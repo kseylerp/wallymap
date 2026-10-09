@@ -6,7 +6,15 @@ export { createBucket, type Bucket, type BucketOptions } from "./bucket";
 
 export type CachedFetch = (
   url: string,
-  init?: RequestInit & { cacheKey?: string; ttlSeconds?: number },
+  init?: RequestInit & {
+    cacheKey?: string;
+    ttlSeconds?: number;
+    /**
+     * Whether a 2xx body is a real answer worth caching. Upstreams that report failures as HTTP 200
+     * pass their own check; the default is `!looksLikeUpstreamFailure(body)`.
+     */
+    shouldCache?: (body: string) => boolean;
+  },
 ) => Promise<Response>;
 
 export type LayerFetchOptions = {
@@ -32,6 +40,30 @@ function bucketFor(layerId: string, capacity: number, refillPerSecond: number): 
   }
   return bucket;
 }
+
+/** Bodies larger than this are never parsed by the default check; upstream error bodies are small. */
+const FAILURE_SNIFF_MAX_CHARS = 64 * 1024;
+const FAILURE_REMARK = /timed out|runtime error|out of memory/i;
+
+/**
+ * True for a 200 body that is really an upstream failure: a JSON object with a top-level `error`
+ * (ArcGIS, MediaWiki/Commons) or an Overpass failure `remark`. Genuine empty results are not failures.
+ */
+export function looksLikeUpstreamFailure(body: string): boolean {
+  if (body.length > FAILURE_SNIFF_MAX_CHARS || !body.trimStart().startsWith("{")) return false;
+  let json: unknown;
+  try {
+    json = JSON.parse(body);
+  } catch {
+    return false;
+  }
+  if (typeof json !== "object" || json === null) return false;
+  const record = json as Record<string, unknown>;
+  if (record.error !== undefined && record.error !== null) return true;
+  return typeof record.remark === "string" && FAILURE_REMARK.test(record.remark);
+}
+
+const defaultShouldCache = (body: string): boolean => !looksLikeUpstreamFailure(body);
 
 let warnedAboutCache = false;
 
@@ -63,7 +95,7 @@ export function createLayerFetch(layerId: string, opts: LayerFetchOptions = {}):
   const cache = opts.cache ?? createCache();
 
   return async (url, init = {}) => {
-    const { cacheKey, ttlSeconds, ...requestInit } = init;
+    const { cacheKey, ttlSeconds, shouldCache = defaultShouldCache, ...requestInit } = init;
 
     const method = (requestInit.method ?? "GET").toUpperCase();
     const text = bodyText(requestInit.body);
@@ -87,7 +119,8 @@ export function createLayerFetch(layerId: string, opts: LayerFetchOptions = {}):
     if (response.status < 200 || response.status >= 300) return response;
 
     const responseText = await response.text();
-    if (key !== null) {
+    // A failure that arrived as a 200 is passed back to the caller but never cached.
+    if (key !== null && shouldCache(responseText)) {
       try {
         await cache.set(key, responseText, ttlSeconds ?? defaultTtl);
       } catch (error) {

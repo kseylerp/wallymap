@@ -22,6 +22,16 @@ export function overpassFailure(json: unknown): string | null {
   return null;
 }
 
+const FAILURE_REMARK_IN_JSON = /"remark"\s*:\s*"[^"]*(timed out|runtime error|out of memory)/i;
+
+/**
+ * Whether an Overpass 200 body is worth caching, checked on the text so large answers are not parsed
+ * twice: no failure remark and an `elements` array present. An empty `elements` is a real answer.
+ */
+export function overpassBodyCacheable(body: string): boolean {
+  return !FAILURE_REMARK_IN_JSON.test(body) && /"elements"\s*:\s*\[/.test(body);
+}
+
 /**
  * POSTs an Overpass QL query (form-encoded as `data=`). Tries `ctx.env.OVERPASS_URL`
  * (blank counts as unset) then retries once on the public endpoint; a 200 whose body
@@ -53,6 +63,7 @@ export async function overpassQuery(
     try {
       const res = await ctx.fetch(url, {
         cacheKey: key,
+        shouldCache: overpassBodyCacheable,
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },

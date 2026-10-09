@@ -83,6 +83,13 @@ export function parseFirmsCsv(text: string): FeatureCollection {
   return { type: "FeatureCollection", features };
 }
 
+/** A FIRMS body worth caching: empty (no fires) or a CSV whose header names latitude; never an "Invalid ..." message. */
+export function firmsBodyCacheable(body: string): boolean {
+  const text = body.trimStart();
+  if (text === "") return true;
+  return !text.startsWith("Invalid") && text.split(/\r?\n/)[0].includes("latitude");
+}
+
 function frpOf(feature: Feature): number {
   const v: unknown = feature.properties?.v;
   return typeof v === "number" ? v : -Infinity;
@@ -124,6 +131,8 @@ const fireDetections = defineLayer({
     try {
       const res = await ctx.fetch(url, {
         cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:firms`,
+        // FIRMS answers a bad key with a 200 "Invalid MAP_KEY." text; only cache a real CSV (or an empty one).
+        shouldCache: firmsBodyCacheable,
         // Hotspots are near-real-time; the default 24 hour cache would show stale fires.
         ttlSeconds: 1800,
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),

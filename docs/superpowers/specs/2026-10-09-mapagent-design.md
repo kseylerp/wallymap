@@ -212,6 +212,8 @@ Tools:
   rivers, and lakes ("the Andes") where Mapbox returns only a point.
 - `route(from, to, profile)` via Mapbox Directions, returns a LineString
 - `set_view({ bbox | center+zoom, pitch?, bearing?, globe? })`
+- `set_basemap({ style: "outdoors" | "satellite" | "natural-earth-2",
+  compareWith?: style | layerId })`
 - `render({ layerId, mode, encode, timeField?, valueField? })` where
   `mode` is one of `points | lines | polygons | heat | columns | hexbin`
   and `encode` maps `v` to height and/or color
@@ -250,6 +252,13 @@ Modes:
 - Terrain: a toggle, on by default under zoom 11 when pitch is nonzero.
 - Globe context: Natural Earth countries, rivers, lakes, and urban areas
   drawn lightly at world zoom so columns have geography to sit on.
+- Basemaps: Mapbox Outdoors (default), Mapbox Satellite, and Natural
+  Earth 2, a public-domain painted raster of the planet with no human
+  features, uploaded once to Mapbox Studio (about 50 MB at 1:50m) and served
+  from there. The agent picks Natural Earth 2 for remoteness and
+  "before humans" questions. A swipe-compare control splits the canvas
+  between any two basemaps or between a basemap and a layer, so satellite
+  against Natural Earth 2 shows where humans changed the land.
 
 Considered and rejected for v1: video crowd counting (no feeds), pedestrian
 simulators such as JuPedSim and Vadere (need capacity and arrival data we

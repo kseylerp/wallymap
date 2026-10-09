@@ -36,7 +36,6 @@ import {
 import { visibleMapPadding } from "@/lib/render/viewportPadding";
 import { samplePoints } from "@/lib/render/wally/sample";
 import {
-  arrivalPitch,
   BUILDINGS_LAYER_ID,
   buildingsSpec,
   easeInOut,
@@ -495,7 +494,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
 
   // Start and stop: frame the route so its terrain loads, read the profile heights, ease down into the follow
   // camera, then follow every animation frame. Stopping (exit, route removed, basemap swap, tab hidden) eases
-  // back to the camera from before the preview at Explore pitch.
+  // back to the camera from before the preview, at its pitch.
   const playbackRouteId = playback?.routeId;
   useEffect(() => {
     const map = mapRef.current;
@@ -508,20 +507,22 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     restoreRef.current ??= { camera: cameraOf(map), padding: map.getPadding() };
     activePreviewRef.current = routeId;
     followingRef.current = true;
-    // Keep the followed point out from under the preview dock and the chat panel or sheet. On a phone where not
-    // even 80px fit above the dock, the dock drops its profile (a 56px strip) and the padding is worked out again.
+    // Keep the followed point out from under the preview dock, the chat panel or sheet, and the data console while it
+    // is open. On a phone where not even 80px fit above the dock, the dock drops its profile (a 56px strip) and the
+    // padding is worked out again. (On a phone the app closes the console for the preview: components/App.tsx.)
     let repad = false;
     const paddingNow = () => {
       const box = map.getContainer().getBoundingClientRect();
       const chat = document.querySelector<HTMLElement>('section[aria-label="Chat"]');
       const dock = document.querySelector<HTMLElement>('[data-testid="preview-control"]');
+      const dataConsole = document.querySelector<HTMLElement>('[data-testid="layer-stack"]');
       const base = visibleMapPadding({
         width: box.width,
         height: box.height,
         panelOpen: chat?.dataset.chatOpen === "true",
         isMobile: box.width < 768,
       });
-      const rects = [chat, dock].flatMap((el) => {
+      const rects = [chat, dock, dataConsole].flatMap((el) => {
         if (!el) return [];
         const r = el.getBoundingClientRect();
         return [{ left: r.left - box.left, top: r.top - box.top, right: r.right - box.left, bottom: r.bottom - box.top }];
@@ -745,12 +746,13 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
         restoreRef.current = null;
         dockCompactStore.set(false);
         if (!restore) return;
-        // Never leave the camera in follow pitch: back to where the preview began, at Explore pitch.
+        // Never leave the camera in follow pitch: back to the camera the preview began from, tilt included (a map
+        // flattened meanwhile comes back flat).
         map.easeTo({
           center: [restore.camera.longitude, restore.camera.latitude],
           zoom: restore.camera.zoom,
           bearing: restore.camera.bearing,
-          pitch: arrivalPitch(restore.camera.zoom, stateRef.current.flattened),
+          pitch: stateRef.current.flattened ? 0 : restore.camera.pitch,
           padding: restore.padding,
           duration: PREVIEW_EASE_MS,
           easing: easeInOut,

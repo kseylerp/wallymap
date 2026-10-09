@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { ChatRail } from "@/components/ChatRail";
 import { CompareControl, CompareSwipe, openCompareAction, useCompareTicker } from "@/components/CompareControl";
 import { InspectCard } from "@/components/InspectCard";
-import { drawnColor, LayerStack } from "@/components/LayerStack";
+import { LayerStack, selectionColor } from "@/components/LayerStack";
 import { MapCanvas, type MapHandle } from "@/components/MapCanvas";
 import { MapControls } from "@/components/MapControls";
 import { MapPills } from "@/components/MapPills";
@@ -22,6 +22,10 @@ import { visibleMapPadding } from "@/lib/render/viewportPadding";
 import { pitchFor } from "@/lib/render/wally/terrain";
 
 const DEFAULT_CANVAS = { width: 1000, height: 800 };
+/** Below this width the app lays out for a phone (Tailwind's `md` breakpoint). */
+const PHONE_MAX_WIDTH = 768;
+/** The gap between the map pills' last row and the data console on a phone. */
+const CONSOLE_GAP = 8;
 const FLATTENED_KEY = "wallymap:flattened";
 
 /** Session storage can throw (private mode, blocked storage); the 3D choice then lasts only for the page. */
@@ -68,6 +72,9 @@ export function App() {
   // Phones start with the layer panel folded into its pill so it does not cover the map.
   const [layersOpen, setLayersOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 768);
   const mapBoxRef = useRef<HTMLDivElement>(null);
+  const pillsRef = useRef<HTMLDivElement>(null);
+  // Where the data console starts on a phone: under the map pills, which wrap to a second row at 375px.
+  const [pillsBottom, setPillsBottom] = useState<number | null>(null);
   const mapRef = useRef<MapHandle>(null);
   const canvasSizeRef = useRef(DEFAULT_CANVAS);
 
@@ -92,6 +99,16 @@ export function App() {
       // Mapbox only tracks window resizes, so collapsing the rail would leave a stale canvas size.
       if (prev.width !== width || prev.height !== height) window.dispatchEvent(new Event("resize"));
     });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const el = pillsRef.current;
+    if (!el) return;
+    const measure = () => setPillsBottom(Math.round(el.getBoundingClientRect().bottom));
+    measure();
+    const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
@@ -126,6 +143,23 @@ export function App() {
     [],
   );
 
+  // On a phone the preview dock, the data console and the chat sheet would cover the whole map, so starting a route
+  // preview closes the console and ending it opens it again (when the preview closed it). Adjusted during render, the
+  // React way to follow a prop change, so the console never paints over the preview first.
+  const previewing = state.playback !== undefined;
+  const [wasPreviewing, setWasPreviewing] = useState(previewing);
+  const [reopenAfterPreview, setReopenAfterPreview] = useState(false);
+  if (previewing !== wasPreviewing) {
+    setWasPreviewing(previewing);
+    if (previewing && layersOpen && window.innerWidth < PHONE_MAX_WIDTH) {
+      setLayersOpen(false);
+      setReopenAfterPreview(true);
+    } else if (!previewing && reopenAfterPreview) {
+      setLayersOpen(true);
+      setReopenAfterPreview(false);
+    }
+  }
+
   const hasLayers = Object.keys(state.layers).length > 0;
   const layerPanelOpen = layersOpen && hasLayers;
   const canCompare = useMemo(() => Object.values(state.layers).some(isComparable), [state.layers]);
@@ -148,7 +182,8 @@ export function App() {
     return sent;
   }, [selected, selectedLayer]);
 
-  // Stub until route playback lands (Milestone 3): frame the whole line in the part of the map left visible.
+  // The fallback for "Preview route" when no preview control is mounted to run one (components/InspectCard.tsx):
+  // frame the whole line in the part of the map left visible.
   const previewRoute = useCallback(() => {
     const bbox = selected ? featureBBox(selected.feature) : null;
     if (!bbox) return;
@@ -161,14 +196,17 @@ export function App() {
   }, [selected, collapsed, layerPanelOpen, state.flattened]);
 
   return (
-    <div className="relative h-dvh w-full overflow-hidden bg-cream">
+    <div
+      className="relative h-dvh w-full overflow-hidden bg-cream"
+      style={pillsBottom === null ? undefined : { ["--console-top" as string]: `${pillsBottom + CONSOLE_GAP}px` }}
+    >
       {/* The map fills the window; every control floats over it. */}
       <main ref={mapBoxRef} className="absolute inset-0">
         <MapCanvas ref={mapRef} state={state} onViewportChange={onViewportChange} onPick={onPick} />
       </main>
 
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 md:p-4">
-        <div className="pointer-events-auto">
+        <div ref={pillsRef} className="pointer-events-auto">
           <MapPills
             basemap={state.basemap}
             onBasemapChange={setBasemap}
@@ -187,7 +225,9 @@ export function App() {
       {/* Compare's swipe handle across the map (the control itself is in the data console). */}
       <CompareSwipe state={state} />
 
-      <div className="pointer-events-none absolute top-3 right-3 z-20 flex flex-col items-end md:top-4 md:right-4">
+      {/* Phones: the console opens under the map pills (however many rows they wrap to) and leaves a gutter on the
+          right for the zoom, globe and 3D buttons. */}
+      <div className="pointer-events-none absolute top-3 right-3 z-20 flex flex-col items-end max-md:top-(--console-top,60px) max-md:right-14 md:top-4 md:right-4">
         <LayerStack
           layers={state.layers}
           renderOps={state.renderOps}
@@ -205,10 +245,10 @@ export function App() {
       {selected && selectedLayer && (
         <InspectCard
           // A new selection starts fresh (copy and busy states reset).
-          key={`${selected.layerId}:${selected.lngLat.join(",")}`}
+          key={`${selected.layerId}:${selected.side ?? "a"}:${selected.lngLat.join(",")}`}
           selection={selected}
           layer={selectedLayer}
-          color={drawnColor(selectedLayer, state.renderOps.find((op) => op.layerId === selected.layerId))}
+          color={selectionColor(state, selected, selectedLayer)}
           project={project}
           onCameraChange={onCameraChange}
           onClose={deselect}

@@ -145,10 +145,13 @@ export function CompareControl({ state, dispatch }: CompareControlProps) {
 /**
  * Toggle mode's 1 Hz flip, and space to pause it. It lives in the app (like the scrubber's play), so the flip keeps
  * going while the data console is closed. Nothing ticks while the compared layer is hidden. Space is left to any
- * focused field, button or slider, and key repeat is ignored.
+ * focused field, button or slider, and key repeat is ignored. While a route preview runs (its dock is mounted), Space
+ * belongs to the preview's play and pause (components/PreviewControl.tsx), so one key press never drives both.
  */
 export function useCompareTicker(state: MapState, dispatch: (action: MapAction) => void): void {
+  const previewing = state.playback !== undefined && state.routes[state.playback.routeId] !== undefined;
   const toggleMode = effectiveMode(state) === "toggle";
+  const spaceKey = toggleMode && !previewing;
   const paused = state.compare?.paused === true;
   const toggling = toggleMode && !paused && !compareHidden(state);
   useEffect(() => {
@@ -157,7 +160,7 @@ export function useCompareTicker(state: MapState, dispatch: (action: MapAction) 
     return () => globalThis.clearInterval(id);
   }, [toggling, dispatch]);
   useEffect(() => {
-    if (!toggleMode) return;
+    if (!spaceKey) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== " " || e.repeat) return;
       const target = e.target instanceof Element ? e.target : null;
@@ -167,7 +170,7 @@ export function useCompareTicker(state: MapState, dispatch: (action: MapAction) 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggleMode, paused, dispatch]);
+  }, [spaceKey, paused, dispatch]);
 }
 
 /** The swipe handle over the map while a compare swipes (and its layer is shown). Mount it at the map, not in a panel. */

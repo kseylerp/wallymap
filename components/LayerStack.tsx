@@ -5,8 +5,9 @@ import { LayerFilters } from "@/components/LayerFilters";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { deriveFilterFields, filterSummary, type FilterField } from "@/lib/render/filters";
-import { TILE_SWATCH } from "@/lib/render/palette";
-import type { LoadedLayer, MapAction, MapState, RenderMode, RenderOp, TimeState } from "@/lib/render/state";
+import { COMPARE_COLORS, effectiveMode } from "@/lib/render/compareView";
+import { INK, TILE_SWATCH } from "@/lib/render/palette";
+import type { LoadedLayer, MapAction, MapState, RenderMode, RenderOp, Selection, TimeState } from "@/lib/render/state";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
 import { legendSymbol, type LegendMode, type LegendSymbol } from "@/lib/render/wally/legend";
 
@@ -40,13 +41,35 @@ const MODES: { value: RenderMode; label: string; ready: boolean }[] = [
 ];
 
 /**
- * The color the map actually draws: a valid render-op color, else the style color. Raster tiles carry their own
- * imagery colors, so they read as a neutral gray. (The inspect card uses it; the panel shows no colors.)
+ * The color the map actually draws for a layer (the inspect card's swatch; the panel shows no colors). GeoJSON lines
+ * and polygons draw in ink unless the user or agent picked a color, and points are always ink sprites
+ * (lib/render/deck.ts). Vector tiles draw polygons in ink and lines and points in the picked color, else the style
+ * color (components/mapTiles.ts). Raster tiles carry their own imagery colors, so they read as a neutral gray.
  */
 export function drawnColor(layer: LoadedLayer, op: RenderOp | undefined): string {
-  if (op?.color && HEX.test(op.color.trim())) return op.color;
-  if (layer.result.kind === "tiles" && layer.result.data.format === "raster") return TILE_SWATCH;
-  return layer.style.color;
+  const picked = op?.color && HEX.test(op.color.trim()) ? op.color.trim() : undefined;
+  if (layer.result.kind === "tiles") {
+    if (layer.result.data.format === "raster") return TILE_SWATCH;
+    const geometry = layer.result.data.geometry ?? layer.style.geometry;
+    return geometry === "polygon" ? INK : (picked ?? layer.style.color);
+  }
+  return op?.mode === "points" ? INK : (picked ?? INK);
+}
+
+/**
+ * The swatch for a selected feature: during a compare of its layer, the side's color (A purple, B pink) or, in delta
+ * mode, the feature's class color, as the map draws them (lib/render/deck.ts); otherwise the layer's drawn color.
+ */
+export function selectionColor(state: MapState, selection: Selection, layer: LoadedLayer): string {
+  const op = state.renderOps.find((o) => o.layerId === selection.layerId);
+  const mode = state.compare?.layerId === selection.layerId ? effectiveMode(state) : undefined;
+  if (mode === "delta") {
+    const cls: unknown = selection.feature.properties?.delta;
+    return cls === "a-only" ? COMPARE_COLORS.a : cls === "b-only" ? COMPARE_COLORS.b : COMPARE_COLORS.both;
+  }
+  // Point sprites stay ink on both sides; lines and areas take the side's color.
+  if (mode && op?.mode !== "points") return selection.side === "b" ? COMPARE_COLORS.b : COMPARE_COLORS.a;
+  return drawnColor(layer, op);
 }
 
 /** Loaded layers top first (the last render op draws on top), then any layer still waiting for an op. */
@@ -383,10 +406,11 @@ export function LayerStack({
     <section
       aria-label="Layers"
       data-testid="layer-stack"
-      // Phones: below the header row (wordmark and basemap switch) instead of over it, and one scrolling column (the
-      // scrubber, the compare and the layers scroll together) so a short screen never squeezes the list to nothing.
+      // Phones: below the map pills instead of over them (the app positions the column at `--console-top`, measured
+      // from the pills), clear of the map buttons on the right, ending above the chat sheet, and one scrolling column
+      // (the scrubber, the compare and the layers scroll together) so a short screen never squeezes the list to nothing.
       data-scroll="console"
-      className="glass-strong rise-in pointer-events-auto flex max-h-[calc(100dvh-24px)] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-panel max-md:mt-12 max-md:max-h-[calc(54dvh-72px)] max-md:overflow-y-auto max-md:overscroll-contain md:max-h-[calc(100dvh-260px)]"
+      className="glass-strong rise-in pointer-events-auto flex max-h-[calc(100dvh-24px)] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-panel max-md:max-h-[calc(54dvh-var(--console-top,60px)-12px)] max-md:max-w-[calc(100vw-68px)] max-md:overflow-y-auto max-md:overscroll-contain md:max-h-[calc(100dvh-260px)]"
       style={{ width: LAYER_PANEL_WIDTH }}
     >
       {/* The time scrubber docks here while any layer has dated features; empty, the slot takes no space. */}

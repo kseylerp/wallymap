@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { useReducer } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { drawnColor, LayerStack } from "@/components/LayerStack";
+import { INK } from "@/lib/render/palette";
 import { reduce } from "@/lib/render/reducer";
 import { visibleState } from "@/lib/render/view";
 import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
@@ -409,9 +410,27 @@ describe("drawnColor", () => {
     result: { kind: "tiles", data: { url: "https://example.test/{z}/{x}/{y}.png", minzoom: 0, maxzoom: 8, format: "raster" }, citation },
   };
 
-  it("shows the layer color for points too (the map fills them in it)", () => {
+  it("shows ink, not the registry color, for GeoJSON (the research look draws data in ink)", () => {
     const species: LoadedLayer = { ...trails, id: "species", style: { geometry: "point", color: "#E24BB1" } };
-    expect(drawnColor(species, { layerId: "species", mode: "points", visible: true })).toBe("#E24BB1");
+    expect(drawnColor(species, { layerId: "species", mode: "points", visible: true })).toBe(INK);
+    // Point sprites stay ink even with a picked color.
+    expect(drawnColor(species, { layerId: "species", mode: "points", color: "#FF5A36", visible: true })).toBe(INK);
+    const fires: LoadedLayer = { ...trails, id: "fire-perimeters", style: { geometry: "polygon", color: "#FF5A36" } };
+    expect(drawnColor(fires, { layerId: "fire-perimeters", mode: "polygons", visible: true })).toBe(INK);
+  });
+
+  it("shows ink for vector tile polygons and the style color for vector tile lines", () => {
+    const vector = (geometry: "polygon" | "line"): LoadedLayer => ({
+      ...lands,
+      style: { geometry, color: "#B9A6FF" },
+      result: {
+        kind: "tiles",
+        data: { url: "https://example.test/{z}/{x}/{y}.pbf", minzoom: 0, maxzoom: 14, format: "vector", sourceLayer: "x", geometry },
+        citation,
+      },
+    });
+    expect(drawnColor(vector("polygon"), undefined)).toBe(INK);
+    expect(drawnColor(vector("line"), undefined)).toBe("#B9A6FF");
   });
 
   it("shows a neutral gray for raster tiles, which draw their own colors", () => {

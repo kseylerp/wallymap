@@ -131,7 +131,8 @@ function Dock({ state, route, onActions }: DockProps) {
   const toggleRef = useRef(toggle);
 
   // Space plays or pauses and Escape exits, except while typing (the composer stays usable) or when a control
-  // has focus and Space should press it.
+  // has focus and Space should press it. A toggle compare's Space pause steps aside while the dock is up
+  // (useCompareTicker in components/CompareControl.tsx), so one press never pauses both.
   const actionsRef = useRef(onActions);
   useEffect(() => {
     actionsRef.current = onActions;

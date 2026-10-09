@@ -152,6 +152,23 @@ describe("CompareControl", () => {
     expect(pause()).toBe("Play");
   });
 
+  it("leaves space to a running route preview (its dock owns play and pause)", () => {
+    vi.useFakeTimers();
+    const route = {
+      id: "r1",
+      line: { type: "LineString" as const, coordinates: [[-119.5, 37.8], [-119.4, 37.9]] },
+      source: "tool" as const,
+      distanceKm: 14,
+      waypoints: [],
+    };
+    const previewing = [{ type: "route_loaded", route }, { type: "preview_start", routeId: "r1" }] as MapAction[];
+    const spy = vi.fn();
+    render(<Harness spy={spy} initial={previewing.reduce(reduce, comparing("toggle"))} />);
+    fireEvent.keyDown(window, { key: " " });
+    expect(spy).not.toHaveBeenCalledWith({ type: "set_compare_paused", paused: true });
+    expect(screen.getByTestId("compare-pause").textContent).toBe("Pause");
+  });
+
   it("stops flipping after exit", () => {
     vi.useFakeTimers();
     const spy = vi.fn();

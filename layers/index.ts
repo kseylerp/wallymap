@@ -10,3 +10,4 @@ import "./forest-alerts";
 import "./snowpack";
 import "./mvum-dispersed";
 import "./campsites";
+import "./streamflow";

@@ -27,6 +27,9 @@ export function getModel(): LanguageModel {
       );
     }
     case "anthropic":
+      if (!process.env.ANTHROPIC_API_KEY) {
+        throw new Error("ANTHROPIC_API_KEY is required");
+      }
       return anthropic(modelName);
     case "openai-compatible": {
       const baseURL = process.env.OPENAI_COMPATIBLE_BASE_URL;

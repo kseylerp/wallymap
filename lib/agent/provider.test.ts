@@ -10,8 +10,9 @@ function info(model: unknown): ModelInfo {
 describe("getModel", () => {
   beforeEach(() => {
     vi.stubEnv("MODEL_PROVIDER", "");
-    vi.stubEnv("MODEL_NAME", "anthropic/claude-haiku-5-5");
+    vi.stubEnv("MODEL_NAME", "anthropic/claude-haiku-5.5");
     vi.stubEnv("OPENROUTER_API_KEY", "test-openrouter-key");
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-anthropic-key");
     vi.stubEnv("OPENAI_COMPATIBLE_BASE_URL", "");
     vi.stubEnv("OPENAI_COMPATIBLE_API_KEY", "");
   });
@@ -22,7 +23,7 @@ describe("getModel", () => {
 
   it("defaults to an OpenRouter model named by MODEL_NAME", () => {
     const model = info(getModel());
-    expect(model.modelId).toBe("anthropic/claude-haiku-5-5");
+    expect(model.modelId).toBe("anthropic/claude-haiku-5.5");
     expect(model.provider).toMatch(/^openrouter/);
   });
 
@@ -42,6 +43,12 @@ describe("getModel", () => {
     const model = info(getModel());
     expect(model.modelId).toBe("claude-sonnet-5-5");
     expect(model.provider).toMatch(/^anthropic/);
+  });
+
+  it("requires ANTHROPIC_API_KEY when MODEL_PROVIDER=anthropic", () => {
+    vi.stubEnv("MODEL_PROVIDER", "anthropic");
+    vi.stubEnv("ANTHROPIC_API_KEY", "");
+    expect(() => getModel()).toThrow("ANTHROPIC_API_KEY is required");
   });
 
   it("requires a base URL for openai-compatible", () => {

@@ -159,6 +159,18 @@ describe("tileUrlForTime", () => {
   it("leaves other layers unchanged", () => {
     expect(tileUrlForTime("snow", night, ["2023-01-01", "2023-02-01"])).toBe(night);
   });
+  it("clamps a window that ends in the present to the latest published period", () => {
+    const now = Date.parse("2026-10-09T15:00:00Z");
+    const window: TimeWindow = ["2016-01-01T00:00:00Z", "2026-10-09T12:00:00Z"];
+    const lights = tileUrlForTime("night-lights", night, window, now);
+    expect(lights).toBe(night.replace("2024-01-01", "2026-10-06"));
+    const forest = tileUrlForTime("forest-loss", loss, window, now);
+    expect(forest).toContain("start_year=2015&end_year=2025&");
+    // A forest-loss window entirely after 2025 still draws loss through the newest year.
+    expect(tileUrlForTime("forest-loss", loss, ["2026-01-01T00:00:00Z", "2026-10-09T00:00:00Z"], now)).toContain(
+      "end_year=2025&",
+    );
+  });
 });
 
 describe("windowLabel", () => {

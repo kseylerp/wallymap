@@ -16,12 +16,13 @@
 import { z } from "zod";
 import { defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
+import { FOREST_LOSS_LATEST_YEAR } from "@/lib/time";
 
 const TILE_BASE = "https://tiles.globalforestwatch.org/umd_tree_cover_loss/latest/dynamic/{z}/{x}/{y}.png";
 
 const inputSchema = z.object({
   startYear: z.number().int().min(2001).default(2015),
-  endYear: z.number().int().max(2025).default(2025),
+  endYear: z.number().int().max(FOREST_LOSS_LATEST_YEAR).default(FOREST_LOSS_LATEST_YEAR),
   canopyThreshold: z.enum(["10", "20", "30", "50", "75"]).default("30"),
 });
 

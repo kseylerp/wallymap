@@ -135,15 +135,26 @@ export function stepWindow(index: TimeIndex, window: TimeWindow, direction: 1 | 
 
 const NIGHT_DATE = /\/\d{4}-\d{2}-\d{2}\//;
 
-/** Points a time-aware tile layer's URL at the window: night-lights gets the end date, forest-loss the end year (start year never exceeds it). Other layers are unchanged. */
-export function tileUrlForTime(layerId: string, url: string, window: TimeWindow): string {
+/** Newest year of tree cover loss GFW serves; later years answer 422 (layers/forest-loss.ts caps endYear here too). */
+export const FOREST_LOSS_LATEST_YEAR = 2025;
+/** The newest night-lights day that is reliably processed is about this many days back (layers/night-lights.ts). */
+export const NIGHT_LIGHTS_DAYS_BACK = 3;
+
+/**
+ * Points a time-aware tile layer's URL at the window: night-lights gets the end date, forest-loss the end year
+ * (start year never exceeds it). Both are clamped to the latest period the upstream publishes, so a window that
+ * ends today still draws the newest imagery instead of blank tiles. Other layers are unchanged.
+ */
+export function tileUrlForTime(layerId: string, url: string, window: TimeWindow, now: number = Date.now()): string {
   const end = new Date(window[1]);
   if (Number.isNaN(end.getTime())) return url;
   if (layerId === "night-lights") {
-    return url.replace(NIGHT_DATE, `/${end.toISOString().slice(0, 10)}/`);
+    const latest = now - NIGHT_LIGHTS_DAYS_BACK * DAY_MS;
+    const day = new Date(Math.min(end.getTime(), latest)).toISOString().slice(0, 10);
+    return url.replace(NIGHT_DATE, `/${day}/`);
   }
   if (layerId === "forest-loss") {
-    const endYear = end.getUTCFullYear();
+    const endYear = Math.min(end.getUTCFullYear(), FOREST_LOSS_LATEST_YEAR);
     const m = /[?&]start_year=(\d+)/.exec(url);
     const startYear = m ? Math.min(Number(m[1]), endYear) : endYear;
     return setParam(setParam(url, "start_year", startYear), "end_year", endYear);

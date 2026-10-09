@@ -14,13 +14,14 @@ import { z } from "zod";
 import { defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { gibsTileUrl } from "./_shared/gibs";
+import { NIGHT_LIGHTS_DAYS_BACK } from "@/lib/time";
 
 const GIBS_LAYER_ID = "VIIRS_SNPP_DayNightBand_At_Sensor_Radiance";
 /** GoogleMapsCompatible_Level8: the finest zoom this layer is published at. */
 const GIBS_LEVEL = 8;
 /** First day the archive holds. */
 const EARLIEST_DATE = "2020-11-18";
-const DEFAULT_DAYS_BACK = 3;
+const DEFAULT_DAYS_BACK = NIGHT_LIGHTS_DAYS_BACK;
 const DAY_MS = 86_400_000;
 
 const inputSchema = z.object({

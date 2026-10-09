@@ -11,3 +11,4 @@ import "./snowpack";
 import "./mvum-dispersed";
 import "./campsites";
 import "./streamflow";
+import "./species";

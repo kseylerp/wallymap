@@ -45,9 +45,9 @@ function isInitialView(state: MapState): boolean {
 }
 
 /**
- * Keeps the URL hash and the map in step. On mount, a hash that names a view or layers is replayed into the map
- * (layers are fetched again, so a link carries ids, not data). After that, the camera, basemap, layer ids and time
- * window are written back to the hash 500 ms after they stop changing. `status` is a short line to show while layers
+ * Keeps the URL hash and the map in step. On mount, and whenever a new link is pasted into the same tab, a hash that
+ * names a view or layers is replayed into the map (layers are fetched again, so a link carries ids, not data). After
+ * that, the camera, basemap, layer ids and time window are written back to the hash 500 ms after they stop changing. `status` is a short line to show while layers
  * are coming back ("Restoring 3 layers…") or when some could not be; null otherwise.
  */
 export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { status: string | null } {
@@ -57,17 +57,22 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
   // The layer ids `/api/layer/<id>` can serve; a link names only those (route results and drawn layers cannot be replayed).
   const [catalog, setCatalog] = useState<LayerCatalog | null>(null);
   const startedRef = useRef(false);
+  // Replays a hash into the map; set by the first effect, called again by the hashchange listener.
+  const restoreRef = useRef<((hash: string) => Promise<void>) | null>(null);
 
   useEffect(() => {
     // Strict mode runs effects twice in development; the restore must run once.
     if (startedRef.current) return;
     startedRef.current = true;
-    const hash = window.location.hash;
-    const wantsRestore = decodeState(hash) !== null;
-    void (async () => {
-      const catalog = await fetchCatalog();
-      setCatalog(catalog);
-      if (!wantsRestore) return;
+    const catalogReady = fetchCatalog().then((c) => {
+      setCatalog(c);
+      return c;
+    });
+    // Each restore gets a number; a newer one (another pasted link) makes an older one's outcome stale.
+    let latest = 0;
+    restoreRef.current = async (hash: string) => {
+      const run = ++latest;
+      const catalog = await catalogReady;
       const outcome = await restoreFromPermalink(hash, dispatch, fetchLayer, {
         catalog,
         canvas: { width: window.innerWidth, height: window.innerHeight },
@@ -75,6 +80,7 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
           if (count > 0) setStatus(`Restoring ${count} ${count === 1 ? "layer" : "layers"}…`);
         },
       });
+      if (run !== latest) return;
       setReady(true);
       if (outcome && outcome.failed.length > 0) {
         setStatus(`Could not restore ${outcome.failed.length} of ${outcome.failed.length + outcome.restored.length} layers`);
@@ -82,7 +88,24 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
       } else {
         setStatus(null);
       }
-    })();
+    };
+    if (decodeState(window.location.hash) !== null) void restoreRef.current(window.location.hash);
+  }, [dispatch]);
+
+  // A share link pasted into this tab changes only the hash, which reloads nothing: apply it in place, replacing the
+  // map's layers and routes (`clear_layers`). The hash this hook writes goes through replaceState, which fires no
+  // hashchange.
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash;
+      const restore = restoreRef.current;
+      if (!restore || decodeState(hash) === null) return;
+      setReady(false);
+      dispatch({ type: "clear_layers" });
+      void restore(hash);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
   }, [dispatch]);
 
   // The window's ends only, not the rest of the time state: each play step moves the window, so it rewrites the hash

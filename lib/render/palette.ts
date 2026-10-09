@@ -92,6 +92,12 @@ export const OUTDOORS_TRAIL = {
   casingExtra: 0.6,
 };
 
+/** Plain white: casings, halos and the white core of outlines drawn over ink (Mapbox paint needs a color string). */
+export const WHITE = "#FFFFFF";
+
+/** Wally's dark slate: route mile markers and their labels. */
+export const SLATE = "#3A3A3C";
+
 /** The Wally pin body, and the coral start pin. */
 export const PIN_BODY = "#3A3A3C";
 export const PIN_START = "#F57272";

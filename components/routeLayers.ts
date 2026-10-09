@@ -9,6 +9,7 @@ import type {
   SymbolLayerSpecification,
 } from "mapbox-gl";
 import type { MapState, RouteState } from "@/lib/render/state";
+import { SLATE, WHITE } from "@/lib/render/palette";
 import { progressGradient } from "@/lib/render/wally/playback";
 import {
   DART_ICON_ID,
@@ -32,7 +33,6 @@ import {
 const PREFIX = "route-";
 /** Data layers from components/mapTiles.ts. */
 const DATA_PREFIXES = ["tiles-", "heat-"];
-const SLATE = "#3A3A3C";
 const LABEL_FONT = ["DIN Pro Medium", "Arial Unicode MS Regular"];
 const UNITS = "mi" as const;
 
@@ -71,7 +71,7 @@ export function routeMapLayers(id: string): { below: LayerSpecification[]; above
     filter: kindIs("mile"),
     paint: {
       "circle-radius": 5,
-      "circle-color": "#FFFFFF",
+      "circle-color": WHITE,
       "circle-stroke-color": SLATE,
       "circle-stroke-opacity": 0.45,
       "circle-stroke-width": 1.5,
@@ -106,7 +106,7 @@ export function routeMapLayers(id: string): { below: LayerSpecification[]; above
       "text-offset": [0.9, 0],
       "text-allow-overlap": true,
     },
-    paint: { "text-color": SLATE, "text-halo-color": "#FFFFFF", "text-halo-width": 1.4 },
+    paint: { "text-color": SLATE, "text-halo-color": WHITE, "text-halo-width": 1.4 },
   };
   const pins: SymbolLayerSpecification = {
     id: `${source}-pins`,

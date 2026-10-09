@@ -21,7 +21,7 @@ import {
   type StyleLayerLike,
 } from "@/lib/render/hybridStyle";
 import { compareBaseId, compareBId, compareSideShown } from "@/lib/render/compareView";
-import { INK } from "@/lib/render/palette";
+import { INK, WHITE } from "@/lib/render/palette";
 import { featureCenter } from "@/lib/render/inspect";
 import type { Basemap, MapState } from "@/lib/render/state";
 
@@ -89,7 +89,7 @@ export function vectorTileLayerSpecs(
         type: "line",
         ...common,
         layout: lineLayout,
-        paint: { "line-color": "#FFFFFF", "line-width": o.width, "line-opacity": o.opacity * opacity },
+        paint: { "line-color": WHITE, "line-width": o.width, "line-opacity": o.opacity * opacity },
       },
     ];
   }
@@ -113,7 +113,7 @@ export function vectorTileLayerSpecs(
       paint: {
         "circle-color": color,
         "circle-radius": 4,
-        "circle-stroke-color": "#FFFFFF",
+        "circle-stroke-color": WHITE,
         "circle-stroke-width": 1,
         "circle-opacity": opacity,
         "circle-stroke-opacity": opacity,

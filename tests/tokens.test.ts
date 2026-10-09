@@ -72,16 +72,22 @@ describe("tokens in app/globals.css", () => {
   });
 });
 
-function tsxFiles(dir: string): string[] {
+/** Every .ts and .tsx file under `dir`: map paint lives in plain .ts component files (mapTiles.ts, routeLayers.ts). */
+function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const full = path.join(dir, name);
-    if (statSync(full).isDirectory()) return tsxFiles(full);
-    return full.endsWith(".tsx") ? [full] : [];
+    if (statSync(full).isDirectory()) return sourceFiles(full);
+    return /\.tsx?$/.test(full) ? [full] : [];
   });
 }
 
 describe("components use tokens, not raw hex", () => {
-  const files = tsxFiles(path.join(root, "components"));
+  const files = sourceFiles(path.join(root, "components"));
+
+  it("scans the plain .ts component files too", () => {
+    expect(files.some((f) => f.endsWith("mapTiles.ts"))).toBe(true);
+    expect(files.some((f) => f.endsWith("routeLayers.ts"))).toBe(true);
+  });
 
   it("finds component files", () => {
     expect(files.length).toBeGreaterThan(0);

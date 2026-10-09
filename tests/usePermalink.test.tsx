@@ -70,4 +70,24 @@ describe("usePermalink", () => {
     });
     expect(window.location.hash).toBe(encodeState({ ...moved, renderOps: [] }));
   });
+
+  it("applies a share link pasted into the same tab (hash change), replacing the layers", async () => {
+    const dispatch = vi.fn();
+    renderHook(() => usePermalink(initialMapState, dispatch));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/layers"));
+    expect(dispatch).not.toHaveBeenCalled();
+    window.history.replaceState(null, "", "/#v=-120.1,39.2,11,45,0&b=outdoors&l=osm-trails:lines:1");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await waitFor(() => expect(dispatch.mock.calls.map(([a]) => a.type)).toEqual(["clear_layers", "set_basemap", "set_view", "layer_loaded", "render"]));
+  });
+
+  it("ignores a hash change to something that is not a share link", async () => {
+    const dispatch = vi.fn();
+    renderHook(() => usePermalink(initialMapState, dispatch));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/layers"));
+    window.history.replaceState(null, "", "/#about");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(dispatch).not.toHaveBeenCalled();
+  });
 });

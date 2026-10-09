@@ -26,12 +26,12 @@ A `LayerError` is `{ error, hint }` where `hint` is `"zoom_in"` (area too big), 
 
 ## The `t` and `v` convention
 
-Feature properties may carry two optional fields the renderer understands:
+Feature properties may carry two optional fields:
 
-- `t`: an ISO date string. It feeds the time scrubber.
-- `v`: a number. It feeds column height, color ramps, and route charts.
+- `t`: an ISO date string. From Milestone 3 the renderer will use it for the time scrubber.
+- `v`: a number. From Milestone 3 the renderer will use it for column height and route charts.
 
-A layer that sets neither still draws as plain points, lines, or polygons.
+The renderer does not read them yet; set them now so the layer is ready. A layer that sets neither still draws as plain points, lines, or polygons.
 
 ## What `runLayer` does for you
 

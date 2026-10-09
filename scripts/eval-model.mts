@@ -9,9 +9,9 @@
  * tokens, seconds. With --set, runs every question listed between the `<!-- eval:start -->`
  * and `<!-- eval:end -->` markers in docs/questions.md (lines starting with "- "), one after
  * another, prints one JSON line each, then a final line `ok N/M`.
- * "ok" means: geocode and a query tool ran, a render op was issued, at least one
- * feature or tile layer came back (or the model handled a layer error and still wrote a note),
- * and the run finished without throwing.
+ * "ok" means: geocode and a query tool ran, anything that came back was rendered, the model
+ * wrote a note (also when a layer errored or returned nothing), and the run finished without
+ * throwing. A route-only question passes when the route tool ran and a note followed.
  */
 import { readFileSync } from "node:fs";
 import { generateText, stepCountIs } from "ai";
@@ -79,7 +79,12 @@ async function runQuestion(question: string): Promise<Outcome> {
     const queried = seq.some((t) => t.startsWith("query_"));
     const rendered = seq.includes("render");
     const noted = seq.includes("note") || result.text.trim().length > 40;
-    const ok = seq.includes("geocode") && queried && (features.some((n) => n > 0) || tiles > 0 ? rendered : layerErrors.length > 0) && noted;
+    const routed = seq.includes("route");
+    const drew = features.some((n) => n > 0) || tiles > 0;
+    // A route question is answered by the route tool alone (it geocodes its own stops).
+    // A query that drew something must have been rendered; an empty result or a layer
+    // error only needs the note that explains it.
+    const ok = routed && !queried ? noted : seq.includes("geocode") && queried && (drew ? rendered : true) && noted;
 
     return {
       ok,

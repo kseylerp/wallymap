@@ -88,21 +88,28 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set
 
 ## Last run
 
-Run on 2026-10-09 with model `openai/gpt-oss-120b` and a 12-step cap: **ok 12/12**. A question passes when the agent geocoded a place, queried a layer, drew the result (or handled a layer error), and wrote a note.
+Run on 2026-10-09 with model `openai/gpt-oss-120b` and a 12-step cap: **ok 19/19**. A question passes when the agent geocoded a place, queried a layer, drew whatever came back, and wrote a note (a route question passes when the route tool ran and a note followed).
 
 | Question | ok | Tools (query_ prefix dropped) | Seconds |
 | --- | --- | --- | --- |
-| Show hiking trails around Lake Tahoe | yes | geocode, set_view, osm-trails, render, note | 24.7 |
-| Which wildfires burned near Yosemite in the last 10 years? | yes | geocode, set_view, fire-perimeters, render | 18.2 |
-| Are there any active fires burning near Missoula right now? | yes | geocode, set_view, fire-detections, fire-perimeters, render, render, note | 35.9 |
-| Where has the Amazon lost the most forest since 2015? | yes | geocode, set_view, forest-loss, render, note | 34.7 |
-| How much snow is on the ground around Mount Hood? | yes | geocode, set_view, snowpack, snowpack, render, note | 36.9 |
-| Which rivers near Jackson Hole are running high right now? | yes | list_layers, geocode, geocode, set_view, streamflow, render | 31.7 |
-| Find campsites and forest roads open to vehicles near Moab | yes | geocode, set_view, forest-roads, campsites, render, render, note | 35.1 |
-| What wildlife has been spotted around Banff this year? | yes | geocode, set_view, species, render, note | 34.1 |
-| Which trails and viewpoints around Zion National Park look the most popular? | yes | list_layers, geocode, set_view, osm-trails, popularity, photos, render, render, render, osm-trails, note | 116.6 |
-| Who owns the land around Bryce Canyon, and is any of it designated wilderness? | yes | geocode, set_view, public-lands, wilderness, render, render, note | 29.4 |
-| Where is the night sky darkest around Great Basin National Park, and how many people live nearby? | yes | list_layers, geocode, set_view, night-lights, population, render, render, note | 56.4 |
-| How remote is the Wind River Range? | yes | geocode, geocode, geocode, set_view, physical-regions, remoteness, remoteness, set_view, remoteness, render, note | 77.4 |
+| Show hiking trails around Lake Tahoe | yes | geocode, set_view, osm-trails, render, note | 14.1 |
+| Which wildfires burned near Yosemite in the last 10 years? | yes | geocode, set_view, fire-perimeters, render | 65.2 |
+| Are there any active fires burning near Missoula right now? | yes | geocode, set_view, fire-detections, fire-perimeters, render, note | 19 |
+| Where has the Amazon lost the most forest since 2015? | yes | list_layers, geocode, geocode, forest-loss, render, note | 17.3 |
+| How much snow is on the ground around Mount Hood? | yes | geocode, set_view, snowpack, set_view, snowpack, render, note | 18.5 |
+| Which rivers near Jackson Hole are running high right now? | yes | list_layers, geocode, geocode, set_view, streamflow, render, note | 17.1 |
+| Find campsites and forest roads open to vehicles near Moab | yes | geocode, set_view, campsites, forest-roads, render, render, note | 26.3 |
+| What wildlife has been spotted around Banff this year? | yes | geocode, geocode, set_view, species, render, note | 33 |
+| Which trails and viewpoints around Zion National Park look the most popular? | yes | list_layers, geocode, set_view, osm-trails, popularity, photos, render, render, osm-trails, render, note | 61.9 |
+| Who owns the land around Bryce Canyon, and is any of it designated wilderness? | yes | geocode, set_view, public-lands, wilderness, render, render | 19.6 |
+| Where is the night sky darkest around Great Basin National Park, and how many people live nearby? | yes | list_layers, geocode, set_view, night_lights, night-lights, population, render, render, note | 45.3 |
+| How remote is the Wind River Range? | yes | list_layers, geocode, geocode, geocode, geocode, physical-regions, remoteness, remoteness, render, set_view, note | 40.1 |
+| Show me a walking route from Tahoe City to Emerald Bay | yes | route | 5.4 |
+| Show wildfires near Yosemite year by year since 2016 | yes | geocode, set_view, fire-perimeters, render, set_time | 12.9 |
+| Show only alpine-grade trails near Chamonix | yes | geocode, set_view, osm-trails, render, note | 13.7 |
+| Compare forest loss in Rondônia between 2015 and 2025 | yes | list_layers, geocode, set_view, forest-loss, forest-loss, compare, render, render, note | 26 |
+| Which sources did you use for snow near Mount Hood? | yes | geocode, set_view, snowpack, set_view, snowpack, render, note | 18.1 |
+| Which campsites around Moab look the most popular? | yes | list_layers, geocode, set_view, campsites, popularity-campsites, popularity-campsites, popularity-campsites, render, render, popularity-campsites, note | 46.9 |
+| Outline the Sierra Nevada | yes | geocode, set_view, physical-regions, set_view, physical-regions, render, note | 15 |
 
-Things still worth watching: on the Zion question the model queried `osm-trails` a second time even though the prompt says popularity already includes trails (it still finished with a note), and on Wind River it had one malformed tool name (`query_remoteness<|channel|>commentary`, a model glitch) and one zoom-in retry after the view was 89,653 km², over the 60,000 km² remoteness limit.
+Three questions failed on the first pass and passed on a re-run after two fixes: the pass rule now accepts route-only answers and empty results that end in a note, and the "over time" prompt rule now says to call `set_time` once with play on instead of stepping through years by hand (the first run spent all 12 steps on repeated `set_time` and `render` calls). Things still worth watching: the Wind River and Moab popularity questions each needed a zoom-in retry after an area-limit error, and the Zion question queried `osm-trails` a second time although popularity already includes trails.

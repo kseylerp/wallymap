@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, getToolName, isToolUIPart, type UIMessage } from "ai";
-import { ArrowUp, ChevronDown, ChevronRight, ChevronUp, Square } from "lucide-react";
+import { ArrowUp, ChevronDown, ChevronUp, Square } from "lucide-react";
 import {
   memo,
   useCallback,
@@ -66,7 +66,7 @@ function layerErrorText(name: string, output: unknown): string | null {
   return typeof output.error === "string" ? output.error : null;
 }
 
-type Source = { source: string; url: string };
+type Source = { source: string; url: string; retrieved?: string };
 
 /** The citations a message's finished tool calls carry (`citation.source` + url), one per url, in call order. */
 export function messageSources(message: UIMessage): Source[] {
@@ -81,24 +81,30 @@ export function messageSources(message: UIMessage): Source[] {
     const { source, url } = citation;
     if (typeof source !== "string" || typeof url !== "string" || !source || seen.has(url)) continue;
     seen.add(url);
-    sources.push({ source, url });
+    const retrieved = "retrieved" in citation && typeof citation.retrieved === "string" ? citation.retrieved : undefined;
+    sources.push({ source, url, retrieved });
   }
   return sources;
 }
 
-/** "Sources: A · B" under an answer; each link has Wally's 4/3 dashed underline (`.source-link`). */
+/**
+ * "SOURCES A · B  2026-10-09" under an answer: a small-caps label, dashed-underline links (`.dashed-link`), and the
+ * latest retrieval date in tabular figures.
+ */
 function SourcesLine({ sources }: { sources: Source[] }) {
+  const retrieved = sources.map((s) => s.retrieved).filter(Boolean).sort().at(-1);
   return (
-    <p data-testid="sources-line" className="text-[12.5px] leading-relaxed text-ink-muted">
-      Sources:{" "}
+    <p data-testid="sources-line" className="text-[12px] leading-relaxed text-ink-muted">
+      <span className="small-caps">Sources</span>{" "}
       {sources.map((s, i) => (
         <span key={s.url}>
           {i > 0 && <span aria-hidden> · </span>}
-          <a href={s.url} target="_blank" rel="noreferrer" className="source-link">
+          <a href={s.url} target="_blank" rel="noreferrer" className="dashed-link">
             {s.source}
           </a>
         </span>
       ))}
+      {retrieved && <span className="ml-2 tabular-nums">{retrieved}</span>}
     </p>
   );
 }
@@ -136,7 +142,7 @@ type AnswerCardProps = {
 
 /**
  * An assistant answer: plain markdown on the panel, no bubble. A finished answer's closing follow-up questions
- * become Wally multiple-choice rows (full width, 44px, hairline separators, a chevron).
+ * become plain text rows (full width, 44px, hairline separators, a "→" at 60% ink).
  */
 const AnswerCard = memo(function AnswerCard({ text, done, onFollowUp }: AnswerCardProps) {
   const { body, followUps } = useMemo(
@@ -157,15 +163,15 @@ const AnswerCard = memo(function AnswerCard({ text, done, onFollowUp }: AnswerCa
                 type="button"
                 disabled={!onFollowUp}
                 onClick={() => onFollowUp?.(q)}
-                className="group press flex min-h-11 w-full items-center gap-3 py-2 pr-1 text-left text-[14px] leading-snug text-ink transition duration-150 ease-out hover:bg-mist/60 disabled:opacity-50 disabled:hover:bg-transparent"
+                className="group press flex min-h-11 w-full items-center gap-3 py-2 pr-1 text-left text-[14px] leading-snug text-ink transition duration-150 ease-out disabled:opacity-50"
               >
                 <span className="flex-1">{q}</span>
-                <ChevronRight
+                <span
                   aria-hidden
-                  size={16}
-                  strokeWidth={2}
-                  className="shrink-0 text-ink-muted transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-ink"
-                />
+                  className="shrink-0 text-ink/60 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-ink"
+                >
+                  →
+                </span>
               </button>
             </li>
           ))}
@@ -233,13 +239,13 @@ const MessageView = memo(function MessageView({ message, streaming, onFollowUp }
       </p>
     );
   }
-  // Consecutive tool calls share one wrapping row of chips; text, notes and errors break the row.
+  // Consecutive tool calls share one list of hairline rows; text, notes and errors break the row.
   const blocks: ReactNode[] = [];
   let chips: ReactNode[] = [];
   const flushChips = () => {
     if (chips.length === 0) return;
     blocks.push(
-      <div key={`chips-${blocks.length}`} className="flex flex-wrap gap-1.5">
+      <div key={`chips-${blocks.length}`} className="flex flex-col divide-y divide-line border-y border-line">
         {chips}
       </div>,
     );

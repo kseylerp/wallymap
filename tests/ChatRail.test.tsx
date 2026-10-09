@@ -95,7 +95,7 @@ describe("ChatRail follow-ups", () => {
     chat.status = "ready";
     rerender(rail());
     const pills = screen.getAllByRole("button", { name: /\?$/ });
-    expect(pills.map((b) => b.textContent)).toEqual([
+    expect(pills.map((b) => b.textContent?.replace(/→$/, ""))).toEqual([
       "Which trails are good for a day hike?",
       "Are there fire perimeters nearby?",
       "Where can I camp near the lake?",
@@ -166,13 +166,13 @@ describe("ChatRail sources line", () => {
     ];
     render(rail());
     const line = screen.getByTestId("sources-line");
-    expect(line.textContent).toBe("Sources: OpenStreetMap · NIFC");
+    expect(line.textContent).toBe("Sources OpenStreetMap · NIFC2026-10-09");
     const links = Array.from(line.querySelectorAll("a"));
     expect(links.map((a) => a.getAttribute("href"))).toEqual([
       "https://www.openstreetmap.org/copyright",
       "https://data-nifc.opendata.arcgis.com",
     ]);
-    expect(links.every((a) => a.classList.contains("source-link"))).toBe(true);
+    expect(links.every((a) => a.classList.contains("dashed-link"))).toBe(true);
   });
 
   it("shows no sources line when no tool cited anything", () => {

@@ -628,17 +628,21 @@ textarea:focus-visible {
   }
 }
 
-/* The answer's sources line: Wally's link with a 4/3 dashed underline (4px dash, 3px gap). */
-.source-link {
-  color: var(--accent);
-  text-decoration: none;
-  background-image: linear-gradient(to right, currentColor 4px, transparent 4px);
-  background-size: 7px 1px;
-  background-repeat: repeat-x;
-  background-position: 0 100%;
-  padding-bottom: 1px;
-  transition: color 150ms var(--ease-out);
+/* Tool-trace rows (components/ToolTrace.tsx): a small-caps label, and a hollow ink dot that breathes while the call runs. */
+.trace-label {
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.04em;
 }
-.source-link:hover {
-  color: var(--accent-deep);
+@keyframes trace-dot-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+.trace-dot {
+  animation: trace-dot-pulse 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .trace-dot {
+    animation: none;
+  }
 }

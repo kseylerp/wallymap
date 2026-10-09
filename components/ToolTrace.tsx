@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DotSpinner } from "@/components/DotSpinner";
 
 const INPUT_PREVIEW_CHARS = 300;
 
@@ -28,9 +27,13 @@ function preview(value: unknown): string {
   return text.length > INPUT_PREVIEW_CHARS ? `${text.slice(0, INPUT_PREVIEW_CHARS)}…` : text;
 }
 
+/** "query_osm-trails" reads as "query osm-trails". */
+const labelFor = (name: string) => name.replace(/_/g, " ");
+
 /**
- * One small chip per tool call: Wally's 3×3 dot spinner while it runs, then a 6px dot (green when done, red when it
- * failed); name, feature count, and elapsed time. The input is behind a disclosure.
+ * One hairline row per tool call, in the research-console style: a small-caps monospace label, a 1px ink ring
+ * while the call runs and a "·" once it is done, the feature count, and the elapsed time in tabular figures at the
+ * right. The input is behind a disclosure. No colors, no spinner.
  */
 export function ToolTrace({ name, state, input, output, errorText }: ToolTraceProps) {
   const [open, setOpen] = useState(false);
@@ -47,35 +50,29 @@ export function ToolTrace({ name, state, input, output, errorText }: ToolTracePr
 
   const count = featureCount(output);
   const failed = state === "output-error";
-  const dot = failed ? "bg-danger" : "bg-moss";
 
   return (
-    <div
-      data-testid="tool-trace"
-      className={[
-        "text-xs text-ink-muted",
-        open ? "basis-full overflow-hidden rounded-2xl border border-line bg-paper" : "rounded-pill bg-mist",
-      ].join(" ")}
-    >
+    <div data-testid="tool-trace" className="text-[12px] text-ink-muted">
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex min-h-7 w-full items-center gap-1.5 rounded-pill px-2.5 py-1 text-left transition-colors hover:text-ink"
+        className="flex min-h-7 w-full items-center gap-2 py-1 text-left transition-colors hover:text-ink"
       >
         {finished ? (
-          <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${dot}`} />
+          <span aria-hidden className="w-2 shrink-0 text-center leading-none">
+            ·
+          </span>
         ) : (
-          <DotSpinner className="shrink-0 text-ink-muted" />
+          <span aria-hidden className="trace-dot size-2 shrink-0 rounded-full border border-ink" />
         )}
-        <span className={`font-mono text-[11px] ${failed ? "text-danger" : "text-ink"}`}>{name}</span>
+        <span className="trace-label font-mono">{labelFor(name)}</span>
+        {failed && <span>· failed</span>}
         {count !== null && <span className="tabular-nums">· {count.toLocaleString()} features</span>}
-        <span className={`tabular-nums ${open ? "ml-auto" : ""}`}>
-          {!finished ? "…" : elapsedMs !== null ? `· ${elapsedMs} ms` : ""}
-        </span>
+        <span className="ml-auto pl-2 tabular-nums">{finished && elapsedMs !== null ? `${elapsedMs} ms` : ""}</span>
       </button>
       {open && (
-        <pre className="max-h-48 overflow-auto border-t border-line px-3 py-2 font-mono text-[11px] break-all whitespace-pre-wrap text-ink-muted">
+        <pre className="max-h-48 overflow-auto border-t border-line py-2 pl-4 font-mono text-[11px] break-all whitespace-pre-wrap text-ink-muted">
           {preview(input)}
           {errorText ? `\n${errorText}` : ""}
         </pre>

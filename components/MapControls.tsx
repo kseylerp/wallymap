@@ -7,7 +7,7 @@ type MapControlsProps = {
 };
 
 const BUTTON =
-  "flex size-10 items-center justify-center text-ink transition-colors hover:bg-paper/80 active:bg-accent-soft";
+  "flex size-10 items-center justify-center text-ink transition-colors hover:bg-paper/80 active:bg-mist";
 
 /** Glass zoom and reset buttons in the bottom-right corner. Positioned by `.map-controls` in globals.css. */
 export function MapControls({ onZoomIn, onZoomOut, onGlobe }: MapControlsProps) {

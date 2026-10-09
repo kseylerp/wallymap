@@ -16,7 +16,7 @@ export function EmptyState({ onPick }: EmptyStateProps) {
   return (
     <div
       data-testid="empty-state"
-      className="glass rise-in pointer-events-auto w-full max-w-[600px] rounded-card p-5 md:p-7"
+      className="glass-strong rise-in pointer-events-auto w-full max-w-[600px] rounded-card p-5 md:p-7"
       style={{ animationDelay: "120ms" }}
     >
       <Wordmark variant="hero" />
@@ -29,12 +29,12 @@ export function EmptyState({ onPick }: EmptyStateProps) {
             <button
               type="button"
               onClick={() => onPick(q)}
-              className="group flex h-full w-full items-center gap-2 rounded-[18px] border border-line bg-paper/90 px-4 py-2 text-left text-[14px] sm:py-2.5 leading-snug text-ink transition-all duration-200 hover:-translate-y-px hover:border-accent/40 hover:bg-accent-soft"
+              className="group flex h-full w-full items-center gap-2 rounded-[18px] border border-line bg-paper px-4 py-2 text-left text-[14px] leading-snug text-ink transition-all duration-200 hover:-translate-y-px hover:bg-mist sm:py-2.5"
             >
               <span className="flex-1">{q}</span>
               <span
                 aria-hidden
-                className="text-accent opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                className="text-ink-muted opacity-0 transition-opacity duration-200 group-hover:opacity-100"
               >
                 →
               </span>

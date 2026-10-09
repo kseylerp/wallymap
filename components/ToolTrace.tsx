@@ -43,14 +43,14 @@ export function ToolTrace({ name, state, input, output, errorText }: ToolTracePr
 
   const count = featureCount(output);
   const failed = state === "output-error";
-  const dot = failed ? "bg-accent-deep" : finished ? "bg-moss" : "bg-accent animate-pulse";
+  const dot = failed ? "bg-danger" : finished ? "bg-moss" : "bg-ink-muted animate-pulse";
 
   return (
     <div
       data-testid="tool-trace"
       className={[
         "text-xs text-ink-muted",
-        open ? "basis-full overflow-hidden rounded-2xl border border-line bg-paper/70" : "rounded-pill bg-ink/[0.05]",
+        open ? "basis-full overflow-hidden rounded-2xl border border-line bg-paper" : "rounded-pill bg-mist",
       ].join(" ")}
     >
       <button
@@ -60,7 +60,7 @@ export function ToolTrace({ name, state, input, output, errorText }: ToolTracePr
         className="flex w-full items-center gap-1.5 rounded-pill px-2.5 py-1 text-left transition-colors hover:text-ink"
       >
         <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${dot}`} />
-        <span className={`font-mono text-[11px] ${failed ? "text-accent-deep" : "text-ink"}`}>{name}</span>
+        <span className={`font-mono text-[11px] ${failed ? "text-danger" : "text-ink"}`}>{name}</span>
         {count !== null && <span className="tabular-nums">· {count.toLocaleString()} features</span>}
         <span className={`tabular-nums ${open ? "ml-auto" : ""}`}>
           {!finished ? "…" : elapsedMs !== null ? `· ${elapsedMs} ms` : ""}

@@ -20,8 +20,8 @@ export function EmptyState({ onPick }: EmptyStateProps) {
       style={{ animationDelay: "120ms" }}
     >
       {/* Text only: the logo lives in the corner map pill. */}
-      <h2 className="font-serif text-[2.1rem] leading-none font-semibold tracking-[-0.02em] text-ink">WallyMap</h2>
-      <p className="mt-3 text-[16px] leading-snug text-ink-muted sm:mt-4 md:text-[18px]">
+      <h2 className="font-serif text-[20px] leading-tight font-medium tracking-normal text-ink">WallyMap</h2>
+      <p className="mt-2 text-[14px] leading-snug text-ink-muted">
         Ask the map. Every answer is drawn, cited, and exportable.
       </p>
       <ul className="mt-4 grid grid-cols-1 gap-1.5 sm:mt-5 sm:grid-cols-2 sm:gap-2">

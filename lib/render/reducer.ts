@@ -1,4 +1,4 @@
-import type { MapAction, MapState, RenderOp, TimeState, Viewport } from "@/lib/render/state";
+import type { CompareState, MapAction, MapState, RenderOp, TimeState, Viewport } from "@/lib/render/state";
 import type { LayerFilters } from "@/lib/render/filters";
 import { stepWindow, timeIndex, type TimeIndex, type TimeWindow } from "@/lib/time";
 import { arrivalPitch, fitZoomOffset } from "@/lib/render/wally/terrain";
@@ -107,6 +107,27 @@ function withTimeIndex(state: MapState, allowCreate: boolean): MapState {
   let time: TimeState = { index, mode, playing: false, window: mode === "cumulative" ? [index.min, window[1]] : window };
   if (pending?.playing) time = startPlaying(time);
   return { ...state, time, pendingTime: undefined };
+}
+
+// ---- Compare over time ----
+
+/** A window with its ends in order (an unreadable end is left as given). */
+function ordered(w: [string, string]): [string, string] {
+  const a = Date.parse(w[0]);
+  const b = Date.parse(w[1]);
+  return !Number.isNaN(a) && !Number.isNaN(b) && a > b ? [w[1], w[0]] : [w[0], w[1]];
+}
+
+/** Starts a compare: windows in order, toggle on A, the scrubber paused, and no selection left on the compared layer. */
+function startCompare(state: MapState, compare: CompareState): MapState {
+  const next: CompareState = { ...compare, a: ordered(compare.a), b: ordered(compare.b), side: "a" };
+  const time = state.time?.playing ? { ...state.time, playing: false } : state.time;
+  return { ...state, compare: next, time, selected: dropSelectionOf(state, compare.layerId) };
+}
+
+/** Drops the compare when it is on `layerId` (the layer was removed). */
+function dropCompareOf(state: MapState, layerId: string): MapState["compare"] {
+  return state.compare?.layerId === layerId ? undefined : state.compare;
 }
 
 function sameWindow(a: TimeWindow, b: TimeWindow): boolean {
@@ -220,6 +241,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
           renderOps: state.renderOps.filter((op) => op.layerId !== action.layerId),
           errors: state.errors.filter((e) => e.layerId !== action.layerId),
           selected: dropSelectionOf(state, action.layerId),
+          compare: dropCompareOf(state, action.layerId),
         },
         false,
       );
@@ -235,6 +257,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
         playback: undefined,
         time: undefined,
         pendingTime: undefined,
+        compare: undefined,
       };
     case "route_loaded":
       return {
@@ -314,5 +337,15 @@ function reduceAction(state: MapState, action: MapAction): MapState {
     }
     case "clear_time":
       return state.time || state.pendingTime ? { ...state, time: undefined, pendingTime: undefined } : state;
+    case "set_compare":
+      return startCompare(state, action.compare);
+    case "set_compare_mode":
+      if (!state.compare || state.compare.mode === action.mode) return state;
+      return { ...state, compare: { ...state.compare, mode: action.mode, side: "a" } };
+    case "compare_flip":
+      if (!state.compare) return state;
+      return { ...state, compare: { ...state.compare, side: state.compare.side === "b" ? "a" : "b" } };
+    case "clear_compare":
+      return state.compare ? { ...state, compare: undefined } : state;
   }
 }

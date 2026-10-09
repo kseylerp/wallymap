@@ -20,6 +20,7 @@ import {
   type PaintOverride,
   type StyleLayerLike,
 } from "@/lib/render/hybridStyle";
+import { compareBaseId, compareBId, compareSideShown } from "@/lib/render/compareView";
 import { INK } from "@/lib/render/palette";
 import { featureCenter } from "@/lib/render/inspect";
 import type { Basemap, MapState } from "@/lib/render/state";
@@ -129,10 +130,13 @@ export function insertBeforeId(styleLayers: readonly { id: string; type: string 
 const RASTER_OPACITY = 0.8;
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
-/** Loaded layers bottom first: render-op order, then any layer without an op. */
+/** Loaded layers bottom first: render-op order (a compare's side B right above its side A), then any layer without an op. */
 function layersInRenderOrder(state: MapState) {
-  const ordered = state.renderOps.map((op) => state.layers[op.layerId]).filter((l) => l !== undefined);
-  const rest = Object.values(state.layers).filter((l) => !state.renderOps.some((op) => op.layerId === l.id));
+  const ordered = state.renderOps
+    .flatMap((op) => [state.layers[op.layerId], state.layers[compareBId(op.layerId)]])
+    .filter((l) => l !== undefined);
+  const placed = new Set(ordered.map((l) => l.id));
+  const rest = Object.values(state.layers).filter((l) => !placed.has(l.id));
   return [...ordered, ...rest];
 }
 
@@ -180,8 +184,8 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
     if (loaded.result.kind !== "tiles") continue;
     const id = `${PREFIX}${loaded.id}`;
     const { url, minzoom, maxzoom, format, tileSize, sourceLayer, geometry } = loaded.result.data;
-    // Honor a hide toggle if the agent has issued a render op for this layer.
-    const op = state.renderOps.find((o) => o.layerId === loaded.id);
+    // Honor a hide toggle if the agent has issued a render op for this layer (a compare's side B follows its layer's op).
+    const op = state.renderOps.find((o) => o.layerId === compareBaseId(loaded.id));
     const visible = !(op && !op.visible);
     const opacity = Math.min(1, Math.max(0, op?.opacity ?? 1));
 
@@ -223,11 +227,20 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
     if (!map.getSource(id)) {
       map.addSource(id, { type: "raster", tiles: [url], minzoom, maxzoom, tileSize: tileSize ?? 256 });
     }
+    // A compare in toggle mode hides the side not showing by opacity, not visibility, so both sides keep their tiles
+    // loaded and the 1 Hz flip is instant.
+    const shown = compareSideShown(state, loaded.id) ? 1 : 0;
+    const rasterOpacity = RASTER_OPACITY * opacity * shown;
     if (!map.getLayer(id)) {
-      map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": RASTER_OPACITY * opacity } });
+      map.addLayer({
+        id,
+        type: "raster",
+        source: id,
+        paint: { "raster-opacity": rasterOpacity, "raster-opacity-transition": { duration: 0 } },
+      });
     }
     map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
-    map.setPaintProperty(id, "raster-opacity", RASTER_OPACITY * opacity);
+    map.setPaintProperty(id, "raster-opacity", rasterOpacity);
   }
 
   // Restack when the layer panel reordered layers that were already on the map (new ones arrive in order).

@@ -8,7 +8,8 @@ import { MapSetupNotice } from "@/components/MapSetupNotice";
 import { syncHeatLayers, syncSatelliteHybrid, syncTileLayers } from "@/components/mapTiles";
 import { ensureRouteImages, setRouteProgress, syncRouteLayers } from "@/components/routeLayers";
 import { basemapStyleUrl } from "@/lib/render/basemaps";
-import { buildDeckLayers } from "@/lib/render/deck";
+import { swipeStore } from "@/lib/render/compareView";
+import { buildDeckLayerSets } from "@/lib/render/deck";
 import { pickToSelection, type DeckPick } from "@/lib/render/inspect";
 import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
 import { visibleState } from "@/lib/render/view";
@@ -119,15 +120,64 @@ function tileUrlsKey(view: MapState): string {
     .join("|");
 }
 
+type DeckLayerSets = { main: Layer[]; a: Layer[]; b: Layer[] };
+
 /** An unsupported render mode must not crash the canvas, so failures render no deck layers. */
-function safeDeckLayers(state: MapState): Layer[] {
+function safeDeckLayers(state: MapState): DeckLayerSets {
   try {
     // The visible view: features outside the time window (and filtered out in the layer panel) are not drawn.
-    return buildDeckLayers(visibleState(state));
+    return buildDeckLayerSets(visibleState(state));
   } catch (error) {
     console.error("MapCanvas: could not build deck.gl layers", error);
-    return [];
+    return { main: [], a: [], b: [] };
   }
+}
+
+// ---- Compare swipe (lib/render/compareView.ts) ----
+// Side A and side B of the compared layer draw in two extra overlays (their own canvases, each with its own terrain
+// copy so draped features sit on the slopes), clipped with CSS either side of the swipe handle, so the split is
+// exactly the handle's screen line at any pitch and bearing. They exist only while a swipe is on. Cost: two more
+// WebGL contexts and a second fetch of deck's DEM tiles (served from the HTTP cache); the compared layer is not
+// clickable while swiping. Tile layers (night lights, forest loss) compare by toggle instead: clipping a Mapbox
+// raster to a screen half would need a second synced map.
+
+type SideOverlays = { a: MapboxOverlay; b: MapboxOverlay };
+
+/** Clips side A to the left of the handle and side B to its right (`at` is a share of the map width). */
+function clipSides(sides: SideOverlays | null, at: number): void {
+  if (!sides) return;
+  const pct = Math.min(100, Math.max(0, at * 100));
+  const a = sides.a.getCanvas()?.parentElement;
+  const b = sides.b.getCanvas()?.parentElement;
+  if (a) a.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
+  if (b) b.style.clipPath = `inset(0 0 0 ${pct}%)`;
+}
+
+/** Adds, updates or removes the two side overlays to match the deck sets (they exist while `a` or `b` has layers). */
+function syncSideOverlays(map: mapboxgl.Map, current: SideOverlays | null, sets: DeckLayerSets): SideOverlays | null {
+  if (sets.a.length === 0 && sets.b.length === 0) {
+    if (current) {
+      map.removeControl(current.a);
+      map.removeControl(current.b);
+    }
+    return null;
+  }
+  let sides = current;
+  if (!sides) {
+    // Deck creates its canvas asynchronously, so the first clip waits for each overlay's `onLoad`.
+    const clipWhenLoaded = () => clipSides(sides, swipeStore.get());
+    sides = {
+      a: new MapboxOverlay({ interleaved: false, layers: sets.a, onLoad: clipWhenLoaded }),
+      b: new MapboxOverlay({ interleaved: false, layers: sets.b, onLoad: clipWhenLoaded }),
+    };
+    map.addControl(sides.a);
+    map.addControl(sides.b);
+  } else {
+    sides.a.setProps({ layers: sets.a });
+    sides.b.setProps({ layers: sets.b });
+  }
+  clipSides(sides, swipeStore.get());
+  return sides;
 }
 
 // ---- 3D: terrain, sky, fog and buildings (lib/render/wally/terrain.ts) ----
@@ -223,6 +273,8 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
   const onViewportChangeRef = useRef(onViewportChange);
   const onPickRef = useRef(onPick);
   const appliedBasemapRef = useRef<Basemap>(state.basemap);
+  // A compare swipe's two side overlays, while one is on.
+  const sidesRef = useRef<SideOverlays | null>(null);
   // The camera the map last settled on (or is easing to). A prop equal to this is our own echo.
   const lastCameraRef = useRef<Viewport>(state.viewport);
   // True while a route preview drives the camera: it neither reports every frame nor eases to viewport props.
@@ -281,7 +333,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       pitch: initial.viewport.pitch,
       bearing: initial.viewport.bearing,
     });
-    const overlay = new MapboxOverlay({ interleaved: false, layers: safeDeckLayers(initial) });
+    const overlay = new MapboxOverlay({ interleaved: false, layers: safeDeckLayers(initial).main });
     map.addControl(overlay);
 
     map.on("moveend", () => {
@@ -323,6 +375,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
 
     return () => {
       cancelAnimationFrame(hoverFrame);
+      sidesRef.current = syncSideOverlays(map, sidesRef.current, { main: [], a: [], b: [] });
       map.removeControl(overlay);
       map.remove();
       mapRef.current = null;
@@ -337,9 +390,11 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
   const appliedTilesKeyRef = useRef("");
   useEffect(() => {
     const view = visibleState(state);
-    overlayRef.current?.setProps({ layers: safeDeckLayers(state) });
+    const sets = safeDeckLayers(state);
+    overlayRef.current?.setProps({ layers: sets.main });
     const map = mapRef.current;
     if (!map) return;
+    sidesRef.current = syncSideOverlays(map, sidesRef.current, sets);
     const key = tileUrlsKey(view);
     if (key === appliedTilesKeyRef.current && tileTimerRef.current === null) {
       syncTileLayers(map, view);
@@ -362,6 +417,9 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     },
     [],
   );
+
+  // The swipe handle moves the clip without a React render.
+  useEffect(() => swipeStore.subscribe(() => clipSides(sidesRef.current, swipeStore.get())), []);
 
   // The preview control reads the map state from here (components/App.tsx does not pass it to the chat rail).
   useEffect(() => {

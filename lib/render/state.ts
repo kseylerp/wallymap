@@ -1,5 +1,6 @@
 import type { Feature, LineString } from "geojson";
 import type { LayerResult, StyleHints } from "@/layers/types";
+import type { CompareSpec } from "@/lib/render/compare";
 import type { LayerFilters } from "@/lib/render/filters";
 import type { TimeIndex, TimeWindow } from "@/lib/time";
 
@@ -79,7 +80,15 @@ export type MapState = {
   time?: TimeState;
   /** A time window asked for before any time-aware layer arrived; the next such layer applies it. */
   pendingTime?: { window: TimeWindow; playing?: boolean; mode?: TimeMode };
+  /**
+   * Compare over time (components/CompareControl.tsx, lib/render/compareView.ts): one layer seen at two windows, A
+   * and B. While it exists the compared layer ignores the scrubber's window; other layers keep it.
+   */
+  compare?: CompareState;
 };
+
+/** A compare: the spec, optional labels for the two sides, and (toggle mode) the side on screen, A by default. */
+export type CompareState = CompareSpec & { aLabel?: string; bLabel?: string; side?: "a" | "b" };
 
 /** "slide" moves the whole window each step; "cumulative" keeps the start at the first date and grows the end. */
 export type TimeMode = "slide" | "cumulative";
@@ -145,4 +154,10 @@ export type MapAction =
   /** One play step: the window moves one bucket; at the end, play stops. */
   | { type: "time_tick" }
   /** Hides the scrubber and shows every feature again. */
-  | { type: "clear_time" };
+  | { type: "clear_time" }
+  /** Starts (or replaces) a compare; windows are put in order, play on the scrubber pauses, toggle shows A first. */
+  | { type: "set_compare"; compare: CompareState }
+  | { type: "set_compare_mode"; mode: CompareSpec["mode"] }
+  /** Toggle mode's 1 Hz flip between A and B. */
+  | { type: "compare_flip" }
+  | { type: "clear_compare" };

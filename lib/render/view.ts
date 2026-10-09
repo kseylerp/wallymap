@@ -1,4 +1,5 @@
 import type { FeatureCollection } from "geojson";
+import { compareEntries, effectiveMode } from "@/lib/render/compareView";
 import { applyFilters, type LayerFilters } from "@/lib/render/filters";
 import { activeFilters, fullWindow } from "@/lib/render/reducer";
 import type { LoadedLayer, MapState, Selection } from "@/lib/render/state";
@@ -76,7 +77,8 @@ function visibleLayer(
  * narrowed by its render op's attribute filters and to the time window (features without `t` always stay), and time-aware tile layers (night lights, forest
  * loss) pointed at the window's end once the window is narrower than the whole span. Pure and memoized: the same
  * state gives the same object, the same layer and window give the same data object (so deck does not re-upload),
- * and nothing to narrow returns `state` itself.
+ * and nothing to narrow returns `state` itself. While a compare is on, the compared layer is replaced by its compare
+ * entries (lib/render/compareView.ts): side A under its id and side B under `compareBId(id)`, or the delta collection.
  */
 export function visibleState(state: MapState): MapState {
   const cached = stateMemo.get(state);
@@ -85,7 +87,15 @@ export function visibleState(state: MapState): MapState {
   const rewriteTiles = !isFullSpan(state);
   let changed = false;
   const layers: MapState["layers"] = {};
+  const compare = state.compare;
+  const mode = effectiveMode(state);
   for (const [id, layer] of Object.entries(state.layers)) {
+    if (compare && mode && compare.layerId === id) {
+      // The compared layer shows its two windows (or their delta) instead of the scrubber's window.
+      Object.assign(layers, compareEntries(layer, filtersOf(state, id), compare, mode));
+      changed = true;
+      continue;
+    }
     const next = visibleLayer(layer, filtersOf(state, id), window, rewriteTiles);
     if (next !== layer) changed = true;
     layers[id] = next;

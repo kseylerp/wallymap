@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { ChatRail } from "@/components/ChatRail";
+import { CompareControl } from "@/components/CompareControl";
 import { InspectCard } from "@/components/InspectCard";
 import { drawnColor, LayerStack } from "@/components/LayerStack";
 import { MapCanvas, type MapHandle } from "@/components/MapCanvas";
@@ -167,6 +168,9 @@ export function App() {
           />
         </div>
       </header>
+
+      {/* Compare over time: the Compare pill or strip under the map pills, and the swipe handle across the map. */}
+      <CompareControl state={state} dispatch={dispatch} />
 
       <div className="pointer-events-none absolute top-3 right-3 z-20 flex flex-col items-end md:top-4 md:right-4">
         <LayerStack

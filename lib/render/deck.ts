@@ -12,6 +12,14 @@ import {
   POLYGON_INK_FILL,
   SCORE_RAMP,
 } from "@/lib/render/palette";
+import {
+  COMPARE_COLORS,
+  compareBId,
+  compareSideShown,
+  DELTA_FILL_ALPHA,
+  effectiveMode,
+  isHexCollection,
+} from "@/lib/render/compareView";
 import { DECK_TERRAIN_ID, demDecoder, demTileUrl } from "@/lib/render/wally/deckTerrain";
 import { featureCenter } from "@/lib/render/inspect";
 import { pinIconFor } from "@/lib/render/wally/pins";
@@ -321,6 +329,8 @@ type OpContext = {
   zoom: number;
   /** Deck's terrain layer is in the stack: drape and offset this op's layers on it. */
   terrain: boolean;
+  /** The id this op's deck layers are named after, when not the op's layer id (compare side B). */
+  deckId?: string;
 };
 
 /** Selection, opacity and color: what every color accessor of an op depends on (see `updateTriggers`). */
@@ -337,7 +347,7 @@ function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
   const stroke = requested ? hexToRgba(requested) : WHITE;
   const fill = requested ? hexToRgba(requested) : INK;
   const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
-  const id = `${op.layerId}:${op.mode}`;
+  const id = `${ctx.deckId ?? op.layerId}:${op.mode}`;
   // Color and width accessors become functions while a feature is selected, and deck only re-runs a function
   // accessor when its trigger changes, so the trigger carries everything they depend on.
   const trigger = colorTrigger(selected, opacity, requested ?? INK_HEX);
@@ -431,10 +441,10 @@ function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
  * Point symbols: one monochrome sprite per layer family (pins.ts), centered on the point and filled solid ink
  * while selected. The sprite's alpha carries the op opacity and the selection fade.
  */
-function symbolLayers(op: RenderOp, { data, selected, terrain }: OpContext, opacity: number): Layer[] {
+function symbolLayers(op: RenderOp, { data, selected, terrain, deckId }: OpContext, opacity: number): Layer[] {
   return [
     new IconLayer<Feature>({
-      id: `${op.layerId}:points`,
+      id: `${deckId ?? op.layerId}:points`,
       data: data.features,
       pickable: true,
       getPosition: markerPosition,
@@ -455,8 +465,8 @@ function symbolLayers(op: RenderOp, { data, selected, terrain }: OpContext, opac
  * Dense point layers as flat light-gray H3 tiles at a zoom-dependent resolution, with an ink count on grouped
  * tiles. A picked tile is a `HexFeature`, so the inspect card shows its count.
  */
-function hexTileLayers(op: RenderOp, { data, selected: picked, zoom, terrain }: OpContext, opacity: number): Layer[] {
-  const id = `${op.layerId}:points`;
+function hexTileLayers(op: RenderOp, { data, selected: picked, zoom, terrain, deckId }: OpContext, opacity: number): Layer[] {
+  const id = `${deckId ?? op.layerId}:points`;
   const resolution = hexResolution(zoom);
   const { hexes, labelled, max } = binned(data, resolution);
   // A tile picked at another resolution is not among these tiles: ignore it rather than fade every tile.
@@ -507,6 +517,107 @@ function hexTileLayers(op: RenderOp, { data, selected: picked, zoom, terrain }: 
   ];
 }
 
+// ---- Compare delta (spec §7, palette §11) ----
+
+const DELTA_RGB = {
+  "a-only": hexToRgba(COMPARE_COLORS.a),
+  "b-only": hexToRgba(COMPARE_COLORS.b),
+  both: hexToRgba(COMPARE_COLORS.both),
+} as const;
+
+/** Delta strokes: 1.5px outlines and 2.5px lines in the class color over a 1px white casing a side; points 5px discs. */
+export const DELTA_STROKE = { polygon: 1.5, line: 2.5, casing: 1, pointRadius: 5 } as const;
+/** Hex delta columns: the largest |B − A| stands this many meters tall, at the translucent-3D alpha (spec §11). */
+export const HEX_DELTA = { maxHeightM: 4000, alpha: 0.55 } as const;
+
+/** The class color for a delta feature (a-only purple, b-only pink, both dark grey); unknown reads as both. */
+export function deltaColor(f: Feature): Rgba {
+  const cls: unknown = f.properties?.delta;
+  return cls === "a-only" || cls === "b-only" ? DELTA_RGB[cls] : DELTA_RGB.both;
+}
+
+function isArea(f: Feature): boolean {
+  const t = f.geometry?.type;
+  return t === "Polygon" || t === "MultiPolygon";
+}
+
+const hexDeltaMax = new WeakMap<GeoJSON.FeatureCollection, number>();
+function maxAbsV(data: GeoJSON.FeatureCollection): number {
+  let max = hexDeltaMax.get(data);
+  if (max === undefined) {
+    max = data.features.reduce((m, f) => Math.max(m, Math.abs(Number(f.properties?.v) || 0)), 0);
+    hexDeltaMax.set(data, max);
+  }
+  return max;
+}
+
+/**
+ * The compared layer in delta mode: each feature stroked in its class color (A only purple, B only pink, both dark
+ * grey) over a white casing, areas filled at 12% of it, points as solid discs. H3 cells extrude instead: height is
+ * |B − A| (tallest = 4,000 m), color the sign class, translucent with dark grey edges. Hatching comes with the
+ * palette task.
+ */
+function deltaLayers(op: RenderOp, { data, selected, terrain }: OpContext): Layer[] {
+  const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
+  const id = `${op.layerId}:${op.mode}`;
+  const fade = (f: Feature, c: Rgba): Rgba => {
+    const base = withOpacity(c, opacity);
+    return selected && f !== selected ? withOpacity(base, SIBLING_FADE) : base;
+  };
+  const trigger = [selectionKey(selected), opacity];
+  if (isHexCollection(data)) {
+    const max = maxAbsV(data) || 1;
+    return [
+      new GeoJsonLayer({
+        id,
+        data,
+        pickable: true,
+        extruded: true,
+        wireframe: true,
+        getElevation: (f: Feature) => (Math.abs(Number(f.properties?.v) || 0) / max) * HEX_DELTA.maxHeightM,
+        getFillColor: (f: Feature) => fade(f, withOpacity(deltaColor(f), HEX_DELTA.alpha)),
+        getLineColor: (f: Feature) => fade(f, DELTA_RGB.both),
+        lineWidthUnits: "pixels",
+        getLineWidth: 1,
+        material: false,
+        updateTriggers: { getFillColor: trigger, getLineColor: trigger },
+      }),
+    ];
+  }
+  const updateTriggers = { getFillColor: trigger, getLineColor: trigger, getLineWidth: trigger };
+  const strokeWidth = (f: Feature) => (isArea(f) ? DELTA_STROKE.polygon : DELTA_STROKE.line);
+  return [
+    new GeoJsonLayer({
+      id: `${id}:casing`,
+      data,
+      pickable: false,
+      filled: false,
+      pointType: "circle",
+      getLineColor: (f: Feature) => fade(f, WHITE),
+      getLineWidth: (f: Feature) => strokeWidth(f) + 2 * DELTA_STROKE.casing,
+      lineWidthUnits: "pixels",
+      getPointRadius: DELTA_STROKE.pointRadius + DELTA_STROKE.casing,
+      pointRadiusUnits: "pixels",
+      updateTriggers,
+      ...terrainProps(terrain, "drape"),
+    }),
+    new GeoJsonLayer({
+      id,
+      data,
+      pickable: true,
+      pointType: "circle",
+      getFillColor: (f: Feature) => fade(f, isArea(f) ? withOpacity(deltaColor(f), DELTA_FILL_ALPHA) : deltaColor(f)),
+      getLineColor: (f: Feature) => fade(f, deltaColor(f)),
+      getLineWidth: (f: Feature) => (f === selected ? strokeWidth(f) + 1 : strokeWidth(f)),
+      lineWidthUnits: "pixels",
+      getPointRadius: DELTA_STROKE.pointRadius,
+      pointRadiusUnits: "pixels",
+      updateTriggers,
+      ...terrainProps(terrain, "drape"),
+    }),
+  ];
+}
+
 /**
  * Deck's invisible copy of the map's terrain: a TerrainLayer over the same DEM, drawn fully transparent so only
  * the draped data layers show, and read by the TerrainExtension to stand pins on the slopes.
@@ -532,29 +643,70 @@ function terrainSourceLayer(token: string): Layer {
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim() ?? "";
 
 /**
- * Turns map state into deck.gl layer instances for each visible geojson render op (lines bring a casing).
- * Heat ops yield none here; Mapbox draws them.
+ * Deck layers in three sets. `main` is everything the map overlay draws, bottom first (the terrain copy, then each
+ * visible GeoJSON render op; heat ops yield none, Mapbox draws them). While a compare swipes, the compared layer's two
+ * sides go to `a` and `b` instead (each with its own terrain copy), for the two clipped side overlays MapCanvas lays
+ * over the map; otherwise both are empty. In toggle mode both sides stay in `main` and the side not showing is hidden
+ * (not removed, so its buffers stay on the GPU for the next flip). Delta draws the delta collection by class.
  */
-export function buildDeckLayers(state: MapState, { mapboxToken = MAPBOX_TOKEN }: { mapboxToken?: string } = {}): Layer[] {
-  const layers: Layer[] = [];
+export function buildDeckLayerSets(
+  state: MapState,
+  { mapboxToken = MAPBOX_TOKEN }: { mapboxToken?: string } = {},
+): { main: Layer[]; a: Layer[]; b: Layer[] } {
+  const main: Layer[] = [];
+  const a: Layer[] = [];
+  const b: Layer[] = [];
   // 3D terrain on the map means deck needs its own copy of the surface to drape on (see deckTerrain.ts).
   const terrain = state.terrain && !state.flattened && mapboxToken !== "";
-  if (terrain) layers.push(terrainSourceLayer(mapboxToken));
+  if (terrain) main.push(terrainSourceLayer(mapboxToken));
+  const compare = state.compare;
+  const mode = effectiveMode(state);
   for (const op of state.renderOps) {
     if (!op.visible) continue;
     const loaded = state.layers[op.layerId];
     if (!loaded) continue;
     if (loaded.result.kind === "tiles") continue;
     const selected = state.selected?.layerId === op.layerId ? state.selected.feature : undefined;
-    layers.push(
-      ...geoJsonLayersFor(op, {
-        data: loaded.result.data,
-        style: loaded.style,
-        selected,
-        zoom: state.viewport.zoom,
-        terrain,
-      }),
-    );
+    const ctx: OpContext = { data: loaded.result.data, style: loaded.style, selected, zoom: state.viewport.zoom, terrain };
+    if (compare?.layerId !== op.layerId || !mode) {
+      main.push(...geoJsonLayersFor(op, ctx));
+      continue;
+    }
+    if (mode === "delta") {
+      main.push(...deltaLayers(op, ctx));
+      continue;
+    }
+    // Each side draws in its compare color (A purple, B pink: palette §11), in place of the layer's own stroke.
+    const sideA = geoJsonLayersFor({ ...op, color: COMPARE_COLORS.a }, ctx);
+    const bId = compareBId(op.layerId);
+    const loadedB = state.layers[bId];
+    const sideB =
+      loadedB?.result.kind === "geojson"
+        ? geoJsonLayersFor({ ...op, color: COMPARE_COLORS.b }, { ...ctx, data: loadedB.result.data, selected: undefined, deckId: bId })
+        : [];
+    if (mode === "swipe") {
+      a.push(...sideA);
+      b.push(...sideB);
+      continue;
+    }
+    // Toggle: both sides stay built; the one not showing is hidden.
+    const shownA = compareSideShown(state, op.layerId);
+    const shownB = compareSideShown(state, bId);
+    main.push(...sideA.map((l) => (shownA ? l : l.clone({ visible: false }))));
+    main.push(...sideB.map((l) => (shownB ? l : l.clone({ visible: false }))));
   }
-  return layers;
+  if (terrain && a.length > 0) a.unshift(terrainSourceLayer(mapboxToken));
+  if (terrain && b.length > 0) b.unshift(terrainSourceLayer(mapboxToken));
+  return { main, a, b };
+}
+
+/**
+ * Turns map state into deck.gl layer instances for each visible geojson render op (lines bring a casing), as one
+ * list: `buildDeckLayerSets`' main set plus any swipe sides (without their own terrain copies).
+ * Heat ops yield none here; Mapbox draws them.
+ */
+export function buildDeckLayers(state: MapState, options: { mapboxToken?: string } = {}): Layer[] {
+  const { main, a, b } = buildDeckLayerSets(state, options);
+  const sides = [...a, ...b].filter((l) => l.id !== DECK_TERRAIN_ID);
+  return sides.length > 0 ? [...main, ...sides] : main;
 }

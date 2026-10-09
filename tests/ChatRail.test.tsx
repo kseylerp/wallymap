@@ -101,4 +101,26 @@ describe("ChatRail follow-ups", () => {
       "Where can I camp near the lake?",
     ]);
   });
+  it("shows an answer once when the model repeats its note as closing text", () => {
+    const body = "Trails mapped around the lake, mostly on the west shore with a few gaps near the south end.";
+    chat.messages = [
+      user("Trails?"),
+      {
+        id: "a1",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-note",
+            toolCallId: "n1",
+            state: "output-available",
+            input: { markdown: body },
+            output: { markdown: body },
+          },
+          { type: "text", text: `${body}\n\n- Which trails are good for a day hike?`, state: "done" },
+        ],
+      } as UIMessage,
+    ];
+    render(rail());
+    expect(screen.getAllByText(body)).toHaveLength(1);
+  });
 });

@@ -14,5 +14,6 @@ export const SYSTEM_PROMPT = [
   "Query tools return a summary (feature count, extent, sample properties, citation); the full data is already drawn on the map.",
   "If a query returns an error with hint zoom_in, query a smaller bbox; if the hint is unavailable or upstream, say that layer could not be loaded and continue with the others.",
   "Only render layers whose query succeeded.",
+  "After calling note, do not repeat its content in your reply; add only the follow-up questions.",
   "End with two or three follow-up questions as a bulleted list.",
 ].join("\n");

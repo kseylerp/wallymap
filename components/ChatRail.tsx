@@ -9,6 +9,7 @@ import { ArrowUpIcon, ChevronDownIcon, ChevronUpIcon, StopIcon } from "@/compone
 import { ToolTrace } from "@/components/ToolTrace";
 import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
 import { compactMessages } from "@/lib/agent/compactMessages";
+import { dedupeNoteAndText } from "@/lib/agent/dedupe";
 import { extractFollowUps } from "@/lib/agent/followups";
 import type { MapAction, RenderOp } from "@/lib/render/state";
 import { visibleMapPadding } from "@/lib/render/viewportPadding";
@@ -174,6 +175,8 @@ const MessageView = memo(function MessageView({ message, streaming, onFollowUp }
     );
     chips = [];
   };
+  // When the model repeats its note as closing text, show only the text (it carries the follow-ups).
+  const repeatedNotes = dedupeNoteAndText(message.parts);
   message.parts.forEach((part, i) => {
     if (part.type === "text") {
       if (!part.text.trim()) return;
@@ -182,7 +185,7 @@ const MessageView = memo(function MessageView({ message, streaming, onFollowUp }
       blocks.push(<AnswerCard key={i} text={part.text} done={done} onFollowUp={onFollowUp} />);
     } else if (isToolUIPart(part)) {
       chips.push(<ToolTraceView key={part.toolCallId} part={part} />);
-      const extras = toolExtras(part, onFollowUp);
+      const extras = repeatedNotes.has(i) ? null : toolExtras(part, onFollowUp);
       if (extras !== null) {
         flushChips();
         blocks.push(<div key={`${part.toolCallId}-extras`}>{extras}</div>);

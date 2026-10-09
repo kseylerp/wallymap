@@ -1,6 +1,6 @@
-# MapAgent
+# WildMap
 
-MapAgent is an open-source chat agent that draws outdoor data on a Mapbox map. Ask a question in plain language, and the agent picks the right data layers and shows them on the map: trails today; forest loss, fire, snow, and water next. It runs on Next.js, and you bring your own model: OpenRouter, Anthropic directly, or any OpenAI-compatible server.
+WildMap is an open-source chat agent that draws outdoor data on a Mapbox map. Ask a question in plain language, and the agent picks the right data layers and shows them on the map: trails today; forest loss, fire, snow, and water next. It runs on Next.js, and you bring your own model: OpenRouter, Anthropic directly, or any OpenAI-compatible server.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/kseylerp/mapagent)
 
@@ -36,7 +36,7 @@ Copy `.env.example` to `.env.local` and fill in what you need.
 
 ## Bring your own key and model
 
-MapAgent never picks a model for you. Set `MODEL_NAME` and the key for your provider.
+WildMap never picks a model for you. Set `MODEL_NAME` and the key for your provider.
 
 **OpenRouter (default).** Set `OPENROUTER_API_KEY` and any OpenRouter model slug:
 

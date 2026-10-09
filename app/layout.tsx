@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MapAgent",
+  title: "WildMap",
   description: "Ask a chat agent to draw outdoor datasets on a globe.",
 };
 

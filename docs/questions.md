@@ -1,6 +1,6 @@
 # Example questions
 
-These are the six starter questions in `components/EmptyState.tsx`. Each one should end with a trail layer drawn on the map and a short note. In Milestone 1 the only data layer is `osm-trails`.
+These are the six WildMap starter questions in `components/EmptyState.tsx`. Each one should end with a trail layer drawn on the map and a short note. In Milestone 1 the only data layer is `osm-trails`.
 
 The usual tool order is: find the place, move the map, query the layer, draw it, explain it.
 
@@ -8,7 +8,7 @@ The usual tool order is: find the place, move the map, query the layer, draw it,
 
 Tools: `geocode` → `set_view` → `query_osm-trails` → `render` → `note`
 
-The map flies to Lake Tahoe and shows a network of orange trail lines.
+The map flies to Lake Tahoe and shows a network of terracotta trail lines.
 
 ## 2. Which trails near Chamonix are alpine grade?
 

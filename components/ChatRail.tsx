@@ -111,7 +111,7 @@ export function ChatRail({ catalog, renderOps, getCanvasSize, onActions, collaps
       }),
   );
   // A fixed id: without one the SDK picks a random id during render, which Cache Components rejects at prerender.
-  const { messages, sendMessage, status, error, stop } = useChat({ id: "mapagent", transport });
+  const { messages, sendMessage, status, error, stop } = useChat({ id: "wildmap", transport });
   const [draft, setDraft] = useState("");
   const appliedRef = useRef<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -169,7 +169,7 @@ export function ChatRail({ catalog, renderOps, getCanvasSize, onActions, collaps
           <span aria-hidden className="md:hidden">{collapsed ? "▴" : "▾"}</span>
           <span aria-hidden className="hidden md:inline">{collapsed ? "»" : "«"}</span>
         </button>
-        <h1 className={`text-sm font-semibold text-neutral-900 ${collapsed ? "md:hidden" : ""}`}>MapAgent</h1>
+        <h1 className={`text-sm font-semibold text-neutral-900 ${collapsed ? "md:hidden" : ""}`}>WildMap</h1>
         {busy && !collapsed && <span className="ml-auto text-xs text-neutral-500">Thinking…</span>}
       </header>
 

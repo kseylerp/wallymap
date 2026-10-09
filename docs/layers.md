@@ -1,6 +1,6 @@
 # Adding a layer
 
-A layer is one dataset the agent can draw on the map. Each layer is a single file in `layers/` that exports a `Layer` object. The agent gets a `query_<id>` tool for it automatically, so you do not touch the chat code.
+A layer is one dataset the WildMap agent can draw on the map. Each layer is a single file in `layers/` that exports a `Layer` object. The agent gets a `query_<id>` tool for it automatically, so you do not touch the chat code.
 
 ## The `Layer` interface
 

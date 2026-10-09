@@ -81,3 +81,15 @@ Dark map style, route recording/live tracking, offline, accounts, clustering, cu
 - **Basemap labels:** "Topographical + Satellite" (default), "Topographical", "Satellite". No icons on the basemap pills.
 
 - **Data console (right pane):** the time scrubber docks at the top of the right pane (not under the composer); each layer card carries attribute filters derived from its data (category chips, numeric ranges) that apply instantly to the map, the counts, and exports. Data lines are white over a thin ink casing (no grey lines); routes keep the purple→coral gradient.
+
+## 11. Approved palette (owner, 2026-10-09 late) — supersedes "no colors" where it conflicts
+
+Approved colors only: wally pink `#F57272`, purple `#6E5BFF`, sage `#9FB693`, off-white `#FAF9F5`/`#ECEAE7`, dark grey `#3A3A3C` (ink `#1F1F1F` for text). No other hues. Symbols stay shape-coded with no icons.
+
+- **Dark grey:** symbol strokes, trail/data lines over a white casing, polygon outlines, text, hex count labels.
+- **Purple:** selection (symbol fill, selected line), the active trail, the time-window highlight, compare side A.
+- **Wally pink:** route start, the scrubber playhead, compare side B, hazard tints (fire perimeters at 12% fill).
+- **Sage:** natural/protected areas (wilderness, public lands, physical regions) at 10–15% fill; "available/open" states.
+- **Off-white:** surfaces and the low end of every ramp.
+- **Routes:** purple → pink gradient (unchanged).
+- **Ramps (heatmaps and hex tiles may use more colors, derived from the five, lightness monotonic):** density/heat/hex: off-white → sage → purple → dark grey; popularity: off-white → pink → purple; remoteness: off-white → sage → dark grey; compare: diverging purple ← off-white → pink, unchanged = dark grey; 3D columns: sage → purple by height with dark grey edges. Interpolate in OKLCH; validate contrast against both basemaps.

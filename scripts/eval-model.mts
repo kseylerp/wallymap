@@ -60,7 +60,7 @@ async function runQuestion(question: string): Promise<Outcome> {
       system: SYSTEM_PROMPT,
       tools: buildTools(),
       prompt: question,
-      stopWhen: stepCountIs(8),
+      stopWhen: stepCountIs(12),
     });
 
     const calls: ToolCall[] = [];

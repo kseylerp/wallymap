@@ -16,11 +16,11 @@ import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 const SOURCES = ["VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "MODIS_NRT"] as const;
 
 const inputSchema = z.object({
-  days: z.number().int().min(1).max(10).default(7),
+  days: z.number().int().min(1).max(5).default(3),
   source: z.enum(SOURCES).default("VIIRS_SNPP_NRT"),
 });
 
-/** Most points returned; keeps the strongest so a 10-day, country-sized request stays drawable. */
+/** Most points returned; keeps the strongest so a 5-day, country-sized request stays drawable. */
 const MAX_POINTS = 5_000;
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -92,14 +92,14 @@ const fireDetections = defineLayer({
   id: "fire-detections",
   title: "Active fire detections",
   description:
-    "Satellite hotspots from NASA FIRMS: each point is a spot a satellite saw burning (or very hot) in the last 1 to 10 days. " +
+    "Satellite hotspots from NASA FIRMS: each point is a spot a satellite saw burning (or very hot) in the last 1 to 5 days (default 3; NASA allows no more than 5). " +
     "Each point has t (UTC time of the satellite pass), v (fire radiative power in megawatts, a measure of how intensely it burns), confidence and daynight (D day pass, N night pass). " +
     "Confidence is l, n or h (low, nominal, high) for VIIRS and a 0 to 100 number for MODIS. " +
     "Use it to show where fire is burning right now or recently, anywhere in the world. " +
     "Caveats: detections are heat points, not fire outlines (use fire-perimeters for the burned area); one fire often produces many points; " +
     "VIIRS sources are about 375 m resolution and MODIS about 1 km; data arrives roughly 3 hours after the pass; " +
     "industrial flares, gas wells and volcanoes also show up. " +
-    "Pick VIIRS_SNPP_NRT (default), VIIRS_NOAA20_NRT or MODIS_NRT with source. Needs a region under 2,000,000 km² (about the size of Mexico); 10 days over an area that large can be tens of thousands of points, so at most the 5,000 strongest (by v) are returned and the result says so when it trims.",
+    "Pick VIIRS_SNPP_NRT (default), VIIRS_NOAA20_NRT or MODIS_NRT with source. Needs a region under 2,000,000 km² (about the size of Mexico); 5 days over an area that large can be tens of thousands of points, so at most the 5,000 strongest (by v) are returned and the result says so when it trims.",
   coverage: "global",
   license: "NASA FIRMS (public, attribution requested)",
   requiredEnv: ["FIRMS_MAP_KEY"],

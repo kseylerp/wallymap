@@ -117,11 +117,11 @@ const forestRoads = defineLayer({
     "tell the user to confirm with the local ranger district or the forest's MVUM before camping. " +
     "Pair it with the campsites layer to show developed sites and trailhead parking. " +
     "United States National Forests only (nothing on other land or outside the US); dates the roads are open are not included beyond the seasonal flag. " +
-    "Zoom in to a region under 20,000 km² (about a 140 km square) first; at most 2,000 road segments are returned and the result says so when it trims.",
+    "Zoom in to a region under 25,000 km² (about a 160 km square) first; at most 2,000 road segments are returned and the result says so when it trims.",
   coverage: "us",
   license: "Public domain (USDA Forest Service)",
   requiredEnv: [],
-  maxAreaKm2: 20_000,
+  maxAreaKm2: 25_000,
   input: inputSchema,
   style: { geometry: "line", color: "#F2A33A" },
 

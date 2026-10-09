@@ -177,12 +177,12 @@ const campsites = defineLayer({
     "Set backcountryOnly to true to keep only camp sites tagged as backcountry (it never hides parking); set includeParking to false to get camp sites alone. " +
     "Caveats: OpenStreetMap is volunteer-mapped, so it misses many sites and is not a reservation or availability source; fees, seasons and rules may be out of date or missing; " +
     "free dispersed camping spots are mostly not mapped here (see forest-roads for the drivable Forest Service roads), and parking is any lot with a capacity, not only trailhead lots. " +
-    "Zoom in to a region under 10,000 km² (about a 100 km square) first. At most 5,000 points are returned (all camp sites first, then the largest parking lots) and the result says so when it trims.",
+    "Zoom in to a region under 25,000 km² (about a 160 km square) first. At most 5,000 points are returned (all camp sites first, then the largest parking lots) and the result says so when it trims.",
   coverage: "global",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],
-  maxAreaKm2: 10_000,
+  maxAreaKm2: 25_000,
   input: inputSchema,
   style: { geometry: "point", color: "#F2A33A" },
 

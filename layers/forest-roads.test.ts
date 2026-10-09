@@ -99,10 +99,10 @@ describe("normalizeMvum", () => {
 });
 
 describe("forest-roads layer", () => {
-  it("declares US coverage, no key and a 20,000 km2 cap", () => {
+  it("declares US coverage, no key and a 25,000 km2 cap", () => {
     expect(layer.coverage).toBe("us");
     expect(layer.requiredEnv).toEqual([]);
-    expect(layer.maxAreaKm2).toBe(20_000);
+    expect(layer.maxAreaKm2).toBe(25_000);
     expect(layer.style).toEqual({ geometry: "line", color: "#F2A33A" });
     expect(layer.license).toBe("Public domain (USDA Forest Service)");
   });
@@ -161,8 +161,8 @@ describe("forest-roads layer", () => {
     expect(stub).not.toHaveBeenCalled();
   });
 
-  it("returns 422 zoom_in from runLayer for a bbox over 20,000 km2", async () => {
-    const res = await runLayer("forest-roads", { bbox: [-122, 37, -119, 40] });
+  it("returns 422 zoom_in from runLayer for a bbox over 25,000 km2", async () => {
+    const res = await runLayer("forest-roads", { bbox: [-123, 36, -119, 40] });
     expect(res.status).toBe(422);
     expect(res.body).toMatchObject({ hint: "zoom_in" });
   });

@@ -30,6 +30,8 @@ const inputSchema = z.object({
   resolution: z.number().int().min(5).max(8).default(7),
 });
 
+/** Coarsest H3 resolution the layer steps down to. */
+const MIN_RESOLUTION = 5;
 const KM_PER_DEG_LAT = 110.57;
 const KM_PER_DEG_LON_EQUATOR = 111.32;
 /** Long road segments get extra points this far apart, so distance to a vertex tracks distance to the road. */
@@ -231,9 +233,8 @@ export function scoreCells(inputs: ScoreCellsInputs): Feature<Polygon>[] {
 }
 
 function tooManyCells(count: number, resolution: number): LayerError {
-  const lower = resolution > 5 ? ` or a lower resolution (${resolution - 1})` : "";
   return {
-    error: `This view needs about ${Math.round(count).toLocaleString("en-US")} hexagons at resolution ${resolution}, over the ${MAX_CELLS.toLocaleString("en-US")} limit; zoom in${lower}`,
+    error: `This view needs about ${Math.round(count).toLocaleString("en-US")} hexagons even at resolution ${resolution}, over the ${MAX_CELLS.toLocaleString("en-US")} limit; zoom in`,
     hint: "zoom_in",
   };
 }
@@ -245,15 +246,15 @@ const remoteness = defineLayer({
     "How remote each hexagon in view is, from 0 (on a road, by a campground) to 100 (far from any road, inside wilderness, no campsites near). It is an estimate from map data, not a measure of solitude. " +
     "Signals: distance from the hexagon centre to the nearest OpenStreetMap road or track (counts up to 20 km; most weight), inside a designated US wilderness area (a bonus, US only, so scores elsewhere top out at 80), and no camp site within 2 km (a small bonus). " +
     "Each hexagon has v (the score), h3 (the H3 cell id) and signals { roadDistanceKm, inWilderness, campsitesWithin2km } (null when that signal was unavailable). " +
-    "resolution sets the hexagon size: 5 (about 250 km² each), 6 (36 km²), 7 (default, 5 km²) or 8 (0.7 km²); at most 4,000 hexagons per request, so zoom in or lower the resolution if asked. " +
+    "resolution sets the hexagon size: 5 (about 250 km² each), 6 (36 km²), 7 (default, 5 km²) or 8 (0.7 km²); at most 4,000 hexagons per request, so a large view steps down to a coarser resolution on its own. " +
     "Caveats: OpenStreetMap misses some roads and tracks, so remote-looking cells can have unmapped access; raster signals (human footprint, night lights, population) arrive in Milestone 3. " +
-    "Zoom in to a region under 20,000 km² (about a 140 km square) first.",
+    "The view can be up to 60,000 km² (about a 245 km square); if it needs more than 4,000 hexagons the resolution is lowered automatically and the coverageNote says which was used.",
   coverage: "global",
   license: "Derived (see signals)",
   requiredEnv: [],
   // The campsites layer reads OVERPASS_URL from the same ctx.env, so it must be declared here.
   optionalEnv: ["OVERPASS_URL"],
-  maxAreaKm2: 20_000,
+  maxAreaKm2: 60_000,
   input: inputSchema,
   style: { geometry: "polygon", color: "#FFFFFF", unit: "score" },
 
@@ -266,12 +267,25 @@ const remoteness = defineLayer({
       };
     }
 
-    const { resolution } = input;
-    // Estimate first so an oversized request never builds a huge cell list.
-    const estimate = area / getHexagonAreaAvg(resolution, "km2");
-    if (estimate > MAX_CELLS * 1.25) return tooManyCells(estimate, resolution);
-    const cells = cellsForBBox(ctx.bbox, resolution);
-    if (cells.length > MAX_CELLS) return tooManyCells(cells.length, resolution);
+    // Step the resolution down (7 to 6 to 5) until the view fits under the cell cap.
+    let resolution = input.resolution;
+    let cells: string[] | null = null;
+    for (;;) {
+      // Estimate first so an oversized request never builds a huge cell list.
+      const estimate = area / getHexagonAreaAvg(resolution, "km2");
+      const over = estimate > MAX_CELLS * 1.25 ? estimate : null;
+      if (over === null) {
+        const found = cellsForBBox(ctx.bbox, resolution);
+        if (found.length <= MAX_CELLS) {
+          cells = found;
+          break;
+        }
+        if (resolution <= MIN_RESOLUTION) return tooManyCells(found.length, resolution);
+      } else if (resolution <= MIN_RESOLUTION) {
+        return tooManyCells(over, resolution);
+      }
+      resolution -= 1;
+    }
 
     const us = !outsideUs(ctx.bbox);
     const campsLayer = getLayer("campsites");
@@ -302,6 +316,9 @@ const remoteness = defineLayer({
     const wildRun = await wildPromise;
 
     const notes: string[] = [];
+    if (resolution !== input.resolution) {
+      notes.push(`Used resolution ${resolution} instead of ${input.resolution} to keep the view under ${MAX_CELLS.toLocaleString("en-US")} hexagons`);
+    }
     let wilderness: Feature[] | null = null;
     if (!us) {
       notes.push("Outside the US there is no wilderness bonus, so scores reach at most 80");

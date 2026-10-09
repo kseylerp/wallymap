@@ -1,6 +1,6 @@
-# WildMap
+# WallyMap
 
-WildMap (becoming WallyMap) is an open-source chat agent that draws outdoor data on a Mapbox map. Ask a question in plain language, and the agent picks the right data layers and shows them on the map: trails, fire, forest loss, snow, water, campsites, wildlife, photos, public lands, and computed popularity and remoteness scores. It runs on Next.js, and you bring your own model: OpenRouter, Anthropic directly, or any OpenAI-compatible server.
+WallyMap is an open-source research tool for the outdoors: a chat agent that puts outdoor data on a Mapbox map, with every answer drawn, cited, and exportable. Ask a question in plain language, and the agent picks the right data layers and shows them on the map: trails, fire, forest loss, snow, water, campsites, wildlife, photos, public lands, and computed popularity and remoteness scores. It runs on Next.js, and you bring your own model: OpenRouter, Anthropic directly, or any OpenAI-compatible server.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/kseylerp/mapagent)
 
@@ -25,7 +25,7 @@ WallyMap ships 19 data layers. The agent gets one `query_<id>` tool per layer an
 | --- | --- | --- | --- | --- | --- | --- |
 | `osm-trails` | OpenStreetMap trails | Hiking paths and tracks with difficulty and surface | OpenStreetMap | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
 | `fire-perimeters` | Wildfire perimeters | Current and past US wildfire outlines | NIFC (WFIGS) | US | None | Updated through the fire season |
-| `fire-detections` | Active fire detections | Satellite hotspots from the last 1 to 10 days | NASA FIRMS | Global | `FIRMS_MAP_KEY` (required) | Near real time (hours) |
+| `fire-detections` | Active fire detections | Satellite hotspots from the last 1 to 5 days | NASA FIRMS | Global | `FIRMS_MAP_KEY` (required) | Near real time (hours) |
 | `forest-loss` | Tree cover loss | Where tree cover was lost, by year | UMD / Global Forest Watch | Global | None | Yearly |
 | `forest-alerts` | Forest disturbance alerts | Recent forest clearing in the tropics | Global Forest Watch (GLAD, RADD) | Tropics (30°S to 30°N) | None | Weekly |
 | `snowpack` | Snowpack (SNOTEL) | Snow water equivalent at mountain weather stations | USDA NRCS SNOTEL | Western US | None | Latest reading (daily) |

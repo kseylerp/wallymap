@@ -174,10 +174,10 @@ describe("normalizeCampsites", () => {
 });
 
 describe("campsites layer", () => {
-  it("declares global ODbL coverage and a 10,000 km2 cap", () => {
+  it("declares global ODbL coverage and a 25,000 km2 cap", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toContain("ODbL");
-    expect(layer.maxAreaKm2).toBe(10_000);
+    expect(layer.maxAreaKm2).toBe(25_000);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toContain("OVERPASS_URL");
   });
@@ -226,8 +226,8 @@ describe("campsites layer", () => {
     expect(r.coverageNote).toBe("Showing 5,000 of 5,101 sites (all camp sites, then the largest parking lots); zoom in for the rest");
   });
 
-  it("returns 422 zoom_in from runLayer for a bbox over 10,000 km2", async () => {
-    const res = await runLayer("campsites", { bbox: [-121, 38, -119, 40] });
+  it("returns 422 zoom_in from runLayer for a bbox over 25,000 km2", async () => {
+    const res = await runLayer("campsites", { bbox: [-122, 37, -119, 40] });
     expect(res.status).toBe(422);
     expect(res.body).toMatchObject({ hint: "zoom_in" });
   });

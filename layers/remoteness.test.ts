@@ -263,13 +263,31 @@ describe("remoteness layer", () => {
     expect(near?.properties?.signals.campsitesWithin2km).toBe(1);
   });
 
-  it("refuses too many hexagons with a hint to lower the resolution or zoom in", async () => {
+  it("steps the resolution down until the view fits and says which one it used", async () => {
     const big: BBox = [-120.5, 39.0, -120.0, 39.5]; // ~2,400 km², ~3,300 cells at resolution 8
-    const result = await remoteness.query(ctx([-121, 39.0, -120.0, 39.5]), { resolution: 8 });
-    expect(result).toMatchObject({ hint: "zoom_in" });
-    expect((result as LayerError).error).toMatch(/4,000.*resolution \(7\)/);
-    // Under the cap at resolution 8 still works.
-    expect(features(await remoteness.query(ctx(big), { resolution: 8 })).length).toBeLessThanOrEqual(4_000);
+    const wide: BBox = [-121, 39.0, -120.0, 39.5]; // ~4,300 km², over the cap at resolution 8
+    // Under the cap at resolution 8 keeps the resolution and adds no note.
+    const fits = await remoteness.query(ctx(big), { resolution: 8 });
+    expect(features(fits).length).toBeLessThanOrEqual(4_000);
+    expect("coverageNote" in fits && fits.coverageNote).toBeFalsy();
+    // Over the cap at resolution 8 drops to 7.
+    const stepped = await remoteness.query(ctx(wide), { resolution: 8 });
+    const cells = features(stepped);
+    expect(cells.length).toBeLessThanOrEqual(4_000);
+    expect(cells.length).toBeGreaterThan(0);
+    expect("coverageNote" in stepped && stepped.coverageNote).toMatch(/resolution 7 instead of 8/);
+  });
+
+  it("steps down more than once for a large view (7 to 6)", async () => {
+    const large: BBox = [-122, 38.5, -120.0, 40.0]; // ~28,700 km², ~5,500 cells at resolution 7
+    roadsBody = { elements: [] };
+    const result = await remoteness.query(ctx(large), { resolution: 7 });
+    expect(features(result).length).toBeLessThanOrEqual(4_000);
+    expect("coverageNote" in result && result.coverageNote).toMatch(/resolution 6 instead of 7/);
+  });
+
+  it("declares a 60,000 km2 cap", () => {
+    expect(remoteness.maxAreaKm2).toBe(60_000);
   });
 
   it("returns an error when the roads query fails", async () => {

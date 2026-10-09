@@ -7,7 +7,7 @@ import { buildTools } from "@/lib/agent/tools";
 // Room for several tool steps, each of which may wait on a slow upstream.
 export const maxDuration = 120;
 
-const MAX_STEPS = 8;
+const MAX_STEPS = 12;
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

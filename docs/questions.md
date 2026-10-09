@@ -72,26 +72,21 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set
 
 ## Last run
 
-Run on 2026-10-09 with model `openai/gpt-oss-120b`: **ok 8/12**. A question passes when the agent geocoded a place, queried a layer, drew the result (or handled a layer error), and wrote a note.
+Run on 2026-10-09 with model `openai/gpt-oss-120b` and a 12-step cap: **ok 12/12**. A question passes when the agent geocoded a place, queried a layer, drew the result (or handled a layer error), and wrote a note.
 
 | Question | ok | Tools (query_ prefix dropped) | Seconds |
 | --- | --- | --- | --- |
-| Show hiking trails around Lake Tahoe | yes | geocode, set_view, osm-trails, render, note | 27.8 |
-| Which wildfires burned near Yosemite in the last 10 years? | yes | geocode, set_view, fire-perimeters, render, note | 29.3 |
-| Are there any active fires burning near Missoula right now? | no | list_layers, geocode, set_view, fire-detections, fire-detections, fire-perimeters, render, render | 40.2 |
-| Where has the Amazon lost the most forest since 2015? | yes | geocode, geocode, set_view, forest-loss, render, note | 25 |
-| How much snow is on the ground around Mount Hood? | yes | geocode, set_view, snowpack, set_view, snowpack, render | 40.6 |
-| Which rivers near Jackson Hole are running high right now? | yes | geocode, geocode, set_view, streamflow, render, note | 45.5 |
-| Find campsites and forest roads open to vehicles near Moab | no | geocode, set_view, campsites, set_view, campsites, forest-roads, render, render | 29.5 |
-| What wildlife has been spotted around Banff this year? | yes | geocode, set_view, species, render, note | 34.2 |
-| Which trails and viewpoints around Zion National Park look the most popular? | no | geocode, set_view, osm-trails, popularity, photos, render, render, render | 48.7 |
-| Who owns the land around Bryce Canyon, and is any of it designated wilderness? | yes | geocode, set_view, public-lands, wilderness, render, render, note | 29 |
-| Where is the night sky darkest around Great Basin National Park, and how many people live nearby? | yes | geocode, set_view, night-lights, population, render, render | 37 |
-| How remote is the Wind River Range? | no | geocode, geocode, physical-regions, physical-regions, remoteness, remoteness, remoteness, osm-trails | 43.4 |
+| Show hiking trails around Lake Tahoe | yes | geocode, set_view, osm-trails, render, note | 24.7 |
+| Which wildfires burned near Yosemite in the last 10 years? | yes | geocode, set_view, fire-perimeters, render | 18.2 |
+| Are there any active fires burning near Missoula right now? | yes | geocode, set_view, fire-detections, fire-perimeters, render, render, note | 35.9 |
+| Where has the Amazon lost the most forest since 2015? | yes | geocode, set_view, forest-loss, render, note | 34.7 |
+| How much snow is on the ground around Mount Hood? | yes | geocode, set_view, snowpack, snowpack, render, note | 36.9 |
+| Which rivers near Jackson Hole are running high right now? | yes | list_layers, geocode, geocode, set_view, streamflow, render | 31.7 |
+| Find campsites and forest roads open to vehicles near Moab | yes | geocode, set_view, forest-roads, campsites, render, render, note | 35.1 |
+| What wildlife has been spotted around Banff this year? | yes | geocode, set_view, species, render, note | 34.1 |
+| Which trails and viewpoints around Zion National Park look the most popular? | yes | list_layers, geocode, set_view, osm-trails, popularity, photos, render, render, render, osm-trails, note | 116.6 |
+| Who owns the land around Bryce Canyon, and is any of it designated wilderness? | yes | geocode, set_view, public-lands, wilderness, render, render, note | 29.4 |
+| Where is the night sky darkest around Great Basin National Park, and how many people live nearby? | yes | list_layers, geocode, set_view, night-lights, population, render, render, note | 56.4 |
+| How remote is the Wind River Range? | yes | geocode, geocode, geocode, set_view, physical-regions, remoteness, remoteness, set_view, remoteness, render, note | 77.4 |
 
-Why the four failures happened (the run stops after 8 steps, the same cap as the chat endpoint):
-
-- **Active fires near Missoula.** NASA FIRMS now rejects a day range over 5 (`Invalid day range. Expects [1..5]`), but `fire-detections` defaults to 7 days and allows up to 10, so the first query fails and the model retries. This is a bug in `layers/fire-detections.ts`, not in the model.
-- **Campsites and roads near Moab.** The model's view was 13,446 km², over the 10,000 km² campsites limit; it zoomed in and re-queried but ran out of steps before writing the note.
-- **Popular trails and viewpoints near Zion.** The model queried `osm-trails` as well as `popularity` (which already includes trails), used its steps, and never reached the note.
-- **How remote is the Wind River Range.** The region outline was larger than the 20,000 km² remoteness limit, and the model needed several zoom-in retries.
+Things still worth watching: on the Zion question the model queried `osm-trails` a second time even though the prompt says popularity already includes trails (it still finished with a note), and on Wind River it had one malformed tool name (`query_remoteness<|channel|>commentary`, a model glitch) and one zoom-in retry after the view was 89,653 km², over the 60,000 km² remoteness limit.

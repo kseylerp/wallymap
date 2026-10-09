@@ -13,7 +13,7 @@ function ctx(stub: ReturnType<typeof vi.fn>, cacheKey?: string) {
   return { bbox: BBOX, zoom: 6, env: { FIRMS_MAP_KEY: KEY }, fetch: stub as unknown as CachedFetch, cacheKey };
 }
 
-const INPUT = { days: 7, source: "VIIRS_SNPP_NRT" } as const;
+const INPUT = { days: 3, source: "VIIRS_SNPP_NRT" } as const;
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -198,7 +198,7 @@ describe("fire-detections layer", () => {
 
   it("rejects an unknown source or out-of-range days through runLayer", async () => {
     vi.stubEnv("FIRMS_MAP_KEY", KEY);
-    expect((await runLayer("fire-detections", { bbox: BBOX, input: { days: 11 } })).status).toBe(400);
+    expect((await runLayer("fire-detections", { bbox: BBOX, input: { days: 6 } })).status).toBe(400);
     expect((await runLayer("fire-detections", { bbox: BBOX, input: { source: "GOES" } })).status).toBe(400);
   });
 });

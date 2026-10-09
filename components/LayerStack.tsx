@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
-import { ChevronUpIcon, CloseIcon, EyeIcon, EyeOffIcon, GripIcon, LayersIcon } from "@/components/icons";
+import { ChevronUp, Eye, EyeOff, GripVertical, X } from "lucide-react";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { DATA_COLORS, TILE_SWATCH } from "@/lib/render/palette";
 import type { LoadedLayer, MapAction, MapState, RenderMode, RenderOp } from "@/lib/render/state";
@@ -12,8 +12,11 @@ type LayerStackProps = {
   renderOps: RenderOp[];
   catalog: LayerCatalog | null;
   dispatch: (action: MapAction) => void;
+  /** Whether the panel shows; the layers map pill (MapPills) opens and closes it. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The layer holding the selected feature; its card gets the sage selection rim. */
+  selectedLayerId?: string;
 };
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
@@ -188,9 +191,10 @@ type CardProps = {
   armDrag: (armed: boolean) => void;
   dropTarget: boolean;
   dragging: boolean;
+  selected: boolean;
 };
 
-function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, dropTarget, dragging }: CardProps) {
+function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, dropTarget, dragging, selected }: CardProps) {
   const visible = op?.visible ?? false;
   const opacity = op?.opacity ?? 1;
   const count = layer.result.kind === "geojson" ? layer.result.data.features.length : null;
@@ -210,10 +214,12 @@ function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, d
     <li
       data-testid="layer-card"
       data-layer-id={layer.id}
+      data-selected={selected || undefined}
       {...dragProps}
       className={[
-        "group/card relative rounded-[14px] border bg-paper/70 py-2.5 pr-2 pl-1.5 transition-[border-color,opacity,box-shadow]",
-        dropTarget ? "border-slate shadow-chip" : "border-line",
+        // Wally card: radius 16; the card whose layer holds the selected feature gets a sage rim.
+        "group/card relative rounded-[16px] border bg-paper/70 py-2.5 pr-2 pl-1.5 transition-[border-color,opacity,box-shadow] duration-350",
+        dropTarget ? "border-slate shadow-chip" : selected ? "border-sage ring-1 ring-sage" : "border-line",
         dragging ? "opacity-50" : "",
       ].join(" ")}
     >
@@ -229,7 +235,7 @@ function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, d
           onKeyDown={onHandleKey}
           className="flex h-7 w-5 shrink-0 cursor-grab items-center justify-center rounded-[6px] text-ink-muted/70 transition-colors hover:text-ink active:cursor-grabbing disabled:cursor-default disabled:opacity-30"
         >
-          <GripIcon width={14} height={14} />
+          <GripVertical aria-hidden size={14} strokeWidth={2} />
         </button>
         <Swatch
           color={drawnColor(layer, op)}
@@ -242,9 +248,8 @@ function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, d
           {layer.title}
         </p>
         {count !== null ? (
-          // Text is --ink on the amber badge: 6.5:1 (white on amber is only 2.7:1).
           <span
-            className="rounded-pill bg-accent px-1.5 py-px text-[11px] leading-4 font-semibold text-ink tabular-nums"
+            className="rounded-pill bg-primary px-1.5 py-px text-[11px] leading-4 font-semibold text-on-primary tabular-nums"
             title={`${count.toLocaleString()} ${count === 1 ? "feature" : "features"}`}
           >
             {count.toLocaleString()}
@@ -261,7 +266,7 @@ function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, d
           title={visible ? "Hide layer" : "Show layer"}
           className="flex size-7 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-mist hover:text-ink disabled:opacity-40"
         >
-          {visible ? <EyeIcon width={16} height={16} /> : <EyeOffIcon width={16} height={16} />}
+          {visible ? <Eye aria-hidden size={16} strokeWidth={2} /> : <EyeOff aria-hidden size={16} strokeWidth={2} />}
         </button>
         <button
           type="button"
@@ -270,7 +275,7 @@ function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, d
           title="Remove layer"
           className="flex size-7 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-mist hover:text-ink"
         >
-          <CloseIcon width={14} height={14} />
+          <X aria-hidden size={14} strokeWidth={2} />
         </button>
       </div>
 
@@ -330,11 +335,14 @@ function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, d
   );
 }
 
+/** Wally rail chip: 30px tall, radius 15; sage tint when selected. */
+const RAIL_CHIP = "flex h-[30px] items-center gap-1.5 rounded-[15px] px-3 text-[12.5px] font-medium";
+
 /**
  * The layer panel: a glass drawer on the right listing every loaded layer top first, with visibility, opacity,
- * color, render mode, removal and drag-to-reorder; it collapses to a "Layers" pill with a count.
+ * color, render mode, removal and drag-to-reorder. Closed, it renders nothing: the layers map pill reopens it.
  */
-export function LayerStack({ layers, renderOps, catalog, dispatch, open, onOpenChange }: LayerStackProps) {
+export function LayerStack({ layers, renderOps, catalog, dispatch, open, onOpenChange, selectedLayerId }: LayerStackProps) {
   const items = stackOrder(layers, renderOps);
   const [armed, setArmed] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -347,23 +355,7 @@ export function LayerStack({ layers, renderOps, catalog, dispatch, open, onOpenC
     if (toIndex !== -1 && layerId !== targetId) dispatch({ type: "reorder", layerId, toIndex });
   };
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => onOpenChange(true)}
-        aria-expanded={false}
-        aria-label={`Layers, ${items.length} loaded`}
-        className="glass-strong rise-in pointer-events-auto flex h-10 items-center gap-2 rounded-pill pr-2 pl-3 text-[13px] font-medium text-ink"
-      >
-        <LayersIcon width={16} height={16} />
-        Layers
-        <span className="rounded-pill bg-accent px-1.5 text-[11px] leading-5 font-semibold text-ink tabular-nums">
-          {items.length}
-        </span>
-      </button>
-    );
-  }
+  if (!open) return null;
 
   return (
     <section
@@ -373,17 +365,20 @@ export function LayerStack({ layers, renderOps, catalog, dispatch, open, onOpenC
       className="glass-strong rise-in pointer-events-auto flex max-h-[calc(100dvh-24px)] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-[20px] max-md:mt-12 max-md:max-h-[calc(54dvh-72px)] md:max-h-[calc(100dvh-260px)]"
       style={{ width: LAYER_PANEL_WIDTH }}
     >
-      <header className="flex shrink-0 items-center gap-2 pt-3 pr-2 pb-2 pl-4">
-        <h2 className="font-serif text-[1.05rem] font-semibold text-ink">Layers</h2>
-        <span className="text-[12px] text-ink-muted tabular-nums">{items.length}</span>
-        <span className="flex-1" />
+      {/* Wally rail chips: "Layers N" is the selected chip; "Clear all" is a plain one. */}
+      <header className="flex shrink-0 items-center gap-1.5 pt-3 pr-2 pb-2 pl-3">
+        <h2 className={`${RAIL_CHIP} bg-sage-tint text-ink`}>
+          Layers
+          <span className="text-ink-muted tabular-nums">{items.length}</span>
+        </h2>
         <button
           type="button"
           onClick={() => dispatch({ type: "clear_layers" })}
-          className="h-7 rounded-pill px-2.5 text-[12px] font-medium text-ink-muted transition-colors hover:bg-mist hover:text-ink"
+          className={`${RAIL_CHIP} press border border-line text-ink-muted transition duration-150 ease-out hover:bg-mist hover:text-ink`}
         >
           Clear all
         </button>
+        <span className="flex-1" />
         <button
           type="button"
           onClick={() => onOpenChange(false)}
@@ -392,7 +387,7 @@ export function LayerStack({ layers, renderOps, catalog, dispatch, open, onOpenC
           title="Collapse"
           className="flex size-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-mist hover:text-ink"
         >
-          <ChevronUpIcon width={16} height={16} />
+          <ChevronUp aria-hidden size={16} strokeWidth={2} />
         </button>
       </header>
       <ul className="flex min-h-0 flex-col gap-1.5 overflow-y-auto overscroll-contain px-2 pb-2">
@@ -411,6 +406,7 @@ export function LayerStack({ layers, renderOps, catalog, dispatch, open, onOpenC
               armDrag={(on) => setArmed(on ? layer.id : null)}
               dropTarget={overId === layer.id && dragId !== null && dragId !== layer.id}
               dragging={dragId === layer.id}
+              selected={selectedLayerId === layer.id}
               dragProps={{
                 // Only the grip starts a drag, so the slider and text stay usable.
                 draggable: armed === layer.id,

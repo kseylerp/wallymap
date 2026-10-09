@@ -410,7 +410,7 @@ textarea:focus-visible {
   }
 }
 
-/* Layer panel opacity slider: a 4px track filled in ink up to the value (--fill, set inline), a white thumb. */
+/* Layer panel opacity slider: a 4px track filled in the accent up to the value (--fill, set inline), a white thumb. */
 .layer-opacity {
   appearance: none;
   height: 18px;
@@ -420,12 +420,12 @@ textarea:focus-visible {
 .layer-opacity::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(to right, var(--slate) var(--fill, 100%), var(--mist) var(--fill, 100%));
+  background: linear-gradient(to right, var(--accent) var(--fill, 100%), var(--mist) var(--fill, 100%));
 }
 .layer-opacity::-moz-range-track {
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(to right, var(--slate) var(--fill, 100%), var(--mist) var(--fill, 100%));
+  background: linear-gradient(to right, var(--accent) var(--fill, 100%), var(--mist) var(--fill, 100%));
 }
 .layer-opacity::-webkit-slider-thumb {
   appearance: none;
@@ -469,4 +469,70 @@ textarea:focus-visible {
 [data-theme="dark"] [role="group"][aria-label="Basemap"] button[aria-pressed="true"],
 [data-theme="dark"] .map-controls button[aria-pressed="true"] {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+/*
+ * Wally's 3×3 dot spinner (components/DotSpinner.tsx): 3px dots, 2px apart. The eight outer dots light one per
+ * 150 ms step around the ring (each dot's delay is set inline), the center holds at half strength.
+ */
+.dot-spinner {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 3px);
+  grid-auto-rows: 3px;
+  gap: 2px;
+  vertical-align: middle;
+}
+.dot-spinner > span {
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.2;
+  animation: dot-step 1200ms steps(1, end) infinite;
+}
+.dot-spinner > .dot-spinner-center {
+  opacity: 0.5;
+  animation: none;
+}
+@keyframes dot-step {
+  0% {
+    opacity: 1;
+  }
+  12.5% {
+    opacity: 0.55;
+  }
+  25% {
+    opacity: 0.2;
+  }
+}
+
+/* The topo heartbeat band (components/TopoHeartbeat.tsx): a quiet surface under the contours; verbs fade in. */
+.topo-heartbeat {
+  background: color-mix(in srgb, var(--mist) 55%, transparent);
+}
+.topo-verb {
+  animation: topo-verb-in 400ms var(--ease-out) both;
+}
+@keyframes topo-verb-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The answer's sources line: Wally's link with a 4/3 dashed underline (4px dash, 3px gap). */
+.source-link {
+  color: var(--accent);
+  text-decoration: none;
+  background-image: linear-gradient(to right, currentColor 4px, transparent 4px);
+  background-size: 7px 1px;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+  padding-bottom: 1px;
+  transition: color 150ms var(--ease-out);
+}
+.source-link:hover {
+  color: var(--accent-deep);
 }

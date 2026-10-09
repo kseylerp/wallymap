@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { BasemapSwitch } from "@/components/BasemapSwitch";
 import { ChatRail } from "@/components/ChatRail";
 import { InspectCard } from "@/components/InspectCard";
 import { drawnColor, LayerStack } from "@/components/LayerStack";
 import { MapCanvas, type MapHandle } from "@/components/MapCanvas";
 import { MapControls } from "@/components/MapControls";
-import { Wordmark } from "@/components/Wordmark";
+import { MapPills } from "@/components/MapPills";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { sendChat } from "@/lib/agent/chatBus";
 import { bboxToViewport } from "@/lib/render/deck";
@@ -149,13 +148,14 @@ export function App() {
       </main>
 
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 md:p-4">
-        <div className="pointer-events-auto flex items-center gap-2">
-          <div className="rise-in">
-            <Wordmark />
-          </div>
-          <div className="rise-in" style={{ animationDelay: "60ms" }}>
-            <BasemapSwitch value={state.basemap} onChange={setBasemap} />
-          </div>
+        <div className="pointer-events-auto">
+          <MapPills
+            basemap={state.basemap}
+            onBasemapChange={setBasemap}
+            layerCount={Object.keys(state.layers).length}
+            layersOpen={layersOpen}
+            onLayersOpenChange={setLayersOpen}
+          />
         </div>
       </header>
 
@@ -167,6 +167,7 @@ export function App() {
           dispatch={dispatch}
           open={layersOpen}
           onOpenChange={setLayersOpen}
+          selectedLayerId={state.selected?.layerId}
         />
       </div>
 

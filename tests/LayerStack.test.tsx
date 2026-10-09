@@ -139,8 +139,7 @@ describe("LayerStack", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: /Reorder OSM trails/ }));
   });
 
-  it("collapses to a Layers pill with the count", () => {
-    const onOpenChange = vi.fn();
+  it("renders nothing while closed (the layers map pill reopens it)", () => {
     render(
       <LayerStack
         layers={start.layers}
@@ -148,12 +147,30 @@ describe("LayerStack", () => {
         catalog={null}
         dispatch={() => {}}
         open={false}
-        onOpenChange={onOpenChange}
+        onOpenChange={() => {}}
       />,
     );
     expect(screen.queryByTestId("layer-stack")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Layers, 2 loaded" }));
-    expect(onOpenChange).toHaveBeenCalledWith(true);
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("puts the sage selection rim on the card whose layer holds the selected feature", () => {
+    render(
+      <LayerStack
+        layers={start.layers}
+        renderOps={start.renderOps}
+        catalog={null}
+        dispatch={() => {}}
+        open
+        onOpenChange={() => {}}
+        selectedLayerId="public-lands"
+      />,
+    );
+    const [top, bottom] = screen.getAllByTestId("layer-card");
+    expect(top.getAttribute("data-selected")).toBeNull();
+    expect(bottom.getAttribute("data-layer-id")).toBe("public-lands");
+    expect(bottom.getAttribute("data-selected")).toBe("true");
+    expect(bottom.className).toContain("border-sage");
   });
 });
 

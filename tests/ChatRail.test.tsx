@@ -124,3 +124,100 @@ describe("ChatRail follow-ups", () => {
     expect(screen.getAllByText(body)).toHaveLength(1);
   });
 });
+
+const layerOutput = (source: string, url: string) => ({
+  kind: "geojson",
+  data: { type: "FeatureCollection", features: [] },
+  citation: { source, url, retrieved: "2026-10-09" },
+});
+
+describe("ChatRail sources line", () => {
+  it("lists each cited source once under the answer, as dashed links", () => {
+    chat.messages = [
+      user("Trails and fires near Tahoe?"),
+      {
+        id: "a1",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-query_osm-trails",
+            toolCallId: "t1",
+            state: "output-available",
+            input: {},
+            output: layerOutput("OpenStreetMap", "https://www.openstreetmap.org/copyright"),
+          },
+          {
+            type: "tool-query_fire-perimeters",
+            toolCallId: "t2",
+            state: "output-available",
+            input: {},
+            output: layerOutput("NIFC", "https://data-nifc.opendata.arcgis.com"),
+          },
+          {
+            type: "tool-query_osm-trails",
+            toolCallId: "t3",
+            state: "output-available",
+            input: {},
+            output: layerOutput("OpenStreetMap", "https://www.openstreetmap.org/copyright"),
+          },
+          { type: "text", text: "Trails and two fires.", state: "done" },
+        ],
+      } as UIMessage,
+    ];
+    render(rail());
+    const line = screen.getByTestId("sources-line");
+    expect(line.textContent).toBe("Sources: OpenStreetMap · NIFC");
+    const links = Array.from(line.querySelectorAll("a"));
+    expect(links.map((a) => a.getAttribute("href"))).toEqual([
+      "https://www.openstreetmap.org/copyright",
+      "https://data-nifc.opendata.arcgis.com",
+    ]);
+    expect(links.every((a) => a.classList.contains("source-link"))).toBe(true);
+  });
+
+  it("shows no sources line when no tool cited anything", () => {
+    chat.messages = [user("Hi"), assistant("Hello.", "done")];
+    render(rail());
+    expect(screen.queryByTestId("sources-line")).toBeNull();
+  });
+});
+
+describe("ChatRail loading", () => {
+  it("shows the topo heartbeat only while the conversation's first answer is on its way", () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new Error("offline"))));
+    try {
+      chat.messages = [user("Trails?")];
+      chat.status = "submitted";
+      const { rerender } = render(rail());
+      expect(screen.getByTestId("topo-heartbeat")).toBeTruthy();
+
+      chat.messages = [user("Trails?"), assistant("Trails mapped.", "streaming")];
+      chat.status = "streaming";
+      rerender(rail());
+      expect(screen.getByTestId("topo-heartbeat")).toBeTruthy();
+
+      chat.messages = [user("Trails?"), assistant("Trails mapped.", "done")];
+      chat.status = "ready";
+      rerender(rail());
+      expect(screen.queryByTestId("topo-heartbeat")).toBeNull();
+
+      // The second question gets the dot spinner, never the heartbeat again.
+      chat.messages = [user("Trails?"), assistant("Trails mapped.", "done"), { ...user("And fires?"), id: "u2" }];
+      chat.status = "submitted";
+      rerender(rail());
+      expect(screen.queryByTestId("topo-heartbeat")).toBeNull();
+      expect(screen.getByRole("status", { name: "Thinking" })).toBeTruthy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("ChatRail presentation", () => {
+  it("marks the user's line with a chevron instead of a bubble", () => {
+    chat.messages = [user("Show hiking trails around Lake Tahoe"), assistant("Done.", "done")];
+    render(rail());
+    const line = screen.getByTestId("user-message");
+    expect(line.textContent).toBe("›Show hiking trails around Lake Tahoe");
+  });
+});

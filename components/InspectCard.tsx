@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AskIcon, CheckIcon, CloseIcon, CopyIcon, RouteIcon } from "@/components/icons";
+import { Check, ChevronRight, Copy, MessageCircle, Route, X } from "lucide-react";
 import { formatDate, isLineFeature, summarizeFeature, type Row } from "@/lib/render/inspect";
 import type { LoadedLayer, Selection } from "@/lib/render/state";
 
@@ -77,6 +77,23 @@ function RowList({ rows }: { rows: Row[] }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+type RowIcon = typeof Copy;
+
+/** A 44px action row: icon, label, chevron. */
+function ActionRow({ onClick, icon: Icon, children }: { onClick: () => void; icon: RowIcon; children: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group press flex h-11 w-full items-center gap-2.5 text-left text-[14px] font-medium text-ink transition duration-150 ease-out"
+    >
+      <Icon aria-hidden size={16} strokeWidth={2} className="shrink-0 text-ink-muted group-hover:text-ink" />
+      <span className="flex-1">{children}</span>
+      <ChevronRight aria-hidden size={16} strokeWidth={2} className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" />
+    </button>
   );
 }
 
@@ -221,19 +238,19 @@ export function InspectCard({
             title="Close (Esc)"
             className="-mt-0.5 -mr-1.5 flex size-7 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-mist hover:text-ink"
           >
-            <CloseIcon width={15} height={15} />
+            <X aria-hidden size={16} strokeWidth={2} />
           </button>
         </header>
 
         {(summary.date || summary.estimate) && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {summary.date && (
-              <span className="rounded-pill bg-mist px-2 py-0.5 text-[11.5px] font-medium text-ink tabular-nums">
+              <span className="rounded-pill bg-sage-tint px-2 py-0.5 text-[11.5px] font-medium text-ink tabular-nums">
                 {summary.date}
               </span>
             )}
             {summary.estimate && (
-              <span className="rounded-pill bg-accent/20 px-2 py-0.5 text-[11.5px] font-medium text-ink">Estimate</span>
+              <span className="rounded-pill border border-line px-2 py-0.5 text-[11.5px] font-medium text-ink-muted">Estimate</span>
             )}
           </div>
         )}
@@ -288,32 +305,23 @@ export function InspectCard({
           {citation.retrieved && <span className="tabular-nums"> · retrieved {formatDate(citation.retrieved)}</span>}
         </p>
 
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            onClick={ask}
-            className="inline-flex h-8 items-center gap-1.5 rounded-pill bg-ink px-3 text-[12.5px] font-medium text-paper transition-[background-color,transform] hover:bg-ink/85 active:scale-[0.98]"
-          >
-            <AskIcon width={14} height={14} />
-            {busy ? "Chat is busy" : "Ask about this"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void copy()}
-            className="inline-flex h-8 items-center gap-1.5 rounded-pill border border-line px-3 text-[12.5px] font-medium text-ink transition-[background-color,transform] hover:bg-mist active:scale-[0.98]"
-          >
-            {copied ? <CheckIcon width={14} height={14} /> : <CopyIcon width={14} height={14} />}
+        {/* Wally rows: the primary action as a 44px black button, then 44px rows split by hairlines. */}
+        <button
+          type="button"
+          onClick={ask}
+          className="press mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-primary text-[14px] font-medium text-on-primary transition duration-150 ease-out hover:opacity-85"
+        >
+          <MessageCircle aria-hidden size={16} strokeWidth={2} />
+          {busy ? "Chat is busy" : "Ask about this"}
+        </button>
+        <div className="mt-3 -mb-1.5 divide-y divide-line border-t border-line">
+          <ActionRow onClick={() => void copy()} icon={copied ? Check : Copy}>
             {copied ? "Copied" : "Copy GeoJSON"}
-          </button>
+          </ActionRow>
           {line && (
-            <button
-              type="button"
-              onClick={onPreviewRoute}
-              className="inline-flex h-8 items-center gap-1.5 rounded-pill border border-line px-3 text-[12.5px] font-medium text-ink transition-[background-color,transform] hover:bg-mist active:scale-[0.98]"
-            >
-              <RouteIcon width={14} height={14} />
+            <ActionRow onClick={onPreviewRoute} icon={Route}>
               Preview route
-            </button>
+            </ActionRow>
           )}
         </div>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DotSpinner } from "@/components/DotSpinner";
 
 const INPUT_PREVIEW_CHARS = 300;
 
@@ -27,7 +28,10 @@ function preview(value: unknown): string {
   return text.length > INPUT_PREVIEW_CHARS ? `${text.slice(0, INPUT_PREVIEW_CHARS)}…` : text;
 }
 
-/** One small chip per tool call: name, feature count, and elapsed time; the input is behind a disclosure. */
+/**
+ * One small chip per tool call: Wally's 3×3 dot spinner while it runs, then a 6px dot (green when done, red when it
+ * failed); name, feature count, and elapsed time. The input is behind a disclosure.
+ */
 export function ToolTrace({ name, state, input, output, errorText }: ToolTraceProps) {
   const [open, setOpen] = useState(false);
   // Timed from when this row first mounts (the part first appears) until its output lands.
@@ -43,7 +47,7 @@ export function ToolTrace({ name, state, input, output, errorText }: ToolTracePr
 
   const count = featureCount(output);
   const failed = state === "output-error";
-  const dot = failed ? "bg-danger" : finished ? "bg-moss" : "bg-ink-muted animate-pulse";
+  const dot = failed ? "bg-danger" : "bg-moss";
 
   return (
     <div
@@ -57,9 +61,13 @@ export function ToolTrace({ name, state, input, output, errorText }: ToolTracePr
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 rounded-pill px-2.5 py-1 text-left transition-colors hover:text-ink"
+        className="flex min-h-7 w-full items-center gap-1.5 rounded-pill px-2.5 py-1 text-left transition-colors hover:text-ink"
       >
-        <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${dot}`} />
+        {finished ? (
+          <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${dot}`} />
+        ) : (
+          <DotSpinner className="shrink-0 text-ink-muted" />
+        )}
         <span className={`font-mono text-[11px] ${failed ? "text-danger" : "text-ink"}`}>{name}</span>
         {count !== null && <span className="tabular-nums">· {count.toLocaleString()} features</span>}
         <span className={`tabular-nums ${open ? "ml-auto" : ""}`}>

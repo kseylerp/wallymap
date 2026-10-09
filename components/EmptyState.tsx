@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import { Wordmark } from "@/components/Brand";
 
 export const EXAMPLE_QUESTIONS = [
@@ -29,15 +30,15 @@ export function EmptyState({ onPick }: EmptyStateProps) {
             <button
               type="button"
               onClick={() => onPick(q)}
-              className="group press flex h-full min-h-11 w-full items-center gap-2 rounded-card border border-line bg-paper px-4 py-2 text-left text-[15px] leading-snug text-ink transition duration-150 ease-out hover:border-accent/40 hover:bg-mist sm:py-2.5"
+              className="group press flex h-full min-h-11 w-full items-center gap-2 rounded-[16px] border border-line bg-paper px-4 py-2 text-left text-[15px] leading-snug text-ink transition duration-150 ease-out hover:border-ink/20 hover:bg-mist sm:py-2.5"
             >
               <span className="flex-1">{q}</span>
-              <span
+              <ChevronRight
                 aria-hidden
-                className="text-accent opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-              >
-                →
-              </span>
+                size={16}
+                strokeWidth={2}
+                className="shrink-0 text-ink-muted opacity-0 transition duration-200 group-hover:translate-x-0.5 group-hover:opacity-100"
+              />
             </button>
           </li>
         ))}

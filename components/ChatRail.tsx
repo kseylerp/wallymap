@@ -2,12 +2,24 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, getToolName, isToolUIPart, type UIMessage } from "ai";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { ArrowUp, ChevronDown, ChevronRight, ChevronUp, Square } from "lucide-react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { WallyMark } from "@/components/Brand";
+import { DotSpinner } from "@/components/DotSpinner";
 import { EmptyState } from "@/components/EmptyState";
-import { ArrowUpIcon, ChevronDownIcon, ChevronUpIcon, StopIcon } from "@/components/icons";
 import { ToolTrace } from "@/components/ToolTrace";
+import { TopoHeartbeat } from "@/components/TopoHeartbeat";
 import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
 import { onChatSend } from "@/lib/agent/chatBus";
 import { compactMessages } from "@/lib/agent/compactMessages";
@@ -53,6 +65,43 @@ function layerErrorText(name: string, output: unknown): string | null {
   return typeof output.error === "string" ? output.error : null;
 }
 
+type Source = { source: string; url: string };
+
+/** The citations a message's finished tool calls carry (`citation.source` + url), one per url, in call order. */
+export function messageSources(message: UIMessage): Source[] {
+  const seen = new Set<string>();
+  const sources: Source[] = [];
+  for (const part of message.parts) {
+    if (!isToolUIPart(part) || part.state !== "output-available") continue;
+    const output: unknown = part.output;
+    if (typeof output !== "object" || output === null || !("citation" in output)) continue;
+    const citation: unknown = output.citation;
+    if (typeof citation !== "object" || citation === null || !("source" in citation) || !("url" in citation)) continue;
+    const { source, url } = citation;
+    if (typeof source !== "string" || typeof url !== "string" || !source || seen.has(url)) continue;
+    seen.add(url);
+    sources.push({ source, url });
+  }
+  return sources;
+}
+
+/** "Sources: A · B" under an answer; each link has Wally's 4/3 dashed underline (`.source-link`). */
+function SourcesLine({ sources }: { sources: Source[] }) {
+  return (
+    <p data-testid="sources-line" className="text-[12.5px] leading-relaxed text-ink-muted">
+      Sources:{" "}
+      {sources.map((s, i) => (
+        <span key={s.url}>
+          {i > 0 && <span aria-hidden> · </span>}
+          <a href={s.url} target="_blank" rel="noreferrer" className="source-link">
+            {s.source}
+          </a>
+        </span>
+      ))}
+    </p>
+  );
+}
+
 /** Models often title an answer with a bold-only paragraph; set it as a serif heading like a real one. */
 const MARKDOWN_COMPONENTS: Components = {
   p: ({ node, children }) => {
@@ -84,26 +133,38 @@ type AnswerCardProps = {
   done: boolean;
 } & FollowUpProps;
 
-/** An assistant answer on a white card; a finished answer's closing follow-up questions become tappable pills. */
+/**
+ * An assistant answer: plain markdown on the panel, no bubble. A finished answer's closing follow-up questions
+ * become Wally multiple-choice rows (full width, 44px, hairline separators, a chevron).
+ */
 const AnswerCard = memo(function AnswerCard({ text, done, onFollowUp }: AnswerCardProps) {
   const { body, followUps } = useMemo(
     () => (done ? extractFollowUps(text) : { body: text, followUps: [] as string[] }),
     [text, done],
   );
   return (
-    <div className="rounded-[20px] border border-line bg-paper px-4 py-3 shadow-hair">
+    <div className="px-1">
       {body.trim() && <Markdown text={body} />}
       {followUps.length > 0 && (
-        <ul aria-label="Follow-up questions" className={`flex flex-col items-start gap-1.5 ${body.trim() ? "mt-3" : ""}`}>
+        <ul
+          aria-label="Follow-up questions"
+          className={`divide-y divide-line border-y border-line ${body.trim() ? "mt-3" : ""}`}
+        >
           {followUps.map((q) => (
             <li key={q}>
               <button
                 type="button"
                 disabled={!onFollowUp}
                 onClick={() => onFollowUp?.(q)}
-                className="rounded-[16px] border border-line bg-paper px-3 py-1.5 text-left text-[13px] leading-snug text-ink transition-colors hover:bg-mist disabled:opacity-50 disabled:hover:bg-paper"
+                className="group press flex min-h-11 w-full items-center gap-3 py-2 pr-1 text-left text-[14px] leading-snug text-ink transition duration-150 ease-out hover:bg-mist/60 disabled:opacity-50 disabled:hover:bg-transparent"
               >
-                {q}
+                <span className="flex-1">{q}</span>
+                <ChevronRight
+                  aria-hidden
+                  size={16}
+                  strokeWidth={2}
+                  className="shrink-0 text-ink-muted transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-ink"
+                />
               </button>
             </li>
           ))}
@@ -161,10 +222,14 @@ type MessageViewProps = {
 const MessageView = memo(function MessageView({ message, streaming, onFollowUp }: MessageViewProps) {
   if (message.role === "user") {
     const text = message.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
+    // No bubble: an accent chevron marks the user's line.
     return (
-      <div className="max-w-[85%] self-end rounded-[20px] rounded-br-md bg-mist px-4 py-2.5 text-[15px] text-ink">
-        {text}
-      </div>
+      <p data-testid="user-message" className="flex gap-2 px-1 text-[15px] leading-snug font-medium text-ink">
+        <span aria-hidden className="font-semibold text-accent">
+          ›
+        </span>
+        <span className="min-w-0 flex-1 break-words">{text}</span>
+      </p>
     );
   }
   // Consecutive tool calls share one wrapping row of chips; text, notes and errors break the row.
@@ -197,24 +262,23 @@ const MessageView = memo(function MessageView({ message, streaming, onFollowUp }
     }
   });
   flushChips();
+  const sources = messageSources(message);
+  if (sources.length > 0) blocks.push(<SourcesLine key="sources" sources={sources} />);
   return <div className="flex flex-col gap-2">{blocks}</div>;
 });
 
-/** Three soft dots while the model has not answered yet. */
+/** The dot spinner while a later answer has not started yet (the first answer gets the topo heartbeat). */
 function Thinking() {
   return (
-    <div aria-label="Thinking" role="status" className="flex w-fit items-center gap-1 rounded-pill bg-paper px-3 py-2.5">
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          aria-hidden
-          className="size-1.5 animate-pulse rounded-full bg-ink-muted"
-          style={{ animationDelay: `${i * 160}ms` }}
-        />
-      ))}
+    <div className="flex items-center gap-2 px-1 py-1 text-[13px] text-ink-muted">
+      <DotSpinner label="Thinking" />
+      Thinking…
     </div>
   );
 }
+
+/** A drag this far (px) on the handle snaps the sheet; anything shorter is a tap. */
+const DRAG_SNAP_PX = 40;
 
 export function ChatRail({
   catalog,
@@ -243,6 +307,11 @@ export function ChatRail({
   const inputRef = useRef<HTMLInputElement>(null);
   const busy = status === "submitted" || status === "streaming";
   const hasMessages = messages.length > 0;
+  // The topo heartbeat plays only while the conversation's first answer is on its way; messages only grow, so
+  // once a second question is asked it never shows again this session.
+  const firstAnswerPending = busy && messages.filter((m) => m.role === "user").length === 1;
+  const [tall, setTall] = useState(false);
+  const dragStartRef = useRef<number | null>(null);
   const open = hasMessages && !collapsed;
   const state = !hasMessages ? "empty" : open ? "open" : "collapsed";
 
@@ -316,6 +385,23 @@ export function ChatRail({
 
   const lastId = messages.at(-1)?.id;
 
+  // The phone sheet's handle: a tap toggles half and tall; a drag snaps up to tall, or down a step (from half,
+  // down collapses the panel).
+  const onHandleDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    dragStartRef.current = e.clientY;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const onHandleUp = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const start = dragStartRef.current;
+    dragStartRef.current = null;
+    if (start === null) return;
+    const dy = e.clientY - start;
+    if (Math.abs(dy) < DRAG_SNAP_PX) setTall((t) => !t);
+    else if (dy < 0) setTall(true);
+    else if (tall) setTall(false);
+    else onToggle();
+  };
+
   return (
     <>
       {!hasMessages && (
@@ -333,22 +419,47 @@ export function ChatRail({
         aria-label="Chat"
         data-chat-open={open}
         data-chat-state={state}
+        data-sheet={tall ? "tall" : "half"}
         className={[
           "chat-surface absolute z-20 flex flex-col",
           open
             ? [
-                "glass-strong rise-in overflow-hidden",
-                // Phones: a bottom sheet.
-                "inset-x-0 bottom-0 h-[46vh] rounded-t-panel",
+                "glass-strong rise-in overflow-hidden transition-[height] duration-350 ease-(--ease-out)",
+                // Phones: a bottom sheet that snaps between half and tall.
+                tall ? "inset-x-0 bottom-0 h-[90vh] rounded-t-panel" : "inset-x-0 bottom-0 h-[46vh] rounded-t-panel",
                 // md and up: a floating panel in the bottom-left corner.
                 "md:inset-x-auto md:bottom-4 md:left-4 md:h-auto md:max-h-[72vh] md:w-[420px] md:rounded-panel",
               ].join(" ")
             : "inset-x-3 bottom-3 items-start gap-2 md:inset-x-auto md:bottom-4 md:left-4 md:w-[420px]",
         ].join(" ")}
       >
+        {open && (
+          <button
+            type="button"
+            onPointerDown={onHandleDown}
+            onPointerUp={onHandleUp}
+            onPointerCancel={() => (dragStartRef.current = null)}
+            // Keyboard activation (no pointer) toggles too; a tap is already handled on pointer up.
+            onClick={(e) => {
+              if (e.detail === 0) setTall((t) => !t);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowUp") setTall(true);
+              else if (e.key === "ArrowDown") setTall(false);
+            }}
+            aria-label={tall ? "Shrink chat" : "Expand chat"}
+            title={tall ? "Shrink" : "Expand"}
+            data-testid="sheet-handle"
+            className="absolute inset-x-0 top-0 z-10 mx-auto flex h-6 w-24 touch-none items-start justify-center pt-2 md:hidden"
+          >
+            {/* Wally's drag handle: 36×5. */}
+            <span aria-hidden className="h-[5px] w-9 rounded-full bg-ink/20" />
+          </button>
+        )}
+
         {hasMessages && (
-          // One toggle in every state, so focus survives collapse/expand: the grab handle (phones) or chevron
-          // (desktop) at the top of the open panel, and the small WallyMap tag above the input when collapsed.
+          // One toggle in every state, so focus survives collapse/expand: the chevron at the top right of the open
+          // panel, and the small WallyMap tag above the input when collapsed.
           <button
             type="button"
             onClick={onToggle}
@@ -357,21 +468,18 @@ export function ChatRail({
             title={open ? "Collapse" : "Expand"}
             className={
               open
-                ? "absolute inset-x-0 top-0 z-10 flex h-5 items-end justify-center md:inset-x-auto md:top-3.5 md:right-3.5 md:size-8 md:items-center md:rounded-full md:text-ink-muted md:transition-colors md:hover:bg-mist md:hover:text-ink"
+                ? "absolute top-3.5 right-3.5 z-10 flex size-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-mist hover:text-ink max-md:top-4"
                 : "glass-strong rise-in flex h-8 items-center gap-1.5 rounded-pill pr-2.5 pl-3 text-xs font-medium text-ink"
             }
           >
             {open ? (
-              <>
-                <span aria-hidden className="h-1 w-10 rounded-full bg-ink/20 md:hidden" />
-                <ChevronDownIcon aria-hidden className="hidden md:block" />
-              </>
+              <ChevronDown aria-hidden size={18} strokeWidth={2} />
             ) : (
               <>
                 <WallyMark size={16} />
                 <span className="text-[13px] font-semibold">WallyMap</span>
-                {busy && <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-ink-muted" />}
-                <ChevronUpIcon aria-hidden width={14} height={14} className="text-ink-muted" />
+                {busy && <DotSpinner className="text-ink-muted" />}
+                <ChevronUp aria-hidden size={14} strokeWidth={2} className="text-ink-muted" />
               </>
             )}
           </button>
@@ -380,11 +488,11 @@ export function ChatRail({
         {hasMessages && (
           // Stays mounted while collapsed so tool-trace timings and scroll position survive.
           <div className={open ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-            <header className="flex shrink-0 items-center gap-2 pt-5 pr-14 pb-2 pl-5 md:pt-4">
+            <header className="flex shrink-0 items-center gap-2 pt-6 pr-14 pb-2 pl-5 md:pt-4">
               <h2 className="font-serif text-[1.2rem] font-semibold text-ink">Ask the map</h2>
               {busy && (
                 <span className="flex items-center gap-1.5 text-xs text-ink-muted">
-                  <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-ink-muted" />
+                  <DotSpinner />
                   Thinking…
                 </span>
               )}
@@ -404,7 +512,7 @@ export function ChatRail({
                   onFollowUp={busy ? undefined : followUp}
                 />
               ))}
-              {status === "submitted" && <Thinking />}
+              {firstAnswerPending ? <TopoHeartbeat className="h-28 shrink-0" zoom={0.5} /> : status === "submitted" && <Thinking />}
               {error && <ErrorCard title="Something went wrong">{readableError(error)}</ErrorCard>}
               <div ref={bottomRef} />
             </div>
@@ -436,9 +544,9 @@ export function ChatRail({
                 onClick={() => void stop()}
                 aria-label="Stop"
                 title="Stop"
-                className="flex size-10 shrink-0 items-center justify-center rounded-full bg-ink text-paper transition-colors hover:bg-ink/85"
+                className="press flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary transition duration-150 ease-out hover:opacity-85"
               >
-                <StopIcon />
+                <Square aria-hidden size={14} strokeWidth={2.5} fill="currentColor" />
               </button>
             ) : (
               <button
@@ -446,10 +554,10 @@ export function ChatRail({
                 disabled={!draft.trim()}
                 aria-label="Send"
                 title="Send"
-                // Amber only once there is something to send. Ink arrow on amber: 6.5:1 (white would be 2.7:1).
-                className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-ink transition-colors hover:bg-accent-deep disabled:bg-mist disabled:text-ink-muted"
+                // The primary (black) button only once there is something to send.
+                className="press flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary transition duration-150 ease-out hover:opacity-85 disabled:bg-mist disabled:text-ink-muted disabled:hover:opacity-100"
               >
-                <ArrowUpIcon />
+                <ArrowUp aria-hidden size={18} strokeWidth={2.25} />
               </button>
             )}
           </form>

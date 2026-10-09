@@ -69,7 +69,28 @@ describe("arcgisQuery", () => {
   it("returns the FeatureCollection on success", async () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(fc), { status: 200 }));
     const r = await arcgisQuery(ctxWith(stub), SERVICE, { outFields: ["NAME"], bbox: BBOX });
-    expect(r).toEqual({ ok: true, fc });
+    expect(r).toEqual({ ok: true, fc, truncated: false });
+  });
+
+  it("reports truncated when the service sets exceededTransferLimit", async () => {
+    const stub = vi.fn(
+      async () => new Response(JSON.stringify({ ...fc, exceededTransferLimit: true }), { status: 200 }),
+    );
+    const r = await arcgisQuery(ctxWith(stub), SERVICE, { outFields: ["NAME"], bbox: BBOX });
+    expect(r).toMatchObject({ ok: true, truncated: true });
+  });
+
+  it("forwards orderByFields and ttlSeconds", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(fc), { status: 200 }));
+    await arcgisQuery(ctxWith(stub), SERVICE, {
+      outFields: ["NAME"],
+      bbox: BBOX,
+      orderByFields: "GIS_ACRES DESC",
+      ttlSeconds: 3600,
+    });
+    const [url, init] = stub.mock.calls[0] as unknown as [string, RequestInit & { ttlSeconds?: number }];
+    expect(new URL(url).searchParams.get("orderByFields")).toBe("GIS_ACRES DESC");
+    expect(init.ttlSeconds).toBe(3600);
   });
 
   it("maps a 200 body with an error object to ok: false", async () => {

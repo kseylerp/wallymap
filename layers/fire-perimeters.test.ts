@@ -111,6 +111,38 @@ describe("fire-perimeters layer", () => {
     expect(new URL(String(history)).searchParams.get("maxAllowableOffset")).toBe("0.0005");
   });
 
+  it("with yearsBack 7 queries history for 2019 and WFIGS from 2020, largest first, with a 1 hour cache", async () => {
+    const stub = routedStub();
+    const r = await layer.query(ctx(stub), { yearsBack: 7, minAcres: 100 });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.coverageNote).toBeUndefined();
+    const calls = stub.mock.calls as unknown as [string, RequestInit & { ttlSeconds?: number }][];
+    expect(calls).toHaveLength(2);
+    const history = calls.find(([u]) => u.includes("InterAgencyFirePerimeterHistory_All_Years_View"));
+    const wfigs = calls.find(([u]) => u.includes("WFIGS_Interagency_Perimeters"));
+    if (!history || !wfigs) throw new Error("expected both services to be called");
+    expect(whereOf(history[0])).toContain("FIRE_YEAR_INT >= 2019");
+    expect(whereOf(wfigs[0])).toContain("DATE '2020-01-01'");
+    expect(new URL(history[0]).searchParams.get("orderByFields")).toBe("GIS_ACRES DESC");
+    expect(new URL(wfigs[0]).searchParams.get("orderByFields")).toBe("poly_GISAcres DESC");
+    expect(wfigs[1].ttlSeconds).toBe(3600);
+    expect(r.data.features.some((f) => f.properties?.name === "Caldor")).toBe(true);
+  });
+
+  it("adds a coverage note when a service reports it capped the result", async () => {
+    const stub = vi.fn(async (url: string) =>
+      json(
+        url.includes("WFIGS_Interagency_Perimeters")
+          ? { ...fixture.wfigs, exceededTransferLimit: true }
+          : fixture.history,
+      ),
+    );
+    const r = await layer.query(ctx(stub), { yearsBack: 10, minAcres: 100 });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.coverageNote).toBe("Showing the 2,000 largest fires; zoom in for all");
+    expect(r.data.features.length).toBeGreaterThan(0);
+  });
+
   it("skips the stale history service when the window starts in 2020 or later", async () => {
     const stub = routedStub();
     await layer.query(ctx(stub), { yearsBack: 5, minAcres: 100 });

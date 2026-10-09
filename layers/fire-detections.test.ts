@@ -58,6 +58,17 @@ describe("parseFirmsCsv", () => {
     expect(fc.features[0].properties).toMatchObject({ confidence: 85, v: 3.1, daynight: "D" });
   });
 
+  it("skips rows without a usable date or time", () => {
+    const csv = [
+      "latitude,longitude,acq_date,acq_time,frp,confidence,daynight",
+      "40,-120,,1342,3,n,D",
+      "40,-120,2026-10-05,99,3,n,D",
+      "40,-120,2026-10-05,2575,3,n,D",
+      "40,-120,2026-10-05,1342,3,n,D",
+    ].join("\n");
+    expect(parseFirmsCsv(csv).features).toHaveLength(1);
+  });
+
   it("skips rows with bad coordinates and returns an empty collection for a header-only body", () => {
     const header = "latitude,longitude,acq_date,acq_time,frp,confidence,daynight";
     expect(parseFirmsCsv(`${header}\n`).features).toHaveLength(0);
@@ -83,6 +94,7 @@ describe("fire-detections layer", () => {
     );
     expect(init.signal).toBeInstanceOf(AbortSignal);
     expect(init.cacheKey).toBe("fire-detections:k:firms");
+    expect((init as { ttlSeconds?: number }).ttlSeconds).toBe(1800);
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(100);
     expect(r.citation.source).toContain("NASA FIRMS");
@@ -100,6 +112,49 @@ describe("fire-detections layer", () => {
     const r = await layer.query(ctx(stub), INPUT);
     expect(r).toMatchObject({ hint: "upstream" });
     expect((r as { error: string }).error).toContain("Invalid MAP_KEY.");
+  });
+
+  it("treats a 200 HTML body as an upstream error, not as zero fires", async () => {
+    const html = "<!DOCTYPE html><html><head><title>Maintenance</title></head><body>Back soon</body></html>\nmore";
+    const stub = vi.fn(async () => new Response(html, { status: 200 }));
+    const r = await layer.query(ctx(stub), INPUT);
+    expect(r).toEqual({
+      error: `FIRMS returned an unexpected response: ${html.split("\n")[0].slice(0, 80)}`,
+      hint: "upstream",
+    });
+  });
+
+  it("returns an empty collection for an empty 200 body or a header-only CSV", async () => {
+    for (const body of ["", "latitude,longitude,acq_date,acq_time,frp,confidence,daynight\n"]) {
+      const stub = vi.fn(async () => new Response(body, { status: 200 }));
+      const r = await layer.query(ctx(stub), INPUT);
+      if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+      expect(r.data.features).toHaveLength(0);
+      expect(r.coverageNote).toBeUndefined();
+    }
+  });
+
+  it("caps output at the 5,000 strongest detections and says so", async () => {
+    const rows = ["latitude,longitude,acq_date,acq_time,frp,confidence,daynight"];
+    for (let i = 0; i < 5001; i++) rows.push(`40,-120,2026-10-05,1342,${i},n,D`);
+    const stub = vi.fn(async () => new Response(rows.join("\n"), { status: 200 }));
+    const r = await layer.query(ctx(stub), INPUT);
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features).toHaveLength(5000);
+    expect(r.coverageNote).toBe("Showing the 5,000 strongest detections");
+    const values = r.data.features.map((f) => f.properties?.v as number);
+    expect(Math.max(...values)).toBe(5000);
+    expect(Math.min(...values)).toBe(1); // the weakest (v = 0) was dropped
+  });
+
+  it("does not add a note at exactly 5,000 points", async () => {
+    const rows = ["latitude,longitude,acq_date,acq_time,frp,confidence,daynight"];
+    for (let i = 0; i < 5000; i++) rows.push(`40,-120,2026-10-05,1342,${i},n,D`);
+    const stub = vi.fn(async () => new Response(rows.join("\n"), { status: 200 }));
+    const r = await layer.query(ctx(stub), INPUT);
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features).toHaveLength(5000);
+    expect(r.coverageNote).toBeUndefined();
   });
 
   it("maps a non-2xx response to an upstream error", async () => {

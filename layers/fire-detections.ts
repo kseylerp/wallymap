@@ -20,6 +20,9 @@ const inputSchema = z.object({
   source: z.enum(SOURCES).default("VIIRS_SNPP_NRT"),
 });
 
+/** Most points returned; keeps the strongest so a 10-day, country-sized request stays drawable. */
+const MAX_POINTS = 5_000;
+
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
 /** `"342"` becomes `"03:42:00Z"`; returns null when the value is not a clock time. */
@@ -38,7 +41,7 @@ function numeric(value: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Parses a FIRMS area CSV into point features, skipping rows without a usable position or time. */
+/** Parses a FIRMS area CSV into point features, skipping rows without a usable position or time (`t`). */
 export function parseFirmsCsv(text: string): FeatureCollection {
   const lines = text.split(/\r?\n/).filter((line) => line.trim() !== "");
   if (lines.length < 2) return { type: "FeatureCollection", features: [] };
@@ -64,7 +67,8 @@ export function parseFirmsCsv(text: string): FeatureCollection {
     const properties: Record<string, string | number> = {};
     const date = iDate === -1 ? undefined : cells[iDate]?.trim();
     const time = iTime === -1 ? null : clockTime(cells[iTime]?.trim() ?? "");
-    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date) && time !== null) properties.t = `${date}T${time}`;
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || time === null) continue;
+    properties.t = `${date}T${time}`;
 
     const frp = iFrp === -1 ? null : numeric(cells[iFrp]);
     if (frp !== null) properties.v = frp;
@@ -79,6 +83,11 @@ export function parseFirmsCsv(text: string): FeatureCollection {
   return { type: "FeatureCollection", features };
 }
 
+function frpOf(feature: Feature): number {
+  const v: unknown = feature.properties?.v;
+  return typeof v === "number" ? v : -Infinity;
+}
+
 const fireDetections = defineLayer({
   id: "fire-detections",
   title: "Active fire detections",
@@ -90,7 +99,7 @@ const fireDetections = defineLayer({
     "Caveats: detections are heat points, not fire outlines (use fire-perimeters for the burned area); one fire often produces many points; " +
     "VIIRS sources are about 375 m resolution and MODIS about 1 km; data arrives roughly 3 hours after the pass; " +
     "industrial flares, gas wells and volcanoes also show up. " +
-    "Pick VIIRS_SNPP_NRT (default), VIIRS_NOAA20_NRT or MODIS_NRT with source. Needs a region under 2,000,000 km² (roughly a large US state or smaller).",
+    "Pick VIIRS_SNPP_NRT (default), VIIRS_NOAA20_NRT or MODIS_NRT with source. Needs a region under 2,000,000 km² (about the size of Mexico); 10 days over an area that large can be tens of thousands of points, so at most the 5,000 strongest (by v) are returned and the result says so when it trims.",
   coverage: "global",
   license: "NASA FIRMS (public, attribution requested)",
   requiredEnv: ["FIRMS_MAP_KEY"],
@@ -115,6 +124,8 @@ const fireDetections = defineLayer({
     try {
       const res = await ctx.fetch(url, {
         cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:firms`,
+        // Hotspots are near-real-time; the default 24 hour cache would show stale fires.
+        ttlSeconds: 1800,
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       });
       status = res.status;
@@ -138,9 +149,27 @@ const fireDetections = defineLayer({
     }
     if (!ok) return { error: `FIRMS returned ${status}`, hint: "upstream" };
 
+    // Anything that is not a CSV (an HTML error page, say) must not be shown as "no fires".
+    const firstLine = body.trimStart().split(/\r?\n/)[0];
+    if (body.trim() !== "" && !firstLine.includes("latitude")) {
+      return { error: `FIRMS returned an unexpected response: ${firstLine.slice(0, 80)}`, hint: "upstream" };
+    }
+
+    const parsed = body.trim() === "" ? EMPTY : parseFirmsCsv(body);
+    const capped = parsed.features.length > MAX_POINTS;
+    const data: FeatureCollection = capped
+      ? {
+          type: "FeatureCollection",
+          features: [...parsed.features]
+            .sort((a, b) => frpOf(b) - frpOf(a))
+            .slice(0, MAX_POINTS),
+        }
+      : parsed;
+
     return {
       kind: "geojson",
-      data: body.trim() === "" ? EMPTY : parseFirmsCsv(body),
+      data,
+      ...(capped ? { coverageNote: `Showing the ${MAX_POINTS.toLocaleString("en-US")} strongest detections` } : {}),
       citation: {
         source: `NASA FIRMS ${input.source} (public, attribution requested)`,
         url: "https://firms.modaps.eosdis.nasa.gov/",

@@ -157,6 +157,8 @@ function outsideUs(bbox: BBox): boolean {
   return east < uw || west > ue || north < us || south > un;
 }
 
+const TRUNCATED_NOTE = "Showing the 2,000 largest fires; zoom in for all";
+
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
 const firePerimeters = defineLayer({
@@ -167,6 +169,7 @@ const firePerimeters = defineLayer({
     "Each polygon has name, year, acres, agency (when known), t (discovery date, or January 1 of the fire year for fires before 2020) and v (burned acres, from the mapped perimeter). " +
     "Use yearsBack (1 to 25, default 10) to choose how far back to go and minAcres (default 100) to hide small fires. " +
     "United States only; elsewhere it returns nothing. Perimeters are simplified for display, so acreage is approximate and edges are not survey-grade. " +
+    "Each source returns at most 2,000 fires, largest first; when that cap is hit the result says so, so zoom in for the rest. " +
     "Prescribed burns are excluded. Fires smaller than minAcres, and rare older fires never mapped, will not appear. " +
     "Zoom in to a region under 60,000 km² (about a 200 km square) first.",
   coverage: "us",
@@ -205,22 +208,31 @@ const firePerimeters = defineLayer({
             outFields: HISTORY_FIELDS,
             bbox: ctx.bbox,
             maxAllowableOffset: 0.0005,
+            orderByFields: "GIS_ACRES DESC",
             cacheSuffix: "perimeters-history",
           })
-        : Promise.resolve({ ok: true as const, fc: EMPTY }),
+        : Promise.resolve({ ok: true as const, fc: EMPTY, truncated: false }),
       arcgisQuery(ctx, WFIGS_URL, {
         where: wfigsWhere(wfigsStart, input.minAcres),
         outFields: WFIGS_FIELDS,
         bbox: ctx.bbox,
         maxAllowableOffset: 0.0005,
+        orderByFields: "poly_GISAcres DESC",
         cacheSuffix: "perimeters-wfigs",
+        // Current-year fires change daily, so keep this cache short.
+        ttlSeconds: 3600,
       }),
     ]);
 
     if (!history.ok) return { error: history.error, hint: "upstream" };
     if (!wfigs.ok) return { error: wfigs.error, hint: "upstream" };
 
-    return { kind: "geojson", data: normalizeFirePerimeters(history.fc, wfigs.fc), citation };
+    return {
+      kind: "geojson",
+      data: normalizeFirePerimeters(history.fc, wfigs.fc),
+      citation,
+      ...(history.truncated || wfigs.truncated ? { coverageNote: TRUNCATED_NOTE } : {}),
+    };
   },
 });
 

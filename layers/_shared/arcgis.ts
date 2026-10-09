@@ -9,11 +9,20 @@ export type ArcgisParams = {
   bbox: BBox;
   maxRecords?: number;
   maxAllowableOffset?: number;
+  /** ArcGIS `orderByFields`, e.g. "GIS_ACRES DESC"; matters when the result may be capped. */
+  orderByFields?: string;
   cacheSuffix?: string;
+  /** Cache lifetime for this request; omit for the fetch wrapper's default. */
+  ttlSeconds?: number;
 };
 
 export type ArcgisResult =
-  | { ok: true; fc: FeatureCollection }
+  | {
+      ok: true;
+      fc: FeatureCollection;
+      /** True when the service capped the result (`exceededTransferLimit`), so features were left out. */
+      truncated: boolean;
+    }
   | { ok: false; error: string; status?: number };
 
 const DEFAULT_MAX_RECORDS = 2000;
@@ -63,6 +72,10 @@ export async function arcgisQuery(
     search.set("maxAllowableOffset", String(params.maxAllowableOffset));
   }
 
+  if (params.orderByFields !== undefined) {
+    search.set("orderByFields", params.orderByFields);
+  }
+
   const url = `${serviceUrl}/query?${search.toString()}`;
   // Without ctx.cacheKey the fetch wrapper builds its own URL-based key.
   // Without a suffix, hash the full URL so two queries from one ctx never share a key.
@@ -74,6 +87,7 @@ export async function arcgisQuery(
   try {
     const res = await ctx.fetch(url, {
       cacheKey,
+      ttlSeconds: params.ttlSeconds,
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
     if (!res.ok) {
@@ -90,7 +104,12 @@ export async function arcgisQuery(
     if (!isFeatureCollection(json)) {
       return { ok: false, error: "ArcGIS service did not return a FeatureCollection" };
     }
-    return { ok: true, fc: json };
+    const truncated =
+      typeof json === "object" &&
+      json !== null &&
+      "exceededTransferLimit" in json &&
+      json.exceededTransferLimit === true;
+    return { ok: true, fc: json, truncated };
   } catch (err) {
     const timedOut =
       typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";

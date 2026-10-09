@@ -1,11 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { BasemapSwitch } from "@/components/BasemapSwitch";
 import { ChatRail } from "@/components/ChatRail";
-import { MapCanvas } from "@/components/MapCanvas";
+import { LayerChips } from "@/components/LayerChips";
+import { MapCanvas, type MapHandle } from "@/components/MapCanvas";
+import { MapControls } from "@/components/MapControls";
+import { Wordmark } from "@/components/Wordmark";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { reduce } from "@/lib/render/reducer";
-import { initialMapState, type MapAction, type Viewport } from "@/lib/render/state";
+import { initialMapState, type Basemap, type MapAction, type Viewport } from "@/lib/render/state";
 
 const DEFAULT_CANVAS = { width: 1000, height: 800 };
 
@@ -28,6 +32,7 @@ export function App() {
   const [catalog, setCatalog] = useState<LayerCatalog | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const mapBoxRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<MapHandle>(null);
   const canvasSizeRef = useRef(DEFAULT_CANVAS);
 
   useEffect(() => {
@@ -59,31 +64,42 @@ export function App() {
   const onActions = useCallback((actions: MapAction[]) => actions.forEach(dispatch), []);
   const onViewportChange = useCallback((viewport: Viewport) => dispatch({ type: "set_view", viewport }), []);
   const toggle = useCallback(() => setCollapsed((c) => !c), []);
+  const setBasemap = useCallback((basemap: Basemap) => dispatch({ type: "set_basemap", basemap }), []);
+  const toggleLayer = useCallback((layerId: string) => dispatch({ type: "toggle_layer", layerId }), []);
 
   return (
-    <div className="relative flex h-dvh w-full overflow-hidden bg-neutral-100">
-      <aside
-        className={[
-          // Phones: a bottom sheet over the full-screen map.
-          "fixed inset-x-0 bottom-0 z-10 overflow-hidden rounded-t-xl border-t border-neutral-200 shadow-lg",
-          collapsed ? "h-12" : "h-[45vh]",
-          // md and up: a left rail beside the map.
-          "md:static md:z-auto md:h-full md:shrink-0 md:rounded-none md:border-t-0 md:border-r md:shadow-none",
-          collapsed ? "md:w-12" : "md:w-1/3 md:min-w-[320px]",
-        ].join(" ")}
-      >
-        <ChatRail
-          catalog={catalog}
-          renderOps={state.renderOps}
-          getCanvasSize={getCanvasSize}
-          onActions={onActions}
-          collapsed={collapsed}
-          onToggle={toggle}
-        />
-      </aside>
-      <main ref={mapBoxRef} className="h-full min-w-0 flex-1">
-        <MapCanvas state={state} onViewportChange={onViewportChange} />
+    <div className="relative h-dvh w-full overflow-hidden bg-cream">
+      {/* The map fills the window; every control floats over it. */}
+      <main ref={mapBoxRef} className="absolute inset-0">
+        <MapCanvas ref={mapRef} state={state} onViewportChange={onViewportChange} />
       </main>
+
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 md:p-4">
+        <div className="pointer-events-auto flex items-center gap-2">
+          <div className="rise-in">
+            <Wordmark />
+          </div>
+          <div className="rise-in" style={{ animationDelay: "60ms" }}>
+            <BasemapSwitch value={state.basemap} onChange={setBasemap} />
+          </div>
+        </div>
+        <LayerChips layers={state.layers} renderOps={state.renderOps} onToggle={toggleLayer} />
+      </header>
+
+      <MapControls
+        onZoomIn={() => mapRef.current?.zoomIn()}
+        onZoomOut={() => mapRef.current?.zoomOut()}
+        onGlobe={() => mapRef.current?.resetToGlobe()}
+      />
+
+      <ChatRail
+        catalog={catalog}
+        renderOps={state.renderOps}
+        getCanvasSize={getCanvasSize}
+        onActions={onActions}
+        collapsed={collapsed}
+        onToggle={toggle}
+      />
     </div>
   );
 }

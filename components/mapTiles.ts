@@ -1,4 +1,4 @@
-import type { Map as MapboxMap, StyleSpecification } from "mapbox-gl";
+import type { FogSpecification, Map as MapboxMap, StyleSpecification } from "mapbox-gl";
 import type { Basemap, MapState } from "@/lib/render/state";
 
 const PREFIX = "tiles-";
@@ -63,9 +63,22 @@ const SATELLITE_OPACITY = 0.9;
 const OCCLUDING_FILL = /^(landcover|landuse|national-park|land-structure-polygon|wetland|park|pitch|glacier|snow|sand|scrub|wood|grass|golf)/;
 /** Terrain shading stays, but lighter, so it adds relief without muddying the photo. */
 const HILLSHADE_SCALE = 0.5;
-const HILLSHADE_FALLBACK_OPACITY = 0.12;
+const HILLSHADE_FALLBACK_OPACITY = 0.3;
+/** Outdoors' white fog washes out imagery; a clearer, bluer atmosphere suits a satellite globe. */
+const HYBRID_FOG: FogSpecification = {
+  range: [0.8, 8],
+  color: "rgb(214, 222, 228)",
+  "high-color": "rgb(70, 118, 186)",
+  "horizon-blend": 0.03,
+  "space-color": "rgb(12, 14, 20)",
+  "star-intensity": 0.3,
+};
 
-type HybridMemo = { hidden: string[]; hillshade: { id: string; property: string; value: unknown }[] };
+type HybridMemo = {
+  hidden: string[];
+  hillshade: { id: string; property: string; value: unknown }[];
+  fog: FogSpecification | null | undefined;
+};
 /** What the hybrid changed on each map's current style, so switching back to plain Outdoors can undo it. */
 const hybridMemo = new WeakMap<MapboxMap, HybridMemo>();
 
@@ -86,8 +99,9 @@ function dimHillshade(map: MapboxMap, layer: StyleSpecification["layers"][number
   if (!property) return;
   const value: unknown = map.getPaintProperty(layer.id, property as never);
   memo.hillshade.push({ id: layer.id, property, value });
-  // Zoom expressions must stay top-level, so only plain numbers can be scaled; others get a light constant.
-  const next = typeof value === "number" ? value * HILLSHADE_SCALE : HILLSHADE_FALLBACK_OPACITY;
+  // Zoom expressions must stay top-level, so only plain numbers (or the default of 1) can be scaled.
+  const next =
+    typeof value === "number" ? value * HILLSHADE_SCALE : value === undefined ? HILLSHADE_SCALE : HILLSHADE_FALLBACK_OPACITY;
   map.setPaintProperty(layer.id, property as never, next as never);
 }
 
@@ -104,7 +118,7 @@ export function syncSatelliteHybrid(map: MapboxMap, basemap: Basemap): void {
   const active = Boolean(map.getLayer(SATELLITE_ID));
 
   if (wanted && !active) {
-    const next: HybridMemo = { hidden: [], hillshade: [] };
+    const next: HybridMemo = { hidden: [], hillshade: [], fog: map.getFog() };
     if (!map.getSource(SATELLITE_ID)) {
       map.addSource(SATELLITE_ID, { type: "raster", url: "mapbox://mapbox.satellite", tileSize: 256 });
     }
@@ -121,6 +135,7 @@ export function syncSatelliteHybrid(map: MapboxMap, basemap: Basemap): void {
         next.hidden.push(layer.id);
       }
     }
+    map.setFog(HYBRID_FOG);
     hybridMemo.set(map, next);
     return;
   }
@@ -133,6 +148,7 @@ export function syncSatelliteHybrid(map: MapboxMap, basemap: Basemap): void {
       for (const { id, property, value } of memo.hillshade) {
         if (map.getLayer(id)) map.setPaintProperty(id, property as never, value as never);
       }
+      map.setFog(memo.fog ?? null);
     }
     hybridMemo.delete(map);
   }

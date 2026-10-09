@@ -3,24 +3,34 @@
 import type { Layer } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import mapboxgl from "mapbox-gl";
-import { useEffect, useRef } from "react";
+import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { MapSetupNotice } from "@/components/MapSetupNotice";
 import { syncSatelliteHybrid, syncTileLayers } from "@/components/mapTiles";
 import { basemapStyleUrl } from "@/lib/render/basemaps";
 import { buildDeckLayers } from "@/lib/render/deck";
-import type { Basemap, MapState, Viewport } from "@/lib/render/state";
+import { initialMapState, type Basemap, type MapState, type Viewport } from "@/lib/render/state";
 
 // Literal `process.env.NEXT_PUBLIC_*` access so Next inlines it into the client bundle.
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim() ?? "";
 const EPSILON = 1e-6;
 
+/** Imperative camera controls for the on-map buttons. */
+export type MapHandle = {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  /** Back to the starting world view (pitch 0), through the same `set_view` path the agent uses. */
+  resetToGlobe: () => void;
+};
+
 type MapCanvasProps = {
   state: MapState;
   onViewportChange: (v: Viewport) => void;
   className?: string;
+  /** React 19 passes `ref` as a plain prop, so no `forwardRef` wrapper is needed. */
+  ref?: Ref<MapHandle>;
 };
 
-export function MapCanvas({ state, onViewportChange, className }: MapCanvasProps) {
+export function MapCanvas({ state, onViewportChange, className, ref }: MapCanvasProps) {
   if (!MAPBOX_TOKEN) {
     return (
       <div data-testid="map-canvas" className={className ?? "h-full w-full"}>
@@ -28,7 +38,7 @@ export function MapCanvas({ state, onViewportChange, className }: MapCanvasProps
       </div>
     );
   }
-  return <GlobeMap state={state} onViewportChange={onViewportChange} className={className} />;
+  return <GlobeMap state={state} onViewportChange={onViewportChange} className={className} ref={ref} />;
 }
 
 function cameraOf(map: mapboxgl.Map): Viewport {
@@ -62,7 +72,7 @@ function safeDeckLayers(state: MapState): Layer[] {
   }
 }
 
-function GlobeMap({ state, onViewportChange, className }: MapCanvasProps) {
+function GlobeMap({ state, onViewportChange, className, ref }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
@@ -77,6 +87,16 @@ function GlobeMap({ state, onViewportChange, className }: MapCanvasProps) {
     stateRef.current = state;
     onViewportChangeRef.current = onViewportChange;
   });
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      zoomIn: () => mapRef.current?.zoomIn(),
+      zoomOut: () => mapRef.current?.zoomOut(),
+      resetToGlobe: () => onViewportChangeRef.current(initialMapState.viewport),
+    }),
+    [],
+  );
 
   // Create the map and overlay once.
   useEffect(() => {

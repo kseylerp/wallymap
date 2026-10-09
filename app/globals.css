@@ -185,3 +185,49 @@ h4 {
 .chat-markdown h4 {
   font-size: 1.05rem;
 }
+
+/*
+ * Corner furniture that must clear the chat. Phones: the controls and the Mapbox logo/attribution sit just
+ * above the input pill, or above the bottom sheet while it is open. Desktop: they clear the attribution
+ * strip, and the logo moves right of the chat panel.
+ */
+.map-controls {
+  bottom: 100px;
+}
+.mapboxgl-ctrl-bottom-left,
+.mapboxgl-ctrl-bottom-right {
+  bottom: 68px;
+}
+:root:has([data-chat-open="true"]) .map-controls {
+  bottom: calc(46vh + 32px);
+}
+:root:has([data-chat-open="true"]) .mapboxgl-ctrl-bottom-left,
+:root:has([data-chat-open="true"]) .mapboxgl-ctrl-bottom-right {
+  bottom: 46vh;
+}
+@media (min-width: 768px) {
+  .map-controls,
+  :root:has([data-chat-open="true"]) .map-controls {
+    bottom: 40px;
+  }
+  .mapboxgl-ctrl-bottom-left,
+  .mapboxgl-ctrl-bottom-right,
+  :root:has([data-chat-open="true"]) .mapboxgl-ctrl-bottom-left,
+  :root:has([data-chat-open="true"]) .mapboxgl-ctrl-bottom-right {
+    bottom: 0;
+  }
+  .mapboxgl-ctrl-bottom-left {
+    left: calc(420px + 24px);
+  }
+}
+
+/* A paragraph that is only bold text titles the answer or a section of it. */
+.chat-markdown .answer-title {
+  font-family: var(--font-serif);
+  font-size: 1.12rem;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.chat-markdown .answer-title strong {
+  font-weight: 600;
+}

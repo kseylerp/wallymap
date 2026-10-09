@@ -1,15 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Ubuntu } from "next/font/google";
+import { Saira_Condensed } from "next/font/google";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./globals.css";
 
-// Ubuntu for text and headings (Kyle, 2026-10-09) — the same face as
-// wally.guide and the Wally app's titles. Replaced Geist + Source Serif 4.
-const ubuntu = Ubuntu({
-  variable: "--font-ubuntu",
+// Saira Condensed for headings (Kyle, 2026-10-09) — the block title face on
+// wally.guide and the Wally app. Text is the system font, Light.
+const saira = Saira_Condensed({
+  variable: "--font-saira",
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  style: ["normal", "italic"],
+  weight: ["600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -30,7 +29,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${ubuntu.variable} h-full antialiased`}>
+    <html lang="en" className={`${saira.variable} h-full antialiased`}>
       <body className="h-full overflow-hidden">{children}</body>
     </html>
   );

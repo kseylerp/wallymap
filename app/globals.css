@@ -114,8 +114,8 @@
   --shadow-card: var(--card-shadow);
   --shadow-drawer: var(--drawer-shadow);
 
-  --font-sans: var(--font-ubuntu), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-ubuntu), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-saira), "Arial Narrow", ui-sans-serif, system-ui, sans-serif;
 }
 
 /* Frosted glass over the map: translucent white, blur, a 1px inner highlight and a soft low shadow. Icon-only controls. */
@@ -184,6 +184,8 @@ body {
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: 15px;
+  /* One step thinner than regular, under the block headings (Kyle, 2026-10-09). */
+  font-weight: 300;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }

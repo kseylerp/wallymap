@@ -1,5 +1,4 @@
 import { ChevronRight } from "lucide-react";
-import { Wordmark } from "@/components/Brand";
 
 export const EXAMPLE_QUESTIONS = [
   "Show hiking trails around Lake Tahoe",
@@ -20,7 +19,8 @@ export function EmptyState({ onPick }: EmptyStateProps) {
       className="glass-strong rise-in pointer-events-auto w-full max-w-[600px] rounded-large p-5 md:p-7"
       style={{ animationDelay: "120ms" }}
     >
-      <Wordmark variant="hero" />
+      {/* Text only: the logo lives in the corner map pill. */}
+      <h2 className="font-serif text-[2.1rem] leading-none font-semibold tracking-[-0.02em] text-ink">WallyMap</h2>
       <p className="mt-3 text-[16px] leading-snug text-ink-muted sm:mt-4 md:text-[18px]">
         Ask the map. Every answer is drawn, cited, and exportable.
       </p>

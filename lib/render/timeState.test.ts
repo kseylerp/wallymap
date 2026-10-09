@@ -161,3 +161,24 @@ describe("time state in the reducer", () => {
     expect(s.time?.window).toEqual([y(2018), yEnd(2020)]);
   });
 });
+
+describe("a single-date layer", () => {
+  it("does not open a one-bucket scrubber (nothing to scrub or play)", () => {
+    const one = layer("fire-perimeters", fc("2016-07-01T00:00:00.000Z", "2016-07-01T00:00:00.000Z"));
+    expect(run(initialMapState, { type: "layer_loaded", layer: one }).time).toBeUndefined();
+  });
+
+  it("opens the scrubber once a second date arrives", () => {
+    const one = layer("fire-perimeters", fc("2016-07-01T00:00:00.000Z"));
+    const two = layer("fire-detections", fc("2018-07-01T00:00:00.000Z"));
+    const s = run(initialMapState, { type: "layer_loaded", layer: one }, { type: "layer_loaded", layer: two });
+    expect(s.time?.index.buckets.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("keeps an agent's early time window waiting rather than applying it to one date", () => {
+    const one = layer("fire-perimeters", fc("2016-07-01T00:00:00.000Z"));
+    const s = run(initialMapState, { type: "set_time_window", window: [y(2016), yEnd(2016)] }, { type: "layer_loaded", layer: one });
+    expect(s.time).toBeUndefined();
+    expect(s.pendingTime?.window).toEqual([y(2016), yEnd(2016)]);
+  });
+});

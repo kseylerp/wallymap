@@ -37,6 +37,8 @@ export type Selection = {
   lngLat: [number, number];
   /** The click's screen point, so the card can open before the map reports a projection. */
   screen?: { x: number; y: number };
+  /** "b" when the feature was picked on a compare's side B (drawn under the view-only id `<layerId>~b`). */
+  side?: "b";
 };
 
 export type LoadedLayer = {

@@ -88,3 +88,30 @@ describe("set_filters and the visible view", () => {
     expect(isSelectionVisible(s, { layerId: "osm-trails", feature: features[0], lngLat: [0, 0] })).toBe(false);
   });
 });
+
+describe("a re-query and the filters", () => {
+  const filtered = run(base, { type: "set_filters", layerId: "osm-trails", filters: { sac_scale: { include: ["alpine_hiking"] } } });
+  const requery = { ...trails, receivedAt: "later" };
+
+  it("clears the previous filters when the same layer loads again (they may match none of the new features)", () => {
+    expect(filtered.renderOps[0].filters).toBeDefined();
+    const s = run(filtered, { type: "layer_loaded", layer: requery }, { type: "render", op: { layerId: "osm-trails", mode: "lines", visible: true } });
+    expect(s.renderOps[0].filters).toBeUndefined();
+    expect(names(s)).toHaveLength(9);
+  });
+
+  it("keeps the filters the re-query's render op sends", () => {
+    const s = run(
+      filtered,
+      { type: "layer_loaded", layer: requery },
+      { type: "render", op: { layerId: "osm-trails", mode: "lines", visible: true, filters: { sac_scale: { include: ["hiking"] } } } },
+    );
+    expect(s.renderOps[0].filters).toEqual({ sac_scale: { include: ["hiking"] } });
+  });
+
+  it("leaves other layers' filters alone", () => {
+    const other = { ...trails, id: "forest-roads" };
+    const s = run(filtered, { type: "layer_loaded", layer: other });
+    expect(s.renderOps[0].filters).toEqual({ sac_scale: { include: ["alpine_hiking"] } });
+  });
+});

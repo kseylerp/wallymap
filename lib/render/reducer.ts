@@ -1,3 +1,4 @@
+import type { CompareSpec } from "@/lib/render/compare";
 import type { CompareState, LoadedLayer, MapAction, MapState, RenderOp, TimeState, Viewport } from "@/lib/render/state";
 import type { LayerFilters } from "@/lib/render/filters";
 import { stepWindow, timeIndex, type TimeIndex, type TimeWindow } from "@/lib/time";
@@ -14,6 +15,17 @@ function clamp01(value: number): number {
 /** A playback speed multiplier, or undefined when it is not a positive number. */
 function validSpeed(speed: number | undefined): number | undefined {
   return speed !== undefined && Number.isFinite(speed) && speed > 0 ? speed : undefined;
+}
+
+/** The ops with `layerId`'s filters dropped; the same array when it had none. */
+function withoutFilters(renderOps: RenderOp[], layerId: string): RenderOp[] {
+  if (!renderOps.some((op) => op.layerId === layerId && op.filters !== undefined)) return renderOps;
+  return renderOps.map((op) => {
+    if (op.layerId !== layerId) return op;
+    const { filters: _old, ...rest } = op;
+    void _old;
+    return rest;
+  });
 }
 
 /** Applies `change` to the op for `layerId`; returns `state` untouched when there is no such op. */
@@ -101,10 +113,15 @@ function isDated(layer: LoadedLayer | undefined): boolean {
   return layer !== undefined && timeIndex({ [layer.id]: layer }) !== null;
 }
 
-/** The time index over the shown layers only: a hidden layer's dates neither open the scrubber nor widen it (spec §5). */
+/**
+ * The time index over the shown layers only: a hidden layer's dates neither open the scrubber nor widen it (spec §5).
+ * Null when the dates fill fewer than two buckets (one fire perimeter, one date): a one-step scrubber has nothing to
+ * scrub or play.
+ */
 function shownTimeIndex(state: MapState): TimeIndex | null {
   const shown = Object.fromEntries(Object.entries(state.layers).filter(([id]) => !isHidden(state, id)));
-  return timeIndex(shown);
+  const index = timeIndex(shown);
+  return index && index.buckets.length >= 2 ? index : null;
 }
 
 /** True when the window covers every date in the index (the opening state, or the user widened it all the way). */
@@ -174,6 +191,18 @@ function startCompare(state: MapState, compare: CompareState): MapState {
   return { ...state, compare: next, time, selected: dropSelectionOf(state, compare.layerId) };
 }
 
+/**
+ * Drops the selection on the compared layer when the features drawn for it change identity: the delta draws copies of
+ * the features (tagged a-only, b-only, both), swipe and toggle draw the originals, and a side B pick needs side B drawn.
+ */
+function dropComparedSelection(state: MapState, from: CompareSpec["mode"] | undefined, to: CompareSpec["mode"] | undefined): MapState["selected"] {
+  const compare = state.compare;
+  const selected = state.selected;
+  if (!compare || selected?.layerId !== compare.layerId) return selected;
+  const sideBGone = selected.side === "b" && (to === undefined || to === "delta");
+  return sideBGone || from === "delta" || to === "delta" ? undefined : selected;
+}
+
 /** Drops the compare when it is on `layerId` (the layer was removed). */
 function dropCompareOf(state: MapState, layerId: string): MapState["compare"] {
   return state.compare?.layerId === layerId ? undefined : state.compare;
@@ -212,6 +241,9 @@ function reduceAction(state: MapState, action: MapAction): MapState {
         {
           ...state,
           layers: { ...state.layers, [action.layer.id]: action.layer },
+          // A re-query (new place, new data) starts unfiltered: a value picked for the old features may match none of
+          // the new ones. The render op that follows the load brings its own filters when the agent sends some.
+          renderOps: state.layers[action.layer.id] ? withoutFilters(state.renderOps, action.layer.id) : state.renderOps,
           errors: state.errors.filter((e) => e.layerId !== action.layer.id),
           // A reload replaces the features, so the old selection no longer points at anything drawn.
           selected: dropSelectionOf(state, action.layer.id),
@@ -396,7 +428,11 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       return startCompare(state, action.compare);
     case "set_compare_mode":
       if (!state.compare || state.compare.mode === action.mode) return state;
-      return { ...state, compare: { ...state.compare, mode: action.mode, side: "a" } };
+      return {
+        ...state,
+        compare: { ...state.compare, mode: action.mode, side: "a" },
+        selected: dropComparedSelection(state, state.compare.mode, action.mode),
+      };
     case "compare_flip":
       if (!state.compare) return state;
       return { ...state, compare: { ...state.compare, side: state.compare.side === "b" ? "a" : "b" } };
@@ -405,6 +441,8 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       return { ...state, compare: { ...state.compare, paused: action.paused } };
     case "clear_compare":
       // Starting a compare paused the scrubber; ending it does not resume play (the user presses Play again).
-      return state.compare ? { ...state, compare: undefined } : state;
+      return state.compare
+        ? { ...state, compare: undefined, selected: dropComparedSelection(state, state.compare.mode, undefined) }
+        : state;
   }
 }

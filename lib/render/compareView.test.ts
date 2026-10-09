@@ -71,9 +71,33 @@ describe("compareSides", () => {
     ]);
   });
 
+  it("keeps undated features on both sides, so the delta calls them unchanged", () => {
+    const undated: Feature = { type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: { name: "Undated" } };
+    const layer = geo("fire-perimeters", [fire("Ferguson", 2018), undated, fire("Washburn", 2022)]);
+    const sides = compareSides(layer, undefined, { ...spec, mode: "delta" });
+    expect(names(sides.a)).toEqual(["Ferguson", "Undated"]);
+    expect(names(sides.b)).toEqual(["Undated", "Washburn"]);
+    const delta = sides.delta?.result.kind === "geojson" ? sides.delta.result.data.features : [];
+    expect(delta.map((f) => [f.properties?.name, f.properties?.delta])).toEqual([
+      ["Ferguson", "a-only"],
+      ["Undated", "both"],
+      ["Washburn", "b-only"],
+    ]);
+  });
+
+  it("builds the delta only in delta mode, keeping the sides it already made", () => {
+    const layer = geo("fire-perimeters", [fire("Ferguson", 2018), fire("Washburn", 2022)]);
+    const swipe = compareSides(layer, undefined, { ...spec, mode: "swipe" });
+    expect(swipe.delta).toBeUndefined();
+    const delta = compareSides(layer, undefined, { ...spec, mode: "delta" });
+    expect(delta.delta).toBeDefined();
+    expect(delta.a).toBe(swipe.a);
+    expect(delta.b).toBe(swipe.b);
+  });
+
   it("returns the same objects for the same compare (deck keeps its buffers)", () => {
     const one = compareSides(fires, undefined, { ...spec, mode: "swipe" });
-    const two = compareSides(fires, undefined, { ...spec, mode: "toggle" });
+    const two = compareSides(fires, undefined, { ...spec, mode: "delta" });
     expect(two.a).toBe(one.a);
     expect(two.b).toBe(one.b);
   });

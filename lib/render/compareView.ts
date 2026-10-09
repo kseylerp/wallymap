@@ -97,7 +97,7 @@ function withUrl(layer: LoadedLayer, id: string, url: string): LoadedLayer {
   return { ...layer, id, result: { ...layer.result, data: { ...layer.result.data, url } } };
 }
 
-function deriveSides(layer: LoadedLayer, filters: LayerFilters | undefined, spec: CompareSpec): Sides {
+function deriveSides(layer: LoadedLayer, filters: LayerFilters | undefined, spec: CompareSpec, withDelta: boolean): Sides {
   if (layer.result.kind === "tiles") {
     const url = layer.result.data.url;
     return {
@@ -108,16 +108,29 @@ function deriveSides(layer: LoadedLayer, filters: LayerFilters | undefined, spec
   const data = layer.result.data;
   const filtered = filters ? applyFilters(data, filters) : data;
   const { a, b } = splitWindows(filtered, spec);
-  const delta = isHexCollection(filtered) ? hexDelta(a, b) : deltaFeatures(a, b);
-  return {
-    a: withData(layer, a),
-    b: { ...withData(layer, b), id: compareBId(layer.id) },
-    delta: withData(layer, delta),
-  };
+  const sides: Sides = { a: withData(layer, a), b: { ...withData(layer, b), id: compareBId(layer.id) } };
+  return withDelta ? withDeltaOf(layer, sides) : sides;
 }
 
-/** Side A, side B and (GeoJSON only) the delta collection for `layer` under `spec`, after the layer's filters. Memoized. */
-export function compareSides(layer: LoadedLayer, filters: LayerFilters | undefined, spec: CompareSpec): Sides {
+/** `sides` plus the delta of its two collections (side A and B objects kept, so deck keeps their buffers). */
+function withDeltaOf(layer: LoadedLayer, sides: Sides): Sides {
+  if (sides.a.result.kind !== "geojson" || sides.b.result.kind !== "geojson") return sides;
+  const a = sides.a.result.data;
+  const b = sides.b.result.data;
+  const hex = isHexCollection({ type: "FeatureCollection", features: [...a.features, ...b.features] });
+  return { ...sides, delta: withData(layer, hex ? hexDelta(a, b) : deltaFeatures(a, b)) };
+}
+
+/**
+ * Side A, side B and (GeoJSON only, when `withDelta`: delta mode by default) the delta collection for `layer` under
+ * `spec`, after the layer's filters. Memoized; the delta is only built when asked for.
+ */
+export function compareSides(
+  layer: LoadedLayer,
+  filters: LayerFilters | undefined,
+  spec: CompareSpec,
+  withDelta: boolean = spec.mode === "delta",
+): Sides {
   let byKey = memo.get(layer);
   if (!byKey) {
     byKey = new Map();
@@ -125,9 +138,14 @@ export function compareSides(layer: LoadedLayer, filters: LayerFilters | undefin
   }
   const key = `${spec.a.join("|")}#${spec.b.join("|")}#${filters ? JSON.stringify(filters) : ""}`;
   const hit = byKey.get(key);
-  if (hit) return hit;
+  if (hit && (hit.delta || !withDelta || layer.result.kind === "tiles")) return hit;
+  if (hit) {
+    const sides = withDeltaOf(layer, hit);
+    byKey.set(key, sides);
+    return sides;
+  }
   if (byKey.size >= MAX_PER_LAYER) byKey.clear();
-  const sides = deriveSides(layer, filters, spec);
+  const sides = deriveSides(layer, filters, spec, withDelta);
   byKey.set(key, sides);
   return sides;
 }
@@ -137,7 +155,7 @@ export function compareSides(layer: LoadedLayer, filters: LayerFilters | undefin
  * and toggle put side A there and side B under `compareBId`. The scrubber's window does not apply (compare wins).
  */
 export function compareEntries(layer: LoadedLayer, filters: LayerFilters | undefined, compare: CompareState, mode: CompareMode): Record<string, LoadedLayer> {
-  const sides = compareSides(layer, filters, compare);
+  const sides = compareSides(layer, filters, compare, mode === "delta");
   if (mode === "delta" && sides.delta) return { [layer.id]: sides.delta };
   return { [layer.id]: sides.a, [compareBId(layer.id)]: sides.b };
 }

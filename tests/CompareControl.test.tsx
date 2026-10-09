@@ -130,25 +130,107 @@ describe("CompareControl", () => {
     expect(screen.getByTestId("compare-pause").textContent).toBe("Play");
   });
 
-  it("space pauses even with the Toggle button focused", () => {
+  it("leaves space to a focused button (the strip's own too), a text field, and key repeat", () => {
     vi.useFakeTimers();
-    render(<Harness spy={() => {}} initial={comparing("toggle")} />);
-    const toggle = screen.getByRole("button", { name: "Toggle" });
-    toggle.focus();
-    fireEvent.keyDown(toggle, { key: " " });
-    act(() => void vi.advanceTimersByTime(FLIP_MS * 2));
-    expect(screen.getByTestId("compare-badge").textContent).toBe("A");
-    expect(screen.getByTestId("compare-pause").textContent).toBe("Play");
+    render(
+      <>
+        <textarea aria-label="Chat" />
+        <Harness spy={() => {}} initial={comparing("toggle")} />
+      </>,
+    );
+    const pause = () => screen.getByTestId("compare-pause").textContent;
+    fireEvent.keyDown(screen.getByRole("button", { name: "Toggle" }), { key: " " });
+    expect(pause()).toBe("Pause");
+    fireEvent.keyDown(screen.getByLabelText("Chat"), { key: " " });
+    expect(pause()).toBe("Pause");
+    fireEvent.keyDown(window, { key: " ", repeat: true });
+    expect(pause()).toBe("Pause");
+    fireEvent.keyDown(window, { key: " " });
+    expect(pause()).toBe("Play");
   });
 
-  it("edits a side's window from its date fields", () => {
+  it("stops flipping after exit", () => {
+    vi.useFakeTimers();
+    const spy = vi.fn();
+    render(<Harness spy={spy} initial={comparing("toggle")} />);
+    fireEvent.click(screen.getByTestId("compare-exit"));
+    spy.mockClear();
+    act(() => void vi.advanceTimersByTime(FLIP_MS * 3));
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("does not tick while the compared layer is hidden, and says so", () => {
+    vi.useFakeTimers();
+    const spy = vi.fn();
+    const hidden = reduce(comparing("toggle"), { type: "toggle_layer", layerId: "fire-perimeters" });
+    render(<Harness spy={spy} initial={hidden} />);
+    act(() => void vi.advanceTimersByTime(FLIP_MS * 3));
+    expect(spy).not.toHaveBeenCalled();
+    expect(screen.getByTestId("compare-hidden").textContent).toBe("Layer hidden");
+    expect(screen.queryByTestId("compare-badge")).toBeNull();
+  });
+
+  it("edits a side's window as a draft, committed on blur", () => {
     const spy = vi.fn();
     render(<Harness spy={spy} initial={comparing("delta")} />);
-    fireEvent.change(screen.getByLabelText("B to"), { target: { value: "2024-12-31" } });
+    const field = screen.getByLabelText("B to") as HTMLInputElement;
+    fireEvent.focus(field);
+    // Mid-edit the end is before the start: the field keeps what was typed and nothing reaches the map.
+    fireEvent.change(field, { target: { value: "2019-12-31" } });
+    expect(field.value).toBe("2019-12-31");
+    expect(spy).not.toHaveBeenCalled();
+    fireEvent.change(field, { target: { value: "2024-12-31" } });
+    expect(spy).not.toHaveBeenCalled();
+    fireEvent.blur(field);
     expect(spy).toHaveBeenLastCalledWith({
       type: "set_compare",
       compare: expect.objectContaining({ b: ["2021-01-01", "2024-12-31"], mode: "delta" }),
     });
+    expect(field.value).toBe("2024-12-31");
+  });
+
+  it("commits a date on Enter and drops an unreadable draft", () => {
+    const spy = vi.fn();
+    render(<Harness spy={spy} initial={comparing("delta")} />);
+    const field = screen.getByLabelText("A from") as HTMLInputElement;
+    field.focus();
+    fireEvent.change(field, { target: { value: "2017-03-01" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(spy).toHaveBeenLastCalledWith({
+      type: "set_compare",
+      compare: expect.objectContaining({ a: ["2017-03-01", "2020-12-31"] }),
+    });
+    spy.mockClear();
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "" } });
+    fireEvent.blur(field);
+    expect(spy).not.toHaveBeenCalled();
+    expect(field.value).toBe("2017-03-01");
+  });
+
+  it("opens on the selected layer, else the one loaded last", () => {
+    const species: LoadedLayer = { ...fires, id: "species", title: "Species", receivedAt: "2026-10-09T12:00:00Z" };
+    const firesEarly = { ...fires, receivedAt: "2026-10-09T10:00:00Z" };
+    const both = [firesEarly, species].reduce((s, layer) => reduce(s, { type: "layer_loaded", layer }), initialMapState);
+    const spy = vi.fn();
+    const { unmount } = render(<Harness spy={spy} initial={both} />);
+    fireEvent.click(screen.getByTestId("compare-open"));
+    expect(spy.mock.calls[0][0].compare.layerId).toBe("species");
+    unmount();
+    const feature = (firesEarly.result.kind === "geojson" ? firesEarly.result.data.features : [])[0];
+    const selected = reduce(both, { type: "select", selection: { layerId: "fire-perimeters", feature, lngLat: [0, 0] } });
+    spy.mockClear();
+    render(<Harness spy={spy} initial={selected} />);
+    fireEvent.click(screen.getByTestId("compare-open"));
+    expect(spy.mock.calls[0][0].compare.layerId).toBe("fire-perimeters");
+  });
+
+  it("keeps the chosen mode when a preset is applied", () => {
+    const spy = vi.fn();
+    render(<Harness spy={spy} initial={comparing("swipe")} />);
+    fireEvent.click(screen.getByRole("button", { name: "Presets" }));
+    fireEvent.click(screen.getByRole("menuitem"));
+    expect(spy).toHaveBeenLastCalledWith({ type: "set_compare", compare: expect.objectContaining({ layerId: "fire-perimeters", mode: "swipe" }) });
   });
 
   it("offers only toggle for a tile layer", () => {

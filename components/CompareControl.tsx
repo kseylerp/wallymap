@@ -65,7 +65,7 @@ function Swatch({ color, label }: { color: string; label?: string }) {
 
 /** Text button segment: black when pressed (the app's primary), muted text otherwise. */
 const SEG =
-  "h-6 rounded-pill px-2.5 text-[12px] whitespace-nowrap transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:text-ink-muted/40";
+  "h-6 rounded-[4px] px-2.5 text-[12px] whitespace-nowrap transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:text-ink-muted/40";
 const SEG_IDLE = "text-ink hover:bg-mist/70";
 const SEG_ON = "bg-primary text-on-primary";
 const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 hover:text-ink";
@@ -77,21 +77,35 @@ const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 h
  * Swipe adds a handle across the map; toggle flips A and B every second with a badge (space pauses). Monochrome
  * chrome, text only.
  */
+/**
+ * The layer the Compare pill opens on: the selected feature's layer when it can be compared, else the comparable layer
+ * loaded last.
+ */
+export function openingLayer(state: MapState, comparable: LoadedLayer[]): LoadedLayer | undefined {
+  const selected = comparable.find((l) => l.id === state.selected?.layerId);
+  if (selected) return selected;
+  return comparable.reduce<LoadedLayer | undefined>(
+    (latest, l) => (!latest || Date.parse(l.receivedAt) >= Date.parse(latest.receivedAt) ? l : latest),
+    undefined,
+  );
+}
+
 export function CompareControl({ state, dispatch }: CompareControlProps) {
   const comparable = useMemo(() => Object.values(state.layers).filter(isComparable), [state.layers]);
   const compare = state.compare;
   const layer = compare ? state.layers[compare.layerId] : undefined;
 
   if (!compare || !layer) {
-    if (comparable.length === 0) return null;
+    const opening = openingLayer(state, comparable);
+    if (!opening) return null;
     return (
       <div className="pointer-events-none absolute top-[56px] left-3 z-10 md:top-[60px] md:left-4">
         <div className="map-pill rise-in pointer-events-auto flex h-9 items-center rounded-pill p-1 text-ink">
           <button
             type="button"
             data-testid="compare-open"
-            title="Compare one layer at two times"
-            onClick={() => dispatch({ type: "set_compare", compare: defaultCompare(comparable[0], new Date()) })}
+            title={`Compare ${opening.title} at two times`}
+            onClick={() => dispatch({ type: "set_compare", compare: defaultCompare(opening, new Date()) })}
             className={`${SEG} h-7 px-2.5 text-[13px] ${SEG_IDLE}`}
           >
             Compare
@@ -117,9 +131,11 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
   const [paused, setPaused] = useState(false);
   const [presetsOpen, setPresetsOpen] = useState(false);
   const presets = comparable.map((l) => l.id).filter(hasPreset);
+  // A hidden layer draws nothing, so nothing ticks and the strip says so.
+  const hidden = state.renderOps.find((op) => op.layerId === compare.layerId)?.visible === false;
 
-  // Toggle: flip A and B every second until paused; space pauses anywhere outside a text field.
-  const toggling = mode === "toggle" && !paused;
+  // Toggle: flip A and B every second until paused (or the layer is hidden); space pauses outside any control.
+  const toggling = mode === "toggle" && !paused && !hidden;
   useEffect(() => {
     if (!toggling) return;
     const id = globalThis.setInterval(() => dispatch({ type: "compare_flip" }), FLIP_MS);
@@ -128,31 +144,22 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
   useEffect(() => {
     if (mode !== "toggle") return;
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== " ") return;
+      if (e.key !== " " || e.repeat) return;
       const target = e.target instanceof Element ? e.target : null;
-      // Text fields keep their spaces; other buttons and sliders keep theirs, except the compare strip's own buttons.
-      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
-      if (target?.closest("button, [role='slider']") && !target.closest("[data-testid='compare-control']")) return;
+      // Text fields keep their spaces, and any focused button or slider (the strip's own too) keeps its own.
+      if (target?.closest("input, textarea, select, button, [role='slider'], [contenteditable='true']")) return;
       e.preventDefault();
       setPaused((p) => !p);
     };
-    // A focused button clicks on space's keyup; inside the strip, space only pauses.
-    const onKeyUp = (e: globalThis.KeyboardEvent) => {
-      if (e.key === " " && e.target instanceof Element && e.target.closest("[data-testid='compare-control'] button")) e.preventDefault();
-    };
     window.addEventListener("keydown", onKey);
-    window.addEventListener("keyup", onKeyUp);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("keyup", onKeyUp);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [mode]);
 
-  const summary = useMemo(() => {
-    if (mode !== "delta") return null;
-    const drawn = visibleState(state).layers[compare.layerId];
-    return drawn?.result.kind === "geojson" ? compareSummary(drawn.result.data) : null;
-  }, [mode, state, compare.layerId]);
+  // visibleState is memoized per state and its compare data per layer and windows, so this is the same object until
+  // the compare or the data changes (a camera move does not recount).
+  const drawn = mode === "delta" ? visibleState(state).layers[compare.layerId] : undefined;
+  const deltaData = drawn?.result.kind === "geojson" ? drawn.result.data : null;
+  const summary = useMemo(() => (deltaData ? compareSummary(deltaData) : null), [deltaData]);
 
   const set = (next: Partial<CompareState>) => {
     const { side: _side, ...rest } = compare;
@@ -160,14 +167,15 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
     dispatch({ type: "set_compare", compare: { ...rest, ...next } });
   };
   const setWindow = (which: "a" | "b", end: 0 | 1, value: string) => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
     const w: [string, string] = [...compare[which]];
+    if (w[end].slice(0, 10) === value) return;
     w[end] = value;
     set({ [which]: w, [which === "a" ? "aLabel" : "bLabel"]: undefined });
   };
+  // A preset (or another layer) sets the windows; the mode the user chose stays.
   const applyPreset = (id: PresetLayer) => {
     setPresetsOpen(false);
-    dispatch({ type: "set_compare", compare: presetFor(id, new Date()) });
+    dispatch({ type: "set_compare", compare: { ...presetFor(id, new Date()), mode: compare.mode } });
   };
   const exit = () => dispatch({ type: "clear_compare" });
 
@@ -180,23 +188,11 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
       <div className="flex min-w-0 items-center gap-1.5" data-testid={`compare-side-${which}`}>
         <Swatch color={color} />
         <span className="w-3 text-[12px] font-medium text-ink">{name}</span>
-        <input
-          type="date"
-          aria-label={`${name} from`}
-          value={w[0].slice(0, 10)}
-          onChange={(e) => setWindow(which, 0, e.target.value)}
-          className="compare-date h-6 w-[118px] rounded-small bg-transparent px-1 text-[12px] text-ink tabular-nums outline-none hover:bg-mist/60 focus-visible:bg-mist/70"
-        />
+        <DateField label={`${name} from`} value={w[0].slice(0, 10)} onCommit={(v) => setWindow(which, 0, v)} />
         <span aria-hidden className="text-[12px] text-ink-muted">
           –
         </span>
-        <input
-          type="date"
-          aria-label={`${name} to`}
-          value={w[1].slice(0, 10)}
-          onChange={(e) => setWindow(which, 1, e.target.value)}
-          className="compare-date h-6 w-[118px] rounded-small bg-transparent px-1 text-[12px] text-ink tabular-nums outline-none hover:bg-mist/60 focus-visible:bg-mist/70"
-        />
+        <DateField label={`${name} to`} value={w[1].slice(0, 10)} onCommit={(v) => setWindow(which, 1, v)} />
         {label && <span className="truncate text-[11.5px] text-ink-muted">{label}</span>}
       </div>
     );
@@ -212,7 +208,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
           onKeyDown={(e) => {
             if (e.key === "Escape") exit();
           }}
-          className="map-pill rise-in pointer-events-auto w-[372px] max-w-full rounded-card px-4 pt-3 pb-2.5 text-ink"
+          className="map-pill rise-in pointer-events-auto w-[372px] max-w-full rounded-small px-4 pt-3 pb-2.5 text-ink"
         >
           <div className="flex items-baseline gap-2">
             <h2 className="small-caps">Compare</h2>
@@ -222,7 +218,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
                 value={layer.id}
                 onChange={(e) => {
                   const next = comparable.find((l) => l.id === e.target.value);
-                  if (next) dispatch({ type: "set_compare", compare: defaultCompare(next, new Date()) });
+                  if (next) dispatch({ type: "set_compare", compare: { ...defaultCompare(next, new Date()), mode: compare.mode } });
                 }}
                 className="min-w-0 flex-1 truncate bg-transparent text-[13px] text-ink outline-none"
               >
@@ -301,7 +297,11 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
                 );
               })}
             </div>
-            {mode === "toggle" && (
+            {hidden ? (
+              <p className="ml-auto text-[11.5px] text-ink-muted" data-testid="compare-hidden">
+                Layer hidden
+              </p>
+            ) : mode === "toggle" && (
               <div className="ml-auto flex items-center gap-2">
                 <span className="text-[11.5px] text-ink-muted tabular-nums">
                   {compare.side === "b" ? (compare.bLabel ?? windowText(compare.b)) : (compare.aLabel ?? windowText(compare.a))}
@@ -316,13 +316,13 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
                 >
                   {paused ? "Play" : "Pause"}
                 </button>
+                {/* The side on screen: its letter in its token color over a thin bar of the same color. */}
                 <span
                   aria-live="polite"
                   data-testid="compare-badge"
-                  className={`flex h-6 min-w-6 items-center justify-center rounded-small px-1.5 text-[13px] font-semibold tabular-nums ${
-                    compare.side === "b" ? "text-ink" : "text-on-primary"
+                  className={`border-b-2 px-0.5 text-[13px] leading-5 font-semibold tabular-nums ${
+                    compare.side === "b" ? "border-coral text-coral" : "border-accent text-accent"
                   }`}
-                  style={{ background: compare.side === "b" ? COMPARE_COLORS.b : COMPARE_COLORS.a }}
                 >
                   {compare.side === "b" ? "B" : "A"}
                 </span>
@@ -349,10 +349,43 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
           </ul>
         </div>
       </div>
-      {mode === "swipe" && (
+      {mode === "swipe" && !hidden && (
         <SwipeHandle aText={compare.aLabel ?? windowText(compare.a)} bText={compare.bLabel ?? windowText(compare.b)} />
       )}
     </>
+  );
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A date field that edits a draft: typing never reaches the map (so the reducer never reorders a window under the
+ * cursor). The draft is committed on blur, or on Enter (which blurs), when it is a real date; otherwise the field
+ * goes back to the committed value.
+ */
+export function DateField({ label, value, onCommit }: { label: string; value: string; onCommit: (value: string) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    const next = draft;
+    setDraft(null);
+    if (next !== null && DATE_RE.test(next) && !Number.isNaN(Date.parse(next)) && next !== value) onCommit(next);
+  };
+  return (
+    <input
+      type="date"
+      aria-label={label}
+      value={draft ?? value}
+      onFocus={() => setDraft(value)}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          e.currentTarget.blur();
+        }
+      }}
+      className="compare-date h-6 w-[118px] rounded-[4px] bg-transparent px-1 text-[12px] text-ink tabular-nums outline-none hover:bg-mist/60 focus-visible:bg-mist/70"
+    />
   );
 }
 

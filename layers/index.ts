@@ -12,3 +12,5 @@ import "./mvum-dispersed";
 import "./campsites";
 import "./streamflow";
 import "./species";
+import "./population";
+import "./night-lights";

@@ -6,6 +6,7 @@ import { useReducer } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { drawnColor, LayerStack } from "@/components/LayerStack";
 import { reduce } from "@/lib/render/reducer";
+import { visibleState } from "@/lib/render/view";
 import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
 
 afterEach(cleanup);
@@ -258,6 +259,58 @@ describe("LayerStack", () => {
     expect(bottom.getAttribute("data-layer-id")).toBe("public-lands");
     expect(bottom.getAttribute("data-selected")).toBe("true");
     expect(bottom.className).not.toMatch(/sage/);
+  });
+});
+
+describe("LayerStack data console", () => {
+  const fires: LoadedLayer = {
+    ...trails,
+    id: "fire-perimeters",
+    title: "Fire perimeters",
+    style: { geometry: "polygon", color: "#000000" },
+    result: {
+      kind: "geojson",
+      citation,
+      data: {
+        type: "FeatureCollection",
+        features: Array.from({ length: 12 }, (_, k) => ({
+          type: "Feature" as const,
+          geometry: { type: "Point" as const, coordinates: [0, 0] },
+          properties: { t: `${2014 + k}-07-01T00:00:00.000Z` },
+        })),
+      },
+    },
+  };
+
+  /** The panel as App mounts it: the scrubber from `state.time`, counts from the visible view. */
+  function Console() {
+    const [state, dispatch] = useReducer(reduce, reduce(initialMapState, { type: "layer_loaded", layer: fires }));
+    return (
+      <LayerStack
+        layers={state.layers}
+        renderOps={state.renderOps}
+        catalog={null}
+        dispatch={dispatch}
+        open
+        onOpenChange={() => {}}
+        time={state.time}
+        shownLayers={visibleState(state).layers}
+      />
+    );
+  }
+
+  it("docks the time scrubber in the top slot, above the layers label", () => {
+    render(<Console />);
+    const slot = document.querySelector('[data-slot="time-scrubber"]');
+    expect(slot?.querySelector('[data-testid="time-scrubber"]')).toBeTruthy();
+    expect(slot?.nextElementSibling?.textContent).toContain("Layers");
+  });
+
+  it("shows shown / total once the window narrows a layer", () => {
+    render(<Console />);
+    expect(screen.getByTestId("layer-count").textContent).toBe("12");
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Window start" }), { key: "End" });
+    expect(screen.getByTestId("layer-count").textContent).toBe("1 / 12");
   });
 });
 

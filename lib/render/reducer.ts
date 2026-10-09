@@ -1,4 +1,5 @@
-import type { MapAction, MapState, RenderOp, Viewport } from "@/lib/render/state";
+import type { MapAction, MapState, RenderOp, TimeState, Viewport } from "@/lib/render/state";
+import { stepWindow, timeIndex, type TimeIndex, type TimeWindow } from "@/lib/time";
 import { arrivalPitch, fitZoomOffset } from "@/lib/render/wally/terrain";
 
 /** The `layer_error` id a failed `route` tool call reports under. */
@@ -42,6 +43,68 @@ function setView(state: MapState, requested: Partial<Viewport>, fit: boolean): M
   return { ...state, viewport };
 }
 
+// ---- Time scrubber ----
+
+/** The whole span of the index: the first bucket's start to the last bucket's end. */
+export function fullWindow(index: TimeIndex): TimeWindow {
+  return [index.buckets[0].start, index.buckets[index.buckets.length - 1].end];
+}
+
+/** The bucket a date falls in (the last bucket starting at or before it), clamped to the ends. */
+export function bucketAt(index: TimeIndex, iso: string): number {
+  const ms = Date.parse(iso);
+  let at = 0;
+  for (let i = 0; i < index.buckets.length; i++) if (Date.parse(index.buckets[i].start) <= ms) at = i;
+  return at;
+}
+
+/** Keeps a window inside the data's span, ends in order; an unreadable or disjoint window becomes the whole span. */
+function clampWindow(index: TimeIndex, window: TimeWindow): TimeWindow {
+  const [lo, hi] = fullWindow(index);
+  let a = Date.parse(window[0]);
+  let b = Date.parse(window[1]);
+  if (Number.isNaN(a) || Number.isNaN(b)) return [lo, hi];
+  if (a > b) [a, b] = [b, a];
+  const start = Math.max(a, Date.parse(lo));
+  const end = Math.min(b, Date.parse(hi));
+  if (start > end) return [lo, hi];
+  return [start === Date.parse(lo) ? lo : new Date(start).toISOString(), end === Date.parse(hi) ? hi : new Date(end).toISOString()];
+}
+
+/** Starts play. From the end (or with the whole span selected) it starts over at the first bucket, keeping the width. */
+function startPlaying(time: TimeState): TimeState {
+  const { index, window, mode } = time;
+  const last = index.buckets.length - 1;
+  const i = bucketAt(index, window[0]);
+  const j = bucketAt(index, window[1]);
+  if (j < last) return { ...time, playing: true };
+  if (mode === "cumulative") return { ...time, playing: true, window: [index.min, index.buckets[0].end] };
+  const width = j - i >= last ? 0 : j - i;
+  return { ...time, playing: true, window: [index.buckets[0].start, index.buckets[width].end] };
+}
+
+/**
+ * Rebuilds the time index after the layers changed. No time-aware layer left clears the scrubber; an existing window
+ * is clamped to the new span. Only a newly loaded layer may open the scrubber (`allowCreate`), so removing a layer
+ * never brings back a scrubber the user closed. A window the agent asked for early (`pendingTime`) applies here.
+ */
+function withTimeIndex(state: MapState, allowCreate: boolean): MapState {
+  const index = timeIndex(state.layers);
+  if (!index) return state.time ? { ...state, time: undefined } : state;
+  if (state.time) return { ...state, time: { ...state.time, index, window: clampWindow(index, state.time.window) } };
+  if (!allowCreate) return state;
+  const pending = state.pendingTime;
+  const mode = pending?.mode ?? "slide";
+  const window = pending ? clampWindow(index, pending.window) : fullWindow(index);
+  let time: TimeState = { index, mode, playing: false, window: mode === "cumulative" ? [index.min, window[1]] : window };
+  if (pending?.playing) time = startPlaying(time);
+  return { ...state, time, pendingTime: undefined };
+}
+
+function sameWindow(a: TimeWindow, b: TimeWindow): boolean {
+  return a[0] === b[0] && a[1] === b[1];
+}
+
 /**
  * Pure reducer: always returns new objects and never mutates `state`. Selecting or deselecting a feature never
  * moves the camera; only `set_view` and the 3D button do.
@@ -67,13 +130,16 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       // A style swap drops the route layers the preview draws on, so the preview ends with it.
       return { ...state, basemap: action.basemap, playback: undefined };
     case "layer_loaded":
-      return {
-        ...state,
-        layers: { ...state.layers, [action.layer.id]: action.layer },
-        errors: state.errors.filter((e) => e.layerId !== action.layer.id),
-        // A reload replaces the features, so the old selection no longer points at anything drawn.
-        selected: dropSelectionOf(state, action.layer.id),
-      };
+      return withTimeIndex(
+        {
+          ...state,
+          layers: { ...state.layers, [action.layer.id]: action.layer },
+          errors: state.errors.filter((e) => e.layerId !== action.layer.id),
+          // A reload replaces the features, so the old selection no longer points at anything drawn.
+          selected: dropSelectionOf(state, action.layer.id),
+        },
+        true,
+      );
     case "layer_error":
       return {
         ...state,
@@ -126,16 +192,29 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       if (!state.layers[action.layerId] && !state.renderOps.some((op) => op.layerId === action.layerId)) return state;
       const layers = { ...state.layers };
       delete layers[action.layerId];
-      return {
-        ...state,
-        layers,
-        renderOps: state.renderOps.filter((op) => op.layerId !== action.layerId),
-        errors: state.errors.filter((e) => e.layerId !== action.layerId),
-        selected: dropSelectionOf(state, action.layerId),
-      };
+      return withTimeIndex(
+        {
+          ...state,
+          layers,
+          renderOps: state.renderOps.filter((op) => op.layerId !== action.layerId),
+          errors: state.errors.filter((e) => e.layerId !== action.layerId),
+          selected: dropSelectionOf(state, action.layerId),
+        },
+        false,
+      );
     }
     case "clear_layers":
-      return { ...state, layers: {}, routes: {}, renderOps: [], errors: [], selected: undefined, playback: undefined };
+      return {
+        ...state,
+        layers: {},
+        routes: {},
+        renderOps: [],
+        errors: [],
+        selected: undefined,
+        playback: undefined,
+        time: undefined,
+        pendingTime: undefined,
+      };
     case "route_loaded":
       return {
         ...state,
@@ -182,5 +261,37 @@ function reduceAction(state: MapState, action: MapAction): MapState {
     }
     case "preview_stop":
       return state.playback ? { ...state, playback: undefined } : state;
+    case "set_time_window": {
+      if (!state.time) {
+        // No time-aware layer yet (the agent set the time before its query landed): apply it when one arrives.
+        const index = timeIndex(state.layers);
+        const pendingTime = { ...state.pendingTime, window: action.window };
+        return index ? withTimeIndex({ ...state, pendingTime }, true) : { ...state, pendingTime };
+      }
+      const clamped = clampWindow(state.time.index, action.window);
+      const window: TimeWindow = state.time.mode === "cumulative" ? [state.time.index.min, clamped[1]] : clamped;
+      return sameWindow(window, state.time.window) ? state : { ...state, time: { ...state.time, window } };
+    }
+    case "set_time_playing": {
+      if (!state.time) return state.pendingTime ? { ...state, pendingTime: { ...state.pendingTime, playing: action.playing } } : state;
+      if (state.time.playing === action.playing) return state;
+      return { ...state, time: action.playing ? startPlaying(state.time) : { ...state.time, playing: false } };
+    }
+    case "set_time_mode": {
+      if (!state.time) return state.pendingTime ? { ...state, pendingTime: { ...state.pendingTime, mode: action.mode } } : state;
+      if (state.time.mode === action.mode) return state;
+      const window: TimeWindow = action.mode === "cumulative" ? [state.time.index.min, state.time.window[1]] : state.time.window;
+      return { ...state, time: { ...state.time, mode: action.mode, window } };
+    }
+    case "time_tick": {
+      const time = state.time;
+      if (!time?.playing) return state;
+      const window = stepWindow(time.index, time.window, 1, time.mode);
+      // Nothing left to step to: play ends on the last frame.
+      if (sameWindow(window, time.window)) return { ...state, time: { ...time, playing: false } };
+      return { ...state, time: { ...time, window } };
+    }
+    case "clear_time":
+      return state.time || state.pendingTime ? { ...state, time: undefined, pendingTime: undefined } : state;
   }
 }

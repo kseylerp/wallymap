@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { buildExportBundle, formatBytes, zipBundle } from "@/lib/export/exportView";
 import { crc32, zipStored } from "@/lib/export/zip";
 import type { LayerResult } from "@/layers/types";
-import { initialMapState, type LoadedLayer, type MapState } from "@/lib/render/state";
+import { reduce } from "@/lib/render/reducer";
+import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
 
 const geo = (id: string, title: string): LoadedLayer => ({
   id,
@@ -61,6 +62,40 @@ describe("buildExportBundle", () => {
     expect(md).not.toContain("Campsites");
     expect(md).toContain("2026-10-09T12:00:00.000Z");
     expect(md).toContain("longitude -120.10000, latitude 39.20000, zoom 11.00");
+  });
+});
+
+describe("buildExportBundle with a time window", () => {
+  const dated: LoadedLayer = {
+    ...geo("fire-perimeters", "Fire perimeters"),
+    result: {
+      kind: "geojson",
+      citation: { source: "NIFC", url: "https://nifc.gov", retrieved: "2026-10-09T10:00:00Z" },
+      data: {
+        type: "FeatureCollection",
+        features: Array.from({ length: 12 }, (_, k) => ({
+          type: "Feature" as const,
+          properties: { name: `F${k}`, t: `${2014 + k}-07-01T00:00:00.000Z` },
+          geometry: { type: "Point" as const, coordinates: [1, 2] },
+        })),
+      },
+    },
+  };
+  const timed = [
+    { type: "layer_loaded", layer: dated },
+    { type: "render", op: { layerId: "fire-perimeters", mode: "polygons", visible: true } },
+    { type: "set_time_window", window: ["2019-01-01T00:00:00.000Z", "2020-12-31T23:59:59.999Z"] },
+  ] satisfies MapAction[];
+  const withTime = timed.reduce(reduce, initialMapState);
+
+  it("exports only the features inside the window and notes the window in citations.md", async () => {
+    const { files } = buildExportBundle(withTime, null, now);
+    const json = JSON.parse(await files[0].blob.text());
+    expect(json.features.map((f: { properties: { name: string } }) => f.properties.name)).toEqual(["F5", "F6"]);
+    expect(json.wallymap.timeWindow).toEqual(["2019-01-01T00:00:00.000Z", "2020-12-31T23:59:59.999Z"]);
+    const md = await files[1].blob.text();
+    expect(md).toContain("Time window: 2019 – 2020 (2019-01-01T00:00:00.000Z to 2020-12-31T23:59:59.999Z)");
+    expect(md).toContain("2 of 12 features exported");
   });
 });
 

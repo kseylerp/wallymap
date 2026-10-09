@@ -1,0 +1,124 @@
+// @vitest-environment jsdom
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useReducer } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { PLAY_STEP_MS, TimeScrubber } from "@/components/TimeScrubber";
+import { reduce } from "@/lib/render/reducer";
+import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+
+const fires: LoadedLayer = {
+  id: "fire-perimeters",
+  title: "Fire perimeters",
+  style: { geometry: "polygon", color: "#000000" },
+  result: {
+    kind: "geojson",
+    data: {
+      type: "FeatureCollection",
+      features: Array.from({ length: 10 }, (_, k) => ({
+        type: "Feature" as const,
+        geometry: { type: "Point" as const, coordinates: [0, 0] },
+        properties: { t: `${2016 + k}-07-01T00:00:00.000Z` },
+      })),
+    },
+    citation: { source: "s", url: "u", retrieved: "r" },
+  },
+  receivedAt: "now",
+};
+const start = reduce(initialMapState, { type: "layer_loaded", layer: fires });
+
+function Harness({ spy, initial = start }: { spy: (a: MapAction) => void; initial?: MapState }) {
+  const [state, dispatch] = useReducer(reduce, initial);
+  if (!state.time) return <p>no scrubber</p>;
+  return (
+    <TimeScrubber
+      time={state.time}
+      dispatch={(a) => {
+        spy(a);
+        dispatch(a);
+      }}
+    />
+  );
+}
+
+const label = () => screen.getByTestId("time-window-label").textContent;
+
+describe("TimeScrubber", () => {
+  it("shows a bar per bucket, the window's dates and counts", () => {
+    render(<Harness spy={() => {}} />);
+    expect(label()).toBe("2016 – 2025");
+    expect(document.querySelectorAll(".time-bar")).toHaveLength(10);
+    expect(screen.getByText("features per year")).toBeTruthy();
+  });
+
+  it("play steps one bucket every 600 ms; pause stops it", () => {
+    vi.useFakeTimers();
+    const spy = vi.fn();
+    render(<Harness spy={spy} />);
+    fireEvent.click(screen.getByTestId("time-play"));
+    expect(screen.getByTestId("time-play").textContent).toBe("Pause");
+    // Playing the whole span starts over at the first year.
+    expect(label()).toBe("2016 – 2016");
+    act(() => {
+      vi.advanceTimersByTime(PLAY_STEP_MS);
+    });
+    expect(label()).toBe("2017 – 2017");
+    fireEvent.click(screen.getByTestId("time-play"));
+    expect(screen.getByTestId("time-play").textContent).toBe("Play");
+    act(() => {
+      vi.advanceTimersByTime(PLAY_STEP_MS * 3);
+    });
+    expect(label()).toBe("2017 – 2017");
+    expect(spy).toHaveBeenCalledWith({ type: "time_tick" });
+  });
+
+  it("space plays and pauses from inside the scrubber", () => {
+    render(<Harness spy={() => {}} />);
+    fireEvent.keyDown(screen.getByTestId("time-window"), { key: " " });
+    expect(screen.getByTestId("time-play").getAttribute("aria-pressed")).toBe("true");
+    fireEvent.keyDown(screen.getByTestId("time-window"), { key: " " });
+    expect(screen.getByTestId("time-play").getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("arrow keys move the window, and each handle moves its own end", () => {
+    const initial = reduce(start, { type: "set_time_window", window: ["2018-01-01T00:00:00.000Z", "2019-12-31T23:59:59.999Z"] });
+    render(<Harness spy={() => {}} initial={initial} />);
+    expect(label()).toBe("2018 – 2019");
+    fireEvent.keyDown(screen.getByTestId("time-window"), { key: "ArrowRight" });
+    expect(label()).toBe("2019 – 2020");
+    fireEvent.keyDown(screen.getByTestId("time-window"), { key: "ArrowLeft" });
+    fireEvent.keyDown(screen.getByTestId("time-window"), { key: "ArrowLeft" });
+    expect(label()).toBe("2017 – 2018");
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Window end" }), { key: "ArrowRight" });
+    expect(label()).toBe("2017 – 2019");
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Window start" }), { key: "Home" });
+    expect(label()).toBe("2016 – 2019");
+  });
+
+  it("pressing a handle focuses it, so the keys that follow move that end", () => {
+    render(<Harness spy={() => {}} />);
+    const end = screen.getByRole("slider", { name: "Window end" });
+    fireEvent.pointerDown(end, { button: 0, clientX: 0, pointerId: 1 });
+    expect(document.activeElement).toBe(end);
+  });
+
+  it("cumulative mode grows from the first year", () => {
+    const initial = reduce(start, { type: "set_time_window", window: ["2018-01-01T00:00:00.000Z", "2019-12-31T23:59:59.999Z"] });
+    render(<Harness spy={() => {}} initial={initial} />);
+    fireEvent.click(screen.getByRole("button", { name: "Cumulative" }));
+    expect(label()).toBe("2016 – 2019");
+    expect(screen.queryByRole("slider", { name: "Window start" })).toBeNull();
+  });
+
+  it("× clears the time window", () => {
+    const spy = vi.fn();
+    render(<Harness spy={spy} />);
+    fireEvent.click(screen.getByRole("button", { name: "Clear time window" }));
+    expect(spy).toHaveBeenCalledWith({ type: "clear_time" });
+    expect(screen.getByText("no scrubber")).toBeTruthy();
+  });
+});

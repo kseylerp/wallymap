@@ -1,6 +1,8 @@
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { zipStored } from "@/lib/export/zip";
 import type { MapState } from "@/lib/render/state";
+import { visibleState } from "@/lib/render/view";
+import { windowLabel } from "@/lib/time";
 
 export type ExportFile = { name: string; blob: Blob };
 export type ExportBundle = { files: ExportFile[] };
@@ -30,17 +32,30 @@ function visibleLayers(state: MapState) {
   });
 }
 
+/** A layer's exported and loaded feature counts, when the time window or its filters left some out. */
+function narrowing(state: MapState, layerId: string): { shown?: number; total?: number } {
+  const loaded = state.layers[layerId];
+  const shown = visibleState(state).layers[layerId];
+  if (loaded?.result.kind !== "geojson" || shown?.result.kind !== "geojson") return {};
+  const total = loaded.result.data.features.length;
+  const count = shown.result.data.features.length;
+  return count === total ? {} : { shown: count, total };
+}
+
 function fixed(value: number, digits: number): string {
   return value.toFixed(digits);
 }
 
 /**
- * One `<layerId>.geojson` per visible GeoJSON layer (the full result, with a `wallymap` block naming its title,
- * retrieval time, license and citation) plus `citations.md` covering every visible layer, tile layers included,
- * the map viewport and the export time.
+ * One `<layerId>.geojson` per visible GeoJSON layer (the features as drawn: inside the time window and the layer's
+ * filters, with a `wallymap` block naming its title, retrieval time, license, citation and what narrowed it) plus
+ * `citations.md` covering every visible layer, tile layers included, the map viewport, the time window and the
+ * export time.
  */
 export function buildExportBundle(state: MapState, catalog: LayerCatalog | null, now: Date = new Date()): ExportBundle {
-  const layers = visibleLayers(state);
+  const layers = visibleLayers(visibleState(state));
+  const time = state.time;
+  const timeNote = time ? `${windowLabel(time.window, time.index.bucket)} (${time.window[0]} to ${time.window[1]})` : undefined;
   const files: ExportFile[] = [];
   const bullets: string[] = [];
 
@@ -48,19 +63,28 @@ export function buildExportBundle(state: MapState, catalog: LayerCatalog | null,
     const { citation } = layer.result;
     const license = catalog?.[layer.id]?.license ?? "not recorded";
     const retrieved = citation.retrieved || layer.receivedAt;
+    const narrowed = narrowing(state, layer.id);
     if (layer.result.kind === "geojson") {
       const collection = {
         ...layer.result.data,
-        wallymap: { layer: layer.title, layerId: layer.id, retrieved, license, citation },
+        wallymap: {
+          layer: layer.title,
+          layerId: layer.id,
+          retrieved,
+          license,
+          citation,
+          ...(time && { timeWindow: time.window }),
+        },
       };
       files.push({
         name: `${fileSafe(layer.id)}.geojson`,
         blob: new Blob([JSON.stringify(collection)], { type: "application/geo+json" }),
       });
     }
+    const shown = narrowed.shown !== undefined ? `; ${narrowed.shown.toLocaleString("en-US")} of ${narrowed.total?.toLocaleString("en-US")} features exported` : "";
     bullets.push(
       `- **${layer.title}** (\`${layer.id}\`${layer.result.kind === "tiles" ? ", map tiles, not exported as data" : ""}): ` +
-        `${citation.source}, <${citation.url}>, retrieved ${retrieved}, license: ${license}`,
+        `${citation.source}, <${citation.url}>, retrieved ${retrieved}, license: ${license}${shown}`,
     );
   }
 
@@ -72,6 +96,7 @@ export function buildExportBundle(state: MapState, catalog: LayerCatalog | null,
     "",
     `Map view: longitude ${fixed(longitude, 5)}, latitude ${fixed(latitude, 5)}, zoom ${fixed(zoom, 2)}, pitch ${fixed(pitch, 0)}, bearing ${fixed(bearing, 0)}; basemap ${state.basemap}.`,
     "",
+    ...(timeNote ? [`Time window: ${timeNote}. Dated features outside it are not exported; features without a date are.`, ""] : []),
     "## Layers",
     "",
     ...(bullets.length > 0 ? bullets : ["- No visible layers."]),

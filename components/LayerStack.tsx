@@ -1,9 +1,10 @@
 "use client";
 
 import { useId, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { TimeScrubber } from "@/components/TimeScrubber";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { TILE_SWATCH } from "@/lib/render/palette";
-import type { LoadedLayer, MapAction, MapState, RenderMode, RenderOp } from "@/lib/render/state";
+import type { LoadedLayer, MapAction, MapState, RenderMode, RenderOp, TimeState } from "@/lib/render/state";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
 import { legendSymbol, type LegendMode, type LegendSymbol } from "@/lib/render/wally/legend";
 
@@ -17,6 +18,10 @@ type LayerStackProps = {
   onOpenChange: (open: boolean) => void;
   /** The layer holding the selected feature; its row gets the ink selection rule. */
   selectedLayerId?: string;
+  /** The time scrubber's state; the scrubber docks at the top of the panel while it exists. */
+  time?: TimeState;
+  /** The layers as drawn (lib/render/view.ts: time window and filters applied), for the shown / total counts. */
+  shownLayers?: MapState["layers"];
 };
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
@@ -138,6 +143,8 @@ function LegendKey({ symbol }: { symbol: LegendSymbol }) {
 
 type RowProps = {
   layer: LoadedLayer;
+  /** The layer as drawn (time window and filters applied); its count shows as shown / total when smaller. */
+  shownLayer: LoadedLayer | undefined;
   op: RenderOp | undefined;
   license: string | undefined;
   dispatch: (action: MapAction) => void;
@@ -159,10 +166,11 @@ type RowProps = {
  * One legend row: the key (also the drag handle), the title over a muted line of coverage, license and source, the
  * feature count in tabular figures, and (on hover or focus) visibility, opacity, mode and remove.
  */
-function LegendRow({ layer, op, license, dispatch, onMove, dragProps, armDrag, dropTarget, dragging, selected }: RowProps) {
+function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps, armDrag, dropTarget, dragging, selected }: RowProps) {
   const visible = op?.visible ?? false;
   const opacity = op?.opacity ?? 1;
   const count = layer.result.kind === "geojson" ? layer.result.data.features.length : null;
+  const shownCount = shownLayer?.result.kind === "geojson" ? shownLayer.result.data.features.length : count;
   const { citation, coverageNote } = layer.result;
   const host = hostOf(citation.url);
   const symbol = legendSymbol(layer.id, legendModeFor(layer, op), layer.style.unit);
@@ -218,12 +226,23 @@ function LegendRow({ layer, op, license, dispatch, onMove, dragProps, armDrag, d
           </p>
         </div>
         {count !== null ? (
-          <span
-            className="text-right text-[12px] leading-[18px] text-ink tabular-nums"
-            title={`${count.toLocaleString()} ${count === 1 ? "feature" : "features"}`}
-          >
-            {count.toLocaleString()}
-          </span>
+          shownCount !== null && shownCount !== count ? (
+            <span
+              data-testid="layer-count"
+              className="text-right text-[12px] leading-[18px] text-ink-muted tabular-nums"
+              title={`${shownCount.toLocaleString()} of ${count.toLocaleString()} features shown`}
+            >
+              <span className="text-ink">{shownCount.toLocaleString()}</span> / {count.toLocaleString()}
+            </span>
+          ) : (
+            <span
+              data-testid="layer-count"
+              className="text-right text-[12px] leading-[18px] text-ink tabular-nums"
+              title={`${count.toLocaleString()} ${count === 1 ? "feature" : "features"}`}
+            >
+              {count.toLocaleString()}
+            </span>
+          )
         ) : (
           <span className="small-caps text-right leading-[18px]">tiles</span>
         )}
@@ -301,7 +320,17 @@ const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 h
  * reorder. The top slot holds the time scrubber when one is mounted. Closed, it renders nothing: the layers map pill
  * reopens it.
  */
-export function LayerStack({ layers, renderOps, catalog, dispatch, open, onOpenChange, selectedLayerId }: LayerStackProps) {
+export function LayerStack({
+  layers,
+  renderOps,
+  catalog,
+  dispatch,
+  open,
+  onOpenChange,
+  selectedLayerId,
+  time,
+  shownLayers,
+}: LayerStackProps) {
   const items = stackOrder(layers, renderOps);
   const [armed, setArmed] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -324,8 +353,15 @@ export function LayerStack({ layers, renderOps, catalog, dispatch, open, onOpenC
       className="glass-strong rise-in pointer-events-auto flex max-h-[calc(100dvh-24px)] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-panel max-md:mt-12 max-md:max-h-[calc(54dvh-72px)] md:max-h-[calc(100dvh-260px)]"
       style={{ width: LAYER_PANEL_WIDTH }}
     >
-      {/* The time scrubber mounts here (Task 7); empty, it takes no space. */}
-      <div data-slot="time-scrubber" className="shrink-0 empty:hidden" />
+      {/* The time scrubber docks here while any layer has dated features; empty, the slot takes no space. */}
+      <div data-slot="time-scrubber" className="shrink-0 empty:hidden">
+        {time && (
+          <>
+            <TimeScrubber time={time} dispatch={dispatch} />
+            <div aria-hidden className="hairline mx-5" />
+          </>
+        )}
+      </div>
       <header className="flex shrink-0 items-baseline gap-3 px-5 pt-4 pb-1.5">
         <h2 className="small-caps">
           Layers <span className="ml-1 text-ink tabular-nums">{items.length}</span>
@@ -353,6 +389,7 @@ export function LayerStack({ layers, renderOps, catalog, dispatch, open, onOpenC
             <LegendRow
               key={layer.id}
               layer={layer}
+              shownLayer={shownLayers?.[layer.id]}
               op={op}
               license={catalog?.[layer.id]?.license}
               dispatch={dispatch}

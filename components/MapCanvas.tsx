@@ -11,6 +11,7 @@ import { basemapStyleUrl } from "@/lib/render/basemaps";
 import { buildDeckLayers } from "@/lib/render/deck";
 import { pickToSelection, type DeckPick } from "@/lib/render/inspect";
 import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
+import { visibleState } from "@/lib/render/view";
 import {
   bearingAt,
   cameraDistanceMeters,
@@ -105,10 +106,21 @@ function sameViewport(a: Viewport, b: Viewport): boolean {
   );
 }
 
+/** Tile URLs re-request at most this often while the time window moves (spec §5). */
+const TILE_TIME_DEBOUNCE_MS = 150;
+
+/** Every tile layer's URL, so a time step that rewrites one can be told apart from other state changes. */
+function tileUrlsKey(view: MapState): string {
+  return Object.values(view.layers)
+    .map((l) => (l.result.kind === "tiles" ? `${l.id}=${l.result.data.url}` : ""))
+    .join("|");
+}
+
 /** An unsupported render mode must not crash the canvas, so failures render no deck layers. */
 function safeDeckLayers(state: MapState): Layer[] {
   try {
-    return buildDeckLayers(state);
+    // The visible view: features outside the time window (and filtered out in the layer panel) are not drawn.
+    return buildDeckLayers(visibleState(state));
   } catch (error) {
     console.error("MapCanvas: could not build deck.gl layers", error);
     return [];
@@ -276,8 +288,8 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       syncSatelliteHybrid(map, stateRef.current.basemap);
       // After the hybrid, so its fog is already set and its imagery sits below the buildings.
       sync3D(map, wantsTerrain(stateRef.current));
-      syncTileLayers(map, stateRef.current);
-      syncHeatLayers(map, stateRef.current);
+      syncTileLayers(map, visibleState(stateRef.current));
+      syncHeatLayers(map, visibleState(stateRef.current));
       ensureRouteImages(map);
       syncRouteLayers(map, stateRef.current);
     });
@@ -311,15 +323,38 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     };
   }, []);
 
-  // Deck layers, tile layers and Mapbox heatmaps follow every state change.
+  // Deck layers, tile layers and Mapbox heatmaps follow every state change, through the visible view (time window
+  // and filters). Routes are not filtered. A tile URL the time window rewrote waits 150 ms, so playing or dragging
+  // the scrubber does not re-request tiles for every step it passes.
+  const tileTimerRef = useRef<number | null>(null);
+  const appliedTilesKeyRef = useRef("");
   useEffect(() => {
+    const view = visibleState(state);
     overlayRef.current?.setProps({ layers: safeDeckLayers(state) });
-    if (mapRef.current) {
-      syncTileLayers(mapRef.current, state);
-      syncHeatLayers(mapRef.current, state);
-      syncRouteLayers(mapRef.current, state);
+    const map = mapRef.current;
+    if (!map) return;
+    const key = tileUrlsKey(view);
+    if (key === appliedTilesKeyRef.current && tileTimerRef.current === null) {
+      syncTileLayers(map, view);
+    } else {
+      if (tileTimerRef.current !== null) window.clearTimeout(tileTimerRef.current);
+      tileTimerRef.current = window.setTimeout(() => {
+        tileTimerRef.current = null;
+        if (mapRef.current !== map) return;
+        const latest = visibleState(stateRef.current);
+        appliedTilesKeyRef.current = tileUrlsKey(latest);
+        syncTileLayers(map, latest);
+      }, TILE_TIME_DEBOUNCE_MS);
     }
+    syncHeatLayers(map, view);
+    syncRouteLayers(map, state);
   }, [state]);
+  useEffect(
+    () => () => {
+      if (tileTimerRef.current !== null) window.clearTimeout(tileTimerRef.current);
+    },
+    [],
+  );
 
   // The preview control reads the map state from here (components/App.tsx does not pass it to the chat rail).
   useEffect(() => {

@@ -4,7 +4,7 @@ import { listLayers } from "@/layers/registry";
 import { BBoxSchema, type BBox, type Coverage, type Layer } from "@/layers/types";
 import { runLayer } from "@/lib/layers/run";
 import { isFullLayerResult, summarizeLayerResult } from "@/lib/layers/summarize";
-import type { Basemap, RenderMode } from "@/lib/render/state";
+import type { Basemap, RenderMode, TimeMode } from "@/lib/render/state";
 import { geocode } from "./geocode";
 import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
 import { synonymsFor } from "./vocabulary";
@@ -18,6 +18,8 @@ const RENDER_MODES = [
   "columns",
   "hexbin",
 ] as const satisfies readonly RenderMode[];
+
+const TIME_MODES = ["slide", "cumulative"] as const satisfies readonly TimeMode[];
 
 const LngLatSchema = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]);
 
@@ -124,6 +126,21 @@ export function buildTools(): ToolSet {
         layerId: z.string(),
         mode: z.enum(RENDER_MODES),
         color: z.string().optional().describe("Only set when the user asked for a specific color; otherwise omit"),
+      }),
+      execute: async (input) => input,
+    }),
+    set_time: tool({
+      description:
+        "Set the map's time window: only features dated inside it show (layers without dates are untouched), and the " +
+        "time scrubber in the data console follows it. start and end are a year (\"2016\"), a month (\"2016-07\") " +
+        "or a date (\"2016-07-04\"); a year or month as end means its last day. play: true animates the window one " +
+        "step at a time (for \"year by year\" give one year as the window). mode: slide moves the whole window, " +
+        "cumulative keeps the first date and grows the end.",
+      inputSchema: z.object({
+        start: z.string().min(1).describe("Window start: a year, month or ISO date"),
+        end: z.string().min(1).describe("Window end: a year, month or ISO date"),
+        play: z.boolean().optional().describe("Animate the window forward one step at a time"),
+        mode: z.enum(TIME_MODES).optional().describe("slide (default) or cumulative"),
       }),
       execute: async (input) => input,
     }),

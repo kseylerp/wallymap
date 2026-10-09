@@ -25,6 +25,7 @@ export const SYSTEM_PROMPT = [
   "The popularity layers already include the trails or campsites they score; do not query osm-trails or campsites again for the same question.",
   "Always leave your last step for the note; write the note even when some layers failed.",
   "Only render layers whose query succeeded.",
+  "Use set_time to answer 'over time' questions (e.g. year by year) and leave play on for animations.",
   "After calling note, do not repeat its content in your reply; add only the follow-up questions.",
   "End with two or three follow-up questions as a bulleted list.",
 ].join("\n");

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type Dispatch } from "react";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import type { LayerError, LayerResult } from "@/layers/types";
-import { decodeState, encodeState, restoreFromPermalink, type FetchLayer, type PermalinkTime } from "@/lib/render/permalink";
+import { decodeState, encodeState, restoreFromPermalink, type FetchLayer } from "@/lib/render/permalink";
 import { initialMapState, type MapAction, type MapState } from "@/lib/render/state";
 
 const WRITE_DELAY_MS = 500;
@@ -85,7 +85,9 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
     })();
   }, [dispatch]);
 
-  const time = (state as MapState & { time?: PermalinkTime }).time;
+  // The window only: the scrubber's play steps and index rebuilds must not rewrite the hash on their own.
+  const start = state.time?.window[0];
+  const end = state.time?.window[1];
   const { viewport, basemap, layers, renderOps } = state;
   const untouched = isInitialView(state);
   useEffect(() => {
@@ -96,6 +98,7 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
       try {
         // A fresh page with nothing to share keeps a clean URL.
         if (untouched && window.location.hash === "") return;
+        const time = start !== undefined && end !== undefined ? { start, end } : undefined;
         const hash = untouched ? "" : encodeState({ viewport, basemap, layers, renderOps, time }, servable);
         const url = window.location.pathname + window.location.search + hash;
         window.history.replaceState(window.history.state, "", url);
@@ -104,7 +107,7 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
       }
     }, WRITE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [ready, catalog, untouched, viewport, basemap, layers, renderOps, time]);
+  }, [ready, catalog, untouched, viewport, basemap, layers, renderOps, start, end]);
 
   return { status };
 }

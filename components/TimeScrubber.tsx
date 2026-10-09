@@ -1,0 +1,271 @@
+"use client";
+
+import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { bucketAt } from "@/lib/render/reducer";
+import type { MapAction, TimeMode, TimeState } from "@/lib/render/state";
+import { stepWindow, windowLabel, type Bucket, type TimeIndex, type TimeWindow } from "@/lib/time";
+
+/** Play advances one bucket this often (spec §5). */
+export const PLAY_STEP_MS = 600;
+
+type TimeScrubberProps = {
+  time: TimeState;
+  dispatch: (action: MapAction) => void;
+};
+
+/** One bucket's start as the scrubber's axis shows it: "2019", "Mar 2024" or "2024-06-01". */
+function bucketName(start: string, bucket: Bucket): string {
+  return windowLabel([start, start], bucket).split(" – ")[0];
+}
+
+/** The window from bucket `a` through bucket `b` (either order). */
+function spanOf(index: TimeIndex, a: number, b: number): TimeWindow {
+  const lo = Math.max(0, Math.min(a, b));
+  const hi = Math.min(index.buckets.length - 1, Math.max(a, b));
+  return [index.buckets[lo].start, index.buckets[hi].end];
+}
+
+type Drag = { kind: "start" | "end" | "move"; from: number; i: number; j: number };
+
+const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 hover:text-ink";
+
+/**
+ * The time scrubber at the top of the data console: a histogram of features per bucket (ink bars, the window's
+ * bars darker), a window with two handles (drag them, or arrow keys on each; drag or arrow keys on the window
+ * itself move it whole), play/pause (space anywhere in the scrubber) stepping one bucket every 600 ms, step back and
+ * forward, slide or cumulative mode, the window's dates, and × to clear. Monochrome, text only.
+ */
+export function TimeScrubber({ time, dispatch }: TimeScrubberProps) {
+  const { index, window, playing, mode } = time;
+  const n = index.buckets.length;
+  const i = bucketAt(index, window[0]);
+  const j = bucketAt(index, window[1]);
+  const counts = index.buckets.map((b) => b.count);
+  const max = Math.max(1, ...counts);
+  const total = counts.reduce((a, b) => a + b, 0);
+  const shown = counts.slice(i, j + 1).reduce((a, b) => a + b, 0);
+  const label = windowLabel(window, index.bucket);
+
+  const trackRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<Drag | null>(null);
+  const windowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!playing) return;
+    const id = globalThis.setInterval(() => dispatch({ type: "time_tick" }), PLAY_STEP_MS);
+    return () => globalThis.clearInterval(id);
+  }, [playing, dispatch]);
+
+  const setSpan = (a: number, b: number) => dispatch({ type: "set_time_window", window: spanOf(index, a, b) });
+  const pause = () => {
+    if (playing) dispatch({ type: "set_time_playing", playing: false });
+  };
+  const step = (direction: 1 | -1) => {
+    pause();
+    dispatch({ type: "set_time_window", window: stepWindow(index, window, direction, mode) });
+  };
+  const setMode = (next: TimeMode) => dispatch({ type: "set_time_mode", mode: next });
+
+  const bucketFromX = (clientX: number): number => {
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return 0;
+    return Math.min(n - 1, Math.max(0, Math.floor(((clientX - rect.left) / rect.width) * n)));
+  };
+
+  const beginDrag = (e: PointerEvent, kind: Drag["kind"]) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // preventDefault keeps text from selecting but also blocks focus; focus by hand so arrow keys follow the press.
+    (kind === "move" ? windowRef.current : (e.currentTarget as HTMLElement))?.focus({ preventScroll: true });
+    pause();
+    const at = bucketFromX(e.clientX);
+    let from = { i, j };
+    if (kind === "move" && (at < i || at > j)) {
+      // A press outside the window jumps it there (same width in slide mode), then drags it.
+      const width = mode === "cumulative" ? 0 : j - i;
+      const start = Math.min(at, n - 1 - width);
+      from = { i: start, j: start + width };
+      if (mode === "cumulative") setSpan(0, at);
+      else setSpan(from.i, from.j);
+    }
+    dragRef.current = { kind, from: at, ...from };
+    trackRef.current?.setPointerCapture?.(e.pointerId);
+  };
+
+  const onDragMove = (e: PointerEvent) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const at = bucketFromX(e.clientX);
+    if (drag.kind === "start") setSpan(Math.min(at, j), j);
+    else if (drag.kind === "end") setSpan(mode === "cumulative" ? 0 : i, Math.max(at, mode === "cumulative" ? 0 : i));
+    else if (mode === "cumulative") setSpan(0, at);
+    else {
+      const delta = Math.min(n - 1 - drag.j, Math.max(-drag.i, at - drag.from));
+      setSpan(drag.i + delta, drag.j + delta);
+    }
+  };
+
+  const endDrag = (e: PointerEvent) => {
+    dragRef.current = null;
+    if (trackRef.current?.hasPointerCapture?.(e.pointerId)) trackRef.current.releasePointerCapture(e.pointerId);
+  };
+
+  /** Arrow keys (and Home/End) on a handle move that end one bucket at a time. */
+  const onHandleKey = (end: "start" | "end") => (e: KeyboardEvent) => {
+    const delta = e.key === "ArrowLeft" || e.key === "ArrowDown" ? -1 : e.key === "ArrowRight" || e.key === "ArrowUp" ? 1 : 0;
+    if (delta === 0 && e.key !== "Home" && e.key !== "End") return;
+    e.preventDefault();
+    pause();
+    if (end === "start") {
+      const next = e.key === "Home" ? 0 : e.key === "End" ? j : Math.min(j, Math.max(0, i + delta));
+      setSpan(next, j);
+    } else {
+      const next = e.key === "Home" ? i : e.key === "End" ? n - 1 : Math.min(n - 1, Math.max(i, j + delta));
+      setSpan(i, next);
+    }
+  };
+
+  /** Arrow keys on the window move it whole, one bucket a step. */
+  const onWindowKey = (e: KeyboardEvent) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    step(e.key === "ArrowRight" ? 1 : -1);
+  };
+
+  /** Space plays or pauses from anywhere in the scrubber (a focused button handles its own space). */
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== " " || (e.target as HTMLElement).closest("button")) return;
+    e.preventDefault();
+    dispatch({ type: "set_time_playing", playing: !playing });
+  };
+
+  const left = (i / n) * 100;
+  const width = ((j - i + 1) / n) * 100;
+  const bucketWord = index.bucket === "year" ? "year" : index.bucket === "month" ? "month" : "day";
+
+  return (
+    <div role="group" aria-label="Time" data-testid="time-scrubber" onKeyDown={onKeyDown} className="px-5 pt-4 pb-3">
+      <div className="flex items-baseline gap-3">
+        <h2 className="small-caps">Time</h2>
+        <p aria-live="polite" className="min-w-0 flex-1 truncate text-[13px] leading-[18px] text-ink tabular-nums" data-testid="time-window-label">
+          {label}
+        </p>
+        <button
+          type="button"
+          onClick={() => dispatch({ type: "clear_time" })}
+          aria-label="Clear time window"
+          title="Show all dates"
+          className="px-1 text-[15px] leading-none text-ink-muted transition-colors hover:text-ink"
+        >
+          ×
+        </button>
+      </div>
+
+      <div
+        ref={trackRef}
+        data-testid="time-track"
+        onPointerDown={(e) => beginDrag(e, "move")}
+        onPointerMove={onDragMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        className="time-track relative mt-2.5 h-10 cursor-pointer touch-none select-none"
+      >
+        <div aria-hidden className="absolute inset-0 flex items-end gap-px">
+          {index.buckets.map((b, k) => (
+            <div
+              key={b.start}
+              title={`${bucketName(b.start, index.bucket)}: ${b.count.toLocaleString()}`}
+              data-in-window={(k >= i && k <= j) || undefined}
+              className="time-bar flex-1"
+              style={{ height: b.count > 0 ? `${Math.max(4, (b.count / max) * 100)}%` : "1px" }}
+            />
+          ))}
+        </div>
+        <div
+          role="slider"
+          tabIndex={0}
+          aria-label="Time window (arrow keys move it)"
+          aria-valuemin={0}
+          aria-valuemax={n - 1}
+          aria-valuenow={j}
+          aria-valuetext={label}
+          data-testid="time-window"
+          ref={windowRef}
+          onKeyDown={onWindowKey}
+          onPointerDown={(e) => beginDrag(e, "move")}
+          className="time-band absolute inset-y-0 cursor-grab active:cursor-grabbing"
+          style={{ left: `${left}%`, width: `${width}%` }}
+        />
+        {mode === "slide" && (
+          <div
+            role="slider"
+            tabIndex={0}
+            aria-label="Window start"
+            aria-valuemin={0}
+            aria-valuemax={n - 1}
+            aria-valuenow={i}
+            aria-valuetext={bucketName(index.buckets[i].start, index.bucket)}
+            onKeyDown={onHandleKey("start")}
+            onPointerDown={(e) => beginDrag(e, "start")}
+            className="time-handle absolute inset-y-0"
+            style={{ left: `${left}%` }}
+          />
+        )}
+        <div
+          role="slider"
+          tabIndex={0}
+          aria-label="Window end"
+          aria-valuemin={0}
+          aria-valuemax={n - 1}
+          aria-valuenow={j}
+          aria-valuetext={bucketName(index.buckets[j].start, index.bucket)}
+          onKeyDown={onHandleKey("end")}
+          onPointerDown={(e) => beginDrag(e, "end")}
+          className="time-handle absolute inset-y-0"
+          style={{ left: `${left + width}%` }}
+        />
+      </div>
+      <div className="mt-1 flex items-baseline justify-between text-[11px] leading-4 text-ink-muted tabular-nums">
+        <span>{bucketName(index.buckets[0].start, index.bucket)}</span>
+        <span>features per {bucketWord}</span>
+        <span>{bucketName(index.buckets[n - 1].start, index.bucket)}</span>
+      </div>
+
+      <div className="mt-2.5 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => dispatch({ type: "set_time_playing", playing: !playing })}
+          aria-pressed={playing}
+          className="time-play"
+          data-testid="time-play"
+        >
+          {playing ? "Pause" : "Play"}
+        </button>
+        <button type="button" onClick={() => step(-1)} aria-label="Step back" title="Step back" className={`${TEXT_BUTTON} px-1`}>
+          ‹
+        </button>
+        <button type="button" onClick={() => step(1)} aria-label="Step forward" title="Step forward" className={`${TEXT_BUTTON} px-1`}>
+          ›
+        </button>
+        <div role="group" aria-label="Window mode" className="ml-1 flex items-baseline gap-2">
+          {(["slide", "cumulative"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={mode === m}
+              onClick={() => setMode(m)}
+              title={m === "slide" ? "The window moves" : "The window grows from the first date"}
+              className="time-mode"
+            >
+              {m === "slide" ? "Slide" : "Cumulative"}
+            </button>
+          ))}
+        </div>
+        <span className="ml-auto text-[11.5px] text-ink-muted tabular-nums" title="Dated features in the window, of all dated features">
+          <span className="text-ink">{shown.toLocaleString()}</span> / {total.toLocaleString()}
+        </span>
+      </div>
+    </div>
+  );
+}

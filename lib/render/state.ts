@@ -1,5 +1,6 @@
 import type { Feature, LineString } from "geojson";
 import type { LayerResult, StyleHints } from "@/layers/types";
+import type { TimeIndex, TimeWindow } from "@/lib/time";
 
 export type Viewport = {
   longitude: number;
@@ -68,7 +69,19 @@ export type MapState = {
   flattened: boolean;
   /** A route preview in progress (lib/render/wally/playback.ts): the camera follows `routeId` while it exists. */
   playback?: Playback;
+  /**
+   * The time scrubber (components/TimeScrubber.tsx): present while any loaded GeoJSON layer has features with `t`.
+   * Features outside `window` are hidden (lib/render/view.ts); features without `t` always show.
+   */
+  time?: TimeState;
+  /** A time window asked for before any time-aware layer arrived; the next such layer applies it. */
+  pendingTime?: { window: TimeWindow; playing?: boolean; mode?: TimeMode };
 };
+
+/** "slide" moves the whole window each step; "cumulative" keeps the start at the first date and grows the end. */
+export type TimeMode = "slide" | "cumulative";
+
+export type TimeState = { window: TimeWindow; playing: boolean; mode: TimeMode; index: TimeIndex };
 
 /** Route preview: how far along (0 to 1), whether it is moving, and the speed as a multiple of 10 km per minute. */
 export type Playback = { routeId: string; fraction: number; playing: boolean; speed: number };
@@ -118,4 +131,13 @@ export type MapAction =
   /** Play or pause; playing from the end starts over. */
   | { type: "preview_toggle" }
   | { type: "preview_speed"; speed: number }
-  | { type: "preview_stop" };
+  | { type: "preview_stop" }
+  /** Sets the time window (clamped to the data); before any time-aware layer exists it waits in `pendingTime`. */
+  | { type: "set_time_window"; window: TimeWindow }
+  /** Play or pause; playing from the end (or with the whole span selected) starts over from the first bucket. */
+  | { type: "set_time_playing"; playing: boolean }
+  | { type: "set_time_mode"; mode: TimeMode }
+  /** One play step: the window moves one bucket; at the end, play stops. */
+  | { type: "time_tick" }
+  /** Hides the scrubber and shows every feature again. */
+  | { type: "clear_time" };

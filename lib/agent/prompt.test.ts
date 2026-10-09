@@ -14,6 +14,7 @@ const REQUIRED = [
   "If a layer returns a zoom_in error, shrink the bounding box once to the central quarter and retry that layer once; do not retry more than once.",
   "The popularity layers already include the trails or campsites they score; do not query osm-trails or campsites again for the same question.",
   "Always leave your last step for the note; write the note even when some layers failed.",
+  "Use set_time to answer 'over time' questions (e.g. year by year) and leave play on for animations.",
   "Choose the layer whose synonyms match the question; when several match, query them in the listed order; if none match, say which layers exist and ask.",
 ];
 

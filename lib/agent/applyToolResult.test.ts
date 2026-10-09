@@ -77,6 +77,28 @@ describe("toolResultToActions", () => {
     ]);
   });
 
+  it("set_time maps to the window (year bounds cover whole years), then the mode, then play", () => {
+    const output = { start: "2016", end: "2017", play: true, mode: "cumulative" };
+    expect(toolResultToActions("set_time", output, output, canvas, catalog, [])).toEqual([
+      { type: "set_time_window", window: ["2016-01-01T00:00:00.000Z", "2017-12-31T23:59:59.999Z"] },
+      { type: "set_time_mode", mode: "cumulative" },
+      { type: "set_time_playing", playing: true },
+    ]);
+  });
+
+  it("set_time reads months and dates, orders reversed ends, and drops unreadable or bad modes", () => {
+    const months = { start: "2024-03", end: "2024-02-10" };
+    expect(toolResultToActions("set_time", months, months, canvas, catalog, [])).toEqual([
+      { type: "set_time_window", window: ["2024-02-10T23:59:59.999Z", "2024-03-01T00:00:00.000Z"] },
+    ]);
+    const month = { start: "2024-02", end: "2024-02", mode: "rolling" };
+    expect(toolResultToActions("set_time", month, month, canvas, catalog, [])).toEqual([
+      { type: "set_time_window", window: ["2024-02-01T00:00:00.000Z", "2024-02-29T23:59:59.999Z"] },
+    ]);
+    const bad = { start: "last summer", end: "2024" };
+    expect(toolResultToActions("set_time", bad, bad, canvas, catalog, [])).toEqual([]);
+  });
+
   it("query_<id> with a LayerResult loads the layer and adds a default render op", () => {
     const actions = toolResultToActions("query_osm-trails", { bbox: [0, 0, 1, 1] }, result, canvas, catalog, []);
     expect(actions).toEqual([

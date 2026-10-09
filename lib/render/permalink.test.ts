@@ -90,6 +90,13 @@ describe("viewportBBox", () => {
   });
 });
 
+describe("encodeState with the scrubber's state", () => {
+  it("writes the window of a TimeState as t=", () => {
+    const hash = encodeState({ ...source, time: { window: ["2019-01-01T00:00:00.000Z", "2019-12-31T23:59:59.999Z"] } });
+    expect(decodeState(hash)?.time).toEqual({ start: "2019-01-01T00:00:00.000Z", end: "2019-12-31T23:59:59.999Z" });
+  });
+});
+
 describe("restoreFromPermalink", () => {
   const catalog = {
     "osm-trails": { title: "Trails", style: { geometry: "line" as const, color: "#111" } },
@@ -103,7 +110,17 @@ describe("restoreFromPermalink", () => {
     const outcome = await restoreFromPermalink(encodeState(source), (a) => actions.push(a), fetchLayer, { catalog, canvas });
     expect(outcome).toEqual({ restored: ["osm-trails", "campsites"], failed: [] });
     expect(fetchLayer).toHaveBeenCalledTimes(2);
-    expect(actions.map((a) => a.type)).toEqual(["set_basemap", "set_view", "layer_loaded", "render", "layer_loaded", "render"]);
+    expect(actions.map((a) => a.type)).toEqual([
+      "set_basemap",
+      "set_view",
+      "layer_loaded",
+      "render",
+      "layer_loaded",
+      "render",
+      "set_time_window",
+    ]);
+    // The time window comes last, once the layers that build the time index are in.
+    expect(actions[6]).toEqual({ type: "set_time_window", window: ["2016-01-01", "2026-01-01"] });
     expect(actions[2]).toMatchObject({ layer: { id: "osm-trails", title: "Trails" } });
     expect(actions[5]).toMatchObject({ op: { layerId: "campsites", mode: "points", visible: false } });
   });

@@ -1,7 +1,7 @@
 import type { BBox, LayerResult, StyleHints } from "@/layers/types";
 import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import { ROUTE_ERROR_ID } from "@/lib/render/reducer";
-import type { Basemap, MapAction, RenderMode, RenderOp, RouteState, Viewport } from "@/lib/render/state";
+import type { Basemap, MapAction, RenderMode, RenderOp, RouteState, TimeMode, Viewport } from "@/lib/render/state";
 
 /** Layer titles and styles by id, fetched by the browser from `GET /api/layers`. */
 export type LayerCatalog = Record<string, { title: string; style: StyleHints; license?: string }>;
@@ -147,6 +147,40 @@ function routeActions(output: Obj, canvas: Canvas): MapAction[] {
   return [{ type: "route_loaded", route }, ...setViewActions({ bbox }, canvas)];
 }
 
+const TIME_MODES: readonly TimeMode[] = ["slide", "cumulative"];
+
+/**
+ * A `set_time` bound as an ISO instant. A bare year or month is its first moment as a start and its last as an end
+ * ("2016" to "2016" is the whole of 2016); a date as an end runs to the end of that day. Null when unreadable.
+ */
+export function timeBound(value: unknown, edge: "start" | "end"): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  const year = /^(\d{4})$/.exec(text);
+  const month = /^(\d{4})-(\d{2})$/.exec(text);
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  let ms: number;
+  if (year) ms = edge === "start" ? Date.UTC(+year[1], 0, 1) : Date.UTC(+year[1] + 1, 0, 1) - 1;
+  else if (month) ms = edge === "start" ? Date.UTC(+month[1], +month[2] - 1, 1) : Date.UTC(+month[1], +month[2], 1) - 1;
+  else if (day) ms = Date.UTC(+day[1], +day[2] - 1, +day[3]) + (edge === "end" ? 86_400_000 - 1 : 0);
+  else ms = Date.parse(text);
+  return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+}
+
+/**
+ * A `set_time` result: the window, then the mode (cumulative moves the start to the first date), then play or pause.
+ * The window goes first so that, before any dated layer has loaded, the mode and play attach to the waiting window.
+ */
+function setTimeActions(output: Obj): MapAction[] {
+  const start = timeBound(output.start, "start");
+  const end = timeBound(output.end, "end");
+  if (!start || !end) return [];
+  const actions: MapAction[] = [{ type: "set_time_window", window: start <= end ? [start, end] : [end, start] }];
+  if (TIME_MODES.includes(output.mode as TimeMode)) actions.push({ type: "set_time_mode", mode: output.mode as TimeMode });
+  if (typeof output.play === "boolean") actions.push({ type: "set_time_playing", playing: output.play });
+  return actions;
+}
+
 /**
  * Pure mapping from one finished tool call to the map actions it implies.
  * Malformed or unknown outputs map to no actions, so a bad model reply cannot break the map.
@@ -174,6 +208,8 @@ export function toolResultToActions(
       return renderActions(output);
     case "route":
       return routeActions(output, canvas);
+    case "set_time":
+      return setTimeActions(output);
     default:
       return [];
   }

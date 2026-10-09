@@ -32,6 +32,7 @@ describe("buildTools", () => {
         "render",
         "note",
         "route",
+        "set_time",
         ...listLayers().map((layer) => `query_${layer.id}`),
       ].sort(),
     );
@@ -97,6 +98,18 @@ describe("buildTools", () => {
     expect(schemaOf(tools.render).safeParse({ layerId: "x", mode: "blobs" }).success).toBe(false);
     expect(schemaOf(tools.set_basemap).safeParse({ style: "dark" }).success).toBe(false);
     expect(schemaOf(tools.set_basemap).safeParse({ style: "outdoors-satellite" }).success).toBe(true);
+  });
+
+  it("set_time takes a start, an end, play and a mode, and echoes them", async () => {
+    const tools = buildTools();
+    const schema = schemaOf(tools.set_time);
+    expect(schema.safeParse({ start: "2016", end: "2016", play: true, mode: "slide" }).success).toBe(true);
+    expect(schema.safeParse({ start: "2016", end: "2025" }).success).toBe(true);
+    expect(schema.safeParse({ start: "2016" }).success).toBe(false);
+    expect(schema.safeParse({ start: "2016", end: "2025", mode: "rolling" }).success).toBe(false);
+    expect(schema.safeParse({ start: "2016", end: "2025", play: "yes" }).success).toBe(false);
+    const input = { start: "2016", end: "2016", play: true };
+    expect(await run(tools.set_time, input)).toEqual(input);
   });
 
   it("list_layers includes vocabulary synonyms for each layer", async () => {

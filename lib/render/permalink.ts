@@ -1,8 +1,8 @@
 import type { BBox, LayerError, LayerResult, StyleHints } from "@/layers/types";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
-import type { Basemap, MapAction, MapState, RenderMode, Viewport } from "@/lib/render/state";
+import type { Basemap, MapAction, MapState, RenderMode, TimeState, Viewport } from "@/lib/render/state";
 
-/** A time window as ISO dates; no map state carries one yet, so it rides along only when the state has it. */
+/** A time window as ISO dates (the scrubber's window, `t=`). */
 export type PermalinkTime = { start: string; end: string };
 
 export type PermalinkLayer = { id: string; mode?: RenderMode; visible: boolean };
@@ -16,7 +16,15 @@ export type PermalinkState = {
 };
 
 /** The slice of map state a permalink records: the camera, the basemap, which layers are loaded, and the time window. */
-export type PermalinkSource = Pick<MapState, "viewport" | "basemap" | "layers" | "renderOps"> & { time?: PermalinkTime };
+export type PermalinkSource = Pick<MapState, "viewport" | "basemap" | "layers" | "renderOps"> & {
+  /** The scrubber's state (its window is written) or a window as start and end. */
+  time?: PermalinkTime | Pick<TimeState, "window">;
+};
+
+function timeOf(time: PermalinkSource["time"]): PermalinkTime | undefined {
+  if (!time) return undefined;
+  return "window" in time ? { start: time.window[0], end: time.window[1] } : time;
+}
 
 const BASEMAPS: readonly Basemap[] = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"];
 const RENDER_MODES: readonly RenderMode[] = ["points", "lines", "polygons", "heat", "columns", "hexbin"];
@@ -38,7 +46,8 @@ export function encodeState(state: PermalinkSource, servable?: Record<string, un
     .filter((op) => state.layers[op.layerId] && (!servable || op.layerId in servable))
     .map((op) => `${encodeURIComponent(op.layerId)}:${op.mode}:${op.visible ? 1 : 0}`);
   if (layers.length > 0) parts.push(`l=${layers.join(",")}`);
-  if (state.time) parts.push(`t=${encodeURIComponent(state.time.start)},${encodeURIComponent(state.time.end)}`);
+  const time = timeOf(state.time);
+  if (time) parts.push(`t=${encodeURIComponent(time.start)},${encodeURIComponent(time.end)}`);
   return `#${parts.join("&")}`;
 }
 
@@ -206,5 +215,7 @@ export async function restoreFromPermalink(
     dispatch({ type: "render", op: { layerId: layer.id, mode: layer.mode ?? DEFAULT_MODE[style.geometry], visible: layer.visible } });
     outcome.restored.push(layer.id);
   });
+  // After the layers, so the window lands on the time index they build (or waits for one).
+  if (decoded.time) dispatch({ type: "set_time_window", window: [decoded.time.start, decoded.time.end] });
   return outcome;
 }

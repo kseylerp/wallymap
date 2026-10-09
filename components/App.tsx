@@ -14,6 +14,7 @@ import { askAboutText, featureBBox } from "@/lib/render/inspect";
 import { usePermalink } from "@/lib/render/usePermalink";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type Basemap, type MapAction, type Selection, type Viewport } from "@/lib/render/state";
+import { isSelectionVisible, visibleState } from "@/lib/render/view";
 import { visibleMapPadding } from "@/lib/render/viewportPadding";
 import { pitchFor } from "@/lib/render/wally/terrain";
 
@@ -120,7 +121,10 @@ export function App() {
 
   const hasLayers = Object.keys(state.layers).length > 0;
   const layerPanelOpen = layersOpen && hasLayers;
-  const selected = state.selected;
+  // What the map draws: the time window and the layer filters applied (lib/render/view.ts).
+  const view = visibleState(state);
+  // The inspect card follows the time window and filters: a feature they hide is not inspected.
+  const selected = state.selected && isSelectionVisible(state, state.selected) ? state.selected : undefined;
   const selectedLayer = selected ? state.layers[selected.layerId] : undefined;
 
   const askAbout = useCallback(() => {
@@ -173,6 +177,8 @@ export function App() {
           open={layersOpen}
           onOpenChange={setLayersOpen}
           selectedLayerId={state.selected?.layerId}
+          time={state.time}
+          shownLayers={view.layers}
         />
       </div>
 

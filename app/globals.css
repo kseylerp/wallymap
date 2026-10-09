@@ -561,6 +561,95 @@ textarea:focus-visible {
 }
 
 /*
+ * The time scrubber (components/TimeScrubber.tsx): ink histogram bars (60% inside the window, faint outside), the
+ * window as a light ink wash between two 1px ink handles with small paper grips, and text-only controls.
+ */
+.time-bar {
+  min-height: 1px;
+  background: var(--ink);
+  opacity: 0.16;
+  transition:
+    opacity 150ms var(--ease-out),
+    height 150ms var(--ease-out);
+}
+.time-bar[data-in-window] {
+  opacity: 0.6;
+}
+.time-track {
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 35%, transparent);
+}
+.time-band {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  outline-offset: 0;
+  transition:
+    left 150ms var(--ease-out),
+    width 150ms var(--ease-out);
+}
+.time-handle {
+  width: 13px;
+  margin-left: -6.5px;
+  cursor: ew-resize;
+  transition: left 150ms var(--ease-out);
+}
+.time-handle::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  bottom: 0;
+  left: 6px;
+  width: 1px;
+  background: var(--ink);
+}
+.time-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 3.5px;
+  width: 6px;
+  height: 12px;
+  margin-top: -6px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper);
+}
+.time-handle:focus-visible {
+  outline: none;
+}
+.time-handle:focus-visible::after {
+  box-shadow: 0 0 0 2px var(--slate);
+}
+.time-play {
+  height: 22px;
+  min-width: 52px;
+  padding: 0 10px;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--ink);
+  transition:
+    background-color 150ms var(--ease-out),
+    color 150ms var(--ease-out);
+}
+.time-play[aria-pressed="true"] {
+  background: var(--button-primary);
+  color: var(--button-primary-text);
+}
+.time-mode {
+  font-size: 12px;
+  color: var(--ink-muted);
+  transition: color 150ms var(--ease-out);
+}
+.time-mode:hover {
+  color: var(--ink);
+}
+.time-mode[aria-pressed="true"] {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+/*
  * Primary buttons and active control states are ink with white text, never the accent. These unlayered rules beat
  * the components' utility classes (and the 3D toggle's inline tint) so the chrome picks it up without component edits:
  * the send button once there is text, the active basemap, and pressed map controls.

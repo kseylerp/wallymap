@@ -1,18 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Source_Serif_4 } from "next/font/google";
+import { Ubuntu } from "next/font/google";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./globals.css";
 
-const geist = Geist({
-  variable: "--font-geist",
+// Ubuntu for text and headings (Kyle, 2026-10-09) — the same face as
+// wally.guide and the Wally app's titles. Replaced Geist + Source Serif 4.
+const ubuntu = Ubuntu({
+  variable: "--font-ubuntu",
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
-});
-
-const sourceSerif = Source_Serif_4({
-  variable: "--font-source-serif",
-  subsets: ["latin"],
-  weight: ["500", "600"],
+  weight: ["400", "500", "700"],
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
@@ -33,7 +30,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geist.variable} ${sourceSerif.variable} h-full antialiased`}>
+    <html lang="en" className={`${ubuntu.variable} h-full antialiased`}>
       <body className="h-full overflow-hidden">{children}</body>
     </html>
   );

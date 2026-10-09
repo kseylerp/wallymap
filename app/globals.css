@@ -114,8 +114,8 @@
   --shadow-card: var(--card-shadow);
   --shadow-drawer: var(--drawer-shadow);
 
-  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
+  --font-sans: var(--font-ubuntu), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-ubuntu), ui-sans-serif, system-ui, sans-serif;
 }
 
 /* Frosted glass over the map: translucent white, blur, a 1px inner highlight and a soft low shadow. Icon-only controls. */

@@ -15,6 +15,12 @@ const SAC_SCALES = [
   "difficult_alpine_hiking",
 ] as const;
 
+/** Most trails returned. A dense 2,500 km² box holds tens of thousands of ways (tens of MB with geometry). */
+export const MAX_TRAILS = 2_000;
+/** Overpass stops after this many ways, so the upstream answer and its cache entry stay bounded too. */
+export const OVERPASS_WAY_LIMIT = 2 * MAX_TRAILS;
+const TRUNCATED_NOTE = `Showing ${MAX_TRAILS.toLocaleString("en-US")} trails, named ones first; zoom in for the rest`;
+
 const inputSchema = z.object({
   sacScaleMax: z.enum(SAC_SCALES).optional(),
   namedOnly: z.boolean().default(false),
@@ -41,7 +47,7 @@ export function buildOverpassQuery(
   return (
     `[out:json][timeout:25];` +
     `way["highway"~"^(path|footway|track)$"]${name}(${south},${west},${north},${east});` +
-    `out geom;`
+    `out geom ${OVERPASS_WAY_LIMIT};`
   );
 }
 
@@ -75,6 +81,12 @@ export function normalizeOverpass(json: unknown): FeatureCollection {
     });
   }
   return { type: "FeatureCollection", features };
+}
+
+/** Number of elements in an Overpass body (0 when it has none). */
+function elementCount(json: unknown): number {
+  const elements = typeof json === "object" && json !== null ? (json as { elements?: unknown }).elements : undefined;
+  return Array.isArray(elements) ? elements.length : 0;
 }
 
 /** Keeps trails with no sac_scale, or one at or below `max` in difficulty order. */
@@ -118,9 +130,17 @@ const osmTrails = defineLayer({
       data.features = data.features.filter((f) => withinSacScale(f, max));
     }
 
+    // Capped when Overpass stopped at its limit or more trails came back than are kept; named trails go first.
+    const truncated = elementCount(result.json) >= OVERPASS_WAY_LIMIT || data.features.length > MAX_TRAILS;
+    if (data.features.length > MAX_TRAILS) {
+      const named = (f: Feature) => (f.properties?.name === undefined ? 1 : 0);
+      data.features = [...data.features].sort((a, b) => named(a) - named(b)).slice(0, MAX_TRAILS);
+    }
+
     return {
       kind: "geojson",
       data,
+      ...(truncated ? { coverageNote: TRUNCATED_NOTE } : {}),
       citation: {
         source: "OpenStreetMap contributors (ODbL)",
         url: "https://www.openstreetmap.org/copyright",

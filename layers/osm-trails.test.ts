@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
-import layer, { buildOverpassQuery, normalizeOverpass, overpassFailure } from "./osm-trails";
+import layer, { MAX_TRAILS, OVERPASS_WAY_LIMIT, buildOverpassQuery, normalizeOverpass, overpassFailure } from "./osm-trails";
 import fixture from "./__fixtures__/osm-trails.tahoe.json";
 
 const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
@@ -9,7 +9,7 @@ describe("osm-trails layer", () => {
   it("builds a query for highway=path|footway|track with out geom", () => {
     const q = buildOverpassQuery(TAHOE, { namedOnly: false });
     expect(q).toContain('["highway"~"^(path|footway|track)$"]');
-    expect(q).toContain("out geom");
+    expect(q).toContain(`out geom ${OVERPASS_WAY_LIMIT};`);
     expect(q).toContain("(38.85,-120.2,39,-120)");
     expect(q).not.toContain('["name"]');
   });
@@ -160,5 +160,34 @@ describe("osm-trails layer", () => {
     expect(overpassFailure({ elements: [] })).toBeNull();
     expect(overpassFailure({ remark: "out of memory", elements: [] })).toBe("out of memory");
     expect(overpassFailure(null)).not.toBeNull();
+  });
+
+  it("caps a dense box at MAX_TRAILS, named trails first, with a coverage note", async () => {
+    const way = (id: number, named: boolean) => ({
+      type: "way",
+      id,
+      tags: { highway: "path", ...(named ? { name: `Trail ${id}` } : {}) },
+      geometry: [
+        { lat: 38.9, lon: -120.1 },
+        { lat: 38.91, lon: -120.11 },
+      ],
+    });
+    // Unnamed ways first in the body, so the named ones must be pulled forward.
+    const elements = [
+      ...Array.from({ length: MAX_TRAILS + 400 }, (_, i) => way(i, false)),
+      ...Array.from({ length: 100 }, (_, i) => way(100_000 + i, true)),
+    ];
+    const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
+    const r = await layer.query({ bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch }, { namedOnly: false });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features).toHaveLength(MAX_TRAILS);
+    expect(r.data.features.slice(0, 100).every((f) => typeof f.properties?.name === "string")).toBe(true);
+    expect(r.coverageNote).toMatch(/^Showing 2,000 trails, named ones first/);
+  });
+
+  it("adds no coverage note when nothing was cut", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
+    const r = await layer.query({ bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch }, { namedOnly: false });
+    expect(r).not.toHaveProperty("coverageNote");
   });
 });

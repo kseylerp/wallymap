@@ -1,4 +1,5 @@
 import type { FogSpecification, Map as MapboxMap, StyleSpecification } from "mapbox-gl";
+import { isHillshadeLayer, isWaterFill, occludingLayerIds, scaleOpacity, type StyleLayerLike } from "@/lib/render/hybridStyle";
 import type { Basemap, MapState } from "@/lib/render/state";
 
 const PREFIX = "tiles-";
@@ -64,28 +65,40 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
 
 const SATELLITE_ID = "wildmap-satellite";
 const SATELLITE_OPACITY = 0.9;
-/** Outdoors area fills that would paint over the imagery. Water, hillshade, contours, roads, paths and labels stay. */
-const OCCLUDING_FILL = /^(landcover|landuse|national-park|land-structure-polygon|wetland|park|pitch|glacier|snow|sand|scrub|wood|grass|golf)/;
 /** Terrain shading stays, but lighter, so it adds relief without muddying the photo. */
 const HILLSHADE_SCALE = 0.5;
-const HILLSHADE_FALLBACK_OPACITY = 0.3;
+/** Water stays (it carries the shoreline and labels sit on it), but thin enough that the real lake shows. */
+const WATER_SCALE = 0.6;
+
+/** A CSS custom property from `:root` (see app/globals.css), or undefined outside a browser or when unset. */
+function cssToken(name: string): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || undefined;
+}
+
 /** Outdoors' white fog washes out imagery; a clearer, bluer atmosphere suits a satellite globe. */
-const HYBRID_FOG: FogSpecification = {
-  range: [0.8, 8],
-  color: "rgb(214, 222, 228)",
-  "high-color": "rgb(70, 118, 186)",
-  "horizon-blend": 0.03,
-  "space-color": "rgb(12, 14, 20)",
-  "star-intensity": 0.3,
-};
+function hybridFog(): FogSpecification {
+  const fog: FogSpecification = { range: [0.8, 8], "horizon-blend": 0.03, "star-intensity": 0.3 };
+  const color = cssToken("--fog-color");
+  const high = cssToken("--fog-high-color");
+  const space = cssToken("--fog-space-color");
+  if (color) fog.color = color;
+  if (high) fog["high-color"] = high;
+  if (space) fog["space-color"] = space;
+  return fog;
+}
 
 type HybridMemo = {
   hidden: string[];
-  hillshade: { id: string; property: string; value: unknown }[];
+  /** Paint values the hybrid scaled (hillshade, water), with their originals. */
+  dimmed: { id: string; property: string; value: unknown }[];
   fog: FogSpecification | null | undefined;
 };
 /** What the hybrid changed on each map's current style, so switching back to plain Outdoors can undo it. */
 const hybridMemo = new WeakMap<MapboxMap, HybridMemo>();
+/** Warn once per page if a style update leaves the hybrid with nothing to hide. */
+let warnedNoOccluders = false;
 
 /** Index of the last background/land layer near the bottom of the stack; imagery goes right above it. */
 function baseLayerIndex(layers: StyleSpecification["layers"]): number {
@@ -98,21 +111,18 @@ function baseLayerIndex(layers: StyleSpecification["layers"]): number {
   return index;
 }
 
-function dimHillshade(map: MapboxMap, layer: StyleSpecification["layers"][number], memo: HybridMemo): void {
+function dimLayer(map: MapboxMap, layer: StyleSpecification["layers"][number], factor: number, memo: HybridMemo): void {
   const property =
     layer.type === "fill" ? "fill-opacity" : layer.type === "hillshade" ? "hillshade-exaggeration" : null;
   if (!property) return;
   const value: unknown = map.getPaintProperty(layer.id, property as never);
-  memo.hillshade.push({ id: layer.id, property, value });
-  // Zoom expressions must stay top-level, so only plain numbers (or the default of 1) can be scaled.
-  const next =
-    typeof value === "number" ? value * HILLSHADE_SCALE : value === undefined ? HILLSHADE_SCALE : HILLSHADE_FALLBACK_OPACITY;
-  map.setPaintProperty(layer.id, property as never, next as never);
+  memo.dimmed.push({ id: layer.id, property, value });
+  map.setPaintProperty(layer.id, property as never, scaleOpacity(value, factor) as never);
 }
 
 /**
  * Makes the `outdoors-satellite` hybrid match `basemap`: on, it adds the Mapbox satellite raster just above
- * the Outdoors land layer, hides the area fills that would cover it, and dims the hillshade; off, it undoes
+ * the Outdoors land layer, hides the area fills that would cover it, and thins the hillshade and water; off, it undoes
  * that. Idempotent; callers run it on `style.load` and when switching between basemaps that share a style.
  */
 export function syncSatelliteHybrid(map: MapboxMap, basemap: Basemap): void {
@@ -123,7 +133,7 @@ export function syncSatelliteHybrid(map: MapboxMap, basemap: Basemap): void {
   const active = Boolean(map.getLayer(SATELLITE_ID));
 
   if (wanted && !active) {
-    const next: HybridMemo = { hidden: [], hillshade: [], fog: map.getFog() };
+    const next: HybridMemo = { hidden: [], dimmed: [], fog: map.getFog() };
     if (!map.getSource(SATELLITE_ID)) {
       map.addSource(SATELLITE_ID, { type: "raster", url: "mapbox://mapbox.satellite", tileSize: 256 });
     }
@@ -133,14 +143,18 @@ export function syncSatelliteHybrid(map: MapboxMap, basemap: Basemap): void {
       beforeId,
     );
     for (const layer of style.layers) {
-      if (layer.id.includes("hillshade")) {
-        dimHillshade(map, layer, next);
-      } else if (layer.type === "fill" && OCCLUDING_FILL.test(layer.id) && map.getLayoutProperty(layer.id, "visibility") !== "none") {
-        map.setLayoutProperty(layer.id, "visibility", "none");
-        next.hidden.push(layer.id);
-      }
+      if (isHillshadeLayer(layer as StyleLayerLike)) dimLayer(map, layer, HILLSHADE_SCALE, next);
+      else if (isWaterFill(layer as StyleLayerLike)) dimLayer(map, layer, WATER_SCALE, next);
     }
-    map.setFog(HYBRID_FOG);
+    for (const id of occludingLayerIds(style.layers as StyleLayerLike[])) {
+      map.setLayoutProperty(id, "visibility", "none");
+      next.hidden.push(id);
+    }
+    if (next.hidden.length === 0 && !warnedNoOccluders) {
+      warnedNoOccluders = true;
+      console.warn("outdoors-satellite: no Outdoors fill layers matched, so the imagery may be covered. Check the style's layer ids.");
+    }
+    map.setFog(hybridFog());
     hybridMemo.set(map, next);
     return;
   }
@@ -150,7 +164,7 @@ export function syncSatelliteHybrid(map: MapboxMap, basemap: Basemap): void {
     if (map.getSource(SATELLITE_ID)) map.removeSource(SATELLITE_ID);
     if (memo) {
       for (const id of memo.hidden) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
-      for (const { id, property, value } of memo.hillshade) {
+      for (const { id, property, value } of memo.dimmed) {
         if (map.getLayer(id)) map.setPaintProperty(id, property as never, value as never);
       }
       map.setFog(memo.fog ?? null);

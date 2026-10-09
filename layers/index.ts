@@ -8,3 +8,5 @@ import "./fire-detections";
 import "./forest-loss";
 import "./forest-alerts";
 import "./snowpack";
+import "./mvum-dispersed";
+import "./campsites";

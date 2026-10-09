@@ -1,6 +1,7 @@
 import { GeoJsonLayer, IconLayer } from "@deck.gl/layers";
 import { describe, expect, it } from "vitest";
-import { PathStyleExtension } from "@deck.gl/extensions";
+import { PathStyleExtension, _TerrainExtension as TerrainExtension } from "@deck.gl/extensions";
+import { TerrainLayer } from "@deck.gl/geo-layers";
 import {
   SIBLING_FADE,
   bboxToViewport,
@@ -316,8 +317,9 @@ describe("Wally trail style on plain Outdoors", () => {
     const c = casing.props as unknown as Record<string, unknown>;
     const p = core.props as unknown as Record<string, unknown>;
     expect(c.getLineColor).toEqual([255, 255, 255, 255]);
-    expect(c.getLineWidth).toBeCloseTo(2.6);
-    expect(p.getLineColor).toEqual(hexToRgba("#16A34A"));
+    // Wally's 2.6 at z14 plus 0.6 so the white edge frames the dashes on green fills.
+    expect(c.getLineWidth).toBeCloseTo(3.2);
+    expect(p.getLineColor).toEqual(hexToRgba("#15803D"));
     expect(p.getLineWidth).toBeCloseTo(1.7);
     // Mapbox [2, 1.6] in line widths is [4, 3.2] in deck's half widths.
     expect(p.getDashArray).toEqual([4, 3.2]);
@@ -325,11 +327,13 @@ describe("Wally trail style on plain Outdoors", () => {
     expect(core.id).toBe("osm-trails:lines");
   });
 
-  it("steps widths with zoom: 1.8/1.1 at z11, 4.6/3.2 at z18, clamped outside", () => {
-    expect(outdoorsTrailWidths(11)).toEqual({ casing: 1.8, core: 1.1 });
-    expect(outdoorsTrailWidths(18)).toEqual({ casing: 4.6, core: 3.2 });
-    expect(outdoorsTrailWidths(6)).toEqual({ casing: 1.8, core: 1.1 });
-    expect(outdoorsTrailWidths(22)).toEqual({ casing: 4.6, core: 3.2 });
+  it("steps widths with zoom: casing 1.8/4.6 (+0.6) and core 1.1/3.2 at z11/z18, clamped outside", () => {
+    expect(outdoorsTrailWidths(11).casing).toBeCloseTo(2.4);
+    expect(outdoorsTrailWidths(11).core).toBe(1.1);
+    expect(outdoorsTrailWidths(18).casing).toBeCloseTo(5.2);
+    expect(outdoorsTrailWidths(18).core).toBe(3.2);
+    expect(outdoorsTrailWidths(6)).toEqual(outdoorsTrailWidths(11));
+    expect(outdoorsTrailWidths(22)).toEqual(outdoorsTrailWidths(18));
     expect(outdoorsTrailWidths(16).core).toBeCloseTo(2.45);
   });
 
@@ -415,5 +419,59 @@ describe("update triggers while a feature is selected", () => {
     const selected = { layerId: "species", feature: features[0], lngLat: [-120, 39] as [number, number] };
     const at = (opacity: number) => ({ ...stateOf("species", features, { opacity }), selected });
     expect(triggers(at(0.5), "getColor")).not.toEqual(triggers(at(1), "getColor"));
+  });
+});
+
+describe("draping on 3D terrain", () => {
+  const TOKEN = "pk.test";
+  const props = (l: { props: unknown }) => l.props as unknown as Record<string, unknown>;
+  const terrainOf = (l: { props: unknown }) =>
+    ((props(l).extensions as unknown[]) ?? []).some((e) => e instanceof TerrainExtension);
+  const lines = { ...stateWith({ layerId: "osm-trails", mode: "lines", visible: true }), terrain: true, flattened: false };
+
+  it("puts an invisible terrain source from Mapbox's DEM first, scaled by the 1.2 exaggeration", () => {
+    const [source] = buildDeckLayers(lines, { mapboxToken: TOKEN });
+    expect(source).toBeInstanceOf(TerrainLayer);
+    const p = props(source);
+    expect(p.operation).toBe("terrain+draw");
+    expect(p.pickable).toBe(false);
+    expect(p.color).toEqual([0, 0, 0, 0]);
+    expect(p.elevationData).toBe("https://api.mapbox.com/v4/mapbox.mapbox-terrain-dem-v1/{z}/{x}/{y}@2x.pngraw?access_token=pk.test");
+    const decoder = p.elevationDecoder as Record<string, number>;
+    expect(decoder.rScaler).toBeCloseTo(6553.6 * 1.2);
+    expect(decoder.offset).toBeCloseTo(-12000);
+  });
+
+  it("drapes lines (casing and core, keeping the dash extension) and polygons", () => {
+    const [, casing, core] = buildDeckLayers(lines, { mapboxToken: TOKEN });
+    for (const l of [casing, core]) {
+      expect(terrainOf(l)).toBe(true);
+      expect(props(l).terrainDrawMode).toBe("drape");
+    }
+    expect((props(core).extensions as unknown[])[0]).toBeInstanceOf(PathStyleExtension);
+    const poly = { ...lines, renderOps: [{ layerId: "osm-trails", mode: "polygons" as const, visible: true }] };
+    expect(props(buildDeckLayers(poly, { mapboxToken: TOKEN })[1]).terrainDrawMode).toBe("drape");
+  });
+
+  it("stands pins and discs on the surface (offset)", () => {
+    for (const n of [3, 301]) {
+      const state = { ...stateOf("campsites", points(n)), terrain: true, flattened: false };
+      const [, layer] = buildDeckLayers(state, { mapboxToken: TOKEN });
+      expect(layer).toBeInstanceOf(n === 3 ? IconLayer : GeoJsonLayer);
+      expect(terrainOf(layer)).toBe(true);
+      expect(props(layer).terrainDrawMode).toBe("offset");
+    }
+  });
+
+  it("stays flat with no terrain source when the map is flattened, terrain is off, or there is no token", () => {
+    for (const [state, token] of [
+      [{ ...lines, flattened: true }, TOKEN],
+      [{ ...lines, terrain: false }, TOKEN],
+      [lines, ""],
+    ] as const) {
+      const layers = buildDeckLayers(state, { mapboxToken: token });
+      expect(layers.some((l) => l instanceof TerrainLayer)).toBe(false);
+      expect(layers.some(terrainOf)).toBe(false);
+    }
   });
 });

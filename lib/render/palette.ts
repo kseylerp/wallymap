@@ -48,18 +48,21 @@ export const LAND_MANAGER_COLORS = {
 
 /** Wally's basemap-trail look for trails on plain Outdoors: green dashes over a white casing. */
 export const OUTDOORS_TRAIL = {
-  color: "#16A34A",
+  /** A shade darker than Wally's #16A34A so the dashes read over Outdoors' green park fills. */
+  color: "#15803D",
   /** Mapbox `line-dasharray` in line widths. */
   dash: [2, 1.6] as const,
   /** Widths in pixels at zoom 11, 14 and 18 (interpolated linearly, clamped outside). */
   zooms: [11, 14, 18] as const,
   casing: [1.8, 2.6, 4.6] as const,
   core: [1.1, 1.7, 3.2] as const,
+  /** Added to every casing width so the white edge frames the dashes on green fills. */
+  casingExtra: 0.6,
 };
 
 /** The Wally pin body, and the coral start pin. */
 export const PIN_BODY = "#3A3A3C";
 export const PIN_START = "#F57272";
 
-/** Contours in the hybrid, as Wally draws them over imagery. */
-export const CONTOUR_PAINT = { color: "#FAF9F5", opacity: 0.85, width: 0.6, minzoom: 9 } as const;
+/** Contours in the hybrid, as Wally draws them over imagery, faded out from z13 to z14 where they get busy. */
+export const CONTOUR_PAINT = { color: "#FAF9F5", opacity: 0.85, width: 0.6, minzoom: 9, fadeFrom: 13, fadeTo: 14 } as const;

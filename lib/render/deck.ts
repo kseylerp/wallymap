@@ -1,10 +1,12 @@
 import type { Layer } from "@deck.gl/core";
-import { PathStyleExtension } from "@deck.gl/extensions";
+import { PathStyleExtension, _TerrainExtension as TerrainExtension } from "@deck.gl/extensions";
+import { TerrainLayer } from "@deck.gl/geo-layers";
 import { GeoJsonLayer, IconLayer } from "@deck.gl/layers";
 import { WebMercatorViewport } from "@math.gl/web-mercator";
 import type { Feature } from "geojson";
 import type { BBox, StyleHints } from "@/layers/types";
 import { OUTDOORS_TRAIL, SCORE_RAMP } from "@/lib/render/palette";
+import { DECK_TERRAIN_ID, demDecoder, demTileUrl } from "@/lib/render/wally/deckTerrain";
 import { pinIconFor, pinThreshold, type PinIcon } from "@/lib/render/wally/pins";
 import type { MapState, RenderOp, Viewport } from "@/lib/render/state";
 
@@ -146,14 +148,24 @@ function rampFor(ramp: (f: Feature) => Rgba, opacity: number, selected: Feature 
 
 /** Widths (px) of Wally's basemap-trail look at a zoom: casing and dashed core. */
 export function outdoorsTrailWidths(zoom: number): { casing: number; core: number } {
-  const { zooms, casing, core } = OUTDOORS_TRAIL;
-  return { casing: interpolate(zoom, zooms, casing), core: interpolate(zoom, zooms, core) };
+  const { zooms, casing, core, casingExtra } = OUTDOORS_TRAIL;
+  return { casing: interpolate(zoom, zooms, casing) + casingExtra, core: interpolate(zoom, zooms, core) };
 }
 
 /** Dashes for the Outdoors trail core. Mapbox measures dashes in line widths, deck in half widths. */
 const OUTDOORS_TRAIL_DASH: [number, number] = [OUTDOORS_TRAIL.dash[0] * 2, OUTDOORS_TRAIL.dash[1] * 2];
 const dashExtension = new PathStyleExtension({ dash: true });
 const SOLID: [number, number] = [0, 0];
+const terrainExtension = new TerrainExtension();
+
+/**
+ * Terrain props for a data layer while 3D terrain is on: pins and discs stand on the surface by their anchor
+ * (`offset`), lines and polygons are draped over it (`drape`). Off, the layer keeps only its own extensions.
+ */
+function terrainProps(terrain: boolean, mode: "offset" | "drape", extensions: LayerExtensionLike[] = []) {
+  return terrain ? { extensions: [...extensions, terrainExtension], terrainDrawMode: mode } : { extensions };
+}
+type LayerExtensionLike = PathStyleExtension | TerrainExtension;
 
 /** Pins draw this tall on screen (the sprite is 34×44). */
 const PIN_SIZE_PX = 44;
@@ -189,10 +201,12 @@ type OpContext = {
   selected: Feature | undefined;
   basemap: MapState["basemap"];
   zoom: number;
+  /** Deck's terrain layer is in the stack: drape and offset this op's layers on it. */
+  terrain: boolean;
 };
 
 /** The deck layers for one render op, bottom first (lines add a white casing beneath the stroke). */
-function geoJsonLayersFor(op: RenderOp, { data, style, selected, basemap, zoom }: OpContext): Layer[] {
+function geoJsonLayersFor(op: RenderOp, { data, style, selected, basemap, zoom, terrain }: OpContext): Layer[] {
   const requested = usableColor(op.color);
   const color = requested ?? style.color;
   const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
@@ -220,6 +234,7 @@ function geoJsonLayersFor(op: RenderOp, { data, style, selected, basemap, zoom }
             // The overlay draws in deck's GlobeView, which flips the icon quads' winding; with back-face culling
             // on, deck 9.4 draws (and picks) no icons at all there.
             parameters: { cullMode: "none" },
+            ...terrainProps(terrain, "offset"),
           }),
         ];
       }
@@ -234,6 +249,7 @@ function geoJsonLayersFor(op: RenderOp, { data, style, selected, basemap, zoom }
           getLineColor: colorFor(WHITE, opacity, selected),
           getLineWidth: POINT_CASING_PX,
           lineWidthUnits: "pixels",
+          ...terrainProps(terrain, "offset"),
         }),
       ];
     case "lines": {
@@ -250,6 +266,7 @@ function geoJsonLayersFor(op: RenderOp, { data, style, selected, basemap, zoom }
           getLineWidth: widths.casing,
           lineWidthUnits: "pixels",
           updateTriggers,
+          ...terrainProps(terrain, "drape"),
         }),
         new GeoJsonLayer({
           ...base,
@@ -259,8 +276,8 @@ function geoJsonLayersFor(op: RenderOp, { data, style, selected, basemap, zoom }
           lineWidthUnits: "pixels",
           // The dash extension stays on every core line: adding or removing an extension on a live layer (as a
           // basemap switch would) leaves deck with a dangling dash attribute and it throws. [0, 0] draws solid.
-          extensions: [dashExtension],
           getDashArray: wallyTrail ? OUTDOORS_TRAIL_DASH : SOLID,
+          ...terrainProps(terrain, "drape", [dashExtension]),
         }),
       ];
     }
@@ -278,6 +295,7 @@ function geoJsonLayersFor(op: RenderOp, { data, style, selected, basemap, zoom }
           getLineColor: colorFor(WHITE, opacity, selected),
           getLineWidth: POLYGON_OUTLINE_PX,
           lineWidthUnits: "pixels",
+          ...terrainProps(terrain, "drape"),
         }),
       ];
     }
@@ -291,11 +309,38 @@ function geoJsonLayersFor(op: RenderOp, { data, style, selected, basemap, zoom }
 }
 
 /**
+ * Deck's invisible copy of the map's terrain: a TerrainLayer over the same DEM, drawn fully transparent so only
+ * the draped data layers show, and read by the TerrainExtension to stand pins on the slopes.
+ */
+function terrainSourceLayer(token: string): Layer {
+  return new TerrainLayer({
+    id: DECK_TERRAIN_ID,
+    elevationData: demTileUrl(token),
+    elevationDecoder: demDecoder(),
+    tileSize: 512,
+    maxZoom: 14,
+    // Transparent mesh: the draped layers' cover is all that reaches the screen.
+    color: [0, 0, 0, 0],
+    material: false,
+    operation: "terrain+draw",
+    pickable: false,
+    // Same GlobeView winding flip as the pins: with back-face culling on, deck draws no terrain mesh at all.
+    parameters: { cullMode: "none" },
+  });
+}
+
+/** Literal `process.env.NEXT_PUBLIC_*` access so Next inlines it into the client bundle. */
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim() ?? "";
+
+/**
  * Turns map state into deck.gl layer instances for each visible geojson render op (lines bring a casing).
  * Heat ops yield none here; Mapbox draws them.
  */
-export function buildDeckLayers(state: MapState): Layer[] {
+export function buildDeckLayers(state: MapState, { mapboxToken = MAPBOX_TOKEN }: { mapboxToken?: string } = {}): Layer[] {
   const layers: Layer[] = [];
+  // 3D terrain on the map means deck needs its own copy of the surface to drape on (see deckTerrain.ts).
+  const terrain = state.terrain && !state.flattened && mapboxToken !== "";
+  if (terrain) layers.push(terrainSourceLayer(mapboxToken));
   for (const op of state.renderOps) {
     if (!op.visible) continue;
     const loaded = state.layers[op.layerId];
@@ -309,6 +354,7 @@ export function buildDeckLayers(state: MapState): Layer[] {
         selected,
         basemap: state.basemap,
         zoom: state.viewport.zoom,
+        terrain,
       }),
     );
   }

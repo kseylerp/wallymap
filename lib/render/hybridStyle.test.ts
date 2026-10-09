@@ -73,10 +73,14 @@ describe("hybridPaintOverrides", () => {
     expect(overrides.find((o) => o.id === "admin-0-boundary")?.value).toBe(ADMIN_LINE_PAINT["line-color"]);
   });
 
-  it("draws contours as Wally does over imagery: #FAF9F5 at 0.85, 0.6px, from zoom 9", () => {
+  it("draws contours as Wally does over imagery: #FAF9F5 at 0.85, 0.6px, from zoom 9, fading out z13 to z14", () => {
     expect(overrides.filter((o) => o.id === "contour-line")).toEqual([
       { id: "contour-line", property: "line-color", value: "#FAF9F5" },
-      { id: "contour-line", property: "line-opacity", value: ["step", ["zoom"], 0, 9, 0.85] },
+      {
+        id: "contour-line",
+        property: "line-opacity",
+        value: ["interpolate", ["linear"], ["zoom"], 8.99, 0, 9, 0.85, 13, 0.85, 14, 0],
+      },
       { id: "contour-line", property: "line-width", value: 0.6 },
     ]);
   });

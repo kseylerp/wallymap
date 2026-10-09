@@ -38,10 +38,23 @@ export const LABEL_PAINT = {
   "text-halo-width": 1.2,
 } as const;
 
-/** Paint the hybrid puts on contour lines, as Wally draws them over imagery: warm white, thin, from zoom 9. */
+/** Paint the hybrid puts on contour lines, as Wally draws them over imagery: warm white, thin, zoom 9 to 14. */
 export const CONTOUR_LINE_PAINT = {
   "line-color": CONTOUR_PAINT.color,
-  "line-opacity": ["step", ["zoom"], 0, CONTOUR_PAINT.minzoom, CONTOUR_PAINT.opacity],
+  // Off below z9, 0.85 from z9 to z13, fading to 0 by z14 (a zoom input must sit in one top-level interpolate).
+  "line-opacity": [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    CONTOUR_PAINT.minzoom - 0.01,
+    0,
+    CONTOUR_PAINT.minzoom,
+    CONTOUR_PAINT.opacity,
+    CONTOUR_PAINT.fadeFrom,
+    CONTOUR_PAINT.opacity,
+    CONTOUR_PAINT.fadeTo,
+    0,
+  ],
   "line-width": CONTOUR_PAINT.width,
 } as const;
 

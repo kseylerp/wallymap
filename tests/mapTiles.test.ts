@@ -320,11 +320,25 @@ describe("heat mode (Mapbox heatmap)", () => {
     ]);
   });
 
-  it("builds a heatmap layer with opacity and an optional color ramp", () => {
-    const spec = heatLayerSpec("fires", 0.5, "#C2410C");
+  it("builds a heatmap layer with opacity and the monochrome gray ramp", () => {
+    const spec = heatLayerSpec("fires", 0.5);
     expect(spec).toMatchObject({ id: "heat-fires", type: "heatmap", source: "heat-fires" });
     expect(spec.paint?.["heatmap-opacity"]).toBeCloseTo(0.45);
-    expect(JSON.stringify(spec.paint?.["heatmap-color"])).toContain("rgba(194,65,12,0.95)");
+    expect(spec.paint?.["heatmap-color"]).toEqual([
+      "interpolate",
+      ["linear"],
+      ["heatmap-density"],
+      0,
+      "rgba(255,255,255,0)",
+      0.2,
+      "rgba(255,255,255,0.35)",
+      0.5,
+      "rgba(154,154,150,0.6)",
+      0.8,
+      "rgba(90,90,88,0.75)",
+      1,
+      "rgba(31,31,31,0.85)",
+    ]);
   });
 
   it("adds the heat source and layer under the labels, uploads data once, and removes them when the mode changes", () => {

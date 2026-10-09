@@ -16,7 +16,7 @@
  *                    "Private Conservation Land"; private parcels usually have no agency, only a "Private ..." designation
  *       access       open | restricted | closed | unknown (raw Pub_Access)
  *       category     protected_area | wilderness | state_park | nature_reserve | managed_forest | national_park | national_monument
- *   The map colors fills by `agency` (wilderness by `category` / `designation`); see landManagerFillColor in components/mapTiles.ts.
+ *   The map draws these polygons as a gray ink tint (not colored by manager); see landFillOpacity in components/mapTiles.ts.
  * No upstream call is made by the layer: it only hands the tile URL to the map.
  */
 import { z } from "zod";

@@ -20,7 +20,6 @@ import {
   type PaintOverride,
   type StyleLayerLike,
 } from "@/lib/render/hybridStyle";
-import { hexToRgba } from "@/lib/render/deck";
 import { INK } from "@/lib/render/palette";
 import { featureCenter } from "@/lib/render/inspect";
 import type { Basemap, MapState } from "@/lib/render/state";
@@ -276,30 +275,26 @@ export function heatPointsCollection(data: FeatureCollection): FeatureCollection
   return { type: "FeatureCollection", features };
 }
 
-/** Heat color: transparent, then a warm yellow-to-red ramp, or a tint-to-`color` ramp when one was picked. */
-export function heatColor(color: string | undefined): ExpressionSpecification {
-  const stops: [number, string][] = color
-    ? (() => {
-        const [r, g, b] = hexToRgba(color);
-        const mix = (t: number) =>
-          `rgba(${[r, g, b].map((c) => Math.round(255 + (c - 255) * t)).join(",")},${Math.round((0.2 + 0.75 * t) * 100) / 100})`;
-        return [
-          [0.15, mix(0.2)],
-          [0.4, mix(0.45)],
-          [0.7, mix(0.75)],
-          [1, mix(1)],
-        ];
-      })()
-    : [
-        [0.15, "rgba(255,237,160,0.55)"],
-        [0.4, "rgba(254,178,76,0.75)"],
-        [0.7, "rgba(240,59,32,0.85)"],
-        [1, "rgba(189,0,38,0.95)"],
-      ];
-  return ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,0,0)", ...stops.flat()] as ExpressionSpecification;
+/** Heat color: the monochrome research ramp, transparent white up to near-black ink. The layer panel's color is ignored. */
+export function heatColor(): ExpressionSpecification {
+  return [
+    "interpolate",
+    ["linear"],
+    ["heatmap-density"],
+    0,
+    "rgba(255,255,255,0)",
+    0.2,
+    "rgba(255,255,255,0.35)",
+    0.5,
+    "rgba(154,154,150,0.6)",
+    0.8,
+    "rgba(90,90,88,0.75)",
+    1,
+    "rgba(31,31,31,0.85)",
+  ] as ExpressionSpecification;
 }
 
-export function heatLayerSpec(layerId: string, opacity: number, color: string | undefined): HeatmapLayerSpecification {
+export function heatLayerSpec(layerId: string, opacity: number): HeatmapLayerSpecification {
   const id = `${HEAT_PREFIX}${layerId}`;
   return {
     id,
@@ -310,7 +305,7 @@ export function heatLayerSpec(layerId: string, opacity: number, color: string | 
       "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 4, 8, 16, 14, 34],
       "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.6, 14, 1.2],
       "heatmap-opacity": Math.min(1, Math.max(0, opacity)) * 0.9,
-      "heatmap-color": heatColor(color),
+      "heatmap-color": heatColor(),
     },
   };
 }
@@ -342,8 +337,7 @@ export function syncHeatLayers(map: MapboxMap, state: MapState): void {
     if (!source) map.addSource(id, { type: "geojson", data: heatPointsCollection(data) });
     else if (uploaded.get(id) !== data) source.setData(heatPointsCollection(data));
     uploaded.set(id, data);
-    const color = op.color && HEX.test(op.color.trim()) ? op.color.trim() : undefined;
-    const spec = heatLayerSpec(op.layerId, op.opacity ?? 1, color);
+    const spec = heatLayerSpec(op.layerId, op.opacity ?? 1);
     if (!map.getLayer(id)) map.addLayer(spec, beforeId);
     else for (const [property, value] of Object.entries(spec.paint ?? {})) map.setPaintProperty(id, property as never, value as never);
   }

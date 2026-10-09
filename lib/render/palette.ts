@@ -41,20 +41,6 @@ export const INK = "#1F1F1F";
 /** Score ramp on `v` (0 to 100): white at 25% alpha up to ink at 70%. */
 export const SCORE_RAMP = { from: "#FFFFFF", fromAlpha: 0.25, to: INK, toAlpha: 0.7 } as const;
 
-/**
- * Public land by manager (PAD-US `agency`), plus wilderness: grays chosen so that under the map's 18% regional land
- * wash each reads as an ink tint of 8 to 12% (NPS and wilderness darkest, state land lightest).
- */
-export const LAND_MANAGER_COLORS = {
-  NPS: "#696969",
-  USFS: "#777777",
-  BLM: "#848484",
-  FWS: "#909090",
-  State: "#9B9B9B",
-  Wilderness: "#696969",
-  other: "#9B9B9B",
-} as const;
-
 /** Deck dash arrays ([dash, gap] in line widths) that tell line layers apart; [0, 0] is solid. */
 export const LINE_DASHES = {
   solid: [0, 0],

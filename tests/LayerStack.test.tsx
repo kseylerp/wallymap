@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { useReducer } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -89,6 +91,17 @@ describe("LayerStack", () => {
     expect(within(screen.getAllByTestId("layer-card")[0]).getByText("35%")).toBeTruthy();
   });
 
+  it("gives the opacity slider a visible keyboard focus ring on its thumb", () => {
+    render(<Harness spy={vi.fn()} />);
+    const slider = within(screen.getAllByTestId("layer-card")[0]).getByRole("slider");
+    expect(slider.classList.contains("layer-opacity")).toBe(true);
+    const css = readFileSync(path.resolve(__dirname, "../app/globals.css"), "utf8");
+    for (const thumb of ["::-webkit-slider-thumb", "::-moz-range-thumb"]) {
+      const rule = css.match(new RegExp(`\\.layer-opacity:focus-visible${thumb} \\{([^}]*)\\}`));
+      expect(rule?.[1]).toMatch(/box-shadow:[\s\S]*var\(--slate\)/);
+    }
+  });
+
   it("changes mode and disables columns and hexbin", () => {
     const spy = vi.fn();
     render(<Harness spy={spy} />);
@@ -116,10 +129,14 @@ describe("LayerStack", () => {
     expect(trailsKey.getAttribute("data-kind")).toBe("line");
     expect(trailsKey.querySelectorAll("line")).toHaveLength(2);
     expect(trailsKey.querySelector("line[stroke-dasharray]")).toBeNull();
-    // Public lands are vector polygons: an outlined square with a 10% wash.
+    // Public lands are vector tile areas, which Mapbox tints gray: an outlined square with a 10% wash.
     const landsKey = landsRow.querySelector("svg.legend-key")!;
     expect(landsKey.getAttribute("data-kind")).toBe("polygon");
     expect(landsKey.querySelector("rect")?.getAttribute("fill-opacity")).toBe("0.1");
+    // The row controls keep their padding inside the collapsing track, so a collapsed row has no dead space.
+    const track = trailsRow.querySelector(".legend-controls")!;
+    expect(track.firstElementChild?.className).toBe("");
+    expect(track.querySelector(".pt-2")).toBeTruthy();
 
     // No swatches, no color popover, no inline colors.
     expect(screen.queryByRole("button", { name: /Color for/ })).toBeNull();
@@ -166,6 +183,23 @@ describe("LayerStack", () => {
     expect(lightsRow.querySelector("svg.legend-key")?.getAttribute("data-kind")).toBe("tiles");
     expect(lightsRow.querySelector("pattern")).toBeTruthy();
     expect(within(lightsRow).getByText("tiles")).toBeTruthy();
+  });
+
+  it("keys boundary polygons (wilderness) as an outline with no wash", () => {
+    const wild: LoadedLayer = { ...trails, id: "wilderness", title: "Wilderness", style: { geometry: "polygon", color: "#B9A6FF" } };
+    render(
+      <LayerStack
+        layers={{ wilderness: wild }}
+        renderOps={[{ layerId: "wilderness", mode: "polygons", visible: true }]}
+        catalog={null}
+        dispatch={() => {}}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    const rect = screen.getByTestId("layer-card").querySelector("svg.legend-key rect")!;
+    expect(rect.getAttribute("fill")).toBe("none");
+    expect(rect.getAttribute("fill-opacity")).toBeNull();
   });
 
   it("reorders with the arrow keys on the grip, and removes and clears layers", () => {

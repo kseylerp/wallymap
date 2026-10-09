@@ -10,9 +10,9 @@ import {
   hexTileColor,
   hexToRgba,
   hexbin,
-  lineDashFor,
   scoreRampColor,
 } from "@/lib/render/deck";
+import { lineDashFor } from "@/lib/render/palette";
 import { pickToSelection } from "@/lib/render/inspect";
 import { initialMapState, type LoadedLayer, type MapState } from "@/lib/render/state";
 

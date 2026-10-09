@@ -542,6 +542,23 @@ textarea:focus-visible {
   background: var(--paper);
   box-shadow: 0 0 0 1px var(--ink);
 }
+/*
+ * Keyboard focus rings the thumb in slate (text inputs drop the global outline, and a range input is one). Separate
+ * rules per engine: one unknown pseudo-element would void a combined selector.
+ */
+.layer-opacity:focus-visible {
+  outline: none;
+}
+.layer-opacity:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 1px var(--ink),
+    0 0 0 3px var(--slate);
+}
+.layer-opacity:focus-visible::-moz-range-thumb {
+  box-shadow:
+    0 0 0 1px var(--ink),
+    0 0 0 3px var(--slate);
+}
 
 /*
  * Primary buttons and active control states are ink with white text, never the accent. These unlayered rules beat

@@ -65,7 +65,7 @@ function legendModeFor(layer: LoadedLayer, op: RenderOp | undefined): LegendMode
   if (layer.result.kind === "tiles") {
     if (layer.result.data.format === "raster") return "tiles";
     const geometry = layer.result.data.geometry ?? layer.style.geometry;
-    return geometry === "polygon" ? "polygons" : geometry === "line" ? "lines" : "points";
+    return geometry === "polygon" ? "vector-polygons" : geometry === "line" ? "lines" : "points";
   }
   if (op) return op.mode;
   return layer.style.geometry === "polygon" ? "polygons" : layer.style.geometry === "line" ? "lines" : "points";
@@ -102,7 +102,17 @@ function LegendKey({ symbol }: { symbol: LegendSymbol }) {
         </>
       )}
       {symbol.kind === "polygon" && (
-        <rect x={4.5} y={4.5} width={15} height={15} fill="currentColor" fillOpacity={0.1} stroke="currentColor" strokeWidth={1} />
+        <rect
+          x={4.5}
+          y={4.5}
+          width={15}
+          height={15}
+          // Boundary layers (wilderness, physical regions) draw an outline only, so their key has no wash.
+          fill={symbol.fill ? "currentColor" : "none"}
+          fillOpacity={symbol.fill || undefined}
+          stroke="currentColor"
+          strokeWidth={1}
+        />
       )}
       {symbol.kind === "score" && (
         <>
@@ -219,60 +229,63 @@ function LegendRow({ layer, op, license, dispatch, onMove, dragProps, armDrag, d
         )}
       </div>
 
+      {/* The grid row collapses to 0 while hidden; the padding lives inside it so a collapsed row stays tight. */}
       <div className="legend-controls">
-        <div className="flex items-center gap-2.5 pt-2 pl-9">
-          <button
-            type="button"
-            onClick={() => dispatch({ type: "toggle_layer", layerId: layer.id })}
-            disabled={!op}
-            aria-pressed={visible}
-            aria-label={`Show ${layer.title}`}
-            title={visible ? "Hide layer" : "Show layer"}
-            className="legend-check"
-          />
-          {op && (
-            <label className="flex items-center gap-1.5">
-              <span className="sr-only">Opacity for {layer.title}</span>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={opacity}
-                onChange={(e) => dispatch({ type: "set_opacity", layerId: layer.id, opacity: Number(e.target.value) })}
-                className="layer-opacity w-[60px]"
-                style={{ ["--fill" as string]: `${Math.round(opacity * 100)}%` }}
-              />
-              <span aria-hidden className="w-7 text-right text-[11px] text-ink-muted tabular-nums">
-                {Math.round(opacity * 100)}%
-              </span>
-            </label>
-          )}
-          {op && layer.result.kind === "geojson" && (
-            <label>
-              <span className="sr-only">Draw {layer.title} as</span>
-              <select
-                value={op.mode}
-                onChange={(e) => dispatch({ type: "set_style", layerId: layer.id, mode: e.target.value as RenderMode })}
-                className="legend-select"
-              >
-                {MODES.map((m) => (
-                  <option key={m.value} value={m.value} disabled={!m.ready} title={m.ready ? undefined : "Milestone 3"}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <button
-            type="button"
-            onClick={() => dispatch({ type: "remove_layer", layerId: layer.id })}
-            aria-label={`Remove ${layer.title}`}
-            title="Remove layer"
-            className="ml-auto px-1 text-[15px] leading-none text-ink-muted transition-colors hover:text-ink"
-          >
-            ×
-          </button>
+        <div>
+          <div className="flex items-center gap-2.5 pt-2 pl-9">
+            <button
+              type="button"
+              onClick={() => dispatch({ type: "toggle_layer", layerId: layer.id })}
+              disabled={!op}
+              aria-pressed={visible}
+              aria-label={`Show ${layer.title}`}
+              title={visible ? "Hide layer" : "Show layer"}
+              className="legend-check"
+            />
+            {op && (
+              <label className="flex items-center gap-1.5">
+                <span className="sr-only">Opacity for {layer.title}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={opacity}
+                  onChange={(e) => dispatch({ type: "set_opacity", layerId: layer.id, opacity: Number(e.target.value) })}
+                  className="layer-opacity w-[60px]"
+                  style={{ ["--fill" as string]: `${Math.round(opacity * 100)}%` }}
+                />
+                <span aria-hidden className="w-7 text-right text-[11px] text-ink-muted tabular-nums">
+                  {Math.round(opacity * 100)}%
+                </span>
+              </label>
+            )}
+            {op && layer.result.kind === "geojson" && (
+              <label>
+                <span className="sr-only">Draw {layer.title} as</span>
+                <select
+                  value={op.mode}
+                  onChange={(e) => dispatch({ type: "set_style", layerId: layer.id, mode: e.target.value as RenderMode })}
+                  className="legend-select"
+                >
+                  {MODES.map((m) => (
+                    <option key={m.value} value={m.value} disabled={!m.ready} title={m.ready ? undefined : "Milestone 3"}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button
+              type="button"
+              onClick={() => dispatch({ type: "remove_layer", layerId: layer.id })}
+              aria-label={`Remove ${layer.title}`}
+              title="Remove layer"
+              className="ml-auto px-1 text-[15px] leading-none text-ink-muted transition-colors hover:text-ink"
+            >
+              ×
+            </button>
+          </div>
         </div>
       </div>
     </li>

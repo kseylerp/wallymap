@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { lineDashFor } from "@/lib/render/deck";
-import { legendDash, legendSymbol } from "@/lib/render/wally/legend";
+import { lineDashFor } from "@/lib/render/palette";
+import { legendSymbol } from "@/lib/render/wally/legend";
 
 describe("legendSymbol", () => {
   it.each([
@@ -21,20 +21,26 @@ describe("legendSymbol", () => {
     expect(legendSymbol("forest-roads", "lines")).toEqual({ kind: "line", dash: [4, 3] });
   });
 
-  it.each(["osm-trails", "forest-roads", "popularity", "some-river", "x", "fire-perimeters"])(
-    "passes deck's dash for %s through unchanged",
-    (layerId) => {
-      expect(legendSymbol(layerId, "lines").dash).toEqual(lineDashFor(layerId));
-      expect(legendDash(layerId)).toEqual(lineDashFor(layerId));
-    },
-  );
+  it("passes deck's dash (palette lineDashFor) through unchanged", () => {
+    expect(legendSymbol("some-river", "lines").dash).toEqual(lineDashFor("some-river"));
+  });
 
-  it("keys polygons as an outlined square, and score polygons as the gray ramp", () => {
-    expect(legendSymbol("fire-perimeters", "polygons")).toEqual({ kind: "polygon" });
-    expect(legendSymbol("public-lands", "polygons")).toEqual({ kind: "polygon" });
+  it("keys polygons with the wash deck draws: 10% for events, outline only for boundaries", () => {
+    expect(legendSymbol("fire-perimeters", "polygons")).toEqual({ kind: "polygon", fill: 0.1 });
+    expect(legendSymbol("something-new", "polygons")).toEqual({ kind: "polygon", fill: 0.1 });
+    for (const id of ["wilderness", "public-lands", "physical-regions"]) {
+      expect(legendSymbol(id, "polygons")).toEqual({ kind: "polygon", fill: 0 });
+    }
+  });
+
+  it("keys vector tile areas (public lands on Mapbox) with their regional gray tint", () => {
+    expect(legendSymbol("public-lands", "vector-polygons")).toEqual({ kind: "polygon", fill: 0.1 });
+  });
+
+  it("keys score polygons as the gray ramp", () => {
     expect(legendSymbol("remoteness", "polygons")).toEqual({ kind: "score" });
     expect(legendSymbol("any-grid", "polygons", "score")).toEqual({ kind: "score" });
-    expect(legendSymbol("remoteness", "polygons", "km")).toEqual({ kind: "polygon" });
+    expect(legendSymbol("remoteness", "polygons", "km")).toEqual({ kind: "polygon", fill: 0.1 });
   });
 
   it("keys raster tiles as hatching and heat as a ramp", () => {

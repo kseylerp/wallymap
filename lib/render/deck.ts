@@ -8,8 +8,7 @@ import { cellToLatLng, latLngToCell } from "h3-js";
 import type { BBox, StyleHints } from "@/layers/types";
 import {
   INK as INK_HEX,
-  LAYER_LINE_DASH,
-  LINE_DASHES,
+  lineDashFor,
   POLYGON_INK_FILL,
   SCORE_RAMP,
 } from "@/lib/render/palette";
@@ -165,18 +164,6 @@ function rampFor(ramp: (f: Feature) => Rgba, opacity: number, selected: Feature 
 
 const dashExtension = new PathStyleExtension({ dash: true });
 const terrainExtension = new TerrainExtension();
-
-/** Patterns for line layers with no assigned dash, so two unknown line layers still differ. */
-const FALLBACK_DASHES = ["dashed", "dotted", "long"] as const;
-
-/** The dash pattern that marks a line layer: trails solid, forest roads dashed, others by a stable hash. */
-export function lineDashFor(layerId: string): [number, number] {
-  const named = LAYER_LINE_DASH[layerId];
-  if (named) return [...LINE_DASHES[named]];
-  let hash = 0;
-  for (const ch of layerId) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return [...LINE_DASHES[FALLBACK_DASHES[hash % FALLBACK_DASHES.length]]];
-}
 
 /**
  * Terrain props for a data layer while 3D terrain is on: symbols stand on the surface by their anchor (`offset`),

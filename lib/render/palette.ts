@@ -55,6 +55,21 @@ export const LAYER_LINE_DASH: Record<string, keyof typeof LINE_DASHES> = {
   "forest-roads": "dashed",
 };
 
+/** Patterns for line layers with no assigned dash, so two unknown line layers still differ. */
+const FALLBACK_DASHES = ["dashed", "dotted", "long"] as const;
+
+/**
+ * The dash pattern that marks a line layer: trails solid, forest roads dashed, others by a stable hash of the id.
+ * Deck draws with it and the layer panel's legend keys show it. A fresh array each call.
+ */
+export function lineDashFor(layerId: string): [number, number] {
+  const named = LAYER_LINE_DASH[layerId];
+  if (named) return [...LINE_DASHES[named]];
+  let hash = 0;
+  for (const ch of layerId) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return [...LINE_DASHES[FALLBACK_DASHES[hash % FALLBACK_DASHES.length]]];
+}
+
 /** Polygon fill as a share of ink, per layer: outlines only for boundaries, a 10% wash for events. Default 10%. */
 export const POLYGON_INK_FILL: Record<string, number> = {
   "fire-perimeters": 0.1,

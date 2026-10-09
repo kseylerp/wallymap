@@ -1,13 +1,13 @@
 import type { Feature } from "geojson";
-import { LAYER_LINE_DASH, LINE_DASHES } from "@/lib/render/palette";
+import { lineDashFor, POLYGON_INK_FILL } from "@/lib/render/palette";
 import type { RenderMode } from "@/lib/render/state";
 import { pinIconFor } from "@/lib/render/wally/pins";
 
 /**
  * The layer panel's legend key for one layer (spec §10, "research look"): what the map draws for it, in the same
  * monochrome terms. Points show their symbol sprite (pins.ts), lines a sample with the layer's dash pattern (the
- * same table deck.ts draws with), polygons an outlined square with a light ink wash, score layers a gray ramp,
- * raster tiles a hatched square. The panel draws each key as an inline SVG in `currentColor`.
+ * same `lineDashFor` deck draws with), polygons an outlined square with the layer's ink wash (none for boundary
+ * layers), score layers a gray ramp, raster tiles a hatched square. The panel draws each key as an inline SVG in `currentColor`.
  */
 export type LegendKind = "symbol" | "line" | "polygon" | "tiles" | "score";
 
@@ -17,25 +17,23 @@ export type LegendSymbol = {
   spriteUrl?: string;
   /** Lines: deck's [dash, gap] in line widths; [0, 0] is solid. */
   dash?: [number, number];
+  /** Polygons: the ink wash as a share of ink, 0 for an outline only. */
+  fill?: number;
 };
 
-/** How a layer is drawn: a render mode, or `tiles` for raster imagery. */
-export type LegendMode = RenderMode | "tiles";
+/**
+ * How a layer is drawn: a render mode, `tiles` for raster imagery, or `vector-polygons` for vector tile areas
+ * (public lands), which Mapbox draws as a gray tint (components/mapTiles.ts).
+ */
+export type LegendMode = RenderMode | "tiles" | "vector-polygons";
+
+/** Deck's wash for polygon layers not listed in POLYGON_INK_FILL. */
+const POLYGON_FILL_DEFAULT = 0.1;
+/** Vector tile areas: the regional stop of the public-lands tint (landFillOpacity in components/mapTiles.ts). */
+const VECTOR_TILE_FILL = 0.1;
 
 /** Layers that shade areas by a 0 to 100 score, when the caller does not pass the layer's unit. */
 const SCORE_LAYERS: ReadonlySet<string> = new Set(["remoteness", "popularity"]);
-
-/** Line layers with no named dash take one of these by a stable hash of their id. Kept in step with deck.ts. */
-const FALLBACK_DASHES = ["dashed", "dotted", "long"] as const;
-
-/** The dash pattern that marks a line layer: trails solid, forest roads dashed, others by a stable hash. */
-export function legendDash(layerId: string): [number, number] {
-  const named = LAYER_LINE_DASH[layerId];
-  if (named) return [...LINE_DASHES[named]];
-  let hash = 0;
-  for (const ch of layerId) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return [...LINE_DASHES[FALLBACK_DASHES[hash % FALLBACK_DASHES.length]]];
-}
 
 /** A feature with no properties: campsite layers then read as camp sites (triangles), not parking. */
 const BLANK: Feature = { type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: {} };
@@ -48,10 +46,13 @@ export function legendSymbol(layerId: string, mode: LegendMode, unit?: string): 
   switch (mode) {
     case "tiles":
       return { kind: "tiles" };
+    case "vector-polygons":
+      return { kind: "polygon", fill: VECTOR_TILE_FILL };
     case "lines":
-      return { kind: "line", dash: legendDash(layerId) };
+      return { kind: "line", dash: lineDashFor(layerId) };
     case "polygons":
-      return unit === "score" || (unit === undefined && SCORE_LAYERS.has(layerId)) ? { kind: "score" } : { kind: "polygon" };
+      if (unit === "score" || (unit === undefined && SCORE_LAYERS.has(layerId))) return { kind: "score" };
+      return { kind: "polygon", fill: POLYGON_INK_FILL[layerId] ?? POLYGON_FILL_DEFAULT };
     case "heat":
       return { kind: "score" };
     default:

@@ -1,0 +1,100 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { CachedFetch } from "@/lib/fetch";
+import layer, { buildOverpassQuery, normalizeOverpass } from "./osm-trails";
+import fixture from "./__fixtures__/osm-trails.tahoe.json";
+
+const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
+
+describe("osm-trails layer", () => {
+  const originalUrl = process.env.OVERPASS_URL;
+
+  beforeEach(() => {
+    delete process.env.OVERPASS_URL;
+  });
+
+  afterEach(() => {
+    if (originalUrl === undefined) delete process.env.OVERPASS_URL;
+    else process.env.OVERPASS_URL = originalUrl;
+  });
+
+  it("builds a query for highway=path|footway|track with out geom", () => {
+    const q = buildOverpassQuery(TAHOE, { namedOnly: false });
+    expect(q).toContain('["highway"~"^(path|footway|track)$"]');
+    expect(q).toContain("out geom");
+    expect(q).toContain("(38.85,-120.2,39,-120)");
+    expect(q).not.toContain('["name"]');
+  });
+
+  it("adds a name selector when namedOnly is true", () => {
+    const q = buildOverpassQuery(TAHOE, { namedOnly: true });
+    expect(q).toContain('["name"]');
+  });
+
+  it("normalizes fixture to LineStrings with trail tags", () => {
+    const fc = normalizeOverpass(fixture);
+    expect(fc.features.length).toBeGreaterThan(0);
+    expect(fc.features[0].geometry.type).toBe("LineString");
+    expect(fc.features.every((f) => typeof f.properties?.osmId === "string")).toBe(true);
+    expect(fc.features.every((f) => /^way\/\d+$/.test(String(f.properties?.osmId)))).toBe(true);
+  });
+
+  it("rejects a bbox over 2500 km2 with zoom_in", async () => {
+    const r = await layer.query(
+      { bbox: [-122, 36, -119, 39], zoom: 7, env: {}, fetch: vi.fn() as unknown as CachedFetch },
+      { namedOnly: false },
+    );
+    expect(r).toMatchObject({ hint: "zoom_in" });
+  });
+
+  it("maps 429 to upstream error after fallback", async () => {
+    const stub = vi.fn(async () => new Response("slow down", { status: 429 }));
+    const r = await layer.query(
+      { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch },
+      { namedOnly: false },
+    );
+    expect(r).toMatchObject({ hint: "upstream", error: "Overpass returned 429" });
+    expect(stub).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns a cited FeatureCollection on success", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
+    const r = await layer.query(
+      { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch },
+      { namedOnly: false },
+    );
+    expect(stub).toHaveBeenCalledTimes(1);
+    expect(r).toMatchObject({ kind: "geojson" });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features.length).toBeGreaterThan(0);
+    expect(r.citation.source).toBe("OpenStreetMap contributors (ODbL)");
+  });
+
+  it("filters by sacScaleMax, keeping untagged and easier trails", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
+    const r = await layer.query(
+      { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch },
+      { namedOnly: false, sacScaleMax: "hiking" },
+    );
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const scales = r.data.features.map((f) => f.properties?.sac_scale as string | undefined);
+    expect(scales.every((s) => s === undefined || s === "hiking")).toBe(true);
+    expect(r.data.features.length).toBeLessThan(normalizeOverpass(fixture).features.length);
+  });
+
+  it("retries a thrown network error against the public endpoint", async () => {
+    process.env.OVERPASS_URL = "https://overpass.example.test/api/interpreter";
+    const stub = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce(new Response(JSON.stringify(fixture), { status: 200 }));
+    const r = await layer.query(
+      { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch },
+      { namedOnly: false },
+    );
+    expect(r).toMatchObject({ kind: "geojson" });
+    expect(stub.mock.calls.map((c) => c[0])).toEqual([
+      "https://overpass.example.test/api/interpreter",
+      "https://overpass-api.de/api/interpreter",
+    ]);
+  });
+});

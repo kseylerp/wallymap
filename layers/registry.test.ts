@@ -15,7 +15,11 @@ describe("BBoxSchema", () => {
   it("rejects latitude over 90", () => expect(() => BBoxSchema.parse([0, 0, 1, 91])).toThrow());
 });
 describe("bboxAreaKm2", () => {
-  it("is about 12300 km2 for a 1x1 degree box at 38N", () => expect(bboxAreaKm2([-120, 38, -119, 39])).toBeGreaterThan(9000));
+  it("is about 9600 km2 for a 1x1 degree box at 38N", () => {
+    const area = bboxAreaKm2([-120, 38, -119, 39]);
+    expect(area).toBeGreaterThan(9000);
+    expect(area).toBeLessThan(10500);
+  });
 });
 describe("registry", () => {
   beforeEach(clearRegistry);

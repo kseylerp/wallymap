@@ -127,6 +127,12 @@ h4 {
   outline-offset: 2px;
 }
 
+/* Text fields show focus through their container's border, never a square outline of their own. */
+input:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
 /*
  * Inside the chat a mouse click shows no ring: the composer pill's border turns slate instead (see ChatRail).
  * Keyboard focus still gets a slate ring on buttons and pills. The text input always matches :focus-visible,

@@ -308,7 +308,8 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     // easeTo would cancel this one), and marking the pitch as ours stops the viewport effect from easing again.
     const { pitch } = stateRef.current.viewport;
     lastCameraRef.current = stateRef.current.viewport;
-    map.easeTo({ center, pitch, duration: SELECT_EASE_MS, easing: (t) => t * (2 - t) });
+    // Pin the zoom: left out, Mapbox recomputes it against the terrain under the new center (13 became 15.7).
+    map.easeTo({ center, zoom: map.getZoom(), pitch, duration: SELECT_EASE_MS, easing: (t) => t * (2 - t) });
   }, [selected]);
 
   // Ease to a new viewport when it differs from both the actual camera and our own last report.
@@ -327,7 +328,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     lastCameraRef.current = target;
     // A pitch-only change (select, deselect, the 3D button) tilts in place with Wally's short ease.
     if (pitchOnly) {
-      map.easeTo({ pitch: target.pitch, duration: PITCH_EASE_MS, easing: easeInOut });
+      map.easeTo({ zoom: map.getZoom(), pitch: target.pitch, duration: PITCH_EASE_MS, easing: easeInOut });
       return;
     }
     map.easeTo({

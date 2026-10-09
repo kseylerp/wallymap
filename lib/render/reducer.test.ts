@@ -218,6 +218,30 @@ describe("reduce: 3D camera rules", () => {
     expect(deselected.viewport.pitch).toBe(45);
   });
 
+  it("returns to Explore pitch when the selection is dropped by hide, clear, reload or heat", () => {
+    const loaded = reduce(
+      reduce(atTrailZoom, { type: "layer_loaded", layer }),
+      { type: "render", op: { layerId: "osm-trails", mode: "lines", visible: true } },
+    );
+    const selected = reduce(loaded, { type: "select", selection });
+    expect(selected.viewport.pitch).toBe(72);
+    const dropped = [
+      reduce(selected, { type: "toggle_layer", layerId: "osm-trails" }),
+      reduce(selected, { type: "clear_layers" }),
+      reduce(selected, { type: "layer_loaded", layer }),
+      reduce(selected, { type: "render", op: { layerId: "osm-trails", mode: "heat", visible: true } }),
+      reduce(selected, { type: "set_style", layerId: "osm-trails", mode: "heat" }),
+      reduce(selected, { type: "remove_layer", layerId: "osm-trails" }),
+    ];
+    for (const next of dropped) {
+      expect(next.selected).toBeUndefined();
+      expect(next.viewport.pitch).toBe(45);
+    }
+    // A flattened map stays flat when the selection goes.
+    const flat = reduce({ ...selected, flattened: true, viewport: { ...selected.viewport, pitch: 0 } }, { type: "clear_layers" });
+    expect(flat.viewport.pitch).toBe(0);
+  });
+
   it("select leaves the pitch alone on a flattened map or the world view", () => {
     const flattened = reduce({ ...atTrailZoom, flattened: true, viewport: { ...atTrailZoom.viewport, pitch: 0 } }, {
       type: "select",

@@ -40,11 +40,11 @@ export function MapControls({ onZoomIn, onZoomOut, onGlobe, threeD, onToggle3D }
         aria-pressed={threeD}
         aria-label="3D terrain"
         title={threeD ? "Flatten the map" : "Show 3D terrain"}
-        className={`glass rounded-full text-[13px] font-semibold tracking-tight ${BUTTON_BASE} ${
-          threeD ? "text-ink" : "text-ink-muted"
+        // Pressed: the primary button look (black with white text in both themes; globals.css makes it beat `.glass`
+        // for pressed map controls). Off: the normal glass.
+        className={`glass rounded-full text-[13px] font-semibold tracking-tight ${
+          threeD ? `${BUTTON_BASE} bg-primary text-on-primary` : BUTTON
         }`}
-        // Inline so the sage "on" tint wins over the `.glass` background.
-        style={threeD ? { backgroundColor: "var(--sage-tint)" } : undefined}
       >
         3D
       </button>

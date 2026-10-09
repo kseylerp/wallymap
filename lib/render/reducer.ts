@@ -34,8 +34,18 @@ function setView(state: MapState, requested: Partial<Viewport>, fit: boolean): M
   return { ...state, viewport };
 }
 
-/** Pure reducer: always returns new objects and never mutates `state`. */
+/**
+ * Pure reducer: always returns new objects and never mutates `state`. Whenever a selection goes away (deselect,
+ * or its layer hidden, cleared, reloaded or turned into heat), the camera leaves Detail pitch for Explore.
+ */
 export function reduce(state: MapState, action: MapAction): MapState {
+  const next = reduceAction(state, action);
+  if (state.selected === undefined || next.selected !== undefined) return next;
+  const explore = !next.flattened && next.viewport.zoom >= ARRIVAL_MIN_ZOOM;
+  return explore ? withPitch(next, pitchFor("explore")) : next;
+}
+
+function reduceAction(state: MapState, action: MapAction): MapState {
   switch (action.type) {
     case "set_view":
       return setView(state, action.viewport, action.fit === true);
@@ -87,12 +97,9 @@ export function reduce(state: MapState, action: MapAction): MapState {
       const detail = !state.flattened && state.viewport.zoom >= ARRIVAL_MIN_ZOOM;
       return detail ? withPitch(next, pitchFor("detail")) : next;
     }
-    case "deselect": {
-      if (state.selected === undefined) return state;
-      const next = { ...state, selected: undefined };
-      const explore = !state.flattened && state.viewport.zoom >= ARRIVAL_MIN_ZOOM;
-      return explore ? withPitch(next, pitchFor("explore")) : next;
-    }
+    case "deselect":
+      // `reduce` returns the camera to Explore pitch.
+      return state.selected === undefined ? state : { ...state, selected: undefined };
     case "set_opacity":
       return updateOp(state, action.layerId, (op) => ({ ...op, opacity: clamp01(action.opacity) }));
     case "set_style": {

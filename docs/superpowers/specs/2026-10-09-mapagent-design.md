@@ -147,6 +147,10 @@ At build time, `layers/index.ts` collects all layers and exports:
 | Cell coverage | FCC BDC H3 hexes | US | none | Hosted as PMTiles if the bulk file is too slow live; decision deferred |
 | Physical regions | Natural Earth (public domain) via GitHub/CDN GeoJSON | Global | none | Mountain ranges, deserts, rivers, lakes, glaciers, parks; also the geocode fallback for named regions |
 | Population density | NASA SEDAC GPW v4 map service | Global | none | ~1 km raster tiles; baseline signal for popularity |
+| Human footprint | Human Footprint Index (open, ~1 km) | Global | none | Combined roads, buildings, crops, population, lights; 0 = untouched |
+| Nighttime lights | NASA VIIRS Black Marble | Global | none | Tiles and `v` for columns; dark = remote |
+| Designated wilderness | wilderness.net boundaries | US | none | Polygons; legal protection overlay |
+| Remoteness | Computed; see below | Global, richer in US | none | Score per cell; the "places without human intervention" question |
 
 Two keys unlock the headline features: Mapbox (map) and one model
 provider. GFW and FIRMS keys are free and add the forest and fire layers.
@@ -174,6 +178,22 @@ are free and allowed:
 Weights live in one config file and the UI shows the contributing signals
 when a feature is clicked. The agent's system prompt forbids the words
 "live" or "real-time" for this layer.
+
+### Remoteness score
+
+The inverse question: where has nothing been touched? Computed per hexagon
+cell in the bounding box, 0 to 100 where 100 is most remote, from:
+
+- Human Footprint Index value (the heaviest weight; it already combines
+  most signals).
+- Nighttime light radiance.
+- Distance to the nearest OSM road or track, computed in the viewport.
+- Population density.
+- Inside designated wilderness or a Natural Earth protected area: a bonus.
+
+Renders naturally as columns at any zoom and as a route profile ("where
+does this trail leave the human world"). Same config-file weights and
+click-to-see-signals treatment as popularity.
 
 ## The agent
 

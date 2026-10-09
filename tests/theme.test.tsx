@@ -64,10 +64,12 @@ describe("brand", () => {
     expect(screen.getByTestId("wally-mark")).toBeTruthy();
   });
 
-  it("sizes the mark", () => {
+  it("renders the Wally logo PNG at the requested size", () => {
     render(<WallyMark size={20} />);
-    const svg = screen.getByTestId("wally-mark");
-    expect(svg.getAttribute("width")).toBe("20");
-    expect(svg.getAttribute("height")).toBe("20");
+    const box = screen.getByTestId("wally-mark");
+    expect(box.style.width).toBe("20px");
+    expect(box.style.height).toBe("20px");
+    const img = screen.getByAltText("Wally");
+    expect(img.getAttribute("src")).toContain("wally-logo.png");
   });
 });

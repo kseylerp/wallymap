@@ -1,7 +1,20 @@
 import type { Metadata, Viewport } from "next";
+import { Geist, Source_Serif_4 } from "next/font/google";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./globals.css";
 import { ThemeScript } from "@/lib/theme/ThemeScript";
+
+const geist = Geist({
+  variable: "--font-geist",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
+
+const sourceSerif = Source_Serif_4({
+  variable: "--font-source-serif",
+  subsets: ["latin"],
+  weight: ["500", "600"],
+});
 
 export const metadata: Metadata = {
   title: "WallyMap",
@@ -16,13 +29,18 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#FAF9F5",
+  themeColor: "#F5F5F3",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     // Light by default; the inline script applies a stored dark choice before first paint.
-    <html lang="en" data-theme="light" className="h-full antialiased" suppressHydrationWarning>
+    <html
+      lang="en"
+      data-theme="light"
+      className={`${geist.variable} ${sourceSerif.variable} h-full antialiased`}
+      suppressHydrationWarning
+    >
       <head>
         <ThemeScript />
       </head>

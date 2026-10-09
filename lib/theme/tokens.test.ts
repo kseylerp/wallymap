@@ -18,17 +18,8 @@ function tokenValue(body: string, name: string): string | undefined {
   return m?.[1].trim().toLowerCase();
 }
 
-// Every exact value from spec §2 (docs/superpowers/specs/2026-10-09-wallymap-m3-design.md).
+// Wally colors from spec §2 that the owner kept: accent, coral, sage, semantic, and the whole dark set.
 const SPEC_HEX = [
-  "#FAF9F5", // scaffold light
-  "#151515", // scaffold dark
-  "#ECEAE7", // surface light
-  "#1A1A1A", // surface dark
-  "#292929", // deeper surface dark
-  "#1F1F1F", // text primary light / deeper surface dark
-  "#F5F5F5", // text primary dark
-  "#6B6B6B", // text secondary light
-  "#A0A0A0", // text secondary dark
   "#6E5BFF", // accent purple
   "#F57272", // coral
   "#9FB693", // sage
@@ -36,25 +27,38 @@ const SPEC_HEX = [
   "#DC5046", // error
   "#5B9BD5", // info
   "#FF9500", // caution
-  "#4A4A4A", // logo outline
+  "#151515", // scaffold dark
+  "#1A1A1A", // surface dark
+  "#292929", // deeper surface dark
+  "#F5F5F5", // text primary dark
+  "#A0A0A0", // text secondary dark
 ];
 
-describe("Wally tokens in app/globals.css", () => {
+describe("tokens in app/globals.css", () => {
   it.each(SPEC_HEX)("defines %s", (hex) => {
     expect(css.toLowerCase()).toContain(hex.toLowerCase());
   });
 
-  it("maps the light defaults onto the existing variable names", () => {
+  it("keeps the original light surfaces, with the Wally accent", () => {
     const light = block(":root");
-    expect(tokenValue(light, "--paper")).toBe("#faf9f5");
-    expect(tokenValue(light, "--cream")).toBe("#eceae7");
-    expect(tokenValue(light, "--ink")).toBe("#1f1f1f");
-    expect(tokenValue(light, "--ink-muted")).toBe("#6b6b6b");
+    expect(tokenValue(light, "--paper")).toBe("#ffffff");
+    expect(tokenValue(light, "--cream")).toBe("#f5f5f3");
+    expect(tokenValue(light, "--ink")).toBe("#1a1a1a");
+    expect(tokenValue(light, "--ink-muted")).toBe("#66665f");
+    expect(tokenValue(light, "--mist")).toBe("#ededea");
+    expect(tokenValue(light, "--glass")).toBe("rgba(255, 255, 255, 0.82)");
+    expect(tokenValue(light, "--glass-strong")).toBe("rgba(255, 255, 255, 0.9)");
+    expect(tokenValue(light, "--r-card")).toBe("24px");
     expect(tokenValue(light, "--accent")).toBe("#6e5bff");
-    expect(tokenValue(light, "--slate")).toBe("#2f3a44");
-    expect(tokenValue(light, "--mist")).toBe("#e4e1dc");
     expect(tokenValue(light, "--route-gradient")).toContain("#6e5bff");
     expect(tokenValue(light, "--route-gradient")).toContain("#f57272");
+  });
+
+  it("makes primary buttons ink with white text, not the accent", () => {
+    const light = block(":root");
+    expect(tokenValue(light, "--button-primary")).toBe("var(--ink)");
+    expect(tokenValue(light, "--button-primary-text")).toBe("var(--paper)");
+    expect(css).toMatch(/\.chat-surface button\[type="submit"\]:not\(:disabled\)/);
   });
 
   it("overrides surfaces and text under [data-theme=dark]", () => {
@@ -67,10 +71,11 @@ describe("Wally tokens in app/globals.css", () => {
     expect(tokenValue(dark, "--glass")).toBeDefined();
   });
 
-  it("uses the system font stack, not Geist or Source Serif", () => {
-    expect(css).toContain("--font-sans: -apple-system");
-    expect(css).toContain('"SF Pro Rounded"');
-    expect(css).not.toMatch(/geist|source-serif/i);
+  it("uses Geist for UI text and Source Serif 4 for headings", () => {
+    expect(css).toContain("--font-sans: var(--font-geist)");
+    expect(css).toContain("--font-serif: var(--font-source-serif)");
+    expect(css).not.toContain("-apple-system");
+    expect(css).not.toContain("SF Pro Rounded");
   });
 });
 

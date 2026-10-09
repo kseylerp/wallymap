@@ -24,11 +24,11 @@ function applyTheme(theme: Theme) {
   document.documentElement.dataset.theme = theme;
 }
 
-/** Keep the browser chrome (mobile address bar) on the scaffold color of the active theme. */
+/** Keep the browser chrome (mobile address bar) on the page background (--cream) of the active theme. */
 function syncThemeColor() {
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  const paper = getComputedStyle(document.documentElement).getPropertyValue("--paper").trim();
-  if (meta && paper) meta.content = paper;
+  const background = getComputedStyle(document.documentElement).getPropertyValue("--cream").trim();
+  if (meta && background) meta.content = background;
 }
 
 /** Apply and remember a theme; every `useTheme()` re-renders. */

@@ -7,3 +7,4 @@ import "./fire-perimeters";
 import "./fire-detections";
 import "./forest-loss";
 import "./forest-alerts";
+import "./snowpack";

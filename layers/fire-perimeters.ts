@@ -18,9 +18,10 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
+import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 
 const ORG = "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services";
 const HISTORY_URL = `${ORG}/InterAgencyFirePerimeterHistory_All_Years_View/FeatureServer/0`;
@@ -28,9 +29,6 @@ const WFIGS_URL = `${ORG}/WFIGS_Interagency_Perimeters/FeatureServer/0`;
 
 /** First year the WFIGS service is used instead of the history view. */
 const WFIGS_FROM_YEAR = 2020;
-
-/** Rough US extent (including Alaska and Hawaii); a bbox wholly outside it has no data. */
-const US_EXTENT: BBox = [-170, 18, -65, 72];
 
 const HISTORY_FIELDS = ["INCIDENT", "FIRE_YEAR_INT", "GIS_ACRES", "AGENCY", "IRWINID"];
 const WFIGS_FIELDS = [
@@ -151,12 +149,6 @@ export function normalizeFirePerimeters(
   return { type: "FeatureCollection", features: [...best.values()].map((c) => c.feature) };
 }
 
-function outsideUs(bbox: BBox): boolean {
-  const [west, south, east, north] = bbox;
-  const [uw, us, ue, un] = US_EXTENT;
-  return east < uw || west > ue || north < us || south > un;
-}
-
 const TRUNCATED_NOTE = "Showing the 2,000 largest fires; zoom in for all";
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -188,7 +180,7 @@ const firePerimeters = defineLayer({
     };
 
     if (outsideUs(ctx.bbox)) {
-      return { kind: "geojson", data: EMPTY, citation, coverageNote: "No data outside the United States" };
+      return { kind: "geojson", data: EMPTY, citation, coverageNote: OUTSIDE_US_NOTE };
     }
 
     const area = bboxAreaKm2(ctx.bbox);

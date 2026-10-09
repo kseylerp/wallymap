@@ -1,0 +1,546 @@
+[
+ {
+  "stationTriplet": "356:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "1979-10-01 00:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.0
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.0
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "1051:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "2003-09-21 19:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.1
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.1
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.1
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "1067:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "2004-09-23 00:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.0
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.0
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "463:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "1978-10-01 00:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.2
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.1
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.2
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "473:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "1978-10-01 00:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.1
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.1
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.1
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "1049:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "2003-09-20 00:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.1
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.2
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.1
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "508:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "1978-10-01 00:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.0
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.0
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "518:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "1978-10-01 00:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.1
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.1
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.1
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "1050:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "2003-09-21 21:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.0
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.0
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "1242:NV:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "2013-07-08 00:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.3
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.3
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.3
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "1331:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "2024-09-18 05:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.0
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.0
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "615:NV:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "1978-10-01 00:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.1
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.1
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.1
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "784:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "1979-10-01 00:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.2
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.2
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.2
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "724:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "1979-10-01 00:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.2
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.2
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.2
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "778:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "1979-10-01 00:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.1
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.1
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.1
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "809:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "1979-10-01 00:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.0
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.0
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.0
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "stationTriplet": "848:CA:SNTL",
+  "data": [
+   {
+    "stationElement": {
+     "elementCode": "WTEQ",
+     "ordinal": 1,
+     "durationName": "DAILY",
+     "dataPrecision": 1,
+     "storedUnitCode": "in",
+     "originalUnitCode": "in",
+     "beginDate": "1978-10-01 00:00",
+     "endDate": "2100-01-01 00:00",
+     "derivedData": false
+    },
+    "values": [
+     {
+      "date": "2026-10-06",
+      "value": 0.0
+     },
+     {
+      "date": "2026-10-07",
+      "value": 0.0
+     },
+     {
+      "date": "2026-10-08",
+      "value": 0.0
+     }
+    ]
+   }
+  ]
+ }
+]

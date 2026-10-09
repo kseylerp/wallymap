@@ -52,6 +52,7 @@ describe("public-lands layer", () => {
     expect(layer.description).toMatch(/state/i);
     expect(layer.description).toMatch(/private/i);
     expect(layer.description).toMatch(/not .*access|access rules/i);
+    expect(layer.description).toContain("You cannot see the rendered map");
   });
 
   it("summarizes to a vector tiles result with the source layer", async () => {

@@ -49,6 +49,11 @@ export function isWaterFill(layer: StyleLayerLike): boolean {
   return layer.type === "fill" && (layer["source-layer"] === "water" || /^water($|-)/.test(layer.id));
 }
 
+/** WildMap's own tile layers (see components/mapTiles.ts) are data, never basemap detail to hide or restyle. */
+function isAppTileLayer(layer: StyleLayerLike): boolean {
+  return layer.id.startsWith("tiles-");
+}
+
 function isAdminLine(layer: StyleLayerLike): boolean {
   return layer.type === "line" && (layer["source-layer"] === "admin" || layer.id.startsWith("admin"));
 }
@@ -77,7 +82,12 @@ function isOccludingLine(layer: StyleLayerLike): boolean {
  */
 export function occludingLayerIds(layers: readonly StyleLayerLike[]): string[] {
   return layers
-    .filter((layer) => layer.layout?.visibility !== "none" && (isOccludingFill(layer) || isOccludingLine(layer)))
+    .filter(
+      (layer) =>
+        !isAppTileLayer(layer) &&
+        layer.layout?.visibility !== "none" &&
+        (isOccludingFill(layer) || isOccludingLine(layer)),
+    )
     .map((layer) => layer.id);
 }
 
@@ -88,6 +98,7 @@ export function occludingLayerIds(layers: readonly StyleLayerLike[]): string[] {
 export function hybridPaintOverrides(layers: readonly StyleLayerLike[]): PaintOverride[] {
   const overrides: PaintOverride[] = [];
   for (const layer of layers) {
+    if (isAppTileLayer(layer)) continue;
     let paint: Record<string, unknown> | null = null;
     if (isAdminLine(layer) && !layer.id.endsWith("-bg")) paint = ADMIN_LINE_PAINT;
     else if (layer.type === "symbol" && LABEL_SOURCE_LAYERS.has(layer["source-layer"] ?? "")) paint = LABEL_PAINT;

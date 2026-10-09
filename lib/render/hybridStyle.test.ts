@@ -111,3 +111,21 @@ describe("scaleOpacity", () => {
     expect(scaleOpacity(["get", "opacity"], 0.5)).toEqual(["*", ["get", "opacity"], 0.5]);
   });
 });
+
+describe("WildMap tile layers under the hybrid", () => {
+  // Ids that would otherwise match the park/land-use outline, admin and label rules.
+  const OURS: StyleLayerLike[] = [
+    { id: "tiles-state-parks", type: "fill", "source-layer": "landuse" },
+    { id: "tiles-state-parks-line", type: "line", "source-layer": "national_park" },
+    { id: "tiles-admin-areas", type: "line", "source-layer": "admin" },
+    { id: "tiles-places", type: "symbol", "source-layer": "place_label" },
+  ];
+
+  it("never hides a tiles- layer", () => {
+    expect(occludingLayerIds([...STYLE_LAYERS, ...OURS])).toEqual(occludingLayerIds(STYLE_LAYERS));
+  });
+
+  it("never repaints a tiles- layer", () => {
+    expect(hybridPaintOverrides(OURS)).toEqual([]);
+  });
+});

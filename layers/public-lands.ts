@@ -40,7 +40,7 @@ const publicLands = defineLayer({
     "Use it to answer whose land a place is on, where national forest or BLM land begins, or where the public land is around a town or lake. " +
     "Caveats: this is ownership and management, not access rules. It does not say whether camping, hunting, fires, drones or vehicles are allowed, " +
     "private land outside the database is simply not drawn, and boundaries are approximate at parcel scale; check the managing agency before relying on it. " +
-    "United States only. Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms. " +
+    "United States only. Returns map tiles drawn on the globe, not features you can count or list. You cannot see the rendered map: say the layer is shown and what each color means, but do not claim which land lies where. " +
     "Works at any size of region, from a whole state down to a single valley.",
   coverage: "us",
   license: "Public domain (USGS PAD-US 4.1)",

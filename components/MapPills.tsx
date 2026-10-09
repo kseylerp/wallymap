@@ -25,6 +25,12 @@ type MapPillsProps = {
   catalog?: LayerCatalog | null;
   /** Muted status next to Export while a shared link's layers are coming back, e.g. "Restoring 3 layers…". */
   restoreStatus?: string | null;
+  /**
+   * Compare over time while the data console is closed: the pill shows when this is set (a layer can be compared) and
+   * reads pressed while a compare is on. The control itself lives in the console (components/CompareControl.tsx).
+   */
+  onCompare?: () => void;
+  comparing?: boolean;
 };
 
 /** Every map pill: 36px, the off-white surface with ink text, a hairline rim and a barely-there shadow. */
@@ -50,6 +56,8 @@ export function MapPills({
   mapState,
   catalog = null,
   restoreStatus = null,
+  onCompare,
+  comparing = false,
 }: MapPillsProps) {
   // Export is two steps: the pill opens a confirm that lists the files and their size; only its Export button downloads.
   const [pending, setPending] = useState<ExportBundle | null>(null);
@@ -138,6 +146,21 @@ export function MapPills({
           Export
         </button>
       </div>
+
+      {onCompare && (
+        <div className={`${PILL} rise-in p-1`}>
+          <button
+            type="button"
+            onClick={onCompare}
+            aria-pressed={comparing}
+            data-testid="compare-pill"
+            title={comparing ? "Show the compare in the data console" : "Compare one layer at two times"}
+            className={`${SEG} px-2.5 ${comparing ? ACTIVE : IDLE}`}
+          >
+            Compare
+          </button>
+        </div>
+      )}
 
       {restoreStatus && (
         <div role="status" className={`${PILL} rise-in px-3 text-[13px] text-ink-muted`}>

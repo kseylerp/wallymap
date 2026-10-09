@@ -87,8 +87,11 @@ export type MapState = {
   compare?: CompareState;
 };
 
-/** A compare: the spec, optional labels for the two sides, and (toggle mode) the side on screen, A by default. */
-export type CompareState = CompareSpec & { aLabel?: string; bLabel?: string; side?: "a" | "b" };
+/**
+ * A compare: the spec, optional labels for the two sides, and (toggle mode) the side on screen, A by default, and
+ * whether the 1 Hz flip is paused. The permalink does not record it (lib/render/permalink.ts).
+ */
+export type CompareState = CompareSpec & { aLabel?: string; bLabel?: string; side?: "a" | "b"; paused?: boolean };
 
 /** "slide" moves the whole window each step; "cumulative" keeps the start at the first date and grows the end. */
 export type TimeMode = "slide" | "cumulative";
@@ -160,4 +163,6 @@ export type MapAction =
   | { type: "set_compare_mode"; mode: CompareSpec["mode"] }
   /** Toggle mode's 1 Hz flip between A and B. */
   | { type: "compare_flip" }
+  /** Pauses or resumes toggle mode's flip (space, or Pause in the console). */
+  | { type: "set_compare_paused"; paused: boolean }
   | { type: "clear_compare" };

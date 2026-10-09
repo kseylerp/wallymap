@@ -303,7 +303,9 @@ describe("LayerStack data console", () => {
     render(<Console />);
     const slot = document.querySelector('[data-slot="time-scrubber"]');
     expect(slot?.querySelector('[data-testid="time-scrubber"]')).toBeTruthy();
-    expect(slot?.nextElementSibling?.textContent).toContain("Layers");
+    // The compare slot (empty here, so hidden) sits between the scrubber and the layers.
+    expect(slot?.nextElementSibling?.getAttribute("data-slot")).toBe("compare");
+    expect(slot?.nextElementSibling?.nextElementSibling?.textContent).toContain("Layers");
   });
 
   it("shows shown / total once the window narrows a layer", () => {
@@ -418,5 +420,25 @@ describe("drawnColor", () => {
 
   it("prefers a color picked in the panel", () => {
     expect(drawnColor(trails, { layerId: "osm-trails", mode: "lines", color: "#FF5A36", visible: true })).toBe("#FF5A36");
+  });
+
+  it("docks the compare slot under the time scrubber, above the layers", () => {
+    render(
+      <LayerStack
+        layers={start.layers}
+        renderOps={start.renderOps}
+        catalog={null}
+        dispatch={() => {}}
+        open
+        onOpenChange={() => {}}
+        compareSlot={<p data-testid="compare-slot-content">compare</p>}
+      />,
+    );
+    const panel = screen.getByTestId("layer-stack");
+    const slots = Array.from(panel.querySelectorAll("[data-slot]")).map((el) => el.getAttribute("data-slot"));
+    expect(slots).toEqual(["time-scrubber", "compare"]);
+    const content = screen.getByTestId("compare-slot-content");
+    const header = within(panel).getByRole("heading", { name: /Layers/ });
+    expect(content.compareDocumentPosition(header) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

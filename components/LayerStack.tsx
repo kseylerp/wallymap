@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { useId, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { LayerFilters } from "@/components/LayerFilters";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
@@ -24,6 +24,8 @@ type LayerStackProps = {
   time?: TimeState;
   /** The layers as drawn (lib/render/view.ts: time window and filters applied), for the shown / total counts. */
   shownLayers?: MapState["layers"];
+  /** The compare control (components/CompareControl.tsx), docked under the time scrubber; it brings its own hairline. */
+  compareSlot?: ReactNode;
 };
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
@@ -361,6 +363,7 @@ export function LayerStack({
   selectedLayerId,
   time,
   shownLayers,
+  compareSlot,
 }: LayerStackProps) {
   const items = stackOrder(layers, renderOps);
   const [armed, setArmed] = useState<string | null>(null);
@@ -392,6 +395,10 @@ export function LayerStack({
             <div aria-hidden className="hairline mx-5" />
           </>
         )}
+      </div>
+      {/* Compare over time sits under the scrubber; empty (nothing to compare), the slot takes no space. */}
+      <div data-slot="compare" className="shrink-0 empty:hidden">
+        {compareSlot}
       </div>
       <header className="flex shrink-0 items-baseline gap-3 px-5 pt-4 pb-1.5">
         <h2 className="small-caps">

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { useReducer } from "react";
+import { useReducer, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CompareControl, FLIP_MS, windowText } from "@/components/CompareControl";
+import { CompareControl, CompareSwipe, FLIP_MS, openCompareAction, useCompareTicker, windowText } from "@/components/CompareControl";
 import { swipeStore } from "@/lib/render/compareView";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
@@ -44,16 +44,19 @@ const loaded = [
 const withFires = loaded.reduce(reduce, initialMapState);
 const spec = { layerId: "fire-perimeters", a: ["2016-01-01", "2020-12-31"] as [string, string], b: ["2021-01-01", "2026-10-09"] as [string, string] };
 
-function Harness({ spy, initial }: { spy: (a: MapAction) => void; initial: MapState }) {
-  const [state, dispatch] = useReducer(reduce, initial);
+/** The app's compare wiring: the console control, the map's swipe handle and the app-level ticker. */
+function Harness({ spy, initial, console: inConsole = true }: { spy: (a: MapAction) => void; initial: MapState; console?: boolean }) {
+  const [state, rawDispatch] = useReducer(reduce, initial);
+  const [dispatch] = useState(() => (a: MapAction) => {
+    spy(a);
+    rawDispatch(a);
+  });
+  useCompareTicker(state, dispatch);
   return (
-    <CompareControl
-      state={state}
-      dispatch={(a) => {
-        spy(a);
-        dispatch(a);
-      }}
-    />
+    <>
+      {inConsole && <CompareControl state={state} dispatch={dispatch} />}
+      <CompareSwipe state={state} />
+    </>
   );
 }
 
@@ -248,6 +251,27 @@ describe("CompareControl", () => {
     expect(screen.getByRole("button", { name: "Toggle" }).getAttribute("aria-pressed")).toBe("true");
     expect((screen.getByRole("button", { name: "Swipe" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Delta" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("compare outside the console", () => {
+  it("keeps flipping and swiping while the console is closed", () => {
+    vi.useFakeTimers();
+    const spy = vi.fn();
+    render(<Harness spy={spy} initial={comparing("toggle")} console={false} />);
+    act(() => void vi.advanceTimersByTime(FLIP_MS * 2));
+    expect(spy).toHaveBeenCalledWith({ type: "compare_flip" });
+    cleanup();
+    render(<Harness spy={() => {}} initial={comparing("swipe")} console={false} />);
+    expect(screen.getByTestId("compare-handle")).toBeTruthy();
+  });
+
+  it("opens from outside on the layer the Start button would", () => {
+    expect(openCompareAction(withFires, new Date("2026-10-09T12:00:00Z"))).toEqual({
+      type: "set_compare",
+      compare: { layerId: "fire-perimeters", a: ["2016-01-01", "2020-12-31"], b: ["2021-01-01", "2026-10-09"], mode: "delta" },
+    });
+    expect(openCompareAction(initialMapState)).toBeNull();
   });
 });
 

@@ -110,6 +110,62 @@ describe("buildExportBundle with a time window", () => {
   });
 });
 
+describe("buildExportBundle during a compare", () => {
+  const fires: LoadedLayer = {
+    ...geo("fire-perimeters", "Fire perimeters"),
+    result: {
+      kind: "geojson",
+      citation: { source: "NIFC", url: "https://nifc.gov", retrieved: "2026-10-09T10:00:00Z" },
+      data: {
+        type: "FeatureCollection",
+        features: [2013, 2017, 2018, 2022].map((year) => ({
+          type: "Feature" as const,
+          properties: { name: `F${year}`, year, t: `${year}-07-01T00:00:00.000Z` },
+          geometry: { type: "Point" as const, coordinates: [1, 2] },
+        })),
+      },
+    },
+  };
+  const comparing = (
+    [
+      { type: "layer_loaded", layer: fires },
+      { type: "render", op: { layerId: "fire-perimeters", mode: "polygons", visible: true } },
+      { type: "set_time_window", window: ["2013-01-01T00:00:00.000Z", "2013-12-31T23:59:59.999Z"] },
+      {
+        type: "set_compare",
+        compare: { layerId: "fire-perimeters", a: ["2016-01-01", "2020-12-31"], b: ["2021-01-01", "2026-10-09"], mode: "swipe" },
+      },
+    ] satisfies MapAction[]
+  ).reduce(reduce, initialMapState);
+
+  it("exports the whole loaded layer with a compare note instead of the time window", async () => {
+    const { files } = buildExportBundle(comparing, null, now);
+    const json = JSON.parse(await files[0].blob.text());
+    expect(json.features.map((f: { properties: { name: string } }) => f.properties.name)).toEqual(["F2013", "F2017", "F2018", "F2022"]);
+    expect(json.wallymap.timeWindow).toBeUndefined();
+    expect(json.wallymap.compare).toEqual({
+      layerId: "fire-perimeters",
+      mode: "swipe",
+      a: ["2016-01-01", "2020-12-31"],
+      b: ["2021-01-01", "2026-10-09"],
+      counts: { aOnly: 2, bOnly: 1, both: 0 },
+    });
+  });
+
+  it("adds a compare section to citations.md", async () => {
+    const md = await buildExportBundle(comparing, null, now).files[1].blob.text();
+    expect(md).toContain("## Compare");
+    expect(md).toContain("Fire perimeters (`fire-perimeters`), swipe mode. A: 2016-01-01 to 2020-12-31 (2016–2020). B: 2021-01-01 to 2026-10-09");
+    expect(md).toContain("Delta: 2 A only, 1 B only, 0 both.");
+    expect(md).not.toContain("features exported");
+  });
+
+  it("drops the compare section once the compare ends", async () => {
+    const md = await buildExportBundle(reduce(comparing, { type: "clear_compare" }), null, now).files[1].blob.text();
+    expect(md).not.toContain("## Compare");
+  });
+});
+
 describe("buildExportBundle with filters", () => {
   it("exports only the filtered features and notes the filters", async () => {
     const trail = (name: string, sac: string) => ({

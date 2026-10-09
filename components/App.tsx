@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ChatRail } from "@/components/ChatRail";
-import { CompareControl } from "@/components/CompareControl";
+import { CompareControl, CompareSwipe, openCompareAction, useCompareTicker } from "@/components/CompareControl";
 import { InspectCard } from "@/components/InspectCard";
 import { drawnColor, LayerStack } from "@/components/LayerStack";
 import { MapCanvas, type MapHandle } from "@/components/MapCanvas";
@@ -13,6 +13,7 @@ import { sendChat } from "@/lib/agent/chatBus";
 import { bboxToViewport } from "@/lib/render/deck";
 import { askAboutText, featureBBox } from "@/lib/render/inspect";
 import { usePermalink } from "@/lib/render/usePermalink";
+import { isComparable } from "@/lib/render/compareView";
 import { useTimePlay } from "@/lib/render/useTimePlay";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type Basemap, type MapAction, type Selection, type Viewport } from "@/lib/render/state";
@@ -60,6 +61,8 @@ export function App() {
   const permalink = usePermalink(state, dispatch);
   // The scrubber's play steps here, so it keeps going while the layer panel is closed.
   useTimePlay(state.time?.playing ?? false, dispatch);
+  // Compare's 1 Hz toggle flip and its space key, here so they keep going while the data console is closed.
+  useCompareTicker(state, dispatch);
   const [catalog, setCatalog] = useState<LayerCatalog | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   // Phones start with the layer panel folded into its pill so it does not cover the map.
@@ -125,6 +128,13 @@ export function App() {
 
   const hasLayers = Object.keys(state.layers).length > 0;
   const layerPanelOpen = layersOpen && hasLayers;
+  const canCompare = useMemo(() => Object.values(state.layers).some(isComparable), [state.layers]);
+  // The Compare pill (shown while the console is closed) opens the console, starting a compare if none is on.
+  const openCompare = useCallback(() => {
+    setLayersOpen(true);
+    const action = state.compare ? null : openCompareAction(state);
+    if (action) dispatch(action);
+  }, [state]);
   // What the map draws: the time window and the layer filters applied (lib/render/view.ts).
   const view = visibleState(state);
   // The inspect card follows the time window and filters: a feature they hide is not inspected.
@@ -168,12 +178,14 @@ export function App() {
             mapState={state}
             catalog={catalog}
             restoreStatus={permalink.status}
+            onCompare={!layerPanelOpen && (canCompare || state.compare) ? openCompare : undefined}
+            comparing={state.compare !== undefined}
           />
         </div>
       </header>
 
-      {/* Compare over time: the Compare pill or strip under the map pills, and the swipe handle across the map. */}
-      <CompareControl state={state} dispatch={dispatch} />
+      {/* Compare's swipe handle across the map (the control itself is in the data console). */}
+      <CompareSwipe state={state} />
 
       <div className="pointer-events-none absolute top-3 right-3 z-20 flex flex-col items-end md:top-4 md:right-4">
         <LayerStack
@@ -186,6 +198,7 @@ export function App() {
           selectedLayerId={state.selected?.layerId}
           time={state.time}
           shownLayers={view.layers}
+          compareSlot={<CompareControl state={state} dispatch={dispatch} />}
         />
       </div>
 

@@ -157,7 +157,7 @@ function ordered(w: [string, string]): [string, string] {
 
 /** Starts a compare: windows in order, toggle on A, the scrubber paused, and no selection left on the compared layer. */
 function startCompare(state: MapState, compare: CompareState): MapState {
-  const next: CompareState = { ...compare, a: ordered(compare.a), b: ordered(compare.b), side: "a" };
+  const next: CompareState = { ...compare, a: ordered(compare.a), b: ordered(compare.b), side: "a", paused: undefined };
   const time = state.time?.playing ? { ...state.time, playing: false } : state.time;
   return { ...state, compare: next, time, selected: dropSelectionOf(state, compare.layerId) };
 }
@@ -385,7 +385,11 @@ function reduceAction(state: MapState, action: MapAction): MapState {
     case "compare_flip":
       if (!state.compare) return state;
       return { ...state, compare: { ...state.compare, side: state.compare.side === "b" ? "a" : "b" } };
+    case "set_compare_paused":
+      if (!state.compare || Boolean(state.compare.paused) === action.paused) return state;
+      return { ...state, compare: { ...state.compare, paused: action.paused } };
     case "clear_compare":
+      // Starting a compare paused the scrubber; ending it does not resume play (the user presses Play again).
       return state.compare ? { ...state, compare: undefined } : state;
   }
 }

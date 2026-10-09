@@ -119,4 +119,17 @@ describe("MapPills", () => {
     const group = screen.getByRole("group", { name: "Basemap" });
     expect(group.querySelector('[aria-pressed="true"]')).toBeNull();
   });
+
+  it("shows a Compare pill only when given one, pressed while comparing", () => {
+    const onCompare = vi.fn();
+    const { rerender } = render(<MapPills basemap="outdoors" onBasemapChange={() => {}} layerCount={1} />);
+    expect(screen.queryByTestId("compare-pill")).toBeNull();
+    rerender(<MapPills basemap="outdoors" onBasemapChange={() => {}} layerCount={1} onCompare={onCompare} />);
+    const pill = screen.getByTestId("compare-pill");
+    expect(pill.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(pill);
+    expect(onCompare).toHaveBeenCalledTimes(1);
+    rerender(<MapPills basemap="outdoors" onBasemapChange={() => {}} layerCount={1} onCompare={onCompare} comparing />);
+    expect(screen.getByTestId("compare-pill").getAttribute("aria-pressed")).toBe("true");
+  });
 });

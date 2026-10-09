@@ -70,6 +70,19 @@ describe("compare actions", () => {
     expect(run(loaded, { type: "compare_flip" })).toBe(loaded);
   });
 
+  it("set_compare_paused pauses the flip; a new compare starts unpaused", () => {
+    const s = run(loaded, { type: "set_compare", compare: { ...spec, mode: "toggle" } }, { type: "set_compare_paused", paused: true });
+    expect(s.compare?.paused).toBe(true);
+    expect(run(s, { type: "set_compare_paused", paused: true })).toBe(s);
+    expect(run(s, { type: "set_compare", compare: { ...spec, mode: "toggle" } }).compare?.paused).toBeFalsy();
+    expect(run(loaded, { type: "set_compare_paused", paused: true })).toBe(loaded);
+  });
+
+  it("exiting a compare does not resume the scrubber's play", () => {
+    const s = run(loaded, { type: "set_time_playing", playing: true }, { type: "set_compare", compare: { ...spec, mode: "swipe" } });
+    expect(run(s, { type: "clear_compare" }).time?.playing).toBe(false);
+  });
+
   it("clear_compare ends it; removing the layer or clearing the map ends it too", () => {
     const s = run(loaded, { type: "set_compare", compare: { ...spec, mode: "swipe" } });
     expect(run(s, { type: "clear_compare" }).compare).toBeUndefined();

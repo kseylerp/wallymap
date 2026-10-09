@@ -15,7 +15,10 @@ export type PermalinkState = {
   time?: PermalinkTime;
 };
 
-/** The slice of map state a permalink records: the camera, the basemap, which layers are loaded, and the time window. */
+/**
+ * The slice of map state a permalink records: the camera, the basemap, which layers are loaded, and the time window.
+ * A compare (`MapState.compare`) is not recorded: a shared link opens the plain map.
+ */
 export type PermalinkSource = Pick<MapState, "viewport" | "basemap" | "layers" | "renderOps"> & {
   /** The scrubber's state (its window is written) or a window as start and end. */
   time?: PermalinkTime | Pick<TimeState, "window">;

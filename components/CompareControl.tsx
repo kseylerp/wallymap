@@ -4,12 +4,14 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type Keyboa
 import { compareSummary, presetFor, type CompareMode } from "@/lib/render/compare";
 import {
   COMPARE_COLORS,
+  compareHidden,
   defaultCompare,
   effectiveMode,
   hasPreset,
   isComparable,
   modesFor,
   swipeStore,
+  windowText,
   type PresetLayer,
 } from "@/lib/render/compareView";
 import type { CompareState, LoadedLayer, MapAction, MapState } from "@/lib/render/state";
@@ -37,20 +39,7 @@ type CompareControlProps = {
   dispatch: (action: MapAction) => void;
 };
 
-/**
- * A window as people say it: "2015" for one whole year, "2016–2020" for whole years, "2021–today" when it runs from a
- * new year to today, else the days ("2020-01-01", "2024-03-01 – 2024-06-30").
- */
-export function windowText([start, end]: [string, string], today: Date = new Date()): string {
-  const s = start.slice(0, 10);
-  const e = end.slice(0, 10);
-  const yearStart = s.endsWith("-01-01");
-  const endIsToday = e === today.toISOString().slice(0, 10);
-  if (yearStart && e.endsWith("-12-31")) return s.slice(0, 4) === e.slice(0, 4) ? s.slice(0, 4) : `${s.slice(0, 4)}–${e.slice(0, 4)}`;
-  if (s === e) return endIsToday ? "today" : s;
-  if (yearStart && endIsToday) return `${s.slice(0, 4)}–today`;
-  return `${s} – ${endIsToday ? "today" : e}`;
-}
+export { windowText };
 
 function Swatch({ color, label }: { color: string; label?: string }) {
   return (
@@ -90,6 +79,25 @@ export function openingLayer(state: MapState, comparable: LoadedLayer[]): Loaded
   );
 }
 
+/** The comparable layers, and the one Compare opens on (null when none can be compared). */
+export function compareEntry(state: MapState): { comparable: LoadedLayer[]; opening: LoadedLayer | undefined } {
+  const comparable = Object.values(state.layers).filter(isComparable);
+  return { comparable, opening: openingLayer(state, comparable) };
+}
+
+/** The action that opens a compare on the layer `compareEntry` picks, or null when nothing can be compared. */
+export function openCompareAction(state: MapState, today: Date = new Date()): MapAction | null {
+  const { opening } = compareEntry(state);
+  return opening ? { type: "set_compare", compare: defaultCompare(opening, today) } : null;
+}
+
+/**
+ * Compare over time (spec §7), in the data console under the time scrubber: while a loaded layer has dates (or is
+ * night lights or forest loss) a one-line "Compare" row with Start; while a compare is on, the layer, the A and B
+ * windows (date fields, or a preset), Swipe / Toggle / Delta, a legend in the compare colors (A purple, B pink, both
+ * dark grey) and × to exit. The swipe handle (`CompareSwipe`) and the 1 Hz flip (`useCompareTicker`) live in the app,
+ * so they keep working while the console is closed. Hairlines, small caps, tabular figures; text only.
+ */
 export function CompareControl({ state, dispatch }: CompareControlProps) {
   const comparable = useMemo(() => Object.values(state.layers).filter(isComparable), [state.layers]);
   const compare = state.compare;
@@ -99,22 +107,60 @@ export function CompareControl({ state, dispatch }: CompareControlProps) {
     const opening = openingLayer(state, comparable);
     if (!opening) return null;
     return (
-      <div className="pointer-events-none absolute top-[56px] left-3 z-10 md:top-[60px] md:left-4">
-        <div className="map-pill rise-in pointer-events-auto flex h-9 items-center rounded-pill p-1 text-ink">
+      <>
+        <div role="group" aria-label="Compare over time" className="flex items-baseline gap-3 px-5 pt-3.5 pb-3">
+          <h2 className="small-caps">Compare</h2>
+          <p className="min-w-0 flex-1 truncate text-[12px] text-ink-muted">{opening.title} at two times</p>
           <button
             type="button"
             data-testid="compare-open"
             title={`Compare ${opening.title} at two times`}
             onClick={() => dispatch({ type: "set_compare", compare: defaultCompare(opening, new Date()) })}
-            className={`${SEG} h-7 px-2.5 text-[13px] ${SEG_IDLE}`}
+            className={TEXT_BUTTON}
           >
-            Compare
+            Start
           </button>
         </div>
-      </div>
+        <div aria-hidden className="hairline mx-5" />
+      </>
     );
   }
   return <CompareStrip compare={compare} layer={layer} comparable={comparable} state={state} dispatch={dispatch} />;
+}
+
+/**
+ * Toggle mode's 1 Hz flip, and space to pause it. It lives in the app (like the scrubber's play), so the flip keeps
+ * going while the data console is closed. Nothing ticks while the compared layer is hidden. Space is left to any
+ * focused field, button or slider, and key repeat is ignored.
+ */
+export function useCompareTicker(state: MapState, dispatch: (action: MapAction) => void): void {
+  const toggleMode = effectiveMode(state) === "toggle";
+  const paused = state.compare?.paused === true;
+  const toggling = toggleMode && !paused && !compareHidden(state);
+  useEffect(() => {
+    if (!toggling) return;
+    const id = globalThis.setInterval(() => dispatch({ type: "compare_flip" }), FLIP_MS);
+    return () => globalThis.clearInterval(id);
+  }, [toggling, dispatch]);
+  useEffect(() => {
+    if (!toggleMode) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== " " || e.repeat) return;
+      const target = e.target instanceof Element ? e.target : null;
+      if (target?.closest("input, textarea, select, button, [role='slider'], [contenteditable='true']")) return;
+      e.preventDefault();
+      dispatch({ type: "set_compare_paused", paused: !paused });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleMode, paused, dispatch]);
+}
+
+/** The swipe handle over the map while a compare swipes (and its layer is shown). Mount it at the map, not in a panel. */
+export function CompareSwipe({ state }: { state: MapState }) {
+  const compare = state.compare;
+  if (!compare || effectiveMode(state) !== "swipe" || compareHidden(state) || !state.layers[compare.layerId]) return null;
+  return <SwipeHandle aText={compare.aLabel ?? windowText(compare.a)} bText={compare.bLabel ?? windowText(compare.b)} />;
 }
 
 type StripProps = {
@@ -128,32 +174,11 @@ type StripProps = {
 function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProps) {
   const mode = effectiveMode(state) ?? compare.mode;
   const available = modesFor(layer);
-  const [paused, setPaused] = useState(false);
+  const paused = compare.paused === true;
   const [presetsOpen, setPresetsOpen] = useState(false);
   const presets = comparable.map((l) => l.id).filter(hasPreset);
-  // A hidden layer draws nothing, so nothing ticks and the strip says so.
-  const hidden = state.renderOps.find((op) => op.layerId === compare.layerId)?.visible === false;
-
-  // Toggle: flip A and B every second until paused (or the layer is hidden); space pauses outside any control.
-  const toggling = mode === "toggle" && !paused && !hidden;
-  useEffect(() => {
-    if (!toggling) return;
-    const id = globalThis.setInterval(() => dispatch({ type: "compare_flip" }), FLIP_MS);
-    return () => globalThis.clearInterval(id);
-  }, [toggling, dispatch]);
-  useEffect(() => {
-    if (mode !== "toggle") return;
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== " " || e.repeat) return;
-      const target = e.target instanceof Element ? e.target : null;
-      // Text fields keep their spaces, and any focused button or slider (the strip's own too) keeps its own.
-      if (target?.closest("input, textarea, select, button, [role='slider'], [contenteditable='true']")) return;
-      e.preventDefault();
-      setPaused((p) => !p);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [mode]);
+  // A hidden layer draws nothing, so nothing ticks (useCompareTicker) and the strip says so.
+  const hidden = compareHidden(state);
 
   // visibleState is memoized per state and its compare data per layer and windows, so this is the same object until
   // the compare or the data changes (a camera move does not recount).
@@ -200,7 +225,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
 
   return (
     <>
-      <div className="pointer-events-none absolute top-[56px] left-3 z-10 max-w-[calc(100%-24px)] md:top-[60px] md:left-4">
+      <div>
         <div
           role="group"
           aria-label="Compare over time"
@@ -208,7 +233,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
           onKeyDown={(e) => {
             if (e.key === "Escape") exit();
           }}
-          className="map-pill rise-in pointer-events-auto w-[372px] max-w-full rounded-small px-4 pt-3 pb-2.5 text-ink"
+          className="px-5 pt-3.5 pb-3 text-ink"
         >
           <div className="flex items-baseline gap-2">
             <h2 className="small-caps">Compare</h2>
@@ -278,7 +303,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
             {sideRow("b")}
           </div>
 
-          <div className="hairline mt-2.5 flex items-center gap-2 pt-2">
+          <div className="hairline mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 pt-2">
             <div role="group" aria-label="Compare mode" className="flex items-center gap-0.5">
               {MODES.map(({ mode: m, label, hint }) => {
                 const supported = available.includes(m);
@@ -308,7 +333,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
                 </span>
                 <button
                   type="button"
-                  onClick={() => setPaused((p) => !p)}
+                  onClick={() => dispatch({ type: "set_compare_paused", paused: !paused })}
                   aria-pressed={paused}
                   title="Space pauses"
                   className={TEXT_BUTTON}
@@ -349,9 +374,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
           </ul>
         </div>
       </div>
-      {mode === "swipe" && !hidden && (
-        <SwipeHandle aText={compare.aLabel ?? windowText(compare.a)} bText={compare.bLabel ?? windowText(compare.b)} />
-      )}
+      <div aria-hidden className="hairline mx-5" />
     </>
   );
 }
@@ -384,7 +407,7 @@ export function DateField({ label, value, onCommit }: { label: string; value: st
           e.currentTarget.blur();
         }
       }}
-      className="compare-date h-6 w-[118px] rounded-[4px] bg-transparent px-1 text-[12px] text-ink tabular-nums outline-none hover:bg-mist/60 focus-visible:bg-mist/70"
+      className="compare-date h-6 w-[108px] rounded-[4px] bg-transparent px-1 text-[12px] text-ink tabular-nums outline-none hover:bg-mist/60 focus-visible:bg-mist/70"
     />
   );
 }

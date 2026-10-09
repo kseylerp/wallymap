@@ -208,6 +208,27 @@ export function defaultCompare(layer: LoadedLayer, today: Date): CompareState {
   };
 }
 
+/** True while the compared layer is hidden in the layer panel: nothing is drawn, so toggle does not tick. */
+export function compareHidden(state: MapState): boolean {
+  const compare = state.compare;
+  return compare !== undefined && state.renderOps.find((op) => op.layerId === compare.layerId)?.visible === false;
+}
+
+/**
+ * A window as people say it: "2015" for one whole year, "2016–2020" for whole years, "2021–today" when it runs from a
+ * new year to today, else the days ("2020-01-01", "2024-03-01 – 2024-06-30").
+ */
+export function windowText([start, end]: [string, string], today: Date = new Date()): string {
+  const s = start.slice(0, 10);
+  const e = end.slice(0, 10);
+  const yearStart = s.endsWith("-01-01");
+  const endIsToday = e === today.toISOString().slice(0, 10);
+  if (yearStart && e.endsWith("-12-31")) return s.slice(0, 4) === e.slice(0, 4) ? s.slice(0, 4) : `${s.slice(0, 4)}–${e.slice(0, 4)}`;
+  if (s === e) return endIsToday ? "today" : s;
+  if (yearStart && endIsToday) return `${s.slice(0, 4)}–today`;
+  return `${s} – ${endIsToday ? "today" : e}`;
+}
+
 /**
  * Where the swipe handle sits, as a share of the map's width (0 = left edge). The handle writes it, the map clips its
  * two side canvases from it; React never re-renders for a drag.

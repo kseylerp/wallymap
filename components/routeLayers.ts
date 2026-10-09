@@ -37,11 +37,11 @@ const LABEL_FONT = ["DIN Pro Medium", "Arial Unicode MS Regular"];
 const UNITS = "mi" as const;
 
 export const PIN_IMAGES = {
-  start: { id: "pin-start", url: "/pins/start.svg" },
-  end: { id: "pin-end", url: "/pins/default.svg" },
-  via: { id: "pin-via", url: "/pins/default.svg" },
+  start: { id: "route-start", url: "/pins/route-start.svg" },
+  end: { id: "route-end", url: "/pins/route-end.svg" },
+  via: { id: "route-via", url: "/pins/route-via.svg" },
 } as const;
-/** Draw order among pins (higher on top): the coral start pin stays visible on a loop. */
+/** Draw order among pins (higher on top): the start ring stays visible on a loop. */
 const PIN_SORT = { start: 2, end: 1, via: 0 } as const;
 
 type Kind = "line" | "dart" | "mile" | "pin";
@@ -115,7 +115,8 @@ export function routeMapLayers(id: string): { below: LayerSpecification[]; above
     filter: kindIs("pin"),
     layout: {
       "icon-image": ["get", "icon"],
-      "icon-anchor": "bottom",
+      "icon-anchor": "center",
+      "icon-size": 1,
       "icon-allow-overlap": true,
       "icon-ignore-placement": false,
       "symbol-sort-key": ["get", "sort"],
@@ -214,11 +215,11 @@ export function setRouteProgress(map: MapboxMap, routeId: string, fraction: numb
 
 type ImageSpec = { id: string; url: string; width: number; height: number; pixelRatio: number };
 
-/** The dart and the three waypoint pins (the pin SVGs are 68×88, drawn at 2x for a 34×44 pin). */
+/** The dart and the three monochrome waypoint symbols (24×24 drawings on a 48 px canvas, drawn at 2x). */
 export function routeImageSpecs(): ImageSpec[] {
   return [
     dartIconSpec(),
-    ...Object.values(PIN_IMAGES).map(({ id, url }) => ({ id, url, width: 68, height: 88, pixelRatio: 2 })),
+    ...Object.values(PIN_IMAGES).map(({ id, url }) => ({ id, url, width: 48, height: 48, pixelRatio: 2 })),
   ];
 }
 

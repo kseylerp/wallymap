@@ -77,9 +77,9 @@ describe("routeFeatures", () => {
     expect(kinds.filter((k) => k === "dart")).toHaveLength(7);
     expect(features.filter((f) => f.properties?.kind === "mile").map((f) => f.properties?.label)).toEqual(["1 mi", "2 mi"]);
     expect(features.filter((f) => f.properties?.kind === "pin").map((f) => f.properties?.icon)).toEqual([
-      "pin-start",
-      "pin-via",
-      "pin-end",
+      "route-start",
+      "route-via",
+      "route-end",
     ]);
   });
 });
@@ -93,7 +93,7 @@ describe("routeMapLayers", () => {
     expect(above[0]).toMatchObject({
       layout: { "icon-image": "route-dart", "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": false },
     });
-    expect(above[2]).toMatchObject({ layout: { "icon-image": ["get", "icon"], "icon-anchor": "bottom" } });
+    expect(above[2]).toMatchObject({ layout: { "icon-image": ["get", "icon"], "icon-anchor": "center", "icon-size": 1 } });
     expect(below[2]).toMatchObject({
       type: "circle",
       paint: { "circle-color": "#FFFFFF", "circle-stroke-color": "#3A3A3C", "circle-stroke-opacity": 0.45 },
@@ -179,12 +179,12 @@ describe("syncRouteLayers", () => {
 });
 
 describe("routeImageSpecs", () => {
-  it("registers the dart and coral start, end and via pins at 2x", () => {
+  it("registers the dart and the monochrome start, end and via symbols at 2x", () => {
     expect(routeImageSpecs().map(({ id, url, pixelRatio }) => [id, url.startsWith("data:") ? "data" : url, pixelRatio])).toEqual([
       ["route-dart", "data", 2],
-      ["pin-start", "/pins/start.svg", 2],
-      ["pin-end", "/pins/default.svg", 2],
-      ["pin-via", "/pins/default.svg", 2],
+      ["route-start", "/pins/route-start.svg", 2],
+      ["route-end", "/pins/route-end.svg", 2],
+      ["route-via", "/pins/route-via.svg", 2],
     ]);
   });
 });

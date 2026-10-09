@@ -105,8 +105,17 @@ export function visibleState(state: MapState): MapState {
   return out;
 }
 
-/** Whether the selected feature is still drawn (inside the time window and the layer's filters); the inspect card closes when it is not. */
+/**
+ * Whether the selected feature is still drawn (inside the time window and the layer's filters); the inspect card
+ * closes when it is not. The compared layer ignores the scrubber's window (compare wins, as in `visibleState`), and a
+ * feature picked on side B stays inspectable only while a swipe or toggle compare of its layer draws side B.
+ */
 export function isSelectionVisible(state: MapState, selection: Selection): boolean {
+  const compared = state.compare?.layerId === selection.layerId && effectiveMode(state) !== undefined;
+  if (selection.side === "b") {
+    const mode = effectiveMode(state);
+    if (!compared || (mode !== "swipe" && mode !== "toggle")) return false;
+  }
   const layer = state.layers[selection.layerId];
   // Vector tile features are not filtered (only GeoJSON layers are).
   if (layer?.result.kind !== "geojson") return true;
@@ -114,6 +123,7 @@ export function isSelectionVisible(state: MapState, selection: Selection): boole
   if (filters && applyFilters({ type: "FeatureCollection", features: [selection.feature] }, filters).features.length === 0) {
     return false;
   }
+  if (compared) return true;
   const window = activeWindow(state);
   if (!window) return true;
   const t = selection.feature.properties?.t;

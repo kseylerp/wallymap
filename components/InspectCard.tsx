@@ -126,6 +126,7 @@ export function InspectCard({
   const summary = useMemo(() => summarizeFeature(selection.feature, unit), [selection.feature, unit]);
   const { citation, coverageNote } = layer.result;
   const line = isLineFeature(selection.feature);
+  const sideB = selection.side === "b";
 
   // Follow the clicked point as the camera moves (including the ease onto the feature).
   useEffect(() => {
@@ -159,6 +160,19 @@ export function InspectCard({
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
+  }, []);
+
+  // The dialog takes focus once it shows (a hidden element cannot take it), so keyboard users reach "Ask about this"
+  // with one Tab, and hands it back to whatever had it (the map, a button) when it closes.
+  useEffect(() => {
+    const card = cardRef.current;
+    const previous = document.activeElement;
+    return () => {
+      // Only when focus is still in the card (or fell to the page as the card left): a click elsewhere keeps its focus.
+      const active = document.activeElement;
+      const stillOurs = active === null || active === document.body || (card?.contains(active) ?? false);
+      if (stillOurs && previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true });
+    };
   }, []);
 
   useEffect(() => {
@@ -197,14 +211,22 @@ export function InspectCard({
 
   const placement = anchor && size ? place(anchor, size, view) : null;
   const hidden = !placement || placement.offscreen;
+  const focusedRef = useRef(false);
+  useEffect(() => {
+    if (hidden || focusedRef.current) return;
+    focusedRef.current = true;
+    cardRef.current?.focus({ preventScroll: true });
+  }, [hidden]);
 
   return (
     <div
       ref={cardRef}
       role="dialog"
-      aria-label={`${layer.title}: ${summary.name ?? "Feature"}`}
+      aria-label={`${layer.title}${sideB ? " (compare side B)" : ""}: ${summary.name ?? "Feature"}`}
+      tabIndex={-1}
       data-testid="inspect-card"
-      className="inspect-card absolute z-30 rounded-[12px] border border-line bg-paper text-ink"
+      data-side={sideB ? "b" : undefined}
+      className="inspect-card absolute z-30 rounded-[12px] border border-line bg-paper text-ink outline-none"
       style={{
         width: `min(${MAX_WIDTH}px, calc(100vw - ${EDGE * 2}px))`,
         left: placement?.left ?? 0,
@@ -233,6 +255,12 @@ export function InspectCard({
             <p className="flex items-center gap-1.5 text-[11.5px] font-medium text-ink-muted">
               <span aria-hidden className="size-2 shrink-0 rounded-full ring-1 ring-black/20 ring-inset" style={{ backgroundColor: color }} />
               <span className="truncate">{layer.title}</span>
+              {/* Picked on a compare's side B: a plain text marker, as the console labels the sides. */}
+              {sideB && (
+                <span data-testid="inspect-side" title="Compare side B" className="shrink-0 rounded-pill border border-line px-1.5 text-[10.5px] leading-4 font-semibold text-ink">
+                  B
+                </span>
+              )}
             </p>
             <h3 className="mt-0.5 font-serif text-[1.15rem] leading-snug font-semibold break-words text-ink">
               {summary.name ?? "Feature"}

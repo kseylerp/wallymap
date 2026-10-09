@@ -74,4 +74,54 @@ describe("InspectCard Escape", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  const renderCard = (sel: Selection) => (
+    <InspectCard
+      selection={sel}
+      layer={layer}
+      color="#2F3A44"
+      project={() => ({ x: 500, y: 500 })}
+      onCameraChange={() => () => {}}
+      onClose={() => {}}
+      onAsk={() => true}
+      onPreviewRoute={() => {}}
+    />
+  );
+
+  it("takes focus when it opens and hands it back when it closes", () => {
+    const { rerender } = render(
+      <>
+        <button type="button">Map</button>
+        {renderCard(selection)}
+      </>,
+    );
+    expect(document.activeElement).toBe(screen.getByRole("dialog"));
+    rerender(<button type="button">Map</button>);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("returns focus to the control that had it before the card opened", () => {
+    const { rerender } = render(<button type="button">Map</button>);
+    screen.getByRole("button", { name: "Map" }).focus();
+    rerender(
+      <>
+        <button type="button">Map</button>
+        {renderCard(selection)}
+      </>,
+    );
+    expect(document.activeElement).toBe(screen.getByRole("dialog"));
+    rerender(<button type="button">Map</button>);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Map" }));
+  });
+
+  it("marks a feature picked on a compare's side B", () => {
+    render(renderCard({ ...selection, side: "b" }));
+    expect(screen.getByTestId("inspect-side").textContent).toBe("B");
+    expect(screen.getByRole("dialog").getAttribute("aria-label")).toContain("compare side B");
+  });
+
+  it("shows no side marker outside a compare's side B", () => {
+    render(renderCard(selection));
+    expect(screen.queryByTestId("inspect-side")).toBeNull();
+  });
 });

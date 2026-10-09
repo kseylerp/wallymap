@@ -3,6 +3,15 @@ import type { BBox } from "@/layers/types";
 import type { RenderMode, Selection } from "@/lib/render/state";
 import { DECK_TERRAIN_TAG } from "@/lib/render/wally/deckTerrain";
 
+/** Side B of a compare draws under `<layerId>~b` (lib/render/compareView.ts `compareBId`). */
+const COMPARE_B_SUFFIX = "~b";
+
+/**
+ * Appended to the deck id of a hex compare's extruded delta columns (`<layerId>@hexdelta:points`), so the columns
+ * (a GeoJsonLayer) never reuse the id of the flat H3HexagonLayer, which deck would then try to update in place.
+ */
+export const HEX_DELTA_TAG = "@hexdelta";
+
 /** Mapbox layer and source ids for vector tile layers start with this (see components/mapTiles.ts). */
 const TILES_PREFIX = "tiles-";
 const RENDER_MODES: readonly RenderMode[] = ["points", "lines", "polygons", "heat", "columns", "hexbin"];
@@ -49,8 +58,9 @@ export function layerIdFromDeckId(deckId: string): string | null {
   const mode = deckId.slice(cut + 1);
   if (!RENDER_MODES.includes(mode as RenderMode)) return null;
   const layerId = deckId.slice(0, cut);
-  // Layers draped on 3D terrain carry a tag after the layer id (see DECK_TERRAIN_TAG).
-  return layerId.endsWith(DECK_TERRAIN_TAG) ? layerId.slice(0, -DECK_TERRAIN_TAG.length) : layerId;
+  // Layers draped on 3D terrain carry a tag after the layer id (see DECK_TERRAIN_TAG); hex delta columns carry theirs.
+  for (const tag of [DECK_TERRAIN_TAG, HEX_DELTA_TAG]) if (layerId.endsWith(tag)) return layerId.slice(0, -tag.length);
+  return layerId;
 }
 
 /** The app layer id behind a vector tile source (`tiles-<id>`) or Mapbox layer (`tiles-<id>`, `tiles-<id>-line`). */
@@ -87,13 +97,17 @@ export function pickToSelection(pick: Pick | null | undefined, known: Record<str
     return { layerId, feature, lngLat: pick.lngLat, ...(pick.point && { screen: pick.point }) };
   }
   if (!pick.layer || !isFeature(pick.object)) return null;
-  const layerId = layerIdFromDeckId(pick.layer.id);
-  if (!layerId || !(layerId in known)) return null;
+  const deckLayerId = layerIdFromDeckId(pick.layer.id);
+  if (!deckLayerId) return null;
+  // A compare's side B draws under a view-only id; the card belongs to the layer behind it, marked as side B.
+  const sideB = deckLayerId.endsWith(COMPARE_B_SUFFIX);
+  const layerId = sideB ? deckLayerId.slice(0, -COMPARE_B_SUFFIX.length) : deckLayerId;
+  if (!(layerId in known)) return null;
   const coord = pick.coordinate;
   const lngLat: [number, number] =
     coord && coord.length >= 2 ? [coord[0], coord[1]] : (featureCenter(pick.object) ?? [0, 0]);
   const screen = typeof pick.x === "number" && typeof pick.y === "number" ? { x: pick.x, y: pick.y } : undefined;
-  return { layerId, feature: pick.object, lngLat, ...(screen && { screen }) };
+  return { layerId, feature: pick.object, lngLat, ...(screen && { screen }), ...(sideB && { side: "b" as const }) };
 }
 
 function eachPosition(geometry: Geometry | null | undefined, visit: (p: Position) => void): void {

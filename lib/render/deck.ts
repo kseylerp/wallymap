@@ -21,7 +21,7 @@ import {
   isHexCollection,
 } from "@/lib/render/compareView";
 import { DECK_TERRAIN_ID, DECK_TERRAIN_TAG, demDecoder, demTileUrl } from "@/lib/render/wally/deckTerrain";
-import { featureCenter } from "@/lib/render/inspect";
+import { featureCenter, HEX_DELTA_TAG } from "@/lib/render/inspect";
 import { pinIconFor } from "@/lib/render/wally/pins";
 import type { MapState, RenderOp, Viewport } from "@/lib/render/state";
 
@@ -580,8 +580,9 @@ function deltaLayers(op: RenderOp, { data, selected, terrain }: OpContext): Laye
     const max = maxAbsV(data) || 1;
     return [
       new GeoJsonLayer({
-        // No terrain extension on these columns, so no 3D tag on the id either.
-        id: `${op.layerId}:${op.mode}`,
+        // No terrain extension on these columns, so no 3D tag on the id either. Their own tag keeps them off the flat
+        // H3HexagonLayer's id (`<id>:points` while 3D is off): deck must not update one layer class in place of another.
+        id: `${op.layerId}${HEX_DELTA_TAG}:${op.mode}`,
         data,
         pickable: true,
         extruded: true,
@@ -678,7 +679,10 @@ export function buildDeckLayerSets(
     const loaded = state.layers[op.layerId];
     if (!loaded) continue;
     if (loaded.result.kind === "tiles") continue;
-    const selected = state.selected?.layerId === op.layerId ? state.selected.feature : undefined;
+    const picked = state.selected?.layerId === op.layerId ? state.selected : undefined;
+    // A feature picked on a compare's side B highlights there; side A (and every other mode) gets the rest.
+    const selected = picked && picked.side !== "b" ? picked.feature : undefined;
+    const selectedB = picked?.side === "b" ? picked.feature : undefined;
     const ctx: OpContext = { data: loaded.result.data, style: loaded.style, selected, zoom: state.viewport.zoom, terrain };
     if (compare?.layerId !== op.layerId || !mode) {
       main.push(...geoJsonLayersFor(op, ctx));
@@ -694,7 +698,7 @@ export function buildDeckLayerSets(
     const loadedB = state.layers[bId];
     const sideB =
       loadedB?.result.kind === "geojson"
-        ? geoJsonLayersFor({ ...op, color: COMPARE_COLORS.b }, { ...ctx, data: loadedB.result.data, selected: undefined, deckId: bId })
+        ? geoJsonLayersFor({ ...op, color: COMPARE_COLORS.b }, { ...ctx, data: loadedB.result.data, selected: selectedB, deckId: bId })
         : [];
     if (mode === "swipe") {
       a.push(...sideA);

@@ -237,10 +237,13 @@ Modes:
 
 - Points, lines, polygons: plain geometry with the layer's default style.
 - Heat: deck.gl HeatmapLayer colored by `v` or density.
-- Columns and hexbin: deck.gl HexagonLayer or H3HexagonLayer, column height
+- Columns and hexbin: deck.gl H3HexagonLayer over H3 cells, column height
   from `v` sum or count, color from a second channel (recency by default).
-  Cell size scales with zoom so the globe shows continental spikes and a
-  valley shows trail-level cells.
+  H3 resolution follows zoom (about resolution 2 at world scale, 9 at
+  trail scale) so the globe shows continental spikes and a valley shows
+  trail-level cells. Computed layers (popularity, remoteness) are scored
+  per H3 cell and cached by cell id, and parent cells aggregate children
+  for zoomed-out views. Library: `h3-js`.
 - Time: when any visible layer has `t`, a scrubber appears below the map
   with play, step, and a histogram of counts per step. Dragging filters
   all time-aware layers together. A small line chart of totals per step

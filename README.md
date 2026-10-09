@@ -1,13 +1,13 @@
 # MapAgent
 
-MapAgent is an open-source chat agent that draws outdoor data on a Mapbox map. Ask a question in plain language, and the agent picks the right data layers (trails, peaks, water, and more) and shows them on the map. It runs on Next.js, and you bring your own model: OpenRouter, Anthropic directly, or any OpenAI-compatible server.
+MapAgent is an open-source chat agent that draws outdoor data on a Mapbox map. Ask a question in plain language, and the agent picks the right data layers and shows them on the map: trails today; forest loss, fire, snow, and water next. It runs on Next.js, and you bring your own model: OpenRouter, Anthropic directly, or any OpenAI-compatible server.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/REPO_OWNER/mapagent)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/kseylerp/mapagent)
 
 ## Quickstart
 
 ```bash
-git clone https://github.com/REPO_OWNER/mapagent.git
+git clone https://github.com/kseylerp/mapagent
 cd mapagent
 cp .env.example .env.local
 pnpm i

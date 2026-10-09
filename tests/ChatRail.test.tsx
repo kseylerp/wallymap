@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { UIMessage } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ChatRail } from "@/components/ChatRail";
+import { ChatRail, readableError } from "@/components/ChatRail";
 
 type ChatStub = {
   messages: UIMessage[];
@@ -219,5 +219,22 @@ describe("ChatRail presentation", () => {
     render(rail());
     const line = screen.getByTestId("user-message");
     expect(line.textContent).toBe("›Show hiking trails around Lake Tahoe");
+  });
+});
+
+describe("ChatRail errors", () => {
+  it("turns a 429 body into a one-line retry message in the error card", () => {
+    chat.messages = [user("Trails?")];
+    chat.status = "error";
+    chat.error = new Error(JSON.stringify({ error: "Too many requests", retryAfterSeconds: 290 }));
+    render(rail());
+    expect(screen.getByText("Too many requests, try again in 5 min.")).toBeTruthy();
+  });
+
+  it("shows other route errors as their sentence", () => {
+    expect(readableError(new Error(JSON.stringify({ error: "Request too large" })))).toBe("Request too large");
+    expect(readableError(new Error(JSON.stringify({ error: "Too many requests", retryAfterSeconds: 5 })))).toBe(
+      "Too many requests, try again in 1 min.",
+    );
   });
 });

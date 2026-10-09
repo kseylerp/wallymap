@@ -3,6 +3,7 @@ import "@/layers";
 import { SYSTEM_PROMPT } from "@/lib/agent/prompt";
 import { getModel } from "@/lib/agent/provider";
 import { buildTools } from "@/lib/agent/tools";
+import { chatRules, limitRequest } from "@/lib/fetch/rateLimit";
 
 // Room for several tool steps, each of which may wait on a slow upstream.
 export const maxDuration = 120;
@@ -14,15 +15,32 @@ function errorMessage(err: unknown): string {
 }
 
 // Caps on what one request may send, so the endpoint cannot be used to push
-// arbitrarily large prompts through the deployer's model key.
+// arbitrarily large prompts through the deployer's model key. The text cap counts
+// the characters people and the model wrote; tool results are bounded by the body cap.
 const MAX_MESSAGES = 40;
+const MAX_TEXT_CHARS = 60_000;
 const MAX_BODY_BYTES = 256 * 1024;
 
-type ReadResult = { messages: UIMessage[] } | { error: string };
+type ReadResult = { messages: UIMessage[] } | { error: string; status: 400 | 413 };
+
+/** Characters in every text part of every message. */
+function textChars(messages: unknown[]): number {
+  let total = 0;
+  for (const message of messages) {
+    const parts = typeof message === "object" && message !== null && "parts" in message ? message.parts : null;
+    if (!Array.isArray(parts)) continue;
+    for (const part of parts) {
+      if (typeof part === "object" && part !== null && "text" in part && typeof part.text === "string") {
+        total += part.text.length;
+      }
+    }
+  }
+  return total;
+}
 
 async function readMessages(req: Request): Promise<ReadResult> {
-  const invalid = { error: "Invalid request body" };
-  const tooLarge = { error: "Request too large" };
+  const invalid = { error: "Invalid request body", status: 400 as const };
+  const tooLarge = { error: "Request too large", status: 413 as const };
   let text: string;
   try {
     text = await req.text();
@@ -36,7 +54,7 @@ async function readMessages(req: Request): Promise<ReadResult> {
     if (typeof body !== "object" || body === null || !("messages" in body)) return invalid;
     const { messages } = body;
     if (!Array.isArray(messages)) return invalid;
-    if (messages.length > MAX_MESSAGES) return tooLarge;
+    if (messages.length > MAX_MESSAGES || textChars(messages) > MAX_TEXT_CHARS) return tooLarge;
     return { messages: messages as UIMessage[] };
   } catch {
     return invalid;
@@ -44,9 +62,12 @@ async function readMessages(req: Request): Promise<ReadResult> {
 }
 
 export async function POST(req: Request): Promise<Response> {
+  const limited = await limitRequest(req, chatRules());
+  if (limited) return limited;
+
   const read = await readMessages(req);
   if ("error" in read) {
-    return Response.json({ error: read.error }, { status: 400 });
+    return Response.json({ error: read.error }, { status: read.status });
   }
   const { messages } = read;
 

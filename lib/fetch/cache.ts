@@ -35,21 +35,38 @@ const memoryCache: Cache = {
   },
 };
 
-function kvCache(url: string, token: string): Cache {
-  // Loaded lazily inside get/set so local runs and tests never import
-  // @vercel/kv, and a failed import surfaces as a catchable error there.
-  let clientPromise: Promise<VercelKV> | undefined;
-  const getClient = (): Promise<VercelKV> => {
-    clientPromise ??= import("@vercel/kv")
-      .then(({ createClient }) =>
-        createClient({ url, token, automaticDeserialization: false }),
-      )
+type KvConfig = { url: string; token: string };
+
+/** The KV REST credentials when both are set, else null (callers then use process memory). */
+export function kvConfig(): KvConfig | null {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  return url && token ? { url, token } : null;
+}
+
+const kvClients = new Map<string, Promise<VercelKV>>();
+
+/**
+ * A lazily created KV client, shared by the cache and the rate limiter. Loaded on first use so
+ * local runs and tests never import @vercel/kv, and a failed import surfaces as a catchable error.
+ */
+export function kvClient({ url, token }: KvConfig): Promise<VercelKV> {
+  const id = `${url}\n${token}`;
+  let client = kvClients.get(id);
+  if (!client) {
+    client = import("@vercel/kv")
+      .then(({ createClient }) => createClient({ url, token, automaticDeserialization: false }))
       .catch((error: unknown) => {
-        clientPromise = undefined;
+        kvClients.delete(id);
         throw error;
       });
-    return clientPromise;
-  };
+    kvClients.set(id, client);
+  }
+  return client;
+}
+
+function kvCache(config: KvConfig): Cache {
+  const getClient = () => kvClient(config);
   return {
     async get(key) {
       const client = await getClient();
@@ -66,10 +83,8 @@ function kvCache(url: string, token: string): Cache {
 
 /** KV-backed when KV_REST_API_URL and KV_REST_API_TOKEN are set, else in-memory. */
 export function createCache(): Cache {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  if (url && token) return kvCache(url, token);
-  return memoryCache;
+  const config = kvConfig();
+  return config ? kvCache(config) : memoryCache;
 }
 
 /** Short deterministic hash of a request body; empty body gives an empty string. */

@@ -44,9 +44,12 @@ type ChatRailProps = {
 type ToolPart = Extract<UIMessage["parts"][number], { toolCallId: string }>;
 
 /** The chat route answers failures with `{ error }` JSON; show that sentence rather than raw JSON. */
-function readableError(error: Error): string {
+export function readableError(error: Error): string {
   try {
     const parsed: unknown = JSON.parse(error.message);
+    if (typeof parsed === "object" && parsed !== null && "retryAfterSeconds" in parsed && typeof parsed.retryAfterSeconds === "number") {
+      return `Too many requests, try again in ${Math.max(1, Math.ceil(parsed.retryAfterSeconds / 60))} min.`;
+    }
     if (typeof parsed === "object" && parsed !== null && "error" in parsed && typeof parsed.error === "string") {
       return parsed.error;
     }

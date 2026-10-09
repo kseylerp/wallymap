@@ -79,3 +79,5 @@ Dark map style, route recording/live tracking, offline, accounts, clustering, cu
 - **Camera never moves on click.** Selecting a feature opens the card only. Camera moves happen on arrival (`set_view`), route preview, and "Ask about this".
 - **No downloads without a click.** Exports happen only from an explicit Export action with a confirm step listing files and size; nothing downloads on load, restore, or as a fallback.
 - **Basemap labels:** "Topographical + Satellite" (default), "Topographical", "Satellite". No icons on the basemap pills.
+
+- **Data console (right pane):** the time scrubber docks at the top of the right pane (not under the composer); each layer card carries attribute filters derived from its data (category chips, numeric ranges) that apply instantly to the map, the counts, and exports. Data lines are white over a thin ink casing (no grey lines); routes keep the purple→coral gradient.

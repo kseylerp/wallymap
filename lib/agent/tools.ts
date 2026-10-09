@@ -86,7 +86,8 @@ export function buildTools(): ToolSet {
     }),
     geocode: tool({
       description:
-        "Find a place by name. Returns its bbox [west, south, east, north], center [lon, lat], and full name.",
+        "Find a place by name. Returns its bbox [west, south, east, north], center [lon, lat], and full name. " +
+        "Named mountain ranges, deserts, plateaus and similar regions (for example the Andes) come back as the whole region, with source \"natural-earth\".",
       inputSchema: z.object({ place: z.string().min(1) }),
       execute: async ({ place }) => geocode(place),
     }),

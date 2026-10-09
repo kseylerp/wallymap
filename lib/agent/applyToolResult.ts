@@ -1,11 +1,12 @@
 import type { BBox, LayerResult, StyleHints } from "@/layers/types";
-import { bboxToViewport } from "@/lib/render/deck";
+import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import type { Basemap, MapAction, RenderMode, RenderOp, Viewport } from "@/lib/render/state";
 
 /** Layer titles and styles by id, fetched by the browser from `GET /api/layers`. */
 export type LayerCatalog = Record<string, { title: string; style: StyleHints }>;
 
-type Canvas = { width: number; height: number };
+/** The map canvas size, and the screen area a fitted bbox must stay clear of (floating panels). */
+type Canvas = { width: number; height: number; padding?: Padding };
 
 const QUERY_PREFIX = "query_";
 const FALLBACK_STYLE: StyleHints = { geometry: "line", color: "#5B6B7A" };
@@ -41,7 +42,7 @@ function isLayerResult(value: Obj): value is Obj & LayerResult {
 
 function setViewActions(output: Obj, canvas: Canvas): MapAction[] {
   if (isBBox(output.bbox)) {
-    return [{ type: "set_view", viewport: bboxToViewport(output.bbox, canvas.width, canvas.height) }];
+    return [{ type: "set_view", viewport: bboxToViewport(output.bbox, canvas.width, canvas.height, canvas.padding) }];
   }
   const viewport: Partial<Viewport> = {};
   if (isLngLat(output.center)) {

@@ -7,7 +7,7 @@ import type { RenderOp } from "@/lib/render/state";
 const canvas = { width: 1000, height: 800 };
 
 const catalog: LayerCatalog = {
-  "osm-trails": { title: "OpenStreetMap trails", style: { geometry: "line", color: "#c2410c" } },
+  "osm-trails": { title: "OpenStreetMap trails", style: { geometry: "line", color: "#D97757" } },
   huts: { title: "Mountain huts", style: { geometry: "point", color: "#16a34a" } },
   parks: { title: "Parks", style: { geometry: "polygon", color: "#65a30d" } },
 };
@@ -56,7 +56,7 @@ describe("toolResultToActions", () => {
         layer: {
           id: "osm-trails",
           title: "OpenStreetMap trails",
-          style: { geometry: "line", color: "#c2410c" },
+          style: { geometry: "line", color: "#D97757" },
           result,
           receivedAt: expect.any(String),
         },
@@ -87,7 +87,7 @@ describe("toolResultToActions", () => {
         layer: {
           id: "mystery",
           title: "mystery",
-          style: { geometry: "line", color: "#2563eb" },
+          style: { geometry: "line", color: "#5B6B7A" },
           result,
           receivedAt: expect.any(String),
         },

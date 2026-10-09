@@ -6,7 +6,7 @@ import { initialMapState, type LoadedLayer, type MapState } from "@/lib/render/s
 const layer: LoadedLayer = {
   id: "osm-trails",
   title: "OSM trails",
-  style: { geometry: "line", color: "#c2410c" },
+  style: { geometry: "line", color: "#D97757" },
   result: {
     kind: "geojson",
     data: { type: "FeatureCollection", features: [] },
@@ -46,9 +46,11 @@ describe("buildDeckLayers styling", () => {
   it("styles points", () => {
     const props = propsFor({ layerId: "osm-trails", mode: "points", visible: true });
     expect(props.pointType).toBe("circle");
-    expect(props.getPointRadius).toBe(6);
+    expect(props.getPointRadius).toBe(7);
     expect(props.pointRadiusUnits).toBe("pixels");
-    expect(props.getFillColor).toEqual(hexToRgba(color));
+    expect(props.getFillColor).toEqual([255, 255, 255, 255]);
+    expect(props.getLineColor).toEqual(hexToRgba(color));
+    expect(props.getLineWidth).toBe(2);
   });
 
   it("styles lines", () => {
@@ -61,7 +63,7 @@ describe("buildDeckLayers styling", () => {
 
   it("styles polygons", () => {
     const props = propsFor({ layerId: "osm-trails", mode: "polygons", visible: true });
-    expect(props.getFillColor).toEqual(hexToRgba(color, 90));
+    expect(props.getFillColor).toEqual(hexToRgba(color, 64));
     expect(props.getLineColor).toEqual(hexToRgba(color, 255));
     expect(props.getLineWidth).toBe(1);
   });

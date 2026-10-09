@@ -6,6 +6,13 @@ import type { MapState, RenderOp, Viewport } from "@/lib/render/state";
 
 type Rgba = [number, number, number, number];
 
+/** Point markers: a white disc ringed in the layer color, like a map pin seen from above. */
+const POINT_FILL: Rgba = [255, 255, 255, 255];
+const POINT_RADIUS_PX = 7;
+const POINT_STROKE_PX = 2;
+/** Polygon fills stay light so the imagery underneath still reads. */
+const POLYGON_FILL_ALPHA = 64;
+
 /** Parses `#rgb` or `#rrggbb` into an RGBA tuple for deck.gl. */
 export function hexToRgba(hex: string, alpha = 255): Rgba {
   let digits = hex.trim().replace(/^#/, "");
@@ -58,10 +65,13 @@ function geoJsonLayerFor(op: RenderOp, data: GeoJSON.FeatureCollection, defaultC
       return new GeoJsonLayer({
         ...base,
         pointType: "circle",
-        getPointRadius: 6,
+        getPointRadius: POINT_RADIUS_PX,
         pointRadiusUnits: "pixels",
-        getFillColor: hexToRgba(color),
+        getFillColor: POINT_FILL,
+        stroked: true,
         getLineColor: hexToRgba(color),
+        getLineWidth: POINT_STROKE_PX,
+        lineWidthUnits: "pixels",
       });
     case "lines":
       return new GeoJsonLayer({
@@ -74,7 +84,7 @@ function geoJsonLayerFor(op: RenderOp, data: GeoJSON.FeatureCollection, defaultC
     case "polygons":
       return new GeoJsonLayer({
         ...base,
-        getFillColor: hexToRgba(color, 90),
+        getFillColor: hexToRgba(color, POLYGON_FILL_ALPHA),
         getLineColor: hexToRgba(color, 255),
         getLineWidth: 1,
         lineWidthUnits: "pixels",

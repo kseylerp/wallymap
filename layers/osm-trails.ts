@@ -154,7 +154,7 @@ const osmTrails = defineLayer({
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 2500,
   input: inputSchema,
-  style: { geometry: "line", color: "#c2410c" },
+  style: { geometry: "line", color: "#D97757" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const area = bboxAreaKm2(ctx.bbox);

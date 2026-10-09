@@ -5,7 +5,7 @@ import { initialMapState, type LoadedLayer, type MapState } from "@/lib/render/s
 const layer: LoadedLayer = {
   id: "osm-trails",
   title: "OSM trails",
-  style: { geometry: "line", color: "#c2410c" },
+  style: { geometry: "line", color: "#D97757" },
   result: {
     kind: "geojson",
     data: { type: "FeatureCollection", features: [] },

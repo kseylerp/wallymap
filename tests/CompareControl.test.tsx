@@ -254,6 +254,48 @@ describe("CompareControl", () => {
   });
 });
 
+describe("short viewports", () => {
+  const original = window.matchMedia;
+  afterEach(() => {
+    window.matchMedia = original;
+  });
+  const short = (matches: boolean) => {
+    window.matchMedia = ((query: string) => ({
+      matches: matches && query.includes("max-height"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+  };
+
+  it("folds the strip to one summary line under 700px tall, with More and Less", () => {
+    short(true);
+    render(<Harness spy={() => {}} initial={comparing("toggle")} />);
+    expect(screen.getByTestId("compare-summary").textContent).toBe(`Toggle · 2016–20 vs ${windowText(spec.b)}`);
+    expect(screen.getByTestId("compare-badge").textContent).toBe("A");
+    expect(screen.queryByRole("button", { name: "Swipe" })).toBeNull();
+    fireEvent.click(screen.getByTestId("compare-more"));
+    expect(screen.getByRole("button", { name: "Swipe" })).toBeTruthy();
+    fireEvent.click(screen.getByTestId("compare-less"));
+    expect(screen.getByTestId("compare-summary")).toBeTruthy();
+  });
+
+  it("shows the whole strip on taller screens", () => {
+    short(false);
+    render(<Harness spy={() => {}} initial={comparing("delta")} />);
+    expect(screen.queryByTestId("compare-summary")).toBeNull();
+    expect(screen.queryByTestId("compare-less")).toBeNull();
+  });
+
+  it("puts a side's label on its own line under the dates", () => {
+    const labelled = reduce(withFires, { type: "set_compare", compare: { ...spec, mode: "delta", aLabel: "Before the Ferguson fire" } });
+    render(<Harness spy={() => {}} initial={labelled} />);
+    const side = screen.getByTestId("compare-side-a");
+    expect(side.children).toHaveLength(2);
+    expect(side.children[1].textContent).toBe("Before the Ferguson fire");
+  });
+});
+
 describe("compare outside the console", () => {
   it("keeps flipping and swiping while the console is closed", () => {
     vi.useFakeTimers();

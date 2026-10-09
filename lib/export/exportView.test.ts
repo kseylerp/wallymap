@@ -160,6 +160,18 @@ describe("buildExportBundle during a compare", () => {
     expect(md).not.toContain("features exported");
   });
 
+  it("says the time window does not apply to the compared layer", async () => {
+    const md = await buildExportBundle(comparing, null, now).files[1].blob.text();
+    expect(md).toContain("except Fire perimeters, which is exported in full for the compare.");
+  });
+
+  it("says nothing about the compare while the compared layer is hidden", async () => {
+    const hidden = reduce(comparing, { type: "toggle_layer", layerId: "fire-perimeters" });
+    const md = await buildExportBundle(hidden, null, now).files[0].blob.text();
+    expect(md).not.toContain("## Compare");
+    expect(md).not.toContain("exported in full for the compare");
+  });
+
   it("drops the compare section once the compare ends", async () => {
     const md = await buildExportBundle(reduce(comparing, { type: "clear_compare" }), null, now).files[1].blob.text();
     expect(md).not.toContain("## Compare");

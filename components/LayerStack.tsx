@@ -383,8 +383,10 @@ export function LayerStack({
     <section
       aria-label="Layers"
       data-testid="layer-stack"
-      // Phones: below the header row (wordmark and basemap switch) instead of over it.
-      className="glass-strong rise-in pointer-events-auto flex max-h-[calc(100dvh-24px)] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-panel max-md:mt-12 max-md:max-h-[calc(54dvh-72px)] md:max-h-[calc(100dvh-260px)]"
+      // Phones: below the header row (wordmark and basemap switch) instead of over it, and one scrolling column (the
+      // scrubber, the compare and the layers scroll together) so a short screen never squeezes the list to nothing.
+      data-scroll="console"
+      className="glass-strong rise-in pointer-events-auto flex max-h-[calc(100dvh-24px)] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-panel max-md:mt-12 max-md:max-h-[calc(54dvh-72px)] max-md:overflow-y-auto max-md:overscroll-contain md:max-h-[calc(100dvh-260px)]"
       style={{ width: LAYER_PANEL_WIDTH }}
     >
       {/* The time scrubber docks here while any layer has dated features; empty, the slot takes no space. */}
@@ -420,7 +422,7 @@ export function LayerStack({
         </button>
       </header>
       <div aria-hidden className="hairline mx-5 shrink-0" />
-      <ul className="legend-table min-h-0 overflow-y-auto overscroll-contain px-5 pb-2">
+      <ul className="legend-table min-h-0 overflow-y-auto overscroll-contain px-5 pb-2 max-md:shrink-0 max-md:overflow-visible">
         {items.map(({ layer, op }) => {
           const index = renderOps.findIndex((o) => o.layerId === layer.id);
           return (

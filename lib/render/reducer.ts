@@ -155,9 +155,21 @@ function ordered(w: [string, string]): [string, string] {
   return !Number.isNaN(a) && !Number.isNaN(b) && a > b ? [w[1], w[0]] : [w[0], w[1]];
 }
 
-/** Starts a compare: windows in order, toggle on A, the scrubber paused, and no selection left on the compared layer. */
+/**
+ * Starts a compare: windows in order, toggle on A, the scrubber paused, and no selection left on the compared layer.
+ * Changing only the windows of the compare that is on (same layer and mode, e.g. a date edited in the console) keeps
+ * the side on screen and the pause.
+ */
 function startCompare(state: MapState, compare: CompareState): MapState {
-  const next: CompareState = { ...compare, a: ordered(compare.a), b: ordered(compare.b), side: "a", paused: undefined };
+  const current = state.compare;
+  const sameCompare = current?.layerId === compare.layerId && current.mode === compare.mode;
+  const next: CompareState = {
+    ...compare,
+    a: ordered(compare.a),
+    b: ordered(compare.b),
+    side: sameCompare ? (current.side ?? "a") : "a",
+    paused: sameCompare ? current.paused : undefined,
+  };
   const time = state.time?.playing ? { ...state.time, playing: false } : state.time;
   return { ...state, compare: next, time, selected: dropSelectionOf(state, compare.layerId) };
 }
@@ -281,6 +293,9 @@ function reduceAction(state: MapState, action: MapAction): MapState {
           errors: state.errors.filter((e) => e.layerId !== action.layerId),
           selected: dropSelectionOf(state, action.layerId),
           compare: dropCompareOf(state, action.layerId),
+          // The last layer gone ends the conversation's map: a time window still waiting for a dated layer is dropped
+          // too, so it never lands on a layer opened much later.
+          ...(Object.keys(layers).length === 0 && { pendingTime: undefined }),
         },
         false,
       );

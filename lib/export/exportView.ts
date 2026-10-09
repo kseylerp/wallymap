@@ -61,6 +61,8 @@ function compareNote(state: MapState): CompareNote | undefined {
   const compare = state.compare;
   const loaded = compare ? state.layers[compare.layerId] : undefined;
   if (!compare || !loaded) return undefined;
+  // A hidden compared layer is not exported, so the export says nothing about the compare.
+  if (state.renderOps.find((op) => op.layerId === compare.layerId)?.visible !== true) return undefined;
   const filters = activeFilters(state.renderOps.find((op) => op.layerId === compare.layerId)?.filters);
   const delta = loaded.result.kind === "geojson" ? compareSides(loaded, filters, compare, true).delta : undefined;
   const summary = delta?.result.kind === "geojson" ? compareSummary(delta.result.data) : undefined;
@@ -158,7 +160,15 @@ export function buildExportBundle(state: MapState, catalog: LayerCatalog | null,
     "",
     `Map view: longitude ${fixed(longitude, 5)}, latitude ${fixed(latitude, 5)}, zoom ${fixed(zoom, 2)}, pitch ${fixed(pitch, 0)}, bearing ${fixed(bearing, 0)}; basemap ${state.basemap}.`,
     "",
-    ...(timeNote ? [`Time window: ${timeNote}. Dated features outside it are not exported; features without a date are.`, ""] : []),
+    ...(timeNote
+      ? [
+          `Time window: ${timeNote}. Dated features outside it are not exported; features without a date are.` +
+            (compared && time?.index.layerIds.includes(compared.layerId)
+              ? ` The window applies to every dated layer except ${state.layers[compared.layerId]?.title ?? compared.layerId}, which is exported in full for the compare.`
+              : ""),
+          "",
+        ]
+      : []),
     ...(compared ? compareMarkdown(compared, state.layers[compared.layerId]?.title ?? compared.layerId) : []),
     ...(layers.some((l) => activeFilters(state.renderOps.find((op) => op.layerId === l.id)?.filters))
       ? ["Filters set in the layer panel apply: each filtered layer exports only the features that pass.", ""]

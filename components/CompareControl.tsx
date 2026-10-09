@@ -52,6 +52,27 @@ function Swatch({ color, label }: { color: string; label?: string }) {
   );
 }
 
+/** Below this viewport height the compare collapses to a one-line summary with a disclosure. */
+export const SHORT_VIEWPORT_QUERY = "(max-height: 699px)";
+
+function subscribeShort(onChange: () => void): () => void {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => {};
+  const query = window.matchMedia(SHORT_VIEWPORT_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function isShortViewport(): boolean {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(SHORT_VIEWPORT_QUERY).matches;
+}
+
+/** True while the viewport is under 700px tall (a phone in most cases, or a short laptop window). */
+function useShortViewport(): boolean {
+  return useSyncExternalStore(subscribeShort, isShortViewport, () => false);
+}
+
+const MODE_LABEL: Record<CompareMode, string> = { swipe: "Swipe", toggle: "Toggle", delta: "Delta" };
+
 /** Text button segment: black when pressed (the app's primary), muted text otherwise. */
 const SEG =
   "h-6 rounded-[4px] px-2.5 text-[12px] whitespace-nowrap transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:text-ink-muted/40";
@@ -60,15 +81,8 @@ const SEG_ON = "bg-primary text-on-primary";
 const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 hover:text-ink";
 
 /**
- * Compare over time (spec §7): the Compare pill under the map pills while any loaded layer has dates (or is night
- * lights or forest loss), and while a compare is on a strip there: the layer, the A and B windows (date fields, or a
- * preset), Swipe / Toggle / Delta, a legend in the compare colors (A purple, B pink, both dark grey) and × to exit.
- * Swipe adds a handle across the map; toggle flips A and B every second with a badge (space pauses). Monochrome
- * chrome, text only.
- */
-/**
- * The layer the Compare pill opens on: the selected feature's layer when it can be compared, else the comparable layer
- * loaded last.
+ * The layer a compare opens on (the console's Start button and the map's Compare pill): the selected feature's layer
+ * when it can be compared, else the comparable layer loaded last.
  */
 export function openingLayer(state: MapState, comparable: LoadedLayer[]): LoadedLayer | undefined {
   const selected = comparable.find((l) => l.id === state.selected?.layerId);
@@ -176,6 +190,9 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
   const available = modesFor(layer);
   const paused = compare.paused === true;
   const [presetsOpen, setPresetsOpen] = useState(false);
+  // Under 700px tall the strip folds to one summary line; More opens it (and Less folds it back).
+  const short = useShortViewport();
+  const [expanded, setExpanded] = useState(false);
   const presets = comparable.map((l) => l.id).filter(hasPreset);
   // A hidden layer draws nothing, so nothing ticks (useCompareTicker) and the strip says so.
   const hidden = compareHidden(state);
@@ -204,21 +221,84 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
   };
   const exit = () => dispatch({ type: "clear_compare" });
 
+  if (short && !expanded) {
+    // "2016–2020" reads as "2016–20" here, so the line fits the 280px console.
+    const compact = (text: string) => text.replace(/^(\d{2})(\d{2})–\1(\d{2})$/, "$1$2–$3");
+    const aText = compare.aLabel ?? compact(windowText(compare.a));
+    const bText = compare.bLabel ?? compact(windowText(compare.b));
+    return (
+      <>
+        <div
+          role="group"
+          aria-label="Compare over time"
+          data-testid="compare-control"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") exit();
+          }}
+          className="flex items-baseline gap-1.5 px-5 py-3 text-ink"
+        >
+          <h2 className="small-caps">Compare</h2>
+          {/* The summary line is the disclosure: pressing it opens the whole strip. */}
+          <button
+            type="button"
+            aria-expanded={false}
+            aria-label={`Show compare controls: ${layer.title}`}
+            onClick={() => setExpanded(true)}
+            data-testid="compare-more"
+            className="min-w-0 flex-1 truncate text-left text-[11.5px] tracking-[-0.01em] tabular-nums underline-offset-4 hover:underline"
+          >
+            <span data-testid="compare-summary">
+              {MODE_LABEL[mode]} · {aText} vs {bText}
+              {hidden && <span className="text-ink-muted"> · layer hidden</span>}
+            </span>
+          </button>
+          {/* The side on screen stays visible however the line truncates. */}
+          {!hidden && mode === "toggle" && (
+            <span
+              data-testid="compare-badge"
+              className={`shrink-0 text-[11.5px] font-semibold ${compare.side === "b" ? "text-coral" : "text-accent"}`}
+            >
+              {compare.side === "b" ? "B" : "A"}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={exit}
+            aria-label="Exit compare"
+            title="Exit compare"
+            data-testid="compare-exit"
+            className="px-1 text-[15px] leading-none text-ink-muted transition-colors hover:text-ink"
+          >
+            ×
+          </button>
+        </div>
+        <div aria-hidden className="hairline mx-5" />
+      </>
+    );
+  }
+
   const sideRow = (which: "a" | "b") => {
     const w = compare[which];
     const label = which === "a" ? compare.aLabel : compare.bLabel;
     const color = which === "a" ? COMPARE_COLORS.a : COMPARE_COLORS.b;
     const name = which.toUpperCase();
     return (
-      <div className="flex min-w-0 items-center gap-1.5" data-testid={`compare-side-${which}`}>
-        <Swatch color={color} />
-        <span className="w-3 text-[12px] font-medium text-ink">{name}</span>
-        <DateField label={`${name} from`} value={w[0].slice(0, 10)} onCommit={(v) => setWindow(which, 0, v)} />
-        <span aria-hidden className="text-[12px] text-ink-muted">
-          –
-        </span>
-        <DateField label={`${name} to`} value={w[1].slice(0, 10)} onCommit={(v) => setWindow(which, 1, v)} />
-        {label && <span className="truncate text-[11.5px] text-ink-muted">{label}</span>}
+      // 280px of console: the two dates fill the row, so an agent's label for the side gets its own line under them.
+      <div className="min-w-0" data-testid={`compare-side-${which}`}>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Swatch color={color} />
+          <span className="w-3 shrink-0 text-[12px] font-medium text-ink">{name}</span>
+          <DateField label={`${name} from`} value={w[0].slice(0, 10)} onCommit={(v) => setWindow(which, 0, v)} />
+          <span aria-hidden className="text-[12px] text-ink-muted">
+            –
+          </span>
+          <DateField label={`${name} to`} value={w[1].slice(0, 10)} onCommit={(v) => setWindow(which, 1, v)} />
+        </div>
+        {label && (
+          <p className="truncate pl-[34px] text-[11.5px] leading-4 text-ink-muted" title={label}>
+            {label}
+          </p>
+        )}
       </div>
     );
   };
@@ -257,6 +337,11 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
               <p className="min-w-0 flex-1 truncate text-[13px] text-ink" data-testid="compare-layer">
                 {layer.title}
               </p>
+            )}
+            {short && (
+              <button type="button" aria-expanded onClick={() => setExpanded(false)} className={TEXT_BUTTON} data-testid="compare-less">
+                Less
+              </button>
             )}
             {presets.length > 0 && (
               <button
@@ -407,7 +492,7 @@ export function DateField({ label, value, onCommit }: { label: string; value: st
           e.currentTarget.blur();
         }
       }}
-      className="compare-date h-6 w-[108px] rounded-[4px] bg-transparent px-1 text-[12px] text-ink tabular-nums outline-none hover:bg-mist/60 focus-visible:bg-mist/70"
+      className="compare-date h-6 w-[108px] min-w-0 shrink rounded-[4px] bg-transparent px-1 text-[12px] text-ink tabular-nums outline-none hover:bg-mist/60 focus-visible:bg-mist/70"
     />
   );
 }

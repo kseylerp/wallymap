@@ -441,4 +441,14 @@ describe("drawnColor", () => {
     const header = within(panel).getByRole("heading", { name: /Layers/ });
     expect(content.compareDocumentPosition(header) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
+  it("scrolls as one column on phones (scrubber, compare and layers together)", () => {
+    render(<LayerStack layers={start.layers} renderOps={start.renderOps} catalog={null} dispatch={() => {}} open onOpenChange={() => {}} />);
+    const panel = screen.getByTestId("layer-stack");
+    expect(panel.className).toContain("max-md:overflow-y-auto");
+    // On phones the list grows with its rows instead of scrolling inside a squeezed box.
+    const list = panel.querySelector("ul.legend-table");
+    expect(list?.className).toContain("max-md:overflow-visible");
+    expect(list?.className).toContain("max-md:shrink-0");
+  });
 });

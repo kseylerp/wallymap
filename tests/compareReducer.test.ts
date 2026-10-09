@@ -70,12 +70,27 @@ describe("compare actions", () => {
     expect(run(loaded, { type: "compare_flip" })).toBe(loaded);
   });
 
-  it("set_compare_paused pauses the flip; a new compare starts unpaused", () => {
+  it("set_compare_paused pauses the flip; a compare in another mode starts unpaused", () => {
     const s = run(loaded, { type: "set_compare", compare: { ...spec, mode: "toggle" } }, { type: "set_compare_paused", paused: true });
     expect(s.compare?.paused).toBe(true);
     expect(run(s, { type: "set_compare_paused", paused: true })).toBe(s);
-    expect(run(s, { type: "set_compare", compare: { ...spec, mode: "toggle" } }).compare?.paused).toBeFalsy();
+    expect(run(s, { type: "set_compare", compare: { ...spec, mode: "delta" } }).compare?.paused).toBeFalsy();
     expect(run(loaded, { type: "set_compare_paused", paused: true })).toBe(loaded);
+  });
+
+  it("editing only the windows keeps the pause and the side on screen", () => {
+    const pausedOnB = run(
+      loaded,
+      { type: "set_compare", compare: { ...spec, mode: "toggle" } },
+      { type: "compare_flip" },
+      { type: "set_compare_paused", paused: true },
+    );
+    const edited = run(pausedOnB, { type: "set_compare", compare: { ...spec, b: ["2021-01-01", "2024-12-31"], mode: "toggle" } });
+    expect(edited.compare).toMatchObject({ b: ["2021-01-01", "2024-12-31"], side: "b", paused: true });
+    // Another mode (or layer) is a new compare: back on A, playing.
+    const other = run(pausedOnB, { type: "set_compare", compare: { ...spec, mode: "swipe" } });
+    expect(other.compare).toMatchObject({ side: "a" });
+    expect(other.compare?.paused).toBeFalsy();
   });
 
   it("exiting a compare does not resume the scrubber's play", () => {
@@ -94,5 +109,35 @@ describe("compare actions", () => {
   it("keeps the compare when another layer is removed", () => {
     const s = run(loaded, { type: "set_compare", compare: { ...spec, mode: "swipe" } }, { type: "remove_layer", layerId: "osm-trails" });
     expect(s.compare?.layerId).toBe("fire-perimeters");
+  });
+});
+
+describe("a time window waiting for a dated layer", () => {
+  const trails: LoadedLayer = { ...fires, id: "osm-trails", title: "Trails", result: { ...fires.result, data: { type: "FeatureCollection", features: [] } } as LoadedLayer["result"] };
+  const waiting = run(
+    initialMapState,
+    { type: "layer_loaded", layer: trails },
+    { type: "set_time_window", window: ["2019-01-01T00:00:00.000Z", "2019-12-31T23:59:59.999Z"] },
+    { type: "set_time_mode", mode: "cumulative" },
+  );
+
+  it("waits while the map still has layers", () => {
+    expect(waiting.pendingTime).toMatchObject({ mode: "cumulative" });
+  });
+
+  it("is dropped when the map's layers are cleared, so a later dated layer opens on its whole span", () => {
+    const cleared = run(waiting, { type: "clear_layers" });
+    expect(cleared.pendingTime).toBeUndefined();
+    const later = run(cleared, { type: "layer_loaded", layer: fires });
+    expect(later.time?.mode).toBe("slide");
+  });
+
+  it("is dropped when the last layer is removed", () => {
+    expect(run(waiting, { type: "remove_layer", layerId: "osm-trails" }).pendingTime).toBeUndefined();
+  });
+
+  it("is kept when another layer is removed", () => {
+    const two = run(waiting, { type: "layer_loaded", layer: { ...trails, id: "campsites" } });
+    expect(run(two, { type: "remove_layer", layerId: "campsites" }).pendingTime).toBeDefined();
   });
 });

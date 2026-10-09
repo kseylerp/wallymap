@@ -13,6 +13,8 @@ import { pickToSelection, type DeckPick } from "@/lib/render/inspect";
 import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
 import {
   bearingAt,
+  cameraDistanceMeters,
+  clearPitch,
   DEFAULT_LOOKAHEAD_M,
   dispatchPreview,
   elevationStore,
@@ -21,6 +23,7 @@ import {
   fractionStep,
   liveFractionStore,
   mapStateStore,
+  offsetPoint,
   positionAt,
   PREVIEW_EASE_MS,
   speedKmPerMin,
@@ -429,6 +432,19 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
 
     const lookAhead = (kmPerMin: number) => Math.max(DEFAULT_LOOKAHEAD_M, (kmPerMin * 1000) / 60);
     let bearing = bearingAt(line, live.fraction, lookAhead(speedKmPerMin(live.speed)));
+    let pitch: number = FOLLOW_PITCH;
+    // Follow pitch unless a ridge behind the position would hide it from the camera: then tilt up just enough.
+    const clearPitchAt = (center: [number, number], heading: number, zoom: number) => {
+      const ground = map.queryTerrainElevation(center, { exaggerated: true });
+      if (typeof ground !== "number") return FOLLOW_PITCH;
+      const distance = cameraDistanceMeters(zoom, center[1], map.getCanvas().clientHeight);
+      const rises = [1, 2, 3, 4, 5, 6, 7, 8].map((k) => {
+        const behindM = (distance * k) / 8;
+        const h = map.queryTerrainElevation(offsetPoint(center, heading + 180, behindM), { exaggerated: true });
+        return { behindM, rise: typeof h === "number" ? h - ground : null };
+      });
+      return clearPitch(distance, rises);
+    };
     let last = 0;
     let lastSentAt = 0;
     let lastReadAt = 0;
@@ -448,7 +464,12 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
         const target = bearingAt(line, live.fraction, lookAhead(kmPerMin));
         // Heading-up, turned smoothly so a switchback does not whip the camera; a scrub turns at once.
         bearing = live.playing ? bearing + turnBetween(bearing, target) * Math.min(1, dt / 400) : target;
-        map.jumpTo({ center: positionAt(line, live.fraction), bearing, pitch: FOLLOW_PITCH, zoom: followZoom(kmPerMin) });
+        const center = positionAt(line, live.fraction);
+        const zoom = followZoom(kmPerMin);
+        // Tilt up fast when a ridge is in the way, settle back down slowly.
+        const wanted = clearPitchAt(center, bearing, zoom);
+        pitch = live.playing ? pitch + (wanted - pitch) * Math.min(1, dt / (wanted < pitch ? 150 : 600)) : wanted;
+        map.jumpTo({ center, bearing, pitch, zoom });
         liveFractionStore.set({ routeId, fraction: live.fraction });
         const shown = Math.round(live.fraction * 2000) / 2000;
         if (shown !== shownFraction) {
@@ -474,10 +495,12 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       if (cancelled) return;
       readHeights();
       const kmPerMin = speedKmPerMin(live.speed);
+      const center = positionAt(line, live.fraction);
+      pitch = clearPitchAt(center, bearing, followZoom(kmPerMin));
       map.easeTo({
-        center: positionAt(line, live.fraction),
+        center,
         bearing,
-        pitch: FOLLOW_PITCH,
+        pitch,
         zoom: followZoom(kmPerMin),
         duration: PREVIEW_EASE_MS,
         easing: easeInOut,
@@ -503,14 +526,17 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       follow();
     };
     map.once("idle", startFollowing);
-    timers.push(window.setTimeout(startFollowing, 3000));
-    map.fitBounds(
+    timers.push(window.setTimeout(startFollowing, 1800));
+    // cameraForBounds then easeTo, rather than fitBounds: a fit's padding would stay on the map afterwards.
+    const overview = map.cameraForBounds(
       [
         [west, south],
         [east, north],
       ],
-      { padding: 80, bearing: 0, pitch: 0, maxZoom: 15, duration: PREVIEW_EASE_MS, easing: easeInOut },
+      { padding: 80, bearing: 0, pitch: 0, maxZoom: 15 },
     );
+    if (overview) map.easeTo({ ...overview, bearing: 0, pitch: 0, duration: PREVIEW_EASE_MS, easing: easeInOut });
+    else startFollowing();
 
     // Grabbing the map pauses the ride so the user can look around.
     const onDragStart = () => {

@@ -120,6 +120,52 @@ export function* playbackFrames(
   }
 }
 
+/** Ground meters per CSS pixel at `zoom` and latitude `lat` (Mapbox's 512 px world tiles). */
+export function metersPerPixel(zoom: number, lat: number): number {
+  return (40_075_016.686 * Math.cos((lat * Math.PI) / 180)) / (512 * 2 ** zoom);
+}
+
+/** Camera-to-target distance in meters for a canvas `heightPx` tall (Mapbox's default 36.87° vertical field of view). */
+export function cameraDistanceMeters(zoom: number, lat: number, heightPx: number): number {
+  return 1.5 * heightPx * metersPerPixel(zoom, lat);
+}
+
+/** The point `meters` from `from` on `bearing` (flat approximation, fine over a few kilometers). */
+export function offsetPoint(from: [number, number], bearing: number, meters: number): [number, number] {
+  const b = (bearing * Math.PI) / 180;
+  const dLat = (meters * Math.cos(b)) / 110_574;
+  const dLng = (meters * Math.sin(b)) / (111_320 * Math.cos((from[1] * Math.PI) / 180));
+  return [from[0] + dLng, from[1] + dLat];
+}
+
+/** The lowest pitch the follow camera drops to when a ridge would hide the route. */
+export const MIN_CLEAR_PITCH = 35;
+/** Sight line margin over the terrain, meters. */
+const CLEARANCE_M = 20;
+
+/**
+ * The steepest pitch from `maxPitch` down to `MIN_CLEAR_PITCH` (in 5° steps) at which the camera, `distanceM` from
+ * the target, sees it over the terrain behind it. `rises` are terrain heights relative to the target at ground
+ * distances behind it (null where unknown). The sight line at ground distance d behind the target, for a camera
+ * at ground distance D and height H, is H·d/D above the target.
+ */
+export function clearPitch(
+  distanceM: number,
+  rises: { behindM: number; rise: number | null }[],
+  maxPitch = FOLLOW_PITCH,
+): number {
+  for (let pitch = maxPitch; pitch > MIN_CLEAR_PITCH; pitch -= 5) {
+    const p = (pitch * Math.PI) / 180;
+    const ground = distanceM * Math.sin(p);
+    const height = distanceM * Math.cos(p);
+    const blocked = rises.some(
+      ({ behindM, rise }) => rise !== null && behindM <= ground && rise > (height * behindM) / ground - CLEARANCE_M,
+    );
+    if (!blocked) return pitch;
+  }
+  return MIN_CLEAR_PITCH;
+}
+
 /** Smallest signed turn from bearing `a` to bearing `b`, in (-180, 180]. */
 export function turnBetween(a: number, b: number): number {
   const d = (((b - a) % 360) + 540) % 360 - 180;

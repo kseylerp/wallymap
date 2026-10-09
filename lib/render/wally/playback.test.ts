@@ -2,11 +2,14 @@ import type { LineString } from "geojson";
 import { describe, expect, it } from "vitest";
 import {
   bearingAt,
+  cameraDistanceMeters,
+  clearPitch,
   dispatchPreview,
   followZoom,
   fractionStep,
   gradientColorAt,
   lengthMeters,
+  offsetPoint,
   onPreviewDispatch,
   playbackFrames,
   positionAt,
@@ -147,5 +150,29 @@ describe("routeFromFeature and the preview bus", () => {
     expect(dispatchPreview({ type: "preview_stop" })).toBe(true);
     off();
     expect(dispatchPreview({ type: "preview_stop" })).toBe(false);
+  });
+});
+
+describe("clearPitch", () => {
+  const distance = 1000; // camera 1 km from the target
+  it("keeps Follow pitch over flat or falling ground", () => {
+    expect(clearPitch(distance, [{ behindM: 300, rise: 0 }, { behindM: 600, rise: -50 }])).toBe(65);
+    expect(clearPitch(distance, [{ behindM: 300, rise: null }])).toBe(65);
+  });
+
+  it("tilts up just enough to see over a ridge behind the target", () => {
+    // At 65° the camera sits ~906 m back and ~423 m up; the sight line is ~140 m up at 300 m back.
+    const ridge = [{ behindM: 300, rise: 160 }];
+    const pitch = clearPitch(distance, ridge);
+    expect(pitch).toBeLessThan(65);
+    expect(pitch).toBeGreaterThanOrEqual(35);
+    expect(clearPitch(distance, [{ behindM: 300, rise: 5000 }])).toBe(35);
+  });
+
+  it("measures the camera distance and offsets points", () => {
+    expect(cameraDistanceMeters(16, 0, 900)).toBeCloseTo(1.5 * 900 * (40_075_016.686 / (512 * 2 ** 16)), 6);
+    const [lng, lat] = offsetPoint([-120, 39], 180, 1105.74);
+    expect(lng).toBeCloseTo(-120, 9);
+    expect(lat).toBeCloseTo(38.99, 6);
   });
 });

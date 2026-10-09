@@ -39,7 +39,77 @@ describe("buildDeckLayers", () => {
   });
 });
 
+describe("buildDeckLayers styling", () => {
+  const color = layer.style.color;
+  const propsFor = (op: MapState["renderOps"][number]) => buildDeckLayers(stateWith(op))[0].props as unknown as Record<string, unknown>;
+
+  it("styles points", () => {
+    const props = propsFor({ layerId: "osm-trails", mode: "points", visible: true });
+    expect(props.pointType).toBe("circle");
+    expect(props.getPointRadius).toBe(6);
+    expect(props.pointRadiusUnits).toBe("pixels");
+    expect(props.getFillColor).toEqual(hexToRgba(color));
+  });
+
+  it("styles lines", () => {
+    const props = propsFor({ layerId: "osm-trails", mode: "lines", visible: true });
+    expect(props.filled).toBe(false);
+    expect(props.getLineWidth).toBe(3);
+    expect(props.lineWidthUnits).toBe("pixels");
+    expect(props.getLineColor).toEqual(hexToRgba(color));
+  });
+
+  it("styles polygons", () => {
+    const props = propsFor({ layerId: "osm-trails", mode: "polygons", visible: true });
+    expect(props.getFillColor).toEqual(hexToRgba(color, 90));
+    expect(props.getLineColor).toEqual(hexToRgba(color, 255));
+    expect(props.getLineWidth).toBe(1);
+  });
+
+  it("lets op.color override the style color", () => {
+    const props = propsFor({ layerId: "osm-trails", mode: "lines", color: "#00ff00", visible: true });
+    expect(props.getLineColor).toEqual([0, 255, 0, 255]);
+  });
+
+  it("falls back to the style color when op.color is not valid hex", () => {
+    const props = propsFor({ layerId: "osm-trails", mode: "lines", color: "notahex", visible: true });
+    expect(props.getLineColor).toEqual(hexToRgba(color));
+  });
+
+  it("skips tiles results", () => {
+    const state: MapState = {
+      ...initialMapState,
+      layers: {
+        "osm-trails": {
+          ...layer,
+          result: {
+            kind: "tiles",
+            data: { url: "https://example.com/{z}/{x}/{y}.png", minzoom: 0, maxzoom: 12 },
+            citation: layer.result.citation,
+          },
+        },
+      },
+      renderOps: [{ layerId: "osm-trails", mode: "lines", visible: true }],
+    };
+    expect(buildDeckLayers(state)).toHaveLength(0);
+  });
+
+  it("skips ops whose layer is not loaded", () => {
+    const state: MapState = {
+      ...initialMapState,
+      renderOps: [{ layerId: "missing", mode: "lines", visible: true }],
+    };
+    expect(buildDeckLayers(state)).toHaveLength(0);
+  });
+});
+
 describe("hexToRgba", () => {
+  it("throws on invalid colors", () => {
+    expect(() => hexToRgba("red")).toThrow();
+    expect(() => hexToRgba("#12")).toThrow();
+    expect(() => hexToRgba("#12345678")).toThrow();
+  });
+
   it("parses hex with default and custom alpha", () => {
     expect(hexToRgba("#c2410c")).toEqual([194, 65, 12, 255]);
     expect(hexToRgba("#fff", 90)).toEqual([255, 255, 255, 90]);

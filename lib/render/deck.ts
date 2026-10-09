@@ -39,8 +39,19 @@ export function bboxToViewport(bbox: BBox, width: number, height: number): Viewp
   return { longitude, latitude, zoom, pitch: 0, bearing: 0 };
 }
 
+/** Returns `color` if it parses as hex, else undefined (a bad model-supplied color must not crash the map). */
+function usableColor(color: string | undefined): string | undefined {
+  if (color === undefined) return undefined;
+  try {
+    hexToRgba(color);
+    return color;
+  } catch {
+    return undefined;
+  }
+}
+
 function geoJsonLayerFor(op: RenderOp, data: GeoJSON.FeatureCollection, defaultColor: string): GeoJsonLayer {
-  const color = op.color ?? defaultColor;
+  const color = usableColor(op.color) ?? defaultColor;
   const base = { id: `${op.layerId}:${op.mode}`, data, pickable: true };
   switch (op.mode) {
     case "points":

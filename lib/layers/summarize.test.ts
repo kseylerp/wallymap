@@ -59,7 +59,7 @@ describe("summarizeLayerResult", () => {
   it("flattens a tiles result and passes an error through unchanged", () => {
     const tiles: LayerResult = {
       kind: "tiles",
-      data: { url: "https://tiles.example.test/{z}/{x}/{y}.png", minzoom: 0, maxzoom: 12 },
+      data: { url: "https://tiles.example.test/{z}/{x}/{y}.png", minzoom: 0, maxzoom: 12, format: "raster" },
       citation,
     };
     expect(summarizeLayerResult(tiles)).toEqual({
@@ -67,10 +67,36 @@ describe("summarizeLayerResult", () => {
       url: "https://tiles.example.test/{z}/{x}/{y}.png",
       minzoom: 0,
       maxzoom: 12,
+      format: "raster",
       citation,
     });
     const error = { error: "nope", hint: "upstream" as const };
     expect(summarizeLayerResult(error)).toBe(error);
+  });
+
+  it("includes vector format, sourceLayer and geometry in a tiles summary", () => {
+    const tiles: LayerResult = {
+      kind: "tiles",
+      data: {
+        url: "https://tiles.example.test/{z}/{x}/{y}.pbf",
+        minzoom: 4,
+        maxzoom: 14,
+        format: "vector",
+        sourceLayer: "trails",
+        geometry: "line",
+      },
+      citation,
+    };
+    expect(summarizeLayerResult(tiles)).toEqual({
+      kind: "tiles",
+      url: "https://tiles.example.test/{z}/{x}/{y}.pbf",
+      minzoom: 4,
+      maxzoom: 14,
+      format: "vector",
+      sourceLayer: "trails",
+      geometry: "line",
+      citation,
+    });
   });
 
   it("isFullLayerResult tells full results from summaries and errors", () => {

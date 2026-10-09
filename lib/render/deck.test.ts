@@ -86,7 +86,7 @@ describe("buildDeckLayers styling", () => {
           ...layer,
           result: {
             kind: "tiles",
-            data: { url: "https://example.com/{z}/{x}/{y}.png", minzoom: 0, maxzoom: 12 },
+            data: { url: "https://example.com/{z}/{x}/{y}.png", minzoom: 0, maxzoom: 12, format: "raster" },
             citation: layer.result.citation,
           },
         },

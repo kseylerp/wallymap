@@ -27,7 +27,16 @@ export type LayerResult =
     }
   | {
       kind: "tiles";
-      data: { url: string; minzoom: number; maxzoom: number };
+      data: {
+        url: string;
+        minzoom: number;
+        maxzoom: number;
+        format: "raster" | "vector";
+        /** Vector tiles only: the layer name inside each tile. */
+        sourceLayer?: string;
+        /** Vector tiles only: how to draw the features. */
+        geometry?: "point" | "line" | "polygon";
+      };
       citation: Citation;
       coverageNote?: string;
     };

@@ -17,6 +17,9 @@ export type TilesSummary = {
   url: string;
   minzoom: number;
   maxzoom: number;
+  format: "raster" | "vector";
+  sourceLayer?: string;
+  geometry?: "point" | "line" | "polygon";
   citation: Citation;
   coverageNote?: string;
 };
@@ -61,6 +64,9 @@ export function summarizeLayerResult(body: LayerResult | LayerError): LayerResul
       url: body.data.url,
       minzoom: body.data.minzoom,
       maxzoom: body.data.maxzoom,
+      format: body.data.format,
+      ...(body.data.sourceLayer !== undefined && { sourceLayer: body.data.sourceLayer }),
+      ...(body.data.geometry !== undefined && { geometry: body.data.geometry }),
       citation: body.citation,
       ...(body.coverageNote !== undefined && { coverageNote: body.coverageNote }),
     };

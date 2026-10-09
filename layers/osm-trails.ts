@@ -1,11 +1,10 @@
 import { z } from "zod";
 import type { Feature, FeatureCollection, LineString } from "geojson";
-import type { CachedFetch } from "../lib/fetch";
 import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
+import { overpassQuery } from "./_shared/overpass";
 
-const PUBLIC_ENDPOINT = "https://overpass-api.de/api/interpreter";
-const REQUEST_TIMEOUT_MS = 30_000;
+export { overpassFailure } from "./_shared/overpass";
 
 const SAC_SCALES = [
   "hiking",
@@ -84,65 +83,6 @@ function withinSacScale(feature: Feature, max: (typeof SAC_SCALES)[number]): boo
   return index !== -1 && index <= SAC_SCALES.indexOf(max);
 }
 
-const FAILURE_REMARK = /timed out|runtime error|out of memory/i;
-
-/**
- * Overpass often answers HTTP 200 with a failure `remark` and empty or partial
- * `elements`. Returns the failure reason, or null when the body looks usable.
- */
-export function overpassFailure(json: unknown): string | null {
-  if (typeof json !== "object" || json === null) return "unexpected response body";
-  const body = json as Record<string, unknown>;
-  if (typeof body.remark === "string" && FAILURE_REMARK.test(body.remark)) return body.remark;
-  if (!Array.isArray(body.elements)) return "response has no elements";
-  return null;
-}
-
-async function requestOverpass(
-  fetchFn: CachedFetch,
-  query: string,
-  cacheKey: string | undefined,
-  overpassUrl: string | undefined,
-): Promise<{ ok: true; json: unknown } | { ok: false; reason: string }> {
-  // A blank OVERPASS_URL counts as unset.
-  const primary = overpassUrl || PUBLIC_ENDPOINT;
-  let reason = "Overpass returned no response";
-
-  // Primary endpoint first, then one retry against the public endpoint
-  // (the same URL again when the primary already is the public one).
-  // The fallback gets its own key so a cached primary failure never answers it.
-  const attempts = [
-    { url: primary, key: cacheKey },
-    { url: PUBLIC_ENDPOINT, key: cacheKey === undefined ? undefined : `${cacheKey}:fallback` },
-  ];
-  for (const { url, key } of attempts) {
-    try {
-      const res = await fetchFn(url, {
-        cacheKey: key,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: `data=${encodeURIComponent(query)}`,
-      });
-      if (!res.ok) {
-        reason = `Overpass returned ${res.status}`;
-        continue;
-      }
-      const json: unknown = await res.json();
-      const failure = overpassFailure(json);
-      if (failure === null) return { ok: true, json };
-      reason = `Overpass failed: ${failure}`;
-    } catch (err) {
-      reason =
-        // DOMException is not an Error subclass in every runtime, so match on name.
-        typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError"
-          ? `Overpass timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds`
-          : "Overpass returned no response";
-    }
-  }
-  return { ok: false, reason };
-}
-
 const osmTrails = defineLayer({
   id: "osm-trails",
   title: "OpenStreetMap trails",
@@ -165,14 +105,9 @@ const osmTrails = defineLayer({
       };
     }
 
-    const result = await requestOverpass(
-      ctx.fetch,
-      buildOverpassQuery(ctx.bbox, input),
-      ctx.cacheKey,
-      ctx.env.OVERPASS_URL,
-    );
+    const result = await overpassQuery(ctx, buildOverpassQuery(ctx.bbox, input));
     if (!result.ok) {
-      return { error: result.reason, hint: "upstream" };
+      return { error: result.error, hint: "upstream" };
     }
 
     const data = normalizeOverpass(result.json);

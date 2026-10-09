@@ -27,7 +27,12 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
   for (const loaded of Object.values(state.layers)) {
     if (loaded.result.kind !== "tiles") continue;
     const id = `${PREFIX}${loaded.id}`;
-    const { url, minzoom, maxzoom } = loaded.result.data;
+    const { url, minzoom, maxzoom, format } = loaded.result.data;
+    if (format === "vector") {
+      // Vector tile rendering arrives with its own task; skip rather than draw it as raster.
+      console.warn(`Skipping vector tile layer "${loaded.id}": vector rendering is not supported yet.`);
+      continue;
+    }
     wanted.add(id);
 
     // A reloaded layer may point at a new tile URL; raster sources cannot change URL in place.

@@ -184,7 +184,7 @@ const campsites = defineLayer({
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 10_000,
   input: inputSchema,
-  style: { geometry: "point", color: "#6B8F5E" },
+  style: { geometry: "point", color: "#F2A33A" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const area = bboxAreaKm2(ctx.bbox);

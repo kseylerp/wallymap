@@ -2,6 +2,11 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { z } from "zod";
 import { BBoxSchema, bboxAreaKm2, defineLayer } from "./types";
 import { registerLayer, getLayer, listLayers, clearRegistry } from "./registry";
+import "./index";
+import { DATA_COLORS, DATA_PALETTE, RASTER_TILE_LAYERS } from "@/lib/render/palette";
+
+/** Every real layer, captured before any test clears the registry. */
+const registered = listLayers();
 
 const fake = defineLayer({
   id: "fake", title: "Fake", description: "d", coverage: "global", license: "CC0",
@@ -25,4 +30,18 @@ describe("registry", () => {
   beforeEach(clearRegistry);
   it("registers and lists", () => { registerLayer(fake); expect(listLayers().map(l => l.id)).toEqual(["fake"]); expect(getLayer("fake")).toBe(fake); });
   it("rejects duplicate ids", () => { registerLayer(fake); expect(() => registerLayer(fake)).toThrow(/duplicate/i); });
+});
+describe("satellite data palette", () => {
+  it("registers every layer the palette knows, plus the raster tile layers", () => {
+    const ids = registered.map((l) => l.id).sort();
+    expect(ids).toEqual([...Object.keys(DATA_COLORS), ...RASTER_TILE_LAYERS].sort());
+  });
+
+  it.each(registered.filter((l) => !RASTER_TILE_LAYERS.has(l.id)).map((l) => [l.id, l] as const))(
+    "%s draws in its palette color",
+    (id, layer) => {
+      expect(DATA_PALETTE.has(layer.style.color)).toBe(true);
+      expect(layer.style.color).toBe(DATA_COLORS[id as keyof typeof DATA_COLORS]);
+    },
+  );
 });

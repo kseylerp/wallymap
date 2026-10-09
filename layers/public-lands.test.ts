@@ -20,7 +20,7 @@ describe("public-lands layer", () => {
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(Number.POSITIVE_INFINITY);
     expect(layer.input.parse({})).toEqual({});
-    expect(layer.style).toEqual({ geometry: "polygon", color: "#B9A6FF" });
+    expect(layer.style).toEqual({ geometry: "polygon", color: "#B9A6FF", fillOpacity: 0.28 });
   });
 
   it("returns the PAD-US vector tiles without calling upstream", async () => {

@@ -3,6 +3,8 @@
  * and how to lighten the hillshade without breaking its zoom expression. `components/mapTiles.ts` applies them.
  */
 
+import { CONTOUR_PAINT } from "@/lib/render/palette";
+
 /** The slice of a Mapbox style layer these helpers read. */
 export type StyleLayerLike = {
   id: string;
@@ -35,6 +37,18 @@ export const LABEL_PAINT = {
   "text-halo-color": "rgba(26, 26, 26, 0.85)",
   "text-halo-width": 1.2,
 } as const;
+
+/** Paint the hybrid puts on contour lines, as Wally draws them over imagery: warm white, thin, from zoom 9. */
+export const CONTOUR_LINE_PAINT = {
+  "line-color": CONTOUR_PAINT.color,
+  "line-opacity": ["step", ["zoom"], 0, CONTOUR_PAINT.minzoom, CONTOUR_PAINT.opacity],
+  "line-width": CONTOUR_PAINT.width,
+} as const;
+
+/** Contour lines (Outdoors `contour-line`, or any line layer drawn from the `contour` source layer). */
+export function isContourLine(layer: StyleLayerLike): boolean {
+  return layer.type === "line" && (layer.id.includes("contour") || layer["source-layer"] === "contour");
+}
 
 /** A paint property the hybrid sets on one layer. */
 export type PaintOverride = { id: string; property: string; value: unknown };
@@ -93,7 +107,8 @@ export function occludingLayerIds(layers: readonly StyleLayerLike[]): string[] {
 
 /**
  * The paint the hybrid sets so kept layers read on imagery: country and state boundaries become a faint white
- * line, and natural, POI, place and airport labels become white text on a dark halo.
+ * line, contours a thin warm-white line from zoom 9, and natural, POI, place and airport labels white text on a
+ * dark halo.
  */
 export function hybridPaintOverrides(layers: readonly StyleLayerLike[]): PaintOverride[] {
   const overrides: PaintOverride[] = [];
@@ -101,6 +116,7 @@ export function hybridPaintOverrides(layers: readonly StyleLayerLike[]): PaintOv
     if (isAppTileLayer(layer)) continue;
     let paint: Record<string, unknown> | null = null;
     if (isAdminLine(layer) && !layer.id.endsWith("-bg")) paint = ADMIN_LINE_PAINT;
+    else if (isContourLine(layer)) paint = CONTOUR_LINE_PAINT;
     else if (layer.type === "symbol" && LABEL_SOURCE_LAYERS.has(layer["source-layer"] ?? "")) paint = LABEL_PAINT;
     if (!paint) continue;
     for (const [property, value] of Object.entries(paint)) overrides.push({ id: layer.id, property, value });

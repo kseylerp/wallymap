@@ -168,7 +168,7 @@ const species = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 50_000,
   input: inputSchema,
-  style: { geometry: "point", color: "#5E7D5A" },
+  style: { geometry: "point", color: "#E24BB1" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const area = bboxAreaKm2(ctx.bbox);

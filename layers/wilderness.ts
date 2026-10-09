@@ -89,7 +89,7 @@ const wilderness = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 400_000,
   input: z.object({}),
-  style: { geometry: "polygon", color: "#5E7D5A" },
+  style: { geometry: "polygon", color: "#B9A6FF", fillOpacity: 0.22 },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

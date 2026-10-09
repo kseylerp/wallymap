@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { ChevronUpIcon, CloseIcon, EyeIcon, EyeOffIcon, GripIcon, LayersIcon } from "@/components/icons";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
-import { SLATE } from "@/lib/render/deck";
+import { DATA_COLORS, TILE_SWATCH } from "@/lib/render/palette";
 import type { LoadedLayer, MapAction, MapState, RenderMode, RenderOp } from "@/lib/render/state";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
 
@@ -18,8 +18,15 @@ type LayerStackProps = {
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
-/** Map data colors offered in the swatch popover: satellite-safe and distinct from each other. */
-export const PRESET_COLORS = ["#2F3A44", "#E0893F", "#5E7D5A", "#C2410C", "#3E7CB1", "#8E6CC9"] as const;
+/** Map data colors offered in the swatch popover: the satellite-safe data palette. */
+export const PRESET_COLORS = [
+  DATA_COLORS["osm-trails"],
+  DATA_COLORS["fire-perimeters"],
+  DATA_COLORS.campsites,
+  DATA_COLORS.photos,
+  DATA_COLORS.streamflow,
+  DATA_COLORS.species,
+] as const;
 
 const MODES: { value: RenderMode; label: string; ready: boolean }[] = [
   { value: "points", label: "Points", ready: true },
@@ -30,10 +37,14 @@ const MODES: { value: RenderMode; label: string; ready: boolean }[] = [
   { value: "hexbin", label: "Hexbin (Milestone 3)", ready: false },
 ];
 
-/** The color the map actually draws: a valid render-op color, else slate for points, else the style color. */
+/**
+ * The color the map actually draws: a valid render-op color, else the style color. Raster tiles carry their own
+ * imagery colors, so their swatch is a neutral gray.
+ */
 export function drawnColor(layer: LoadedLayer, op: RenderOp | undefined): string {
   if (op?.color && HEX.test(op.color.trim())) return op.color;
-  return op?.mode === "points" ? SLATE : layer.style.color;
+  if (layer.result.kind === "tiles" && layer.result.data.format === "raster") return TILE_SWATCH;
+  return layer.style.color;
 }
 
 /** Loaded layers top first (the last render op draws on top), then any layer still waiting for an op. */
@@ -223,7 +234,8 @@ function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, d
         <Swatch
           color={drawnColor(layer, op)}
           title={layer.title}
-          disabled={!op}
+          // Raster tiles draw their own imagery colors, so there is nothing to recolor.
+          disabled={!op || (layer.result.kind === "tiles" && layer.result.data.format === "raster")}
           onPick={(color) => dispatch({ type: "set_style", layerId: layer.id, color })}
         />
         <p className={`ml-1 min-w-0 flex-1 truncate text-[13.5px] font-medium ${visible ? "text-ink" : "text-ink-muted"}`} title={layer.title}>

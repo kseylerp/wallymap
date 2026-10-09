@@ -166,7 +166,7 @@ const snowpack = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 400_000,
   input: inputSchema,
-  style: { geometry: "point", color: "#5B6B7A", unit: "in" },
+  style: { geometry: "point", color: "#CFF2FF", unit: "in" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

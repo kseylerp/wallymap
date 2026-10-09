@@ -104,7 +104,7 @@ describe("photos layer", () => {
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toEqual(["MAPILLARY_TOKEN"]);
     expect(layer.maxAreaKm2).toBe(2_500);
-    expect(layer.style).toEqual({ geometry: "point", color: "#5B6B7A" });
+    expect(layer.style).toEqual({ geometry: "point", color: "#FFD23F" });
     expect(layer.license).toBe("Wikimedia Commons (various free licenses); Mapillary (CC BY-SA 4.0)");
   });
 

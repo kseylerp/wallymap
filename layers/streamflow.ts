@@ -190,7 +190,7 @@ const streamflow = defineLayer({
   optionalEnv: ["USGS_API_KEY"],
   maxAreaKm2: 400_000,
   input: inputSchema,
-  style: { geometry: "point", color: "#5B6B7A", unit: "cfs" },
+  style: { geometry: "point", color: "#3FA9F5", unit: "cfs" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

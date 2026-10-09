@@ -123,7 +123,7 @@ const forestRoads = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 20_000,
   input: inputSchema,
-  style: { geometry: "line", color: "#C4633F" },
+  style: { geometry: "line", color: "#F2A33A" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     if (outsideUs(ctx.bbox)) {

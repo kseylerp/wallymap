@@ -99,7 +99,7 @@ const physicalRegions = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 30_000_000,
   input: inputSchema,
-  style: { geometry: "polygon", color: "#5B6B7A" },
+  style: { geometry: "polygon", color: "#FFFFFF", fillOpacity: 0 },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     let fc: FeatureCollection;

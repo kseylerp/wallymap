@@ -16,6 +16,7 @@
     "@ai-sdk/openai-compatible": "^3.0.67",
     "@ai-sdk/react": "^4.0.140",
     "@deck.gl/core": "^9.4.0",
+    "@deck.gl/extensions": "^9.4.0",
     "@deck.gl/layers": "^9.4.0",
     "@deck.gl/mapbox": "^9.4.0",
     "@math.gl/web-mercator": "^4.1.0",

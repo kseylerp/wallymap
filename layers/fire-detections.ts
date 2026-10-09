@@ -105,7 +105,7 @@ const fireDetections = defineLayer({
   requiredEnv: ["FIRMS_MAP_KEY"],
   maxAreaKm2: 2_000_000,
   input: inputSchema,
-  style: { geometry: "point", color: "#D97757", unit: "MW" },
+  style: { geometry: "point", color: "#FF5A36", unit: "MW" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const key = ctx.env.FIRMS_MAP_KEY;

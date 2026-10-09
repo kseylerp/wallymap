@@ -212,7 +212,7 @@ describe("snowpack layer", () => {
     expect(layer.description).toMatch(/snow water equivalent/i);
     expect(layer.description).toMatch(/daily/i);
     expect(layer.description).toMatch(/inches/i);
-    expect(layer.style).toEqual({ geometry: "point", color: "#5B6B7A", unit: "in" });
+    expect(layer.style).toEqual({ geometry: "point", color: "#CFF2FF", unit: "in" });
     expect(layer.coverage).toEqual({ bbox: [-125, 31, -102, 49] });
     expect(layer.license).toBe("Public domain (USDA NRCS)");
     expect(layer.maxAreaKm2).toBe(400_000);

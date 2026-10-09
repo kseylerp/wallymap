@@ -69,8 +69,16 @@ describe("hybridPaintOverrides", () => {
   const idsWith = (property: string) => overrides.filter((o) => o.property === property).map((o) => o.id);
 
   it("turns admin boundaries into a faint white line, but not their casing", () => {
-    expect(idsWith("line-color")).toEqual(["admin-1-boundary", "admin-0-boundary"]);
+    expect(idsWith("line-color")).toEqual(["contour-line", "admin-1-boundary", "admin-0-boundary"]);
     expect(overrides.find((o) => o.id === "admin-0-boundary")?.value).toBe(ADMIN_LINE_PAINT["line-color"]);
+  });
+
+  it("draws contours as Wally does over imagery: #FAF9F5 at 0.85, 0.6px, from zoom 9", () => {
+    expect(overrides.filter((o) => o.id === "contour-line")).toEqual([
+      { id: "contour-line", property: "line-color", value: "#FAF9F5" },
+      { id: "contour-line", property: "line-opacity", value: ["step", ["zoom"], 0, 9, 0.85] },
+      { id: "contour-line", property: "line-width", value: 0.6 },
+    ]);
   });
 
   it("gives natural, POI and place labels white text on a dark halo, leaving road labels and shields", () => {

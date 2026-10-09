@@ -246,7 +246,7 @@ describe("streamflow layer", () => {
     expect(layer.description).toMatch(/gage height|gauge height/i);
     expect(layer.description).toMatch(/latest reading|most recent reading/i);
     expect(layer.description).toMatch(/provisional/i);
-    expect(layer.style).toEqual({ geometry: "point", color: "#5B6B7A", unit: "cfs" });
+    expect(layer.style).toEqual({ geometry: "point", color: "#3FA9F5", unit: "cfs" });
     expect(layer.coverage).toBe("us");
     expect(layer.license).toBe("Public domain (USGS)");
     expect(layer.maxAreaKm2).toBe(400_000);

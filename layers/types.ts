@@ -62,6 +62,8 @@ export type StyleHints = {
   geometry: "point" | "line" | "polygon";
   color: string;
   unit?: string;
+  /** Polygons only: fill alpha from 0 (outline only) to 1; the renderer's default when unset. */
+  fillOpacity?: number;
 };
 
 export type Layer<I extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawShape>> = {

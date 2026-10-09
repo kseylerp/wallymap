@@ -16,7 +16,7 @@
  *                    "Private Conservation Land"; private parcels usually have no agency, only a "Private ..." designation
  *       access       open | restricted | closed | unknown (raw Pub_Access)
  *       category     protected_area | wilderness | state_park | nature_reserve | managed_forest | national_park | national_monument
- *   The map colors fills by `agency` (falling back to `designation`); see ownershipFillColor in components/mapTiles.ts.
+ *   The map colors fills by `agency` (wilderness by `category` / `designation`); see landManagerFillColor in components/mapTiles.ts.
  * No upstream call is made by the layer: it only hands the tile URL to the map.
  */
 import { z } from "zod";
@@ -32,8 +32,9 @@ const publicLands = defineLayer({
   title: "Public land ownership",
   description:
     "Who owns and manages land across the United States, from the USGS Protected Areas Database (PAD-US 4.1), drawn as tinted areas with white outlines. " +
-    "Colors show the manager type: federal land (Forest Service, BLM, National Park Service, Fish and Wildlife Service, Bureau of Reclamation, Army Corps, military) in lavender, " +
-    "state land and state parks in light blue, local and tribal land in pale lilac, and private conservation land (land trusts and other nonprofits, easements) in off-white. " +
+    "Colors show the manager: National Park Service dark green, Forest Service olive green, BLM tan, Fish and Wildlife Service teal, state land and state parks blue, " +
+    "wilderness areas deep green whoever manages them, and every other manager (other federal land such as the Bureau of Reclamation, Army Corps or military; local, tribal, " +
+    "and private conservation land held by land trusts and other nonprofits) lavender. The tint fades as the map zooms in so trails stay readable. " +
     "PAD-US combines a Fee layer (who holds title) with Designation and Easement layers (wilderness areas, roadless areas, recreation areas, conservation easements), " +
     "so one place can carry several overlapping polygons, for example a wilderness area inside a national forest. " +
     "Each area has a name, a manager, a designation and a coarse public-access flag (open, restricted, closed, unknown). " +
@@ -47,7 +48,7 @@ const publicLands = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
-  style: { geometry: "polygon", color: "#B9A6FF" },
+  style: { geometry: "polygon", color: "#B9A6FF", fillOpacity: 0.28 },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     // Outside the US the tiles are simply empty, so they are returned anyway along with the note.

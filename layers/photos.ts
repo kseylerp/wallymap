@@ -287,7 +287,7 @@ const photos = defineLayer({
   optionalEnv: ["MAPILLARY_TOKEN"],
   maxAreaKm2: 2_500,
   input: inputSchema,
-  style: { geometry: "point", color: "#5B6B7A" },
+  style: { geometry: "point", color: "#FFD23F" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const area = bboxAreaKm2(ctx.bbox);

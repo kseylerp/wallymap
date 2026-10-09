@@ -160,7 +160,7 @@ describe("species layer", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(50_000);
-    expect(layer.style).toEqual({ geometry: "point", color: "#5E7D5A" });
+    expect(layer.style).toEqual({ geometry: "point", color: "#E24BB1" });
     expect(layer.license).toBe("CC BY-NC / CC0 per observation (iNaturalist)");
   });
 

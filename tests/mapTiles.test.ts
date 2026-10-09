@@ -4,7 +4,8 @@ import {
   heatLayerSpec,
   heatPointsCollection,
   insertBeforeId,
-  ownershipFillColor,
+  landFillOpacity,
+  landManagerFillColor,
   syncHeatLayers,
   syncTileLayers,
   vectorTileLayerSpecs,
@@ -25,7 +26,7 @@ describe("vectorTileLayerSpecs", () => {
       source: "tiles-public-lands",
       "source-layer": "padus",
       layout: { visibility: "visible" },
-      paint: { "fill-opacity": 0.28 },
+      paint: { "fill-opacity": landFillOpacity(1) },
     });
     expect(line).toMatchObject({
       id: "tiles-public-lands-line",
@@ -33,14 +34,19 @@ describe("vectorTileLayerSpecs", () => {
       source: "tiles-public-lands",
       "source-layer": "padus",
       layout: { visibility: "visible" },
-      paint: { "line-color": "#FFFFFF", "line-width": 1.5, "line-opacity": 0.9 },
+      paint: { "line-color": "#FFFFFF", "line-width": 1, "line-opacity": 0.6 },
     });
   });
 
   it("colors polygon fills by manager, falling back to the layer style color", () => {
     const [fill] = vectorTileLayerSpecs("public-lands", STYLE, "padus", "polygon", true);
     expect(fill.type).toBe("fill");
-    expect((fill as { paint: Record<string, unknown> }).paint["fill-color"]).toEqual(ownershipFillColor("#B9A6FF"));
+    expect((fill as { paint: Record<string, unknown> }).paint["fill-color"]).toEqual(landManagerFillColor("#B9A6FF"));
+  });
+
+  it("paints every area in a color picked in the layer panel", () => {
+    const [fill] = vectorTileLayerSpecs("public-lands", STYLE, "padus", "polygon", true, { color: "#FF5A36" });
+    expect((fill as { paint: Record<string, unknown> }).paint["fill-color"]).toBe("#FF5A36");
   });
 
   it("hides every spec when not visible", () => {
@@ -62,36 +68,44 @@ describe("vectorTileLayerSpecs", () => {
   });
 });
 
-describe("ownershipFillColor", () => {
-  const expr = ownershipFillColor("#ABCDEF") as unknown[];
-  // ["case", ["has","agency"], agencyMatch, ["has","designation"], designationCase, fallback]
-  const agencyMatch = expr[2] as unknown[];
+describe("landManagerFillColor", () => {
+  const expr = landManagerFillColor("#B9A6FF") as unknown[];
+  // ["case", wildernessTest, "#24543A", ["match", ["to-string", ["get","agency"]], label, color, ..., fallback]]
+  const agencyMatch = expr[3] as unknown[];
 
-  /** The output that follows the match label list containing `value`. */
+  /** The output that follows the match label `value` (a single label or a label list). */
   function colorAfterLabel(match: unknown[], value: string): unknown {
-    const index = match.findIndex((part) => Array.isArray(part) && part.includes(value));
+    const index = match.findIndex((part, i) => i >= 2 && i % 2 === 0 && (part === value || (Array.isArray(part) && part.includes(value))));
     return index === -1 ? undefined : match[index + 1];
   }
 
-  it("matches the decoded PAD-US agency values, each list followed by its color", () => {
+  it("colors wilderness areas deep green whoever manages them", () => {
     expect(expr[0]).toBe("case");
-    expect(expr[1]).toEqual(["has", "agency"]);
-    expect(agencyMatch[0]).toBe("match");
-    for (const agency of ["USFS", "BLM", "NPS", "FWS", "USBR", "USACE", "DOE", "TVA", "ARS", "DOD", "NRCS"]) {
-      expect(colorAfterLabel(agencyMatch, agency)).toBe("#B9A6FF");
-    }
-    for (const agency of ["State", "State Parks"]) expect(colorAfterLabel(agencyMatch, agency)).toBe("#9FC4FF");
-    expect(colorAfterLabel(agencyMatch, "NGO")).toBe("#EDEDEA");
-    // Local, Tribal and anything unlisted take the match default.
-    expect(agencyMatch[agencyMatch.length - 1]).toBe("#D9D4FF");
+    expect(JSON.stringify(expr[1])).toContain('["get","category"]');
+    expect(JSON.stringify(expr[1])).toContain('"Wilderness"');
+    expect(expr[2]).toBe("#24543A");
   });
 
-  it("falls back to the designation when there is no agency, then to the style color", () => {
-    expect(expr[3]).toEqual(["has", "designation"]);
-    const designationCase = JSON.stringify(expr[4]);
-    expect(designationCase).toContain('["get","designation"]');
-    expect(designationCase).toContain('"Private"');
-    expect(expr[expr.length - 1]).toBe("#ABCDEF");
+  it("matches the PAD-US agency to Wally's manager colors, others in the fallback lavender", () => {
+    expect(agencyMatch[0]).toBe("match");
+    expect(agencyMatch[1]).toEqual(["to-string", ["get", "agency"]]);
+    expect(colorAfterLabel(agencyMatch, "NPS")).toBe("#357647");
+    expect(colorAfterLabel(agencyMatch, "USFS")).toBe("#7E9A54");
+    expect(colorAfterLabel(agencyMatch, "BLM")).toBe("#C9A254");
+    expect(colorAfterLabel(agencyMatch, "FWS")).toBe("#488C89");
+    for (const agency of ["State", "State Parks"]) expect(colorAfterLabel(agencyMatch, agency)).toBe("#4A7DB5");
+    expect(colorAfterLabel(agencyMatch, "USACE")).toBeUndefined();
+    expect(agencyMatch[agencyMatch.length - 1]).toBe("#B9A6FF");
+  });
+});
+
+describe("landFillOpacity", () => {
+  it("interpolates Wally's wash on zoom: 0.18, 0.15, 0.08, 0.03", () => {
+    expect(landFillOpacity()).toEqual(["interpolate", ["linear"], ["zoom"], 9, 0.18, 12, 0.15, 13.5, 0.08, 15, 0.03]);
+  });
+
+  it("scales every stop by the layer panel opacity", () => {
+    expect(landFillOpacity(0.5)).toEqual(["interpolate", ["linear"], ["zoom"], 9, 0.09, 12, 0.075, 13.5, 0.04, 15, 0.015]);
   });
 });
 
@@ -268,7 +282,7 @@ describe("syncTileLayers with layer panel settings", () => {
     const faded = stateWith({ visible: true });
     faded.renderOps = [{ ...faded.renderOps[0], opacity: 0.5 }];
     syncTileLayers(vector.map, faded);
-    expect(vector.layers.find((l) => l.id === "tiles-public-lands")?.paint).toMatchObject({ "fill-opacity": 0.14 });
+    expect(vector.layers.find((l) => l.id === "tiles-public-lands")?.paint).toMatchObject({ "fill-opacity": landFillOpacity(0.5) });
   });
 
   it("stacks tile layers in render-op order and restacks after a reorder", () => {

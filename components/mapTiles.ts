@@ -21,26 +21,14 @@ import {
   type StyleLayerLike,
 } from "@/lib/render/hybridStyle";
 import { hexToRgba } from "@/lib/render/deck";
+import { LAND_MANAGER_COLORS } from "@/lib/render/palette";
 import { featureCenter } from "@/lib/render/inspect";
 import type { Basemap, MapState } from "@/lib/render/state";
 
 const PREFIX = "tiles-";
 
-/** Satellite data palette for land ownership (docs/superpowers/specs/2026-10-09-wildmap-restyle.md). */
-const OWNERSHIP_COLORS = {
-  federal: "#B9A6FF",
-  state: "#9FC4FF",
-  local: "#D9D4FF",
-  private: "#EDEDEA",
-} as const;
-
-/** PAD-US manager abbreviations as decoded from the tiles, plus the raw PAD-US codes in case a rebuild uses them. */
-const FEDERAL_AGENCIES = [
-  "USFS", "BLM", "NPS", "FWS", "USBR", "BOR", "USACE", "DOD", "DOE", "TVA", "ARS", "NRCS", "NOAA", "BIA", "BOEM",
-  "OTHF", "Federal", "FED",
-];
+/** PAD-US `agency` values (as decoded from the tiles) that take Wally's state-land color. */
 const STATE_AGENCIES = ["State", "State Parks", "STAT", "SPR", "SDNR", "SFW", "SLB", "SDOL", "OTHS"];
-const PRIVATE_AGENCIES = ["NGO", "Private", "PVT"];
 
 /** True when the string expression starts with `prefix`. */
 function startsWith(value: ExpressionSpecification, prefix: string): ExpressionSpecification {
@@ -48,46 +36,54 @@ function startsWith(value: ExpressionSpecification, prefix: string): ExpressionS
 }
 
 /**
- * A fill color that follows the land manager when features carry PAD-US `agency` / `designation` properties:
- * federal lavender, state blue, local or tribal pale lilac, private off-white. Features with neither property
- * (any other vector tile set) get `fallback`, the layer's own style color.
+ * Wally's public-land fill by manager: NPS, USFS, BLM, FWS and state land each get their color, wilderness areas
+ * (PAD-US `category` "wilderness" or a "Wilderness ..." designation, whoever manages them) the deep wilderness
+ * green, and every other manager or a feature without one `fallback` (the layer's lavender).
  */
-export function ownershipFillColor(fallback: string): ExpressionSpecification {
-  const designation: ExpressionSpecification = ["to-string", ["get", "designation"]];
+export function landManagerFillColor(fallback: string): ExpressionSpecification {
+  const c = LAND_MANAGER_COLORS;
   return [
     "case",
-    ["has", "agency"],
+    [
+      "any",
+      ["==", ["to-string", ["get", "category"]], "wilderness"],
+      startsWith(["to-string", ["get", "designation"]], "Wilderness"),
+    ],
+    c.Wilderness,
     [
       "match",
       ["to-string", ["get", "agency"]],
-      FEDERAL_AGENCIES,
-      OWNERSHIP_COLORS.federal,
+      "NPS",
+      c.NPS,
+      "USFS",
+      c.USFS,
+      "BLM",
+      c.BLM,
+      "FWS",
+      c.FWS,
       STATE_AGENCIES,
-      OWNERSHIP_COLORS.state,
-      PRIVATE_AGENCIES,
-      OWNERSHIP_COLORS.private,
-      OWNERSHIP_COLORS.local,
+      c.State,
+      fallback,
     ],
-    // About 7% of PAD-US features have no agency; their designation still says who holds them.
-    ["has", "designation"],
-    [
-      "case",
-      startsWith(designation, "Private"),
-      OWNERSHIP_COLORS.private,
-      startsWith(designation, "State"),
-      OWNERSHIP_COLORS.state,
-      ["any", startsWith(designation, "National"), startsWith(designation, "Federal"), startsWith(designation, "Military")],
-      OWNERSHIP_COLORS.federal,
-      OWNERSHIP_COLORS.local,
-    ],
-    fallback,
   ];
+}
+
+/** Wally's land wash fades as you zoom in so trails and pins read: 0.18 regional, 0.03 at trailhead zooms. */
+export function landFillOpacity(opacity = 1): ExpressionSpecification {
+  const stops: [number, number][] = [
+    [9, 0.18],
+    [12, 0.15],
+    [13.5, 0.08],
+    [15, 0.03],
+  ];
+  return ["interpolate", ["linear"], ["zoom"], ...stops.flatMap(([z, o]) => [z, Math.round(o * opacity * 1000) / 1000])];
 }
 
 type VectorLayerSpec = FillLayerSpecification | LineLayerSpecification | CircleLayerSpecification;
 
 /**
- * The Mapbox layers that draw one vector tile layer: a manager-colored fill plus a white outline for polygons,
+ * The Mapbox layers that draw one vector tile layer: a manager-colored fill (fading with zoom) plus a thin white
+ * outline for polygons,
  * else one line or circle layer in the style color. Every layer reads source `tiles-<id>`; the first layer is
  * `tiles-<id>`, the polygon outline `tiles-<id>-line`.
  */
@@ -112,14 +108,18 @@ export function vectorTileLayerSpecs(
         type: "fill",
         ...common,
         layout,
-        paint: { "fill-color": ownershipFillColor(color), "fill-opacity": 0.28 * opacity },
+        paint: {
+          // A color picked in the layer panel paints every area; otherwise Wally's manager palette.
+          "fill-color": paint.color ?? landManagerFillColor(style.color),
+          "fill-opacity": landFillOpacity(opacity),
+        },
       },
       {
         id: `${layerId}-line`,
         type: "line",
         ...common,
         layout: { ...layout, "line-join": "round" },
-        paint: { "line-color": "#FFFFFF", "line-width": 1.5, "line-opacity": 0.9 * opacity },
+        paint: { "line-color": "#FFFFFF", "line-width": 1, "line-opacity": 0.6 * opacity },
       },
     ];
   }

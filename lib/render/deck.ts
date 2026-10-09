@@ -1,8 +1,10 @@
 import type { Layer } from "@deck.gl/core";
+import { PathStyleExtension } from "@deck.gl/extensions";
 import { GeoJsonLayer } from "@deck.gl/layers";
 import { WebMercatorViewport } from "@math.gl/web-mercator";
 import type { Feature } from "geojson";
-import type { BBox } from "@/layers/types";
+import type { BBox, StyleHints } from "@/layers/types";
+import { OUTDOORS_TRAIL, SCORE_RAMP } from "@/lib/render/palette";
 import type { MapState, RenderOp, Viewport } from "@/lib/render/state";
 
 type Rgba = [number, number, number, number];
@@ -10,14 +12,15 @@ type Rgba = [number, number, number, number];
 /** `--slate`: the default stroke for data drawn over imagery. */
 export const SLATE = "#2F3A44";
 const WHITE: Rgba = [255, 255, 255, 255];
-/** Point markers: a white disc ringed in slate (or the requested color), like a map pin seen from above. */
+/** Point markers: a disc in the layer color with a white casing ring, so it reads on any imagery. */
 const POINT_RADIUS_PX = 7;
-const POINT_STROKE_PX = 2;
+const POINT_CASING_PX = 1.5;
 /** Lines get a white casing underneath so a dark stroke reads on both bright and dark imagery. */
 const LINE_WIDTH_PX = 2.5;
 const LINE_CASING_WIDTH_PX = 4.5;
-/** Polygon fills stay light so the imagery underneath still reads. */
-const POLYGON_FILL_ALPHA = 64;
+/** Polygons: a translucent fill (the layer's `fillOpacity`, else this) under a white outline. */
+const POLYGON_FILL_OPACITY = 0.25;
+const POLYGON_OUTLINE_PX = 1.5;
 /** While a feature is selected, the rest of its layer fades to this share of its alpha. */
 export const SIBLING_FADE = 0.35;
 
@@ -102,15 +105,67 @@ function colorFor(color: Rgba, opacity: number, selected: Feature | undefined): 
   return (f: Feature) => (f === selected ? base : faded);
 }
 
+/** Linear interpolation of `stops` (x ascending) at `x`, clamped at both ends. */
+function interpolate(x: number, xs: readonly number[], ys: readonly number[]): number {
+  if (x <= xs[0]) return ys[0];
+  for (let i = 1; i < xs.length; i++) {
+    if (x <= xs[i]) {
+      const t = (x - xs[i - 1]) / (xs[i] - xs[i - 1]);
+      return ys[i - 1] + (ys[i] - ys[i - 1]) * t;
+    }
+  }
+  return ys[ys.length - 1];
+}
+
+/**
+ * The score ramp for a 0 to 100 `v`: white at 25% alpha up to `to` (amber by default) at 70%. Missing or
+ * non-numeric `v` reads as 0.
+ */
+export function scoreRampColor(v: unknown, to: string = SCORE_RAMP.to): Rgba {
+  const n = typeof v === "number" ? v : Number(v);
+  const t = Number.isFinite(n) ? Math.min(1, Math.max(0, n / 100)) : 0;
+  const from = hexToRgba(SCORE_RAMP.from);
+  const end = hexToRgba(to);
+  const alpha = SCORE_RAMP.fromAlpha + (SCORE_RAMP.toAlpha - SCORE_RAMP.fromAlpha) * t;
+  return [
+    Math.round(from[0] + (end[0] - from[0]) * t),
+    Math.round(from[1] + (end[1] - from[1]) * t),
+    Math.round(from[2] + (end[2] - from[2]) * t),
+    Math.round(255 * alpha),
+  ];
+}
+
+/** A per-feature color (the score ramp) with op opacity and the selection fade applied. */
+function rampFor(ramp: (f: Feature) => Rgba, opacity: number, selected: Feature | undefined): ColorAccessor {
+  return (f: Feature) => {
+    const color = withOpacity(ramp(f), opacity);
+    return selected && f !== selected ? withOpacity(color, SIBLING_FADE) : color;
+  };
+}
+
+/** Widths (px) of Wally's basemap-trail look at a zoom: casing and dashed core. */
+export function outdoorsTrailWidths(zoom: number): { casing: number; core: number } {
+  const { zooms, casing, core } = OUTDOORS_TRAIL;
+  return { casing: interpolate(zoom, zooms, casing), core: interpolate(zoom, zooms, core) };
+}
+
+/** Dashes for the Outdoors trail core. Mapbox measures dashes in line widths, deck in half widths. */
+const OUTDOORS_TRAIL_DASH: [number, number] = [OUTDOORS_TRAIL.dash[0] * 2, OUTDOORS_TRAIL.dash[1] * 2];
+const dashExtension = new PathStyleExtension({ dash: true });
+
+/** What one op's layers need to know beyond the op itself. */
+type OpContext = {
+  data: GeoJSON.FeatureCollection;
+  style: StyleHints;
+  selected: Feature | undefined;
+  basemap: MapState["basemap"];
+  zoom: number;
+};
+
 /** The deck layers for one render op, bottom first (lines add a white casing beneath the stroke). */
-function geoJsonLayersFor(
-  op: RenderOp,
-  data: GeoJSON.FeatureCollection,
-  defaultColor: string,
-  selected: Feature | undefined,
-): Layer[] {
+function geoJsonLayersFor(op: RenderOp, { data, style, selected, basemap, zoom }: OpContext): Layer[] {
   const requested = usableColor(op.color);
-  const color = requested ?? defaultColor;
+  const color = requested ?? style.color;
   const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
   const id = `${op.layerId}:${op.mode}`;
   const key = selectionKey(selected);
@@ -124,14 +179,17 @@ function geoJsonLayersFor(
           pointType: "circle",
           getPointRadius: POINT_RADIUS_PX,
           pointRadiusUnits: "pixels",
-          getFillColor: colorFor(WHITE, opacity, selected),
+          getFillColor: colorFor(hexToRgba(color), opacity, selected),
           stroked: true,
-          getLineColor: colorFor(hexToRgba(requested ?? SLATE), opacity, selected),
-          getLineWidth: POINT_STROKE_PX,
+          getLineColor: colorFor(WHITE, opacity, selected),
+          getLineWidth: POINT_CASING_PX,
           lineWidthUnits: "pixels",
         }),
       ];
-    case "lines":
+    case "lines": {
+      // On plain Outdoors the trails read as Wally's basemap trails: green dashes over a white casing.
+      const wallyTrail = basemap === "outdoors" && op.layerId === "osm-trails" && !requested;
+      const widths = wallyTrail ? outdoorsTrailWidths(zoom) : { casing: LINE_CASING_WIDTH_PX, core: LINE_WIDTH_PX };
       return [
         new GeoJsonLayer({
           id: `${id}:casing`,
@@ -139,28 +197,40 @@ function geoJsonLayersFor(
           pickable: false,
           filled: false,
           getLineColor: colorFor(WHITE, opacity, selected),
-          getLineWidth: LINE_CASING_WIDTH_PX,
+          getLineWidth: widths.casing,
           lineWidthUnits: "pixels",
           updateTriggers,
         }),
         new GeoJsonLayer({
           ...base,
           filled: false,
-          getLineColor: colorFor(hexToRgba(color), opacity, selected),
-          getLineWidth: LINE_WIDTH_PX,
+          getLineColor: colorFor(hexToRgba(wallyTrail ? OUTDOORS_TRAIL.color : color), opacity, selected),
+          getLineWidth: widths.core,
           lineWidthUnits: "pixels",
+          ...(wallyTrail && {
+            extensions: [dashExtension],
+            getDashArray: OUTDOORS_TRAIL_DASH,
+          }),
         }),
       ];
-    case "polygons":
+    }
+    case "polygons": {
+      const fillAlpha = Math.round(255 * (style.fillOpacity ?? POLYGON_FILL_OPACITY));
+      // Scores (popularity, remoteness) shade each area by `v` from white to amber, or to a picked color.
+      const getFillColor =
+        style.unit === "score"
+          ? rampFor((f) => scoreRampColor(f.properties?.v, requested ?? SCORE_RAMP.to), opacity, selected)
+          : colorFor(hexToRgba(color, fillAlpha), opacity, selected);
       return [
         new GeoJsonLayer({
           ...base,
-          getFillColor: colorFor(hexToRgba(color, POLYGON_FILL_ALPHA), opacity, selected),
-          getLineColor: colorFor(hexToRgba(color, 255), opacity, selected),
-          getLineWidth: 1,
+          getFillColor,
+          getLineColor: colorFor(WHITE, opacity, selected),
+          getLineWidth: POLYGON_OUTLINE_PX,
           lineWidthUnits: "pixels",
         }),
       ];
+    }
     case "heat":
       // Drawn by Mapbox's native heatmap (components/mapTiles.ts): deck's HeatmapLayer renders nothing in
       // GlobeView, which is what the overlay uses while the map is in globe projection.
@@ -182,7 +252,15 @@ export function buildDeckLayers(state: MapState): Layer[] {
     if (!loaded) continue;
     if (loaded.result.kind === "tiles") continue;
     const selected = state.selected?.layerId === op.layerId ? state.selected.feature : undefined;
-    layers.push(...geoJsonLayersFor(op, loaded.result.data, loaded.style.color, selected));
+    layers.push(
+      ...geoJsonLayersFor(op, {
+        data: loaded.result.data,
+        style: loaded.style,
+        selected,
+        basemap: state.basemap,
+        zoom: state.viewport.zoom,
+      }),
+    );
   }
   return layers;
 }

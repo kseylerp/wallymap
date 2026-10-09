@@ -40,7 +40,7 @@ describe("physical-regions layer", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toBe("Public domain (Natural Earth)");
     expect(layer.requiredEnv).toEqual([]);
-    expect(layer.style).toEqual({ geometry: "polygon", color: "#5B6B7A" });
+    expect(layer.style).toEqual({ geometry: "polygon", color: "#FFFFFF", fillOpacity: 0 });
   });
 
   it("accepts an optional list of kinds and rejects unknown kinds", () => {

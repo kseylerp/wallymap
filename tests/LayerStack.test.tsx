@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { useReducer } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LayerStack } from "@/components/LayerStack";
+import { drawnColor, LayerStack } from "@/components/LayerStack";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
 
@@ -99,8 +99,8 @@ describe("LayerStack", () => {
     fireEvent.change(select, { target: { value: "heat" } });
     expect(spy).toHaveBeenCalledWith({ type: "set_style", layerId: "osm-trails", mode: "heat" });
     fireEvent.click(within(card).getByRole("button", { name: "Color for OSM trails" }));
-    fireEvent.click(screen.getByRole("button", { name: "Use #5E7D5A" }));
-    expect(spy).toHaveBeenCalledWith({ type: "set_style", layerId: "osm-trails", color: "#5E7D5A" });
+    fireEvent.click(screen.getByRole("button", { name: "Use #3FA9F5" }));
+    expect(spy).toHaveBeenCalledWith({ type: "set_style", layerId: "osm-trails", color: "#3FA9F5" });
   });
 
   it("reorders with the arrow keys on the grip, and removes and clears layers", () => {
@@ -154,5 +154,27 @@ describe("LayerStack", () => {
     expect(screen.queryByTestId("layer-stack")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Layers, 2 loaded" }));
     expect(onOpenChange).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("drawnColor", () => {
+  const nightLights: LoadedLayer = {
+    ...lands,
+    id: "night-lights",
+    style: { geometry: "polygon", color: "#F2C14E" },
+    result: { kind: "tiles", data: { url: "https://example.test/{z}/{x}/{y}.png", minzoom: 0, maxzoom: 8, format: "raster" }, citation },
+  };
+
+  it("shows the layer color for points too (the map fills them in it)", () => {
+    const species: LoadedLayer = { ...trails, id: "species", style: { geometry: "point", color: "#E24BB1" } };
+    expect(drawnColor(species, { layerId: "species", mode: "points", visible: true })).toBe("#E24BB1");
+  });
+
+  it("shows a neutral gray for raster tiles, which draw their own colors", () => {
+    expect(drawnColor(nightLights, { layerId: "night-lights", mode: "polygons", visible: true })).toBe("#9A9A96");
+  });
+
+  it("prefers a color picked in the panel", () => {
+    expect(drawnColor(trails, { layerId: "osm-trails", mode: "lines", color: "#FF5A36", visible: true })).toBe("#FF5A36");
   });
 });

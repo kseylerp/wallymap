@@ -25,7 +25,7 @@ describe("wilderness layer", () => {
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(400_000);
     expect(layer.input.parse({})).toEqual({});
-    expect(layer.style).toEqual({ geometry: "polygon", color: "#5E7D5A" });
+    expect(layer.style).toEqual({ geometry: "polygon", color: "#B9A6FF", fillOpacity: 0.22 });
   });
 
   it("normalizes service rows to polygons with name, agency, acres, designated, t and v", () => {

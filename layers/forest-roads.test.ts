@@ -103,7 +103,7 @@ describe("forest-roads layer", () => {
     expect(layer.coverage).toBe("us");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(20_000);
-    expect(layer.style).toEqual({ geometry: "line", color: "#C4633F" });
+    expect(layer.style).toEqual({ geometry: "line", color: "#F2A33A" });
     expect(layer.license).toBe("Public domain (USDA Forest Service)");
   });
 

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { Tool } from "ai";
 import "@/layers";
-import { clearRegistry, defineLayer, registerLayer } from "@/layers";
+import { clearRegistry, defineLayer, listLayers, registerLayer } from "@/layers";
 import { buildTools } from "@/lib/agent/tools";
 
 const callOptions = { toolCallId: "test-call", messages: [], context: {} };
@@ -24,7 +24,15 @@ describe("buildTools", () => {
   it("exposes the fixed tools plus one query tool per registered layer", () => {
     const tools = buildTools();
     expect(Object.keys(tools).sort()).toEqual(
-      ["list_layers", "geocode", "set_view", "set_basemap", "render", "note", "query_osm-trails"].sort(),
+      [
+        "list_layers",
+        "geocode",
+        "set_view",
+        "set_basemap",
+        "render",
+        "note",
+        ...listLayers().map((layer) => `query_${layer.id}`),
+      ].sort(),
     );
   });
 

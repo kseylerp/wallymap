@@ -42,3 +42,7 @@ next-env.d.ts
 
 # local agent workflow notes
 .superpowers/
+
+# playwright
+/test-results/
+/playwright-report/

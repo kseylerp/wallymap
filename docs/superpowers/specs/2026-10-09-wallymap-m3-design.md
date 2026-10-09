@@ -12,7 +12,7 @@ Source of truth for the design system is the Wally iOS code (`/Users/kyleseyler/
 
 ## 2. Tokens (CSS variables; Tailwind `@theme` maps them)
 
-Light is the default (Wally light surfaces are off-white, which matches the owner's "barely off-white" direction); dark follows Wally's dark tokens and is a toggle in the layer panel header.
+Light only (owner decision 2026-10-09: no dark mode). Wally light surfaces are off-white; the light logo variant (`public/brand/wally-logo-light.png`) is used. Fonts stay Geist (UI) and Source Serif 4 (headings), and primary buttons are black (`--button-primary: var(--ink)`); purple is for links and the route gradient only.
 
 - Scaffold: light `#FAF9F5`, dark `#151515`. Surface: light `#ECEAE7`, dark `#1A1A1A`; deeper surfaces `#292929`, `#1F1F1F` (dark).
 - Text: primary light `#1F1F1F` / dark `#F5F5F5`; secondary light `#6B6B6B` / dark `#A0A0A0`.

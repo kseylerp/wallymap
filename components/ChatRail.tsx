@@ -4,6 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, getToolName, isToolUIPart, type UIMessage } from "ai";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
+import { WallyMark } from "@/components/Brand";
 import { EmptyState } from "@/components/EmptyState";
 import { ArrowUpIcon, ChevronDownIcon, ChevronUpIcon, StopIcon } from "@/components/icons";
 import { ToolTrace } from "@/components/ToolTrace";
@@ -347,11 +348,11 @@ export function ChatRail({
       >
         {hasMessages && (
           // One toggle in every state, so focus survives collapse/expand: the grab handle (phones) or chevron
-          // (desktop) at the top of the open panel, and the small WildMap tag above the input when collapsed.
+          // (desktop) at the top of the open panel, and the small WallyMap tag above the input when collapsed.
           <button
             type="button"
             onClick={onToggle}
-            aria-label="WildMap chat"
+            aria-label="WallyMap chat"
             aria-expanded={open}
             title={open ? "Collapse" : "Expand"}
             className={
@@ -367,7 +368,8 @@ export function ChatRail({
               </>
             ) : (
               <>
-                <span className="font-serif text-[13px] font-semibold">WildMap</span>
+                <WallyMark size={16} />
+                <span className="text-[13px] font-semibold">WallyMap</span>
                 {busy && <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-ink-muted" />}
                 <ChevronUpIcon aria-hidden width={14} height={14} className="text-ink-muted" />
               </>

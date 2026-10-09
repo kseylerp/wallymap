@@ -1,4 +1,4 @@
-import { Wordmark } from "@/components/Wordmark";
+import { Wordmark } from "@/components/Brand";
 
 export const EXAMPLE_QUESTIONS = [
   "Show hiking trails around Lake Tahoe",
@@ -16,12 +16,12 @@ export function EmptyState({ onPick }: EmptyStateProps) {
   return (
     <div
       data-testid="empty-state"
-      className="glass-strong rise-in pointer-events-auto w-full max-w-[600px] rounded-card p-5 md:p-7"
+      className="glass-strong rise-in pointer-events-auto w-full max-w-[600px] rounded-large p-5 md:p-7"
       style={{ animationDelay: "120ms" }}
     >
       <Wordmark variant="hero" />
-      <p className="mt-2 text-[15px] text-ink-muted sm:mt-3 md:text-base">
-        Ask about trails, fire, forests, snow, rivers, camping, and wildlife, anywhere on Earth.
+      <p className="mt-3 text-[16px] leading-snug text-ink-muted sm:mt-4 md:text-[18px]">
+        Ask the map. Every answer is drawn, cited, and exportable.
       </p>
       <ul className="mt-4 grid grid-cols-1 gap-1.5 sm:mt-5 sm:grid-cols-2 sm:gap-2">
         {EXAMPLE_QUESTIONS.map((q, i) => (
@@ -29,12 +29,12 @@ export function EmptyState({ onPick }: EmptyStateProps) {
             <button
               type="button"
               onClick={() => onPick(q)}
-              className="group flex h-full w-full items-center gap-2 rounded-[18px] border border-line bg-paper px-4 py-2 text-left text-[14px] leading-snug text-ink transition-all duration-200 hover:-translate-y-px hover:bg-mist sm:py-2.5"
+              className="group press flex h-full min-h-11 w-full items-center gap-2 rounded-card border border-line bg-paper px-4 py-2 text-left text-[15px] leading-snug text-ink transition duration-150 ease-out hover:border-accent/40 hover:bg-mist sm:py-2.5"
             >
               <span className="flex-1">{q}</span>
               <span
                 aria-hidden
-                className="text-ink-muted opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                className="text-accent opacity-0 transition-opacity duration-200 group-hover:opacity-100"
               >
                 →
               </span>

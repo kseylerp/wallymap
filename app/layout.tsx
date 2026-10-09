@@ -1,32 +1,31 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Source_Serif_4 } from "next/font/google";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./globals.css";
-
-const geist = Geist({
-  variable: "--font-geist",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-});
-
-const sourceSerif = Source_Serif_4({
-  variable: "--font-source-serif",
-  subsets: ["latin"],
-  weight: ["500", "600"],
-});
+import { ThemeScript } from "@/lib/theme/ThemeScript";
 
 export const metadata: Metadata = {
-  title: "WildMap",
-  description: "Ask about trails, terrain, and the wild, anywhere on Earth.",
+  title: "WallyMap",
+  description: "A research tool for the outdoors. Ask the map: every answer is drawn, cited, and exportable.",
+  icons: {
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: { url: "/apple-touch-icon.png", sizes: "180x180" },
+  },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#F5F5F3",
+  themeColor: "#FAF9F5",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geist.variable} ${sourceSerif.variable} h-full antialiased`}>
+    // Light by default; the inline script applies a stored dark choice before first paint.
+    <html lang="en" data-theme="light" className="h-full antialiased" suppressHydrationWarning>
+      <head>
+        <ThemeScript />
+      </head>
       <body className="h-full overflow-hidden">{children}</body>
     </html>
   );

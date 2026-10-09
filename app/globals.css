@@ -1,47 +1,133 @@
 @import "tailwindcss";
 
-/* WildMap design tokens. Components use these through the Tailwind theme below; no raw hex in components. */
+/*
+ * WallyMap design tokens (spec §2, from Wally's DesignTokens.swift and LiquidGlass.swift). Light is the default;
+ * [data-theme="dark"] on <html> switches to Wally's dark set. Components use these through the Tailwind theme
+ * below; no raw hex in components. The older variable names stay so existing components keep working.
+ */
 :root {
-  /* Revised 2026-10-09: "not orange, barely off-white". The imagery is the color; the UI is white. */
-  --paper: #ffffff;
-  --cream: #f5f5f3;
-  --ink: #1a1a1a;
-  /* 4.6:1 on --glass-strong even over black imagery (#7a7a76 measured 3.4:1 there). */
-  --ink-muted: #66665f;
+  color-scheme: light;
+
+  /* Scaffold (page) and surface (cards, sheets). */
+  --paper: #faf9f5;
+  --cream: #eceae7;
+  --mist: #e4e1dc;
+  --ink: #1f1f1f;
+  /* 4.5:1 on --glass-strong even over black imagery. */
+  --ink-muted: #6b6b6b;
   --line: rgba(0, 0, 0, 0.07);
-  --mist: #ededea;
 
-  /* Amber, only for count badges, the send button, the active basemap dot and a highlighted result. */
-  --accent: #e0893f;
-  --accent-deep: #c9772f;
+  /* Purple: primary buttons, active states, links. */
+  --accent: #6e5bff;
+  --accent-deep: #5240f2;
+  /* Coral: route start, active map pills, progress end. Sage: selection rims, chip tint at 0.5. */
+  --coral: #f57272;
+  --sage: #9fb693;
+  --sage-tint: rgba(159, 182, 147, 0.5);
+  --route-gradient: linear-gradient(90deg, #6e5bff, #f57272);
 
+  /* Semantic. --danger is the text-safe error color (4.5:1 on paper); --error is the Wally fill. */
+  --warning: #e8884a;
+  --error: #dc5046;
+  --info: #5b9bd5;
+  --caution: #ff9500;
+  --danger: #b83a31;
+
+  /* Data strokes and the done dot in tool traces. */
   --slate: #2f3a44;
-  --moss: #5e7d5a;
-  /* Error titles only. */
-  --danger: #b42318;
+  --moss: #6f8a62;
 
-  --glass: rgba(255, 255, 255, 0.82);
-  /* Text-bearing glass: more opaque so muted text keeps 4.5:1 over dark imagery. */
-  --glass-strong: rgba(255, 255, 255, 0.9);
-  --glass-dark: rgba(26, 26, 26, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.6);
-  --glass-dark-border: rgba(255, 255, 255, 0.12);
+  /* The Wally mark: white mountain, #4A4A4A outline and W (the app icon). */
+  --mark-fill: #ffffff;
+  --mark-line: #4a4a4a;
+  --mark-w: #4a4a4a;
+  --mark-w-stroke: 0;
 
-  --r-pill: 999px;
-  --r-card: 24px;
+  /* Glass: surface at 0.75 with a 0.12 accent tint (icon controls); text-bearing glass is near-opaque scaffold. */
+  --glass: rgba(236, 234, 231, 0.75);
+  --glass-tint: rgba(110, 91, 255, 0.12);
+  --glass-strong: rgba(250, 249, 245, 0.95);
+  --glass-rim-top: rgba(255, 255, 255, 0.18);
+  --glass-rim: rgba(255, 255, 255, 0.045);
+  --glass-shadow: 0 6px 10px rgba(0, 0, 0, 0.12);
+  /* Map pills over imagery: black tint 0.35 with a 0.6 white rim. */
+  --glass-dark: rgba(0, 0, 0, 0.35);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --glass-dark-border: rgba(255, 255, 255, 0.6);
+  /* Primary buttons: the silver sheen border. */
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.15));
+
+  /* Spacing 4/8/12/16/24/32. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Radii: small 8, card 12, large 24, sheet 28; controls 44 tall (pill 22), map pills 36 (pill 18). */
+  --r-small: 8px;
+  --r-card: 12px;
+  --r-large: 24px;
   --r-panel: 28px;
+  --r-pill: 999px;
+  --control-h: 44px;
+  --map-pill-h: 36px;
 
-  --shadow: 0 10px 30px rgba(31, 30, 27, 0.12);
+  --card-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+  --drawer-shadow: 0 -10px 30px rgba(0, 0, 0, 0.25);
+  --shadow: var(--glass-shadow);
   /* Lifted segment in a control, and the hairline lift under an answer card. */
   --chip-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   --hair-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  /* Floating cards over the map (the inspect card), from the Wally card shadow. */
-  --card-shadow: 0 6px 12px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+
+  /* Motion: press 150ms ease-out to 0.98; spring-like 350ms; camera 300-500ms; progress 300ms. */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
+  --ease-camera: cubic-bezier(0.45, 0, 0.55, 1);
+  --dur-press: 150ms;
+  --dur-spring: 350ms;
+  --dur-camera: 400ms;
+  --dur-progress: 300ms;
 
   /* Globe atmosphere for the satellite hybrid, read by components/mapTiles.ts. */
   --fog-color: rgb(214, 222, 228);
   --fog-high-color: rgb(70, 118, 186);
   --fog-space-color: rgb(12, 14, 20);
+}
+
+/* Wally dark: scaffold #151515, surface #1A1A1A, deeper #292929 / #1F1F1F. */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper: #151515;
+  --cream: #1a1a1a;
+  --mist: #292929;
+  --deep: #1f1f1f;
+  --ink: #f5f5f5;
+  --ink-muted: #a0a0a0;
+  --line: rgba(255, 255, 255, 0.09);
+
+  --accent-deep: #8a7bff;
+  --danger: #f07a70;
+  --moss: #9fb693;
+
+  /* The Wally logo: dark mountain and W with cream outlines. */
+  --mark-fill: #333333;
+  --mark-line: #f5f3ee;
+  --mark-w: #333333;
+  --mark-w-stroke: 2.8px;
+
+  --glass: rgba(26, 26, 26, 0.75);
+  --glass-strong: rgba(26, 26, 26, 0.92);
+  --glass-rim-top: rgba(255, 255, 255, 0.2);
+  --glass-rim: rgba(255, 255, 255, 0.063);
+  --glass-shadow: 0 6px 10px rgba(0, 0, 0, 0.25);
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  --chip-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --hair-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --card-shadow: 0 6px 12px rgba(0, 0, 0, 0.35);
 }
 
 @theme inline {
@@ -52,6 +138,13 @@
   --color-line: var(--line);
   --color-accent: var(--accent);
   --color-accent-deep: var(--accent-deep);
+  --color-coral: var(--coral);
+  --color-sage: var(--sage);
+  --color-sage-tint: var(--sage-tint);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-info: var(--info);
+  --color-caution: var(--caution);
   --color-slate: var(--slate);
   --color-moss: var(--moss);
   --color-mist: var(--mist);
@@ -60,47 +153,96 @@
   --color-glass-strong: var(--glass-strong);
   --color-glass-dark: var(--glass-dark);
 
-  --radius-pill: var(--r-pill);
+  --radius-small: var(--r-small);
   --radius-card: var(--r-card);
+  --radius-large: var(--r-large);
   --radius-panel: var(--r-panel);
+  --radius-pill: var(--r-pill);
 
   --shadow-soft: var(--shadow);
   --shadow-chip: var(--chip-shadow);
   --shadow-hair: var(--hair-shadow);
   --shadow-card: var(--card-shadow);
-
-  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
+  --shadow-drawer: var(--drawer-shadow);
 }
 
-/* Frosted glass over the map: translucent white, blur, a 1px inner highlight and a soft low shadow. Icon-only controls. */
+/* Fonts and the type scale are plain theme variables so Tailwind emits them for var() lookups. */
+@theme {
+  /* SF on Apple platforms, Inter or the system face elsewhere. Headings are the same family at heavier weights. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, system-ui, sans-serif;
+  --font-rounded: "SF Pro Rounded", ui-rounded, var(--font-sans);
+  /* Legacy alias: older components still say font-serif; it now resolves to the sans stack. */
+  --font-serif: var(--font-sans);
+
+  /* Wally type scale. */
+  --text-display: 24px;
+  --text-display--line-height: 1.2;
+  --text-display--font-weight: 700;
+  --text-title: 20px;
+  --text-title--line-height: 1.25;
+  --text-title--font-weight: 700;
+  --text-subtitle: 18px;
+  --text-subtitle--line-height: 1.3;
+  --text-subtitle--font-weight: 600;
+  --text-label: 17px;
+  --text-label--line-height: 1.3;
+  --text-label--font-weight: 500;
+  --text-body: 16px;
+  --text-body--line-height: 1.5;
+  --text-segmented: 13px;
+  --text-segmented--line-height: 1.2;
+  --text-caption: 12px;
+  --text-caption--line-height: 1.35;
+}
+
+/*
+ * Wally liquid glass: blur 20, a 1px rim brighter at the top (white .18 fading to .045), and a soft low shadow.
+ * `glass` is for icon-only controls and carries the accent tint; `glass-strong` carries text and stays
+ * near-opaque so muted text keeps 4.5:1 over dark imagery.
+ */
 @utility glass {
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(18px) saturate(1.1);
-  backdrop-filter: blur(18px) saturate(1.1);
+  background: linear-gradient(var(--glass-tint), var(--glass-tint)), var(--glass);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  backdrop-filter: blur(20px) saturate(1.1);
   box-shadow:
+    inset 0 1px 0 var(--glass-rim-top),
+    inset 0 0 0 1px var(--glass-rim),
     inset 0 0 0 1px var(--glass-border),
-    var(--shadow);
+    var(--glass-shadow);
 }
 
-/* The same glass, more opaque, for anything that carries text. */
 @utility glass-strong {
   background: var(--glass-strong);
-  -webkit-backdrop-filter: blur(18px) saturate(1.1);
-  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  backdrop-filter: blur(20px) saturate(1.1);
   box-shadow:
+    inset 0 1px 0 var(--glass-rim-top),
+    inset 0 0 0 1px var(--glass-rim),
     inset 0 0 0 1px var(--glass-border),
-    var(--shadow);
+    var(--glass-shadow);
 }
 
-/* Dark glass for chips that sit on bright imagery. */
+/* Map pills on imagery: black tint with a white rim. */
 @utility glass-dark {
   background: var(--glass-dark);
-  -webkit-backdrop-filter: blur(18px) saturate(1.1);
-  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  backdrop-filter: blur(20px) saturate(1.1);
   box-shadow:
     inset 0 0 0 1px var(--glass-dark-border),
-    var(--shadow);
+    var(--glass-shadow);
+}
+
+/* Wally press feedback: scale to 0.98 on press. Pair with `transition` (which covers scale) at 150ms ease-out. */
+@utility press {
+  &:active {
+    scale: 0.98;
+  }
+}
+
+/* Stats: the rounded face with tabular figures. */
+@utility stat {
+  font-family: var(--font-rounded);
+  font-variant-numeric: tabular-nums;
 }
 
 html,
@@ -109,10 +251,10 @@ body {
 }
 
 body {
-  background: var(--cream);
+  background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -121,6 +263,7 @@ h1,
 h2,
 h3,
 h4 {
+  font-family: var(--font-sans);
   letter-spacing: -0.01em;
   line-height: 1.2;
 }
@@ -185,10 +328,12 @@ textarea:focus-visible {
 }
 
 /* Assistant markdown in the chat panel. */
+/* Wally chat answers: 18px regular. */
 .chat-markdown {
   color: var(--ink);
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.5;
 }
 .chat-markdown > * + * {
   margin-top: 0.6rem;
@@ -229,25 +374,27 @@ textarea:focus-visible {
 .chat-markdown h2,
 .chat-markdown h3,
 .chat-markdown h4 {
-  font-family: var(--font-serif);
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--ink);
 }
+/* Display 24/700, title 20/700, subtitle 18/600. */
 .chat-markdown h1 {
-  font-size: 1.3rem;
+  font-size: 24px;
 }
 .chat-markdown h2 {
-  font-size: 1.18rem;
+  font-size: 20px;
 }
 .chat-markdown h3,
 .chat-markdown h4 {
-  font-size: 1.05rem;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 /*
  * Corner furniture that must clear the chat. The chat section carries data-chat-state: "empty" (input pill
- * only), "collapsed" (input pill plus the WildMap tag) or "open" (panel or bottom sheet).
+ * only), "collapsed" (input pill plus the WallyMap tag) or "open" (panel or bottom sheet).
  * Phones: the zoom controls and the Mapbox logo/attribution sit just above the input stack, or above the
  * open bottom sheet. Desktop: the controls clear the attribution strip; the logo sits above the input stack
  * and moves right of the panel only while the panel is open.
@@ -293,13 +440,13 @@ textarea:focus-visible {
 
 /* A paragraph that is only bold text titles the answer or a section of it. */
 .chat-markdown .answer-title {
-  font-family: var(--font-serif);
-  font-size: 1.12rem;
+  font-family: var(--font-sans);
+  font-size: 20px;
   letter-spacing: -0.01em;
   line-height: 1.25;
 }
 .chat-markdown .answer-title strong {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* The inspect card pops from its pointer; the pointer edge is its transform origin (set inline). */

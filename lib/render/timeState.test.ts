@@ -107,4 +107,57 @@ describe("time state in the reducer", () => {
     expect(run(narrowed, { type: "remove_layer", layerId: "fire-perimeters" }).time).toBeUndefined();
     expect(run(narrowed, { type: "clear_layers" }).time).toBeUndefined();
   });
+
+  it("a re-query with earlier dates widens a whole-span window, but keeps a narrowed one", () => {
+    const wider = layer("fire-perimeters", fc("2010-07-01T00:00:00.000Z", ...years));
+    const untouched = run(loaded, { type: "layer_loaded", layer: wider });
+    expect(untouched.time?.window).toEqual([y(2010), yEnd(2025)]);
+    const narrowed = run(loaded, { type: "set_time_window", window: [y(2018), yEnd(2020)] }, { type: "layer_loaded", layer: wider });
+    expect(narrowed.time?.window).toEqual([y(2018), yEnd(2020)]);
+    const cumulative = run(loaded, { type: "set_time_mode", mode: "cumulative" }, { type: "layer_loaded", layer: wider });
+    expect(cumulative.time?.window).toEqual([cumulative.time?.index.min, yEnd(2025)]);
+  });
+
+  it("a hidden layer does not open the scrubber; showing it does, and hiding the last dated layer closes it", () => {
+    const hidden = run(
+      initialMapState,
+      { type: "render", op: { layerId: "fire-perimeters", mode: "polygons", visible: false } },
+      { type: "layer_loaded", layer: fires },
+    );
+    expect(hidden.time).toBeUndefined();
+    const shown = run(hidden, { type: "toggle_layer", layerId: "fire-perimeters" });
+    expect(shown.time?.window).toEqual([y(2016), yEnd(2025)]);
+    expect(run(shown, { type: "toggle_layer", layerId: "fire-perimeters" }).time).toBeUndefined();
+  });
+
+  it("a hidden layer's dates do not widen the scrubber", () => {
+    const early = layer("old-fires", fc("2001-07-01T00:00:00.000Z", "2002-07-01T00:00:00.000Z"));
+    const both = run(
+      loaded,
+      { type: "render", op: { layerId: "fire-perimeters", mode: "polygons", visible: true } },
+      { type: "layer_loaded", layer: early },
+      { type: "render", op: { layerId: "old-fires", mode: "polygons", visible: true } },
+    );
+    expect(both.time?.window[0]).toBe(y(2001));
+    const hidden = run(both, { type: "toggle_layer", layerId: "old-fires" });
+    expect(hidden.time?.index.min).toBe(years[0]);
+    expect(hidden.time?.window).toEqual([y(2016), yEnd(2025)]);
+  });
+
+  it("a mode sent before any dated layer waits with the window that follows it", () => {
+    const early = run(
+      initialMapState,
+      { type: "set_time_mode", mode: "slide" },
+      { type: "set_time_window", window: [y(2018), yEnd(2019)] },
+      { type: "set_time_playing", playing: false },
+    );
+    expect(early.pendingTime).toEqual({ mode: "slide", window: [y(2018), yEnd(2019)], playing: false });
+    expect(run(early, { type: "layer_loaded", layer: fires }).time).toMatchObject({ mode: "slide", window: [y(2018), yEnd(2019)] });
+  });
+
+  it("switching from cumulative to slide then setting the window keeps the start the agent asked for", () => {
+    const cumulative = run(loaded, { type: "set_time_mode", mode: "cumulative" });
+    const s = run(cumulative, { type: "set_time_mode", mode: "slide" }, { type: "set_time_window", window: [y(2018), yEnd(2020)] });
+    expect(s.time?.window).toEqual([y(2018), yEnd(2020)]);
+  });
 });

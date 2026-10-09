@@ -2,8 +2,10 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useReducer } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PLAY_STEP_MS, TimeScrubber } from "@/components/TimeScrubber";
+import { LayerStack } from "@/components/LayerStack";
+import { TimeScrubber } from "@/components/TimeScrubber";
 import { reduce } from "@/lib/render/reducer";
+import { PLAY_STEP_MS, useTimePlay } from "@/lib/render/useTimePlay";
 import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
 
 afterEach(() => {
@@ -33,6 +35,8 @@ const start = reduce(initialMapState, { type: "layer_loaded", layer: fires });
 
 function Harness({ spy, initial = start }: { spy: (a: MapAction) => void; initial?: MapState }) {
   const [state, dispatch] = useReducer(reduce, initial);
+  // As in App: the play timer runs outside the scrubber.
+  useTimePlay(state.time?.playing ?? false, dispatch);
   if (!state.time) return <p>no scrubber</p>;
   return (
     <TimeScrubber
@@ -57,8 +61,7 @@ describe("TimeScrubber", () => {
 
   it("play steps one bucket every 600 ms; pause stops it", () => {
     vi.useFakeTimers();
-    const spy = vi.fn();
-    render(<Harness spy={spy} />);
+    render(<Harness spy={() => {}} />);
     fireEvent.click(screen.getByTestId("time-play"));
     expect(screen.getByTestId("time-play").textContent).toBe("Pause");
     // Playing the whole span starts over at the first year.
@@ -73,7 +76,51 @@ describe("TimeScrubber", () => {
       vi.advanceTimersByTime(PLAY_STEP_MS * 3);
     });
     expect(label()).toBe("2017 – 2017");
-    expect(spy).toHaveBeenCalledWith({ type: "time_tick" });
+  });
+
+  it("play keeps stepping while the layer panel (and the scrubber in it) is closed", () => {
+    vi.useFakeTimers();
+    function ClosedPanel() {
+      const [state, dispatch] = useReducer(reduce, start);
+      useTimePlay(state.time?.playing ?? false, dispatch);
+      return (
+        <>
+          <button type="button" onClick={() => dispatch({ type: "set_time_playing", playing: true })}>
+            agent play
+          </button>
+          <p data-testid="window">{state.time?.window.join(" ")}</p>
+          <LayerStack
+            layers={state.layers}
+            renderOps={state.renderOps}
+            catalog={null}
+            dispatch={dispatch}
+            open={false}
+            onOpenChange={() => {}}
+            time={state.time}
+            shownLayers={state.layers}
+          />
+        </>
+      );
+    }
+    render(<ClosedPanel />);
+    expect(screen.queryByTestId("time-scrubber")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "agent play" }));
+    expect(screen.getByTestId("window").textContent).toBe("2016-01-01T00:00:00.000Z 2016-12-31T23:59:59.999Z");
+    act(() => {
+      vi.advanceTimersByTime(PLAY_STEP_MS * 2);
+    });
+    expect(screen.getByTestId("window").textContent).toBe("2018-01-01T00:00:00.000Z 2018-12-31T23:59:59.999Z");
+  });
+
+  it("the scrubber alone runs no timer", () => {
+    vi.useFakeTimers();
+    const spy = vi.fn();
+    const playing = reduce(start, { type: "set_time_playing", playing: true });
+    render(<TimeScrubber time={playing.time!} dispatch={spy} />);
+    act(() => {
+      vi.advanceTimersByTime(PLAY_STEP_MS * 3);
+    });
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it("space plays and pauses from inside the scrubber", () => {

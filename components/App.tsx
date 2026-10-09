@@ -13,6 +13,7 @@ import { sendChat } from "@/lib/agent/chatBus";
 import { bboxToViewport } from "@/lib/render/deck";
 import { askAboutText, featureBBox } from "@/lib/render/inspect";
 import { usePermalink } from "@/lib/render/usePermalink";
+import { useTimePlay } from "@/lib/render/useTimePlay";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type Basemap, type MapAction, type Selection, type Viewport } from "@/lib/render/state";
 import { isSelectionVisible, visibleState } from "@/lib/render/view";
@@ -57,6 +58,8 @@ async function fetchCatalog(): Promise<LayerCatalog> {
 export function App() {
   const [state, dispatch] = useReducer(reduce, initialMapState);
   const permalink = usePermalink(state, dispatch);
+  // The scrubber's play steps here, so it keeps going while the layer panel is closed.
+  useTimePlay(state.time?.playing ?? false, dispatch);
   const [catalog, setCatalog] = useState<LayerCatalog | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   // Phones start with the layer panel folded into its pill so it does not cover the map.

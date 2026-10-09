@@ -2,7 +2,7 @@ import type { BBox, LayerResult, StyleHints } from "@/layers/types";
 import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import type { LayerFilters } from "@/lib/render/filters";
 import { ROUTE_ERROR_ID } from "@/lib/render/reducer";
-import type { Basemap, MapAction, RenderMode, RenderOp, RouteState, TimeMode, Viewport } from "@/lib/render/state";
+import type { Basemap, CompareState, MapAction, RenderMode, RenderOp, RouteState, TimeMode, Viewport } from "@/lib/render/state";
 
 /** Layer titles and styles by id, fetched by the browser from `GET /api/layers`. */
 export type LayerCatalog = Record<string, { title: string; style: StyleHints; license?: string }>;
@@ -192,15 +192,17 @@ export function timeBound(value: unknown, edge: "start" | "end"): string | null 
 }
 
 /**
- * A `set_time` result: the window, then the mode (cumulative moves the start to the first date), then play or pause.
- * The window goes first so that, before any dated layer has loaded, the mode and play attach to the waiting window.
+ * A `set_time` result: the mode, then the window, then play or pause. The mode goes first so the window lands in it:
+ * a slide window sent while the scrubber is cumulative keeps the start the agent asked for. Before any dated layer has
+ * loaded, all three wait together in `pendingTime`.
  */
 function setTimeActions(output: Obj): MapAction[] {
   const start = timeBound(output.start, "start");
   const end = timeBound(output.end, "end");
   if (!start || !end) return [];
-  const actions: MapAction[] = [{ type: "set_time_window", window: start <= end ? [start, end] : [end, start] }];
+  const actions: MapAction[] = [];
   if (TIME_MODES.includes(output.mode as TimeMode)) actions.push({ type: "set_time_mode", mode: output.mode as TimeMode });
+  actions.push({ type: "set_time_window", window: start <= end ? [start, end] : [end, start] });
   if (typeof output.play === "boolean") actions.push({ type: "set_time_playing", playing: output.play });
   return actions;
 }
@@ -220,11 +222,10 @@ function compareActions(output: Obj): MapAction[] {
   const { layerId, a, b, mode, aLabel, bLabel } = output;
   if (typeof layerId !== "string" || layerId === "" || !isWindow(a) || !isWindow(b)) return [];
   if (!COMPARE_MODES.includes(mode as (typeof COMPARE_MODES)[number])) return [];
-  const compare: Obj = { layerId, a, b, mode };
+  const compare: CompareState = { layerId, a, b, mode: mode as CompareState["mode"] };
   if (typeof aLabel === "string") compare.aLabel = aLabel;
   if (typeof bLabel === "string") compare.bLabel = bLabel;
-  // TODO: drop the cast once lib/render/state.ts exports the `set_compare` action (owned by the compare agent).
-  return [{ type: "set_compare", compare } as unknown as MapAction];
+  return [{ type: "set_compare", compare }];
 }
 
 /**

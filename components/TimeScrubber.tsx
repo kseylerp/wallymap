@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { useRef, type KeyboardEvent, type PointerEvent } from "react";
 import { bucketAt } from "@/lib/render/reducer";
 import type { MapAction, TimeMode, TimeState } from "@/lib/render/state";
 import { stepWindow, windowLabel, type Bucket, type TimeIndex, type TimeWindow } from "@/lib/time";
-
-/** Play advances one bucket this often (spec §5). */
-export const PLAY_STEP_MS = 600;
 
 type TimeScrubberProps = {
   time: TimeState;
@@ -32,8 +29,9 @@ const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 h
 /**
  * The time scrubber at the top of the data console: a histogram of features per bucket (ink bars, the window's
  * bars darker), a window with two handles (drag them, or arrow keys on each; drag or arrow keys on the window
- * itself move it whole), play/pause (space anywhere in the scrubber) stepping one bucket every 600 ms, step back and
- * forward, slide or cumulative mode, the window's dates, and × to clear. Monochrome, text only.
+ * itself move it whole), play/pause (space anywhere in the scrubber), step back and forward, slide or cumulative mode,
+ * the window's dates, and × to clear. Monochrome, text only. It only shows and changes state: the play timer runs in
+ * the app (lib/render/useTimePlay.ts), so play goes on while the panel is closed.
  */
 export function TimeScrubber({ time, dispatch }: TimeScrubberProps) {
   const { index, window, playing, mode } = time;
@@ -49,12 +47,6 @@ export function TimeScrubber({ time, dispatch }: TimeScrubberProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<Drag | null>(null);
   const windowRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!playing) return;
-    const id = globalThis.setInterval(() => dispatch({ type: "time_tick" }), PLAY_STEP_MS);
-    return () => globalThis.clearInterval(id);
-  }, [playing, dispatch]);
 
   const setSpan = (a: number, b: number) => dispatch({ type: "set_time_window", window: spanOf(index, a, b) });
   const pause = () => {

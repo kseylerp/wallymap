@@ -1,4 +1,4 @@
-import type { CompareState, MapAction, MapState, RenderOp, TimeState, Viewport } from "@/lib/render/state";
+import type { CompareState, LoadedLayer, MapAction, MapState, RenderOp, TimeState, Viewport } from "@/lib/render/state";
 import type { LayerFilters } from "@/lib/render/filters";
 import { stepWindow, timeIndex, type TimeIndex, type TimeWindow } from "@/lib/time";
 import { arrivalPitch, fitZoomOffset } from "@/lib/render/wally/terrain";
@@ -91,22 +91,59 @@ function startPlaying(time: TimeState): TimeState {
   return { ...time, playing: true, window: [index.buckets[0].start, index.buckets[width].end] };
 }
 
+/** True when the layer's op hides it (a layer with no op yet counts as shown: its op follows the load). */
+function isHidden(state: MapState, layerId: string): boolean {
+  return state.renderOps.some((op) => op.layerId === layerId && !op.visible);
+}
+
+/** True when the layer has at least one feature with a valid `t`. */
+function isDated(layer: LoadedLayer | undefined): boolean {
+  return layer !== undefined && timeIndex({ [layer.id]: layer }) !== null;
+}
+
+/** The time index over the shown layers only: a hidden layer's dates neither open the scrubber nor widen it (spec §5). */
+function shownTimeIndex(state: MapState): TimeIndex | null {
+  const shown = Object.fromEntries(Object.entries(state.layers).filter(([id]) => !isHidden(state, id)));
+  return timeIndex(shown);
+}
+
+/** True when the window covers every date in the index (the opening state, or the user widened it all the way). */
+function coversSpan(index: TimeIndex, window: TimeWindow): boolean {
+  return Date.parse(window[0]) <= Date.parse(index.min) && Date.parse(window[1]) >= Date.parse(index.max);
+}
+
 /**
- * Rebuilds the time index after the layers changed. No time-aware layer left clears the scrubber; an existing window
- * is clamped to the new span. Only a newly loaded layer may open the scrubber (`allowCreate`), so removing a layer
- * never brings back a scrubber the user closed. A window the agent asked for early (`pendingTime`) applies here.
+ * The window after the index changed. A window that covered the old span follows the data to the whole new span (a
+ * re-query with earlier dates shows them); a window the user or agent narrowed stays where it was, clamped to the data.
+ */
+function rewindow(time: TimeState, index: TimeIndex): TimeWindow {
+  const window = coversSpan(time.index, time.window) ? fullWindow(index) : clampWindow(index, time.window);
+  return time.mode === "cumulative" ? [index.min, window[1]] : window;
+}
+
+/**
+ * Rebuilds the time index after the layers (or which of them are shown) changed. No shown time-aware layer left clears
+ * the scrubber. Only a newly loaded or newly shown layer may open the scrubber (`allowCreate`), so removing or hiding a
+ * layer never brings back a scrubber the user closed. A window the agent asked for early (`pendingTime`) applies here.
  */
 function withTimeIndex(state: MapState, allowCreate: boolean): MapState {
-  const index = timeIndex(state.layers);
+  const index = shownTimeIndex(state);
   if (!index) return state.time ? { ...state, time: undefined } : state;
-  if (state.time) return { ...state, time: { ...state.time, index, window: clampWindow(index, state.time.window) } };
+  if (state.time) return { ...state, time: { ...state.time, index, window: rewindow(state.time, index) } };
   if (!allowCreate) return state;
   const pending = state.pendingTime;
   const mode = pending?.mode ?? "slide";
-  const window = pending ? clampWindow(index, pending.window) : fullWindow(index);
+  const window = pending?.window ? clampWindow(index, pending.window) : fullWindow(index);
   let time: TimeState = { index, mode, playing: false, window: mode === "cumulative" ? [index.min, window[1]] : window };
   if (pending?.playing) time = startPlaying(time);
   return { ...state, time, pendingTime: undefined };
+}
+
+/** Rebuilds the time index when `layerId` (a dated layer) was hidden or shown; showing it may open the scrubber. */
+function withShownChange(prev: MapState, next: MapState, layerId: string): MapState {
+  const hidden = isHidden(next, layerId);
+  if (hidden === isHidden(prev, layerId) || !isDated(next.layers[layerId])) return next;
+  return withTimeIndex(next, !hidden);
 }
 
 // ---- Compare over time ----
@@ -191,13 +228,15 @@ function reduceAction(state: MapState, action: MapAction): MapState {
             );
       // Heat is not clickable, so a selection on a layer that turns into heat would point at nothing drawn.
       const selected = action.op.mode === "heat" ? dropSelectionOf(state, action.op.layerId) : state.selected;
-      return { ...state, renderOps, selected };
+      const next = { ...state, renderOps, selected };
+      return withShownChange(state, next, action.op.layerId);
     }
     case "toggle_layer": {
       const next = updateOp(state, action.layerId, (op) => ({ ...op, visible: !op.visible }));
       if (next === state) return state;
       const op = next.renderOps.find((o) => o.layerId === action.layerId);
-      return op?.visible ? next : { ...next, selected: dropSelectionOf(next, action.layerId) };
+      const shown = op?.visible ? next : { ...next, selected: dropSelectionOf(next, action.layerId) };
+      return withShownChange(state, shown, action.layerId);
     }
     case "select":
       return { ...state, selected: action.selection };
@@ -308,7 +347,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
     case "set_time_window": {
       if (!state.time) {
         // No time-aware layer yet (the agent set the time before its query landed): apply it when one arrives.
-        const index = timeIndex(state.layers);
+        const index = shownTimeIndex(state);
         const pendingTime = { ...state.pendingTime, window: action.window };
         return index ? withTimeIndex({ ...state, pendingTime }, true) : { ...state, pendingTime };
       }
@@ -322,7 +361,8 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       return { ...state, time: action.playing ? startPlaying(state.time) : { ...state.time, playing: false } };
     }
     case "set_time_mode": {
-      if (!state.time) return state.pendingTime ? { ...state, pendingTime: { ...state.pendingTime, mode: action.mode } } : state;
+      // Before any dated layer, the mode waits with (or ahead of) the window the agent asks for next.
+      if (!state.time) return { ...state, pendingTime: { ...state.pendingTime, mode: action.mode } };
       if (state.time.mode === action.mode) return state;
       const window: TimeWindow = action.mode === "cumulative" ? [state.time.index.min, state.time.window[1]] : state.time.window;
       return { ...state, time: { ...state.time, mode: action.mode, window } };

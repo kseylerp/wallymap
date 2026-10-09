@@ -97,6 +97,17 @@ describe("buildExportBundle with a time window", () => {
     expect(md).toContain("Time window: 2019 – 2020 (2019-01-01T00:00:00.000Z to 2020-12-31T23:59:59.999Z)");
     expect(md).toContain("2 of 12 features exported");
   });
+
+  it("stamps the time window only on layers with dates", async () => {
+    const both = reduce(reduce(withTime, { type: "layer_loaded", layer: geo("osm-trails", "Trails") }), {
+      type: "render",
+      op: { layerId: "osm-trails", mode: "lines", visible: true },
+    });
+    const { files } = buildExportBundle(both, null, now);
+    const byName = Object.fromEntries(await Promise.all(files.map(async (f) => [f.name, await f.blob.text()] as const)));
+    expect(JSON.parse(byName["fire-perimeters.geojson"]).wallymap.timeWindow).toBeDefined();
+    expect(JSON.parse(byName["osm-trails.geojson"]).wallymap.timeWindow).toBeUndefined();
+  });
 });
 
 describe("buildExportBundle with filters", () => {

@@ -81,7 +81,8 @@ export function buildExportBundle(state: MapState, catalog: LayerCatalog | null,
           retrieved,
           license,
           citation,
-          ...(time && { timeWindow: time.window }),
+          // Only a layer with dates was narrowed by the window; an undated layer exports whole.
+          ...(time && time.index.layerIds.includes(layer.id) && { timeWindow: time.window }),
           ...(filters && { filters }),
         },
       };

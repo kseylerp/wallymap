@@ -361,7 +361,7 @@ describe("LayerStack filters", () => {
     fireEvent.click(toggle);
     const panel = screen.getByTestId("layer-filters");
     const chips = within(within(panel).getByRole("group", { name: "Difficulty (sac_scale)" })).getAllByRole("button");
-    expect(chips.map((c) => c.textContent)).toEqual(["all", "hiking4", "alpine hiking2", "mountain hiking2"]);
+    expect(chips.map((c) => c.textContent)).toEqual(["all", "hiking 4", "alpine hiking 2", "mountain hiking 2"]);
     expect(within(panel).getByRole("slider", { name: "Length km from" })).toBeTruthy();
   });
 

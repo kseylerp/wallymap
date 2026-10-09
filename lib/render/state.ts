@@ -78,8 +78,8 @@ export type MapState = {
    * Features outside `window` are hidden (lib/render/view.ts); features without `t` always show.
    */
   time?: TimeState;
-  /** A time window asked for before any time-aware layer arrived; the next such layer applies it. */
-  pendingTime?: { window: TimeWindow; playing?: boolean; mode?: TimeMode };
+  /** A time window (and mode, play) asked for before any time-aware layer arrived; the next such layer applies it. */
+  pendingTime?: { window?: TimeWindow; playing?: boolean; mode?: TimeMode };
   /**
    * Compare over time (components/CompareControl.tsx, lib/render/compareView.ts): one layer seen at two windows, A
    * and B. While it exists the compared layer ignores the scrubber's window; other layers keep it.

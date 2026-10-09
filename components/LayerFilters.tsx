@@ -28,6 +28,11 @@ function formatNumber(value: number, integer: boolean, key: string): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
 }
 
+/** Drops float noise (0.30000000000000004 reads 0.3). */
+function clean(value: number): number {
+  return Number(value.toPrecision(12));
+}
+
 /** Slider step: 1 for whole numbers, else about 200 steps across the span. */
 function stepFor(field: Range): number {
   if (field.integer) return 1;
@@ -35,7 +40,7 @@ function stepFor(field: Range): number {
   if (span <= 0) return 1;
   const raw = span / 200;
   const pow = 10 ** Math.floor(Math.log10(raw));
-  return Math.max(pow, Math.round(raw / pow) * pow);
+  return clean(Math.max(pow, Math.round(raw / pow) * pow));
 }
 
 function CategoryFilter({ field, include, onChange }: { field: Category; include: string[]; onChange: (next: string[]) => void }) {
@@ -59,7 +64,7 @@ function CategoryFilter({ field, include, onChange }: { field: Category; include
           title={`${value}: ${count.toLocaleString()}`}
           className="filter-chip"
         >
-          {plain(value)}
+          {plain(value)}{" "}
           <span className="filter-chip-count tabular-nums">{count.toLocaleString()}</span>
         </button>
       ))}
@@ -77,53 +82,58 @@ function RangeFilter({
   onChange: (next: [number, number] | undefined) => void;
 }) {
   const [lo, hi] = range ?? [field.min, field.max];
-  const span = field.max - field.min || 1;
   const step = stepFor(field);
-  // Thumbs land on round numbers (a step multiple), so the summary and the export read "acres ≥ 4000", not 4164.94.
-  const snap = (v: number) => Math.min(field.max, Math.max(field.min, Math.round(v / step) * step));
-  const set = (a: number, b: number) => {
-    const [x, y] = [snap(a), snap(b)];
-    onChange(x <= field.min && y >= field.max ? undefined : [x, y]);
+  // The inputs run over round numbers (step multiples) that enclose the data, so every thumb stop reads "4000", not
+  // 4164.94, and the ends are reachable even when the data's own min or max is not a step multiple.
+  const inputMin = clean(Math.floor(field.min / step) * step);
+  const inputMax = clean(Math.ceil(field.max / step) * step);
+  const inputSpan = inputMax - inputMin || 1;
+  // Only the thumb that moved is rounded; a thumb at or past the data's end means "no bound" on that side.
+  const settle = (v: number) => (v <= field.min ? field.min : v >= field.max ? field.max : clean(Math.round(v / step) * step));
+  const set = (a: number, b: number) => onChange(a <= field.min && b >= field.max ? undefined : [a, b]);
+  // A thumb dragged past the other one pushes it along, so the two never lock together.
+  const moveLo = (v: number) => {
+    const next = settle(v);
+    set(next, Math.max(hi, next));
+  };
+  const moveHi = (v: number) => {
+    const next = settle(v);
+    set(Math.min(lo, next), next);
   };
   const unit = field.unit && field.unit !== "score" ? ` ${field.unit}` : "";
+  const readout = (v: number) => `${formatNumber(v, field.integer, field.key)}${unit}`;
+  const pct = (v: number) => `${((Math.min(inputMax, Math.max(inputMin, v)) - inputMin) / inputSpan) * 100}%`;
+  // The upper input sits on top; once the lower thumb is in the top half it goes on top, so it can always be pulled back.
+  const loOnTop = lo - inputMin > inputSpan / 2;
   return (
     <div>
-      <div
-        className="filter-range"
-        style={{
-          ["--lo" as string]: `${((lo - field.min) / span) * 100}%`,
-          ["--hi" as string]: `${((hi - field.min) / span) * 100}%`,
-        }}
-      >
+      <div className="filter-range" style={{ ["--lo" as string]: pct(lo), ["--hi" as string]: pct(hi) }}>
         <span aria-hidden className="filter-range-track" />
         <input
           type="range"
-          min={field.min}
-          max={field.max}
+          min={inputMin}
+          max={inputMax}
           step={step}
           value={lo}
           aria-label={`${field.label} from`}
-          onChange={(e) => set(Math.min(Number(e.target.value), hi), hi)}
+          aria-valuetext={lo <= field.min ? `${readout(lo)}, lowest` : readout(lo)}
+          style={loOnTop ? { zIndex: 1 } : undefined}
+          onChange={(e) => moveLo(Number(e.target.value))}
         />
         <input
           type="range"
-          min={field.min}
-          max={field.max}
+          min={inputMin}
+          max={inputMax}
           step={step}
           value={hi}
           aria-label={`${field.label} to`}
-          onChange={(e) => set(lo, Math.max(Number(e.target.value), lo))}
+          aria-valuetext={hi >= field.max ? `${readout(hi)}, highest` : readout(hi)}
+          onChange={(e) => moveHi(Number(e.target.value))}
         />
       </div>
       <p className="mt-0.5 flex justify-between text-[11px] leading-4 text-ink-muted tabular-nums">
-        <span className={lo > field.min ? "text-ink" : undefined}>
-          {formatNumber(lo, field.integer, field.key)}
-          {unit}
-        </span>
-        <span className={hi < field.max ? "text-ink" : undefined}>
-          {formatNumber(hi, field.integer, field.key)}
-          {unit}
-        </span>
+        <span className={lo > field.min ? "text-ink" : undefined}>{readout(lo)}</span>
+        <span className={hi < field.max ? "text-ink" : undefined}>{readout(hi)}</span>
       </p>
     </div>
   );

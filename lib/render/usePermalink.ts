@@ -85,7 +85,8 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
     })();
   }, [dispatch]);
 
-  // The window only: the scrubber's play steps and index rebuilds must not rewrite the hash on their own.
+  // The window's ends only, not the rest of the time state: each play step moves the window, so it rewrites the hash
+  // (debounced below), while an index rebuild or a play/pause that leaves the window where it was does not.
   const start = state.time?.window[0];
   const end = state.time?.window[1];
   const { viewport, basemap, layers, renderOps } = state;

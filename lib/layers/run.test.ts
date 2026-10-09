@@ -105,4 +105,12 @@ describe("runLayer", () => {
     expect(ctx.bbox).toEqual(BBOX);
     expect(input).toEqual({ n: 3 });
   });
+
+  it("gives the same cacheKey to bboxes that differ only past the 3rd decimal", async () => {
+    await runLayer("fake", { bbox: [-120.0001, 38.0002, -119.0004, 39.0001], input: { n: 1 } });
+    await runLayer("fake", { bbox: [-120.0003, 38.0001, -119.0001, 39.0004], input: { n: 1 } });
+    const [first, second] = query.mock.calls.map(([ctx]) => ctx.cacheKey);
+    expect(first).toBe("fake:-120,38,-119,39:{\"n\":1}");
+    expect(second).toBe(first);
+  });
 });

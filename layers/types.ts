@@ -43,6 +43,8 @@ export type QueryContext = {
   route?: LineString;
   env: Record<string, string | undefined>;
   fetch: CachedFetch;
+  /** Stable key for this request (layer id, bbox rounded to 3 decimals, sorted input); pass it as `cacheKey` to ctx.fetch. */
+  cacheKey?: string;
 };
 
 export type StyleHints = {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Feature, FeatureCollection, LineString } from "geojson";
-import { createLayerFetch } from "../lib/fetch";
+import type { CachedFetch } from "../lib/fetch";
 import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 
@@ -21,8 +21,6 @@ const inputSchema = z.object({
 });
 
 type OsmTrailsInput = z.infer<typeof inputSchema>;
-
-const overpassFetch = createLayerFetch("osm-trails");
 
 const elementSchema = z.object({
   type: z.literal("way"),
@@ -100,17 +98,24 @@ export function overpassFailure(json: unknown): string | null {
 }
 
 async function requestOverpass(
-  fetchFn: typeof overpassFetch,
+  fetchFn: CachedFetch,
   query: string,
+  cacheKey: string | undefined,
 ): Promise<{ ok: true; json: unknown } | { ok: false; reason: string }> {
   const primary = process.env.OVERPASS_URL || PUBLIC_ENDPOINT;
   let reason = "Overpass returned no response";
 
   // Primary endpoint first, then one retry against the public endpoint
   // (the same URL again when the primary already is the public one).
-  for (const url of [primary, PUBLIC_ENDPOINT]) {
+  // The fallback gets its own key so a cached primary failure never answers it.
+  const attempts = [
+    { url: primary, key: cacheKey },
+    { url: PUBLIC_ENDPOINT, key: cacheKey === undefined ? undefined : `${cacheKey}:fallback` },
+  ];
+  for (const { url, key } of attempts) {
     try {
       const res = await fetchFn(url, {
+        cacheKey: key,
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: `data=${encodeURIComponent(query)}`,
@@ -151,7 +156,7 @@ const osmTrails = defineLayer({
       };
     }
 
-    const result = await requestOverpass(ctx.fetch, buildOverpassQuery(ctx.bbox, input));
+    const result = await requestOverpass(ctx.fetch, buildOverpassQuery(ctx.bbox, input), ctx.cacheKey);
     if (!result.ok) {
       return { error: result.reason, hint: "upstream" };
     }

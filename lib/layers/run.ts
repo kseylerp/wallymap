@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getLayer } from "@/layers/registry";
 import { BBoxSchema, bboxAreaKm2, type LayerError, type LayerResult } from "@/layers/types";
-import { createLayerFetch } from "@/lib/fetch";
+import { cacheKeyFor, createLayerFetch } from "@/lib/fetch";
 
 export type RunLayerParams = { bbox: unknown; zoom?: number; input?: unknown };
 
@@ -55,6 +55,7 @@ export async function runLayer(id: string, params: RunLayerParams): Promise<RunL
         zoom: params.zoom ?? DEFAULT_ZOOM,
         env: process.env,
         fetch: createLayerFetch(id),
+        cacheKey: cacheKeyFor(layer.id, bbox.data, input.data),
       },
       input.data,
     );

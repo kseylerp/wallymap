@@ -77,6 +77,16 @@ describe("osm-trails layer", () => {
     expect(r.citation.source).toBe("OpenStreetMap contributors (ODbL)");
   });
 
+  it("passes ctx.cacheKey to the primary request and a fallback key to the retry", async () => {
+    const stub = vi.fn(async () => new Response("slow down", { status: 429 }));
+    await layer.query(
+      { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch, cacheKey: "osm-trails:k" },
+      { namedOnly: false },
+    );
+    const keys = stub.mock.calls.map((call: unknown[]) => (call[1] as { cacheKey?: string }).cacheKey);
+    expect(keys).toEqual(["osm-trails:k", "osm-trails:k:fallback"]);
+  });
+
   it("filters by sacScaleMax, keeping untagged and easier trails", async () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
     const r = await layer.query(

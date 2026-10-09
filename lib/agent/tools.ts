@@ -41,15 +41,18 @@ const CompareWindowSchema = z.tuple([IsoDateSchema, IsoDateSchema]);
 
 const LngLatSchema = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]);
 
+/**
+ * One list_layers row. Kept short on purpose: the model already has every layer's description in
+ * its query_<id> tool definition, so repeating it here only cost tokens on every later turn.
+ */
 export type LayerSummary = {
   id: string;
   title: string;
-  description: string;
-  coverage: Coverage;
-  license: string;
+  /** Plain words, e.g. "worldwide" or "the United States". */
+  coverage: string;
   available: boolean;
-  /** Words people use that should route to this layer. */
-  synonyms: string[];
+  /** Words people use that should route to this layer, comma-separated on one line. */
+  synonyms: string;
 };
 
 function isAvailable(layer: Layer): boolean {
@@ -96,17 +99,15 @@ export function buildTools(): ToolSet {
   const tools: ToolSet = {
     list_layers: tool({
       description:
-        "List every dataset layer: what it shows, where it has coverage, its license, and whether it is available on this server.",
+        "List every dataset layer: its id, title, where it has coverage, whether it is available on this server, and the words that route to it. Each query_<id> tool describes its layer in full.",
       inputSchema: z.object({}),
       execute: async (): Promise<LayerSummary[]> =>
         listLayers().map((layer) => ({
           id: layer.id,
           title: layer.title,
-          description: layer.description,
-          coverage: layer.coverage,
-          license: layer.license,
+          coverage: describeCoverage(layer.coverage),
           available: isAvailable(layer),
-          synonyms: synonymsFor(layer.id),
+          synonyms: synonymsFor(layer.id).join(", "),
         })),
     }),
     geocode: tool({

@@ -141,9 +141,15 @@ describe("buildTools", () => {
   });
 
   it("list_layers includes vocabulary synonyms for each layer", async () => {
-    const result = (await run(buildTools().list_layers, {})) as { id: string; synonyms: string[] }[];
-    expect(result.find((l) => l.id === "fire-perimeters")?.synonyms).toContain("wildfire");
+    const result = (await run(buildTools().list_layers, {})) as { id: string; synonyms: string }[];
+    expect(result.find((l) => l.id === "fire-perimeters")?.synonyms).toBe("wildfire, fire, burn, burned area");
     for (const layer of result) expect(layer.synonyms.length).toBeGreaterThan(0);
+  });
+
+  it("list_layers stays short: no descriptions or licenses", async () => {
+    const result = (await run(buildTools().list_layers, {})) as Record<string, unknown>[];
+    for (const layer of result) expect(Object.keys(layer).sort()).toEqual(["available", "coverage", "id", "synonyms", "title"]);
+    expect(JSON.stringify(result).length).toBeLessThan(4000);
   });
 
   it("list_layers marks a layer whose env is missing as unavailable", async () => {
@@ -184,20 +190,16 @@ describe("buildTools", () => {
         {
           id: "needs-key",
           title: "Needs key",
-          description: "A layer that needs a key",
-          coverage: "us",
-          license: "CC0",
+          coverage: "the United States",
           available: false,
-          synonyms: [],
+          synonyms: "",
         },
         {
           id: "free",
           title: "Free",
-          description: "A layer with no keys",
-          coverage: "global",
-          license: "ODbL",
+          coverage: "worldwide",
           available: true,
-          synonyms: [],
+          synonyms: "",
         },
       ]);
     } finally {

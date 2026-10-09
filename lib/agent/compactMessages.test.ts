@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { UIMessage } from "ai";
-import { compactMessages } from "./compactMessages";
+import { LIST_LAYERS_STUB, compactMessages } from "./compactMessages";
 
 const citation = { source: "OSM", url: "https://www.openstreetmap.org/copyright", retrieved: "2026-10-09T00:00:00Z" };
 const fullResult = {
@@ -62,6 +62,16 @@ describe("compactMessages", () => {
     expect(compacted.parts[1]).toBe(original.parts[1]);
     expect((original.parts[0] as { output: unknown }).output).toBe(route);
     // Compacting twice changes nothing more.
+    expect(compactMessages([compacted])[0]).toBe(compacted);
+  });
+
+  it("collapses an earlier list_layers output to a one-line stub", () => {
+    const rows = [{ id: "osm-trails", title: "OpenStreetMap trails", coverage: "worldwide", available: true, synonyms: "trail" }];
+    const original = message([{ type: "tool-list_layers", toolCallId: "c1", state: "output-available", input: {}, output: rows }]);
+    const [compacted] = compactMessages([original]);
+    expect((compacted.parts[0] as { output: unknown }).output).toBe(LIST_LAYERS_STUB);
+    expect(LIST_LAYERS_STUB).not.toContain("\n");
+    // Already compacted: returned as is.
     expect(compactMessages([compacted])[0]).toBe(compacted);
   });
 });

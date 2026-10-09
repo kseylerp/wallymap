@@ -1,0 +1,123 @@
+import { describe, expect, it } from "vitest";
+import { buildExportBundle, formatBytes, zipBundle } from "@/lib/export/exportView";
+import { crc32, zipStored } from "@/lib/export/zip";
+import type { LayerResult } from "@/layers/types";
+import { initialMapState, type LoadedLayer, type MapState } from "@/lib/render/state";
+
+const geo = (id: string, title: string): LoadedLayer => ({
+  id,
+  title,
+  style: { geometry: "line", color: "#000" },
+  receivedAt: "2026-10-09T10:00:00Z",
+  result: {
+    kind: "geojson",
+    data: { type: "FeatureCollection", features: [{ type: "Feature", properties: { name: "A" }, geometry: { type: "Point", coordinates: [1, 2] } }] },
+    citation: { source: "OpenStreetMap contributors", url: "https://osm.org", retrieved: "2026-10-09T10:00:00Z" },
+  } satisfies LayerResult,
+});
+const tiles: LoadedLayer = {
+  id: "gfw-loss",
+  title: "Forest loss",
+  style: { geometry: "polygon", color: "#f00" },
+  receivedAt: "2026-10-09T10:01:00Z",
+  result: {
+    kind: "tiles",
+    data: { url: "https://t/{z}/{x}/{y}", minzoom: 0, maxzoom: 12, format: "raster" },
+    citation: { source: "Global Forest Watch", url: "https://gfw.org", retrieved: "2026-10-09T10:01:00Z" },
+  },
+};
+const state: MapState = {
+  ...initialMapState,
+  viewport: { longitude: -120.1, latitude: 39.2, zoom: 11, pitch: 45, bearing: 10 },
+  layers: { "osm-trails": geo("osm-trails", "Trails"), campsites: geo("campsites", "Campsites"), "gfw-loss": tiles },
+  renderOps: [
+    { layerId: "osm-trails", mode: "lines", visible: true },
+    { layerId: "campsites", mode: "points", visible: false },
+    { layerId: "gfw-loss", mode: "polygons", visible: true },
+  ],
+};
+const catalog = { "osm-trails": { title: "Trails", style: state.layers["osm-trails"].style, license: "ODbL" } };
+const now = new Date("2026-10-09T12:00:00Z");
+
+describe("buildExportBundle", () => {
+  it("writes one geojson per visible GeoJSON layer with a wallymap block, and a citations file", async () => {
+    const { files } = buildExportBundle(state, catalog, now);
+    expect(files.map((f) => f.name)).toEqual(["osm-trails.geojson", "citations.md"]);
+    const json = JSON.parse(await files[0].blob.text());
+    expect(json.type).toBe("FeatureCollection");
+    expect(json.features).toHaveLength(1);
+    expect(json.wallymap).toMatchObject({ layer: "Trails", retrieved: "2026-10-09T10:00:00Z", license: "ODbL" });
+    expect(json.wallymap.citation.url).toBe("https://osm.org");
+  });
+
+  it("lists every visible layer in citations.md (tiles included, hidden layers left out) with the view and time", async () => {
+    const md = await buildExportBundle(state, catalog, now).files[1].blob.text();
+    expect(md).toContain("**Trails**");
+    expect(md).toContain("https://osm.org");
+    expect(md).toContain("license: ODbL");
+    expect(md).toContain("**Forest loss**");
+    expect(md).toContain("https://gfw.org");
+    expect(md).toContain("license: not recorded");
+    expect(md).not.toContain("Campsites");
+    expect(md).toContain("2026-10-09T12:00:00.000Z");
+    expect(md).toContain("longitude -120.10000, latitude 39.20000, zoom 11.00");
+  });
+});
+
+/** Reads a stored zip back: [name, bytes, crc ok] per entry, walking the central directory. */
+function readZip(bytes: Uint8Array) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const end = bytes.length - 22;
+  expect(view.getUint32(end, true)).toBe(0x06054b50);
+  const count = view.getUint16(end + 10, true);
+  let at = view.getUint32(end + 16, true);
+  const out: { name: string; data: Uint8Array; crcOk: boolean }[] = [];
+  for (let i = 0; i < count; i++) {
+    expect(view.getUint32(at, true)).toBe(0x02014b50);
+    const crc = view.getUint32(at + 16, true);
+    const size = view.getUint32(at + 20, true);
+    const nameLen = view.getUint16(at + 28, true);
+    const local = view.getUint32(at + 42, true);
+    const name = new TextDecoder().decode(bytes.subarray(at + 46, at + 46 + nameLen));
+    expect(view.getUint32(local, true)).toBe(0x04034b50);
+    const dataStart = local + 30 + view.getUint16(local + 26, true);
+    const data = bytes.subarray(dataStart, dataStart + size);
+    out.push({ name, data, crcOk: crc32(data) === crc });
+    at += 46 + nameLen;
+  }
+  return out;
+}
+
+describe("zip writer", () => {
+  it("matches the standard CRC-32 check value", () => {
+    expect(crc32(new TextEncoder().encode("123456789"))).toBe(0xcbf43926);
+  });
+
+  it("stores every file intact with correct sizes, names and checksums", () => {
+    const enc = new TextEncoder();
+    const bytes = zipStored([
+      { name: "a.geojson", data: enc.encode('{"x":1}') },
+      { name: "citations.md", data: enc.encode("# héllo") },
+      { name: "empty.txt", data: new Uint8Array() },
+    ]);
+    const entries = readZip(bytes);
+    expect(entries.map((e) => e.name)).toEqual(["a.geojson", "citations.md", "empty.txt"]);
+    expect(entries.every((e) => e.crcOk)).toBe(true);
+    expect(new TextDecoder().decode(entries[1].data)).toBe("# héllo");
+  });
+
+  it("zips a bundle blob", async () => {
+    const blob = await zipBundle(buildExportBundle(state, catalog, now), now);
+    const entries = readZip(new Uint8Array(await blob.arrayBuffer()));
+    expect(entries.map((e) => e.name)).toEqual(["osm-trails.geojson", "citations.md"]);
+    expect(blob.type).toBe("application/zip");
+  });
+});
+
+describe("formatBytes", () => {
+  it("writes sizes for the confirm step", () => {
+    expect(formatBytes(377)).toBe("377 B");
+    expect(formatBytes(2048)).toBe("2.0 KB");
+    expect(formatBytes(2_223_321)).toBe("2.1 MB");
+  });
+});

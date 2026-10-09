@@ -11,6 +11,7 @@ import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { sendChat } from "@/lib/agent/chatBus";
 import { bboxToViewport } from "@/lib/render/deck";
 import { askAboutText, featureBBox } from "@/lib/render/inspect";
+import { usePermalink } from "@/lib/render/usePermalink";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type Basemap, type MapAction, type Selection, type Viewport } from "@/lib/render/state";
 import { visibleMapPadding } from "@/lib/render/viewportPadding";
@@ -53,6 +54,7 @@ async function fetchCatalog(): Promise<LayerCatalog> {
 
 export function App() {
   const [state, dispatch] = useReducer(reduce, initialMapState);
+  const permalink = usePermalink(state, dispatch);
   const [catalog, setCatalog] = useState<LayerCatalog | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   // Phones start with the layer panel folded into its pill so it does not cover the map.
@@ -155,6 +157,9 @@ export function App() {
             layerCount={Object.keys(state.layers).length}
             layersOpen={layersOpen}
             onLayersOpenChange={setLayersOpen}
+            mapState={state}
+            catalog={catalog}
+            restoreStatus={permalink.status}
           />
         </div>
       </header>

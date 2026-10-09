@@ -5,6 +5,7 @@ const REQUIRED = [
   "You answer by drawing on a map.",
   "Prefer tools over prose.",
   "Every claim cites a layer.",
+  "End every answer with a Sources line naming each layer's citation; never cite a layer you did not query.",
   "State coverage gaps plainly.",
   "Never invent coordinates; every geometry comes from a tool result.",
   "End with two or three follow-up questions as a bulleted list.",

@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MapPills } from "@/components/MapPills";
+import * as exportView from "@/lib/export/exportView";
+import { initialMapState } from "@/lib/render/state";
 
 afterEach(cleanup);
 
 describe("MapPills", () => {
-  it("renders the wordmark, basemap switch, layers toggle and the export placeholder", () => {
+  it("renders the wordmark, basemap switch, layers toggle and the export pill", () => {
     const onBasemapChange = vi.fn();
     const onLayersOpenChange = vi.fn();
     render(
@@ -19,7 +21,7 @@ describe("MapPills", () => {
       />,
     );
     expect(screen.getByTestId("wally-mark")).toBeTruthy();
-    expect(screen.getByText("WallyMap")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "WallyMap" }).textContent).toBe("");
     expect(screen.queryByTestId("theme-toggle")).toBeNull();
 
     const hybrid = screen.getByRole("button", { name: "Topographical + Satellite" });
@@ -38,9 +40,45 @@ describe("MapPills", () => {
     fireEvent.click(layers);
     expect(onLayersOpenChange).toHaveBeenCalledWith(true);
 
-    const exportPill = screen.getByRole("button", { name: "Export view" });
-    expect(exportPill.getAttribute("aria-disabled")).toBe("true");
-    expect(exportPill.getAttribute("title")).toBe("Milestone 3");
+    // Without map state to pack, Export stays off.
+    expect(screen.getByRole("button", { name: "Export view" }).getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("keeps Export off until a layer is loaded, then downloads the bundle", async () => {
+    const download = vi.spyOn(exportView, "downloadBundle").mockResolvedValue(["citations.md"]);
+    const { rerender } = render(<MapPills basemap="outdoors" onBasemapChange={() => {}} layerCount={0} mapState={initialMapState} />);
+    const off = screen.getByRole("button", { name: "Export view" });
+    expect(off.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(off);
+    expect(download).not.toHaveBeenCalled();
+
+    rerender(<MapPills basemap="outdoors" onBasemapChange={() => {}} layerCount={1} mapState={initialMapState} />);
+    const on = screen.getByRole("button", { name: "Export view" });
+    expect(on.getAttribute("aria-disabled")).toBe("false");
+
+    // The pill only asks; nothing downloads until the confirm's Export button is pressed.
+    fireEvent.click(on);
+    const dialog = screen.getByRole("dialog", { name: "Confirm export" });
+    expect(dialog.textContent).toMatch(/Export 1 file \(\d+ B\)\?/);
+    expect(dialog.textContent).toContain("citations.md");
+    expect(download).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(download).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Export view" }));
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    const bundle = download.mock.calls[0][0];
+    expect(bundle.files.map((f) => f.name)).toEqual(["citations.md"]);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    download.mockRestore();
+  });
+
+  it("shows the restore status next to Export", () => {
+    render(<MapPills basemap="outdoors" onBasemapChange={() => {}} restoreStatus="Restoring 3 layers…" />);
+    expect(screen.getByRole("status").textContent).toBe("Restoring 3 layers…");
   });
 
   it("hides the layers toggle until a layer is loaded, and presses nothing for the agent-only basemap", () => {

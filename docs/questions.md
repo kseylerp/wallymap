@@ -49,7 +49,7 @@ The map shows recent wildlife sightings around Banff, and the note summarizes th
 
 ## Eval set
 
-`scripts/eval-model.mts --set` reads the questions below (the lines starting with `- ` between the markers), runs each one through the real agent with the model in `MODEL_NAME`, and prints one JSON line per question and a final `ok N/M`. It spends model credits and calls live data servers. The set covers trails, both fire layers, forest loss, snow, stream flow, campsites and roads, species, photos with popularity, public lands with wilderness, night lights with population, and remoteness (which also looks up a named physical region).
+`scripts/eval-model.mts --set` reads the questions below (the lines starting with `- ` between the markers), runs each one through the real agent with the model in `MODEL_NAME`, and prints one JSON line per question and a final `ok N/M`. It spends model credits and calls live data servers. The set covers trails, both fire layers, forest loss, snow, stream flow, campsites and roads, species, photos with popularity, public lands with wilderness, night lights with population, remoteness (which also looks up a named physical region), a walking route, fire year by year, a compare over time, a sources check, popular campsites, and a physical-region outline.
 
 ```bash
 node --env-file=.env.local --import tsx scripts/eval-model.mts --set
@@ -68,6 +68,12 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set
 - Who owns the land around Bryce Canyon, and is any of it designated wilderness?
 - Where is the night sky darkest around Great Basin National Park, and how many people live nearby?
 - How remote is the Wind River Range?
+- Show me a walking route from Tahoe City to Emerald Bay
+- Show wildfires near Yosemite year by year since 2016
+- Compare forest loss in Rondônia 2015 vs 2025
+- Which sources did you use for snow near Mount Hood?
+- Which campsites around Moab look the most popular?
+- Outline the Sierra Nevada
 <!-- eval:end -->
 
 ## Last run

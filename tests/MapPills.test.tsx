@@ -44,6 +44,27 @@ describe("MapPills", () => {
     expect(screen.getByRole("button", { name: "Export view" }).getAttribute("aria-disabled")).toBe("true");
   });
 
+  it("labels Layers and Export in text, with no icons; only the logo pill draws", () => {
+    render(
+      <MapPills
+        basemap="outdoors"
+        onBasemapChange={() => {}}
+        layerCount={3}
+        onLayersOpenChange={() => {}}
+        mapState={initialMapState}
+      />,
+    );
+    const layers = screen.getByRole("button", { name: "Layers, 3 loaded" });
+    expect(layers.textContent).toBe("Layers·3");
+    expect(layers.querySelector("svg")).toBeNull();
+    const exportPill = screen.getByRole("button", { name: "Export view" });
+    expect(exportPill.textContent).toBe("Export");
+    expect(exportPill.querySelector("svg")).toBeNull();
+    // The Wally logo is the one drawing among the pills.
+    const svgs = Array.from(screen.getByTestId("map-pills").querySelectorAll("svg"));
+    expect(svgs.every((svg) => screen.getByRole("img", { name: "WallyMap" }).contains(svg))).toBe(true);
+  });
+
   it("keeps Export off until a layer is loaded, then downloads the bundle", async () => {
     const download = vi.spyOn(exportView, "downloadBundle").mockResolvedValue(["citations.md"]);
     const { rerender } = render(<MapPills basemap="outdoors" onBasemapChange={() => {}} layerCount={0} mapState={initialMapState} />);

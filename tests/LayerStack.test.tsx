@@ -89,7 +89,7 @@ describe("LayerStack", () => {
     expect(within(screen.getAllByTestId("layer-card")[0]).getByText("35%")).toBeTruthy();
   });
 
-  it("changes mode, disables columns and hexbin, and picks a preset color", () => {
+  it("changes mode and disables columns and hexbin", () => {
     const spy = vi.fn();
     render(<Harness spy={spy} />);
     const card = screen.getAllByTestId("layer-card")[0];
@@ -98,9 +98,74 @@ describe("LayerStack", () => {
     expect((within(select).getByRole("option", { name: /Hexbin/ }) as HTMLOptionElement).disabled).toBe(true);
     fireEvent.change(select, { target: { value: "heat" } });
     expect(spy).toHaveBeenCalledWith({ type: "set_style", layerId: "osm-trails", mode: "heat" });
-    fireEvent.click(within(card).getByRole("button", { name: "Color for OSM trails" }));
-    fireEvent.click(screen.getByRole("button", { name: "Use #3FA9F5" }));
-    expect(spy).toHaveBeenCalledWith({ type: "set_style", layerId: "osm-trails", color: "#3FA9F5" });
+  });
+
+  it("renders a monochrome legend row: key, title, count, and no color picker", () => {
+    render(<Harness spy={vi.fn()} />);
+    const stack = screen.getByTestId("layer-stack");
+    expect(within(stack).getByText("Layers")).toBeTruthy();
+    // The time scrubber's slot sits at the top, empty until Task 7 mounts it.
+    const slot = stack.querySelector('[data-slot="time-scrubber"]');
+    expect(slot).toBeTruthy();
+    expect(stack.firstElementChild).toBe(slot);
+    expect(slot?.childElementCount).toBe(0);
+
+    const [trailsRow, landsRow] = screen.getAllByTestId("layer-card");
+    // Trails draw as lines: a solid line sample, white over ink.
+    const trailsKey = trailsRow.querySelector("svg.legend-key")!;
+    expect(trailsKey.getAttribute("data-kind")).toBe("line");
+    expect(trailsKey.querySelectorAll("line")).toHaveLength(2);
+    expect(trailsKey.querySelector("line[stroke-dasharray]")).toBeNull();
+    // Public lands are vector polygons: an outlined square with a 10% wash.
+    const landsKey = landsRow.querySelector("svg.legend-key")!;
+    expect(landsKey.getAttribute("data-kind")).toBe("polygon");
+    expect(landsKey.querySelector("rect")?.getAttribute("fill-opacity")).toBe("0.1");
+
+    // No swatches, no color popover, no inline colors.
+    expect(screen.queryByRole("button", { name: /Color for/ })).toBeNull();
+    expect(stack.querySelector("[style*='background-color']")).toBeNull();
+    for (const el of stack.querySelectorAll("svg *")) {
+      for (const attr of ["fill", "stroke"]) {
+        const value = el.getAttribute(attr);
+        if (value) expect(["currentColor", "white", "none"].includes(value) || value.startsWith("url(#")).toBe(true);
+      }
+    }
+    // The source is a dashed link.
+    expect(within(trailsRow).getByRole("link", { name: "openstreetmap.org" }).className).toContain("dashed-link");
+  });
+
+  it("keys points with the layer's symbol sprite, dashes forest roads, and hatches raster tiles", () => {
+    const camps: LoadedLayer = { ...trails, id: "campsites", title: "Campsites", style: { geometry: "point", color: "#F2A33A" } };
+    const roads: LoadedLayer = { ...trails, id: "forest-roads", title: "Forest roads" };
+    const lights: LoadedLayer = {
+      ...lands,
+      id: "night-lights",
+      title: "Night lights",
+      result: { kind: "tiles", data: { url: "https://example.test/{z}/{x}/{y}.png", minzoom: 0, maxzoom: 8, format: "raster" }, citation },
+    };
+    render(
+      <LayerStack
+        layers={{ campsites: camps, "forest-roads": roads, "night-lights": lights }}
+        renderOps={[
+          { layerId: "night-lights", mode: "polygons", visible: true },
+          { layerId: "forest-roads", mode: "lines", visible: true },
+          { layerId: "campsites", mode: "points", visible: false },
+        ]}
+        catalog={null}
+        dispatch={() => {}}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    const [campRow, roadRow, lightsRow] = screen.getAllByTestId("layer-card");
+    expect(campRow.querySelector("image")?.getAttribute("href")).toBe("/pins/camp.svg");
+    // Hidden layers say so on the row (the key fades) and in the visibility box.
+    expect(campRow.getAttribute("data-hidden")).toBe("true");
+    expect(within(campRow).getByRole("button", { name: "Show Campsites" }).getAttribute("aria-pressed")).toBe("false");
+    expect(roadRow.querySelector("line[stroke-dasharray]")?.getAttribute("stroke-dasharray")).toBe("6 4.5");
+    expect(lightsRow.querySelector("svg.legend-key")?.getAttribute("data-kind")).toBe("tiles");
+    expect(lightsRow.querySelector("pattern")).toBeTruthy();
+    expect(within(lightsRow).getByText("tiles")).toBeTruthy();
   });
 
   it("reorders with the arrow keys on the grip, and removes and clears layers", () => {
@@ -116,18 +181,6 @@ describe("LayerStack", () => {
     expect(screen.getAllByTestId("layer-card")).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
     expect(screen.queryByTestId("layer-stack")).toBeNull();
-  });
-
-  it("Escape in the color popover closes it without reaching window listeners (the inspect card)", () => {
-    const onWindowEscape = vi.fn();
-    window.addEventListener("keydown", onWindowEscape);
-    render(<Harness spy={vi.fn()} />);
-    const card = screen.getAllByTestId("layer-card")[0];
-    fireEvent.click(within(card).getByRole("button", { name: "Color for OSM trails" }));
-    fireEvent.keyDown(screen.getByLabelText("Custom hex color"), { key: "Escape" });
-    expect(screen.queryByLabelText("Custom hex color")).toBeNull();
-    expect(onWindowEscape).not.toHaveBeenCalled();
-    window.removeEventListener("keydown", onWindowEscape);
   });
 
   it("keeps focus on the grip after an arrow-key reorder", async () => {
@@ -154,7 +207,7 @@ describe("LayerStack", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("puts the sage selection rim on the card whose layer holds the selected feature", () => {
+  it("marks the row whose layer holds the selected feature", () => {
     render(
       <LayerStack
         layers={start.layers}
@@ -170,7 +223,7 @@ describe("LayerStack", () => {
     expect(top.getAttribute("data-selected")).toBeNull();
     expect(bottom.getAttribute("data-layer-id")).toBe("public-lands");
     expect(bottom.getAttribute("data-selected")).toBe("true");
-    expect(bottom.className).toContain("border-sage");
+    expect(bottom.className).not.toMatch(/sage/);
   });
 });
 

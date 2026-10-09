@@ -21,71 +21,35 @@ import {
   type StyleLayerLike,
 } from "@/lib/render/hybridStyle";
 import { hexToRgba } from "@/lib/render/deck";
-import { LAND_MANAGER_COLORS } from "@/lib/render/palette";
+import { INK } from "@/lib/render/palette";
 import { featureCenter } from "@/lib/render/inspect";
 import type { Basemap, MapState } from "@/lib/render/state";
 
 const PREFIX = "tiles-";
 
-/** PAD-US `agency` values (as decoded from the tiles) that take Wally's state-land color. */
-const STATE_AGENCIES = ["State", "State Parks", "STAT", "SPR", "SDNR", "SFW", "SLB", "SDOL", "OTHS"];
-
-/** True when the string expression starts with `prefix`. */
-function startsWith(value: ExpressionSpecification, prefix: string): ExpressionSpecification {
-  return ["==", ["slice", value, 0, prefix.length], prefix];
-}
-
 /**
- * Wally's public-land fill by manager: NPS, USFS, BLM, FWS and state land each get their color, wilderness areas
- * (PAD-US `category` "wilderness" or a "Wilderness ..." designation, whoever manages them) the deep wilderness
- * green, and every other manager or a feature without one `fallback` (the layer's lavender).
+ * Public land is a gray tint, not a manager palette (spec §10, research look): ink at 10% regionally, fading to 3% at
+ * trailhead zooms so trails and symbols read. The PAD-US `agency` stays in the picked properties but draws nothing.
  */
-export function landManagerFillColor(fallback: string): ExpressionSpecification {
-  const c = LAND_MANAGER_COLORS;
-  return [
-    "case",
-    [
-      "any",
-      ["==", ["to-string", ["get", "category"]], "wilderness"],
-      startsWith(["to-string", ["get", "designation"]], "Wilderness"),
-    ],
-    c.Wilderness,
-    [
-      "match",
-      ["to-string", ["get", "agency"]],
-      "NPS",
-      c.NPS,
-      "USFS",
-      c.USFS,
-      "BLM",
-      c.BLM,
-      "FWS",
-      c.FWS,
-      STATE_AGENCIES,
-      c.State,
-      fallback,
-    ],
-  ];
-}
-
-/** Wally's land wash fades as you zoom in so trails and pins read: 0.18 regional, 0.03 at trailhead zooms. */
 export function landFillOpacity(opacity = 1): ExpressionSpecification {
   const stops: [number, number][] = [
-    [9, 0.18],
-    [12, 0.15],
-    [13.5, 0.08],
+    [9, 0.1],
+    [12, 0.08],
+    [13.5, 0.05],
     [15, 0.03],
   ];
   return ["interpolate", ["linear"], ["zoom"], ...stops.flatMap(([z, o]) => [z, Math.round(o * opacity * 1000) / 1000])];
 }
 
+/** Polygon outlines: a 1px white line at 70% between two 0.5px ink edges (white over ink, as deck draws areas). */
+export const LAND_OUTLINE = { width: 1, casing: 0.5, opacity: 0.7 } as const;
+
 type VectorLayerSpec = FillLayerSpecification | LineLayerSpecification | CircleLayerSpecification;
 
 /**
- * The Mapbox layers that draw one vector tile layer: a manager-colored fill (fading with zoom) plus a thin white
- * outline for polygons,
- * else one line or circle layer in the style color. Every layer reads source `tiles-<id>`; the first layer is
- * `tiles-<id>`, the polygon outline `tiles-<id>-line`.
+ * The Mapbox layers that draw one vector tile layer: for polygons an ink tint (fading with zoom) under a white
+ * outline cased in ink, else one line or circle layer in the style color. Every layer reads source `tiles-<id>`;
+ * the first layer is `tiles-<id>` (the one picking queries), then `tiles-<id>-casing` and `tiles-<id>-line`.
  */
 export function vectorTileLayerSpecs(
   id: string,
@@ -93,7 +57,7 @@ export function vectorTileLayerSpecs(
   sourceLayer: string,
   geometry: "point" | "line" | "polygon",
   visible: boolean,
-  /** The layer panel's color and opacity (render op), when set. */
+  /** The layer panel's color and opacity (render op), when set. Polygons ignore the color: they stay gray. */
   paint: { color?: string; opacity?: number } = {},
 ): VectorLayerSpec[] {
   const layerId = `${PREFIX}${id}`;
@@ -102,24 +66,30 @@ export function vectorTileLayerSpecs(
   const common = { source: layerId, "source-layer": sourceLayer };
   const layout = { visibility: visible ? ("visible" as const) : ("none" as const) };
   if (geometry === "polygon") {
+    const o = LAND_OUTLINE;
+    const lineLayout = { ...layout, "line-join": "round" as const };
     return [
       {
         id: layerId,
         type: "fill",
         ...common,
         layout,
-        paint: {
-          // A color picked in the layer panel paints every area; otherwise Wally's manager palette.
-          "fill-color": paint.color ?? landManagerFillColor(style.color),
-          "fill-opacity": landFillOpacity(opacity),
-        },
+        paint: { "fill-color": INK, "fill-opacity": landFillOpacity(opacity) },
+      },
+      {
+        // The ink edges: a 0.5px line either side of a 1px gap, which the white line fills.
+        id: `${layerId}-casing`,
+        type: "line",
+        ...common,
+        layout: lineLayout,
+        paint: { "line-color": INK, "line-width": o.casing, "line-gap-width": o.width, "line-opacity": o.opacity * opacity },
       },
       {
         id: `${layerId}-line`,
         type: "line",
         ...common,
-        layout: { ...layout, "line-join": "round" },
-        paint: { "line-color": "#FFFFFF", "line-width": 1, "line-opacity": 0.6 * opacity },
+        layout: lineLayout,
+        paint: { "line-color": "#FFFFFF", "line-width": o.width, "line-opacity": o.opacity * opacity },
       },
     ];
   }

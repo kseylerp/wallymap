@@ -394,43 +394,153 @@ textarea:focus-visible {
   }
 }
 
-/* Layer panel opacity slider: a 4px track filled in the accent up to the value (--fill, set inline), a white thumb. */
+/*
+ * Research console utilities (spec §10): hairline rules, small-caps section labels, and the dashed source link.
+ * Tabular figures come from Tailwind's `tabular-nums`.
+ */
+@utility hairline {
+  border-color: var(--line);
+  border-style: solid;
+  border-width: 0;
+  border-top-width: 1px;
+}
+@utility small-caps {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+@utility dashed-link {
+  color: inherit;
+  text-decoration: none;
+  background-image: linear-gradient(to right, currentColor 3px, transparent 3px);
+  background-size: 5px 1px;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+  padding-bottom: 1px;
+  transition: color 150ms var(--ease-out);
+  &:hover {
+    color: var(--ink);
+  }
+}
+
+/*
+ * The layer panel legend (components/LayerStack.tsx): flat rows on hairlines, no cards. The selected layer's row
+ * takes a 2px ink rule at its left; a hidden layer's key fades. Row controls show on hover or focus (always on
+ * touch screens).
+ */
+.legend-row + .legend-row {
+  border-top: 1px solid var(--line);
+}
+.legend-row[data-selected]::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: -12px;
+  width: 2px;
+  background: var(--ink);
+}
+.legend-row[data-drop-target] {
+  box-shadow: inset 0 2px 0 var(--ink);
+}
+.legend-row[data-hidden] .legend-key {
+  opacity: 0.35;
+}
+.legend-controls {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 150ms var(--ease-out),
+    opacity 150ms var(--ease-out);
+}
+.legend-controls > * {
+  min-height: 0;
+  overflow: hidden;
+}
+@media (hover: hover) and (pointer: fine) {
+  .legend-row:not(:hover, :focus-within, [data-selected]) .legend-controls {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+/* Visibility: an 11px square, ink when the layer shows. */
+.legend-check {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 150ms var(--ease-out);
+}
+.legend-check[aria-pressed="true"] {
+  background: var(--ink);
+}
+.legend-check:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+/* Render mode: a plain select on a hairline. */
+.legend-select {
+  height: 22px;
+  max-width: 92px;
+  padding: 0 2px;
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  border-radius: 4px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--ink);
+  outline: none;
+}
+.legend-select:focus-visible {
+  border-color: var(--ink);
+}
+
+/* Layer panel opacity slider: a 2px ink track filled up to the value (--fill, set inline), a small ringed thumb. */
 .layer-opacity {
   appearance: none;
-  height: 18px;
+  height: 14px;
   background: transparent;
   cursor: pointer;
 }
 .layer-opacity::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: 999px;
-  background: linear-gradient(to right, var(--accent) var(--fill, 100%), var(--mist) var(--fill, 100%));
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(
+    to right,
+    var(--ink) var(--fill, 100%),
+    color-mix(in srgb, var(--ink) 15%, transparent) var(--fill, 100%)
+  );
 }
 .layer-opacity::-moz-range-track {
-  height: 4px;
-  border-radius: 999px;
-  background: linear-gradient(to right, var(--accent) var(--fill, 100%), var(--mist) var(--fill, 100%));
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(
+    to right,
+    var(--ink) var(--fill, 100%),
+    color-mix(in srgb, var(--ink) 15%, transparent) var(--fill, 100%)
+  );
 }
 .layer-opacity::-webkit-slider-thumb {
   appearance: none;
-  margin-top: -5px;
-  width: 14px;
-  height: 14px;
+  margin-top: -4px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
   background: var(--paper);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.12),
-    var(--chip-shadow);
+  box-shadow: 0 0 0 1px var(--ink);
 }
 .layer-opacity::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
+  width: 10px;
+  height: 10px;
   border: none;
   border-radius: 999px;
   background: var(--paper);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.12),
-    var(--chip-shadow);
+  box-shadow: 0 0 0 1px var(--ink);
 }
 
 /*

@@ -1,6 +1,5 @@
 "use client";
 
-import { Download, Layers } from "lucide-react";
 import { useCallback, useState } from "react";
 import { WallyMark } from "@/components/Brand";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
@@ -113,17 +112,10 @@ export function MapPills({
             aria-pressed={layersOpen}
             aria-label={`Layers, ${layerCount} loaded`}
             title={layersOpen ? "Hide layers" : "Show layers"}
-            className={`${SEG} pr-1.5 pl-2 ${layersOpen ? ACTIVE : IDLE}`}
+            className={`${SEG} px-2.5 ${layersOpen ? ACTIVE : IDLE}`}
           >
-            <Layers size={14} strokeWidth={2} aria-hidden />
-            <span className="hidden md:inline">Layers</span>
-            <span
-              className={`stat min-w-5 rounded-pill px-1.5 text-center text-[11px] leading-5 font-semibold ${
-                layersOpen ? "bg-white/20" : "bg-mist"
-              }`}
-            >
-              {layerCount}
-            </span>
+            Layers<span aria-hidden className="opacity-50">·</span>
+            <span className="tabular-nums">{layerCount}</span>
           </button>
         </div>
       )}
@@ -141,9 +133,9 @@ export function MapPills({
             if (exportOpen) cancelExport();
             else askExport();
           }}
-          className={`${SEG} w-7 justify-center ${canExport ? IDLE : "cursor-not-allowed text-ink-muted/50"}`}
+          className={`${SEG} px-2.5 ${canExport ? IDLE : "cursor-not-allowed text-ink-muted/50"}`}
         >
-          <Download size={14} strokeWidth={2} aria-hidden />
+          Export
         </button>
       </div>
 

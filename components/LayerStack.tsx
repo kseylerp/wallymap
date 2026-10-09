@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
-import { ChevronUp, Eye, EyeOff, GripVertical, X } from "lucide-react";
+import { useId, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
-import { DATA_COLORS, TILE_SWATCH } from "@/lib/render/palette";
+import { TILE_SWATCH } from "@/lib/render/palette";
 import type { LoadedLayer, MapAction, MapState, RenderMode, RenderOp } from "@/lib/render/state";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
+import { legendSymbol, type LegendMode, type LegendSymbol } from "@/lib/render/wally/legend";
 
 type LayerStackProps = {
   layers: MapState["layers"];
@@ -15,21 +15,11 @@ type LayerStackProps = {
   /** Whether the panel shows; the layers map pill (MapPills) opens and closes it. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** The layer holding the selected feature; its card gets the sage selection rim. */
+  /** The layer holding the selected feature; its row gets the ink selection rule. */
   selectedLayerId?: string;
 };
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
-
-/** Map data colors offered in the swatch popover: the satellite-safe data palette. */
-export const PRESET_COLORS = [
-  DATA_COLORS["osm-trails"],
-  DATA_COLORS["fire-perimeters"],
-  DATA_COLORS.campsites,
-  DATA_COLORS.photos,
-  DATA_COLORS.streamflow,
-  DATA_COLORS.species,
-] as const;
 
 const MODES: { value: RenderMode; label: string; ready: boolean }[] = [
   { value: "points", label: "Points", ready: true },
@@ -42,7 +32,7 @@ const MODES: { value: RenderMode; label: string; ready: boolean }[] = [
 
 /**
  * The color the map actually draws: a valid render-op color, else the style color. Raster tiles carry their own
- * imagery colors, so their swatch is a neutral gray.
+ * imagery colors, so they read as a neutral gray. (The inspect card uses it; the panel shows no colors.)
  */
 export function drawnColor(layer: LoadedLayer, op: RenderOp | undefined): string {
   if (op?.color && HEX.test(op.color.trim())) return op.color;
@@ -70,112 +60,73 @@ function hostOf(url: string): string | null {
   }
 }
 
-type SwatchProps = { color: string; title: string; disabled: boolean; onPick: (color: string) => void };
+/** How the map draws a layer, for its legend key: raster tiles hatch, vector tiles by geometry, geojson by mode. */
+function legendModeFor(layer: LoadedLayer, op: RenderOp | undefined): LegendMode {
+  if (layer.result.kind === "tiles") {
+    if (layer.result.data.format === "raster") return "tiles";
+    const geometry = layer.result.data.geometry ?? layer.style.geometry;
+    return geometry === "polygon" ? "polygons" : geometry === "line" ? "lines" : "points";
+  }
+  if (op) return op.mode;
+  return layer.style.geometry === "polygon" ? "polygons" : layer.style.geometry === "line" ? "lines" : "points";
+}
 
-/** The color dot; clicking it opens six presets and a hex field. */
-function Swatch({ color, title, disabled, onPick }: SwatchProps) {
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState("");
-  const rootRef = useRef<HTMLDivElement>(null);
+/** Dash lengths in the legend sample, per line width of deck's [dash, gap]: short enough to show the rhythm in 22px. */
+const DASH_SCALE = 1.5;
+/** Five gray steps, light to dark, matching the score ramp's alpha range on the map. */
+const RAMP_STEPS = [0.1, 0.25, 0.4, 0.55, 0.7];
 
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("pointerdown", onDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("pointerdown", onDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const commit = () => {
-    const hex = draft.trim().startsWith("#") ? draft.trim() : `#${draft.trim()}`;
-    if (HEX.test(hex)) {
-      onPick(hex.toUpperCase());
-      setOpen(false);
-    }
-  };
-
+/**
+ * The legend key: a 24px inline SVG in `currentColor` (ink) and white, drawn the way the map draws the layer. The
+ * point key is the layer's own sprite.
+ */
+function LegendKey({ symbol }: { symbol: LegendSymbol }) {
+  const hatchId = `hatch-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   return (
-    <div
-      ref={rootRef}
-      className="relative shrink-0"
-      // Escape inside the swatch or its popover closes only the popover: stopping it here keeps it from
-      // reaching the window listener that closes the inspect card.
-      onKeyDown={(e) => {
-        if (e.key === "Escape" && open) {
-          e.stopPropagation();
-          setOpen(false);
-        }
-      }}
-    >
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => {
-          setDraft(color.replace(/^#/, ""));
-          setOpen((o) => !o);
-        }}
-        aria-label={`Color for ${title}`}
-        aria-expanded={open}
-        title="Color"
-        className="flex size-6 items-center justify-center rounded-full transition-transform hover:scale-110 disabled:opacity-40 disabled:hover:scale-100"
-      >
-        {/* The inset hairline keeps a white swatch (remoteness) visible on the white card. */}
-        <span className="size-3.5 rounded-full shadow-chip ring-1 ring-black/20 ring-inset" style={{ backgroundColor: color }} />
-      </button>
-      {open && (
-        <div
-          role="dialog"
-          aria-label={`Pick a color for ${title}`}
-          className="absolute top-8 left-0 z-10 w-[188px] rounded-[12px] border border-line bg-paper p-2.5 shadow-card"
-        >
-          <div className="grid grid-cols-6 gap-1.5">
-            {PRESET_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => {
-                  onPick(c);
-                  setOpen(false);
-                }}
-                aria-label={`Use ${c}`}
-                aria-pressed={c.toLowerCase() === color.toLowerCase()}
-                className="size-6 rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,0.15)] ring-offset-2 ring-offset-paper transition-transform hover:scale-110 aria-pressed:ring-2 aria-pressed:ring-ink"
-                style={{ backgroundColor: c }}
-              />
-            ))}
-          </div>
-          <label className="mt-2.5 flex h-8 items-center gap-1 rounded-[8px] border border-line px-2 text-[12.5px] focus-within:border-slate">
-            <span aria-hidden className="text-ink-muted">
-              #
-            </span>
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value.replace(/[^0-9a-f#]/gi, "").slice(0, 7))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commit();
-              }}
-              onBlur={commit}
-              aria-label="Custom hex color"
-              placeholder="2F3A44"
-              spellCheck={false}
-              className="min-w-0 flex-1 bg-transparent font-mono text-ink uppercase outline-none placeholder:text-ink-muted/60"
-            />
-          </label>
-        </div>
+    <svg viewBox="0 0 24 24" width={24} height={24} aria-hidden className="legend-key block shrink-0" data-kind={symbol.kind}>
+      {symbol.kind === "symbol" && symbol.spriteUrl && <image href={symbol.spriteUrl} x={0} y={0} width={24} height={24} />}
+      {symbol.kind === "line" && (
+        <>
+          <line x1={1} y1={12} x2={23} y2={12} stroke="currentColor" strokeWidth={3.5} />
+          <line
+            x1={1}
+            y1={12}
+            x2={23}
+            y2={12}
+            stroke="white"
+            strokeWidth={2}
+            strokeDasharray={
+              symbol.dash && symbol.dash[0] > 0 ? `${symbol.dash[0] * DASH_SCALE} ${symbol.dash[1] * DASH_SCALE}` : undefined
+            }
+          />
+        </>
       )}
-    </div>
+      {symbol.kind === "polygon" && (
+        <rect x={4.5} y={4.5} width={15} height={15} fill="currentColor" fillOpacity={0.1} stroke="currentColor" strokeWidth={1} />
+      )}
+      {symbol.kind === "score" && (
+        <>
+          {RAMP_STEPS.map((alpha, i) => (
+            <rect key={alpha} x={2 + i * 4} y={8} width={4} height={8} fill="currentColor" fillOpacity={alpha} />
+          ))}
+          <rect x={2.25} y={8.25} width={19.5} height={7.5} fill="none" stroke="currentColor" strokeOpacity={0.35} strokeWidth={0.5} />
+        </>
+      )}
+      {symbol.kind === "tiles" && (
+        <>
+          <defs>
+            <pattern id={hatchId} width={3} height={3} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <line x1={0} y1={0} x2={0} y2={3} stroke="currentColor" strokeWidth={0.75} />
+            </pattern>
+          </defs>
+          <rect x={4.5} y={4.5} width={15} height={15} fill={`url(#${hatchId})`} stroke="currentColor" strokeWidth={1} />
+        </>
+      )}
+    </svg>
   );
 }
 
-type CardProps = {
+type RowProps = {
   layer: LoadedLayer;
   op: RenderOp | undefined;
   license: string | undefined;
@@ -194,19 +145,24 @@ type CardProps = {
   selected: boolean;
 };
 
-function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, dropTarget, dragging, selected }: CardProps) {
+/**
+ * One legend row: the key (also the drag handle), the title over a muted line of coverage, license and source, the
+ * feature count in tabular figures, and (on hover or focus) visibility, opacity, mode and remove.
+ */
+function LegendRow({ layer, op, license, dispatch, onMove, dragProps, armDrag, dropTarget, dragging, selected }: RowProps) {
   const visible = op?.visible ?? false;
   const opacity = op?.opacity ?? 1;
   const count = layer.result.kind === "geojson" ? layer.result.data.features.length : null;
   const { citation, coverageNote } = layer.result;
   const host = hostOf(citation.url);
+  const symbol = legendSymbol(layer.id, legendModeFor(layer, op), layer.style.unit);
 
   const gripRef = useRef<HTMLButtonElement>(null);
   const onHandleKey = (e: KeyboardEvent) => {
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     e.preventDefault();
     onMove(e.key === "ArrowUp" ? 1 : -1);
-    // React moves the card's node to its new place, which drops focus; put it back so repeated presses work.
+    // React moves the row's node to its new place, which drops focus; put it back so repeated presses work.
     requestAnimationFrame(() => gripRef.current?.focus());
   };
 
@@ -215,15 +171,12 @@ function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, d
       data-testid="layer-card"
       data-layer-id={layer.id}
       data-selected={selected || undefined}
+      data-hidden={!visible || undefined}
+      data-drop-target={dropTarget || undefined}
       {...dragProps}
-      className={[
-        // Wally card: radius 16; the card whose layer holds the selected feature gets a sage rim.
-        "group/card relative rounded-[16px] border bg-paper/70 py-2.5 pr-2 pl-1.5 transition-[border-color,opacity,box-shadow] duration-350",
-        dropTarget ? "border-slate shadow-chip" : selected ? "border-sage ring-1 ring-sage" : "border-line",
-        dragging ? "opacity-50" : "",
-      ].join(" ")}
+      className={`legend-row relative py-2.5 transition-opacity duration-150 ${dragging ? "opacity-40" : ""}`}
     >
-      <div className="flex items-center gap-1">
+      <div className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-start gap-x-3">
         <button
           type="button"
           ref={gripRef}
@@ -233,93 +186,75 @@ function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, d
           onPointerDown={() => armDrag(true)}
           onPointerUp={() => armDrag(false)}
           onKeyDown={onHandleKey}
-          className="flex h-7 w-5 shrink-0 cursor-grab items-center justify-center rounded-[6px] text-ink-muted/70 transition-colors hover:text-ink active:cursor-grabbing disabled:cursor-default disabled:opacity-30"
+          className="-my-[3px] flex h-6 w-6 cursor-grab items-center justify-center rounded-[4px] text-ink active:cursor-grabbing disabled:cursor-default"
         >
-          <GripVertical aria-hidden size={14} strokeWidth={2} />
+          <LegendKey symbol={symbol} />
         </button>
-        <Swatch
-          color={drawnColor(layer, op)}
-          title={layer.title}
-          // Raster tiles draw their own imagery colors, so there is nothing to recolor.
-          disabled={!op || (layer.result.kind === "tiles" && layer.result.data.format === "raster")}
-          onPick={(color) => dispatch({ type: "set_style", layerId: layer.id, color })}
-        />
-        <p className={`ml-1 min-w-0 flex-1 truncate text-[13.5px] font-medium ${visible ? "text-ink" : "text-ink-muted"}`} title={layer.title}>
-          {layer.title}
-        </p>
+        <div className="min-w-0">
+          <p className={`truncate text-[13px] leading-[18px] ${visible ? "text-ink" : "text-ink-muted"}`} title={layer.title}>
+            {layer.title}
+          </p>
+          <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-4 text-ink-muted">
+            {coverageNote && (
+              <>
+                <span title={coverageNote}>{coverageNote}</span>
+                {" · "}
+              </>
+            )}
+            {license && <span title={license}>{license} · </span>}
+            <a href={citation.url} target="_blank" rel="noreferrer" title={citation.source} className="dashed-link whitespace-nowrap">
+              {host ?? citation.source}
+            </a>
+          </p>
+        </div>
         {count !== null ? (
           <span
-            className="rounded-pill bg-primary px-1.5 py-px text-[11px] leading-4 font-semibold text-on-primary tabular-nums"
+            className="text-right text-[12px] leading-[18px] text-ink tabular-nums"
             title={`${count.toLocaleString()} ${count === 1 ? "feature" : "features"}`}
           >
             {count.toLocaleString()}
           </span>
         ) : (
-          <span className="rounded-pill bg-mist px-1.5 py-px text-[11px] leading-4 font-medium text-ink-muted">tiles</span>
+          <span className="small-caps text-right leading-[18px]">tiles</span>
         )}
-        <button
-          type="button"
-          onClick={() => dispatch({ type: "toggle_layer", layerId: layer.id })}
-          disabled={!op}
-          aria-pressed={visible}
-          aria-label={`Show ${layer.title}`}
-          title={visible ? "Hide layer" : "Show layer"}
-          className="flex size-7 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-mist hover:text-ink disabled:opacity-40"
-        >
-          {visible ? <Eye aria-hidden size={16} strokeWidth={2} /> : <EyeOff aria-hidden size={16} strokeWidth={2} />}
-        </button>
-        <button
-          type="button"
-          onClick={() => dispatch({ type: "remove_layer", layerId: layer.id })}
-          aria-label={`Remove ${layer.title}`}
-          title="Remove layer"
-          className="flex size-7 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-mist hover:text-ink"
-        >
-          <X aria-hidden size={14} strokeWidth={2} />
-        </button>
       </div>
 
-      <div className="mt-1 space-y-1 pl-[52px] text-[11.5px] leading-snug text-ink-muted">
-        {coverageNote && <p className="line-clamp-2" title={coverageNote}>{coverageNote}</p>}
-        <p className="truncate">
-          {license && <span title={license}>{license} · </span>}
-          <a
-            href={citation.url}
-            target="_blank"
-            rel="noreferrer"
-            title={citation.source}
-            className="text-ink underline decoration-ink/25 underline-offset-2 hover:decoration-ink"
-          >
-            {host ?? citation.source}
-          </a>
-        </p>
-      </div>
-
-      {op && (
-        <div className="mt-2 flex items-center gap-2 pl-[52px]">
-          <label className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="sr-only">Opacity for {layer.title}</span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={opacity}
-              onChange={(e) => dispatch({ type: "set_opacity", layerId: layer.id, opacity: Number(e.target.value) })}
-              className="layer-opacity w-full min-w-[80px] flex-1"
-              style={{ ["--fill" as string]: `${Math.round(opacity * 100)}%` }}
-            />
-            <span aria-hidden className="w-8 text-right text-[11px] text-ink-muted tabular-nums">
-              {Math.round(opacity * 100)}%
-            </span>
-          </label>
-          {layer.result.kind === "geojson" && (
-            <label className="shrink-0">
+      <div className="legend-controls">
+        <div className="flex items-center gap-2.5 pt-2 pl-9">
+          <button
+            type="button"
+            onClick={() => dispatch({ type: "toggle_layer", layerId: layer.id })}
+            disabled={!op}
+            aria-pressed={visible}
+            aria-label={`Show ${layer.title}`}
+            title={visible ? "Hide layer" : "Show layer"}
+            className="legend-check"
+          />
+          {op && (
+            <label className="flex items-center gap-1.5">
+              <span className="sr-only">Opacity for {layer.title}</span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={opacity}
+                onChange={(e) => dispatch({ type: "set_opacity", layerId: layer.id, opacity: Number(e.target.value) })}
+                className="layer-opacity w-[60px]"
+                style={{ ["--fill" as string]: `${Math.round(opacity * 100)}%` }}
+              />
+              <span aria-hidden className="w-7 text-right text-[11px] text-ink-muted tabular-nums">
+                {Math.round(opacity * 100)}%
+              </span>
+            </label>
+          )}
+          {op && layer.result.kind === "geojson" && (
+            <label>
               <span className="sr-only">Draw {layer.title} as</span>
               <select
                 value={op.mode}
                 onChange={(e) => dispatch({ type: "set_style", layerId: layer.id, mode: e.target.value as RenderMode })}
-                className="h-7 w-[104px] rounded-pill border border-line bg-paper pl-2.5 text-[12px] text-ink outline-none focus-visible:border-slate"
+                className="legend-select"
               >
                 {MODES.map((m) => (
                   <option key={m.value} value={m.value} disabled={!m.ready} title={m.ready ? undefined : "Milestone 3"}>
@@ -329,18 +264,29 @@ function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, d
               </select>
             </label>
           )}
+          <button
+            type="button"
+            onClick={() => dispatch({ type: "remove_layer", layerId: layer.id })}
+            aria-label={`Remove ${layer.title}`}
+            title="Remove layer"
+            className="ml-auto px-1 text-[15px] leading-none text-ink-muted transition-colors hover:text-ink"
+          >
+            ×
+          </button>
         </div>
-      )}
+      </div>
     </li>
   );
 }
 
-/** Wally rail chip: 30px tall, radius 15; sage tint when selected. */
-const RAIL_CHIP = "flex h-[30px] items-center gap-1.5 rounded-[15px] px-3 text-[12.5px] font-medium";
+/** Quiet text buttons in the panel header. */
+const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 hover:text-ink";
 
 /**
- * The layer panel: a glass drawer on the right listing every loaded layer top first, with visibility, opacity,
- * color, render mode, removal and drag-to-reorder. Closed, it renders nothing: the layers map pill reopens it.
+ * The layer panel, a research legend: one row per loaded layer, top first, with its monochrome key, title, source
+ * and count; visibility, opacity, render mode and removal on hover or focus; drag (or arrow keys on the key) to
+ * reorder. The top slot holds the time scrubber when one is mounted. Closed, it renders nothing: the layers map pill
+ * reopens it.
  */
 export function LayerStack({ layers, renderOps, catalog, dispatch, open, onOpenChange, selectedLayerId }: LayerStackProps) {
   const items = stackOrder(layers, renderOps);
@@ -362,39 +308,36 @@ export function LayerStack({ layers, renderOps, catalog, dispatch, open, onOpenC
       aria-label="Layers"
       data-testid="layer-stack"
       // Phones: below the header row (wordmark and basemap switch) instead of over it.
-      className="glass-strong rise-in pointer-events-auto flex max-h-[calc(100dvh-24px)] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-[20px] max-md:mt-12 max-md:max-h-[calc(54dvh-72px)] md:max-h-[calc(100dvh-260px)]"
+      className="glass-strong rise-in pointer-events-auto flex max-h-[calc(100dvh-24px)] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-panel max-md:mt-12 max-md:max-h-[calc(54dvh-72px)] md:max-h-[calc(100dvh-260px)]"
       style={{ width: LAYER_PANEL_WIDTH }}
     >
-      {/* Wally rail chips: "Layers N" is the selected chip; "Clear all" is a plain one. */}
-      <header className="flex shrink-0 items-center gap-1.5 pt-3 pr-2 pb-2 pl-3">
-        <h2 className={`${RAIL_CHIP} bg-sage-tint text-ink`}>
-          Layers
-          <span className="text-ink-muted tabular-nums">{items.length}</span>
+      {/* The time scrubber mounts here (Task 7); empty, it takes no space. */}
+      <div data-slot="time-scrubber" className="shrink-0 empty:hidden" />
+      <header className="flex shrink-0 items-baseline gap-3 px-5 pt-4 pb-1.5">
+        <h2 className="small-caps">
+          Layers <span className="ml-1 text-ink tabular-nums">{items.length}</span>
         </h2>
-        <button
-          type="button"
-          onClick={() => dispatch({ type: "clear_layers" })}
-          className={`${RAIL_CHIP} press border border-line text-ink-muted transition duration-150 ease-out hover:bg-mist hover:text-ink`}
-        >
+        <span className="flex-1" />
+        <button type="button" onClick={() => dispatch({ type: "clear_layers" })} className={TEXT_BUTTON}>
           Clear all
         </button>
-        <span className="flex-1" />
         <button
           type="button"
           onClick={() => onOpenChange(false)}
           aria-expanded
           aria-label="Collapse layers"
           title="Collapse"
-          className="flex size-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-mist hover:text-ink"
+          className={TEXT_BUTTON}
         >
-          <ChevronUp aria-hidden size={16} strokeWidth={2} />
+          Hide
         </button>
       </header>
-      <ul className="flex min-h-0 flex-col gap-1.5 overflow-y-auto overscroll-contain px-2 pb-2">
+      <div aria-hidden className="hairline mx-5 shrink-0" />
+      <ul className="legend-table min-h-0 overflow-y-auto overscroll-contain px-5 pb-2">
         {items.map(({ layer, op }) => {
           const index = renderOps.findIndex((o) => o.layerId === layer.id);
           return (
-            <LayerCard
+            <LegendRow
               key={layer.id}
               layer={layer}
               op={op}
@@ -408,7 +351,7 @@ export function LayerStack({ layers, renderOps, catalog, dispatch, open, onOpenC
               dragging={dragId === layer.id}
               selected={selectedLayerId === layer.id}
               dragProps={{
-                // Only the grip starts a drag, so the slider and text stay usable.
+                // Only the key starts a drag, so the slider and text stay usable.
                 draggable: armed === layer.id,
                 onDragStart: (e) => {
                   e.dataTransfer.effectAllowed = "move";

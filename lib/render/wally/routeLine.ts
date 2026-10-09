@@ -212,14 +212,14 @@ export const DART_ICON_PX = 16;
 export const DART_ICON_ID = "route-dart";
 
 /**
- * The 16px white dart (pointing north, so `icon-rotate` is the bearing) as an SVG data URL drawn at 2x, with a
- * faint dark edge so it reads on the white casing and on snow.
+ * The 16px white dart (pointing north, so `icon-rotate` is the bearing) as an SVG data URL drawn at 2x. It fills
+ * its box so the wings reach past the 7px white casing, and a dark edge outlines it on the casing and on snow.
  */
 export function dartIconSpec(): { id: string; url: string; width: number; height: number; pixelRatio: number } {
   const size = DART_ICON_PX * 2;
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 16 16">` +
-    `<path d="M8 2.2 L13.2 13.4 L8 10.6 L2.8 13.4 Z" fill="#FFFFFF" stroke="rgba(0,0,0,0.35)" stroke-width="0.8" stroke-linejoin="round"/>` +
+    `<path d="M8 1.2 L14.8 14.6 L8 11.2 L1.2 14.6 Z" fill="#FFFFFF" stroke="rgba(0,0,0,0.45)" stroke-width="0.9" stroke-linejoin="round"/>` +
     `</svg>`;
   return { id: DART_ICON_ID, url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, width: size, height: size, pixelRatio: 2 };
 }

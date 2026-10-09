@@ -87,7 +87,8 @@ export function routeMapLayers(id: string): { below: LayerSpecification[]; above
       "icon-rotation-alignment": "map",
       "icon-pitch-alignment": "map",
       "icon-allow-overlap": true,
-      "icon-ignore-placement": true,
+      // Darts claim their space, so a road label along the same road does not draw over them.
+      "icon-ignore-placement": false,
     },
   };
   const mileLabels: SymbolLayerSpecification = {
@@ -114,7 +115,7 @@ export function routeMapLayers(id: string): { below: LayerSpecification[]; above
       "icon-image": ["get", "icon"],
       "icon-anchor": "bottom",
       "icon-allow-overlap": true,
-      "icon-ignore-placement": true,
+      "icon-ignore-placement": false,
       "symbol-sort-key": ["get", "sort"],
     },
   };

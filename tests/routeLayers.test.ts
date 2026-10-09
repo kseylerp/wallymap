@@ -91,7 +91,7 @@ describe("routeMapLayers", () => {
     expect(above.map((l) => l.id)).toEqual(["route-a-darts", "route-a-mile-labels", "route-a-pins"]);
     for (const layer of [...below, ...above]) expect(layer).toMatchObject({ source: "route-a" });
     expect(above[0]).toMatchObject({
-      layout: { "icon-image": "route-dart", "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true },
+      layout: { "icon-image": "route-dart", "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": false },
     });
     expect(above[2]).toMatchObject({ layout: { "icon-image": ["get", "icon"], "icon-anchor": "bottom" } });
     expect(below[2]).toMatchObject({

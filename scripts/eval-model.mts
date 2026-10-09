@@ -9,7 +9,8 @@
  * tokens, seconds. With --set, runs every question listed between the `<!-- eval:start -->`
  * and `<!-- eval:end -->` markers in docs/questions.md (lines starting with "- "), one after
  * another, prints one JSON line each, then a final line `ok N/M`.
- * "ok" means: geocode and a query tool ran, anything that came back was rendered, the model
+ * "ok" means: the place was located (geocode or a physical-regions query), a query tool ran,
+ * anything that came back was rendered (render or compare), the model
  * wrote a note (also when a layer errored or returned nothing), and the run finished without
  * throwing. A route-only question passes when the route tool ran and a note followed.
  */
@@ -77,14 +78,17 @@ async function runQuestion(question: string): Promise<Outcome> {
       .map((c) => String((c.output as { error: string }).error).slice(0, 80));
     const tiles = calls.filter((c) => c.toolName.startsWith("query_") && isTiles(c.output)).length;
     const queried = seq.some((t) => t.startsWith("query_"));
-    const rendered = seq.includes("render");
+    const rendered = seq.includes("render") || seq.includes("compare");
     const noted = seq.includes("note") || result.text.trim().length > 40;
     const routed = seq.includes("route");
     const drew = features.some((n) => n > 0) || tiles > 0;
+    // Locating the place: geocode, or a physical-regions query (the model may outline a
+    // named region such as the Amazon directly). Drawing: render, or compare (which draws both sides).
+    const located = seq.includes("geocode") || seq.includes("query_physical-regions");
     // A route question is answered by the route tool alone (it geocodes its own stops).
     // A query that drew something must have been rendered; an empty result or a layer
     // error only needs the note that explains it.
-    const ok = routed && !queried ? noted : seq.includes("geocode") && queried && (drew ? rendered : true) && noted;
+    const ok = routed && !queried ? noted : located && queried && (drew ? rendered : true) && noted;
 
     return {
       ok,

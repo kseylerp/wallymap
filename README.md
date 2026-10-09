@@ -64,6 +64,10 @@ MODEL_NAME=<the model name your server serves>
 
 The model must support tool calling.
 
+## Before you deploy publicly
+
+Anyone who can reach your deployment can chat with the agent, and every message spends your model credits. Turn on [Vercel Deployment Protection](https://vercel.com/docs/deployment-protection) (a password, or Vercel Authentication) before you share the URL. The chat endpoint also rejects requests with more than 40 messages or a body over 256 KB, but that only limits the size of each request, not how many are sent.
+
 ## Tests
 
 - `pnpm test` runs the unit tests. It needs no keys and no network.

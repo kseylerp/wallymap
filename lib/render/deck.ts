@@ -6,10 +6,15 @@ import type { MapState, RenderOp, Viewport } from "@/lib/render/state";
 
 type Rgba = [number, number, number, number];
 
-/** Point markers: a white disc ringed in the layer color, like a map pin seen from above. */
-const POINT_FILL: Rgba = [255, 255, 255, 255];
+/** `--slate`: the default stroke for data drawn over imagery. */
+export const SLATE = "#2F3A44";
+const WHITE: Rgba = [255, 255, 255, 255];
+/** Point markers: a white disc ringed in slate (or the requested color), like a map pin seen from above. */
 const POINT_RADIUS_PX = 7;
 const POINT_STROKE_PX = 2;
+/** Lines get a white casing underneath so a dark stroke reads on both bright and dark imagery. */
+const LINE_WIDTH_PX = 2.5;
+const LINE_CASING_WIDTH_PX = 4.5;
 /** Polygon fills stay light so the imagery underneath still reads. */
 const POLYGON_FILL_ALPHA = 64;
 
@@ -33,15 +38,20 @@ export function hexToRgba(hex: string, alpha = 255): Rgba {
   ];
 }
 
-/** Fits a bbox into a width x height pixel viewport with 40px padding. */
-export function bboxToViewport(bbox: BBox, width: number, height: number): Viewport {
+export type Padding = { top: number; right: number; bottom: number; left: number };
+
+/**
+ * Fits a bbox into a width x height pixel viewport. `padding` is the screen area the bbox must stay clear of
+ * (floating panels, the header), 40px on each side by default.
+ */
+export function bboxToViewport(bbox: BBox, width: number, height: number, padding: Padding | number = 40): Viewport {
   const [west, south, east, north] = bbox;
   const { longitude, latitude, zoom } = new WebMercatorViewport({ width, height }).fitBounds(
     [
       [west, south],
       [east, north],
     ],
-    { padding: 40 },
+    { padding },
   );
   return { longitude, latitude, zoom, pitch: 0, bearing: 0 };
 }
@@ -57,44 +67,62 @@ function usableColor(color: string | undefined): string | undefined {
   }
 }
 
-function geoJsonLayerFor(op: RenderOp, data: GeoJSON.FeatureCollection, defaultColor: string): GeoJsonLayer {
-  const color = usableColor(op.color) ?? defaultColor;
-  const base = { id: `${op.layerId}:${op.mode}`, data, pickable: true };
+/** The deck layers for one render op, bottom first (lines add a white casing beneath the stroke). */
+function geoJsonLayersFor(op: RenderOp, data: GeoJSON.FeatureCollection, defaultColor: string): GeoJsonLayer[] {
+  const requested = usableColor(op.color);
+  const color = requested ?? defaultColor;
+  const id = `${op.layerId}:${op.mode}`;
+  const base = { id, data, pickable: true };
   switch (op.mode) {
     case "points":
-      return new GeoJsonLayer({
-        ...base,
-        pointType: "circle",
-        getPointRadius: POINT_RADIUS_PX,
-        pointRadiusUnits: "pixels",
-        getFillColor: POINT_FILL,
-        stroked: true,
-        getLineColor: hexToRgba(color),
-        getLineWidth: POINT_STROKE_PX,
-        lineWidthUnits: "pixels",
-      });
+      return [
+        new GeoJsonLayer({
+          ...base,
+          pointType: "circle",
+          getPointRadius: POINT_RADIUS_PX,
+          pointRadiusUnits: "pixels",
+          getFillColor: WHITE,
+          stroked: true,
+          getLineColor: hexToRgba(requested ?? SLATE),
+          getLineWidth: POINT_STROKE_PX,
+          lineWidthUnits: "pixels",
+        }),
+      ];
     case "lines":
-      return new GeoJsonLayer({
-        ...base,
-        filled: false,
-        getLineColor: hexToRgba(color),
-        getLineWidth: 3,
-        lineWidthUnits: "pixels",
-      });
+      return [
+        new GeoJsonLayer({
+          id: `${id}:casing`,
+          data,
+          pickable: false,
+          filled: false,
+          getLineColor: WHITE,
+          getLineWidth: LINE_CASING_WIDTH_PX,
+          lineWidthUnits: "pixels",
+        }),
+        new GeoJsonLayer({
+          ...base,
+          filled: false,
+          getLineColor: hexToRgba(color),
+          getLineWidth: LINE_WIDTH_PX,
+          lineWidthUnits: "pixels",
+        }),
+      ];
     case "polygons":
-      return new GeoJsonLayer({
-        ...base,
-        getFillColor: hexToRgba(color, POLYGON_FILL_ALPHA),
-        getLineColor: hexToRgba(color, 255),
-        getLineWidth: 1,
-        lineWidthUnits: "pixels",
-      });
+      return [
+        new GeoJsonLayer({
+          ...base,
+          getFillColor: hexToRgba(color, POLYGON_FILL_ALPHA),
+          getLineColor: hexToRgba(color, 255),
+          getLineWidth: 1,
+          lineWidthUnits: "pixels",
+        }),
+      ];
     default:
       throw new Error(`NotImplemented: ${op.mode}`);
   }
 }
 
-/** Turns map state into deck.gl layer instances, one per visible geojson render op. */
+/** Turns map state into deck.gl layer instances for each visible geojson render op (lines bring a casing). */
 export function buildDeckLayers(state: MapState): Layer[] {
   const layers: Layer[] = [];
   for (const op of state.renderOps) {
@@ -102,7 +130,7 @@ export function buildDeckLayers(state: MapState): Layer[] {
     const loaded = state.layers[op.layerId];
     if (!loaded) continue;
     if (loaded.result.kind === "tiles") continue;
-    layers.push(geoJsonLayerFor(op, loaded.result.data, loaded.style.color));
+    layers.push(...geoJsonLayersFor(op, loaded.result.data, loaded.style.color));
   }
   return layers;
 }

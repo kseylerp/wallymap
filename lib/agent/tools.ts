@@ -110,11 +110,11 @@ export function buildTools(): ToolSet {
     }),
     render: tool({
       description:
-        "Draw a layer you already queried. mode picks the drawing style; color is an optional CSS color.",
+        "Draw a layer you already queried. mode picks the drawing style.",
       inputSchema: z.object({
         layerId: z.string(),
         mode: z.enum(RENDER_MODES),
-        color: z.string().optional(),
+        color: z.string().optional().describe("Only set when the user asked for a specific color; otherwise omit"),
       }),
       execute: async (input) => input,
     }),

@@ -22,8 +22,25 @@ describe("toolResultToActions", () => {
   it("set_view with a bbox fits the bbox to the canvas", () => {
     const bbox = [-120.3, 38.9, -119.9, 39.3] as const;
     const actions = toolResultToActions("set_view", { bbox }, { bbox }, canvas, catalog, []);
-    expect(actions).toEqual([
-      { type: "set_view", viewport: bboxToViewport([...bbox], canvas.width, canvas.height) },
+    const { longitude, latitude, zoom } = bboxToViewport([...bbox], canvas.width, canvas.height);
+    // No pitch: the reducer picks the arrival pitch and backs the zoom off for it (`fit`).
+    expect(actions).toEqual([{ type: "set_view", viewport: { longitude, latitude, zoom, bearing: 0 }, fit: true }]);
+  });
+
+  it("set_view with a bbox passes an explicit pitch and bearing through", () => {
+    const bbox = [6.8, 45.85, 6.95, 45.97];
+    const [action] = toolResultToActions("set_view", {}, { bbox, pitch: 72, bearing: 30 }, canvas, catalog, []);
+    expect(action).toMatchObject({ type: "set_view", fit: true, viewport: { pitch: 72, bearing: 30 } });
+  });
+
+  it("set_view with terrain sets terrain before moving the camera", () => {
+    const output = { center: [6.87, 45.92], zoom: 12, terrain: false };
+    expect(toolResultToActions("set_view", output, output, canvas, catalog, [])).toEqual([
+      { type: "set_terrain", terrain: false },
+      { type: "set_view", viewport: { longitude: 6.87, latitude: 45.92, zoom: 12 } },
+    ]);
+    expect(toolResultToActions("set_view", {}, { terrain: true }, canvas, catalog, [])).toEqual([
+      { type: "set_terrain", terrain: true },
     ]);
   });
 

@@ -41,18 +41,27 @@ function isLayerResult(value: Obj): value is Obj & LayerResult {
 }
 
 function setViewActions(output: Obj, canvas: Canvas): MapAction[] {
-  if (isBBox(output.bbox)) {
-    return [{ type: "set_view", viewport: bboxToViewport(output.bbox, canvas.width, canvas.height, canvas.padding) }];
-  }
+  const actions: MapAction[] = [];
+  // Terrain first, so the camera move that follows lands on the relief the agent asked for.
+  if (typeof output.terrain === "boolean") actions.push({ type: "set_terrain", terrain: output.terrain });
   const viewport: Partial<Viewport> = {};
-  if (isLngLat(output.center)) {
-    viewport.longitude = output.center[0];
-    viewport.latitude = output.center[1];
+  // A bbox is fitted at pitch 0; the reducer then applies the pitch (the agent's, or the arrival pitch) and
+  // backs the zoom off so the tilted view keeps the whole bbox.
+  const fit = isBBox(output.bbox);
+  if (isBBox(output.bbox)) {
+    const { longitude, latitude, zoom } = bboxToViewport(output.bbox, canvas.width, canvas.height, canvas.padding);
+    Object.assign(viewport, { longitude, latitude, zoom, bearing: 0 });
+  } else {
+    if (isLngLat(output.center)) {
+      viewport.longitude = output.center[0];
+      viewport.latitude = output.center[1];
+    }
+    if (isNumber(output.zoom)) viewport.zoom = output.zoom;
   }
-  if (isNumber(output.zoom)) viewport.zoom = output.zoom;
   if (isNumber(output.pitch)) viewport.pitch = output.pitch;
   if (isNumber(output.bearing)) viewport.bearing = output.bearing;
-  return Object.keys(viewport).length > 0 ? [{ type: "set_view", viewport }] : [];
+  if (Object.keys(viewport).length > 0) actions.push(fit ? { type: "set_view", viewport, fit } : { type: "set_view", viewport });
+  return actions;
 }
 
 function renderActions(output: Obj): MapAction[] {

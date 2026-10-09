@@ -10,6 +10,19 @@ import { basemapStyleUrl } from "@/lib/render/basemaps";
 import { buildDeckLayers } from "@/lib/render/deck";
 import { featureBBox, featureCenter, pickToSelection, type DeckPick } from "@/lib/render/inspect";
 import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
+import {
+  BUILDINGS_LAYER_ID,
+  buildingsSpec,
+  easeInOut,
+  firstSymbolLayerId,
+  fogSpec,
+  PITCH_EASE_MS,
+  SKY_LAYER_ID,
+  skySpec,
+  TERRAIN_SOURCE_ID,
+  terrainSource,
+  terrainSpec,
+} from "@/lib/render/wally/terrain";
 
 // Literal `process.env.NEXT_PUBLIC_*` access so Next inlines it into the client bundle.
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim() ?? "";
@@ -81,6 +94,51 @@ function safeDeckLayers(state: MapState): Layer[] {
     console.error("MapCanvas: could not build deck.gl layers", error);
     return [];
   }
+}
+
+// ---- 3D: terrain, sky, fog and buildings (lib/render/wally/terrain.ts) ----
+
+/** A streets source for buildings on styles without Mapbox's `composite` source. */
+const STREETS_SOURCE_ID = "wally-streets";
+
+/** The style's layers, or null while it is loading (getStyle throws before `style.load`). */
+function styleLayers(map: mapboxgl.Map): { id: string; type: string }[] | null {
+  try {
+    return map.getStyle()?.layers ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** True when `state` wants terrain drawn: on by default, off while the user has flattened the map. */
+function wantsTerrain(state: MapState): boolean {
+  return state.terrain && !state.flattened;
+}
+
+/**
+ * Adds Wally's 3D dressing to the current style and switches terrain on or off. Safe to call repeatedly: a style
+ * swap drops all of it, so `style.load` calls this again. Fog is only set when the style has none, so the
+ * satellite hybrid's own fog (components/mapTiles.ts) wins there. Buildings go below the first label layer, which
+ * keeps them above the hybrid's satellite imagery.
+ */
+function sync3D(map: mapboxgl.Map, terrain: boolean): void {
+  if (!map.getSource(TERRAIN_SOURCE_ID) || !map.getLayer(SKY_LAYER_ID) || !map.getLayer(BUILDINGS_LAYER_ID)) {
+    // Reading the style serializes it, so only do it when something is missing.
+    const layers = styleLayers(map);
+    if (!layers) return;
+    if (!map.getSource(TERRAIN_SOURCE_ID)) map.addSource(TERRAIN_SOURCE_ID, terrainSource());
+    if (!map.getLayer(SKY_LAYER_ID)) map.addLayer(skySpec());
+    if (!map.getFog()) map.setFog(fogSpec());
+    if (!map.getLayer(BUILDINGS_LAYER_ID)) {
+      let source = "composite";
+      if (!map.getSource(source)) {
+        source = STREETS_SOURCE_ID;
+        if (!map.getSource(source)) map.addSource(source, { type: "vector", url: "mapbox://mapbox.mapbox-streets-v8" });
+      }
+      map.addLayer(buildingsSpec(source), firstSymbolLayerId(layers));
+    }
+  }
+  if (Boolean(map.getTerrain()) !== terrain) map.setTerrain(terrain ? terrainSpec() : null);
 }
 
 /** The Mapbox layers a click can inspect: the main layer of each visible vector tile result. */
@@ -188,6 +246,8 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     // A style swap drops every source, so re-add the imagery and tile layers whenever a style finishes loading.
     map.on("style.load", () => {
       syncSatelliteHybrid(map, stateRef.current.basemap);
+      // After the hybrid, so its fog is already set and its imagery sits below the buildings.
+      sync3D(map, wantsTerrain(stateRef.current));
       syncTileLayers(map, stateRef.current);
       syncHeatLayers(map, stateRef.current);
     });
@@ -244,7 +304,11 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       bounds.contains([bbox[0], bbox[1]]) &&
       bounds.contains([bbox[2], bbox[3]]);
     const center = (fits ? featureCenter(selected.feature) : null) ?? selected.lngLat;
-    map.easeTo({ center, duration: SELECT_EASE_MS, easing: (t) => t * (2 - t) });
+    // The reducer may have tilted to Detail pitch with this selection. One ease carries both moves (a second
+    // easeTo would cancel this one), and marking the pitch as ours stops the viewport effect from easing again.
+    const { pitch } = stateRef.current.viewport;
+    lastCameraRef.current = stateRef.current.viewport;
+    map.easeTo({ center, pitch, duration: SELECT_EASE_MS, easing: (t) => t * (2 - t) });
   }, [selected]);
 
   // Ease to a new viewport when it differs from both the actual camera and our own last report.
@@ -259,7 +323,13 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     // The prop is the echo of a camera we already reported (e.g. an ease that was interrupted
     // mid-flight); easing back to it would fight the newer move.
     if (sameViewport(target, lastCameraRef.current)) return;
+    const pitchOnly = sameViewport({ ...target, pitch: lastCameraRef.current.pitch }, lastCameraRef.current);
     lastCameraRef.current = target;
+    // A pitch-only change (select, deselect, the 3D button) tilts in place with Wally's short ease.
+    if (pitchOnly) {
+      map.easeTo({ pitch: target.pitch, duration: PITCH_EASE_MS, easing: easeInOut });
+      return;
+    }
     map.easeTo({
       center: [target.longitude, target.latitude],
       zoom: target.zoom,
@@ -285,6 +355,12 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     // from the map's own settings, and passing them explicitly as undefined would override those.
     map.setStyle(basemapStyleUrl(state.basemap), { diff: false } as Parameters<mapboxgl.Map["setStyle"]>[1]);
   }, [state.basemap]);
+
+  // Terrain follows the 3D button and the agent's `terrain`; a basemap change re-adds it once the new style loads.
+  const terrain = wantsTerrain(state);
+  useEffect(() => {
+    if (mapRef.current) sync3D(mapRef.current, terrain);
+  }, [terrain]);
 
   return <div ref={containerRef} data-testid="map-canvas" className={className ?? "h-full w-full"} />;
 }

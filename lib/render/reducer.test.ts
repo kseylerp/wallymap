@@ -151,3 +151,101 @@ describe("reduce: selection and layer panel actions", () => {
     expect(next.selected).toBeUndefined();
   });
 });
+
+describe("reduce: 3D camera rules", () => {
+  const feature = {
+    type: "Feature" as const,
+    geometry: { type: "Point" as const, coordinates: [6.87, 45.92] },
+    properties: { name: "Lac Blanc" },
+  };
+  const selection = { layerId: "osm-trails", feature, lngLat: [6.87, 45.92] as [number, number] };
+  const atTrailZoom: MapState = { ...initialMapState, viewport: { ...initialMapState.viewport, zoom: 12, pitch: 45 } };
+
+  it("starts with terrain on and the map not flattened", () => {
+    expect(initialMapState.terrain).toBe(true);
+    expect(initialMapState.flattened).toBe(false);
+  });
+
+  it("set_view without a pitch tilts to 45 at zoom 10 and above", () => {
+    const next = reduce(initialMapState, { type: "set_view", viewport: { longitude: 6.87, latitude: 45.92, zoom: 11 } });
+    expect(next.viewport.pitch).toBe(45);
+    expect(next.viewport.zoom).toBe(11);
+  });
+
+  it("set_view below zoom 10 stays flat", () => {
+    const next = reduce(atTrailZoom, { type: "set_view", viewport: { zoom: 6 } });
+    expect(next.viewport.pitch).toBe(0);
+  });
+
+  it("set_view keeps an explicit pitch, so the map's own camera reports pass unchanged", () => {
+    const camera = { longitude: 6.87, latitude: 45.92, zoom: 12, pitch: 20, bearing: 10 };
+    expect(reduce(initialMapState, { type: "set_view", viewport: camera }).viewport).toEqual(camera);
+    expect(reduce(initialMapState, { type: "set_view", viewport: { zoom: 12, pitch: 60 } }).viewport.pitch).toBe(60);
+  });
+
+  it("the world reset returns to pitch 0", () => {
+    const next = reduce(atTrailZoom, { type: "set_view", viewport: initialMapState.viewport });
+    expect(next.viewport).toEqual(initialMapState.viewport);
+  });
+
+  it("a fit at trail zoom tilts to 45 and backs the zoom off 0.4", () => {
+    const next = reduce(initialMapState, {
+      type: "set_view",
+      viewport: { longitude: 6.87, latitude: 45.92, zoom: 12 },
+      fit: true,
+    });
+    expect(next.viewport.pitch).toBe(45);
+    expect(next.viewport.zoom).toBeCloseTo(11.6);
+  });
+
+  it("a fit at Detail pitch backs the zoom off 0.8, and a flat fit keeps its zoom", () => {
+    const detail = reduce(initialMapState, { type: "set_view", viewport: { zoom: 12, pitch: 72 }, fit: true });
+    expect(detail.viewport.zoom).toBeCloseTo(11.2);
+    const flat = reduce(initialMapState, { type: "set_view", viewport: { zoom: 8 }, fit: true });
+    expect(flat.viewport).toMatchObject({ zoom: 8, pitch: 0 });
+  });
+
+  it("does not tilt arrivals on a flattened map", () => {
+    const flattened = { ...initialMapState, flattened: true };
+    const next = reduce(flattened, { type: "set_view", viewport: { zoom: 12 }, fit: true });
+    expect(next.viewport).toMatchObject({ zoom: 12, pitch: 0 });
+  });
+
+  it("select tilts to Detail (72) at trail zoom and deselect returns to Explore (45)", () => {
+    const selected = reduce(atTrailZoom, { type: "select", selection });
+    expect(selected.viewport.pitch).toBe(72);
+    const deselected = reduce(selected, { type: "deselect" });
+    expect(deselected.viewport.pitch).toBe(45);
+  });
+
+  it("select leaves the pitch alone on a flattened map or the world view", () => {
+    const flattened = reduce({ ...atTrailZoom, flattened: true, viewport: { ...atTrailZoom.viewport, pitch: 0 } }, {
+      type: "select",
+      selection,
+    });
+    expect(flattened.viewport.pitch).toBe(0);
+    const world = reduce(initialMapState, { type: "select", selection });
+    expect(world.viewport).toBe(initialMapState.viewport);
+  });
+
+  it("set_flattened(true) drops to pitch 0; set_flattened(false) restores 45 and terrain", () => {
+    const flat = reduce(atTrailZoom, { type: "set_flattened", flattened: true });
+    expect(flat.flattened).toBe(true);
+    expect(flat.viewport.pitch).toBe(0);
+    const off = reduce({ ...flat, terrain: false }, { type: "set_flattened", flattened: false });
+    expect(off.flattened).toBe(false);
+    expect(off.terrain).toBe(true);
+    expect(off.viewport.pitch).toBe(45);
+  });
+
+  it("set_flattened(false) at the world view keeps the globe flat", () => {
+    const flat = reduce(initialMapState, { type: "set_flattened", flattened: true });
+    expect(reduce(flat, { type: "set_flattened", flattened: false }).viewport.pitch).toBe(0);
+  });
+
+  it("set_terrain switches terrain and returns the same state when unchanged", () => {
+    const off = reduce(initialMapState, { type: "set_terrain", terrain: false });
+    expect(off.terrain).toBe(false);
+    expect(reduce(initialMapState, { type: "set_terrain", terrain: true })).toBe(initialMapState);
+  });
+});

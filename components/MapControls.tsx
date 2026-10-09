@@ -4,13 +4,16 @@ type MapControlsProps = {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onGlobe: () => void;
+  /** 3D (terrain and a tilted camera) is on; the button reads pressed. */
+  threeD: boolean;
+  onToggle3D: () => void;
 };
 
-const BUTTON =
-  "flex size-10 items-center justify-center text-ink transition-colors hover:bg-paper/80 active:bg-mist";
+const BUTTON_BASE = "flex size-10 items-center justify-center transition-colors hover:bg-paper/80 active:bg-mist";
+const BUTTON = `${BUTTON_BASE} text-ink`;
 
-/** Glass zoom and reset buttons in the bottom-right corner. Positioned by `.map-controls` in globals.css. */
-export function MapControls({ onZoomIn, onZoomOut, onGlobe }: MapControlsProps) {
+/** Glass zoom, reset and 3D buttons in the bottom-right corner. Positioned by `.map-controls` in globals.css. */
+export function MapControls({ onZoomIn, onZoomOut, onGlobe, threeD, onToggle3D }: MapControlsProps) {
   return (
     <div className="map-controls rise-in absolute right-3 z-10 flex flex-col items-center gap-2 md:right-4" style={{ animationDelay: "180ms" }}>
       <div className="glass flex flex-col overflow-hidden rounded-pill">
@@ -30,6 +33,20 @@ export function MapControls({ onZoomIn, onZoomOut, onGlobe }: MapControlsProps) 
         className={`glass rounded-full ${BUTTON}`}
       >
         <GlobeIcon />
+      </button>
+      <button
+        type="button"
+        onClick={onToggle3D}
+        aria-pressed={threeD}
+        aria-label="3D terrain"
+        title={threeD ? "Flatten the map" : "Show 3D terrain"}
+        className={`glass rounded-full text-[13px] font-semibold tracking-tight ${BUTTON_BASE} ${
+          threeD ? "text-ink" : "text-ink-muted"
+        }`}
+        // Inline so the sage "on" tint wins over the `.glass` background.
+        style={threeD ? { backgroundColor: "var(--sage-tint)" } : undefined}
+      >
+        3D
       </button>
     </div>
   );

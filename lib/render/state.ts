@@ -49,6 +49,10 @@ export type MapState = {
   renderOps: RenderOp[];
   errors: { layerId: string; message: string }[];
   selected?: Selection;
+  /** 3D terrain wanted (on by default); drawn only while the map is not flattened. */
+  terrain: boolean;
+  /** The user pressed 3D off: pitch 0 and no terrain until they press it again (remembered for the session). */
+  flattened: boolean;
 };
 
 export const initialMapState: MapState = {
@@ -57,10 +61,19 @@ export const initialMapState: MapState = {
   layers: {},
   renderOps: [],
   errors: [],
+  terrain: true,
+  flattened: false,
 };
 
 export type MapAction =
-  | { type: "set_view"; viewport: Partial<Viewport> }
+  /**
+   * Move the camera. Without a `pitch`, the camera takes the arrival pitch (45 at zoom 10 and above unless
+   * flattened, else 0). `fit` marks a center and zoom fitted to a bbox at pitch 0: the zoom then backs off for the
+   * pitch so the target stays in view. The map's own camera reports always carry a pitch, so they pass unchanged.
+   */
+  | { type: "set_view"; viewport: Partial<Viewport>; fit?: boolean }
+  | { type: "set_terrain"; terrain: boolean }
+  | { type: "set_flattened"; flattened: boolean }
   | { type: "set_basemap"; basemap: Basemap }
   | { type: "layer_loaded"; layer: LoadedLayer }
   | { type: "layer_error"; layerId: string; message: string }

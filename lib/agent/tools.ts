@@ -97,13 +97,16 @@ export function buildTools(): ToolSet {
     }),
     set_view: tool({
       description:
-        "Move the map camera. Give a bbox to fit, or a center [lon, lat] with zoom; pitch and bearing are optional.",
+        "Move the map camera. Give a bbox to fit, or a center [lon, lat] with zoom. The map is 3D by default: at zoom 10 " +
+        "and above it tilts to pitch 45 over terrain on its own, so only pass pitch (0 flat, 45 explore, 72 close-up), " +
+        "bearing or terrain when the user asks for a particular angle or a flat map.",
       inputSchema: z.object({
         bbox: BBoxSchema.optional(),
         center: LngLatSchema.optional(),
         zoom: z.number().min(0).max(22).optional(),
         pitch: z.number().min(0).max(85).optional(),
         bearing: z.number().optional(),
+        terrain: z.boolean().optional().describe("Show 3D terrain relief; on by default"),
       }),
       execute: async (input) => input,
     }),

@@ -84,6 +84,13 @@ describe("buildTools", () => {
     expect(await run(tools.note, { markdown: "**hi**" })).toEqual({ markdown: "**hi**" });
   });
 
+  it("set_view accepts pitch, bearing and terrain", () => {
+    const schema = schemaOf(buildTools().set_view);
+    expect(schema.safeParse({ center: [6.87, 45.92], zoom: 12, pitch: 72, bearing: 40, terrain: true }).success).toBe(true);
+    expect(schema.safeParse({ terrain: "yes" }).success).toBe(false);
+    expect(schema.safeParse({ pitch: 90 }).success).toBe(false);
+  });
+
   it("restricts render.mode and set_basemap.style to known values", () => {
     const tools = buildTools();
     expect(schemaOf(tools.render).safeParse({ layerId: "x", mode: "blobs" }).success).toBe(false);

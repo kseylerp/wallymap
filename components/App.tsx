@@ -15,8 +15,28 @@ import { askAboutText, featureBBox } from "@/lib/render/inspect";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type Basemap, type MapAction, type Selection, type Viewport } from "@/lib/render/state";
 import { visibleMapPadding } from "@/lib/render/viewportPadding";
+import { pitchFor } from "@/lib/render/wally/terrain";
 
 const DEFAULT_CANVAS = { width: 1000, height: 800 };
+const FLATTENED_KEY = "wallymap:flattened";
+
+/** Session storage can throw (private mode, blocked storage); the 3D choice then lasts only for the page. */
+function readSessionFlag(key: string): boolean {
+  try {
+    return window.sessionStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeSessionFlag(key: string, value: boolean): void {
+  try {
+    if (value) window.sessionStorage.setItem(key, "1");
+    else window.sessionStorage.removeItem(key);
+  } catch {
+    // Unavailable storage only costs the remembered choice.
+  }
+}
 
 type CatalogEntry = { id: string; title: string; style: LayerCatalog[string]["style"]; license?: string };
 
@@ -67,6 +87,20 @@ export function App() {
     return () => observer.disconnect();
   }, []);
 
+  // The 3D button's choice lasts for the browser session: restore a flattened map on load, save every change.
+  const flattenedLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!flattenedLoadedRef.current) {
+      flattenedLoadedRef.current = true;
+      if (readSessionFlag(FLATTENED_KEY)) dispatch({ type: "set_flattened", flattened: true });
+      return;
+    }
+    writeSessionFlag(FLATTENED_KEY, state.flattened);
+  }, [state.flattened]);
+  const threeD = state.terrain && !state.flattened;
+  // Pressing 3D while it is off also brings back terrain the agent turned off.
+  const toggle3D = useCallback(() => dispatch({ type: "set_flattened", flattened: threeD }), [threeD]);
+
   const getCanvasSize = useCallback(() => canvasSizeRef.current, []);
   const onActions = useCallback((actions: MapAction[]) => actions.forEach(dispatch), []);
   const onViewportChange = useCallback((viewport: Viewport) => dispatch({ type: "set_view", viewport }), []);
@@ -101,8 +135,11 @@ export function App() {
     if (!bbox) return;
     const size = canvasSizeRef.current;
     const padding = visibleMapPadding({ ...size, panelOpen: !collapsed, isMobile: size.width < 768, layerPanelOpen });
-    dispatch({ type: "set_view", viewport: bboxToViewport(bbox, size.width, size.height, padding) });
-  }, [selected, collapsed, layerPanelOpen]);
+    const { longitude, latitude, zoom } = bboxToViewport(bbox, size.width, size.height, padding);
+    // A route preview frames the line at Detail pitch (unless the map is flattened); `fit` backs the zoom off for it.
+    const pitch = state.flattened ? {} : { pitch: pitchFor("detail") };
+    dispatch({ type: "set_view", viewport: { longitude, latitude, zoom, bearing: 0, ...pitch }, fit: true });
+  }, [selected, collapsed, layerPanelOpen, state.flattened]);
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-cream">
@@ -152,6 +189,8 @@ export function App() {
         onZoomIn={() => mapRef.current?.zoomIn()}
         onZoomOut={() => mapRef.current?.zoomOut()}
         onGlobe={() => mapRef.current?.resetToGlobe()}
+        threeD={threeD}
+        onToggle3D={toggle3D}
       />
 
       <ChatRail

@@ -1,4 +1,5 @@
-import type { MapAction, MapState, RenderOp } from "@/lib/render/state";
+import type { MapAction, MapState, RenderOp, Viewport } from "@/lib/render/state";
+import { ARRIVAL_MIN_ZOOM, arrivalPitch, fitZoomOffset, pitchFor } from "@/lib/render/wally/terrain";
 
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 1;
@@ -16,11 +17,36 @@ function dropSelectionOf(state: MapState, layerId: string): MapState["selected"]
   return state.selected?.layerId === layerId ? undefined : state.selected;
 }
 
+/** Returns `state` itself when the pitch is unchanged, so the map does not see a new viewport. */
+function withPitch(state: MapState, pitch: number): MapState {
+  return state.viewport.pitch === pitch ? state : { ...state, viewport: { ...state.viewport, pitch } };
+}
+
+/**
+ * A camera move. The map reports its own camera with a pitch, which passes unchanged; an agent move or a fit
+ * without one takes the arrival pitch (45 at zoom 10 and above unless flattened, else 0), and a fit backs its
+ * zoom off for that pitch so the tilted view still shows the whole target.
+ */
+function setView(state: MapState, requested: Partial<Viewport>, fit: boolean): MapState {
+  const viewport = { ...state.viewport, ...requested };
+  if (requested.pitch === undefined) viewport.pitch = arrivalPitch(viewport.zoom, state.flattened);
+  if (fit) viewport.zoom = Math.max(0, viewport.zoom - fitZoomOffset(viewport.pitch));
+  return { ...state, viewport };
+}
+
 /** Pure reducer: always returns new objects and never mutates `state`. */
 export function reduce(state: MapState, action: MapAction): MapState {
   switch (action.type) {
     case "set_view":
-      return { ...state, viewport: { ...state.viewport, ...action.viewport } };
+      return setView(state, action.viewport, action.fit === true);
+    case "set_terrain":
+      return state.terrain === action.terrain ? state : { ...state, terrain: action.terrain };
+    case "set_flattened": {
+      if (action.flattened) return withPitch({ ...state, flattened: true }, 0);
+      // Turning 3D back on brings the terrain back, and tilts the camera when it is at trail zooms.
+      const next = { ...state, flattened: false, terrain: true };
+      return withPitch(next, arrivalPitch(state.viewport.zoom, false) || state.viewport.pitch);
+    }
     case "set_basemap":
       return { ...state, basemap: action.basemap };
     case "layer_loaded":
@@ -55,10 +81,18 @@ export function reduce(state: MapState, action: MapAction): MapState {
       const op = next.renderOps.find((o) => o.layerId === action.layerId);
       return op?.visible ? next : { ...next, selected: dropSelectionOf(next, action.layerId) };
     }
-    case "select":
-      return { ...state, selected: action.selection };
-    case "deselect":
-      return state.selected === undefined ? state : { ...state, selected: undefined };
+    case "select": {
+      // Detail pitch on the selected feature, except on a flattened map or the world view (which stays flat).
+      const next = { ...state, selected: action.selection };
+      const detail = !state.flattened && state.viewport.zoom >= ARRIVAL_MIN_ZOOM;
+      return detail ? withPitch(next, pitchFor("detail")) : next;
+    }
+    case "deselect": {
+      if (state.selected === undefined) return state;
+      const next = { ...state, selected: undefined };
+      const explore = !state.flattened && state.viewport.zoom >= ARRIVAL_MIN_ZOOM;
+      return explore ? withPitch(next, pitchFor("explore")) : next;
+    }
     case "set_opacity":
       return updateOp(state, action.layerId, (op) => ({ ...op, opacity: clamp01(action.opacity) }));
     case "set_style": {

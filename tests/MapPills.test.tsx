@@ -22,10 +22,16 @@ describe("MapPills", () => {
     expect(screen.getByText("WallyMap")).toBeTruthy();
     expect(screen.queryByTestId("theme-toggle")).toBeNull();
 
-    const hybrid = screen.getByRole("button", { name: "Outdoors+Sat" });
+    const hybrid = screen.getByRole("button", { name: "Topographical + Satellite" });
     expect(hybrid.getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Satellite" }));
     expect(onBasemapChange).toHaveBeenCalledWith("satellite");
+    // Text only, no icons; the short label is for phones.
+    const topo = screen.getByRole("button", { name: "Topographical" });
+    expect(topo.querySelector("svg")).toBeNull();
+    expect(Array.from(topo.querySelectorAll("span")).map((s) => s.textContent)).toEqual(["Topo", "Topographical"]);
+    fireEvent.click(topo);
+    expect(onBasemapChange).toHaveBeenCalledWith("outdoors");
 
     const layers = screen.getByRole("button", { name: "Layers, 2 loaded" });
     expect(layers.getAttribute("aria-pressed")).toBe("false");

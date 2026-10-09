@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { isWaterFill, occludingLayerIds, scaleOpacity, type StyleLayerLike } from "@/lib/render/hybridStyle";
+import {
+  ADMIN_LINE_PAINT,
+  LABEL_PAINT,
+  hybridPaintOverrides,
+  isWaterFill,
+  occludingLayerIds,
+  scaleOpacity,
+  type StyleLayerLike,
+} from "@/lib/render/hybridStyle";
 
 const STYLE_LAYERS: StyleLayerLike[] = [
   { id: "land", type: "background" },
@@ -12,23 +20,64 @@ const STYLE_LAYERS: StyleLayerLike[] = [
   { id: "water", type: "fill", "source-layer": "water" },
   { id: "hillshade", type: "fill", "source-layer": "hillshade" },
   { id: "landuse-outline", type: "line", "source-layer": "landuse" },
+  // Park outline (Outdoors' green band) and land-structure line: hidden.
+  { id: "national-park_tint-band", type: "line", "source-layer": "landuse_overlay" },
+  { id: "land-structure-line", type: "line", "source-layer": "structure" },
   { id: "contour-line", type: "line", "source-layer": "contour" },
+  { id: "waterway", type: "line", "source-layer": "waterway" },
   { id: "road-path", type: "line", "source-layer": "road" },
+  { id: "road-primary", type: "line", "source-layer": "road" },
+  { id: "cliff", type: "line", "source-layer": "structure" },
+  { id: "admin-1-boundary-bg", type: "line", "source-layer": "admin" },
+  { id: "admin-1-boundary", type: "line", "source-layer": "admin" },
+  { id: "admin-0-boundary", type: "line", "source-layer": "admin" },
   { id: "poi-label", type: "symbol", "source-layer": "poi_label" },
+  { id: "natural-point-label", type: "symbol", "source-layer": "natural_label" },
+  { id: "settlement-major-label", type: "symbol", "source-layer": "place_label" },
+  { id: "road-label", type: "symbol", "source-layer": "road" },
+  { id: "road-number-shield", type: "symbol", "source-layer": "road" },
 ];
 
 describe("occludingLayerIds", () => {
-  it("hides area fills by id or source layer and keeps water, hillshade, lines and labels", () => {
+  it("hides area fills, park and land-use outlines and the admin casing; keeps water, roads, contours and labels", () => {
     expect(occludingLayerIds(STYLE_LAYERS)).toEqual([
       "landcover",
       "national-park",
       "outdoors-greenery-v2",
       "wetland-pattern",
+      "landuse-outline",
+      "national-park_tint-band",
+      "land-structure-line",
+      "admin-1-boundary-bg",
     ]);
+  });
+
+  it("hides a park outline line and keeps a road line", () => {
+    const hidden = occludingLayerIds(STYLE_LAYERS);
+    expect(hidden).toContain("national-park_tint-band");
+    expect(hidden).not.toContain("road-primary");
+    expect(hidden).not.toContain("road-path");
   });
 
   it("returns nothing for a style without such fills", () => {
     expect(occludingLayerIds([{ id: "water", type: "fill", "source-layer": "water" }])).toEqual([]);
+  });
+});
+
+describe("hybridPaintOverrides", () => {
+  const overrides = hybridPaintOverrides(STYLE_LAYERS);
+  const idsWith = (property: string) => overrides.filter((o) => o.property === property).map((o) => o.id);
+
+  it("turns admin boundaries into a faint white line, but not their casing", () => {
+    expect(idsWith("line-color")).toEqual(["admin-1-boundary", "admin-0-boundary"]);
+    expect(overrides.find((o) => o.id === "admin-0-boundary")?.value).toBe(ADMIN_LINE_PAINT["line-color"]);
+  });
+
+  it("gives natural, POI and place labels white text on a dark halo, leaving road labels and shields", () => {
+    expect(idsWith("text-color")).toEqual(["poi-label", "natural-point-label", "settlement-major-label"]);
+    expect(overrides.filter((o) => o.id === "poi-label")).toEqual(
+      Object.entries(LABEL_PAINT).map(([property, value]) => ({ id: "poi-label", property, value })),
+    );
   });
 });
 

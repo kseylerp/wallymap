@@ -1,6 +1,6 @@
 # Adding a layer
 
-A layer is one dataset the WildMap agent can draw on the map. Each layer is a single file in `layers/` that exports a `Layer` object. The agent gets a `query_<id>` tool for it automatically, so you do not touch the chat code.
+A layer is one dataset the WallyMap agent can draw on the map. Each layer is a single file in `layers/` that exports a `Layer` object. The agent gets a `query_<id>` tool for it automatically, so you do not touch the chat code.
 
 ## The `Layer` interface
 
@@ -16,7 +16,7 @@ Defined in `layers/types.ts`. Build it with `defineLayer({...})` so the input ty
 - `maxAreaKm2`: largest bounding box, in square kilometres, the layer will answer for.
 - `input`: a zod object describing the layer's own options (the bbox is added for you).
 - `query(ctx, input)`: fetches data and returns a `LayerResult` or a `LayerError`.
-- `style`: `{ geometry: "point" | "line" | "polygon", color, unit? }` hints for drawing.
+- `style`: `{ geometry: "point" | "line" | "polygon", color, unit? }` hints for drawing. Set `unit: "score"` when `v` is a 0 to 100 score (see "Score layers" below).
 
 `ctx` holds `bbox` as `[west, south, east, north]`, `zoom`, an optional `route`, `env`, a cached `fetch`, and a `cacheKey`. `ctx.env` contains only the names listed in `requiredEnv` and `optionalEnv`, so read keys from `ctx.env`, never from `process.env`. Use `ctx.fetch` for network calls and pass `cacheKey: ctx.cacheKey` in its options so nearby requests share a cache entry.
 
@@ -26,7 +26,7 @@ A `LayerResult` is either `{ kind: "geojson", data, citation }` or `{ kind: "til
 
 A tiles result carries `data: { url, minzoom, maxzoom, format, tileSize?, sourceLayer?, geometry? }`, where `url` is a `{z}/{x}/{y}` template the map fills in.
 
-- `format: "raster"` is a picture per tile (forest loss, night lights, population). Set `tileSize` when the server does not use 256 pixel tiles; Global Forest Watch serves 512.
+- `format: "raster"` is a picture per tile (forest loss, night lights, population). Set `tileSize` (256 or 512) when the server does not use 256 pixel tiles; Global Forest Watch serves 512, and a wrong value draws the tiles at the wrong scale. Leave it out for standard 256 pixel tiles.
 - `format: "vector"` is geometry per tile (public lands). Set `sourceLayer` to the layer name inside each tile and `geometry` to `"point"`, `"line"`, or `"polygon"` so the map knows how to draw it.
 
 Tile layers have no features for the model to read, so the model only gets the URL, zoom range, and citation. Put anything it should tell the user (the date shown, the year range) in `coverageNote`.
@@ -59,12 +59,37 @@ When a source can return more than the map or the model can use, cap the result 
 
 ## The `t` and `v` convention
 
-Feature properties may carry two optional fields:
+Feature properties may carry two optional fields, and the map reads both:
 
-- `t`: an ISO date string. From Milestone 3 the renderer will use it for the time scrubber.
-- `v`: a number. From Milestone 3 the renderer will use it for column height and route charts.
+- `t`: an ISO date string (`2016-07-04T00:00:00.000Z`, or a bare `2016-07-04`). The time scrubber builds its histogram from every loaded layer's `t` and picks day, month, or year buckets from the data span (at most 60 buckets). Moving the window hides dated features outside it; features with no `t` are never hidden, and a layer with no `t` at all does not make the scrubber appear. Fire perimeters set `t` to the start of their year, fire detections to the detection time. The `set_time` agent tool drives the same window. Tile layers carry no features, so the scrubber rewrites their URL instead: today only `night-lights` (the date in the path becomes the window's end date) and `forest-loss` (`start_year` and `end_year` follow the window). A new date-aware tile layer needs a case in `tileUrlForTime` in `lib/time/index.ts`.
+- `v`: a number, the layer's one headline value (acres, a 0 to 100 score, a count). The inspect card shows it with the layer's `style.unit`, the layer console offers it as a numeric range filter (labelled "Value", or "Score (0 to 100)" for `unit: "score"`; it is left out when another property holds the same number on every feature), and route preview plots it along the route in the elevation panel. Column height will use it once 3D columns are drawn.
 
-The renderer does not read them yet; set them now so the layer is ready. A layer that sets neither still draws as plain points, lines, or polygons.
+A layer that sets neither still draws as plain points, lines, or polygons.
+
+## Filters
+
+Each layer card in the layer console has a Filters disclosure. The fields come from the data itself, so a layer needs no filter code: `deriveFilterFields` in `lib/render/filters.ts` scans the GeoJSON properties and offers:
+
+- **Category chips** for text or true/false properties with 2 to 12 distinct values. A property that is mostly unique (more than half the values differ once there are 8 or more) is treated as free text and skipped.
+- **Numeric ranges** for number properties with at least 5 distinct values, or a real spread across 20 or more features.
+- **Never** ids and names: `id`, `name`, `title`, `url`, `t`, `signals`, `h3`, `wikidata`, `wikipedia`, `popularityNote`, `osmId`, and any key ending in `Id` or `_id`. Properties that mix text and numbers, or hold objects, are skipped too.
+
+At most 8 fields show, categories first. So to make a layer filterable, keep short, repeated labels (`sac_scale`, `agency`, `kind`) and real numbers (`acres`, `year`) in `properties`, and keep long free text out of them or under an id-like key. Add a friendlier heading for a new key in `LABELS` in `lib/render/filters.ts`.
+
+Filters live on the render op (`RenderOp.filters`, a map from property name to `{ include?: string[]; range?: [min, max] }`), narrow the map, the shown/total counts, the inspect card and the export together, and the agent can set them through `render` (`{ sac_scale: { include: ["alpine_hiking"] } }`; `{}` clears them). A feature must pass every entry, and one with no value for a filtered property is hidden.
+
+## Score layers
+
+Set `style.unit: "score"` on a layer whose `v` is a 0 to 100 estimate (`popularity`, `popularity-campsites`, and `remoteness` do). The map then shades the layer's polygons by `v` as a ramp from faint to strong instead of a flat tint (the ramp colors are due for the palette pass), the inspect card shows the value out of 100, the legend shows a five-step ramp key instead of a symbol, and the filter reads "Score (0 to 100)". The map ramp only appears when the unit is set; the legend alone falls back to the layer id for `remoteness` and `popularity`, so a new score layer must declare the unit.
+
+## Legend symbols
+
+The layer console draws each layer's legend key the same way the map draws it, and `lib/render/wally/pins.ts` decides the shape for point layers. Symbols are a monochrome set (`camp`, `parking`, `species`, `photo`, `gauge`, `snow`, `fire`, `road`, `trailhead`, `point`) drawn from `public/pins/<symbol>.svg`, with a `<symbol>-selected.svg` twin that fills solid ink.
+
+- A new point layer picks an existing shape by adding `"<layer-id>": "<symbol>"` to `LAYER_SYMBOLS`. A layer left out gets the plain circle (`point`).
+- A new shape needs two 24 by 24 SVGs (`<name>.svg` and `<name>-selected.svg`, 1.5 px dark stroke, white fill, centred) and the name added to `PIN_SYMBOLS`.
+- A layer whose points are camp sites or parking lots, told apart by a `kind` property, goes in `CAMPSITE_LAYERS`.
+- Line layers get a dash pattern from `lineDashFor` and polygon layers an ink wash from `POLYGON_INK_FILL`, both in `lib/render/palette.ts`; add an entry there to tell a new layer apart from the rest. Raster tile layers show a hatched square.
 
 ## What `runLayer` does for you
 
@@ -127,5 +152,7 @@ This step is easy to forget and the layer is hard for the agent to find without 
 - [ ] The layer has a `VOCABULARY` entry in `lib/agent/vocabulary.ts`.
 - [ ] A tile layer sets `format`, and a vector one also sets `sourceLayer` and `geometry`.
 - [ ] A capped or empty result sets `coverageNote`.
+- [ ] Dated features carry `t`; a headline number goes in `v`, and a 0 to 100 score sets `style.unit: "score"`.
+- [ ] A point layer has a legend symbol in `lib/render/wally/pins.ts` (or accepts the plain circle).
 - [ ] `scripts/layer-table.mts` has an entry for the layer; then run it with `--write` to refresh the README table.
 - [ ] `pnpm test` passes with no keys set.

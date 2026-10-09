@@ -16,6 +16,20 @@ pnpm dev
 
 Then open http://localhost:3000. Fill in `.env.local` first; each variable in `.env.example` has a comment explaining what it unlocks.
 
+## What you can do
+
+- **Ask, and get a drawn, cited answer.** Type a question in plain language. The agent finds the place, queries the right layers, draws them on the map, and writes a short note that ends with a Sources line.
+- **Click any feature for details.** An inspect card shows its properties, the citation, and buttons to ask the agent about it, copy it as GeoJSON, or preview it when it is a route. Clicking never moves the camera.
+- **Run the layer console.** The right-hand pane is a legend table: one row per layer with its symbol, source, and count. Each row has visibility, an opacity slider, a draw mode (points, lines, polygons, heat, columns, hexagons), removal, and drag to reorder. A Filters disclosure on each row lists the layer's own attributes (category chips and numeric ranges); filters change the map, the counts, and the export at once, and the agent can set them through `render`.
+- **Scrub through time.** When a loaded layer has dated features, a time scrubber at the top of the console shows a histogram, a draggable window, play and pause (one step every 0.6 seconds), and slide or cumulative mode. Ask "show wildfires near Yosemite year by year since 2016" and the agent sets the window and plays it with its `set_time` tool. Night lights and tree cover loss also change their imagery with the window.
+- **Plan and preview routes.** Ask for a walking, cycling, or driving route between two places and the `route` tool draws it as a purple-to-coral line with direction arrows, mile markers, and a start pin. Route preview flies the camera along the line while an elevation profile tracks your position, with play, speed, and scrub controls. A trail you click, or a route you build, can be previewed the same way.
+- **See it in 3D.** Terrain, buildings, and a sky are on by default and the camera tilts as you zoom in. The 3D button in the bottom-right corner flattens the map and brings it back.
+- **Switch the basemap.** Choose Topographical + Satellite (the default), Topographical, or Satellite from the pills in the top-left corner.
+- **Export the view.** Export in the top-left pills opens a confirm step that lists the files and their size; nothing downloads until you confirm. You get one GeoJSON file per visible layer (with its time window and filters applied) and a `citations.md` covering every visible layer, the viewport, and the export time. Four or more files come down as a single zip.
+- **Share a link.** The page address (the part after `#`) records the camera, basemap, layers with their draw modes, and time window. Open it and WallyMap fetches the layers again, so a link carries layer ids, not data. Route results and anything not in the layer catalog are not part of a link.
+
+**Research-tool guarantees.** Every answer ends with a Sources line that names only the layers the agent actually queried. Computed layers say they are estimates and list their signals. Empty or capped results say so in a note instead of failing quietly. Nothing is downloaded without an explicit click on a confirmed Export.
+
 ## Layers
 
 WallyMap ships 19 data layers. The agent gets one `query_<id>` tool per layer and picks them from your question. This table is generated from the layer registry by `pnpm exec tsx scripts/layer-table.mts --write`.
@@ -25,7 +39,7 @@ WallyMap ships 19 data layers. The agent gets one `query_<id>` tool per layer an
 | --- | --- | --- | --- | --- | --- | --- |
 | `osm-trails` | OpenStreetMap trails | Hiking paths and tracks with difficulty and surface | OpenStreetMap | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
 | `fire-perimeters` | Wildfire perimeters | Current and past US wildfire outlines | NIFC (WFIGS) | US | None | Updated through the fire season |
-| `fire-detections` | Active fire detections | Satellite hotspots from the last 1 to 5 days | NASA FIRMS | Global | `FIRMS_MAP_KEY` (required) | Near real time (hours) |
+| `fire-detections` | Active fire detections | Satellite hotspots from the last 1 to 10 days | NASA FIRMS | Global | `FIRMS_MAP_KEY` (required) | Near real time (hours) |
 | `forest-loss` | Tree cover loss | Where tree cover was lost, by year | UMD / Global Forest Watch | Global | None | Yearly |
 | `forest-alerts` | Forest disturbance alerts | Recent forest clearing in the tropics | Global Forest Watch (GLAD, RADD) | Tropics (30°S to 30°N) | None | Weekly |
 | `snowpack` | Snowpack (SNOTEL) | Snow water equivalent at mountain weather stations | USDA NRCS SNOTEL | Western US | None | Latest reading (daily) |
@@ -65,11 +79,11 @@ Copy `.env.example` to `.env.local` and fill in what you need.
 | `MAPILLARY_TOKEN` | No | Adds Mapillary street-level images to `photos` and popularity scores for views about 15 km across or smaller | [mapillary.com/developer](https://www.mapillary.com/developer) |
 | `USGS_API_KEY` | No | A higher rate limit for `streamflow` (it works without one at a low limit) | [api.waterdata.usgs.gov/signup](https://api.waterdata.usgs.gov/signup/) |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | No | Response caching and rate limiting | Vercel KV |
-| `NEXT_PUBLIC_NATURAL_EARTH_STYLE` | No | Natural Earth basemap (Milestone 3) | Mapbox Studio |
+| `NEXT_PUBLIC_NATURAL_EARTH_STYLE` | No | Natural Earth 2 basemap, which the agent can switch to | Mapbox Studio |
 
 ## Bring your own key and model
 
-WildMap never picks a model for you. Set `MODEL_NAME` and the key for your provider.
+WallyMap never picks a model for you. Set `MODEL_NAME` and the key for your provider.
 
 **OpenRouter (default).** Set `OPENROUTER_API_KEY` and any OpenRouter model slug:
 
@@ -104,18 +118,18 @@ Anyone who can reach your deployment can chat with the agent, and every message 
 ## Tests
 
 - `pnpm test` runs the unit tests. It needs no keys and no network.
-- `pnpm exec tsx scripts/eval-model.mts "<question>"` runs one question through the real agent and prints one JSON line; add `--set` to run the 12-question eval set in [docs/questions.md](docs/questions.md). It needs your model key and spends credits.
+- `pnpm exec tsx scripts/eval-model.mts "<question>"` runs one question through the real agent and prints one JSON line; add `--set` to run the eval set in [docs/questions.md](docs/questions.md). It needs your model key and spends credits.
 - `pnpm e2e` runs the browser tests with Playwright. The page-load test always runs; the test that asks the agent a question is skipped unless `OPENROUTER_API_KEY` or `ANTHROPIC_API_KEY` is set.
 
 ## Add a layer
 
 See [docs/layers.md](docs/layers.md) for how to add your own data layer. The six starter questions and the tool calls expected for each are in [docs/questions.md](docs/questions.md).
 
-## What is in Milestone 2 and what is next
+## What is in the box and what is next
 
-**In Milestone 2:** 19 data layers (trails, fire perimeters and detections, forest loss and alerts, snowpack, forest roads, campsites, stream flow, species, population, night lights, wilderness, photos, physical regions, public lands), computed popularity and remoteness scores, vector tiles for public lands, and a vocabulary table that routes everyday words to the right layer.
+**Built:** 19 data layers, computed popularity and remoteness scores, vector tiles for public lands, a vocabulary table that routes everyday words to the right layer, the layer console with legend, filters, and opacity, the time scrubber, routes with preview and elevation profile, 3D terrain, export, and permalinks.
 
-**Next (Milestone 3):** the WallyMap design, 3D columns, a time scrubber, route preview, and compare.
+**Next:** a palette and hatching pass (the five approved colors, with diagonal hatching for density and categories), compare polishing (swipe, toggle, and delta views of two moments; the comparison logic exists but the controls and agent tool are not finished), and Milestone 4.
 
 ## License
 

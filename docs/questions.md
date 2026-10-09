@@ -1,6 +1,6 @@
 # Example questions
 
-These are the six WildMap starter questions in `components/EmptyState.tsx`. Together they show a first set of the data layers: trails, fire, forest loss, snow, campsites, and wildlife. The eval set at the bottom covers every layer family. Each question should end with the matching layer drawn on the map and a short note.
+These are the six WallyMap starter questions in `components/EmptyState.tsx`. Together they show a first set of the data layers: trails, fire, forest loss, snow, campsites, and wildlife. The eval set at the bottom covers every layer family. Each question should end with the matching layer drawn on the map and a short note.
 
 The usual tool order is: find the place, move the map, query the layer, draw it, explain it.
 
@@ -8,13 +8,13 @@ The usual tool order is: find the place, move the map, query the layer, draw it,
 
 Tools: `geocode` → `set_view` → `query_osm-trails` → `render` → `note`
 
-The map flies to Lake Tahoe and shows a network of terracotta trail lines.
+The map flies to Lake Tahoe and tilts over 3D terrain, with the trail network drawn as white lines over a thin dark casing. The Filters disclosure on the trails layer offers difficulty (`sac_scale`) and surface chips.
 
 ## 2. Which wildfires burned near Yosemite in the last 10 years?
 
 Tools: `geocode` → `set_view` → `query_fire-perimeters` → `render` → `note`
 
-The map shows fire perimeters around Yosemite, and the note lists the largest recent fires by year.
+The map shows fire perimeters around Yosemite, and the note lists the largest recent fires by year. Fire perimeters carry dates, so the time scrubber appears in the layer console; the acres filter narrows the list to the large fires.
 
 ## 3. Where has the Amazon lost the most forest since 2015?
 
@@ -39,6 +39,15 @@ The map shows campsites together with forest roads open to motor vehicles near M
 Tools: `geocode` → `set_view` → `query_species` → `render` → `note`
 
 The map shows recent wildlife sightings around Banff, and the note summarizes the most commonly seen species.
+
+## Time, routes, compare
+
+Beyond the six starters, these tools shape follow-up questions. They appear in the trace next to the `query_<layer>` and `render` calls.
+
+- `set_time({ start, end, play?, mode? })` sets the time window the scrubber shows, for example "show wildfires near Yosemite year by year since 2016" (`geocode` → `set_view` → `query_fire-perimeters` → `render` → `set_time` with `play` → `note`). Layers without dates are not affected.
+- `render({ layerId, mode, filters? })` takes `filters` when the user names an attribute value, such as "only alpine-grade trails" (`{ sac_scale: { include: ["alpine_hiking"] } }`) or "fires over 1,000 acres" (`{ acres: { range: [1000, 1000000] } }`). The agent should pass the filter rather than query again.
+- `route({ from, to, profile })` draws a walking, cycling, or driving route from Mapbox Directions with place names as the user said them (`route` → `note`, no geocode needed). The Preview route button then flies along it with an elevation profile.
+- `compare({ layerId, a, b, mode })` compares one layer across two windows as `delta`, `swipe`, or `toggle`, for questions like "compare forest loss in Rondônia between 2015 and 2025" (`geocode` → `set_view` → `query_forest-loss` for both windows → `compare` → `note`). It is new and its on-map controls are still being polished.
 
 ## Notes
 

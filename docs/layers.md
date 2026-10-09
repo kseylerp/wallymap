@@ -12,12 +12,13 @@ Defined in `layers/types.ts`. Build it with `defineLayer({...})` so the input ty
 - `coverage`: `"global"`, `"us"`, or `{ bbox }`; tells the model where data exists.
 - `license`: the data license, shown with the citation.
 - `requiredEnv`: env var names the layer needs (an empty array if none).
+- `optionalEnv`: env var names the layer reads when they are set but can work without (optional).
 - `maxAreaKm2`: largest bounding box, in square kilometres, the layer will answer for.
 - `input`: a zod object describing the layer's own options (the bbox is added for you).
 - `query(ctx, input)`: fetches data and returns a `LayerResult` or a `LayerError`.
 - `style`: `{ geometry: "point" | "line" | "polygon", color, unit? }` hints for drawing.
 
-`ctx` holds `bbox` as `[west, south, east, north]`, `zoom`, an optional `route`, `env`, and a cached `fetch`. Use `ctx.fetch` for network calls so responses are cached.
+`ctx` holds `bbox` as `[west, south, east, north]`, `zoom`, an optional `route`, `env`, a cached `fetch`, and a `cacheKey`. `ctx.env` contains only the names listed in `requiredEnv` and `optionalEnv`, so read keys from `ctx.env`, never from `process.env`. Use `ctx.fetch` for network calls and pass `cacheKey: ctx.cacheKey` in its options so nearby requests share a cache entry.
 
 A `LayerResult` is either `{ kind: "geojson", data, citation }` or `{ kind: "tiles", data: { url, minzoom, maxzoom }, citation }`. The citation is `{ source, url, retrieved }`. Add `coverageNote` for caveats such as "No data outside the US".
 
@@ -32,9 +33,11 @@ Feature properties may carry two optional fields the renderer understands:
 
 A layer that sets neither still draws as plain points, lines, or polygons.
 
-## What `runLayer` checks for you
+## What `runLayer` does for you
 
 Both the HTTP route and the agent tools call `runLayer` in `lib/layers/run.ts` before your `query`. It already rejects a bad bbox, input that fails the `input` schema, a bbox larger than `maxAreaKm2` (as `zoom_in`), and missing `requiredEnv` (as `unavailable`). Your `query` does not need to re-check these. The one exception is area: `osm-trails` re-checks it because its tests call `query` directly, and you may do the same.
+
+It also builds `ctx.env` from just your `requiredEnv` and `optionalEnv` names (a missing optional one is `undefined`), and computes `ctx.cacheKey` from the layer id, the bbox rounded to 3 decimals, and your parsed input.
 
 ## The `requiredEnv` rule
 

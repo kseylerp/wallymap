@@ -113,4 +113,23 @@ describe("runLayer", () => {
     expect(first).toBe("fake:-120,38,-119,39:{\"n\":1}");
     expect(second).toBe(first);
   });
+
+  it("passes only the layer's declared env vars to query", async () => {
+    vi.stubEnv("SECRET_X", "do-not-leak");
+    vi.stubEnv("OPT_Y", "opt-value");
+    try {
+      await runLayer("fake", { bbox: BBOX });
+      expect(query.mock.calls[0][0].env).not.toHaveProperty("SECRET_X");
+      expect(query.mock.calls[0][0].env).toEqual({});
+
+      const withOptional = defineLayer({ ...fake, id: "opt", optionalEnv: ["OPT_Y", "OPT_MISSING"] });
+      registerLayer(withOptional);
+      await runLayer("opt", { bbox: BBOX });
+      const env = query.mock.calls[1][0].env;
+      expect(env).toEqual({ OPT_Y: "opt-value", OPT_MISSING: undefined });
+      expect(env).not.toHaveProperty("SECRET_X");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

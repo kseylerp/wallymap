@@ -101,8 +101,10 @@ async function requestOverpass(
   fetchFn: CachedFetch,
   query: string,
   cacheKey: string | undefined,
+  overpassUrl: string | undefined,
 ): Promise<{ ok: true; json: unknown } | { ok: false; reason: string }> {
-  const primary = process.env.OVERPASS_URL || PUBLIC_ENDPOINT;
+  // A blank OVERPASS_URL counts as unset.
+  const primary = overpassUrl || PUBLIC_ENDPOINT;
   let reason = "Overpass returned no response";
 
   // Primary endpoint first, then one retry against the public endpoint
@@ -143,6 +145,7 @@ const osmTrails = defineLayer({
   coverage: "global",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
+  optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 2500,
   input: inputSchema,
   style: { geometry: "line", color: "#c2410c" },
@@ -156,7 +159,12 @@ const osmTrails = defineLayer({
       };
     }
 
-    const result = await requestOverpass(ctx.fetch, buildOverpassQuery(ctx.bbox, input), ctx.cacheKey);
+    const result = await requestOverpass(
+      ctx.fetch,
+      buildOverpassQuery(ctx.bbox, input),
+      ctx.cacheKey,
+      ctx.env.OVERPASS_URL,
+    );
     if (!result.ok) {
       return { error: result.reason, hint: "upstream" };
     }

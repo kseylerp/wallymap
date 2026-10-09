@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getLayer } from "@/layers/registry";
-import { BBoxSchema, bboxAreaKm2, type LayerError, type LayerResult } from "@/layers/types";
+import { BBoxSchema, bboxAreaKm2, type Layer, type LayerError, type LayerResult } from "@/layers/types";
 import { cacheKeyFor, createLayerFetch } from "@/lib/fetch";
 
 export type RunLayerParams = { bbox: unknown; zoom?: number; input?: unknown };
@@ -8,6 +8,15 @@ export type RunLayerParams = { bbox: unknown; zoom?: number; input?: unknown };
 export type RunLayerResponse = { status: number; body: LayerResult | LayerError };
 
 const DEFAULT_ZOOM = 10;
+
+/** Only the env vars a layer declares, so a layer never sees other secrets. */
+function layerEnv(layer: Layer): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = {};
+  for (const name of [...layer.requiredEnv, ...(layer.optionalEnv ?? [])]) {
+    env[name] = process.env[name];
+  }
+  return env;
+}
 
 /**
  * Validates a request and runs one registered layer. Shared by the HTTP route
@@ -53,7 +62,7 @@ export async function runLayer(id: string, params: RunLayerParams): Promise<RunL
       {
         bbox: bbox.data,
         zoom: params.zoom ?? DEFAULT_ZOOM,
-        env: process.env,
+        env: layerEnv(layer),
         fetch: createLayerFetch(id),
         cacheKey: cacheKeyFor(layer.id, bbox.data, input.data),
       },

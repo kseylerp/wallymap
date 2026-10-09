@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import layer, { buildOverpassQuery, normalizeOverpass, overpassFailure } from "./osm-trails";
 import fixture from "./__fixtures__/osm-trails.tahoe.json";
@@ -6,17 +6,6 @@ import fixture from "./__fixtures__/osm-trails.tahoe.json";
 const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
 
 describe("osm-trails layer", () => {
-  const originalUrl = process.env.OVERPASS_URL;
-
-  beforeEach(() => {
-    delete process.env.OVERPASS_URL;
-  });
-
-  afterEach(() => {
-    if (originalUrl === undefined) delete process.env.OVERPASS_URL;
-    else process.env.OVERPASS_URL = originalUrl;
-  });
-
   it("builds a query for highway=path|footway|track with out geom", () => {
     const q = buildOverpassQuery(TAHOE, { namedOnly: false });
     expect(q).toContain('["highway"~"^(path|footway|track)$"]');
@@ -87,6 +76,15 @@ describe("osm-trails layer", () => {
     expect(keys).toEqual(["osm-trails:k", "osm-trails:k:fallback"]);
   });
 
+  it("treats a blank OVERPASS_URL as unset", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
+    await layer.query(
+      { bbox: TAHOE, zoom: 11, env: { OVERPASS_URL: "" }, fetch: stub as unknown as CachedFetch },
+      { namedOnly: false },
+    );
+    expect(stub.mock.calls.map((call: unknown[]) => call[0])).toEqual(["https://overpass-api.de/api/interpreter"]);
+  });
+
   it("filters by sacScaleMax, keeping untagged and easier trails", async () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
     const r = await layer.query(
@@ -100,13 +98,13 @@ describe("osm-trails layer", () => {
   });
 
   it("retries a thrown network error against the public endpoint", async () => {
-    process.env.OVERPASS_URL = "https://overpass.example.test/api/interpreter";
+    const env = { OVERPASS_URL: "https://overpass.example.test/api/interpreter" };
     const stub = vi
       .fn()
       .mockRejectedValueOnce(new Error("boom"))
       .mockResolvedValueOnce(new Response(JSON.stringify(fixture), { status: 200 }));
     const r = await layer.query(
-      { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch },
+      { bbox: TAHOE, zoom: 11, env, fetch: stub as unknown as CachedFetch },
       { namedOnly: false },
     );
     expect(r).toMatchObject({ kind: "geojson" });

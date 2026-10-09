@@ -60,6 +60,8 @@ export type Layer<I extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawSha
   coverage: Coverage;
   license: string;
   requiredEnv: string[];
+  /** Env vars the layer reads when set but works without; only these and requiredEnv reach ctx.env. */
+  optionalEnv?: string[];
   maxAreaKm2: number;
   input: I;
   // Method syntax keeps parameter checking bivariant so Layer<specific> is

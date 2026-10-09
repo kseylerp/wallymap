@@ -15,3 +15,4 @@ import "./species";
 import "./population";
 import "./night-lights";
 import "./wilderness";
+import "./photos";

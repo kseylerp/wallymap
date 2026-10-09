@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { VercelKV } from "@vercel/kv";
 import type { BBox } from "@/layers/types";
 
 export type Cache = {
@@ -27,19 +28,29 @@ const memoryCache: Cache = {
 };
 
 function kvCache(url: string, token: string): Cache {
-  // Loaded lazily so local runs and tests never import @vercel/kv.
-  const clientPromise = import("@vercel/kv").then(({ createClient }) =>
-    createClient({ url, token, automaticDeserialization: false }),
-  );
+  // Loaded lazily inside get/set so local runs and tests never import
+  // @vercel/kv, and a failed import surfaces as a catchable error there.
+  let clientPromise: Promise<VercelKV> | undefined;
+  const getClient = (): Promise<VercelKV> => {
+    clientPromise ??= import("@vercel/kv")
+      .then(({ createClient }) =>
+        createClient({ url, token, automaticDeserialization: false }),
+      )
+      .catch((error: unknown) => {
+        clientPromise = undefined;
+        throw error;
+      });
+    return clientPromise;
+  };
   return {
     async get(key) {
-      const client = await clientPromise;
+      const client = await getClient();
       const value = await client.get<unknown>(key);
       if (value === null || value === undefined) return null;
       return typeof value === "string" ? value : JSON.stringify(value);
     },
     async set(key, value, ttlSeconds) {
-      const client = await clientPromise;
+      const client = await getClient();
       await client.set(key, value, { ex: Math.max(1, Math.ceil(ttlSeconds)) });
     },
   };

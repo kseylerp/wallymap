@@ -19,6 +19,15 @@ const RENDER_MODES = [
   "hexbin",
 ] as const satisfies readonly RenderMode[];
 
+/** Per property: keep only these category values, and/or only numbers inside [min, max]. */
+export const LayerFiltersSchema = z.record(
+  z.string(),
+  z.object({
+    include: z.array(z.string()).optional().describe("Keep features whose value is one of these"),
+    range: z.tuple([z.number(), z.number()]).optional().describe("Keep features whose number is in [min, max]"),
+  }),
+);
+
 const TIME_MODES = ["slide", "cumulative"] as const satisfies readonly TimeMode[];
 
 const LngLatSchema = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]);
@@ -121,11 +130,14 @@ export function buildTools(): ToolSet {
     }),
     render: tool({
       description:
-        "Draw a layer you already queried. mode picks the drawing style.",
+        "Draw a layer you already queried. mode picks the drawing style. filters narrows it by its own properties " +
+        "(the query summary's sample properties name them), e.g. { sac_scale: { include: [\"alpine_hiking\"] } } or " +
+        "{ acres: { range: [1000, 1000000] } }; they replace the layer's filters, and {} clears them.",
       inputSchema: z.object({
         layerId: z.string(),
         mode: z.enum(RENDER_MODES),
         color: z.string().optional().describe("Only set when the user asked for a specific color; otherwise omit"),
+        filters: LayerFiltersSchema.optional().describe("Show only features matching every entry; omit to keep the current filters"),
       }),
       execute: async (input) => input,
     }),

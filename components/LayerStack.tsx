@@ -1,8 +1,10 @@
 "use client";
 
-import { useId, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { useId, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { LayerFilters } from "@/components/LayerFilters";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
+import { deriveFilterFields, filterSummary, type FilterField } from "@/lib/render/filters";
 import { TILE_SWATCH } from "@/lib/render/palette";
 import type { LoadedLayer, MapAction, MapState, RenderMode, RenderOp, TimeState } from "@/lib/render/state";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
@@ -171,6 +173,14 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
   const opacity = op?.opacity ?? 1;
   const count = layer.result.kind === "geojson" ? layer.result.data.features.length : null;
   const shownCount = shownLayer?.result.kind === "geojson" ? shownLayer.result.data.features.length : count;
+  const data = layer.result.kind === "geojson" ? layer.result.data : null;
+  const unit = layer.style.unit;
+  const fields = useMemo<FilterField[]>(() => (data ? deriveFilterFields(data, { unitForV: unit }) : []), [data, unit]);
+  const filters = op?.filters ?? {};
+  const activeCount = Object.keys(filters).length;
+  const summary = activeCount > 0 ? filterSummary(fields, filters) : "";
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersId = `filters-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const { citation, coverageNote } = layer.result;
   const host = hostOf(citation.url);
   const symbol = legendSymbol(layer.id, legendModeFor(layer, op), layer.style.unit);
@@ -191,6 +201,7 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
       data-selected={selected || undefined}
       data-hidden={!visible || undefined}
       data-drop-target={dropTarget || undefined}
+      data-filters-open={(filtersOpen && fields.length > 0) || undefined}
       {...dragProps}
       className={`legend-row relative py-2.5 transition-opacity duration-150 ${dragging ? "opacity-40" : ""}`}
     >
@@ -224,6 +235,11 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
               {host ?? citation.source}
             </a>
           </p>
+          {summary && (
+            <p data-testid="filter-summary" className="mt-0.5 truncate text-[11.5px] leading-4 text-ink-muted" title={summary}>
+              Filtered: {summary}
+            </p>
+          )}
         </div>
         {count !== null ? (
           shownCount !== null && shownCount !== count ? (
@@ -295,6 +311,17 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
                 </select>
               </label>
             )}
+            {op && fields.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((o) => !o)}
+                aria-expanded={filtersOpen}
+                aria-controls={filtersId}
+                className="legend-disclosure whitespace-nowrap"
+              >
+                Filters{activeCount > 0 && <span className="tabular-nums"> · {activeCount}</span>}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => dispatch({ type: "remove_layer", layerId: layer.id })}
@@ -307,6 +334,10 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
           </div>
         </div>
       </div>
+      {/* Open filters stay open off hover, so a slider can be dragged and read without the row folding away. */}
+      {op && filtersOpen && fields.length > 0 && (
+        <LayerFilters id={filtersId} layerId={layer.id} title={layer.title} fields={fields} filters={filters} dispatch={dispatch} />
+      )}
     </li>
   );
 }

@@ -461,7 +461,7 @@ textarea:focus-visible {
   overflow: hidden;
 }
 @media (hover: hover) and (pointer: fine) {
-  .legend-row:not(:hover, :focus-within, [data-selected]) .legend-controls {
+  .legend-row:not(:hover, :focus-within, [data-selected], [data-filters-open]) .legend-controls {
     grid-template-rows: 0fr;
     opacity: 0;
   }
@@ -555,6 +555,125 @@ textarea:focus-visible {
     0 0 0 3px var(--slate);
 }
 .layer-opacity:focus-visible::-moz-range-thumb {
+  box-shadow:
+    0 0 0 1px var(--ink),
+    0 0 0 3px var(--slate);
+}
+
+/*
+ * Layer filters (components/LayerFilters.tsx): the "Filters" disclosure is a quiet text toggle; category chips are
+ * hairline-bordered text that fill with ink when picked; a range is two native sliders sharing one 2px track, the
+ * part between the thumbs in ink.
+ */
+.legend-disclosure {
+  font-size: 12px;
+  color: var(--ink-muted);
+  transition: color 150ms var(--ease-out);
+}
+.legend-disclosure:hover,
+.legend-disclosure[aria-expanded="true"] {
+  color: var(--ink);
+}
+.legend-disclosure[aria-expanded="true"] {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  height: 20px;
+  padding: 1px 7px 0;
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  border-radius: 4px;
+  font-size: 11.5px;
+  line-height: 17px;
+  color: var(--ink);
+  transition:
+    background-color 150ms var(--ease-out),
+    border-color 150ms var(--ease-out),
+    color 150ms var(--ease-out);
+}
+.filter-chip:hover {
+  border-color: var(--ink);
+}
+.filter-chip[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--button-primary);
+  color: var(--button-primary-text);
+}
+.filter-chip-count {
+  font-size: 10.5px;
+  opacity: 0.6;
+}
+.filter-range {
+  position: relative;
+  height: 14px;
+}
+.filter-range-track {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--ink) 15%, transparent) var(--lo, 0%),
+    var(--ink) var(--lo, 0%),
+    var(--ink) var(--hi, 100%),
+    color-mix(in srgb, var(--ink) 15%, transparent) var(--hi, 100%)
+  );
+}
+.filter-range input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 14px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+}
+.filter-range input:focus-visible {
+  outline: none;
+}
+.filter-range input::-webkit-slider-runnable-track {
+  height: 2px;
+  background: transparent;
+}
+.filter-range input::-moz-range-track {
+  height: 2px;
+  background: transparent;
+}
+.filter-range input::-webkit-slider-thumb {
+  appearance: none;
+  margin-top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px var(--ink);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.filter-range input::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: none;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px var(--ink);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.filter-range input:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 1px var(--ink),
+    0 0 0 3px var(--slate);
+}
+.filter-range input:focus-visible::-moz-range-thumb {
   box-shadow:
     0 0 0 1px var(--ink),
     0 0 0 3px var(--slate);

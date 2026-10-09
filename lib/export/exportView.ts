@@ -1,6 +1,8 @@
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { zipStored } from "@/lib/export/zip";
 import type { MapState } from "@/lib/render/state";
+import { deriveFilterFields, filterSummary } from "@/lib/render/filters";
+import { activeFilters } from "@/lib/render/reducer";
 import { visibleState } from "@/lib/render/view";
 import { windowLabel } from "@/lib/time";
 
@@ -64,6 +66,12 @@ export function buildExportBundle(state: MapState, catalog: LayerCatalog | null,
     const license = catalog?.[layer.id]?.license ?? "not recorded";
     const retrieved = citation.retrieved || layer.receivedAt;
     const narrowed = narrowing(state, layer.id);
+    const loaded = state.layers[layer.id];
+    const filters = activeFilters(state.renderOps.find((op) => op.layerId === layer.id)?.filters);
+    const filterNote =
+      filters && loaded.result.kind === "geojson"
+        ? filterSummary(deriveFilterFields(loaded.result.data, { unitForV: loaded.style.unit }), filters)
+        : "";
     if (layer.result.kind === "geojson") {
       const collection = {
         ...layer.result.data,
@@ -74,6 +82,7 @@ export function buildExportBundle(state: MapState, catalog: LayerCatalog | null,
           license,
           citation,
           ...(time && { timeWindow: time.window }),
+          ...(filters && { filters }),
         },
       };
       files.push({
@@ -84,7 +93,7 @@ export function buildExportBundle(state: MapState, catalog: LayerCatalog | null,
     const shown = narrowed.shown !== undefined ? `; ${narrowed.shown.toLocaleString("en-US")} of ${narrowed.total?.toLocaleString("en-US")} features exported` : "";
     bullets.push(
       `- **${layer.title}** (\`${layer.id}\`${layer.result.kind === "tiles" ? ", map tiles, not exported as data" : ""}): ` +
-        `${citation.source}, <${citation.url}>, retrieved ${retrieved}, license: ${license}${shown}`,
+        `${citation.source}, <${citation.url}>, retrieved ${retrieved}, license: ${license}${shown}${filterNote ? `; filtered: ${filterNote}` : ""}`,
     );
   }
 
@@ -97,6 +106,9 @@ export function buildExportBundle(state: MapState, catalog: LayerCatalog | null,
     `Map view: longitude ${fixed(longitude, 5)}, latitude ${fixed(latitude, 5)}, zoom ${fixed(zoom, 2)}, pitch ${fixed(pitch, 0)}, bearing ${fixed(bearing, 0)}; basemap ${state.basemap}.`,
     "",
     ...(timeNote ? [`Time window: ${timeNote}. Dated features outside it are not exported; features without a date are.`, ""] : []),
+    ...(layers.some((l) => activeFilters(state.renderOps.find((op) => op.layerId === l.id)?.filters))
+      ? ["Filters set in the layer panel apply: each filtered layer exports only the features that pass.", ""]
+      : []),
     "## Layers",
     "",
     ...(bullets.length > 0 ? bullets : ["- No visible layers."]),

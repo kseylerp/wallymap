@@ -124,7 +124,24 @@ export function deriveFilterFields(
     ranges.push(field);
   }
 
-  return [...categories, ...ranges].slice(0, MAX_FIELDS);
+  // `v` is the layer's value channel, often a copy of a named property (fire perimeters: v = acres). The named
+  // field says more, so a `v` that matches another property on every feature is not offered twice.
+  const kept = ranges.filter((field) => field.key !== "v" || !mirrorsAnotherProperty(fc, "v"));
+  return [...categories, ...kept].slice(0, MAX_FIELDS);
+}
+
+/** True when some other numeric property equals `key`'s value on every feature that has one. */
+function mirrorsAnotherProperty(fc: GeoJSON.FeatureCollection, key: string): boolean {
+  let candidates: Set<string> | null = null;
+  for (const f of fc.features) {
+    const props = f.properties;
+    const value = props?.[key];
+    if (!props || typeof value !== "number") continue;
+    const same = Object.keys(props).filter((k) => k !== key && props[k] === value);
+    candidates = candidates === null ? new Set(same) : new Set(same.filter((k) => candidates!.has(k)));
+    if (candidates.size === 0) return false;
+  }
+  return candidates !== null && candidates.size > 0;
 }
 
 function valueLabel(unitForV: string | undefined): string {

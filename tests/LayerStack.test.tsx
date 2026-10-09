@@ -314,6 +314,91 @@ describe("LayerStack data console", () => {
   });
 });
 
+describe("LayerStack filters", () => {
+  const scales = ["hiking", "mountain_hiking", "alpine_hiking", "hiking"];
+  const rich: LoadedLayer = {
+    ...trails,
+    result: {
+      kind: "geojson",
+      citation,
+      data: {
+        type: "FeatureCollection",
+        features: Array.from({ length: 8 }, (_, k) => ({
+          type: "Feature" as const,
+          geometry: { type: "LineString" as const, coordinates: [[0, 0], [1, 1]] },
+          properties: { name: `T${k}`, sac_scale: scales[k % 4], length_km: k + 1 },
+        })),
+      },
+    },
+  };
+
+  function Filtered({ spy }: { spy: (a: MapAction) => void }) {
+    const [state, dispatch] = useReducer(reduce, {
+      ...initialMapState,
+      layers: { "osm-trails": rich },
+      renderOps: [{ layerId: "osm-trails", mode: "lines", visible: true }],
+    } satisfies MapState);
+    return (
+      <LayerStack
+        layers={state.layers}
+        renderOps={state.renderOps}
+        catalog={null}
+        dispatch={(a) => {
+          spy(a);
+          dispatch(a);
+        }}
+        open
+        onOpenChange={() => {}}
+        shownLayers={visibleState(state).layers}
+      />
+    );
+  }
+
+  it("opens a Filters disclosure with category chips (with counts) and a range per numeric field", () => {
+    render(<Filtered spy={() => {}} />);
+    const toggle = screen.getByRole("button", { name: "Filters" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    const panel = screen.getByTestId("layer-filters");
+    const chips = within(within(panel).getByRole("group", { name: "Difficulty (sac_scale)" })).getAllByRole("button");
+    expect(chips.map((c) => c.textContent)).toEqual(["all", "hiking4", "alpine hiking2", "mountain hiking2"]);
+    expect(within(panel).getByRole("slider", { name: "Length km from" })).toBeTruthy();
+  });
+
+  it("a chip dispatches set_filters, the count becomes shown / total and the summary shows; Reset clears", () => {
+    const spy = vi.fn();
+    render(<Filtered spy={spy} />);
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    fireEvent.click(screen.getByRole("button", { name: /^alpine hiking/ }));
+    expect(spy).toHaveBeenCalledWith({
+      type: "set_filters",
+      layerId: "osm-trails",
+      filters: { sac_scale: { include: ["alpine_hiking"] } },
+    });
+    expect(screen.getByTestId("layer-count").textContent).toBe("2 / 8");
+    expect(screen.getByTestId("filter-summary").textContent).toBe("Filtered: sac_scale: alpine_hiking");
+    expect(screen.getByRole("button", { name: /^Filters/ }).textContent).toBe("Filters · 1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(spy).toHaveBeenLastCalledWith({ type: "set_filters", layerId: "osm-trails", filters: {} });
+    expect(screen.getByTestId("layer-count").textContent).toBe("8");
+    expect(screen.queryByTestId("filter-summary")).toBeNull();
+  });
+
+  it("the range's lower thumb narrows by number, and all clears the chips", () => {
+    const spy = vi.fn();
+    render(<Filtered spy={spy} />);
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    fireEvent.change(screen.getByRole("slider", { name: "Length km from" }), { target: { value: "6" } });
+    expect(spy).toHaveBeenLastCalledWith({ type: "set_filters", layerId: "osm-trails", filters: { length_km: { range: [6, 8] } } });
+    expect(screen.getByTestId("layer-count").textContent).toBe("3 / 8");
+    fireEvent.click(screen.getByRole("button", { name: /^hiking/ }));
+    expect(screen.getByTestId("layer-count").textContent).toBe("1 / 8");
+    fireEvent.click(screen.getByRole("button", { name: "all" }));
+    expect(screen.getByTestId("layer-count").textContent).toBe("3 / 8");
+  });
+});
+
 describe("drawnColor", () => {
   const nightLights: LoadedLayer = {
     ...lands,

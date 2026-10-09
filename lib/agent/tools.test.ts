@@ -100,6 +100,14 @@ describe("buildTools", () => {
     expect(schemaOf(tools.set_basemap).safeParse({ style: "outdoors-satellite" }).success).toBe(true);
   });
 
+  it("render accepts optional filters by property (include values, numeric range)", () => {
+    const schema = schemaOf(buildTools().render);
+    expect(schema.safeParse({ layerId: "osm-trails", mode: "lines", filters: { sac_scale: { include: ["alpine_hiking"] } } }).success).toBe(true);
+    expect(schema.safeParse({ layerId: "fire-perimeters", mode: "polygons", filters: { acres: { range: [1000, 50000] } } }).success).toBe(true);
+    expect(schema.safeParse({ layerId: "x", mode: "lines", filters: { acres: { range: [1] } } }).success).toBe(false);
+    expect(schema.safeParse({ layerId: "x", mode: "lines", filters: { sac_scale: { include: "alpine" } } }).success).toBe(false);
+  });
+
   it("set_time takes a start, an end, play and a mode, and echoes them", async () => {
     const tools = buildTools();
     const schema = schemaOf(tools.set_time);

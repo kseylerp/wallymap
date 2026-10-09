@@ -1,5 +1,6 @@
 import type { FeatureCollection } from "geojson";
-import { fullWindow } from "@/lib/render/reducer";
+import { applyFilters, type LayerFilters } from "@/lib/render/filters";
+import { activeFilters, fullWindow } from "@/lib/render/reducer";
 import type { LoadedLayer, MapState, Selection } from "@/lib/render/state";
 import { filterByWindow, inWindow, tileUrlForTime, type TimeWindow } from "@/lib/time";
 
@@ -41,11 +42,27 @@ function withData(layer: LoadedLayer, data: FeatureCollection): LoadedLayer {
   return { ...layer, result: { ...layer.result, data } };
 }
 
-function visibleLayer(layer: LoadedLayer, window: TimeWindow | undefined, rewriteTiles: boolean): LoadedLayer {
+/** A layer's filters that restrict something, from its render op. */
+function filtersOf(state: MapState, layerId: string): LayerFilters | undefined {
+  return activeFilters(state.renderOps.find((op) => op.layerId === layerId)?.filters);
+}
+
+function visibleLayer(
+  layer: LoadedLayer,
+  filters: LayerFilters | undefined,
+  window: TimeWindow | undefined,
+  rewriteTiles: boolean,
+): LoadedLayer {
   if (layer.result.kind === "geojson") {
-    if (!window) return layer;
+    if (!window && !filters) return layer;
     const data = layer.result.data;
-    return remember(layer, `t:${window[0]}|${window[1]}`, () => withData(layer, filterByWindow(data, window)));
+    const key = `f:${filters ? JSON.stringify(filters) : ""}|t:${window ? `${window[0]}|${window[1]}` : ""}`;
+    return remember(layer, key, () => {
+      const filtered = applyFilters(data, filters);
+      // applyFilters copies even when it keeps everything; the original keeps deck from re-uploading.
+      const kept = filtered.features.length === data.features.length ? data : filtered;
+      return withData(layer, window ? filterByWindow(kept, window) : kept);
+    });
   }
   if (!window || !rewriteTiles) return layer;
   const tiles = layer.result;
@@ -56,7 +73,7 @@ function visibleLayer(layer: LoadedLayer, window: TimeWindow | undefined, rewrit
 
 /**
  * What the map, the layer counts, the inspect card and the export show: `state` with each GeoJSON layer's features
- * narrowed to the time window (features without `t` always stay), and time-aware tile layers (night lights, forest
+ * narrowed by its render op's attribute filters and to the time window (features without `t` always stay), and time-aware tile layers (night lights, forest
  * loss) pointed at the window's end once the window is narrower than the whole span. Pure and memoized: the same
  * state gives the same object, the same layer and window give the same data object (so deck does not re-upload),
  * and nothing to narrow returns `state` itself.
@@ -69,7 +86,7 @@ export function visibleState(state: MapState): MapState {
   let changed = false;
   const layers: MapState["layers"] = {};
   for (const [id, layer] of Object.entries(state.layers)) {
-    const next = visibleLayer(layer, window, rewriteTiles);
+    const next = visibleLayer(layer, filtersOf(state, id), window, rewriteTiles);
     if (next !== layer) changed = true;
     layers[id] = next;
   }
@@ -78,8 +95,15 @@ export function visibleState(state: MapState): MapState {
   return out;
 }
 
-/** Whether the selected feature is still drawn (inside the time window); the inspect card closes when it is not. */
+/** Whether the selected feature is still drawn (inside the time window and the layer's filters); the inspect card closes when it is not. */
 export function isSelectionVisible(state: MapState, selection: Selection): boolean {
+  const layer = state.layers[selection.layerId];
+  // Vector tile features are not filtered (only GeoJSON layers are).
+  if (layer?.result.kind !== "geojson") return true;
+  const filters = filtersOf(state, selection.layerId);
+  if (filters && applyFilters({ type: "FeatureCollection", features: [selection.feature] }, filters).features.length === 0) {
+    return false;
+  }
   const window = activeWindow(state);
   if (!window) return true;
   const t = selection.feature.properties?.t;

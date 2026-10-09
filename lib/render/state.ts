@@ -1,5 +1,6 @@
 import type { Feature, LineString } from "geojson";
 import type { LayerResult, StyleHints } from "@/layers/types";
+import type { LayerFilters } from "@/lib/render/filters";
 import type { TimeIndex, TimeWindow } from "@/lib/time";
 
 export type Viewport = {
@@ -23,6 +24,8 @@ export type RenderOp = {
   visible: boolean;
   /** 0 to 1, multiplied into every color's alpha; 1 when unset. */
   opacity?: number;
+  /** Attribute filters from the layer panel or the agent (lib/render/filters.ts); unset shows every feature. */
+  filters?: LayerFilters;
 };
 
 /** The feature the user clicked: what the inspect card shows and the map highlights. */
@@ -115,6 +118,8 @@ export type MapAction =
   | { type: "deselect" }
   | { type: "set_opacity"; layerId: string; opacity: number }
   | { type: "set_style"; layerId: string; color?: string; mode?: RenderMode }
+  /** Replaces a layer's attribute filters; an empty object (or only empty entries) clears them. */
+  | { type: "set_filters"; layerId: string; filters: LayerFilters }
   /** Moves a layer's render op to `toIndex` in `renderOps` (later ops draw on top). */
   | { type: "reorder"; layerId: string; toIndex: number }
   | { type: "remove_layer"; layerId: string }

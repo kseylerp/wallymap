@@ -1,4 +1,5 @@
 import type { MapAction, MapState, RenderOp, TimeState, Viewport } from "@/lib/render/state";
+import type { LayerFilters } from "@/lib/render/filters";
 import { stepWindow, timeIndex, type TimeIndex, type TimeWindow } from "@/lib/time";
 import { arrivalPitch, fitZoomOffset } from "@/lib/render/wally/terrain";
 
@@ -41,6 +42,13 @@ function setView(state: MapState, requested: Partial<Viewport>, fit: boolean): M
   if (requested.pitch === undefined) viewport.pitch = arrivalPitch(viewport.zoom, state.flattened);
   if (fit) viewport.zoom = Math.max(0, viewport.zoom - fitZoomOffset(viewport.pitch));
   return { ...state, viewport };
+}
+
+/** The filters that restrict something (a non-empty include, or a range); undefined when none do. */
+export function activeFilters(filters: LayerFilters | undefined): LayerFilters | undefined {
+  if (!filters) return undefined;
+  const kept = Object.entries(filters).filter(([, f]) => (f.include !== undefined && f.include.length > 0) || f.range !== undefined);
+  return kept.length > 0 ? Object.fromEntries(kept) : undefined;
 }
 
 // ---- Time scrubber ----
@@ -151,8 +159,14 @@ function reduceAction(state: MapState, action: MapAction): MapState {
         index === -1
           ? [...state.renderOps, action.op]
           : state.renderOps.map((op, i) =>
-              // The agent restyling a layer keeps the opacity the user picked in the layer panel.
-              i === index ? { ...action.op, opacity: action.op.opacity ?? op.opacity } : op,
+              // The agent restyling a layer keeps the opacity and filters the user picked in the layer panel.
+              i === index
+                ? {
+                    ...action.op,
+                    opacity: action.op.opacity ?? op.opacity,
+                    filters: action.op.filters !== undefined ? activeFilters(action.op.filters) : op.filters,
+                  }
+                : op,
             );
       // Heat is not clickable, so a selection on a layer that turns into heat would point at nothing drawn.
       const selected = action.op.mode === "heat" ? dropSelectionOf(state, action.op.layerId) : state.selected;
@@ -178,6 +192,13 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       }));
       return next !== state && action.mode === "heat" ? { ...next, selected: dropSelectionOf(next, action.layerId) } : next;
     }
+    case "set_filters":
+      return updateOp(state, action.layerId, (op) => {
+        const { filters: _old, ...rest } = op;
+        void _old;
+        const filters = activeFilters(action.filters);
+        return filters ? { ...rest, filters } : rest;
+      });
     case "reorder": {
       const from = state.renderOps.findIndex((op) => op.layerId === action.layerId);
       if (from === -1) return state;

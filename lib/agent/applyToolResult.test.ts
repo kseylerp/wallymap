@@ -77,6 +77,30 @@ describe("toolResultToActions", () => {
     ]);
   });
 
+  it("render carries well-formed filters (ranges ordered, junk dropped); {} clears", () => {
+    const output = {
+      layerId: "osm-trails",
+      mode: "lines",
+      filters: { sac_scale: { include: ["alpine_hiking", 3] }, acres: { range: [500, 100] }, bad: "x", empty: { include: [] } },
+    };
+    expect(toolResultToActions("render", output, output, canvas, catalog, [])).toEqual([
+      {
+        type: "render",
+        op: {
+          layerId: "osm-trails",
+          mode: "lines",
+          visible: true,
+          filters: { sac_scale: { include: ["alpine_hiking"] }, acres: { range: [100, 500] } },
+        },
+      },
+    ]);
+    const clear = { layerId: "osm-trails", mode: "lines", filters: {} };
+    expect(toolResultToActions("render", clear, clear, canvas, catalog, [])[0]).toEqual({
+      type: "render",
+      op: { layerId: "osm-trails", mode: "lines", visible: true, filters: {} },
+    });
+  });
+
   it("set_time maps to the window (year bounds cover whole years), then the mode, then play", () => {
     const output = { start: "2016", end: "2017", play: true, mode: "cumulative" };
     expect(toolResultToActions("set_time", output, output, canvas, catalog, [])).toEqual([

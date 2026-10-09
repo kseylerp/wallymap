@@ -1,5 +1,6 @@
 import type { BBox, LayerResult, StyleHints } from "@/layers/types";
 import { bboxToViewport, type Padding } from "@/lib/render/deck";
+import type { LayerFilters } from "@/lib/render/filters";
 import { ROUTE_ERROR_ID } from "@/lib/render/reducer";
 import type { Basemap, MapAction, RenderMode, RenderOp, RouteState, TimeMode, Viewport } from "@/lib/render/state";
 
@@ -65,11 +66,34 @@ function setViewActions(output: Obj, canvas: Canvas): MapAction[] {
   return actions;
 }
 
+/** The well-formed entries of a `render.filters` object (string includes, an ordered numeric range); null if not an object. */
+function parseFilters(value: unknown): LayerFilters | null {
+  if (!isObject(value)) return null;
+  const filters: LayerFilters = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (!isObject(entry)) continue;
+    const out: LayerFilters[string] = {};
+    if (Array.isArray(entry.include)) {
+      const include = entry.include.filter((v): v is string => typeof v === "string");
+      if (include.length > 0) out.include = include;
+    }
+    if (Array.isArray(entry.range) && entry.range.length === 2 && entry.range.every(isNumber)) {
+      const [a, b] = entry.range as [number, number];
+      out.range = a <= b ? [a, b] : [b, a];
+    }
+    if (out.include || out.range) filters[key] = out;
+  }
+  return filters;
+}
+
 function renderActions(output: Obj): MapAction[] {
   const { layerId, mode, color } = output;
   if (typeof layerId !== "string" || !RENDER_MODES.includes(mode as RenderMode)) return [];
   const op: RenderOp = { layerId, mode: mode as RenderMode, visible: true };
   if (typeof color === "string") op.color = color;
+  // Filters replace the layer's current ones ({} clears them); without them the panel's filters stay.
+  const filters = parseFilters(output.filters);
+  if (filters) op.filters = filters;
   return [{ type: "render", op }];
 }
 

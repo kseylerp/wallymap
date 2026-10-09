@@ -99,6 +99,41 @@ describe("buildExportBundle with a time window", () => {
   });
 });
 
+describe("buildExportBundle with filters", () => {
+  it("exports only the filtered features and notes the filters", async () => {
+    const trail = (name: string, sac: string) => ({
+      type: "Feature" as const,
+      properties: { name, sac_scale: sac },
+      geometry: { type: "Point" as const, coordinates: [1, 2] },
+    });
+    const layer: LoadedLayer = {
+      ...geo("osm-trails", "Trails"),
+      result: {
+        kind: "geojson",
+        citation: { source: "OpenStreetMap contributors", url: "https://osm.org", retrieved: "2026-10-09T10:00:00Z" },
+        data: {
+          type: "FeatureCollection",
+          features: [trail("A", "hiking"), trail("B", "alpine_hiking"), trail("C", "hiking"), trail("D", "alpine_hiking")],
+        },
+      },
+    };
+    const filtered = (
+      [
+        { type: "layer_loaded", layer },
+        { type: "render", op: { layerId: "osm-trails", mode: "lines", visible: true } },
+        { type: "set_filters", layerId: "osm-trails", filters: { sac_scale: { include: ["alpine_hiking"] } } },
+      ] satisfies MapAction[]
+    ).reduce(reduce, initialMapState);
+    const { files } = buildExportBundle(filtered, catalog, now);
+    const json = JSON.parse(await files[0].blob.text());
+    expect(json.features.map((f: { properties: { name: string } }) => f.properties.name)).toEqual(["B", "D"]);
+    expect(json.wallymap.filters).toEqual({ sac_scale: { include: ["alpine_hiking"] } });
+    const md = await files[1].blob.text();
+    expect(md).toContain("2 of 4 features exported; filtered: sac_scale: alpine_hiking");
+    expect(md).toContain("Filters set in the layer panel apply");
+  });
+});
+
 /** Reads a stored zip back: [name, bytes, crc ok] per entry, walking the central directory. */
 function readZip(bytes: Uint8Array) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);

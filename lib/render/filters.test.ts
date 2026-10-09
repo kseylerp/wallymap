@@ -115,6 +115,14 @@ describe("deriveFilterFields rules", () => {
     expect(f).toMatchObject({ min: 1, max: 5 });
   });
 
+  it("does not offer v when it copies another property (fire perimeters: v = acres)", () => {
+    expect(deriveFilterFields(fires).map((f) => f.key)).not.toContain("v");
+    const copied = [1, 2, 3, 4, 5].map((n) => ({ v: n * 10, acres: n * 10 }));
+    expect(deriveFilterFields(fc(copied)).map((f) => f.key)).toEqual(["acres"]);
+    const own = [1, 2, 3, 4, 5].map((n) => ({ v: n * 10, acres: n * 7 }));
+    expect(deriveFilterFields(fc(own)).map((f) => f.key)).toEqual(["v", "acres"]);
+  });
+
   it("labels and units the v field", () => {
     const rows = [10, 20, 30, 40, 50].map((v) => ({ v }));
     expect(deriveFilterFields(fc(rows), { unitForV: "cfs" })[0]).toMatchObject({ label: "Value", unit: "cfs" });

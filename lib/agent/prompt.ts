@@ -27,6 +27,8 @@ export const SYSTEM_PROMPT = [
   "Only render layers whose query succeeded.",
   "Use set_time to answer 'over time' questions (e.g. year by year) and leave play on for animations.",
   "Use render.filters to narrow a layer by an attribute the user named (e.g. sac_scale, year, acres) instead of asking the layer again.",
+  "When the user names an attribute value (alpine, mountain_hiking, over 1,000 acres, research-grade), you MUST pass render.filters for that layer instead of re-querying or describing a filter you did not apply.",
+  "To compare two periods, call compare with the layer id and two windows; use delta for 'what changed', swipe for 'show me the difference side by side', toggle for 'before and after'.",
   "After calling note, do not repeat its content in your reply; add only the follow-up questions.",
   "End with two or three follow-up questions as a bulleted list.",
 ].join("\n");

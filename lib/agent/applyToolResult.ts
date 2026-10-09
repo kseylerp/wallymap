@@ -205,6 +205,28 @@ function setTimeActions(output: Obj): MapAction[] {
   return actions;
 }
 
+const COMPARE_MODES = ["swipe", "toggle", "delta"] as const;
+
+function isWindow(value: unknown): value is [string, string] {
+  return (
+    Array.isArray(value) &&
+    value.length === 2 &&
+    value.every((v) => typeof v === "string" && !Number.isNaN(Date.parse(v)))
+  );
+}
+
+/** A `compare` result: the two windows and the mode, passed through as the compare state; malformed output maps to nothing. */
+function compareActions(output: Obj): MapAction[] {
+  const { layerId, a, b, mode, aLabel, bLabel } = output;
+  if (typeof layerId !== "string" || layerId === "" || !isWindow(a) || !isWindow(b)) return [];
+  if (!COMPARE_MODES.includes(mode as (typeof COMPARE_MODES)[number])) return [];
+  const compare: Obj = { layerId, a, b, mode };
+  if (typeof aLabel === "string") compare.aLabel = aLabel;
+  if (typeof bLabel === "string") compare.bLabel = bLabel;
+  // TODO: drop the cast once lib/render/state.ts exports the `set_compare` action (owned by the compare agent).
+  return [{ type: "set_compare", compare } as unknown as MapAction];
+}
+
 /**
  * Pure mapping from one finished tool call to the map actions it implies.
  * Malformed or unknown outputs map to no actions, so a bad model reply cannot break the map.
@@ -234,6 +256,8 @@ export function toolResultToActions(
       return routeActions(output, canvas);
     case "set_time":
       return setTimeActions(output);
+    case "compare":
+      return compareActions(output);
     default:
       return [];
   }

@@ -123,6 +123,20 @@ describe("toolResultToActions", () => {
     expect(toolResultToActions("set_time", bad, bad, canvas, catalog, [])).toEqual([]);
   });
 
+  it("compare maps to a set_compare action carrying the windows, mode and labels", () => {
+    const output = { layerId: "forest-loss", a: ["2015-01-01", "2015-12-31"], b: ["2025-01-01", "2025-12-31"], mode: "delta", aLabel: "2015", bLabel: "2025" };
+    expect(toolResultToActions("compare", output, output, canvas, catalog, [])).toEqual([{ type: "set_compare", compare: output }]);
+    const bare = { layerId: "night-lights", a: ["2020-01-01", "2020-01-01"], b: ["2026-10-06", "2026-10-06"], mode: "toggle" };
+    expect(toolResultToActions("compare", bare, bare, canvas, catalog, [])).toEqual([{ type: "set_compare", compare: bare }]);
+  });
+
+  it("compare with malformed output maps to nothing", () => {
+    const good = { layerId: "forest-loss", a: ["2015-01-01", "2015-12-31"], b: ["2025-01-01", "2025-12-31"], mode: "delta" };
+    for (const bad of [{ ...good, mode: "fade" }, { ...good, a: ["2015-01-01"] }, { ...good, b: ["nope", "2025"] }, { ...good, layerId: 3 }]) {
+      expect(toolResultToActions("compare", bad, bad, canvas, catalog, [])).toEqual([]);
+    }
+  });
+
   it("query_<id> with a LayerResult loads the layer and adds a default render op", () => {
     const actions = toolResultToActions("query_osm-trails", { bbox: [0, 0, 1, 1] }, result, canvas, catalog, []);
     expect(actions).toEqual([

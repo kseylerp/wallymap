@@ -33,6 +33,7 @@ describe("buildTools", () => {
         "note",
         "route",
         "set_time",
+        "compare",
         ...listLayers().map((layer) => `query_${layer.id}`),
       ].sort(),
     );
@@ -118,6 +119,25 @@ describe("buildTools", () => {
     expect(schema.safeParse({ start: "2016", end: "2025", play: "yes" }).success).toBe(false);
     const input = { start: "2016", end: "2016", play: true };
     expect(await run(tools.set_time, input)).toEqual(input);
+  });
+
+  it("compare takes a layer and two ISO windows, defaults to delta, and echoes the input", async () => {
+    const tools = buildTools();
+    const schema = schemaOf(tools.compare);
+    const input = { layerId: "forest-loss", a: ["2015-01-01", "2015-12-31"], b: ["2025-01-01T00:00:00Z", "2025-12-31T23:59:59Z"] };
+    const parsed = schema.safeParse(input);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data).toMatchObject({ mode: "delta" });
+    expect(schema.safeParse({ ...input, mode: "swipe", aLabel: "2015", bLabel: "2025" }).success).toBe(true);
+    expect(schema.safeParse({ ...input, mode: "fade" }).success).toBe(false);
+    expect(schema.safeParse({ ...input, a: ["2015", "2015"] }).success).toBe(false);
+    expect(schema.safeParse({ ...input, a: ["2015-01-01"] }).success).toBe(false);
+    expect(schema.safeParse({ ...input, b: ["2025-13-45", "2025-12-31"] }).success).toBe(false);
+    expect(await run(tools.compare, parsed.data)).toEqual(parsed.data);
+    const description = tools.compare.description ?? "";
+    expect(description).toContain("forest-loss 2015 vs 2025");
+    expect(description).toContain("night-lights 2020-01-01 vs three days ago");
+    expect(description).toContain("fire-perimeters 2016-2020 vs 2021-today");
   });
 
   it("list_layers includes vocabulary synonyms for each layer", async () => {

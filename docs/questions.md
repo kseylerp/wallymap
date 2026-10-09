@@ -70,7 +70,8 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set
 - How remote is the Wind River Range?
 - Show me a walking route from Tahoe City to Emerald Bay
 - Show wildfires near Yosemite year by year since 2016
-- Compare forest loss in Rondônia 2015 vs 2025
+- Show only alpine-grade trails near Chamonix
+- Compare forest loss in Rondônia between 2015 and 2025
 - Which sources did you use for snow near Mount Hood?
 - Which campsites around Moab look the most popular?
 - Outline the Sierra Nevada

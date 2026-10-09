@@ -30,6 +30,15 @@ export const LayerFiltersSchema = z.record(
 
 const TIME_MODES = ["slide", "cumulative"] as const satisfies readonly TimeMode[];
 
+const COMPARE_MODES = ["swipe", "toggle", "delta"] as const;
+
+/** `YYYY-MM-DD` or a full ISO timestamp. */
+const IsoDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:?\d{2})?)?$/, "Use YYYY-MM-DD or a full ISO timestamp")
+  .refine((value) => !Number.isNaN(Date.parse(value)), "Not a real date");
+const CompareWindowSchema = z.tuple([IsoDateSchema, IsoDateSchema]);
+
 const LngLatSchema = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]);
 
 export type LayerSummary = {
@@ -153,6 +162,24 @@ export function buildTools(): ToolSet {
         end: z.string().min(1).describe("Window end: a year, month or ISO date"),
         play: z.boolean().optional().describe("Animate the window forward one step at a time"),
         mode: z.enum(TIME_MODES).optional().describe("slide (default) or cumulative"),
+      }),
+      execute: async (input) => input,
+    }),
+    compare: tool({
+      description:
+        "Compare one layer across two time windows. a and b are each [start, end] as YYYY-MM-DD or full ISO dates. " +
+        "mode: delta shows what changed (only in A, only in B, in both), swipe puts the two windows side by side " +
+        "behind a draggable divider, toggle flips between them. aLabel and bLabel name the windows. Query the layer " +
+        "for both windows first. Presets: forest-loss 2015 vs 2025 (delta: a [\"2015-01-01\", \"2015-12-31\"], b " +
+        "[\"2025-01-01\", \"2025-12-31\"]); night-lights 2020-01-01 vs three days ago (toggle: a and b each a single day); " +
+        "fire-perimeters 2016-2020 vs 2021-today (delta: a [\"2016-01-01\", \"2020-12-31\"], b [\"2021-01-01\", today]).",
+      inputSchema: z.object({
+        layerId: z.string().min(1),
+        a: CompareWindowSchema.describe("First window [start, end]"),
+        b: CompareWindowSchema.describe("Second window [start, end]"),
+        mode: z.enum(COMPARE_MODES).default("delta"),
+        aLabel: z.string().optional().describe("Short name for window A, e.g. \"2015\""),
+        bLabel: z.string().optional().describe("Short name for window B, e.g. \"2025\""),
       }),
       execute: async (input) => input,
     }),

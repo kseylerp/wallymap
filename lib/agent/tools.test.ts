@@ -80,6 +80,7 @@ describe("buildTools", () => {
     const tools = buildTools();
     expect(schemaOf(tools.render).safeParse({ layerId: "x", mode: "blobs" }).success).toBe(false);
     expect(schemaOf(tools.set_basemap).safeParse({ style: "dark" }).success).toBe(false);
+    expect(schemaOf(tools.set_basemap).safeParse({ style: "outdoors-satellite" }).success).toBe(true);
   });
 
   it("list_layers marks a layer whose env is missing as unavailable", async () => {

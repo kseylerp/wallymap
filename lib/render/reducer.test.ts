@@ -56,6 +56,10 @@ describe("reduce", () => {
     expect(recovered.errors).toEqual([]);
   });
 
+  it("defaults to the outdoors-satellite hybrid basemap", () => {
+    expect(initialMapState.basemap).toBe("outdoors-satellite");
+  });
+
   it("set_basemap sets the basemap", () => {
     expect(reduce(initialMapState, { type: "set_basemap", basemap: "satellite" }).basemap).toBe("satellite");
   });

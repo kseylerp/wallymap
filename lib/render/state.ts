@@ -8,7 +8,8 @@ export type Viewport = {
   bearing: number;
 };
 
-export type Basemap = "outdoors" | "satellite" | "natural-earth-2";
+/** `outdoors-satellite` is the Outdoors style with satellite imagery laid beneath its vector detail. */
+export type Basemap = "outdoors-satellite" | "outdoors" | "satellite" | "natural-earth-2";
 
 /** Only points, lines and polygons are implemented in milestone 1. */
 export type RenderMode = "points" | "lines" | "polygons" | "heat" | "columns" | "hexbin";
@@ -38,7 +39,7 @@ export type MapState = {
 
 export const initialMapState: MapState = {
   viewport: { longitude: 0, latitude: 20, zoom: 1.5, pitch: 0, bearing: 0 },
-  basemap: "outdoors",
+  basemap: "outdoors-satellite",
   layers: {},
   renderOps: [],
   errors: [],

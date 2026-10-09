@@ -8,6 +8,10 @@ describe("basemapStyleUrl", () => {
     vi.unstubAllEnvs();
   });
 
+  it("maps outdoors-satellite to the Outdoors style (imagery is added on style load)", () => {
+    expect(basemapStyleUrl("outdoors-satellite")).toBe(OUTDOORS);
+  });
+
   it("maps outdoors to the Mapbox Outdoors style", () => {
     expect(basemapStyleUrl("outdoors")).toBe(OUTDOORS);
   });

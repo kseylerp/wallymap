@@ -3,9 +3,13 @@ import type { Basemap } from "@/lib/render/state";
 const OUTDOORS_STYLE = "mapbox://styles/mapbox/outdoors-v12";
 const SATELLITE_STYLE = "mapbox://styles/mapbox/satellite-streets-v12";
 
-/** Mapbox style URL for a basemap. Natural Earth 2 falls back to Outdoors until its Studio style is set. */
+/**
+ * Mapbox style URL for a basemap. Natural Earth 2 falls back to Outdoors until its Studio style is set.
+ * `outdoors-satellite` loads Outdoors; the map adds the satellite imagery on `style.load` (see `components/mapTiles.ts`).
+ */
 export function basemapStyleUrl(b: Basemap): string {
   switch (b) {
+    case "outdoors-satellite":
     case "outdoors":
       return OUTDOORS_STYLE;
     case "satellite":

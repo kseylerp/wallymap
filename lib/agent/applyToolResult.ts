@@ -9,7 +9,7 @@ type Canvas = { width: number; height: number };
 
 const QUERY_PREFIX = "query_";
 const FALLBACK_STYLE: StyleHints = { geometry: "line", color: "#5B6B7A" };
-const BASEMAPS: readonly Basemap[] = ["outdoors", "satellite", "natural-earth-2"];
+const BASEMAPS: readonly Basemap[] = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"];
 const RENDER_MODES: readonly RenderMode[] = ["points", "lines", "polygons", "heat", "columns", "hexbin"];
 const DEFAULT_MODE: Record<StyleHints["geometry"], RenderMode> = {
   point: "points",

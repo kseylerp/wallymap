@@ -7,7 +7,7 @@ import { isFullLayerResult, summarizeLayerResult } from "@/lib/layers/summarize"
 import type { Basemap, RenderMode } from "@/lib/render/state";
 import { geocode } from "./geocode";
 
-const BASEMAPS = ["outdoors", "satellite", "natural-earth-2"] as const satisfies readonly Basemap[];
+const BASEMAPS = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"] as const satisfies readonly Basemap[];
 const RENDER_MODES = [
   "points",
   "lines",
@@ -103,7 +103,8 @@ export function buildTools(): ToolSet {
       execute: async (input) => input,
     }),
     set_basemap: tool({
-      description: "Switch the basemap style.",
+      description:
+        "Switch the basemap style: outdoors-satellite (default: trails, contours and labels over satellite imagery), outdoors, satellite, or natural-earth-2.",
       inputSchema: z.object({ style: z.enum(BASEMAPS) }),
       execute: async (input) => input,
     }),

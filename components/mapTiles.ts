@@ -1,5 +1,5 @@
 import type { Map as MapboxMap, StyleSpecification } from "mapbox-gl";
-import type { MapState } from "@/lib/render/state";
+import type { Basemap, MapState } from "@/lib/render/state";
 
 const PREFIX = "tiles-";
 
@@ -54,5 +54,86 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
   }
   for (const sourceId of Object.keys(style.sources)) {
     if (sourceId.startsWith(PREFIX) && !wanted.has(sourceId)) map.removeSource(sourceId);
+  }
+}
+
+const SATELLITE_ID = "wildmap-satellite";
+const SATELLITE_OPACITY = 0.9;
+/** Outdoors area fills that would paint over the imagery. Water, hillshade, contours, roads, paths and labels stay. */
+const OCCLUDING_FILL = /^(landcover|landuse|national-park|land-structure-polygon|wetland|park|pitch|glacier|snow|sand|scrub|wood|grass|golf)/;
+/** Terrain shading stays, but lighter, so it adds relief without muddying the photo. */
+const HILLSHADE_SCALE = 0.5;
+const HILLSHADE_FALLBACK_OPACITY = 0.12;
+
+type HybridMemo = { hidden: string[]; hillshade: { id: string; property: string; value: unknown }[] };
+/** What the hybrid changed on each map's current style, so switching back to plain Outdoors can undo it. */
+const hybridMemo = new WeakMap<MapboxMap, HybridMemo>();
+
+/** Index of the last background/land layer near the bottom of the stack; imagery goes right above it. */
+function baseLayerIndex(layers: StyleSpecification["layers"]): number {
+  let index = -1;
+  for (let i = 0; i < layers.length; i++) {
+    const layer = layers[i];
+    if (layer.type === "background" || layer.id === "land") index = i;
+    else if (index !== -1) break;
+  }
+  return index;
+}
+
+function dimHillshade(map: MapboxMap, layer: StyleSpecification["layers"][number], memo: HybridMemo): void {
+  const property =
+    layer.type === "fill" ? "fill-opacity" : layer.type === "hillshade" ? "hillshade-exaggeration" : null;
+  if (!property) return;
+  const value: unknown = map.getPaintProperty(layer.id, property as never);
+  memo.hillshade.push({ id: layer.id, property, value });
+  // Zoom expressions must stay top-level, so only plain numbers can be scaled; others get a light constant.
+  const next = typeof value === "number" ? value * HILLSHADE_SCALE : HILLSHADE_FALLBACK_OPACITY;
+  map.setPaintProperty(layer.id, property as never, next as never);
+}
+
+/**
+ * Makes the `outdoors-satellite` hybrid match `basemap`: on, it adds the Mapbox satellite raster just above
+ * the Outdoors land layer, hides the area fills that would cover it, and dims the hillshade; off, it undoes
+ * that. Idempotent; callers run it on `style.load` and when switching between basemaps that share a style.
+ */
+export function syncSatelliteHybrid(map: MapboxMap, basemap: Basemap): void {
+  const style = loadedStyle(map);
+  if (!style) return;
+  const wanted = basemap === "outdoors-satellite";
+  const memo = hybridMemo.get(map);
+  const active = Boolean(map.getLayer(SATELLITE_ID));
+
+  if (wanted && !active) {
+    const next: HybridMemo = { hidden: [], hillshade: [] };
+    if (!map.getSource(SATELLITE_ID)) {
+      map.addSource(SATELLITE_ID, { type: "raster", url: "mapbox://mapbox.satellite", tileSize: 256 });
+    }
+    const beforeId = style.layers[baseLayerIndex(style.layers) + 1]?.id;
+    map.addLayer(
+      { id: SATELLITE_ID, type: "raster", source: SATELLITE_ID, paint: { "raster-opacity": SATELLITE_OPACITY } },
+      beforeId,
+    );
+    for (const layer of style.layers) {
+      if (layer.id.includes("hillshade")) {
+        dimHillshade(map, layer, next);
+      } else if (layer.type === "fill" && OCCLUDING_FILL.test(layer.id) && map.getLayoutProperty(layer.id, "visibility") !== "none") {
+        map.setLayoutProperty(layer.id, "visibility", "none");
+        next.hidden.push(layer.id);
+      }
+    }
+    hybridMemo.set(map, next);
+    return;
+  }
+
+  if (!wanted && active) {
+    map.removeLayer(SATELLITE_ID);
+    if (map.getSource(SATELLITE_ID)) map.removeSource(SATELLITE_ID);
+    if (memo) {
+      for (const id of memo.hidden) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
+      for (const { id, property, value } of memo.hillshade) {
+        if (map.getLayer(id)) map.setPaintProperty(id, property as never, value as never);
+      }
+    }
+    hybridMemo.delete(map);
   }
 }

@@ -5,7 +5,7 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import mapboxgl from "mapbox-gl";
 import { useEffect, useRef } from "react";
 import { MapSetupNotice } from "@/components/MapSetupNotice";
-import { syncTileLayers } from "@/components/mapTiles";
+import { syncSatelliteHybrid, syncTileLayers } from "@/components/mapTiles";
 import { basemapStyleUrl } from "@/lib/render/basemaps";
 import { buildDeckLayers } from "@/lib/render/deck";
 import type { Basemap, MapState, Viewport } from "@/lib/render/state";
@@ -102,8 +102,11 @@ function GlobeMap({ state, onViewportChange, className }: MapCanvasProps) {
       lastCameraRef.current = camera;
       onViewportChangeRef.current(camera);
     });
-    // A style swap drops every source, so re-add tile layers whenever a style finishes loading.
-    map.on("style.load", () => syncTileLayers(map, stateRef.current));
+    // A style swap drops every source, so re-add the imagery and tile layers whenever a style finishes loading.
+    map.on("style.load", () => {
+      syncSatelliteHybrid(map, stateRef.current.basemap);
+      syncTileLayers(map, stateRef.current);
+    });
 
     mapRef.current = map;
     overlayRef.current = overlay;
@@ -151,7 +154,13 @@ function GlobeMap({ state, onViewportChange, className }: MapCanvasProps) {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || appliedBasemapRef.current === state.basemap) return;
+    const previous = appliedBasemapRef.current;
     appliedBasemapRef.current = state.basemap;
+    // Outdoors and its satellite hybrid share one style, so toggle the imagery in place instead of reloading.
+    if (basemapStyleUrl(previous) === basemapStyleUrl(state.basemap)) {
+      syncSatelliteHybrid(map, state.basemap);
+      return;
+    }
     // The cast is a typing quirk: SetStyleOptions marks the font fields required, but mapbox fills them
     // from the map's own settings, and passing them explicitly as undefined would override those.
     map.setStyle(basemapStyleUrl(state.basemap), { diff: false } as Parameters<mapboxgl.Map["setStyle"]>[1]);

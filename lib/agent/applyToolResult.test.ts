@@ -35,6 +35,18 @@ describe("toolResultToActions", () => {
     ]);
   });
 
+  it("set_basemap accepts the outdoors-satellite hybrid", () => {
+    const actions = toolResultToActions(
+      "set_basemap",
+      { style: "outdoors-satellite" },
+      { style: "outdoors-satellite" },
+      canvas,
+      catalog,
+      [],
+    );
+    expect(actions).toEqual([{ type: "set_basemap", basemap: "outdoors-satellite" }]);
+  });
+
   it("set_basemap switches the basemap", () => {
     const actions = toolResultToActions("set_basemap", { style: "satellite" }, { style: "satellite" }, canvas, catalog, []);
     expect(actions).toEqual([{ type: "set_basemap", basemap: "satellite" }]);

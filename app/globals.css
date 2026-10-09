@@ -144,7 +144,6 @@ textarea:focus-visible {
 .chat-surface :focus-visible {
   outline: 2px solid var(--slate);
   outline-offset: 2px;
-  border-radius: inherit;
 }
 .chat-surface input:focus-visible {
   outline: none;

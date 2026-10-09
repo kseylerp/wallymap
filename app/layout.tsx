@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Source_Serif_4 } from "next/font/google";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./globals.css";
-import { ThemeScript } from "@/lib/theme/ThemeScript";
 
 const geist = Geist({
   variable: "--font-geist",
@@ -29,21 +28,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#F5F5F3",
+  themeColor: "#FAF9F5",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    // Light by default; the inline script applies a stored dark choice before first paint.
-    <html
-      lang="en"
-      data-theme="light"
-      className={`${geist.variable} ${sourceSerif.variable} h-full antialiased`}
-      suppressHydrationWarning
-    >
-      <head>
-        <ThemeScript />
-      </head>
+    <html lang="en" className={`${geist.variable} ${sourceSerif.variable} h-full antialiased`}>
       <body className="h-full overflow-hidden">{children}</body>
     </html>
   );

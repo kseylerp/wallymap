@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const root = path.resolve(__dirname, "../..");
+const root = path.resolve(__dirname, "..");
 const css = readFileSync(path.join(root, "app/globals.css"), "utf8");
 
 /** The CSS block for a selector, e.g. `:root {` or `[data-theme="dark"] {` (first match, no nesting). */
@@ -18,8 +18,11 @@ function tokenValue(body: string, name: string): string | undefined {
   return m?.[1].trim().toLowerCase();
 }
 
-// Wally colors from spec §2 that the owner kept: accent, coral, sage, semantic, and the whole dark set.
+// Wally colors from spec §2 that the owner kept: off-white surfaces, accent, coral, sage, semantic.
 const SPEC_HEX = [
+  "#FAF9F5", // scaffold
+  "#ECEAE7", // surface
+  "#E4E1DC", // deeper surface
   "#6E5BFF", // accent purple
   "#F57272", // coral
   "#9FB693", // sage
@@ -27,11 +30,6 @@ const SPEC_HEX = [
   "#DC5046", // error
   "#5B9BD5", // info
   "#FF9500", // caution
-  "#151515", // scaffold dark
-  "#1A1A1A", // surface dark
-  "#292929", // deeper surface dark
-  "#F5F5F5", // text primary dark
-  "#A0A0A0", // text secondary dark
 ];
 
 describe("tokens in app/globals.css", () => {
@@ -39,15 +37,15 @@ describe("tokens in app/globals.css", () => {
     expect(css.toLowerCase()).toContain(hex.toLowerCase());
   });
 
-  it("keeps the original light surfaces, with the Wally accent", () => {
+  it("uses the Wally off-white surfaces with the original ink, glass opacities, radii and accent", () => {
     const light = block(":root");
-    expect(tokenValue(light, "--paper")).toBe("#ffffff");
-    expect(tokenValue(light, "--cream")).toBe("#f5f5f3");
+    expect(tokenValue(light, "--paper")).toBe("#faf9f5");
+    expect(tokenValue(light, "--cream")).toBe("#eceae7");
+    expect(tokenValue(light, "--mist")).toBe("#e4e1dc");
     expect(tokenValue(light, "--ink")).toBe("#1a1a1a");
     expect(tokenValue(light, "--ink-muted")).toBe("#66665f");
-    expect(tokenValue(light, "--mist")).toBe("#ededea");
-    expect(tokenValue(light, "--glass")).toBe("rgba(255, 255, 255, 0.82)");
-    expect(tokenValue(light, "--glass-strong")).toBe("rgba(255, 255, 255, 0.9)");
+    expect(tokenValue(light, "--glass")).toBe("rgba(250, 249, 245, 0.82)");
+    expect(tokenValue(light, "--glass-strong")).toBe("rgba(250, 249, 245, 0.9)");
     expect(tokenValue(light, "--r-card")).toBe("24px");
     expect(tokenValue(light, "--accent")).toBe("#6e5bff");
     expect(tokenValue(light, "--route-gradient")).toContain("#6e5bff");
@@ -57,18 +55,13 @@ describe("tokens in app/globals.css", () => {
   it("makes primary buttons ink with white text, not the accent", () => {
     const light = block(":root");
     expect(tokenValue(light, "--button-primary")).toBe("var(--ink)");
-    expect(tokenValue(light, "--button-primary-text")).toBe("var(--paper)");
+    expect(tokenValue(light, "--button-primary-text")).toBe("#ffffff");
     expect(css).toMatch(/\.chat-surface button\[type="submit"\]:not\(:disabled\)/);
   });
 
-  it("overrides surfaces and text under [data-theme=dark]", () => {
-    const dark = block('[data-theme="dark"]');
-    expect(tokenValue(dark, "--paper")).toBe("#151515");
-    expect(tokenValue(dark, "--cream")).toBe("#1a1a1a");
-    expect(tokenValue(dark, "--ink")).toBe("#f5f5f5");
-    expect(tokenValue(dark, "--ink-muted")).toBe("#a0a0a0");
-    expect(tokenValue(dark, "--mist")).toBe("#292929");
-    expect(tokenValue(dark, "--glass")).toBeDefined();
+  it("has one light theme: no dark mode", () => {
+    expect(css).not.toContain("data-theme");
+    expect(css).not.toContain("prefers-color-scheme");
   });
 
   it("uses Geist for UI text and Source Serif 4 for headings", () => {

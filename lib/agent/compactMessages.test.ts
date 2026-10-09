@@ -38,4 +38,30 @@ describe("compactMessages", () => {
     ]);
     expect(compactMessages([original])[0]).toBe(original);
   });
+
+  it("replaces a finished route output with the route minus its line, keeping errors as they are", () => {
+    const route = {
+      id: "walking-tahoe-city-to-emerald-bay",
+      name: "Tahoe City to Emerald Bay",
+      line: { type: "LineString", coordinates: [[-120.14, 39.17], [-120.12, 39.05], [-120.1, 38.95]] },
+      distanceKm: 27.34,
+      resolved: { from: "Tahoe City, California", to: "Emerald Bay, California" },
+    };
+    const original = message([
+      { type: "tool-route", toolCallId: "r1", state: "output-available", input: {}, output: route },
+      { type: "tool-route", toolCallId: "r2", state: "output-available", input: {}, output: { error: "No route found" } },
+    ]);
+    const [compacted] = compactMessages([original]);
+    expect((compacted.parts[0] as { output: unknown }).output).toEqual({
+      id: "walking-tahoe-city-to-emerald-bay",
+      name: "Tahoe City to Emerald Bay",
+      distanceKm: 27.34,
+      resolved: { from: "Tahoe City, California", to: "Emerald Bay, California" },
+      pointCount: 3,
+    });
+    expect(compacted.parts[1]).toBe(original.parts[1]);
+    expect((original.parts[0] as { output: unknown }).output).toBe(route);
+    // Compacting twice changes nothing more.
+    expect(compactMessages([compacted])[0]).toBe(compacted);
+  });
 });

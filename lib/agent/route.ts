@@ -168,7 +168,9 @@ export async function fetchRoute(
       waypoints,
     };
   } catch (err) {
-    return { error: `Directions failed: ${String(err)}` };
+    // A network error can echo the request URL; never hand the token to the model or the chat.
+    const message = String(err).split(token).join("[token]").split(encodeURIComponent(token)).join("[token]");
+    return { error: `Directions failed: ${message}` };
   }
 }
 
@@ -184,6 +186,8 @@ export type RouteToolOutput = FetchedRoute & {
   name: string;
   profile: RouteProfile;
   bbox: BBox;
+  /** The geocoded names of the two ends (or their coordinates, when given as coordinates). */
+  resolved: { from: string; to: string };
 };
 
 type Deps = {
@@ -206,15 +210,28 @@ export function lineBBox(line: LineString): BBox {
   return [west, south, east, north];
 }
 
-function slug(text: string): string {
-  return (
+const MAX_ID_LENGTH = 60;
+
+/** FNV-1a, as 8 hex digits: a short, stable fingerprint (no node:crypto, so it runs anywhere). */
+function fnv1a(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+/** A Mapbox-safe id; a long one keeps its start and swaps the tail for a hash of the whole, so two long ids sharing a prefix stay apart. */
+export function routeId(text: string): string {
+  const full =
     text
       .toLowerCase()
       .normalize("NFKD")
       .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 60) || "route"
-  );
+      .replace(/^-+|-+$/g, "") || "route";
+  if (full.length <= MAX_ID_LENGTH) return full;
+  return `${full.slice(0, MAX_ID_LENGTH - 9).replace(/-+$/, "")}-${fnv1a(full)}`;
 }
 
 function label(place: string | [number, number]): string {
@@ -255,17 +272,15 @@ export async function runRouteTool(input: RouteToolInput, deps: Deps = {}): Prom
   }
   const name = input.name?.trim() || `${label(input.from)} to ${label(input.to)}`;
   return {
-    id: slug(`${profile} ${label(input.from)} to ${label(input.to)}`),
+    id: routeId(`${profile} ${label(input.from)} to ${label(input.to)}`),
     name,
     profile,
     ...fetched,
     bbox: lineBBox(fetched.line),
+    // Where each end landed, so the model can tell the user (and catch a wrong "Emerald Bay").
+    resolved: { from: from.found ?? label(input.from), to: to.found ?? label(input.to) },
   };
 }
 
-/** What the model sees for a route: everything but the line's coordinates. */
-export function routeOutputForModel(output: unknown): unknown {
-  if (typeof output !== "object" || output === null || !("line" in output)) return output;
-  const { line, ...rest } = output as RouteToolOutput;
-  return { ...rest, pointCount: line.coordinates.length };
-}
+/** What the model sees for a route (also what the browser resends): everything but the line's coordinates. */
+export { routeOutputForModel } from "./compactMessages";

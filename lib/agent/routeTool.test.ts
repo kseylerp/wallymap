@@ -3,7 +3,7 @@ import type { Tool } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import fixture from "@/lib/agent/__fixtures__/directions-walking-tahoe.json";
-import { fetchRoute, routeOutputForModel, runRouteTool, simplifyLine, type RouteToolOutput } from "@/lib/agent/route";
+import { fetchRoute, routeId, routeOutputForModel, runRouteTool, simplifyLine, type RouteToolOutput } from "@/lib/agent/route";
 import { buildTools } from "@/lib/agent/tools";
 import type { CachedFetch } from "@/lib/fetch";
 
@@ -85,6 +85,13 @@ describe("fetchRoute", () => {
     const offline = await fetchRoute(args, failing);
     expect("error" in offline && offline.error).toMatch(/^Directions failed: TypeError: fetch failed/);
 
+    const leaky: CachedFetch = async (url) => {
+      throw new Error(`request to ${url} failed`);
+    };
+    const leaked = await fetchRoute(args, leaky);
+    expect("error" in leaked && leaked.error).toContain("access_token=[token]");
+    expect("error" in leaked && leaked.error).not.toContain("sk.test-token");
+
     expect(await fetchRoute(args, stubFetch({ nonsense: true }).fetch)).toEqual({
       error: "Directions returned an unexpected response",
     });
@@ -134,6 +141,7 @@ describe("runRouteTool", () => {
       distanceKm: 27.34,
     });
     expect(result.bbox).toEqual([-120.16307, 38.95411, -120.10356, 39.17194]);
+    expect(result.resolved).toEqual({ from: "Tahoe City, California", to: "Emerald Bay" });
   });
 
   it("biases the end's lookup toward the resolved start, and looks the start up unbiased", async () => {
@@ -166,7 +174,12 @@ describe("runRouteTool", () => {
       { from: TAHOE_CITY, to: EMERALD_BAY, profile: "cycling", name: "West shore ride" },
       { geocode, fetch },
     );
-    expect(result).toMatchObject({ name: "West shore ride", profile: "cycling", id: "cycling-39-1719-120-1449-to-38-9541-120-1036" });
+    expect(result).toMatchObject({
+      name: "West shore ride",
+      profile: "cycling",
+      id: "cycling-39-1719-120-1449-to-38-9541-120-1036",
+      resolved: { from: "39.1719, -120.1449", to: "38.9541, -120.1036" },
+    });
   });
 
   it("reports a place it cannot find without calling Directions", async () => {
@@ -190,6 +203,21 @@ describe("runRouteTool", () => {
     expect(forModel.line).toBeUndefined();
     expect(forModel).toMatchObject({ distanceKm: 27.34, durationMin: 328, pointCount: result.line.coordinates.length });
     expect(routeOutputForModel({ error: "x" })).toEqual({ error: "x" });
+  });
+});
+
+describe("routeId", () => {
+  it("keeps short ids readable and gives long ids sharing a prefix distinct hashed tails", () => {
+    expect(routeId("walking Tahoe City to Emerald Bay")).toBe("walking-tahoe-city-to-emerald-bay");
+    const a = routeId("walking Tahoe City, California, United States to Emerald Bay State Park North");
+    const b = routeId("walking Tahoe City, California, United States to Emerald Bay State Park South");
+    expect(a).not.toBe(b);
+    for (const id of [a, b]) {
+      expect(id.length).toBeLessThanOrEqual(60);
+      expect(id).toMatch(/^walking-tahoe-city-california-united-states-to-[a-z-]*-[0-9a-f]{8}$/);
+    }
+    expect(routeId("walking Tahoe City, California, United States to Emerald Bay State Park North")).toBe(a);
+    expect(routeId("!!!")).toBe("route");
   });
 });
 

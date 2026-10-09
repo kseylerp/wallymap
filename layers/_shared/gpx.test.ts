@@ -59,6 +59,11 @@ describe("parseGpx", () => {
     expect(parseGpx(xml)).toEqual({ name: "R", lines: [{ type: "LineString", coordinates: [[20, 10], [21, 11]] }] });
   });
 
+  it("skips a point with an empty lat or lon instead of reading it as 0", () => {
+    const xml = `<gpx><trk><trkseg><trkpt lat="" lon="-120"/><trkpt lat="39" lon=" "/><trkpt lat="39" lon="-120"/><trkpt lat="39.1" lon="-120.1"/></trkseg></trk></gpx>`;
+    expect(parseGpx(xml).lines).toEqual([{ type: "LineString", coordinates: [[-120, 39], [-120.1, 39.1]] }]);
+  });
+
   it("returns no lines for empty or non-GPX text", () => {
     expect(parseGpx("")).toEqual({ lines: [] });
     expect(parseGpx("<html><body>nope</body></html>")).toEqual({ lines: [] });

@@ -29,7 +29,8 @@ function elements(xml: string, tag: string): string[] {
 
 function attribute(attrs: string, name: string): number {
   const match = new RegExp(`\\b${name}\\s*=\\s*["']([^"']*)["']`, "i").exec(attrs);
-  return match ? Number(match[1]) : Number.NaN;
+  // Number("") is 0, so an empty attribute would put the point at the equator or the prime meridian.
+  return match && match[1].trim() !== "" ? Number(match[1]) : Number.NaN;
 }
 
 /** The points named `tag` (trkpt or rtept) in `xml`, skipping any without a valid lat and lon. */

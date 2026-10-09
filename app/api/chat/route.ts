@@ -4,7 +4,8 @@ import { SYSTEM_PROMPT } from "@/lib/agent/prompt";
 import { getModel } from "@/lib/agent/provider";
 import { buildTools } from "@/lib/agent/tools";
 
-export const maxDuration = 60;
+// Room for several tool steps, each of which may wait on a slow upstream.
+export const maxDuration = 120;
 
 const MAX_STEPS = 8;
 

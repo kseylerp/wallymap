@@ -5,6 +5,7 @@ import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult 
 import { registerLayer } from "./registry";
 
 const PUBLIC_ENDPOINT = "https://overpass-api.de/api/interpreter";
+const REQUEST_TIMEOUT_MS = 30_000;
 
 const SAC_SCALES = [
   "hiking",
@@ -118,6 +119,7 @@ async function requestOverpass(
     try {
       const res = await fetchFn(url, {
         cacheKey: key,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: `data=${encodeURIComponent(query)}`,
@@ -130,8 +132,12 @@ async function requestOverpass(
       const failure = overpassFailure(json);
       if (failure === null) return { ok: true, json };
       reason = `Overpass failed: ${failure}`;
-    } catch {
-      reason = "Overpass returned no response";
+    } catch (err) {
+      reason =
+        // DOMException is not an Error subclass in every runtime, so match on name.
+        typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError"
+          ? `Overpass timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds`
+          : "Overpass returned no response";
     }
   }
   return { ok: false, reason };

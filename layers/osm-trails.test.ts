@@ -85,6 +85,22 @@ describe("osm-trails layer", () => {
     expect(stub.mock.calls.map((call: unknown[]) => call[0])).toEqual(["https://overpass-api.de/api/interpreter"]);
   });
 
+  it("sets a timeout on each request and reports a timeout as upstream", async () => {
+    const stub = vi.fn(async () => {
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    });
+    const r = await layer.query(
+      { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch },
+      { namedOnly: false },
+    );
+    expect(r).toMatchObject({ hint: "upstream" });
+    expect((r as { error: string }).error).toContain("timed out");
+    expect(stub).toHaveBeenCalledTimes(2);
+    for (const call of stub.mock.calls as unknown[][]) {
+      expect((call[1] as RequestInit).signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+
   it("filters by sacScaleMax, keeping untagged and easier trails", async () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
     const r = await layer.query(

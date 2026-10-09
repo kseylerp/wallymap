@@ -9,6 +9,7 @@ import { ArrowUpIcon, ChevronDownIcon, ChevronUpIcon, StopIcon } from "@/compone
 import { ToolTrace } from "@/components/ToolTrace";
 import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
 import { compactMessages } from "@/lib/agent/compactMessages";
+import { extractFollowUps } from "@/lib/agent/followups";
 import type { MapAction, RenderOp } from "@/lib/render/state";
 
 type ChatRailProps = {
@@ -63,11 +64,33 @@ function Markdown({ text }: { text: string }) {
   );
 }
 
-/** An assistant answer on a paper card. */
-function AnswerCard({ text }: { text: string }) {
+type FollowUpProps = {
+  /** Sends a follow-up question; undefined while a reply is in flight. */
+  onFollowUp?: (text: string) => void;
+};
+
+/** An assistant answer on a paper card; a closing list of follow-up questions becomes tappable pills. */
+function AnswerCard({ text, onFollowUp }: { text: string } & FollowUpProps) {
+  const { body, followUps } = extractFollowUps(text);
   return (
     <div className="rounded-[20px] border border-line bg-paper px-4 py-3 shadow-[0_1px_2px_rgba(31,30,27,0.05)]">
-      <Markdown text={text} />
+      {body.trim() && <Markdown text={body} />}
+      {followUps.length > 0 && (
+        <ul aria-label="Follow-up questions" className={`flex flex-col items-start gap-1.5 ${body.trim() ? "mt-3" : ""}`}>
+          {followUps.map((q) => (
+            <li key={q}>
+              <button
+                type="button"
+                disabled={!onFollowUp}
+                onClick={() => onFollowUp?.(q)}
+                className="rounded-[16px] border border-accent/25 bg-accent-soft/50 px-3 py-1.5 text-left text-[13px] leading-snug text-ink transition-colors hover:border-accent/50 hover:bg-accent-soft disabled:opacity-50 disabled:hover:bg-accent-soft/50"
+              >
+                {q}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -95,17 +118,17 @@ function ToolTraceView({ part }: { part: ToolPart }) {
 }
 
 /** What a finished tool call adds below its trace chip: the note's markdown or a layer's error. */
-function toolExtras(part: ToolPart): ReactNode {
+function toolExtras(part: ToolPart, onFollowUp: FollowUpProps["onFollowUp"]): ReactNode {
   const name = getToolName(part);
   const output = part.state === "output-available" ? part.output : undefined;
   const note = name === "note" ? noteMarkdown(output) : null;
   const layerError = layerErrorText(name, output);
-  if (note !== null) return <AnswerCard text={note} />;
+  if (note !== null) return <AnswerCard text={note} onFollowUp={onFollowUp} />;
   if (layerError !== null) return <ErrorCard>{layerError}</ErrorCard>;
   return null;
 }
 
-function MessageView({ message }: { message: UIMessage }) {
+function MessageView({ message, onFollowUp }: { message: UIMessage } & FollowUpProps) {
   if (message.role === "user") {
     const text = message.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
     return (
@@ -130,10 +153,10 @@ function MessageView({ message }: { message: UIMessage }) {
     if (part.type === "text") {
       if (!part.text.trim()) return;
       flushChips();
-      blocks.push(<AnswerCard key={i} text={part.text} />);
+      blocks.push(<AnswerCard key={i} text={part.text} onFollowUp={onFollowUp} />);
     } else if (isToolUIPart(part)) {
       chips.push(<ToolTraceView key={part.toolCallId} part={part} />);
-      const extras = toolExtras(part);
+      const extras = toolExtras(part, onFollowUp);
       if (extras !== null) {
         flushChips();
         blocks.push(<div key={`${part.toolCallId}-extras`}>{extras}</div>);
@@ -210,6 +233,11 @@ export function ChatRail({ catalog, renderOps, getCanvasSize, onActions, collaps
     if (!trimmed || busy) return;
     void sendMessage({ text: trimmed });
     setDraft("");
+  };
+
+  // Unlike `send`, a follow-up leaves whatever the user is typing in the input.
+  const followUp = (text: string) => {
+    if (!busy) void sendMessage({ text });
   };
 
   const onSubmit = (e: FormEvent) => {
@@ -313,7 +341,7 @@ export function ChatRail({ catalog, renderOps, getCanvasSize, onActions, collaps
 
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-4 pb-3">
             {messages.map((m) => (
-              <MessageView key={m.id} message={m} />
+              <MessageView key={m.id} message={m} onFollowUp={busy ? undefined : followUp} />
             ))}
             {status === "submitted" && <Thinking />}
             {error && <ErrorCard>{readableError(error)}</ErrorCard>}

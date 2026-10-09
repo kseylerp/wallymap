@@ -32,19 +32,50 @@ export const RASTER_TILE_LAYERS: ReadonlySet<string> = new Set(["forest-loss", "
 /** Raster tile layers draw their own imagery colors; their swatch shows this neutral gray. */
 export const TILE_SWATCH = "#9A9A96";
 
-/** Score ramp on `v` (0 to 100): white at 25% alpha up to amber at 70%. */
-export const SCORE_RAMP = { from: "#FFFFFF", fromAlpha: 0.25, to: "#F2A33A", toAlpha: 0.7 } as const;
+/**
+ * The monochrome research look (owner direction, Task 12): data draws in one ink over white, told apart by symbol
+ * shape and dash pattern rather than by color. Only routes keep Wally's purple to coral gradient.
+ */
+export const INK = "#1F1F1F";
 
-/** Wally's public land palette by manager (PAD-US `agency`), plus wilderness designations. */
+/** Score ramp on `v` (0 to 100): white at 25% alpha up to ink at 70%. */
+export const SCORE_RAMP = { from: "#FFFFFF", fromAlpha: 0.25, to: INK, toAlpha: 0.7 } as const;
+
+/**
+ * Public land by manager (PAD-US `agency`), plus wilderness: grays chosen so that under the map's 18% regional land
+ * wash each reads as an ink tint of 8 to 12% (NPS and wilderness darkest, state land lightest).
+ */
 export const LAND_MANAGER_COLORS = {
-  NPS: "#357647",
-  USFS: "#7E9A54",
-  BLM: "#C9A254",
-  FWS: "#488C89",
-  State: "#4A7DB5",
-  Wilderness: "#24543A",
-  other: "#B9A6FF",
+  NPS: "#696969",
+  USFS: "#777777",
+  BLM: "#848484",
+  FWS: "#909090",
+  State: "#9B9B9B",
+  Wilderness: "#696969",
+  other: "#9B9B9B",
 } as const;
+
+/** Deck dash arrays ([dash, gap] in line widths) that tell line layers apart; [0, 0] is solid. */
+export const LINE_DASHES = {
+  solid: [0, 0],
+  dashed: [4, 3],
+  dotted: [1, 3],
+  long: [8, 3],
+} as const satisfies Record<string, readonly [number, number]>;
+
+/** The dash per line layer; others take one by a stable hash of their id. */
+export const LAYER_LINE_DASH: Record<string, keyof typeof LINE_DASHES> = {
+  "osm-trails": "solid",
+  "forest-roads": "dashed",
+};
+
+/** Polygon fill as a share of ink, per layer: outlines only for boundaries, a 10% wash for events. Default 10%. */
+export const POLYGON_INK_FILL: Record<string, number> = {
+  "fire-perimeters": 0.1,
+  wilderness: 0,
+  "public-lands": 0,
+  "physical-regions": 0,
+};
 
 /** Wally's basemap-trail look for trails on plain Outdoors: green dashes over a white casing. */
 export const OUTDOORS_TRAIL = {

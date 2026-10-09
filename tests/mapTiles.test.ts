@@ -83,17 +83,17 @@ describe("landManagerFillColor", () => {
     expect(expr[0]).toBe("case");
     expect(JSON.stringify(expr[1])).toContain('["get","category"]');
     expect(JSON.stringify(expr[1])).toContain('"Wilderness"');
-    expect(expr[2]).toBe("#24543A");
+    expect(expr[2]).toBe("#696969");
   });
 
   it("matches the PAD-US agency to Wally's manager colors, others in the fallback lavender", () => {
     expect(agencyMatch[0]).toBe("match");
     expect(agencyMatch[1]).toEqual(["to-string", ["get", "agency"]]);
-    expect(colorAfterLabel(agencyMatch, "NPS")).toBe("#357647");
-    expect(colorAfterLabel(agencyMatch, "USFS")).toBe("#7E9A54");
-    expect(colorAfterLabel(agencyMatch, "BLM")).toBe("#C9A254");
-    expect(colorAfterLabel(agencyMatch, "FWS")).toBe("#488C89");
-    for (const agency of ["State", "State Parks"]) expect(colorAfterLabel(agencyMatch, agency)).toBe("#4A7DB5");
+    expect(colorAfterLabel(agencyMatch, "NPS")).toBe("#696969");
+    expect(colorAfterLabel(agencyMatch, "USFS")).toBe("#777777");
+    expect(colorAfterLabel(agencyMatch, "BLM")).toBe("#848484");
+    expect(colorAfterLabel(agencyMatch, "FWS")).toBe("#909090");
+    for (const agency of ["State", "State Parks"]) expect(colorAfterLabel(agencyMatch, agency)).toBe("#9B9B9B");
     expect(colorAfterLabel(agencyMatch, "USACE")).toBeUndefined();
     expect(agencyMatch[agencyMatch.length - 1]).toBe("#B9A6FF");
   });

@@ -10,15 +10,18 @@ Date: 2026-10-09. Scope: rename MapAgent to WildMap and restyle the Milestone 1 
 
 Reference: a full-bleed satellite map with frosted-glass controls floating over it; one warm accent; large corner radii; round pins with count badges; a white detail card with a pointer.
 
-Tokens (CSS variables on `:root`, used everywhere; no raw hex in components):
+Tokens (CSS variables on `:root`, used everywhere; no raw hex in components). Revised 2026-10-09 after review: "not orange, barely off-white". The map imagery is the color; the UI is white.
 
-- `--cream: #F4F1EA` page/panel base; `--paper: #FAF8F3` cards; `--ink: #1F1E1B` text; `--ink-muted: #6B675F`; `--line: rgba(31,30,27,0.08)`
-- `--accent: #D97757` (terracotta) for pins, badges, active trail lines, primary buttons; `--accent-deep: #C4633F` hover; `--accent-soft: #F3DDD3` tints
-- `--slate: #5B6B7A` secondary data color; `--moss: #5E7D5A` success/available
-- `--glass: rgba(250,248,243,0.72)` with `backdrop-filter: blur(18px) saturate(1.2)` and a 1px `rgba(255,255,255,0.5)` inner border; `--glass-dark: rgba(31,30,27,0.72)` for dark chips on bright imagery
+- `--paper: #FFFFFF` cards and pills; `--cream: #F5F5F3` panel base (barely off-white); `--ink: #1A1A1A` text; `--ink-muted: #7A7A76`; `--line: rgba(0,0,0,0.07)`
+- `--accent: #E0893F` (warm amber) used ONLY for count badges, the send button, an active segmented-control dot, and a highlighted result; never as a surface tint. No `--accent-soft` tints on bubbles or pills. `--accent-deep: #C9772F` hover.
+- `--slate: #2F3A44` default data stroke on imagery (trails, perimeters) with a 1px white casing; `--moss: #5E7D5A` success/available; `--mist: #EDEDEA` user bubbles and hover states
+- `--glass: rgba(255,255,255,0.82)` with `backdrop-filter: blur(18px) saturate(1.1)` and a 1px `rgba(255,255,255,0.6)` inner border; `--glass-dark: rgba(26,26,26,0.72)` for dark chips/cards on bright imagery (version/journey cards later)
+- Data lines: `osm-trails` style color `#2F3A44` at 2.5px with a white casing (deck: two GeoJsonLayers or `getLineColor` white 4px beneath); the `render` tool's `color` overrides only when the user asked for a color. Points: white 7px circle, 2px `--slate` stroke; a count badge in `--accent` when clustered.
 - Radii: `--r-pill: 999px`, `--r-card: 24px`, `--r-panel: 28px`. Shadows: soft, low (`0 10px 30px rgba(31,30,27,0.12)`).
 
 Fonts via `next/font/google`, self-hosted at build: **Geist** for UI and body (weights 400, 500, 600), **Source Serif 4** for the wordmark, section headings, and answer headings (weights 500, 600). Body 15px/1.5; headings tight (-0.01em).
+
+Chat bubbles: user messages on `--mist`, assistant answers on `--paper` cards with a hairline border; follow-up pills white with a hairline border and `--ink` text; the Empty-state card is `--glass` with white question pills.
 
 Basemap default becomes a new hybrid `outdoors-satellite`: the Mapbox Outdoors style (contours, hillshade, trails, paths, roads, labels, water) with the Mapbox satellite raster (`mapbox://mapbox.satellite`) inserted beneath its vector detail. On `style.load`, add the raster source and a raster layer placed just above the style's background/land layer, then hide the Outdoors fill layers that would occlude the imagery (landcover, landuse, national-park, land-structure, wetland, and similar area fills; keep water, hillshade, contours, roads, paths, and labels). Tune `raster-opacity` (about 0.9) and keep hillshade at reduced opacity so terrain reads. `outdoors`, `satellite` (satellite-streets), and `natural-earth-2` remain selectable; the segmented control shows Outdoors+Sat / Outdoors / Satellite. Trail line color becomes `--accent`; the OSM layer style color updates to `#D97757`. Point layers render as a white 7px circle with a 2px accent stroke. Polygon fill uses accent at low alpha.
 

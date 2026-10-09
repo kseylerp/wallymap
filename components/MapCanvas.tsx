@@ -9,7 +9,7 @@ import { syncHeatLayers, syncSatelliteHybrid, syncTileLayers } from "@/component
 import { ensureRouteImages, syncRouteLayers } from "@/components/routeLayers";
 import { basemapStyleUrl } from "@/lib/render/basemaps";
 import { buildDeckLayers } from "@/lib/render/deck";
-import { featureBBox, featureCenter, pickToSelection, type DeckPick } from "@/lib/render/inspect";
+import { pickToSelection, type DeckPick } from "@/lib/render/inspect";
 import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
 import {
   BUILDINGS_LAYER_ID,
@@ -30,8 +30,6 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim() ?? "";
 const EPSILON = 1e-6;
 /** Picking slop around the pointer, so a 2.5px trail is clickable. */
 const PICK_RADIUS_PX = 4;
-/** Camera ease onto a selected feature (spec: 350 ms). */
-const SELECT_EASE_MS = 350;
 
 /** Imperative camera controls for the on-map buttons. */
 export type MapHandle = {
@@ -294,28 +292,6 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     }
   }, [state]);
 
-  // A new selection eases the camera onto the feature: its center when the whole feature is in view, else
-  // the clicked point (centering a national forest would fly away from where the user clicked).
-  const selected = state.selected;
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !selected) return;
-    const bbox = featureBBox(selected.feature);
-    const bounds = map.getBounds();
-    const fits =
-      bbox !== null &&
-      bounds !== null &&
-      bounds.contains([bbox[0], bbox[1]]) &&
-      bounds.contains([bbox[2], bbox[3]]);
-    const center = (fits ? featureCenter(selected.feature) : null) ?? selected.lngLat;
-    // The reducer may have tilted to Detail pitch with this selection. One ease carries both moves (a second
-    // easeTo would cancel this one), and marking the pitch as ours stops the viewport effect from easing again.
-    const { pitch } = stateRef.current.viewport;
-    lastCameraRef.current = stateRef.current.viewport;
-    // Pin the zoom: left out, Mapbox recomputes it against the terrain under the new center (13 became 15.7).
-    map.easeTo({ center, zoom: map.getZoom(), pitch, duration: SELECT_EASE_MS, easing: (t) => t * (2 - t) });
-  }, [selected]);
-
   // Ease to a new viewport when it differs from both the actual camera and our own last report.
   useEffect(() => {
     const map = mapRef.current;
@@ -330,7 +306,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     if (sameViewport(target, lastCameraRef.current)) return;
     const pitchOnly = sameViewport({ ...target, pitch: lastCameraRef.current.pitch }, lastCameraRef.current);
     lastCameraRef.current = target;
-    // A pitch-only change (select, deselect, the 3D button) tilts in place with Wally's short ease.
+    // A pitch-only change (the 3D button) tilts in place with Wally's short ease.
     if (pitchOnly) {
       map.easeTo({ zoom: map.getZoom(), pitch: target.pitch, duration: PITCH_EASE_MS, easing: easeInOut });
       return;

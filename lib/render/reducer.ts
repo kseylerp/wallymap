@@ -1,5 +1,5 @@
 import type { MapAction, MapState, RenderOp, Viewport } from "@/lib/render/state";
-import { ARRIVAL_MIN_ZOOM, arrivalPitch, fitZoomOffset, pitchFor } from "@/lib/render/wally/terrain";
+import { arrivalPitch, fitZoomOffset } from "@/lib/render/wally/terrain";
 
 /** The `layer_error` id a failed `route` tool call reports under. */
 export const ROUTE_ERROR_ID = "route";
@@ -38,14 +38,11 @@ function setView(state: MapState, requested: Partial<Viewport>, fit: boolean): M
 }
 
 /**
- * Pure reducer: always returns new objects and never mutates `state`. Whenever a selection goes away (deselect,
- * or its layer hidden, cleared, reloaded or turned into heat), the camera leaves Detail pitch for Explore.
+ * Pure reducer: always returns new objects and never mutates `state`. Selecting or deselecting a feature never
+ * moves the camera; only `set_view` and the 3D button do.
  */
 export function reduce(state: MapState, action: MapAction): MapState {
-  const next = reduceAction(state, action);
-  if (state.selected === undefined || next.selected !== undefined) return next;
-  const explore = !next.flattened && next.viewport.zoom >= ARRIVAL_MIN_ZOOM;
-  return explore ? withPitch(next, pitchFor("explore")) : next;
+  return reduceAction(state, action);
 }
 
 function reduceAction(state: MapState, action: MapAction): MapState {
@@ -94,14 +91,9 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       const op = next.renderOps.find((o) => o.layerId === action.layerId);
       return op?.visible ? next : { ...next, selected: dropSelectionOf(next, action.layerId) };
     }
-    case "select": {
-      // Detail pitch on the selected feature, except on a flattened map or the world view (which stays flat).
-      const next = { ...state, selected: action.selection };
-      const detail = !state.flattened && state.viewport.zoom >= ARRIVAL_MIN_ZOOM;
-      return detail ? withPitch(next, pitchFor("detail")) : next;
-    }
+    case "select":
+      return { ...state, selected: action.selection };
     case "deselect":
-      // `reduce` returns the camera to Explore pitch.
       return state.selected === undefined ? state : { ...state, selected: undefined };
     case "set_opacity":
       return updateOp(state, action.layerId, (op) => ({ ...op, opacity: clamp01(action.opacity) }));

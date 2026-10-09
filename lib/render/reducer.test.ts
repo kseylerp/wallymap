@@ -211,20 +211,24 @@ describe("reduce: 3D camera rules", () => {
     expect(next.viewport).toMatchObject({ zoom: 12, pitch: 0 });
   });
 
-  it("select tilts to Detail (72) at trail zoom and deselect returns to Explore (45)", () => {
+  it("select leaves the viewport untouched, and so does deselect", () => {
     const selected = reduce(atTrailZoom, { type: "select", selection });
-    expect(selected.viewport.pitch).toBe(72);
+    expect(selected.selected).toEqual(selection);
+    expect(selected.viewport).toBe(atTrailZoom.viewport);
     const deselected = reduce(selected, { type: "deselect" });
-    expect(deselected.viewport.pitch).toBe(45);
+    expect(deselected.selected).toBeUndefined();
+    expect(deselected.viewport).toBe(atTrailZoom.viewport);
+    const flat = { ...atTrailZoom, flattened: true, viewport: { ...atTrailZoom.viewport, pitch: 0 } };
+    expect(reduce(flat, { type: "select", selection }).viewport).toBe(flat.viewport);
+    expect(reduce(initialMapState, { type: "select", selection }).viewport).toBe(initialMapState.viewport);
   });
 
-  it("returns to Explore pitch when the selection is dropped by hide, clear, reload or heat", () => {
+  it("a selection dropped by hide, clear, reload or heat leaves the viewport untouched", () => {
     const loaded = reduce(
       reduce(atTrailZoom, { type: "layer_loaded", layer }),
       { type: "render", op: { layerId: "osm-trails", mode: "lines", visible: true } },
     );
     const selected = reduce(loaded, { type: "select", selection });
-    expect(selected.viewport.pitch).toBe(72);
     const dropped = [
       reduce(selected, { type: "toggle_layer", layerId: "osm-trails" }),
       reduce(selected, { type: "clear_layers" }),
@@ -235,21 +239,8 @@ describe("reduce: 3D camera rules", () => {
     ];
     for (const next of dropped) {
       expect(next.selected).toBeUndefined();
-      expect(next.viewport.pitch).toBe(45);
+      expect(next.viewport).toBe(atTrailZoom.viewport);
     }
-    // A flattened map stays flat when the selection goes.
-    const flat = reduce({ ...selected, flattened: true, viewport: { ...selected.viewport, pitch: 0 } }, { type: "clear_layers" });
-    expect(flat.viewport.pitch).toBe(0);
-  });
-
-  it("select leaves the pitch alone on a flattened map or the world view", () => {
-    const flattened = reduce({ ...atTrailZoom, flattened: true, viewport: { ...atTrailZoom.viewport, pitch: 0 } }, {
-      type: "select",
-      selection,
-    });
-    expect(flattened.viewport.pitch).toBe(0);
-    const world = reduce(initialMapState, { type: "select", selection });
-    expect(world.viewport).toBe(initialMapState.viewport);
   });
 
   it("set_flattened(true) drops to pitch 0; set_flattened(false) restores 45 and terrain", () => {

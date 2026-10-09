@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 import { EmptyState } from "@/components/EmptyState";
 import { ToolTrace } from "@/components/ToolTrace";
 import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
+import { compactMessages } from "@/lib/agent/compactMessages";
 import type { MapAction, RenderOp } from "@/lib/render/state";
 
 type ChatRailProps = {
@@ -99,7 +100,16 @@ function MessageView({ message }: { message: UIMessage }) {
 }
 
 export function ChatRail({ catalog, renderOps, getCanvasSize, onActions, collapsed, onToggle }: ChatRailProps) {
-  const [transport] = useState(() => new DefaultChatTransport({ api: "/api/chat" }));
+  // Resend query results as summaries: the map already has the full data, and the route caps request size.
+  const [transport] = useState(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/chat",
+        prepareSendMessagesRequest: ({ id, messages, body, trigger, messageId }) => ({
+          body: { ...body, id, messages: compactMessages(messages), trigger, messageId },
+        }),
+      }),
+  );
   // A fixed id: without one the SDK picks a random id during render, which Cache Components rejects at prerender.
   const { messages, sendMessage, status, error, stop } = useChat({ id: "mapagent", transport });
   const [draft, setDraft] = useState("");

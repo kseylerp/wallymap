@@ -42,6 +42,30 @@ describe("buildTools", () => {
     expect(result).toMatchObject({ hint: "zoom_in" });
   });
 
+  it("query_osm-trails gives the model a summary without the features array", async () => {
+    const t = buildTools()["query_osm-trails"];
+    if (!t.toModelOutput) throw new Error("query tool has no toModelOutput");
+    const output = {
+      kind: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", properties: { name: "Rim" }, geometry: { type: "LineString", coordinates: [[-120.1, 38.9], [-120, 39]] } },
+        ],
+      },
+      citation: { source: "OSM", url: "https://www.openstreetmap.org/copyright", retrieved: "2026-10-09T00:00:00Z" },
+    };
+    const modelOutput = await t.toModelOutput({ toolCallId: "c1", input: {}, output });
+    if (modelOutput.type !== "json") throw new Error("expected json model output");
+    const value = modelOutput.value as Record<string, unknown>;
+    expect(value).toMatchObject({ kind: "geojson", featureCount: 1, bbox: [-120.1, 38.9, -120, 39] });
+    expect(JSON.stringify(value)).not.toContain('"features"');
+    expect(value).not.toHaveProperty("data");
+
+    const error = { error: "Overpass returned 429", hint: "upstream" };
+    expect(await t.toModelOutput({ toolCallId: "c2", input: {}, output: error })).toEqual({ type: "json", value: error });
+  });
+
   it("echoes its input from the view, basemap, render and note tools", async () => {
     const tools = buildTools();
     const view = { bbox: [-120.2, 38.85, -120, 39], pitch: 45 };

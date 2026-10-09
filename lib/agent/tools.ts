@@ -1,8 +1,9 @@
-import { tool, type ToolSet } from "ai";
+import { tool, type JSONValue, type ToolSet } from "ai";
 import { z } from "zod";
 import { listLayers } from "@/layers/registry";
 import { BBoxSchema, type BBox, type Coverage, type Layer } from "@/layers/types";
 import { runLayer } from "@/lib/layers/run";
+import { isFullLayerResult, summarizeLayerResult } from "@/lib/layers/summarize";
 import type { Basemap, RenderMode } from "@/lib/render/state";
 import { geocode } from "./geocode";
 
@@ -37,6 +38,16 @@ function describeCoverage(coverage: Coverage): string {
   return `the bbox [${coverage.bbox.join(", ")}]`;
 }
 
+/**
+ * What the model sees for a query result. A full result (often megabytes of
+ * GeoJSON) becomes a short summary; errors and results the browser already
+ * summarized before resending the history pass through unchanged.
+ */
+export function layerResultForModel(output: unknown): JSONValue {
+  if (isFullLayerResult(output)) return summarizeLayerResult(output);
+  return output as JSONValue;
+}
+
 /** Query-tool input: the layer's own input fields plus the area to search. */
 type QueryArgs = { bbox: BBox; zoom: number } & Record<string, unknown>;
 
@@ -51,6 +62,8 @@ function queryTool(layer: Layer) {
     description: `${layer.description} Covers ${describeCoverage(layer.coverage)}; data license ${layer.license}. bbox is [west, south, east, north].`,
     inputSchema,
     execute: async ({ bbox, zoom, ...input }) => (await runLayer(layer.id, { bbox, zoom, input })).body,
+    // The UI part keeps the full body for the map; the model gets a summary.
+    toModelOutput: ({ output }) => ({ type: "json", value: layerResultForModel(output) }),
   });
 }
 

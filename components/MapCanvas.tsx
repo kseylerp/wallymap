@@ -6,6 +6,7 @@ import mapboxgl from "mapbox-gl";
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { MapSetupNotice } from "@/components/MapSetupNotice";
 import { syncHeatLayers, syncSatelliteHybrid, syncTileLayers } from "@/components/mapTiles";
+import { ensureRouteImages, syncRouteLayers } from "@/components/routeLayers";
 import { basemapStyleUrl } from "@/lib/render/basemaps";
 import { buildDeckLayers } from "@/lib/render/deck";
 import { featureBBox, featureCenter, pickToSelection, type DeckPick } from "@/lib/render/inspect";
@@ -250,6 +251,8 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       sync3D(map, wantsTerrain(stateRef.current));
       syncTileLayers(map, stateRef.current);
       syncHeatLayers(map, stateRef.current);
+      ensureRouteImages(map);
+      syncRouteLayers(map, stateRef.current);
     });
 
     // Click to inspect: deck features first (they draw on top), then vector tiles; empty map deselects.
@@ -287,6 +290,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     if (mapRef.current) {
       syncTileLayers(mapRef.current, state);
       syncHeatLayers(mapRef.current, state);
+      syncRouteLayers(mapRef.current, state);
     }
   }, [state]);
 

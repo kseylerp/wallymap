@@ -31,6 +31,7 @@ describe("buildTools", () => {
         "set_basemap",
         "render",
         "note",
+        "route",
         ...listLayers().map((layer) => `query_${layer.id}`),
       ].sort(),
     );

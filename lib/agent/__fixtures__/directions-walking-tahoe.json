@@ -1,0 +1,45 @@
+{
+  "routes": [
+    {
+      "weight_name": "pedestrian",
+      "weight": 19876.2,
+      "duration": 19702.4,
+      "distance": 27342.7,
+      "legs": [
+        {
+          "via_waypoints": [],
+          "admins": [{ "iso_3166_1_alpha3": "USA", "iso_3166_1": "US" }],
+          "weight": 19876.2,
+          "duration": 19702.4,
+          "steps": [],
+          "distance": 27342.7,
+          "summary": "West Lake Boulevard, Emerald Bay Road"
+        }
+      ],
+      "geometry": {
+        "coordinates": [
+          [-120.144886, 39.171944],
+          [-120.145923, 39.163121],
+          [-120.142106, 39.148795],
+          [-120.142843, 39.133216],
+          [-120.136412, 39.112087],
+          [-120.14321, 39.094113],
+          [-120.15572, 39.072154],
+          [-120.159481, 39.051602],
+          [-120.163066, 39.032187],
+          [-120.142218, 39.010466],
+          [-120.12133, 38.989624],
+          [-120.110973, 38.972361],
+          [-120.103562, 38.954107]
+        ],
+        "type": "LineString"
+      }
+    }
+  ],
+  "waypoints": [
+    { "distance": 3.1, "name": "North Lake Boulevard", "location": [-120.144886, 39.171944] },
+    { "distance": 12.8, "name": "Emerald Bay Road", "location": [-120.103562, 38.954107] }
+  ],
+  "code": "Ok",
+  "uuid": "fixture-tahoe-city-emerald-bay"
+}

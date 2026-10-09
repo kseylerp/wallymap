@@ -1,4 +1,4 @@
-import type { Feature } from "geojson";
+import type { Feature, LineString } from "geojson";
 import type { LayerResult, StyleHints } from "@/layers/types";
 
 export type Viewport = {
@@ -42,10 +42,23 @@ export type LoadedLayer = {
   receivedAt: string;
 };
 
+/** A route drawn Wally-style (gradient line, darts, mile markers, waypoint pins): a `route` result, a GPX, a trail. */
+export type RouteState = {
+  id: string;
+  name?: string;
+  line: LineString;
+  source: "tool" | "gpx" | "feature";
+  distanceKm: number;
+  durationMin?: number;
+  waypoints: { lngLat: [number, number]; type: "start" | "end" | "via" }[];
+};
+
 export type MapState = {
   viewport: Viewport;
   basemap: Basemap;
   layers: Record<string, LoadedLayer>;
+  /** Routes by id, drawn above the basemap's roads and under its labels (components/routeLayers.ts). */
+  routes: Record<string, RouteState>;
   renderOps: RenderOp[];
   errors: { layerId: string; message: string }[];
   selected?: Selection;
@@ -59,6 +72,7 @@ export const initialMapState: MapState = {
   viewport: { longitude: 0, latitude: 20, zoom: 1.5, pitch: 0, bearing: 0 },
   basemap: "outdoors-satellite",
   layers: {},
+  routes: {},
   renderOps: [],
   errors: [],
   terrain: true,
@@ -86,4 +100,9 @@ export type MapAction =
   /** Moves a layer's render op to `toIndex` in `renderOps` (later ops draw on top). */
   | { type: "reorder"; layerId: string; toIndex: number }
   | { type: "remove_layer"; layerId: string }
-  | { type: "clear_layers" };
+  /** Clears every layer and every route. */
+  | { type: "clear_layers" }
+  /** Adds a route, or replaces the route with the same id. */
+  | { type: "route_loaded"; route: RouteState }
+  | { type: "route_removed"; routeId: string }
+  | { type: "routes_cleared" };

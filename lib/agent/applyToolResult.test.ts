@@ -147,3 +147,66 @@ describe("toolResultToActions", () => {
     expect(toolResultToActions("query_osm-trails", {}, null, canvas, catalog, [])).toEqual([]);
   });
 });
+
+describe("toolResultToActions for route", () => {
+  const line = { type: "LineString", coordinates: [[-120.14, 39.17], [-120.16, 39.05], [-120.1, 38.95]] };
+  const output = {
+    id: "walking-tahoe-city-to-emerald-bay",
+    name: "Tahoe City to Emerald Bay",
+    profile: "walking",
+    line,
+    distanceKm: 27.34,
+    durationMin: 328,
+    waypoints: [
+      { lngLat: [-120.14, 39.17], type: "start", name: "North Lake Boulevard" },
+      { lngLat: [-120.1, 38.95], type: "end" },
+    ],
+    bbox: [-120.16, 38.95, -120.1, 39.17],
+  };
+  const padded = { width: 1000, height: 800, padding: { top: 60, right: 40, bottom: 200, left: 420 } };
+
+  it("loads the route, then fits the camera to its bbox inside the panels' padding", () => {
+    const actions = toolResultToActions("route", {}, output, padded, catalog, []);
+    expect(actions[0]).toEqual({
+      type: "route_loaded",
+      route: {
+        id: "walking-tahoe-city-to-emerald-bay",
+        name: "Tahoe City to Emerald Bay",
+        line,
+        source: "tool",
+        distanceKm: 27.34,
+        durationMin: 328,
+        waypoints: [
+          { lngLat: [-120.14, 39.17], type: "start" },
+          { lngLat: [-120.1, 38.95], type: "end" },
+        ],
+      },
+    });
+    const { longitude, latitude, zoom } = bboxToViewport([-120.16, 38.95, -120.1, 39.17], 1000, 800, padded.padding);
+    expect(actions[1]).toEqual({ type: "set_view", viewport: { longitude, latitude, zoom, bearing: 0 }, fit: true });
+    expect(actions).toHaveLength(2);
+  });
+
+  it("falls back to the line's extent and its ends when bbox and waypoints are missing", () => {
+    const { bbox, waypoints, ...bare } = output;
+    void bbox;
+    void waypoints;
+    const [loaded, view] = toolResultToActions("route", {}, bare, canvas, catalog, []);
+    expect(loaded).toMatchObject({
+      route: { waypoints: [{ lngLat: [-120.14, 39.17], type: "start" }, { lngLat: [-120.1, 38.95], type: "end" }] },
+    });
+    const fitted = bboxToViewport([-120.16, 38.95, -120.1, 39.17], canvas.width, canvas.height);
+    expect(view).toMatchObject({ type: "set_view", fit: true, viewport: { longitude: fitted.longitude, zoom: fitted.zoom } });
+  });
+
+  it("reports a route error under the route layer id", () => {
+    expect(toolResultToActions("route", {}, { error: "No route found" }, canvas, catalog, [])).toEqual([
+      { type: "layer_error", layerId: "route", message: "No route found" },
+    ]);
+  });
+
+  it("ignores a malformed route", () => {
+    expect(toolResultToActions("route", {}, { id: "x", line: { type: "LineString", coordinates: [[0, 0]] } }, canvas, catalog)).toEqual([]);
+    expect(toolResultToActions("route", {}, { line }, canvas, catalog)).toEqual([]);
+  });
+});

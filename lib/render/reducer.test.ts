@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduce } from "@/lib/render/reducer";
-import { initialMapState, type LoadedLayer, type MapState } from "@/lib/render/state";
+import { initialMapState, type LoadedLayer, type MapState, type RouteState } from "@/lib/render/state";
 
 const layer: LoadedLayer = {
   id: "osm-trails",
@@ -271,5 +271,51 @@ describe("reduce: 3D camera rules", () => {
     const off = reduce(initialMapState, { type: "set_terrain", terrain: false });
     expect(off.terrain).toBe(false);
     expect(reduce(initialMapState, { type: "set_terrain", terrain: true })).toBe(initialMapState);
+  });
+});
+
+describe("routes", () => {
+  const route = (id: string): RouteState => ({
+    id,
+    name: "Tahoe City to Emerald Bay",
+    line: { type: "LineString", coordinates: [[-120.14, 39.17], [-120.1, 38.95]] },
+    source: "tool",
+    distanceKm: 26.1,
+    durationMin: 330,
+    waypoints: [
+      { lngLat: [-120.14, 39.17], type: "start" },
+      { lngLat: [-120.1, 38.95], type: "end" },
+    ],
+  });
+
+  it("route_loaded adds a route and replaces one with the same id", () => {
+    const one = reduce(initialMapState, { type: "route_loaded", route: route("a") });
+    expect(Object.keys(one.routes)).toEqual(["a"]);
+    expect(initialMapState.routes).toEqual({});
+    const replaced = reduce(one, { type: "route_loaded", route: { ...route("a"), distanceKm: 3 } });
+    expect(replaced.routes.a.distanceKm).toBe(3);
+    const two = reduce(replaced, { type: "route_loaded", route: route("b") });
+    expect(Object.keys(two.routes).sort()).toEqual(["a", "b"]);
+  });
+
+  it("route_loaded clears an earlier route error", () => {
+    const failed = reduce(initialMapState, { type: "layer_error", layerId: "route", message: "No route found" });
+    expect(reduce(failed, { type: "route_loaded", route: route("a") }).errors).toEqual([]);
+  });
+
+  it("route_removed drops one route and is a no-op for an unknown id", () => {
+    const two = reduce(reduce(initialMapState, { type: "route_loaded", route: route("a") }), {
+      type: "route_loaded",
+      route: route("b"),
+    });
+    expect(Object.keys(reduce(two, { type: "route_removed", routeId: "a" }).routes)).toEqual(["b"]);
+    expect(reduce(two, { type: "route_removed", routeId: "zzz" })).toBe(two);
+  });
+
+  it("routes_cleared and clear_layers remove every route", () => {
+    const loaded = reduce(initialMapState, { type: "route_loaded", route: route("a") });
+    expect(reduce(loaded, { type: "routes_cleared" }).routes).toEqual({});
+    expect(reduce(loaded, { type: "clear_layers" }).routes).toEqual({});
+    expect(reduce(initialMapState, { type: "routes_cleared" })).toBe(initialMapState);
   });
 });

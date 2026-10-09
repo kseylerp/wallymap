@@ -1,6 +1,9 @@
 import type { MapAction, MapState, RenderOp, Viewport } from "@/lib/render/state";
 import { ARRIVAL_MIN_ZOOM, arrivalPitch, fitZoomOffset, pitchFor } from "@/lib/render/wally/terrain";
 
+/** The `layer_error` id a failed `route` tool call reports under. */
+export const ROUTE_ERROR_ID = "route";
+
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 1;
   return Math.min(1, Math.max(0, value));
@@ -133,6 +136,21 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       };
     }
     case "clear_layers":
-      return { ...state, layers: {}, renderOps: [], errors: [], selected: undefined };
+      return { ...state, layers: {}, routes: {}, renderOps: [], errors: [], selected: undefined };
+    case "route_loaded":
+      return {
+        ...state,
+        routes: { ...state.routes, [action.route.id]: action.route },
+        // A route that arrived supersedes an earlier failed route request.
+        errors: state.errors.filter((e) => e.layerId !== ROUTE_ERROR_ID),
+      };
+    case "route_removed": {
+      if (!state.routes[action.routeId]) return state;
+      const routes = { ...state.routes };
+      delete routes[action.routeId];
+      return { ...state, routes };
+    }
+    case "routes_cleared":
+      return Object.keys(state.routes).length === 0 ? state : { ...state, routes: {} };
   }
 }

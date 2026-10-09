@@ -6,6 +6,7 @@ import { runLayer } from "@/lib/layers/run";
 import { isFullLayerResult, summarizeLayerResult } from "@/lib/layers/summarize";
 import type { Basemap, RenderMode } from "@/lib/render/state";
 import { geocode } from "./geocode";
+import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
 import { synonymsFor } from "./vocabulary";
 
 const BASEMAPS = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"] as const satisfies readonly Basemap[];
@@ -125,6 +126,24 @@ export function buildTools(): ToolSet {
         color: z.string().optional().describe("Only set when the user asked for a specific color; otherwise omit"),
       }),
       execute: async (input) => input,
+    }),
+    route: tool({
+      description:
+        "Get a walking, cycling or driving route between two places from Mapbox Directions and draw it on the map " +
+        "(purple-to-coral line with direction arrows, mile markers and a start pin); the map fits to it. from and to " +
+        "are each a place name or [lon, lat]. Pass place names as the user said them, with no need to geocode first, " +
+        "and qualify ambiguous ones (\"Emerald Bay, Lake Tahoe\"); they also name the route. Returns the distance in " +
+        "km and the duration in minutes. Use it for \"route from A to B\", \"how far is it to hike from A to B\", or " +
+        "driving directions; it follows roads and mapped paths, not off-trail lines.",
+      inputSchema: z.object({
+        from: z.union([z.string().min(1), LngLatSchema]).describe("Start: a place name or [lon, lat]"),
+        to: z.union([z.string().min(1), LngLatSchema]).describe("End: a place name or [lon, lat]"),
+        profile: z.enum(ROUTE_PROFILES).default("walking"),
+        name: z.string().optional().describe("A short name for the route; defaults to \"<from> to <to>\""),
+      }),
+      execute: async (input) => runRouteTool(input),
+      // The UI part keeps the line for the map; the model gets distance, duration and waypoints.
+      toModelOutput: ({ output }) => ({ type: "json", value: routeOutputForModel(output) as JSONValue }),
     }),
     note: tool({
       description: "Show a short markdown note beside the map.",

@@ -18,6 +18,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import { WallyMark } from "@/components/Brand";
 import { DotSpinner } from "@/components/DotSpinner";
 import { EmptyState } from "@/components/EmptyState";
+import { PreviewControl } from "@/components/PreviewControl";
 import { ToolTrace } from "@/components/ToolTrace";
 import { TopoHeartbeat } from "@/components/TopoHeartbeat";
 import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
@@ -519,6 +520,7 @@ export function ChatRail({
           </div>
         )}
 
+        <PreviewControl onActions={onActions} />
         {/* rise-in stays on in every state so it plays once, on mount, and never replays on collapse. */}
         <div className={`rise-in w-full ${open ? "shrink-0 px-3 pt-1 pb-3" : ""}`} style={{ animationDelay: "240ms" }}>
           <form

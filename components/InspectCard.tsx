@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronRight, Copy, MessageCircle, Route, X } from "lucide-react";
 import { formatDate, isLineFeature, summarizeFeature, type Row } from "@/lib/render/inspect";
 import type { LoadedLayer, Selection } from "@/lib/render/state";
+import { previewFeature } from "@/lib/render/wally/playback";
 
 type Point = { x: number; y: number };
 
@@ -188,6 +189,12 @@ export function InspectCard({
     if (!sent) window.setTimeout(() => setBusy(false), 2000);
   };
 
+  // Plays the line as a route preview; `onPreviewRoute` (framing the line) is the fallback when no preview
+  // control is mounted to run one.
+  const preview = () => {
+    if (!previewFeature(selection.feature, layer.id, summary.name ?? undefined)) onPreviewRoute();
+  };
+
   const placement = anchor && size ? place(anchor, size, view) : null;
   const hidden = !placement || placement.offscreen;
 
@@ -319,7 +326,7 @@ export function InspectCard({
             {copied ? "Copied" : "Copy GeoJSON"}
           </ActionRow>
           {line && (
-            <ActionRow onClick={onPreviewRoute} icon={Route}>
+            <ActionRow onClick={preview} icon={Route}>
               Preview route
             </ActionRow>
           )}

@@ -9,10 +9,12 @@ import type {
   SymbolLayerSpecification,
 } from "mapbox-gl";
 import type { MapState, RouteState } from "@/lib/render/state";
+import { progressGradient } from "@/lib/render/wally/playback";
 import {
   DART_ICON_ID,
   dartIconSpec,
   directionDarts,
+  gradientExpression,
   mileMarkers,
   routeLayerSpecs,
   routeSourceId,
@@ -189,6 +191,24 @@ export function syncRouteLayers(map: MapboxMap, state: MapState): void {
       map.removeSource(sourceId);
       sent.delete(sourceId);
     }
+  }
+}
+
+/** The gradient line layer of route `routeId`. */
+export const routeLineLayerId = (routeId: string) => `${routeSourceId(routeId)}-line`;
+
+/**
+ * Shows preview progress on route `routeId`: the traversed part keeps the purple→coral gradient and the rest
+ * shows only the white casing. `null` puts the whole gradient back. A no-op while the layer is missing (a style
+ * is loading, or the route was removed).
+ */
+export function setRouteProgress(map: MapboxMap, routeId: string, fraction: number | null): void {
+  const id = routeLineLayerId(routeId);
+  try {
+    if (!map.getLayer(id)) return;
+    map.setPaintProperty(id, "line-gradient", fraction === null ? gradientExpression() : progressGradient(fraction));
+  } catch {
+    // The style is mid-swap; the next style load draws the full gradient again.
   }
 }
 

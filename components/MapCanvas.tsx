@@ -6,12 +6,29 @@ import mapboxgl from "mapbox-gl";
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { MapSetupNotice } from "@/components/MapSetupNotice";
 import { syncHeatLayers, syncSatelliteHybrid, syncTileLayers } from "@/components/mapTiles";
-import { ensureRouteImages, syncRouteLayers } from "@/components/routeLayers";
+import { ensureRouteImages, setRouteProgress, syncRouteLayers } from "@/components/routeLayers";
 import { basemapStyleUrl } from "@/lib/render/basemaps";
 import { buildDeckLayers } from "@/lib/render/deck";
 import { pickToSelection, type DeckPick } from "@/lib/render/inspect";
 import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
 import {
+  bearingAt,
+  DEFAULT_LOOKAHEAD_M,
+  dispatchPreview,
+  elevationStore,
+  FOLLOW_PITCH,
+  followZoom,
+  fractionStep,
+  liveFractionStore,
+  mapStateStore,
+  positionAt,
+  PREVIEW_EASE_MS,
+  speedKmPerMin,
+  turnBetween,
+} from "@/lib/render/wally/playback";
+import { samplePoints } from "@/lib/render/wally/sample";
+import {
+  arrivalPitch,
   BUILDINGS_LAYER_ID,
   buildingsSpec,
   easeInOut,
@@ -109,9 +126,13 @@ function styleLayers(map: mapboxgl.Map): { id: string; type: string }[] | null {
   }
 }
 
-/** True when `state` wants terrain drawn: on by default, off while the user has flattened the map. */
+/**
+ * True when `state` wants terrain drawn: on by default, off while the user has flattened the map. A route preview
+ * always has terrain, since its elevation profile reads heights from it; it goes back to the user's choice when
+ * the preview ends.
+ */
 function wantsTerrain(state: MapState): boolean {
-  return state.terrain && !state.flattened;
+  return (state.terrain && !state.flattened) || state.playback !== undefined;
 }
 
 /**
@@ -186,6 +207,10 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
   const appliedBasemapRef = useRef<Basemap>(state.basemap);
   // The camera the map last settled on (or is easing to). A prop equal to this is our own echo.
   const lastCameraRef = useRef<Viewport>(state.viewport);
+  // True while a route preview drives the camera: it neither reports every frame nor eases to viewport props.
+  const followingRef = useRef(false);
+  // The preview's position and settings as the animation loop sees them (see the playback effects below).
+  const liveRef = useRef({ fraction: 0, playing: false, speed: 1, lastSent: -1, dirty: false });
 
   // Keep the latest props reachable from map event handlers without re-creating the map.
   useEffect(() => {
@@ -238,6 +263,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     map.addControl(overlay);
 
     map.on("moveend", () => {
+      if (followingRef.current) return;
       const camera = cameraOf(map);
       lastCameraRef.current = camera;
       onViewportChangeRef.current(camera);
@@ -292,11 +318,17 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     }
   }, [state]);
 
+  // The preview control reads the map state from here (components/App.tsx does not pass it to the chat rail).
+  useEffect(() => {
+    mapStateStore.set(state);
+  }, [state]);
+  useEffect(() => () => mapStateStore.set(null), []);
+
   // Ease to a new viewport when it differs from both the actual camera and our own last report.
   useEffect(() => {
     const map = mapRef.current;
     const target = state.viewport;
-    if (!map) return;
+    if (!map || followingRef.current) return;
     if (sameViewport(target, cameraOf(map))) {
       lastCameraRef.current = target;
       return;
@@ -342,6 +374,181 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
   useEffect(() => {
     if (mapRef.current) sync3D(mapRef.current, terrain);
   }, [terrain]);
+
+  // ---- Route preview: the loop reads these refs, so play, pause, speed and scrub never restart it. ----
+  const playback = state.playback;
+  useEffect(() => {
+    if (!playback) return;
+    const live = liveRef.current;
+    live.playing = playback.playing;
+    live.speed = playback.speed;
+    // A fraction the loop did not send itself is a scrub (or a restart from the end): jump there.
+    if (Math.abs(playback.fraction - live.lastSent) > 1e-9) {
+      live.fraction = playback.fraction;
+      live.lastSent = playback.fraction;
+      live.dirty = true;
+    }
+  }, [playback]);
+
+  // Start and stop: frame the route so its terrain loads, read the profile heights, ease down into the follow
+  // camera, then follow every animation frame. Stopping (exit, route removed, basemap swap, tab hidden) eases
+  // back to the camera from before the preview at Explore pitch.
+  const playbackRouteId = playback?.routeId;
+  useEffect(() => {
+    const map = mapRef.current;
+    const routeId = playbackRouteId;
+    const route = routeId ? stateRef.current.routes[routeId] : undefined;
+    if (!map || !routeId || !route) return;
+    const line = route.line;
+    const live = liveRef.current;
+    const restore = cameraOf(map);
+    followingRef.current = true;
+    let cancelled = false;
+    let raf = 0;
+    const timers: number[] = [];
+
+    const { points } = samplePoints(line);
+    const heights: (number | null)[] = points.map(() => null);
+    let complete = false;
+    const readHeights = () => {
+      let changed = false;
+      for (let i = 0; i < points.length; i++) {
+        if (heights[i] !== null) continue;
+        const h = map.queryTerrainElevation(points[i], { exaggerated: false });
+        if (typeof h === "number" && Number.isFinite(h)) {
+          heights[i] = h;
+          changed = true;
+        }
+      }
+      if (changed) elevationStore.set({ routeId, values: [...heights] });
+      complete = heights.every((h) => h !== null);
+    };
+    elevationStore.set({ routeId, values: [...heights] });
+    liveFractionStore.set({ routeId, fraction: live.fraction });
+    setRouteProgress(map, routeId, live.fraction);
+
+    const lookAhead = (kmPerMin: number) => Math.max(DEFAULT_LOOKAHEAD_M, (kmPerMin * 1000) / 60);
+    let bearing = bearingAt(line, live.fraction, lookAhead(speedKmPerMin(live.speed)));
+    let last = 0;
+    let lastSentAt = 0;
+    let lastReadAt = 0;
+    let shownFraction = -1;
+    const frame = (now: number) => {
+      if (cancelled) return;
+      const dt = last ? Math.min(100, now - last) : 16;
+      last = now;
+      const kmPerMin = speedKmPerMin(live.speed);
+      let moved = live.dirty;
+      live.dirty = false;
+      if (live.playing && live.fraction < 1) {
+        live.fraction = Math.min(1, live.fraction + fractionStep(line, kmPerMin, dt));
+        moved = true;
+      }
+      if (moved) {
+        const target = bearingAt(line, live.fraction, lookAhead(kmPerMin));
+        // Heading-up, turned smoothly so a switchback does not whip the camera; a scrub turns at once.
+        bearing = live.playing ? bearing + turnBetween(bearing, target) * Math.min(1, dt / 400) : target;
+        map.jumpTo({ center: positionAt(line, live.fraction), bearing, pitch: FOLLOW_PITCH, zoom: followZoom(kmPerMin) });
+        liveFractionStore.set({ routeId, fraction: live.fraction });
+        const shown = Math.round(live.fraction * 2000) / 2000;
+        if (shown !== shownFraction) {
+          shownFraction = shown;
+          setRouteProgress(map, routeId, live.fraction);
+        }
+        // The reducer hears about the position four times a second, and always about the end.
+        if ((now - lastSentAt > 250 || live.fraction >= 1) && live.lastSent !== live.fraction) {
+          lastSentAt = now;
+          live.lastSent = live.fraction;
+          dispatchPreview({ type: "preview_tick", fraction: live.fraction });
+        }
+      }
+      // Heights the overview missed (tiles that had not loaded) fill in as the camera passes.
+      if (!complete && now - lastReadAt > 500) {
+        lastReadAt = now;
+        readHeights();
+      }
+      raf = requestAnimationFrame(frame);
+    };
+
+    const follow = () => {
+      if (cancelled) return;
+      readHeights();
+      const kmPerMin = speedKmPerMin(live.speed);
+      map.easeTo({
+        center: positionAt(line, live.fraction),
+        bearing,
+        pitch: FOLLOW_PITCH,
+        zoom: followZoom(kmPerMin),
+        duration: PREVIEW_EASE_MS,
+        easing: easeInOut,
+      });
+      timers.push(window.setTimeout(() => (raf = requestAnimationFrame(frame)), PREVIEW_EASE_MS + 20));
+    };
+
+    // Overview first: the whole route in view loads the terrain tiles the profile needs.
+    let west = Infinity;
+    let south = Infinity;
+    let east = -Infinity;
+    let north = -Infinity;
+    for (const [x, y] of line.coordinates) {
+      west = Math.min(west, x);
+      south = Math.min(south, y);
+      east = Math.max(east, x);
+      north = Math.max(north, y);
+    }
+    let started = false;
+    const startFollowing = () => {
+      if (started) return;
+      started = true;
+      follow();
+    };
+    map.once("idle", startFollowing);
+    timers.push(window.setTimeout(startFollowing, 3000));
+    map.fitBounds(
+      [
+        [west, south],
+        [east, north],
+      ],
+      { padding: 80, bearing: 0, pitch: 0, maxZoom: 15, duration: PREVIEW_EASE_MS, easing: easeInOut },
+    );
+
+    // Grabbing the map pauses the ride so the user can look around.
+    const onDragStart = () => {
+      if (live.playing) {
+        live.playing = false;
+        dispatchPreview({ type: "preview_toggle" });
+      }
+    };
+    map.on("dragstart", onDragStart);
+    const onVisibility = () => {
+      if (document.hidden) dispatchPreview({ type: "preview_stop" });
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      timers.forEach((t) => window.clearTimeout(t));
+      document.removeEventListener("visibilitychange", onVisibility);
+      map.off("dragstart", onDragStart);
+      map.off("idle", startFollowing);
+      liveFractionStore.set(null);
+      elevationStore.set(null);
+      live.lastSent = -1;
+      followingRef.current = false;
+      if (mapRef.current !== map) return; // unmounted: the map is gone
+      setRouteProgress(map, routeId, null);
+      // Never leave the camera in follow pitch: back to where the preview began, at Explore pitch.
+      map.easeTo({
+        center: [restore.longitude, restore.latitude],
+        zoom: restore.zoom,
+        bearing: restore.bearing,
+        pitch: arrivalPitch(restore.zoom, stateRef.current.flattened),
+        duration: PREVIEW_EASE_MS,
+        easing: easeInOut,
+      });
+    };
+  }, [playbackRouteId]);
 
   return <div ref={containerRef} data-testid="map-canvas" className={className ?? "h-full w-full"} />;
 }

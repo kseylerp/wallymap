@@ -9,6 +9,11 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
+/** A playback speed multiplier, or undefined when it is not a positive number. */
+function validSpeed(speed: number | undefined): number | undefined {
+  return speed !== undefined && Number.isFinite(speed) && speed > 0 ? speed : undefined;
+}
+
 /** Applies `change` to the op for `layerId`; returns `state` untouched when there is no such op. */
 function updateOp(state: MapState, layerId: string, change: (op: RenderOp) => RenderOp): MapState {
   if (!state.renderOps.some((op) => op.layerId === layerId)) return state;
@@ -58,7 +63,9 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       return withPitch(next, arrivalPitch(state.viewport.zoom, false) || state.viewport.pitch);
     }
     case "set_basemap":
-      return { ...state, basemap: action.basemap };
+      if (state.basemap === action.basemap) return state;
+      // A style swap drops the route layers the preview draws on, so the preview ends with it.
+      return { ...state, basemap: action.basemap, playback: undefined };
     case "layer_loaded":
       return {
         ...state,
@@ -128,7 +135,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       };
     }
     case "clear_layers":
-      return { ...state, layers: {}, routes: {}, renderOps: [], errors: [], selected: undefined };
+      return { ...state, layers: {}, routes: {}, renderOps: [], errors: [], selected: undefined, playback: undefined };
     case "route_loaded":
       return {
         ...state,
@@ -140,9 +147,40 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       if (!state.routes[action.routeId]) return state;
       const routes = { ...state.routes };
       delete routes[action.routeId];
-      return { ...state, routes };
+      // Previewing a route that is gone would follow nothing.
+      const playback = state.playback?.routeId === action.routeId ? undefined : state.playback;
+      return { ...state, routes, playback };
     }
     case "routes_cleared":
-      return Object.keys(state.routes).length === 0 ? state : { ...state, routes: {} };
+      return Object.keys(state.routes).length === 0 && !state.playback ? state : { ...state, routes: {}, playback: undefined };
+    case "preview_start":
+      if (!state.routes[action.routeId]) return state;
+      return {
+        ...state,
+        selected: undefined,
+        playback: { routeId: action.routeId, fraction: 0, playing: true, speed: validSpeed(action.speed) ?? 1 },
+      };
+    case "preview_tick": {
+      if (!state.playback || !Number.isFinite(action.fraction)) return state;
+      const fraction = Math.min(1, Math.max(0, action.fraction));
+      const playing = state.playback.playing && fraction < 1;
+      if (fraction === state.playback.fraction && playing === state.playback.playing) return state;
+      return { ...state, playback: { ...state.playback, fraction, playing } };
+    }
+    case "preview_toggle": {
+      if (!state.playback) return state;
+      const { playing, fraction } = state.playback;
+      return {
+        ...state,
+        playback: { ...state.playback, playing: !playing, fraction: !playing && fraction >= 1 ? 0 : fraction },
+      };
+    }
+    case "preview_speed": {
+      const speed = validSpeed(action.speed);
+      if (!state.playback || speed === undefined || speed === state.playback.speed) return state;
+      return { ...state, playback: { ...state.playback, speed } };
+    }
+    case "preview_stop":
+      return state.playback ? { ...state, playback: undefined } : state;
   }
 }

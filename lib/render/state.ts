@@ -66,7 +66,12 @@ export type MapState = {
   terrain: boolean;
   /** The user pressed 3D off: pitch 0 and no terrain until they press it again (remembered for the session). */
   flattened: boolean;
+  /** A route preview in progress (lib/render/wally/playback.ts): the camera follows `routeId` while it exists. */
+  playback?: Playback;
 };
+
+/** Route preview: how far along (0 to 1), whether it is moving, and the speed as a multiple of 10 km per minute. */
+export type Playback = { routeId: string; fraction: number; playing: boolean; speed: number };
 
 export const initialMapState: MapState = {
   viewport: { longitude: 0, latitude: 20, zoom: 1.5, pitch: 0, bearing: 0 },
@@ -105,4 +110,12 @@ export type MapAction =
   /** Adds a route, or replaces the route with the same id. */
   | { type: "route_loaded"; route: RouteState }
   | { type: "route_removed"; routeId: string }
-  | { type: "routes_cleared" };
+  | { type: "routes_cleared" }
+  /** Starts previewing a route from its start (closes the inspect card; the camera follows the route). */
+  | { type: "preview_start"; routeId: string; speed?: number }
+  /** Moves the preview to `fraction`; reaching the end pauses it there. */
+  | { type: "preview_tick"; fraction: number }
+  /** Play or pause; playing from the end starts over. */
+  | { type: "preview_toggle" }
+  | { type: "preview_speed"; speed: number }
+  | { type: "preview_stop" };

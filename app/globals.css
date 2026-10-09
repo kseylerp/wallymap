@@ -33,8 +33,8 @@
 
   --shadow: 0 10px 30px rgba(31, 30, 27, 0.12);
   /* Lifted segment in a control, and the hairline lift under an answer card. */
-  --shadow-chip: 0 1px 3px rgba(0, 0, 0, 0.12);
-  --shadow-hair: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --chip-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --hair-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 
   /* Globe atmosphere for the satellite hybrid, read by components/mapTiles.ts. */
   --fog-color: rgb(214, 222, 228);
@@ -63,8 +63,8 @@
   --radius-panel: var(--r-panel);
 
   --shadow-soft: var(--shadow);
-  --shadow-chip: var(--shadow-chip);
-  --shadow-hair: var(--shadow-hair);
+  --shadow-chip: var(--chip-shadow);
+  --shadow-hair: var(--hair-shadow);
 
   --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
@@ -125,6 +125,23 @@ h4 {
 :focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
+}
+
+/*
+ * Inside the chat a mouse click shows no ring: the composer pill's border turns slate instead (see ChatRail).
+ * Keyboard focus still gets a slate ring on buttons and pills. The text input always matches :focus-visible,
+ * so its ring is left to the pill border.
+ */
+.chat-surface :focus {
+  outline: none;
+}
+.chat-surface :focus-visible {
+  outline: 2px solid var(--slate);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+.chat-surface input:focus-visible {
+  outline: none;
 }
 
 /* Controls settle onto the map one after another on first load. */

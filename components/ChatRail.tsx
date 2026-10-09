@@ -307,7 +307,7 @@ export function ChatRail({ catalog, renderOps, getCanvasSize, onActions, collaps
         data-chat-open={open}
         data-chat-state={state}
         className={[
-          "absolute z-20 flex flex-col",
+          "chat-surface absolute z-20 flex flex-col",
           open
             ? [
                 "glass-strong rise-in overflow-hidden",
@@ -383,12 +383,14 @@ export function ChatRail({ catalog, renderOps, getCanvasSize, onActions, collaps
           </div>
         )}
 
-        <div className={open ? "w-full shrink-0 px-3 pt-1 pb-3" : "rise-in w-full"} style={{ animationDelay: "240ms" }}>
+        {/* rise-in stays on in every state so it plays once, on mount, and never replays on collapse. */}
+        <div className={`rise-in w-full ${open ? "shrink-0 px-3 pt-1 pb-3" : ""}`} style={{ animationDelay: "240ms" }}>
           <form
             onSubmit={onSubmit}
             className={[
-              "flex w-full items-center gap-2 rounded-pill p-1.5 pl-5",
-              open ? "border border-line bg-paper" : "glass-strong",
+              // A hairline that turns slate while the input has focus: the only focus cue a click gives.
+              "flex w-full items-center gap-2 rounded-pill border border-line p-1.5 pl-5 transition-colors focus-within:border-slate",
+              open ? "bg-paper" : "glass-strong",
             ].join(" ")}
           >
             <input

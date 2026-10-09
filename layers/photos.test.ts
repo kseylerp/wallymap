@@ -268,7 +268,15 @@ describe("photos layer", () => {
     });
     const r = geojson(await layer.query(ctx(stub, { token: TOKEN }), BOTH));
     expect(r.data.features.every((f) => f.properties?.source === "commons")).toBe(true);
+    expect(r.coverageNote).toMatch(/^All \d+ Mapillary requests failed .*; showing Commons photos only$/);
     expect(JSON.stringify(r)).not.toContain(TOKEN);
+  });
+
+  it("says so when every Commons request fails but Mapillary works", async () => {
+    const stub = routed({ commons: () => new Response("down", { status: 503 }) });
+    const r = geojson(await layer.query(ctx(stub, { token: TOKEN }), BOTH));
+    expect(r.data.features.every((f) => f.properties?.source === "mapillary")).toBe(true);
+    expect(r.coverageNote).toBe("All 1 Wikimedia Commons requests failed; showing Mapillary photos only");
   });
 
   it("maps a failure of every request to an upstream error that never mentions the token", async () => {

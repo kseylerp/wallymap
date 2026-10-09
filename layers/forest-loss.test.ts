@@ -22,7 +22,7 @@ describe("forest-loss layer", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toBe("CC BY 4.0 (Hansen/UMD/Google/USGS/NASA via GFW)");
     expect(layer.requiredEnv).toEqual([]);
-    expect(layer.maxAreaKm2).toBe(50_000_000);
+    expect(layer.maxAreaKm2).toBe(Number.POSITIVE_INFINITY);
   });
 
   it("applies the documented input defaults", () => {

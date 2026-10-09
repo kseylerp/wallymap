@@ -49,7 +49,7 @@ const forestLoss = defineLayer({
   coverage: "global",
   license: "CC BY 4.0 (Hansen/UMD/Google/USGS/NASA via GFW)",
   requiredEnv: [],
-  maxAreaKm2: 50_000_000,
+  maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
   style: { geometry: "polygon", color: "#E1498C" },
 

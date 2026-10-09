@@ -3,7 +3,7 @@
  *   node/way["tourism"="camp_site"]                         (optionally ["backcountry"="yes"])
  *   node/way["amenity"="parking"]["capacity"]               (only when includeParking)
  * Fixture: layers/__fixtures__/campsites.tahoe.json (Lake Tahoe west shore, recorded 2026-10-09 with
- * `out tags geom`). Tags read: name, backcountry, tents, caravans, fee (yes/no), capacity (integer).
+ * `out tags geom`). Tags read: name, backcountry, tents, caravans, fee (yes/no), capacity (integer), wikidata, wikipedia (passed through for the popularity layer).
  * Ways are reduced to the area centroid of their geometry (vertex average for open lines).
  */
 import { z } from "zod";
@@ -69,18 +69,23 @@ export function wayCentroid(points: LatLon[]): [number, number] | null {
   const closed = points.length >= 4 && first.lat === last.lat && first.lon === last.lon;
 
   if (closed) {
+    // Work relative to the first vertex: raw lon/lat products lose most of their precision on small rings.
     let twiceArea = 0;
     let cx = 0;
     let cy = 0;
     for (let i = 0; i < points.length - 1; i++) {
-      const a = points[i];
-      const b = points[i + 1];
-      const cross = a.lon * b.lat - b.lon * a.lat;
+      const ax = points[i].lon - first.lon;
+      const ay = points[i].lat - first.lat;
+      const bx = points[i + 1].lon - first.lon;
+      const by = points[i + 1].lat - first.lat;
+      const cross = ax * by - bx * ay;
       twiceArea += cross;
-      cx += (a.lon + b.lon) * cross;
-      cy += (a.lat + b.lat) * cross;
+      cx += (ax + bx) * cross;
+      cy += (ay + by) * cross;
     }
-    if (Math.abs(twiceArea) > 1e-18) return [cx / (3 * twiceArea), cy / (3 * twiceArea)];
+    if (Math.abs(twiceArea) > 1e-18) {
+      return [first.lon + cx / (3 * twiceArea), first.lat + cy / (3 * twiceArea)];
+    }
   }
 
   const sumLon = points.reduce((s, p) => s + p.lon, 0);
@@ -147,6 +152,8 @@ export function normalizeCampsites(json: unknown): FeatureCollection<Point> {
     const fee = yesNo(tags.fee);
     if (fee !== undefined) properties.fee = fee;
     if (capacity !== undefined && capacity > 0) properties.capacity = capacity;
+    if (tags.wikidata) properties.wikidata = tags.wikidata;
+    if (tags.wikipedia) properties.wikipedia = tags.wikipedia;
     if (!isCamp && capacity !== undefined) properties.v = capacity;
 
     features.push({ type: "Feature", geometry: { type: "Point", coordinates: center }, properties });
@@ -161,7 +168,7 @@ function capacityOf(feature: Feature): number {
 
 const campsites = defineLayer({
   id: "campsites",
-  title: "Campsites and trailhead parking",
+  title: "Campsites and parking lots",
   description:
     "Campsites and parking lots from OpenStreetMap, anywhere in the world. Each point has kind ('camp_site' or 'parking'), name when mapped, and the tags that are mapped: " +
     "backcountry (true for walk-in or wilderness sites), tents, caravans (true when tents or RVs are allowed), fee (true when it costs money) and capacity (spaces or pitches). " +
@@ -169,7 +176,7 @@ const campsites = defineLayer({
     "Use it to find places to camp or where to leave a car near a trail. " +
     "Set backcountryOnly to true to keep only camp sites tagged as backcountry (it never hides parking); set includeParking to false to get camp sites alone. " +
     "Caveats: OpenStreetMap is volunteer-mapped, so it misses many sites and is not a reservation or availability source; fees, seasons and rules may be out of date or missing; " +
-    "free dispersed camping spots are mostly not mapped here (see mvum-dispersed for the roads), and parking is any lot with a capacity, not only trailhead lots. " +
+    "free dispersed camping spots are mostly not mapped here (see forest-roads for the drivable Forest Service roads), and parking is any lot with a capacity, not only trailhead lots. " +
     "Zoom in to a region under 10,000 km² (about a 100 km square) first. At most 5,000 points are returned (all camp sites first, then the largest parking lots) and the result says so when it trims.",
   coverage: "global",
   license: "ODbL (OpenStreetMap contributors)",

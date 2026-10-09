@@ -27,12 +27,17 @@ const featureSchema = z.object({
 
 const responseSchema = z.object({ features: z.array(z.unknown()) });
 
+/** How long a failed Natural Earth download is remembered, so lookups during an outage do not each wait out the timeout. */
+const REGIONS_RETRY_AFTER_MS = 60_000;
+let failedAt: number | undefined;
+
 function isSmall(bbox: BBox): boolean {
   return bbox[2] - bbox[0] < SMALL_BBOX_DEG && bbox[3] - bbox[1] < SMALL_BBOX_DEG;
 }
 
 /** The Natural Earth region named `place`, as a geocode result, or null when there is none or the download fails. */
 async function regionResult(place: string): Promise<GeocodeResult | null> {
+  if (failedAt !== undefined && Date.now() - failedAt < REGIONS_RETRY_AFTER_MS) return null;
   try {
     const fc = await loadNaturalEarthRegions();
     const region = findRegion(place, fc);
@@ -46,6 +51,7 @@ async function regionResult(place: string): Promise<GeocodeResult | null> {
       source: "natural-earth",
     };
   } catch {
+    failedAt = Date.now();
     return null;
   }
 }

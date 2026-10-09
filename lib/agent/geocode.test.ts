@@ -206,6 +206,28 @@ describe("geocode", () => {
       }
     });
 
+    it("remembers a failed regions download for 60 seconds, then tries again", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        vi.setSystemTime(new Date("2026-10-09T12:00:00Z"));
+        const calls = routed(ANDES_TOWN, { ne: "fail" });
+        await geocode("Andes");
+        await geocode("Andes");
+        expect(calls.ne).toBe(1);
+
+        vi.setSystemTime(new Date("2026-10-09T12:00:59Z"));
+        await geocode("Andes");
+        expect(calls.ne).toBe(1);
+
+        vi.setSystemTime(new Date("2026-10-09T12:01:01Z"));
+        const recovered = routed(ANDES_TOWN);
+        await expect(geocode("Andes")).resolves.toMatchObject({ source: "natural-earth" });
+        expect(recovered.ne).toBe(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("downloads the regions only once across several lookups", async () => {
       const calls = routed(ANDES_TOWN);
       await geocode("Andes");

@@ -24,7 +24,7 @@ describe("night-lights layer", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toBe("NASA GIBS (public)");
     expect(layer.requiredEnv).toEqual([]);
-    expect(layer.maxAreaKm2).toBe(50_000_000);
+    expect(layer.maxAreaKm2).toBe(Number.POSITIVE_INFINITY);
   });
 
   it("accepts an optional YYYY-MM-DD date and rejects other formats", () => {
@@ -82,5 +82,10 @@ describe("night-lights layer", () => {
   it("runs through runLayer and rejects a malformed date", async () => {
     expect((await runLayer("night-lights", { bbox: EUROPE, zoom: 2 })).status).toBe(200);
     expect((await runLayer("night-lights", { bbox: EUROPE, input: { date: "yesterday" } })).status).toBe(400);
+  });
+
+  it("accepts a whole-globe bbox through runLayer", async () => {
+    const res = await runLayer("night-lights", { bbox: [-180, -85, 180, 85], zoom: 1 });
+    expect(res.status).toBe(200);
   });
 });

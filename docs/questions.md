@@ -30,7 +30,7 @@ The map shows snow depth around Mount Hood, and the note gives the current depth
 
 ## 5. Find campsites and forest roads open to vehicles near Moab
 
-Tools: `geocode` → `set_view` → `query_campsites` + `query_mvum-dispersed` → `render` (each layer) → `note`
+Tools: `geocode` → `set_view` → `query_campsites` + `query_forest-roads` → `render` (each layer) → `note`
 
 The map shows campsites together with forest roads that allow dispersed camping near Moab, and the note says which is which.
 

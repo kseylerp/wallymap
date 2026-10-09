@@ -66,6 +66,24 @@ describe("wayCentroid", () => {
     expect(lat).toBeCloseTo(1, 9);
   });
 
+  it("stays within 1 m of the mean on a ~10 m ring near lon -120, lat 39", () => {
+    const lon0 = -120.0000123;
+    const lat0 = 39.0000456;
+    const dLon = 0.00012; // about 9 m east-west at this latitude
+    const dLat = 0.00009; // about 10 m north-south
+    const ring = [
+      { lat: lat0, lon: lon0 },
+      { lat: lat0, lon: lon0 + dLon },
+      { lat: lat0 + dLat, lon: lon0 + dLon },
+      { lat: lat0 + dLat, lon: lon0 },
+      { lat: lat0, lon: lon0 },
+    ];
+    const [lon, lat] = wayCentroid(ring) ?? [NaN, NaN];
+    const metresLon = Math.abs(lon - (lon0 + dLon / 2)) * 111_320 * Math.cos((39 * Math.PI) / 180);
+    const metresLat = Math.abs(lat - (lat0 + dLat / 2)) * 110_570;
+    expect(Math.hypot(metresLon, metresLat)).toBeLessThan(1);
+  });
+
   it("averages the vertices of an open line and returns null for an empty geometry", () => {
     expect(wayCentroid([{ lat: 0, lon: 0 }, { lat: 2, lon: 4 }])).toEqual([2, 1]);
     expect(wayCentroid([])).toBeNull();

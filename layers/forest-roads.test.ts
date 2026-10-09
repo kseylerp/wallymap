@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { mvumWhere, normalizeMvum } from "./mvum-dispersed";
-import raw from "./__fixtures__/mvum-dispersed.tahoe.json";
+import layer, { mvumWhere, normalizeMvum } from "./forest-roads";
+import raw from "./__fixtures__/forest-roads.tahoe.json";
 
 const fixture = raw as unknown as FeatureCollection;
 const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
@@ -98,7 +98,7 @@ describe("normalizeMvum", () => {
   });
 });
 
-describe("mvum-dispersed layer", () => {
+describe("forest-roads layer", () => {
   it("declares US coverage, no key and a 20,000 km2 cap", () => {
     expect(layer.coverage).toBe("us");
     expect(layer.requiredEnv).toEqual([]);
@@ -109,7 +109,7 @@ describe("mvum-dispersed layer", () => {
 
   it("queries MVUM roads layer 1 with the filter, a 24 hour cache and a cache key", async () => {
     const stub = vi.fn(async () => json(fixture));
-    const r = await layer.query(ctx(stub, "mvum-dispersed:k"), { includeAllRoads: false });
+    const r = await layer.query(ctx(stub, "forest-roads:k"), { includeAllRoads: false });
     const [url, init] = stub.mock.calls[0] as unknown as [
       string,
       RequestInit & { cacheKey?: string; ttlSeconds?: number },
@@ -119,7 +119,7 @@ describe("mvum-dispersed layer", () => {
     expect(params(url).get("geometry")).toBe("-120.2,38.85,-120,39");
     expect(params(url).get("outFields")).toContain("mvum_symbol_name");
     expect(init.ttlSeconds).toBe(86_400);
-    expect(init.cacheKey).toBe("mvum-dispersed:k:mvum-roads");
+    expect(init.cacheKey).toBe("forest-roads:k:mvum-roads");
     expect(init.signal).toBeInstanceOf(AbortSignal);
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(fixture.features.length);
@@ -162,7 +162,7 @@ describe("mvum-dispersed layer", () => {
   });
 
   it("returns 422 zoom_in from runLayer for a bbox over 20,000 km2", async () => {
-    const res = await runLayer("mvum-dispersed", { bbox: [-122, 37, -119, 40] });
+    const res = await runLayer("forest-roads", { bbox: [-122, 37, -119, 40] });
     expect(res.status).toBe(422);
     expect(res.body).toMatchObject({ hint: "zoom_in" });
   });

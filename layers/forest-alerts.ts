@@ -50,7 +50,7 @@ const forestAlerts = defineLayer({
   coverage: { bbox: [-180, -30, 180, 30] },
   license: "CC BY 4.0 (GFW integrated alerts: UMD GLAD, WUR RADD)",
   requiredEnv: [],
-  maxAreaKm2: 50_000_000,
+  maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
   style: { geometry: "polygon", color: "#E1498C" },
 

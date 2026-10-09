@@ -33,7 +33,7 @@ const population = defineLayer({
   coverage: "global",
   license: "NASA GIBS (public)",
   requiredEnv: [],
-  maxAreaKm2: 50_000_000,
+  maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
   style: { geometry: "polygon", color: "#C0504D" },
 

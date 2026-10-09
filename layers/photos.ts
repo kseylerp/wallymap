@@ -346,7 +346,9 @@ const photos = defineLayer({
         if (o.value.capped) capped += 1;
       }
       commons = [...merged.values()];
-      if (failed > 0 && failed < commonsRun.outcomes.length) {
+      if (failed === commonsRun.outcomes.length) {
+        notes.push(`All ${failed} Wikimedia Commons requests failed; showing ${useMapillary ? "Mapillary" : "no"} photos only`);
+      } else if (failed > 0) {
         notes.push(`${failed} of ${commonsRun.outcomes.length} Wikimedia Commons requests failed, so some areas may be missing photos`);
       }
       if (commonsRun.used < commonsRun.total) {
@@ -371,7 +373,9 @@ const photos = defineLayer({
         if (o.value.capped) capped += 1;
       }
       mapillary = [...merged.values()];
-      if (failed > 0 && failed < mapillaryRun.outcomes.length) {
+      if (failed === mapillaryRun.outcomes.length) {
+        notes.push(`All ${failed} Mapillary requests failed (very dense areas can exceed its limits); showing ${useCommons ? "Commons" : "no"} photos only`);
+      } else if (failed > 0) {
         notes.push(`${failed} of ${mapillaryRun.outcomes.length} Mapillary requests failed (very dense areas can exceed its limits), so some areas may be missing`);
       }
       if (mapillaryRun.used < mapillaryRun.total) {

@@ -16,7 +16,7 @@ describe("population layer", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toBe("NASA GIBS (public)");
     expect(layer.requiredEnv).toEqual([]);
-    expect(layer.maxAreaKm2).toBe(50_000_000);
+    expect(layer.maxAreaKm2).toBe(Number.POSITIVE_INFINITY);
     expect(layer.input.parse({})).toEqual({});
   });
 
@@ -47,6 +47,11 @@ describe("population layer", () => {
 
   it("runs through runLayer for a continent-sized bbox", async () => {
     const res = await runLayer("population", { bbox: EUROPE, zoom: 2 });
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts a whole-globe bbox through runLayer", async () => {
+    const res = await runLayer("population", { bbox: [-180, -85, 180, 85], zoom: 1 });
     expect(res.status).toBe(200);
   });
 });

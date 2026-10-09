@@ -104,9 +104,9 @@ const citation = () => ({
   retrieved: new Date().toISOString(),
 });
 
-const mvumDispersed = defineLayer({
-  id: "mvum-dispersed",
-  title: "Forest Service roads for car camping",
+const forestRoads = defineLayer({
+  id: "forest-roads",
+  title: "Forest Service roads open to motor vehicles",
   description:
     "US Forest Service roads that are legally open to public motor vehicles (from each forest's Motor Vehicle Use Map), the roads you drive to find a dispersed (free, undeveloped) campsite in a National Forest. " +
     "Each line has routeId, name (when it has one), forest, access (the Forest Service class, such as 'Roads open to highway legal vehicles only, Seasonal'), " +
@@ -131,9 +131,9 @@ const mvumDispersed = defineLayer({
     }
 
     const area = bboxAreaKm2(ctx.bbox);
-    if (area > mvumDispersed.maxAreaKm2) {
+    if (area > forestRoads.maxAreaKm2) {
       return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${mvumDispersed.maxAreaKm2} km²`,
+        error: `Area is ${Math.round(area)} km²; zoom in to under ${forestRoads.maxAreaKm2} km²`,
         hint: "zoom_in",
       };
     }
@@ -159,6 +159,6 @@ const mvumDispersed = defineLayer({
   },
 });
 
-registerLayer(mvumDispersed);
+registerLayer(forestRoads);
 
-export default mvumDispersed;
+export default forestRoads;

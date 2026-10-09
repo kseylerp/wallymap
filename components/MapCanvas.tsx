@@ -146,12 +146,15 @@ function GlobeMap({ state, onViewportChange, className }: MapCanvasProps) {
     });
   }, [state.viewport]);
 
-  // Swap the basemap style; tile layers come back via the `style.load` handler.
+  // Swap the basemap style; tile layers come back via the `style.load` handler. `diff: false` forces a
+  // full rebuild: the default diff path silently drops our raster sources and never fires `style.load`.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || appliedBasemapRef.current === state.basemap) return;
     appliedBasemapRef.current = state.basemap;
-    map.setStyle(basemapStyleUrl(state.basemap));
+    // The cast is a typing quirk: SetStyleOptions marks the font fields required, but mapbox fills them
+    // from the map's own settings, and passing them explicitly as undefined would override those.
+    map.setStyle(basemapStyleUrl(state.basemap), { diff: false } as Parameters<mapboxgl.Map["setStyle"]>[1]);
   }, [state.basemap]);
 
   return <div ref={containerRef} data-testid="map-canvas" className={className ?? "h-full w-full"} />;

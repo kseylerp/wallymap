@@ -34,7 +34,7 @@ describe("arcgisQuery", () => {
     expect(parsed.searchParams.get("resultRecordCount")).toBe("2000");
     expect(parsed.searchParams.has("maxAllowableOffset")).toBe(false);
     expect(init.signal).toBeInstanceOf(AbortSignal);
-    expect(init.cacheKey).toBe(`${SERVICE}:arcgis`);
+    expect(init.cacheKey).toBeUndefined();
   });
 
   it("honours where, maxRecords, maxAllowableOffset and cacheSuffix", async () => {
@@ -53,6 +53,17 @@ describe("arcgisQuery", () => {
     expect(parsed.searchParams.get("resultRecordCount")).toBe("50");
     expect(parsed.searchParams.get("maxAllowableOffset")).toBe("0.001");
     expect(init.cacheKey).toBe("layer:k:x");
+  });
+
+  it("gives different queries under one ctx different cache keys", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(fc), { status: 200 }));
+    const ctx = ctxWith(stub, "layer:k");
+    await arcgisQuery(ctx, SERVICE, { where: "TYPE='A'", outFields: ["NAME"], bbox: BBOX });
+    await arcgisQuery(ctx, SERVICE, { where: "TYPE='B'", outFields: ["NAME"], bbox: BBOX });
+    const keys = stub.mock.calls.map((c: unknown[]) => (c[1] as { cacheKey?: string }).cacheKey);
+    expect(keys[0]).toMatch(/^layer:k:arcgis:[0-9a-f]+$/);
+    expect(keys[1]).toMatch(/^layer:k:arcgis:[0-9a-f]+$/);
+    expect(keys[0]).not.toBe(keys[1]);
   });
 
   it("returns the FeatureCollection on success", async () => {

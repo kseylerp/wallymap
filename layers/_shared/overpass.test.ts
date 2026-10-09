@@ -61,6 +61,16 @@ describe("overpassQuery", () => {
     expect(keys).toEqual(["layer:k:s", "layer:k:s:fallback"]);
   });
 
+  it("gives different queries under one ctx different cache keys when no suffix is given", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(GOOD), { status: 200 }));
+    const ctx = ctxWith(stub, { cacheKey: "layer:k" });
+    await overpassQuery(ctx, "node(1);out;");
+    await overpassQuery(ctx, "node(2);out;");
+    const keys = stub.mock.calls.map((c: unknown[]) => (c[1] as { cacheKey?: string }).cacheKey);
+    expect(keys[0]).toMatch(/^layer:k:overpass:[0-9a-f]+$/);
+    expect(keys[0]).not.toBe(keys[1]);
+  });
+
   it("leaves the cache key undefined when ctx has none", async () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(GOOD), { status: 200 }));
     await overpassQuery(ctxWith(stub), "q");

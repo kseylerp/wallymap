@@ -73,7 +73,8 @@ describe("osm-trails layer", () => {
       { namedOnly: false },
     );
     const keys = stub.mock.calls.map((call: unknown[]) => (call[1] as { cacheKey?: string }).cacheKey);
-    expect(keys).toEqual(["osm-trails:k", "osm-trails:k:fallback"]);
+    expect(keys[0]).toMatch(/^osm-trails:k:overpass:[0-9a-f]+$/);
+    expect(keys[1]).toBe(`${keys[0]}:fallback`);
   });
 
   it("treats a blank OVERPASS_URL as unset", async () => {

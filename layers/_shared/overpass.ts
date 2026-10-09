@@ -1,7 +1,8 @@
+import { bodyHash } from "@/lib/fetch/cache";
 import type { QueryContext } from "../types";
+import { UPSTREAM_TIMEOUT_MS } from "./constants";
 
 export const PUBLIC_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
-export const UPSTREAM_TIMEOUT_MS = 25_000;
 
 export type OverpassResult =
   | { ok: true; json: unknown }
@@ -32,12 +33,12 @@ export async function overpassQuery(
   opts: { cacheSuffix?: string } = {},
 ): Promise<OverpassResult> {
   const primary = ctx.env.OVERPASS_URL || PUBLIC_OVERPASS_ENDPOINT;
+  // Without ctx.cacheKey the fetch wrapper builds its own URL + body-hash key.
+  // Without a suffix, hash the query so two queries from one ctx never share a key.
   const baseKey =
     ctx.cacheKey === undefined
       ? undefined
-      : opts.cacheSuffix === undefined
-        ? ctx.cacheKey
-        : `${ctx.cacheKey}:${opts.cacheSuffix}`;
+      : `${ctx.cacheKey}:${opts.cacheSuffix ?? `overpass:${bodyHash(query)}`}`;
 
   // The fallback gets its own key so a cached primary failure never answers it.
   const attempts = [

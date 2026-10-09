@@ -1,6 +1,7 @@
 import type { FeatureCollection } from "geojson";
 import type { BBox, QueryContext } from "../types";
-import { UPSTREAM_TIMEOUT_MS } from "./overpass";
+import { bodyHash } from "@/lib/fetch/cache";
+import { UPSTREAM_TIMEOUT_MS } from "./constants";
 
 export type ArcgisParams = {
   where?: string;
@@ -62,9 +63,17 @@ export async function arcgisQuery(
     search.set("maxAllowableOffset", String(params.maxAllowableOffset));
   }
 
+  const url = `${serviceUrl}/query?${search.toString()}`;
+  // Without ctx.cacheKey the fetch wrapper builds its own URL-based key.
+  // Without a suffix, hash the full URL so two queries from one ctx never share a key.
+  const cacheKey =
+    ctx.cacheKey === undefined
+      ? undefined
+      : `${ctx.cacheKey}:${params.cacheSuffix ?? `arcgis:${bodyHash(url)}`}`;
+
   try {
-    const res = await ctx.fetch(`${serviceUrl}/query?${search.toString()}`, {
-      cacheKey: `${ctx.cacheKey ?? serviceUrl}:${params.cacheSuffix ?? "arcgis"}`,
+    const res = await ctx.fetch(url, {
+      cacheKey,
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
     if (!res.ok) {

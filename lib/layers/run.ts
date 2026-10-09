@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getLayer } from "@/layers/registry";
-import { BBoxSchema, type LayerError, type LayerResult } from "@/layers/types";
+import { BBoxSchema, bboxAreaKm2, type LayerError, type LayerResult } from "@/layers/types";
 import { createLayerFetch } from "@/lib/fetch";
 
 export type RunLayerParams = { bbox: unknown; zoom?: number; input?: unknown };
@@ -27,6 +27,17 @@ export async function runLayer(id: string, params: RunLayerParams): Promise<RunL
   const input = layer.input.safeParse(params.input ?? {});
   if (!input.success) {
     return { status: 400, body: { error: `Invalid input: ${z.prettifyError(input.error)}` } };
+  }
+
+  const area = bboxAreaKm2(bbox.data);
+  if (area > layer.maxAreaKm2) {
+    return {
+      status: 422,
+      body: {
+        error: `Area is ${Math.round(area)} km²; zoom in to under ${layer.maxAreaKm2} km²`,
+        hint: "zoom_in",
+      },
+    };
   }
 
   const missing = layer.requiredEnv.find((name) => !process.env[name]);

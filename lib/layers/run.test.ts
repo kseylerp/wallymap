@@ -23,7 +23,7 @@ const fake = defineLayer({
   coverage: "global",
   license: "CC0",
   requiredEnv: [],
-  maxAreaKm2: 100,
+  maxAreaKm2: 100000,
   input: z.object({ n: z.number().optional() }),
   query,
   style: { geometry: "point", color: "#000" },
@@ -71,6 +71,29 @@ describe("runLayer", () => {
       status: 422,
       body: { error: "Area is 9000 km²; zoom in", hint: "zoom_in" },
     });
+  });
+
+  it("returns 422 zoom_in without querying when the bbox exceeds maxAreaKm2", async () => {
+    const tiny = defineLayer({ ...fake, id: "tiny", maxAreaKm2: 100 });
+    clearRegistry();
+    registerLayer(tiny);
+
+    const res = await runLayer("tiny", { bbox: BBOX });
+    expect(res.status).toBe(422);
+    expect(res.body).toEqual({
+      error: expect.stringMatching(/^Area is \d+ km²; zoom in to under 100 km²$/),
+      hint: "zoom_in",
+    });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 upstream when query rejects", async () => {
+    query.mockImplementation(async () => {
+      throw new Error("boom");
+    });
+    const res = await runLayer("fake", { bbox: BBOX });
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ error: "Error: boom", hint: "upstream" });
   });
 
   it("returns 200 with the layer result unchanged", async () => {

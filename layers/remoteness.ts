@@ -14,7 +14,8 @@ import { getLayer, registerLayer } from "./registry";
 import { overpassQuery } from "./_shared/overpass";
 import { outsideUs } from "./_shared/coverage";
 import { GridIndex, geometryBBox, haversineKm, pointInPolygon } from "./_shared/geo";
-import { runComposed } from "./_shared/compose";
+import { runComposed, type ComposedResult } from "./_shared/compose";
+import { cacheKeyFor } from "@/lib/fetch/cache";
 import {
   CAMP_RADIUS_KM,
   MAX_CELLS,
@@ -33,6 +34,8 @@ const KM_PER_DEG_LAT = 110.57;
 const KM_PER_DEG_LON_EQUATOR = 111.32;
 /** Long road segments get extra points this far apart, so distance to a vertex tracks distance to the road. */
 const DENSIFY_KM = 1;
+/** Road points closer together than this collapse to one; far below the scale of an H3 cell. */
+const COLLAPSE_KM = 0.2;
 
 export type RemotenessSignals = {
   roadDistanceKm: number;
@@ -78,8 +81,26 @@ export function buildRoadsQuery(bbox: BBox): string {
 }
 
 /**
+ * Keeps the first point in each ~`cellKm` square, so dense town grids collapse while every point
+ * of a sparse, lone track survives.
+ */
+export function collapseToGrid(points: Position[], cellKm: number): Position[] {
+  const seen = new Set<string>();
+  const out: Position[] = [];
+  for (const p of points) {
+    const kmPerDegLon = KM_PER_DEG_LON_EQUATOR * Math.max(Math.cos((p[1] * Math.PI) / 180), 0.01);
+    const key = `${Math.floor((p[0] * kmPerDegLon) / cellKm)},${Math.floor((p[1] * KM_PER_DEG_LAT) / cellKm)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+  }
+  return out;
+}
+
+/**
  * Road vertices as [lng, lat] from an Overpass `out geom` body. Long segments are densified to
- * about 1 km, then the whole set is thinned evenly to at most `max` points.
+ * about 1 km, points are collapsed to one per ~200 m square, and only if still over `max` is the
+ * set thinned evenly.
  */
 export function roadVertices(json: unknown, max: number = MAX_ROAD_VERTICES): Position[] {
   const elements = (json as { elements?: unknown })?.elements;
@@ -104,9 +125,10 @@ export function roadVertices(json: unknown, max: number = MAX_ROAD_VERTICES): Po
       prev = p;
     }
   }
-  if (all.length <= max) return all;
-  const stride = all.length / max;
-  return Array.from({ length: max }, (_, i) => all[Math.floor(i * stride)]);
+  const collapsed = collapseToGrid(all, COLLAPSE_KM);
+  if (collapsed.length <= max) return collapsed;
+  const stride = collapsed.length / max;
+  return Array.from({ length: max }, (_, i) => collapsed[Math.floor(i * stride)]);
 }
 
 /** 0..1, rising fast over the first few kilometres from a road and flattening toward the cap. */
@@ -255,15 +277,29 @@ const remoteness = defineLayer({
     const campsLayer = getLayer("campsites");
     const campBoxes = splitBBox(padBBox(ctx.bbox, CAMP_RADIUS_KM), campsLayer?.maxAreaKm2 ?? Infinity);
 
-    const [roadsRun, wildRun, ...campRuns] = await Promise.all([
-      overpassQuery(ctx, buildRoadsQuery(padBBox(ctx.bbox, ROAD_PADDING_KM)), { cacheSuffix: "roads" }),
-      us ? runComposed("wilderness", ctx, {}, "wilderness") : Promise.resolve(null),
-      ...campBoxes.map((bbox, i) =>
-        runComposed("campsites", { ...ctx, bbox }, { includeParking: false, backcountryOnly: false }, `campsites:${i}`),
-      ),
-    ]);
+    // Signals do not depend on resolution, so their cache keys leave it out and every resolution shares them.
+    const shared = { ...ctx, cacheKey: ctx.cacheKey === undefined ? undefined : cacheKeyFor(remoteness.id, ctx.bbox, {}) };
 
+    // Wilderness is ArcGIS, so it runs alongside the roads query; campsites wait for roads so
+    // only one Overpass query is in flight at a time (Overpass limits concurrent queries per IP).
+    const wildPromise = us ? runComposed("wilderness", shared, {}, "wilderness") : Promise.resolve(null);
+    const roadsRun = await overpassQuery(shared, buildRoadsQuery(padBBox(ctx.bbox, ROAD_PADDING_KM)), {
+      cacheSuffix: "roads",
+    });
     if (!roadsRun.ok) return { error: roadsRun.error, hint: "upstream" };
+
+    const campRuns: ComposedResult[] = [];
+    for (const [i, bbox] of campBoxes.entries()) {
+      const run = await runComposed(
+        "campsites",
+        { ...shared, bbox },
+        { includeParking: false, backcountryOnly: false },
+        `campsites:${i}`,
+      );
+      campRuns.push(run);
+      if (!run.ok) break;
+    }
+    const wildRun = await wildPromise;
 
     const notes: string[] = [];
     let wilderness: Feature[] | null = null;
@@ -278,13 +314,13 @@ const remoteness = defineLayer({
 
     let camps: Feature[] | null = [];
     for (const run of campRuns) {
-      if (run === null) continue;
       if (!run.ok) {
         camps = null;
         notes.push(`Scored without the no-campsite bonus (${run.error.error})`);
         break;
       }
       camps.push(...run.data.features.filter((f) => f.properties?.kind === "camp_site"));
+      if (run.coverageNote) notes.push(`Campsites: ${run.coverageNote}`);
     }
 
     const features = scoreCells({

@@ -26,7 +26,8 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "physical-regions", synonyms: ["region", "the Andes", "the Rockies", "mountain range", "plateau"], notes: "named landform regions" },
   { layerId: "night-lights", synonyms: ["night sky", "light pollution", "dark sky", "stargazing"], notes: "satellite night brightness" },
   { layerId: "population", synonyms: ["population", "how many people", "density"], notes: "residents per area" },
-  { layerId: "popularity", synonyms: ["crowded", "busy", "popular", "congestion", "foot traffic"], notes: "estimate computed from other layers" },
+  { layerId: "popularity-campsites", synonyms: ["busiest campgrounds", "crowded campsites"], notes: "camp site scores" },
+  { layerId: "popularity", synonyms: ["crowded", "busy", "popular", "congestion", "foot traffic"], notes: "trails; see popularity-campsites" },
   { layerId: "remoteness", synonyms: ["remote", "untouched", "off the grid", "solitude"], notes: "estimate computed from other layers" },
 ];
 

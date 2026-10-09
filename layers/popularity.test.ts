@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { CachedFetch } from "@/lib/fetch";
 import { clearRegistry, registerLayer } from "./registry";
 import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
-import popularity, { rankNormalize, samplePoints, scorePopularity } from "./popularity";
+import popularity, { mapillaryPartial, popularityCampsites, rankNormalize, samplePoints, scorePopularity } from "./popularity";
 
 const BBOX: BBox = [-120.2, 39.05, -120.0, 39.15];
 
@@ -82,8 +82,9 @@ function ctx(cacheKey?: string): QueryContext {
   return { bbox: BBOX, zoom: 12, env: {}, fetch: vi.fn() as unknown as CachedFetch, cacheKey };
 }
 
-async function run(target: "trails" | "campsites" = "trails", cacheKey?: string) {
-  return popularity.query(ctx(cacheKey), { target });
+async function run(target: "trails" | "campsites" = "trails", cacheKey?: string, bbox: BBox = BBOX) {
+  const layer = target === "trails" ? popularity : popularityCampsites;
+  return layer.query({ ...ctx(cacheKey), bbox }, {});
 }
 
 function features(result: Outcome): Feature[] {
@@ -107,10 +108,21 @@ beforeEach(() => {
 afterAll(() => clearRegistry());
 
 describe("rankNormalize", () => {
-  it("maps zero to 0, the largest to 1 and ties to the same rank", () => {
-    expect(rankNormalize([0, 5, 5, 10])).toEqual([0, 0.75, 0.75, 1]);
+  it("ranks only non-zero values: zero is 0, the smallest non-zero 1/k, the largest 1", () => {
+    expect(rankNormalize([0, 5, 5, 10])).toEqual([0, 2 / 3, 2 / 3, 1]);
+    expect(rankNormalize([0, 1, 2, 3])).toEqual([0, 1 / 3, 2 / 3, 1]);
     expect(rankNormalize([])).toEqual([]);
     expect(rankNormalize([0, 0])).toEqual([0, 0]);
+  });
+
+  it("keeps a crowd of zeros from making the first photo worth more than the next hundred", () => {
+    const values = [...Array(90).fill(0), 1, 2, 3, 5, 8, 13, 21, 50, 100, 356];
+    const norm = rankNormalize(values);
+    const at = (v: number) => norm[values.indexOf(v)];
+    expect(at(1)).toBeCloseTo(0.1, 9);
+    expect(at(356)).toBe(1);
+    // Going from 1 photo to 356 is worth far more than going from 0 to 1.
+    expect(at(356) - at(1)).toBeGreaterThan(at(1) - at(0));
   });
 });
 
@@ -170,13 +182,34 @@ describe("popularity layer", () => {
     expect(keyOf(trailsFake)).toBe("popularity:abc:trails");
     expect(keyOf(campsFake)).toBe("popularity:abc:campsites");
     expect(keyOf(photosFake)).toBe("popularity:abc:photos");
+    expect(vi.mocked(photosFake.query).mock.calls[0][1]).not.toHaveProperty("sources", ["commons"]);
     expect(vi.mocked(trailsFake.query).mock.calls[0][1]).toMatchObject({ namedOnly: false });
     expect(vi.mocked(campsFake.query).mock.calls[0][1]).toMatchObject({ includeParking: true });
   });
 
-  it("scores camp sites (not parking lots) when target is campsites", async () => {
+  it("asks photos for Commons only when Mapillary would cover just the centre, and says so", async () => {
+    const wide: BBox = [-120.2, 39.0, -120.0, 39.15]; // 4 x 3 Mapillary squares, over its 8
+    expect(mapillaryPartial(wide)).toBe(true);
+    expect(mapillaryPartial(BBOX)).toBe(false); // exactly 8 squares
+    const result = await run("trails", "popularity:abc", wide);
+    const photosFake = fakes[2];
+    expect(vi.mocked(photosFake.query).mock.calls[0][1]).toMatchObject({ sources: ["commons"] });
+    expect((vi.mocked(photosFake.query).mock.calls[0][0] as QueryContext).cacheKey).toBe("popularity:abc:photos:commons");
+    expect("coverageNote" in result && result.coverageNote).toMatch(/Wikimedia Commons only/);
+  });
+
+  it("registers trails as lines and campsites as points", () => {
+    expect(popularity.id).toBe("popularity");
+    expect(popularity.style.geometry).toBe("line");
+    expect(popularityCampsites.id).toBe("popularity-campsites");
+    expect(popularityCampsites.style.geometry).toBe("point");
+    expect(popularityCampsites.style.color).toBe(popularity.style.color);
+  });
+
+  it("scores camp sites (not parking lots) as points in popularity-campsites", async () => {
     const out = features(await run("campsites"));
     expect(out.map((f) => f.properties?.kind)).toEqual(["camp_site", "camp_site"]);
+    expect(out.every((f) => f.geometry.type === "Point")).toBe(true);
     const [busy, quiet] = out;
     expect(busy.properties?.v).toBeGreaterThan(quiet.properties?.v as number);
     expect(busy.properties?.signals.informal).toBe(1);
@@ -187,6 +220,7 @@ describe("popularity layer", () => {
     const result = await run();
     const out = features(result);
     expect("coverageNote" in result && result.coverageNote).toMatch(/photo counts.*503/);
+    expect("coverageNote" in result && result.coverageNote).not.toMatch(/Commons only/);
     expect(out.find((f) => f.properties?.osmId === "way/1")?.properties?.signals.photos).toBeNull();
     expect(out.find((f) => f.properties?.osmId === "way/1")?.properties?.v).toBe(100);
   });
@@ -207,12 +241,15 @@ describe("popularity layer", () => {
 
   it("passes composed layers' coverage notes through", async () => {
     photos = () => ok(PHOTOS, "Mapillary was skipped");
+    camps = () => ok([PARKING, CAMP], "Showing 5,000 of 6,000 sites");
     const result = await run();
-    expect("coverageNote" in result && result.coverageNote).toBe("Photos: Mapillary was skipped");
+    expect("coverageNote" in result && result.coverageNote).toBe(
+      "Photos: Mapillary was skipped; Campsites: Showing 5,000 of 6,000 sites",
+    );
   });
 
   it("refuses an area over its limit", async () => {
-    const result = await popularity.query({ ...ctx(), bbox: [-121, 38, -119, 40] }, { target: "trails" });
+    const result = await popularity.query({ ...ctx(), bbox: [-121, 38, -119, 40] }, {});
     expect(result).toMatchObject({ hint: "zoom_in" });
   });
 });

@@ -8,8 +8,9 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Position } from "geojson";
-import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult } from "./types";
+import { bboxAreaKm2, defineLayer, type BBox, type Layer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
+import { MAPILLARY_CELL_DEG, MAPILLARY_MAX_CELLS, tileBBox } from "./photos";
 import { GridIndex, lineMidpoint } from "./_shared/geo";
 import { runComposed, type ComposedResult } from "./_shared/compose";
 import {
@@ -21,9 +22,7 @@ import {
   type PopularitySignal,
 } from "./popularity.config";
 
-const inputSchema = z.object({
-  target: z.enum(["trails", "campsites"]).default("trails"),
-});
+export type PopularityTarget = "trails" | "campsites";
 
 export type PopularitySignals = {
   photos: number | null;
@@ -34,11 +33,13 @@ export type PopularitySignals = {
 };
 
 /**
- * Rank-normalizes values to 0..1: zero (or less) maps to 0, otherwise the share of values at or
- * below it, so the largest value maps to 1 and ties share a rank.
+ * Rank-normalizes values to 0..1 among the non-zero values only: zero (or less) maps to 0, the
+ * smallest non-zero value to 1/k (k = how many are non-zero) and the largest to 1; ties share a rank.
+ * Ranking only non-zero values keeps a crowd of zeros from making the first photo worth more
+ * than the next hundred.
  */
 export function rankNormalize(values: number[]): number[] {
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted = values.filter((v) => v > 0).sort((a, b) => a - b);
   const n = sorted.length;
   return values.map((v) => {
     if (!(v > 0)) return 0;
@@ -183,85 +184,112 @@ const SIGNAL_LABELS = {
   informal: "informal trail counts",
 } as const;
 
-const popularity = defineLayer({
-  id: "popularity",
-  title: "Popularity estimate",
-  description:
-    "An estimate of how popular each trail (default) or campsite in view is, as a score from 0 (quietest) to 100 (busiest-looking in this view). It is an estimate built from public signals, not live or measured foot traffic. " +
-    "Signals: geotagged photos within 500 m (Wikimedia Commons and, when configured, Mapillary), parking capacity within 1 km, a Wikipedia or Wikidata link, informal (social) trails within 500 m, and whether the feature is named. " +
-    "Each feature has v (the score), signals { photos, parking (spaces), wiki, informal, named } (null when that signal was unavailable) and popularityNote 'estimate'. " +
-    "Scores rank features against each other in the current view, so the same trail can score differently in a different view. " +
-    "Set target to 'campsites' to score camp sites instead of trails. Coverage is global but the signals are richer in the US and Europe, where OpenStreetMap and photo coverage is denser; " +
-    "if a signal's source fails the score uses the others and the result says which were left out. Zoom in to a region under 2,500 km² (about a 50 km square) first.",
-  coverage: "global",
-  license: "Derived (see signals)",
-  requiredEnv: [],
-  // Composed layers read these from the same ctx.env, so they must be declared here.
-  optionalEnv: ["MAPILLARY_TOKEN", "OVERPASS_URL"],
-  maxAreaKm2: 2_500,
-  input: inputSchema,
-  style: { geometry: "line", color: "#F2A33A", unit: "score" },
+/**
+ * True when the photos layer would query Mapillary for only part of `bbox` (its central squares).
+ * Then popularity asks for Commons alone, so every feature is scored on the same photo source.
+ */
+export function mapillaryPartial(bbox: BBox): boolean {
+  return tileBBox(bbox, MAPILLARY_CELL_DEG, MAPILLARY_CELL_DEG).length > MAPILLARY_MAX_CELLS;
+}
 
-  async query(ctx, input): Promise<LayerResult | LayerError> {
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > popularity.maxAreaKm2) {
+const COMMONS_ONLY_NOTE =
+  "Photo counts use Wikimedia Commons only: Mapillary covers just the centre of a view this large, which would favour central features; zoom in to about 15 km across to include it";
+
+const SHARED_DESCRIPTION =
+  "It is an estimate built from public signals, not live or measured foot traffic. " +
+  "Signals: geotagged photos within 500 m (Wikimedia Commons, plus Mapillary when configured and the view is small enough, about 15 km across, for Mapillary to cover all of it), parking capacity within 1 km, a Wikipedia or Wikidata link, informal (social) trails within 500 m, and whether the feature is named. " +
+  "Each feature has v (the score), signals { photos, parking (spaces), wiki, informal, named } (null when that signal was unavailable) and popularityNote 'estimate'. " +
+  "Scores rank features against each other in the current view, so the same feature can score differently in a different view. " +
+  "Coverage is global but the signals are richer in the US and Europe, where OpenStreetMap and photo coverage is denser; " +
+  "if a signal's source fails the score uses the others and the result says which were left out. Zoom in to a region under 2,500 km² (about a 50 km square) first.";
+
+/** Builds the popularity layer for one target; trails and campsites are registered as separate layers so each has the right style. */
+function popularityLayer(target: PopularityTarget): Layer {
+  const layer = defineLayer({
+    id: target === "trails" ? "popularity" : "popularity-campsites",
+    title: target === "trails" ? "Trail popularity estimate" : "Campsite popularity estimate",
+    description:
+      (target === "trails"
+        ? "An estimate of how popular each trail in view is, as a score from 0 (quietest) to 100 (busiest-looking in this view); for camp sites use popularity-campsites. "
+        : "An estimate of how popular each camp site in view is, as a score from 0 (quietest) to 100 (busiest-looking in this view); for trails use popularity. ") +
+      SHARED_DESCRIPTION,
+    coverage: "global",
+    license: "Derived (see signals)",
+    requiredEnv: [],
+    // Composed layers read these from the same ctx.env, so they must be declared here.
+    optionalEnv: ["MAPILLARY_TOKEN", "OVERPASS_URL"],
+    maxAreaKm2: 2_500,
+    input: z.object({}),
+    style: { geometry: target === "trails" ? "line" : "point", color: "#F2A33A", unit: "score" },
+
+    async query(ctx): Promise<LayerResult | LayerError> {
+      const area = bboxAreaKm2(ctx.bbox);
+      if (area > layer.maxAreaKm2) {
+        return {
+          error: `Area is ${Math.round(area)} km²; zoom in to under ${layer.maxAreaKm2} km²`,
+          hint: "zoom_in",
+        };
+      }
+
+      const commonsOnly = mapillaryPartial(ctx.bbox);
+      const [trailsRun, campsRun, photosRun]: ComposedResult[] = await Promise.all([
+        runComposed("osm-trails", ctx, { namedOnly: false }, "trails"),
+        runComposed("campsites", ctx, { includeParking: true, backcountryOnly: false }, "campsites"),
+        runComposed("photos", ctx, commonsOnly ? { sources: ["commons"] } : {}, commonsOnly ? "photos:commons" : "photos"),
+      ]);
+
+      const targetRun = target === "trails" ? trailsRun : campsRun;
+      if (!targetRun.ok) return targetRun.error;
+
+      const kindOf = (f: Feature) => f.properties?.kind;
+      const targets =
+        target === "trails"
+          ? targetRun.data.features
+          : targetRun.data.features.filter((f) => kindOf(f) === "camp_site");
+
+      const missing: string[] = [];
+      if (!photosRun.ok) missing.push(`${SIGNAL_LABELS.photos} (${photosRun.error.error})`);
+      if (!campsRun.ok) missing.push(`${SIGNAL_LABELS.parking} (${campsRun.error.error})`);
+      if (!trailsRun.ok) missing.push(`${SIGNAL_LABELS.informal} (${trailsRun.error.error})`);
+
+      const features = scorePopularity({
+        targets,
+        photos: photosRun.ok ? photosRun.data.features : null,
+        parking: campsRun.ok ? campsRun.data.features.filter((f) => kindOf(f) === "parking") : null,
+        trails: trailsRun.ok ? trailsRun.data.features : null,
+        targetsAreTrails: target === "trails",
+        refLat: (ctx.bbox[1] + ctx.bbox[3]) / 2,
+      });
+
+      const notes: string[] = [];
+      if (missing.length > 0) {
+        notes.push(`Scored without ${missing.join("; ")}; the other signals were reweighted`);
+      }
+      if (commonsOnly && photosRun.ok) notes.push(COMMONS_ONLY_NOTE);
+      if (photosRun.ok && photosRun.coverageNote) notes.push(`Photos: ${photosRun.coverageNote}`);
+      if (campsRun.ok && campsRun.coverageNote) notes.push(`Campsites: ${campsRun.coverageNote}`);
+
+      const data: FeatureCollection = { type: "FeatureCollection", features };
       return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${popularity.maxAreaKm2} km²`,
-        hint: "zoom_in",
+        kind: "geojson",
+        data,
+        ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
+        citation: {
+          source:
+            "WildMap popularity estimate derived from OpenStreetMap contributors (ODbL), Wikimedia Commons and Mapillary (CC BY-SA 4.0)",
+          url: "https://www.openstreetmap.org/copyright",
+          retrieved: new Date().toISOString(),
+        },
       };
-    }
+    },
+  });
+  return layer;
+}
 
-    const [trailsRun, campsRun, photosRun]: ComposedResult[] = await Promise.all([
-      runComposed("osm-trails", ctx, { namedOnly: false }, "trails"),
-      runComposed("campsites", ctx, { includeParking: true, backcountryOnly: false }, "campsites"),
-      runComposed("photos", ctx, {}, "photos"),
-    ]);
-
-    const targetRun = input.target === "trails" ? trailsRun : campsRun;
-    if (!targetRun.ok) return targetRun.error;
-
-    const kindOf = (f: Feature) => f.properties?.kind;
-    const targets =
-      input.target === "trails"
-        ? targetRun.data.features
-        : targetRun.data.features.filter((f) => kindOf(f) === "camp_site");
-
-    const missing: string[] = [];
-    if (!photosRun.ok) missing.push(`${SIGNAL_LABELS.photos} (${photosRun.error.error})`);
-    if (!campsRun.ok) missing.push(`${SIGNAL_LABELS.parking} (${campsRun.error.error})`);
-    if (!trailsRun.ok) missing.push(`${SIGNAL_LABELS.informal} (${trailsRun.error.error})`);
-
-    const features = scorePopularity({
-      targets,
-      photos: photosRun.ok ? photosRun.data.features : null,
-      parking: campsRun.ok ? campsRun.data.features.filter((f) => kindOf(f) === "parking") : null,
-      trails: trailsRun.ok ? trailsRun.data.features : null,
-      targetsAreTrails: input.target === "trails",
-      refLat: (ctx.bbox[1] + ctx.bbox[3]) / 2,
-    });
-
-    const notes: string[] = [];
-    if (missing.length > 0) {
-      notes.push(`Scored without ${missing.join("; ")}; the other signals were reweighted`);
-    }
-    if (photosRun.ok && photosRun.coverageNote) notes.push(`Photos: ${photosRun.coverageNote}`);
-    if (campsRun.ok && campsRun.coverageNote) notes.push(`Campsites: ${campsRun.coverageNote}`);
-
-    const data: FeatureCollection = { type: "FeatureCollection", features };
-    return {
-      kind: "geojson",
-      data,
-      ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
-      citation: {
-        source:
-          "WildMap popularity estimate derived from OpenStreetMap contributors (ODbL), Wikimedia Commons and Mapillary (CC BY-SA 4.0)",
-        url: "https://www.openstreetmap.org/copyright",
-        retrieved: new Date().toISOString(),
-      },
-    };
-  },
-});
+const popularity = popularityLayer("trails");
+export const popularityCampsites = popularityLayer("campsites");
 
 registerLayer(popularity);
+registerLayer(popularityCampsites);
 
 export default popularity;

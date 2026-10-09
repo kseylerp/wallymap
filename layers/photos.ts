@@ -44,8 +44,8 @@ const MAPILLARY_ENDPOINT = "https://graph.mapillary.com/images";
 const MAPILLARY_LIMIT = 2000;
 /** A cell this full is treated as capped (a dense cell returned 1,939 for limit 2000). */
 const MAPILLARY_CAPPED_AT = 1900;
-const MAPILLARY_CELL_DEG = 0.05;
-const MAPILLARY_MAX_CELLS = 8;
+export const MAPILLARY_CELL_DEG = 0.05;
+export const MAPILLARY_MAX_CELLS = 8;
 const MAPILLARY_TTL_SECONDS = 86_400;
 
 /** Requests in flight at once; the layer's rate limiter queues anything beyond its burst. */

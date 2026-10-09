@@ -3,11 +3,13 @@ import type { Feature, FeatureCollection, Polygon } from "geojson";
 import { latLngToCell } from "h3-js";
 import { z } from "zod";
 import type { CachedFetch } from "@/lib/fetch";
+import { cacheKeyFor } from "@/lib/fetch/cache";
 import { clearRegistry, registerLayer } from "./registry";
 import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import remoteness, {
   buildRoadsQuery,
   cellPolygon,
+  collapseToGrid,
   cellsForBBox,
   padBBox,
   roadDistanceScore,
@@ -150,6 +152,26 @@ describe("helpers", () => {
     expect(roadVertices({ nope: true })).toEqual([]);
   });
 
+  it("keeps every point of a lone track while collapsing a dense town grid", () => {
+    // A sparse track: 30 vertices ~3 km apart heading north.
+    const track = Array.from({ length: 30 }, (_, i) => ({ lat: 39 + i * 0.027, lon: -120.5 }));
+    // A dense town: 300 x 300 street vertices every ~10 m in a ~3 km square, 20 km east.
+    const town: { lat: number; lon: number }[] = [];
+    for (let i = 0; i < 300; i++) for (let j = 0; j < 300; j++) town.push({ lat: 39.2 + i * 0.0001, lon: -120.27 + j * 0.0001 });
+    const json = {
+      elements: [
+        { type: "way", id: 1, geometry: track },
+        ...Array.from({ length: 300 }, (_, i) => ({ type: "way", id: 100 + i, geometry: town.slice(i * 300, (i + 1) * 300) })),
+      ],
+    };
+    const pts = roadVertices(json, 50_000);
+    expect(pts.length).toBeLessThan(50_000);
+    const kept = new Set(pts.map((p) => `${p[0]},${p[1]}`));
+    for (const v of track) expect(kept.has(`${v.lon},${v.lat}`)).toBe(true);
+    // One point per ~200 m square: the first wins.
+    expect(collapseToGrid([[0, 0], [0.0001, 0.0001], [1, 1]], 0.2)).toEqual([[0, 0], [1, 1]]);
+  });
+
   it("scores road distance from 0 at the road to 1 at the cap", () => {
     expect(roadDistanceScore(0)).toBe(0);
     expect(roadDistanceScore(20)).toBe(1);
@@ -224,11 +246,14 @@ describe("remoteness layer", () => {
     expect(byV[0].properties?.signals.inWilderness).toBe(true);
     expect(byV[byV.length - 1].properties?.signals.roadDistanceKm).toBeLessThan(2);
 
-    // Roads go through Overpass with their own cache suffix; composed layers get theirs.
+    // Roads go through Overpass with their own cache suffix; composed layers get theirs. None
+    // depend on resolution, so the keys leave it out and every resolution shares them.
+    const base = cacheKeyFor("remoteness", SMALL, {});
     const roadCall = fetch.mock.calls[0] as unknown as [string, { cacheKey?: string }];
-    expect(roadCall[1].cacheKey).toBe("remoteness:k:roads");
+    expect(roadCall[1].cacheKey).toBe(`${base}:roads`);
     const wildCtx = vi.mocked(fakes[0].query).mock.calls[0][0] as QueryContext;
-    expect(wildCtx.cacheKey).toBe("remoteness:k:wilderness");
+    expect(wildCtx.cacheKey).toBe(`${base}:wilderness`);
+    expect((vi.mocked(fakes[1].query).mock.calls[0][0] as QueryContext).cacheKey).toBe(`${base}:campsites:0`);
     expect(vi.mocked(fakes[1].query).mock.calls[0][1]).toMatchObject({ includeParking: false });
   });
 
@@ -274,9 +299,33 @@ describe("remoteness layer", () => {
     for (const f of features(result)) expect(f.properties?.v).toBeLessThanOrEqual(80);
   });
 
-  it("splits the campsites request when the padded view is over the campsites limit", async () => {
+  it("splits the campsites request when the padded view is over the campsites limit, one piece at a time after roads", async () => {
     const wide: BBox = [-121.2, 38.6, -120.0, 39.5]; // ~10,400 km², over the fake's 10,000
-    await remoteness.query(ctx(wide), { resolution: 6 });
-    expect(vi.mocked(fakes[1].query).mock.calls.length).toBeGreaterThan(1);
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const fetch = vi.fn(async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight -= 1;
+      return new Response(JSON.stringify(roadsBody), { status: 200 });
+    });
+    const campsFake = fakes[1];
+    vi.mocked(campsFake.query).mockImplementation(async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight -= 1;
+      return ok([]);
+    });
+    await remoteness.query(ctx(wide, fetch), { resolution: 6 });
+    expect(vi.mocked(campsFake.query).mock.calls.length).toBeGreaterThan(1);
+    expect(maxInFlight).toBe(1);
+  });
+
+  it("passes the campsites coverage note through", async () => {
+    camps = () => ok([], "Showing 5,000 of 6,000 sites");
+    const result = await remoteness.query(ctx(), { resolution: 7 });
+    expect("coverageNote" in result && result.coverageNote).toBe("Campsites: Showing 5,000 of 6,000 sites");
   });
 });

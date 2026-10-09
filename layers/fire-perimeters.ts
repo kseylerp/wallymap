@@ -169,7 +169,7 @@ const firePerimeters = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 60_000,
   input: inputSchema,
-  style: { geometry: "polygon", color: "#D97757" },
+  style: { geometry: "polygon", color: "#2F3A44" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const retrieved = new Date();

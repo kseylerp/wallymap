@@ -99,7 +99,7 @@ describe("toolResultToActions", () => {
         layer: {
           id: "mystery",
           title: "mystery",
-          style: { geometry: "line", color: "#5B6B7A" },
+          style: { geometry: "line", color: "#2F3A44" },
           result,
           receivedAt: expect.any(String),
         },

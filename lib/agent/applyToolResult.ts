@@ -9,7 +9,7 @@ export type LayerCatalog = Record<string, { title: string; style: StyleHints }>;
 type Canvas = { width: number; height: number; padding?: Padding };
 
 const QUERY_PREFIX = "query_";
-const FALLBACK_STYLE: StyleHints = { geometry: "line", color: "#5B6B7A" };
+const FALLBACK_STYLE: StyleHints = { geometry: "line", color: "#2F3A44" };
 const BASEMAPS: readonly Basemap[] = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"];
 const RENDER_MODES: readonly RenderMode[] = ["points", "lines", "polygons", "heat", "columns", "hexbin"];
 const DEFAULT_MODE: Record<StyleHints["geometry"], RenderMode> = {

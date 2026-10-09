@@ -78,6 +78,10 @@ describe("my-layer", () => {
 });
 ```
 
+## Teach the agent your layer's words
+
+Add an entry to `VOCABULARY` in `lib/agent/vocabulary.ts` with your layer's `id`, the words people use for it (synonyms), and a short note. The entry is rendered into the system prompt and returned by `list_layers`; a test fails if a registered layer has no entry. Put layers that should be queried together next to each other, since the agent queries matches in table order. Keep the note short, because the whole table must stay under about 1,800 characters.
+
 ## Checklist
 
 - [ ] `id` is unique across `layers/`.
@@ -87,4 +91,5 @@ describe("my-layer", () => {
 - [ ] A fixture is committed in `layers/__fixtures__/`.
 - [ ] The layer is imported in `layers/index.ts` (below the "Layer imports" comment).
 - [ ] Any new env var is in `.env.example`.
+- [ ] The layer has a `VOCABULARY` entry in `lib/agent/vocabulary.ts`.
 - [ ] `pnpm test` passes with no keys set.

@@ -9,6 +9,8 @@ const REQUIRED = [
   "Never invent coordinates; every geometry comes from a tool result.",
   "End with two or three follow-up questions as a bulleted list.",
   "Do not describe the popularity layer as live or real-time.",
+  "Popularity and remoteness are estimates computed from other layers; say so, and never call them live.",
+  "Choose the layer whose synonyms match the question; when several match, query them in the listed order; if none match, say which layers exist and ask.",
 ];
 
 describe("SYSTEM_PROMPT", () => {

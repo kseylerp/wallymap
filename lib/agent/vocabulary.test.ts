@@ -1,0 +1,33 @@
+import { describe, expect, it } from "vitest";
+import { listLayers } from "@/layers";
+import { SYSTEM_PROMPT } from "@/lib/agent/prompt";
+import { VOCABULARY, vocabularyForPrompt } from "@/lib/agent/vocabulary";
+
+describe("VOCABULARY", () => {
+  const ids = listLayers().map((l) => l.id);
+
+  it("only names registered layers", () => {
+    for (const entry of VOCABULARY) expect(ids).toContain(entry.layerId);
+  });
+
+  it("has an entry for every registered layer", () => {
+    const covered = VOCABULARY.map((e) => e.layerId);
+    for (const id of ids) expect(covered).toContain(id);
+  });
+
+  it("lists each layer once, each with at least one synonym", () => {
+    expect(new Set(VOCABULARY.map((e) => e.layerId)).size).toBe(VOCABULARY.length);
+    for (const entry of VOCABULARY) expect(entry.synonyms.length).toBeGreaterThan(0);
+  });
+
+  it("renders a table small enough for the prompt", () => {
+    expect(vocabularyForPrompt().length).toBeLessThan(1800);
+  });
+
+  it("appears in the system prompt: every layer id and a synonym from each group", () => {
+    for (const entry of VOCABULARY) {
+      expect(SYSTEM_PROMPT).toContain(entry.layerId);
+      expect(SYSTEM_PROMPT).toContain(entry.synonyms[0]);
+    }
+  });
+});

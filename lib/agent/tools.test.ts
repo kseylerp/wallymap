@@ -91,6 +91,12 @@ describe("buildTools", () => {
     expect(schemaOf(tools.set_basemap).safeParse({ style: "outdoors-satellite" }).success).toBe(true);
   });
 
+  it("list_layers includes vocabulary synonyms for each layer", async () => {
+    const result = (await run(buildTools().list_layers, {})) as { id: string; synonyms: string[] }[];
+    expect(result.find((l) => l.id === "fire-perimeters")?.synonyms).toContain("wildfire");
+    for (const layer of result) expect(Array.isArray(layer.synonyms)).toBe(true);
+  });
+
   it("list_layers marks a layer whose env is missing as unavailable", async () => {
     clearRegistry();
     try {
@@ -133,6 +139,7 @@ describe("buildTools", () => {
           coverage: "us",
           license: "CC0",
           available: false,
+          synonyms: [],
         },
         {
           id: "free",
@@ -141,6 +148,7 @@ describe("buildTools", () => {
           coverage: "global",
           license: "ODbL",
           available: true,
+          synonyms: [],
         },
       ]);
     } finally {

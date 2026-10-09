@@ -6,6 +6,7 @@ import { runLayer } from "@/lib/layers/run";
 import { isFullLayerResult, summarizeLayerResult } from "@/lib/layers/summarize";
 import type { Basemap, RenderMode } from "@/lib/render/state";
 import { geocode } from "./geocode";
+import { synonymsFor } from "./vocabulary";
 
 const BASEMAPS = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"] as const satisfies readonly Basemap[];
 const RENDER_MODES = [
@@ -26,6 +27,8 @@ export type LayerSummary = {
   coverage: Coverage;
   license: string;
   available: boolean;
+  /** Words people use that should route to this layer. */
+  synonyms: string[];
 };
 
 function isAvailable(layer: Layer): boolean {
@@ -82,6 +85,7 @@ export function buildTools(): ToolSet {
           coverage: layer.coverage,
           license: layer.license,
           available: isAvailable(layer),
+          synonyms: synonymsFor(layer.id),
         })),
     }),
     geocode: tool({

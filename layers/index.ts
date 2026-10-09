@@ -19,3 +19,4 @@ import "./photos";
 import "./physical-regions";
 import "./public-lands";
 import "./popularity";
+import "./remoteness";

@@ -37,7 +37,7 @@ const publicLands = defineLayer({
     "PAD-US combines a Fee layer (who holds title) with Designation and Easement layers (wilderness areas, roadless areas, recreation areas, conservation easements), " +
     "so one place can carry several overlapping polygons, for example a wilderness area inside a national forest. " +
     "Each area has a name, a manager, a designation and a coarse public-access flag (open, restricted, closed, unknown). " +
-    "Use it to answer whose land a place is on, where national forest or BLM land begins, or where the public land is around a town or lake. " +
+    "Use it to show public land ownership on the map so the user can see where national forest, BLM, park, or state land lies; the model itself cannot read the map. " +
     "Caveats: this is ownership and management, not access rules. It does not say whether camping, hunting, fires, drones or vehicles are allowed, " +
     "private land outside the database is simply not drawn, and boundaries are approximate at parcel scale; check the managing agency before relying on it. " +
     "United States only. Returns map tiles drawn on the globe, not features you can count or list. You cannot see the rendered map: say the layer is shown and what each color means, but do not claim which land lies where. " +

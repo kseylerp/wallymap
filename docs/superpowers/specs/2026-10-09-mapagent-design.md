@@ -145,6 +145,8 @@ At build time, `layers/index.ts` collects all layers and exports:
 | Photo density | Wikimedia Commons geosearch, Mapillary | Global | Mapillary (free) | Points with `t`; input to popularity |
 | Species sightings | iNaturalist, GBIF | Global | none | Points with `t`; fun for 3D columns |
 | Cell coverage | FCC BDC H3 hexes | US | none | Hosted as PMTiles if the bulk file is too slow live; decision deferred |
+| Physical regions | Natural Earth (public domain) via GitHub/CDN GeoJSON | Global | none | Mountain ranges, deserts, rivers, lakes, glaciers, parks; also the geocode fallback for named regions |
+| Population density | NASA SEDAC GPW v4 map service | Global | none | ~1 km raster tiles; baseline signal for popularity |
 
 Two keys unlock the headline features: Mapbox (map) and one model
 provider. GFW and FIRMS keys are free and add the forest and fire layers.
@@ -165,6 +167,9 @@ are free and allowed:
   dates so the scrubber can show seasonality.
 - National Park Service monthly visitation where a feature falls inside a
   park unit (bundled CSV, 2 MB, the one static file the repo ships).
+- Population within a two-hour drive, from the GPW density raster, as the
+  baseline: the same trail draws more people near a city than in the
+  desert.
 
 Weights live in one config file and the UI shows the contributing signals
 when a feature is clicked. The agent's system prompt forbids the words
@@ -182,7 +187,9 @@ Tools:
 
 - `list_layers()`
 - `query_<layer>(bbox, route?, ...input)` generated per layer
-- `geocode(place)` via Mapbox Geocoding v6, returns bbox and center
+- `geocode(place)` via Mapbox Geocoding v6, returns bbox and center. Falls
+  back to Natural Earth physical-region polygons for named ranges, deserts,
+  rivers, and lakes ("the Andes") where Mapbox returns only a point.
 - `route(from, to, profile)` via Mapbox Directions, returns a LineString
 - `set_view({ bbox | center+zoom, pitch?, bearing?, globe? })`
 - `render({ layerId, mode, encode, timeField?, valueField? })` where
@@ -221,6 +228,13 @@ Modes:
   Mapbox terrain, forest loss, popularity, fire history, cell coverage).
   Hovering the chart moves a cursor on the map and vice versa.
 - Terrain: a toggle, on by default under zoom 11 when pitch is nonzero.
+- Globe context: Natural Earth countries, rivers, lakes, and urban areas
+  drawn lightly at world zoom so columns have geography to sit on.
+
+Considered and rejected for v1: video crowd counting (no feeds), pedestrian
+simulators such as JuPedSim and Vadere (need capacity and arrival data we
+lack; a possible later experiment on top of the popularity layer), and
+TILE2NET (urban sidewalks, not trails).
 
 ## UI and UX
 

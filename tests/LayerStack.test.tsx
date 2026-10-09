@@ -118,6 +118,27 @@ describe("LayerStack", () => {
     expect(screen.queryByTestId("layer-stack")).toBeNull();
   });
 
+  it("Escape in the color popover closes it without reaching window listeners (the inspect card)", () => {
+    const onWindowEscape = vi.fn();
+    window.addEventListener("keydown", onWindowEscape);
+    render(<Harness spy={vi.fn()} />);
+    const card = screen.getAllByTestId("layer-card")[0];
+    fireEvent.click(within(card).getByRole("button", { name: "Color for OSM trails" }));
+    fireEvent.keyDown(screen.getByLabelText("Custom hex color"), { key: "Escape" });
+    expect(screen.queryByLabelText("Custom hex color")).toBeNull();
+    expect(onWindowEscape).not.toHaveBeenCalled();
+    window.removeEventListener("keydown", onWindowEscape);
+  });
+
+  it("keeps focus on the grip after an arrow-key reorder", async () => {
+    render(<Harness spy={vi.fn()} />);
+    const grip = screen.getByRole("button", { name: /Reorder OSM trails/ });
+    grip.focus();
+    fireEvent.keyDown(grip, { key: "ArrowDown" });
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /Reorder OSM trails/ }));
+  });
+
   it("collapses to a Layers pill with the count", () => {
     const onOpenChange = vi.fn();
     render(

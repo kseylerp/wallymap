@@ -133,6 +133,17 @@ describe("reduce: selection and layer panel actions", () => {
     expect(reduce(selected, { type: "layer_loaded", layer }).selected).toBeUndefined();
   });
 
+  it("switching the selected layer to heat drops the selection; other modes and layers keep it", () => {
+    const selected = reduce(base, { type: "select", selection });
+    expect(reduce(selected, { type: "set_style", layerId: "osm-trails", mode: "heat" }).selected).toBeUndefined();
+    expect(
+      reduce(selected, { type: "render", op: { layerId: "osm-trails", mode: "heat", visible: true } }).selected,
+    ).toBeUndefined();
+    expect(reduce(selected, { type: "set_style", layerId: "osm-trails", mode: "points" }).selected).toEqual(selection);
+    expect(reduce(selected, { type: "set_style", layerId: "osm-trails", color: "#123456" }).selected).toEqual(selection);
+    expect(reduce(selected, { type: "set_style", layerId: "campsites", mode: "heat" }).selected).toEqual(selection);
+  });
+
   it("clear_layers empties layers, ops, errors and the selection", () => {
     const next = reduce(reduce(base, { type: "select", selection }), { type: "clear_layers" });
     expect(next.layers).toEqual({});

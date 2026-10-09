@@ -45,7 +45,9 @@ export function reduce(state: MapState, action: MapAction): MapState {
               // The agent restyling a layer keeps the opacity the user picked in the layer panel.
               i === index ? { ...action.op, opacity: action.op.opacity ?? op.opacity } : op,
             );
-      return { ...state, renderOps };
+      // Heat is not clickable, so a selection on a layer that turns into heat would point at nothing drawn.
+      const selected = action.op.mode === "heat" ? dropSelectionOf(state, action.op.layerId) : state.selected;
+      return { ...state, renderOps, selected };
     }
     case "toggle_layer": {
       const next = updateOp(state, action.layerId, (op) => ({ ...op, visible: !op.visible }));
@@ -59,12 +61,14 @@ export function reduce(state: MapState, action: MapAction): MapState {
       return state.selected === undefined ? state : { ...state, selected: undefined };
     case "set_opacity":
       return updateOp(state, action.layerId, (op) => ({ ...op, opacity: clamp01(action.opacity) }));
-    case "set_style":
-      return updateOp(state, action.layerId, (op) => ({
+    case "set_style": {
+      const next = updateOp(state, action.layerId, (op) => ({
         ...op,
         ...(action.color !== undefined && { color: action.color }),
         ...(action.mode !== undefined && { mode: action.mode }),
       }));
+      return next !== state && action.mode === "heat" ? { ...next, selected: dropSelectionOf(next, action.layerId) } : next;
+    }
     case "reorder": {
       const from = state.renderOps.findIndex((op) => op.layerId === action.layerId);
       if (from === -1) return state;

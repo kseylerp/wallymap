@@ -30,21 +30,39 @@ const GAP = 14;
 const TOP_SAFE = 64;
 const POINTER = 12;
 
-type Placement = { left: number; top: number; below: boolean; pointerX: number; offscreen: boolean };
+type Placement = {
+  left: number;
+  top: number;
+  below: boolean;
+  pointerX: number;
+  /** False when clamping moved the card away from the point, so a pointer would aim at nothing. */
+  pointer: boolean;
+  offscreen: boolean;
+};
 
 /**
- * Where the card goes for an anchor point: centered above it, flipped below when there is no room above,
- * slid sideways to stay on screen, with the pointer still aimed at the point.
+ * Where the card goes for an anchor point: centered above it, flipped below when there is more room there,
+ * then clamped inside the window (below the header). The pointer shows only while the card still touches the
+ * point and the point is within its width.
  */
-function place(anchor: Point, card: { width: number; height: number }, view: { width: number; height: number }): Placement {
+export function place(
+  anchor: Point,
+  card: { width: number; height: number },
+  view: { width: number; height: number },
+): Placement {
   const offscreen = anchor.x < 0 || anchor.y < 0 || anchor.x > view.width || anchor.y > view.height;
   const roomAbove = anchor.y - GAP - TOP_SAFE;
-  const below = roomAbove < card.height && view.height - anchor.y - GAP - EDGE > roomAbove;
-  const top = below ? anchor.y + GAP : Math.max(TOP_SAFE, anchor.y - GAP - card.height);
+  const roomBelow = view.height - anchor.y - GAP - EDGE;
+  const below = roomAbove < card.height && roomBelow > roomAbove;
+  const ideal = below ? anchor.y + GAP : anchor.y - GAP - card.height;
+  const maxTop = Math.max(TOP_SAFE, view.height - EDGE - card.height);
+  const top = Math.min(maxTop, Math.max(TOP_SAFE, ideal));
   const maxLeft = Math.max(EDGE, view.width - EDGE - card.width);
   const left = Math.min(maxLeft, Math.max(EDGE, anchor.x - card.width / 2));
-  const pointerX = Math.min(card.width - 20, Math.max(20, anchor.x - left));
-  return { left, top, below, pointerX, offscreen };
+  const rawPointerX = anchor.x - left;
+  const pointerX = Math.min(card.width - 20, Math.max(20, rawPointerX));
+  const pointer = Math.abs(top - ideal) < 1 && rawPointerX >= 14 && rawPointerX <= card.width - 14;
+  return { left, top, below, pointerX, pointer, offscreen };
 }
 
 function RowList({ rows }: { rows: Row[] }) {
@@ -127,7 +145,11 @@ export function InspectCard({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      // Escape in a text field or select belongs to that field (clearing it, closing its menu).
+      const target = e.target;
+      if (target instanceof Element && target.closest("input, select, textarea, [contenteditable='true']")) return;
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -168,7 +190,7 @@ export function InspectCard({
       }}
     >
       {/* The pointer: a rotated square tucked under the card's edge, aimed at the clicked point. */}
-      {placement && (
+      {placement?.pointer && (
         <span
           aria-hidden
           className="absolute size-3 rotate-45 border-line bg-paper"

@@ -89,7 +89,18 @@ function Swatch({ color, title, disabled, onPick }: SwatchProps) {
   };
 
   return (
-    <div ref={rootRef} className="relative shrink-0">
+    <div
+      ref={rootRef}
+      className="relative shrink-0"
+      // Escape inside the swatch or its popover closes only the popover: stopping it here keeps it from
+      // reaching the window listener that closes the inspect card.
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && open) {
+          e.stopPropagation();
+          setOpen(false);
+        }
+      }}
+    >
       <button
         type="button"
         disabled={disabled}
@@ -175,14 +186,13 @@ function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, d
   const { citation, coverageNote } = layer.result;
   const host = hostOf(citation.url);
 
+  const gripRef = useRef<HTMLButtonElement>(null);
   const onHandleKey = (e: KeyboardEvent) => {
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      onMove(1);
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      onMove(-1);
-    }
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    onMove(e.key === "ArrowUp" ? 1 : -1);
+    // React moves the card's node to its new place, which drops focus; put it back so repeated presses work.
+    requestAnimationFrame(() => gripRef.current?.focus());
   };
 
   return (
@@ -199,6 +209,7 @@ function LayerCard({ layer, op, license, dispatch, onMove, dragProps, armDrag, d
       <div className="flex items-center gap-1">
         <button
           type="button"
+          ref={gripRef}
           aria-label={`Reorder ${layer.title} (arrow keys)`}
           title="Drag to reorder"
           disabled={!op}

@@ -279,6 +279,26 @@ describe("photos layer", () => {
     expect(r.coverageNote).toBe("All 1 Wikimedia Commons requests failed; showing Mapillary photos only");
   });
 
+  it("returns one upstream error naming both sources when every request to both fails", async () => {
+    const stub = routed({
+      commons: () => new Response("down", { status: 503 }),
+      mapillary: () => json({ error: { message: `bad ${TOKEN}` } }, 500),
+    });
+    const r = await layer.query(ctx(stub, { token: TOKEN }), BOTH);
+    expect(r).toEqual({
+      error: "Both photo sources failed: Wikimedia Commons returned 503; Mapillary returned 500",
+      hint: "upstream",
+    });
+    expect(JSON.stringify(r)).not.toContain(TOKEN);
+  });
+
+  it("returns an upstream error, not a note about Mapillary, when Commons fails and there is no token", async () => {
+    const stub = routed({ commons: () => new Response("down", { status: 503 }) });
+    const r = await layer.query(ctx(stub), BOTH);
+    expect(r).toEqual({ error: "Wikimedia Commons returned 503", hint: "upstream" });
+    expect(JSON.stringify(r)).not.toContain("showing Mapillary");
+  });
+
   it("maps a failure of every request to an upstream error that never mentions the token", async () => {
     const stub = routed({ mapillary: () => json({ error: { message: `bad ${TOKEN}` } }, 500) });
     const r = await layer.query(ctx(stub, { token: TOKEN }), { sources: ["mapillary"] });

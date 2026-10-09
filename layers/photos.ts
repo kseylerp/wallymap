@@ -346,8 +346,9 @@ const photos = defineLayer({
         if (o.value.capped) capped += 1;
       }
       commons = [...merged.values()];
-      if (failed === commonsRun.outcomes.length) {
-        notes.push(`All ${failed} Wikimedia Commons requests failed; showing ${useMapillary ? "Mapillary" : "no"} photos only`);
+      if (failed > 0 && failed === commonsRun.outcomes.length) {
+        // With no other source to fall back on the whole query fails below, so no note is needed.
+        if (mapillaryRun) notes.push(`All ${failed} Wikimedia Commons requests failed; showing Mapillary photos only`);
       } else if (failed > 0) {
         notes.push(`${failed} of ${commonsRun.outcomes.length} Wikimedia Commons requests failed, so some areas may be missing photos`);
       }
@@ -373,8 +374,8 @@ const photos = defineLayer({
         if (o.value.capped) capped += 1;
       }
       mapillary = [...merged.values()];
-      if (failed === mapillaryRun.outcomes.length) {
-        notes.push(`All ${failed} Mapillary requests failed (very dense areas can exceed its limits); showing ${useCommons ? "Commons" : "no"} photos only`);
+      if (failed > 0 && failed === mapillaryRun.outcomes.length) {
+        if (commonsRun) notes.push(`All ${failed} Mapillary requests failed (very dense areas can exceed its limits); showing Commons photos only`);
       } else if (failed > 0) {
         notes.push(`${failed} of ${mapillaryRun.outcomes.length} Mapillary requests failed (very dense areas can exceed its limits), so some areas may be missing`);
       }
@@ -391,6 +392,13 @@ const photos = defineLayer({
     // Only an error when every request that was made failed; otherwise partial results are returned with notes.
     const attempted = (commonsRun?.outcomes.length ?? 0) + (mapillaryRun?.outcomes.length ?? 0);
     if (attempted > 0 && errors.length === attempted) {
+      if (commonsRun && mapillaryRun) {
+        const first = [commonsRun, mapillaryRun].map((run) => {
+          const failure = run.outcomes.find((o) => !o.ok);
+          return failure && !failure.ok ? failure.error : "unknown error";
+        });
+        return { error: `Both photo sources failed: ${first.join("; ")}`, hint: "upstream" };
+      }
       return { error: errors[0], hint: "upstream" };
     }
 

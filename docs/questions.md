@@ -32,7 +32,7 @@ The map shows snow depth around Mount Hood, and the note gives the current depth
 
 Tools: `geocode` → `set_view` → `query_campsites` + `query_forest-roads` → `render` (each layer) → `note`
 
-The map shows campsites together with forest roads that allow dispersed camping near Moab, and the note says which is which.
+The map shows campsites together with forest roads open to motor vehicles near Moab, and the note says which is which and that dispersed-camping rules come from the ranger district.
 
 ## 6. What wildlife has been spotted around Banff this year?
 

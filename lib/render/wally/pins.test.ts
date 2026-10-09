@@ -74,7 +74,7 @@ describe("symbol sprites", () => {
     expect(read("camp")).toMatch(/<path d="M12 6\.2 18\.2 17H5\.8Z"/); // triangle
     expect(read("parking")).toContain("<rect"); // square
     expect(read("gauge")).toMatch(/<path d="M12 5\.6 18\.4 12 12 18\.4 5\.6 12Z"/); // diamond
-    expect(read("photo")).toContain('r="3.25" fill="#1F1F1F"'); // small filled circle
+    expect(read("photo")).toContain('r="4.25" fill="#FFFFFF"/><circle cx="12" cy="12" r="3.25" fill="#1F1F1F"'); // small dot, 1px halo
     expect(read("fire")).toContain('r="5.5" fill="#FFFFFF"'); // filled circle with a halo
     expect(read("road")).toContain('stroke-dasharray="3 2"'); // dashed line
     expect(read("trailhead")).toContain('r="1.6" fill="#1F1F1F"'); // center dot

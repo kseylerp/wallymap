@@ -248,11 +248,18 @@ function markerPosition(f: Feature): [number, number] {
  */
 export type HexFeature = Feature<GeoJSON.Point, { count: number; h3: string }>;
 
-/** Binned tiles per result and resolution, so panning and selection reuse the same tile objects. */
-const hexCache = new WeakMap<GeoJSON.FeatureCollection, Map<number, HexFeature[]>>();
+/** One result binned at one resolution: the tiles, the labelled subset, and the busiest tile's count. */
+type Binned = { hexes: HexFeature[]; labelled: HexFeature[]; max: number };
 
-/** Bins a result's features into H3 cells at `resolution` (cached per result and resolution). */
-export function hexbin(data: GeoJSON.FeatureCollection, resolution: number): HexFeature[] {
+/** Binned tiles per result and resolution, so panning and selection reuse the same tile objects. */
+const hexCache = new WeakMap<GeoJSON.FeatureCollection, Map<number, Binned>>();
+
+/** True for a usable lng/lat: finite, longitude within ±180 and latitude within ±90 (H3 throws otherwise). */
+function validLngLat([lng, lat]: [number, number]): boolean {
+  return Number.isFinite(lng) && Number.isFinite(lat) && Math.abs(lng) <= 180 && Math.abs(lat) <= 90;
+}
+
+function binned(data: GeoJSON.FeatureCollection, resolution: number): Binned {
   let byResolution = hexCache.get(data);
   if (!byResolution) {
     byResolution = new Map();
@@ -262,33 +269,56 @@ export function hexbin(data: GeoJSON.FeatureCollection, resolution: number): Hex
   if (cached) return cached;
   const counts = new Map<string, number>();
   for (const f of data.features) {
-    const [lng, lat] = markerPosition(f);
-    const cell = latLngToCell(lat, lng, resolution);
+    const position = markerPosition(f);
+    // One bad coordinate must not throw, or the overlay drops every layer on the map.
+    if (!validLngLat(position)) continue;
+    const cell = latLngToCell(position[1], position[0], resolution);
     counts.set(cell, (counts.get(cell) ?? 0) + 1);
   }
   const hexes: HexFeature[] = [...counts].map(([h3, count]) => {
     const [lat, lng] = cellToLatLng(h3);
     return { type: "Feature", geometry: { type: "Point", coordinates: [lng, lat] }, properties: { count, h3 } };
   });
-  byResolution.set(resolution, hexes);
-  return hexes;
+  const entry = {
+    hexes,
+    labelled: hexes.filter((h) => h.properties.count >= HEX_TILE.labelMin),
+    max: hexes.reduce((m, h) => Math.max(m, h.properties.count), 1),
+  };
+  byResolution.set(resolution, entry);
+  return entry;
 }
 
-/** Tiles: light gray (ink from 6% to 24% alpha as the count nears the busiest tile's), white edges, ink counts. */
+/** Bins a result's features into H3 cells at `resolution`, skipping invalid coordinates (cached per result). */
+export function hexbin(data: GeoJSON.FeatureCollection, resolution: number): HexFeature[] {
+  return binned(data, resolution).hexes;
+}
+
+/**
+ * Tiles: light gray that holds up on dark imagery, from white at 55% alpha (fewest features) to `#9A9A96` at 80%
+ * (busiest tile), with a light edge and ink counts on a white halo.
+ */
 export const HEX_TILE = {
-  inkAlpha: [0.06, 0.24] as const,
-  edge: [255, 255, 255, 153] as Rgba,
+  from: [255, 255, 255] as const,
+  to: hexToRgba("#9A9A96"),
+  alpha: [0.55, 0.8] as const,
+  edge: [255, 255, 255, 204] as Rgba,
   /** Tiles shrink to this share of their cell, so they read as separate cells. */
   coverage: 0.94,
   /** Tiles holding at least this many features show their count. */
   labelMin: 2,
-  labelSize: 10,
+  labelSize: 11,
 } as const;
 
-/** A tile's fill: ink at an alpha that grows with its count (log scaled against `max`). */
+/** A tile's fill: white toward light gray, and more opaque, as its count nears `max` (log scaled). */
 export function hexTileColor(count: number, max: number): Rgba {
-  const t = max > 1 ? Math.min(1, Math.log(count) / Math.log(max)) : 1;
-  return [INK[0], INK[1], INK[2], Math.round(255 * interpolate(t, [0, 1], HEX_TILE.inkAlpha))];
+  const t = max > 1 ? Math.min(1, Math.max(0, Math.log(count) / Math.log(max))) : 1;
+  const { from, to, alpha } = HEX_TILE;
+  return [
+    Math.round(from[0] + (to[0] - from[0]) * t),
+    Math.round(from[1] + (to[1] - from[1]) * t),
+    Math.round(from[2] + (to[2] - from[2]) * t),
+    Math.round(255 * interpolate(t, [0, 1], alpha)),
+  ];
 }
 
 /** Counts as tile labels: 1,234 reads as 1.2k. */
@@ -438,11 +468,12 @@ function symbolLayers(op: RenderOp, { data, selected, terrain }: OpContext, opac
  * Dense point layers as flat light-gray H3 tiles at a zoom-dependent resolution, with an ink count on grouped
  * tiles. A picked tile is a `HexFeature`, so the inspect card shows its count.
  */
-function hexTileLayers(op: RenderOp, { data, selected, zoom, terrain }: OpContext, opacity: number): Layer[] {
+function hexTileLayers(op: RenderOp, { data, selected: picked, zoom, terrain }: OpContext, opacity: number): Layer[] {
   const id = `${op.layerId}:points`;
   const resolution = hexResolution(zoom);
-  const hexes = hexbin(data, resolution);
-  const max = hexes.reduce((m, h) => Math.max(m, h.properties.count), 1);
+  const { hexes, labelled, max } = binned(data, resolution);
+  // A tile picked at another resolution is not among these tiles: ignore it rather than fade every tile.
+  const selected = picked && hexes.includes(picked as HexFeature) ? picked : undefined;
   const trigger = [selectionKey(selected), opacity, resolution];
   const fade = (f: HexFeature, c: Rgba) => {
     const base = withOpacity(c, opacity);
@@ -468,7 +499,7 @@ function hexTileLayers(op: RenderOp, { data, selected, zoom, terrain }: OpContex
     }),
     new TextLayer<HexFeature>({
       id: `${id}:labels`,
-      data: hexes.filter((h) => h.properties.count >= HEX_TILE.labelMin),
+      data: labelled,
       pickable: false,
       getPosition: (f) => f.geometry.coordinates as [number, number],
       getText: (f) => countLabel(f.properties.count),

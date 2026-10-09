@@ -59,7 +59,7 @@ export const LAND_MANAGER_COLORS = {
 export const LINE_DASHES = {
   solid: [0, 0],
   dashed: [4, 3],
-  dotted: [1, 3],
+  dotted: [2, 2],
   long: [8, 3],
 } as const satisfies Record<string, readonly [number, number]>;
 

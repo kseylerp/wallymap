@@ -1,4 +1,4 @@
-import { GeoJsonLayer, IconLayer, TextLayer } from "@deck.gl/layers";
+import { IconLayer, TextLayer } from "@deck.gl/layers";
 import { describe, expect, it } from "vitest";
 import { PathStyleExtension, _TerrainExtension as TerrainExtension } from "@deck.gl/extensions";
 import { H3HexagonLayer, TerrainLayer } from "@deck.gl/geo-layers";
@@ -131,7 +131,7 @@ describe("lines: white over a thin ink casing, dashed per layer", () => {
     expect(lineDashFor("osm-trails")).toEqual([0, 0]);
     expect(lineDashFor("forest-roads")).toEqual([4, 3]);
     expect(lineDashFor("something-new")).toEqual(lineDashFor("something-new"));
-    expect([[4, 3], [1, 3], [8, 3]]).toContainEqual(lineDashFor("something-new"));
+    expect([[4, 3], [2, 2], [8, 3]]).toContainEqual(lineDashFor("something-new"));
     const [casing, line] = buildDeckLayers(stateOf("forest-roads", [a], {}, { geometry: "line" }));
     expect(props(line).getDashArray).toEqual([4, 3]);
     expect((props(line).extensions as unknown[])[0]).toBeInstanceOf(PathStyleExtension);
@@ -315,24 +315,53 @@ describe("H3 tiles for dense points", () => {
     expect([0, 6, 6.9, 7, 8.5, 9, 10.9, 11, 12.9, 13, 18].map(hexResolution)).toEqual([3, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]);
   });
 
-  it("draws flat light-gray tiles with white edges, no color", () => {
+  it("draws flat light-gray tiles with a light edge, no color", () => {
     const p = props(buildDeckLayers(stateOf("species", dense(2001), {}, { zoom: 10 }))[0]);
     expect(p.pickable).toBe(true);
     expect(p.extruded).toBe(false);
     const hexes = p.data as { properties: { count: number; h3: string } }[];
     expect(hexes.reduce((n, h) => n + h.properties.count, 0)).toBe(2001);
     expect((p.getHexagon as (f: unknown) => string)(hexes[0])).toBe(hexes[0].properties.h3);
-    expect((p.getLineColor as Accessor)(hexes[0])).toEqual([255, 255, 255, 153]);
-    for (const h of hexes) expect((p.getFillColor as Accessor)(h).slice(0, 3)).toEqual([31, 31, 31]);
+    expect((p.getLineColor as Accessor)(hexes[0])).toEqual([255, 255, 255, 204]);
+    for (const h of hexes) {
+      const [r, g, bl] = (p.getFillColor as Accessor)(h);
+      // Neutral gray between #9A9A96 and white.
+      expect(r).toBe(g);
+      expect(r).toBeGreaterThanOrEqual(154);
+      expect(bl).toBeGreaterThanOrEqual(150);
+    }
   });
 
-  it("darkens with count: ink from 6% to 24% alpha", () => {
-    expect(hexTileColor(1, 100)).toEqual([31, 31, 31, Math.round(255 * 0.06)]);
-    expect(hexTileColor(100, 100)).toEqual([31, 31, 31, Math.round(255 * 0.24)]);
-    expect(hexTileColor(10, 100)[3]).toBe(Math.round(255 * 0.15));
+  it("runs from white at 55% (fewest) to #9A9A96 at 80% (busiest), through the fill accessor", () => {
+    expect(hexTileColor(1, 100)).toEqual([255, 255, 255, Math.round(255 * 0.55)]);
+    expect(hexTileColor(100, 100)).toEqual([154, 154, 150, Math.round(255 * 0.8)]);
+    const tiles: GeoJSON.Feature[] = [
+      ...Array.from({ length: 1990 }, () => dense(1)[0]),
+      ...dense(11).map((f, i) => ({ ...f, geometry: { type: "Point" as const, coordinates: [-121 + i * 0.5, 40] } })),
+    ];
+    const p = props(buildDeckLayers(stateOf("species", tiles, {}, { zoom: 10 }))[0]);
+    const hexes = p.data as { properties: { count: number } }[];
+    const fill = p.getFillColor as Accessor;
+    const busiest = hexes.find((h) => h.properties.count === 1990)!;
+    const single = hexes.find((h) => h.properties.count === 1)!;
+    expect(fill(busiest)).toEqual([154, 154, 150, 204]);
+    expect(fill(single)).toEqual([255, 255, 255, 140]);
   });
 
-  it("labels grouped tiles with an ink count on a white halo", () => {
+  it("skips features with invalid coordinates instead of throwing", () => {
+    const bad: GeoJSON.Feature[] = [
+      { type: "Feature", geometry: { type: "Point", coordinates: [NaN, 39] }, properties: {} },
+      { type: "Feature", geometry: { type: "Point", coordinates: [-120, 95] }, properties: {} },
+      { type: "Feature", geometry: { type: "Point", coordinates: [200, 39] }, properties: {} },
+    ];
+    for (const one of bad) {
+      const layers = buildDeckLayers(stateOf("species", [...dense(2000), one], {}, { zoom: 10 }));
+      const hexes = props(layers[0]).data as { properties: { count: number } }[];
+      expect(hexes.reduce((n, h) => n + h.properties.count, 0)).toBe(2000);
+    }
+  });
+
+  it("labels grouped tiles with an 11px ink count on a white halo, reusing the label list", () => {
     const [hex, labels] = buildDeckLayers(stateOf("species", dense(2001), {}, { zoom: 10 }));
     const all = props(hex).data as { properties: { count: number } }[];
     const p = props(labels);
@@ -341,7 +370,11 @@ describe("H3 tiles for dense points", () => {
     expect((p.getColor as Accessor)(labelled[0])).toEqual(INK);
     expect(p.outlineColor).toEqual([255, 255, 255, 230]);
     expect(p.fontSettings).toMatchObject({ sdf: true });
+    expect(p.getSize).toBe(11);
     expect(p.pickable).toBe(false);
+    expect(props(buildDeckLayers(stateOf("species", dense(2001), {}, { zoom: 10 }))[1]).data).not.toBe(labelled);
+    const state = stateOf("species", dense(2001), {}, { zoom: 10 });
+    expect(props(buildDeckLayers(state)[1]).data).toBe(props(buildDeckLayers(state)[1]).data);
   });
 
   it("caches the binning per result and resolution", () => {
@@ -374,6 +407,17 @@ describe("H3 tiles for dense points", () => {
     expect(fill(tiles[1])[3]).toBeLessThan((props(buildDeckLayers(base)[0]).getFillColor as Accessor)(tiles[1])[3]);
     const other = (props(labels).data as GeoJSON.Feature[]).find((t) => t !== tiles[0])!;
     expect((props(labels).getColor as Accessor)(other)[3]).toBe(Math.round(255 * SIBLING_FADE));
+  });
+
+  it("ignores a tile selected at another resolution instead of fading every tile", () => {
+    const at10 = stateOf("species", dense(2001), {}, { zoom: 10 });
+    const stale = (props(buildDeckLayers(at10)[0]).data as GeoJSON.Feature[])[0];
+    const at12 = select({ ...at10, viewport: { ...at10.viewport, zoom: 12 } }, stale);
+    const p = props(buildDeckLayers(at12)[0]);
+    const tiles = p.data as GeoJSON.Feature[];
+    expect(tiles).not.toContain(stale);
+    const plain = props(buildDeckLayers({ ...at10, viewport: { ...at10.viewport, zoom: 12 } })[0]);
+    expect((p.getFillColor as Accessor)(tiles[0])).toEqual((plain.getFillColor as Accessor)(tiles[0]));
   });
 });
 

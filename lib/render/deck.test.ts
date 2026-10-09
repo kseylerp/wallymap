@@ -1,4 +1,4 @@
-import { GeoJsonLayer } from "@deck.gl/layers";
+import { GeoJsonLayer, IconLayer } from "@deck.gl/layers";
 import { describe, expect, it } from "vitest";
 import { PathStyleExtension } from "@deck.gl/extensions";
 import {
@@ -25,6 +25,31 @@ const layer: LoadedLayer = {
 
 function stateWith(op: MapState["renderOps"][number]): MapState {
   return { ...initialMapState, layers: { "osm-trails": layer }, renderOps: [op] };
+}
+
+/** `n` point features, spread out a little. */
+function points(n: number): GeoJSON.Feature[] {
+  return Array.from({ length: n }, (_, i) => ({
+    type: "Feature" as const,
+    geometry: { type: "Point" as const, coordinates: [-120 + i * 0.001, 39] },
+    properties: { kind: i % 2 ? "parking" : "camp_site" },
+  }));
+}
+
+/** A state with `features` loaded as `layerId` and one op on it. */
+function stateOf(layerId: string, features: GeoJSON.Feature[], op: Partial<MapState["renderOps"][number]> = {}): MapState {
+  return {
+    ...initialMapState,
+    layers: {
+      [layerId]: {
+        ...layer,
+        id: layerId,
+        style: { geometry: "point", color: "#F2A33A" },
+        result: { ...layer.result, data: { type: "FeatureCollection", features } } as LoadedLayer["result"],
+      },
+    },
+    renderOps: [{ layerId, mode: "points", visible: true, ...op }],
+  };
 }
 
 describe("buildDeckLayers", () => {
@@ -66,9 +91,11 @@ describe("buildDeckLayers styling", () => {
   const propsFor = (op: MapState["renderOps"][number]) =>
     buildDeckLayers(stateWith(op)).at(-1)!.props as unknown as Record<string, unknown>;
 
-  it("fills points in the layer color with a white casing ring (no more white dots)", () => {
-    const layers = buildDeckLayers(stateWith({ layerId: "osm-trails", mode: "points", visible: true }));
+  it("past 300 points, fills discs in the layer color with a white casing ring (no more white dots)", () => {
+    const layers = buildDeckLayers(stateOf("campsites", points(301)));
     expect(layers).toHaveLength(1);
+    expect(layers[0]).toBeInstanceOf(GeoJsonLayer);
+    const color = "#F2A33A";
     const props = layers[0].props as unknown as Record<string, unknown>;
     expect(props.pointType).toBe("circle");
     expect(props.getPointRadius).toBe(7);
@@ -80,8 +107,9 @@ describe("buildDeckLayers styling", () => {
     expect(props.lineWidthUnits).toBe("pixels");
   });
 
-  it("fills points in a requested color", () => {
-    const props = propsFor({ layerId: "osm-trails", mode: "points", color: "#00ff00", visible: true });
+  it("fills discs in a requested color", () => {
+    const props = buildDeckLayers(stateOf("campsites", points(301), { color: "#00ff00" }))[0]
+      .props as unknown as Record<string, unknown>;
     expect(props.getFillColor).toEqual([0, 255, 0, 255]);
     expect(props.getLineColor).toEqual([255, 255, 255, 255]);
   });
@@ -305,11 +333,87 @@ describe("Wally trail style on plain Outdoors", () => {
     expect(outdoorsTrailWidths(16).core).toBeCloseTo(2.45);
   });
 
-  it("keeps the slate satellite style on the hybrid and when the user picked a color", () => {
+  it("keeps the solid slate satellite style on the hybrid and when the user picked a color", () => {
     for (const state of [onBasemap("outdoors-satellite"), onBasemap("outdoors", 14, "#FF5A36")]) {
       const p = buildDeckLayers(state)[1].props as unknown as Record<string, unknown>;
-      expect(p.getDashArray).toBeUndefined();
+      expect(p.getDashArray).toEqual([0, 0]);
       expect(p.getLineWidth).toBe(2.5);
     }
+  });
+
+  it("keeps the same extensions across a basemap switch (deck throws if they change on a live layer)", () => {
+    const ext = (basemap: MapState["basemap"]) =>
+      (buildDeckLayers(onBasemap(basemap))[1].props as unknown as { extensions: unknown[] }).extensions;
+    expect(ext("outdoors")).toEqual(ext("outdoors-satellite"));
+    expect(ext("outdoors")[0]).toBe(ext("satellite")[0]);
+  });
+});
+
+describe("Wally pins", () => {
+  const props = (l: { props: unknown }) => l.props as Record<string, unknown>;
+
+  it("draws up to 300 points as teardrop pins, anchored at the tip", () => {
+    const [pins] = buildDeckLayers(stateOf("campsites", points(300)));
+    expect(pins).toBeInstanceOf(IconLayer);
+    expect(pins.id).toBe("campsites:points");
+    const p = props(pins);
+    expect(p.pickable).toBe(true);
+    expect(p.sizeUnits).toBe("pixels");
+    expect(p.getSize).toBe(44);
+    // Without this, GlobeView culls every icon quad.
+    expect(p.parameters).toMatchObject({ cullMode: "none" });
+    const getIcon = p.getIcon as (f: GeoJSON.Feature) => { url: string; width: number; height: number; anchorY: number };
+    const [camp, parking] = points(2);
+    expect(getIcon(camp)).toMatchObject({ url: "/pins/camp.svg", anchorY: 88, height: 88, width: 68 });
+    expect(getIcon(parking).url).toBe("/pins/parking.svg");
+    // The same definition every call, so the atlas is not rebuilt per frame.
+    expect(getIcon(camp)).toBe(getIcon(points(1)[0]));
+    const getPosition = p.getPosition as (f: GeoJSON.Feature) => number[];
+    expect(getPosition(camp)).toEqual([-120, 39]);
+  });
+
+  it("falls back to discs at 301 points", () => {
+    const [dots] = buildDeckLayers(stateOf("campsites", points(301)));
+    expect(dots).toBeInstanceOf(GeoJsonLayer);
+    expect(dots).not.toBeInstanceOf(IconLayer);
+  });
+
+  it("falls back to discs when a points op holds non-point geometry", () => {
+    const line: GeoJSON.Feature = { type: "Feature", geometry: { type: "LineString", coordinates: [[0, 0], [1, 1]] }, properties: {} };
+    expect(buildDeckLayers(stateOf("campsites", [...points(3), line]))[0]).toBeInstanceOf(GeoJsonLayer);
+  });
+
+  it("keeps the selected pin at full alpha and fades its siblings to 35%", () => {
+    const features = points(3);
+    const state = { ...stateOf("species", features), selected: { layerId: "species", feature: features[1], lngLat: [-120, 39] as [number, number] } };
+    const getColor = props(buildDeckLayers(state)[0]).getColor as (f: GeoJSON.Feature) => number[];
+    expect(getColor(features[1])).toEqual([255, 255, 255, 255]);
+    expect(getColor(features[0])).toEqual([255, 255, 255, Math.round(255 * SIBLING_FADE)]);
+  });
+
+  it("applies op opacity to the pins", () => {
+    expect(props(buildDeckLayers(stateOf("species", points(2), { opacity: 0.5 }))[0]).getColor).toEqual([255, 255, 255, 128]);
+  });
+});
+
+describe("update triggers while a feature is selected", () => {
+  const triggers = (state: MapState, accessor: string) =>
+    ((buildDeckLayers(state).at(-1)!.props as unknown as Record<string, unknown>).updateTriggers as Record<string, unknown>)[accessor];
+
+  it("change with opacity and color, so layer panel edits apply while the card is open", () => {
+    const features = points(400);
+    const selected = { layerId: "campsites", feature: features[0], lngLat: [-120, 39] as [number, number] };
+    const at = (op: Partial<MapState["renderOps"][number]>) => ({ ...stateOf("campsites", features, op), selected });
+    for (const accessor of ["getFillColor", "getLineColor"]) {
+      expect(triggers(at({ opacity: 0.5 }), accessor)).not.toEqual(triggers(at({ opacity: 1 }), accessor));
+      expect(triggers(at({ color: "#FF5A36" }), accessor)).not.toEqual(triggers(at({}), accessor));
+    }
+  });
+
+  it("change with opacity for the pins' getColor", () => {
+    const features = points(3);
+    const selected = { layerId: "species", feature: features[0], lngLat: [-120, 39] as [number, number] };
+    const at = (opacity: number) => ({ ...stateOf("species", features, { opacity }), selected });
+    expect(triggers(at(0.5), "getColor")).not.toEqual(triggers(at(1), "getColor"));
   });
 });

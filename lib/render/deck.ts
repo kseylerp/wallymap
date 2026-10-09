@@ -1,10 +1,11 @@
 import type { Layer } from "@deck.gl/core";
 import { PathStyleExtension } from "@deck.gl/extensions";
-import { GeoJsonLayer } from "@deck.gl/layers";
+import { GeoJsonLayer, IconLayer } from "@deck.gl/layers";
 import { WebMercatorViewport } from "@math.gl/web-mercator";
 import type { Feature } from "geojson";
 import type { BBox, StyleHints } from "@/layers/types";
 import { OUTDOORS_TRAIL, SCORE_RAMP } from "@/lib/render/palette";
+import { pinIconFor, pinThreshold, type PinIcon } from "@/lib/render/wally/pins";
 import type { MapState, RenderOp, Viewport } from "@/lib/render/state";
 
 type Rgba = [number, number, number, number];
@@ -152,6 +153,34 @@ export function outdoorsTrailWidths(zoom: number): { casing: number; core: numbe
 /** Dashes for the Outdoors trail core. Mapbox measures dashes in line widths, deck in half widths. */
 const OUTDOORS_TRAIL_DASH: [number, number] = [OUTDOORS_TRAIL.dash[0] * 2, OUTDOORS_TRAIL.dash[1] * 2];
 const dashExtension = new PathStyleExtension({ dash: true });
+const SOLID: [number, number] = [0, 0];
+
+/** Pins draw this tall on screen (the sprite is 34×44). */
+const PIN_SIZE_PX = 44;
+/** Sprites are rasterized into the icon atlas at 2x so they stay sharp on high-density screens. */
+const PIN_ATLAS_SCALE = 2;
+type AtlasIcon = { id: string; url: string; width: number; height: number; anchorY: number };
+/** One atlas definition per pin sprite, made once, so `getIcon` returns the same object every frame. */
+const atlasIcons = new Map<PinIcon, AtlasIcon>();
+function atlasIcon(icon: PinIcon): AtlasIcon {
+  let entry = atlasIcons.get(icon);
+  if (!entry) {
+    entry = {
+      id: icon.id,
+      url: icon.url,
+      width: icon.width * PIN_ATLAS_SCALE,
+      height: icon.height * PIN_ATLAS_SCALE,
+      anchorY: icon.anchorY * PIN_ATLAS_SCALE,
+    };
+    atlasIcons.set(icon, entry);
+  }
+  return entry;
+}
+
+/** True when a points op should draw Wally pins: every feature a Point, and no more than `pinThreshold`. */
+export function drawsPins(data: GeoJSON.FeatureCollection): boolean {
+  return data.features.length <= pinThreshold && data.features.every((f) => f.geometry?.type === "Point");
+}
 
 /** What one op's layers need to know beyond the op itself. */
 type OpContext = {
@@ -168,11 +197,32 @@ function geoJsonLayersFor(op: RenderOp, { data, style, selected, basemap, zoom }
   const color = requested ?? style.color;
   const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
   const id = `${op.layerId}:${op.mode}`;
-  const key = selectionKey(selected);
-  const updateTriggers = { getLineColor: key, getFillColor: key };
+  // Color accessors become functions while a feature is selected, and deck only re-runs a function accessor
+  // when its trigger changes, so the trigger carries everything the colors depend on.
+  const trigger = [selectionKey(selected), opacity, color];
+  const updateTriggers = { getLineColor: trigger, getFillColor: trigger };
   const base = { id, data, pickable: true, updateTriggers };
   switch (op.mode) {
     case "points":
+      if (drawsPins(data)) {
+        // Wally teardrops: the icon's alpha carries the op opacity and the selection fade.
+        return [
+          new IconLayer<Feature>({
+            id,
+            data: data.features,
+            pickable: true,
+            getIcon: (f) => atlasIcon(pinIconFor(op.layerId, f)),
+            getPosition: (f) => (f.geometry as GeoJSON.Point).coordinates as [number, number],
+            getSize: PIN_SIZE_PX,
+            sizeUnits: "pixels",
+            getColor: colorFor(WHITE, opacity, selected),
+            updateTriggers: { getColor: trigger, getIcon: op.layerId },
+            // The overlay draws in deck's GlobeView, which flips the icon quads' winding; with back-face culling
+            // on, deck 9.4 draws (and picks) no icons at all there.
+            parameters: { cullMode: "none" },
+          }),
+        ];
+      }
       return [
         new GeoJsonLayer({
           ...base,
@@ -207,10 +257,10 @@ function geoJsonLayersFor(op: RenderOp, { data, style, selected, basemap, zoom }
           getLineColor: colorFor(hexToRgba(wallyTrail ? OUTDOORS_TRAIL.color : color), opacity, selected),
           getLineWidth: widths.core,
           lineWidthUnits: "pixels",
-          ...(wallyTrail && {
-            extensions: [dashExtension],
-            getDashArray: OUTDOORS_TRAIL_DASH,
-          }),
+          // The dash extension stays on every core line: adding or removing an extension on a live layer (as a
+          // basemap switch would) leaves deck with a dangling dash attribute and it throws. [0, 0] draws solid.
+          extensions: [dashExtension],
+          getDashArray: wallyTrail ? OUTDOORS_TRAIL_DASH : SOLID,
         }),
       ];
     }

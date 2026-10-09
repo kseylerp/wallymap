@@ -136,6 +136,30 @@ describe("runRouteTool", () => {
     expect(result.bbox).toEqual([-120.16307, 38.95411, -120.10356, 39.17194]);
   });
 
+  it("biases the end's lookup toward the resolved start, and looks the start up unbiased", async () => {
+    const calls: [string, unknown][] = [];
+    const spy = vi.fn(async (place: string, opts?: { proximity?: [number, number] }) => {
+      calls.push([place, opts]);
+      return geocode(place);
+    });
+    const { fetch } = stubFetch(fixture);
+    await runRouteTool({ from: "Tahoe City", to: "Emerald Bay" }, { geocode: spy, fetch });
+    expect(calls).toEqual([
+      ["Tahoe City", undefined],
+      ["Emerald Bay", { proximity: TAHOE_CITY }],
+    ]);
+    calls.length = 0;
+    await runRouteTool({ from: TAHOE_CITY, to: "Emerald Bay" }, { geocode: spy, fetch });
+    expect(calls).toEqual([["Emerald Bay", { proximity: TAHOE_CITY }]]);
+  });
+
+  it("stops at the start when it cannot be found, without looking up the end", async () => {
+    const spy = vi.fn(geocode);
+    const result = await runRouteTool({ from: "Atlantis", to: "Emerald Bay" }, { geocode: spy, fetch: stubFetch(fixture).fetch });
+    expect(result).toEqual({ error: "Could not find Atlantis: No match for Atlantis" });
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
   it("takes coordinates as they are and a given name", async () => {
     const { fetch } = stubFetch(fixture);
     const result = await runRouteTool(

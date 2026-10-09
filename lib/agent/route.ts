@@ -187,7 +187,7 @@ export type RouteToolOutput = FetchedRoute & {
 };
 
 type Deps = {
-  geocode?: (place: string) => Promise<GeocodeResult | GeocodeError>;
+  geocode?: (place: string, opts?: { proximity?: [number, number] }) => Promise<GeocodeResult | GeocodeError>;
   fetch?: CachedFetch;
 };
 
@@ -223,9 +223,13 @@ function label(place: string | [number, number]): string {
 
 type Resolved = { lngLat: [number, number]; found?: string };
 
-async function resolve(place: string | [number, number], geocode: NonNullable<Deps["geocode"]>): Promise<Resolved | RouteError> {
+async function resolve(
+  place: string | [number, number],
+  geocode: NonNullable<Deps["geocode"]>,
+  proximity?: [number, number],
+): Promise<Resolved | RouteError> {
   if (typeof place !== "string") return { lngLat: place };
-  const found = await geocode(place);
+  const found = await geocode(place, proximity ? { proximity } : undefined);
   if ("error" in found) return { error: `Could not find ${place}: ${found.error}` };
   return { lngLat: found.center, found: found.name };
 }
@@ -239,8 +243,10 @@ async function resolve(place: string | [number, number], geocode: NonNullable<De
 export async function runRouteTool(input: RouteToolInput, deps: Deps = {}): Promise<RouteToolOutput | RouteError> {
   const profile = input.profile ?? "walking";
   const geocode = deps.geocode ?? defaultGeocode;
-  const [from, to] = await Promise.all([resolve(input.from, geocode), resolve(input.to, geocode)]);
+  // The start resolves first and biases the end's lookup toward it: a route's two ends are near each other.
+  const from = await resolve(input.from, geocode);
   if ("error" in from) return from;
+  const to = await resolve(input.to, geocode, from.lngLat);
   if ("error" in to) return to;
   const fetched = await fetchRoute({ from: from.lngLat, to: to.lngLat, profile }, deps.fetch);
   if ("error" in fetched) {

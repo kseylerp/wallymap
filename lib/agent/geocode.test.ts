@@ -63,6 +63,31 @@ describe("geocode", () => {
     expect(url.searchParams.get("access_token")).toBe("test-mapbox-token");
   });
 
+  it("adds Mapbox's proximity parameter only when given", async () => {
+    const fetchMock = vi.fn(async (_url: string | URL | Request) =>
+      jsonResponse({
+        features: [
+          {
+            properties: {
+              name: "Emerald Bay",
+              bbox: [-120.2, 38.9, -119.9, 39.3],
+              coordinates: { longitude: -120.1, latitude: 38.95 },
+            },
+          },
+        ],
+      }),
+    );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await geocode("Emerald Bay", { proximity: [-120.14, 39.17] });
+    await geocode("Emerald Bay");
+
+    const withProximity = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(withProximity.searchParams.get("proximity")).toBe("-120.14,39.17");
+    expect(withProximity.toString()).toContain("proximity=-120.14%2C39.17");
+    expect(new URL(String(fetchMock.mock.calls[1][0])).searchParams.has("proximity")).toBe(false);
+  });
+
   it("builds a bbox around the center when the feature has none", async () => {
     globalThis.fetch = vi.fn(async () =>
       jsonResponse({

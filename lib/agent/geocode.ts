@@ -56,8 +56,14 @@ async function regionResult(place: string): Promise<GeocodeResult | null> {
   }
 }
 
-/** Forward-geocodes a place name with Mapbox Geocoding v6. Never throws. */
-export async function geocode(place: string): Promise<GeocodeResult | GeocodeError> {
+/**
+ * Forward-geocodes a place name with Mapbox Geocoding v6. Never throws. `proximity` ([lng, lat]) biases the
+ * match toward that point, so "Emerald Bay" next to Tahoe City is not Laguna Beach's Emerald Bay.
+ */
+export async function geocode(
+  place: string,
+  opts: { proximity?: [number, number] } = {},
+): Promise<GeocodeResult | GeocodeError> {
   const token = process.env.MAPBOX_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   if (!token) {
     return { error: "MAPBOX_TOKEN is not set" };
@@ -66,6 +72,7 @@ export async function geocode(place: string): Promise<GeocodeResult | GeocodeErr
   const url = new URL(ENDPOINT);
   url.searchParams.set("q", place);
   url.searchParams.set("limit", "1");
+  if (opts.proximity) url.searchParams.set("proximity", `${opts.proximity[0]},${opts.proximity[1]}`);
   url.searchParams.set("access_token", token);
 
   try {

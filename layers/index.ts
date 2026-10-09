@@ -18,3 +18,4 @@ import "./wilderness";
 import "./photos";
 import "./physical-regions";
 import "./public-lands";
+import "./popularity";

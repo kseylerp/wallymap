@@ -65,6 +65,8 @@ export function normalizeOverpass(json: unknown): FeatureCollection {
     if (tags.sac_scale !== undefined) properties.sac_scale = tags.sac_scale;
     if (tags.trail_visibility !== undefined) properties.trail_visibility = tags.trail_visibility;
     if (tags.surface !== undefined) properties.surface = tags.surface;
+    if (tags.wikidata !== undefined) properties.wikidata = tags.wikidata;
+    if (tags.wikipedia !== undefined) properties.wikipedia = tags.wikipedia;
 
     features.push({
       type: "Feature",
@@ -87,7 +89,7 @@ const osmTrails = defineLayer({
   id: "osm-trails",
   title: "OpenStreetMap trails",
   description:
-    "Hiking paths, footways and tracks from OpenStreetMap, with difficulty (sac_scale), visibility and surface tags where mapped.",
+    "Hiking paths, footways and tracks from OpenStreetMap, with difficulty (sac_scale), visibility and surface tags where mapped, plus wikidata or wikipedia when the trail has an article.",
   coverage: "global",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cacheKeyFor, createCache, type Cache } from "./cache";
+import { MEMORY_CACHE_MAX_ENTRIES, cacheKeyFor, createCache, type Cache } from "./cache";
 import { createLayerFetch } from "./index";
 
 describe("createCache", () => {
@@ -33,6 +33,17 @@ describe("createCache", () => {
   it("shares memory between createCache calls", async () => {
     await createCache().set("shared-key", "x", 10);
     expect(await createCache().get("shared-key")).toBe("x");
+  });
+
+  it("evicts the oldest memory entry once it holds 50", async () => {
+    delete process.env.KV_REST_API_URL;
+    delete process.env.KV_REST_API_TOKEN;
+    const c = createCache();
+    expect(MEMORY_CACHE_MAX_ENTRIES).toBe(50);
+    for (let i = 0; i < 51; i++) await c.set(`fifo-${i}`, `v${i}`, 60);
+    expect(await c.get("fifo-0")).toBeNull();
+    expect(await c.get("fifo-1")).toBe("v1");
+    expect(await c.get("fifo-50")).toBe("v50");
   });
 });
 

@@ -12,6 +12,9 @@ type MemoryEntry = { value: string; expiresAt: number };
 // Module-level so every createCache() call in a process shares one store.
 const memory = new Map<string, MemoryEntry>();
 
+/** Most entries the in-memory cache holds; the oldest insert is evicted first. */
+export const MEMORY_CACHE_MAX_ENTRIES = 50;
+
 const memoryCache: Cache = {
   async get(key) {
     const entry = memory.get(key);
@@ -23,6 +26,11 @@ const memoryCache: Cache = {
     return entry.value;
   },
   async set(key, value, ttlSeconds) {
+    if (!memory.has(key) && memory.size >= MEMORY_CACHE_MAX_ENTRIES) {
+      // Maps iterate in insertion order, so the first key is the oldest.
+      const oldest = memory.keys().next().value;
+      if (oldest !== undefined) memory.delete(oldest);
+    }
     memory.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
   },
 };

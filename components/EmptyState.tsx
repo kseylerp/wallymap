@@ -2,11 +2,11 @@ import { Wordmark } from "@/components/Wordmark";
 
 export const EXAMPLE_QUESTIONS = [
   "Show hiking trails around Lake Tahoe",
-  "Which trails near Chamonix are alpine grade?",
-  "Find footpaths in the Lake District",
-  "Show tracks and paths around Torres del Paine",
-  "What trails run through the Blue Mountains near Sydney?",
-  "Trails near Yosemite Valley with a name",
+  "Which wildfires burned near Yosemite in the last 10 years?",
+  "Where has the Amazon lost the most forest since 2015?",
+  "How much snow is on the ground around Mount Hood?",
+  "Find campsites and forest roads open to vehicles near Moab",
+  "What wildlife has been spotted around Banff this year?",
 ] as const;
 
 type EmptyStateProps = { onPick: (question: string) => void };
@@ -21,7 +21,7 @@ export function EmptyState({ onPick }: EmptyStateProps) {
     >
       <Wordmark variant="hero" />
       <p className="mt-2 text-[15px] text-ink-muted sm:mt-3 md:text-base">
-        Ask about trails, terrain, and the wild, anywhere on Earth.
+        Ask about trails, fire, forests, snow, rivers, camping, and wildlife, anywhere on Earth.
       </p>
       <ul className="mt-4 grid grid-cols-1 gap-1.5 sm:mt-5 sm:grid-cols-2 sm:gap-2">
         {EXAMPLE_QUESTIONS.map((q, i) => (

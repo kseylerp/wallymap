@@ -1,6 +1,6 @@
 # Example questions
 
-These are the six WildMap starter questions in `components/EmptyState.tsx`. Each one should end with a trail layer drawn on the map and a short note. In Milestone 1 the only data layer is `osm-trails`.
+These are the six WildMap starter questions in `components/EmptyState.tsx`. Together they show the data layers available: trails, fire, forest loss, snow, campsites, and wildlife. Each should end with the matching layer drawn on the map and a short note.
 
 The usual tool order is: find the place, move the map, query the layer, draw it, explain it.
 
@@ -10,38 +10,38 @@ Tools: `geocode` → `set_view` → `query_osm-trails` → `render` → `note`
 
 The map flies to Lake Tahoe and shows a network of terracotta trail lines.
 
-## 2. Which trails near Chamonix are alpine grade?
+## 2. Which wildfires burned near Yosemite in the last 10 years?
 
-Tools: `geocode` → `set_view` → `query_osm-trails` (with `sacScaleMax` set to an alpine grade) → `render` → `note`
+Tools: `geocode` → `set_view` → `query_fire-perimeters` → `render` → `note`
 
-The map shows trails around Chamonix, and the note explains which difficulty grades were included.
+The map shows fire perimeters around Yosemite, and the note lists the largest recent fires by year.
 
-## 3. Find footpaths in the Lake District
+## 3. Where has the Amazon lost the most forest since 2015?
 
-Tools: `geocode` → `set_view` → `query_osm-trails` → `render` → `note`
+Tools: `geocode` → `set_view` → `query_forest-loss` → `render` → `note`
 
-The map shows footpaths across the English Lake District. If the area is too large, the agent re-queries a smaller box.
+The map shows tree cover loss across the Amazon from 2015 onward; the note names the areas with the heaviest loss.
 
-## 4. Show tracks and paths around Torres del Paine
+## 4. How much snow is on the ground around Mount Hood?
 
-Tools: `geocode` → `set_view` → `query_osm-trails` → `render` → `note`
+Tools: `geocode` → `set_view` → `query_snowpack` → `render` → `note`
 
-The map shows tracks and paths in the Torres del Paine park in Chile; coverage may be sparse.
+The map shows snow depth around Mount Hood, and the note gives the current depth and how recent the reading is.
 
-## 5. What trails run through the Blue Mountains near Sydney?
+## 5. Find campsites and forest roads open to vehicles near Moab
 
-Tools: `geocode` → `set_view` → `query_osm-trails` → `render` → `note`
+Tools: `geocode` → `set_view` → `query_campsites` + `query_mvum-dispersed` → `render` (each layer) → `note`
 
-The map shows trails in the Blue Mountains west of Sydney, and the note summarizes what was found.
+The map shows campsites together with forest roads that allow dispersed camping near Moab, and the note says which is which.
 
-## 6. Trails near Yosemite Valley with a name
+## 6. What wildlife has been spotted around Banff this year?
 
-Tools: `geocode` → `set_view` → `query_osm-trails` (with `namedOnly` true) → `render` → `note`
+Tools: `geocode` → `set_view` → `query_species` → `render` → `note`
 
-The map shows only named trails around Yosemite Valley.
+The map shows recent wildlife sightings around Banff, and the note summarizes the most commonly seen species.
 
 ## Notes
 
-- If a query returns the hint `zoom_in`, expect an extra `query_osm-trails` call on a smaller area.
+- If a query returns the hint `zoom_in`, expect an extra query call on a smaller area.
 - `list_layers` may appear first in the trace; it does not change the result.
-- Public Overpass servers can be slow, so a trail query can take 10 to 30 seconds.
+- Public data servers can be slow, so a query can take 10 to 30 seconds.

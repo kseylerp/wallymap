@@ -5,3 +5,5 @@ export * from "./types";
 import "./osm-trails";
 import "./fire-perimeters";
 import "./fire-detections";
+import "./forest-loss";
+import "./forest-alerts";

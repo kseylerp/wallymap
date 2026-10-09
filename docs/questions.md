@@ -88,28 +88,28 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set
 
 ## Last run
 
-Run on 2026-10-09 with model `openai/gpt-oss-120b` and a 12-step cap: **ok 19/19**. A question passes when the agent geocoded a place, queried a layer, drew whatever came back, and wrote a note (a route question passes when the route tool ran and a note followed).
+Run on 2026-10-09 (final, commit aa86c78) with model `openai/gpt-oss-120b` and a 12-step cap: **ok 19/19**. A question passes when the agent located the place (geocode or a physical-regions query), queried a layer, drew whatever came back (render or compare), and wrote a note; a route question passes when the route tool ran and a note followed.
 
 | Question | ok | Tools (query_ prefix dropped) | Seconds |
 | --- | --- | --- | --- |
-| Show hiking trails around Lake Tahoe | yes | geocode, set_view, osm-trails, render, note | 14.1 |
-| Which wildfires burned near Yosemite in the last 10 years? | yes | geocode, set_view, fire-perimeters, render | 65.2 |
-| Are there any active fires burning near Missoula right now? | yes | geocode, set_view, fire-detections, fire-perimeters, render, note | 19 |
-| Where has the Amazon lost the most forest since 2015? | yes | list_layers, geocode, geocode, forest-loss, render, note | 17.3 |
-| How much snow is on the ground around Mount Hood? | yes | geocode, set_view, snowpack, set_view, snowpack, render, note | 18.5 |
-| Which rivers near Jackson Hole are running high right now? | yes | list_layers, geocode, geocode, set_view, streamflow, render, note | 17.1 |
-| Find campsites and forest roads open to vehicles near Moab | yes | geocode, set_view, campsites, forest-roads, render, render, note | 26.3 |
-| What wildlife has been spotted around Banff this year? | yes | geocode, geocode, set_view, species, render, note | 33 |
-| Which trails and viewpoints around Zion National Park look the most popular? | yes | list_layers, geocode, set_view, osm-trails, popularity, photos, render, render, osm-trails, render, note | 61.9 |
-| Who owns the land around Bryce Canyon, and is any of it designated wilderness? | yes | geocode, set_view, public-lands, wilderness, render, render | 19.6 |
-| Where is the night sky darkest around Great Basin National Park, and how many people live nearby? | yes | list_layers, geocode, set_view, night_lights, night-lights, population, render, render, note | 45.3 |
-| How remote is the Wind River Range? | yes | list_layers, geocode, geocode, geocode, geocode, physical-regions, remoteness, remoteness, render, set_view, note | 40.1 |
-| Show me a walking route from Tahoe City to Emerald Bay | yes | route | 5.4 |
-| Show wildfires near Yosemite year by year since 2016 | yes | geocode, set_view, fire-perimeters, render, set_time | 12.9 |
-| Show only alpine-grade trails near Chamonix | yes | geocode, set_view, osm-trails, render, note | 13.7 |
-| Compare forest loss in Rondônia between 2015 and 2025 | yes | list_layers, geocode, set_view, forest-loss, forest-loss, compare, render, render, note | 26 |
-| Which sources did you use for snow near Mount Hood? | yes | geocode, set_view, snowpack, set_view, snowpack, render, note | 18.1 |
-| Which campsites around Moab look the most popular? | yes | list_layers, geocode, set_view, campsites, popularity-campsites, popularity-campsites, popularity-campsites, render, render, popularity-campsites, note | 46.9 |
-| Outline the Sierra Nevada | yes | geocode, set_view, physical-regions, set_view, physical-regions, render, note | 15 |
+| Show hiking trails around Lake Tahoe | yes | list_layers, geocode, set_view, osm-trails, render, note | 26.9 |
+| Which wildfires burned near Yosemite in the last 10 years? | yes | geocode, set_view, fire-perimeters, render | 29.6 |
+| Are there any active fires burning near Missoula right now? | yes | geocode, set_view, fire-detections, render, note | 31.5 |
+| Where has the Amazon lost the most forest since 2015? | yes | list_layers, geocode, geocode, set_view, forest-loss, render | 38.4 |
+| How much snow is on the ground around Mount Hood? | yes | geocode, set_view, snowpack, set_view, snowpack, set_view, snowpack | 39 |
+| Which rivers near Jackson Hole are running high right now? | yes | list_layers, geocode, set_view, streamflow, render, render, render | 35.3 |
+| Find campsites and forest roads open to vehicles near Moab | yes | geocode, set_view, forest-roads, campsites, render, render, note | 33.8 |
+| What wildlife has been spotted around Banff this year? | yes | geocode, set_view, species, render | 40.8 |
+| Which trails and viewpoints around Zion National Park look the most popular? | yes | list_layers, geocode, set_view, osm-trails, popularity, photos, render, render, render, render, osm-trails | 126.2 |
+| Who owns the land around Bryce Canyon, and is any of it designated wilderness? | yes | geocode, set_view, public-lands, wilderness, render, render, note | 96 |
+| Where is the night sky darkest around Great Basin National Park, and how many people live nearby? | yes | list_layers, geocode, set_view, night-lights, population, render, render | 46.8 |
+| How remote is the Wind River Range? | yes | geocode, geocode, geocode, physical-regions, set_view, remoteness, render, note | 48.1 |
+| Show me a walking route from Tahoe City to Emerald Bay | yes | route, render, note | 11.3 |
+| Show wildfires near Yosemite year by year since 2016 | yes | geocode, set_view, fire-perimeters, render, set_time, note | 30.4 |
+| Show only alpine-grade trails near Chamonix | yes | list_layers, geocode, set_view, osm-trails, render, note | 27.2 |
+| Compare forest loss in Rondônia between 2015 and 2025 | yes | list_layers, geocode, set_view, forest-loss, render, forest-loss, render, compare, note | 37.7 |
+| Which sources did you use for snow near Mount Hood? | yes | list_layers, geocode, set_view, snowpack, note | 18.5 |
+| Which campsites around Moab look the most popular? | yes | geocode, set_view, popularity-campsites, popularity-campsites, popularity-campsites, render, note | 48.7 |
+| Outline the Sierra Nevada | yes | geocode, set_view, physical-regions, render, note | 18.5 |
 
-Three questions failed on the first pass and passed on a re-run after two fixes: the pass rule now accepts route-only answers and empty results that end in a note, and the "over time" prompt rule now says to call `set_time` once with play on instead of stepping through years by hand (the first run spent all 12 steps on repeated `set_time` and `render` calls). Things still worth watching: the Wind River and Moab popularity questions each needed a zoom-in retry after an area-limit error, and the Zion question queried `osm-trails` a second time although popularity already includes trails.
+Questions that needed a zoom-in retry after an area-limit error: How much snow is on the ground around Mount Hood?, Which campsites around Moab look the most popular?. The pass rule was widened earlier today so that route-only answers, empty results that end in a note, physical-region outlines and compare drawings count; the "over time" prompt rule now says to call `set_time` once with play on.

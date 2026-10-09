@@ -17,3 +17,4 @@ import "./night-lights";
 import "./wilderness";
 import "./photos";
 import "./physical-regions";
+import "./public-lands";

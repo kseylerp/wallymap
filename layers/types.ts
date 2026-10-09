@@ -32,6 +32,8 @@ export type LayerResult =
         minzoom: number;
         maxzoom: number;
         format: "raster" | "vector";
+        /** Raster tiles only: pixel size of each tile image (default 256; GFW serves 512). */
+        tileSize?: number;
         /** Vector tiles only: the layer name inside each tile. */
         sourceLayer?: string;
         /** Vector tiles only: how to draw the features. */

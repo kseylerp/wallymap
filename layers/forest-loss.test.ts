@@ -38,7 +38,7 @@ describe("forest-loss layer", () => {
     expect(stub).not.toHaveBeenCalled();
     if (!("kind" in r) || r.kind !== "tiles") throw new Error("expected tiles");
     expect(r.data.format).toBe("raster");
-    expect(r.data).toMatchObject({ minzoom: 3, maxzoom: 12 });
+    expect(r.data).toMatchObject({ minzoom: 3, maxzoom: 12, tileSize: 512 });
     expect(r.data.url).toContain("start_year=2015&end_year=2025&tree_cover_density_threshold=30");
     expect(r.citation.source).toContain("Global Forest Watch");
   });

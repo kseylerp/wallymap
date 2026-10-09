@@ -1,4 +1,13 @@
-import type { FogSpecification, Map as MapboxMap, StyleSpecification } from "mapbox-gl";
+import type {
+  CircleLayerSpecification,
+  ExpressionSpecification,
+  FillLayerSpecification,
+  FogSpecification,
+  LineLayerSpecification,
+  Map as MapboxMap,
+  StyleSpecification,
+} from "mapbox-gl";
+import type { StyleHints } from "@/layers/types";
 import {
   hybridPaintOverrides,
   isHillshadeLayer,
@@ -12,6 +21,126 @@ import type { Basemap, MapState } from "@/lib/render/state";
 
 const PREFIX = "tiles-";
 
+/** Satellite data palette for land ownership (docs/superpowers/specs/2026-10-09-wildmap-restyle.md). */
+const OWNERSHIP_COLORS = {
+  federal: "#B9A6FF",
+  state: "#9FC4FF",
+  local: "#D9D4FF",
+  private: "#EDEDEA",
+} as const;
+
+/** PAD-US manager abbreviations as decoded from the tiles, plus the raw PAD-US codes in case a rebuild uses them. */
+const FEDERAL_AGENCIES = [
+  "USFS", "BLM", "NPS", "FWS", "USBR", "BOR", "USACE", "DOD", "DOE", "TVA", "ARS", "NRCS", "NOAA", "BIA", "BOEM",
+  "OTHF", "Federal", "FED",
+];
+const STATE_AGENCIES = ["State", "State Parks", "STAT", "SPR", "SDNR", "SFW", "SLB", "SDOL", "OTHS"];
+const PRIVATE_AGENCIES = ["NGO", "Private", "PVT"];
+
+/** True when the string expression starts with `prefix`. */
+function startsWith(value: ExpressionSpecification, prefix: string): ExpressionSpecification {
+  return ["==", ["slice", value, 0, prefix.length], prefix];
+}
+
+/**
+ * A fill color that follows the land manager when features carry PAD-US `agency` / `designation` properties:
+ * federal lavender, state blue, local or tribal pale lilac, private off-white. Features with neither property
+ * (any other vector tile set) get `fallback`, the layer's own style color.
+ */
+export function ownershipFillColor(fallback: string): ExpressionSpecification {
+  const designation: ExpressionSpecification = ["to-string", ["get", "designation"]];
+  return [
+    "case",
+    ["has", "agency"],
+    [
+      "match",
+      ["to-string", ["get", "agency"]],
+      FEDERAL_AGENCIES,
+      OWNERSHIP_COLORS.federal,
+      STATE_AGENCIES,
+      OWNERSHIP_COLORS.state,
+      PRIVATE_AGENCIES,
+      OWNERSHIP_COLORS.private,
+      OWNERSHIP_COLORS.local,
+    ],
+    // About 7% of PAD-US features have no agency; their designation still says who holds them.
+    ["has", "designation"],
+    [
+      "case",
+      startsWith(designation, "Private"),
+      OWNERSHIP_COLORS.private,
+      startsWith(designation, "State"),
+      OWNERSHIP_COLORS.state,
+      ["any", startsWith(designation, "National"), startsWith(designation, "Federal"), startsWith(designation, "Military")],
+      OWNERSHIP_COLORS.federal,
+      OWNERSHIP_COLORS.local,
+    ],
+    fallback,
+  ];
+}
+
+type VectorLayerSpec = FillLayerSpecification | LineLayerSpecification | CircleLayerSpecification;
+
+/**
+ * The Mapbox layers that draw one vector tile layer: a manager-colored fill plus a white outline for polygons,
+ * else one line or circle layer in the style color. Every layer reads source `tiles-<id>`; the first layer is
+ * `tiles-<id>`, the polygon outline `tiles-<id>-line`.
+ */
+export function vectorTileLayerSpecs(
+  id: string,
+  style: StyleHints,
+  sourceLayer: string,
+  geometry: "point" | "line" | "polygon",
+  visible: boolean,
+): VectorLayerSpec[] {
+  const layerId = `${PREFIX}${id}`;
+  const common = { source: layerId, "source-layer": sourceLayer };
+  const layout = { visibility: visible ? ("visible" as const) : ("none" as const) };
+  if (geometry === "polygon") {
+    return [
+      {
+        id: layerId,
+        type: "fill",
+        ...common,
+        layout,
+        paint: { "fill-color": ownershipFillColor(style.color), "fill-opacity": 0.28 },
+      },
+      {
+        id: `${layerId}-line`,
+        type: "line",
+        ...common,
+        layout: { ...layout, "line-join": "round" },
+        paint: { "line-color": "#FFFFFF", "line-width": 1.5, "line-opacity": 0.9 },
+      },
+    ];
+  }
+  if (geometry === "line") {
+    return [
+      {
+        id: layerId,
+        type: "line",
+        ...common,
+        layout: { ...layout, "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": style.color, "line-width": 2, "line-opacity": 0.9 },
+      },
+    ];
+  }
+  return [
+    {
+      id: layerId,
+      type: "circle",
+      ...common,
+      layout,
+      paint: { "circle-color": style.color, "circle-radius": 4, "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 1 },
+    },
+  ];
+}
+
+/** The first label (symbol) layer, so data drawn before it sits under place names; undefined puts it on top. */
+export function insertBeforeId(styleLayers: readonly { id: string; type: string }[]): string | undefined {
+  return styleLayers.find((layer) => layer.type === "symbol")?.id;
+}
+
 /**
  * The style JSON once it has loaded, else undefined. `map.isStyleLoaded()` is not used as the gate
  * because it stays false while any basemap tile is in flight, which would skip most syncs.
@@ -24,50 +153,72 @@ function loadedStyle(map: MapboxMap): StyleSpecification | undefined {
   }
 }
 
+/** Drops a tiles source (and every layer drawing from it) when its type or tile URL no longer matches. */
+function dropStaleSource(map: MapboxMap, style: StyleSpecification, id: string, type: "raster" | "vector", url: string) {
+  const existing = style.sources[id];
+  if (!existing) return;
+  const existingUrl = existing.type === "raster" || existing.type === "vector" ? existing.tiles?.[0] : undefined;
+  if (existing.type === type && existingUrl === url) return;
+  for (const layer of style.layers) {
+    if ("source" in layer && layer.source === id && map.getLayer(layer.id)) map.removeLayer(layer.id);
+  }
+  if (map.getSource(id)) map.removeSource(id);
+}
+
 /**
- * Makes the map's raster sources/layers match the `kind: "tiles"` results in `state`.
- * No-op until the style is loaded; callers re-run it on `style.load` because a style swap drops sources.
+ * Makes the map's tile sources/layers match the `kind: "tiles"` results in `state`: raster tiles as one raster
+ * layer, vector tiles as fill/line/circle layers under the labels. No-op until the style is loaded; callers
+ * re-run it on `style.load` because a style swap drops sources.
  */
 export function syncTileLayers(map: MapboxMap, state: MapState): void {
   const style = loadedStyle(map);
   if (!style) return;
 
-  const wanted = new Set<string>();
+  const wantedLayers = new Set<string>();
+  const wantedSources = new Set<string>();
+  const beforeId = insertBeforeId(style.layers);
   for (const loaded of Object.values(state.layers)) {
     if (loaded.result.kind !== "tiles") continue;
     const id = `${PREFIX}${loaded.id}`;
-    const { url, minzoom, maxzoom, format } = loaded.result.data;
+    const { url, minzoom, maxzoom, format, tileSize, sourceLayer, geometry } = loaded.result.data;
+    // Honor a hide toggle if the agent has issued a render op for this layer.
+    const op = state.renderOps.find((o) => o.layerId === loaded.id);
+    const visible = !(op && !op.visible);
+
     if (format === "vector") {
-      // Vector tile rendering arrives with its own task; skip rather than draw it as raster.
-      console.warn(`Skipping vector tile layer "${loaded.id}": vector rendering is not supported yet.`);
+      if (!sourceLayer) {
+        console.warn(`Skipping vector tile layer "${loaded.id}": the result has no sourceLayer.`);
+        continue;
+      }
+      wantedSources.add(id);
+      // A reloaded layer may point at a new tile URL; sources cannot change URL in place.
+      dropStaleSource(map, style, id, "vector", url);
+      if (!map.getSource(id)) map.addSource(id, { type: "vector", tiles: [url], minzoom, maxzoom });
+      for (const spec of vectorTileLayerSpecs(loaded.id, loaded.style, sourceLayer, geometry ?? loaded.style.geometry, visible)) {
+        wantedLayers.add(spec.id);
+        if (!map.getLayer(spec.id)) map.addLayer(spec, beforeId);
+        else map.setLayoutProperty(spec.id, "visibility", visible ? "visible" : "none");
+      }
       continue;
     }
-    wanted.add(id);
 
-    // A reloaded layer may point at a new tile URL; raster sources cannot change URL in place.
-    const existing = style.sources[id];
-    const existingUrl = existing?.type === "raster" ? existing.tiles?.[0] : undefined;
-    if (existing && existingUrl !== url) {
-      if (map.getLayer(id)) map.removeLayer(id);
-      map.removeSource(id);
-    }
+    wantedSources.add(id);
+    wantedLayers.add(id);
+    dropStaleSource(map, style, id, "raster", url);
     if (!map.getSource(id)) {
-      map.addSource(id, { type: "raster", tiles: [url], minzoom, maxzoom, tileSize: 256 });
+      map.addSource(id, { type: "raster", tiles: [url], minzoom, maxzoom, tileSize: tileSize ?? 256 });
     }
     if (!map.getLayer(id)) {
       map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": 0.8 } });
     }
-
-    // Honor a hide toggle if the agent has issued a render op for this layer.
-    const op = state.renderOps.find((o) => o.layerId === loaded.id);
-    map.setLayoutProperty(id, "visibility", op && !op.visible ? "none" : "visible");
+    map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
   }
 
   for (const layer of style.layers) {
-    if (layer.id.startsWith(PREFIX) && !wanted.has(layer.id)) map.removeLayer(layer.id);
+    if (layer.id.startsWith(PREFIX) && !wantedLayers.has(layer.id) && map.getLayer(layer.id)) map.removeLayer(layer.id);
   }
   for (const sourceId of Object.keys(style.sources)) {
-    if (sourceId.startsWith(PREFIX) && !wanted.has(sourceId)) map.removeSource(sourceId);
+    if (sourceId.startsWith(PREFIX) && !wantedSources.has(sourceId) && map.getSource(sourceId)) map.removeSource(sourceId);
   }
 }
 

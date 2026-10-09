@@ -64,6 +64,7 @@ const forestLoss = defineLayer({
         minzoom: 3,
         maxzoom: 12,
         format: "raster",
+        tileSize: 512,
       },
       citation: {
         source:

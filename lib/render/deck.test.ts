@@ -1,6 +1,6 @@
 import { GeoJsonLayer } from "@deck.gl/layers";
 import { describe, expect, it } from "vitest";
-import { SLATE, bboxToViewport, buildDeckLayers, hexToRgba } from "@/lib/render/deck";
+import { SIBLING_FADE, SLATE, bboxToViewport, buildDeckLayers, hexToRgba } from "@/lib/render/deck";
 import { initialMapState, type LoadedLayer, type MapState } from "@/lib/render/state";
 
 const layer: LoadedLayer = {
@@ -158,5 +158,61 @@ describe("bboxToViewport", () => {
     // A wide left panel pushes the camera west so the bbox lands right of it, and zooms out to fit.
     expect(padded.longitude).toBeLessThan(plain.longitude);
     expect(padded.zoom).toBeLessThan(plain.zoom);
+  });
+});
+
+describe("buildDeckLayers opacity, heat and selection", () => {
+  const a: GeoJSON.Feature = { type: "Feature", geometry: { type: "Point", coordinates: [-120, 39] }, properties: { v: 5 } };
+  const b: GeoJSON.Feature = {
+    type: "Feature",
+    geometry: { type: "LineString", coordinates: [[-121, 38], [-119, 40]] },
+    properties: {},
+  };
+  const withData: LoadedLayer = {
+    ...layer,
+    result: { ...layer.result, data: { type: "FeatureCollection", features: [a, b] } } as LoadedLayer["result"],
+  };
+  const stateFor = (op: MapState["renderOps"][number], selected?: MapState["selected"]): MapState => ({
+    ...initialMapState,
+    layers: { "osm-trails": withData },
+    renderOps: [op],
+    selected,
+  });
+  const props = (l: { props: unknown }) => l.props as Record<string, unknown>;
+
+  it("multiplies opacity into every color's alpha", () => {
+    const [casing, line] = buildDeckLayers(stateFor({ layerId: "osm-trails", mode: "lines", visible: true, opacity: 0.5 }));
+    expect(props(casing).getLineColor).toEqual([255, 255, 255, 128]);
+    expect(props(line).getLineColor).toEqual(hexToRgba(layer.style.color, 128));
+    const [poly] = buildDeckLayers(stateFor({ layerId: "osm-trails", mode: "polygons", visible: true, opacity: 0.5 }));
+    expect(props(poly).getFillColor).toEqual(hexToRgba(layer.style.color, 32));
+  });
+
+  it("leaves heat to the Mapbox heatmap (no deck layers)", () => {
+    expect(buildDeckLayers(stateFor({ layerId: "osm-trails", mode: "heat", visible: true }))).toHaveLength(0);
+  });
+
+  it("still throws for hexbin", () => {
+    expect(() => buildDeckLayers(stateFor({ layerId: "osm-trails", mode: "hexbin", visible: true }))).toThrow(
+      "NotImplemented: hexbin",
+    );
+  });
+
+  it("fades siblings of the selected feature and re-triggers the color accessors", () => {
+    const op = { layerId: "osm-trails", mode: "lines" as const, visible: true };
+    const plain = buildDeckLayers(stateFor(op));
+    const selected = buildDeckLayers(stateFor(op, { layerId: "osm-trails", feature: a, lngLat: [-120, 39] }));
+    const getColor = props(selected[1]).getLineColor as (f: GeoJSON.Feature) => number[];
+    expect(typeof getColor).toBe("function");
+    expect(getColor(a)).toEqual(hexToRgba(layer.style.color));
+    expect(getColor(b)[3]).toBe(Math.round(255 * SIBLING_FADE));
+    const triggers = (l: { props: unknown }) => (props(l).updateTriggers as { getLineColor: unknown }).getLineColor;
+    expect(triggers(selected[1])).not.toEqual(triggers(plain[1]));
+  });
+
+  it("leaves other layers alone when a feature of a different layer is selected", () => {
+    const op = { layerId: "osm-trails", mode: "lines" as const, visible: true };
+    const [, line] = buildDeckLayers(stateFor(op, { layerId: "campsites", feature: a, lngLat: [-120, 39] }));
+    expect(props(line).getLineColor).toEqual(hexToRgba(layer.style.color));
   });
 });

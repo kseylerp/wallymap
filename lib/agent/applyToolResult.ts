@@ -3,7 +3,7 @@ import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import type { Basemap, MapAction, RenderMode, RenderOp, Viewport } from "@/lib/render/state";
 
 /** Layer titles and styles by id, fetched by the browser from `GET /api/layers`. */
-export type LayerCatalog = Record<string, { title: string; style: StyleHints }>;
+export type LayerCatalog = Record<string, { title: string; style: StyleHints; license?: string }>;
 
 /** The map canvas size, and the screen area a fitted bbox must stay clear of (floating panels). */
 type Canvas = { width: number; height: number; padding?: Padding };

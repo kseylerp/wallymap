@@ -1,4 +1,20 @@
-import type { MapAction, MapState } from "@/lib/render/state";
+import type { MapAction, MapState, RenderOp } from "@/lib/render/state";
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(1, Math.max(0, value));
+}
+
+/** Applies `change` to the op for `layerId`; returns `state` untouched when there is no such op. */
+function updateOp(state: MapState, layerId: string, change: (op: RenderOp) => RenderOp): MapState {
+  if (!state.renderOps.some((op) => op.layerId === layerId)) return state;
+  return { ...state, renderOps: state.renderOps.map((op) => (op.layerId === layerId ? change(op) : op)) };
+}
+
+/** Drops the selection when it belongs to `layerId` (the layer was removed, hidden or reloaded). */
+function dropSelectionOf(state: MapState, layerId: string): MapState["selected"] {
+  return state.selected?.layerId === layerId ? undefined : state.selected;
+}
 
 /** Pure reducer: always returns new objects and never mutates `state`. */
 export function reduce(state: MapState, action: MapAction): MapState {
@@ -12,6 +28,8 @@ export function reduce(state: MapState, action: MapAction): MapState {
         ...state,
         layers: { ...state.layers, [action.layer.id]: action.layer },
         errors: state.errors.filter((e) => e.layerId !== action.layer.id),
+        // A reload replaces the features, so the old selection no longer points at anything drawn.
+        selected: dropSelectionOf(state, action.layer.id),
       };
     case "layer_error":
       return {
@@ -23,16 +41,53 @@ export function reduce(state: MapState, action: MapAction): MapState {
       const renderOps =
         index === -1
           ? [...state.renderOps, action.op]
-          : state.renderOps.map((op, i) => (i === index ? action.op : op));
+          : state.renderOps.map((op, i) =>
+              // The agent restyling a layer keeps the opacity the user picked in the layer panel.
+              i === index ? { ...action.op, opacity: action.op.opacity ?? op.opacity } : op,
+            );
       return { ...state, renderOps };
     }
-    case "toggle_layer":
-      if (!state.renderOps.some((op) => op.layerId === action.layerId)) return state;
+    case "toggle_layer": {
+      const next = updateOp(state, action.layerId, (op) => ({ ...op, visible: !op.visible }));
+      if (next === state) return state;
+      const op = next.renderOps.find((o) => o.layerId === action.layerId);
+      return op?.visible ? next : { ...next, selected: dropSelectionOf(next, action.layerId) };
+    }
+    case "select":
+      return { ...state, selected: action.selection };
+    case "deselect":
+      return state.selected === undefined ? state : { ...state, selected: undefined };
+    case "set_opacity":
+      return updateOp(state, action.layerId, (op) => ({ ...op, opacity: clamp01(action.opacity) }));
+    case "set_style":
+      return updateOp(state, action.layerId, (op) => ({
+        ...op,
+        ...(action.color !== undefined && { color: action.color }),
+        ...(action.mode !== undefined && { mode: action.mode }),
+      }));
+    case "reorder": {
+      const from = state.renderOps.findIndex((op) => op.layerId === action.layerId);
+      if (from === -1) return state;
+      const to = Math.min(state.renderOps.length - 1, Math.max(0, Math.trunc(action.toIndex)));
+      if (to === from) return state;
+      const renderOps = [...state.renderOps];
+      const [moved] = renderOps.splice(from, 1);
+      renderOps.splice(to, 0, moved);
+      return { ...state, renderOps };
+    }
+    case "remove_layer": {
+      if (!state.layers[action.layerId] && !state.renderOps.some((op) => op.layerId === action.layerId)) return state;
+      const layers = { ...state.layers };
+      delete layers[action.layerId];
       return {
         ...state,
-        renderOps: state.renderOps.map((op) =>
-          op.layerId === action.layerId ? { ...op, visible: !op.visible } : op,
-        ),
+        layers,
+        renderOps: state.renderOps.filter((op) => op.layerId !== action.layerId),
+        errors: state.errors.filter((e) => e.layerId !== action.layerId),
+        selected: dropSelectionOf(state, action.layerId),
       };
+    }
+    case "clear_layers":
+      return { ...state, layers: {}, renderOps: [], errors: [], selected: undefined };
   }
 }

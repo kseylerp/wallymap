@@ -8,6 +8,9 @@ const HEADER = 64;
 const PANEL_FOOTPRINT = 436;
 /** Desktop zoom/globe controls along the right edge. */
 const CONTROLS = 56;
+/** The open layer panel: 320px wide at right 16px (components/LayerStack.tsx). */
+export const LAYER_PANEL_WIDTH = 320;
+const LAYER_PANEL_FOOTPRINT = LAYER_PANEL_WIDTH + 16;
 /** The input pill (and the WildMap tag above it when collapsed) at the bottom while no panel is open. */
 const INPUT_STACK = 72;
 /** Phone bottom sheet height as a share of the viewport (`h-[46vh]` in ChatRail). */
@@ -15,7 +18,14 @@ const SHEET_SHARE = 0.46;
 /** Never leave less than this much map to fit into; fitBounds rejects an empty target. */
 const MIN_VISIBLE = 120;
 
-type VisibleMapInput = { width: number; height: number; panelOpen: boolean; isMobile: boolean };
+type VisibleMapInput = {
+  width: number;
+  height: number;
+  panelOpen: boolean;
+  isMobile: boolean;
+  /** The layer panel drawer is open on the right (desktop only; on phones it overlays the map). */
+  layerPanelOpen?: boolean;
+};
 
 /** Shrinks the two paddings on one axis together so at least MIN_VISIBLE pixels stay clear. */
 function fitAxis(size: number, a: number, b: number): [number, number] {
@@ -28,9 +38,9 @@ function fitAxis(size: number, a: number, b: number): [number, number] {
 
 /**
  * The fitBounds padding that keeps a result inside the part of the map nobody has covered: on desktop, right
- * of the open chat panel and below the header; on phones, above the bottom sheet (or the input pill).
+ * of the open chat panel, left of the open layer panel and below the header; on phones, above the bottom sheet (or the input pill).
  */
-export function visibleMapPadding({ width, height, panelOpen, isMobile }: VisibleMapInput): Padding {
+export function visibleMapPadding({ width, height, panelOpen, isMobile, layerPanelOpen = false }: VisibleMapInput): Padding {
   let top = MARGIN + HEADER;
   let right = MARGIN;
   let bottom = MARGIN;
@@ -38,7 +48,8 @@ export function visibleMapPadding({ width, height, panelOpen, isMobile }: Visibl
   if (isMobile) {
     bottom += panelOpen ? Math.round(height * SHEET_SHARE) : INPUT_STACK;
   } else {
-    right += CONTROLS;
+    // The open layer panel is wider than the zoom controls beneath it, so it sets the right edge.
+    right += layerPanelOpen ? LAYER_PANEL_FOOTPRINT : CONTROLS;
     if (panelOpen) left += PANEL_FOOTPRINT;
     else bottom += INPUT_STACK;
   }

@@ -12,6 +12,14 @@ describe("visibleMapPadding", () => {
     });
   });
 
+  it("clears the open layer panel on the right", () => {
+    expect(
+      visibleMapPadding({ width: 1440, height: 900, panelOpen: true, isMobile: false, layerPanelOpen: true }).right,
+    ).toBe(40 + 336);
+    // Phones overlay the panel, so the padding does not change.
+    expect(visibleMapPadding({ width: 390, height: 844, panelOpen: false, isMobile: true, layerPanelOpen: true }).right).toBe(40);
+  });
+
   it("clears the input pill instead of the panel when the desktop panel is closed", () => {
     expect(visibleMapPadding({ width: 1440, height: 900, panelOpen: false, isMobile: false })).toEqual({
       top: 104,

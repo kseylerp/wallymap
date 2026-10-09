@@ -1,6 +1,14 @@
 import type { Map as MapboxMap } from "mapbox-gl";
 import { describe, expect, it } from "vitest";
-import { insertBeforeId, ownershipFillColor, syncTileLayers, vectorTileLayerSpecs } from "@/components/mapTiles";
+import {
+  heatLayerSpec,
+  heatPointsCollection,
+  insertBeforeId,
+  ownershipFillColor,
+  syncHeatLayers,
+  syncTileLayers,
+  vectorTileLayerSpecs,
+} from "@/components/mapTiles";
 import type { LayerResult } from "@/layers/types";
 import { initialMapState, type MapState } from "@/lib/render/state";
 
@@ -87,17 +95,30 @@ describe("ownershipFillColor", () => {
   });
 });
 
-type FakeLayer = { id: string; type: string; source?: string; layout?: Record<string, unknown> };
+type FakeLayer = {
+  id: string;
+  type: string;
+  source?: string;
+  layout?: Record<string, unknown>;
+  paint?: Record<string, unknown>;
+};
 
 /** A stand-in for the Mapbox map that records every mutating call. */
 function fakeMap(initialLayers: FakeLayer[] = [{ id: "land", type: "background" }, { id: "road-label", type: "symbol" }]) {
   const layers: FakeLayer[] = initialLayers.map((l) => ({ ...l }));
-  const sources: Record<string, { type: string; tiles?: string[]; tileSize?: number }> = {};
+  const sources: Record<string, { type: string; tiles?: string[]; tileSize?: number; data?: unknown }> = {};
   const calls: string[] = [];
   const map = {
     getStyle: () => ({ layers: layers.map((l) => ({ ...l })), sources: { ...sources } }),
     getLayer: (id: string) => layers.find((l) => l.id === id),
-    getSource: (id: string) => sources[id],
+    getSource: (id: string) =>
+      sources[id] && {
+        ...sources[id],
+        setData: (data: unknown) => {
+          calls.push(`setData ${id}`);
+          sources[id] = { ...sources[id], data } as (typeof sources)[string];
+        },
+      },
     addSource: (id: string, spec: { type: string; tiles?: string[] }) => {
       calls.push(`addSource ${id}`);
       sources[id] = spec;
@@ -120,6 +141,17 @@ function fakeMap(initialLayers: FakeLayer[] = [{ id: "land", type: "background" 
       calls.push(`setLayout ${id} ${property}=${String(value)}`);
       const layer = layers.find((l) => l.id === id);
       if (layer) layer.layout = { ...layer.layout, [property]: value };
+    },
+    setPaintProperty: (id: string, property: string, value: unknown) => {
+      const layer = layers.find((l) => l.id === id);
+      if (layer) layer.paint = { ...layer.paint, [property]: value };
+    },
+    moveLayer: (id: string, beforeId?: string) => {
+      calls.push(`moveLayer ${id}`);
+      const [layer] = layers.splice(layers.findIndex((l) => l.id === id), 1);
+      const index = beforeId ? layers.findIndex((l) => l.id === beforeId) : -1;
+      if (index === -1) layers.push(layer);
+      else layers.splice(index, 0, layer);
     },
   };
   return { map: map as unknown as MapboxMap, calls, layers, sources };
@@ -189,7 +221,7 @@ describe("syncTileLayers", () => {
     calls.length = 0;
     const next = "https://storage.googleapis.com/wally-tiles/padus/v2/{z}/{x}/{y}.pbf";
     syncTileLayers(map, stateWith({ url: next }));
-    expect(calls.filter((c) => !c.startsWith("setLayout"))).toEqual([
+    expect(calls.filter((c) => !c.startsWith("setLayout") && !c.startsWith("moveLayer"))).toEqual([
       "removeLayer tiles-public-lands",
       "removeLayer tiles-public-lands-line",
       "removeSource tiles-public-lands",
@@ -207,6 +239,95 @@ describe("syncTileLayers", () => {
     const plain = fakeMap();
     syncTileLayers(plain.map, stateWith({ raster: {} }));
     expect(plain.sources["tiles-public-lands"]).toMatchObject({ type: "raster", tileSize: 256 });
+  });
+});
+
+describe("syncTileLayers with layer panel settings", () => {
+  const rasterResult = (url: string): LayerResult => ({
+    kind: "tiles",
+    data: { url, minzoom: 0, maxzoom: 12, format: "raster" },
+    citation: { source: "x", url: "https://example.test", retrieved: "2026-10-09" },
+  });
+  const twoRasters = (order: string[], opacity?: number): MapState => ({
+    ...initialMapState,
+    layers: Object.fromEntries(
+      ["a", "b"].map((id) => [
+        id,
+        { id, title: id, style: STYLE, result: rasterResult(`https://example.test/${id}/{z}/{x}/{y}.png`), receivedAt: "" },
+      ]),
+    ),
+    renderOps: order.map((layerId) => ({ layerId, mode: "polygons", visible: true, ...(opacity !== undefined && { opacity }) })),
+  });
+
+  it("scales raster and vector opacity by the render op", () => {
+    const raster = fakeMap();
+    syncTileLayers(raster.map, twoRasters(["a", "b"], 0.5));
+    expect(raster.layers.find((l) => l.id === "tiles-a")?.paint).toMatchObject({ "raster-opacity": 0.4 });
+    const vector = fakeMap();
+    syncTileLayers(vector.map, stateWith({ visible: true }));
+    const faded = stateWith({ visible: true });
+    faded.renderOps = [{ ...faded.renderOps[0], opacity: 0.5 }];
+    syncTileLayers(vector.map, faded);
+    expect(vector.layers.find((l) => l.id === "tiles-public-lands")?.paint).toMatchObject({ "fill-opacity": 0.14 });
+  });
+
+  it("stacks tile layers in render-op order and restacks after a reorder", () => {
+    const { map, layers, calls } = fakeMap();
+    syncTileLayers(map, twoRasters(["a", "b"]));
+    expect(layers.map((l) => l.id)).toEqual(["land", "road-label", "tiles-a", "tiles-b"]);
+    syncTileLayers(map, twoRasters(["a", "b"]));
+    expect(calls.some((c) => c.startsWith("moveLayer"))).toBe(false);
+    syncTileLayers(map, twoRasters(["b", "a"]));
+    expect(layers.map((l) => l.id)).toEqual(["land", "road-label", "tiles-b", "tiles-a"]);
+  });
+});
+
+describe("heat mode (Mapbox heatmap)", () => {
+  const fc: GeoJSON.FeatureCollection = {
+    type: "FeatureCollection",
+    features: [
+      { type: "Feature", geometry: { type: "Point", coordinates: [-120, 39] }, properties: { v: 10 } },
+      { type: "Feature", geometry: { type: "LineString", coordinates: [[-121, 38], [-119, 40]] }, properties: { v: 5 } },
+    ],
+  };
+  const heatState = (mode: "heat" | "lines", opacity?: number): MapState => ({
+    ...initialMapState,
+    layers: {
+      fires: {
+        id: "fires",
+        title: "Fires",
+        style: { geometry: "point", color: "#D97757" },
+        result: { kind: "geojson", data: fc, citation: { source: "x", url: "https://x.test", retrieved: "" } },
+        receivedAt: "",
+      },
+    },
+    renderOps: [{ layerId: "fires", mode, visible: true, ...(opacity !== undefined && { opacity }) }],
+  });
+
+  it("weights one point per feature by v against the largest v", () => {
+    expect(heatPointsCollection(fc).features).toEqual([
+      { type: "Feature", geometry: { type: "Point", coordinates: [-120, 39] }, properties: { w: 1 } },
+      { type: "Feature", geometry: { type: "Point", coordinates: [-120, 39] }, properties: { w: 0.5 } },
+    ]);
+  });
+
+  it("builds a heatmap layer with opacity and an optional color ramp", () => {
+    const spec = heatLayerSpec("fires", 0.5, "#C2410C");
+    expect(spec).toMatchObject({ id: "heat-fires", type: "heatmap", source: "heat-fires" });
+    expect(spec.paint?.["heatmap-opacity"]).toBeCloseTo(0.45);
+    expect(JSON.stringify(spec.paint?.["heatmap-color"])).toContain("rgba(194,65,12,0.95)");
+  });
+
+  it("adds the heat source and layer under the labels, uploads data once, and removes them when the mode changes", () => {
+    const { map, layers, calls, sources } = fakeMap();
+    syncHeatLayers(map, heatState("heat"));
+    syncHeatLayers(map, heatState("heat", 0.5));
+    expect(layers.map((l) => l.id)).toEqual(["land", "heat-fires", "road-label"]);
+    expect(calls.filter((c) => c.startsWith("setData"))).toEqual([]);
+    expect(layers[1].paint?.["heatmap-opacity"]).toBeCloseTo(0.45);
+    syncHeatLayers(map, heatState("lines"));
+    expect(layers.map((l) => l.id)).toEqual(["land", "road-label"]);
+    expect(sources).toEqual({});
   });
 });
 

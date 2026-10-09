@@ -1,8 +1,11 @@
+import type { FeatureCollection } from "geojson";
 import type {
   CircleLayerSpecification,
   ExpressionSpecification,
   FillLayerSpecification,
   FogSpecification,
+  GeoJSONSource,
+  HeatmapLayerSpecification,
   LineLayerSpecification,
   Map as MapboxMap,
   StyleSpecification,
@@ -17,6 +20,8 @@ import {
   type PaintOverride,
   type StyleLayerLike,
 } from "@/lib/render/hybridStyle";
+import { hexToRgba } from "@/lib/render/deck";
+import { featureCenter } from "@/lib/render/inspect";
 import type { Basemap, MapState } from "@/lib/render/state";
 
 const PREFIX = "tiles-";
@@ -92,8 +97,12 @@ export function vectorTileLayerSpecs(
   sourceLayer: string,
   geometry: "point" | "line" | "polygon",
   visible: boolean,
+  /** The layer panel's color and opacity (render op), when set. */
+  paint: { color?: string; opacity?: number } = {},
 ): VectorLayerSpec[] {
   const layerId = `${PREFIX}${id}`;
+  const color = paint.color ?? style.color;
+  const opacity = Math.min(1, Math.max(0, paint.opacity ?? 1));
   const common = { source: layerId, "source-layer": sourceLayer };
   const layout = { visibility: visible ? ("visible" as const) : ("none" as const) };
   if (geometry === "polygon") {
@@ -103,14 +112,14 @@ export function vectorTileLayerSpecs(
         type: "fill",
         ...common,
         layout,
-        paint: { "fill-color": ownershipFillColor(style.color), "fill-opacity": 0.28 },
+        paint: { "fill-color": ownershipFillColor(color), "fill-opacity": 0.28 * opacity },
       },
       {
         id: `${layerId}-line`,
         type: "line",
         ...common,
         layout: { ...layout, "line-join": "round" },
-        paint: { "line-color": "#FFFFFF", "line-width": 1.5, "line-opacity": 0.9 },
+        paint: { "line-color": "#FFFFFF", "line-width": 1.5, "line-opacity": 0.9 * opacity },
       },
     ];
   }
@@ -121,7 +130,7 @@ export function vectorTileLayerSpecs(
         type: "line",
         ...common,
         layout: { ...layout, "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": style.color, "line-width": 2, "line-opacity": 0.9 },
+        paint: { "line-color": color, "line-width": 2, "line-opacity": 0.9 * opacity },
       },
     ];
   }
@@ -131,7 +140,14 @@ export function vectorTileLayerSpecs(
       type: "circle",
       ...common,
       layout,
-      paint: { "circle-color": style.color, "circle-radius": 4, "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 1 },
+      paint: {
+        "circle-color": color,
+        "circle-radius": 4,
+        "circle-stroke-color": "#FFFFFF",
+        "circle-stroke-width": 1,
+        "circle-opacity": opacity,
+        "circle-stroke-opacity": opacity,
+      },
     },
   ];
 }
@@ -139,6 +155,16 @@ export function vectorTileLayerSpecs(
 /** The first label (symbol) layer, so data drawn before it sits under place names; undefined puts it on top. */
 export function insertBeforeId(styleLayers: readonly { id: string; type: string }[]): string | undefined {
   return styleLayers.find((layer) => layer.type === "symbol")?.id;
+}
+
+const RASTER_OPACITY = 0.8;
+const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+/** Loaded layers bottom first: render-op order, then any layer without an op. */
+function layersInRenderOrder(state: MapState) {
+  const ordered = state.renderOps.map((op) => state.layers[op.layerId]).filter((l) => l !== undefined);
+  const rest = Object.values(state.layers).filter((l) => !state.renderOps.some((op) => op.layerId === l.id));
+  return [...ordered, ...rest];
 }
 
 /**
@@ -176,14 +202,19 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
 
   const wantedLayers = new Set<string>();
   const wantedSources = new Set<string>();
+  /** Our Mapbox layer ids, bottom first, in render-op order (the layer panel's drag order). */
+  const order: string[] = [];
+  /** Rasters sit on top of the style and vector layers under its labels; restacking keeps each where it was. */
+  const rasterIds = new Set<string>();
   const beforeId = insertBeforeId(style.layers);
-  for (const loaded of Object.values(state.layers)) {
+  for (const loaded of layersInRenderOrder(state)) {
     if (loaded.result.kind !== "tiles") continue;
     const id = `${PREFIX}${loaded.id}`;
     const { url, minzoom, maxzoom, format, tileSize, sourceLayer, geometry } = loaded.result.data;
     // Honor a hide toggle if the agent has issued a render op for this layer.
     const op = state.renderOps.find((o) => o.layerId === loaded.id);
     const visible = !(op && !op.visible);
+    const opacity = Math.min(1, Math.max(0, op?.opacity ?? 1));
 
     if (format === "vector") {
       if (!sourceLayer) {
@@ -194,24 +225,47 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
       // A reloaded layer may point at a new tile URL; sources cannot change URL in place.
       dropStaleSource(map, style, id, "vector", url);
       if (!map.getSource(id)) map.addSource(id, { type: "vector", tiles: [url], minzoom, maxzoom });
-      for (const spec of vectorTileLayerSpecs(loaded.id, loaded.style, sourceLayer, geometry ?? loaded.style.geometry, visible)) {
+      const color = op?.color && HEX.test(op.color.trim()) ? op.color.trim() : undefined;
+      const specs = vectorTileLayerSpecs(loaded.id, loaded.style, sourceLayer, geometry ?? loaded.style.geometry, visible, {
+        color,
+        opacity,
+      });
+      for (const spec of specs) {
         wantedLayers.add(spec.id);
-        if (!map.getLayer(spec.id)) map.addLayer(spec, beforeId);
-        else map.setLayoutProperty(spec.id, "visibility", visible ? "visible" : "none");
+        order.push(spec.id);
+        if (!map.getLayer(spec.id)) {
+          map.addLayer(spec, beforeId);
+          continue;
+        }
+        map.setLayoutProperty(spec.id, "visibility", visible ? "visible" : "none");
+        // Mapbox skips a paint update whose value is unchanged, so re-applying every sync is cheap.
+        for (const [property, value] of Object.entries(spec.paint ?? {})) {
+          map.setPaintProperty(spec.id, property as never, value as never);
+        }
       }
       continue;
     }
 
     wantedSources.add(id);
     wantedLayers.add(id);
+    order.push(id);
+    rasterIds.add(id);
     dropStaleSource(map, style, id, "raster", url);
     if (!map.getSource(id)) {
       map.addSource(id, { type: "raster", tiles: [url], minzoom, maxzoom, tileSize: tileSize ?? 256 });
     }
     if (!map.getLayer(id)) {
-      map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": 0.8 } });
+      map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": RASTER_OPACITY * opacity } });
     }
     map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+    map.setPaintProperty(id, "raster-opacity", RASTER_OPACITY * opacity);
+  }
+
+  // Restack when the layer panel reordered layers that were already on the map (new ones arrive in order).
+  const current = style.layers.map((l) => l.id).filter((id) => order.includes(id));
+  const expected = order.filter((id) => current.includes(id));
+  if (current.join("|") !== expected.join("|")) {
+    for (const id of order) if (map.getLayer(id)) map.moveLayer(id, rasterIds.has(id) ? undefined : beforeId);
   }
 
   for (const layer of style.layers) {
@@ -219,6 +273,118 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
   }
   for (const sourceId of Object.keys(style.sources)) {
     if (sourceId.startsWith(PREFIX) && !wantedSources.has(sourceId) && map.getSource(sourceId)) map.removeSource(sourceId);
+  }
+}
+
+/* ---------- Heat mode ---------- */
+
+const HEAT_PREFIX = "heat-";
+
+/**
+ * One point per feature for the heatmap (lines and polygons contribute their center), weighted by `v` scaled
+ * to 0..1 against the largest `v` (default 1), so acres and scores heat alike.
+ */
+export function heatPointsCollection(data: FeatureCollection): FeatureCollection {
+  const raw = data.features.map((f) => {
+    const v = Number(f.properties?.v ?? 1);
+    return Number.isFinite(v) && v > 0 ? v : 1;
+  });
+  const max = Math.max(1e-9, ...raw);
+  const features: FeatureCollection["features"] = [];
+  data.features.forEach((f, i) => {
+    const w = raw[i] / max;
+    const positions =
+      f.geometry?.type === "Point"
+        ? [f.geometry.coordinates]
+        : f.geometry?.type === "MultiPoint"
+          ? f.geometry.coordinates
+          : [featureCenter(f)].filter((p) => p !== null);
+    for (const position of positions) {
+      features.push({ type: "Feature", geometry: { type: "Point", coordinates: position.slice(0, 2) }, properties: { w } });
+    }
+  });
+  return { type: "FeatureCollection", features };
+}
+
+/** Heat color: transparent, then a warm yellow-to-red ramp, or a tint-to-`color` ramp when one was picked. */
+export function heatColor(color: string | undefined): ExpressionSpecification {
+  const stops: [number, string][] = color
+    ? (() => {
+        const [r, g, b] = hexToRgba(color);
+        const mix = (t: number) =>
+          `rgba(${[r, g, b].map((c) => Math.round(255 + (c - 255) * t)).join(",")},${Math.round((0.2 + 0.75 * t) * 100) / 100})`;
+        return [
+          [0.15, mix(0.2)],
+          [0.4, mix(0.45)],
+          [0.7, mix(0.75)],
+          [1, mix(1)],
+        ];
+      })()
+    : [
+        [0.15, "rgba(255,237,160,0.55)"],
+        [0.4, "rgba(254,178,76,0.75)"],
+        [0.7, "rgba(240,59,32,0.85)"],
+        [1, "rgba(189,0,38,0.95)"],
+      ];
+  return ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,0,0)", ...stops.flat()] as ExpressionSpecification;
+}
+
+export function heatLayerSpec(layerId: string, opacity: number, color: string | undefined): HeatmapLayerSpecification {
+  const id = `${HEAT_PREFIX}${layerId}`;
+  return {
+    id,
+    type: "heatmap",
+    source: id,
+    paint: {
+      "heatmap-weight": ["get", "w"],
+      "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 4, 8, 16, 14, 34],
+      "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.6, 14, 1.2],
+      "heatmap-opacity": Math.min(1, Math.max(0, opacity)) * 0.9,
+      "heatmap-color": heatColor(color),
+    },
+  };
+}
+
+/** The geojson result each map last received per heat source, so a data upload happens only on change. */
+const heatData = new WeakMap<MapboxMap, Map<string, FeatureCollection>>();
+
+/**
+ * Makes the map's Mapbox heatmap layers match the visible `heat` render ops. Mapbox draws heat (not deck)
+ * because deck's HeatmapLayer renders nothing in globe projection. No-op until the style is loaded.
+ */
+export function syncHeatLayers(map: MapboxMap, state: MapState): void {
+  const style = loadedStyle(map);
+  if (!style) return;
+  const beforeId = insertBeforeId(style.layers);
+  let uploaded = heatData.get(map);
+  if (!uploaded) {
+    uploaded = new Map();
+    heatData.set(map, uploaded);
+  }
+  const wanted = new Set<string>();
+  for (const op of state.renderOps) {
+    const loaded = state.layers[op.layerId];
+    if (op.mode !== "heat" || !op.visible || loaded?.result.kind !== "geojson") continue;
+    const id = `${HEAT_PREFIX}${op.layerId}`;
+    wanted.add(id);
+    const data = loaded.result.data;
+    const source = map.getSource(id) as GeoJSONSource | undefined;
+    if (!source) map.addSource(id, { type: "geojson", data: heatPointsCollection(data) });
+    else if (uploaded.get(id) !== data) source.setData(heatPointsCollection(data));
+    uploaded.set(id, data);
+    const color = op.color && HEX.test(op.color.trim()) ? op.color.trim() : undefined;
+    const spec = heatLayerSpec(op.layerId, op.opacity ?? 1, color);
+    if (!map.getLayer(id)) map.addLayer(spec, beforeId);
+    else for (const [property, value] of Object.entries(spec.paint ?? {})) map.setPaintProperty(id, property as never, value as never);
+  }
+  for (const layer of style.layers) {
+    if (layer.id.startsWith(HEAT_PREFIX) && !wanted.has(layer.id) && map.getLayer(layer.id)) map.removeLayer(layer.id);
+  }
+  for (const sourceId of Object.keys(style.sources)) {
+    if (sourceId.startsWith(HEAT_PREFIX) && !wanted.has(sourceId) && map.getSource(sourceId)) {
+      map.removeSource(sourceId);
+      uploaded.delete(sourceId);
+    }
   }
 }
 

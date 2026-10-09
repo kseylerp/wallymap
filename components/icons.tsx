@@ -101,3 +101,64 @@ export const HybridIcon = (p: IconProps) => (
     <path d="M5 14.25 8.5 8.5l2.25 3.5 1.5-2 2.75 4.25Z" />
   </Icon>
 );
+
+/** Stacked sheets: the layer panel. */
+export const LayersIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M10 3.5 17 7l-7 3.5L3 7Z" />
+    <path d="m3 10.25 7 3.5 7-3.5M3 13.5l7 3.5 7-3.5" />
+  </Icon>
+);
+
+/** Six dots: a drag handle. */
+export const GripIcon = (p: IconProps) => (
+  <Icon {...p} fill="currentColor" stroke="none">
+    <circle cx="7.5" cy="5.5" r="1.25" />
+    <circle cx="12.5" cy="5.5" r="1.25" />
+    <circle cx="7.5" cy="10" r="1.25" />
+    <circle cx="12.5" cy="10" r="1.25" />
+    <circle cx="7.5" cy="14.5" r="1.25" />
+    <circle cx="12.5" cy="14.5" r="1.25" />
+  </Icon>
+);
+
+export const CloseIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="m5.5 5.5 9 9M14.5 5.5l-9 9" />
+  </Icon>
+);
+
+export const CopyIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="7" y="7" width="9.5" height="9.5" rx="2" />
+    <path d="M13 7V5.5a2 2 0 0 0-2-2H5.5a2 2 0 0 0-2 2V11a2 2 0 0 0 2 2H7" />
+  </Icon>
+);
+
+export const CheckIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="m4.5 10.5 3.5 3.5 7.5-8" />
+  </Icon>
+);
+
+/** A speech bubble: ask the chat. */
+export const AskIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 5.5A2 2 0 0 1 6 3.5h8a2 2 0 0 1 2 2V11a2 2 0 0 1-2 2H9l-3.5 3v-3H6a2 2 0 0 1-2-2Z" />
+  </Icon>
+);
+
+/** A winding path between two points. */
+export const RouteIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="5" cy="15" r="1.75" />
+    <circle cx="15" cy="5" r="1.75" />
+    <path d="M6.75 15H12a2.5 2.5 0 0 0 0-5H8a2.5 2.5 0 0 1 0-5h5.25" />
+  </Icon>
+);
+
+export const TrashIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 6h12M8 6V4.5h4V6M5.5 6l.75 10h7.5L14.5 6" />
+  </Icon>
+);

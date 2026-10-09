@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ArrowUpIcon, ChevronDownIcon, ChevronUpIcon, StopIcon } from "@/components/icons";
 import { ToolTrace } from "@/components/ToolTrace";
 import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
+import { onChatSend } from "@/lib/agent/chatBus";
 import { compactMessages } from "@/lib/agent/compactMessages";
 import { dedupeNoteAndText } from "@/lib/agent/dedupe";
 import { extractFollowUps } from "@/lib/agent/followups";
@@ -22,6 +23,8 @@ type ChatRailProps = {
   onActions: (actions: MapAction[]) => void;
   collapsed: boolean;
   onToggle: () => void;
+  /** The layer panel is open on the right, so fitted results must stay left of it. */
+  layerPanelOpen?: boolean;
 };
 
 type ToolPart = Extract<UIMessage["parts"][number], { toolCallId: string }>;
@@ -212,7 +215,15 @@ function Thinking() {
   );
 }
 
-export function ChatRail({ catalog, renderOps, getCanvasSize, onActions, collapsed, onToggle }: ChatRailProps) {
+export function ChatRail({
+  catalog,
+  renderOps,
+  getCanvasSize,
+  onActions,
+  collapsed,
+  onToggle,
+  layerPanelOpen = false,
+}: ChatRailProps) {
   // Resend query results as summaries: the map already has the full data, and the route caps request size.
   const [transport] = useState(
     () =>
@@ -240,7 +251,8 @@ export function ChatRail({ catalog, renderOps, getCanvasSize, onActions, collaps
     const applied = appliedRef.current;
     // Fit results into the map the panel leaves visible, not the whole window.
     const size = getCanvasSize();
-    const canvas = { ...size, padding: visibleMapPadding({ ...size, panelOpen: open, isMobile: size.width < 768 }) };
+    const padding = visibleMapPadding({ ...size, panelOpen: open, isMobile: size.width < 768, layerPanelOpen });
+    const canvas = { ...size, padding };
     // Track ops produced in this pass so a later query in the same batch sees an earlier render.
     let ops = renderOps;
     const actions: MapAction[] = [];
@@ -258,7 +270,7 @@ export function ChatRail({ catalog, renderOps, getCanvasSize, onActions, collaps
       }
     }
     if (actions.length > 0) onActions(actions);
-  }, [messages, catalog, renderOps, getCanvasSize, onActions, open]);
+  }, [messages, catalog, renderOps, getCanvasSize, onActions, open, layerPanelOpen]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
@@ -272,6 +284,17 @@ export function ChatRail({ catalog, renderOps, getCanvasSize, onActions, collaps
       setDraft("");
       return true;
     },
+    [busy, sendMessage],
+  );
+
+  // Messages from outside the chat (the inspect card's "Ask about this") go out like a follow-up.
+  useEffect(
+    () =>
+      onChatSend((text) => {
+        if (busy) return false;
+        void sendMessage({ text });
+        return true;
+      }),
     [busy, sendMessage],
   );
 

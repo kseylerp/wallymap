@@ -35,6 +35,8 @@
   /* Lifted segment in a control, and the hairline lift under an answer card. */
   --chip-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   --hair-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  /* Floating cards over the map (the inspect card), from the Wally card shadow. */
+  --card-shadow: 0 6px 12px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
 
   /* Globe atmosphere for the satellite hybrid, read by components/mapTiles.ts. */
   --fog-color: rgb(214, 222, 228);
@@ -65,6 +67,7 @@
   --shadow-soft: var(--shadow);
   --shadow-chip: var(--chip-shadow);
   --shadow-hair: var(--hair-shadow);
+  --shadow-card: var(--card-shadow);
 
   --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
@@ -297,4 +300,64 @@ textarea:focus-visible {
 }
 .chat-markdown .answer-title strong {
   font-weight: 600;
+}
+
+/* The inspect card pops from its pointer; the pointer edge is its transform origin (set inline). */
+@keyframes inspect-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.inspect-card {
+  box-shadow: var(--card-shadow);
+  animation: inspect-pop 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .inspect-card {
+    animation: none;
+  }
+}
+
+/* Layer panel opacity slider: a 4px track filled in ink up to the value (--fill, set inline), a white thumb. */
+.layer-opacity {
+  appearance: none;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+.layer-opacity::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--slate) var(--fill, 100%), var(--mist) var(--fill, 100%));
+}
+.layer-opacity::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--slate) var(--fill, 100%), var(--mist) var(--fill, 100%));
+}
+.layer-opacity::-webkit-slider-thumb {
+  appearance: none;
+  margin-top: -5px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.12),
+    var(--chip-shadow);
+}
+.layer-opacity::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.12),
+    var(--chip-shadow);
 }

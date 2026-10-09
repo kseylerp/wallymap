@@ -5,14 +5,19 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import mapboxgl from "mapbox-gl";
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { MapSetupNotice } from "@/components/MapSetupNotice";
-import { syncSatelliteHybrid, syncTileLayers } from "@/components/mapTiles";
+import { syncHeatLayers, syncSatelliteHybrid, syncTileLayers } from "@/components/mapTiles";
 import { basemapStyleUrl } from "@/lib/render/basemaps";
 import { buildDeckLayers } from "@/lib/render/deck";
-import { initialMapState, type Basemap, type MapState, type Viewport } from "@/lib/render/state";
+import { featureBBox, featureCenter, pickToSelection, type DeckPick } from "@/lib/render/inspect";
+import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
 
 // Literal `process.env.NEXT_PUBLIC_*` access so Next inlines it into the client bundle.
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim() ?? "";
 const EPSILON = 1e-6;
+/** Picking slop around the pointer, so a 2.5px trail is clickable. */
+const PICK_RADIUS_PX = 4;
+/** Camera ease onto a selected feature (spec: 350 ms). */
+const SELECT_EASE_MS = 350;
 
 /** Imperative camera controls for the on-map buttons. */
 export type MapHandle = {
@@ -20,17 +25,23 @@ export type MapHandle = {
   zoomOut: () => void;
   /** Back to the starting world view (pitch 0), through the same `set_view` path the agent uses. */
   resetToGlobe: () => void;
+  /** Screen position of a map point (container pixels), or null before the map exists. */
+  project: (lngLat: [number, number]) => { x: number; y: number } | null;
+  /** Calls `listener` on every camera frame and resize; returns the unsubscribe function. */
+  onCameraChange: (listener: () => void) => () => void;
 };
 
 type MapCanvasProps = {
   state: MapState;
   onViewportChange: (v: Viewport) => void;
+  /** A click on the map: the feature it hit, or null for empty map (which closes the inspect card). */
+  onPick?: (selection: Selection | null) => void;
   className?: string;
   /** React 19 passes `ref` as a plain prop, so no `forwardRef` wrapper is needed. */
   ref?: Ref<MapHandle>;
 };
 
-export function MapCanvas({ state, onViewportChange, className, ref }: MapCanvasProps) {
+export function MapCanvas({ state, onViewportChange, onPick, className, ref }: MapCanvasProps) {
   if (!MAPBOX_TOKEN) {
     return (
       <div data-testid="map-canvas" className={className ?? "h-full w-full"}>
@@ -38,7 +49,7 @@ export function MapCanvas({ state, onViewportChange, className, ref }: MapCanvas
       </div>
     );
   }
-  return <GlobeMap state={state} onViewportChange={onViewportChange} className={className} ref={ref} />;
+  return <GlobeMap state={state} onViewportChange={onViewportChange} onPick={onPick} className={className} ref={ref} />;
 }
 
 function cameraOf(map: mapboxgl.Map): Viewport {
@@ -72,12 +83,49 @@ function safeDeckLayers(state: MapState): Layer[] {
   }
 }
 
-function GlobeMap({ state, onViewportChange, className, ref }: MapCanvasProps) {
+/** The Mapbox layers a click can inspect: the main layer of each visible vector tile result. */
+function inspectableTileLayers(map: mapboxgl.Map, state: MapState): string[] {
+  const ids: string[] = [];
+  for (const loaded of Object.values(state.layers)) {
+    if (loaded.result.kind !== "tiles" || loaded.result.data.format !== "vector") continue;
+    const id = `tiles-${loaded.id}`;
+    if (map.getLayer(id) && map.getLayoutProperty(id, "visibility") !== "none") ids.push(id);
+  }
+  return ids;
+}
+
+/** The deck feature under a screen point, then the top vector tile feature, as a selection. */
+function pickAt(map: mapboxgl.Map, overlay: MapboxOverlay, state: MapState, point: mapboxgl.Point): Selection | null {
+  let info: DeckPick | null = null;
+  try {
+    info = overlay.pickObject({ x: point.x, y: point.y, radius: PICK_RADIUS_PX }) as DeckPick | null;
+  } catch {
+    // Deck is not initialized yet (no WebGL context); fall through to the tiles.
+  }
+  const fromDeck = pickToSelection(info, state.layers);
+  if (fromDeck) return fromDeck;
+  const layers = inspectableTileLayers(map, state);
+  if (layers.length === 0) return null;
+  const [top] = map.queryRenderedFeatures(point, { layers });
+  if (!top) return null;
+  const { lng, lat } = map.unproject(point);
+  return pickToSelection(
+    {
+      feature: { id: top.id, source: top.source, layer: top.layer, geometry: top.geometry, properties: top.properties },
+      lngLat: [lng, lat],
+      point: { x: point.x, y: point.y },
+    },
+    state.layers,
+  );
+}
+
+function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
   const stateRef = useRef(state);
   const onViewportChangeRef = useRef(onViewportChange);
+  const onPickRef = useRef(onPick);
   const appliedBasemapRef = useRef<Basemap>(state.basemap);
   // The camera the map last settled on (or is easing to). A prop equal to this is our own echo.
   const lastCameraRef = useRef<Viewport>(state.viewport);
@@ -86,6 +134,7 @@ function GlobeMap({ state, onViewportChange, className, ref }: MapCanvasProps) {
   useEffect(() => {
     stateRef.current = state;
     onViewportChangeRef.current = onViewportChange;
+    onPickRef.current = onPick;
   });
 
   useImperativeHandle(
@@ -94,6 +143,20 @@ function GlobeMap({ state, onViewportChange, className, ref }: MapCanvasProps) {
       zoomIn: () => mapRef.current?.zoomIn(),
       zoomOut: () => mapRef.current?.zoomOut(),
       resetToGlobe: () => onViewportChangeRef.current(initialMapState.viewport),
+      project: (lngLat) => {
+        const point = mapRef.current?.project(lngLat);
+        return point ? { x: point.x, y: point.y } : null;
+      },
+      onCameraChange: (listener) => {
+        const map = mapRef.current;
+        if (!map) return () => {};
+        map.on("move", listener);
+        map.on("resize", listener);
+        return () => {
+          map.off("move", listener);
+          map.off("resize", listener);
+        };
+      },
     }),
     [],
   );
@@ -126,6 +189,22 @@ function GlobeMap({ state, onViewportChange, className, ref }: MapCanvasProps) {
     map.on("style.load", () => {
       syncSatelliteHybrid(map, stateRef.current.basemap);
       syncTileLayers(map, stateRef.current);
+      syncHeatLayers(map, stateRef.current);
+    });
+
+    // Click to inspect: deck features first (they draw on top), then vector tiles; empty map deselects.
+    map.on("click", (e) => {
+      onPickRef.current?.(pickAt(map, overlay, stateRef.current, e.point));
+    });
+    // A pointer cursor over anything inspectable, checked at most once per frame.
+    let hoverFrame = 0;
+    map.on("mousemove", (e) => {
+      if (hoverFrame) return;
+      hoverFrame = requestAnimationFrame(() => {
+        hoverFrame = 0;
+        const hit = pickAt(map, overlay, stateRef.current, e.point) !== null;
+        map.getCanvas().style.cursor = hit ? "pointer" : "";
+      });
     });
 
     mapRef.current = map;
@@ -134,6 +213,7 @@ function GlobeMap({ state, onViewportChange, className, ref }: MapCanvasProps) {
     lastCameraRef.current = initial.viewport;
 
     return () => {
+      cancelAnimationFrame(hoverFrame);
       map.removeControl(overlay);
       map.remove();
       mapRef.current = null;
@@ -141,11 +221,31 @@ function GlobeMap({ state, onViewportChange, className, ref }: MapCanvasProps) {
     };
   }, []);
 
-  // Deck layers and raster tile layers follow every state change.
+  // Deck layers, tile layers and Mapbox heatmaps follow every state change.
   useEffect(() => {
     overlayRef.current?.setProps({ layers: safeDeckLayers(state) });
-    if (mapRef.current) syncTileLayers(mapRef.current, state);
+    if (mapRef.current) {
+      syncTileLayers(mapRef.current, state);
+      syncHeatLayers(mapRef.current, state);
+    }
   }, [state]);
+
+  // A new selection eases the camera onto the feature: its center when the whole feature is in view, else
+  // the clicked point (centering a national forest would fly away from where the user clicked).
+  const selected = state.selected;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selected) return;
+    const bbox = featureBBox(selected.feature);
+    const bounds = map.getBounds();
+    const fits =
+      bbox !== null &&
+      bounds !== null &&
+      bounds.contains([bbox[0], bbox[1]]) &&
+      bounds.contains([bbox[2], bbox[3]]);
+    const center = (fits ? featureCenter(selected.feature) : null) ?? selected.lngLat;
+    map.easeTo({ center, duration: SELECT_EASE_MS, easing: (t) => t * (2 - t) });
+  }, [selected]);
 
   // Ease to a new viewport when it differs from both the actual camera and our own last report.
   useEffect(() => {

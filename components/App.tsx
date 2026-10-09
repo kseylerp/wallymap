@@ -3,24 +3,29 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { BasemapSwitch } from "@/components/BasemapSwitch";
 import { ChatRail } from "@/components/ChatRail";
-import { LayerChips } from "@/components/LayerChips";
+import { InspectCard } from "@/components/InspectCard";
+import { drawnColor, LayerStack } from "@/components/LayerStack";
 import { MapCanvas, type MapHandle } from "@/components/MapCanvas";
 import { MapControls } from "@/components/MapControls";
 import { Wordmark } from "@/components/Wordmark";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
+import { sendChat } from "@/lib/agent/chatBus";
+import { bboxToViewport } from "@/lib/render/deck";
+import { askAboutText, featureBBox } from "@/lib/render/inspect";
 import { reduce } from "@/lib/render/reducer";
-import { initialMapState, type Basemap, type MapAction, type Viewport } from "@/lib/render/state";
+import { initialMapState, type Basemap, type MapAction, type Selection, type Viewport } from "@/lib/render/state";
+import { visibleMapPadding } from "@/lib/render/viewportPadding";
 
 const DEFAULT_CANVAS = { width: 1000, height: 800 };
 
-type CatalogEntry = { id: string; title: string; style: LayerCatalog[string]["style"] };
+type CatalogEntry = { id: string; title: string; style: LayerCatalog[string]["style"]; license?: string };
 
 async function fetchCatalog(): Promise<LayerCatalog> {
   try {
     const res = await fetch("/api/layers");
     if (!res.ok) return {};
     const entries = (await res.json()) as CatalogEntry[];
-    return Object.fromEntries(entries.map((e) => [e.id, { title: e.title, style: e.style }]));
+    return Object.fromEntries(entries.map((e) => [e.id, { title: e.title, style: e.style, license: e.license }]));
   } catch {
     // Without a catalog, layers still draw with the fallback title and style.
     return {};
@@ -31,6 +36,8 @@ export function App() {
   const [state, dispatch] = useReducer(reduce, initialMapState);
   const [catalog, setCatalog] = useState<LayerCatalog | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  // Phones start with the layer panel folded into its pill so it does not cover the map.
+  const [layersOpen, setLayersOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 768);
   const mapBoxRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapHandle>(null);
   const canvasSizeRef = useRef(DEFAULT_CANVAS);
@@ -65,13 +72,43 @@ export function App() {
   const onViewportChange = useCallback((viewport: Viewport) => dispatch({ type: "set_view", viewport }), []);
   const toggle = useCallback(() => setCollapsed((c) => !c), []);
   const setBasemap = useCallback((basemap: Basemap) => dispatch({ type: "set_basemap", basemap }), []);
-  const toggleLayer = useCallback((layerId: string) => dispatch({ type: "toggle_layer", layerId }), []);
+  const onPick = useCallback(
+    (selection: Selection | null) => dispatch(selection ? { type: "select", selection } : { type: "deselect" }),
+    [],
+  );
+  const deselect = useCallback(() => dispatch({ type: "deselect" }), []);
+  const project = useCallback((lngLat: [number, number]) => mapRef.current?.project(lngLat) ?? null, []);
+  const onCameraChange = useCallback(
+    (listener: () => void) => mapRef.current?.onCameraChange(listener) ?? (() => {}),
+    [],
+  );
+
+  const hasLayers = Object.keys(state.layers).length > 0;
+  const layerPanelOpen = layersOpen && hasLayers;
+  const selected = state.selected;
+  const selectedLayer = selected ? state.layers[selected.layerId] : undefined;
+
+  const askAbout = useCallback(() => {
+    if (!selected || !selectedLayer) return false;
+    const sent = sendChat(askAboutText(selectedLayer.title, selected, selectedLayer.style.unit));
+    if (sent) setCollapsed(false);
+    return sent;
+  }, [selected, selectedLayer]);
+
+  // Stub until route playback lands (Milestone 3): frame the whole line in the part of the map left visible.
+  const previewRoute = useCallback(() => {
+    const bbox = selected ? featureBBox(selected.feature) : null;
+    if (!bbox) return;
+    const size = canvasSizeRef.current;
+    const padding = visibleMapPadding({ ...size, panelOpen: !collapsed, isMobile: size.width < 768, layerPanelOpen });
+    dispatch({ type: "set_view", viewport: bboxToViewport(bbox, size.width, size.height, padding) });
+  }, [selected, collapsed, layerPanelOpen]);
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-cream">
       {/* The map fills the window; every control floats over it. */}
       <main ref={mapBoxRef} className="absolute inset-0">
-        <MapCanvas ref={mapRef} state={state} onViewportChange={onViewportChange} />
+        <MapCanvas ref={mapRef} state={state} onViewportChange={onViewportChange} onPick={onPick} />
       </main>
 
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 md:p-4">
@@ -83,8 +120,33 @@ export function App() {
             <BasemapSwitch value={state.basemap} onChange={setBasemap} />
           </div>
         </div>
-        <LayerChips layers={state.layers} renderOps={state.renderOps} onToggle={toggleLayer} />
       </header>
+
+      <div className="pointer-events-none absolute top-3 right-3 z-20 flex flex-col items-end md:top-4 md:right-4">
+        <LayerStack
+          layers={state.layers}
+          renderOps={state.renderOps}
+          catalog={catalog}
+          dispatch={dispatch}
+          open={layersOpen}
+          onOpenChange={setLayersOpen}
+        />
+      </div>
+
+      {selected && selectedLayer && (
+        <InspectCard
+          // A new selection starts fresh (copy and busy states reset).
+          key={`${selected.layerId}:${selected.lngLat.join(",")}`}
+          selection={selected}
+          layer={selectedLayer}
+          color={drawnColor(selectedLayer, state.renderOps.find((op) => op.layerId === selected.layerId))}
+          project={project}
+          onCameraChange={onCameraChange}
+          onClose={deselect}
+          onAsk={askAbout}
+          onPreviewRoute={previewRoute}
+        />
+      )}
 
       <MapControls
         onZoomIn={() => mapRef.current?.zoomIn()}
@@ -99,6 +161,7 @@ export function App() {
         onActions={onActions}
         collapsed={collapsed}
         onToggle={toggle}
+        layerPanelOpen={layerPanelOpen}
       />
     </div>
   );

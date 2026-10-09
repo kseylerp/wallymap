@@ -1,6 +1,7 @@
 import type { Layer } from "@deck.gl/core";
 import { GeoJsonLayer } from "@deck.gl/layers";
 import { WebMercatorViewport } from "@math.gl/web-mercator";
+import type { Feature } from "geojson";
 import type { BBox } from "@/layers/types";
 import type { MapState, RenderOp, Viewport } from "@/lib/render/state";
 
@@ -17,6 +18,8 @@ const LINE_WIDTH_PX = 2.5;
 const LINE_CASING_WIDTH_PX = 4.5;
 /** Polygon fills stay light so the imagery underneath still reads. */
 const POLYGON_FILL_ALPHA = 64;
+/** While a feature is selected, the rest of its layer fades to this share of its alpha. */
+export const SIBLING_FADE = 0.35;
 
 /** Parses `#rgb` or `#rrggbb` into an RGBA tuple for deck.gl. */
 export function hexToRgba(hex: string, alpha = 255): Rgba {
@@ -67,12 +70,52 @@ function usableColor(color: string | undefined): string | undefined {
   }
 }
 
+type ColorAccessor = Rgba | ((f: Feature) => Rgba);
+
+/** Scales a color's alpha by the op opacity. */
+function withOpacity([r, g, b, a]: Rgba, opacity: number): Rgba {
+  return [r, g, b, Math.round(a * opacity)];
+}
+
+/** A stable key per selected feature object, so `updateTriggers` re-run the color accessors on a new selection. */
+const selectionKeys = new WeakMap<Feature, number>();
+let nextSelectionKey = 1;
+function selectionKey(feature: Feature | undefined): number {
+  if (!feature) return 0;
+  let key = selectionKeys.get(feature);
+  if (key === undefined) {
+    key = nextSelectionKey++;
+    selectionKeys.set(feature, key);
+  }
+  return key;
+}
+
+/**
+ * A constant color, or (while one of this layer's features is selected) an accessor that keeps the selected
+ * feature at full strength and fades its siblings. `selected` is matched by reference: deck hands accessors the
+ * same feature objects the pick returned.
+ */
+function colorFor(color: Rgba, opacity: number, selected: Feature | undefined): ColorAccessor {
+  const base = withOpacity(color, opacity);
+  if (!selected) return base;
+  const faded = withOpacity(base, SIBLING_FADE);
+  return (f: Feature) => (f === selected ? base : faded);
+}
+
 /** The deck layers for one render op, bottom first (lines add a white casing beneath the stroke). */
-function geoJsonLayersFor(op: RenderOp, data: GeoJSON.FeatureCollection, defaultColor: string): GeoJsonLayer[] {
+function geoJsonLayersFor(
+  op: RenderOp,
+  data: GeoJSON.FeatureCollection,
+  defaultColor: string,
+  selected: Feature | undefined,
+): Layer[] {
   const requested = usableColor(op.color);
   const color = requested ?? defaultColor;
+  const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
   const id = `${op.layerId}:${op.mode}`;
-  const base = { id, data, pickable: true };
+  const key = selectionKey(selected);
+  const updateTriggers = { getLineColor: key, getFillColor: key };
+  const base = { id, data, pickable: true, updateTriggers };
   switch (op.mode) {
     case "points":
       return [
@@ -81,9 +124,9 @@ function geoJsonLayersFor(op: RenderOp, data: GeoJSON.FeatureCollection, default
           pointType: "circle",
           getPointRadius: POINT_RADIUS_PX,
           pointRadiusUnits: "pixels",
-          getFillColor: WHITE,
+          getFillColor: colorFor(WHITE, opacity, selected),
           stroked: true,
-          getLineColor: hexToRgba(requested ?? SLATE),
+          getLineColor: colorFor(hexToRgba(requested ?? SLATE), opacity, selected),
           getLineWidth: POINT_STROKE_PX,
           lineWidthUnits: "pixels",
         }),
@@ -95,14 +138,15 @@ function geoJsonLayersFor(op: RenderOp, data: GeoJSON.FeatureCollection, default
           data,
           pickable: false,
           filled: false,
-          getLineColor: WHITE,
+          getLineColor: colorFor(WHITE, opacity, selected),
           getLineWidth: LINE_CASING_WIDTH_PX,
           lineWidthUnits: "pixels",
+          updateTriggers,
         }),
         new GeoJsonLayer({
           ...base,
           filled: false,
-          getLineColor: hexToRgba(color),
+          getLineColor: colorFor(hexToRgba(color), opacity, selected),
           getLineWidth: LINE_WIDTH_PX,
           lineWidthUnits: "pixels",
         }),
@@ -111,18 +155,25 @@ function geoJsonLayersFor(op: RenderOp, data: GeoJSON.FeatureCollection, default
       return [
         new GeoJsonLayer({
           ...base,
-          getFillColor: hexToRgba(color, POLYGON_FILL_ALPHA),
-          getLineColor: hexToRgba(color, 255),
+          getFillColor: colorFor(hexToRgba(color, POLYGON_FILL_ALPHA), opacity, selected),
+          getLineColor: colorFor(hexToRgba(color, 255), opacity, selected),
           getLineWidth: 1,
           lineWidthUnits: "pixels",
         }),
       ];
+    case "heat":
+      // Drawn by Mapbox's native heatmap (components/mapTiles.ts): deck's HeatmapLayer renders nothing in
+      // GlobeView, which is what the overlay uses while the map is in globe projection.
+      return [];
     default:
       throw new Error(`NotImplemented: ${op.mode}`);
   }
 }
 
-/** Turns map state into deck.gl layer instances for each visible geojson render op (lines bring a casing). */
+/**
+ * Turns map state into deck.gl layer instances for each visible geojson render op (lines bring a casing).
+ * Heat ops yield none here; Mapbox draws them.
+ */
 export function buildDeckLayers(state: MapState): Layer[] {
   const layers: Layer[] = [];
   for (const op of state.renderOps) {
@@ -130,7 +181,8 @@ export function buildDeckLayers(state: MapState): Layer[] {
     const loaded = state.layers[op.layerId];
     if (!loaded) continue;
     if (loaded.result.kind === "tiles") continue;
-    layers.push(...geoJsonLayersFor(op, loaded.result.data, loaded.style.color));
+    const selected = state.selected?.layerId === op.layerId ? state.selected.feature : undefined;
+    layers.push(...geoJsonLayersFor(op, loaded.result.data, loaded.style.color, selected));
   }
   return layers;
 }

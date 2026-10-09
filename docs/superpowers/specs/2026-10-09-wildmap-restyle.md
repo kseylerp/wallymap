@@ -20,12 +20,12 @@ Tokens (CSS variables on `:root`, used everywhere; no raw hex in components):
 
 Fonts via `next/font/google`, self-hosted at build: **Geist** for UI and body (weights 400, 500, 600), **Source Serif 4** for the wordmark, section headings, and answer headings (weights 500, 600). Body 15px/1.5; headings tight (-0.01em).
 
-Basemap default becomes `satellite` (Mapbox satellite-streets); `outdoors` and `natural-earth-2` remain selectable. Trail line color becomes `--accent`; the OSM layer style color updates to `#D97757`. Point layers render as a white 7px circle with a 2px accent stroke. Polygon fill uses accent at low alpha.
+Basemap default becomes a new hybrid `outdoors-satellite`: the Mapbox Outdoors style (contours, hillshade, trails, paths, roads, labels, water) with the Mapbox satellite raster (`mapbox://mapbox.satellite`) inserted beneath its vector detail. On `style.load`, add the raster source and a raster layer placed just above the style's background/land layer, then hide the Outdoors fill layers that would occlude the imagery (landcover, landuse, national-park, land-structure, wetland, and similar area fills; keep water, hillshade, contours, roads, paths, and labels). Tune `raster-opacity` (about 0.9) and keep hillshade at reduced opacity so terrain reads. `outdoors`, `satellite` (satellite-streets), and `natural-earth-2` remain selectable; the segmented control shows Outdoors+Sat / Outdoors / Satellite. Trail line color becomes `--accent`; the OSM layer style color updates to `#D97757`. Point layers render as a white 7px circle with a 2px accent stroke. Polygon fill uses accent at low alpha.
 
 ## Layout (desktop ≥ 768px)
 
 - Map fills the viewport; no side rail.
-- Top-left: WildMap wordmark (serif) in a glass pill, then a glass segmented control for the basemap (Satellite / Outdoors).
+- Top-left: WildMap wordmark (serif) in a glass pill, then a glass segmented control for the basemap (Outdoors+Sat / Outdoors / Satellite).
 - Top-right: active layer chips (glass pill per loaded layer: color dot, title, feature count, eye toggle). This is the minimal layer stack; the full panel is Milestone 2.
 - Bottom-right: glass round buttons for zoom in, zoom out, and "globe" (reset to world view, pitch 0).
 - Bottom-left: the chat panel, a glass panel 420px wide, max-height 72vh, radius `--r-panel`. Header row: "Ask the map" (serif) and a collapse button. Body: the conversation (user bubbles in `--accent-soft`; assistant answers on `--paper` cards with serif headings; tool trace rows as small muted chips with the tool name and feature count, collapsed by default). Footer: the input as a pill with a terracotta send button. Collapsed state: only the input pill plus a small "WildMap" tag.

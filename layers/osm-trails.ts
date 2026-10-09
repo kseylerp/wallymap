@@ -85,12 +85,26 @@ function withinSacScale(feature: Feature, max: (typeof SAC_SCALES)[number]): boo
   return index !== -1 && index <= SAC_SCALES.indexOf(max);
 }
 
+const FAILURE_REMARK = /timed out|runtime error|out of memory/i;
+
+/**
+ * Overpass often answers HTTP 200 with a failure `remark` and empty or partial
+ * `elements`. Returns the failure reason, or null when the body looks usable.
+ */
+export function overpassFailure(json: unknown): string | null {
+  if (typeof json !== "object" || json === null) return "unexpected response body";
+  const body = json as Record<string, unknown>;
+  if (typeof body.remark === "string" && FAILURE_REMARK.test(body.remark)) return body.remark;
+  if (!Array.isArray(body.elements)) return "response has no elements";
+  return null;
+}
+
 async function requestOverpass(
   fetchFn: typeof overpassFetch,
   query: string,
-): Promise<{ ok: true; json: unknown } | { ok: false; status: number | null }> {
+): Promise<{ ok: true; json: unknown } | { ok: false; reason: string }> {
   const primary = process.env.OVERPASS_URL || PUBLIC_ENDPOINT;
-  let status: number | null = null;
+  let reason = "Overpass returned no response";
 
   // Primary endpoint first, then one retry against the public endpoint
   // (the same URL again when the primary already is the public one).
@@ -101,13 +115,19 @@ async function requestOverpass(
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: `data=${encodeURIComponent(query)}`,
       });
-      if (res.ok) return { ok: true, json: await res.json() };
-      status = res.status;
+      if (!res.ok) {
+        reason = `Overpass returned ${res.status}`;
+        continue;
+      }
+      const json: unknown = await res.json();
+      const failure = overpassFailure(json);
+      if (failure === null) return { ok: true, json };
+      reason = `Overpass failed: ${failure}`;
     } catch {
-      status = null;
+      reason = "Overpass returned no response";
     }
   }
-  return { ok: false, status };
+  return { ok: false, reason };
 }
 
 const osmTrails = defineLayer({
@@ -133,7 +153,7 @@ const osmTrails = defineLayer({
 
     const result = await requestOverpass(ctx.fetch, buildOverpassQuery(ctx.bbox, input));
     if (!result.ok) {
-      return { error: `Overpass returned ${result.status ?? "no response"}`, hint: "upstream" };
+      return { error: result.reason, hint: "upstream" };
     }
 
     const data = normalizeOverpass(result.json);

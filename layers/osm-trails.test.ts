@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
-import layer, { buildOverpassQuery, normalizeOverpass } from "./osm-trails";
+import layer, { buildOverpassQuery, normalizeOverpass, overpassFailure } from "./osm-trails";
 import fixture from "./__fixtures__/osm-trails.tahoe.json";
 
 const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
@@ -36,14 +36,22 @@ describe("osm-trails layer", () => {
     expect(fc.features[0].geometry.type).toBe("LineString");
     expect(fc.features.every((f) => typeof f.properties?.osmId === "string")).toBe(true);
     expect(fc.features.every((f) => /^way\/\d+$/.test(String(f.properties?.osmId)))).toBe(true);
+
+    const way = fixture.elements[0];
+    const first = fc.features[0];
+    expect(first.properties?.osmId).toBe(`way/${way.id}`);
+    if (first.geometry.type !== "LineString") throw new Error("expected LineString");
+    expect(first.geometry.coordinates[0]).toEqual([way.geometry[0].lon, way.geometry[0].lat]);
   });
 
   it("rejects a bbox over 2500 km2 with zoom_in", async () => {
+    const stub = vi.fn();
     const r = await layer.query(
-      { bbox: [-122, 36, -119, 39], zoom: 7, env: {}, fetch: vi.fn() as unknown as CachedFetch },
+      { bbox: [-122, 36, -119, 39], zoom: 7, env: {}, fetch: stub as unknown as CachedFetch },
       { namedOnly: false },
     );
     expect(r).toMatchObject({ hint: "zoom_in" });
+    expect(stub).not.toHaveBeenCalled();
   });
 
   it("maps 429 to upstream error after fallback", async () => {
@@ -96,5 +104,36 @@ describe("osm-trails layer", () => {
       "https://overpass.example.test/api/interpreter",
       "https://overpass-api.de/api/interpreter",
     ]);
+  });
+
+  it("treats a 200 with a timeout remark as an upstream failure after retry", async () => {
+    const remark = 'runtime error: Query timed out in "query" at line 1 after 26 seconds.';
+    const stub = vi.fn(
+      async () => new Response(JSON.stringify({ remark, elements: [] }), { status: 200 }),
+    );
+    const r = await layer.query(
+      { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch },
+      { namedOnly: false },
+    );
+    expect(r).toMatchObject({ hint: "upstream" });
+    expect((r as { error: string }).error).toContain("Query timed out");
+    expect(stub).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats a 200 body with no elements array as an upstream failure", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify({ version: 0.6 }), { status: 200 }));
+    const r = await layer.query(
+      { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch },
+      { namedOnly: false },
+    );
+    expect(r).toMatchObject({ hint: "upstream" });
+    expect(stub).toHaveBeenCalledTimes(2);
+  });
+
+  it("overpassFailure accepts a good body and flags bad ones", () => {
+    expect(overpassFailure(fixture)).toBeNull();
+    expect(overpassFailure({ elements: [] })).toBeNull();
+    expect(overpassFailure({ remark: "out of memory", elements: [] })).toBe("out of memory");
+    expect(overpassFailure(null)).not.toBeNull();
   });
 });

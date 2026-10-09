@@ -20,7 +20,7 @@ import {
   effectiveMode,
   isHexCollection,
 } from "@/lib/render/compareView";
-import { DECK_TERRAIN_ID, demDecoder, demTileUrl } from "@/lib/render/wally/deckTerrain";
+import { DECK_TERRAIN_ID, DECK_TERRAIN_TAG, demDecoder, demTileUrl } from "@/lib/render/wally/deckTerrain";
 import { featureCenter } from "@/lib/render/inspect";
 import { pinIconFor } from "@/lib/render/wally/pins";
 import type { MapState, RenderOp, Viewport } from "@/lib/render/state";
@@ -321,6 +321,17 @@ function countLabel(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, "")}k` : String(n);
 }
 
+/**
+ * The id a data layer's deck layers are named after: the app layer id, tagged while the layer drapes on terrain.
+ * Deck sets a layer extension up once, at creation, and the terrain extension leaves its draw mode in the layer's
+ * state for good. So a live layer that gains it is never drawn (no terrain effect was registered for it) and one
+ * that loses it is skipped by the effect that is still registered. A new id on each 3D switch makes deck build a
+ * fresh layer instead of updating the old one.
+ */
+export function deckLayerKey(layerId: string, terrain: boolean): string {
+  return terrain ? `${layerId}${DECK_TERRAIN_TAG}` : layerId;
+}
+
 /** What one op's layers need to know beyond the op itself. */
 type OpContext = {
   data: GeoJSON.FeatureCollection;
@@ -347,7 +358,7 @@ function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
   const stroke = requested ? hexToRgba(requested) : WHITE;
   const fill = requested ? hexToRgba(requested) : INK;
   const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
-  const id = `${ctx.deckId ?? op.layerId}:${op.mode}`;
+  const id = `${deckLayerKey(ctx.deckId ?? op.layerId, terrain)}:${op.mode}`;
   // Color and width accessors become functions while a feature is selected, and deck only re-runs a function
   // accessor when its trigger changes, so the trigger carries everything they depend on.
   const trigger = colorTrigger(selected, opacity, requested ?? INK_HEX);
@@ -444,7 +455,7 @@ function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
 function symbolLayers(op: RenderOp, { data, selected, terrain, deckId }: OpContext, opacity: number): Layer[] {
   return [
     new IconLayer<Feature>({
-      id: `${deckId ?? op.layerId}:points`,
+      id: `${deckLayerKey(deckId ?? op.layerId, terrain)}:points`,
       data: data.features,
       pickable: true,
       getPosition: markerPosition,
@@ -466,7 +477,7 @@ function symbolLayers(op: RenderOp, { data, selected, terrain, deckId }: OpConte
  * tiles. A picked tile is a `HexFeature`, so the inspect card shows its count.
  */
 function hexTileLayers(op: RenderOp, { data, selected: picked, zoom, terrain, deckId }: OpContext, opacity: number): Layer[] {
-  const id = `${deckId ?? op.layerId}:points`;
+  const id = `${deckLayerKey(deckId ?? op.layerId, terrain)}:points`;
   const resolution = hexResolution(zoom);
   const { hexes, labelled, max } = binned(data, resolution);
   // A tile picked at another resolution is not among these tiles: ignore it rather than fade every tile.
@@ -559,7 +570,7 @@ function maxAbsV(data: GeoJSON.FeatureCollection): number {
  */
 function deltaLayers(op: RenderOp, { data, selected, terrain }: OpContext): Layer[] {
   const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
-  const id = `${op.layerId}:${op.mode}`;
+  const id = `${deckLayerKey(op.layerId, terrain)}:${op.mode}`;
   const fade = (f: Feature, c: Rgba): Rgba => {
     const base = withOpacity(c, opacity);
     return selected && f !== selected ? withOpacity(base, SIBLING_FADE) : base;
@@ -569,7 +580,8 @@ function deltaLayers(op: RenderOp, { data, selected, terrain }: OpContext): Laye
     const max = maxAbsV(data) || 1;
     return [
       new GeoJsonLayer({
-        id,
+        // No terrain extension on these columns, so no 3D tag on the id either.
+        id: `${op.layerId}:${op.mode}`,
         data,
         pickable: true,
         extruded: true,

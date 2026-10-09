@@ -24,6 +24,10 @@ describe("layerIdFromDeckId", () => {
     expect(layerIdFromDeckId("osm-trails:lines")).toBe("osm-trails");
     expect(layerIdFromDeckId("fire-perimeters:polygons")).toBe("fire-perimeters");
   });
+  it("drops the 3D tag of a layer draped on terrain", () => {
+    expect(layerIdFromDeckId("osm-trails@3d:lines")).toBe("osm-trails");
+    expect(layerIdFromDeckId("osm-trails@3d:lines:casing")).toBeNull();
+  });
   it("ignores casings and unknown suffixes", () => {
     expect(layerIdFromDeckId("osm-trails:lines:casing")).toBeNull();
     expect(layerIdFromDeckId("osm-trails")).toBeNull();

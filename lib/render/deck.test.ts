@@ -15,6 +15,7 @@ import {
 import { lineDashFor } from "@/lib/render/palette";
 import { pickToSelection } from "@/lib/render/inspect";
 import { initialMapState, type LoadedLayer, type MapState } from "@/lib/render/state";
+import { DECK_TERRAIN_TAG } from "@/lib/render/wally/deckTerrain";
 
 const INK = [31, 31, 31, 255];
 const WHITE = [255, 255, 255, 255];
@@ -508,6 +509,51 @@ describe("draping on 3D terrain", () => {
       expect(layers.some((l) => l instanceof TerrainLayer)).toBe(false);
       expect(layers.some(terrainOf)).toBe(false);
     }
+  });
+});
+
+describe("switching 3D on and off", () => {
+  const TOKEN = "pk.test";
+  const terrainOf = (l: { props: unknown }) => ((props(l).extensions as unknown[]) ?? []).some((e) => e instanceof TerrainExtension);
+  const flat = (state: MapState) => ({ ...state, terrain: false });
+  const on = (state: MapState) => ({ ...state, terrain: true, flattened: false });
+  const dataIds = (state: MapState) =>
+    buildDeckLayers(state, { mapboxToken: TOKEN })
+      .filter((l) => !(l instanceof TerrainLayer))
+      .map((l) => l.id);
+  const cases: [string, MapState][] = [
+    ["lines", trails()],
+    ["polygons", stateOf("fire-perimeters", [a], {}, { geometry: "polygon" })],
+    ["symbols", stateOf("campsites", points(3))],
+    ["hex tiles", stateOf("species", dense(2001), {}, { zoom: 10 })],
+  ];
+
+  // Deck sets a layer extension up once, when the layer is created, so a live layer cannot gain or lose the terrain
+  // extension: it was never drawn after 3D came on, and vanished (and broke picking) after it went off.
+  it.each(cases)("gives %s new deck ids when 3D turns on or off, so deck builds fresh layers", (_name, state) => {
+    const flatIds = dataIds(flat(state));
+    const drapedIds = dataIds(on(state));
+    expect(flatIds.length).toBeGreaterThan(0);
+    expect(drapedIds).toHaveLength(flatIds.length);
+    for (const id of drapedIds) expect(flatIds).not.toContain(id);
+    for (const id of drapedIds) expect(id.startsWith(`${state.renderOps[0].layerId}${DECK_TERRAIN_TAG}:`)).toBe(true);
+    // Same ids on every build, so ordinary updates still match the live layers.
+    expect(dataIds(on(state))).toEqual(drapedIds);
+    expect(dataIds(flat(state))).toEqual(flatIds);
+  });
+
+  it("keeps the untagged ids and no terrain extension with 3D off", () => {
+    const layers = buildDeckLayers(flat(trails()), { mapboxToken: TOKEN });
+    expect(layers.map((l) => l.id)).toEqual(["osm-trails:lines:casing", "osm-trails:lines"]);
+    expect(layers.some(terrainOf)).toBe(false);
+    // The dash extension stays: it does not depend on terrain.
+    expect((props(layers[1]).extensions as unknown[])[0]).toBeInstanceOf(PathStyleExtension);
+  });
+
+  it("still maps a draped layer's pick back to its app layer", () => {
+    const [, , core] = buildDeckLayers(on(trails()), { mapboxToken: TOKEN });
+    const selection = pickToSelection({ object: a, layer: { id: core.id }, coordinate: [-120, 39] }, { "osm-trails": {} });
+    expect(selection?.layerId).toBe("osm-trails");
   });
 });
 

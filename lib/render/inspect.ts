@@ -1,6 +1,7 @@
 import type { Feature, Geometry, Position } from "geojson";
 import type { BBox } from "@/layers/types";
 import type { RenderMode, Selection } from "@/lib/render/state";
+import { DECK_TERRAIN_TAG } from "@/lib/render/wally/deckTerrain";
 
 /** Mapbox layer and source ids for vector tile layers start with this (see components/mapTiles.ts). */
 const TILES_PREFIX = "tiles-";
@@ -39,14 +40,17 @@ function isFeature(value: unknown): value is Feature {
 }
 
 /**
- * The app layer id behind a deck layer id. Deck layers are named `<layerId>:<mode>`; the white casing under a
+ * The app layer id behind a deck layer id. Deck layers are named `<layerId>:<mode>` (`<layerId>@3d:<mode>` while draped on terrain); the white casing under a
  * line (`<layerId>:lines:casing`) and any sublayer are not inspectable, so they map to null.
  */
 export function layerIdFromDeckId(deckId: string): string | null {
   const cut = deckId.lastIndexOf(":");
   if (cut <= 0) return null;
   const mode = deckId.slice(cut + 1);
-  return RENDER_MODES.includes(mode as RenderMode) ? deckId.slice(0, cut) : null;
+  if (!RENDER_MODES.includes(mode as RenderMode)) return null;
+  const layerId = deckId.slice(0, cut);
+  // Layers draped on 3D terrain carry a tag after the layer id (see DECK_TERRAIN_TAG).
+  return layerId.endsWith(DECK_TERRAIN_TAG) ? layerId.slice(0, -DECK_TERRAIN_TAG.length) : layerId;
 }
 
 /** The app layer id behind a vector tile source (`tiles-<id>`) or Mapbox layer (`tiles-<id>`, `tiles-<id>-line`). */

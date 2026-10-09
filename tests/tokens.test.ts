@@ -64,11 +64,11 @@ describe("tokens in app/globals.css", () => {
     expect(css).not.toContain("prefers-color-scheme");
   });
 
-  it("uses Geist for UI text and Source Serif 4 for headings", () => {
-    expect(css).toContain("--font-sans: var(--font-geist)");
-    expect(css).toContain("--font-serif: var(--font-source-serif)");
-    expect(css).not.toContain("-apple-system");
-    expect(css).not.toContain("SF Pro Rounded");
+  it("uses the system font (light) for UI text and Saira Condensed for headings, as on wally.guide", () => {
+    expect(css).toContain("--font-sans: -apple-system");
+    expect(css).toContain("--font-serif: var(--font-saira)");
+    expect(css).not.toContain("--font-geist");
+    expect(css).not.toContain("--font-source-serif");
   });
 });
 

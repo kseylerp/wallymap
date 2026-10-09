@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeOverpass } from "@/layers/osm-trails";
 import fixture from "@/layers/__fixtures__/osm-trails.tahoe.json";
 import type { LayerResult } from "@/layers/types";
-import { isFullLayerResult, summarizeLayerResult } from "./summarize";
+import { SAMPLE_MAX_CHARS, SAMPLE_VALUE_MAX_CHARS, isFullLayerResult, sampleOf, summarizeLayerResult } from "./summarize";
 
 const citation = { source: "Test", url: "https://example.test", retrieved: "2026-10-09T00:00:00Z" };
 
@@ -105,5 +105,27 @@ describe("summarizeLayerResult", () => {
     expect(isFullLayerResult(summarizeLayerResult(full))).toBe(false);
     expect(isFullLayerResult({ error: "x" })).toBe(false);
     expect(isFullLayerResult(null)).toBe(false);
+  });
+});
+
+describe("sampleOf", () => {
+  it("clips long strings, flattens nested values and keeps numbers", () => {
+    const [sample] = sampleOf([{ properties: { name: "x".repeat(500), n: 3, tags: { a: "y".repeat(500) }, ok: true } }]);
+    const props = sample as Record<string, unknown>;
+    expect((props.name as string).length).toBe(SAMPLE_VALUE_MAX_CHARS);
+    expect((props.name as string).endsWith("…")).toBe(true);
+    expect(props.n).toBe(3);
+    expect(props.ok).toBe(true);
+    expect(typeof props.tags).toBe("string");
+    expect((props.tags as string).length).toBe(SAMPLE_VALUE_MAX_CHARS);
+  });
+
+  it("drops samples from the end until the whole sample fits", () => {
+    const big = () => ({ properties: Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`k${i}`, "z".repeat(200)])) });
+    const sample = sampleOf([big(), big(), big()]);
+    expect(sample).toHaveLength(1);
+    const small = sampleOf([{ properties: { a: 1 } }, { properties: { b: 2 } }, { properties: null }]);
+    expect(small).toEqual([{ a: 1 }, { b: 2 }, null]);
+    expect(JSON.stringify(sampleOf([{ properties: { a: "z".repeat(119) } }, { properties: { b: 2 } }])).length).toBeLessThan(SAMPLE_MAX_CHARS);
   });
 });

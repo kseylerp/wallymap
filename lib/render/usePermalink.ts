@@ -68,19 +68,25 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
       setCatalog(c);
       return c;
     });
-    // Each restore gets a number; a newer one (another pasted link) makes an older one's outcome stale.
+    // Each restore gets a number; a newer one (another pasted link) makes an older one stale, so the older one's
+    // dispatches and status messages are dropped rather than landing on top of the newer link's map.
     let latest = 0;
     restoreRef.current = async (hash: string) => {
       const run = ++latest;
+      const current = () => run === latest;
+      const guarded: typeof dispatch = (action) => {
+        if (current()) dispatch(action);
+      };
       const catalog = await catalogReady;
-      const outcome = await restoreFromPermalink(hash, dispatch, fetchLayer, {
+      if (!current()) return;
+      const outcome = await restoreFromPermalink(hash, guarded, fetchLayer, {
         catalog,
         canvas: { width: window.innerWidth, height: window.innerHeight },
         onStart: (count) => {
-          if (count > 0) setStatus(`Restoring ${count} ${count === 1 ? "layer" : "layers"}…`);
+          if (count > 0 && current()) setStatus(`Restoring ${count} ${count === 1 ? "layer" : "layers"}…`);
         },
       });
-      if (run !== latest) return;
+      if (!current()) return;
       setReady(true);
       if (outcome && outcome.failed.length > 0) {
         setStatus(`Could not restore ${outcome.failed.length} of ${outcome.failed.length + outcome.restored.length} layers`);

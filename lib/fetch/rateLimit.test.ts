@@ -3,6 +3,7 @@ import {
   chatRules,
   checkRateLimit,
   clientKey,
+  ipv6Prefix,
   createKvStore,
   createMemoryStore,
   layerRules,
@@ -60,7 +61,7 @@ describe.each([
     const results = await hits(store, [perClient(20)], 21, T0 + MIN);
     expect(results.slice(0, 20).every((r) => r.ok)).toBe(true);
     const last = results[20];
-    expect(last.ok).toBe(false);
+    expect(last).toMatchObject({ ok: false, scope: "client" });
     // This window alone is full, so the wait runs past the end of it (9 minutes away).
     if (!last.ok) expect(last.retryAfterSeconds).toBeGreaterThanOrEqual(9 * 60);
   });
@@ -91,7 +92,7 @@ describe.each([
     const rules = [perClient(100), daily(3)];
     expect((await hits(store, rules, 3, now, "a")).every((r) => r.ok)).toBe(true);
     const blocked = await checkRateLimit("b", rules, { store, now });
-    expect(blocked).toEqual({ ok: false, retryAfterSeconds: 2 * 60 * 60 });
+    expect(blocked).toEqual({ ok: false, retryAfterSeconds: 2 * 60 * 60, scope: "daily" });
     expect((await checkRateLimit("b", rules, { store, now: 20_001 * DAY })).ok).toBe(true);
   });
 
@@ -149,12 +150,26 @@ describe("rules and request helpers", () => {
     expect(clientKey(req({ "x-forwarded-for": "203.0.113.9, 10.0.0.1", "x-real-ip": "10.0.0.2" }))).toBe("203.0.113.9");
     expect(clientKey(req({ "x-real-ip": "10.0.0.2" }))).toBe("10.0.0.2");
     expect(clientKey(req({}))).toBe("anon");
+    expect(clientKey(req({ "x-forwarded-for": "2001:db8:abcd:12:aaaa:bbbb:cccc:1" }))).toBe("2001:db8:abcd:12::/64");
+  });
+
+  it("keys IPv6 callers by their first 64 bits", () => {
+    expect(ipv6Prefix("2001:0db8:abcd:0012:0000:0000:0000:0001")).toBe("2001:db8:abcd:12::/64");
+    expect(ipv6Prefix("2001:db8:abcd:12::1")).toBe("2001:db8:abcd:12::/64");
+    expect(ipv6Prefix("2001:db8:abcd:12::ffff:2")).toBe(ipv6Prefix("2001:db8:abcd:12:9:9:9:9"));
+    expect(ipv6Prefix("2001:db8::1")).toBe("2001:db8:0:0::/64");
+    expect(ipv6Prefix("::1")).toBe("0:0:0:0::/64");
+    expect(ipv6Prefix("[2001:db8:1:2::5]:443")).toBe("2001:db8:1:2::/64");
+    expect(ipv6Prefix("fe80::1%eth0")).toBe("fe80:0:0:0::/64");
+    expect(ipv6Prefix("::ffff:203.0.113.9")).toBe("203.0.113.9");
+    expect(ipv6Prefix("203.0.113.9")).toBeNull();
+    expect(ipv6Prefix("not:an:address:zz")).toBeNull();
   });
 
   it("answers 429 with plain JSON and Retry-After", async () => {
-    const res = tooManyRequests(120);
+    const res = tooManyRequests(120, "daily");
     expect(res.status).toBe(429);
     expect(res.headers.get("Retry-After")).toBe("120");
-    expect(await res.json()).toEqual({ error: "Too many requests", retryAfterSeconds: 120 });
+    expect(await res.json()).toEqual({ error: "Too many requests", retryAfterSeconds: 120, scope: "daily" });
   });
 });

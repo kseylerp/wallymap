@@ -1,22 +1,29 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
-import layer, { MAX_TRAILS, OVERPASS_WAY_LIMIT, buildOverpassQuery, normalizeOverpass, overpassFailure } from "./osm-trails";
+import layer, { MAX_TRAILS, buildOverpassQuery, countedWays, normalizeOverpass, overpassFailure } from "./osm-trails";
 import fixture from "./__fixtures__/osm-trails.tahoe.json";
 
 const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
 
 describe("osm-trails layer", () => {
-  it("builds a query for highway=path|footway|track with out geom", () => {
+  it("builds a query for highway=path|footway|track: named ways first, counted, each set capped", () => {
     const q = buildOverpassQuery(TAHOE, { namedOnly: false });
-    expect(q).toContain('["highway"~"^(path|footway|track)$"]');
-    expect(q).toContain(`out geom ${OVERPASS_WAY_LIMIT};`);
-    expect(q).toContain("(38.85,-120.2,39,-120)");
-    expect(q).not.toContain('["name"]');
+    expect(q).toContain('way["highway"~"^(path|footway|track)$"]["name"](38.85,-120.2,39,-120)->.named;');
+    expect(q).toContain('way["highway"~"^(path|footway|track)$"][!"name"](38.85,-120.2,39,-120)->.unnamed;');
+    expect(q).toContain(".named out count;.unnamed out count;");
+    expect(q.endsWith(`.named out geom ${MAX_TRAILS};.unnamed out geom ${MAX_TRAILS};`)).toBe(true);
   });
 
-  it("adds a name selector when namedOnly is true", () => {
+  it("leaves out the unnamed set when namedOnly is true", () => {
     const q = buildOverpassQuery(TAHOE, { namedOnly: true });
-    expect(q).toContain('["name"]');
+    expect(q).not.toContain("unnamed");
+    expect(q).toContain(`.named out geom ${MAX_TRAILS};`);
+  });
+
+  it("reads the way total from out count elements", () => {
+    const count = (ways: number) => ({ type: "count", id: 0, tags: { nodes: "0", ways: String(ways) } });
+    expect(countedWays({ elements: [count(30), count(9000)] })).toBe(9030);
+    expect(countedWays({ elements: [] })).toBeNull();
   });
 
   it("normalizes fixture to LineStrings with trail tags", () => {
@@ -162,7 +169,7 @@ describe("osm-trails layer", () => {
     expect(overpassFailure(null)).not.toBeNull();
   });
 
-  it("caps a dense box at MAX_TRAILS, named trails first, with a coverage note", async () => {
+  it("caps at MAX_TRAILS, named trails first, and says how many the box holds", async () => {
     const way = (id: number, named: boolean) => ({
       type: "way",
       id,
@@ -172,9 +179,12 @@ describe("osm-trails layer", () => {
         { lat: 38.91, lon: -120.11 },
       ],
     });
+    const count = (ways: number) => ({ type: "count", id: 0, tags: { ways: String(ways) } });
     // Unnamed ways first in the body, so the named ones must be pulled forward.
     const elements = [
-      ...Array.from({ length: MAX_TRAILS + 400 }, (_, i) => way(i, false)),
+      count(100),
+      count(9_000),
+      ...Array.from({ length: MAX_TRAILS }, (_, i) => way(i, false)),
       ...Array.from({ length: 100 }, (_, i) => way(100_000 + i, true)),
     ];
     const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
@@ -182,7 +192,15 @@ describe("osm-trails layer", () => {
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(MAX_TRAILS);
     expect(r.data.features.slice(0, 100).every((f) => typeof f.properties?.name === "string")).toBe(true);
-    expect(r.coverageNote).toMatch(/^Showing 2,000 trails, named ones first/);
+    expect(r.coverageNote).toBe("Showing 2,000 of 9,100 trail ways in this box (named first); zoom in for the rest");
+  });
+
+  it("notes a cut made upstream even when fewer than MAX_TRAILS came back", async () => {
+    const elements = [{ type: "count", id: 0, tags: { ways: "5000" } }, ...fixture.elements];
+    const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
+    const r = await layer.query({ bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch }, { namedOnly: true });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.coverageNote).toMatch(/^Showing \d[\d,]* of 5,000 trail ways in this box/);
   });
 
   it("adds no coverage note when nothing was cut", async () => {

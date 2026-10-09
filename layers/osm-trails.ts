@@ -17,9 +17,12 @@ const SAC_SCALES = [
 
 /** Most trails returned. A dense 2,500 km² box holds tens of thousands of ways (tens of MB with geometry). */
 export const MAX_TRAILS = 2_000;
-/** Overpass stops after this many ways, so the upstream answer and its cache entry stay bounded too. */
-export const OVERPASS_WAY_LIMIT = 2 * MAX_TRAILS;
-const TRUNCATED_NOTE = `Showing ${MAX_TRAILS.toLocaleString("en-US")} trails, named ones first; zoom in for the rest`;
+
+/** The coverage note for a capped result: how many are shown of how many ways the box holds. */
+export function truncatedNote(shown: number, total: number): string {
+  const fmt = (n: number) => n.toLocaleString("en-US");
+  return `Showing ${fmt(shown)} of ${fmt(total)} trail ways in this box (named first); zoom in for the rest`;
+}
 
 const inputSchema = z.object({
   sacScaleMax: z.enum(SAC_SCALES).optional(),
@@ -37,18 +40,40 @@ const elementSchema = z.object({
 
 const responseSchema = z.object({ elements: z.array(z.unknown()) });
 
-/** Overpass QL for trail-like ways in the bbox. Overpass bbox order is (south,west,north,east). */
+/**
+ * Overpass QL for trail-like ways in the bbox. Overpass bbox order is (south,west,north,east).
+ * Named and unnamed ways are separate sets so named trails come first and are never cut behind
+ * unnamed ones (Overpass returns ways in id order), each set stops at MAX_TRAILS ways so the answer
+ * and its cache entry stay bounded, and `out count` reports how many ways the box really holds.
+ */
 export function buildOverpassQuery(
   bbox: BBox,
   input: Pick<OsmTrailsInput, "namedOnly">,
 ): string {
   const [west, south, east, north] = bbox;
-  const name = input.namedOnly ? '["name"]' : "";
+  const area = `(${south},${west},${north},${east})`;
+  const way = `way["highway"~"^(path|footway|track)$"]`;
+  const sets = input.namedOnly ? ["named"] : ["named", "unnamed"];
   return (
     `[out:json][timeout:25];` +
-    `way["highway"~"^(path|footway|track)$"]${name}(${south},${west},${north},${east});` +
-    `out geom ${OVERPASS_WAY_LIMIT};`
+    `${way}["name"]${area}->.named;` +
+    (input.namedOnly ? "" : `${way}[!"name"]${area}->.unnamed;`) +
+    sets.map((set) => `.${set} out count;`).join("") +
+    sets.map((set) => `.${set} out geom ${MAX_TRAILS};`).join("")
   );
+}
+
+/** Ways in the box according to the `out count` elements, or null when the body has none. */
+export function countedWays(json: unknown): number | null {
+  const elements = typeof json === "object" && json !== null ? (json as { elements?: unknown }).elements : undefined;
+  if (!Array.isArray(elements)) return null;
+  let total: number | null = null;
+  for (const el of elements) {
+    if (typeof el !== "object" || el === null || (el as { type?: unknown }).type !== "count") continue;
+    const ways = Number((el as { tags?: { ways?: unknown } }).tags?.ways);
+    if (Number.isFinite(ways)) total = (total ?? 0) + ways;
+  }
+  return total;
 }
 
 /** Converts an Overpass `out geom` response into LineString features, skipping malformed ways. */
@@ -81,12 +106,6 @@ export function normalizeOverpass(json: unknown): FeatureCollection {
     });
   }
   return { type: "FeatureCollection", features };
-}
-
-/** Number of elements in an Overpass body (0 when it has none). */
-function elementCount(json: unknown): number {
-  const elements = typeof json === "object" && json !== null ? (json as { elements?: unknown }).elements : undefined;
-  return Array.isArray(elements) ? elements.length : 0;
 }
 
 /** Keeps trails with no sac_scale, or one at or below `max` in difficulty order. */
@@ -125,22 +144,26 @@ const osmTrails = defineLayer({
     }
 
     const data = normalizeOverpass(result.json);
+    const returned = data.features.length;
+    const total = Math.max(countedWays(result.json) ?? returned, returned);
     const max = input.sacScaleMax;
     if (max !== undefined) {
       data.features = data.features.filter((f) => withinSacScale(f, max));
     }
 
-    // Capped when Overpass stopped at its limit or more trails came back than are kept; named trails go first.
-    const truncated = elementCount(result.json) >= OVERPASS_WAY_LIMIT || data.features.length > MAX_TRAILS;
-    if (data.features.length > MAX_TRAILS) {
+    // Named trails go first (they also come first from Overpass); keep MAX_TRAILS.
+    const cut = data.features.length > MAX_TRAILS;
+    if (cut) {
       const named = (f: Feature) => (f.properties?.name === undefined ? 1 : 0);
       data.features = [...data.features].sort((a, b) => named(a) - named(b)).slice(0, MAX_TRAILS);
     }
+    // Capped when the box holds more ways than came back, or more came back than are kept.
+    const truncated = cut || total > returned;
 
     return {
       kind: "geojson",
       data,
-      ...(truncated ? { coverageNote: TRUNCATED_NOTE } : {}),
+      ...(truncated ? { coverageNote: truncatedNote(data.features.length, total) } : {}),
       citation: {
         source: "OpenStreetMap contributors (ODbL)",
         url: "https://www.openstreetmap.org/copyright",

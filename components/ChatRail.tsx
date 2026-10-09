@@ -43,19 +43,30 @@ type ChatRailProps = {
 
 type ToolPart = Extract<UIMessage["parts"][number], { toolCallId: string }>;
 
-/** The chat route answers failures with `{ error }` JSON; show that sentence rather than raw JSON. */
-export function readableError(error: Error): string {
+function parsedError(error: Error): Record<string, unknown> | null {
   try {
     const parsed: unknown = JSON.parse(error.message);
-    if (typeof parsed === "object" && parsed !== null && "retryAfterSeconds" in parsed && typeof parsed.retryAfterSeconds === "number") {
-      return `Too many requests, try again in ${Math.max(1, Math.ceil(parsed.retryAfterSeconds / 60))} min.`;
-    }
-    if (typeof parsed === "object" && parsed !== null && "error" in parsed && typeof parsed.error === "string") {
-      return parsed.error;
-    }
+    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
   } catch {
     // Not JSON: the message is already prose.
+    return null;
   }
+}
+
+/** True when the chat route refused the history as too big (413), so only a new chat can go on. */
+export function isConversationTooLong(error: Error): boolean {
+  return parsedError(error)?.error === "Request too large";
+}
+
+/** The chat route answers failures with `{ error }` JSON; show that sentence rather than raw JSON. */
+export function readableError(error: Error): string {
+  const parsed = parsedError(error);
+  if (parsed?.scope === "daily") return "The map has reached today's request limit; try again tomorrow.";
+  if (typeof parsed?.retryAfterSeconds === "number") {
+    return `Too many requests, try again in ${Math.max(1, Math.ceil(parsed.retryAfterSeconds / 60))} min.`;
+  }
+  if (parsed?.error === "Request too large") return "This conversation is too long; start a new chat.";
+  if (typeof parsed?.error === "string") return parsed.error;
   return error.message || "Something went wrong.";
 }
 
@@ -310,7 +321,7 @@ export function ChatRail({
       }),
   );
   // A fixed id: without one the SDK picks a random id during render, which Cache Components rejects at prerender.
-  const { messages, sendMessage, status, error, stop } = useChat({ id: "wildmap", transport });
+  const { messages, sendMessage, setMessages, clearError, status, error, stop } = useChat({ id: "wildmap", transport });
   const [draft, setDraft] = useState("");
   const appliedRef = useRef<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -523,7 +534,27 @@ export function ChatRail({
                 />
               ))}
               {firstAnswerPending ? <TopoHeartbeat className="h-28 shrink-0" zoom={0.5} /> : status === "submitted" && <Thinking />}
-              {error && <ErrorCard title="Something went wrong">{readableError(error)}</ErrorCard>}
+              {error && (
+                <ErrorCard title="Something went wrong">
+                  {readableError(error)}
+                  {isConversationTooLong(error) && (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        className="font-medium underline underline-offset-2"
+                        onClick={() => {
+                          // The map keeps what is drawn; only the conversation starts over.
+                          setMessages([]);
+                          clearError();
+                        }}
+                      >
+                        New chat
+                      </button>
+                    </>
+                  )}
+                </ErrorCard>
+              )}
               <div ref={bottomRef} />
             </div>
           </div>

@@ -30,7 +30,10 @@ export type RateLimitRule = {
   windowMs: number;
 };
 
-export type RateLimitResult = { ok: true } | { ok: false; retryAfterSeconds: number };
+/** Which limit refused a request: the caller's own, or the daily cap shared by everyone. */
+export type RateLimitScope = "client" | "daily";
+
+export type RateLimitResult = { ok: true } | { ok: false; retryAfterSeconds: number; scope: RateLimitScope };
 
 const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
@@ -61,11 +64,36 @@ export function layerRules(): RateLimitRule[] {
   return [{ name: "layer", limit: envCount("RATE_LIMIT_LAYER", DEFAULT_LAYER_LIMIT), scope: "client", windowMs: TEN_MINUTES_MS }];
 }
 
-/** The caller's IP: first hop of x-forwarded-for, then x-real-ip, else "anon" (all unknown callers share one counter). */
+/**
+ * An IPv6 address reduced to its first 64 bits ("2001:db8:1:2::/64"), since one subscriber usually holds a
+ * whole /64 and could otherwise rotate addresses to dodge the limit. IPv4-mapped addresses give the IPv4.
+ * Returns null for anything that is not IPv6.
+ */
+export function ipv6Prefix(ip: string): string | null {
+  const addr = ip.replace(/^\[|\](:\d+)?$/g, "").split("%")[0];
+  if (!addr.includes(":")) return null;
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(addr);
+  if (mapped) return mapped[1];
+  const halves = addr.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  // A trailing dotted IPv4 part fills two groups.
+  const tailGroups = tail.length + (tail.at(-1)?.includes(".") ? 1 : 0);
+  const groups = halves.length === 2 ? [...head, ...Array<string>(Math.max(0, 8 - head.length - tailGroups)).fill("0"), ...tail] : head;
+  const prefix = groups.slice(0, 4);
+  if (prefix.length < 4 || !prefix.every((g) => /^[0-9a-f]{1,4}$/i.test(g))) return null;
+  return `${prefix.map((g) => parseInt(g, 16).toString(16)).join(":")}::/64`;
+}
+
+/**
+ * The caller's key: first hop of x-forwarded-for, then x-real-ip, else "anon" (all unknown callers share one
+ * counter). IPv6 callers are keyed by their /64.
+ */
 export function clientKey(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   const ip = forwarded || req.headers.get("x-real-ip")?.trim() || "anon";
-  return ip.slice(0, 64);
+  return (ipv6Prefix(ip) ?? ip).slice(0, 64);
 }
 
 type MemoryCounter = { value: number; expiresAt: number };
@@ -203,12 +231,16 @@ export async function checkRateLimit(
     const values = await store.read(checks.flatMap((c) => c.keys));
     let offset = 0;
     let waitMs = 0;
+    let scope: RateLimitScope = "client";
     for (const check of checks) {
       const wait = check.wait(values.slice(offset, offset + check.keys.length));
       offset += check.keys.length;
-      if (wait !== null) waitMs = Math.max(waitMs, wait);
+      if (wait !== null && wait > waitMs) {
+        waitMs = wait;
+        scope = check.rule.scope === "global-day" ? "daily" : "client";
+      }
     }
-    if (waitMs > 0) return { ok: false, retryAfterSeconds: Math.max(1, Math.ceil(waitMs / 1000)) };
+    if (waitMs > 0) return { ok: false, retryAfterSeconds: Math.max(1, Math.ceil(waitMs / 1000)), scope };
     await Promise.all(checks.map((c) => store.increment(c.current, c.ttlSeconds)));
     return { ok: true };
   } catch (error) {
@@ -220,10 +252,10 @@ export async function checkRateLimit(
   }
 }
 
-/** The 429 answer: plain JSON `{ error, retryAfterSeconds }` plus a Retry-After header. */
-export function tooManyRequests(retryAfterSeconds: number): Response {
+/** The 429 answer: plain JSON `{ error, retryAfterSeconds, scope }` plus a Retry-After header. */
+export function tooManyRequests(retryAfterSeconds: number, scope: RateLimitScope = "client"): Response {
   return Response.json(
-    { error: "Too many requests", retryAfterSeconds },
+    { error: "Too many requests", retryAfterSeconds, scope },
     { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
   );
 }
@@ -231,5 +263,5 @@ export function tooManyRequests(retryAfterSeconds: number): Response {
 /** Runs the rules for this request; returns the 429 response to send, or null to carry on. */
 export async function limitRequest(req: Request, rules: RateLimitRule[]): Promise<Response | null> {
   const result = await checkRateLimit(clientKey(req), rules);
-  return result.ok ? null : tooManyRequests(result.retryAfterSeconds);
+  return result.ok ? null : tooManyRequests(result.retryAfterSeconds, result.scope);
 }

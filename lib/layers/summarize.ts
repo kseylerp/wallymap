@@ -27,6 +27,40 @@ export type TilesSummary = {
 export type LayerResultSummary = GeojsonSummary | TilesSummary;
 
 const SAMPLE_SIZE = 3;
+/** Longest string value kept in a sample property; longer ones end in an ellipsis. */
+export const SAMPLE_VALUE_MAX_CHARS = 120;
+/** Most properties kept per sample feature. */
+const SAMPLE_MAX_KEYS = 20;
+/** Upper bound on the whole sample as JSON; samples are dropped from the end until it fits (one always stays). */
+export const SAMPLE_MAX_CHARS = 2_000;
+
+function clip(text: string): string {
+  return text.length > SAMPLE_VALUE_MAX_CHARS ? `${text.slice(0, SAMPLE_VALUE_MAX_CHARS - 1)}…` : text;
+}
+
+/**
+ * A sample feature's properties with every string clipped and nested values flattened to clipped JSON.
+ * Properties come from upstream users (OSM names, Commons titles), so this bounds both token cost and
+ * how much injected text can reach the model.
+ */
+function sampleProperties(properties: GeoJsonProperties): GeoJsonProperties {
+  if (properties === null) return null;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(properties).slice(0, SAMPLE_MAX_KEYS)) {
+    const name = clip(key);
+    if (typeof value === "string") out[name] = clip(value);
+    else if (value === null || typeof value === "number" || typeof value === "boolean") out[name] = value;
+    else if (value !== undefined) out[name] = clip(JSON.stringify(value) ?? "");
+  }
+  return out;
+}
+
+/** The first SAMPLE_SIZE features' clipped properties, trimmed from the end to SAMPLE_MAX_CHARS. */
+export function sampleOf(features: { properties: GeoJsonProperties }[]): GeoJsonProperties[] {
+  const sample = features.slice(0, SAMPLE_SIZE).map((f) => sampleProperties(f.properties));
+  while (sample.length > 1 && JSON.stringify(sample).length > SAMPLE_MAX_CHARS) sample.pop();
+  return sample;
+}
 
 function eachPosition(geometry: Geometry | null, visit: (p: Position) => void): void {
   if (!geometry) return;
@@ -94,7 +128,7 @@ export function summarizeLayerResult(body: LayerResult | LayerError): LayerResul
     featureCount: features.length,
     geometryTypes,
     bbox: west <= east ? [west, south, east, north] : null,
-    sample: features.slice(0, SAMPLE_SIZE).map((f) => f.properties),
+    sample: sampleOf(features),
     citation: body.citation,
     ...(body.coverageNote !== undefined && { coverageNote: body.coverageNote }),
   };

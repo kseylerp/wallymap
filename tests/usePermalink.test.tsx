@@ -90,4 +90,30 @@ describe("usePermalink", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(dispatch).not.toHaveBeenCalled();
   });
+
+  it("drops an older restore's layers when a newer link is pasted while it is still loading", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/layers") return Response.json([{ id: "osm-trails", title: "Trails", style: { geometry: "line", color: "#000" } }]);
+        if (url === "/api/layer/osm-trails") await gate;
+        return Response.json(trails);
+      }),
+    );
+    const dispatch = vi.fn();
+    const { result } = renderHook(() => usePermalink(initialMapState, dispatch));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/layers"));
+    window.history.replaceState(null, "", "/#v=-120.1,39.2,11,45,0&b=outdoors&l=osm-trails:lines:1");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/layer/osm-trails", expect.anything()));
+    window.history.replaceState(null, "", "/#v=-111.5,38.6,10,45,0&b=outdoors&l=campsites:points:1");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await waitFor(() => expect(result.current.status).toBeNull());
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const loaded = dispatch.mock.calls.filter(([a]) => a.type === "layer_loaded").map(([a]) => a.layer.id);
+    expect(loaded).toEqual(["campsites"]);
+  });
 });

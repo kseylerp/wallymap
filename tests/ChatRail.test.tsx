@@ -9,10 +9,20 @@ type ChatStub = {
   status: "ready" | "submitted" | "streaming" | "error";
   error: Error | undefined;
   sendMessage: ReturnType<typeof vi.fn>;
+  setMessages: ReturnType<typeof vi.fn>;
+  clearError: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
 };
 
-const chat: ChatStub = { messages: [], status: "ready", error: undefined, sendMessage: vi.fn(), stop: vi.fn() };
+const chat: ChatStub = {
+  messages: [],
+  status: "ready",
+  error: undefined,
+  sendMessage: vi.fn(),
+  setMessages: vi.fn(),
+  clearError: vi.fn(),
+  stop: vi.fn(),
+};
 
 vi.mock("@ai-sdk/react", () => ({ useChat: () => chat }));
 
@@ -231,8 +241,26 @@ describe("ChatRail errors", () => {
     expect(screen.getByText("Too many requests, try again in 5 min.")).toBeTruthy();
   });
 
+  it("says when the shared daily cap is reached", () => {
+    const daily = new Error(JSON.stringify({ error: "Too many requests", retryAfterSeconds: 86_000, scope: "daily" }));
+    expect(readableError(daily)).toBe("The map has reached today's request limit; try again tomorrow.");
+  });
+
+  it("offers a new chat when the conversation is too long", () => {
+    chat.messages = [user("Trails?")];
+    chat.status = "error";
+    chat.error = new Error(JSON.stringify({ error: "Request too large" }));
+    chat.setMessages = vi.fn();
+    chat.clearError = vi.fn();
+    render(rail());
+    expect(screen.getByRole("alert").textContent).toContain("This conversation is too long; start a new chat.");
+    fireEvent.click(screen.getByRole("button", { name: "New chat" }));
+    expect(chat.setMessages).toHaveBeenCalledWith([]);
+    expect(chat.clearError).toHaveBeenCalled();
+  });
+
   it("shows other route errors as their sentence", () => {
-    expect(readableError(new Error(JSON.stringify({ error: "Request too large" })))).toBe("Request too large");
+    expect(readableError(new Error(JSON.stringify({ error: "Invalid request body" })))).toBe("Invalid request body");
     expect(readableError(new Error(JSON.stringify({ error: "Too many requests", retryAfterSeconds: 5 })))).toBe(
       "Too many requests, try again in 1 min.",
     );

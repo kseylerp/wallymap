@@ -7,6 +7,7 @@ import {
   dispatchPreview,
   followZoom,
   fractionStep,
+  followPadding,
   gradientColorAt,
   lengthMeters,
   offsetPoint,
@@ -174,5 +175,32 @@ describe("clearPitch", () => {
     const [lng, lat] = offsetPoint([-120, 39], 180, 1105.74);
     expect(lng).toBeCloseTo(-120, 9);
     expect(lat).toBeCloseTo(38.99, 6);
+  });
+});
+
+describe("followPadding", () => {
+  const base = { top: 104, right: 96, bottom: 112, left: 40 };
+
+  it("pads the left past a desktop chat panel", () => {
+    const canvas = { width: 1400, height: 900 };
+    const panel = { left: 16, top: 236, right: 436, bottom: 884 };
+    expect(followPadding(base, canvas, [panel])).toEqual({ ...base, left: 460 });
+  });
+
+  it("pads the bottom past a phone dock floating above the sheet", () => {
+    const canvas = { width: 390, height: 844 };
+    const dock = { left: 12, top: 137, right: 378, bottom: 445 };
+    const sheet = { left: 0, top: 456, right: 390, bottom: 844 };
+    const pad = followPadding({ top: 104, right: 40, bottom: 428, left: 40 }, canvas, [dock, sheet]);
+    // The visible band is above the dock; the header padding shrinks so 120px stay clear.
+    expect(844 - pad.top - pad.bottom).toBeGreaterThanOrEqual(120);
+    expect(844 - pad.top - pad.bottom).toBeLessThan(123);
+    expect(pad.bottom).toBeGreaterThanOrEqual(Math.floor((844 - 137 + 24) * 0.8));
+    expect(pad.left + pad.right).toBe(80);
+  });
+
+  it("ignores obstacles outside the canvas", () => {
+    const canvas = { width: 800, height: 600 };
+    expect(followPadding(base, canvas, [{ left: 900, top: 0, right: 1000, bottom: 100 }])).toEqual(base);
   });
 });

@@ -21,6 +21,7 @@ import {
   elevationStore,
   FOLLOW_PITCH,
   followZoom,
+  followPadding,
   fractionStep,
   liveFractionStore,
   mapStateStore,
@@ -30,6 +31,7 @@ import {
   speedKmPerMin,
   turnBetween,
 } from "@/lib/render/wally/playback";
+import { visibleMapPadding } from "@/lib/render/viewportPadding";
 import { samplePoints } from "@/lib/render/wally/sample";
 import {
   arrivalPitch,
@@ -226,6 +228,10 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
   const followingRef = useRef(false);
   // The preview's position and settings as the animation loop sees them (see the playback effects below).
   const liveRef = useRef({ fraction: 0, playing: false, speed: 1, lastSent: -1, dirty: false });
+  // The camera (and padding) from before the first of back-to-back previews, kept until a real stop eases back.
+  const restoreRef = useRef<{ camera: Viewport; padding: mapboxgl.PaddingOptions } | null>(null);
+  // The route a preview is following right now (null between a cleanup and the next start).
+  const activePreviewRef = useRef<string | null>(null);
 
   // Keep the latest props reachable from map event handlers without re-creating the map.
   useEffect(() => {
@@ -439,8 +445,29 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     if (!map || !routeId || !route) return;
     const line = route.line;
     const live = liveRef.current;
-    const restore = cameraOf(map);
+    // Switching straight to another preview keeps the camera from before the first one.
+    restoreRef.current ??= { camera: cameraOf(map), padding: map.getPadding() };
+    activePreviewRef.current = routeId;
     followingRef.current = true;
+    // Keep the followed point out from under the preview dock and the chat panel or sheet.
+    const paddingNow = () => {
+      const box = map.getContainer().getBoundingClientRect();
+      const chat = document.querySelector<HTMLElement>('section[aria-label="Chat"]');
+      const dock = document.querySelector<HTMLElement>('[data-testid="preview-control"]');
+      const base = visibleMapPadding({
+        width: box.width,
+        height: box.height,
+        panelOpen: chat?.dataset.chatOpen === "true",
+        isMobile: box.width < 768,
+      });
+      const rects = [chat, dock].flatMap((el) => {
+        if (!el) return [];
+        const r = el.getBoundingClientRect();
+        return [{ left: r.left - box.left, top: r.top - box.top, right: r.right - box.left, bottom: r.bottom - box.top }];
+      });
+      return followPadding(base, box, rects);
+    };
+    let padding = paddingNow();
     let cancelled = false;
     let raf = 0;
     const timers: number[] = [];
@@ -481,9 +508,11 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       return clearPitch(distance, rises);
     };
     let last = 0;
-    let lastSentAt = 0;
     let lastReadAt = 0;
+    let lastPaddedAt = 0;
     let shownFraction = -1;
+    // The position this loop last published; a different value in the store is a scrub from the dock.
+    let published = live.fraction;
     const frame = (now: number) => {
       if (cancelled) return;
       const dt = last ? Math.min(100, now - last) : 16;
@@ -491,6 +520,15 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       const kmPerMin = speedKmPerMin(live.speed);
       let moved = live.dirty;
       live.dirty = false;
+      const outside = liveFractionStore.get();
+      if (outside?.routeId === routeId && outside.fraction !== published) {
+        live.fraction = outside.fraction;
+        moved = true;
+      }
+      if (now - lastPaddedAt > 500) {
+        lastPaddedAt = now;
+        padding = paddingNow();
+      }
       if (live.playing && live.fraction < 1) {
         live.fraction = Math.min(1, live.fraction + fractionStep(line, kmPerMin, dt));
         moved = true;
@@ -504,18 +542,19 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
         // Tilt up fast when a ridge is in the way, settle back down slowly.
         const wanted = clearPitchAt(center, bearing, zoom);
         pitch = live.playing ? pitch + (wanted - pitch) * Math.min(1, dt / (wanted < pitch ? 150 : 600)) : wanted;
-        map.jumpTo({ center, bearing, pitch, zoom });
+        map.jumpTo({ center, bearing, pitch, zoom, padding });
+        published = live.fraction;
         liveFractionStore.set({ routeId, fraction: live.fraction });
         const shown = Math.round(live.fraction * 2000) / 2000;
         if (shown !== shownFraction) {
           shownFraction = shown;
           setRouteProgress(map, routeId, live.fraction);
         }
-        // The reducer hears about the position four times a second, and always about the end.
-        if ((now - lastSentAt > 250 || live.fraction >= 1) && live.lastSent !== live.fraction) {
-          lastSentAt = now;
-          live.lastSent = live.fraction;
-          dispatchPreview({ type: "preview_tick", fraction: live.fraction });
+        // The reducer only hears about the end (which pauses there); pause and scrub send their own position,
+        // so playing does not re-render the app every frame.
+        if (live.fraction >= 1 && live.lastSent !== 1) {
+          live.lastSent = 1;
+          dispatchPreview({ type: "preview_tick", fraction: 1 });
         }
       }
       // Heights the overview missed (tiles that had not loaded) fill in as the camera passes.
@@ -532,10 +571,12 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       const kmPerMin = speedKmPerMin(live.speed);
       const center = positionAt(line, live.fraction);
       pitch = clearPitchAt(center, bearing, followZoom(kmPerMin));
+      padding = paddingNow();
       map.easeTo({
         center,
         bearing,
         pitch,
+        padding,
         zoom: followZoom(kmPerMin),
         duration: PREVIEW_EASE_MS,
         easing: easeInOut,
@@ -562,22 +603,37 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     };
     map.once("idle", startFollowing);
     timers.push(window.setTimeout(startFollowing, 1800));
-    // cameraForBounds then easeTo, rather than fitBounds: a fit's padding would stay on the map afterwards.
+    // The zoom that fits the route in the clear part of the map, centered there by the camera padding.
     const overview = map.cameraForBounds(
       [
         [west, south],
         [east, north],
       ],
-      { padding: 80, bearing: 0, pitch: 0, maxZoom: 15 },
+      {
+        padding: { top: padding.top + 40, right: padding.right + 40, bottom: padding.bottom + 40, left: padding.left + 40 },
+        bearing: 0,
+        pitch: 0,
+        maxZoom: 15,
+      },
     );
-    if (overview) map.easeTo({ ...overview, bearing: 0, pitch: 0, duration: PREVIEW_EASE_MS, easing: easeInOut });
-    else startFollowing();
+    if (overview?.zoom !== undefined) {
+      map.easeTo({
+        center: [(west + east) / 2, (south + north) / 2],
+        zoom: overview.zoom,
+        bearing: 0,
+        pitch: 0,
+        padding,
+        duration: PREVIEW_EASE_MS,
+        easing: easeInOut,
+      });
+    } else startFollowing();
 
     // Grabbing the map pauses the ride so the user can look around.
     const onDragStart = () => {
       if (live.playing) {
         live.playing = false;
-        dispatchPreview({ type: "preview_toggle" });
+        live.lastSent = live.fraction;
+        dispatchPreview({ type: "preview_tick", fraction: live.fraction }, { type: "preview_toggle" });
       }
     };
     map.on("dragstart", onDragStart);
@@ -597,16 +653,29 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       elevationStore.set(null);
       live.lastSent = -1;
       followingRef.current = false;
+      activePreviewRef.current = null;
       if (mapRef.current !== map) return; // unmounted: the map is gone
       setRouteProgress(map, routeId, null);
-      // Never leave the camera in follow pitch: back to where the preview began, at Explore pitch.
-      map.easeTo({
-        center: [restore.longitude, restore.latitude],
-        zoom: restore.zoom,
-        bearing: restore.bearing,
-        pitch: arrivalPitch(restore.zoom, stateRef.current.flattened),
-        duration: PREVIEW_EASE_MS,
-        easing: easeInOut,
+      // After this commit's effects: a preview that started in the same commit is a switch, not a stop.
+      queueMicrotask(() => {
+        if (mapRef.current !== map) return;
+        const next = activePreviewRef.current;
+        // A route made from a clicked feature exists only for its preview.
+        if (route.source === "feature" && next !== routeId) dispatchPreview({ type: "route_removed", routeId });
+        if (next) return;
+        const restore = restoreRef.current;
+        restoreRef.current = null;
+        if (!restore) return;
+        // Never leave the camera in follow pitch: back to where the preview began, at Explore pitch.
+        map.easeTo({
+          center: [restore.camera.longitude, restore.camera.latitude],
+          zoom: restore.camera.zoom,
+          bearing: restore.camera.bearing,
+          pitch: arrivalPitch(restore.camera.zoom, stateRef.current.flattened),
+          padding: restore.padding,
+          duration: PREVIEW_EASE_MS,
+          easing: easeInOut,
+        });
       });
     };
   }, [playbackRouteId]);

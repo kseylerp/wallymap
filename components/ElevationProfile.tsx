@@ -4,10 +4,10 @@ import { useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as
 import type { Series } from "@/lib/render/wally/sample";
 
 /**
- * Wally's elevation profile (spec §6, `ElevationProfileChart`): a 2px purple→coral line over a white 0.15 grid,
- * 180px tall, with a cursor at the preview position. The part already ridden is drawn bright and the rest dim, as
- * on the map. Up to three faint dotted series plot visible layers' values along the route, each scaled to its own
- * range. Dragging on the chart scrubs.
+ * Wally's elevation profile (spec §6, `ElevationProfileChart`): a 2px purple→coral line, 180px tall, with a cursor
+ * at the preview position. On the off-white surface the grid is ink at 10% (Wally's dark chart uses white at 15%).
+ * The part already ridden is drawn bright and the rest dim, as on the map. Up to three dashed dark grey series plot
+ * visible layers' values along the route, each scaled to its own range. Dragging on the chart scrubs.
  */
 
 export type Units = "mi" | "km";
@@ -26,10 +26,11 @@ type ElevationProfileProps = {
 const M_PER_MI = 1609.344;
 const FT_PER_M = 3.28084;
 const PAD = { left: 40, right: 10, top: 14, bottom: 20 };
+/** Secondary series: dark grey (ink at 60%) told apart by dash pattern (owner palette, spec §2). */
 const SERIES_STYLE = [
-  { color: "var(--sage)", dash: "0 4" },
-  { color: "var(--info)", dash: "1 5" },
-  { color: "var(--caution)", dash: "0 7" },
+  { color: "var(--ink)", dash: "4 3" },
+  { color: "var(--ink)", dash: "1 3" },
+  { color: "var(--ink)", dash: "6 2" },
 ];
 
 /** A round step (1, 2 or 5 times a power of ten) giving about `count` intervals over `range`. */
@@ -190,16 +191,16 @@ export function ElevationProfile({
             <stop offset="1" style={{ stopColor: "var(--coral)" }} />
           </linearGradient>
           <linearGradient id={`${id}-area`} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="white" stopOpacity="0.14" />
-            <stop offset="1" stopColor="white" stopOpacity="0" />
+            <stop offset="0" style={{ stopColor: "var(--accent)", stopOpacity: 0.12 }} />
+            <stop offset="1" style={{ stopColor: "var(--accent)", stopOpacity: 0 }} />
           </linearGradient>
           <clipPath id={`${id}-done`}>
             <rect x="0" y="0" width={cursorX} height={height} />
           </clipPath>
         </defs>
 
-        {/* Grid: white at 15%. */}
-        <g stroke="white" strokeOpacity="0.15" strokeWidth="1" shapeRendering="crispEdges">
+        {/* Grid: ink at 10% (Wally's white-at-15% grid, for an off-white surface). */}
+        <g stroke="var(--ink)" strokeOpacity="0.1" strokeWidth="1" shapeRendering="crispEdges">
           {chart.yTicks.map((v) => (
             <line key={`y${v}`} x1={PAD.left} x2={PAD.left + plotW} y1={chart.y(v)} y2={chart.y(v)} />
           ))}
@@ -207,7 +208,7 @@ export function ElevationProfile({
             <line key={`x${v}`} x1={chart.x(v / toUnit)} x2={chart.x(v / toUnit)} y1={PAD.top} y2={PAD.top + plotH} />
           ))}
         </g>
-        <g fill="white" fillOpacity="0.55" fontSize="10" style={{ fontVariantNumeric: "tabular-nums" }}>
+        <g fill="var(--ink-muted)" fontSize="10" style={{ fontVariantNumeric: "tabular-nums" }}>
           {chart.yTicks.map((v) => (
             <text key={`yl${v}`} x={PAD.left - 6} y={chart.y(v) + 3} textAnchor="end">
               {fmt(v)}
@@ -223,7 +224,7 @@ export function ElevationProfile({
               {i === 0 ? `0 ${units}` : fmt(v, 1)}
             </text>
           ))}
-          <text x={PAD.left - 6} y={PAD.top - 4} textAnchor="end" fillOpacity="0.4">
+          <text x={PAD.left - 6} y={PAD.top - 4} textAnchor="end" fillOpacity="0.7">
             {elevUnit}
           </text>
         </g>
@@ -234,9 +235,8 @@ export function ElevationProfile({
             d={d}
             fill="none"
             stroke={SERIES_STYLE[i].color}
-            strokeOpacity="0.75"
-            strokeWidth="1.6"
-            strokeLinecap="round"
+            strokeOpacity="0.6"
+            strokeWidth="1.5"
             strokeDasharray={SERIES_STYLE[i].dash}
           />
         ))}
@@ -260,8 +260,7 @@ export function ElevationProfile({
             x={PAD.left + plotW / 2}
             y={PAD.top + plotH / 2}
             textAnchor="middle"
-            fill="white"
-            fillOpacity="0.55"
+            fill="var(--ink-muted)"
             fontSize="12"
           >
             Reading terrain…
@@ -269,11 +268,11 @@ export function ElevationProfile({
         )}
 
         {/* The cursor: a hairline, the position on the line, and its height. */}
-        <line x1={cursorX} x2={cursorX} y1={PAD.top - 4} y2={PAD.top + plotH} stroke="white" strokeOpacity="0.6" strokeWidth="1" />
+        <line x1={cursorX} x2={cursorX} y1={PAD.top - 4} y2={PAD.top + plotH} stroke="var(--ink)" strokeOpacity="0.45" strokeWidth="1" />
         {cursorY !== null && (
           <>
-            <circle cx={cursorX} cy={cursorY} r="7" fill="white" fillOpacity="0.18" />
-            <circle cx={cursorX} cy={cursorY} r="3.5" fill="white" stroke="var(--coral)" strokeWidth="2" />
+            <circle cx={cursorX} cy={cursorY} r="7" fill="var(--coral)" fillOpacity="0.2" />
+            <circle cx={cursorX} cy={cursorY} r="3.5" fill="var(--paper)" stroke="var(--coral)" strokeWidth="2" />
           </>
         )}
       </svg>
@@ -281,7 +280,7 @@ export function ElevationProfile({
         <span
           aria-hidden
           data-testid="profile-readout"
-          className="pointer-events-none absolute top-0 rounded-full bg-white px-1.5 py-px text-[10.5px] font-semibold text-ink tabular-nums"
+          className="pointer-events-none absolute top-0 rounded-full bg-primary px-1.5 py-px text-[10.5px] font-semibold text-on-primary tabular-nums"
           style={{
             left: Math.min(width - 60, Math.max(PAD.left, cursorX - 28)),
           }}
@@ -305,7 +304,7 @@ export function SeriesLegend({ series, distancesM, fraction }: { series: Series[
   if (series.length === 0) return null;
   const total = distancesM[distancesM.length - 1] ?? 0;
   return (
-    <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-white/70">
+    <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-muted">
       {series.slice(0, 3).map((s, i) => {
         const v = nearestSample(distancesM, s.values, fraction * total);
         return (
@@ -317,14 +316,14 @@ export function SeriesLegend({ series, distancesM, fraction }: { series: Series[
                 y1="2"
                 y2="2"
                 stroke={SERIES_STYLE[i].color}
+                strokeOpacity="0.6"
                 strokeWidth="2"
-                strokeLinecap="round"
                 strokeDasharray={SERIES_STYLE[i].dash}
               />
             </svg>
             <span className="truncate">{s.title}</span>
             {v !== null && (
-              <span className="font-medium text-white tabular-nums">
+              <span className="font-medium text-ink tabular-nums">
                 {fmt(v, 1)}
                 {s.unit ? ` ${s.unit}` : ""}
               </span>

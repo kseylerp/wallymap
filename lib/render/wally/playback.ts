@@ -138,6 +138,47 @@ export function offsetPoint(from: [number, number], bearing: number, meters: num
   return [from[0] + dLng, from[1] + dLat];
 }
 
+export type Insets = { top: number; right: number; bottom: number; left: number };
+export type Rect = { left: number; top: number; right: number; bottom: number };
+
+/** Never leave less than this much map (px, each axis) for the followed point. */
+const MIN_CLEAR_PX = 120;
+const OBSTACLE_MARGIN = 24;
+
+/**
+ * Camera padding that puts the followed point in the middle of the map nobody covers: `base` (from
+ * `visibleMapPadding`) grown past each obstacle (the preview dock, the chat sheet or panel). Each obstacle pushes
+ * in from whichever side leaves the larger clear area, so a left-hand panel pads the left and a phone's bottom
+ * sheet pads the bottom. Each axis keeps at least 120px clear.
+ */
+export function followPadding(base: Insets, canvas: { width: number; height: number }, obstacles: Rect[]): Insets {
+  let pad = { ...base };
+  const area = (p: Insets) => Math.max(0, canvas.width - p.left - p.right) * Math.max(0, canvas.height - p.top - p.bottom);
+  for (const r of obstacles) {
+    const left = Math.max(0, r.left);
+    const top = Math.max(0, r.top);
+    const right = Math.min(canvas.width, r.right);
+    const bottom = Math.min(canvas.height, r.bottom);
+    if (right <= left || bottom <= top) continue;
+    const options: Insets[] = [
+      { ...pad, left: Math.max(pad.left, right + OBSTACLE_MARGIN) },
+      { ...pad, right: Math.max(pad.right, canvas.width - left + OBSTACLE_MARGIN) },
+      { ...pad, top: Math.max(pad.top, bottom + OBSTACLE_MARGIN) },
+      { ...pad, bottom: Math.max(pad.bottom, canvas.height - top + OBSTACLE_MARGIN) },
+    ];
+    pad = options.reduce((best, o) => (area(o) > area(best) ? o : best));
+  }
+  const fit = (size: number, a: number, b: number): [number, number] => {
+    const room = Math.max(0, size - MIN_CLEAR_PX);
+    if (a + b <= room) return [a, b];
+    const scale = room / (a + b);
+    return [Math.floor(a * scale), Math.floor(b * scale)];
+  };
+  [pad.top, pad.bottom] = fit(canvas.height, pad.top, pad.bottom);
+  [pad.left, pad.right] = fit(canvas.width, pad.left, pad.right);
+  return pad;
+}
+
 /** The lowest pitch the follow camera drops to when a ridge would hide the route. */
 export const MIN_CLEAR_PITCH = 35;
 /** Sight line margin over the terrain, meters. */

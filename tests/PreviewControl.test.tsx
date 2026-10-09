@@ -4,13 +4,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PreviewControl } from "@/components/PreviewControl";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type MapAction, type MapState } from "@/lib/render/state";
-import { elevationStore, mapStateStore } from "@/lib/render/wally/playback";
+import { elevationStore, liveFractionStore, mapStateStore } from "@/lib/render/wally/playback";
 
 afterEach(() => {
   cleanup();
   act(() => {
     mapStateStore.set(null);
     elevationStore.set(null);
+    liveFractionStore.set(null);
   });
 });
 
@@ -56,8 +57,11 @@ describe("PreviewControl", () => {
 
   it("toggles play with the button and Space, changes speed, and exits with Escape", () => {
     const app = mount(reduce(withRoute, { type: "preview_start", routeId: "r" }));
+    act(() => liveFractionStore.set({ routeId: "r", fraction: 0.3 }));
     fireEvent.click(screen.getByRole("button", { name: "Pause preview" }));
-    expect(app.state.playback?.playing).toBe(false);
+    // Pausing reports where the ride stopped; playing does not feed the reducer.
+    expect(app.onActions).toHaveBeenLastCalledWith([{ type: "preview_tick", fraction: 0.3 }, { type: "preview_toggle" }]);
+    expect(app.state.playback).toMatchObject({ playing: false, fraction: 0.3 });
     expect(screen.getByRole("button", { name: "Play preview" })).toBeTruthy();
 
     fireEvent.keyDown(window, { key: " ", code: "Space" });

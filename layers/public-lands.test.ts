@@ -40,6 +40,16 @@ describe("public-lands layer", () => {
     expect(r.citation.source).toContain("PAD-US");
   });
 
+  it("serves PADUS_TILES_URL instead of the default bucket when set", async () => {
+    const own = "https://tiles.example.test/padus/{z}/{x}/{y}.pbf";
+    const r = await layer.query({ ...ctx(TAHOE), env: { PADUS_TILES_URL: own } }, {});
+    if (!("kind" in r) || r.kind !== "tiles") throw new Error("expected tiles");
+    expect(r.data.url).toBe(own);
+    const blank = await layer.query({ ...ctx(TAHOE), env: { PADUS_TILES_URL: "" } }, {});
+    if (!("kind" in blank) || blank.kind !== "tiles") throw new Error("expected tiles");
+    expect(blank.data.url).toBe("https://storage.googleapis.com/wally-tiles/padus/v1/{z}/{x}/{y}.pbf");
+  });
+
   it("still returns the tiles outside the US, with a coverage note", async () => {
     const r = await layer.query(ctx(ALPS), {});
     if (!("kind" in r) || r.kind !== "tiles") throw new Error("expected tiles");

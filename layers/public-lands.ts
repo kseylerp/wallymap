@@ -1,6 +1,6 @@
 /**
  * Public land ownership from the USGS Protected Areas Database of the United States (PAD-US 4.1), served as
- * Mapbox vector tiles from WildMap's own bucket:
+ * Mapbox vector tiles from a bucket the maintainer pays for (set PADUS_TILES_URL to serve your own copy):
  *   https://storage.googleapis.com/wally-tiles/padus/v1/{z}/{x}/{y}.pbf
  * Facts from decoding live tiles on 2026-10-09 (z3 to z12 across CA, WY, CO, TX, FL, TN, DC, AK, HI):
  *   - One source layer, `padus`, polygons only (40,371 features sampled, every one a polygon).
@@ -46,6 +46,8 @@ const publicLands = defineLayer({
   coverage: "us",
   license: "Public domain (USGS PAD-US 4.1)",
   requiredEnv: [],
+  // A deployment's own copy of the tiles; the default is the maintainer's bucket.
+  optionalEnv: ["PADUS_TILES_URL"],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
   style: { geometry: "polygon", color: "#B9A6FF", fillOpacity: 0.28 },
@@ -55,7 +57,7 @@ const publicLands = defineLayer({
     return {
       kind: "tiles",
       data: {
-        url: PADUS_TILE_URL,
+        url: ctx.env.PADUS_TILES_URL || PADUS_TILE_URL,
         minzoom: 3,
         maxzoom: 12,
         format: "vector",

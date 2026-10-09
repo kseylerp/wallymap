@@ -52,11 +52,15 @@ WallyMap ships 19 data layers. The agent gets one `query_<id>` tool per layer an
 | `wilderness` | Wilderness areas | Designated wilderness boundaries | Wilderness.net / USGS | US | None | Updated occasionally |
 | `photos` | Photo density | Where geotagged photos were taken | Wikimedia Commons, Mapillary | Global | `MAPILLARY_TOKEN` (optional) | Live |
 | `physical-regions` | Named physical regions | Named mountain ranges, deserts and plateaus | Natural Earth | Global | None | Static |
-| `public-lands` | Public land ownership | Who owns and manages the land | USGS PAD-US 4.1 | US | None | Static (release 4.1) |
+| `public-lands` | Public land ownership | Who owns and manages the land | USGS PAD-US 4.1 | US | `PADUS_TILES_URL` (optional) | Static (release 4.1) |
 | `popularity` | Trail popularity estimate | Estimated popularity score (0 to 100) per trail | Computed from OSM, Commons, Mapillary | Global | `MAPILLARY_TOKEN` (optional), `OVERPASS_URL` (optional) | Computed per query |
 | `popularity-campsites` | Campsite popularity estimate | Estimated popularity score (0 to 100) per campsite | Computed from OSM, Commons, Mapillary | Global | `MAPILLARY_TOKEN` (optional), `OVERPASS_URL` (optional) | Computed per query |
 | `remoteness` | Remoteness score | Remoteness score (0 to 100) per hexagon | Computed from OSM and wilderness boundaries | Global | `OVERPASS_URL` (optional) | Computed per query |
 <!-- layers:end -->
+
+**Keys per layer.** The Key needed column says which keys each layer requires and which it only uses when set. Only `fire-detections` requires a key (`FIRMS_MAP_KEY`); without it that layer reports itself unavailable and every other layer still works.
+
+**Public lands tiles are hosted by the maintainer.** `public-lands` draws vector tiles from a Google Cloud Storage bucket the maintainer pays for (`storage.googleapis.com/wally-tiles`). Every deployment that uses the default sends its map traffic to that bucket, and the layer stops drawing if the bucket ever moves. If you deploy publicly, host your own copy and set `PADUS_TILES_URL` to its `{z}/{x}/{y}.pbf` template.
 
 **Computed layers.** `popularity`, `popularity-campsites`, and `remoteness` are estimates, not measurements. They call other layers and combine what those return. Popularity scores each trail or campsite from 0 to 100 using geotagged photos nearby (Wikimedia Commons, plus Mapillary when configured), parking capacity, a Wikipedia or Wikidata link, informal trails, and whether the feature is named; the score ranks features against each other in the current view, so it is not a visitor count. Remoteness scores each hexagon from 0 to 100 using distance to roads, wilderness boundaries, and nearby campsites. Each result lists the signals behind the score and says which ones were left out when a source failed.
 
@@ -74,11 +78,15 @@ Copy `.env.example` to `.env.local` and fill in what you need.
 | `ANTHROPIC_API_KEY` | When `MODEL_PROVIDER=anthropic` | The chat agent via Anthropic | [console.anthropic.com](https://console.anthropic.com/) |
 | `OPENAI_COMPATIBLE_BASE_URL` | When `MODEL_PROVIDER=openai-compatible` | A local or third-party model server | Your server (for example `http://localhost:11434/v1`) |
 | `OPENAI_COMPATIBLE_API_KEY` | No | Authenticated third-party endpoints | Your provider |
-| `OVERPASS_URL` | Recommended | Your own Overpass server for trails, campsites, popularity, and remoteness. The public endpoint is the fallback, but it returns HTTP 406 for geometry queries from some networks | [wiki.openstreetmap.org](https://wiki.openstreetmap.org/wiki/Overpass_API) |
+| `OVERPASS_URL` | Recommended (needed on Vercel in practice) | The Overpass endpoint for trails, campsites, popularity, and remoteness. The public `overpass-api.de` refused geometry queries from Vercel (HTTP 406), so a hosted deployment needs your own server or a keyed endpoint whose URL carries your key; keep a keyed URL secret. The public endpoint stays as the fallback | [wiki.openstreetmap.org](https://wiki.openstreetmap.org/wiki/Overpass_API) |
 | `FIRMS_MAP_KEY` | For `fire-detections` | Active fire hotspots (the layer reports itself unavailable without it) | [firms.modaps.eosdis.nasa.gov](https://firms.modaps.eosdis.nasa.gov/api/map_key/) |
 | `MAPILLARY_TOKEN` | No | Adds Mapillary street-level images to `photos` and popularity scores for views about 15 km across or smaller | [mapillary.com/developer](https://www.mapillary.com/developer) |
 | `USGS_API_KEY` | No | A higher rate limit for `streamflow` (it works without one at a low limit) | [api.waterdata.usgs.gov/signup](https://api.waterdata.usgs.gov/signup/) |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | No | Response caching and rate limiting | Vercel KV |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | No | Stores two things so every serverless instance shares them: the cache of upstream answers (kept up to a day, so a repeated query does not call the data source again) and the rate-limit counters. KV does not limit anything by itself. Without it, each instance keeps its own cache and counters in memory | Vercel KV |
+| `RATE_LIMIT_CHAT` | No | Chat requests one caller (by IP address) may send per 10 minutes. Default 20; 0 turns it off | n/a |
+| `RATE_LIMIT_LAYER` | No | `/api/layer/<id>` requests one caller may send per 10 minutes (opening a shared link makes one per layer). Default 120; 0 turns it off | n/a |
+| `RATE_LIMIT_CHAT_DAILY` | No | Chat requests all callers together may send per day (UTC). Default 500; 0 turns it off | n/a |
+| `PADUS_TILES_URL` | No | Your own copy of the `public-lands` vector tiles, as a `{z}/{x}/{y}.pbf` template. Default: the maintainer's bucket | Your storage |
 | `NEXT_PUBLIC_NATURAL_EARTH_STYLE` | No | Natural Earth 2 basemap, which the agent can switch to | Mapbox Studio |
 
 ## Bring your own key and model
@@ -113,7 +121,9 @@ The model must support tool calling.
 
 ## Before you deploy publicly
 
-Anyone who can reach your deployment can chat with the agent, and every message spends your model credits. Turn on [Vercel Deployment Protection](https://vercel.com/docs/deployment-protection) (a password, or Vercel Authentication) before you share the URL. The chat endpoint also rejects requests with more than 40 messages or a body over 256 KB, but that only limits the size of each request, not how many are sent.
+Anyone who can reach your deployment can chat with the agent, and every message spends your model credits. The layer endpoint (`/api/layer/<id>`) also spends your third-party quotas (FIRMS, Mapillary, USGS, a keyed Overpass endpoint) for whoever calls it. Turn on [Vercel Deployment Protection](https://vercel.com/docs/deployment-protection) (a password, or Vercel Authentication) before you share the URL; it covers every route, including the layer endpoint.
+
+**Rate limits.** Both endpoints limit each caller by IP address: by default 20 chat requests and 120 layer requests per 10 minutes, plus 500 chat requests per day across everyone. A caller over a limit gets HTTP 429 with a `Retry-After` header, and the chat shows how many minutes to wait. The counters live in KV when it is configured; without KV they live in each serverless instance's memory, so every instance counts separately and forgets on restart, which makes the limits much looser. The chat endpoint also rejects (HTTP 413) a request with more than 40 messages, more than 60,000 characters of text, or a body over 256 KB.
 
 ## Tests
 

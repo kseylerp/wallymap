@@ -49,6 +49,18 @@ describe("permalink encode and decode", () => {
     expect(hash).toBe("#v=-120.04321,39.1,11.5,45,-20&b=outdoors");
   });
 
+  it("leaves out ids the layer API cannot serve when given the catalog", () => {
+    const withRoute: PermalinkSource = {
+      ...source,
+      layers: { ...source.layers, "route-ab12": loaded("route-ab12") },
+      renderOps: [...source.renderOps, { layerId: "route-ab12", mode: "lines", visible: true }],
+    };
+    expect(encodeState(withRoute)).toContain("route-ab12:lines:1");
+    const hash = encodeState(withRoute, { "osm-trails": {}, campsites: {} });
+    expect(hash).not.toContain("route-");
+    expect(decodeState(hash)?.layers.map((l) => l.id)).toEqual(["osm-trails", "campsites"]);
+  });
+
   it("returns null for a malformed hash", () => {
     for (const bad of ["", "#", "#garbage", "#v=abc", "#v=1,2", "#v=500,2,3,0,0", "#b=moon", "#l=", "#v=1,,3"]) {
       expect(decodeState(bad), bad).toBeNull();

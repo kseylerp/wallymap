@@ -76,6 +76,17 @@ describe("MapPills", () => {
     download.mockRestore();
   });
 
+  it("has a hidden page heading, and drops an open confirm when the last layer goes", () => {
+    const { rerender } = render(<MapPills basemap="outdoors" onBasemapChange={() => {}} layerCount={1} mapState={initialMapState} />);
+    expect(screen.getByRole("heading", { level: 1, name: "WallyMap" }).className).toContain("sr-only");
+    fireEvent.click(screen.getByRole("button", { name: "Export view" }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    rerender(<MapPills basemap="outdoors" onBasemapChange={() => {}} layerCount={0} mapState={initialMapState} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    rerender(<MapPills basemap="outdoors" onBasemapChange={() => {}} layerCount={1} mapState={initialMapState} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("shows the restore status next to Export", () => {
     render(<MapPills basemap="outdoors" onBasemapChange={() => {}} restoreStatus="Restoring 3 layers…" />);
     expect(screen.getByRole("status").textContent).toBe("Restoring 3 layers…");

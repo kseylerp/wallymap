@@ -27,15 +27,15 @@ function round(value: number, digits: number): string {
   return String(Number(value.toFixed(digits)));
 }
 
-/** `#v=<lng>,<lat>,<zoom>,<pitch>,<bearing>&b=<basemap>&l=<id:mode:visible,...>&t=<start>,<end>` (layers by id only). */
-export function encodeState(state: PermalinkSource): string {
+/** Servable layers only (ids in `servable`, when given; route results and drawn layers are not replayable). `#v=<lng>,<lat>,<zoom>,<pitch>,<bearing>&b=<basemap>&l=<id:mode:visible,...>&t=<start>,<end>` (layers by id only). */
+export function encodeState(state: PermalinkSource, servable?: Record<string, unknown>): string {
   const { longitude, latitude, zoom, pitch, bearing } = state.viewport;
   const parts = [
     `v=${round(longitude, 5)},${round(latitude, 5)},${round(zoom, 2)},${round(pitch, 1)},${round(bearing, 1)}`,
     `b=${state.basemap}`,
   ];
   const layers = state.renderOps
-    .filter((op) => state.layers[op.layerId])
+    .filter((op) => state.layers[op.layerId] && (!servable || op.layerId in servable))
     .map((op) => `${encodeURIComponent(op.layerId)}:${op.mode}:${op.visible ? 1 : 0}`);
   if (layers.length > 0) parts.push(`l=${layers.join(",")}`);
   if (state.time) parts.push(`t=${encodeURIComponent(state.time.start)},${encodeURIComponent(state.time.end)}`);

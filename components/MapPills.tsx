@@ -70,11 +70,13 @@ export function MapPills({
       setPending(null);
     }
   }, [pending]);
-  // Without layers there is nothing to export, so a confirm left open from before is closed.
+  // Without layers there is nothing to export: a confirm left open is dropped, so it cannot reappear with the next layer.
+  if (layerCount === 0 && pending !== null) setPending(null);
   const exportOpen = pending !== null && layerCount > 0;
 
   return (
     <div data-testid="map-pills" className="flex flex-wrap items-center gap-1.5">
+      <h1 className="sr-only">WallyMap</h1>
       <div role="img" aria-label="WallyMap" title="WallyMap" className={`${PILL} rise-in size-9 justify-center`}>
         <WallyMark size={20} />
       </div>

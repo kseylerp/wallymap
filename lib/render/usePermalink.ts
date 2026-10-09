@@ -54,6 +54,8 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
   const [status, setStatus] = useState<string | null>(null);
   // Writing waits until the hash has been read (and any layers restored), or the first write would erase it.
   const [ready, setReady] = useState(() => typeof window === "undefined" || decodeState(window.location.hash) === null);
+  // The layer ids `/api/layer/<id>` can serve; a link names only those (route results and drawn layers cannot be replayed).
+  const [catalog, setCatalog] = useState<LayerCatalog | null>(null);
   const startedRef = useRef(false);
 
   useEffect(() => {
@@ -61,10 +63,11 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
     if (startedRef.current) return;
     startedRef.current = true;
     const hash = window.location.hash;
-    const decoded = decodeState(hash);
-    if (!decoded) return;
+    const wantsRestore = decodeState(hash) !== null;
     void (async () => {
       const catalog = await fetchCatalog();
+      setCatalog(catalog);
+      if (!wantsRestore) return;
       const outcome = await restoreFromPermalink(hash, dispatch, fetchLayer, {
         catalog,
         canvas: { width: window.innerWidth, height: window.innerHeight },
@@ -86,12 +89,14 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
   const { viewport, basemap, layers, renderOps } = state;
   const untouched = isInitialView(state);
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !catalog) return;
+    // An empty catalog means the request failed; then ids are not filtered rather than all dropped.
+    const servable = Object.keys(catalog).length > 0 ? catalog : undefined;
     const timer = window.setTimeout(() => {
       try {
         // A fresh page with nothing to share keeps a clean URL.
         if (untouched && window.location.hash === "") return;
-        const hash = untouched ? "" : encodeState({ viewport, basemap, layers, renderOps, time });
+        const hash = untouched ? "" : encodeState({ viewport, basemap, layers, renderOps, time }, servable);
         const url = window.location.pathname + window.location.search + hash;
         window.history.replaceState(window.history.state, "", url);
       } catch {
@@ -99,7 +104,7 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
       }
     }, WRITE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [ready, untouched, viewport, basemap, layers, renderOps, time]);
+  }, [ready, catalog, untouched, viewport, basemap, layers, renderOps, time]);
 
   return { status };
 }

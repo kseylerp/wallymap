@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { FeatureCollection, LineString } from "geojson";
+import type { CachedFetch } from "@/lib/fetch";
 
 export type BBox = [west: number, south: number, east: number, north: number];
 
@@ -41,8 +42,7 @@ export type QueryContext = {
   zoom: number;
   route?: LineString;
   env: Record<string, string | undefined>;
-  // Task 3 narrows this to a CachedFetch type.
-  fetch: typeof fetch;
+  fetch: CachedFetch;
 };
 
 export type StyleHints = {

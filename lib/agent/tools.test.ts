@@ -94,7 +94,7 @@ describe("buildTools", () => {
   it("list_layers includes vocabulary synonyms for each layer", async () => {
     const result = (await run(buildTools().list_layers, {})) as { id: string; synonyms: string[] }[];
     expect(result.find((l) => l.id === "fire-perimeters")?.synonyms).toContain("wildfire");
-    for (const layer of result) expect(Array.isArray(layer.synonyms)).toBe(true);
+    for (const layer of result) expect(layer.synonyms.length).toBeGreaterThan(0);
   });
 
   it("list_layers marks a layer whose env is missing as unavailable", async () => {

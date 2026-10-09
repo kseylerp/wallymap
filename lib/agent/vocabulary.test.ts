@@ -24,10 +24,15 @@ describe("VOCABULARY", () => {
     expect(vocabularyForPrompt().length).toBeLessThan(1800);
   });
 
-  it("appears in the system prompt: every layer id and a synonym from each group", () => {
+  it("appears in the system prompt: every layer id and every synonym", () => {
     for (const entry of VOCABULARY) {
       expect(SYSTEM_PROMPT).toContain(entry.layerId);
-      expect(SYSTEM_PROMPT).toContain(entry.synonyms[0]);
+      for (const synonym of entry.synonyms) expect(SYSTEM_PROMPT).toContain(synonym);
     }
+  });
+
+  it("keeps campsites paired with forest-roads", () => {
+    const roads = VOCABULARY.find((e) => e.layerId === "forest-roads");
+    expect(roads?.notes).toContain("also query campsites");
   });
 });

@@ -10,24 +10,24 @@ export type VocabularyEntry = {
 };
 
 export const VOCABULARY: VocabularyEntry[] = [
-  { layerId: "osm-trails", synonyms: ["trail", "hike", "path", "route"], notes: "named footpaths and tracks" },
+  { layerId: "osm-trails", synonyms: ["trail", "hike", "path"], notes: "named footpaths and tracks" },
   { layerId: "fire-perimeters", synonyms: ["wildfire", "fire", "burn", "burned area"], notes: "fire outlines; also query fire-detections" },
-  { layerId: "fire-detections", synonyms: ["active fire", "hotspot", "smoke"], notes: "satellite heat spots from recent days" },
+  { layerId: "fire-detections", synonyms: ["active fire", "hotspot"], notes: "satellite heat sources from recent days, not smoke" },
   { layerId: "forest-loss", synonyms: ["deforestation", "logging", "clearcut", "tree loss"], notes: "yearly loss; also query forest-alerts" },
   { layerId: "forest-alerts", synonyms: ["recent clearing", "new deforestation"], notes: "recent weekly alerts" },
-  { layerId: "snowpack", synonyms: ["snow", "snowpack", "SWE", "snow depth"], notes: "snow water equivalent" },
-  { layerId: "streamflow", synonyms: ["river flow", "flow", "cfs", "runoff", "gauge"], notes: "stream gauges; a river name itself is a geocode" },
-  { layerId: "forest-roads", synonyms: ["dispersed", "boondocking", "free camping", "forest road", "4x4"], notes: "roads open to motor vehicles; cannot say where dispersed camping is allowed, so tell the user to check the ranger district" },
+  { layerId: "snowpack", synonyms: ["snow", "snowpack", "SWE"], notes: "snow water equivalent, not depth or avalanche danger" },
+  { layerId: "streamflow", synonyms: ["river flow", "cfs", "runoff", "gauge", "flood", "high water"], notes: "stream gauges; a river name itself is a geocode" },
+  { layerId: "forest-roads", synonyms: ["dispersed", "boondocking", "free camping", "forest road", "off-road", "4x4"], notes: "roads open to motor vehicles; also query campsites; cannot say where dispersed camping is allowed, so tell the user to check the ranger district" },
   { layerId: "campsites", synonyms: ["campground", "campsite", "camping"], notes: "established sites" },
-  { layerId: "species", synonyms: ["wildlife", "species", "birds", "bears", "animals"], notes: "sighting records" },
-  { layerId: "photos", synonyms: ["photos", "instagrammable", "geotag", "viewpoint"], notes: "geotagged pictures" },
+  { layerId: "species", synonyms: ["wildlife", "species", "birds", "bird", "birding", "bears", "animals"], notes: "sighting records" },
+  { layerId: "photos", synonyms: ["photos", "instagrammable", "geotag", "viewpoint"], notes: "geotagged pictures; viewpoints by photo density" },
   { layerId: "public-lands", synonyms: ["public land", "BLM", "national forest", "who owns"], notes: "land ownership" },
   { layerId: "wilderness", synonyms: ["wilderness", "designated wilderness"], notes: "protected wilderness areas" },
-  { layerId: "physical-regions", synonyms: ["region", "range", "the Andes", "plateau"], notes: "named landform regions" },
-  { layerId: "night-lights", synonyms: ["night sky", "light pollution", "dark sky", "dark"], notes: "satellite night brightness" },
-  { layerId: "population", synonyms: ["people", "population", "density"], notes: "residents per area" },
+  { layerId: "physical-regions", synonyms: ["region", "the Andes", "the Rockies", "mountain range", "plateau"], notes: "named landform regions" },
+  { layerId: "night-lights", synonyms: ["night sky", "light pollution", "dark sky", "stargazing"], notes: "satellite night brightness" },
+  { layerId: "population", synonyms: ["population", "how many people", "density"], notes: "residents per area" },
   { layerId: "popularity", synonyms: ["crowded", "busy", "popular", "congestion", "foot traffic"], notes: "estimate computed from other layers" },
-  { layerId: "remoteness", synonyms: ["remote", "untouched", "wild", "solitude"], notes: "estimate computed from other layers" },
+  { layerId: "remoteness", synonyms: ["remote", "untouched", "off the grid", "solitude"], notes: "estimate computed from other layers" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

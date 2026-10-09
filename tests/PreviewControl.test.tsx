@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PreviewControl } from "@/components/PreviewControl";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type MapAction, type MapState } from "@/lib/render/state";
-import { elevationStore, liveFractionStore, mapStateStore } from "@/lib/render/wally/playback";
+import { dockCompactStore, elevationStore, liveFractionStore, mapStateStore } from "@/lib/render/wally/playback";
 
 afterEach(() => {
   cleanup();
@@ -12,6 +12,7 @@ afterEach(() => {
     mapStateStore.set(null);
     elevationStore.set(null);
     liveFractionStore.set(null);
+    dockCompactStore.set(false);
   });
 });
 
@@ -95,5 +96,17 @@ describe("PreviewControl", () => {
     expect(screen.getByText("Reading terrain…")).toBeTruthy();
     act(() => elevationStore.set({ routeId: "r", values: [1900, 1950, 2000, 1980] }));
     expect(screen.getByLabelText(/Climb .* ft, descent .* ft/)).toBeTruthy();
+  });
+
+  it("collapses to a controls strip when the map asks, with a Profile toggle", () => {
+    mount(reduce(withRoute, { type: "preview_start", routeId: "r" }));
+    expect(screen.queryByRole("button", { name: "Profile" })).toBeNull();
+    act(() => dockCompactStore.set(true));
+    expect(screen.getByTestId("preview-control").getAttribute("data-compact")).toBe("true");
+    expect(screen.queryByRole("img", { name: /Elevation profile/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Pause preview" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Profile" }));
+    expect(screen.getByRole("img", { name: /Elevation profile/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Profile" }).getAttribute("aria-pressed")).toBe("true");
   });
 });

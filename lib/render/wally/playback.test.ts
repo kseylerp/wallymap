@@ -184,23 +184,44 @@ describe("followPadding", () => {
   it("pads the left past a desktop chat panel", () => {
     const canvas = { width: 1400, height: 900 };
     const panel = { left: 16, top: 236, right: 436, bottom: 884 };
-    expect(followPadding(base, canvas, [panel])).toEqual({ ...base, left: 460 });
+    expect(followPadding(base, canvas, [panel])).toEqual({ padding: { ...base, left: 460 }, fits: true });
   });
 
-  it("pads the bottom past a phone dock floating above the sheet", () => {
+  it("keeps a phone's clear band entirely above the dock, shrinking the header inset first", () => {
     const canvas = { width: 390, height: 844 };
-    const dock = { left: 12, top: 137, right: 378, bottom: 445 };
+    const dockTop = 137;
+    const dock = { left: 12, top: dockTop, right: 378, bottom: 445 };
     const sheet = { left: 0, top: 456, right: 390, bottom: 844 };
-    const pad = followPadding({ top: 104, right: 40, bottom: 428, left: 40 }, canvas, [dock, sheet]);
-    // The visible band is above the dock; the header padding shrinks so 120px stay clear.
-    expect(844 - pad.top - pad.bottom).toBeGreaterThanOrEqual(120);
-    expect(844 - pad.top - pad.bottom).toBeLessThan(123);
-    expect(pad.bottom).toBeGreaterThanOrEqual(Math.floor((844 - 137 + 24) * 0.8));
-    expect(pad.left + pad.right).toBe(80);
+    const { padding, fits } = followPadding({ top: 104, right: 40, bottom: 428, left: 40 }, canvas, [dock, sheet]);
+    const bandTop = padding.top;
+    const bandBottom = canvas.height - padding.bottom;
+    expect(bandBottom).toBeLessThanOrEqual(dockTop);
+    expect(bandBottom - bandTop).toBeGreaterThanOrEqual(80);
+    expect(fits).toBe(true);
+  });
+
+  it("reports no fit when less than 80px is left above the dock", () => {
+    const canvas = { width: 390, height: 667 };
+    const dockTop = 60;
+    const dock = { left: 12, top: dockTop, right: 378, bottom: 350 };
+    const sheet = { left: 0, top: 360, right: 390, bottom: 667 };
+    const { padding, fits } = followPadding({ top: 104, right: 40, bottom: 340, left: 40 }, canvas, [sheet, dock]);
+    expect(fits).toBe(false);
+    expect(canvas.height - padding.bottom).toBeLessThanOrEqual(dockTop);
+    expect(canvas.height - padding.top - padding.bottom).toBeGreaterThanOrEqual(1);
+  });
+
+  it("fits again once the dock collapses to a 56px strip", () => {
+    const canvas = { width: 390, height: 667 };
+    const strip = { left: 12, top: 294, right: 378, bottom: 350 };
+    const sheet = { left: 0, top: 360, right: 390, bottom: 667 };
+    const { padding, fits } = followPadding({ top: 104, right: 40, bottom: 340, left: 40 }, canvas, [sheet, strip]);
+    expect(fits).toBe(true);
+    expect(canvas.height - padding.bottom).toBeLessThanOrEqual(strip.top);
   });
 
   it("ignores obstacles outside the canvas", () => {
     const canvas = { width: 800, height: 600 };
-    expect(followPadding(base, canvas, [{ left: 900, top: 0, right: 1000, bottom: 100 }])).toEqual(base);
+    expect(followPadding(base, canvas, [{ left: 900, top: 0, right: 1000, bottom: 100 }])).toEqual({ padding: base, fits: true });
   });
 });

@@ -18,6 +18,7 @@ import {
   clearPitch,
   DEFAULT_LOOKAHEAD_M,
   dispatchPreview,
+  dockCompactStore,
   elevationStore,
   FOLLOW_PITCH,
   followZoom,
@@ -449,7 +450,9 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     restoreRef.current ??= { camera: cameraOf(map), padding: map.getPadding() };
     activePreviewRef.current = routeId;
     followingRef.current = true;
-    // Keep the followed point out from under the preview dock and the chat panel or sheet.
+    // Keep the followed point out from under the preview dock and the chat panel or sheet. On a phone where not
+    // even 80px fit above the dock, the dock drops its profile (a 56px strip) and the padding is worked out again.
+    let repad = false;
     const paddingNow = () => {
       const box = map.getContainer().getBoundingClientRect();
       const chat = document.querySelector<HTMLElement>('section[aria-label="Chat"]');
@@ -465,7 +468,12 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
         const r = el.getBoundingClientRect();
         return [{ left: r.left - box.left, top: r.top - box.top, right: r.right - box.left, bottom: r.bottom - box.top }];
       });
-      return followPadding(base, box, rects);
+      const { padding: next, fits } = followPadding(base, box, rects);
+      if (!fits && dock && box.width < 768 && !dockCompactStore.get()) {
+        dockCompactStore.set(true);
+        repad = true;
+      }
+      return next;
     };
     let padding = paddingNow();
     let cancelled = false;
@@ -525,7 +533,8 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
         live.fraction = outside.fraction;
         moved = true;
       }
-      if (now - lastPaddedAt > 500) {
+      if (repad || now - lastPaddedAt > 500) {
+        repad = false;
         lastPaddedAt = now;
         padding = paddingNow();
       }
@@ -603,18 +612,29 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     };
     map.once("idle", startFollowing);
     timers.push(window.setTimeout(startFollowing, 1800));
-    // The zoom that fits the route in the clear part of the map, centered there by the camera padding.
+    // The route framed in the clear part of the map with up to 40px to spare; the same padding sets the zoom and
+    // the ease, so the route lands where the zoom was worked out for.
+    const box = map.getContainer().getBoundingClientRect();
+    const spare = Math.max(
+      0,
+      Math.min(
+        40,
+        Math.floor((box.width - padding.left - padding.right - 40) / 2),
+        Math.floor((box.height - padding.top - padding.bottom - 40) / 2),
+      ),
+    );
+    const framed = {
+      top: padding.top + spare,
+      right: padding.right + spare,
+      bottom: padding.bottom + spare,
+      left: padding.left + spare,
+    };
     const overview = map.cameraForBounds(
       [
         [west, south],
         [east, north],
       ],
-      {
-        padding: { top: padding.top + 40, right: padding.right + 40, bottom: padding.bottom + 40, left: padding.left + 40 },
-        bearing: 0,
-        pitch: 0,
-        maxZoom: 15,
-      },
+      { padding: framed, bearing: 0, pitch: 0, maxZoom: 15 },
     );
     if (overview?.zoom !== undefined) {
       map.easeTo({
@@ -622,7 +642,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
         zoom: overview.zoom,
         bearing: 0,
         pitch: 0,
-        padding,
+        padding: framed,
         duration: PREVIEW_EASE_MS,
         easing: easeInOut,
       });
@@ -665,6 +685,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
         if (next) return;
         const restore = restoreRef.current;
         restoreRef.current = null;
+        dockCompactStore.set(false);
         if (!restore) return;
         // Never leave the camera in follow pitch: back to where the preview began, at Explore pitch.
         map.easeTo({

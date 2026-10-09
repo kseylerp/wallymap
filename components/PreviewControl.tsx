@@ -2,10 +2,11 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { Pause, Play, X } from "lucide-react";
+import { Mountain, Pause, Play, X } from "lucide-react";
 import { ElevationProfile, SeriesLegend, type Units } from "@/components/ElevationProfile";
 import type { MapAction, MapState, RouteState } from "@/lib/render/state";
 import {
+  dockCompactStore,
   elevationStore,
   liveFractionStore,
   mapStateStore,
@@ -94,6 +95,10 @@ type DockProps = { state: MapState; route: RouteState; onActions: (actions: MapA
 function Dock({ state, route, onActions }: DockProps) {
   const playback = state.playback!;
   const [units, setUnits] = useState<Units>("mi");
+  // On a phone with no room above the full dock, the map asks for a 56px controls strip; "Profile" opens it again.
+  const compactWanted = useSyncExternalStore(dockCompactStore.subscribe, dockCompactStore.get, () => false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const compact = compactWanted && !profileOpen;
   const isPhone = useIsPhone();
   const anchorRef = useRef<HTMLSpanElement>(null);
   const [phoneBottom, setPhoneBottom] = useState<number | null>(null);
@@ -174,40 +179,45 @@ function Dock({ state, route, onActions }: DockProps) {
       role="region"
       aria-label="Route preview"
       data-testid="preview-control"
-      className="glass-strong rise-in w-full rounded-[20px] p-3 text-ink"
+      data-compact={compact}
+      className={`glass-strong rise-in w-full text-ink ${compact ? "rounded-[28px] p-2" : "rounded-[20px] p-3"}`}
     >
-      <header className="flex items-baseline gap-2 px-1">
-        <h3 className="min-w-0 flex-1 truncate font-serif text-[15px] font-semibold">{route.name ?? "Route preview"}</h3>
-        {hasHeights && (
-          <span className="shrink-0 text-[11.5px] text-ink-muted tabular-nums" aria-label={`Climb ${fmt(gain * elevScale)} ${elevUnit}, descent ${fmt(loss * elevScale)} ${elevUnit}`}>
-            <span aria-hidden>↑</span> {fmt(gain * elevScale)} {elevUnit}
-            <span aria-hidden className="ml-2">↓</span> {fmt(loss * elevScale)} {elevUnit}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={() => setUnits((u) => (u === "mi" ? "km" : "mi"))}
-          aria-label={`Show ${units === "mi" ? "kilometers" : "miles"}`}
-          className="shrink-0 rounded-full px-1.5 text-[11px] font-semibold tracking-wide text-ink-muted uppercase transition-colors hover:bg-mist hover:text-ink"
-        >
-          {units}
-        </button>
-      </header>
+      {!compact && (
+        <>
+          <header className="flex items-baseline gap-2 px-1">
+            <h3 className="min-w-0 flex-1 truncate font-serif text-[15px] font-semibold">{route.name ?? "Route preview"}</h3>
+            {hasHeights && (
+              <span className="shrink-0 text-[11.5px] text-ink-muted tabular-nums" aria-label={`Climb ${fmt(gain * elevScale)} ${elevUnit}, descent ${fmt(loss * elevScale)} ${elevUnit}`}>
+                <span aria-hidden>↑</span> {fmt(gain * elevScale)} {elevUnit}
+                <span aria-hidden className="ml-2">↓</span> {fmt(loss * elevScale)} {elevUnit}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setUnits((u) => (u === "mi" ? "km" : "mi"))}
+              aria-label={`Show ${units === "mi" ? "kilometers" : "miles"}`}
+              className="shrink-0 rounded-full px-1.5 text-[11px] font-semibold tracking-wide text-ink-muted uppercase transition-colors hover:bg-mist hover:text-ink"
+            >
+              {units}
+            </button>
+          </header>
 
-      <div className="mt-2 overflow-hidden rounded-[14px] border border-line bg-paper pt-1">
-        <ElevationProfile
-          distancesM={samples.distancesM}
-          elevations={heights}
-          series={samples.series}
-          fraction={fraction}
-          units={units}
-          height={PROFILE_HEIGHT}
-          onScrub={scrub}
-        />
-      </div>
-      <SeriesLegend series={samples.series} distancesM={samples.distancesM} fraction={fraction} />
+          <div className="mt-2 overflow-hidden rounded-[14px] border border-line bg-paper pt-1">
+            <ElevationProfile
+              distancesM={samples.distancesM}
+              elevations={heights}
+              series={samples.series}
+              fraction={fraction}
+              units={units}
+              height={PROFILE_HEIGHT}
+              onScrub={scrub}
+            />
+          </div>
+          <SeriesLegend series={samples.series} distancesM={samples.distancesM} fraction={fraction} />
+        </>
+      )}
 
-      <div className="mt-2.5 flex items-center gap-2.5">
+      <div className={`flex items-center gap-2.5 ${compact ? "" : "mt-2.5"}`}>
         <button
           type="button"
           onClick={toggle}
@@ -247,7 +257,7 @@ function Dock({ state, route, onActions }: DockProps) {
               className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
             />
           </div>
-          <p className="flex justify-between px-0.5 text-[11px] text-ink-muted tabular-nums">
+          <p className={`flex justify-between px-0.5 text-[11px] text-ink-muted tabular-nums ${compact ? "hidden" : ""}`}>
             <span>{distanceLabel(doneM, units)}</span>
             <span>{distanceLabel(total, units)}</span>
           </p>
@@ -270,6 +280,20 @@ function Dock({ state, route, onActions }: DockProps) {
           ))}
         </div>
 
+        {compactWanted && (
+          <button
+            type="button"
+            onClick={() => setProfileOpen((open) => !open)}
+            aria-label="Profile"
+            aria-pressed={profileOpen}
+            title={profileOpen ? "Hide elevation profile" : "Show elevation profile"}
+            className={`flex size-8 shrink-0 items-center justify-center rounded-full transition-colors ${
+              profileOpen ? "bg-primary text-on-primary" : "text-ink-muted hover:bg-mist hover:text-ink"
+            }`}
+          >
+            <Mountain aria-hidden size={16} strokeWidth={2} />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => dispatch({ type: "preview_stop" })}

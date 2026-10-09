@@ -141,42 +141,88 @@ export function offsetPoint(from: [number, number], bearing: number, meters: num
 export type Insets = { top: number; right: number; bottom: number; left: number };
 export type Rect = { left: number; top: number; right: number; bottom: number };
 
-/** Never leave less than this much map (px, each axis) for the followed point. */
-const MIN_CLEAR_PX = 120;
+/** The clear band the followed point gets (px, each axis): this much when the soft insets can give way... */
+const WANTED_CLEAR_PX = 120;
+/** ...and never less than this; below it the padding does not fit (a phone then collapses the preview dock). */
+export const MIN_CLEAR_PX = 80;
 const OBSTACLE_MARGIN = 24;
+
+export type FollowPadding = { padding: Insets; fits: boolean };
 
 /**
  * Camera padding that puts the followed point in the middle of the map nobody covers: `base` (from
- * `visibleMapPadding`) grown past each obstacle (the preview dock, the chat sheet or panel). Each obstacle pushes
- * in from whichever side leaves the larger clear area, so a left-hand panel pads the left and a phone's bottom
- * sheet pads the bottom. Each axis keeps at least 120px clear.
+ * `visibleMapPadding`: header, margins) grown past each obstacle (the preview dock, the chat sheet or panel). Each
+ * obstacle pushes in from whichever side leaves the larger clear area, so a left-hand panel pads the left and a
+ * phone's bottom sheet pads the bottom. Obstacle edges are hard: the clear band never reaches under one. When an
+ * axis is short of room, the soft parts (base insets and the 24px margin) shrink first to keep 120px clear. `fits`
+ * is false when the hard edges leave less than 80px on an axis; the padding then keeps the band as clear of the
+ * obstacles as the canvas allows (at least 1px).
  */
-export function followPadding(base: Insets, canvas: { width: number; height: number }, obstacles: Rect[]): Insets {
-  let pad = { ...base };
-  const area = (p: Insets) => Math.max(0, canvas.width - p.left - p.right) * Math.max(0, canvas.height - p.top - p.bottom);
-  for (const r of obstacles) {
-    const left = Math.max(0, r.left);
-    const top = Math.max(0, r.top);
-    const right = Math.min(canvas.width, r.right);
-    const bottom = Math.min(canvas.height, r.bottom);
-    if (right <= left || bottom <= top) continue;
-    const options: Insets[] = [
-      { ...pad, left: Math.max(pad.left, right + OBSTACLE_MARGIN) },
-      { ...pad, right: Math.max(pad.right, canvas.width - left + OBSTACLE_MARGIN) },
-      { ...pad, top: Math.max(pad.top, bottom + OBSTACLE_MARGIN) },
-      { ...pad, bottom: Math.max(pad.bottom, canvas.height - top + OBSTACLE_MARGIN) },
-    ];
-    pad = options.reduce((best, o) => (area(o) > area(best) ? o : best));
-  }
-  const fit = (size: number, a: number, b: number): [number, number] => {
-    const room = Math.max(0, size - MIN_CLEAR_PX);
-    if (a + b <= room) return [a, b];
-    const scale = room / (a + b);
-    return [Math.floor(a * scale), Math.floor(b * scale)];
+export function followPadding(base: Insets, canvas: { width: number; height: number }, obstacles: Rect[]): FollowPadding {
+  // The clear area some insets leave; when every choice leaves none, the least overlapped one wins.
+  const area = (p: Insets) => {
+    const w = canvas.width - p.left - p.right;
+    const h = canvas.height - p.top - p.bottom;
+    return w > 0 && h > 0 ? w * h : Math.min(w, h) - 1e9;
   };
-  [pad.top, pad.bottom] = fit(canvas.height, pad.top, pad.bottom);
-  [pad.left, pad.right] = fit(canvas.width, pad.left, pad.right);
-  return pad;
+  const boxes = obstacles
+    .map((r) => ({
+      left: Math.max(0, r.left),
+      top: Math.max(0, r.top),
+      right: Math.min(canvas.width, r.right),
+      bottom: Math.min(canvas.height, r.bottom),
+    }))
+    .filter((r) => r.right > r.left && r.bottom > r.top)
+    .slice(0, 4);
+  // Every way of clearing each obstacle from one side (at most 4^4), judged by the hard edges alone: the soft
+  // insets give way later anyway.
+  const sidesOf = (r: Rect): [keyof Insets, number][] => [
+    ["left", r.right],
+    ["right", canvas.width - r.left],
+    ["top", r.bottom],
+    ["bottom", canvas.height - r.top],
+  ];
+  let best: Insets | null = null;
+  const search = (i: number, current: Insets) => {
+    if (i === boxes.length) {
+      if (!best || area(current) > area(best)) best = current;
+      return;
+    }
+    for (const [side, edge] of sidesOf(boxes[i])) search(i + 1, { ...current, [side]: Math.max(current[side], edge) });
+  };
+  search(0, { top: 0, right: 0, bottom: 0, left: 0 });
+  const hard: Insets = best ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  const pad: Insets = { ...base };
+  for (const side of ["top", "right", "bottom", "left"] as const) {
+    if (hard[side] > 0) pad[side] = Math.max(pad[side], hard[side] + OBSTACLE_MARGIN);
+  }
+  let fits = true;
+  // Shrinks the soft parts of one axis toward the hard edges until `WANTED_CLEAR_PX` is clear.
+  const fit = (size: number, a: number, b: number, hardA: number, hardB: number): [number, number] => {
+    const excess = a + b - Math.max(0, size - WANTED_CLEAR_PX);
+    if (excess > 0) {
+      const slackA = a - hardA;
+      const slackB = b - hardB;
+      const slack = slackA + slackB;
+      const cut = Math.min(excess, slack);
+      if (slack > 0) {
+        a -= Math.ceil((cut * slackA) / slack);
+        b -= Math.ceil((cut * slackB) / slack);
+      }
+      a = Math.max(a, hardA);
+      b = Math.max(b, hardB);
+    }
+    if (size - a - b < MIN_CLEAR_PX) fits = false;
+    // Mapbox needs some canvas left; when even the hard edges overlap, keep the band against the far edge.
+    if (size - a - b < 1) {
+      b = Math.max(0, Math.min(b, size - 1));
+      a = Math.max(0, size - 1 - b);
+    }
+    return [a, b];
+  };
+  [pad.top, pad.bottom] = fit(canvas.height, pad.top, pad.bottom, hard.top, hard.bottom);
+  [pad.left, pad.right] = fit(canvas.width, pad.left, pad.right, hard.left, hard.right);
+  return { padding: pad, fits };
 }
 
 /** The lowest pitch the follow camera drops to when a ridge would hide the route. */
@@ -349,3 +395,5 @@ export const mapStateStore = createStore<MapState | null>(null);
 export const liveFractionStore = createStore<{ routeId: string; fraction: number } | null>(null);
 /** Terrain heights (meters) at the profile's sample points, filled in as terrain tiles load. */
 export const elevationStore = createStore<{ routeId: string; values: (number | null)[] } | null>(null);
+/** True when the preview dock should drop its profile so the followed point has room above it (phones only). */
+export const dockCompactStore = createStore(false);

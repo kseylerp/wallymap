@@ -48,3 +48,4 @@ import "./disturbance";
 import "./sea-ice";
 import "./fire-weather";
 import "./lakes";
+import "./drought";

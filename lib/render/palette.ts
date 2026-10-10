@@ -66,6 +66,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "protected-areas-world": "raster",
   "fire-hazard": "raster",
   "flood-zones": "raster",
+  drought: "hazard",
   popularity: "score",
   "popularity-campsites": "score",
   remoteness: "score",

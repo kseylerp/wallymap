@@ -80,6 +80,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "hardiness-zones", synonyms: ["hardiness zone", "growing zone", "planting zone"], notes: "USDA 2023 winter-cold bands, lower 48; tiles, zone not readable" },
   { layerId: "temperature-anomaly", synonyms: ["warming", "temperature anomaly", "hotter than normal"], notes: "lower-48 counties, v = °F vs 1901-2000; period, months" },
   { layerId: "pipelines-lines", synonyms: ["pipeline", "gas pipeline", "transmission line", "power line"], notes: "gas, oil, products pipelines and 100 kV+ power lines; network, minKv inputs" },
+  { layerId: "aquifers", synonyms: ["aquifer", "Ogallala", "High Plains aquifer", "principal aquifer"], notes: "US aquifer outlines by rock type (regional, 2003); for well water levels use groundwater" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

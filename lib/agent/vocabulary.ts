@@ -42,7 +42,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "fire-hazard", synonyms: ["fire risk", "fire hazard", "fire-prone"], notes: "US long-run hazard ranking, not a forecast; see fire-perimeters" },
   { layerId: "flood-zones", synonyms: ["floodplain", "flood zone", "flood risk", "FEMA"], notes: "FEMA zones, drawn only at zoom 14 or closer; streamflow is live" },
   { layerId: "drought", synonyms: ["drought", "dry spell", "water shortage"], notes: "weekly US categories D0-D4, weeks input" },
-  { layerId: "glaciers", synonyms: ["glacier", "ice field", "ice cap"], notes: "glacier outlines, v = area km2" },
+  { layerId: "glaciers", synonyms: ["glacier", "ice field", "ice cap", "glacier retreat"], notes: "dated outlines, v = area km2; scrubber plays retreat" },
   { layerId: "peaks", synonyms: ["peaks", "highest peak", "tallest mountain", "prominence", "volcano", "elevation"], notes: "named peaks, v = elevation m; prominence property" },
   { layerId: "recreation-sites", synonyms: ["trailhead", "recreation area", "picnic area", "day use", "visitor center", "OHV"], notes: "USFS and BLM developed sites, filter by kind" },
   { layerId: "wikipedia-nearby", synonyms: ["history of this place", "tell me about", "what is that", "landmark", "points of interest", "Wikipedia"], notes: "articles in view; quote extract, link url" },

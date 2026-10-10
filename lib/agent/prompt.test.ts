@@ -11,7 +11,8 @@ const REQUIRED = [
   "End with two or three follow-up questions as a bulleted list.",
   "Do not describe the popularity layer as live or real-time.",
   "Popularity and remoteness are estimates computed from other layers; say so, and never call them live.",
-  "If a layer returns a zoom_in error, shrink the bounding box once to the central quarter and retry that layer once; do not retry more than once.",
+  "Shrink a bbox only when the user NAMED a place and its geocoded bbox returns a zoom_in error: retry that layer once with the central quarter of that bbox, never more than once, and keep the camera on the place (set_view once to the geocoded bbox, never to the shrunk box).",
+  "If a query returns an error with hint zoom_in, follow the zoom_in rules; if the hint is unavailable or upstream, say that layer could not be loaded and continue with the others.",
   "The popularity layers already include the trails or campsites they score; do not query osm-trails or campsites again for the same question.",
   "Always leave your last step for the note; write the note even when some layers failed.",
   "Use render.filters to narrow a layer by an attribute the user named (e.g. sac_scale, year, acres) instead of asking the layer again.",
@@ -23,7 +24,8 @@ const REQUIRED = [
   "When the user NAMES a place (a park, town, range, lake), the current map view does not matter: geocode it, call set_view to its bbox before you query so the camera moves to the place they asked about, and pass that bbox to the query tools.",
   "When a Current map view line gives a bbox and the user says here, this area or on screen, or names no place, that bbox is where they mean: pass it to the query tools without calling geocode.",
   "When you answer from the current map view, do not call set_view; the user is already looking at that area.",
-  "A layer's area cap may be smaller than the current view; if a layer returns a zoom_in error, shrink the bounding box once to the central quarter and retry that layer once.",
+  "A layer's area cap may be smaller than the current view; when the user names no place and a layer returns a zoom_in error for the current view, do not shrink the bbox, do not retry, and do not call set_view: write one short note that says the view is too wide for that layer, gives the layer's limit in km², asks the user to zoom in (to the error's suggestedZoom when it has one) or name a place, and suggests one layer whose limit fits this view if there is one (tile layers such as land-cover have no limit).",
+  "Each turn, take the bbox from this turn's Current map view line; never reuse a bbox from an earlier turn or one you shrank, so after the user zooms in you query exactly what is on screen now.",
   "For now, today or currently questions (is the river running high, surf today, next low tide, fresh snow, any warnings), query the live layers streamflow, surf, tides, snowpack or weather-alerts, and say how old the newest reading is.",
   "For a route along a named trail, pass the trail name in route.via; if the route result carries notes (a stop that could not be placed), tell the user.",
   "Activity words have their own layers: mountain biking goes to mtb-trails, skiing and ski touring to ski-routes, climbing and bouldering to climbing, kayaking, rafting and canoeing to paddling.",
@@ -47,5 +49,14 @@ const REQUIRED = [
 describe("SYSTEM_PROMPT", () => {
   it.each(REQUIRED)("contains %s", (sentence) => {
     expect(SYSTEM_PROMPT).toContain(sentence);
+  });
+});
+
+describe("SYSTEM_PROMPT zoom_in rules", () => {
+  it("never tells the model to shrink the current view when no place was named", () => {
+    expect(SYSTEM_PROMPT).not.toContain("query a smaller bbox");
+    for (const line of SYSTEM_PROMPT.split("\n").filter((l) => l.includes("central quarter"))) {
+      expect(line).toContain("NAMED a place");
+    }
   });
 });

@@ -20,6 +20,9 @@
  * (lib/agent/view.ts). The view goes into the system prompt and into buildTools the way
  * app/api/chat/route.ts passes it, and the place then counts as located without a geocode.
  * A question without `@view` that geocodes a named place must also call set_view, or it fails.
+ * An `@view` question whose view is too wide for a layer (a zoom_in error) passes only when the model did not call
+ * set_view, got at most one zoom_in error per layer (no shrinking and retrying), and wrote a note or reply asking the
+ * user to zoom in; anything it did draw must still be rendered.
  */
 import { readFileSync } from "node:fs";
 import { generateText, stepCountIs } from "ai";
@@ -34,6 +37,16 @@ import { parseMapView, systemForTurn } from "@/lib/agent/viewContext";
 const model = process.env.MODEL_NAME ?? "(unset)";
 
 type ToolCall = { toolName: string; output?: unknown };
+
+function isZoomInError(output: unknown): boolean {
+  return !!output && typeof output === "object" && (output as { hint?: unknown }).hint === "zoom_in";
+}
+
+/** The note tool's markdown, when the call carried it. */
+function noteText(output: unknown): string {
+  const markdown = output && typeof output === "object" ? (output as { markdown?: unknown }).markdown : undefined;
+  return typeof markdown === "string" ? markdown : "";
+}
 
 function featureCount(output: unknown): number | null {
   if (!output || typeof output !== "object") return null;
@@ -119,13 +132,26 @@ async function runQuestion(raw: string): Promise<Outcome> {
     // A question that names a place (no @view, so the model had to geocode it) must also move the
     // camera there with set_view; otherwise the data loads off-screen. @view questions are exempt.
     const movedToPlace = view !== null || !seq.includes("geocode") || seq.includes("set_view");
-    const ok = routed && !queried ? noted : located && movedToPlace && queried && (drew ? rendered : answeredEmpty) && noted;
+    // A view too wide for a layer: ask the user to zoom in once, rather than shrink the box, retry and move the camera.
+    const zoomInLayers = queryCalls.filter((c) => isZoomInError(c.output)).map((c) => c.toolName);
+    const zoomInPerLayer = Math.max(0, ...zoomInLayers.map((t) => zoomInLayers.filter((u) => u === t).length));
+    const reply = [...calls.filter((c) => c.toolName === "note").map((c) => noteText(c.output)), result.text].join(" ");
+    const askedToZoomIn = /zoom(?:ing)? in|zoom closer|closer view|smaller area/i.test(reply);
+    // Also a model that read the layer's km² limit and asked without querying at all.
+    const wideView = view !== null && (zoomInLayers.length > 0 || (!queried && askedToZoomIn));
+    const wideViewOk = !seq.includes("set_view") && zoomInPerLayer <= 1 && askedToZoomIn && (drew ? rendered : true);
+    const ok = wideView
+      ? wideViewOk
+      : routed && !queried
+        ? noted
+        : located && movedToPlace && queried && (drew ? rendered : answeredEmpty) && noted;
 
     return {
       ok,
       line: {
         question,
         ...(view ? { view: view.bbox, geocoded: seq.includes("geocode"), movedCamera: seq.includes("set_view") } : {}),
+        ...(wideView ? { zoomInErrors: zoomInLayers.length, zoomInPerLayer, askedToZoomIn } : {}),
         model,
         ok,
         seq,

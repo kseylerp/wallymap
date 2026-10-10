@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BBoxSchema } from "@/layers/types";
+import { BBoxSchema, bboxAreaKm2 } from "@/layers/types";
 import type { MapView } from "@/lib/agent/view";
 
 /** The `view` a chat request may carry (lib/agent/view.ts); anything else is ignored, never an error. */
@@ -33,6 +33,14 @@ function widthKm([w, s, e, n]: [number, number, number, number]): number {
   return Math.round(km / 50) * 50;
 }
 
+/** The view's area in km², to two significant figures (417,205 reads as 420,000). */
+function areaKm2(bbox: [number, number, number, number]): number {
+  const area = bboxAreaKm2(bbox);
+  if (area < 10) return Math.max(1, Math.round(area));
+  const step = 10 ** (Math.floor(Math.log10(area)) - 1);
+  return Math.round(area / step) * step;
+}
+
 /** The per-turn system note describing what the user is looking at. */
 export function viewSystemMessage(view: MapView): string {
   const zoom = Math.round(view.zoom * 10) / 10;
@@ -47,7 +55,9 @@ export function viewSystemMessage(view: MapView): string {
     `Current map view: bbox [${view.bbox.join(", ")}] (zoom ${zoom}, about ${widthKm(view.bbox)} km across${place}). ` +
     "When the user says here, this area, on screen, around me, in view, or names no place, use this bbox directly: " +
     "do not geocode, and do not call set_view. " +
-    "When the user names a place instead, ignore this bbox: geocode the place and call set_view to its bbox before you query, so the camera moves to the place they asked about."
+    "When the user names a place instead, ignore this bbox: geocode the place and call set_view to its bbox before you query, so the camera moves to the place they asked about. " +
+    `This view covers about ${areaKm2(view.bbox).toLocaleString("en-US")} km²; a layer with a smaller km² limit returns a zoom_in error for it, ` +
+    "and then you ask the user to zoom in or name a place instead of shrinking this bbox."
   );
 }
 

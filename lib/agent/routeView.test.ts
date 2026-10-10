@@ -46,6 +46,8 @@ describe("POST /api/chat with a map view", () => {
     expect(system.startsWith(SYSTEM_PROMPT)).toBe(true);
     expect(system).toContain("Current map view: bbox [-120.2, 38.9, -119.8, 39.3] (zoom 10.5, about 35 km across)");
     expect(system).toContain("do not geocode, and do not call set_view");
+    expect(system).toContain("This view covers about 1,500 km²");
+    expect(system).toContain("ask the user to zoom in or name a place instead of shrinking this bbox");
   });
 
   it("tells the model to geocode when the view is the whole globe", async () => {

@@ -33,6 +33,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "ski-routes", synonyms: ["skiing", "ski touring", "backcountry skiing", "nordic", "cross-country skiing", "piste"], notes: "ski runs and routes, v = 1-6 difficulty" },
   { layerId: "climbing", synonyms: ["climbing", "bouldering", "crag", "rock climbing", "sport climbing"], notes: "crags and boulders, v = route count" },
   { layerId: "paddling", synonyms: ["whitewater", "kayaking", "canoe", "rafting", "rapids", "put-in", "paddling"], notes: "rapids and canoe routes, v = class 1-6; check streamflow" },
+  { layerId: "outdoor-features", synonyms: ["hut", "shelter", "spring", "water source", "viewpoint", "cave", "hot spring", "waterfall", "summit", "saddle", "pass"], notes: "backcountry points, filter by kind; peaks have v = elevation" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

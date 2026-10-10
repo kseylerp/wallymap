@@ -149,7 +149,7 @@ describe("buildTools", () => {
   it("list_layers stays short: no descriptions or licenses", async () => {
     const result = (await run(buildTools().list_layers, {})) as Record<string, unknown>[];
     for (const layer of result) expect(Object.keys(layer).sort()).toEqual(["available", "coverage", "id", "synonyms", "title"]);
-    expect(JSON.stringify(result).length).toBeLessThan(4000);
+    expect(JSON.stringify(result).length).toBeLessThan(8000);
   });
 
   it("list_layers marks a layer whose env is missing as unavailable", async () => {

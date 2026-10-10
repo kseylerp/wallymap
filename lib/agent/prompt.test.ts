@@ -23,6 +23,11 @@ const REQUIRED = [
   "When a Current map view line gives a bbox and the user says here, this area or on screen, or names no place, that bbox is where they mean: pass it to the query tools without calling geocode.",
   "When you answer from the current map view, do not call set_view; the user is already looking at that area.",
   "A layer's area cap may be smaller than the current view; if a layer returns a zoom_in error, shrink the bounding box once to the central quarter and retry that layer once.",
+  "For now, today or currently questions (is the river running high, surf today, next low tide, fresh snow, any warnings), query the live layers streamflow, surf, tides, snowpack or weather-alerts, and say how old the newest reading is.",
+  "Activity words have their own layers: mountain biking goes to mtb-trails, skiing and ski touring to ski-routes, climbing and bouldering to climbing, kayaking, rafting and canoeing to paddling.",
+  "For 'what rock is this' or 'what is this peak made of', geocode the place and call query_geologic-unit with the lon and lat of its center; geology only draws the map.",
+  "For 'how deep is this lake', call query_lakes with name set to the lake's name; v is the maximum depth in metres.",
+  "Satellite layers that change over time (greenness, snow-cover, sea-ice, flood-extent, disturbance, fire-weather, phenology, burn-severity, night-lights, forest-loss) take a date or year input; to show change, query and render once, then use set_time or compare on that layer instead of querying each date.",
 ];
 
 describe("SYSTEM_PROMPT", () => {

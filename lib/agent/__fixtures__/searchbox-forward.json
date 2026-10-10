@@ -1,0 +1,964 @@
+{
+ "nevadaFallNoProximity": {
+  "type": "FeatureCollection",
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.53334462,
+      37.72479585
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Nevada Fall",
+     "feature_type": "poi",
+     "full_address": "Yosemite National Park, California 95389, United States",
+     "place_formatted": "California 95389, United States",
+     "coordinates": {
+      "longitude": -119.53334462,
+      "latitude": 37.72479585
+     },
+     "poi_category": [
+      "tourist attraction"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.53326632,
+      37.7249632
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Nevada Fall",
+     "feature_type": "poi",
+     "full_address": "Yosemite National Park, California 95389, United States",
+     "place_formatted": "California 95389, United States",
+     "coordinates": {
+      "longitude": -119.53326632,
+      "latitude": 37.7249632
+     },
+     "poi_category": [
+      "outdoors",
+      "waterfall"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.82881,
+      37.497479
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Nevada Fall",
+     "feature_type": "street",
+     "place_formatted": "Mariposa, California 95338, United States",
+     "coordinates": {
+      "longitude": -119.82881,
+      "latitude": 37.497479
+     }
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -115.311973,
+      36.191163
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Nevada Falls Court",
+     "feature_type": "street",
+     "place_formatted": "Las Vegas, Nevada 89134, United States",
+     "coordinates": {
+      "longitude": -115.311973,
+      "latitude": 36.191163
+     }
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.248949,
+      39.598225
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Fall Street",
+     "feature_type": "street",
+     "place_formatted": "Fernley, Nevada 89408, United States",
+     "coordinates": {
+      "longitude": -119.248949,
+      "latitude": 39.598225
+     }
+    }
+   }
+  ]
+ },
+ "nevadaFallNearYosemite": {
+  "type": "FeatureCollection",
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.82881,
+      37.497479
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Nevada Fall",
+     "feature_type": "street",
+     "place_formatted": "Mariposa, California 95338, United States",
+     "coordinates": {
+      "longitude": -119.82881,
+      "latitude": 37.497479
+     }
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.53334462,
+      37.72479585
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Nevada Fall",
+     "feature_type": "poi",
+     "full_address": "Yosemite National Park, California 95389, United States",
+     "place_formatted": "California 95389, United States",
+     "coordinates": {
+      "longitude": -119.53334462,
+      "latitude": 37.72479585
+     },
+     "poi_category": [
+      "tourist attraction"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.53326632,
+      37.7249632
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Nevada Fall",
+     "feature_type": "poi",
+     "full_address": "Yosemite National Park, California 95389, United States",
+     "place_formatted": "California 95389, United States",
+     "coordinates": {
+      "longitude": -119.53326632,
+      "latitude": 37.7249632
+     },
+     "poi_category": [
+      "outdoors",
+      "waterfall"
+     ]
+    }
+   }
+  ]
+ },
+ "happyIslesNearYosemite": {
+  "type": "FeatureCollection",
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.55905313,
+      37.72992057
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Happy Isles",
+     "feature_type": "poi",
+     "full_address": "Yosemite National Park, California 95389, United States",
+     "place_formatted": "California 95389, United States",
+     "coordinates": {
+      "longitude": -119.55905313,
+      "latitude": 37.72992057
+     },
+     "poi_category": [
+      "island",
+      "outdoors"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.55979805,
+      37.73242576
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Happy Isles",
+     "feature_type": "poi",
+     "full_address": "Yosemite National Park, California 95389, United States",
+     "place_formatted": "California 95389, United States",
+     "coordinates": {
+      "longitude": -119.55979805,
+      "latitude": 37.73242576
+     },
+     "poi_category": [
+      "bus stop",
+      "transportation"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.55854338,
+      37.73258762
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Happy Isles Bridge",
+     "feature_type": "poi",
+     "full_address": "Yosemite National Park, Yosemite National Park, California 95389, United States",
+     "place_formatted": "Yosemite National Park, California 95389, United States",
+     "coordinates": {
+      "longitude": -119.55854338,
+      "latitude": 37.73258762
+     },
+     "poi_category": [
+      "bridge",
+      "transportation"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.55968858,
+      37.73043036
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Nature Center at Happy Isles",
+     "feature_type": "poi",
+     "full_address": "John Muir Trail, Yosemite National Park, California 95389, United States",
+     "place_formatted": "Yosemite National Park, California 95389, United States",
+     "coordinates": {
+      "longitude": -119.55968858,
+      "latitude": 37.73043036
+     },
+     "poi_category": [
+      "tourist attraction",
+      "tourist information center"
+     ]
+    }
+   }
+  ]
+ },
+ "happyIslesNoProximity": {
+  "type": "FeatureCollection",
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.55854338,
+      37.73258762
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Happy Isles Bridge",
+     "feature_type": "poi",
+     "full_address": "Yosemite National Park, Yosemite National Park, California 95389, United States",
+     "place_formatted": "Yosemite National Park, California 95389, United States",
+     "coordinates": {
+      "longitude": -119.55854338,
+      "latitude": 37.73258762
+     },
+     "poi_category": [
+      "bridge",
+      "transportation"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.55968858,
+      37.73043036
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Nature Center at Happy Isles",
+     "feature_type": "poi",
+     "full_address": "John Muir Trail, Yosemite National Park, California 95389, United States",
+     "place_formatted": "Yosemite National Park, California 95389, United States",
+     "coordinates": {
+      "longitude": -119.55968858,
+      "latitude": 37.73043036
+     },
+     "poi_category": [
+      "tourist attraction",
+      "tourist information center"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.55905313,
+      37.72992057
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Happy Isles",
+     "feature_type": "poi",
+     "full_address": "Yosemite National Park, California 95389, United States",
+     "place_formatted": "California 95389, United States",
+     "coordinates": {
+      "longitude": -119.55905313,
+      "latitude": 37.72992057
+     },
+     "poi_category": [
+      "island",
+      "outdoors"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -118.36329223,
+      34.06297906
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Happy Isles",
+     "feature_type": "poi",
+     "full_address": "6150 Wilshire Blvd #8, Los Angeles, California 90048, United States",
+     "place_formatted": "Los Angeles, California 90048, United States",
+     "coordinates": {
+      "longitude": -118.36329223,
+      "latitude": 34.06297906
+     },
+     "poi_category": [
+      "bridal shop",
+      "shopping"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -74.00093231,
+      40.72388115
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Happy Isles Salon",
+     "feature_type": "poi",
+     "full_address": "134 Spring St, New York, New York 10012, United States",
+     "place_formatted": "New York, New York 10012, United States",
+     "coordinates": {
+      "longitude": -74.00093231,
+      "latitude": 40.72388115
+     },
+     "poi_category": [
+      "clothes store",
+      "shopping"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      1.61048637,
+      52.17857213
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "The Happy Isles",
+     "feature_type": "poi",
+     "full_address": "Leiston, IP16 4NW, United Kingdom",
+     "place_formatted": "IP16 4NW, United Kingdom",
+     "coordinates": {
+      "longitude": 1.61048637,
+      "latitude": 52.17857213
+     },
+     "poi_category": [
+      "tourist attraction"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      86.94839938,
+      23.69213702
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Happy Isles",
+     "feature_type": "poi",
+     "full_address": "police line, Burnpur Rd, Asansol, 713301, India",
+     "place_formatted": "Burnpur Rd, Asansol, 713301, India",
+     "coordinates": {
+      "longitude": 86.94839938,
+      "latitude": 23.69213702
+     },
+     "poi_category": [
+      "food",
+      "food and drink",
+      "restaurant"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.55979805,
+      37.73242576
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Happy Isles",
+     "feature_type": "poi",
+     "full_address": "Yosemite National Park, California 95389, United States",
+     "place_formatted": "California 95389, United States",
+     "coordinates": {
+      "longitude": -119.55979805,
+      "latitude": 37.73242576
+     },
+     "poi_category": [
+      "bus stop",
+      "transportation"
+     ]
+    }
+   }
+  ]
+ },
+ "mistTrailNearYosemite": {
+  "type": "FeatureCollection",
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.55774678,
+      37.73286541
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Mist Trail and John Muir Trail Trailhead",
+     "feature_type": "poi",
+     "full_address": "Yosemite National Park, California 95389, United States",
+     "place_formatted": "California 95389, United States",
+     "coordinates": {
+      "longitude": -119.55774678,
+      "latitude": 37.73286541
+     },
+     "poi_category": [
+      "outdoors"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.53046104,
+      37.72635568
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Mist and John Muir Trail Junction Outhouse",
+     "feature_type": "poi",
+     "full_address": "Yosemite National Park, Yosemite National Park, California 95389, United States",
+     "place_formatted": "Yosemite National Park, California 95389, United States",
+     "coordinates": {
+      "longitude": -119.53046104,
+      "latitude": 37.72635568
+     },
+     "poi_category": []
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.54904011,
+      37.72610221
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Mist Trailhead",
+     "feature_type": "poi",
+     "full_address": "Mist Trail, Yosemite National Park, California 95389, United States",
+     "place_formatted": "Yosemite National Park, California 95389, United States",
+     "coordinates": {
+      "longitude": -119.54904011,
+      "latitude": 37.72610221
+     },
+     "poi_category": [
+      "outdoors"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -80.00080243,
+      40.60753777
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Blue Mist Trail",
+     "feature_type": "poi",
+     "full_address": "Irwin Road, Gibsonia, Pennsylvania 15044, United States",
+     "place_formatted": "Gibsonia, Pennsylvania 15044, United States",
+     "coordinates": {
+      "longitude": -80.00080243,
+      "latitude": 40.60753777
+     },
+     "poi_category": [
+      "outdoors",
+      "park"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -72.834447,
+      41.39206338
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Morning Mist Trail",
+     "feature_type": "poi",
+     "full_address": "410 Clintonville Rd, North Haven, Connecticut 06473, United States",
+     "place_formatted": "North Haven, Connecticut 06473, United States",
+     "coordinates": {
+      "longitude": -72.834447,
+      "latitude": 41.39206338
+     },
+     "poi_category": [
+      "outdoors"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -114.83166821,
+      50.53882598
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Mist Creek Hills Trail",
+     "feature_type": "poi",
+     "full_address": "Mist Creek Hills Trail, Canada",
+     "place_formatted": "Canada",
+     "coordinates": {
+      "longitude": -114.83166821,
+      "latitude": 50.53882598
+     },
+     "poi_category": [
+      "outdoors"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -97.05305614,
+      33.06339449
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Prairie Trail Park",
+     "feature_type": "poi",
+     "full_address": "1701 Morning Mist Trail, Flower Mound, Texas 75028, United States",
+     "place_formatted": "Flower Mound, Texas 75028, United States",
+     "coordinates": {
+      "longitude": -97.05305614,
+      "latitude": 33.06339449
+     },
+     "poi_category": [
+      "outdoors",
+      "park"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -82.373393,
+      34.944847
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Mist Trail",
+     "feature_type": "street",
+     "place_formatted": "Greenville, South Carolina 29609, United States",
+     "coordinates": {
+      "longitude": -82.373393,
+      "latitude": 34.944847
+     }
+    }
+   }
+  ]
+ },
+ "mountWashington": {
+  "type": "FeatureCollection",
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -85.542858,
+      38.048617
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Mount Washington",
+     "feature_type": "place",
+     "place_formatted": "Kentucky, United States",
+     "coordinates": {
+      "longitude": -85.542858,
+      "latitude": 38.048617
+     }
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -125.29638302,
+      49.75307823
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Mount Washington",
+     "feature_type": "poi",
+     "full_address": "Mount Washington, Canada",
+     "place_formatted": "Canada",
+     "coordinates": {
+      "longitude": -125.29638302,
+      "latitude": 49.75307823
+     },
+     "poi_category": [
+      "mountain"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -121.69929431,
+      47.42575071
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Mount Washington",
+     "feature_type": "poi",
+     "full_address": "Mount Washington Trail, North Bend, Washington 98045, United States",
+     "place_formatted": "North Bend, Washington 98045, United States",
+     "coordinates": {
+      "longitude": -121.69929431,
+      "latitude": 47.42575071
+     },
+     "poi_category": [
+      "outdoors"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -71.30330784,
+      44.27027358
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Mount Washington",
+     "feature_type": "poi",
+     "full_address": "Trinity Heights Connector, Twin Mountain, New Hampshire 03595, United States",
+     "place_formatted": "Twin Mountain, New Hampshire 03595, United States",
+     "coordinates": {
+      "longitude": -71.30330784,
+      "latitude": 44.27027358
+     },
+     "poi_category": [
+      "museum",
+      "tourist attraction"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -71.35085008,
+      44.2699882
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Mount Washington Cog Railway",
+     "feature_type": "poi",
+     "full_address": "3168 Base Station Rd, Twin Mountain, New Hampshire 03595, United States",
+     "place_formatted": "Twin Mountain, New Hampshire 03595, United States",
+     "coordinates": {
+      "longitude": -71.35085008,
+      "latitude": 44.2699882
+     },
+     "poi_category": [
+      "tourist attraction"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -71.43955542,
+      44.2573726
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Omni Mount Washington Resort & Spa",
+     "feature_type": "poi",
+     "full_address": "310 Mount Washington Hotel Rd, Bretton Woods, New Hampshire 03575, United States",
+     "place_formatted": "Bretton Woods, New Hampshire 03575, United States",
+     "coordinates": {
+      "longitude": -71.43955542,
+      "latitude": 44.2573726
+     },
+     "poi_category": [
+      "hotel",
+      "lodging"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -71.45889209,
+      43.60748139
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Mount Washington Cruises",
+     "feature_type": "poi",
+     "full_address": "211 Lakeside Ave, Laconia, New Hampshire 03246, United States",
+     "place_formatted": "Laconia, New Hampshire 03246, United States",
+     "coordinates": {
+      "longitude": -71.45889209,
+      "latitude": 43.60748139
+     },
+     "poi_category": [
+      "services",
+      "travel agent"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -73.45265367,
+      42.10409923
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Mount Washington State Forest",
+     "feature_type": "poi",
+     "full_address": "143 East St, Mount Washington, Massachusetts 01258, United States",
+     "place_formatted": "Mount Washington, Massachusetts 01258, United States",
+     "coordinates": {
+      "longitude": -73.45265367,
+      "latitude": 42.10409923
+     },
+     "poi_category": [
+      "outdoors",
+      "park",
+      "state park"
+     ]
+    }
+   }
+  ]
+ },
+ "nevadaFallNearLosAngeles": {
+  "type": "FeatureCollection",
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.53334462,
+      37.72479585
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Nevada Fall",
+     "feature_type": "poi",
+     "full_address": "Yosemite National Park, California 95389, United States",
+     "place_formatted": "California 95389, United States",
+     "coordinates": {
+      "longitude": -119.53334462,
+      "latitude": 37.72479585
+     },
+     "poi_category": [
+      "tourist attraction"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.53326632,
+      37.7249632
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Nevada Fall",
+     "feature_type": "poi",
+     "full_address": "Yosemite National Park, California 95389, United States",
+     "place_formatted": "California 95389, United States",
+     "coordinates": {
+      "longitude": -119.53326632,
+      "latitude": 37.7249632
+     },
+     "poi_category": [
+      "outdoors",
+      "waterfall"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.82881,
+      37.497479
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Nevada Fall",
+     "feature_type": "street",
+     "place_formatted": "Mariposa, California 95338, United States",
+     "coordinates": {
+      "longitude": -119.82881,
+      "latitude": 37.497479
+     }
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -115.311973,
+      36.191163
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Nevada Falls Court",
+     "feature_type": "street",
+     "place_formatted": "Las Vegas, Nevada 89134, United States",
+     "coordinates": {
+      "longitude": -115.311973,
+      "latitude": 36.191163
+     }
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "coordinates": [
+      -119.779315,
+      39.090598
+     ],
+     "type": "Point"
+    },
+    "properties": {
+     "name": "Fall Court",
+     "feature_type": "street",
+     "place_formatted": "Carson City, Nevada 89705, United States",
+     "coordinates": {
+      "longitude": -119.779315,
+      "latitude": 39.090598
+     }
+    }
+   }
+  ]
+ }
+}

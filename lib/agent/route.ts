@@ -3,7 +3,8 @@ import { z } from "zod";
 import type { BBox } from "@/layers/types";
 import { createLayerFetch, type CachedFetch } from "@/lib/fetch";
 import type { RouteState } from "@/lib/render/state";
-import { geocode as defaultGeocode, type GeocodeError, type GeocodeResult } from "./geocode";
+import { distanceKm, geocodeWaypoint, type GeocodeError, type GeocodeResult, type WaypointOptions } from "./geocode";
+import type { MapView } from "./view";
 
 /** The `route` tool (docs/superpowers/specs/2026-10-09-wallymap-m3-design.md §6): Mapbox Directions v5. */
 
@@ -111,9 +112,15 @@ export function simplifyLine(coords: Position[], maxPoints = MAX_POINTS): Positi
 }
 
 /** The Directions request URL without the token (also the cache key). */
-export function directionsPath(from: [number, number], to: [number, number], profile: RouteProfile): string {
+export function directionsPath(
+  from: [number, number],
+  to: [number, number],
+  profile: RouteProfile,
+  via: [number, number][] = [],
+): string {
   const pair = ([lng, lat]: [number, number]) => `${round(lng, 6)},${round(lat, 6)}`;
-  return `${ENDPOINT}/${profile}/${pair(from)};${pair(to)}?geometries=geojson&overview=full`;
+  const stops = [from, ...via, to].map(pair).join(";");
+  return `${ENDPOINT}/${profile}/${stops}?geometries=geojson&overview=full`;
 }
 
 let sharedFetch: CachedFetch | undefined;
@@ -123,12 +130,12 @@ let sharedFetch: CachedFetch | undefined;
  * Never throws: failures come back as `{ error }`.
  */
 export async function fetchRoute(
-  { from, to, profile }: { from: [number, number]; to: [number, number]; profile: RouteProfile },
+  { from, to, profile, via }: { from: [number, number]; to: [number, number]; profile: RouteProfile; via?: [number, number][] },
   fetchImpl?: CachedFetch,
 ): Promise<FetchedRoute | RouteError> {
   const token = process.env.MAPBOX_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   if (!token) return { error: "MAPBOX_TOKEN is not set" };
-  const path = directionsPath(from, to, profile);
+  const path = directionsPath(from, to, profile, via);
   const fetch = fetchImpl ?? (sharedFetch ??= createLayerFetch("route", { ttlSeconds: TTL_SECONDS }));
   try {
     const res = await fetch(`${path}&access_token=${encodeURIComponent(token)}`, {
@@ -177,6 +184,8 @@ export async function fetchRoute(
 export type RouteToolInput = {
   from: string | [number, number];
   to: string | [number, number];
+  /** Trails or places to pass along the way, in order ("Mist Trail"); "X via Y" in `to` means the same. */
+  via?: string | string[];
   profile?: RouteProfile;
   name?: string;
 };
@@ -187,12 +196,16 @@ export type RouteToolOutput = FetchedRoute & {
   profile: RouteProfile;
   bbox: BBox;
   /** The geocoded names of the two ends (or their coordinates, when given as coordinates). */
-  resolved: { from: string; to: string };
+  resolved: { from: string; to: string; via?: string[] };
+  /** What the model should tell the user, such as a trail that could not be located and was left out. */
+  notes?: string[];
 };
 
 type Deps = {
-  geocode?: (place: string, opts?: { proximity?: [number, number] }) => Promise<GeocodeResult | GeocodeError>;
+  geocode?: (place: string, opts?: WaypointOptions) => Promise<GeocodeResult | GeocodeError>;
   fetch?: CachedFetch;
+  /** The map the user is looking at: centres the first lookup and, at zoom 8 and closer, limits it to the view. */
+  view?: MapView | null;
 };
 
 /** The line's [west, south, east, north]. */
@@ -238,47 +251,161 @@ function label(place: string | [number, number]): string {
   return typeof place === "string" ? place.trim() : `${place[1].toFixed(4)}, ${place[0].toFixed(4)}`;
 }
 
-type Resolved = { lngLat: [number, number]; found?: string };
 
-async function resolve(
-  place: string | [number, number],
-  geocode: NonNullable<Deps["geocode"]>,
-  proximity?: [number, number],
-): Promise<Resolved | RouteError> {
-  if (typeof place !== "string") return { lngLat: place };
-  const found = await geocode(place, proximity ? { proximity } : undefined);
-  if ("error" in found) return { error: `Could not find ${place}: ${found.error}` };
-  return { lngLat: found.center, found: found.name };
+type Resolved = { lngLat: [number, number]; found?: string };
+type Geocoder = NonNullable<Deps["geocode"]>;
+
+/** At zoom 8 and closer the view is a region the user means; wider than that, only its centre biases the lookup. */
+const VIEW_BBOX_MIN_ZOOM = 8;
+/** Two waypoints more than this many view-spans apart are probably one wrong match. */
+const FAR_VIEW_SPANS = 10;
+/** A tiny view (a block or two) still allows a 50 km route. */
+const MIN_VIEW_SPAN_KM = 5;
+/** Nobody walks farther than this between two named places in one request. */
+const MAX_WALKING_KM = 300;
+/** A named trail more than this far from the place before it is a different trail with the same name. */
+const MAX_TRAIL_OFFSET_KM = 25;
+
+const KM_PER_DEGREE = 111.32;
+
+/** The longer side of the view's box in km, or null when the view has no box (the whole globe). */
+function viewSpanKm(view: MapView | null | undefined): number | null {
+  if (!view?.bbox) return null;
+  const [w, s, e, n] = view.bbox;
+  const width = (e - w) * KM_PER_DEGREE * Math.cos((((s + n) / 2) * Math.PI) / 180);
+  return Math.max(width, (n - s) * KM_PER_DEGREE);
+}
+
+/** How far apart two consecutive waypoints may be before the later one is doubted; null for no limit. */
+function farLimitKm(view: MapView | null | undefined, profile: RouteProfile): number | null {
+  const span = viewSpanKm(view);
+  const limits = [
+    span === null ? null : FAR_VIEW_SPANS * Math.max(span, MIN_VIEW_SPAN_KM),
+    profile === "walking" ? MAX_WALKING_KM : null,
+  ].filter((limit): limit is number => limit !== null);
+  return limits.length > 0 ? Math.min(...limits) : null;
+}
+
+/** A box of `radiusKm` around a point. */
+function boxAround([lng, lat]: [number, number], radiusKm: number): BBox {
+  const dLat = radiusKm / KM_PER_DEGREE;
+  const dLng = radiusKm / (KM_PER_DEGREE * Math.max(0.05, Math.cos((lat * Math.PI) / 180)));
+  return [lng - dLng, lat - dLat, lng + dLng, lat + dLat];
+}
+
+/** "Nevada Fall via the Mist Trail" is the place "Nevada Fall" and the trail "Mist Trail". */
+function splitVia(place: string | [number, number]): { place: string | [number, number]; via: string[] } {
+  if (typeof place !== "string") return { place, via: [] };
+  const match = /^(.+?)\s+via\s+(?:the\s+)?(.+)$/i.exec(place.trim());
+  return match ? { place: match[1].trim(), via: [match[2].trim()] } : { place, via: [] };
+}
+
+type Stop = { place: string | [number, number]; trail: boolean };
+
+function noneIfEmpty(opts: WaypointOptions): WaypointOptions | undefined {
+  return opts.proximity || opts.bbox ? opts : undefined;
 }
 
 /**
- * The `route` tool: geocodes place names, asks Directions for a route, and returns the line with an id (stable
- * for the same request, so asking twice replaces the drawn route), a name, and its bbox for the camera fit. A
- * failure names the places the names resolved to, so the model can see "Emerald Bay" landed in Laguna Beach and
- * retry with a fuller name.
+ * The `route` tool: geocodes place names (points of interest as well as towns, biased to the map view and to the
+ * waypoint before), asks Directions for a route, and returns the line with an id (stable for the same request, so
+ * asking twice replaces the drawn route), a name, and its bbox for the camera fit. A name that lands far from its
+ * neighbour is looked up again close to it, then reported as ambiguous instead of routed across the state. A failure
+ * names the places the names resolved to, so the model can see "Emerald Bay" landed in Laguna Beach and retry with
+ * a fuller name.
  */
 export async function runRouteTool(input: RouteToolInput, deps: Deps = {}): Promise<RouteToolOutput | RouteError> {
   const profile = input.profile ?? "walking";
-  const geocode = deps.geocode ?? defaultGeocode;
-  // The start resolves first and biases the end's lookup toward it: a route's two ends are near each other.
-  const from = await resolve(input.from, geocode);
-  if ("error" in from) return from;
-  const to = await resolve(input.to, geocode, from.lngLat);
-  if ("error" in to) return to;
-  const fetched = await fetchRoute({ from: from.lngLat, to: to.lngLat, profile }, deps.fetch);
+  const geocode: Geocoder = deps.geocode ?? geocodeWaypoint;
+  const view = deps.view ?? null;
+
+  const end = splitVia(input.to);
+  const trails = [
+    ...(Array.isArray(input.via) ? input.via : input.via ? [input.via] : []),
+    ...end.via,
+  ]
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const stops: Stop[] = [
+    { place: input.from, trail: false },
+    ...trails.map((place) => ({ place, trail: true })),
+    { place: end.place, trail: false },
+  ];
+
+  const limit = farLimitKm(view, profile);
+  const notes: string[] = [];
+  const resolved: (Resolved & { query: string })[] = [];
+  let anchor: [number, number] | undefined = view?.center;
+
+  for (const [index, stop] of stops.entries()) {
+    if (typeof stop.place !== "string") {
+      resolved.push({ lngLat: stop.place, query: label(stop.place) });
+      anchor = stop.place;
+      continue;
+    }
+    const query = stop.place.trim();
+    // The view box only helps the first lookup: later waypoints are expected to leave the screen.
+    const box = index === 0 && view?.bbox && view.zoom >= VIEW_BBOX_MIN_ZOOM ? view.bbox : undefined;
+    let found = await geocode(query, noneIfEmpty({ proximity: anchor, bbox: box, ...(stop.trail ? { trail: true } : {}) }));
+
+    if (stop.trail) {
+      // A trail is a bonus: if the geocoder cannot place it near the route, say so and route without it.
+      if ("error" in found || (anchor && distanceKm(anchor, found.center) > MAX_TRAIL_OFFSET_KM)) {
+        notes.push(`Could not locate the ${query} near the route, so the route does not follow it.`);
+        continue;
+      }
+      resolved.push({ lngLat: found.center, found: found.name, query });
+      anchor = found.center;
+      continue;
+    }
+
+    const previous = resolved[resolved.length - 1];
+    if (!("error" in found) && previous && limit !== null && distanceKm(previous.lngLat, found.center) > limit) {
+      // Probably a same-named place elsewhere: ask again, this time only near the waypoint before.
+      const first = found;
+      found = await geocode(query, { proximity: previous.lngLat, bbox: boxAround(previous.lngLat, limit / 2) });
+      if ("error" in found || distanceKm(previous.lngLat, found.center) > limit) {
+        const km = Math.round(distanceKm(previous.lngLat, first.center));
+        return {
+          error:
+            `"${query}" is ambiguous: the best match is ${first.name}, ${km} km from ${previous.found ?? previous.query}, ` +
+            `too far for a ${profile} route between two named places. Name it more fully (the park, town or state), or give coordinates.`,
+        };
+      }
+    }
+    if ("error" in found) return { error: `Could not find ${query}: ${found.error}` };
+    resolved.push({ lngLat: found.center, found: found.name, query });
+    anchor = found.center;
+  }
+
+  const from = resolved[0];
+  const to = resolved[resolved.length - 1];
+  const via = resolved.slice(1, -1);
+  const fetched = await fetchRoute(
+    { from: from.lngLat, to: to.lngLat, via: via.map((v) => v.lngLat), profile },
+    deps.fetch,
+  );
   if ("error" in fetched) {
-    const places = [from, to].flatMap((r, i) => (r.found ? [`${label([input.from, input.to][i])} resolved to ${r.found}`] : []));
+    const places = [from, to].flatMap((r) => (r.found ? [`${r.query} resolved to ${r.found}`] : []));
     return places.length > 0 ? { error: `${fetched.error} (${places.join("; ")})` } : fetched;
   }
-  const name = input.name?.trim() || `${label(input.from)} to ${label(input.to)}`;
+  const fromLabel = label(input.from);
+  const toLabel = label(end.place);
+  const trailLabel = trails.length > 0 ? ` via ${trails.join(" and ")}` : "";
+  const name = input.name?.trim() || `${fromLabel} to ${toLabel}${trailLabel}`;
   return {
-    id: routeId(`${profile} ${label(input.from)} to ${label(input.to)}`),
+    id: routeId(`${profile} ${fromLabel} to ${toLabel}${trailLabel}`),
     name,
     profile,
     ...fetched,
     bbox: lineBBox(fetched.line),
     // Where each end landed, so the model can tell the user (and catch a wrong "Emerald Bay").
-    resolved: { from: from.found ?? label(input.from), to: to.found ?? label(input.to) },
+    resolved: {
+      from: from.found ?? fromLabel,
+      to: to.found ?? toLabel,
+      ...(via.length > 0 ? { via: via.map((v) => v.found ?? v.query) } : {}),
+    },
+    ...(notes.length > 0 ? { notes } : {}),
   };
 }
 

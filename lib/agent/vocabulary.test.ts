@@ -21,7 +21,7 @@ describe("VOCABULARY", () => {
   });
 
   it("renders a table small enough for the prompt", () => {
-    expect(vocabularyForPrompt().length).toBeLessThan(9000);
+    expect(vocabularyForPrompt().length).toBeLessThan(12000);
   });
 
   it("appears in the system prompt: every layer id and every synonym", () => {

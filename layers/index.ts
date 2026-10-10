@@ -28,3 +28,4 @@ import "./glaciers";
 import "./geology";
 import "./climbing";
 import "./critical-habitat";
+import "./grazing-allotments";

@@ -63,6 +63,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "grazing-allotments": "data",
   "gbif-occurrences": "data",
   "protected-areas-world": "raster",
+  "fire-hazard": "raster",
   popularity: "score",
   "popularity-campsites": "score",
   remoteness: "score",

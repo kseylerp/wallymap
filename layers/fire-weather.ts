@@ -56,7 +56,7 @@ const fireWeather = defineLayer({
   description:
     "Daily forecast map of fire danger: the Canadian Fire Weather Index (FWI), a number built from temperature, humidity, wind and recent rain that says how easily a fire would start and spread if one began. " +
     "Colors run from green (low) through yellow and orange to red and dark red (very high to extreme); it is danger from weather and fuel dryness, not a map of actual fires. " +
-    "region global (default) is the ECMWF forecast from GWIS, worldwide at about 25 km; region europe is the sharper Meteo-France 10 km model from EFFIS, Europe, the Mediterranean and North Africa's coast only. " +
+    "region global (default) is the ECMWF forecast from GWIS, worldwide at coarse resolution (tens of kilometres); region europe is the sharper Meteo-France 10 km model from EFFIS, Europe, the Mediterranean and North Africa's coast only. " +
     "Data runs daily from January 2024 (May 2024 for europe) to about 9 days ahead for global (3 for europe); date (YYYY-MM-DD) picks the day and defaults to today, so it also works as a forecast, and the time scrubber or compare steps through days. " +
     "Use it for 'fire danger', 'fire weather', 'is it a high fire risk day', 'red flag conditions', 'will the fire spread', 'fire season outlook' for a place. " +
     "Example questions: how high is the fire danger in southern California this week, is Portugal at extreme fire risk tomorrow, compare fire danger on the day of the fire with a week before. " +

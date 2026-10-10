@@ -233,6 +233,14 @@ describe("route tool schema", () => {
     expect(schema.safeParse({ from: "a", to: "b", profile: "cycling" }).success).toBe(true);
   });
 
+  it("accepts via as a trail name or a list of them, and rejects an empty one", () => {
+    expect(schema.parse({ from: "a", to: "b", via: "Mist Trail" })).toMatchObject({ via: "Mist Trail" });
+    expect(schema.parse({ from: "a", to: "b", via: ["Mist Trail", "John Muir Trail"] })).toMatchObject({
+      via: ["Mist Trail", "John Muir Trail"],
+    });
+    expect(schema.safeParse({ from: "a", to: "b", via: "" }).success).toBe(false);
+  });
+
   it("rejects an unknown profile, an empty place, and an out-of-range coordinate", () => {
     expect(schema.safeParse({ from: "a", to: "b", profile: "flying" }).success).toBe(false);
     expect(schema.safeParse({ from: "", to: "b" }).success).toBe(false);

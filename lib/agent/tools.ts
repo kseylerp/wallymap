@@ -8,6 +8,7 @@ import type { Basemap, RenderMode, TimeMode } from "@/lib/render/state";
 import { geocode } from "./geocode";
 import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
 import { synonymsFor } from "./vocabulary";
+import type { MapView } from "./view";
 
 const BASEMAPS = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"] as const satisfies readonly Basemap[];
 /**
@@ -100,8 +101,8 @@ function queryTool(layer: Layer) {
   });
 }
 
-/** Builds the agent's tool set from the current layer registry. */
-export function buildTools(): ToolSet {
+/** Builds the agent's tool set from the current layer registry. `view` is the map the user is looking at; the route tool biases its place lookups to it. */
+export function buildTools({ view = null }: { view?: MapView | null } = {}): ToolSet {
   const tools: ToolSet = {
     list_layers: tool({
       description:
@@ -206,9 +207,16 @@ export function buildTools(): ToolSet {
         from: z.union([z.string().min(1), LngLatSchema]).describe("Start: a place name or [lon, lat]"),
         to: z.union([z.string().min(1), LngLatSchema]).describe("End: a place name or [lon, lat]"),
         profile: z.enum(ROUTE_PROFILES).default("walking"),
+        via: z
+          .union([z.string().min(1), z.array(z.string().min(1))])
+          .optional()
+          .describe(
+            "Trail names or places the route should pass, in order, for \"via the Mist Trail\" (also accepted inside to as \"Nevada Fall via the Mist Trail\"). " +
+              "A trail that cannot be located is left out and the result's notes say so; tell the user.",
+          ),
         name: z.string().optional().describe("A short name for the route; defaults to \"<from> to <to>\""),
       }),
-      execute: async (input) => runRouteTool(input),
+      execute: async (input) => runRouteTool(input, { view }),
       // The UI part keeps the line for the map; the model gets distance, duration and waypoints.
       toModelOutput: ({ output }) => ({ type: "json", value: routeOutputForModel(output) as JSONValue }),
     }),

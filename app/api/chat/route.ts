@@ -77,7 +77,7 @@ export async function POST(req: Request): Promise<Response> {
   try {
     // Setup errors name the missing env var (never its value), so they are safe to return.
     const model = getModel();
-    const tools = buildTools();
+    const tools = buildTools({ view });
     const result = streamText({
       model,
       // The view goes into this turn's system prompt only, never the history, so old views are not resent.

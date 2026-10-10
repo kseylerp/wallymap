@@ -27,3 +27,4 @@ import "./recreation-sites";
 import "./glaciers";
 import "./geology";
 import "./climbing";
+import "./critical-habitat";

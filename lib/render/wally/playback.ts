@@ -347,6 +347,65 @@ export function clearPitch(
   return MIN_CLEAR_PITCH;
 }
 
+/** The chase camera's eye stays at least this far above the ground under it (meters, exaggerated terrain). */
+export const EYE_CLEARANCE_M = 40;
+/** On steep ground the chase pitch drops no lower than this before the camera moves in instead... */
+export const CHASE_MIN_PITCH = 50;
+/** ...to no closer than this share of its distance, and only then tilts further, down to `CHASE_LAST_PITCH`. */
+export const CHASE_MIN_SCALE = 0.5;
+/** The last resort under a cliff: nearly top-down beats an eye inside the rock. */
+export const CHASE_LAST_PITCH = 20;
+
+/** Terrain height relative to the followed point at `behindM` meters behind it along the heading (null: unknown). */
+export type RiseAt = (behindM: number) => number | null;
+
+/**
+ * True when a camera `distanceM` from the point at `pitch` sees it over the terrain behind it, with its eye at least
+ * `EYE_CLEARANCE_M` above the ground straight below. Samples the ground every twelfth of the way back to the eye;
+ * the sight line, H·d/G above the point at ground distance d (eye height H, eye ground distance G), must clear each
+ * sample by 20 m (the nearest one, where the line is barely off the ground, is left out).
+ */
+export function chaseSees(distanceM: number, pitch: number, riseAt: RiseAt): boolean {
+  const p = (pitch * Math.PI) / 180;
+  const ground = distanceM * Math.sin(p);
+  const height = distanceM * Math.cos(p);
+  if (!(ground > 0)) return true;
+  for (let k = 2; k <= 12; k++) {
+    const d = (ground * k) / 12;
+    const rise = riseAt(d);
+    if (rise === null) continue;
+    const allowed = k === 12 ? height - EYE_CLEARANCE_M : (height * d) / ground - CLEARANCE_M;
+    if (rise > allowed) return false;
+  }
+  return true;
+}
+
+export type ChaseFit = { pitch: number; scale: number; clear: boolean };
+
+/**
+ * The chase camera for steep ground: the steepest pitch from `maxPitch` down to `CHASE_MIN_PITCH` (5° steps) that
+ * sees the point (`chaseSees`); failing that, the camera moves in at that pitch (×0.8 steps, to `CHASE_MIN_SCALE`
+ * of `distanceM`) so it sits in front of the wall behind; failing that, it tilts on down to `CHASE_LAST_PITCH` at
+ * the closest distance. `scale` multiplies the camera distance (zoom + log2(1/scale)); `clear` is false when even
+ * the last resort is blocked.
+ */
+export function chaseFit(distanceM: number, riseAt: RiseAt, maxPitch = FOLLOW_PITCH): ChaseFit {
+  const floor = Math.min(maxPitch, CHASE_MIN_PITCH);
+  for (let pitch = maxPitch; pitch >= floor; pitch -= 5) {
+    if (chaseSees(distanceM, pitch, riseAt)) return { pitch, scale: 1, clear: true };
+  }
+  let scale = 1;
+  while (scale * 0.8 >= CHASE_MIN_SCALE - 1e-9) {
+    scale *= 0.8;
+    if (chaseSees(distanceM * scale, floor, riseAt)) return { pitch: floor, scale, clear: true };
+  }
+  scale = CHASE_MIN_SCALE;
+  for (let pitch = floor - 5; pitch >= CHASE_LAST_PITCH; pitch -= 5) {
+    if (chaseSees(distanceM * scale, pitch, riseAt)) return { pitch, scale, clear: true };
+  }
+  return { pitch: CHASE_LAST_PITCH, scale, clear: false };
+}
+
 /** Smallest signed turn from bearing `a` to bearing `b`, in (-180, 180]. */
 export function turnBetween(a: number, b: number): number {
   const d = (((b - a) % 360) + 540) % 360 - 180;

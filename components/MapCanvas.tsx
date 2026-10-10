@@ -20,13 +20,14 @@ import {
   cameraDistanceMeters,
   chasePadding,
   chasePitch,
+  chaseFit,
   chaseZoom,
-  clearPitch,
   dispatchPreview,
   dockCompactStore,
   elevationStore,
   followPadding,
   fractionStep,
+  lengthMeters,
   liveFractionStore,
   mapStateStore,
   offsetPoint,
@@ -629,18 +630,35 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     let bearing = bearingAt(line, live.fraction, bearingLookAheadM(speedKmPerMin(live.speed)));
     let pitch = pitchNow();
     let zoom = zoomAt(speedKmPerMin(live.speed), positionAt(line, live.fraction));
-    // The chase pitch unless a ridge behind the position would hide it from the camera: then tilt up just enough.
-    const clearPitchAt = (center: [number, number], heading: number, zoomNow: number, maxPitch: number) => {
+    // Zoom levels the camera has moved in by on steep ground (see chaseFit), on top of `zoom`.
+    let closer = 0;
+    // The chase pitch, unless steep ground behind the point would hide it or put the eye within 40 m of the ground:
+    // then a lower pitch (to 50°), then a closer camera (see chaseFit in lib/render/wally/playback.ts).
+    const fitAt = (center: [number, number], heading: number, zoomNow: number) => {
+      const maxPitch = pitchNow();
       const ground = map.queryTerrainElevation(center, { exaggerated: true });
-      if (typeof ground !== "number") return maxPitch;
+      if (typeof ground !== "number") return { pitch: maxPitch, scale: 1 };
       const distance = cameraDistanceMeters(zoomNow, center[1], heightPx());
-      const rises = [1, 2, 3, 4, 5, 6, 7, 8].map((k) => {
-        const behindM = (distance * k) / 8;
-        const h = map.queryTerrainElevation(offsetPoint(center, heading + 180, behindM), { exaggerated: true });
-        return { behindM, rise: typeof h === "number" ? h - ground : null };
-      });
-      return clearPitch(distance, rises, maxPitch);
+      return chaseFit(
+        distance,
+        (behindM) => {
+          const h = map.queryTerrainElevation(offsetPoint(center, heading + 180, behindM), { exaggerated: true });
+          return typeof h === "number" ? h - ground : null;
+        },
+        maxPitch,
+      );
     };
+    // The stricter of the fit here and 1 s of travel further on with the heading the camera is turning to, so it is
+    // up before a wall arrives or swings in behind it.
+    const totalM = lengthMeters(line);
+    const fitAhead = (fraction: number, heading: number, turningTo: number, zoomNow: number, kmPerMin: number) => {
+      const here = fitAt(positionAt(line, fraction), heading, zoomNow);
+      const soon = totalM > 0 ? Math.min(1, fraction + (kmPerMin * 1000) / 60 / totalM) : fraction;
+      const next = fitAt(positionAt(line, soon), turningTo, zoomNow);
+      return { pitch: Math.min(here.pitch, next.pitch), scale: Math.min(here.scale, next.scale) };
+    };
+    // Terrain checks run ten times a second while playing (the pitch and distance ease in between).
+    let fitted = { at: -Infinity, pitch, scale: 1 };
 
     // The whole route in the clear part of the map with up to 40px to spare, tilted like an arrival (flat with 3D
     // off); the same padding sets the zoom and the ease, so the route lands where the zoom was worked out for.
@@ -708,8 +726,18 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       padding = paddingNow();
       chasePad = chasePadding(padding, heightPx());
       zoom = zoomAt(kmPerMin, center);
-      pitch = clearPitchAt(center, bearing, zoom, pitchNow());
-      map.easeTo({ center, bearing, pitch, zoom, padding: chasePad, duration: PREVIEW_DIVE_MS, easing: easeInOut });
+      const fit = fitAhead(live.fraction, bearing, bearing, zoom, kmPerMin);
+      pitch = fit.pitch;
+      closer = Math.log2(1 / fit.scale);
+      map.easeTo({
+        center,
+        bearing,
+        pitch,
+        zoom: zoom + closer,
+        padding: chasePad,
+        duration: PREVIEW_DIVE_MS,
+        easing: easeInOut,
+      });
       timers.push(
         window.setTimeout(() => {
           if (cancelled || mode !== "dive") return;
@@ -776,10 +804,18 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
         // The zoom eases too, so a speed change or the 3D button does not jump the camera.
         const wantedZoom = zoomAt(kmPerMin, center);
         zoom = live.playing ? zoom + (wantedZoom - zoom) * Math.min(1, dt / 600) : wantedZoom;
-        // Tilt up fast when a ridge is in the way, settle back down slowly.
-        const wanted = clearPitchAt(center, bearing, zoom, pitchNow());
-        pitch = live.playing ? pitch + (wanted - pitch) * Math.min(1, dt / (wanted < pitch ? 150 : 600)) : wanted;
-        map.jumpTo({ center, bearing, pitch, zoom, padding: chasePad });
+        // On steep ground tilt up and move in fast, settle back slowly.
+        if (!live.playing || now - fitted.at > 100) fitted = { at: now, ...fitAhead(live.fraction, bearing, target, zoom, kmPerMin) };
+        const fit = fitted;
+        const wantedCloser = Math.log2(1 / fit.scale);
+        if (live.playing) {
+          pitch += (fit.pitch - pitch) * Math.min(1, dt / (fit.pitch < pitch ? 150 : 600));
+          closer += (wantedCloser - closer) * Math.min(1, dt / (wantedCloser > closer ? 150 : 800));
+        } else {
+          pitch = fit.pitch;
+          closer = wantedCloser;
+        }
+        map.jumpTo({ center, bearing, pitch, zoom: zoom + closer, padding: chasePad });
         published = live.fraction;
         liveFractionStore.set({ routeId, fraction: live.fraction });
         const shown = Math.round(live.fraction * 2000) / 2000;

@@ -9,7 +9,12 @@ import {
   CHASE_POINT_AT,
   chasePadding,
   chasePitch,
+  chaseFit,
+  chaseSees,
   chaseZoom,
+  CHASE_MIN_PITCH,
+  CHASE_MIN_SCALE,
+  EYE_CLEARANCE_M,
   clearPitch,
   dispatchPreview,
   followZoom,
@@ -333,5 +338,55 @@ describe("chase camera framing", () => {
     expect(chaseZoom(10, chasePitch(true), 39.15, 900)).toBeLessThan(chaseZoom(10, chasePitch(false), 39.15, 900));
     expect(chasePitch(true)).toBe(45);
     expect(chaseZoom(10, 65, 39.15, 0)).toBe(16); // no canvas yet: the old follow zoom
+  });
+});
+
+describe("chase camera on steep ground", () => {
+  const D = 1000; // camera 1 km from the point
+  const flat = () => 0;
+  // Ground distance and height of the eye at a pitch, for building terrain around it.
+  const eye = (pitch: number, distance = D) => {
+    const p = (pitch * Math.PI) / 180;
+    return { ground: distance * Math.sin(p), height: distance * Math.cos(p) };
+  };
+
+  it("keeps the chase pitch on flat ground", () => {
+    expect(chaseFit(D, flat, 65)).toEqual({ pitch: 65, scale: 1, clear: true });
+    expect(chaseFit(D, () => null, 65)).toEqual({ pitch: 65, scale: 1, clear: true });
+  });
+
+  it("keeps the eye 40 m above a slope rising behind the point", () => {
+    // A 30° slope behind: at 65° the eye (906 m back, 423 m up) would be under it (523 m of ground there).
+    const slope: (d: number) => number = (d) => d * Math.tan(Math.PI / 6);
+    expect(chaseSees(D, 65, slope)).toBe(false);
+    const fit = chaseFit(D, slope, 65);
+    expect(fit.clear).toBe(true);
+    expect(fit.pitch).toBeGreaterThanOrEqual(CHASE_MIN_PITCH);
+    const { ground, height } = eye(fit.pitch, D * fit.scale);
+    expect(height - slope(ground)).toBeGreaterThanOrEqual(EYE_CLEARANCE_M);
+  });
+
+  it("catches a wall right under the eye that sparse samples skipped", () => {
+    // Flat to 820 m back, then a 600 m cliff: only the eye's own spot (906 m back at 65°) is inside it.
+    const cliff = (d: number) => (d > 820 ? 600 : 0);
+    expect(chaseSees(D, 65, cliff)).toBe(false);
+    const fit = chaseFit(D, cliff, 65);
+    expect(fit.clear).toBe(true);
+    expect(eye(fit.pitch, D * fit.scale).ground).toBeLessThan(820);
+  });
+
+  it("moves in at 50° before tilting lower, and reports a wall nothing clears", () => {
+    // A wall from 400 m back: no pitch from 65 to 50 at full distance clears it, but moving in does.
+    const wall = (d: number) => (d > 400 ? 2000 : 0);
+    const fit = chaseFit(D, wall, 65);
+    expect(fit.pitch).toBe(CHASE_MIN_PITCH);
+    expect(fit.scale).toBeLessThan(1);
+    expect(fit.scale).toBeGreaterThanOrEqual(CHASE_MIN_SCALE);
+    expect(fit.clear).toBe(true);
+    expect(chaseFit(D, (d) => (d > 30 ? 5000 : 0), 65)).toEqual({ pitch: 20, scale: CHASE_MIN_SCALE, clear: false });
+  });
+
+  it("starts from the flattened pitch with 3D off", () => {
+    expect(chaseFit(D, flat, 45)).toEqual({ pitch: 45, scale: 1, clear: true });
   });
 });

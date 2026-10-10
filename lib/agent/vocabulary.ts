@@ -75,6 +75,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "dams", synonyms: ["dam", "dams", "hydropower", "dam safety"], notes: "US National Inventory of Dams, v = storage acre-feet, t = year built (scrubber plays by decade); hazard is consequence, not safety" },
   { layerId: "wolf-packs", synonyms: ["wolf", "wolves"], notes: "Washington state pack ranges 2014-2025 only; year input" },
   { layerId: "methane-plumes", synonyms: ["methane", "emissions", "methane leak", "super-emitter"], notes: "Carbon Mapper plumes and sources, v = kg/h; days input" },
+  { layerId: "ports", synonyms: ["port", "busiest port", "shipping", "cargo"], notes: "150 US principal ports, v = 2023 short tons" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

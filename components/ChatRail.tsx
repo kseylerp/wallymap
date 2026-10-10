@@ -442,8 +442,12 @@ export function ChatRail({
   return (
     <>
       {!hasMessages && (
-        // Leaves room at the bottom for the input pill.
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-4 pt-16 pb-24 md:pb-20">
+        // Leaves room at the bottom for the input pill. Below the data console (z-20, components/App.tsx), and on a
+        // phone hidden while the console is open: there the card would cover all but the console's top row.
+        <div
+          data-testid="empty-state-overlay"
+          className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-4 pt-16 pb-24 md:pb-20${layerPanelOpen ? " max-md:hidden" : ""}`}
+        >
           <EmptyState onPick={send} />
         </div>
       )}

@@ -266,3 +266,21 @@ describe("ChatRail errors", () => {
     );
   });
 });
+
+describe("ChatRail suggestions card and the data console", () => {
+  beforeEach(() => {
+    chat.messages = [];
+  });
+  afterEach(cleanup);
+
+  it("sits below the console (z-20) and hides on a phone while the console is open", () => {
+    const { rerender } = render(rail());
+    const overlay = screen.getByTestId("empty-state-overlay");
+    expect(overlay.className).toContain("z-10");
+    expect(overlay.className).not.toContain("max-md:hidden");
+    rerender(
+      <ChatRail catalog={{}} renderOps={[]} getCanvasSize={canvas} onActions={noop} collapsed={false} onToggle={noop} layerPanelOpen />,
+    );
+    expect(screen.getByTestId("empty-state-overlay").className).toContain("max-md:hidden");
+  });
+});

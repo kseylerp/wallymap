@@ -58,7 +58,7 @@ Beyond the six starters, these tools shape follow-up questions. They appear in t
 
 ## Eval set
 
-`scripts/eval-model.mts --set` reads the questions below (the lines starting with `- ` between the markers), runs each one through the real agent with the model in `MODEL_NAME`, and prints one JSON line per question and a final `ok N/M`. It spends model credits and calls live data servers. The set covers trails, both fire layers, forest loss, snow, stream flow, campsites and roads, species, photos with popularity, public lands with wilderness, night lights with population, remoteness (which also looks up a named physical region), a walking route, fire year by year, a compare over time, a sources check, popular campsites, and a physical-region outline.
+`scripts/eval-model.mts --set` reads the questions below (the lines starting with `- ` between the markers), runs each one through the real agent with the model in `MODEL_NAME`, and prints one JSON line per question and a final `ok N/M`. It spends model credits and calls live data servers. The set covers trails, both fire layers, forest loss, snow, stream flow, campsites and roads, species, photos with popularity, public lands with wilderness, night lights with population, remoteness (which also looks up a named physical region), a walking route, fire year by year, a compare over time, a sources check, popular campsites, a physical-region outline, and two "here" questions that carry a map view (`@view=[w,s,e,n]`, the bbox the browser would send) and pass without a geocode.
 
 ```bash
 node --env-file=.env.local --import tsx scripts/eval-model.mts --set
@@ -84,6 +84,8 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set
 - Which sources did you use for snow near Mount Hood?
 - Which campsites around Moab look the most popular?
 - Outline the Sierra Nevada
+- What fires are here? @view=[-120.2,38.9,-119.8,39.3]
+- Any surf here? @view=[-117.35,32.6,-117.1,32.85]
 <!-- eval:end -->
 
 ## Last run

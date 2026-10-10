@@ -10,7 +10,7 @@ import { MapControls } from "@/components/MapControls";
 import { MapPills } from "@/components/MapPills";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { sendChat } from "@/lib/agent/chatBus";
-import { bboxToViewport } from "@/lib/render/deck";
+import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import { askAboutText, featureBBox } from "@/lib/render/inspect";
 import { usePermalink } from "@/lib/render/usePermalink";
 import { isComparable } from "@/lib/render/compareView";
@@ -145,6 +145,7 @@ export function App() {
   }, [state]);
   const deselect = useCallback(() => dispatch({ type: "deselect" }), []);
   const project = useCallback((lngLat: [number, number]) => mapRef.current?.project(lngLat) ?? null, []);
+  const getView = useCallback((padding: Padding) => mapRef.current?.getView(padding) ?? null, []);
   const onCameraChange = useCallback(
     (listener: () => void) => mapRef.current?.onCameraChange(listener) ?? (() => {}),
     [],
@@ -277,6 +278,7 @@ export function App() {
         catalog={catalog}
         renderOps={state.renderOps}
         getCanvasSize={getCanvasSize}
+        getView={getView}
         onActions={onActions}
         collapsed={collapsed}
         onToggle={toggle}

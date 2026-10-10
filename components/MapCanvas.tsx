@@ -9,8 +9,9 @@ import { syncHeatLayers, syncSatelliteHybrid, syncTileLayers } from "@/component
 import { ensureRouteImages, setRouteProgress, syncRouteLayers } from "@/components/routeLayers";
 import { basemapStyleUrl } from "@/lib/render/basemaps";
 import { swipeStore } from "@/lib/render/compareView";
-import { buildDeckLayerSets } from "@/lib/render/deck";
+import { buildDeckLayerSets, type Padding } from "@/lib/render/deck";
 import { pickToSelection, type DeckPick } from "@/lib/render/inspect";
+import { viewFromCamera, type MapView } from "@/lib/agent/view";
 import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
 import { visibleState } from "@/lib/render/view";
 import {
@@ -65,6 +66,8 @@ export type MapHandle = {
   project: (lngLat: [number, number]) => { x: number; y: number } | null;
   /** Calls `listener` on every camera frame and resize; returns the unsubscribe function. */
   onCameraChange: (listener: () => void) => () => void;
+  /** What the map shows right now inside `padding` (the screen the panels leave uncovered), for the chat request. */
+  getView: (padding?: Padding) => MapView | null;
 };
 
 type MapCanvasProps = {
@@ -97,6 +100,31 @@ function cameraOf(map: mapboxgl.Map): Viewport {
     pitch: map.getPitch(),
     bearing: map.getBearing(),
   };
+}
+
+/** The live map's view inside `padding`: the map points under the uncovered rectangle's corners and edge midpoints. */
+function viewOf(map: mapboxgl.Map, padding: Padding = { top: 0, right: 0, bottom: 0, left: 0 }): MapView {
+  const { lng, lat } = map.getCenter();
+  const canvas = map.getCanvas();
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  const left = Math.min(padding.left, width - 1);
+  const right = Math.max(left + 1, width - padding.right);
+  const top = Math.min(padding.top, height - 1);
+  const bottom = Math.max(top + 1, height - padding.bottom);
+  const xs = [left, (left + right) / 2, right];
+  const ys = [top, (top + bottom) / 2, bottom];
+  const points: [number, number][] = [];
+  for (const x of xs) {
+    for (const y of ys) {
+      if (x === xs[1] && y === ys[1]) continue;
+      const p = map.unproject([x, y]);
+      if (Number.isFinite(p.lng) && Number.isFinite(p.lat)) points.push([p.lng, p.lat]);
+    }
+  }
+  const b = map.getBounds();
+  const bounds: [number, number, number, number] | null = b ? [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()] : null;
+  return viewFromCamera({ center: [lng, lat], zoom: map.getZoom(), points, bounds });
 }
 
 function sameViewport(a: Viewport, b: Viewport): boolean {
@@ -312,6 +340,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
           map.off("resize", listener);
         };
       },
+      getView: (padding) => (mapRef.current ? viewOf(mapRef.current, padding) : null),
     }),
     [],
   );

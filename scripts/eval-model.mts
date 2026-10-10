@@ -13,6 +13,10 @@
  * anything that came back was rendered (render or compare), the model
  * wrote a note (also when a layer errored or returned nothing), and the run finished without
  * throwing. A route-only question passes when the route tool ran and a note followed.
+ *
+ * A question may end with `@view=[w,s,e,n]`, the map view the browser would send with it
+ * (lib/agent/view.ts). The view goes into the system prompt the way app/api/chat/route.ts
+ * puts it there, and the place then counts as located without a geocode.
  */
 import { readFileSync } from "node:fs";
 import { generateText, stepCountIs } from "ai";
@@ -20,6 +24,8 @@ import "@/layers";
 import { getModel } from "@/lib/agent/provider";
 import { buildTools } from "@/lib/agent/tools";
 import { SYSTEM_PROMPT } from "@/lib/agent/prompt";
+import type { MapView } from "@/lib/agent/view";
+import { parseMapView, systemForTurn } from "@/lib/agent/viewContext";
 
 
 const model = process.env.MODEL_NAME ?? "(unset)";
@@ -52,13 +58,27 @@ function readEvalSet(): string[] {
 
 type Outcome = { ok: boolean; line: Record<string, unknown> };
 
-async function runQuestion(question: string): Promise<Outcome> {
+/** Splits a trailing `@view=[w,s,e,n]` off a question into the view a ~1000px-wide map would send for that box. */
+function splitView(raw: string): { question: string; view: MapView | null } {
+  const m = raw.match(/^(.*?)\s*@view=(\[[^\]]*\])\s*$/);
+  if (!m) return { question: raw, view: null };
+  const bbox: unknown = JSON.parse(m[2]);
+  if (!Array.isArray(bbox) || bbox.length !== 4) throw new Error(`Bad @view on: ${raw}`);
+  const [w, s, e, n] = bbox as number[];
+  const zoom = Math.round(Math.log2((360 / (e - w)) * (1000 / 512)) * 10) / 10;
+  const view = parseMapView({ bbox, zoom, center: [(w + e) / 2, (s + n) / 2] });
+  if (!view) throw new Error(`Bad @view on: ${raw}`);
+  return { question: m[1], view };
+}
+
+async function runQuestion(raw: string): Promise<Outcome> {
   const started = Date.now();
   const seconds = () => Math.round((Date.now() - started) / 100) / 10;
+  const { question, view } = splitView(raw);
   try {
     const result = await generateText({
       model: getModel(),
-      system: SYSTEM_PROMPT,
+      system: systemForTurn(SYSTEM_PROMPT, view),
       tools: buildTools(),
       prompt: question,
       stopWhen: stepCountIs(12),
@@ -84,7 +104,8 @@ async function runQuestion(question: string): Promise<Outcome> {
     const drew = features.some((n) => n > 0) || tiles > 0;
     // Locating the place: geocode, or a physical-regions query (the model may outline a
     // named region such as the Amazon directly). Drawing: render, or compare (which draws both sides).
-    const located = seq.includes("geocode") || seq.includes("query_physical-regions");
+    // With a map view (and a bbox) the place is already on screen, so no geocode is needed.
+    const located = !!view?.bbox || seq.includes("geocode") || seq.includes("query_physical-regions");
     // A route question is answered by the route tool alone (it geocodes its own stops).
     // A query that drew something must have been rendered; an empty result or a layer
     // error only needs the note that explains it.
@@ -94,6 +115,7 @@ async function runQuestion(question: string): Promise<Outcome> {
       ok,
       line: {
         question,
+        ...(view ? { view: view.bbox, geocoded: seq.includes("geocode"), movedCamera: seq.includes("set_view") } : {}),
         model,
         ok,
         seq,
@@ -109,7 +131,7 @@ async function runQuestion(question: string): Promise<Outcome> {
   } catch (err) {
     return {
       ok: false,
-      line: { question, model, ok: false, error: err instanceof Error ? err.message.slice(0, 200) : String(err), seconds: seconds() },
+      line: { question: raw, model, ok: false, error: err instanceof Error ? err.message.slice(0, 200) : String(err), seconds: seconds() },
     };
   }
 }

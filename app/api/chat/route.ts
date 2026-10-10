@@ -3,6 +3,8 @@ import "@/layers";
 import { SYSTEM_PROMPT } from "@/lib/agent/prompt";
 import { getModel } from "@/lib/agent/provider";
 import { buildTools } from "@/lib/agent/tools";
+import type { MapView } from "@/lib/agent/view";
+import { parseMapView, systemForTurn } from "@/lib/agent/viewContext";
 import { chatRules, limitRequest } from "@/lib/fetch/rateLimit";
 
 // Room for several tool steps, each of which may wait on a slow upstream.
@@ -21,7 +23,7 @@ const MAX_MESSAGES = 40;
 const MAX_TEXT_CHARS = 60_000;
 const MAX_BODY_BYTES = 256 * 1024;
 
-type ReadResult = { messages: UIMessage[] } | { error: string; status: 400 | 413 };
+type ReadResult = { messages: UIMessage[]; view: MapView | null } | { error: string; status: 400 | 413 };
 
 /** Characters in every text part of every message. */
 function textChars(messages: unknown[]): number {
@@ -55,7 +57,8 @@ async function readMessages(req: Request): Promise<ReadResult> {
     const { messages } = body;
     if (!Array.isArray(messages)) return invalid;
     if (messages.length > MAX_MESSAGES || textChars(messages) > MAX_TEXT_CHARS) return tooLarge;
-    return { messages: messages as UIMessage[] };
+    // The map view is per turn: a malformed one is dropped rather than failing the question.
+    return { messages: messages as UIMessage[], view: "view" in body ? parseMapView(body.view) : null };
   } catch {
     return invalid;
   }
@@ -69,7 +72,7 @@ export async function POST(req: Request): Promise<Response> {
   if ("error" in read) {
     return Response.json({ error: read.error }, { status: read.status });
   }
-  const { messages } = read;
+  const { messages, view } = read;
 
   try {
     // Setup errors name the missing env var (never its value), so they are safe to return.
@@ -77,7 +80,8 @@ export async function POST(req: Request): Promise<Response> {
     const tools = buildTools();
     const result = streamText({
       model,
-      system: SYSTEM_PROMPT,
+      // The view goes into this turn's system prompt only, never the history, so old views are not resent.
+      system: systemForTurn(SYSTEM_PROMPT, view),
       tools,
       messages: await convertToModelMessages(messages, { tools }),
       stopWhen: stepCountIs(MAX_STEPS),

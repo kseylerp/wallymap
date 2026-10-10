@@ -23,9 +23,10 @@ import { ToolTrace } from "@/components/ToolTrace";
 import { TopoHeartbeat } from "@/components/TopoHeartbeat";
 import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
 import { onChatSend } from "@/lib/agent/chatBus";
-import { compactMessages } from "@/lib/agent/compactMessages";
 import { dedupeNoteAndText } from "@/lib/agent/dedupe";
 import { extractFollowUps } from "@/lib/agent/followups";
+import { buildChatBody, type MapView } from "@/lib/agent/view";
+import type { Padding } from "@/lib/render/deck";
 import type { MapAction, RenderOp } from "@/lib/render/state";
 import { visibleMapPadding } from "@/lib/render/viewportPadding";
 
@@ -34,6 +35,8 @@ type ChatRailProps = {
   catalog: LayerCatalog | null;
   renderOps: RenderOp[];
   getCanvasSize: () => { width: number; height: number };
+  /** The live map's view inside the given padding, read when a message is sent so the agent knows what "here" is. */
+  getView?: (padding: Padding) => MapView | null;
   onActions: (actions: MapAction[]) => void;
   collapsed: boolean;
   onToggle: () => void;
@@ -305,21 +308,25 @@ export function ChatRail({
   catalog,
   renderOps,
   getCanvasSize,
+  getView,
   onActions,
   collapsed,
   onToggle,
   layerPanelOpen = false,
 }: ChatRailProps) {
-  // Resend query results as summaries: the map already has the full data, and the route caps request size.
-  const [transport] = useState(
-    () =>
-      new DefaultChatTransport({
+  // Resend query results as summaries (the map already has the full data, and the route caps request size), and
+  // send the map view as it is at send time, through a reader the effect below keeps current.
+  const [{ transport, viewReader }] = useState(() => {
+    let current: () => MapView | null = () => null;
+    const reader = { read: () => current(), set: (next: () => MapView | null) => void (current = next) };
+    return {
+      viewReader: reader,
+      transport: new DefaultChatTransport({
         api: "/api/chat",
-        prepareSendMessagesRequest: ({ id, messages, body, trigger, messageId }) => ({
-          body: { ...body, id, messages: compactMessages(messages), trigger, messageId },
-        }),
+        prepareSendMessagesRequest: (request) => ({ body: buildChatBody(request, reader.read()) }),
       }),
-  );
+    };
+  });
   // A fixed id: without one the SDK picks a random id during render, which Cache Components rejects at prerender.
   const { messages, sendMessage, setMessages, clearError, status, error, stop } = useChat({ id: "wildmap", transport });
   const [draft, setDraft] = useState("");
@@ -335,6 +342,15 @@ export function ChatRail({
   const dragStartRef = useRef<number | null>(null);
   const open = hasMessages && !collapsed;
   const state = !hasMessages ? "empty" : open ? "open" : "collapsed";
+
+  // "Here" is the part of the map the chat panel, layer panel and header leave visible.
+  useEffect(() => {
+    viewReader.set(() => {
+      if (!getView) return null;
+      const size = getCanvasSize();
+      return getView(visibleMapPadding({ ...size, panelOpen: open, isMobile: size.width < 768, layerPanelOpen }));
+    });
+  }, [viewReader, getView, getCanvasSize, open, layerPanelOpen]);
 
   // Turn each finished tool call into map actions exactly once.
   useEffect(() => {

@@ -32,3 +32,4 @@ import "./grazing-allotments";
 import "./paddling";
 import "./gbif-occurrences";
 import "./surf";
+import "./peaks";

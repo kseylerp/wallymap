@@ -81,6 +81,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "temperature-anomaly", synonyms: ["warming", "temperature anomaly", "hotter than normal"], notes: "lower-48 counties, v = °F vs 1901-2000; period, months" },
   { layerId: "pipelines-lines", synonyms: ["pipeline", "gas pipeline", "transmission line", "power line"], notes: "gas, oil, products pipelines and 100 kV+ power lines; network, minKv inputs" },
   { layerId: "aquifers", synonyms: ["aquifer", "Ogallala", "High Plains aquifer", "principal aquifer"], notes: "US aquifer outlines by rock type (regional, 2003); for well water levels use groundwater" },
+  { layerId: "groundwater", synonyms: ["groundwater", "water table", "depth to water", "well water level", "is the aquifer dropping"], notes: "USGS well measurements, v = depth to water in feet, one reading per well, no trend; see aquifers" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

@@ -72,3 +72,4 @@ import "./hardiness-zones";
 import "./temperature-anomaly";
 import "./pipelines-lines";
 import "./aquifers";
+import "./groundwater";

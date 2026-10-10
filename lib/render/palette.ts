@@ -112,6 +112,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "temperature-anomaly": "data",
   "pipelines-lines": "data",
   "aquifers": "natural",
+  "groundwater": "data",
 };
 
 /** Layers that return raster tiles: the imagery carries its own colors. */

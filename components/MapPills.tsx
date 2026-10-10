@@ -31,6 +31,8 @@ type MapPillsProps = {
    */
   onCompare?: () => void;
   comparing?: boolean;
+  /** The logo was pressed: reset the map and its filters (the app decides what that means). */
+  onResetMap?: () => void;
 };
 
 /** Every map pill: 36px, the off-white surface with ink text, a hairline rim and a barely-there shadow. */
@@ -43,7 +45,7 @@ const IDLE = "text-ink hover:bg-mist/70";
 const ACTIVE = "bg-primary text-on-primary";
 
 /**
- * The map pills in the top-left corner: the Wally logo, the basemap switch, the
+ * The map pills in the top-left corner: the Wally logo (a button that resets the map), the basemap switch, the
  * layers toggle and Export (which asks to confirm before downloading). (Zoom, globe and 3D live in MapControls, bottom right.) Labels
  * shorten on phones. `natural-earth-2` (agent-only) has no button, so while it shows nothing is pressed.
  */
@@ -58,6 +60,7 @@ export function MapPills({
   restoreStatus = null,
   onCompare,
   comparing = false,
+  onResetMap,
 }: MapPillsProps) {
   // Export is two steps: the pill opens a confirm that lists the files and their size; only its Export button downloads.
   const [pending, setPending] = useState<ExportBundle | null>(null);
@@ -84,9 +87,15 @@ export function MapPills({
   return (
     <div data-testid="map-pills" className="flex flex-wrap items-center gap-1.5">
       <h1 className="sr-only">WallyMap</h1>
-      <div role="img" aria-label="WallyMap" title="WallyMap" className={`${PILL} rise-in size-9 justify-center`}>
+      <button
+        type="button"
+        aria-label="Reset map"
+        title="Reset map"
+        onClick={onResetMap}
+        className={`${PILL} rise-in size-9 justify-center`}
+      >
         <WallyMark size={20} />
-      </div>
+      </button>
 
       <div role="group" aria-label="Basemap" className={`${PILL} rise-in gap-0.5 p-1`} style={{ animationDelay: "60ms" }}>
         {BASEMAPS.map(({ value, label, short }) => {

@@ -15,7 +15,7 @@ import { askAboutText, featureBBox } from "@/lib/render/inspect";
 import { usePermalink } from "@/lib/render/usePermalink";
 import { isComparable } from "@/lib/render/compareView";
 import { useTimePlay } from "@/lib/render/useTimePlay";
-import { reduce } from "@/lib/render/reducer";
+import { isMapReset, reduce } from "@/lib/render/reducer";
 import { initialMapState, type Basemap, type MapAction, type Selection, type Viewport } from "@/lib/render/state";
 import { isSelectionVisible, visibleState } from "@/lib/render/view";
 import { visibleMapPadding } from "@/lib/render/viewportPadding";
@@ -136,6 +136,13 @@ export function App() {
     (selection: Selection | null) => dispatch(selection ? { type: "select", selection } : { type: "deselect" }),
     [],
   );
+  // The logo: clear layers, filters, time, compare, preview and selection, then fly home. The permalink hook sees the
+  // emptied state and rewrites the hash; the chat, basemap, 3D and the layer panel's open state are left alone.
+  const resetMap = useCallback(() => {
+    if (isMapReset(state)) return;
+    dispatch({ type: "reset_map" });
+    mapRef.current?.resetToGlobe();
+  }, [state]);
   const deselect = useCallback(() => dispatch({ type: "deselect" }), []);
   const project = useCallback((lngLat: [number, number]) => mapRef.current?.project(lngLat) ?? null, []);
   const onCameraChange = useCallback(
@@ -218,6 +225,7 @@ export function App() {
             restoreStatus={permalink.status}
             onCompare={!layerPanelOpen && (canCompare || state.compare) ? openCompare : undefined}
             comparing={state.compare !== undefined}
+            onResetMap={resetMap}
           />
         </div>
       </header>

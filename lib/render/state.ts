@@ -139,6 +139,11 @@ export type MapAction =
   | { type: "remove_layer"; layerId: string }
   /** Clears every layer and every route. */
   | { type: "clear_layers" }
+  /**
+   * The logo: back to a fresh map. Everything `clear_layers` clears, plus the camera (the world view, pitch 0). The
+   * basemap and the 3D choice stay, as the user set them.
+   */
+  | { type: "reset_map" }
   /** Adds a route, or replaces the route with the same id. */
   | { type: "route_loaded"; route: RouteState }
   | { type: "route_removed"; routeId: string }

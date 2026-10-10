@@ -21,7 +21,7 @@ describe("MapPills", () => {
       />,
     );
     expect(screen.getByTestId("wally-mark")).toBeTruthy();
-    expect(screen.getByRole("img", { name: "WallyMap" }).textContent).toBe("");
+    expect(screen.getByRole("button", { name: "Reset map" }).textContent).toBe("");
     expect(screen.queryByTestId("theme-toggle")).toBeNull();
 
     const hybrid = screen.getByRole("button", { name: "Topographical + Satellite" });
@@ -62,7 +62,20 @@ describe("MapPills", () => {
     expect(exportPill.querySelector("svg")).toBeNull();
     // The Wally logo is the one drawing among the pills.
     const svgs = Array.from(screen.getByTestId("map-pills").querySelectorAll("svg"));
-    expect(svgs.every((svg) => screen.getByRole("img", { name: "WallyMap" }).contains(svg))).toBe(true);
+    expect(svgs.every((svg) => screen.getByRole("button", { name: "Reset map" }).contains(svg))).toBe(true);
+  });
+
+  it("makes the logo a Reset map button that calls the handler", () => {
+    const onResetMap = vi.fn();
+    render(<MapPills basemap="outdoors" onBasemapChange={() => {}} onResetMap={onResetMap} />);
+    const logo = screen.getByRole("button", { name: "Reset map" });
+    expect(logo.tagName).toBe("BUTTON");
+    expect(logo.getAttribute("type")).toBe("button");
+    expect(logo.getAttribute("title")).toBe("Reset map");
+    expect(logo.textContent).toBe("");
+    expect(logo.querySelector('[data-testid="wally-mark"]')).toBeTruthy();
+    fireEvent.click(logo);
+    expect(onResetMap).toHaveBeenCalledTimes(1);
   });
 
   it("keeps Export off until a layer is loaded, then downloads the bundle", async () => {

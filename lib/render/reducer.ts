@@ -1,5 +1,14 @@
 import type { CompareSpec } from "@/lib/render/compare";
-import type { CompareState, LoadedLayer, MapAction, MapState, RenderOp, TimeState, Viewport } from "@/lib/render/state";
+import {
+  initialMapState,
+  type CompareState,
+  type LoadedLayer,
+  type MapAction,
+  type MapState,
+  type RenderOp,
+  type TimeState,
+  type Viewport,
+} from "@/lib/render/state";
 import type { LayerFilters } from "@/lib/render/filters";
 import { stepWindow, timeIndex, type TimeIndex, type TimeWindow } from "@/lib/time";
 import { arrivalPitch, fitZoomOffset } from "@/lib/render/wally/terrain";
@@ -212,6 +221,28 @@ function sameWindow(a: TimeWindow, b: TimeWindow): boolean {
   return a[0] === b[0] && a[1] === b[1];
 }
 
+/** True when `reset_map` would change nothing: no layers, routes, filters, time, compare, preview or selection, and the camera at the world view. */
+export function isMapReset(state: MapState): boolean {
+  const a = state.viewport;
+  const b = initialMapState.viewport;
+  return (
+    Object.keys(state.layers).length === 0 &&
+    Object.keys(state.routes).length === 0 &&
+    state.renderOps.length === 0 &&
+    state.errors.length === 0 &&
+    state.selected === undefined &&
+    state.playback === undefined &&
+    state.time === undefined &&
+    state.pendingTime === undefined &&
+    state.compare === undefined &&
+    a.longitude === b.longitude &&
+    a.latitude === b.latitude &&
+    a.zoom === b.zoom &&
+    a.pitch === b.pitch &&
+    a.bearing === b.bearing
+  );
+}
+
 /**
  * Pure reducer: always returns new objects and never mutates `state`. Selecting or deselecting a feature never
  * moves the camera; only `set_view` and the 3D button do.
@@ -345,6 +376,9 @@ function reduceAction(state: MapState, action: MapAction): MapState {
         pendingTime: undefined,
         compare: undefined,
       };
+    case "reset_map":
+      // Compose the layer panel's "Clear all" with the starting camera; basemap and 3D stay as they are.
+      return { ...reduceAction(state, { type: "clear_layers" }), viewport: initialMapState.viewport };
     case "route_loaded":
       return {
         ...state,

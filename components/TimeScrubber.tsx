@@ -3,7 +3,7 @@
 import { useRef, type KeyboardEvent, type PointerEvent } from "react";
 import { bucketAt } from "@/lib/render/reducer";
 import type { MapAction, TimeMode, TimeState } from "@/lib/render/state";
-import { stepWindow, windowLabel, type Bucket, type TimeIndex, type TimeWindow } from "@/lib/time";
+import { stepLabel, stepWindow, windowLabel, type Bucket, type TimeIndex, type TimeWindow } from "@/lib/time";
 
 type TimeScrubberProps = {
   time: TimeState;
@@ -28,7 +28,7 @@ const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 h
 
 /**
  * The time scrubber at the top of the data console: a histogram of features per bucket (ink bars, the window's
- * bars purple), a window with two handles (drag them, or arrow keys on each; drag or arrow keys on the window
+ * bars purple; with dated tile layers alone, one even bar per published image), a window with two handles (drag them, or arrow keys on each; drag or arrow keys on the window
  * itself move it whole), play/pause (space anywhere in the scrubber), step back and forward, slide or cumulative mode,
  * the window's dates, and × to clear. Text only; the window and its handles are purple (palette §11). It only shows and changes state: the play timer runs in
  * the app (lib/render/useTimePlay.ts), so play goes on while the panel is closed.
@@ -134,7 +134,8 @@ export function TimeScrubber({ time, dispatch }: TimeScrubberProps) {
 
   const left = (i / n) * 100;
   const width = ((j - i + 1) / n) * 100;
-  const bucketWord = index.bucket === "year" ? "year" : index.bucket === "month" ? "month" : "day";
+  // Tile layers alone have no features to count: every step is one image, drawn as an even bar.
+  const imagesOnly = index.cadence !== undefined;
 
   return (
     <div role="group" aria-label="Time" data-testid="time-scrubber" onKeyDown={onKeyDown} className="px-5 pt-4 pb-3">
@@ -167,10 +168,10 @@ export function TimeScrubber({ time, dispatch }: TimeScrubberProps) {
           {index.buckets.map((b, k) => (
             <div
               key={b.start}
-              title={`${bucketName(b.start, index.bucket)}: ${b.count.toLocaleString()}`}
+              title={imagesOnly ? bucketName(b.start, index.bucket) : `${bucketName(b.start, index.bucket)}: ${b.count.toLocaleString()}`}
               data-in-window={(k >= i && k <= j) || undefined}
               className="time-bar flex-1"
-              style={{ height: b.count > 0 ? `${Math.max(4, (b.count / max) * 100)}%` : "1px" }}
+              style={{ height: imagesOnly ? "30%" : b.count > 0 ? `${Math.max(4, (b.count / max) * 100)}%` : "1px" }}
             />
           ))}
         </div>
@@ -220,7 +221,7 @@ export function TimeScrubber({ time, dispatch }: TimeScrubberProps) {
       </div>
       <div className="mt-1 flex items-baseline justify-between text-[11px] leading-4 text-ink-muted tabular-nums">
         <span>{bucketName(index.buckets[0].start, index.bucket)}</span>
-        <span>features per {bucketWord}</span>
+        <span data-testid="time-step-label">{stepLabel(index)}</span>
         <span>{bucketName(index.buckets[n - 1].start, index.bucket)}</span>
       </div>
 
@@ -254,9 +255,15 @@ export function TimeScrubber({ time, dispatch }: TimeScrubberProps) {
             </button>
           ))}
         </div>
-        <span className="ml-auto text-[11.5px] text-ink-muted tabular-nums" title="Dated features in the window, of all dated features">
-          <span className="text-ink">{shown.toLocaleString()}</span> / {total.toLocaleString()}
-        </span>
+        {imagesOnly ? (
+          <span className="ml-auto text-[11.5px] text-ink-muted tabular-nums" title="The image shown, of the images on the scrubber">
+            <span className="text-ink">{(j + 1).toLocaleString()}</span> / {n.toLocaleString()}
+          </span>
+        ) : (
+          <span className="ml-auto text-[11.5px] text-ink-muted tabular-nums" title="Dated features in the window, of all dated features">
+            <span className="text-ink">{shown.toLocaleString()}</span> / {total.toLocaleString()}
+          </span>
+        )}
       </div>
     </div>
   );

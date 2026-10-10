@@ -2,7 +2,24 @@ import type { Feature, FeatureCollection } from "geojson";
 import { describe, expect, it } from "vitest";
 import type { TileTime } from "@/layers/types";
 import type { LoadedLayer } from "@/lib/render/state";
-import { chooseBucket, filterByWindow, inWindow, stepWindow, tileUrlForTime, timeIndex, windowLabel, type TimeWindow } from "@/lib/time";
+import { afterEach, vi } from "vitest";
+import { reduce } from "@/lib/render/reducer";
+import { initialMapState, type MapState } from "@/lib/render/state";
+import { visibleState } from "@/lib/render/view";
+import {
+  chooseBucket,
+  filterByWindow,
+  inWindow,
+  MAX_TILE_STEPS,
+  periodStart,
+  stepLabel,
+  stepWindow,
+  tileSteps,
+  tileUrlForTime,
+  timeIndex,
+  windowLabel,
+  type TimeWindow,
+} from "@/lib/time";
 
 const DAY = 86_400_000;
 const feat = (t?: unknown): Feature => ({
@@ -198,9 +215,11 @@ describe("tileUrlForTime", () => {
     const t = (cadence: TileTime["cadence"], from = "2020-01-01"): TileTime => ({ template: "u/{date}", cadence, from });
     const w: TimeWindow = ["2020-01-01", "2024-05-17T13:00:00Z"];
     expect(tileUrlForTime("u", t("daily"), w, now)).toBe("u/2024-05-17");
-    // 2024-05-17 is day 1598 after 2020-01-01; 8-day and 16-day composites start every 8 and 16 days from `from`.
-    expect(tileUrlForTime("u", t("8day"), w, now)).toBe("u/2024-05-11");
-    expect(tileUrlForTime("u", t("16day"), w, now)).toBe("u/2024-05-03");
+    // 8-day and 16-day composites restart every 1 January (MODIS): 2024-05-17 is day-of-year 138, in the 8-day period
+    // starting on day 137 (16 May) and the 16-day period starting on day 129 (8 May).
+    expect(tileUrlForTime("u", t("8day"), w, now)).toBe("u/2024-05-16");
+    expect(tileUrlForTime("u", t("16day"), w, now)).toBe("u/2024-05-08");
+    expect(tileUrlForTime("u", t("16day"), ["2020-01-01", "2025-01-03T00:00:00Z"], now)).toBe("u/2025-01-01");
     expect(tileUrlForTime("u", t("monthly"), w, now)).toBe("u/2024-05-01");
     expect(tileUrlForTime("u", t("yearly"), w, now)).toBe("u/2024-01-01");
   });
@@ -221,5 +240,127 @@ describe("windowLabel", () => {
     expect(windowLabel(["2016-01-01T00:00:00Z", "2025-12-31T23:59:59Z"], "year")).toBe("2016 – 2025");
     expect(windowLabel(["2024-03-01T00:00:00Z", "2024-06-30T23:59:59Z"], "month")).toBe("Mar 2024 – Jun 2024");
     expect(windowLabel(["2024-06-01T00:00:00Z", "2024-06-07T23:59:59Z"], "day")).toBe("2024-06-01 – 2024-06-07");
+  });
+});
+
+// ---- Dated tile layers on the scrubber ----
+
+const NOW = Date.parse("2026-10-09T15:00:00Z");
+const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+function timedTiles(id: string, time: TileTime, filled: string): LoadedLayer {
+  return {
+    id,
+    title: id,
+    style: { geometry: "polygon", color: "#000000" },
+    result: {
+      kind: "tiles",
+      data: { url: time.template.replace("{date}", filled).replace("{year}", filled), minzoom: 0, maxzoom: 9, format: "raster", time },
+      citation: { source: "s", url: "u", retrieved: "r" },
+    },
+    receivedAt: "now",
+  };
+}
+const daily: TileTime = { template: "https://g/snow/{date}/{z}/{x}/{y}.png", cadence: "daily", from: "2000-02-24", daysBack: 1 };
+const sixteen: TileTime = { template: "https://g/ndvi/{date}/{z}/{x}/{y}.png", cadence: "16day", from: "2000-03-05", daysBack: 25 };
+const yearly: TileTime = { template: "https://gfw/loss/2001/{year}/{z}/{x}/{y}.png", cadence: "yearly", from: "2001", to: "2025" };
+
+describe("periodStart", () => {
+  it("restarts 8-day and 16-day periods every 1 January, so the year's last period is short", () => {
+    expect(iso(periodStart(Date.parse("2025-12-31"), "16day"))).toBe("2025-12-19");
+    expect(iso(periodStart(Date.parse("2026-01-05"), "16day"))).toBe("2026-01-01");
+    expect(iso(periodStart(Date.parse("2026-01-20"), "8day"))).toBe("2026-01-17");
+  });
+});
+
+describe("tileSteps", () => {
+  it("offers a daily layer the last 30 days, ending daysBack before today", () => {
+    const steps = tileSteps(daily, "https://g/snow/2026-10-08/{z}/{x}/{y}.png", NOW);
+    expect(steps).toHaveLength(30);
+    expect(iso(steps[29])).toBe("2026-10-08");
+    expect(iso(steps[0])).toBe("2026-09-09");
+    expect(tileSteps(daily, "x", NOW, 7)).toHaveLength(7);
+    expect(tileSteps(daily, "x", NOW, 10_000)).toHaveLength(MAX_TILE_STEPS);
+  });
+  it("runs into forecast days when daysBack is negative", () => {
+    const steps = tileSteps({ ...daily, daysBack: -9 }, "x", NOW);
+    expect(iso(steps[steps.length - 1])).toBe("2026-10-18");
+  });
+  it("ends at an older loaded date instead of today, so the layer stays on the date asked for", () => {
+    const steps = tileSteps(daily, "https://g/snow/2024-02-10/{z}/{x}/{y}.png", NOW);
+    expect(iso(steps[steps.length - 1])).toBe("2024-02-10");
+    expect(steps).toHaveLength(30);
+  });
+  it("steps 16-day composites on the January grid and keeps the newest 120", () => {
+    const steps = tileSteps(sixteen, "https://g/ndvi/2026-09-14/{z}/{x}/{y}.png", NOW);
+    expect(steps).toHaveLength(MAX_TILE_STEPS);
+    // Today less 25 days is 2026-09-14, which is the start of a composite (day 257).
+    expect(iso(steps[steps.length - 1])).toBe("2026-09-14");
+    expect(iso(steps[steps.length - 2])).toBe("2026-08-29");
+    expect(steps.map(iso)).toContain("2026-01-01");
+  });
+  it("steps years from `from` to `to`, reading the loaded year out of a {year} template", () => {
+    const steps = tileSteps(yearly, "https://gfw/loss/2001/2025/{z}/{x}/{y}.png", NOW);
+    expect(steps.map((s) => new Date(s).getUTCFullYear())).toEqual(Array.from({ length: 25 }, (_, k) => 2001 + k));
+  });
+  it("is empty when the archive starts after its newest day", () => {
+    expect(tileSteps({ ...daily, from: "2030-01-01" }, "x", NOW)).toEqual([]);
+  });
+});
+
+describe("timeIndex with dated tile layers", () => {
+  it("opens on a tile layer alone: one bucket per image, no counts, the cadence named", () => {
+    const idx = timeIndex({ n: timedTiles("greenness", sixteen, "2026-09-14") }, { now: NOW })!;
+    expect(idx.cadence).toBe("16day");
+    expect(idx.bucket).toBe("day");
+    expect(idx.layerIds).toEqual(["greenness"]);
+    expect(idx.buckets).toHaveLength(MAX_TILE_STEPS);
+    expect(idx.buckets.every((b) => b.count === 0)).toBe(true);
+    const last = idx.buckets[idx.buckets.length - 1];
+    expect(last.start).toBe("2026-09-14T00:00:00.000Z");
+    expect(last.end).toBe("2026-09-29T23:59:59.999Z");
+    expect(stepLabel(idx)).toBe("one image per 16 days");
+    expect(stepLabel(timeIndex({ f: timedTiles("forest-loss", yearly, "2025") }, { now: NOW })!)).toBe("one image per year");
+  });
+  it("lets the finest cadence set the steps when tile layers differ", () => {
+    const idx = timeIndex({ a: timedTiles("forest-loss", yearly, "2025"), b: timedTiles("snow-cover", daily, "2026-10-08") }, { now: NOW })!;
+    expect(idx.cadence).toBe("daily");
+    expect(idx.buckets).toHaveLength(30);
+    expect(idx.layerIds.sort()).toEqual(["forest-loss", "snow-cover"]);
+  });
+  it("merges with dated features: features pick the bucket, tile periods widen the span", () => {
+    const quakes = layer("earthquakes", fc("2026-06-01T00:00:00Z", "2026-07-15T00:00:00Z"));
+    const idx = timeIndex({ q: quakes, s: timedTiles("snow-cover", daily, "2026-10-08") }, { now: NOW })!;
+    expect(idx.cadence).toBeUndefined();
+    expect(idx.bucket).toBe("month");
+    expect(idx.min).toBe("2026-06-01T00:00:00.000Z");
+    expect(idx.max).toBe("2026-10-08T00:00:00.000Z");
+    expect(idx.buckets.map((b) => b.count)).toEqual([1, 1, 0, 0, 0]);
+    expect(stepLabel(idx)).toBe("features per month");
+    expect(idx.layerIds.sort()).toEqual(["earthquakes", "snow-cover"]);
+  });
+});
+
+describe("a dated tile layer in the map state", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("opens the scrubber, and play rewrites the tile URL one image per step", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const snow = timedTiles("snow-cover", daily, "2026-10-08");
+    let s: MapState = reduce(initialMapState, { type: "layer_loaded", layer: snow });
+    expect(s.time?.index.cadence).toBe("daily");
+    expect(s.time?.index.buckets).toHaveLength(30);
+    // The whole span shows the image the layer loaded.
+    const url = (st: MapState) => {
+      const r = visibleState(st).layers["snow-cover"].result;
+      return r.kind === "tiles" ? r.data.url : "";
+    };
+    expect(url(s)).toBe("https://g/snow/2026-10-08/{z}/{x}/{y}.png");
+    s = reduce(s, { type: "set_time_playing", playing: true });
+    expect(url(s)).toBe("https://g/snow/2026-09-09/{z}/{x}/{y}.png");
+    s = reduce(s, { type: "time_tick" });
+    expect(url(s)).toBe("https://g/snow/2026-09-10/{z}/{x}/{y}.png");
+    s = reduce(s, { type: "time_tick" });
+    expect(url(s)).toBe("https://g/snow/2026-09-11/{z}/{x}/{y}.png");
   });
 });

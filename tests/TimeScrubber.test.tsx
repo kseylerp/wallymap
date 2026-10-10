@@ -59,6 +59,29 @@ describe("TimeScrubber", () => {
     expect(screen.getByText("features per year")).toBeTruthy();
   });
 
+  it("names the cadence and counts images for a dated tile layer alone", () => {
+    const greenness: LoadedLayer = {
+      id: "greenness",
+      title: "Vegetation greenness",
+      style: { geometry: "polygon", color: "#000000" },
+      result: {
+        kind: "tiles",
+        data: {
+          url: "https://g/ndvi/2026-09-14/{z}/{x}/{y}.png",
+          minzoom: 0,
+          maxzoom: 9,
+          format: "raster",
+          time: { template: "https://g/ndvi/{date}/{z}/{x}/{y}.png", cadence: "16day", from: "2000-03-05", daysBack: 25 },
+        },
+        citation: { source: "s", url: "u", retrieved: "r" },
+      },
+      receivedAt: "now",
+    };
+    render(<Harness spy={() => {}} initial={reduce(initialMapState, { type: "layer_loaded", layer: greenness })} />);
+    expect(screen.getByTestId("time-step-label").textContent).toBe("one image per 16 days");
+    expect(document.querySelectorAll(".time-bar").length).toBeGreaterThan(2);
+  });
+
   it("play steps one bucket every 600 ms; pause stops it", () => {
     vi.useFakeTimers();
     render(<Harness spy={() => {}} />);

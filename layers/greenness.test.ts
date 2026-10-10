@@ -60,12 +60,13 @@ describe("greenness layer", () => {
     const r = await tiles({});
     expect(r.data.time).toEqual({
       template: expect.stringContaining("/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png"),
-      cadence: "daily",
+      cadence: "16day",
       from: "2000-03-05",
       daysBack: 25,
     });
     const filled = tileUrlForTime(r.data.url, r.data.time, ["2020-01-01", "2024-06-20T00:00:00Z"], Date.now());
-    expect(filled).toContain("/default/2024-06-20/");
+    // snapped to the composite holding 20 June 2024 (the one starting 9 June, day-of-year 161)
+    expect(filled).toContain("/default/2024-06-09/");
     // a window ending today is held 25 days back so the tiles are not blank
     expect(tileUrlForTime(r.data.url, r.data.time, ["2020-01-01", "2026-10-09T00:00:00Z"], Date.now())).toContain("/default/2026-09-14/");
   });
@@ -92,7 +93,7 @@ describe("greenness layer", () => {
 
   it("summarizes to the tile URL and the time range for the model", async () => {
     const summary = summarizeLayerResult(await layer.query(ctx(vi.fn()), { index: "ndvi" }));
-    expect(summary).toMatchObject({ kind: "tiles", format: "raster", time: { cadence: "daily", from: "2000-03-05", daysBack: 25 } });
+    expect(summary).toMatchObject({ kind: "tiles", format: "raster", time: { cadence: "16day", from: "2000-03-05", daysBack: 25 } });
   });
 
   it("runs through runLayer and rejects a bad date", async () => {

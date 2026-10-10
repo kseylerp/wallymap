@@ -1,7 +1,8 @@
 /**
  * Time scrubber core (pure): which layers carry time, how to bucket it, which features fall inside a
  * window, how to step a window, and how to point a time-aware tile layer at the window.
- * Features carry an optional `t` (ISO 8601 string); features without a valid `t` are never hidden.
+ * Features carry an optional `t` (ISO 8601 string); features without a valid `t` are never hidden. Tile layers whose
+ * result carries `data.time` (a dated tile template) are scrubbable too: they add the dates they publish at their cadence.
  */
 import type { FeatureCollection } from "geojson";
 import type { LoadedLayer } from "@/lib/render/state";
@@ -16,6 +17,19 @@ export type TimeIndex = {
   bucket: Bucket;
   buckets: { start: string; end: string; count: number }[];
   layerIds: string[];
+  /**
+   * Set when only dated tile layers are shown: the buckets are their publishing periods (one image each, no feature
+   * counts), and this is the cadence the scrubber names ("per 16 days").
+   */
+  cadence?: TileTime["cadence"];
+};
+
+export type TimeIndexOptions = {
+  maxBuckets?: number;
+  /** Clock for tile layers' newest period (tests). */
+  now?: number;
+  /** Days a daily tile layer offers, ending at its newest day (default 30, at most MAX_TILE_STEPS). */
+  tileDays?: number;
 };
 
 const DAY_MS = 86_400_000;
@@ -50,12 +64,26 @@ function parseT(v: unknown): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
-/** Builds the bucketed time index over every geojson feature with a valid `t`; null when there are none. */
-export function timeIndex(layers: Record<string, LoadedLayer>, opts?: { maxBuckets?: number }): TimeIndex | null {
+/**
+ * Builds the bucketed time index over every geojson feature with a valid `t` and every tile layer with `data.time`;
+ * null when there are neither. GeoJSON dates pick the bucket (a tile layer's periods only widen the span); with tile
+ * layers alone the buckets are the finest cadence's own periods (tileSteps), so play steps one image at a time.
+ */
+export function timeIndex(layers: Record<string, LoadedLayer>, opts?: TimeIndexOptions): TimeIndex | null {
   const stamps: number[] = [];
   const layerIds: string[] = [];
+  const tileSets: { cadence: TileTime["cadence"]; starts: number[] }[] = [];
+  const now = opts?.now ?? Date.now();
   for (const layer of Object.values(layers)) {
-    if (layer.result.kind !== "geojson") continue;
+    if (layer.result.kind === "tiles") {
+      const time = layer.result.data.time;
+      const starts = time ? tileSteps(time, layer.result.data.url, now, opts?.tileDays) : [];
+      if (time && starts.length > 0) {
+        tileSets.push({ cadence: time.cadence, starts });
+        layerIds.push(layer.id);
+      }
+      continue;
+    }
     let any = false;
     for (const f of layer.result.data.features) {
       const ms = parseT((f.properties as Record<string, unknown> | null)?.t);
@@ -65,13 +93,19 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: { maxBucke
     }
     if (any) layerIds.push(layer.id);
   }
-  if (stamps.length === 0) return null;
+  if (stamps.length === 0 && tileSets.length === 0) return null;
+  if (stamps.length === 0) return tileIndex(tileSets, layerIds);
 
   let min = stamps[0];
   let max = stamps[0];
   for (const ms of stamps) {
     if (ms < min) min = ms;
     if (ms > max) max = ms;
+  }
+  // Tile layers widen the span to the periods they publish, so their dates stay reachable on the scrubber.
+  for (const { starts } of tileSets) {
+    min = Math.min(min, starts[0]);
+    max = Math.max(max, starts[starts.length - 1]);
   }
   const bucket = chooseBucket(max - min, opts?.maxBuckets ?? 60);
 
@@ -86,6 +120,30 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: { maxBucke
     count: counts[i],
   }));
   return { min: new Date(min).toISOString(), max: new Date(max).toISOString(), bucket, buckets, layerIds };
+}
+
+/** Finest first: with tile layers of several cadences, the finest one sets the steps and the others follow it. */
+const CADENCE_ORDER: TileTime["cadence"][] = ["daily", "8day", "16day", "monthly", "yearly"];
+const CADENCE_BUCKET: Record<TileTime["cadence"], Bucket> = { daily: "day", "8day": "day", "16day": "day", monthly: "month", yearly: "year" };
+
+/** The index of tile layers alone: one bucket per period of the finest cadence (union of those layers' periods). */
+function tileIndex(sets: { cadence: TileTime["cadence"]; starts: number[] }[], layerIds: string[]): TimeIndex {
+  const cadence = CADENCE_ORDER.find((c) => sets.some((t) => t.cadence === c)) ?? "daily";
+  const union = [...new Set(sets.filter((t) => t.cadence === cadence).flatMap((t) => t.starts))].sort((a, b) => a - b);
+  const starts = union.slice(-MAX_TILE_STEPS);
+  const buckets = starts.map((s, i) => ({
+    start: new Date(s).toISOString(),
+    end: new Date((i + 1 < starts.length ? starts[i + 1] : periodNext(s, cadence)) - 1).toISOString(),
+    count: 0,
+  }));
+  return {
+    min: buckets[0].start,
+    max: buckets[buckets.length - 1].start,
+    bucket: CADENCE_BUCKET[cadence],
+    buckets,
+    layerIds,
+    cadence,
+  };
 }
 
 /** Index of the last bucket start at or before `ms`, clamped to the ends. */
@@ -141,9 +199,89 @@ export const NIGHT_LIGHTS_DAYS_BACK = 3;
 
 const CADENCE_DAYS = { "8day": 8, "16day": 16 } as const;
 
+/** Most periods a tile layer puts on the scrubber (the newest ones; about ten years of months). */
+export const MAX_TILE_STEPS = 120;
+/** Days a daily tile layer puts on the scrubber by default. */
+export const TILE_DAYS_DEFAULT = 30;
+
 function dayFloor(ms: number): number {
   const d = new Date(ms);
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+/**
+ * The start of the publishing period holding `ms`. 8-day and 16-day composites follow the MODIS calendar: they restart
+ * every 1 January (1 Jan, 17 Jan, ... for 16 days), so the last period of a year is shorter.
+ */
+export function periodStart(ms: number, cadence: TileTime["cadence"]): number {
+  const day = dayFloor(ms);
+  if (cadence === "monthly") return floorTo(day, "month");
+  if (cadence === "yearly") return floorTo(day, "year");
+  if (cadence === "daily") return day;
+  const jan1 = floorTo(day, "year");
+  const step = CADENCE_DAYS[cadence];
+  return jan1 + Math.floor((day - jan1) / DAY_MS / step) * step * DAY_MS;
+}
+
+/** The start of the period after the one starting at `start`. */
+function periodNext(start: number, cadence: TileTime["cadence"]): number {
+  if (cadence === "monthly") return nextStart(start, "month");
+  if (cadence === "yearly") return nextStart(start, "year");
+  if (cadence === "daily") return start + DAY_MS;
+  return Math.min(start + CADENCE_DAYS[cadence] * DAY_MS, nextStart(start, "year"));
+}
+
+/** The date (`{date}`) or year (`{year}`) a tile URL was filled with, read against its template; null if unreadable. */
+function loadedPeriod(url: string, template: string): number | null {
+  for (const [token, pattern] of [["{date}", /^\d{4}-\d{2}-\d{2}/], ["{year}", /^\d{4}/]] as const) {
+    const at = template.indexOf(token);
+    if (at < 0 || !url.startsWith(template.slice(0, at))) continue;
+    const m = pattern.exec(url.slice(at));
+    if (!m) return null;
+    const ms = Date.parse(m[0].length === 4 ? `${m[0]}-01-01` : m[0]);
+    return Number.isNaN(ms) ? null : ms;
+  }
+  return null;
+}
+
+/**
+ * The period starts (epoch ms, oldest first) a dated tile layer offers the scrubber: daily layers the last `days`
+ * days (default 30), other cadences every period from `from`, both capped at MAX_TILE_STEPS and ending at the newest
+ * published period (`to`, or today less `daysBack`; a negative daysBack runs into forecast days). When the layer was
+ * loaded for an older date than that range reaches, the range ends at the loaded period instead, so it stays on it.
+ */
+export function tileSteps(time: TileTime, url: string, now: number = Date.now(), days: number = TILE_DAYS_DEFAULT): number[] {
+  const fromMs = boundMs(time.from);
+  const toMs = boundMs(time.to);
+  let latest = dayFloor(now - (time.daysBack ?? 0) * DAY_MS);
+  if (toMs !== null) latest = Math.min(latest, toMs);
+  if (fromMs !== null && latest < fromMs) return [];
+  const first = fromMs === null ? -Infinity : periodStart(fromMs, time.cadence);
+  const cap = time.cadence === "daily" ? Math.max(1, Math.min(MAX_TILE_STEPS, Math.floor(days))) : MAX_TILE_STEPS;
+
+  let end = periodStart(latest, time.cadence);
+  let oldest = end;
+  for (let k = 1; k < cap && oldest > first; k++) oldest = periodStart(oldest - 1, time.cadence);
+  const loaded = loadedPeriod(url, time.template);
+  if (loaded !== null && loaded < oldest && loaded >= (fromMs ?? -Infinity)) end = periodStart(loaded, time.cadence);
+
+  const starts: number[] = [];
+  for (let s = end; starts.length < cap && s >= first; s = periodStart(s - 1, time.cadence)) starts.push(s);
+  return starts.reverse();
+}
+
+const CADENCE_WORDS: Record<TileTime["cadence"], string> = {
+  daily: "per day",
+  "8day": "per 8 days",
+  "16day": "per 16 days",
+  monthly: "per month",
+  yearly: "per year",
+};
+
+/** What one scrubber step is: "features per month", or for tile layers alone "one image per 16 days". */
+export function stepLabel(index: TimeIndex): string {
+  if (index.cadence) return `one image ${CADENCE_WORDS[index.cadence]}`;
+  return `features per ${index.bucket}`;
 }
 
 /** Parses a `from`/`to` bound (YYYY, YYYY-MM-DD or a full ISO string) to epoch ms, or null. */
@@ -155,7 +293,7 @@ function boundMs(v: string | undefined): number | null {
 
 /**
  * Points a time-aware tile URL at the window using the layer's `data.time`: `{date}` gets the window end (clamped to
- * `from`, `to` and `daysBack` days before today, then snapped down to the cadence), `{year}` gets the window's end year
+ * `from`, `to` and `daysBack` days before today, then snapped down to the cadence's period, see periodStart), `{year}` gets the window's end year
  * (clamped to `from`/`to`; a `start_year=` parameter above it is lowered to it). Because the end is clamped to the
  * newest published period, a window that ends today still draws the newest imagery instead of blank tiles.
  * Returns `url` unchanged when there is no `time` or the window end is not a date.
@@ -184,17 +322,8 @@ export function tileUrlForTime(
   if (!time.template.includes("{date}")) return url;
   let ms = Math.min(endMs, toMs ?? Infinity, now - (time.daysBack ?? 0) * DAY_MS);
   if (fromMs !== null) ms = Math.max(ms, fromMs);
-  const anchor = dayFloor(fromMs ?? Date.UTC(1970, 0, 1));
-  let day = dayFloor(ms);
-  if (time.cadence === "8day" || time.cadence === "16day") {
-    const step = CADENCE_DAYS[time.cadence] * DAY_MS;
-    day = anchor + Math.floor((day - anchor) / step) * step;
-  } else if (time.cadence === "monthly") {
-    day = floorTo(day, "month");
-  } else if (time.cadence === "yearly") {
-    day = floorTo(day, "year");
-  }
-  if (fromMs !== null) day = Math.max(day, anchor);
+  let day = periodStart(ms, time.cadence);
+  if (fromMs !== null) day = Math.max(day, dayFloor(fromMs));
   return time.template.replace(/\{date\}/g, new Date(day).toISOString().slice(0, 10));
 }
 

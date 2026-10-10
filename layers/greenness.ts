@@ -4,10 +4,10 @@
  *   - MODIS_Terra_L3_NDVI_16Day ("Vegetation Index (16-Day, MODIS, Terra)") and MODIS_Terra_L3_EVI_16Day
  *     ("Enhanced Vegetation Index (16-Day, MODIS, Terra)"): time dimension P16D from 2000-03-05 to the latest
  *     composite (2026-09-14 at the time of writing); TileMatrixSet GoogleMapsCompatible_Level9 (zoom 0 to 9), image/png.
- *   - The composites restart every 1 January (1 Jan, 17 Jan, ... 14 Sep), so a 16-day grid counted from `from` drifts
- *     off the real periods. GIBS answers any date inside a period with that period (2026-09-14 and 2026-09-20 returned
- *     byte-identical tiles; 2026-09-10 returned the previous period), so `time.cadence` is "daily": the scrubber fills
- *     the window end and GIBS snaps it. A date after the newest composite is a 404, so the newest day offered is 25 days
+ *   - The composites restart every 1 January (1 Jan, 17 Jan, ... 14 Sep). GIBS answers any date inside a period with
+ *     that period (2026-09-14 and 2026-09-20 returned byte-identical tiles; 2026-09-10 returned the previous period).
+ *     `time.cadence` is "16day", which lib/time snaps on the same January grid, so the scrubber steps one composite at
+ *     a time. A date after the newest composite is a 404, so the newest day offered is 25 days
  *     behind today (a composite is published within about 25 days of its start).
  *   - Live check: z=4 y=6 x=4 for 2026-09-14 returned 200 image/png (19 KB, NDVI) and 20 KB (EVI).
  *   - The brief's "MODIS_Terra_L3_NDVI_8Day" / EVI 8-day ids do not exist; Terra *_NDVI_8Day / *_EVI_8Day (2025 on) do
@@ -49,7 +49,7 @@ export function greennessSpec(index: keyof typeof GIBS_IDS): GibsDatedSpec {
     level: 9,
     from: FROM,
     daysBack: DAYS_BACK,
-    cadence: "daily",
+    cadence: "16day",
     label: index === "ndvi" ? "vegetation index (NDVI) composites" : "enhanced vegetation index (EVI) composites",
     citationSource: `NASA GIBS: MODIS Terra ${index.toUpperCase()} 16-day (NASA LP DAAC / MODIS; public)`,
   };

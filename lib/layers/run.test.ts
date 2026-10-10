@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { z } from "zod";
 import { defineLayer, type LayerError, type LayerResult, type QueryContext } from "@/layers/types";
 import { registerLayer, clearRegistry } from "@/layers/registry";
-import { runLayer } from "@/lib/layers/run";
+import { runLayer, suggestedZoomFor } from "@/lib/layers/run";
 
 const BBOX = [-120, 38, -119, 39];
 
@@ -131,5 +131,31 @@ describe("runLayer", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it("adds suggestedZoom to an area-cap error only when the query came from the user's view", async () => {
+    const huge = [-125, 30, -110, 45];
+    const plain = await runLayer("fake", { bbox: huge });
+    expect(plain.status).toBe(422);
+    expect(plain.body).not.toHaveProperty("suggestedZoom");
+
+    const fromView = await runLayer("fake", { bbox: huge, fromView: { bbox: huge as [number, number, number, number], zoom: 5 } });
+    expect(fromView.status).toBe(422);
+    expect(fromView.body).toMatchObject({ hint: "zoom_in", suggestedZoom: expect.any(Number) });
+    expect(query).not.toHaveBeenCalled();
+  });
+});
+
+describe("suggestedZoomFor", () => {
+  it("adds half a zoom level per doubling of area over the cap, rounded up past it", () => {
+    // The owner's Baltic view: 417,205 km² at zoom 5.9 against the trails' 2,500 km² needs zoom 9.6, so 10.
+    expect(suggestedZoomFor(417_205, 5.9, 2_500)).toBe(10);
+    // Exactly four times the cap at zoom 8 lands on the cap at 9, which is not under it.
+    expect(suggestedZoomFor(10_000, 8, 2_500)).toBe(10);
+    expect(suggestedZoomFor(10_001, 8.2, 2_500)).toBe(10);
+  });
+
+  it("never goes past the deepest zoom", () => {
+    expect(suggestedZoomFor(1e12, 20, 1)).toBe(22);
   });
 });

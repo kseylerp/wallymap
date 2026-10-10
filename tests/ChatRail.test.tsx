@@ -192,6 +192,38 @@ describe("ChatRail sources line", () => {
   });
 });
 
+describe("ChatRail layer error card", () => {
+  const zoomInError = (output: Record<string, unknown>): UIMessage =>
+    ({
+      id: "a1",
+      role: "assistant",
+      parts: [{ type: "tool-query_osm-trails", toolCallId: "t1", state: "output-available", input: {}, output }],
+    }) as UIMessage;
+
+  it("offers Zoom in to N when the view was too wide, and moves only the camera's zoom on click", () => {
+    const onActions = vi.fn();
+    chat.messages = [
+      user("best hiking trails for elevation"),
+      zoomInError({ error: "Area is 417205 km²; zoom in to under 2500 km²", hint: "zoom_in", suggestedZoom: 10 }),
+    ];
+    render(
+      <ChatRail catalog={{}} renderOps={[]} getCanvasSize={canvas} onActions={onActions} collapsed={false} onToggle={noop} />,
+    );
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toContain("zoom in to under 2500 km²");
+    onActions.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in to 10" }));
+    expect(onActions).toHaveBeenCalledWith([{ type: "set_view", viewport: { zoom: 10 } }]);
+  });
+
+  it("shows no zoom action without a suggested zoom", () => {
+    chat.messages = [user("trails"), zoomInError({ error: "Area is 9000 km²; zoom in to under 2500 km²", hint: "zoom_in" })];
+    render(rail());
+    expect(screen.getByRole("alert")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Zoom in to/ })).toBeNull();
+  });
+});
+
 describe("ChatRail loading", () => {
   it("shows the topo heartbeat only while the conversation's first answer is on its way", () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new Error("offline"))));

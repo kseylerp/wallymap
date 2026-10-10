@@ -162,7 +162,21 @@ export function layerResultForModel(output: unknown): JSONValue {
 /** Query-tool input: the layer's own input fields plus the area to search. */
 type QueryArgs = { bbox: BBox; zoom: number } & Record<string, unknown>;
 
-function queryTool(layer: Layer) {
+/** How far (as a share of the view's width or height) a query box may poke past the view and still count as from it. */
+const VIEW_TOLERANCE = 0.02;
+
+/** True when `bbox` lies inside the view's box (within a small rounding margin): the query is about what is on screen. */
+export function isWithinView(bbox: BBox, view: BBox): boolean {
+  const [w, s, e, n] = view;
+  const dx = (e - w) * VIEW_TOLERANCE;
+  const dy = (n - s) * VIEW_TOLERANCE;
+  return bbox[0] >= w - dx && bbox[1] >= s - dy && bbox[2] <= e + dx && bbox[3] <= n + dy;
+}
+
+/** The view a query answers from, or undefined when it does not (no view bbox, a place was geocoded, or the box is elsewhere). */
+type ViewSource = (bbox: BBox) => { bbox: BBox; zoom: number } | undefined;
+
+function queryTool(layer: Layer, fromView: ViewSource = () => undefined) {
   // The registry erases each layer's input shape, so zod cannot infer bbox and
   // zoom through extend(); the cast restores the two fields this tool adds.
   const inputSchema = layer.input.extend({
@@ -173,7 +187,7 @@ function queryTool(layer: Layer) {
     // The licence and the trimmed sentences are in list_layers' detail (ids); the citation comes with each result.
     description: `${compactDescription(layer.description, { inputs: inputNames(layer) })} Covers ${describeCoverage(layer.coverage)}. bbox is [west, south, east, north].`,
     inputSchema,
-    execute: async ({ bbox, zoom, ...input }) => (await runLayer(layer.id, { bbox, zoom, input })).body,
+    execute: async ({ bbox, zoom, ...input }) => (await runLayer(layer.id, { bbox, zoom, input, fromView: fromView(bbox) })).body,
     // The UI part keeps the full body for the map; the model gets a summary.
     toModelOutput: ({ output }) => ({ type: "json", value: layerResultForModel(output) }),
   });
@@ -181,6 +195,10 @@ function queryTool(layer: Layer) {
 
 /** Builds the agent's tool set from the current layer registry. `view` is the map the user is looking at; the route tool biases its place lookups to it. */
 export function buildTools({ view = null }: { view?: MapView | null } = {}): ToolSet {
+  // Tools are built per request, so this is per turn: once a place is geocoded, queries are about that place.
+  let geocoded = false;
+  const fromView: ViewSource = (bbox) =>
+    view?.bbox && !geocoded && isWithinView(bbox, view.bbox) ? { bbox: view.bbox, zoom: view.zoom } : undefined;
   const tools: ToolSet = {
     list_layers: tool({
       description:
@@ -216,7 +234,10 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
         "Find a place by name. Returns its bbox [west, south, east, north], center [lon, lat], and full name. " +
         "Named mountain ranges, deserts, plateaus and similar regions (for example the Andes) come back as the whole region, with source \"natural-earth\".",
       inputSchema: z.object({ place: z.string().min(1) }),
-      execute: async ({ place }) => geocode(place),
+      execute: async ({ place }) => {
+        geocoded = true;
+        return geocode(place);
+      },
     }),
     set_view: tool({
       description:
@@ -322,7 +343,7 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
   };
 
   for (const layer of listLayers()) {
-    tools[`query_${layer.id}`] = queryTool(layer);
+    tools[`query_${layer.id}`] = queryTool(layer, fromView);
   }
   return tools;
 }

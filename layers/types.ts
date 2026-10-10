@@ -64,6 +64,11 @@ export type LayerResult =
 export type LayerError = {
   error: string;
   hint?: "zoom_in" | "unavailable" | "upstream";
+  /**
+   * With hint zoom_in, when the query came from the user's current map view: the whole-number zoom at which that view
+   * fits under the layer's area cap. The chat's error card offers it as "Zoom in to N".
+   */
+  suggestedZoom?: number;
 };
 
 export type QueryContext = {

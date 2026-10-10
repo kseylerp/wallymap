@@ -84,9 +84,14 @@ function noteMarkdown(output: unknown): string | null {
   return typeof output.markdown === "string" ? output.markdown : null;
 }
 
-function layerErrorText(name: string, output: unknown): string | null {
+type LayerErrorInfo = { message: string; suggestedZoom?: number };
+
+/** A query's error, with the zoom the server suggests when the user's view was too wide for the layer. */
+function layerErrorOf(name: string, output: unknown): LayerErrorInfo | null {
   if (!name.startsWith("query_") || typeof output !== "object" || output === null || !("error" in output)) return null;
-  return typeof output.error === "string" ? output.error : null;
+  if (typeof output.error !== "string") return null;
+  const zoom = "suggestedZoom" in output ? output.suggestedZoom : undefined;
+  return typeof zoom === "number" && Number.isFinite(zoom) ? { message: output.error, suggestedZoom: zoom } : { message: output.error };
 }
 
 type Source = { source: string; url: string; retrieved?: string };
@@ -152,6 +157,11 @@ function Markdown({ text }: { text: string }) {
 type FollowUpProps = {
   /** Sends a follow-up question; undefined while a reply is in flight. */
   onFollowUp?: (text: string) => void;
+};
+
+type ZoomToProps = {
+  /** Moves the camera to this zoom around the current center (the user's click on an error card's "Zoom in to N"). */
+  onZoomTo?: (zoom: number) => void;
 };
 
 type AnswerCardProps = {
@@ -230,15 +240,33 @@ function ToolTraceView({ part }: { part: ToolPart }) {
   );
 }
 
-/** What a finished tool call adds below its trace chip: the note's markdown or a layer's error. */
-function toolExtras(part: ToolPart, onFollowUp: FollowUpProps["onFollowUp"]): ReactNode {
+/**
+ * What a finished tool call adds below its trace chip: the note's markdown or a layer's error. An error for a view too
+ * wide for the layer offers "Zoom in to N", which moves the camera only because the user clicks it.
+ */
+function toolExtras(part: ToolPart, onFollowUp: FollowUpProps["onFollowUp"], onZoomTo: ZoomToProps["onZoomTo"]): ReactNode {
   const name = getToolName(part);
   const output = part.state === "output-available" ? part.output : undefined;
   const note = name === "note" ? noteMarkdown(output) : null;
-  const layerError = layerErrorText(name, output);
+  const layerError = layerErrorOf(name, output);
   // A note arrives whole with its tool output, so it is always finished.
   if (note !== null) return <AnswerCard text={note} done onFollowUp={onFollowUp} />;
-  if (layerError !== null) return <ErrorCard title="Couldn't load that layer">{layerError}</ErrorCard>;
+  if (layerError !== null) {
+    const zoom = layerError.suggestedZoom;
+    return (
+      <ErrorCard title="Couldn't load that layer">
+        {layerError.message}
+        {zoom !== undefined && onZoomTo && (
+          <>
+            {" "}
+            <button type="button" className="font-medium underline underline-offset-2" onClick={() => onZoomTo(zoom)}>
+              Zoom in to {zoom}
+            </button>
+          </>
+        )}
+      </ErrorCard>
+    );
+  }
   return null;
 }
 
@@ -246,10 +274,11 @@ type MessageViewProps = {
   message: UIMessage;
   /** True only for the assistant message currently streaming in. */
   streaming: boolean;
-} & FollowUpProps;
+} & FollowUpProps &
+  ZoomToProps;
 
 /** Memoized so typing in the input does not re-render (and re-parse the markdown of) the conversation. */
-const MessageView = memo(function MessageView({ message, streaming, onFollowUp }: MessageViewProps) {
+const MessageView = memo(function MessageView({ message, streaming, onFollowUp, onZoomTo }: MessageViewProps) {
   if (message.role === "user") {
     const text = message.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
     // No bubble: an accent chevron marks the user's line.
@@ -284,7 +313,7 @@ const MessageView = memo(function MessageView({ message, streaming, onFollowUp }
       blocks.push(<AnswerCard key={i} text={part.text} done={done} onFollowUp={onFollowUp} />);
     } else if (isToolUIPart(part)) {
       chips.push(<ToolTraceView key={part.toolCallId} part={part} />);
-      const extras = repeatedNotes.has(i) ? null : toolExtras(part, onFollowUp);
+      const extras = repeatedNotes.has(i) ? null : toolExtras(part, onFollowUp, onZoomTo);
       if (extras !== null) {
         flushChips();
         blocks.push(<div key={`${part.toolCallId}-extras`}>{extras}</div>);
@@ -427,6 +456,10 @@ export function ChatRail({
     },
     [busy, sendMessage],
   );
+
+  // "Zoom in to N" on a layer's error card: the user's click, through the same set_view path the agent's camera uses.
+  // Only the zoom changes, so the map stays centered where the user is looking.
+  const zoomTo = useCallback((zoom: number) => onActions([{ type: "set_view", viewport: { zoom } }]), [onActions]);
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -575,6 +608,7 @@ export function ChatRail({
                   message={m}
                   streaming={status === "streaming" && m.id === lastId}
                   onFollowUp={busy ? undefined : followUp}
+                  onZoomTo={zoomTo}
                 />
               ))}
               {firstAnswerPending ? <TopoHeartbeat className="h-28 shrink-0" zoom={0.5} /> : status === "submitted" && <Thinking />}

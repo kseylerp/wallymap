@@ -77,3 +77,4 @@ import "./power-plants";
 import "./disasters";
 import "./monuments";
 import "./tree-mortality";
+import "./permafrost";

@@ -86,6 +86,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "disasters", synonyms: ["disasters", "hurricane", "disaster declaration"], notes: "GDACS alerts worldwide, FEMA county declarations; days, years" },
   { layerId: "monuments", synonyms: ["national monument", "Bears Ears", "Grand Staircase", "conservation area", "monument boundary"], notes: "BLM monuments now vs 2021 (kind), v = area km2; compare the two for then vs now" },
   { layerId: "tree-mortality", synonyms: ["tree mortality", "beetle kill", "dead trees", "die-off"], notes: "aerial survey tree death by year; California to 2019, US 2021-2025; years input" },
+  { layerId: "permafrost", synonyms: ["permafrost", "frozen ground", "thawing ground"], notes: "northern zones, kind = continuous to isolated; canada true for NRCan tiles" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

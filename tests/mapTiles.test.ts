@@ -405,7 +405,7 @@ describe("heat mode under a compare", () => {
     visibleState(
       [
         ...base,
-        { type: "set_compare", compare: { layerId: "species", a: ["2019-01-01", "2020-12-31"], b: ["2021-01-01", "2024-12-31"], mode } },
+        { type: "set_compare", compare: { layerId: "species", a: ["2019-01-01", "2020-12-31"], b: ["2021-01-01", "2024-12-31"], mode } } as MapAction,
         ...more,
       ].reduce(reduce, { ...initialMapState, terrain: false }),
     );

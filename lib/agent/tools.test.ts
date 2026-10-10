@@ -140,16 +140,23 @@ describe("buildTools", () => {
     expect(description).toContain("fire-perimeters 2016-2020 vs 2021-today");
   });
 
-  it("list_layers includes vocabulary synonyms for each layer", async () => {
-    const result = (await run(buildTools().list_layers, {})) as { id: string; synonyms: string }[];
-    expect(result.find((l) => l.id === "fire-perimeters")?.synonyms).toBe("wildfire, fire, burn, burned area");
-    for (const layer of result) expect(layer.synonyms.length).toBeGreaterThan(0);
+  it("list_layers rows are one line each: id, title, coverage and a gist, no synonyms", async () => {
+    const result = (await run(buildTools().list_layers, {})) as string[];
+    expect(result).toHaveLength(listLayers().length);
+    expect(result.find((row) => row.startsWith("fire-perimeters |"))).toBe(
+      "fire-perimeters | Wildfire perimeters | US | current and past wildfire outlines with acres and year",
+    );
+    expect(result.find((row) => row.startsWith("reservoir-levels |"))).toContain("| [-123.5, 32, -104, 43.5] |");
+    for (const row of result) {
+      expect(row.split(" | ").length).toBeGreaterThanOrEqual(4);
+      expect(row).not.toContain("wildfire, fire");
+    }
   });
 
-  it("list_layers stays short: no descriptions or licenses", async () => {
-    const result = (await run(buildTools().list_layers, {})) as Record<string, unknown>[];
-    for (const layer of result) expect(Object.keys(layer).sort()).toEqual(["available", "coverage", "id", "synonyms", "title"]);
-    expect(JSON.stringify(result).length).toBeLessThan(14_000);
+  it("list_layers stays short: about 9,000 characters for every layer", async () => {
+    const result = await run(buildTools().list_layers, {});
+    // With synonyms repeated from the system prompt the rows were 13,475 characters for 81 layers.
+    expect(JSON.stringify(result).length).toBeLessThan(9_000);
   });
 
   it("list_layers with ids returns those layers' full descriptions and licences", async () => {
@@ -214,22 +221,9 @@ describe("buildTools", () => {
       );
 
       const result = await run(buildTools().list_layers, {});
-      expect(result).toEqual([
-        {
-          id: "needs-key",
-          title: "Needs key",
-          coverage: "the United States",
-          available: false,
-          synonyms: "",
-        },
-        {
-          id: "free",
-          title: "Free",
-          coverage: "worldwide",
-          available: true,
-          synonyms: "",
-        },
-      ]);
+      expect(result).toEqual(["needs-key | Needs key | US | unavailable", "free | Free | worldwide"]);
+      const detail = (await run(buildTools().list_layers, { ids: ["needs-key"] })) as { available: boolean }[];
+      expect(detail[0].available).toBe(false);
     } finally {
       clearRegistry();
       const { default: osmTrails } = await import("@/layers/osm-trails");

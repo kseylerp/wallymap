@@ -7,7 +7,7 @@ import { isFullLayerResult, summarizeLayerResult } from "@/lib/layers/summarize"
 import type { Basemap, RenderMode, TimeMode } from "@/lib/render/state";
 import { geocode } from "./geocode";
 import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
-import { synonymsFor } from "./vocabulary";
+import { gistFor } from "./vocabulary";
 import type { MapView } from "./view";
 
 const BASEMAPS = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"] as const satisfies readonly Basemap[];
@@ -49,21 +49,22 @@ const CompareWindowSchema = z.tuple([IsoDateSchema, IsoDateSchema]);
 const LngLatSchema = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]);
 
 /**
- * One list_layers row. Kept short on purpose: the model already has every layer's description in
- * its query_<id> tool definition, so repeating it here only cost tokens on every later turn.
+ * One list_layers row: "id | title | coverage | gist", plus " | unavailable" when this server lacks the layer's key.
+ * Kept to one short line on purpose: the system prompt already carries every layer's synonyms and notes, and each
+ * query_<id> tool its description, so the list only has to say what exists and where.
  */
-export type LayerSummary = {
+export type LayerRow = string;
+
+/** A list_layers row asked for by id: the layer's full description and data licence. */
+export type LayerDetail = {
   id: string;
   title: string;
-  /** Plain words, e.g. "worldwide" or "the United States". */
   coverage: string;
   available: boolean;
-  /** Words people use that should route to this layer, comma-separated on one line. */
-  synonyms: string;
+  gist: string;
+  description: string;
+  license: string;
 };
-
-/** A list_layers row asked for by id: the summary plus the layer's full description and data licence. */
-export type LayerDetail = LayerSummary & { description: string; license: string };
 
 function isAvailable(layer: Layer): boolean {
   return layer.requiredEnv.every((name) => Boolean(process.env[name]));
@@ -73,6 +74,13 @@ function describeCoverage(coverage: Coverage): string {
   if (coverage === "global") return "worldwide";
   if (coverage === "us") return "the United States";
   return `the bbox [${coverage.bbox.join(", ")}]`;
+}
+
+/** Coverage in a list_layers row: "worldwide", "US" or the bbox. */
+function rowCoverage(coverage: Coverage): string {
+  if (coverage === "global") return "worldwide";
+  if (coverage === "us") return "US";
+  return `[${coverage.bbox.join(", ")}]`;
 }
 
 /** Most characters of a layer's own description that go into its query tool on every turn. */
@@ -176,23 +184,31 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
   const tools: ToolSet = {
     list_layers: tool({
       description:
-        "List every dataset layer: its id, title, where it has coverage, whether it is available on this server, and the words that route to it. " +
+        "List every dataset layer, one row each: \"id | title | coverage | gist\", where coverage is worldwide, US or a bbox [west, south, east, north], " +
+        "and \"| unavailable\" ends the row when this server lacks the layer's key. " +
         "Each query_<id> tool describes its layer briefly; pass ids to get those layers' full descriptions (every caveat and input) and data licences.",
       inputSchema: z.object({
         ids: z.array(z.string().max(64)).max(8).optional().describe("Layer ids to describe in full; omit to list every layer"),
       }),
-      execute: async ({ ids }): Promise<LayerSummary[] | LayerDetail[]> => {
-        const summary = (layer: Layer): LayerSummary => ({
-          id: layer.id,
-          title: layer.title,
-          coverage: describeCoverage(layer.coverage),
-          available: isAvailable(layer),
-          synonyms: synonymsFor(layer.id).join(", "),
-        });
-        if (ids === undefined || ids.length === 0) return listLayers().map(summary);
+      execute: async ({ ids }): Promise<LayerRow[] | LayerDetail[]> => {
+        if (ids === undefined || ids.length === 0) {
+          return listLayers().map((layer) =>
+            [layer.id, layer.title, rowCoverage(layer.coverage), gistFor(layer.id), isAvailable(layer) ? "" : "unavailable"]
+              .filter(Boolean)
+              .join(" | "),
+          );
+        }
         return listLayers()
           .filter((layer) => ids.includes(layer.id))
-          .map((layer) => ({ ...summary(layer), description: layer.description, license: layer.license }));
+          .map((layer) => ({
+            id: layer.id,
+            title: layer.title,
+            coverage: describeCoverage(layer.coverage),
+            available: isAvailable(layer),
+            gist: gistFor(layer.id),
+            description: layer.description,
+            license: layer.license,
+          }));
       },
     }),
     geocode: tool({

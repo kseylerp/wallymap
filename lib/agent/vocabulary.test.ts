@@ -21,7 +21,16 @@ describe("VOCABULARY", () => {
   });
 
   it("renders a table small enough for the prompt", () => {
-    expect(vocabularyForPrompt().length).toBeLessThan(12000);
+    expect(vocabularyForPrompt().length).toBeLessThan(11_000);
+  });
+
+  it("gives every layer a 6-to-10-word gist for list_layers, kept out of the prompt", () => {
+    for (const entry of VOCABULARY) {
+      const words = entry.gist.split(/\s+/).filter(Boolean).length;
+      expect(words, `${entry.layerId}: "${entry.gist}"`).toBeGreaterThanOrEqual(6);
+      expect(words, `${entry.layerId}: "${entry.gist}"`).toBeLessThanOrEqual(10);
+    }
+    expect(vocabularyForPrompt()).not.toContain(VOCABULARY[0].gist);
   });
 
   it("appears in the system prompt: every layer id and every synonym", () => {

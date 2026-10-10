@@ -99,3 +99,7 @@ Approved colors only: wally pink `#F57272`, purple `#6E5BFF`, sage `#9FB693`, of
 ### 11a. Owner ruling on white (2026-10-09, after a fire test)
 
 "White tends to look like everything else." White is reserved for three uses only: hatch (diagonal) lines, some outlines (casings and selected edges), and 3D edges/highlights. Fills and data symbols carry a palette color; nothing data-bearing is drawn white-on-imagery alone. Fire must look like fire: perimeters get the pink tint plus pink hatch and a pink outline, detections are pink symbols, so a fire query visibly changes the map on both basemaps.
+
+### 11b. Owner picks from the style board (2026-10-09, later)
+
+Points = board A (monochrome shapes, off-white fill, white halo; selection purple). Density hex tiles = board A (gray ramp off-white → dark grey, 0.55 → 0.80, log scale, white edges, counts), not hatching; hatching stays for polygons and public-lands tiles. Extruded hex columns = board C (translucent white volumes with dark-grey caps; only the tallest cell takes purple). Trails = sage core on a white casing, dashed; forest roads dark-grey dashed; use trails sage dotted.

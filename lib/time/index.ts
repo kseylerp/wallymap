@@ -177,7 +177,11 @@ export function filterByWindow(fc: FeatureCollection, window: TimeWindow): Featu
   return kept.length === fc.features.length ? fc : { ...fc, features: kept };
 }
 
-/** Moves the window one bucket. "slide" moves both ends (width kept, clamped to the data); "cumulative" keeps start = min and moves the end. */
+/**
+ * Moves the window one bucket. "slide" moves both ends (width kept, clamped to the data); "cumulative" keeps start = min
+ * and moves the end. A slide window over the whole span (how the scrubber opens) cannot move, so stepping from it
+ * narrows to one bucket instead: the first going forward (as Play starts over), the newest going back.
+ */
 export function stepWindow(index: TimeIndex, window: TimeWindow, direction: 1 | -1, mode: "slide" | "cumulative"): TimeWindow {
   const starts = index.buckets.map((b) => Date.parse(b.start));
   const last = index.buckets.length - 1;
@@ -186,6 +190,10 @@ export function stepWindow(index: TimeIndex, window: TimeWindow, direction: 1 | 
   if (mode === "cumulative") {
     const nj = Math.min(last, Math.max(0, j + direction));
     return [index.min, index.buckets[nj].end];
+  }
+  if (last > 0 && i === 0 && j === last) {
+    const bucket = index.buckets[direction === 1 ? 0 : last];
+    return [bucket.start, bucket.end];
   }
   const shift = direction === 1 ? Math.min(1, last - j) : -Math.min(1, i);
   if (shift === 0) return window;

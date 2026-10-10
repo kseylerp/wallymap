@@ -145,6 +145,18 @@ describe("stepWindow", () => {
     expect(stepWindow(idx, first, -1, "slide")).toEqual(first);
     expect(stepWindow(idx, lastW, 1, "slide")).toEqual(lastW);
   });
+  it("narrows a full-span slide window to the first bucket going forward and the newest going back", () => {
+    const full: TimeWindow = [idx.buckets[0].start, idx.buckets[9].end];
+    expect(stepWindow(idx, full, 1, "slide")).toEqual([y(2016), ye(2016)]);
+    expect(stepWindow(idx, full, -1, "slide")).toEqual([y(2025), ye(2025)]);
+    // Then it steps as usual.
+    expect(stepWindow(idx, stepWindow(idx, full, 1, "slide"), 1, "slide")).toEqual([y(2017), ye(2017)]);
+    expect(stepWindow(idx, stepWindow(idx, full, -1, "slide"), -1, "slide")).toEqual([y(2024), ye(2024)]);
+    // A single bucket has nowhere to go.
+    const one = timeIndex({ a: layer("a", fc("2020-06-01")) })!;
+    const only: TimeWindow = [one.buckets[0].start, one.buckets[0].end];
+    expect(stepWindow(one, only, 1, "slide")).toEqual(only);
+  });
   it("cumulative keeps start at min and moves the end", () => {
     const w: TimeWindow = [idx.min, ye(2018)];
     expect(stepWindow(idx, w, 1, "cumulative")).toEqual([idx.min, ye(2019)]);

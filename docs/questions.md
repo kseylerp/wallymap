@@ -40,6 +40,56 @@ Tools: `geocode` → `set_view` → `query_species` → `render` → `note`
 
 The map shows recent wildlife sightings around Banff, and the note summarizes the most commonly seen species.
 
+## More layers: activities, live conditions, hazards, earth and water
+
+The layers added in M4 answer questions like these. Each line gives the question, then the usual tools.
+
+**Activities**
+- "Mountain bike trails near Moab": `geocode` → `set_view` → `query_mtb-trails` → `render` → `note`. Trails carry a 0 to 6 difficulty in `v`.
+- "Ski touring routes around Chamonix": `query_ski-routes` (filter `kind: skitour`).
+- "Climbing crags near Red River Gorge": `query_climbing`; `v` is the route count where OpenBeta knows it.
+- "Where can I put in to raft the South Fork American?": `query_paddling` with `query_streamflow` for today's flow.
+- "Huts and springs along the Haute Route": `query_outdoor-features` (filter `kind`).
+- "Trailheads and picnic areas in the Coconino National Forest": `query_recreation-sites`.
+- "Where can I fish and launch a boat on Lake Powell?": `query_fishing`.
+
+**Live conditions ("now", "today", "currently")**
+- "Surf at Half Moon Bay today": `query_surf` (buoys; `forecast: true` for the days ahead, `season` for typical months).
+- "When is low tide at Point Reyes?": `query_tides`.
+- "Is the Carson River running high?": `query_streamflow`; the note gives flow against the usual for the day.
+- "Is there fresh powder at Mount Baker?": `query_snowpack` (depth, new snow and snow type).
+- "Any weather warnings around Lake Tahoe?": `query_weather-alerts` (NWS warnings plus the weather now).
+
+**Hazards**
+- "Recent earthquakes near Mammoth Lakes": `query_earthquakes`; the scrubber plays them over time.
+- "Where is the wildfire smoke today?": `query_smoke`.
+- "What is the fire danger in Southern California this week?": `query_fire-weather` with a `date` up to 9 days ahead.
+- "Which large fires burned in Oregon in 2020?": `query_burn-severity` with `year: 2020`.
+- "Is this house in a flood zone?" (zoomed in): `query_flood-zones`; `query_fire-hazard` for long-run fire risk; `query_drought` for this week's drought.
+
+**Earth, water and ice**
+- "What rock is Half Dome made of?": `geocode` → `query_geologic-unit` with the lon and lat of the center → `note`. `query_geology` draws the map.
+- "How deep is Lake Tahoe?": `query_lakes` with `name: "Lake Tahoe"`; `v` is the maximum depth in metres.
+- "Glaciers in the Wind River Range": `query_glaciers` (areas in km²).
+- "Tallest peaks in the Sierra Nevada": `query_peaks` (elevation and prominence).
+- "Did Lake Mead shrink?": `query_surface-water` with `product: change`.
+- "Was the Sacramento Valley flooded last week?": `query_flood-extent` with a `date`.
+- "How much sea ice is in the Arctic this September compared to 2012?": `query_sea-ice` → `compare`.
+
+**Over time (satellite tiles)**
+- "How green was the Sierra Nevada this month compared to last year?": `query_greenness` → `render` → `compare` with two windows a year apart.
+- "Show snow cover in the Alps over the last month": `query_snow-cover` → `render` → `set_time` with `play`; the scrubber steps one image per day.
+- "Did spring come early in Virginia this year?": `query_phenology`.
+- "Where has vegetation just been disturbed in British Columbia?": `query_disturbance`.
+- "What covers the ground around Fresno?": `query_land-cover`.
+
+**Wildlife and places**
+- "Where are the most iNaturalist or GBIF records of mountain lions in Colorado?": `query_gbif-occurrences` with `Puma concolor` (or `query_species`) → `render` with mode `heat`.
+- "Critical habitat for the desert tortoise near St. George": `query_critical-habitat`.
+- "Wild horse areas in Nevada": `query_grazing-allotments`.
+- "Protected areas in Patagonia": `query_protected-areas-world`.
+- "Tell me about the history of Bodie": `query_wikipedia-nearby`.
+
 ## Time, routes, compare
 
 Beyond the six starters, these tools shape follow-up questions. They appear in the trace next to the `query_<layer>` and `render` calls.
@@ -58,7 +108,7 @@ Beyond the six starters, these tools shape follow-up questions. They appear in t
 
 ## Eval set
 
-`scripts/eval-model.mts --set` reads the questions below (the lines starting with `- ` between the markers), runs each one through the real agent with the model in `MODEL_NAME`, and prints one JSON line per question and a final `ok N/M`. It spends model credits and calls live data servers. The set covers trails, both fire layers, forest loss, snow, stream flow, campsites and roads, species, photos with popularity, public lands with wilderness, night lights with population, remoteness (which also looks up a named physical region), a walking route, fire year by year, a compare over time, a sources check, popular campsites, a physical-region outline, and two "here" questions that carry a map view (`@view=[w,s,e,n]`, the bbox the browser would send) and pass without a geocode.
+`scripts/eval-model.mts --set` reads the questions below (the lines starting with `- ` between the markers), runs each one through the real agent with the model in `MODEL_NAME`, and prints one JSON line per question and a final `ok N/M`. It spends model credits and calls live data servers. The set covers trails, both fire layers, forest loss, snow, stream flow, campsites and roads, species, photos with popularity, public lands with wilderness, night lights with population, remoteness (which also looks up a named physical region), a walking route, fire year by year, a compare over time, a sources check, popular campsites, a physical-region outline, two "here" questions that carry a map view (`@view=[w,s,e,n]`, the bbox the browser would send) and pass without a geocode, and twelve M4 questions, one per theme: mountain biking, ski touring, climbing, lake depth, surf today, river level, weather warnings, earthquakes, rock type at a point, glaciers, greenness compared over a year, and species records drawn as a heatmap.
 
 ```bash
 node --env-file=.env.local --import tsx scripts/eval-model.mts --set
@@ -86,6 +136,18 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set
 - Outline the Sierra Nevada
 - What fires are here? @view=[-120.2,38.9,-119.8,39.3]
 - Any surf here? @view=[-117.35,32.6,-117.1,32.85]
+- Mountain bike trails near Moab
+- Ski touring routes around Chamonix
+- Climbing crags near Red River Gorge
+- How deep is Lake Tahoe?
+- Surf at Half Moon Bay today
+- Is the Carson River running high?
+- Any weather warnings around Lake Tahoe?
+- Recent earthquakes near Mammoth Lakes
+- What rock is Half Dome made of?
+- Glaciers in the Wind River Range
+- How green was the Sierra Nevada this month compared to last year?
+- Where are the most iNaturalist or GBIF records of mountain lions in Colorado?
 <!-- eval:end -->
 
 ## Last run

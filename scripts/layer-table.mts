@@ -4,6 +4,7 @@
  *   pnpm exec tsx scripts/layer-table.mts            # print to stdout
  *   pnpm exec tsx scripts/layer-table.mts --write    # replace the block between
  *                                                    # <!-- layers:start --> and <!-- layers:end --> in README.md
+ *                                                    # and docs/layers.md (and the layer count before it)
  *
  * id, title, coverage and key columns come from the registry. "Shows", "Source" and
  * "Freshness" are not on the Layer type, so they are written here; the script throws
@@ -18,10 +19,10 @@ const META: Record<string, { shows: string; source: string; freshness: string; c
   "fire-detections": { shows: "Satellite hotspots from the last 1 to 10 days", source: "NASA FIRMS", freshness: "Near real time (hours)" },
   "forest-loss": { shows: "Where tree cover was lost, by year", source: "UMD / Global Forest Watch", freshness: "Yearly" },
   "forest-alerts": { shows: "Recent forest clearing in the tropics", source: "Global Forest Watch (GLAD, RADD)", freshness: "Weekly", coverage: "Tropics (30°S to 30°N)" },
-  snowpack: { shows: "Snow water equivalent at mountain weather stations", source: "USDA NRCS SNOTEL", freshness: "Latest reading (daily)", coverage: "Western US" },
+  snowpack: { shows: "Snow depth, water equivalent, density and snow type at mountain weather stations", source: "USDA NRCS SNOTEL", freshness: "Live (hourly readings)", coverage: "Western US" },
   "forest-roads": { shows: "Forest Service roads open to motor vehicles", source: "USDA Forest Service MVUM", freshness: "Yearly" },
   campsites: { shows: "Campsites and parking lots", source: "OpenStreetMap", freshness: "Live (cached up to a day)" },
-  streamflow: { shows: "River flow and gauge height at stream gauges", source: "USGS Water Data", freshness: "Latest reading (15 minutes), provisional" },
+  streamflow: { shows: "River flow, gauge height and flow against the usual for the day at stream gauges", source: "USGS Water Data", freshness: "Live (15 minutes), provisional" },
   species: { shows: "Wildlife and plant sightings", source: "iNaturalist", freshness: "Daily" },
   population: { shows: "Where people live", source: "NASA GIBS (GPW v4)", freshness: "Fixed at 2020" },
   "night-lights": { shows: "Satellite picture of the Earth at night", source: "NASA GIBS (VIIRS)", freshness: "Daily (date in the note)" },
@@ -32,6 +33,41 @@ const META: Record<string, { shows: string; source: string; freshness: string; c
   popularity: { shows: "Estimated popularity score (0 to 100) per trail", source: "Computed from OSM, Commons, Mapillary", freshness: "Computed per query" },
   "popularity-campsites": { shows: "Estimated popularity score (0 to 100) per campsite", source: "Computed from OSM, Commons, Mapillary", freshness: "Computed per query" },
   remoteness: { shows: "Remoteness score (0 to 100) per hexagon", source: "Computed from OSM and wilderness boundaries", freshness: "Computed per query" },
+  "mtb-trails": { shows: "Mountain bike trails rated 0 to 6 on the Singletrack Scale", source: "OpenStreetMap", freshness: "Live (cached up to a day)" },
+  earthquakes: { shows: "Recent earthquakes with magnitude, depth and time", source: "USGS Earthquake Catalog", freshness: "Live (minutes)" },
+  "ski-routes": { shows: "Downhill runs, nordic trails and ski touring routes", source: "OpenStreetMap", freshness: "Live (cached up to a day)" },
+  "recreation-sites": { shows: "Developed recreation sites: campgrounds, trailheads, boat ramps, day use", source: "USDA Forest Service, BLM", freshness: "Nightly feeds" },
+  glaciers: { shows: "Glacier and ice cap outlines with area", source: "GLIMS (NSIDC)", freshness: "Static (survey dates per glacier)" },
+  geology: { shows: "Geologic map units as map tiles", source: "Macrostrat", freshness: "Static" },
+  climbing: { shows: "Climbing crags, boulders and areas with route counts", source: "OpenStreetMap, OpenBeta", freshness: "Live (cached up to a day)" },
+  "critical-habitat": { shows: "Designated critical habitat for threatened and endangered species", source: "US Fish and Wildlife Service", freshness: "Updated as designated" },
+  "grazing-allotments": { shows: "Livestock grazing allotments and wild horse and burro areas", source: "Bureau of Land Management", freshness: "Updated occasionally" },
+  paddling: { shows: "Rapids, river sections, put-ins and canoe routes", source: "OpenStreetMap", freshness: "Live (cached up to a day)" },
+  "gbif-occurrences": { shows: "Species records by scientific name, or a world density map", source: "GBIF", freshness: "Daily" },
+  surf: { shows: "Wave height, period and direction at buoys; forecast and typical months", source: "NOAA NDBC, Open-Meteo Marine", freshness: "Live (under an hour)" },
+  peaks: { shows: "Named peaks with elevation and prominence", source: "Wikidata", freshness: "Live (community edits)" },
+  greenness: { shows: "How green the vegetation is (NDVI or EVI)", source: "NASA GIBS (MODIS Terra)", freshness: "Every 16 days, back to 2000" },
+  "protected-areas-world": { shows: "Protected areas worldwide as map tiles", source: "WDPA (UNEP-WCMC, IUCN)", freshness: "Monthly" },
+  "fire-hazard": { shows: "Long-run wildfire hazard potential in five classes", source: "USDA Forest Service (WHP 2023)", freshness: "Static (2023)" },
+  "flood-zones": { shows: "FEMA flood hazard zones (zoom 14 and closer)", source: "FEMA National Flood Hazard Layer", freshness: "Updated as maps change" },
+  "snow-cover": { shows: "Where the ground is snow-covered; US snow depth", source: "NASA GIBS (MODIS Terra), NOAA NOHRSC", freshness: "Daily, back to 2000" },
+  "outdoor-features": { shows: "Huts, shelters, springs, viewpoints, caves, hot springs, waterfalls, passes", source: "OpenStreetMap", freshness: "Live (cached up to a day)" },
+  tides: { shows: "Next high and low tides at tide stations", source: "NOAA CO-OPS", freshness: "Live predictions and gauges" },
+  "land-cover": { shows: "What covers the ground: trees, crops, built-up, water", source: "ESA WorldCover, USGS NLCD", freshness: "Static (2021; NLCD map years)" },
+  "wikipedia-nearby": { shows: "Wikipedia articles about places in view", source: "Wikipedia", freshness: "Live" },
+  "surface-water": { shows: "Where surface water has been seen, 1984 to 2021", source: "EC JRC Global Surface Water", freshness: "Static (1984 to 2021)" },
+  "flood-extent": { shows: "Open water and floods from satellite", source: "NASA GIBS (OPERA, MODIS)", freshness: "Daily, a few days behind" },
+  disturbance: { shows: "Where vegetation was just lost or damaged", source: "NASA GIBS (OPERA)", freshness: "Daily, about 3 days behind" },
+  "sea-ice": { shows: "Sea ice concentration and extent", source: "NASA GIBS (GHRSST MUR, MODIS)", freshness: "Daily, back to 2000" },
+  "fire-weather": { shows: "Fire danger forecast (Fire Weather Index)", source: "EC JRC GWIS / EFFIS", freshness: "Daily, up to 9 days ahead" },
+  lakes: { shows: "Named lakes and reservoirs with maximum depth", source: "Wikidata", freshness: "Live (community edits)" },
+  drought: { shows: "Weekly drought categories D0 to D4", source: "U.S. Drought Monitor (NDMC)", freshness: "Weekly" },
+  phenology: { shows: "Whether spring leaf-out and bloom came early or late", source: "USA National Phenology Network", freshness: "Daily this year; yearly back to 1981", coverage: "Lower 48 states" },
+  "burn-severity": { shows: "Burned areas of large fires, by year", source: "MTBS (USGS, USFS)", freshness: "Yearly, about 18 months behind" },
+  smoke: { shows: "Wildfire smoke plumes by density", source: "NOAA Hazard Mapping System", freshness: "Daily", coverage: "North and Central America" },
+  "geologic-unit": { shows: "The rock unit, age and rock type under one point", source: "Macrostrat", freshness: "Static" },
+  fishing: { shows: "Fishing access, boat ramps, piers, recent fish sightings, water temperature", source: "OpenStreetMap, USFS, iNaturalist, USGS", freshness: "Live" },
+  "weather-alerts": { shows: "Active weather warnings and the weather right now", source: "NOAA National Weather Service, Open-Meteo", freshness: "Live (minutes)" },
 };
 
 function coverageText(l: Layer): string {
@@ -67,12 +103,14 @@ export function layerTable(): string {
 
 const table = layerTable();
 if (process.argv.includes("--write")) {
-  const path = "README.md";
-  const text = readFileSync(path, "utf8");
   const re = /(<!-- layers:start -->)[\s\S]*?(<!-- layers:end -->)/;
-  if (!re.test(text)) throw new Error("README.md is missing the layers:start / layers:end markers");
-  writeFileSync(path, text.replace(re, `$1\n${table}\n$2`));
-  console.log(`Updated ${path}`);
+  for (const path of ["README.md", "docs/layers.md"]) {
+    const text = readFileSync(path, "utf8");
+    if (!re.test(text)) throw new Error(`${path} is missing the layers:start / layers:end markers`);
+    const count = listLayers().length;
+    writeFileSync(path, text.replace(re, `$1\n${table}\n$2`).replace(/ships \d+ data layers/, `ships ${count} data layers`));
+    console.log(`Updated ${path}`);
+  }
 } else {
   console.log(table);
 }

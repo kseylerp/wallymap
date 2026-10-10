@@ -31,6 +31,12 @@ A tiles result carries `data: { url, minzoom, maxzoom, format, tileSize?, source
 
 Tile layers have no features for the model to read, so the model only gets the URL, zoom range, and citation. Put anything it should tell the user (the date shown, the year range) in `coverageNote`.
 
+### Dated tile layers
+
+A tile layer whose imagery changes over time sets `data.time: { template, cadence, from, to?, daysBack? }` (the `TileTime` type in `layers/types.ts`). `template` is the tile URL with `{date}` (YYYY-MM-DD) or `{year}` where the time goes; `cadence` is `daily`, `8day`, `16day`, `monthly` or `yearly` (8-day and 16-day periods restart every 1 January, as MODIS composites do); `daysBack` keeps the newest period that many days behind today (negative for forecast days). The `_shared/dated-tiles.ts`, `_shared/gibs-dated.ts` and `_shared/wms.ts` helpers build it for you.
+
+With `data.time` set, loading the layer opens the time scrubber on its own, with one step per published image: the last 30 days for a daily layer, and every period from `from` for the other cadences, at most 120 steps, ending at the date the layer was loaded for when that is older. The scrubber names the cadence ("one image per 16 days"), play steps through the images, and `tileUrlForTime` in `lib/time/index.ts` fills the template for each step. With dated GeoJSON layers on the map too, their features pick the buckets and the tile layer shows the window's end date. Compare works the same way.
+
 ## Shared helpers in `layers/_shared/`
 
 Use these instead of rewriting fetch, retry, and error handling:
@@ -61,7 +67,7 @@ When a source can return more than the map or the model can use, cap the result 
 
 Feature properties may carry two optional fields, and the map reads both:
 
-- `t`: an ISO date string (`2016-07-04T00:00:00.000Z`, or a bare `2016-07-04`). The time scrubber builds its histogram from every loaded layer's `t` and picks day, month, or year buckets from the data span (at most 60 buckets). Moving the window hides dated features outside it; features with no `t` are never hidden, and a layer with no `t` at all does not make the scrubber appear. Fire perimeters set `t` to the start of their year, fire detections to the detection time. The `set_time` agent tool drives the same window. Tile layers carry no features, so the scrubber rewrites their URL instead: today only `night-lights` (the date in the path becomes the window's end date) and `forest-loss` (`start_year` and `end_year` follow the window). A new date-aware tile layer needs a case in `tileUrlForTime` in `lib/time/index.ts`.
+- `t`: an ISO date string (`2016-07-04T00:00:00.000Z`, or a bare `2016-07-04`). The time scrubber builds its histogram from every loaded layer's `t` and picks day, month, or year buckets from the data span (at most 60 buckets). Moving the window hides dated features outside it; features with no `t` are never hidden, and a layer with no `t` at all does not make the scrubber appear. Fire perimeters set `t` to the start of their year, fire detections to the detection time. The `set_time` agent tool drives the same window. Tile layers carry no features, so they follow the scrubber through `data.time` instead (see "Dated tile layers" below).
 - `v`: a number, the layer's one headline value (acres, a 0 to 100 score, a count). The inspect card shows it with the layer's `style.unit`, the layer console offers it as a numeric range filter (labelled "Value", or "Score (0 to 100)" for `unit: "score"`; it is left out when another property holds the same number on every feature), and route preview plots it along the route in the elevation panel. Column height will use it once 3D columns are drawn.
 
 A layer that sets neither still draws as plain points, lines, or polygons.
@@ -138,7 +144,70 @@ describe("my-layer", () => {
 
 ## Teach the agent your layer's words
 
-This step is easy to forget and the layer is hard for the agent to find without it. Add an entry to `VOCABULARY` in `lib/agent/vocabulary.ts` with your layer's `id` (as `layerId`), the words people use for it (`synonyms`), and a short `notes` line. The entry is rendered into the system prompt and returned by `list_layers`; a test fails if a registered layer has no entry. Put layers that should be queried together next to each other, since the agent queries matches in table order. Keep the note short, because the whole table must stay under about 1,800 characters.
+This step is easy to forget and the layer is hard for the agent to find without it. Add an entry to `VOCABULARY` in `lib/agent/vocabulary.ts` with your layer's `id` (as `layerId`), the words people use for it (`synonyms`), and a short `notes` line. The entry is rendered into the system prompt and returned by `list_layers`; a test fails if a registered layer has no entry. Put layers that should be queried together next to each other, since the agent queries matches in table order. Keep the note short, because the whole table must stay under 6,600 characters (`lib/agent/vocabulary.test.ts`). Give the layer a palette role too: one line in `LAYER_ROLES` in `lib/render/palette.ts` (`hazard`, `natural`, `data`, `score` or `raster`), which `layerColor(id)` reads for `style.color`.
+
+## The layers today
+
+WallyMap ships 54 data layers. This table is generated from the layer registry by `pnpm exec tsx scripts/layer-table.mts --write`, which also refreshes the copy in the README.
+
+<!-- layers:start -->
+| Id | Title | What it shows | Source | Coverage | Key needed | Freshness |
+| --- | --- | --- | --- | --- | --- | --- |
+| `osm-trails` | OpenStreetMap trails | Hiking paths and tracks with difficulty and surface | OpenStreetMap | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
+| `fire-perimeters` | Wildfire perimeters | Current and past US wildfire outlines | NIFC (WFIGS) | US | None | Updated through the fire season |
+| `fire-detections` | Active fire detections | Satellite hotspots from the last 1 to 10 days | NASA FIRMS | Global | `FIRMS_MAP_KEY` (required) | Near real time (hours) |
+| `forest-loss` | Tree cover loss | Where tree cover was lost, by year | UMD / Global Forest Watch | Global | None | Yearly |
+| `forest-alerts` | Forest disturbance alerts | Recent forest clearing in the tropics | Global Forest Watch (GLAD, RADD) | Tropics (30°S to 30°N) | None | Weekly |
+| `snowpack` | Snowpack (SNOTEL, live) | Snow depth, water equivalent, density and snow type at mountain weather stations | USDA NRCS SNOTEL | Western US | None | Live (hourly readings) |
+| `forest-roads` | Forest Service roads open to motor vehicles | Forest Service roads open to motor vehicles | USDA Forest Service MVUM | US | None | Yearly |
+| `campsites` | Campsites and parking lots | Campsites and parking lots | OpenStreetMap | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
+| `streamflow` | Stream flow (USGS gauges, live) | River flow, gauge height and flow against the usual for the day at stream gauges | USGS Water Data | Global | `USGS_API_KEY` (optional), `OVERPASS_URL` (optional) | Live (15 minutes), provisional |
+| `species` | Species sightings | Wildlife and plant sightings | iNaturalist | Global | None | Daily |
+| `population` | Population density | Where people live | NASA GIBS (GPW v4) | Global | None | Fixed at 2020 |
+| `night-lights` | Night lights | Satellite picture of the Earth at night | NASA GIBS (VIIRS) | Global | None | Daily (date in the note) |
+| `wilderness` | Wilderness areas | Designated wilderness boundaries | Wilderness.net / USGS | US | None | Updated occasionally |
+| `photos` | Photo density | Where geotagged photos were taken | Wikimedia Commons, Mapillary | Global | `MAPILLARY_TOKEN` (optional) | Live |
+| `physical-regions` | Named physical regions | Named mountain ranges, deserts and plateaus | Natural Earth | Global | None | Static |
+| `public-lands` | Public land ownership | Who owns and manages the land | USGS PAD-US 4.1 | US | `PADUS_TILES_URL` (optional) | Static (release 4.1) |
+| `popularity` | Trail popularity estimate | Estimated popularity score (0 to 100) per trail | Computed from OSM, Commons, Mapillary | Global | `MAPILLARY_TOKEN` (optional), `OVERPASS_URL` (optional) | Computed per query |
+| `popularity-campsites` | Campsite popularity estimate | Estimated popularity score (0 to 100) per campsite | Computed from OSM, Commons, Mapillary | Global | `MAPILLARY_TOKEN` (optional), `OVERPASS_URL` (optional) | Computed per query |
+| `remoteness` | Remoteness score | Remoteness score (0 to 100) per hexagon | Computed from OSM and wilderness boundaries | Global | `OVERPASS_URL` (optional) | Computed per query |
+| `mtb-trails` | Mountain bike trails | Mountain bike trails rated 0 to 6 on the Singletrack Scale | OpenStreetMap | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
+| `earthquakes` | Earthquakes | Recent earthquakes with magnitude, depth and time | USGS Earthquake Catalog | Global | None | Live (minutes) |
+| `ski-routes` | Ski runs, nordic trails and ski touring routes | Downhill runs, nordic trails and ski touring routes | OpenStreetMap | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
+| `recreation-sites` | Recreation sites | Developed recreation sites: campgrounds, trailheads, boat ramps, day use | USDA Forest Service, BLM | US | None | Nightly feeds |
+| `glaciers` | Glaciers | Glacier and ice cap outlines with area | GLIMS (NSIDC) | Global | None | Static (survey dates per glacier) |
+| `geology` | Geology | Geologic map units as map tiles | Macrostrat | Global | None | Static |
+| `climbing` | Climbing crags, boulders and areas | Climbing crags, boulders and areas with route counts | OpenStreetMap, OpenBeta | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
+| `critical-habitat` | Critical habitat | Designated critical habitat for threatened and endangered species | US Fish and Wildlife Service | US | None | Updated as designated |
+| `grazing-allotments` | Grazing allotments and wild horse areas | Livestock grazing allotments and wild horse and burro areas | Bureau of Land Management | US | None | Updated occasionally |
+| `paddling` | Whitewater rapids, put-ins and canoe routes | Rapids, river sections, put-ins and canoe routes | OpenStreetMap | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
+| `gbif-occurrences` | GBIF occurrence records | Species records by scientific name, or a world density map | GBIF | Global | None | Daily |
+| `surf` | Surf and waves (NOAA buoys, live) | Wave height, period and direction at buoys; forecast and typical months | NOAA NDBC, Open-Meteo Marine | Global | None | Live (under an hour) |
+| `peaks` | Peaks | Named peaks with elevation and prominence | Wikidata | Global | None | Live (community edits) |
+| `greenness` | Vegetation greenness | How green the vegetation is (NDVI or EVI) | NASA GIBS (MODIS Terra) | Global | None | Every 16 days, back to 2000 |
+| `protected-areas-world` | Protected areas of the world | Protected areas worldwide as map tiles | WDPA (UNEP-WCMC, IUCN) | Global | None | Monthly |
+| `fire-hazard` | Wildfire hazard potential | Long-run wildfire hazard potential in five classes | USDA Forest Service (WHP 2023) | US | None | Static (2023) |
+| `flood-zones` | FEMA flood zones | FEMA flood hazard zones (zoom 14 and closer) | FEMA National Flood Hazard Layer | US | None | Updated as maps change |
+| `snow-cover` | Snow cover | Where the ground is snow-covered; US snow depth | NASA GIBS (MODIS Terra), NOAA NOHRSC | Global | None | Daily, back to 2000 |
+| `outdoor-features` | Huts, springs, peaks and other backcountry features | Huts, shelters, springs, viewpoints, caves, hot springs, waterfalls, passes | OpenStreetMap | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
+| `tides` | Tides (NOAA, next high and low) | Next high and low tides at tide stations | NOAA CO-OPS | US | None | Live predictions and gauges |
+| `land-cover` | Land cover | What covers the ground: trees, crops, built-up, water | ESA WorldCover, USGS NLCD | Global | None | Static (2021; NLCD map years) |
+| `wikipedia-nearby` | Wikipedia nearby | Wikipedia articles about places in view | Wikipedia | Global | None | Live |
+| `surface-water` | Surface water history | Where surface water has been seen, 1984 to 2021 | EC JRC Global Surface Water | Global | None | Static (1984 to 2021) |
+| `flood-extent` | Flood and surface water extent | Open water and floods from satellite | NASA GIBS (OPERA, MODIS) | Global | None | Daily, a few days behind |
+| `disturbance` | Vegetation disturbance alerts | Where vegetation was just lost or damaged | NASA GIBS (OPERA) | Global | None | Daily, about 3 days behind |
+| `sea-ice` | Sea ice | Sea ice concentration and extent | NASA GIBS (GHRSST MUR, MODIS) | Global | None | Daily, back to 2000 |
+| `fire-weather` | Fire weather (fire danger) | Fire danger forecast (Fire Weather Index) | EC JRC GWIS / EFFIS | Global | None | Daily, up to 9 days ahead |
+| `lakes` | Lakes and reservoirs | Named lakes and reservoirs with maximum depth | Wikidata | Global | None | Live (community edits) |
+| `drought` | Drought | Weekly drought categories D0 to D4 | U.S. Drought Monitor (NDMC) | US | None | Weekly |
+| `phenology` | Spring arrival (leaf-out and bloom) | Whether spring leaf-out and bloom came early or late | USA National Phenology Network | Lower 48 states | None | Daily this year; yearly back to 1981 |
+| `burn-severity` | Burned areas of large fires (MTBS) | Burned areas of large fires, by year | MTBS (USGS, USFS) | US | None | Yearly, about 18 months behind |
+| `smoke` | Wildfire smoke | Wildfire smoke plumes by density | NOAA Hazard Mapping System | North and Central America | None | Daily |
+| `geologic-unit` | Geologic unit at a point | The rock unit, age and rock type under one point | Macrostrat | Global | None | Static |
+| `fishing` | Fishing (access, boat ramps, recent catches, water temperature) | Fishing access, boat ramps, piers, recent fish sightings, water temperature | OpenStreetMap, USFS, iNaturalist, USGS | Global | `OVERPASS_URL` (optional) | Live |
+| `weather-alerts` | Weather alerts (NWS, live) and current weather | Active weather warnings and the weather right now | NOAA National Weather Service, Open-Meteo | Global | None | Live (minutes) |
+<!-- layers:end -->
 
 ## Checklist
 
@@ -154,5 +223,5 @@ This step is easy to forget and the layer is hard for the agent to find without 
 - [ ] A capped or empty result sets `coverageNote`.
 - [ ] Dated features carry `t`; a headline number goes in `v`, and a 0 to 100 score sets `style.unit: "score"`.
 - [ ] A point layer has a legend symbol in `lib/render/wally/pins.ts` (or accepts the plain circle).
-- [ ] `scripts/layer-table.mts` has an entry for the layer; then run it with `--write` to refresh the README table.
+- [ ] `scripts/layer-table.mts` has an entry for the layer; then run it with `--write` to refresh the tables in the README and here.
 - [ ] `pnpm test` passes with no keys set.

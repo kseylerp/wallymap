@@ -32,7 +32,7 @@ Then open http://localhost:3000. Fill in `.env.local` first; each variable in `.
 
 ## Layers
 
-WallyMap ships 19 data layers. The agent gets one `query_<id>` tool per layer and picks them from your question. This table is generated from the layer registry by `pnpm exec tsx scripts/layer-table.mts --write`.
+WallyMap ships 54 data layers. The agent gets one `query_<id>` tool per layer and picks them from your question. This table is generated from the layer registry by `pnpm exec tsx scripts/layer-table.mts --write`.
 
 <!-- layers:start -->
 | Id | Title | What it shows | Source | Coverage | Key needed | Freshness |
@@ -42,10 +42,10 @@ WallyMap ships 19 data layers. The agent gets one `query_<id>` tool per layer an
 | `fire-detections` | Active fire detections | Satellite hotspots from the last 1 to 10 days | NASA FIRMS | Global | `FIRMS_MAP_KEY` (required) | Near real time (hours) |
 | `forest-loss` | Tree cover loss | Where tree cover was lost, by year | UMD / Global Forest Watch | Global | None | Yearly |
 | `forest-alerts` | Forest disturbance alerts | Recent forest clearing in the tropics | Global Forest Watch (GLAD, RADD) | Tropics (30°S to 30°N) | None | Weekly |
-| `snowpack` | Snowpack (SNOTEL) | Snow water equivalent at mountain weather stations | USDA NRCS SNOTEL | Western US | None | Latest reading (daily) |
+| `snowpack` | Snowpack (SNOTEL, live) | Snow depth, water equivalent, density and snow type at mountain weather stations | USDA NRCS SNOTEL | Western US | None | Live (hourly readings) |
 | `forest-roads` | Forest Service roads open to motor vehicles | Forest Service roads open to motor vehicles | USDA Forest Service MVUM | US | None | Yearly |
 | `campsites` | Campsites and parking lots | Campsites and parking lots | OpenStreetMap | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
-| `streamflow` | Stream flow (USGS gauges) | River flow and gauge height at stream gauges | USGS Water Data | US | `USGS_API_KEY` (optional) | Latest reading (15 minutes), provisional |
+| `streamflow` | Stream flow (USGS gauges, live) | River flow, gauge height and flow against the usual for the day at stream gauges | USGS Water Data | Global | `USGS_API_KEY` (optional), `OVERPASS_URL` (optional) | Live (15 minutes), provisional |
 | `species` | Species sightings | Wildlife and plant sightings | iNaturalist | Global | None | Daily |
 | `population` | Population density | Where people live | NASA GIBS (GPW v4) | Global | None | Fixed at 2020 |
 | `night-lights` | Night lights | Satellite picture of the Earth at night | NASA GIBS (VIIRS) | Global | None | Daily (date in the note) |
@@ -56,6 +56,41 @@ WallyMap ships 19 data layers. The agent gets one `query_<id>` tool per layer an
 | `popularity` | Trail popularity estimate | Estimated popularity score (0 to 100) per trail | Computed from OSM, Commons, Mapillary | Global | `MAPILLARY_TOKEN` (optional), `OVERPASS_URL` (optional) | Computed per query |
 | `popularity-campsites` | Campsite popularity estimate | Estimated popularity score (0 to 100) per campsite | Computed from OSM, Commons, Mapillary | Global | `MAPILLARY_TOKEN` (optional), `OVERPASS_URL` (optional) | Computed per query |
 | `remoteness` | Remoteness score | Remoteness score (0 to 100) per hexagon | Computed from OSM and wilderness boundaries | Global | `OVERPASS_URL` (optional) | Computed per query |
+| `mtb-trails` | Mountain bike trails | Mountain bike trails rated 0 to 6 on the Singletrack Scale | OpenStreetMap | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
+| `earthquakes` | Earthquakes | Recent earthquakes with magnitude, depth and time | USGS Earthquake Catalog | Global | None | Live (minutes) |
+| `ski-routes` | Ski runs, nordic trails and ski touring routes | Downhill runs, nordic trails and ski touring routes | OpenStreetMap | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
+| `recreation-sites` | Recreation sites | Developed recreation sites: campgrounds, trailheads, boat ramps, day use | USDA Forest Service, BLM | US | None | Nightly feeds |
+| `glaciers` | Glaciers | Glacier and ice cap outlines with area | GLIMS (NSIDC) | Global | None | Static (survey dates per glacier) |
+| `geology` | Geology | Geologic map units as map tiles | Macrostrat | Global | None | Static |
+| `climbing` | Climbing crags, boulders and areas | Climbing crags, boulders and areas with route counts | OpenStreetMap, OpenBeta | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
+| `critical-habitat` | Critical habitat | Designated critical habitat for threatened and endangered species | US Fish and Wildlife Service | US | None | Updated as designated |
+| `grazing-allotments` | Grazing allotments and wild horse areas | Livestock grazing allotments and wild horse and burro areas | Bureau of Land Management | US | None | Updated occasionally |
+| `paddling` | Whitewater rapids, put-ins and canoe routes | Rapids, river sections, put-ins and canoe routes | OpenStreetMap | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
+| `gbif-occurrences` | GBIF occurrence records | Species records by scientific name, or a world density map | GBIF | Global | None | Daily |
+| `surf` | Surf and waves (NOAA buoys, live) | Wave height, period and direction at buoys; forecast and typical months | NOAA NDBC, Open-Meteo Marine | Global | None | Live (under an hour) |
+| `peaks` | Peaks | Named peaks with elevation and prominence | Wikidata | Global | None | Live (community edits) |
+| `greenness` | Vegetation greenness | How green the vegetation is (NDVI or EVI) | NASA GIBS (MODIS Terra) | Global | None | Every 16 days, back to 2000 |
+| `protected-areas-world` | Protected areas of the world | Protected areas worldwide as map tiles | WDPA (UNEP-WCMC, IUCN) | Global | None | Monthly |
+| `fire-hazard` | Wildfire hazard potential | Long-run wildfire hazard potential in five classes | USDA Forest Service (WHP 2023) | US | None | Static (2023) |
+| `flood-zones` | FEMA flood zones | FEMA flood hazard zones (zoom 14 and closer) | FEMA National Flood Hazard Layer | US | None | Updated as maps change |
+| `snow-cover` | Snow cover | Where the ground is snow-covered; US snow depth | NASA GIBS (MODIS Terra), NOAA NOHRSC | Global | None | Daily, back to 2000 |
+| `outdoor-features` | Huts, springs, peaks and other backcountry features | Huts, shelters, springs, viewpoints, caves, hot springs, waterfalls, passes | OpenStreetMap | Global | `OVERPASS_URL` (optional) | Live (cached up to a day) |
+| `tides` | Tides (NOAA, next high and low) | Next high and low tides at tide stations | NOAA CO-OPS | US | None | Live predictions and gauges |
+| `land-cover` | Land cover | What covers the ground: trees, crops, built-up, water | ESA WorldCover, USGS NLCD | Global | None | Static (2021; NLCD map years) |
+| `wikipedia-nearby` | Wikipedia nearby | Wikipedia articles about places in view | Wikipedia | Global | None | Live |
+| `surface-water` | Surface water history | Where surface water has been seen, 1984 to 2021 | EC JRC Global Surface Water | Global | None | Static (1984 to 2021) |
+| `flood-extent` | Flood and surface water extent | Open water and floods from satellite | NASA GIBS (OPERA, MODIS) | Global | None | Daily, a few days behind |
+| `disturbance` | Vegetation disturbance alerts | Where vegetation was just lost or damaged | NASA GIBS (OPERA) | Global | None | Daily, about 3 days behind |
+| `sea-ice` | Sea ice | Sea ice concentration and extent | NASA GIBS (GHRSST MUR, MODIS) | Global | None | Daily, back to 2000 |
+| `fire-weather` | Fire weather (fire danger) | Fire danger forecast (Fire Weather Index) | EC JRC GWIS / EFFIS | Global | None | Daily, up to 9 days ahead |
+| `lakes` | Lakes and reservoirs | Named lakes and reservoirs with maximum depth | Wikidata | Global | None | Live (community edits) |
+| `drought` | Drought | Weekly drought categories D0 to D4 | U.S. Drought Monitor (NDMC) | US | None | Weekly |
+| `phenology` | Spring arrival (leaf-out and bloom) | Whether spring leaf-out and bloom came early or late | USA National Phenology Network | Lower 48 states | None | Daily this year; yearly back to 1981 |
+| `burn-severity` | Burned areas of large fires (MTBS) | Burned areas of large fires, by year | MTBS (USGS, USFS) | US | None | Yearly, about 18 months behind |
+| `smoke` | Wildfire smoke | Wildfire smoke plumes by density | NOAA Hazard Mapping System | North and Central America | None | Daily |
+| `geologic-unit` | Geologic unit at a point | The rock unit, age and rock type under one point | Macrostrat | Global | None | Static |
+| `fishing` | Fishing (access, boat ramps, recent catches, water temperature) | Fishing access, boat ramps, piers, recent fish sightings, water temperature | OpenStreetMap, USFS, iNaturalist, USGS | Global | `OVERPASS_URL` (optional) | Live |
+| `weather-alerts` | Weather alerts (NWS, live) and current weather | Active weather warnings and the weather right now | NOAA National Weather Service, Open-Meteo | Global | None | Live (minutes) |
 <!-- layers:end -->
 
 **Keys per layer.** The Key needed column says which keys each layer requires and which it only uses when set. Only `fire-detections` requires a key (`FIRMS_MAP_KEY`); without it that layer reports itself unavailable and every other layer still works.

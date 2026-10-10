@@ -152,28 +152,44 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set
 
 ## Last run
 
-Run on 2026-10-09 (final, commit aa86c78) with model `openai/gpt-oss-120b` and a 12-step cap: **ok 19/19**. A question passes when the agent located the place (geocode or a physical-regions query), queried a layer, drew whatever came back (render or compare), and wrote a note; a route question passes when the route tool ran and a note followed.
+Run on 2026-10-09 (M4 integration, commit fb8ef88, with the renderer-modes work still uncommitted in the tree) with model `openai/gpt-oss-120b` and a 12-step cap: **ok 32/33**. A question passes when the agent located the place (geocode or a physical-regions query), queried a layer, drew whatever came back (render or compare), and wrote a note; a route question passes when the route tool ran and a note followed.
 
 | Question | ok | Tools (query_ prefix dropped) | Seconds |
 | --- | --- | --- | --- |
-| Show hiking trails around Lake Tahoe | yes | list_layers, geocode, set_view, osm-trails, render, note | 26.9 |
-| Which wildfires burned near Yosemite in the last 10 years? | yes | geocode, set_view, fire-perimeters, render | 29.6 |
-| Are there any active fires burning near Missoula right now? | yes | geocode, set_view, fire-detections, render, note | 31.5 |
-| Where has the Amazon lost the most forest since 2015? | yes | list_layers, geocode, geocode, set_view, forest-loss, render | 38.4 |
-| How much snow is on the ground around Mount Hood? | yes | geocode, set_view, snowpack, set_view, snowpack, set_view, snowpack | 39 |
-| Which rivers near Jackson Hole are running high right now? | yes | list_layers, geocode, set_view, streamflow, render, render, render | 35.3 |
-| Find campsites and forest roads open to vehicles near Moab | yes | geocode, set_view, forest-roads, campsites, render, render, note | 33.8 |
-| What wildlife has been spotted around Banff this year? | yes | geocode, set_view, species, render | 40.8 |
-| Which trails and viewpoints around Zion National Park look the most popular? | yes | list_layers, geocode, set_view, osm-trails, popularity, photos, render, render, render, render, osm-trails | 126.2 |
-| Who owns the land around Bryce Canyon, and is any of it designated wilderness? | yes | geocode, set_view, public-lands, wilderness, render, render, note | 96 |
-| Where is the night sky darkest around Great Basin National Park, and how many people live nearby? | yes | list_layers, geocode, set_view, night-lights, population, render, render | 46.8 |
-| How remote is the Wind River Range? | yes | geocode, geocode, geocode, physical-regions, set_view, remoteness, render, note | 48.1 |
-| Show me a walking route from Tahoe City to Emerald Bay | yes | route, render, note | 11.3 |
-| Show wildfires near Yosemite year by year since 2016 | yes | geocode, set_view, fire-perimeters, render, set_time, note | 30.4 |
-| Show only alpine-grade trails near Chamonix | yes | list_layers, geocode, set_view, osm-trails, render, note | 27.2 |
-| Compare forest loss in Rondônia between 2015 and 2025 | yes | list_layers, geocode, set_view, forest-loss, render, forest-loss, render, compare, note | 37.7 |
-| Which sources did you use for snow near Mount Hood? | yes | list_layers, geocode, set_view, snowpack, note | 18.5 |
-| Which campsites around Moab look the most popular? | yes | geocode, set_view, popularity-campsites, popularity-campsites, popularity-campsites, render, note | 48.7 |
-| Outline the Sierra Nevada | yes | geocode, set_view, physical-regions, render, note | 18.5 |
+| Show hiking trails around Lake Tahoe | yes | list_layers, geocode, osm-trails, render, popularity, render | 19.4 |
+| Which wildfires burned near Yosemite in the last 10 years? | yes | geocode, fire-perimeters, render, note | 8.3 |
+| Are there any active fires burning near Missoula right now? | yes | geocode, fire-detections, fire-detections, render | 7 |
+| Where has the Amazon lost the most forest since 2015? | yes | geocode, geocode, forest-loss, render, physical-regions, render, set_view, note | 14.1 |
+| How much snow is on the ground around Mount Hood? | yes | list_layers, geocode, snowpack, snowpack, render, note | 12.2 |
+| Which rivers near Jackson Hole are running high right now? | yes | geocode, geocode, streamflow, render | 19.7 |
+| Find campsites and forest roads open to vehicles near Moab | yes | geocode, campsites, forest-roads, render, render, note | 25.9 |
+| What wildlife has been spotted around Banff this year? | yes | geocode, geocode, species, render, note | 30.4 |
+| Which trails and viewpoints around Zion National Park look the most popular? | yes | geocode, set_view, osm-trails, outdoor-features, outdoor-features, popularity, render, render | 31.3 |
+| Who owns the land around Bryce Canyon, and is any of it designated wilderness? | yes | geocode, set_view, public-lands, wilderness, render, render | 17.3 |
+| Where is the night sky darkest around Great Basin National Park, and how many people live nearby? | yes | geocode, night-lights, population, render, render | 13.6 |
+| How remote is the Wind River Range? | yes | geocode, geocode, geocode, remoteness, remoteness, render, note | 33.3 |
+| Show me a walking route from Tahoe City to Emerald Bay | yes | route | 5.4 |
+| Show wildfires near Yosemite year by year since 2016 | yes | geocode, set_view, fire-perimeters, render, set_time, note | 17.6 |
+| Show only alpine-grade trails near Chamonix | yes | geocode, osm-trails, render, note | 11.8 |
+| Compare forest loss in Rondônia between 2015 and 2025 | yes | geocode, geocode, set_view, forest-loss, render, compare, note | 14.1 |
+| Which sources did you use for snow near Mount Hood? | yes | geocode, snowpack, snow-cover, render, note | 10.6 |
+| Which campsites around Moab look the most popular? | yes | list_layers, geocode, popularity-campsites, popularity-campsites, popularity-campsites, popularity-campsites, render, note | 28.4 |
+| Outline the Sierra Nevada | yes | geocode, set_view, physical-regions, physical-regions, render | 9.4 |
+| What fires are here? | yes | fire-perimeters, render, fire-detections | 15.9 |
+| Any surf here? | yes | surf, surf, render | 17.8 |
+| Mountain bike trails near Moab | yes | geocode, mtb-trails, mtb-trails, mtb-trails, render | 19.7 |
+| Ski touring routes around Chamonix | yes | geocode, set_view, ski-routes, render | 11.8 |
+| Climbing crags near Red River Gorge | yes | geocode, geocode, climbing, climbing, render | 15.4 |
+| How deep is Lake Tahoe? | yes | geocode, lakes, render | 7.9 |
+| Surf at Half Moon Bay today | yes | geocode, surf, surf, render | 12.6 |
+| Is the Carson River running high? | yes | geocode, geocode, geocode, streamflow, render, note | 17.6 |
+| Any weather warnings around Lake Tahoe? | yes | geocode, weather-alerts, render, note | 9.5 |
+| Recent earthquakes near Mammoth Lakes | yes | geocode, earthquakes, earthquakes, render, note | 21.1 |
+| What rock is Half Dome made of? | no | geocode, geocode, geocode, geologic-unit, geologic-unit, note | 13.4 |
+| Glaciers in the Wind River Range | yes | list_layers, geocode, geocode, geocode, geocode, glaciers, render, note | 16.3 |
+| How green was the Sierra Nevada this month compared to last year? | yes | geocode, greenness, greenness, compare, note | 15.5 |
+| Where are the most iNaturalist or GBIF records of mountain lions in Colorado? | yes | geocode, species, species, species, gbif-occurrences, render | 20.8 |
 
-Questions that needed a zoom-in retry after an area-limit error: How much snow is on the ground around Mount Hood?, Which campsites around Moab look the most popular?. The pass rule was widened earlier today so that route-only answers, empty results that end in a note, physical-region outlines and compare drawings count; the "over time" prompt rule now says to call `set_time` once with play on.
+Questions that needed a zoom-in retry after an area-limit error: How remote is the Wind River Range?, Which campsites around Moab look the most popular?, Mountain bike trails near Moab, Where are the most iNaturalist or GBIF records of mountain lions in Colorado?.
+
+The one failure, "What rock is Half Dome made of?", answers correctly (Half Dome Granodiorite, from `geologic-unit`) but never calls `render` on the one-point result, so the pass rule counts it as not drawn. A targeted re-run failed the same way. The fix is a prompt change (render the `geologic-unit` point before the note) or a pass rule that lets a single-point lookup end in a note.

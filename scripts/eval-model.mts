@@ -10,13 +10,15 @@
  * and `<!-- eval:end -->` markers in docs/questions.md (lines starting with "- "), one after
  * another, prints one JSON line each, then a final line `ok N/M`.
  * "ok" means: the place was located (geocode or a physical-regions query), a query tool ran,
- * anything that came back was rendered (render or compare), the model
- * wrote a note (also when a layer errored or returned nothing), and the run finished without
- * throwing. A route-only question passes when the route tool ran and a note followed.
+ * anything that came back was rendered (render or compare), the model wrote a note, and the
+ * run finished without throwing. When nothing was drawn, the note only passes if at least one
+ * layer answered successfully with zero features (an honest "nothing here"); a question whose
+ * every layer query errored fails however much text was written. A route-only question passes
+ * when the route tool ran and a note followed.
  *
  * A question may end with `@view=[w,s,e,n]`, the map view the browser would send with it
- * (lib/agent/view.ts). The view goes into the system prompt the way app/api/chat/route.ts
- * puts it there, and the place then counts as located without a geocode.
+ * (lib/agent/view.ts). The view goes into the system prompt and into buildTools the way
+ * app/api/chat/route.ts passes it, and the place then counts as located without a geocode.
  * A question without `@view` that geocodes a named place must also call set_view, or it fails.
  */
 import { readFileSync } from "node:fs";
@@ -80,7 +82,7 @@ async function runQuestion(raw: string): Promise<Outcome> {
     const result = await generateText({
       model: getModel(),
       system: systemForTurn(SYSTEM_PROMPT, view),
-      tools: buildTools(),
+      tools: buildTools({ view }),
       prompt: question,
       stopWhen: stepCountIs(12),
     });
@@ -94,10 +96,14 @@ async function runQuestion(raw: string): Promise<Outcome> {
     }
     const seq = calls.map((c) => c.toolName);
     const features = calls.map((c) => featureCount(c.output)).filter((n): n is number => n !== null);
-    const layerErrors = calls
-      .filter((c) => c.toolName.startsWith("query_") && c.output && typeof c.output === "object" && "error" in (c.output as object))
+    const queryCalls = calls.filter((c) => c.toolName.startsWith("query_"));
+    const isLayerError = (output: unknown) => !!output && typeof output === "object" && "error" in output;
+    const layerErrors = queryCalls
+      .filter((c) => isLayerError(c.output))
       .map((c) => String((c.output as { error: string }).error).slice(0, 80));
-    const tiles = calls.filter((c) => c.toolName.startsWith("query_") && isTiles(c.output)).length;
+    // A query that answered (not an error, not a call that never returned) with zero features.
+    const answeredEmpty = queryCalls.some((c) => c.output !== undefined && !isLayerError(c.output) && featureCount(c.output) === 0);
+    const tiles = queryCalls.filter((c) => isTiles(c.output)).length;
     const queried = seq.some((t) => t.startsWith("query_"));
     const rendered = seq.includes("render") || seq.includes("compare");
     const noted = seq.includes("note") || result.text.trim().length > 40;
@@ -108,12 +114,12 @@ async function runQuestion(raw: string): Promise<Outcome> {
     // With a map view (and a bbox) the place is already on screen, so no geocode is needed.
     const located = !!view?.bbox || seq.includes("geocode") || seq.includes("query_physical-regions");
     // A route question is answered by the route tool alone (it geocodes its own stops).
-    // A query that drew something must have been rendered; an empty result or a layer
-    // error only needs the note that explains it.
+    // A query that drew something must have been rendered. When nothing was drawn, the note passes
+    // only if some layer answered with zero features; layer errors and a note alone are a failure.
     // A question that names a place (no @view, so the model had to geocode it) must also move the
     // camera there with set_view; otherwise the data loads off-screen. @view questions are exempt.
     const movedToPlace = view !== null || !seq.includes("geocode") || seq.includes("set_view");
-    const ok = routed && !queried ? noted : located && movedToPlace && queried && (drew ? rendered : true) && noted;
+    const ok = routed && !queried ? noted : located && movedToPlace && queried && (drew ? rendered : answeredEmpty) && noted;
 
     return {
       ok,

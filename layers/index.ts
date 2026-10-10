@@ -68,3 +68,4 @@ import "./wolf-packs";
 import "./methane-plumes";
 import "./ports";
 import "./river-basins";
+import "./hardiness-zones";

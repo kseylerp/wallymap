@@ -77,6 +77,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "methane-plumes", synonyms: ["methane", "emissions", "methane leak", "super-emitter"], notes: "Carbon Mapper plumes and sources, v = kg/h; days input" },
   { layerId: "ports", synonyms: ["port", "busiest port", "shipping", "cargo"], notes: "150 US principal ports, v = 2023 short tons" },
   { layerId: "river-basins", synonyms: ["river basin", "watershed", "drainage basin", "what watershed", "HUC"], notes: "US hydrologic units, level follows zoom (huc2 regions to huc10); v = area km2" },
+  { layerId: "hardiness-zones", synonyms: ["hardiness zone", "growing zone", "planting zone"], notes: "USDA 2023 winter-cold bands, lower 48; tiles, zone not readable" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

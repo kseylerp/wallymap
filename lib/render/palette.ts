@@ -108,6 +108,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "methane-plumes": "hazard",
   "ports": "data",
   "river-basins": "natural",
+  "hardiness-zones": "natural",
 };
 
 /** Layers that return raster tiles: the imagery carries its own colors. */

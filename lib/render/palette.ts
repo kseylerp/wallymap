@@ -77,6 +77,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   tides: "data",
   lakes: "data",
   fishing: "data",
+  "weather-alerts": "hazard",
 };
 
 /** Layers that return raster tiles: the imagery carries its own colors. */

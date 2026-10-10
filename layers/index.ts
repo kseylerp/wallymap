@@ -46,3 +46,4 @@ import "./surface-water";
 import "./flood-extent";
 import "./disturbance";
 import "./sea-ice";
+import "./fire-weather";

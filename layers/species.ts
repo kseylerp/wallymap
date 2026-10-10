@@ -27,7 +27,7 @@ const MS_PER_DAY = 86_400_000;
 const CACHE_TTL_SECONDS = 6 * 3600;
 
 const inputSchema = z.object({
-  taxon: z.string().trim().min(1).optional(),
+  taxon: z.string().trim().min(1).max(120).optional(),
   days: z.number().int().min(1).max(3650).default(365),
   researchGradeOnly: z.boolean().default(true),
 });

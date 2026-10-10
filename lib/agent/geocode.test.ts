@@ -144,6 +144,23 @@ describe("geocode", () => {
     expect(result).toHaveProperty("error");
   });
 
+  it("never echoes the Mapbox token in an error", async () => {
+    globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
+      throw new TypeError(`fetch failed for ${String(url)}`);
+    }) as typeof fetch;
+    const result = await geocode("Lake Tahoe");
+    expect(result).toHaveProperty("error");
+    expect(JSON.stringify(result)).not.toContain("test-mapbox-token");
+    expect(JSON.stringify(result)).toContain("[token]");
+  });
+
+  it("gives the Mapbox call a timeout", async () => {
+    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => jsonResponse({ type: "FeatureCollection", features: [] }));
+    globalThis.fetch = fetchMock as typeof fetch;
+    await geocode("Lake Tahoe");
+    expect(fetchMock.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
   describe("Natural Earth fallback", () => {
     type Calls = { mapbox: number; ne: number };
 

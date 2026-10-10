@@ -258,3 +258,11 @@ describe("species layer", () => {
     expect((await runLayer("species", { bbox: TAHOE, input: { days: 4000 } })).status).toBe(400);
   });
 });
+
+describe("input", () => {
+  it("caps taxon at 120 characters", async () => {
+    const { default: layer } = await import("./species");
+    expect(layer.input.safeParse({ taxon: "a".repeat(120) }).success).toBe(true);
+    expect(layer.input.safeParse({ taxon: "a".repeat(121) }).success).toBe(false);
+  });
+});

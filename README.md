@@ -124,6 +124,8 @@ Copy `.env.example` to `.env.local` and fill in what you need.
 | `PADUS_TILES_URL` | No | Your own copy of the `public-lands` vector tiles, as a `{z}/{x}/{y}.pbf` template. Default: the maintainer's bucket | Your storage |
 | `NEXT_PUBLIC_NATURAL_EARTH_STYLE` | No | Natural Earth 2 basemap, which the agent can switch to | Mapbox Studio |
 
+**Open-Meteo usage.** `surf` (with `forecast`), `weather-alerts` (the current-weather point) and `streamflow` outside the United States use Open-Meteo, which needs no key but is free for non-commercial use only and counts each location in a request toward a daily allowance of about 10,000. A non-US `streamflow` view samples 12 rivers at 9 model cells each, 108 locations (cached for an hour), and a `surf` forecast sends 16, so roughly 90 distinct non-US river views a day use up the free allowance. A commercial or busy deployment needs an Open-Meteo API plan.
+
 ## Bring your own key and model
 
 WallyMap never picks a model for you. Set `MODEL_NAME` and the key for your provider.
@@ -172,9 +174,9 @@ See [docs/layers.md](docs/layers.md) for how to add your own data layer. The six
 
 ## What is in the box and what is next
 
-**Built:** 19 data layers, computed popularity and remoteness scores, vector tiles for public lands, a vocabulary table that routes everyday words to the right layer, the layer console with legend, filters, and opacity, the time scrubber, routes with preview and elevation profile, 3D terrain, export, and permalinks.
+**Built:** 54 data layers (the table above), including live conditions (surf, river flow, tides, snowpack, weather alerts), dated satellite layers on the time scrubber, and computed popularity and remoteness scores; a vocabulary table that routes everyday words to the right layer; the layer console with legend, filters, and opacity; point render modes (symbols, clusters, heat, 3D columns) and extruded areas; the approved palette with hatching; the time scrubber and compare (swipe, toggle, and delta views of two moments, from the console or the agent); routes with preview and elevation profile; 3D terrain, export, and permalinks.
 
-**Next:** a palette and hatching pass (the five approved colors, with diagonal hatching for density and categories), compare polishing (swipe, toggle, and delta views of two moments; the comparison logic exists but the controls and agent tool are not finished), and Milestone 4.
+**Next:** see the open plans under `docs/superpowers/`.
 
 ## License
 

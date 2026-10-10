@@ -196,3 +196,11 @@ describe("weather-alerts layer", () => {
     expect((await runLayer("weather-alerts", { bbox: TAHOE, input: { event: "" } })).status).toBe(400);
   });
 });
+
+describe("input", () => {
+  it("caps event at 120 characters", async () => {
+    const { default: layer } = await import("./weather-alerts");
+    expect(layer.input.safeParse({ event: "a".repeat(120) }).success).toBe(true);
+    expect(layer.input.safeParse({ event: "a".repeat(121) }).success).toBe(false);
+  });
+});

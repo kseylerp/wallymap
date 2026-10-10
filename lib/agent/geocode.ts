@@ -56,6 +56,14 @@ async function regionResult(place: string): Promise<GeocodeResult | null> {
   }
 }
 
+/** How long one Mapbox lookup may take before it is abandoned, so a hung call cannot hold a chat step. */
+const GEOCODE_TIMEOUT_MS = 15_000;
+
+/** `text` with the token (raw or URL-encoded) replaced by "[token]". */
+export function scrubToken(text: string, token: string): string {
+  return text.split(token).join("[token]").split(encodeURIComponent(token)).join("[token]");
+}
+
 /**
  * Forward-geocodes a place name with Mapbox Geocoding v6. Never throws. `proximity` ([lng, lat]) biases the
  * match toward that point, so "Emerald Bay" next to Tahoe City is not Laguna Beach's Emerald Bay.
@@ -76,7 +84,7 @@ export async function geocode(
   url.searchParams.set("access_token", token);
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS) });
     if (!res.ok) {
       return { error: `Geocoding failed with HTTP ${res.status}` };
     }
@@ -110,7 +118,8 @@ export async function geocode(
       source: "mapbox",
     };
   } catch (err) {
-    return { error: `Geocoding failed: ${String(err)}` };
+    // A network error can echo the request URL; never hand the token to the model or the chat.
+    return { error: `Geocoding failed: ${scrubToken(String(err), token)}` };
   }
 }
 
@@ -234,7 +243,7 @@ async function fetchCandidates(query: string, opts: WaypointOptions, token: stri
   if (opts.proximity) url.searchParams.set("proximity", `${opts.proximity[0]},${opts.proximity[1]}`);
   if (opts.bbox) url.searchParams.set("bbox", opts.bbox.join(","));
   url.searchParams.set("access_token", token);
-  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+  const res = await fetch(url, { signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const body = responseSchema.parse(await res.json());
   const out: Candidate[] = [];

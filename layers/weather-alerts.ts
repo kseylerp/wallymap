@@ -73,7 +73,7 @@ const SEVERITY_RANK: Record<string, number> = { Extreme: 4, Severe: 3, Moderate:
 
 const inputSchema = z.object({
   /** Case-insensitive text to match in the event name, e.g. "red flag", "avalanche", "winter storm". */
-  event: z.string().trim().min(1).optional(),
+  event: z.string().trim().min(1).max(120).optional(),
 });
 
 /** State codes whose padded extent touches the bbox, sorted. */

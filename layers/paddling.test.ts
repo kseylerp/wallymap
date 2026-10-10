@@ -1,0 +1,178 @@
+import { describe, expect, it, vi } from "vitest";
+import type { CachedFetch } from "@/lib/fetch";
+import { runLayer } from "@/lib/layers/run";
+import layer, { buildPaddlingQuery, normalizePaddling, paddlingKind } from "./paddling";
+import trentino from "./__fixtures__/paddling.trentino.json";
+import bern from "./__fixtures__/paddling.bern.json";
+
+const TRENTINO: [number, number, number, number] = [11, 46.1, 11.6, 46.4];
+const BERN: [number, number, number, number] = [7.35, 46.75, 7.65, 46.98];
+const DEFAULTS = { whitewaterOnly: false };
+
+function ctx(stub: ReturnType<typeof vi.fn>, bbox = TRENTINO, cacheKey?: string) {
+  return { bbox, zoom: 12, env: {}, fetch: stub as unknown as CachedFetch, cacheKey };
+}
+
+describe("buildPaddlingQuery", () => {
+  it("selects whitewater elements, rapids, graded sections and canoe routes in (south,west,north,east) order, with counts", () => {
+    const q = buildPaddlingQuery(TRENTINO, DEFAULTS);
+    expect(q).toContain('nw["whitewater"](46.1,11,46.4,11.6)');
+    expect(q).toContain('nw["whitewater:rapid_grade"](46.1,11,46.4,11.6)');
+    expect(q).toContain('nw["waterway"="rapids"](46.1,11,46.4,11.6)');
+    expect(q).toContain('way["whitewater:section_grade"](46.1,11,46.4,11.6)');
+    expect(q).toContain('rel["route"="canoe"](46.1,11,46.4,11.6)');
+    expect(q).toContain(".p out count;.s out count;.r out count;");
+    expect(q).toContain(".p out tags geom 1500;.s out tags geom 1500;.r out geom 50;");
+  });
+
+  it("drops the canoe routes when whitewaterOnly is true", () => {
+    const q = buildPaddlingQuery(TRENTINO, { whitewaterOnly: true });
+    expect(q).not.toContain("canoe");
+    expect(q).not.toContain(".r ");
+  });
+});
+
+describe("paddlingKind", () => {
+  it("sorts elements into rapid, access, hazard, portage and feature", () => {
+    expect(paddlingKind({ whitewater: "rapid" }, "other")).toBe("rapid");
+    expect(paddlingKind({ "whitewater:rapid_grade": "3", waterway: "weir" }, "other")).toBe("rapid");
+    expect(paddlingKind({ waterway: "rapids" }, "other")).toBe("rapid");
+    for (const ww of ["put_in", "egress", "put_in;egress", "put-in;egress", "put_in_out"]) {
+      expect(paddlingKind({ whitewater: ww }, "other")).toBe("access");
+    }
+    expect(paddlingKind({ whitewater: "hazard" }, "other")).toBe("hazard");
+    expect(paddlingKind({ whitewater: "portage_way" }, "other")).toBe("portage");
+    expect(paddlingKind({ whitewater: "playspot" }, "other")).toBe("feature");
+    expect(paddlingKind({}, "section")).toBe("section");
+    expect(paddlingKind({}, "route")).toBe("route");
+  });
+});
+
+describe("normalizePaddling", () => {
+  it("turns the Trentino fixture into graded rapid points and section lines with v = class", () => {
+    const fc = normalizePaddling(trentino);
+    expect(fc.features).toHaveLength(20);
+    const rapids = fc.features.filter((f) => f.properties?.kind === "rapid");
+    expect(rapids).toHaveLength(14);
+    expect(rapids.every((f) => f.geometry.type === "Point")).toBe(true);
+    expect(rapids[0].properties).toMatchObject({ osmId: "node/257437934", grade: "3", v: 3 });
+    const sections = fc.features.filter((f) => f.properties?.kind === "section");
+    expect(sections).toHaveLength(6);
+    expect(sections.every((f) => f.geometry.type === "LineString")).toBe(true);
+    expect(sections[0].properties).toMatchObject({ name: "Torrente Avisio", grade: "2", v: 2 });
+    expect(sections.map((f) => f.properties?.v)).toEqual([2, 3, 2, 2, 2, 3]);
+  });
+
+  it("turns the Bern fixture into access points, an ungraded rapid, a graded rapid line, sections and a canoe route", () => {
+    const fc = normalizePaddling(bern);
+    const by = (kind: string) => fc.features.filter((f) => f.properties?.kind === kind);
+    expect(by("access")).toHaveLength(3);
+    expect(by("access").every((f) => f.geometry.type === "Point")).toBe(true);
+    expect(by("access")[0].properties).toMatchObject({ name: "Thun", whitewater: "put_in" });
+    const graded = fc.features.find((f) => f.properties?.name === "Uttigenschwelle");
+    expect(graded?.geometry.type).toBe("LineString");
+    expect(graded?.properties).toMatchObject({ kind: "rapid", v: 2 });
+    const ungraded = fc.features.find((f) => f.properties?.name === "Bahnbrücke Uttigen");
+    expect(ungraded?.properties).toMatchObject({ kind: "rapid" });
+    expect(ungraded?.properties).not.toHaveProperty("v");
+    expect(by("section").length).toBeGreaterThan(0);
+    const route = by("route");
+    expect(route).toHaveLength(1);
+    expect(route[0].properties).toMatchObject({ name: "Berner Aare Kanu", distanceKm: 20, ref: "60", network: "rpn" });
+    expect(route[0].properties).not.toHaveProperty("v");
+    expect(["LineString", "MultiLineString"]).toContain(route[0].geometry.type);
+  });
+
+  it("puts a closed pier way at its middle as a point, reads class ranges and roman numerals, and keeps check_date as t", () => {
+    const ring = [
+      { lat: 1, lon: 1 }, { lat: 1, lon: 1.002 }, { lat: 1.002, lon: 1.002 }, { lat: 1.002, lon: 1 }, { lat: 1, lon: 1 },
+    ];
+    const fc = normalizePaddling({
+      elements: [
+        { type: "way", id: 1, geometry: ring, tags: { whitewater: "put_in", man_made: "pier" } },
+        {
+          type: "way",
+          id: 2,
+          geometry: ring.slice(0, 2),
+          tags: { "whitewater:section_name": "Upper Gorge", name: "Rogue", "whitewater:section_grade": "III-IV", check_date: "2025-05-05" },
+        },
+        { type: "node", id: 3, lat: 5, lon: 6, tags: { whitewater: "rapid", "whitewater:rapid_grade": "V+" } },
+        { type: "node", id: 4, lat: 5, lon: 6, tags: { whitewater: "rapid", "whitewater:rapid_grade": "unknown" } },
+        { type: "way", id: 5, geometry: [ring[0]], tags: { whitewater: "rapid" } },
+      ],
+    });
+    expect(fc.features).toHaveLength(4);
+    expect(fc.features[0].geometry).toEqual({ type: "Point", coordinates: [1.001, 1.001] });
+    expect(fc.features[1].properties).toMatchObject({ kind: "section", name: "Upper Gorge", river: "Rogue", v: 4, t: "2025-05-05" });
+    expect(fc.features[2].properties).toMatchObject({ v: 5.5 });
+    expect(fc.features[3].properties).toMatchObject({ grade: "unknown" });
+    expect(fc.features[3].properties).not.toHaveProperty("v");
+  });
+
+  it("returns nothing for a malformed body", () => {
+    expect(normalizePaddling(null).features).toHaveLength(0);
+    expect(normalizePaddling({ elements: "x" }).features).toHaveLength(0);
+  });
+});
+
+describe("paddling layer", () => {
+  it("declares global ODbL coverage, a 2,500 km2 cap, line style and the activity words", () => {
+    expect(layer.coverage).toBe("global");
+    expect(layer.license).toContain("ODbL");
+    expect(layer.maxAreaKm2).toBe(2500);
+    expect(layer.requiredEnv).toEqual([]);
+    expect(layer.optionalEnv).toContain("OVERPASS_URL");
+    expect(layer.style.geometry).toBe("line");
+    for (const word of ["whitewater", "kayaking", "canoe"]) expect(layer.description).toContain(word);
+  });
+
+  it("posts one Overpass query and reports when the box holds more than came back", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(trentino), { status: 200 }));
+    const r = await layer.query(ctx(stub, TRENTINO, "paddling:k"), DEFAULTS);
+    expect(stub).toHaveBeenCalledTimes(1);
+    const [url, init] = stub.mock.calls[0] as unknown as [string, RequestInit & { cacheKey?: string }];
+    expect(url).toBe("https://overpass-api.de/api/interpreter");
+    expect(init.method).toBe("POST");
+    expect(init.cacheKey).toBe("paddling:k:paddling");
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features).toHaveLength(20);
+    expect(r.citation.source).toContain("OpenStreetMap");
+    expect(r.coverageNote).toBe(
+      "Showing 20 of 51 paddling features in this box (lowest OpenStreetMap ids first); zoom in for the rest",
+    );
+  });
+
+  it("has no coverage note when everything matched came back", async () => {
+    const elements = bern.elements.filter((e) => e.type !== "count");
+    const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
+    const r = await layer.query(ctx(stub, BERN), DEFAULTS);
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.coverageNote).toBeUndefined();
+    expect(r.data.features.some((f) => f.properties?.kind === "route")).toBe(true);
+  });
+
+  it("keeps only features graded at or above minGrade", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(trentino), { status: 200 }));
+    const r = await layer.query(ctx(stub), { whitewaterOnly: false, minGrade: 3 });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const vs = r.data.features.map((f) => f.properties?.v);
+    expect(vs.length).toBeGreaterThan(0);
+    expect(vs.every((v) => typeof v === "number" && v >= 3)).toBe(true);
+    expect(r.data.features.length).toBeLessThan(20);
+  });
+
+  it("maps a failing Overpass to an upstream error after the fallback", async () => {
+    const stub = vi.fn(async () => new Response("slow down", { status: 429 }));
+    const r = await layer.query(ctx(stub), DEFAULTS);
+    expect(r).toEqual({ error: "Overpass returned 429", hint: "upstream" });
+    expect(stub).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns 422 zoom_in from runLayer over 2,500 km2 and 400 for a bad minGrade", async () => {
+    const big = await runLayer("paddling", { bbox: [10, 45, 12, 47] });
+    expect(big.status).toBe(422);
+    expect(big.body).toMatchObject({ hint: "zoom_in" });
+    const bad = await runLayer("paddling", { bbox: TRENTINO, input: { minGrade: 9 } });
+    expect(bad.status).toBe(400);
+  });
+});

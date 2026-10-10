@@ -6,6 +6,7 @@
 import { z } from "zod";
 import type { LineString, MultiLineString, Position } from "geojson";
 import type { BBox, Citation } from "../types";
+import { lineMidpoint } from "./geo";
 
 export const tagsSchema = z.record(z.string(), z.string());
 
@@ -150,4 +151,19 @@ export function relationLine(
   return lines.length === 1
     ? { type: "LineString", coordinates: lines[0] }
     : { type: "MultiLineString", coordinates: lines };
+}
+
+/**
+ * A representative point for a small way: the vertex average of a closed ring (a pier or pond outline), the halfway
+ * point along an open line. Null for an empty way.
+ */
+export function wayCenter(geometry: { lat: number; lon: number }[] | undefined): Position | null {
+  if (!geometry || geometry.length === 0) return null;
+  const first = geometry[0];
+  const last = geometry[geometry.length - 1];
+  if (geometry.length >= 4 && first.lat === last.lat && first.lon === last.lon) {
+    const ring = geometry.slice(0, -1);
+    return [ring.reduce((s, p) => s + p.lon, 0) / ring.length, ring.reduce((s, p) => s + p.lat, 0) / ring.length];
+  }
+  return lineMidpoint(geometry.map((p) => [p.lon, p.lat]));
 }

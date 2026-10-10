@@ -29,3 +29,4 @@ import "./geology";
 import "./climbing";
 import "./critical-habitat";
 import "./grazing-allotments";
+import "./paddling";

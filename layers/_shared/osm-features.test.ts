@@ -7,6 +7,7 @@ import {
   isoDate,
   metres,
   relationLine,
+  wayCenter,
   wayLine,
   wholeNumber,
 } from "./osm-features";
@@ -69,5 +70,14 @@ describe("geometry helpers", () => {
     expect(relationLine(members)?.type).toBe("MultiLineString");
     expect(relationLine([members[0]])?.type).toBe("LineString");
     expect(relationLine([members[1]])).toBeNull();
+  });
+});
+
+describe("wayCenter", () => {
+  it("averages a closed ring, takes the middle of an open line, and returns null for nothing", () => {
+    const ring = [{ lat: 0, lon: 0 }, { lat: 0, lon: 2 }, { lat: 2, lon: 2 }, { lat: 2, lon: 0 }, { lat: 0, lon: 0 }];
+    expect(wayCenter(ring)).toEqual([1, 1]);
+    expect(wayCenter([{ lat: 0, lon: 0 }, { lat: 0, lon: 2 }])).toEqual([1, 0]);
+    expect(wayCenter([])).toBeNull();
   });
 });

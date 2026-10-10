@@ -2,7 +2,7 @@ import type { BBox, LayerResult, StyleHints } from "@/layers/types";
 import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import type { LayerFilters } from "@/lib/render/filters";
 import { ROUTE_ERROR_ID } from "@/lib/render/reducer";
-import type { Basemap, CompareState, MapAction, RenderMode, RenderOp, RouteState, TimeMode, Viewport } from "@/lib/render/state";
+import { RENDER_MODES, type Basemap, type CompareState, type MapAction, type RenderMode, type RenderOp, type RouteState, type TimeMode, type Viewport } from "@/lib/render/state";
 
 /** Layer titles and styles by id, fetched by the browser from `GET /api/layers`. */
 export type LayerCatalog = Record<string, { title: string; style: StyleHints; license?: string }>;
@@ -13,7 +13,6 @@ type Canvas = { width: number; height: number; padding?: Padding };
 const QUERY_PREFIX = "query_";
 const FALLBACK_STYLE: StyleHints = { geometry: "line", color: "#2F3A44" };
 const BASEMAPS: readonly Basemap[] = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"];
-const RENDER_MODES: readonly RenderMode[] = ["points", "lines", "polygons", "heat", "columns", "hexbin"];
 const DEFAULT_MODE: Record<StyleHints["geometry"], RenderMode> = {
   point: "points",
   line: "lines",
@@ -86,15 +85,25 @@ function parseFilters(value: unknown): LayerFilters | null {
   return filters;
 }
 
-function renderActions(output: Obj): MapAction[] {
+/** The render tool's `mode` as a RenderMode: `symbols` is the map's `points`; anything unknown is null. */
+export function renderModeOf(mode: unknown): RenderMode | null {
+  if (mode === "symbols") return "points";
+  return RENDER_MODES.includes(mode as RenderMode) ? (mode as RenderMode) : null;
+}
+
+function renderActions(output: Obj, catalog: LayerCatalog): MapAction[] {
   const { layerId, mode, color } = output;
-  if (typeof layerId !== "string" || !RENDER_MODES.includes(mode as RenderMode)) return [];
-  const op: RenderOp = { layerId, mode: mode as RenderMode, visible: true };
+  if (typeof layerId !== "string" || layerId === "") return [];
+  const asked = renderModeOf(mode);
+  // A mode that is there but unreadable is a bad reply; no mode at all lets the reducer keep or pick one.
+  if (mode !== undefined && !asked) return [];
+  const geometry = catalog[layerId]?.style.geometry ?? "point";
+  const op: RenderOp = { layerId, mode: asked ?? DEFAULT_MODE[geometry], visible: true };
   if (typeof color === "string") op.color = color;
   // Filters replace the layer's current ones ({} clears them); without them the panel's filters stay.
   const filters = parseFilters(output.filters);
   if (filters) op.filters = filters;
-  return [{ type: "render", op }];
+  return [asked ? { type: "render", op } : { type: "render", op, defaultMode: true }];
 }
 
 function queryActions(layerId: string, output: Obj, catalog: LayerCatalog, existingOps: RenderOp[]): MapAction[] {
@@ -117,7 +126,8 @@ function queryActions(layerId: string, output: Obj, catalog: LayerCatalog, exist
     },
   ];
   if (!existingOps.some((op) => op.layerId === layerId)) {
-    actions.push({ type: "render", op: { layerId, mode: DEFAULT_MODE[style.geometry], visible: true } });
+    // The reducer picks the mode from the layer's hints (clusters for a dense point layer at a regional zoom).
+    actions.push({ type: "render", op: { layerId, mode: DEFAULT_MODE[style.geometry], visible: true }, defaultMode: true });
   }
   return actions;
 }
@@ -252,7 +262,7 @@ export function toolResultToActions(
     case "set_basemap":
       return BASEMAPS.includes(output.style as Basemap) ? [{ type: "set_basemap", basemap: output.style as Basemap }] : [];
     case "render":
-      return renderActions(output);
+      return renderActions(output, catalog);
     case "route":
       return routeActions(output, canvas);
     case "set_time":

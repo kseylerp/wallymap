@@ -1,7 +1,7 @@
 import type { BBox, LayerError, LayerResult, StyleHints } from "@/layers/types";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { DARK_GREY } from "@/lib/render/palette";
-import type { Basemap, MapAction, MapState, RenderMode, TimeState, Viewport } from "@/lib/render/state";
+import { RENDER_MODES, type Basemap, type MapAction, type MapState, type RenderMode, type TimeState, type Viewport } from "@/lib/render/state";
 
 /** A time window as ISO dates (the scrubber's window, `t=`). */
 export type PermalinkTime = { start: string; end: string };
@@ -31,7 +31,6 @@ function timeOf(time: PermalinkSource["time"]): PermalinkTime | undefined {
 }
 
 const BASEMAPS: readonly Basemap[] = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"];
-const RENDER_MODES: readonly RenderMode[] = ["points", "lines", "polygons", "heat", "columns", "hexbin"];
 const FALLBACK_STYLE: StyleHints = { geometry: "line", color: DARK_GREY };
 const DEFAULT_MODE: Record<StyleHints["geometry"], RenderMode> = { point: "points", line: "lines", polygon: "polygons" };
 
@@ -216,7 +215,12 @@ export async function restoreFromPermalink(
       type: "layer_loaded",
       layer: { id: layer.id, title: entry?.title ?? layer.id, style, result, receivedAt: new Date().toISOString() },
     });
-    dispatch({ type: "render", op: { layerId: layer.id, mode: layer.mode ?? DEFAULT_MODE[style.geometry], visible: layer.visible } });
+    // A link without a mode takes the layer's default from its hints, as a fresh query would.
+    dispatch({
+      type: "render",
+      op: { layerId: layer.id, mode: layer.mode ?? DEFAULT_MODE[style.geometry], visible: layer.visible },
+      ...(layer.mode === undefined && { defaultMode: true }),
+    });
     outcome.restored.push(layer.id);
   });
   // After the layers, so the window lands on the time index they build (or waits for one).

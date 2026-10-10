@@ -5,6 +5,7 @@ import {
   type LoadedLayer,
   type MapAction,
   type MapState,
+  type RenderMode,
   type RenderOp,
   type TimeState,
   type Viewport,
@@ -12,6 +13,38 @@ import {
 import type { LayerFilters } from "@/lib/render/filters";
 import { stepWindow, timeIndex, type TimeIndex, type TimeWindow } from "@/lib/time";
 import { arrivalPitch, fitZoomOffset } from "@/lib/render/wally/terrain";
+
+/**
+ * When a dense point layer starts clustered (style hint `cluster`): more than `minFeatures` features while the camera
+ * is below `maxZoom` (regional views, where symbols would pile up).
+ */
+export const CLUSTER_DEFAULT = { minFeatures: 500, maxZoom: 12 } as const;
+
+const GEOMETRY_MODE: Record<LoadedLayer["style"]["geometry"], RenderMode> = { point: "points", line: "lines", polygon: "polygons" };
+
+/**
+ * The mode a layer draws in when nobody asked for one: its geometry's mode, except a point layer hinted `cluster` with
+ * more than 500 features at a regional zoom, which starts as clusters. Heat and columns are never a default: the agent
+ * picks them when the user asks for density or 3D (lib/agent/prompt.ts).
+ */
+export function defaultRenderMode(layer: LoadedLayer, zoom: number): RenderMode {
+  const { geometry, cluster } = layer.style;
+  if (geometry !== "point") return GEOMETRY_MODE[geometry];
+  const count = layer.result.kind === "geojson" ? layer.result.data.features.length : 0;
+  return cluster && count > CLUSTER_DEFAULT.minFeatures && zoom < CLUSTER_DEFAULT.maxZoom ? "clusters" : "points";
+}
+
+/**
+ * A mode the layer's geometry can draw: clusters and hex tiles are for points only, so a line or area layer asked for
+ * them keeps its geometry's mode. Columns on an area layer extrude it by `v`; on a line layer they draw lines.
+ */
+export function modeForGeometry(mode: RenderMode, layer: LoadedLayer | undefined): RenderMode {
+  const geometry = layer?.style.geometry;
+  if (!geometry || geometry === "point") return mode;
+  if (mode === "clusters" || mode === "hexbin") return GEOMETRY_MODE[geometry];
+  if (mode === "columns" && geometry === "line") return "lines";
+  return mode;
+}
 
 /** The `layer_error` id a failed `route` tool call reports under. */
 export const ROUTE_ERROR_ID = "route";
@@ -288,21 +321,27 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       };
     case "render": {
       const index = state.renderOps.findIndex((op) => op.layerId === action.op.layerId);
+      const loaded = state.layers[action.op.layerId];
+      // No mode asked for: keep the one the layer has (the user may have picked it in the panel), or take the default.
+      const asked = action.defaultMode
+        ? (state.renderOps[index]?.mode ?? (loaded ? defaultRenderMode(loaded, state.viewport.zoom) : action.op.mode))
+        : action.op.mode;
+      const op: RenderOp = { ...action.op, mode: modeForGeometry(asked, loaded) };
       const renderOps =
         index === -1
-          ? [...state.renderOps, action.op]
-          : state.renderOps.map((op, i) =>
+          ? [...state.renderOps, op]
+          : state.renderOps.map((old, i) =>
               // The agent restyling a layer keeps the opacity and filters the user picked in the layer panel.
               i === index
                 ? {
-                    ...action.op,
-                    opacity: action.op.opacity ?? op.opacity,
-                    filters: action.op.filters !== undefined ? activeFilters(action.op.filters) : op.filters,
+                    ...op,
+                    opacity: op.opacity ?? old.opacity,
+                    filters: op.filters !== undefined ? activeFilters(op.filters) : old.filters,
                   }
-                : op,
+                : old,
             );
-      // Heat is not clickable, so a selection on a layer that turns into heat would point at nothing drawn.
-      const selected = action.op.mode === "heat" ? dropSelectionOf(state, action.op.layerId) : state.selected;
+      // Heat draws no features of its own, so a selection on a layer that turns into heat would point at nothing drawn.
+      const selected = op.mode === "heat" ? dropSelectionOf(state, op.layerId) : state.selected;
       const next = { ...state, renderOps, selected };
       return withShownChange(state, next, action.op.layerId);
     }
@@ -323,7 +362,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       const next = updateOp(state, action.layerId, (op) => ({
         ...op,
         ...(action.color !== undefined && { color: action.color }),
-        ...(action.mode !== undefined && { mode: action.mode }),
+        ...(action.mode !== undefined && { mode: modeForGeometry(action.mode, state.layers[action.layerId]) }),
       }));
       return next !== state && action.mode === "heat" ? { ...next, selected: dropSelectionOf(next, action.layerId) } : next;
     }

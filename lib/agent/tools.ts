@@ -10,14 +10,20 @@ import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
 import { synonymsFor } from "./vocabulary";
 
 const BASEMAPS = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"] as const satisfies readonly Basemap[];
-const RENDER_MODES = [
-  "points",
-  "lines",
-  "polygons",
+/**
+ * `render.mode` as the model sees it. `symbols` is the map's `points` mode; `points` and `hexbin` (flat hex tiles) are
+ * still accepted from older replies. lib/agent/applyToolResult.ts maps them onto RenderMode.
+ */
+export const TOOL_RENDER_MODES = [
+  "symbols",
+  "clusters",
   "heat",
   "columns",
+  "lines",
+  "polygons",
+  "points",
   "hexbin",
-] as const satisfies readonly RenderMode[];
+] as const satisfies readonly (RenderMode | "symbols")[];
 
 /** Per property: keep only these category values, and/or only numbers inside [min, max]. */
 export const LayerFiltersSchema = z.record(
@@ -140,12 +146,16 @@ export function buildTools(): ToolSet {
     }),
     render: tool({
       description:
-        "Draw a layer you already queried. mode picks the drawing style. filters narrows it by its own properties " +
+        "Draw a layer you already queried. mode picks the drawing style: for point layers symbols (one shape per " +
+        "feature), clusters (blobs with counts), heat (a density heatmap) or columns (hexagon columns as tall as the " +
+        "count, or the value v, in 3D; flat hexagons in 2D); lines for line layers; polygons for areas, or columns to " +
+        "extrude areas by their value v in 3D (fire perimeters by acres, glaciers). Omit mode to keep the layer's " +
+        "current style (new layers start as symbols, or clusters when dense). filters narrows it by its own properties " +
         "(the query summary's sample properties name them), e.g. { sac_scale: { include: [\"alpine_hiking\"] } } or " +
         "{ acres: { range: [1000, 1000000] } }; they replace the layer's filters, and {} clears them.",
       inputSchema: z.object({
         layerId: z.string(),
-        mode: z.enum(RENDER_MODES),
+        mode: z.enum(TOOL_RENDER_MODES).optional(),
         color: z.string().optional().describe("Only set when the user asked for a specific color; otherwise omit"),
         filters: LayerFiltersSchema.optional().describe("Show only features matching every entry; omit to keep the current filters"),
       }),

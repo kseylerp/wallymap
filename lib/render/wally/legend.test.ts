@@ -74,9 +74,9 @@ describe("legendSymbol", () => {
     expect(legendSymbol("remoteness", "polygons", { unit: "km" }).kind).toBe("area");
   });
 
-  it("keys one scored line with its own ramp color on a dark grey casing", () => {
+  it("keys one scored line with its own ramp color on a white casing (no dark outline on any line)", () => {
     const top = legendSymbol("popularity", "lines", { feature: { ...blank, properties: { v: 100 } } });
-    expect(top).toMatchObject({ kind: "line", color: PURPLE, casing: DARK_GREY });
+    expect(top).toMatchObject({ kind: "line", color: PURPLE, casing: WHITE });
   });
 
   it("keys raster tiles as dark grey hatching, heat and hex tiles as their ramps", () => {

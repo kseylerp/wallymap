@@ -17,7 +17,7 @@ import {
 import { DARK_GREY, OFF_WHITE, PINK, PURPLE, SAGE, WHITE as WHITE_HEX } from "@/lib/render/palette";
 import { pinIconFor } from "@/lib/render/wally/pins";
 import { pickToSelection } from "@/lib/render/inspect";
-import { initialMapState, type LoadedLayer, type MapState } from "@/lib/render/state";
+import { initialMapState, RENDER_MODES, type LoadedLayer, type MapState } from "@/lib/render/state";
 import { DECK_TERRAIN_TAG } from "@/lib/render/wally/deckTerrain";
 
 const rgba = (hex: string, alpha = 255) => hexToRgba(hex, alpha);
@@ -104,9 +104,8 @@ describe("buildDeckLayers", () => {
     expect(buildDeckLayers(tiles)).toHaveLength(0);
   });
 
-  it("throws NotImplemented for columns and hexbin, and leaves heat to Mapbox", () => {
-    expect(() => buildDeckLayers(trails({ mode: "columns" }))).toThrow("NotImplemented: columns");
-    expect(() => buildDeckLayers(trails({ mode: "hexbin" }))).toThrow("NotImplemented: hexbin");
+  it("draws every mode without throwing, and leaves heat to Mapbox", () => {
+    for (const mode of RENDER_MODES) expect(() => buildDeckLayers(trails({ mode }))).not.toThrow();
     expect(buildDeckLayers(trails({ mode: "heat" }))).toHaveLength(0);
   });
 });
@@ -180,10 +179,10 @@ describe("lines: dark grey over a white casing, told apart by dash and order", (
     }
   });
 
-  it("draws score lines (popularity) in their ramp on a dark grey casing", () => {
+  it("draws score lines (popularity) in their ramp on the white casing", () => {
     const state = stateOf("popularity", [a, b], {}, { geometry: "line", unit: "score" });
     const [casing, , line] = buildDeckLayers(state);
-    expect(props(casing).getLineColor).toEqual(GREY);
+    expect(props(casing).getLineColor).toEqual(rgba(WHITE_HEX, 230));
     expect((props(line).getLineColor as Accessor)(a)).toEqual(rgba(OFF_WHITE));
     expect((props(line).getLineColor as Accessor)(b)).toEqual(rgba(PURPLE));
   });
@@ -355,9 +354,9 @@ describe("H3 tiles for dense points", () => {
     expect(buildDeckLayers(stateOf("species", dense(2000)))[0]).toBeInstanceOf(IconLayer);
     const layers = buildDeckLayers(stateOf("species", dense(2001)));
     expect(layers[0]).toBeInstanceOf(H3HexagonLayer);
-    expect(layers[0].id).toBe("species:points");
+    expect(layers[0].id).toBe("species:hexbin");
     expect(layers[1]).toBeInstanceOf(TextLayer);
-    expect(layers[1].id).toBe("species:points:labels");
+    expect(layers[1].id).toBe("species:hexbin:labels");
   });
 
   it("maps zoom to resolution: z≤6 → 3, 7–8 → 4, 9–10 → 5, 11–12 → 6, ≥13 → 7", () => {

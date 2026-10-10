@@ -9,8 +9,8 @@ import { syncHeatLayers, syncSatelliteHybrid, syncTileLayers } from "@/component
 import { ensureRouteImages, setRouteProgress, syncRouteLayers } from "@/components/routeLayers";
 import { basemapStyleUrl } from "@/lib/render/basemaps";
 import { swipeStore } from "@/lib/render/compareView";
-import { buildDeckLayerSets, type Padding } from "@/lib/render/deck";
-import { pickToSelection, type DeckPick } from "@/lib/render/inspect";
+import { buildDeckLayerSets, isClusterFeature, type Padding } from "@/lib/render/deck";
+import { pickToSelection, pickUnderHeat, type DeckPick } from "@/lib/render/inspect";
 import { viewFromCamera, type MapView } from "@/lib/agent/view";
 import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
 import { visibleState } from "@/lib/render/view";
@@ -55,6 +55,11 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim() ?? "";
 const EPSILON = 1e-6;
 /** Picking slop around the pointer, so a 2.5px trail is clickable. */
 const PICK_RADIUS_PX = 4;
+/** Under a heatmap, a click selects the nearest feature within this many pixels. */
+const HEAT_PICK_RADIUS_PX = 10;
+/** Clicking a cluster blob zooms in this many levels (capped at the map's max zoom). */
+const CLUSTER_ZOOM_STEP = 1;
+const CLUSTER_EASE_MS = 450;
 
 /** Imperative camera controls for the on-map buttons. */
 export type MapHandle = {
@@ -277,6 +282,14 @@ function pickAt(map: mapboxgl.Map, overlay: MapboxOverlay, state: MapState, poin
   }
   const fromDeck = pickToSelection(info, state.layers);
   if (fromDeck) return fromDeck;
+  // Heat is drawn by Mapbox and has no features to pick: take the nearest real feature under the cursor instead.
+  const underHeat = pickUnderHeat(
+    visibleState(state),
+    (lngLat) => map.project(lngLat),
+    { x: point.x, y: point.y },
+    HEAT_PICK_RADIUS_PX,
+  );
+  if (underHeat) return underHeat;
   const layers = inspectableTileLayers(map, state);
   if (layers.length === 0) return null;
   const [top] = map.queryRenderedFeatures(point, { layers });
@@ -383,7 +396,18 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
 
     // Click to inspect: deck features first (they draw on top), then vector tiles; empty map deselects.
     map.on("click", (e) => {
-      onPickRef.current?.(pickAt(map, overlay, stateRef.current, e.point));
+      const hit = pickAt(map, overlay, stateRef.current, e.point);
+      // A cluster blob is a group, not a feature: zoom one level in toward it so it splits (the one camera move a
+      // click makes, because the user clicked a group; clicking a feature never moves the camera).
+      if (hit && isClusterFeature(hit.feature)) {
+        map.easeTo({
+          center: hit.feature.geometry.coordinates as [number, number],
+          zoom: Math.min(map.getMaxZoom(), map.getZoom() + CLUSTER_ZOOM_STEP),
+          duration: CLUSTER_EASE_MS,
+        });
+        return;
+      }
+      onPickRef.current?.(hit);
     });
     // A pointer cursor over anything inspectable, checked at most once per frame.
     let hoverFrame = 0;

@@ -15,8 +15,24 @@ export type Viewport = {
 /** `outdoors-satellite` is the Outdoors style with satellite imagery laid beneath its vector detail. */
 export type Basemap = "outdoors-satellite" | "outdoors" | "satellite" | "natural-earth-2";
 
-/** `columns` and `hexbin` are not implemented yet (Milestone 3); the renderer throws for them. */
-export type RenderMode = "points" | "lines" | "polygons" | "heat" | "columns" | "hexbin";
+/**
+ * How a layer draws. Point layers: `points` (symbols; flat hex tiles past 2,000 features), `clusters` (supercluster
+ * blobs with counts), `heat` (Mapbox heatmap on the density ramp), `columns` (H3 cells extruded by count or `v` in 3D,
+ * flat hex tiles in 2D) and `hexbin` (flat hex tiles). Lines draw as `lines`, areas as `polygons`, or as `columns`
+ * (extruded by `v` in 3D). Any mode a renderer does not know falls back to symbols (lib/render/deck.ts).
+ */
+export type RenderMode = "points" | "lines" | "polygons" | "heat" | "columns" | "hexbin" | "clusters";
+
+/** Every render mode, for parsers (the render tool, the permalink, deck ids). */
+export const RENDER_MODES: readonly RenderMode[] = ["points", "lines", "polygons", "heat", "columns", "hexbin", "clusters"];
+
+/** The render modes the layer panel offers point layers, in order, with their labels. */
+export const POINT_MODES: readonly { value: RenderMode; label: string }[] = [
+  { value: "points", label: "Symbols" },
+  { value: "clusters", label: "Clusters" },
+  { value: "heat", label: "Heat" },
+  { value: "columns", label: "Columns" },
+];
 
 export type RenderOp = {
   layerId: string;
@@ -126,7 +142,11 @@ export type MapAction =
   | { type: "set_basemap"; basemap: Basemap }
   | { type: "layer_loaded"; layer: LoadedLayer }
   | { type: "layer_error"; layerId: string; message: string }
-  | { type: "render"; op: RenderOp }
+  /**
+   * Draw a layer. `defaultMode`: the op's mode was not asked for, so the layer keeps the mode it has, or a new op takes
+   * the default from the layer's hints (`defaultRenderMode` in lib/render/reducer.ts).
+   */
+  | { type: "render"; op: RenderOp; defaultMode?: boolean }
   | { type: "toggle_layer"; layerId: string }
   | { type: "select"; selection: Selection }
   | { type: "deselect" }

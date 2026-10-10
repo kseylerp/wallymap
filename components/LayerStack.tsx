@@ -10,7 +10,7 @@ import { LegendKey } from "@/components/LegendKey";
 import { COMPARE_COLORS, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
 import { hexbinThreshold } from "@/lib/render/deck";
 import { WHITE } from "@/lib/render/palette";
-import type { LoadedLayer, MapAction, MapState, RenderMode, RenderOp, Selection, TimeState } from "@/lib/render/state";
+import { POINT_MODES, type LoadedLayer, type MapAction, type MapState, type RenderMode, type RenderOp, type Selection, type TimeState } from "@/lib/render/state";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
 import { hexTileLegend, legendSymbol, type LegendMode, type LegendSymbol } from "@/lib/render/wally/legend";
 
@@ -32,14 +32,48 @@ type LayerStackProps = {
   compareSlot?: ReactNode;
 };
 
-const MODES: { value: RenderMode; label: string; ready: boolean }[] = [
-  { value: "points", label: "Points", ready: true },
-  { value: "lines", label: "Lines", ready: true },
-  { value: "polygons", label: "Polygons", ready: true },
-  { value: "heat", label: "Heat", ready: true },
-  { value: "columns", label: "Columns (Milestone 3)", ready: false },
-  { value: "hexbin", label: "Hexbin (Milestone 3)", ready: false },
+/** Modes the select offers line and area layers; areas with an `extrude` hint can also stand as 3D columns. */
+const MODES: { value: RenderMode; label: string }[] = [
+  { value: "points", label: "Points" },
+  { value: "lines", label: "Lines" },
+  { value: "polygons", label: "Polygons" },
+  { value: "heat", label: "Heat" },
 ];
+const EXTRUDE_MODE = { value: "columns" as RenderMode, label: "Columns (3D)" };
+
+/** The segment a point layer's mode lights up: hex tiles (`hexbin`) read as columns, their 2D form. */
+function pointSegment(mode: RenderMode): RenderMode {
+  return mode === "hexbin" ? "columns" : mode;
+}
+
+/**
+ * A point layer's render mode as a small text segmented control (Symbols · Clusters · Heat · Columns): research look, no
+ * icons; the pressed segment is ink, the rest muted.
+ */
+function PointModeControl({ layer, mode, dispatch }: { layer: LoadedLayer; mode: RenderMode; dispatch: (action: MapAction) => void }) {
+  const current = pointSegment(mode);
+  return (
+    <div role="group" aria-label={`Draw ${layer.title} as`} data-testid="mode-control" className="flex items-baseline text-[11.5px] leading-4">
+      {POINT_MODES.map((m, i) => (
+        <span key={m.value} className="flex items-baseline">
+          {i > 0 && (
+            <span aria-hidden className="px-1 text-ink-muted">
+              ·
+            </span>
+          )}
+          <button
+            type="button"
+            aria-pressed={current === m.value}
+            onClick={() => current !== m.value && dispatch({ type: "set_style", layerId: layer.id, mode: m.value })}
+            className={`transition-colors duration-150 ${current === m.value ? "text-ink underline decoration-1 underline-offset-[3px]" : "text-ink-muted hover:text-ink"}`}
+          >
+            {m.label}
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 /**
  * What the map draws for a layer, or for one of its features (the inspect card's swatch): the legend key built from
@@ -48,9 +82,13 @@ const MODES: { value: RenderMode; label: string; ready: boolean }[] = [
  */
 export function layerLegend(layer: LoadedLayer, op: RenderOp | undefined, feature?: Feature, color?: string): LegendSymbol {
   const mode = legendModeFor(layer, op);
-  if (mode === "points" && !feature && layer.result.kind === "geojson" && layer.result.data.features.length > hexbinThreshold) {
-    return hexTileLegend();
-  }
+  const dense = layer.result.kind === "geojson" && layer.result.data.features.length > hexbinThreshold;
+  const point = layer.style.geometry === "point";
+  // Hex tiles and point columns key as the tile ramp (a picked cell too); clusters as the layer's symbol; extruded
+  // areas as their area.
+  if ((mode === "points" && dense && !feature) || (point && (mode === "hexbin" || mode === "columns"))) return hexTileLegend();
+  if (mode === "clusters") return legendSymbol(layer.id, "points", { unit: layer.style.unit, color: color ?? op?.color, feature });
+  if (mode === "columns") return legendSymbol(layer.id, "polygons", { unit: layer.style.unit, color: color ?? op?.color, feature });
   return legendSymbol(layer.id, mode, { unit: layer.style.unit, color: color ?? op?.color, feature });
 }
 
@@ -258,7 +296,7 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
                 </span>
               </label>
             )}
-            {op && layer.result.kind === "geojson" && (
+            {op && layer.result.kind === "geojson" && layer.style.geometry !== "point" && (
               <label>
                 <span className="sr-only">Draw {layer.title} as</span>
                 <select
@@ -266,8 +304,8 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
                   onChange={(e) => dispatch({ type: "set_style", layerId: layer.id, mode: e.target.value as RenderMode })}
                   className="legend-select"
                 >
-                  {MODES.map((m) => (
-                    <option key={m.value} value={m.value} disabled={!m.ready} title={m.ready ? undefined : "Milestone 3"}>
+                  {[...MODES, ...(layer.style.geometry === "polygon" && layer.style.extrude ? [EXTRUDE_MODE] : [])].map((m) => (
+                    <option key={m.value} value={m.value}>
                       {m.label}
                     </option>
                   ))}
@@ -295,6 +333,11 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
               ×
             </button>
           </div>
+          {op && layer.result.kind === "geojson" && layer.style.geometry === "point" && (
+            <div className="pt-1.5 pl-9">
+              <PointModeControl layer={layer} mode={op.mode} dispatch={dispatch} />
+            </div>
+          )}
         </div>
       </div>
       {/* Open filters stay open off hover, so a slider can be dragged and read without the row folding away. */}

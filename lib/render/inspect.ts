@@ -1,6 +1,6 @@
 import type { Feature, Geometry, Position } from "geojson";
 import type { BBox } from "@/layers/types";
-import type { RenderMode, Selection } from "@/lib/render/state";
+import { RENDER_MODES, type RenderMode, type Selection } from "@/lib/render/state";
 import { DECK_TERRAIN_TAG } from "@/lib/render/wally/deckTerrain";
 
 /** Side B of a compare draws under `<layerId>~b` (lib/render/compareView.ts `compareBId`). */
@@ -14,7 +14,6 @@ export const HEX_DELTA_TAG = "@hexdelta";
 
 /** Mapbox layer and source ids for vector tile layers start with this (see components/mapTiles.ts). */
 const TILES_PREFIX = "tiles-";
-const RENDER_MODES: readonly RenderMode[] = ["points", "lines", "polygons", "heat", "columns", "hexbin"];
 
 /** What deck.gl's picking returns for a click (the fields we read). */
 export type DeckPick = {
@@ -161,7 +160,7 @@ export function isLineFeature(feature: Feature): boolean {
 /* ---------- Friendly property display ---------- */
 
 /** Keys the card shows elsewhere (title, chip, value, signals) rather than as plain rows. */
-const SPECIAL_KEYS = new Set(["name", "t", "v", "signals", "popularityNote"]);
+const SPECIAL_KEYS = new Set(["name", "t", "v", "signals", "popularityNote", "tallest"]);
 /** Identifiers and links: real but rarely what a reader wants first, so they go under "Details". */
 const DETAIL_KEY = /^(id|fid|gid|ref|h3|wikidata|wikipedia|osm_?id|osm_?type|objectid|globalid|irwinid|uuid)$|(_id|Id|ID)$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:[T ][\d:.]+Z?)?$/;
@@ -180,6 +179,9 @@ const LABELS: Record<string, string> = {
   kind: "Kind",
   year: "Year",
   informal: "Informal trail",
+  // Columns render mode (lib/render/deck.ts `hexColumns`): one H3 cell's stack.
+  count: "Features",
+  top: "Most common",
 };
 
 /** Labels for the `signals` of popularity and remoteness scores (some keys collide with plain properties). */
@@ -313,4 +315,35 @@ export function askAboutText(layerTitle: string, selection: Selection, unit?: st
   parts.push(`at ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
   const subject = summary.name ? `"${summary.name}"` : "this feature";
   return `Tell me about ${layerTitle} ${subject} (${parts.join("; ")}).`;
+}
+
+/* ---------- Picking under a heatmap ---------- */
+
+/**
+ * The feature nearest a click among the visible layers drawn as heat (Mapbox draws heat, so deck has nothing to pick),
+ * within `radiusPx` on screen, as a selection. Top layer first; null when nothing is that close. `project` is the
+ * map's lng/lat to screen point.
+ */
+export function pickUnderHeat(
+  state: { renderOps: { layerId: string; mode: RenderMode; visible: boolean }[]; layers: Record<string, { result: { kind: string; data?: unknown } }> },
+  project: (lngLat: [number, number]) => { x: number; y: number },
+  point: { x: number; y: number },
+  radiusPx: number,
+): Selection | null {
+  for (const op of [...state.renderOps].reverse()) {
+    if (op.mode !== "heat" || !op.visible) continue;
+    const loaded = state.layers[op.layerId];
+    if (loaded?.result.kind !== "geojson") continue;
+    const data = loaded.result.data as GeoJSON.FeatureCollection;
+    let best: { feature: Feature; at: [number, number]; d: number } | null = null;
+    for (const feature of data.features) {
+      const at = feature.geometry?.type === "Point" ? (feature.geometry.coordinates.slice(0, 2) as [number, number]) : featureCenter(feature);
+      if (!at) continue;
+      const p = project(at);
+      const d = Math.hypot(p.x - point.x, p.y - point.y);
+      if (d <= radiusPx && (!best || d < best.d)) best = { feature, at, d };
+    }
+    if (best) return { layerId: op.layerId, feature: best.feature, lngLat: best.at, screen: { x: point.x, y: point.y } };
+  }
+  return null;
 }

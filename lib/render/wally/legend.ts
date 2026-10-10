@@ -104,7 +104,7 @@ export function legendSymbol(layerId: string, mode: LegendMode, { unit, color, f
         dash: [...cls.dash] as [number, number],
       };
       if (requested) return { ...base, color: requested, dash: [0, 0] };
-      if (scoreColor) return { ...base, color: scoreColor, casing: DARK_GREY, dash: [0, 0] };
+      if (scoreColor) return { ...base, color: scoreColor, dash: [0, 0] };
       if (isScore(layerId, unit)) return { kind: "ramp", colors: rampSamples(scoreRampFor(layerId)) };
       return "under" in cls ? { ...base, color: cls.color, under: cls.under } : { ...base, color: cls.color };
     }

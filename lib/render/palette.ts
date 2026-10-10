@@ -313,3 +313,29 @@ export const ATMOSPHERE = {
 
 /** Buildings: off-white surface extrusions. */
 export const BUILDINGS = SURFACE;
+
+// ---- Point render modes (clusters, columns) ----
+
+/**
+ * Cluster blobs (render mode `clusters`): circles sized by count on the gray density ramp (off-white for the smallest
+ * group, dark grey for the largest, log scaled), a dark grey outline, and the count in dark grey on a white halo.
+ * Radius grows from `minPx` with the log of the count, up to `maxPx`. Singletons keep the layer's own symbol.
+ */
+export const CLUSTER_BLOB = {
+  ramp: "gray" as RampName,
+  alpha: 0.85,
+  outline: DARK_GREY,
+  outlinePx: 1.25,
+  minPx: 11,
+  maxPx: 30,
+  label: DARK_GREY,
+  labelHalo: WHITE,
+  labelSize: 11,
+} as const;
+
+/**
+ * Column walls (render mode `columns`, owner's board 3D C): translucent white at three strengths by height, tallest
+ * third first (0.34, 0.26, 0.18), so the tall columns read as the solid ones. Caps, edges and the purple tallest cell
+ * follow HEX_COLUMN.
+ */
+export const COLUMN_WALL_ALPHAS = [0.34, 0.26, 0.18] as const;

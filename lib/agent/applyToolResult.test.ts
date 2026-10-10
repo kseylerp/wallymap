@@ -150,15 +150,15 @@ describe("toolResultToActions", () => {
           receivedAt: expect.any(String),
         },
       },
-      { type: "render", op: { layerId: "osm-trails", mode: "lines", visible: true } },
+      { type: "render", op: { layerId: "osm-trails", mode: "lines", visible: true }, defaultMode: true },
     ]);
   });
 
   it("query_<id> picks the default render mode from the style geometry", () => {
     const point = toolResultToActions("query_huts", {}, result, canvas, catalog, []);
     const polygon = toolResultToActions("query_parks", {}, result, canvas, catalog, []);
-    expect(point[1]).toEqual({ type: "render", op: { layerId: "huts", mode: "points", visible: true } });
-    expect(polygon[1]).toEqual({ type: "render", op: { layerId: "parks", mode: "polygons", visible: true } });
+    expect(point[1]).toEqual({ type: "render", op: { layerId: "huts", mode: "points", visible: true }, defaultMode: true });
+    expect(polygon[1]).toEqual({ type: "render", op: { layerId: "parks", mode: "polygons", visible: true }, defaultMode: true });
   });
 
   it("query_<id> skips the default render op when one already exists for that layer", () => {
@@ -181,7 +181,7 @@ describe("toolResultToActions", () => {
           receivedAt: expect.any(String),
         },
       },
-      { type: "render", op: { layerId: "mystery", mode: "lines", visible: true } },
+      { type: "render", op: { layerId: "mystery", mode: "lines", visible: true }, defaultMode: true },
     ]);
   });
 

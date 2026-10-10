@@ -105,15 +105,62 @@ describe("LayerStack", () => {
     }
   });
 
-  it("changes mode and disables columns and hexbin", () => {
+  it("changes a line layer's mode with the select, which offers no point-only modes", () => {
     const spy = vi.fn();
     render(<Harness spy={spy} />);
     const card = screen.getAllByTestId("layer-card")[0];
     const select = within(card).getByRole("combobox") as HTMLSelectElement;
-    expect((within(select).getByRole("option", { name: /Columns/ }) as HTMLOptionElement).disabled).toBe(true);
-    expect((within(select).getByRole("option", { name: /Hexbin/ }) as HTMLOptionElement).disabled).toBe(true);
+    expect(within(select).queryByRole("option", { name: /Columns|Hexbin|Clusters/ })).toBeNull();
+    expect(within(card).queryByTestId("mode-control")).toBeNull();
     fireEvent.change(select, { target: { value: "heat" } });
     expect(spy).toHaveBeenCalledWith({ type: "set_style", layerId: "osm-trails", mode: "heat" });
+  });
+
+  it("gives point layers a text segmented control (Symbols · Clusters · Heat · Columns) instead of the select", () => {
+    const species: LoadedLayer = {
+      ...trails,
+      id: "species",
+      title: "Wildlife sightings",
+      style: { geometry: "point", color: DARK_GREY, cluster: true, heat: true, extrude: "count" },
+      result: { kind: "geojson", data: { type: "FeatureCollection", features: [] }, citation },
+    };
+    const spy = vi.fn();
+    function Points() {
+      const [state, dispatch] = useReducer(reduce, {
+        ...initialMapState,
+        layers: { species },
+        renderOps: [{ layerId: "species", mode: "points", visible: true }],
+      });
+      return (
+        <LayerStack
+          layers={state.layers}
+          renderOps={state.renderOps}
+          catalog={null}
+          dispatch={(a) => {
+            spy(a);
+            dispatch(a);
+          }}
+          open
+          onOpenChange={() => {}}
+        />
+      );
+    }
+    render(<Points />);
+    const card = screen.getAllByTestId("layer-card")[0];
+    expect(within(card).queryByRole("combobox")).toBeNull();
+    const control = within(card).getByTestId("mode-control");
+    const buttons = within(control).getAllByRole("button");
+    expect(buttons.map((b) => b.textContent)).toEqual(["Symbols", "Clusters", "Heat", "Columns"]);
+    expect(control.querySelector("svg, img")).toBeNull();
+    expect(within(control).getByRole("button", { name: "Symbols" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(within(control).getByRole("button", { name: "Clusters" }));
+    expect(spy).toHaveBeenCalledWith({ type: "set_style", layerId: "species", mode: "clusters" });
+    expect(within(control).getByRole("button", { name: "Clusters" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(within(control).getByRole("button", { name: "Columns" }));
+    expect(spy).toHaveBeenLastCalledWith({ type: "set_style", layerId: "species", mode: "columns" });
+    // Pressing the pressed segment dispatches nothing.
+    fireEvent.click(within(control).getByRole("button", { name: "Columns" }));
+    expect(spy).toHaveBeenCalledTimes(2);
   });
 
   it("renders a legend row: key, title, count, and no color picker", () => {

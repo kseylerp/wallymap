@@ -1,12 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Saira_Condensed } from "next/font/google";
+import { Outfit } from "next/font/google";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./globals.css";
 
-// Saira Condensed for headings (Kyle, 2026-10-09) — the block title face on
-// wally.guide and the Wally app. Text is the system font, Light.
-const saira = Saira_Condensed({
-  variable: "--font-saira",
+// Outfit for headings (Kyle, 2026-10-09) — the title face on wally.guide and
+// the Wally app. Text is the system font, Light.
+const outfit = Outfit({
+  variable: "--font-outfit",
   subsets: ["latin"],
   weight: ["600", "700"],
 });
@@ -29,7 +29,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${saira.variable} h-full antialiased`}>
+    <html lang="en" className={`${outfit.variable} h-full antialiased`}>
       <body className="h-full overflow-hidden">{children}</body>
     </html>
   );

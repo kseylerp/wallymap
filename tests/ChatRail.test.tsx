@@ -303,4 +303,28 @@ describe("ChatRail suggestions card and the data console", () => {
     );
     expect(onSeen).toHaveBeenCalled();
   });
+
+  it("mid-conversation, opens above the chat as an overlay; picking a question sends it and closes the card", () => {
+    chat.messages = [{ id: "1", role: "user", parts: [{ type: "text", text: "hi" }] }];
+    chat.sendMessage.mockClear();
+    const onClose = vi.fn();
+    const props = { catalog: {}, renderOps: [], getCanvasSize: canvas, onActions: noop, collapsed: false, onToggle: noop };
+    const { rerender } = render(<ChatRail {...props} suggestionsOpen={false} />);
+    expect(screen.queryByTestId("empty-state")).toBeNull();
+    rerender(<ChatRail {...props} suggestionsOpen onSuggestionsClose={onClose} />);
+    expect(screen.getByTestId("empty-state-overlay").className).toContain("z-30");
+    fireEvent.click(screen.getByRole("button", { name: "Find campsites and forest roads open to vehicles near Moab" }));
+    expect(chat.sendMessage).toHaveBeenCalledWith({ text: "Find campsites and forest roads open to vehicles near Moab" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens a collapsed panel when a suggestion is picked mid-conversation", () => {
+    chat.messages = [{ id: "1", role: "user", parts: [{ type: "text", text: "hi" }] }];
+    const onToggle = vi.fn();
+    render(
+      <ChatRail catalog={{}} renderOps={[]} getCanvasSize={canvas} onActions={noop} collapsed onToggle={onToggle} suggestionsOpen />,
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: /Lake Tahoe/ })[0]);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
 });

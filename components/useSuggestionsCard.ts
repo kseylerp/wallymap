@@ -40,7 +40,11 @@ export function useSuggestionsCard() {
   // Null until the pill or the × decides; then it wins over the stored flag.
   const [chosen, setChosen] = useState<boolean | null>(null);
   const open = chosen ?? !seen;
-  const markSeen = useCallback(() => writeSeen(), []);
+  // A sent question hands control back to the stored flag: a card the pill had opened before the first message closes.
+  const markSeen = useCallback(() => {
+    writeSeen();
+    setChosen(null);
+  }, []);
   const close = useCallback(() => {
     setChosen(false);
     writeSeen();

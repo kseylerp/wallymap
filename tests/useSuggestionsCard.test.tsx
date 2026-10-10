@@ -71,6 +71,15 @@ describe("suggestions card, first visit only", () => {
     expect(screen.queryByTestId("empty-state")).toBeNull();
   });
 
+  it("a pill-opened card closes when the first question is sent", () => {
+    store.set(SUGGESTIONS_SEEN_KEY, "1");
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Suggestions" }));
+    expect(screen.getByTestId("empty-state")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "send" }));
+    expect(screen.queryByTestId("empty-state")).toBeNull();
+  });
+
   it("still opens, and closes, when storage throws", () => {
     vi.stubGlobal("localStorage", {
       getItem: () => {

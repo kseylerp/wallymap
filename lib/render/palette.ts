@@ -13,7 +13,7 @@ export const PINK = "#F57272";
 export const PURPLE = "#6E5BFF";
 /** Sage: natural and protected areas (wilderness, public lands, physical regions). */
 export const SAGE = "#9FB693";
-/** Off-white scaffold: the low end of every ramp, and symbol fills (owner's board, points variant A). */
+/** Off-white scaffold: the low end of area, hex and heat ramps (never lines), and symbol fills (owner's board, points variant A). */
 export const OFF_WHITE = "#FAF9F5";
 /** Off-white surface. */
 export const SURFACE = "#ECEAE7";
@@ -242,13 +242,23 @@ export const FIRE_ACRE_STEPS = [100, 1_000, 10_000, 100_000] as const;
 
 // ---- Ramps (stops; lib/render/ramp.ts interpolates them in OKLCH) ----
 
-/** Ramp stops, low to high. Lightness falls monotonically along every ramp. */
+/**
+ * Ramp stops, low to high. Lightness falls monotonically along every ramp. Off-white is the low end only for area
+ * fills, hex tiles and heat; line ramps (the `*Line` ones) start at sage, because an off-white line reads as plain
+ * white on satellite (spec §11a keeps white for casings, hatch lines and 3D edges).
+ */
 export const RAMPS = {
   density: [OFF_WHITE, SAGE, PURPLE, DARK_GREY],
   popularity: [OFF_WHITE, PINK, PURPLE],
   remoteness: [OFF_WHITE, SAGE, DARK_GREY],
   /** Owner's board, hex tiles variant A: a plain gray ramp. */
   gray: [OFF_WHITE, DARK_GREY],
+  /** Score lines (trail popularity): sage → pink → purple. */
+  popularityLine: [SAGE, PINK, PURPLE],
+  /** Density-ramped lines: sage → purple → dark grey. */
+  densityLine: [SAGE, PURPLE, DARK_GREY],
+  /** Remoteness-ramped lines: sage → dark grey. */
+  remotenessLine: [SAGE, DARK_GREY],
 } as const satisfies Record<string, readonly string[]>;
 export type RampName = keyof typeof RAMPS;
 
@@ -260,6 +270,13 @@ export function scoreRampFor(layerId: string): RampName {
   if (layerId === "remoteness") return "remoteness";
   if (layerId.startsWith("popularity")) return "popularity";
   return "density";
+}
+
+/** Which ramp a score layer's lines use: its area ramp's line twin, which starts at sage instead of off-white. */
+export function lineRampFor(layerId: string): RampName {
+  if (layerId === "remoteness") return "remotenessLine";
+  if (layerId.startsWith("popularity")) return "popularityLine";
+  return "densityLine";
 }
 
 // ---- Symbols ----

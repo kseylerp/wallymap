@@ -184,7 +184,8 @@ describe("lines: dark grey over a white casing, told apart by dash and order", (
     const state = stateOf("popularity", [a, b], {}, { geometry: "line", unit: "score" });
     const [casing, , line] = buildDeckLayers(state);
     expect(props(casing).getLineColor).toEqual(rgba(WHITE_HEX, 230));
-    expect((props(line).getLineColor as Accessor)(a)).toEqual(rgba(OFF_WHITE));
+    // The low end is sage, never off-white: an off-white line reads as plain white on satellite.
+    expect((props(line).getLineColor as Accessor)(a)).toEqual(rgba(SAGE));
     expect((props(line).getLineColor as Accessor)(b)).toEqual(rgba(PURPLE));
   });
 

@@ -9,6 +9,7 @@ import {
   LINE,
   LINE_CLASSES,
   lineClassFor,
+  lineRampFor,
   scoreRampFor,
   WHITE,
   type RampName,
@@ -95,7 +96,7 @@ export function legendSymbol(layerId: string, mode: LegendMode, { unit, color, f
     }
     case "lines": {
       const cls = LINE_CLASSES[lineClassFor(layerId, feature?.properties)];
-      const scoreColor = isScore(layerId, unit) && feature ? rgbToHex(rampColor(scoreRampFor(layerId), Number(feature.properties?.v) / 100)) : undefined;
+      const scoreColor = isScore(layerId, unit) && feature ? rgbToHex(rampColor(lineRampFor(layerId), Number(feature.properties?.v) / 100)) : undefined;
       const base = {
         kind: "line" as const,
         casing: WHITE,
@@ -105,7 +106,7 @@ export function legendSymbol(layerId: string, mode: LegendMode, { unit, color, f
       };
       if (requested) return { ...base, color: requested, dash: [0, 0] };
       if (scoreColor) return { ...base, color: scoreColor, dash: [0, 0] };
-      if (isScore(layerId, unit)) return { kind: "ramp", colors: rampSamples(scoreRampFor(layerId)) };
+      if (isScore(layerId, unit)) return { kind: "ramp", colors: rampSamples(lineRampFor(layerId)) };
       return "under" in cls ? { ...base, color: cls.color, under: cls.under } : { ...base, color: cls.color };
     }
     case "heat":

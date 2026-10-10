@@ -69,7 +69,8 @@ describe("legendSymbol", () => {
 
   it("keys score areas and lines with their ramp", () => {
     expect(legendSymbol("remoteness", "polygons")).toEqual({ kind: "ramp", colors: rampSamples("remoteness") });
-    expect(legendSymbol("popularity", "lines")).toEqual({ kind: "ramp", colors: rampSamples("popularity") });
+    expect(legendSymbol("popularity", "lines")).toEqual({ kind: "ramp", colors: rampSamples("popularityLine") });
+    expect(rampSamples("popularityLine")[0]).toBe(SAGE);
     expect(legendSymbol("any-grid", "polygons", { unit: "score" })).toEqual({ kind: "ramp", colors: rampSamples("density") });
     expect(legendSymbol("remoteness", "polygons", { unit: "km" }).kind).toBe("area");
   });
@@ -77,6 +78,8 @@ describe("legendSymbol", () => {
   it("keys one scored line with its own ramp color on a white casing (no dark outline on any line)", () => {
     const top = legendSymbol("popularity", "lines", { feature: { ...blank, properties: { v: 100 } } });
     expect(top).toMatchObject({ kind: "line", color: PURPLE, casing: WHITE });
+    const low = legendSymbol("popularity", "lines", { feature: { ...blank, properties: { v: 0 } } });
+    expect(low).toMatchObject({ kind: "line", color: SAGE });
   });
 
   it("keys raster tiles as dark grey hatching, heat and hex tiles as their ramps", () => {

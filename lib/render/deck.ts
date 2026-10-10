@@ -18,6 +18,7 @@ import {
   LINE,
   LINE_CLASSES,
   lineClassFor,
+  lineRampFor,
   PURPLE,
   scoreRampFor,
   SELECTED_AREA,
@@ -389,7 +390,8 @@ function lineLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const { id, trigger } = opIds(op, ctx, opacity, requested);
   const updateTriggers = { getLineColor: trigger, getLineWidth: trigger, getDashArray: trigger };
   const score = style.unit === "score" && !requested;
-  const ramp = scoreRampFor(op.layerId);
+  // Line ramps start at sage: an off-white low end reads as plain white on satellite.
+  const ramp = lineRampFor(op.layerId);
   const classOf = (f: Feature) => LINE_CLASSES[lineClassFor(op.layerId, f.properties)];
   // Every line casing is white (spec §11a, owner: "the black border around trails ... distorts any line colour"),
   // score lines too: a dark casing shifted how the ramp read.

@@ -89,6 +89,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "permafrost", synonyms: ["permafrost", "frozen ground", "thawing ground"], notes: "northern zones, kind = continuous to isolated; canada true for NRCan tiles" },
   { layerId: "mining-claims", synonyms: ["mining claim", "claims", "staked claim", "lode claim", "placer claim"], notes: "BLM claims on public land, status active or closed, v = acres; shapes are survey-grid squares, not corners" },
   { layerId: "imagery-by-date", synonyms: ["satellite image on a date", "before and after", "satellite photo"], notes: "30 m true colour for date, nearest pass; compare two days" },
+  { layerId: "mines", synonyms: ["mine", "abandoned mine", "gold mine", "mineral deposit", "prospect", "quarry"], notes: "USGS historic mine records (about 2011) and old-map mine symbols; kind = commodity or feature type; commodity input" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

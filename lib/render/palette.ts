@@ -120,6 +120,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   permafrost: "natural",
   "mining-claims": "hazard",
   "imagery-by-date": "raster",
+  "mines": "hazard",
 };
 
 /** Layers that return raster tiles: the imagery carries its own colors. */

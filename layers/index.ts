@@ -78,3 +78,4 @@ import "./disasters";
 import "./monuments";
 import "./tree-mortality";
 import "./permafrost";
+import "./mining-claims";

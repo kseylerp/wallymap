@@ -49,3 +49,4 @@ import "./sea-ice";
 import "./fire-weather";
 import "./lakes";
 import "./drought";
+import "./phenology";

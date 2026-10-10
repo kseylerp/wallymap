@@ -76,6 +76,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "wolf-packs", synonyms: ["wolf", "wolves"], notes: "Washington state pack ranges 2014-2025 only; year input" },
   { layerId: "methane-plumes", synonyms: ["methane", "emissions", "methane leak", "super-emitter"], notes: "Carbon Mapper plumes and sources, v = kg/h; days input" },
   { layerId: "ports", synonyms: ["port", "busiest port", "shipping", "cargo"], notes: "150 US principal ports, v = 2023 short tons" },
+  { layerId: "river-basins", synonyms: ["river basin", "watershed", "drainage basin", "what watershed", "HUC"], notes: "US hydrologic units, level follows zoom (huc2 regions to huc10); v = area km2" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

@@ -8,7 +8,7 @@
  *   "data":[["1963-12-28",3409.0],...]} oldest first, one row a day, newest 1 to 2 days old. The files are 0.5 to 0.9 MB
  *   for a full history, so the layer asks for just the tail with an HTTP Range request (the server answers 206) and
  *   reads rows with a pattern, which also works when a server ignores Range and sends everything.
- *   The service index is `reservoir_data/meta.csv` (site id, name, lat, longi; 200 sites, 764 rows); the folder itself is
+ *   The service index is `reservoir_data/meta.csv` (site id, name, lat, longi; 94 sites with storage or elevation data, 764 rows); the folder itself is
  *   403. Coordinates below were copied from it on 2026-10-10. Its last_meas columns are empty, so values come from the files.
  *
  * CDEC JSONDataServlet (verified live 2026-10-10): GET https://cdec.water.ca.gov/dynamicapp/req/JSONDataServlet
@@ -17,13 +17,21 @@
  *   value, units:"AF"}; -9999 means no reading yet (the newest day or two). dur_code M gives the end-of-month value
  *   (12 stations x 10 years = 247 KB in 1 s). Station coordinates are from each station's CDEC metadata page.
  *
+ * Capacities: official figures, copied 2026-10-10 from the Reclamation Lower Colorado levels page (Mead 26,120,000, Mohave 1,873,648,
+ * Havasu 570,253 acre-feet, "available capacity"; https://www.usbr.gov/lc/region/g4000/hourly/levels.html), Reclamation's Lake Powell
+ * page (5.14 million acre-feet = 22 percent of live capacity, so about 23.3 million; 23,314,000 used,
+ * https://www.usbr.gov/uc/water/crsp/cs/gcd.html) and the CDEC reservoir conditions table (every California reservoir,
+ * https://cdec.water.ca.gov/reportapp/javareports?name=RES). Other Reclamation reservoirs have no capacity because no official
+ * figure was found on those pages (their pages give only a percent of live capacity); `sizeAf` is a rounded size used only to pick
+ * the largest when a view holds more than MAX_USBR_SITES. Reclamation storage is LIVE storage, so pctFull is percent of live capacity.
+ *
  * Output: one point per reservoir. v = storage (acre-feet), the one measure every site has and the only one comparable
  * between reservoirs (elevations are not). Props: name, source, storageAf, elevationFt (USBR sites), capacityAf and pctFull
  * (when a nominal capacity is known), lastDate, t (ISO date of the reading), series ({t, v}[] monthly means for up to 10
  * years, yearly means for longer, at most 120 points), seriesUnit ("ft" when elevation is available, else "acre-feet").
  * Smoke check 2026-10-10 (live, through runLayer): Lake Powell elevation 3,519.03 ft and storage 5.208 million acre-feet
- * on 2026-10-08 (21% of 24.3 million); Lake Mead 1,037.61 ft, 6.814 million on 2026-10-08; Hetch Hetchy 280,357 acre-feet
- * on 2026-10-08 (78% of 360,360); Shasta 2.406 million on 2026-10-09.
+ * on 2026-10-08 (22% of live capacity, 23,314,000); Lake Mead 1,037.61 ft, 6.814 million on 2026-10-08; Hetch Hetchy 280,357 acre-feet
+ * on 2026-10-08 (78% of 360,000); Shasta 2.406 million on 2026-10-09.
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
@@ -57,46 +65,48 @@ export type Site = {
   /** USBR HydroData site id, or CDEC station id. */
   code: string;
   coordinates: [number, number];
-  /** Nominal full-pool capacity in acre-feet, rounded; absent when not known with confidence. */
+  /** Official capacity in acre-feet (see the header); absent when no official figure was checked. */
   capacityAf?: number;
+  /** Rounded size in acre-feet, used only to rank sites when a view holds too many; never shown. */
+  sizeAf?: number;
   river: string;
 };
 
 /** Reservoirs the layer knows. USBR ids and coordinates come from reservoir_data/meta.csv; CDEC ones from station metadata. */
 export const SITES: Site[] = [
-  { id: "usbr-919", name: "Lake Powell", source: "usbr", code: "919", coordinates: [-111.48396, 36.93649], capacityAf: 24_300_000, river: "Colorado River" },
-  { id: "usbr-921", name: "Lake Mead", source: "usbr", code: "921", coordinates: [-114.7374, 36.0163], capacityAf: 25_900_000, river: "Colorado River" },
-  { id: "usbr-922", name: "Lake Mohave", source: "usbr", code: "922", coordinates: [-114.5694, 35.1979], capacityAf: 1_810_000, river: "Colorado River" },
-  { id: "usbr-923", name: "Lake Havasu", source: "usbr", code: "923", coordinates: [-114.1385, 34.2964], capacityAf: 619_000, river: "Colorado River" },
-  { id: "usbr-917", name: "Flaming Gorge Reservoir", source: "usbr", code: "917", coordinates: [-109.42185, 40.91474], capacityAf: 3_750_000, river: "Green River" },
-  { id: "usbr-916", name: "Fontenelle Reservoir", source: "usbr", code: "916", coordinates: [-110.06816, 42.02617], capacityAf: 345_000, river: "Green River" },
-  { id: "usbr-913", name: "Blue Mesa Reservoir", source: "usbr", code: "913", coordinates: [-107.33677, 38.45305], capacityAf: 829_000, river: "Gunnison River" },
-  { id: "usbr-914", name: "Morrow Point Reservoir", source: "usbr", code: "914", coordinates: [-107.53791, 38.45191], capacityAf: 117_000, river: "Gunnison River" },
-  { id: "usbr-915", name: "Crystal Reservoir", source: "usbr", code: "915", coordinates: [-107.62374, 38.51046], capacityAf: 25_000, river: "Gunnison River" },
-  { id: "usbr-920", name: "Navajo Reservoir", source: "usbr", code: "920", coordinates: [-107.61203, 36.80063], capacityAf: 1_696_000, river: "San Juan River" },
-  { id: "usbr-958", name: "McPhee Reservoir", source: "usbr", code: "958", coordinates: [-108.57307, 37.57588], capacityAf: 381_000, river: "Dolores River" },
-  { id: "usbr-964", name: "Jordanelle Reservoir", source: "usbr", code: "964", coordinates: [-111.42304, 40.59833], capacityAf: 320_000, river: "Provo River" },
-  { id: "usbr-962", name: "Strawberry Reservoir", source: "usbr", code: "962", coordinates: [-111.02659, 40.13564], capacityAf: 1_106_000, river: "Strawberry River" },
+  { id: "usbr-919", name: "Lake Powell", source: "usbr", code: "919", coordinates: [-111.48396, 36.93649], capacityAf: 23_314_000, river: "Colorado River" },
+  { id: "usbr-921", name: "Lake Mead", source: "usbr", code: "921", coordinates: [-114.7374, 36.0163], capacityAf: 26_120_000, river: "Colorado River" },
+  { id: "usbr-922", name: "Lake Mohave", source: "usbr", code: "922", coordinates: [-114.5694, 35.1979], capacityAf: 1_873_648, river: "Colorado River" },
+  { id: "usbr-923", name: "Lake Havasu", source: "usbr", code: "923", coordinates: [-114.1385, 34.2964], capacityAf: 570_253, river: "Colorado River" },
+  { id: "usbr-917", name: "Flaming Gorge Reservoir", source: "usbr", code: "917", coordinates: [-109.42185, 40.91474], sizeAf: 3_750_000, river: "Green River" },
+  { id: "usbr-916", name: "Fontenelle Reservoir", source: "usbr", code: "916", coordinates: [-110.06816, 42.02617], sizeAf: 345_000, river: "Green River" },
+  { id: "usbr-913", name: "Blue Mesa Reservoir", source: "usbr", code: "913", coordinates: [-107.33677, 38.45305], sizeAf: 829_000, river: "Gunnison River" },
+  { id: "usbr-914", name: "Morrow Point Reservoir", source: "usbr", code: "914", coordinates: [-107.53791, 38.45191], sizeAf: 117_000, river: "Gunnison River" },
+  { id: "usbr-915", name: "Crystal Reservoir", source: "usbr", code: "915", coordinates: [-107.62374, 38.51046], sizeAf: 25_000, river: "Gunnison River" },
+  { id: "usbr-920", name: "Navajo Reservoir", source: "usbr", code: "920", coordinates: [-107.61203, 36.80063], sizeAf: 1_696_000, river: "San Juan River" },
+  { id: "usbr-958", name: "McPhee Reservoir", source: "usbr", code: "958", coordinates: [-108.57307, 37.57588], sizeAf: 381_000, river: "Dolores River" },
+  { id: "usbr-964", name: "Jordanelle Reservoir", source: "usbr", code: "964", coordinates: [-111.42304, 40.59833], sizeAf: 320_000, river: "Provo River" },
+  { id: "usbr-962", name: "Strawberry Reservoir", source: "usbr", code: "962", coordinates: [-111.02659, 40.13564], sizeAf: 1_106_000, river: "Strawberry River" },
   { id: "usbr-953", name: "Deer Creek Reservoir", source: "usbr", code: "953", coordinates: [-111.52908, 40.40837], river: "Provo River" },
   { id: "usbr-946", name: "Pineview Reservoir", source: "usbr", code: "946", coordinates: [-111.84254, 41.25419], river: "Ogden River" },
   { id: "usbr-928", name: "Starvation Reservoir", source: "usbr", code: "928", coordinates: [-110.44722, 40.19324], river: "Strawberry River" },
-  { id: "usbr-1119", name: "Elephant Butte Reservoir", source: "usbr", code: "1119", coordinates: [-107.19189, 33.15408], capacityAf: 2_023_000, river: "Rio Grande" },
+  { id: "usbr-1119", name: "Elephant Butte Reservoir", source: "usbr", code: "1119", coordinates: [-107.19189, 33.15408], sizeAf: 2_023_000, river: "Rio Grande" },
   { id: "usbr-1094", name: "Caballo Reservoir", source: "usbr", code: "1094", coordinates: [-107.29219, 32.89646], river: "Rio Grande" },
   { id: "usbr-2685", name: "El Vado Lake", source: "usbr", code: "2685", coordinates: [-106.7366, 36.5948], river: "Rio Chama" },
   { id: "usbr-2686", name: "Heron Reservoir", source: "usbr", code: "2686", coordinates: [-106.6992, 36.6973], river: "Rio Chama" },
   { id: "cdec-SHA", name: "Shasta Lake", source: "cdec", code: "SHA", coordinates: [-122.42, 40.718], capacityAf: 4_552_000, river: "Sacramento River" },
-  { id: "cdec-ORO", name: "Lake Oroville", source: "cdec", code: "ORO", coordinates: [-121.493, 39.54], capacityAf: 3_538_000, river: "Feather River" },
+  { id: "cdec-ORO", name: "Lake Oroville", source: "cdec", code: "ORO", coordinates: [-121.493, 39.54], capacityAf: 3_424_753, river: "Feather River" },
   { id: "cdec-CLE", name: "Trinity Lake", source: "cdec", code: "CLE", coordinates: [-122.762, 40.801], capacityAf: 2_448_000, river: "Trinity River" },
   { id: "cdec-NML", name: "New Melones Lake", source: "cdec", code: "NML", coordinates: [-120.525, 37.9481], capacityAf: 2_400_000, river: "Stanislaus River" },
   { id: "cdec-SNL", name: "San Luis Reservoir", source: "cdec", code: "SNL", coordinates: [-121.133, 37.033], capacityAf: 2_041_000, river: "San Luis Creek" },
   { id: "cdec-DNP", name: "Don Pedro Reservoir", source: "cdec", code: "DNP", coordinates: [-120.421, 37.702], capacityAf: 2_030_000, river: "Tuolumne River" },
   { id: "cdec-BER", name: "Lake Berryessa", source: "cdec", code: "BER", coordinates: [-122.104, 38.513], capacityAf: 1_602_000, river: "Putah Creek" },
-  { id: "cdec-EXC", name: "Lake McClure (New Exchequer)", source: "cdec", code: "EXC", coordinates: [-120.27, 37.585], capacityAf: 1_026_000, river: "Merced River" },
+  { id: "cdec-EXC", name: "Lake McClure (New Exchequer)", source: "cdec", code: "EXC", coordinates: [-120.27, 37.585], capacityAf: 1_024_600, river: "Merced River" },
   { id: "cdec-FOL", name: "Folsom Lake", source: "cdec", code: "FOL", coordinates: [-121.183, 38.683], capacityAf: 977_000, river: "American River" },
   { id: "cdec-ISB", name: "Lake Isabella", source: "cdec", code: "ISB", coordinates: [-118.473, 35.646], capacityAf: 568_000, river: "Kern River" },
   { id: "cdec-MIL", name: "Millerton Lake", source: "cdec", code: "MIL", coordinates: [-119.705, 37.001], capacityAf: 520_500, river: "San Joaquin River" },
-  { id: "cdec-CMN", name: "Camanche Reservoir", source: "cdec", code: "CMN", coordinates: [-121.021, 38.225], capacityAf: 417_000, river: "Mokelumne River" },
-  { id: "cdec-HTH", name: "Hetch Hetchy Reservoir", source: "cdec", code: "HTH", coordinates: [-119.783, 37.95], capacityAf: 360_360, river: "Tuolumne River" },
+  { id: "cdec-CMN", name: "Camanche Reservoir", source: "cdec", code: "CMN", coordinates: [-121.021, 38.225], capacityAf: 417_120, river: "Mokelumne River" },
+  { id: "cdec-HTH", name: "Hetch Hetchy Reservoir", source: "cdec", code: "HTH", coordinates: [-119.783, 37.95], capacityAf: 360_000, river: "Tuolumne River" },
   { id: "cdec-PNF", name: "Pine Flat Lake", source: "cdec", code: "PNF", coordinates: [-119.325, 36.833], capacityAf: 1_000_000, river: "Kings River" },
   { id: "cdec-CAS", name: "Castaic Lake", source: "cdec", code: "CAS", coordinates: [-118.6101, 34.5152], capacityAf: 325_000, river: "Castaic Creek" },
 ];
@@ -289,15 +299,7 @@ const reservoirLevels = defineLayer({
   id: "reservoir-levels",
   title: "Reservoir levels",
   description:
-    "Current water level and storage of the big western reservoirs, such as Lake Powell, Lake Mead, Flaming Gorge, Blue Mesa, Shasta, Oroville and Hetch Hetchy, from the Bureau of Reclamation and California's CDEC. " +
-    "Each point is one reservoir with name, river, v and storageAf (water stored, in acre-feet), elevationFt (the surface height above sea level in feet; Reclamation reservoirs only, which is the 'level' people quote for Powell and Mead), " +
-    "capacityAf and pctFull (percent of the nominal full-pool capacity, when known; a rounded design figure, so treat the percent as approximate), lastDate and t (the date of the reading, usually 1 to 2 days old), " +
-    "and series, a list of {t, v} points for the chart (monthly means for up to 10 years, yearly means beyond; v is feet when seriesUnit is 'ft', otherwise acre-feet). " +
-    "Use it for 'how low is Lake Powell', 'what is the Lake Mead level', 'how full is Shasta', 'is Hetch Hetchy full', 'reservoirs in the Colorado basin' or 'has the reservoir recovered'. " +
-    "years (1 to 60, default 5) sets how far back the series goes; set name (for example 'powell') to get one reservoir from a wide view. " +
-    "Data are provisional and subject to revision by the agencies. Only about 35 major reservoirs in the western states are covered (Colorado River basin, Utah, Wyoming, New Mexico, California), not every lake, and small ones are missing. " +
-    "Storage is total storage including dead pool, so a reservoir can read above 0 percent while water cannot flow out of its dam. At most 6 Reclamation reservoirs are returned per view, largest first. " +
-    "Zoom in to a region under 3,000,000 km² (a bit more than the western United States) first.",
+    "Water level and storage of about 35 major western reservoirs (Lake Powell, Lake Mead, Flaming Gorge, Shasta, Oroville, Hetch Hetchy and more) from the Bureau of Reclamation and California's CDEC; provisional data. Each point has v and storageAf (live storage in acre-feet), elevationFt (the level quoted for Powell and Mead; Reclamation sites only), pctFull (percent of official live capacity, where known), lastDate and t (usually 1 to 2 days old), and series ({t, v} points: monthly means for up to 10 years, yearly beyond; feet when seriesUnit is 'ft'). years (1 to 60, default 5) sets the series span; name picks one reservoir. Small lakes are missing and at most 6 Reclamation sites return per view. Zoom in to under 3,000,000 km².",
   coverage: { bbox: [-123.5, 32, -104, 43.5] },
   license: "Public domain (US Bureau of Reclamation, California DWR); provisional data",
   requiredEnv: [],
@@ -344,7 +346,7 @@ const reservoirLevels = defineLayer({
 
     const needle = input.name?.toLowerCase();
     const inView = SITES.filter((s) => inBbox(s.coordinates, ctx.bbox) && (!needle || s.name.toLowerCase().includes(needle)));
-    const usbrAll = inView.filter((s) => s.source === "usbr").sort((a, b) => (b.capacityAf ?? 0) - (a.capacityAf ?? 0));
+    const usbrAll = inView.filter((s) => s.source === "usbr").sort((a, b) => (b.capacityAf ?? b.sizeAf ?? 0) - (a.capacityAf ?? a.sizeAf ?? 0));
     const usbr = usbrAll.slice(0, MAX_USBR_SITES);
     const cdec = inView.filter((s) => s.source === "cdec");
     const notes: string[] = [];
@@ -392,7 +394,7 @@ const reservoirLevels = defineLayer({
       return typeof date === "string" && now - Date.parse(date) > READING_STALE_DAYS * DAY_MS;
     });
     if (stale.length > 0) notes.push(`${stale.length} reservoir(s) have a newest reading older than ${READING_STALE_DAYS} days`);
-    notes.push("Provisional data; pctFull is against a rounded nominal capacity");
+    notes.push("Provisional data; pctFull is percent of official capacity (live capacity for Reclamation)");
 
     features.sort((a, b) => Number(b.properties?.v ?? 0) - Number(a.properties?.v ?? 0));
     return {

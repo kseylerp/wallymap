@@ -110,8 +110,8 @@ describe("reservoir-levels layer", () => {
       v: 5207553,
       storageAf: 5207553,
       elevationFt: 3519.03,
-      capacityAf: 24_300_000,
-      pctFull: 21,
+      capacityAf: 23_314_000,
+      pctFull: 22,
       lastDate: "2026-10-08",
       t: "2026-10-08T00:00:00.000Z",
       river: "Colorado River",
@@ -155,7 +155,7 @@ describe("reservoir-levels layer", () => {
     expect(hetch.properties).toMatchObject({
       name: "Hetch Hetchy Reservoir",
       v: 280357,
-      capacityAf: 360_360,
+      capacityAf: 360_000,
       pctFull: 78,
       lastDate: "2026-10-08",
       seriesUnit: "acre-feet",
@@ -203,6 +203,17 @@ describe("reservoir-levels layer", () => {
     expect(quiet).not.toHaveBeenCalled();
     const europe = geojson(await layer.query(ctx(quiet, [5, 45, 6, 46]), { years: 1 }));
     expect(europe.coverageNote).toMatch(/western United States only/);
+  });
+
+  it("uses the official capacities, and gives no percent for Reclamation sites without an official figure", () => {
+    const cap = (id: string) => SITES.find((s) => s.id === id)?.capacityAf;
+    expect([cap("usbr-919"), cap("usbr-921"), cap("usbr-922"), cap("usbr-923")]).toEqual([23_314_000, 26_120_000, 1_873_648, 570_253]);
+    expect([cap("cdec-ORO"), cap("cdec-HTH"), cap("cdec-SHA"), cap("cdec-EXC")]).toEqual([3_424_753, 360_000, 4_552_000, 1_024_600]);
+    const gorge = SITES.find((s) => s.id === "usbr-917");
+    expect(gorge?.capacityAf).toBeUndefined();
+    expect(gorge?.sizeAf).toBeGreaterThan(3_000_000);
+    expect(layer.description).toMatch(/live storage/);
+    expect(layer.description).not.toMatch(/dead pool/);
   });
 
   it("knows each site once, inside the west, with a source code", () => {

@@ -34,7 +34,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "climbing", synonyms: ["climbing", "bouldering", "crag", "rock climbing", "sport climbing"], notes: "crags and boulders, v = route count" },
   { layerId: "paddling", synonyms: ["whitewater", "kayaking", "canoe", "rafting", "rapids", "put-in", "paddling"], notes: "rapids and canoe routes, v = class 1-6; check streamflow" },
   { layerId: "outdoor-features", synonyms: ["hut", "shelter", "water spring", "water source", "viewpoint", "cave", "hot spring", "waterfall", "summit", "saddle", "mountain pass"], notes: "backcountry points, filter by kind; peaks have v = elevation" },
-  { layerId: "lakes", synonyms: ["lake", "lake depth", "how deep is the lake", "tarn"], notes: "named lakes and reservoirs, v = max depth in metres, null when not recorded; use name to find one lake" },
+  { layerId: "lakes", synonyms: ["lake", "lake depth", "how deep is the lake", "tarn"], notes: "named lakes and reservoirs as features, v = max depth in metres, null when not recorded; use name to find one lake; live reservoir storage is in reservoir-levels" },
   { layerId: "gbif-occurrences", synonyms: ["occurrence records", "range map", "specimens", "museum records"], notes: "worldwide species records by Latin name; density true for a world map; see species" },
   { layerId: "critical-habitat", synonyms: ["endangered species habitat", "critical habitat", "threatened species", "endangered"], notes: "USFWS designated habitat; name a species to filter" },
   { layerId: "grazing-allotments", synonyms: ["cattle", "grazing", "ranching", "wild horses", "burros", "allotment"], notes: "BLM grazing areas and wild horse and burro herds" },

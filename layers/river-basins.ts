@@ -7,7 +7,7 @@
  *   Fields: huc2/huc4/huc6/huc8/huc10 (the code, named for the level), name, areasqkm, states (comma list, e.g. "AZ,NM,UT").
  * Output: v = area (km2), kind = "huc2" .. "huc10", plus name, huc (the code), hucLevel (digits), areaSqKm, states.
  * The level follows the zoom (below 6 regions, 6 and 7 subregions, 8 and up subbasins) unless `level` is set; a level too fine for
- * the view's size steps up to a coarser one rather than failing. Geometry is simplified with maxAllowableOffset by level.
+ * the view's size (from the zoom or from `level`) steps up to a coarser one rather than failing. Geometry is simplified with maxAllowableOffset by level.
  * Smoke check 2026-10-10 (live, through runLayer): Four Corners box -111.6,36.8,-109,38.5 at zoom 8 returned 19 subbasins
  * (Chinle, 10,617 km2, first) in 0.7 s; the lower 48 box (-125,24,-66,50, 15 million km2) at zoom 4 returned 18 regions in 3.8 s
  * (Missouri Region first); at zoom 7 or with level huc8 it steps up to regions (huc4 is limited to 3.5 million km2); huc4 over a
@@ -104,15 +104,7 @@ const riverBasins = defineLayer({
   id: "river-basins",
   title: "River basins and watersheds",
   description:
-    "Drainage basins of the United States from the USGS Watershed Boundary Dataset: the land whose rain and snowmelt flow to one river, lake or outlet. " +
-    "Each polygon has name, huc (the hydrologic unit code; longer codes are smaller areas nested inside shorter ones, so 1407 is inside 14, and 140700 is inside 1407), kind and hucLevel (huc2 regions, huc4 subregions, huc6 basins, huc8 subbasins, huc10 watersheds), " +
-    "v and areaSqKm (area in square kilometres), and states (the states it touches). " +
-    "Use it for 'what watershed am I in', 'what river basin is this', 'the Colorado River basin', 'which basin drains to the Great Salt Lake' or 'how big is this watershed'. " +
-    "The level follows the zoom: regions when zoomed far out, subregions in between and subbasins close in; set level (huc2, huc4, huc6, huc8 or huc10) to choose one, and a level too fine for a wide view steps up to a coarser one (the result says so). " +
-    "United States only (including Alaska, Hawaii and territories); elsewhere it returns nothing. Outlines are simplified for display, so edges are not survey-grade, and a basin is a drainage area, not a boundary of land ownership or water rights. " +
-    "Areas are the dataset's own figures and cover the whole unit, even where it runs outside the US. " +
-    "At most 2,000 units are returned, largest first, and the result says when that cap is hit. " +
-    "Zoom in to a region under 20,000,000 km² (the lower 48 fits at huc2) first; finer levels need smaller views: huc4 under 3,500,000 km², huc6 under 1,000,000 km², huc8 under 250,000 km² and huc10 under 40,000 km².",
+    "US drainage basins from the USGS Watershed Boundary Dataset: the land that drains to one river or outlet. Each polygon has name, huc (hydrologic unit code; longer codes nest inside shorter ones), kind and hucLevel (huc2 regions to huc10 watersheds), v and areaSqKm, and states. The level follows the zoom, or set level; a level too fine for the view steps up to a coarser one and the result says so. Outlines are simplified and a basin is not a legal boundary. At most 2,000 units, largest first. Zoom in to under 20,000,000 km² (huc4 under 3,500,000, huc6 1,000,000, huc8 250,000, huc10 40,000).",
   coverage: "us",
   license: "Public domain (USGS Watershed Boundary Dataset)",
   requiredEnv: [],
@@ -144,14 +136,9 @@ const riverBasins = defineLayer({
       };
     }
 
+    // A level too fine for the view steps up to a coarser one, whether it came from the zoom or from `level`.
     const wanted = input.level ?? levelForZoom(ctx.zoom);
     const level = levelForArea(wanted, area);
-    if (input.level !== undefined && level !== wanted) {
-      return {
-        error: `Area is ${Math.round(area)} km²; ${wanted} units need a view under ${LEVEL_SPECS[wanted].maxAreaKm2} km², or use a coarser level`,
-        hint: "zoom_in",
-      };
-    }
     const spec = LEVEL_SPECS[level];
 
     const res = await arcgisQuery(ctx, `${SERVICE_URL}/${spec.layer}`, {

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { SERVICE_URL, normalizeClaims } from "./mining-claims";
+import layer, { SERVICE_URL, byCaseNumberDesc, normalizeClaims } from "./mining-claims";
 import activeRaw from "./__fixtures__/mining-claims.active.json";
 import closedRaw from "./__fixtures__/mining-claims.closed.json";
 
@@ -70,6 +70,23 @@ describe("normalizeClaims", () => {
   });
 });
 
+describe("ordering", () => {
+  it("lists active claims before closed ones, and the newest case number first within a status", async () => {
+    const stub = upstream();
+    const r = geojson(await layer.query(ctx(stub), { status: "both" }));
+    const kinds = r.data.features.map((f) => f.properties?.kind);
+    expect(kinds).toEqual([...Array(8).fill("active"), ...Array(8).fill("closed")]);
+    for (const kind of ["active", "closed"]) {
+      const numbers = r.data.features.filter((f) => f.properties?.kind === kind).map((f) => String(f.properties?.caseNumber));
+      expect(numbers).toEqual([...numbers].sort().reverse());
+    }
+    const point = { type: "Point" as const, coordinates: [0, 0] };
+    const a = { type: "Feature" as const, geometry: point, properties: { caseNumber: "UT2" } };
+    const none = { type: "Feature" as const, geometry: point, properties: {} };
+    expect([none, a].sort(byCaseNumberDesc)).toEqual([a, none]);
+  });
+});
+
 describe("mining-claims layer", () => {
   it("declares US coverage, a public-domain license, no env, a 2,500 km2 limit and a status input", () => {
     expect(layer.id).toBe("mining-claims");
@@ -113,7 +130,7 @@ describe("mining-claims layer", () => {
 
   it("says when a status hits the 2,000 cap, and which layer failed when only one loads", async () => {
     const capped = upstream({ closed: () => json({ ...closed, exceededTransferLimit: true }) });
-    expect(geojson(await layer.query(ctx(capped), { status: "both" })).coverageNote).toBe("Showing 2,000 closed claims; zoom in for the rest");
+    expect(geojson(await layer.query(ctx(capped), { status: "both" })).coverageNote).toBe("Showing an arbitrary 2,000 closed claims, not the newest; zoom in for the rest");
 
     const partial = upstream({ closed: () => json({}, 500) });
     const r = geojson(await layer.query(ctx(partial), { status: "both" }));
@@ -141,7 +158,7 @@ describe("mining-claims layer", () => {
   });
 
   it("warns that claims are survey-grid squares and not for deciding where to stake", () => {
-    expect(layer.description).toMatch(/not its actual corners/);
+    expect(layer.description).toMatch(/not its corners/);
     expect(layer.description).toMatch(/do not use it to decide/);
   });
 });

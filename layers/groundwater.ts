@@ -95,15 +95,7 @@ const groundwater = defineLayer({
   id: "groundwater",
   title: "Groundwater levels",
   description:
-    "How deep the water table is in wells, from the newest manual measurement at USGS monitoring wells (the data behind USGS Groundwater Watch). " +
-    "Each point is one well with v and depthFt (depth to water in feet below the land surface: bigger is deeper, a negative number means the water stands above the ground, as in a flowing artesian well), " +
-    "t and date (when it was measured), site and siteNo (the USGS well id), kind ('static' for an undisturbed level, 'other' when the well was pumping or disturbed, 'unspecified' when not recorded) with condition, method, approval (Approved or Provisional) and url to the USGS page. " +
-    "Use it for 'how deep is the water table here', 'is the Ogallala aquifer dropping', 'groundwater levels near Kearney', 'where are the deepest wells' or 'depth to water'. " +
-    "sinceYear (default: five years back) hides wells whose latest measurement is older; lower it to see long-abandoned wells. " +
-    "This is one reading per well, not a trend: it cannot say whether a level is rising or falling, so say so rather than guessing, and compare wells only within one aquifer. Wells measured by hand are visited monthly to yearly, so a value can be months old. " +
-    "Wells have no names, only USGS numbers. United States only (state and USGS networks; coverage is thick in the High Plains, California and the Southwest and thin elsewhere). " +
-    "At most 1,000 wells are returned, in no particular order, and the result says when that cap is hit. " +
-    "Zoom in to a region under 40,000 km² (about a 200 km square) first.",
+    "How deep the water table is, from the newest manual measurement at each USGS monitoring well. Each point has v and depthFt (feet below land surface; negative means water above ground, as in a flowing artesian well), t and date, site and siteNo (the USGS well id), kind ('static' undisturbed, 'other' pumped or disturbed), approval and url. sinceYear (default five years back) hides older wells. One reading per well, so it cannot show a trend: never say a level is rising or falling. Values can be months old, and wells have numbers, not names. At most 1,000 wells, in no order. Zoom in to under 40,000 km².",
   coverage: "us",
   license: "Public domain (USGS)",
   requiredEnv: [],

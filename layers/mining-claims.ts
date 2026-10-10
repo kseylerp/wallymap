@@ -12,6 +12,9 @@
  * Density (Moab, UT): 328 active and 2,280 closed claims in a 0.2 x 0.2 degree box, 2,438 and 28,528 in 0.6 x 0.6. Hence a small area limit
  *   (2,500 km2), a 2,000-per-status cap and no tiles. A 2,000-claim answer is 200 KB for active and 1.5 MB for closed claims at full precision;
  *   the layer simplifies by 0.0001 degrees (about 10 m), which keeps the square corners.
+ * Order: active claims first (statuses are queried and listed in that order), then newest case number first within a status.
+ *   The service has no filing or location date, and ordering it by case number server-side took 14 s on the closed layer, so the
+ *   2,000 cap keeps whichever claims the server returns first; the cap note says so.
  * Output: v = recorded acres, kind = "active" | "closed", plus name, caseNumber, claimType, disposition, acres, locationQuality, patented.
  * Smoke check 2026-10-10 (live, through runLayer): Moab box -109.8,38.4,-109.4,38.7 returned 1,346 active claims in 0.9 s (WES-1, a 20.66 acre
  *   lode claim, case UT105832859); with status both it hit the 2,000 closed-claim cap (3,346 claims in 0.5 s); a Los Angeles forest box
@@ -40,6 +43,11 @@ function str(value: unknown): string | undefined {
 
 function num(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/** Newest case numbers first ("UT106362534" before "UT101678581"); a claim without one goes last. */
+export function byCaseNumberDesc(a: Feature<Geometry>, b: Feature<Geometry>): number {
+  return String(b.properties?.caseNumber ?? "").localeCompare(String(a.properties?.caseNumber ?? ""));
 }
 
 /** Service rows to claim polygons; `status` becomes `kind`. */
@@ -73,14 +81,7 @@ const miningClaims = defineLayer({
   id: "mining-claims",
   title: "Mining claims",
   description:
-    "Unpatented mining claims on federal land in the western United States, from the Bureau of Land Management's mining claim records: claims a person or company has staked to look for or mine minerals, which can limit other uses of the ground. " +
-    "Each polygon has name, caseNumber, claimType (lode, placer, mill site or tunnel site), disposition, kind ('active' or 'closed'), v and acres (recorded acres, typically 20 for a placer claim), and locationQuality. " +
-    "status picks 'active' (default, claims still held), 'closed' (claims that lapsed or were relinquished, far more numerous) or 'both'. " +
-    "Use it for 'are there mining claims here', 'active claims near Moab', 'uranium claims on this mesa', 'how many claims are in this area' or 'is this land staked'. " +
-    "Claims are drawn from their legal land descriptions on the survey grid, so a claim shows as the quarter-quarter section or section it names, not its actual corners, and many claims share one square; do not use it to decide where it is safe to stake or camp. " +
-    "It does not say what mineral a claim is for. Western public lands mostly; elsewhere it returns nothing. " +
-    "At most 2,000 claims per status are returned, and the result says when that cap is hit. " +
-    "Zoom in to a region under 2,500 km² (about a 50 km square) first.",
+    "BLM mining claims on US public land (mostly the West): staked claims for minerals that can limit other land use. Each polygon has name, caseNumber, claimType (lode, placer, mill site, tunnel site), disposition, kind ('active' or 'closed'), v and acres, and locationQuality. status picks active (default), closed (lapsed, far more numerous) or both. Claims are drawn from legal descriptions on the survey grid, so a claim shows as the section or quarter-section it names, not its corners, and many share one square; do not use it to decide where to stake or camp. It does not say which mineral. At most 2,000 per status. Zoom in to under 2,500 km².",
   coverage: "us",
   license: "Public domain (US Bureau of Land Management, MLRS)",
   requiredEnv: [],
@@ -134,8 +135,10 @@ const miningClaims = defineLayer({
         failed.push(`${status} claims (${res.error})`);
         return;
       }
-      features.push(...normalizeClaims(res.fc, status));
-      if (res.truncated) notes.push(`Showing 2,000 ${status} claims; zoom in for the rest`);
+      // The service has no filing date and sorting it by case number takes 14 s, so the cap keeps an arbitrary 2,000; within
+      // a status the newest case numbers (a stand-in for filing order) come first.
+      features.push(...normalizeClaims(res.fc, status).sort(byCaseNumberDesc));
+      if (res.truncated) notes.push(`Showing an arbitrary 2,000 ${status} claims, not the newest; zoom in for the rest`);
     });
     if (failed.length === statuses.length) {
       return { error: `Mining claims unavailable: ${failed.join("; ")}`, hint: "upstream" };

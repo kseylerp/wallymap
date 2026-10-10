@@ -114,14 +114,7 @@ const uranium = defineLayer({
   id: "uranium",
   title: "Uranium legacy sites",
   description:
-    "Legacy uranium sites in the western United States: abandoned uranium mines on the Navajo Nation, and Department of Energy uranium mill-tailings disposal sites. " +
-    "Each point has name, kind ('abandoned mine', 'mill tailings site' or 'leasing program') and source. " +
-    "Navajo mines (602 of them) also have v and hazardScore (a 2007 screening score combining groundwater, soil, air and surface-water scores, from 10 to about 17,600; higher means a higher estimated hazard, and it is not a measured exposure), the four component scores, aliases, chapter (the local Navajo chapter area), region and mineId. " +
-    "DOE sites (about 60, from Utah and Colorado to Wyoming, New Mexico and Pennsylvania) have program (UMTRCA Title I sites were abandoned mills that DOE cleaned up; Title II sites were licensed mills handed to DOE for long-term care), state, siteId, url and factSheet to DOE's pages, and transferYear (when DOE took them over) or expectedTransferYear. " +
-    "Use it for 'abandoned uranium mines on the Navajo Nation', 'uranium mill tailings near Moab', 'where are the uranium cleanup sites', 'how many abandoned mines near this chapter' or 'is there a uranium site near here'. " +
-    "It is not every uranium mine: the Navajo list covers the Navajo Nation only, so abandoned mines elsewhere (Colorado Plateau, Wyoming) are missing, and the 2007 scores do not show cleanup done since; for historic mines and prospects with the uranium commodity everywhere, use mines with commodity uranium. " +
-    "A point is a legacy hazard site, so say that old mine openings and tailings can be dangerous and that nothing here is a health or safety clearance. Works in the United States; elsewhere it returns nothing. " +
-    "Zoom in to a region under 20,000,000 km² (the whole lower 48 fits) first.",
+    "Legacy uranium sites in the western US: 602 abandoned uranium mines on the Navajo Nation and about 60 Department of Energy mill-tailings sites. Each point has name, kind ('abandoned mine', 'mill tailings site' or 'leasing program') and source. Navajo mines have v and hazardScore (a 2007 screening score, 10 to about 17,600; higher means a higher estimated hazard, not a measured exposure, and later cleanup is not reflected), chapter and region. DOE sites have program (Title I or II), state, url and transferYear. Not every uranium mine: for historic mines elsewhere use mines with commodity uranium. Old workings and tailings can be dangerous. Zoom in to under 20,000,000 km² (the lower 48 fits).",
   coverage: "us",
   license:
     "Navajo mines: published by the New Mexico Community Data Collaborative from Navajo Nation EPA and US EPA screening (no licence stated); DOE sites: US Department of Energy (public domain)",

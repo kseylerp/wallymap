@@ -120,7 +120,8 @@ describe("dams layer", () => {
 
   it("describes dams in the words people use and the hazard caveat", () => {
     expect(layer.description).toMatch(/hazard/);
-    expect(layer.description).toMatch(/not a safety rating/);
+    expect(layer.description).toMatch(/safety rating/);
+    expect(layer.description).toMatch(/About 3% of dams have no storage figure and are left out/);
     expect(layer.description).toMatch(/decade/);
   });
 });

@@ -103,13 +103,7 @@ const aquifers = defineLayer({
   id: "aquifers",
   title: "Principal aquifers",
   description:
-    "The principal aquifers of the United States: the underground layers of rock or sand that hold the groundwater people pump for farms and towns, such as the High Plains (Ogallala) aquifer, the Edwards aquifer or the Basin and Range basin-fill aquifers. " +
-    "Each polygon has name (the aquifer or aquifer system), kind (the rock it is made of: unconsolidated sand and gravel, semiconsolidated sand and gravel, sandstone, carbonate rock, sandstone and carbonate rock, or igneous and metamorphic rock), rockType and aquiferCode, and alias 'Ogallala' on the High Plains aquifer. " +
-    "Use it for 'where is the Ogallala aquifer', 'what aquifer is under this area', 'which states sit on the High Plains aquifer' or 'what kind of aquifer is here'; for the water level in wells use groundwater. " +
-    "It shows the shallowest principal aquifer at each place at 1:2.5 million scale (2003), so it is regional, not a map of one town's wells, and the glacial aquifers of the northern states are not included. " +
-    "Edges are generalised and several aquifers can overlie each other where only the shallowest is drawn. " +
-    "United States only; elsewhere it returns nothing. The data are USGS public-domain polygons, read from a Nevada Division of Water Resources copy in the west and an Esri Living Atlas copy elsewhere, not from USGS directly. " +
-    "Zoom in to a region under 6,000,000 km² (about a 2,400 km square, most of the western or eastern US) first.",
+    "Principal aquifers of the United States (the rock or sand layers that hold pumped groundwater), including the High Plains (Ogallala) aquifer. Each polygon has name, kind (the rock: sand and gravel, sandstone, carbonate rock, igneous and metamorphic), rockType, aquiferCode, and alias 'Ogallala' on the High Plains. It shows the shallowest principal aquifer at 1:2.5 million scale (2003), so it is regional, the glacial aquifers of the northern states are missing, and it is not a well map; use groundwater for water levels. Read from third-party copies of USGS data. Zoom in to under 6,000,000 km².",
   coverage: "us",
   license:
     "USGS Principal Aquifers (public domain, 2003), served from third-party copies: Nevada Division of Water Resources (western US) and Esri Living Atlas USA Aquifers (rest of the US, Esri terms of use)",

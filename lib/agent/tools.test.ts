@@ -172,7 +172,7 @@ describe("buildTools", () => {
       if (/km²/.test(layer.description)) expect(description).toMatch(/km²/);
     }
     // The 54 layer descriptions were about 88,000 characters in full.
-    expect(total).toBeLessThan(75_000);
+    expect(total).toBeLessThan(66_000);
     const surf = tools["query_surf"].description ?? "";
     expect(surf).toContain("Set forecast to true");
     expect(surf).toContain("Set season to true");

@@ -171,8 +171,7 @@ describe("mines layer", () => {
   });
 
   it("tells the model the data are historic and old workings are unsafe", () => {
-    expect(layer.description).toMatch(/historic record/);
-    expect(layer.description).toMatch(/around 2011/);
-    expect(layer.description).toMatch(/stay out of old workings/);
+        expect(layer.description).toMatch(/around 2011/);
+    expect(layer.description).toMatch(/does not mean a mine is open or safe/);
   });
 });

@@ -120,7 +120,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   permafrost: "natural",
   "mining-claims": "hazard",
   "imagery-by-date": "raster",
-  "mines": "hazard",
+  "mines": "data",
   "uranium": "hazard",
 };
 

@@ -113,15 +113,14 @@ describe("river-basins layer", () => {
     expect(keys).toEqual(["k:river-basins:huc2", "k:river-basins:huc8"]);
   });
 
-  it("honours level, and says so when a wide view forces a coarser one", async () => {
+  it("honours level, and says so when a wide view forces a coarser one (from the zoom or from level)", async () => {
     const stub = vi.fn(async () => json(huc2));
     const wide: [number, number, number, number] = [-125, 24, -66, 50];
     const stepped = geojson(await layer.query(ctx(stub, { zoom: 10, bbox: wide }), {}));
     expect(stepped.coverageNote).toBe("Showing regions (huc2) because huc8 is too fine for this view; zoom in for finer basins");
-    expect(await layer.query(ctx(stub, { bbox: wide }), { level: "huc8" })).toEqual({
-      error: "Area is 15079415 km²; huc8 units need a view under 250000 km², or use a coarser level",
-      hint: "zoom_in",
-    });
+    // An explicit level steps up too, instead of failing.
+    const explicit = geojson(await layer.query(ctx(stub, { bbox: wide }), { level: "huc8" }));
+    expect(explicit.coverageNote).toBe("Showing regions (huc2) because huc8 is too fine for this view; zoom in for finer basins");
     const six = vi.fn(async (_url: string) => json(huc8));
     await layer.query(ctx(six), { level: "huc6" });
     expect(six.mock.calls[0][0]).toContain("/wbd/MapServer/3/query");

@@ -141,13 +141,7 @@ const monuments = defineLayer({
   id: "monuments",
   title: "National monuments and conservation areas",
   description:
-    "Boundaries of Bureau of Land Management national monuments, national conservation areas and similar protected lands (the National Conservation Lands), as BLM draws them now and, for the Utah monuments, as they were drawn in 2021. " +
-    "Each polygon has name, designation (National Monument, National Conservation Area and so on), state, kind ('current' or '2021'), v and areaKm2 (area in square kilometres) and source. " +
-    "The two versions differ for Bears Ears and Grand Staircase-Escalante: BLM's current layer, which reflects the boundary changes of July 2026, draws Bears Ears at about 490 km² and Grand Staircase-Escalante at about 730 km², while the 2021 outlines (Utah AGRC's copy of the earlier boundaries) are about 5,700 and 7,600 km². " +
-    "Use it for 'show Bears Ears', 'how big was Grand Staircase-Escalante before', 'what changed at the monuments', 'national monuments in Utah' or 'BLM conservation areas near here'; to show then versus now, compare the two kinds side by side or filter kind to '2021' and 'current'. " +
-    "version (both, current or 2021; default both) picks what to return. Only BLM-managed monuments and conservation areas are included, not national park system monuments, and the 2021 version exists only for the Utah monuments (the Utah AGRC copy holds no other state). " +
-    "Outlines are simplified for display, so edges are not survey-grade and should not be used for legal or permit decisions; areas are measured on the drawn polygons. " +
-    "Works for any view in the United States, including the whole country at once.",
+    "BLM national monuments and national conservation areas, as drawn now and, for the Utah monuments, in 2021. Each polygon has name, designation, state, kind ('current' or '2021'), v and areaKm2, and source. The current layer reflects the July 2026 boundary changes: Bears Ears is about 490 km² now against 5,700 in 2021, and Grand Staircase-Escalante about 730 against 7,600. version (both, current or 2021) picks what to return; compare the two kinds for then versus now. BLM-managed lands only, 2021 outlines exist only for Utah's monuments, and outlines are simplified, not for legal use.",
   coverage: "us",
   license: "Public domain (BLM National Conservation Lands; Utah AGRC copy of 2021 boundaries)",
   requiredEnv: [],

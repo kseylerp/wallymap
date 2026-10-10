@@ -112,14 +112,7 @@ const dams = defineLayer({
   id: "dams",
   title: "Dams",
   description:
-    "US dams from the National Inventory of Dams (US Army Corps of Engineers): every high- and significant-hazard dam plus the larger low-hazard ones. " +
-    "Each point has name, v and storageAf (how much water it can hold, in acre-feet; 1 acre-foot is about 325,000 gallons), heightFt (dam height), yearCompleted and t (January 1 of that year, so the time scrubber plays dams by decade), " +
-    "purpose and kind (the main use, such as Hydroelectric, Flood Risk Reduction, Irrigation, Water Supply, Recreation or Fire Protection), hazard (High, Significant, Low or Undetermined: what would happen downstream if it failed, not how likely a failure is), river, state, owner, damType and condition. " +
-    "Use it for 'dams near here', 'biggest dams in this state', 'when were the dams on this river built', 'high-hazard dams', 'how tall is Glen Canyon Dam' or 'which dams make power'. " +
-    "United States only; elsewhere it returns nothing. Year completed is missing for some old dams, and storage and height are as reported by the owner or state. " +
-    "The hazard rating is about consequences and is not a safety rating; condition is often 'Not Rated'. " +
-    "At most 2,000 dams are returned, biggest storage first, and the result says when that cap is hit. " +
-    "Zoom in to a region under 250,000 km² (about a 500 km square) first.",
+    "US dams from the National Inventory of Dams (Army Corps of Engineers): every high- and significant-hazard dam plus the larger low-hazard ones. Each point has name, v and storageAf (capacity in acre-feet), heightFt, yearCompleted and t (January 1 of that year, so the time scrubber plays dams by decade), purpose and kind (Hydroelectric, Flood Risk Reduction, Irrigation, Water Supply, Recreation and so on), hazard (High, Significant or Low: the damage if it failed, not the chance of failure or a safety rating), river, state, owner, damType and condition. About 3% of dams have no storage figure and are left out; year completed is missing for some old dams. At most 2,000 dams, biggest storage first. Zoom in to under 250,000 km\u00b2.",
   coverage: "us",
   license: "Public domain (US Army Corps of Engineers, National Inventory of Dams)",
   requiredEnv: [],

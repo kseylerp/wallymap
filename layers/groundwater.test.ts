@@ -154,8 +154,8 @@ describe("groundwater layer", () => {
   });
 
   it("describes depth to water, the sign convention and that it is not a trend", () => {
-    expect(layer.description).toMatch(/depth to water/i);
+    expect(layer.description).toMatch(/water table/);
     expect(layer.description).toMatch(/negative/);
-    expect(layer.description).toMatch(/not a trend/);
+    expect(layer.description).toMatch(/cannot show a trend/);
   });
 });

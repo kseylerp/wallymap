@@ -194,15 +194,7 @@ const mines = defineLayer({
   id: "mines",
   title: "Mines and mineral deposits",
   description:
-    "Mines, prospects, quarries and mineral deposits across the United States from two USGS records: MRDS (the Mineral Resources Data System, with the metals each site holds) and USMIN (mine and prospect symbols, shafts and tunnels copied from old USGS topographic maps). " +
-    "Each point has name, kind (for MRDS the main commodity, such as gold, silver, copper or uranium; for USMIN the feature type, such as Mine, Adit, Mine Shaft, Quarry or Gravel Pit) and source ('MRDS' or 'USMIN'). " +
-    "MRDS points also have status (Producer, Past Producer, Prospect, Occurrence, Plant or Unknown), commodities (every metal or mineral listed), grade and a url to the USGS record; USMIN points have topoName and topoYear (the map the symbol came from), state and county. " +
-    "Use it for 'old gold mines near here', 'where are the uranium mines', 'abandoned mines on this mountain', 'mines in the Colorado Mineral Belt' or 'copper mines in Arizona'. " +
-    "commodity (for example 'gold' or 'uranium') keeps only MRDS sites that list that commodity. source (both, mrds or usmin) limits it to one record. " +
-    "MRDS stopped being updated around 2011, so it is a historic record: most listed mines are closed, many are only prospects or occurrences, and new mines are missing. USMIN symbols show what an old map drew, so a pit or shaft may have been reclaimed or filled. " +
-    "A point here does not mean a mine is open, safe or on public land; stay out of old workings. " +
-    "United States only; elsewhere it returns nothing. At most 2,000 MRDS sites and 2,000 USMIN symbols are returned, and the result says when a cap is hit. " +
-    "Zoom in to a region under 15,000 km² (about a 120 km square) first.",
+    "Mines, prospects, quarries and mineral deposits in the US from two USGS records: MRDS (deposits with their commodities) and USMIN (mine, shaft and tunnel symbols copied from old topographic maps). Each point has name, kind (MRDS: main commodity such as gold or uranium; USMIN: feature type such as Mine, Adit, Quarry) and source; MRDS adds status (Producer, Past Producer, Prospect, Occurrence), commodities and url, USMIN adds topoName and topoYear. commodity filters MRDS; source picks one record. MRDS stopped updating around 2011, so most sites are closed and new mines are missing, and a point does not mean a mine is open or safe. At most 2,000 per record. Zoom in to under 15,000 km².",
   coverage: "us",
   license: "Public domain (USGS MRDS and USMIN)",
   requiredEnv: [],

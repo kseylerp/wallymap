@@ -55,7 +55,7 @@ describe("palette roles per layer", () => {
   it("lists the raster tile layers, which draw their own imagery", () => {
     expect([...RASTER_TILE_LAYERS].sort()).toEqual([
       "burn-severity", "carbon-flux", "disturbance", "fire-hazard", "flood-extent", "flood-zones", "forest-alerts",
-      "forest-loss", "geology", "greenness", "land-cover", "night-lights", "phenology", "population",
+      "forest-loss", "geology", "greenness", "imagery-by-date", "land-cover", "night-lights", "phenology", "population",
       "protected-areas-world", "sea-ice", "sea-level-rise", "snow-cover", "surface-water",
     ]);
   });

@@ -79,3 +79,4 @@ import "./monuments";
 import "./tree-mortality";
 import "./permafrost";
 import "./mining-claims";
+import "./imagery-by-date";

@@ -88,6 +88,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "tree-mortality", synonyms: ["tree mortality", "beetle kill", "dead trees", "die-off"], notes: "aerial survey tree death by year; California to 2019, US 2021-2025; years input" },
   { layerId: "permafrost", synonyms: ["permafrost", "frozen ground", "thawing ground"], notes: "northern zones, kind = continuous to isolated; canada true for NRCan tiles" },
   { layerId: "mining-claims", synonyms: ["mining claim", "claims", "staked claim", "lode claim", "placer claim"], notes: "BLM claims on public land, status active or closed, v = acres; shapes are survey-grid squares, not corners" },
+  { layerId: "imagery-by-date", synonyms: ["satellite image on a date", "before and after", "satellite photo"], notes: "30 m true colour for date, nearest pass; compare two days" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

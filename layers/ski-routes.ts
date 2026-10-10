@@ -15,7 +15,7 @@ import { registerLayer } from "./registry";
 import { overpassQuery } from "./_shared/overpass";
 import {
   bboxClause,
-  cappedNote,
+  returnedNote,
   checkedOn,
   countedTotal,
   osmCitation,
@@ -169,9 +169,7 @@ const skiRoutes = defineLayer({
     return {
       kind: "geojson",
       data,
-      ...(total > returned
-        ? { coverageNote: cappedNote(returned, total, "piste ways and routes", "lowest OpenStreetMap ids first") }
-        : {}),
+      coverageNote: returnedNote(returned, total, "piste ways and routes", "lowest OpenStreetMap ids first"),
       citation: osmCitation(),
     };
   },

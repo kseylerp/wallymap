@@ -7,6 +7,7 @@ import {
   isoDate,
   metres,
   relationLine,
+  returnedNote,
   wayCenter,
   wayLine,
   wholeNumber,
@@ -79,5 +80,14 @@ describe("wayCenter", () => {
     expect(wayCenter(ring)).toEqual([1, 1]);
     expect(wayCenter([{ lat: 0, lon: 0 }, { lat: 0, lon: 2 }])).toEqual([1, 0]);
     expect(wayCenter([])).toBeNull();
+  });
+});
+
+describe("returnedNote", () => {
+  it("reports the count, and whether the box held more", () => {
+    expect(returnedNote(1200, 1200, "trail ways", "named first")).toBe("Returned 1,200 trail ways; the box was not truncated");
+    expect(returnedNote(2000, 3400, "trail ways", "named first")).toBe(
+      "Showing 2,000 of 3,400 trail ways in this box (named first); zoom in for the rest",
+    );
   });
 });

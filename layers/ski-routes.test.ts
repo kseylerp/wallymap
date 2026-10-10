@@ -139,12 +139,12 @@ describe("ski-routes layer", () => {
     );
   });
 
-  it("has no coverage note when everything matched came back", async () => {
+  it("says the box was not truncated when everything matched came back", async () => {
     const elements = fixture.elements.filter((e) => e.type !== "count");
     const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
     const r = await layer.query(ctx(stub), DEFAULTS);
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
-    expect(r.coverageNote).toBeUndefined();
+    expect(r.coverageNote).toBe("Returned 16 piste ways and routes; the box was not truncated");
   });
 
   it("maps a failing Overpass to an upstream error after the fallback", async () => {

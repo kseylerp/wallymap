@@ -76,6 +76,13 @@ export function cappedNote(shown: number, total: number, noun: string, order: st
   return `Showing ${fmt(shown)} of ${fmt(total)} ${noun} in this box (${order}); zoom in for the rest`;
 }
 
+/** The coverage note for a line or point layer: the count returned, and whether the box held more than that. */
+export function returnedNote(shown: number, total: number, noun: string, order: string): string {
+  return total > shown
+    ? cappedNote(shown, total, noun, order)
+    : `Returned ${shown.toLocaleString("en-US")} ${noun}; the box was not truncated`;
+}
+
 /** A calendar date `YYYY-MM-DD` that really exists, else undefined. */
 export function isoDate(value: string | undefined): string | undefined {
   const m = value === undefined ? null : /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());

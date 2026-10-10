@@ -142,12 +142,12 @@ describe("paddling layer", () => {
     );
   });
 
-  it("has no coverage note when everything matched came back", async () => {
+  it("says the box was not truncated when everything matched came back", async () => {
     const elements = bern.elements.filter((e) => e.type !== "count");
     const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
     const r = await layer.query(ctx(stub, BERN), DEFAULTS);
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
-    expect(r.coverageNote).toBeUndefined();
+    expect(r.coverageNote).toBe("Returned 13 paddling features; the box was not truncated");
     expect(r.data.features.some((f) => f.properties?.kind === "route")).toBe(true);
   });
 

@@ -4,6 +4,7 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import layer, { glimsUrl, normalizeGlaciers, thinGeometry } from "./glaciers";
 import raw from "./__fixtures__/glaciers.alps.json";
+import lyell from "./__fixtures__/glaciers.lyell.json";
 
 const MONTE_ROSA: [number, number, number, number] = [7.8, 45.8, 8.0, 46.0];
 
@@ -57,13 +58,54 @@ describe("glaciers layer", () => {
     for (const f of data.features) expect(["Polygon", "MultiPolygon"]).toContain(f.geometry.type);
   });
 
-  it("drops non-outline rows and keeps only the newest outline per glacier id", () => {
+  it("drops non-outline rows and keeps every dated outline, one per glacier id and date", () => {
     const { data } = normalizeGlaciers(raw);
     const ids = data.features.map((f) => f.properties?.glacierId);
     expect(ids).not.toContain("ROCK1");
-    expect(new Set(ids).size).toBe(ids.length);
-    const schwarzberg = data.features.find((f) => f.properties?.glacierId === "G007922E46000N");
-    expect(schwarzberg?.properties?.date).toBe("2003-08-13");
+    const schwarzberg = data.features.filter((f) => f.properties?.glacierId === "G007922E46000N");
+    expect(schwarzberg.map((f) => f.properties?.date)).toEqual(["2003-08-06", "2003-08-13"]);
+    const keys = data.features.map((f) => `${f.properties?.glacierId}|${f.properties?.t}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(data.features).toHaveLength(6);
+  });
+
+  it("plays Lyell and Maclure retreat: two dated outlines each, oldest first, area shrinking", () => {
+    const { data, truncated } = normalizeGlaciers(lyell);
+    expect(truncated).toBe(false);
+    const lyellOutlines = data.features.filter((f) => f.properties?.glacierId === "G240728E37743N");
+    expect(lyellOutlines.map((f) => f.properties?.t)).toEqual(["1984-09-09T00:00:00.000Z", "2014-09-09T00:00:00.000Z"]);
+    expect(lyellOutlines.map((f) => f.properties?.v)).toEqual([0.369, 0.253]);
+    expect(lyellOutlines[0].properties).toMatchObject({ name: "Lyell Glacier", date: "1984-09-09" });
+    const maclure = data.features.filter((f) => f.properties?.glacierId === "G240720E37746N");
+    expect(maclure.map((f) => f.properties?.date)).toEqual(["1984-09-09", "2014-09-09"]);
+    expect(maclure[1].properties?.v as number).toBeLessThan(maclure[0].properties?.v as number);
+    const patch = data.features.filter((f) => f.properties?.glacierId === "G240775E37720N");
+    expect(patch.map((f) => f.properties?.date)).toEqual(["1975-09-09", "2014-09-09"]);
+  });
+
+  it("keeps the larger outline when one glacier has two for the same date", () => {
+    const poly = { type: "Polygon", coordinates: [[[0, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]]] };
+    const row = (area: number, inst: string) => ({
+      type: "Feature",
+      geometry: poly,
+      properties: { line_type: "glac_bound", glac_id: "g1", glac_name: "Twice", db_area: area, src_date: "2000-01-01T00:00:00Z", chief_affl: inst },
+    });
+    const { data } = normalizeGlaciers({ type: "FeatureCollection", features: [row(1, "A"), row(2, "B")] });
+    expect(data.features).toHaveLength(1);
+    expect(data.features[0].properties).toMatchObject({ v: 2, institution: "B" });
+  });
+
+  it("keeps an outline with no date once, without t", () => {
+    const poly = { type: "Polygon", coordinates: [[[0, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]]] };
+    const { data } = normalizeGlaciers({
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", geometry: poly, properties: { line_type: "glac_bound", glac_id: "g1", db_area: 1, src_date: null } },
+        { type: "Feature", geometry: poly, properties: { line_type: "glac_bound", glac_id: "g1", db_area: 1, src_date: null } },
+      ],
+    });
+    expect(data.features).toHaveLength(1);
+    expect(data.features[0].properties).not.toHaveProperty("t");
   });
 
   it("calls a region code or placeholder an unnamed glacier", () => {
@@ -104,6 +146,48 @@ describe("glaciers layer", () => {
     expect(r.coverageNote).toMatch(/300 largest/);
   });
 
+  it("keeps all dated outlines of the 300 largest glaciers, ranked by each glacier's biggest outline", async () => {
+    const poly = { type: "Polygon", coordinates: [[[0, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]]] };
+    const rows = (i: number) => [
+      { type: "Feature", geometry: poly, properties: { line_type: "glac_bound", glac_id: `g${i}`, glac_name: `Glacier ${i}`, db_area: 400 - i, src_date: "1985-01-01T00:00:00Z" } },
+      { type: "Feature", geometry: poly, properties: { line_type: "glac_bound", glac_id: `g${i}`, glac_name: `Glacier ${i}`, db_area: 300 - i, src_date: "2015-01-01T00:00:00Z" } },
+    ];
+    const features = Array.from({ length: 320 }, (_, i) => rows(i)).flat();
+    const { data, truncated } = normalizeGlaciers({ type: "FeatureCollection", features });
+    expect(truncated).toBe(true);
+    expect(data.features).toHaveLength(600);
+    expect(data.features.slice(0, 2).map((f) => f.properties?.date)).toEqual(["1985-01-01", "2015-01-01"]);
+    expect(new Set(data.features.map((f) => f.properties?.glacierId)).size).toBe(300);
+    expect(data.features.some((f) => f.properties?.glacierId === "g319")).toBe(false);
+  });
+
+  it("notes that later outlines may be missing when the row cap is reached without trimming glaciers", async () => {
+    const poly = { type: "Polygon", coordinates: [[[0, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]]] };
+    const features = Array.from({ length: 450 }, (_, i) =>
+      [1985, 2015].map((y) => ({
+        type: "Feature",
+        geometry: poly,
+        properties: { line_type: "glac_bound", glac_id: `g${i}`, glac_name: `Glacier ${i}`, db_area: 400 - i, src_date: `${y}-01-01T00:00:00Z` },
+      })),
+    ).flat();
+    // 900 rows but 450 glaciers: over the glacier cap of 300, so the glacier note wins
+    const stub = vi.fn(async () => json({ type: "FeatureCollection", features }));
+    const r = await layer.query(ctx(stub), {});
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.coverageNote).toMatch(/300 largest glaciers/);
+
+    const few = Array.from({ length: 900 }, (_, i) => ({
+      type: "Feature",
+      geometry: poly,
+      properties: { line_type: "glac_bound", glac_id: `g${i % 100}`, glac_name: "G", db_area: 100 - (i % 100), src_date: `${1900 + Math.floor(i / 100)}-01-01T00:00:00Z` },
+    }));
+    const stub2 = vi.fn(async () => json({ type: "FeatureCollection", features: few }));
+    const r2 = await layer.query(ctx(stub2), {});
+    if (!("kind" in r2) || r2.kind !== "geojson") throw new Error("expected geojson");
+    expect(r2.data.features).toHaveLength(900);
+    expect(r2.coverageNote).toMatch(/900 biggest outlines/);
+  });
+
   it("queries the WFS once with a cache key and returns geojson with a citation", async () => {
     const stub = vi.fn(async () => json(raw));
     const r = await layer.query(ctx(stub, "glaciers:k"), {});
@@ -114,7 +198,7 @@ describe("glaciers layer", () => {
     expect(calls[0][0]).toBe(glimsUrl(MONTE_ROSA));
     expect(calls[0][1].cacheKey).toBe("glaciers:k:glims");
     expect(calls[0][1].ttlSeconds).toBe(7 * 86_400);
-    expect(r.data.features.length).toBe(5);
+    expect(r.data.features.length).toBe(6);
     expect(r.coverageNote).toBeUndefined();
     expect(r.citation.source).toContain("GLIMS");
   });
@@ -147,5 +231,7 @@ describe("glaciers layer", () => {
   it("describes glaciers in the words people use and warns the outlines are dated", () => {
     expect(layer.description).toMatch(/glacier/i);
     expect(layer.description).toMatch(/not a current survey|date/i);
+    expect(layer.description).toMatch(/retreat/);
+    expect(layer.description).toMatch(/Lyell/);
   });
 });

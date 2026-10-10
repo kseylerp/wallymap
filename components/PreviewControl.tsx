@@ -314,7 +314,7 @@ function Dock({ state, route, onActions }: DockProps) {
       {isPhone && typeof document !== "undefined" ? (
         phoneBottom !== null &&
         createPortal(
-          <div className="fixed inset-x-3 z-30" style={{ bottom: phoneBottom }}>
+          <div className="fixed right-[calc(var(--safe-right)+0.75rem)] left-[calc(var(--safe-left)+0.75rem)] z-30" style={{ bottom: phoneBottom }}>
             {dock}
           </div>,
           document.body,

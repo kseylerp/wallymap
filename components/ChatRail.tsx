@@ -446,7 +446,7 @@ export function ChatRail({
         // phone hidden while the console is open: there the card would cover all but the console's top row.
         <div
           data-testid="empty-state-overlay"
-          className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-4 pt-16 pb-24 md:pb-20${layerPanelOpen ? " max-md:hidden" : ""}`}
+          className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center pt-[calc(var(--safe-top)+4rem)] pr-[calc(var(--safe-right)+1rem)] pb-[calc(var(--safe-bottom)+6rem)] pl-[calc(var(--safe-left)+1rem)] md:pb-[calc(var(--safe-bottom)+5rem)]${layerPanelOpen ? " max-md:hidden" : ""}`}
         >
           <EmptyState onPick={send} />
         </div>
@@ -466,12 +466,14 @@ export function ChatRail({
           open
             ? [
                 "glass-strong rise-in overflow-hidden transition-[height] duration-350 ease-(--ease-out)",
-                // Phones: a bottom sheet that snaps between half and tall.
-                tall ? "inset-x-0 bottom-0 h-[90vh] rounded-t-panel" : "inset-x-0 bottom-0 h-[46vh] rounded-t-panel",
+                // Phones: a bottom sheet that snaps between half and tall, edge to edge (the composer keeps clear of
+                // the home indicator, the content of the side insets).
+                tall ? "inset-x-0 bottom-0 h-[90dvh] rounded-t-panel" : "inset-x-0 bottom-0 h-[46dvh] rounded-t-panel",
+                "max-md:pr-(--safe-right) max-md:pl-(--safe-left)",
                 // md and up: a floating panel in the bottom-left corner.
-                "md:inset-x-auto md:bottom-4 md:left-4 md:h-auto md:max-h-[72vh] md:w-[420px] md:rounded-panel",
+                "md:inset-x-auto md:bottom-[calc(var(--safe-bottom)+1rem)] md:left-[calc(var(--safe-left)+1rem)] md:h-auto md:max-h-[72dvh] md:w-[420px] md:rounded-panel",
               ].join(" ")
-            : "inset-x-3 bottom-3 items-start gap-2 md:inset-x-auto md:bottom-4 md:left-4 md:w-[420px]",
+            : "right-[calc(var(--safe-right)+0.75rem)] bottom-[calc(var(--safe-bottom)+0.75rem)] left-[calc(var(--safe-left)+0.75rem)] items-start gap-2 md:right-auto md:bottom-[calc(var(--safe-bottom)+1rem)] md:left-[calc(var(--safe-left)+1rem)] md:w-[420px]",
         ].join(" ")}
       >
         {open && (
@@ -509,7 +511,7 @@ export function ChatRail({
             title={open ? "Collapse" : "Expand"}
             className={
               open
-                ? "absolute top-3.5 right-3.5 z-10 flex size-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-mist hover:text-ink max-md:top-4"
+                ? "absolute top-3.5 right-3.5 z-10 flex size-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-mist hover:text-ink max-md:top-4 max-md:right-[calc(var(--safe-right)+0.875rem)]"
                 : "glass-strong rise-in flex h-8 items-center gap-1.5 rounded-pill pr-2.5 pl-3 text-xs font-medium text-ink"
             }
           >
@@ -582,7 +584,7 @@ export function ChatRail({
 
         <PreviewControl onActions={onActions} />
         {/* rise-in stays on in every state so it plays once, on mount, and never replays on collapse. */}
-        <div className={`rise-in w-full ${open ? "shrink-0 px-3 pt-1 pb-3" : ""}`} style={{ animationDelay: "240ms" }}>
+        <div className={`rise-in w-full ${open ? "shrink-0 px-3 pt-1 pb-[calc(var(--safe-bottom)+0.75rem)] md:pb-3" : ""}`} style={{ animationDelay: "240ms" }}>
           <form
             onSubmit={onSubmit}
             className={[

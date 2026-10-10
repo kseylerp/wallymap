@@ -1,5 +1,6 @@
 "use client";
 
+import { NO_INSETS, safeAreaInsets, type Insets } from "@/lib/render/safeArea";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronRight, Copy, MessageCircle, Route, X } from "lucide-react";
 import { LegendKey } from "@/components/LegendKey";
@@ -51,17 +52,21 @@ type Placement = {
 export function place(
   anchor: Point,
   card: { width: number; height: number },
-  view: { width: number; height: number },
+  view: { width: number; height: number; insets?: Insets },
 ): Placement {
+  const insets = view.insets ?? NO_INSETS;
+  // The header and the window edges move in by the phone's safe area (notch, home indicator).
+  const topSafe = TOP_SAFE + insets.top;
   const offscreen = anchor.x < 0 || anchor.y < 0 || anchor.x > view.width || anchor.y > view.height;
-  const roomAbove = anchor.y - GAP - TOP_SAFE;
-  const roomBelow = view.height - anchor.y - GAP - EDGE;
+  const roomAbove = anchor.y - GAP - topSafe;
+  const roomBelow = view.height - anchor.y - GAP - EDGE - insets.bottom;
   const below = roomAbove < card.height && roomBelow > roomAbove;
   const ideal = below ? anchor.y + GAP : anchor.y - GAP - card.height;
-  const maxTop = Math.max(TOP_SAFE, view.height - EDGE - card.height);
-  const top = Math.min(maxTop, Math.max(TOP_SAFE, ideal));
-  const maxLeft = Math.max(EDGE, view.width - EDGE - card.width);
-  const left = Math.min(maxLeft, Math.max(EDGE, anchor.x - card.width / 2));
+  const maxTop = Math.max(topSafe, view.height - EDGE - insets.bottom - card.height);
+  const top = Math.min(maxTop, Math.max(topSafe, ideal));
+  const minLeft = EDGE + insets.left;
+  const maxLeft = Math.max(minLeft, view.width - EDGE - insets.right - card.width);
+  const left = Math.min(maxLeft, Math.max(minLeft, anchor.x - card.width / 2));
   const rawPointerX = anchor.x - left;
   const pointerX = Math.min(card.width - 20, Math.max(20, rawPointerX));
   const pointer = Math.abs(top - ideal) < 1 && rawPointerX >= 14 && rawPointerX <= card.width - 14;
@@ -119,7 +124,9 @@ export function InspectCard({
   const [anchor, setAnchor] = useState<Point | null>(() => project(selection.lngLat) ?? selection.screen ?? null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [view, setView] = useState(() =>
-    typeof window === "undefined" ? { width: 1000, height: 800 } : { width: window.innerWidth, height: window.innerHeight },
+    typeof window === "undefined"
+      ? { width: 1000, height: 800, insets: NO_INSETS }
+      : { width: window.innerWidth, height: window.innerHeight, insets: safeAreaInsets() },
   );
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -139,7 +146,14 @@ export function InspectCard({
         frame = 0;
         const next = project(selection.lngLat);
         if (next) setAnchor(next);
-        setView({ width: window.innerWidth, height: window.innerHeight });
+        setView((v) => {
+          const insets = safeAreaInsets();
+          const same =
+            v.width === window.innerWidth &&
+            v.height === window.innerHeight &&
+            (["top", "right", "bottom", "left"] as const).every((k) => v.insets[k] === insets[k]);
+          return same ? v : { width: window.innerWidth, height: window.innerHeight, insets };
+        });
       });
     };
     update();
@@ -230,7 +244,7 @@ export function InspectCard({
       data-side={sideB ? "b" : undefined}
       className="inspect-card absolute z-30 rounded-[12px] border border-line bg-paper text-ink outline-none"
       style={{
-        width: `min(${MAX_WIDTH}px, calc(100vw - ${EDGE * 2}px))`,
+        width: `min(${MAX_WIDTH}px, calc(100vw - ${EDGE * 2}px - var(--safe-left) - var(--safe-right)))`,
         left: placement?.left ?? 0,
         top: placement?.top ?? 0,
         visibility: hidden ? "hidden" : "visible",
@@ -251,7 +265,7 @@ export function InspectCard({
         />
       )}
 
-      <div className="relative max-h-[min(70vh,560px)] overflow-y-auto overscroll-contain px-4 pt-3 pb-3.5">
+      <div className="relative max-h-[min(70dvh,560px)] overflow-y-auto overscroll-contain px-4 pt-3 pb-3.5">
         <header className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-1.5 text-[11.5px] font-medium text-ink-muted">

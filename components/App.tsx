@@ -213,7 +213,7 @@ export function App() {
         <MapCanvas ref={mapRef} state={state} onViewportChange={onViewportChange} onPick={onPick} />
       </main>
 
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 md:p-4">
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 pt-[calc(var(--safe-top)+0.75rem)] pr-[calc(var(--safe-right)+0.75rem)] pb-3 pl-[calc(var(--safe-left)+0.75rem)] md:pt-[calc(var(--safe-top)+1rem)] md:pr-[calc(var(--safe-right)+1rem)] md:pb-4 md:pl-[calc(var(--safe-left)+1rem)]">
         <div ref={pillsRef} className="pointer-events-auto">
           <MapPills
             basemap={state.basemap}
@@ -234,9 +234,9 @@ export function App() {
       {/* Compare's swipe handle across the map (the control itself is in the data console). */}
       <CompareSwipe state={state} />
 
-      {/* Phones: the console opens under the map pills (however many rows they wrap to) and leaves a gutter on the
-          right for the zoom, globe and 3D buttons. */}
-      <div className="pointer-events-none absolute top-3 right-3 z-20 flex flex-col items-end max-md:top-(--console-top,60px) max-md:right-14 md:top-4 md:right-4">
+      {/* Phones: the console opens under the map pills (however many rows they wrap to, the top inset included, since
+          it is measured) and leaves a gutter on the right for the zoom, globe and 3D buttons. */}
+      <div className="pointer-events-none absolute z-20 flex flex-col items-end max-md:top-(--console-top,60px) max-md:right-[calc(var(--safe-right)+3.5rem)] md:top-[calc(var(--safe-top)+1rem)] md:right-[calc(var(--safe-right)+1rem)]">
         <LayerStack
           layers={state.layers}
           renderOps={state.renderOps}

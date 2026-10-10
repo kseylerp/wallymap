@@ -498,7 +498,7 @@ export function LayerStack({
       // from the pills), clear of the map buttons on the right, ending above the chat sheet, and one scrolling column
       // (the scrubber, the compare and the layers scroll together) so a short screen never squeezes the list to nothing.
       data-scroll="console"
-      className="glass-strong rise-in pointer-events-auto flex max-h-[calc(100dvh-24px)] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-panel max-md:max-h-[calc(54dvh-var(--console-top,60px)-12px)] max-md:max-w-[calc(100vw-68px)] max-md:overflow-y-auto max-md:overscroll-contain md:max-h-[calc(100dvh-260px)]"
+      className="glass-strong rise-in pointer-events-auto flex max-h-[calc(100dvh-24px-var(--safe-top)-var(--safe-bottom))] max-w-[calc(100vw-24px-var(--safe-left)-var(--safe-right))] flex-col overflow-hidden rounded-panel max-md:max-h-[calc(54dvh-var(--console-top,60px)-12px)] max-md:max-w-[calc(100vw-68px-var(--safe-left)-var(--safe-right))] max-md:overflow-y-auto max-md:overscroll-contain md:max-h-[calc(100dvh-260px-var(--safe-top)-var(--safe-bottom))]"
       style={{ width: LAYER_PANEL_WIDTH }}
     >
       {/* The time scrubber docks here while any layer has dated features; empty, the slot takes no space. */}

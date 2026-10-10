@@ -25,6 +25,9 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#FAF9F5",
+  // The map runs edge to edge under the notch and home indicator; the controls move in by the safe-area insets
+  // (--safe-* in app/globals.css).
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -53,10 +53,11 @@ describe("phone safe area", () => {
     for (const v of vars) expect(source).toContain(v);
   });
 
-  it("keeps the map canvas full-bleed and full-height boxes on dvh", () => {
+  it("keeps the map canvas full-bleed, with the app root pinned to the visible area", () => {
     const app = read("components/App.tsx");
     expect(app).toContain('<main ref={mapBoxRef} className="absolute inset-0">');
-    expect(app).toContain("h-dvh");
+    // position: fixed; inset: 0 follows Safari's visible area (acdb07b); a 100dvh root left a blank band.
+    expect(app).toContain("fixed inset-0");
     expect(read("components/ChatRail.tsx")).not.toMatch(/h-\[\d+vh\]/);
   });
 

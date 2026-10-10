@@ -107,7 +107,12 @@ export function App() {
   useEffect(() => {
     const el = pillsRef.current;
     if (!el) return;
-    const measure = () => setPillsBottom(Math.round(el.getBoundingClientRect().bottom));
+    // Measured from the app's own top edge, not the viewport's: when iOS Safari pans the page (the keyboard opens, or
+    // it zoomed in on a field), viewport coordinates shift and would push the console up under the pills.
+    const measure = () => {
+      const top = mapBoxRef.current?.getBoundingClientRect().top ?? 0;
+      setPillsBottom(Math.round(el.getBoundingClientRect().bottom - top));
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
@@ -240,7 +245,7 @@ export function App() {
 
       {/* Phones: the console opens under the map pills (however many rows they wrap to, the top inset included, since
           it is measured) and leaves a gutter on the right for the zoom, globe and 3D buttons. */}
-      <div className="pointer-events-none absolute z-20 flex flex-col items-end max-md:top-(--console-top,60px) max-md:right-[calc(var(--safe-right)+3.5rem)] md:top-[calc(var(--safe-top)+1rem)] md:right-[calc(var(--safe-right)+1rem)]">
+      <div className="pointer-events-none absolute z-20 flex flex-col items-end max-md:top-(--console-top,60px) max-md:right-[calc(max(12px,var(--safe-right))+44px)] md:top-[calc(var(--safe-top)+1rem)] md:right-[calc(var(--safe-right)+1rem)]">
         <LayerStack
           layers={state.layers}
           renderOps={state.renderOps}

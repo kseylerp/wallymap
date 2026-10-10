@@ -182,9 +182,22 @@
   color: var(--button-primary-text);
 }
 
+/*
+ * The page never scrolls sideways: anything a pixel too wide would let iOS Safari pan the whole map off the edge.
+ * Height follows the dynamic viewport (100dvh), so Safari's collapsing URL bar and bottom toolbar never sit over the
+ * chat input; -webkit-fill-available covers Safari before dvh (iOS 15.4), 100% everything else.
+ */
 html,
 body {
   height: 100%;
+  height: 100dvh;
+  overflow-x: hidden;
+}
+@supports not (height: 100dvh) {
+  html,
+  body {
+    height: -webkit-fill-available;
+  }
 }
 
 body {
@@ -894,5 +907,41 @@ textarea:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .trace-dot {
     animation: none;
+  }
+}
+
+/*
+ * Phones: every text field, date field and select is at least 16px. iOS Safari zooms the page in when a field under
+ * 16px takes focus and keeps the zoom after the keyboard closes, which pushed the top pills above the screen and the
+ * map controls off its right edge. (Never maximum-scale=1: that also stops people pinch-zooming.) Sliders and
+ * checkboxes take no keyboard and keep their size. The console's small select and date fields grow to fit the text.
+ * Last in the file so it wins over the per-control sizes above (.legend-select).
+ */
+@media (max-width: 767.98px) {
+  input:not(
+      [type="range"],
+      [type="checkbox"],
+      [type="radio"],
+      [type="button"],
+      [type="submit"],
+      [type="reset"],
+      [type="color"],
+      [type="file"],
+      [type="image"],
+      [type="hidden"]
+    ),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+  .legend-select {
+    font-size: 16px;
+    height: 28px;
+    max-width: 128px;
+  }
+  .compare-date {
+    flex: 1 1 0;
+    width: auto;
+    height: 28px;
   }
 }

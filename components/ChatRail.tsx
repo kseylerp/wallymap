@@ -622,7 +622,8 @@ export function ChatRail({
               placeholder="Ask about trails, terrain, anywhere…"
               aria-label="Message"
               enterKeyHint="send"
-              className="h-10 min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-muted"
+              // 16px on phones: iOS Safari zooms the page in on any field under 16px and keeps the zoom (app/globals.css).
+              className="h-10 min-w-0 flex-1 bg-transparent text-[16px] text-ink md:text-[15px] outline-none placeholder:text-ink-muted"
             />
             {busy ? (
               <button

@@ -27,7 +27,7 @@ function Glyph({ children }: { children: ReactNode }) {
  */
 export function MapControls({ onZoomIn, onZoomOut, onGlobe, threeD, onToggle3D }: MapControlsProps) {
   return (
-    <div className="map-controls rise-in absolute right-[calc(var(--safe-right)+0.75rem)] z-10 flex flex-col items-center gap-2 md:right-[calc(var(--safe-right)+1rem)]" style={{ animationDelay: "180ms" }}>
+    <div className="map-controls rise-in absolute right-[max(12px,var(--safe-right))] z-10 flex flex-col items-center gap-2 md:right-[max(16px,var(--safe-right))]" style={{ animationDelay: "180ms" }}>
       <div className="map-pill flex flex-col overflow-hidden rounded-[10px]">
         <button type="button" onClick={onZoomIn} aria-label="Zoom in" title="Zoom in" className={BUTTON}>
           <Glyph>

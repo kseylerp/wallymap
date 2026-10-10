@@ -67,15 +67,15 @@ export function speciesWhere(species: string | undefined): string | undefined {
   return `UPPER(comname) LIKE '%${text}%' OR UPPER(sciname) LIKE '%${text}%'`;
 }
 
-/** `YYYYMMDD` to an ISO timestamp; undefined for anything else (the service sometimes holds text). */
-function publishedAt(raw: unknown): string | undefined {
+/** `YYYYMMDD` to `YYYY-MM-DD`; undefined for anything else (the service sometimes holds text). */
+function publishedOn(raw: unknown): string | undefined {
   const text = str(raw);
   if (text === undefined || !/^\d{8}$/.test(text)) return undefined;
-  const iso = `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}T00:00:00.000Z`;
-  return Number.isNaN(Date.parse(iso)) ? undefined : iso;
+  const date = `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
+  return Number.isNaN(Date.parse(`${date}T00:00:00Z`)) ? undefined : date;
 }
 
-/** Converts service rows to polygons with readable property names, `kind` (species) and `t`. */
+/** Converts service rows to polygons with readable property names and `kind` (species). */
 export function normalizeCriticalHabitat(fc: FeatureCollection): FeatureCollection {
   const features: Feature<Geometry>[] = [];
   for (const f of fc.features) {
@@ -92,8 +92,8 @@ export function normalizeCriticalHabitat(fc: FeatureCollection): FeatureCollecti
     if (listing !== undefined) properties.listingStatus = listing;
     const fedreg = str(p.fedreg);
     if (fedreg !== undefined) properties.federalRegister = fedreg;
-    const t = publishedAt(p.pubdate);
-    if (t !== undefined) properties.t = t;
+    const published = publishedOn(p.pubdate);
+    if (published !== undefined) properties.published = published;
     features.push({ type: "Feature", geometry: f.geometry, properties });
   }
   return { type: "FeatureCollection", features };
@@ -104,7 +104,7 @@ const criticalHabitat = defineLayer({
   title: "Critical habitat",
   description:
     "Areas the US Fish and Wildlife Service has designated as critical habitat for threatened and endangered species, drawn as polygons: the land and water a listed species needs to survive and recover. " +
-    "Each polygon has species (common name), scientificName, status (Final means in force, Proposed means a proposed rule), listingStatus (Endangered or Threatened), federalRegister (the rule's citation), t (when the designation was published) and kind (the species, for filtering). " +
+    "Each polygon has species (common name), scientificName, status (Final means in force, Proposed means a proposed rule), listingStatus (Endangered or Threatened), federalRegister (the rule's citation), published (the date the rule was published) and kind (the species, for filtering). " +
     "Use it for 'endangered species habitat', 'where do protected animals live here', or 'is there critical habitat on this trail or river', and to see which listed species have habitat in view. " +
     "Set species to part of a common or scientific name (for example 'bull trout', 'desert tortoise', 'Rana') to show one species; includeProposed (default true) adds proposed designations. " +
     "Caveats: critical habitat only binds federal actions and permits, so it is not a closure and does not by itself mean entry is restricted. " +

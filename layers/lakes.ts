@@ -6,7 +6,8 @@
  * area (P2046), elevation (P2044) and volume (P2234) through the normalised path `p:Pxxx/psn:Pxxx/wikibase:quantityAmount`, which converts
  * every source unit to metres, square metres and cubic metres. The English label comes from `rdfs:label` (so items with no English name drop out
  * and a `name` input can filter by it) and the English Wikipedia article from its sitelink. Results are ordered by area then depth and capped at 500.
- * Wikimedia requires a descriptive User-Agent and returns 429 to bursts; WDQS kills queries after 60 s.
+ * Wikimedia requires a descriptive User-Agent and returns 429 (or 503 from the query service) to bursts; the request goes through
+ * `wikimediaFetch` (shared User-Agent, one retry after the advised wait). WDQS kills queries after 60 s.
  * Smoke check 2026-10-09 (live, keyless, through runLayer): Lake Tahoe box (-120.2,38.8,-119.8,39.2) returned 27 named lakes (28 rows; Spooner
  *   Lake has two coordinate statements) in 0.5 s, only Lake Tahoe with depth: 501 m, area 502 km2, elevation 1,899.5 m, volume 150 km3. With
  *   name "Tahoe" over a 2 x 1.3 degree box it returned just Lake Tahoe in 0.7 s. A Swiss box (7,46,9.5,47.5, about 21,000 km2) returned 311
@@ -18,10 +19,10 @@ import type { Feature, Point } from "geojson";
 import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
+import { wikimediaFetch } from "./_shared/wikimedia";
 import { layerColor } from "@/lib/render/palette";
 
 export const SPARQL_ENDPOINT = "https://query.wikidata.org/sparql";
-const USER_AGENT = "WildMap/0.1 (open-source outdoor map agent)";
 export const LIMIT = 500;
 /** Lakes do not move and Wikidata edits are slow-moving. */
 const TTL_SECONDS = 7 * 86_400;
@@ -170,17 +171,15 @@ const lakes = defineLayer({
 
     let res: Response;
     try {
-      res = await ctx.fetch(SPARQL_ENDPOINT, {
+      res = await wikimediaFetch(ctx.fetch, SPARQL_ENDPOINT, {
         method: "POST",
         headers: {
-          "user-agent": USER_AGENT,
           accept: "application/sparql-results+json",
           "content-type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({ query: lakesQuery(ctx.bbox, input.name) }).toString(),
         cacheKey: ctx.cacheKey,
         ttlSeconds: TTL_SECONDS,
-        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       });
     } catch (err) {
       const timedOut = typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";

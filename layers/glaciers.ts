@@ -171,7 +171,7 @@ const glaciers = defineLayer({
   description:
     "Outlines of the world's glaciers and ice caps from GLIMS (Global Land Ice Measurements from Space), drawn as polygons. " +
     "Each polygon has name (many glaciers are unnamed), glacierId, v and areaKm2 (the glacier's area in square kilometres), t and date (when the satellite image behind that outline was taken) and institution (who mapped it). " +
-    "Use it to show where glaciers are, which are biggest, and how much ice a range holds, for example 'where are the glaciers near Mount Rainier' or 'the largest glaciers in this part of Alaska'. In 3D the glaciers rise as columns by area. " +
+    "Use it to show where glaciers are, which are biggest, and how much ice a range holds, for example 'where are the glaciers near Mount Rainier' or 'the largest glaciers in this part of Alaska'. With 3D on, the map can raise glaciers by area. " +
     "Caveats: this is an inventory, not a current survey. The outlines date from about 1970 to the 2020s depending on the glacier, so the date matters and most glaciers have shrunk since; do not read the outline as today's ice edge. " +
     "A glacier can be mapped by several teams, so a few outlines overlap, and only the newest outline per glacier id is kept. Some small ice patches are listed as glaciers and some real glaciers are missing. " +
     "At most the 300 largest glaciers in view are returned and the result says when it trims, so zoom in for the rest. Outlines are simplified for display (details under about 40 m are dropped). " +

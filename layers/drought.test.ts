@@ -37,10 +37,12 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("drought layer", () => {
-  it("declares US coverage, a credit-required license, no env and the weeks input", () => {
+  it("declares US coverage, a license that flags the Esri-hosted copy, no env and the weeks input", () => {
     expect(layer.id).toBe("drought");
     expect(layer.coverage).toBe("us");
-    expect(layer.license).toMatch(/Drought Monitor/);
+    expect(layer.license).toMatch(/NDMC/);
+    expect(layer.license).toMatch(/Esri/);
+    expect(layer.license).not.toMatch(/free to use/i);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(16_000_000);
     expect(layer.input.parse({})).toEqual({ weeks: 1 });
@@ -162,7 +164,7 @@ describe("drought layer", () => {
     expect(JSON.parse(stats.searchParams.get("outStatistics") ?? "[]")).toEqual([
       { statisticType: "max", onStatisticField: "ddate", outStatisticFieldName: "latest" },
     ]);
-    expect(calls[0][1].cacheKey).toBe("drought:k:usdm-latest");
+    expect(calls[0][1].cacheKey).toBe("drought:usdm-latest");
 
     const q = new URL(calls[1][0]);
     expect(q.searchParams.get("where")).toBe("ddate >= timestamp '2026-10-06 00:00:00' AND ddate <= timestamp '2026-10-06 00:00:00'");

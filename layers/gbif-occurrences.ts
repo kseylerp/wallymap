@@ -13,7 +13,7 @@
  *   Name lookup: https://api.gbif.org/v1/species/match?name=  -> { usageKey, canonicalName, matchType } where matchType
  *     is EXACT, FUZZY, HIGHERRANK or NONE. Density tiles need a taxonKey, so a name is resolved first.
  *   Density tiles: https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@1x.png?style=purpleYellow.point
- *     &taxonKey=K&year=A,B (256 px PNG; 200 at z0 to z14; the whole world, not limited to the bbox).
+ *     &taxonKey=K&year=A,B (the layer always sends the same year window as points: explicit bounds, else the last 10 years; 256 px PNG; 200 at z0 to z14; the whole world, not limited to the bbox).
  * Notes: iNaturalist is the biggest GBIF publisher, so the species layer and this one overlap. Records with a
  * coordinate uncertainty over 5 km (usually a region centroid) are left out. GBIF limits offset+limit to 100,000;
  * this layer reads at most 2 pages (600 records), so dense places are a recent sample, and `density` gives the whole picture.
@@ -125,15 +125,11 @@ export function searchUrl(
   return `${SEARCH_URL}?${search.toString()}`;
 }
 
-/** Density tile template (`{z}/{x}/{y}` stay for the map to fill). Years are added only when asked for. */
-export function densityTileUrl(taxonKey: number | undefined, years: { from?: number; to?: number }): string {
+/** Density tile template (`{z}/{x}/{y}` stay for the map to fill) for a taxon and a year range. */
+export function densityTileUrl(taxonKey: number | undefined, years: { from: number; to: number }): string {
   const parts = [`style=${DENSITY_STYLE}`];
   if (taxonKey !== undefined) parts.push(`taxonKey=${taxonKey}`);
-  if (years.from !== undefined || years.to !== undefined) {
-    const to = years.to ?? currentYear();
-    const from = years.from ?? 1600;
-    parts.push(`year=${Math.min(from, to)},${to}`);
-  }
+  parts.push(`year=${years.from},${years.to}`);
   return `${DENSITY_URL}?${parts.join("&")}`;
 }
 
@@ -219,7 +215,7 @@ const gbifOccurrences = defineLayer({
     "Use it for where a species or group has been recorded, for example 'where have mountain lions been seen here', 'orchid records in this valley' or 'how has this species' range shown up over the years'. It works worldwide and goes back further than the species layer, so pick this one for older records, specimens, or places outside iNaturalist's reach; use species for recent photo sightings with common names. " +
     "Set scientificName to a Latin name at any level, such as 'Puma concolor', 'Pandion haliaetus' or a family like 'Felidae' (common names like 'mountain lion' do not work, so translate first), or taxonKey if you have a GBIF key. Leave both out for all species. " +
     "yearFrom and yearTo set the years (default: the last 10 years). " +
-    "Set density to true to get a world-wide map of record density (map tiles, not countable points) instead of points; it works at any size of region, shows where the data is thickest, and respects scientificName, taxonKey and the year range if you set them. " +
+    "Set density to true to get a world-wide map of record density (map tiles, not countable points) instead of points; it works at any size of region, shows where the data is thickest, and respects scientificName, taxonKey and the year range (the same default of the last 10 years as points). " +
     "Caveats: records show where people and institutions looked, not where animals are: roads, trails, towns and parks look busy and remote land looks empty, and absence of points is not absence of the species. " +
     "The position of some records is deliberately blurred or vague; records vaguer than 5 km are left out, and threatened species are often generalised. " +
     "Points come back roughly newest first (GBIF's own order), at most 600 per request, and the result says when it trims, so narrow the years or name, zoom in, or switch to density for the full picture. Dense places can have tens of thousands of records. " +
@@ -251,11 +247,10 @@ const gbifOccurrences = defineLayer({
         if ("error" in matched) return matched;
         taxonKey = matched.key;
       }
-      const explicitYears = input.yearFrom !== undefined || input.yearTo !== undefined;
       return {
         kind: "tiles",
         data: {
-          url: densityTileUrl(taxonKey, explicitYears ? { from: input.yearFrom, to: input.yearTo } : {}),
+          url: densityTileUrl(taxonKey, yearRange(input, now)),
           minzoom: 0,
           maxzoom: 14,
           format: "raster",
@@ -349,7 +344,8 @@ async function resolveTaxon(
 ): Promise<{ key: number } | LayerError> {
   try {
     const res = await ctx.fetch(`${MATCH_URL}?${new URLSearchParams({ name, verbose: "false" }).toString()}`, {
-      cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:gbif-match`,
+      // A name resolves the same way for every view, so the key leaves out the bbox.
+      cacheKey: ctx.cacheKey === undefined ? undefined : `gbif:match:${name.toLowerCase()}`,
       ttlSeconds: MATCH_TTL_SECONDS,
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });

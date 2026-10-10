@@ -35,7 +35,7 @@ describe("critical-habitat layer", () => {
     expect(layer.style).toMatchObject({ geometry: "polygon", fillOpacity: 0.25 });
   });
 
-  it("normalizes rows to polygons with species as kind, status and the publication date as t", () => {
+  it("normalizes rows to polygons with species as kind, status and the publication date as published (never t)", () => {
     const fc = normalizeCriticalHabitat(finalFc);
     expect(fc.features).toHaveLength(finalFc.features.length);
     const frog = fc.features.find((f) => f.properties?.scientificName === "Rana sierrae");
@@ -47,7 +47,7 @@ describe("critical-habitat layer", () => {
       status: "Final",
       listingStatus: "Endangered",
       federalRegister: "81FR59046 59119",
-      t: "2016-08-26T00:00:00.000Z",
+      published: "2016-08-26",
     });
   });
 
@@ -64,6 +64,7 @@ describe("critical-habitat layer", () => {
     expect(fc.features).toHaveLength(2);
     expect(fc.features[0].properties).toEqual({ species: "Rana muscosa", kind: "Rana muscosa", scientificName: "Rana muscosa" });
     expect(fc.features[1].properties?.species).toBe("Unnamed species");
+    for (const f of finalFc.features.length ? normalizeCriticalHabitat(finalFc).features : []) expect(f.properties).not.toHaveProperty("t");
   });
 
   it("builds a species filter that escapes quotes and strips LIKE wildcards", () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { WIKIMEDIA_USER_AGENT } from "./_shared/wikimedia";
 import layer, { LIMIT, SPARQL_ENDPOINT, lakesQuery, normalizeLakes } from "./lakes";
 import fixture from "./__fixtures__/lakes.tahoe.json";
 
@@ -107,7 +108,7 @@ describe("lakes layer", () => {
     const [url, init] = stub.mock.calls[0] as unknown as [string, RequestInit & { cacheKey?: string }];
     expect(url).toBe(SPARQL_ENDPOINT);
     expect(init.method).toBe("POST");
-    expect((init.headers as Record<string, string>)["user-agent"]).toContain("WildMap");
+    expect((init.headers as Record<string, string>)["user-agent"]).toBe(WIKIMEDIA_USER_AGENT);
     const query = new URLSearchParams(String(init.body)).get("query");
     expect(query).toContain("Point(-120.2 38.8)");
     expect(query).toContain('"tahoe"');
@@ -127,8 +128,18 @@ describe("lakes layer", () => {
     expect(geojson(await layer.query(ctx(stub), { name: "zzz" })).coverageNote).toBe("No lake named like 'zzz' in Wikidata for this area");
   });
 
+  it("retries once after a 429 and uses the second answer", async () => {
+    let n = 0;
+    const stub = vi.fn(async () =>
+      ++n === 1 ? new Response("slow down", { status: 429, headers: { "retry-after": "0" } }) : json(fixture),
+    );
+    const r = geojson(await layer.query(ctx(stub), {}));
+    expect(stub).toHaveBeenCalledTimes(2);
+    expect(r.data.features).toHaveLength(uniqueItems);
+  });
+
   it("maps rate limiting, errors and timeouts to hinted errors", async () => {
-    expect(await layer.query(ctx(vi.fn(async () => new Response("slow down", { status: 429 }))), {})).toEqual({
+    expect(await layer.query(ctx(vi.fn(async () => new Response("slow down", { status: 429, headers: { "retry-after": "0" } }))), {})).toEqual({
       error: "Wikidata is rate-limiting requests; try again in a minute",
       hint: "upstream",
     });

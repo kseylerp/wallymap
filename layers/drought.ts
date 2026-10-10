@@ -8,6 +8,9 @@
  *   https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/US_Drought_Intensity_v1/FeatureServer/2
  *   "US_Drought" (polygons, time-enabled on ddate, one row per week and category, 2000 to now; verified current to the
  *   2026-10-06 map). Keyless in practice, although the service description says organisation accounts.
+ * The official NDMC GeoJSON is the fallback if the Esri copy goes away (nation-wide download, clip to the bbox here);
+ * it is not wired in. Licensing: NDMC data, which NDMC asks users to credit; the Esri-hosted copy's service terms are for
+ * organisational use, so verify them before any commercial use.
  * Fields used: dm (0 to 4, the category), ddate (valid Tuesday, epoch ms UTC). Each row is one MultiPolygon of the area in
  * exactly that category that week (categories do not overlap; a D1 row does not contain the D2 area).
  * Notes from live requests:
@@ -218,9 +221,9 @@ const drought = defineLayer({
     "It describes dryness, not the fire danger and not the water level of a particular lake or river (streamflow and snowpack are better for those). " +
     "The map is updated every Thursday for the Tuesday before, so it lags by two days; the result says when the newest map is older than three weeks. " +
     "United States only (including Alaska, Hawaii and Puerto Rico); elsewhere it returns nothing. Polygons are clipped to the view and simplified for display. " +
-    "Zoom in to a region under 16,000,000 km² (about the size of the contiguous United States) first; with many weeks, a smaller region is faster.",
+    "The map view must be under 16 million km², which is a box about 5,000 km wide and 3,000 km tall, roughly the lower 48 states plus the ocean around them (that is the size of the box on screen, not the area of land); zoom in first, and with many weeks a smaller view is faster.",
   coverage: "us",
-  license: "Free to use with credit (U.S. Drought Monitor: NDMC, USDA, NOAA)",
+  license: "NDMC data via an Esri-hosted copy; NDMC asks for credit; the Esri service terms are for organisational use, verify before commercial use",
   requiredEnv: [],
   maxAreaKm2: 16_000_000,
   input: inputSchema,
@@ -256,7 +259,8 @@ const drought = defineLayer({
         f: "json",
       });
       const res = await ctx.fetch(`${SERVICE}/query?${params.toString()}`, {
-        cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:usdm-latest`,
+        // Not bbox-specific, so every view shares one entry.
+        cacheKey: ctx.cacheKey === undefined ? undefined : "drought:usdm-latest",
         ttlSeconds: LATEST_TTL_SECONDS,
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       });

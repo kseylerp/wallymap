@@ -169,9 +169,9 @@ describe("gbif-occurrences layer", () => {
     expect(stub).not.toHaveBeenCalled();
   });
 
-  it("builds density tile URLs with the taxon and years only when given", () => {
-    expect(densityTileUrl(undefined, {})).toBe(
-      "https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@1x.png?style=purpleYellow.point",
+  it("builds density tile URLs with the taxon and the year window", () => {
+    expect(densityTileUrl(undefined, { from: 2016, to: 2026 })).toBe(
+      "https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@1x.png?style=purpleYellow.point&year=2016,2026",
     );
     expect(densityTileUrl(2435099, { from: 2010, to: 2020 })).toBe(
       "https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@1x.png?style=purpleYellow.point&taxonKey=2435099&year=2010,2020",
@@ -185,10 +185,12 @@ describe("gbif-occurrences layer", () => {
     expect(stub).toHaveBeenCalledTimes(1);
     const calls = stub.mock.calls as unknown as [string, RequestInit & { cacheKey?: string }][];
     expect(calls[0][0]).toContain("https://api.gbif.org/v1/species/match?name=Puma+concolor");
-    expect(calls[0][1].cacheKey).toBe("gbif:k:gbif-match");
+    expect(calls[0][1].cacheKey).toBe("gbif:match:puma concolor");
     expect(r.data).toMatchObject({ format: "raster", minzoom: 0, maxzoom: 14, tileSize: 256 });
     expect(r.data.url).toContain("taxonKey=2435099");
-    expect(r.data.url).not.toContain("year=");
+    expect(r.data.url).toMatch(/year=\d{4},\d{4}$/);
+    const { from, to } = yearRange({}, new Date());
+    expect(r.data.url).toContain(`year=${from},${to}`);
   });
 
   it("uses a given taxonKey without a lookup and passes explicit years", async () => {

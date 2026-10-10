@@ -82,7 +82,7 @@ export type StyleHints = {
   unit?: string;
   /** Polygons only: fill alpha from 0 (outline only) to 1; the renderer's default when unset. */
   fillOpacity?: number;
-  /** Points only: draw columns whose height is the feature's `v` (value) or 1 per feature (`count`) when the map is in 3D. */
+  /** Points (columns) and polygons (extruded by `v`): height is the feature's `v` (value) or, for points, 1 per feature (`count`), when the map is in 3D. */
   extrude?: "v" | "count";
   /** True when a heatmap view of the points is meaningful (dense events, observations). */
   heat?: boolean;

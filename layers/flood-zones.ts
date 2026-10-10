@@ -32,7 +32,7 @@ const floodZones = defineLayer({
     "Caveats: the tiles only appear when zoomed in to street or neighbourhood level (about zoom 14 and closer); zoomed out the map shows nothing, so tell the user to zoom in. " +
     "It is mapped flood hazard for regulation and insurance, not a forecast or a record of floods: places outside the zones can still flood, mountain flash floods and small creeks are often unmapped, and not every county has digital flood maps, so a blank area can mean no study. " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms and do not give a zone for an exact address; point the user to FEMA's Flood Map Service Center for that. " +
-    "Covers the United States and its territories; outside them the result is empty.",
+    "Covers the 50 states, DC and Puerto Rico; outside them the result is empty.",
   coverage: "us",
   license: "Public domain (FEMA)",
   requiredEnv: [],

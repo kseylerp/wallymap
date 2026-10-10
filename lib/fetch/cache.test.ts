@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MEMORY_CACHE_MAX_ENTRIES, cacheKeyFor, createCache, type Cache } from "./cache";
+import {
+  KV_MAX_VALUE_BYTES,
+  MEMORY_CACHE_MAX_BYTES,
+  cacheKeyFor,
+  createCache,
+  createMemoryCache,
+  kvCache,
+  resetCacheWarnings,
+  type Cache,
+} from "./cache";
 import { createLayerFetch } from "./index";
 
 describe("createCache", () => {
@@ -35,15 +44,101 @@ describe("createCache", () => {
     expect(await createCache().get("shared-key")).toBe("x");
   });
 
-  it("evicts the oldest memory entry once it holds 50", async () => {
+  it("holds a large station list alongside many small entries", async () => {
     delete process.env.KV_REST_API_URL;
     delete process.env.KV_REST_API_TOKEN;
     const c = createCache();
-    expect(MEMORY_CACHE_MAX_ENTRIES).toBe(50);
-    for (let i = 0; i < 51; i++) await c.set(`fifo-${i}`, `v${i}`, 60);
-    expect(await c.get("fifo-0")).toBeNull();
-    expect(await c.get("fifo-1")).toBe("v1");
-    expect(await c.get("fifo-50")).toBe("v50");
+    expect(MEMORY_CACHE_MAX_BYTES).toBe(64 * 1024 * 1024);
+    const stationList = "x".repeat(2_000_000);
+    await c.set("bytes:stations", stationList, 600);
+    // A cold weather-alerts view writes about 41 small entries; the old 50-entry cap evicted the list.
+    for (let i = 0; i < 500; i++) await c.set(`bytes:zone-${i}`, `{"zone":${i}}`, 600);
+    expect(await c.get("bytes:stations")).toBe(stationList);
+    expect(await c.get("bytes:zone-0")).toBe('{"zone":0}');
+  });
+});
+
+describe("createMemoryCache", () => {
+  it("evicts least recently used entries once the byte budget is full", async () => {
+    const c = createMemoryCache(200);
+    for (let i = 0; i < 9; i++) await c.set(`k${i}`, String(i).repeat(18), 60); // 20 bytes each with the key
+    expect(c.bytes()).toBe(180);
+    // Reading k0 makes k1 the least recently used.
+    expect(await c.get("k0")).not.toBeNull();
+    await c.set("e", "e".repeat(44), 60); // 45 bytes: k1 and k2 must go
+    expect(await c.get("k1")).toBeNull();
+    expect(await c.get("k2")).toBeNull();
+    expect(await c.get("k0")).not.toBeNull();
+    expect(await c.get("k3")).not.toBeNull();
+    expect(await c.get("e")).not.toBeNull();
+    expect(c.bytes()).toBe(185);
+  });
+
+  it("replacing a key frees its old size, and an entry over a quarter of the budget is not stored", async () => {
+    const c = createMemoryCache(100);
+    await c.set("k", "1".repeat(19), 60);
+    await c.set("k", "2".repeat(9), 60);
+    expect(c.bytes()).toBe(10);
+    await c.set("huge", "h".repeat(30), 60);
+    expect(await c.get("huge")).toBeNull();
+    expect(await c.get("k")).toBe("2".repeat(9));
+  });
+});
+
+describe("kvCache", () => {
+  function fakeKv({ refuse = false } = {}) {
+    const store = new Map<string, string>();
+    const client = {
+      get: vi.fn(async (key: string) => store.get(key) ?? null),
+      set: vi.fn(async (key: string, value: string) => {
+        if (refuse) throw new Error("ERR max request size exceeded");
+        store.set(key, value);
+        return "OK";
+      }),
+    };
+    return { store, client };
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetCacheWarnings();
+  });
+
+  it("writes ordinary values to KV", async () => {
+    const { store, client } = fakeKv();
+    const c = kvCache(async () => client as never, createMemoryCache(10_000_000));
+    await c.set("kv:small", "v", 60);
+    expect(store.get("kv:small")).toBe("v");
+    expect(await c.get("kv:small")).toBe("v");
+  });
+
+  it("keeps a value over the KV limit in memory and warns once for that key", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { store, client } = fakeKv();
+    const c = kvCache(async () => client as never, createMemoryCache(10_000_000));
+    const big = "t".repeat(KV_MAX_VALUE_BYTES + 1);
+    await c.set("tides:stations:predictions", big, 60);
+    await c.set("tides:stations:predictions", big, 60);
+    expect(client.set).not.toHaveBeenCalled();
+    expect(store.size).toBe(0);
+    expect(await c.get("tides:stations:predictions")).toBe(big);
+    expect(client.get).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain("tides:stations:predictions");
+
+    await c.set("surf:ndbc-latest", big, 60);
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to memory when KV rejects a write, warning once per key", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { client } = fakeKv({ refuse: true });
+    const c = kvCache(async () => client as never, createMemoryCache(10_000_000));
+    await c.set("kv:refused", "body", 60);
+    await c.set("kv:refused", "body", 60);
+    expect(await c.get("kv:refused")).toBe("body");
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain("kv:refused");
   });
 });
 

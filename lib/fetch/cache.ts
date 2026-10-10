@@ -7,33 +7,67 @@ export type Cache = {
   set(key: string, value: string, ttlSeconds: number): Promise<void>;
 };
 
-type MemoryEntry = { value: string; expiresAt: number };
+type MemoryEntry = { value: string; expiresAt: number; size: number };
+
+/**
+ * Most the in-memory cache holds, in bytes (string length of key plus value; station lists and API bodies are
+ * almost all ASCII). Large shared station lists (NOAA tides about 2 MB) fit many times over, so one busy layer
+ * no longer flushes the lists every other layer depends on.
+ */
+export const MEMORY_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+
+/** One entry may use at most this share of the budget, so a single huge body cannot empty the cache. */
+const MAX_ENTRY_SHARE = 4;
+
+export type MemoryCache = Cache & {
+  /** Bytes currently held. */
+  readonly bytes: () => number;
+};
+
+/** A process-memory cache bounded by bytes, least recently used out first. */
+export function createMemoryCache(maxBytes: number = MEMORY_CACHE_MAX_BYTES): MemoryCache {
+  // Maps iterate in insertion order; a hit re-inserts its key, so the first key is the least recently used.
+  const entries = new Map<string, MemoryEntry>();
+  let bytes = 0;
+
+  const remove = (key: string) => {
+    const entry = entries.get(key);
+    if (!entry) return;
+    entries.delete(key);
+    bytes -= entry.size;
+  };
+
+  return {
+    bytes: () => bytes,
+    async get(key) {
+      const entry = entries.get(key);
+      if (!entry) return null;
+      if (entry.expiresAt <= Date.now()) {
+        remove(key);
+        return null;
+      }
+      entries.delete(key);
+      entries.set(key, entry);
+      return entry.value;
+    },
+    async set(key, value, ttlSeconds) {
+      remove(key);
+      const size = key.length + value.length;
+      if (size > maxBytes / MAX_ENTRY_SHARE) return;
+      for (const [oldest, entry] of entries) {
+        if (bytes + size <= maxBytes) break;
+        // Expired or not, the least recently used entry goes first.
+        entries.delete(oldest);
+        bytes -= entry.size;
+      }
+      entries.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000, size });
+      bytes += size;
+    },
+  };
+}
 
 // Module-level so every createCache() call in a process shares one store.
-const memory = new Map<string, MemoryEntry>();
-
-/** Most entries the in-memory cache holds; the oldest insert is evicted first. */
-export const MEMORY_CACHE_MAX_ENTRIES = 50;
-
-const memoryCache: Cache = {
-  async get(key) {
-    const entry = memory.get(key);
-    if (!entry) return null;
-    if (entry.expiresAt <= Date.now()) {
-      memory.delete(key);
-      return null;
-    }
-    return entry.value;
-  },
-  async set(key, value, ttlSeconds) {
-    if (!memory.has(key) && memory.size >= MEMORY_CACHE_MAX_ENTRIES) {
-      // Maps iterate in insertion order, so the first key is the oldest.
-      const oldest = memory.keys().next().value;
-      if (oldest !== undefined) memory.delete(oldest);
-    }
-    memory.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
-  },
-};
+const memoryCache = createMemoryCache();
 
 type KvConfig = { url: string; token: string };
 
@@ -65,18 +99,56 @@ export function kvClient({ url, token }: KvConfig): Promise<VercelKV> {
   return client;
 }
 
-function kvCache(config: KvConfig): Cache {
-  const getClient = () => kvClient(config);
+/**
+ * Largest value written to KV. Upstash refuses requests over about 1 MB on its free plan, and the NOAA tide
+ * station list alone is about 2 MB, so larger values stay in process memory instead.
+ */
+export const KV_MAX_VALUE_BYTES = 900_000;
+
+const warnedKeys = new Set<string>();
+const MAX_WARNED_KEYS = 1_000;
+
+/** One warning per key, so a value that never fits KV says so once, not on every request and not just once per process. */
+function warnOncePerKey(key: string, message: string): void {
+  if (warnedKeys.has(key)) return;
+  if (warnedKeys.size >= MAX_WARNED_KEYS) warnedKeys.clear();
+  warnedKeys.add(key);
+  console.warn(message);
+}
+
+/** Tests only. */
+export function resetCacheWarnings(): void {
+  warnedKeys.clear();
+}
+
+/**
+ * KV first, with process memory as the fallback for values KV cannot take: one over KV_MAX_VALUE_BYTES, or one
+ * whose write KV rejects. Reads look in memory first, which only ever holds those fallback values in this mode.
+ */
+export function kvCache(getClient: () => Promise<Pick<VercelKV, "get" | "set">>, memory: Cache = memoryCache): Cache {
   return {
     async get(key) {
+      const local = await memory.get(key);
+      if (local !== null) return local;
       const client = await getClient();
       const value = await client.get<unknown>(key);
       if (value === null || value === undefined) return null;
       return typeof value === "string" ? value : JSON.stringify(value);
     },
     async set(key, value, ttlSeconds) {
-      const client = await getClient();
-      await client.set(key, value, { ex: Math.max(1, Math.ceil(ttlSeconds)) });
+      const bytes = Buffer.byteLength(value, "utf8");
+      if (bytes > KV_MAX_VALUE_BYTES) {
+        warnOncePerKey(key, `Cache: ${key} is ${bytes} bytes, over the ${KV_MAX_VALUE_BYTES}-byte KV limit; kept in process memory instead`);
+        await memory.set(key, value, ttlSeconds);
+        return;
+      }
+      try {
+        const client = await getClient();
+        await client.set(key, value, { ex: Math.max(1, Math.ceil(ttlSeconds)) });
+      } catch (error) {
+        warnOncePerKey(key, `Cache: KV refused ${key} (${bytes} bytes); kept in process memory instead: ${String(error)}`);
+        await memory.set(key, value, ttlSeconds);
+      }
     },
   };
 }
@@ -84,7 +156,7 @@ function kvCache(config: KvConfig): Cache {
 /** KV-backed when KV_REST_API_URL and KV_REST_API_TOKEN are set, else in-memory. */
 export function createCache(): Cache {
   const config = kvConfig();
-  return config ? kvCache(config) : memoryCache;
+  return config ? kvCache(() => kvClient(config)) : memoryCache;
 }
 
 /** Short deterministic hash of a request body; empty body gives an empty string. */

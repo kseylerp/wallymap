@@ -80,6 +80,14 @@ describe("arcgisQuery", () => {
     expect(r).toMatchObject({ ok: true, truncated: true });
   });
 
+  it("also reports truncated when the flag is only under properties", async () => {
+    const stub = vi.fn(
+      async () => new Response(JSON.stringify({ ...fc, properties: { exceededTransferLimit: true } }), { status: 200 }),
+    );
+    const r = await arcgisQuery(ctxWith(stub), SERVICE, { outFields: ["NAME"], bbox: BBOX });
+    expect(r).toMatchObject({ ok: true, truncated: true });
+  });
+
   it("forwards orderByFields and ttlSeconds", async () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(fc), { status: 200 }));
     await arcgisQuery(ctxWith(stub), SERVICE, {

@@ -49,6 +49,17 @@ function arcgisErrorMessage(value: unknown): string | null {
 }
 
 /**
+ * True when the service capped the result. FeatureServers put `exceededTransferLimit` at the top of the GeoJSON; some
+ * (USGS energy.usgs.gov, the Esri Living Atlas copies) only put it under `properties`, and others in both places.
+ */
+function exceededTransferLimit(json: unknown): boolean {
+  if (typeof json !== "object" || json === null) return false;
+  if ("exceededTransferLimit" in json && json.exceededTransferLimit === true) return true;
+  const nested = "properties" in json ? json.properties : null;
+  return typeof nested === "object" && nested !== null && "exceededTransferLimit" in nested && nested.exceededTransferLimit === true;
+}
+
+/**
  * Queries an ArcGIS FeatureServer/MapServer layer for features intersecting a bbox,
  * returning GeoJSON in WGS84. `serviceUrl` is the layer URL without `/query`.
  */
@@ -104,11 +115,7 @@ export async function arcgisQuery(
     if (!isFeatureCollection(json)) {
       return { ok: false, error: "ArcGIS service did not return a FeatureCollection" };
     }
-    const truncated =
-      typeof json === "object" &&
-      json !== null &&
-      "exceededTransferLimit" in json &&
-      json.exceededTransferLimit === true;
+    const truncated = exceededTransferLimit(json);
     return { ok: true, fc: json, truncated };
   } catch (err) {
     const timedOut =

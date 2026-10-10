@@ -33,7 +33,7 @@ export const relationElementSchema = z.object({
   id: z.number(),
   center: latLon.optional(),
   members: z
-    .array(z.object({ type: z.string(), geometry: z.array(latLon).optional() }))
+    .array(z.object({ type: z.string(), ref: z.number().optional(), geometry: z.array(latLon).optional() }))
     .optional(),
   tags: tagsSchema.optional(),
 });
@@ -76,11 +76,26 @@ export function cappedNote(shown: number, total: number, noun: string, order: st
   return `Showing ${fmt(shown)} of ${fmt(total)} ${noun} in this box (${order}); zoom in for the rest`;
 }
 
-/** The coverage note for a line or point layer: the count returned, and whether the box held more than that. */
-export function returnedNote(shown: number, total: number, noun: string, order: string): string {
-  return total > shown
-    ? cappedNote(shown, total, noun, order)
-    : `Returned ${shown.toLocaleString("en-US")} ${noun}; the box was not truncated`;
+/**
+ * The coverage note for a line or point layer: the count returned, and whether the box held more than Overpass sent.
+ * `shown` is what the user gets (after any filter), `fetched` what Overpass sent before the filter, `total` what the
+ * box matched; `filter` names the input that hid the difference.
+ */
+export function returnedNote(
+  shown: number,
+  total: number,
+  noun: string,
+  order: string,
+  opts: { fetched?: number; filter?: string } = {},
+): string {
+  const fetched = opts.fetched ?? shown;
+  const fmt = (n: number) => n.toLocaleString("en-US");
+  const hidden = fetched - shown;
+  const filtered = opts.filter && hidden > 0 ? ` after ${opts.filter} hid ${fmt(hidden)}` : "";
+  if (total > fetched) {
+    return `Showing ${fmt(shown)} of ${fmt(total)} ${noun} in this box (${order}${filtered}); zoom in for the rest`;
+  }
+  return `Returned ${fmt(shown)} ${noun}${filtered}; the box was not truncated`;
 }
 
 /** A calendar date `YYYY-MM-DD` that really exists, else undefined. */
@@ -102,13 +117,14 @@ export function wholeNumber(value: string | undefined): number | undefined {
   return Number(value);
 }
 
-/** A length in metres from "1234", "1234.5", "1234 m" or "5280 ft" / "5280'"; undefined for anything else. */
+/** A length in metres from "1234", "1,234", "1234.5", "1234 m", "5280 ft", "5280 feet" or "5280'"; undefined for anything else. */
 export function metres(value: string | undefined): number | undefined {
   if (value === undefined) return undefined;
-  const m = /^\s*(-?\d{1,5}(?:\.\d+)?)\s*(m|ft|')?\s*$/i.exec(value);
+  const m = /^\s*(-?(?:\d{1,3}(?:,\d{3})+|\d{1,5})(?:\.\d+)?)\s*(m|ft|feet|foot|'|′|’)?\s*$/i.exec(value);
   if (!m) return undefined;
-  const n = Number(m[1]);
-  return m[2] === "ft" || m[2] === "'" ? Math.round(n * 0.3048 * 10) / 10 : n;
+  const n = Number(m[1].replace(/,/g, ""));
+  const unit = m[2]?.toLowerCase();
+  return unit === undefined || unit === "m" ? n : Math.round(n * 0.3048 * 10) / 10;
 }
 
 const ROMAN: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6 };
@@ -144,20 +160,48 @@ export function wayLine(geometry: { lat: number; lon: number }[] | undefined): L
   return { type: "LineString", coordinates: geometry.map((p) => [p.lon, p.lat]) };
 }
 
-/** A relation's way members as one line (a LineString for a single member, else a MultiLineString); null when none. */
+/** Geometry of every way in an Overpass `out geom` body, by way id (used to draw route relations from clipped member ways). */
+export function wayGeometryById(elements: unknown[]): Map<number, { lat: number; lon: number }[]> {
+  const out = new Map<number, { lat: number; lon: number }[]>();
+  for (const raw of elements) {
+    const way = wayElementSchema.safeParse(raw);
+    if (way.success && way.data.geometry && way.data.geometry.length >= 2) out.set(way.data.id, way.data.geometry);
+  }
+  return out;
+}
+
+/**
+ * A relation's way members as one line (a LineString for a single member, else a MultiLineString); null when none.
+ * Member geometry comes from the member itself (`out geom` on the relation) or, for a relation fetched with `out body`
+ * so that only the ways inside the box are downloaded, from `ways` by member ref.
+ */
 export function relationLine(
-  members: { type: string; geometry?: { lat: number; lon: number }[] }[] | undefined,
+  members: { type: string; ref?: number; geometry?: { lat: number; lon: number }[] }[] | undefined,
+  ways?: Map<number, { lat: number; lon: number }[]>,
 ): LineString | MultiLineString | null {
   const lines: Position[][] = [];
   for (const m of members ?? []) {
     if (m.type !== "way") continue;
-    const line = wayLine(m.geometry);
+    const line = wayLine(m.geometry ?? (m.ref === undefined ? undefined : ways?.get(m.ref)));
     if (line) lines.push(line.coordinates);
   }
   if (lines.length === 0) return null;
   return lines.length === 1
     ? { type: "LineString", coordinates: lines[0] }
     : { type: "MultiLineString", coordinates: lines };
+}
+
+/**
+ * Overpass QL for route relations without downloading their whole length: `.<set> out body` lists the members, and
+ * only the member ways inside the bbox are fetched with geometry (`way(r.<set>)(bbox)`), so a 300 km trail costs
+ * what its part in the box costs. `out count` first reports how many relations matched.
+ */
+export function clippedRelationQuery(set: string, selectors: string[], bbox: BBox, limits: { routes: number; ways: number }): string {
+  const area = bboxClause(bbox);
+  return (
+    `(${selectors.map((sel) => `${sel}${area};`).join("")})->.${set};way(r.${set})${area}->.${set}w;` +
+    `.${set} out count;.${set} out body ${limits.routes};.${set}w out tags geom ${limits.ways};`
+  );
 }
 
 /**

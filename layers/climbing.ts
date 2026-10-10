@@ -350,8 +350,10 @@ export function climbingNote(args: {
   shown: number;
   osmShown: number | null;
   openbetaShown: number | null;
-  /** True when a source had more places than were kept. */
-  cut: boolean;
+  /** True when Overpass held more matches than the 3,000 it sent (the lowest OpenStreetMap ids). */
+  osmCut: boolean;
+  /** True when OpenBeta sent more than 3,000 crags and only the 3,000 with the most routes were kept. */
+  openbetaCut: boolean;
   both: number;
   osmError?: string;
   openbetaError?: string;
@@ -363,7 +365,10 @@ export function climbingNote(args: {
   if (args.openbetaShown !== null) sources.push(`${fmt(args.openbetaShown)} from OpenBeta`);
   if (args.both > 0) sources.push(`${fmt(args.both)} in both`);
   if (sources.length > 0) parts.push(`(${sources.join(", ")})`);
-  let note = `${parts.join(" ")}; ${args.cut ? "the box was truncated (largest by route count kept), zoom in for the rest" : "the box was not truncated"}`;
+  const cuts: string[] = [];
+  if (args.osmCut) cuts.push(`OpenStreetMap stopped at ${fmt(MAX_PER_SOURCE)} (lowest ids kept)`);
+  if (args.openbetaCut) cuts.push(`OpenBeta kept the ${fmt(MAX_PER_SOURCE)} with the most routes`);
+  let note = `${parts.join(" ")}; ${cuts.length > 0 ? `the box was truncated (${cuts.join("; ")}), zoom in for the rest` : "the box was not truncated"}`;
   if (args.osmError) note += `. OpenStreetMap did not answer (${args.osmError}), so OpenBeta crags only`;
   if (args.openbetaError) note += `. OpenBeta did not answer (${args.openbetaError}), so OpenStreetMap crags only`;
   return note;
@@ -381,9 +386,10 @@ const climbing = defineLayer({
     "Caveats: OpenBeta is strong in the United States and thinner elsewhere; OpenStreetMap crags are volunteer-mapped and often have no route count (no v); " +
     "route counts and grades are crowd-sourced, so treat them as a guide; access, seasonal closures and bolting rules are not included, so check the land manager (public-lands) before going; " +
     "individual routes and their line geometry are not returned. " +
-    "Zoom in to a region under 10,000 km² first. Each source returns at most 3,000 places (the largest by route count) and the coverage note says if the box was cut or a source did not answer.",
+    "Zoom in to a region under 10,000 km² first. Each source returns at most 3,000 places (OpenStreetMap the lowest ids, OpenBeta the most routes) and the coverage note says if the box was cut or a source did not answer.",
   coverage: "global",
-  license: "ODbL (OpenStreetMap contributors); OpenBeta (openbeta.io open climbing data)",
+  license:
+    "ODbL (OpenStreetMap contributors); OpenBeta (open data; licence not stated by the project, verify before commercial use)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 10_000,
@@ -407,8 +413,10 @@ const climbing = defineLayer({
     if (!osmResult.ok && !openbeta.ok) return { error: `${osmResult.error}; ${openbeta.error}`, hint: "upstream" };
 
     const osmAll = osmResult.ok ? osmCrags(osmResult.json, input.includeGyms) : [];
-    // Overpass stops at MAX_PER_SOURCE elements; its `out count` says how many the box really holds.
-    const osmCut = osmResult.ok && (countedTotal(osmResult.json) ?? 0) > MAX_PER_SOURCE;
+    // Overpass stops at MAX_PER_SOURCE elements; its `out count` says how many the box really holds, so the box was
+    // cut when that exceeds the elements in the body (gyms and other skipped elements are in both numbers).
+    const osmSent = osmResult.ok ? overpassBodySchema.parse(osmResult.json).elements.filter((e) => (e as { type?: unknown }).type !== "count").length : 0;
+    const osmCut = osmResult.ok && (countedTotal(osmResult.json) ?? 0) > osmSent;
     const obAll = openbeta.ok ? openbeta.crags : [];
     const osm = osmAll.sort(byRoutes).slice(0, MAX_PER_SOURCE);
     const ob = obAll.sort(byRoutes).slice(0, MAX_PER_SOURCE);
@@ -421,7 +429,10 @@ const climbing = defineLayer({
     }));
     const data: FeatureCollection<Point> = { type: "FeatureCollection", features };
 
-    const citationSources = [osmResult.ok ? "OpenStreetMap contributors (ODbL)" : null, openbeta.ok ? "OpenBeta" : null];
+    const citationSources = [
+      osmResult.ok ? "OpenStreetMap contributors (ODbL, openstreetmap.org/copyright)" : null,
+      openbeta.ok ? "OpenBeta (openbeta.io)" : null,
+    ];
     return {
       kind: "geojson",
       data,
@@ -429,7 +440,8 @@ const climbing = defineLayer({
         shown: features.length,
         osmShown: osmResult.ok ? osm.length : null,
         openbetaShown: openbeta.ok ? ob.length : null,
-        cut: osmCut || obAll.length > MAX_PER_SOURCE,
+        osmCut,
+        openbetaCut: obAll.length > MAX_PER_SOURCE,
         both,
         ...(osmResult.ok ? {} : { osmError: osmResult.error }),
         ...(openbeta.ok ? {} : { openbetaError: openbeta.error }),

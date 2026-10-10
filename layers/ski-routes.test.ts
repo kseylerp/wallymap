@@ -15,16 +15,25 @@ describe("buildSkiQuery", () => {
   it("selects piste ways (not area outlines) and route=ski relations in (south,west,north,east) order", () => {
     const q = buildSkiQuery(CHAMONIX, DEFAULTS);
     expect(q).toContain('way["piste:type"]["area"!="yes"](45.85,6.8,46,7.05)');
-    expect(q).toContain('rel["route"="ski"](45.85,6.8,46,7.05)');
+    expect(q).toContain('rel["route"~"^(ski|piste)$"](45.85,6.8,46,7.05)');
     expect(q).toContain(".w out count;");
     expect(q).toContain(".w out tags geom 2000;");
-    expect(q).toContain(".r out geom 50;");
+  });
+
+  it("fetches route members clipped to the box, never the relation's whole geometry", () => {
+    const q = buildSkiQuery(CHAMONIX, DEFAULTS);
+    expect(q).toContain("way(r.r)(45.85,6.8,46,7.05)->.rw;");
+    expect(q).toContain(".r out body 50;");
+    expect(q).toContain(".rw out tags geom 3000;");
+    expect(q).not.toContain(".r out geom");
   });
 
   it("filters ways and relations to one kind", () => {
     const q = buildSkiQuery(CHAMONIX, { kind: "nordic", includeRoutes: true });
     expect(q).toContain('way["piste:type"="nordic"]');
-    expect(q).toContain('rel["route"="ski"]["piste:type"="nordic"]');
+    // Relations with no piste:type stay in, so a kind never hides an untyped ski route.
+    expect(q).toContain('rel["route"~"^(ski|piste)$"]["piste:type"="nordic"](45.85,6.8,46,7.05)');
+    expect(q).toContain('rel["route"~"^(ski|piste)$"][!"piste:type"](45.85,6.8,46,7.05)');
   });
 
   it("drops the relations when includeRoutes is false", () => {
@@ -103,6 +112,27 @@ describe("normalizeSki", () => {
       lit: true,
       t: "2025-12-01",
     });
+  });
+
+  it("draws route=ski and route=piste relations from clipped member ways, and drops a relation of another kind", () => {
+    const pts = [{ lat: 46, lon: 7 }, { lat: 46.01, lon: 7.01 }];
+    const body = {
+      elements: [
+        { type: "way", id: 1, tags: { highway: "track" }, geometry: pts },
+        { type: "relation", id: 8, tags: { route: "piste", "piste:type": "nordic", name: "Loop" }, members: [{ type: "way", ref: 1 }] },
+        { type: "relation", id: 9, tags: { route: "ski", name: "Tour" }, members: [{ type: "way", ref: 1 }] },
+        { type: "relation", id: 10, tags: { route: "ski", "piste:type": "downhill" }, members: [{ type: "way", ref: 1 }] },
+      ],
+    };
+    const all = normalizeSki(body);
+    expect(all.features.map((f) => `${f.properties?.osmId}:${f.properties?.kind}`)).toEqual([
+      "relation/8:nordic",
+      "relation/9:route",
+      "relation/10:downhill",
+    ]);
+    expect(all.features[0].geometry.type).toBe("LineString");
+    const nordic = normalizeSki(body, "nordic");
+    expect(nordic.features.map((f) => f.properties?.osmId)).toEqual(["relation/8", "relation/9"]);
   });
 
   it("returns nothing for a malformed body", () => {

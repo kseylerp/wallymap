@@ -216,7 +216,8 @@ describe("climbing layer", () => {
   });
 
   it("queries both sources once, merges them and reports counts and no truncation", async () => {
-    const stub = reply(osmFixture, openbetaFixture);
+    // The recorded Overpass body is a 14-element excerpt of a 39-element box; drop its count so this is a complete answer.
+    const stub = reply({ elements: osmFixture.elements.filter((e) => e.type !== "count") }, openbetaFixture);
     const r = geojson(await layer.query(ctx(stub, "climbing:k"), DEFAULTS));
     expect(stub).toHaveBeenCalledTimes(2);
     const calls = stub.mock.calls as unknown as [string, RequestInit & { cacheKey?: string }][];
@@ -228,20 +229,57 @@ describe("climbing layer", () => {
     expect(r.data.features.length).toBeGreaterThan(14);
     expect(r.data.features.every((f) => f.geometry.type === "Point")).toBe(true);
     expect(r.coverageNote).toMatch(/^Returned \d+ climbing places \(14 from OpenStreetMap, 12 from OpenBeta, \d+ in both\); the box was not truncated$/);
-    expect(r.citation.source).toBe("OpenStreetMap contributors (ODbL) and OpenBeta");
+    expect(r.citation.source).toBe("OpenStreetMap contributors (ODbL, openstreetmap.org/copyright) and OpenBeta (openbeta.io)");
   });
 
   it("says the box was truncated when Overpass counted more than it returned", async () => {
     const body = { elements: [{ type: "count", id: 0, tags: { total: "3500" } }, ...osmFixture.elements.filter((e) => e.type !== "count")] };
     const r = geojson(await layer.query(ctx(reply(body, openbetaFixture)), DEFAULTS));
-    expect(r.coverageNote).toContain("the box was truncated");
+    expect(r.coverageNote).toContain("the box was truncated (OpenStreetMap stopped at 3,000 (lowest ids kept)), zoom in for the rest");
+    expect(r.coverageNote).not.toContain("largest by route count");
+  });
+
+  it("does not call the box truncated when the only elements left out are gyms", async () => {
+    const body = {
+      elements: [
+        { type: "count", id: 0, tags: { total: "3" } },
+        { type: "node", id: 1, lat: 37.8, lon: -83.6, tags: { sport: "climbing", climbing: "crag", name: "Wall" } },
+        { type: "node", id: 2, lat: 37.8, lon: -83.6, tags: { sport: "climbing", leisure: "sports_centre", name: "Gym A" } },
+        { type: "node", id: 3, lat: 37.8, lon: -83.6, tags: { sport: "climbing", leisure: "sports_centre", name: "Gym B" } },
+      ],
+    };
+    const r = geojson(await layer.query(ctx(reply(body, { data: { cragsWithin: [] } })), DEFAULTS));
+    expect(r.data.features).toHaveLength(1);
+    expect(r.coverageNote).toBe("Returned 1 climbing places (1 from OpenStreetMap, 0 from OpenBeta); the box was not truncated");
+  });
+
+  it("says when OpenBeta sent more than it kept, by route count", async () => {
+    const many = Array.from({ length: 3001 }, (_, i) => ({
+      uuid: `u${i}`,
+      area_name: `Crag ${i}`,
+      totalClimbs: i,
+      metadata: { lat: 37.75 + i * 0.00003, lng: -83.7 + i * 0.00003, leaf: true, isBoulder: false },
+    }));
+    const r = geojson(await layer.query(ctx(reply({ elements: [] }, { data: { cragsWithin: many } })), DEFAULTS));
+    expect(r.data.features).toHaveLength(3000);
+    expect(r.coverageNote).toContain("OpenBeta kept the 3,000 with the most routes");
+  });
+
+  it("states the OpenBeta licence honestly and cites both sources", async () => {
+    expect(layer.license).toBe(
+      "ODbL (OpenStreetMap contributors); OpenBeta (open data; licence not stated by the project, verify before commercial use)",
+    );
+    const r = geojson(await layer.query(ctx(reply(osmFixture, openbetaFixture)), DEFAULTS));
+    expect(r.citation.source).toContain("OpenStreetMap contributors (ODbL");
+    expect(r.citation.source).toContain("openstreetmap.org/copyright");
+    expect(r.citation.source).toContain("OpenBeta (openbeta.io)");
   });
 
   it("falls back to OpenStreetMap alone when OpenBeta fails, and says so", async () => {
     const r = geojson(await layer.query(ctx(reply(osmFixture, { errors: [{ message: "boom" }] })), DEFAULTS));
     expect(r.data.features).toHaveLength(14);
     expect(r.coverageNote).toContain("OpenBeta did not answer (OpenBeta returned an unexpected response), so OpenStreetMap crags only");
-    expect(r.citation.source).toBe("OpenStreetMap contributors (ODbL)");
+    expect(r.citation.source).toBe("OpenStreetMap contributors (ODbL, openstreetmap.org/copyright)");
   });
 
   it("falls back to OpenBeta alone when Overpass fails, and says so", async () => {

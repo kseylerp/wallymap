@@ -21,11 +21,16 @@ describe("buildFeaturesQuery", () => {
     for (const kind of KINDS) {
       expect(q).toContain(`)->.${kind};`);
       expect(q).toContain(`.${kind} out count;`);
-      expect(q).toContain(`.${kind} out tags center 1000;`);
+      expect(q).toContain(`.${kind} out tags center ${kind === "peak" ? 2000 : 1000};`);
     }
+    // Peaks with an elevation come first, then the ones without.
+    expect(q).toContain('node["natural"="peak"]["name"]["ele"](38.8,-120.3,39.1,-119.9)');
+    expect(q).toContain('node["natural"="peak"]["name"][!"ele"](38.8,-120.3,39.1,-119.9)');
+    expect(q.indexOf(".peak out tags")).toBeLessThan(q.indexOf(".peak_noele out tags"));
+    expect(q).toContain(".peak_noele out count;");
+    expect(q).toContain(".peak_noele out tags center 1000;");
     expect(q).toContain('nwr["tourism"~"^(alpine_hut|wilderness_hut)$"](38.8,-120.3,39.1,-119.9)');
     expect(q).toContain('nwr["natural"="spring"](38.8,-120.3,39.1,-119.9)');
-    expect(q).toContain('node["natural"="peak"]["name"](38.8,-120.3,39.1,-119.9)');
     expect(q).toContain('node["highway"="mountain_pass"]["name"]');
     expect(q).toContain('nwr["waterway"="waterfall"]');
     expect(q).toContain('nwr["natural"="cave_entrance"]');

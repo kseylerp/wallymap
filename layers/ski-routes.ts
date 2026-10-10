@@ -1,7 +1,7 @@
 /**
  * Ski runs, nordic trails and ski-touring routes from OpenStreetMap via one Overpass query:
  *   way["piste:type"]["area"!="yes"]   (downhill, nordic, skitour, sled and other piste ways, `out tags geom`)
- *   relation["route"="ski"]            (named ski routes, `out geom`)
+ *   relation["route"="ski"|"piste"]    (named ski routes; `out body` plus only the member ways inside the box)
  * Fixture: layers/__fixtures__/ski-routes.chamonix.json (Chamonix, France, recorded 2026-10-09 and trimmed to
  * 12 vertices per line and 4 relation members; the live box held many piste ways and 3 route=ski relations).
  * Tags read: piste:type, piste:difficulty, piste:name, name, ref, piste:grooming, piste:status, piste:lit,
@@ -17,20 +17,24 @@ import {
   bboxClause,
   returnedNote,
   checkedOn,
+  clippedRelationQuery,
   countedTotal,
   osmCitation,
   overpassBodySchema,
   relationElementSchema,
   relationLine,
   wayElementSchema,
+  wayGeometryById,
   wayLine,
 } from "./_shared/osm-features";
 import { layerColor } from "@/lib/render/palette";
 
 /** Most piste ways returned; a resort-dense box holds thousands, each with its full geometry. */
 export const MAX_WAYS = 2_000;
-/** Most route relations returned; each carries all its member ways' geometry. */
+/** Most route relations returned. */
 export const MAX_ROUTES = 50;
+/** Most member ways of those routes fetched, and only the ones inside the box. */
+export const MAX_ROUTE_WAYS = 3_000;
 
 export const PISTE_KINDS = ["downhill", "nordic", "skitour", "sled"] as const;
 
@@ -43,19 +47,29 @@ const inputSchema = z.object({
 
 type SkiInput = z.infer<typeof inputSchema>;
 
-/** Overpass QL: piste ways and (optionally) route=ski relations, each with an `out count` for the truncation note. */
+/**
+ * Selectors for route relations. With a kind set, the relations that name that kind plus the ones that name none
+ * (route=ski relations often have no piste:type), so a kind filter never hides an untyped route.
+ */
+function relationSelectors(kind: SkiInput["kind"]): string[] {
+  const route = '["route"~"^(ski|piste)$"]';
+  return kind === undefined ? [`rel${route}`] : [`rel${route}["piste:type"="${kind}"]`, `rel${route}[!"piste:type"]`];
+}
+
+/**
+ * Overpass QL: piste ways and (optionally) route=ski and route=piste relations whose member ways are clipped to the
+ * box (see clippedRelationQuery), each with an `out count` for the coverage note.
+ */
 export function buildSkiQuery(bbox: BBox, input: Pick<SkiInput, "kind" | "includeRoutes">): string {
   const area = bboxClause(bbox);
   const type = input.kind === undefined ? '["piste:type"]' : `["piste:type"="${input.kind}"]`;
-  const relType = input.kind === undefined ? "" : `["piste:type"="${input.kind}"]`;
   return (
     `[out:json][timeout:25];` +
     `way${type}["area"!="yes"]${area}->.w;` +
-    (input.includeRoutes ? `rel["route"="ski"]${relType}${area}->.r;` : "") +
-    `.w out count;` +
-    (input.includeRoutes ? `.r out count;` : "") +
-    `.w out tags geom ${MAX_WAYS};` +
-    (input.includeRoutes ? `.r out geom ${MAX_ROUTES};` : "")
+    `.w out count;.w out tags geom ${MAX_WAYS};` +
+    (input.includeRoutes
+      ? clippedRelationQuery("r", relationSelectors(input.kind), bbox, { routes: MAX_ROUTES, ways: MAX_ROUTE_WAYS })
+      : "")
   );
 }
 
@@ -77,10 +91,12 @@ export function difficultyRank(value: string | undefined): number | undefined {
 type Line = LineString | MultiLineString;
 
 /** Converts an Overpass response into line features, skipping malformed elements and areas. */
-export function normalizeSki(json: unknown): FeatureCollection<Line> {
+export function normalizeSki(json: unknown, kind?: (typeof PISTE_KINDS)[number]): FeatureCollection<Line> {
   const features: Feature<Line>[] = [];
   const parsed = overpassBodySchema.safeParse(json);
   if (!parsed.success) return { type: "FeatureCollection", features };
+  const routeWays = wayGeometryById(parsed.data.elements);
+  const seen = new Set<string>();
 
   for (const raw of parsed.data.elements) {
     let geometry: Line | null = null;
@@ -97,13 +113,16 @@ export function normalizeSki(json: unknown): FeatureCollection<Line> {
     } else {
       const rel = relationElementSchema.safeParse(raw);
       if (!rel.success) continue;
-      geometry = relationLine(rel.data.members);
+      geometry = relationLine(rel.data.members, routeWays);
       osmId = `relation/${rel.data.id}`;
       tags = rel.data.tags ?? {};
-      if (tags.route !== "ski") continue;
+      if (tags.route !== "ski" && tags.route !== "piste") continue;
+      if (kind !== undefined && tags["piste:type"] !== undefined && tags["piste:type"] !== kind) continue;
       isRoute = true;
     }
-    if (geometry === null) continue;
+    // A piste way can arrive twice: in the piste set and as a member of a route.
+    if (geometry === null || seen.has(osmId)) continue;
+    seen.add(osmId);
 
     const properties: Record<string, string | number | boolean> = {
       kind: tags["piste:type"] ?? "route",
@@ -141,7 +160,7 @@ const skiRoutes = defineLayer({
     "Set kind to focus on one type. " +
     "Caveats: this is volunteer mapping of marked pistes, not avalanche terrain or a conditions report (backcountry skiing routes are sparsely mapped outside the Alps; combine with snowpack for snow depth); " +
     "difficulty colors differ by country, lifts and open or closed status are not included, and trails may be closed or ungroomed. " +
-    "Zoom in to a region under 2,500 km² first. At most 2,000 piste ways and 50 routes are returned and the result says so when it trims.",
+    "Zoom in to a region under 2,500 km² first. At most 2,000 piste ways and 50 routes are returned (a route is drawn only where it passes through the box) and the coverage note gives the count and says if it was trimmed.",
   coverage: "global",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
@@ -162,7 +181,7 @@ const skiRoutes = defineLayer({
     const result = await overpassQuery(ctx, buildSkiQuery(ctx.bbox, input), { cacheSuffix: "ski-routes" });
     if (!result.ok) return { error: result.error, hint: "upstream" };
 
-    const data = normalizeSki(result.json);
+    const data = normalizeSki(result.json, input.kind);
     const returned = data.features.length;
     const total = Math.max(countedTotal(result.json) ?? returned, returned);
 

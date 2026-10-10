@@ -21,8 +21,17 @@ describe("buildPaddlingQuery", () => {
     expect(q).toContain('nw["waterway"="rapids"](46.1,11,46.4,11.6)');
     expect(q).toContain('way["whitewater:section_grade"](46.1,11,46.4,11.6)');
     expect(q).toContain('rel["route"="canoe"](46.1,11,46.4,11.6)');
-    expect(q).toContain(".p out count;.s out count;.r out count;");
-    expect(q).toContain(".p out tags geom 1500;.s out tags geom 1500;.r out geom 50;");
+    expect(q).toContain(".p out count;.s out count;");
+    expect(q).toContain(".r out count;");
+    expect(q).toContain(".p out tags geom 1500;.s out tags geom 1500;");
+  });
+
+  it("fetches canoe route members clipped to the box, never the relation's whole geometry", () => {
+    const q = buildPaddlingQuery(TRENTINO, DEFAULTS);
+    expect(q).toContain("way(r.r)(46.1,11,46.4,11.6)->.rw;");
+    expect(q).toContain(".r out body 50;");
+    expect(q).toContain(".rw out tags geom 3000;");
+    expect(q).not.toContain(".r out geom");
   });
 
   it("drops the canoe routes when whitewaterOnly is true", () => {
@@ -109,6 +118,20 @@ describe("normalizePaddling", () => {
     expect(fc.features[3].properties).not.toHaveProperty("v");
   });
 
+  it("draws a canoe route from clipped member ways without turning those ways into features", () => {
+    const pts = [{ lat: 46.8, lon: 7.4 }, { lat: 46.81, lon: 7.41 }];
+    const fc = normalizePaddling({
+      elements: [
+        { type: "way", id: 1, tags: { waterway: "river", name: "Aare" }, geometry: pts },
+        { type: "way", id: 2, tags: { waterway: "river" }, geometry: pts },
+        { type: "relation", id: 7, tags: { route: "canoe", name: "Aare Kanu" }, members: [{ type: "way", ref: 1 }, { type: "way", ref: 2 }] },
+      ],
+    });
+    expect(fc.features).toHaveLength(1);
+    expect(fc.features[0].properties).toMatchObject({ kind: "route", name: "Aare Kanu" });
+    expect(fc.features[0].geometry.type).toBe("MultiLineString");
+  });
+
   it("returns nothing for a malformed body", () => {
     expect(normalizePaddling(null).features).toHaveLength(0);
     expect(normalizePaddling({ elements: "x" }).features).toHaveLength(0);
@@ -159,6 +182,8 @@ describe("paddling layer", () => {
     expect(vs.length).toBeGreaterThan(0);
     expect(vs.every((v) => typeof v === "number" && v >= 3)).toBe(true);
     expect(r.data.features.length).toBeLessThan(20);
+    // The note counts the filtered result and names the filter.
+    expect(r.coverageNote).toMatch(/^Showing \d+ of 51 paddling features in this box \(lowest OpenStreetMap ids first after minGrade hid \d+\)/);
   });
 
   it("maps a failing Overpass to an upstream error after the fallback", async () => {

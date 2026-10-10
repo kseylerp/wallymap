@@ -1,5 +1,6 @@
 /**
- * Backcountry points of interest from OpenStreetMap via one Overpass query with one set per kind, each cut at 1,000:
+ * Backcountry points of interest from OpenStreetMap via one Overpass query with one set per kind, each cut at 1,000
+ * by OpenStreetMap id (peaks with an elevation get their own set, cut at 2,000, fetched before the peaks without one):
  *   hut        nwr[tourism=alpine_hut|wilderness_hut]
  *   shelter    nwr[amenity=shelter] minus bus, picnic and bike shelters
  *   spring     nwr[natural=spring]          hot_spring  nwr[natural=hot_spring]
@@ -49,8 +50,10 @@ export const KINDS = [
 
 export type Kind = (typeof KINDS)[number];
 
-/** Most elements Overpass returns for each kind. */
+/** Most elements Overpass returns for each kind (by OpenStreetMap id, not by size or distance). */
 export const MAX_PER_KIND = 1_000;
+/** Most peaks with an elevation Overpass returns; they are fetched before the peaks without one. */
+export const MAX_PEAKS_WITH_ELE = 2_000;
 /** Most points returned in all. */
 export const MAX_POINTS = 5_000;
 
@@ -73,19 +76,34 @@ const SELECTORS: Record<Kind, string[]> = {
   cave: ['nwr["natural"="cave_entrance"]'],
   pass: ['node["mountain_pass"="yes"]["name"]', 'node["highway"="mountain_pass"]["name"]'],
   saddle: ['node["natural"="saddle"]["name"]'],
-  peak: ['node["natural"="peak"]["name"]'],
+  peak: ['node["natural"="peak"]["name"]["ele"]'],
   viewpoint: ['nwr["tourism"="viewpoint"]'],
   drinking_water: ['nwr["amenity"="drinking_water"]'],
 };
 
-/** Overpass QL: one set per requested kind, an `out count` for each, then the elements. */
+/** Peaks without an elevation: their own set, listed after the peaks that have one. */
+const PEAKS_WITHOUT_ELE = 'node["natural"="peak"]["name"][!"ele"]';
+
+/** The Overpass sets for the requested kinds, in kind priority order: set name, selectors and element limit. */
+function setsFor(kinds: readonly Kind[]): { set: string; selectors: string[]; limit: number }[] {
+  const sets: { set: string; selectors: string[]; limit: number }[] = [];
+  for (const kind of KINDS.filter((k) => kinds.includes(k))) {
+    sets.push({ set: kind, selectors: SELECTORS[kind], limit: kind === "peak" ? MAX_PEAKS_WITH_ELE : MAX_PER_KIND });
+    if (kind === "peak") sets.push({ set: "peak_noele", selectors: [PEAKS_WITHOUT_ELE], limit: MAX_PER_KIND });
+  }
+  return sets;
+}
+
+/** Overpass QL: one set per requested kind (two for peaks), an `out count` for each, then the elements. */
 export function buildFeaturesQuery(bbox: BBox, kinds: readonly Kind[] = KINDS): string {
   const area = bboxClause(bbox);
-  const wanted = KINDS.filter((k) => kinds.includes(k));
-  const sets = wanted.map((k) => `(${SELECTORS[k].map((s) => `${s}${area};`).join("")})->.${k};`).join("");
-  const counts = wanted.map((k) => `.${k} out count;`).join("");
-  const lists = wanted.map((k) => `.${k} out tags center ${MAX_PER_KIND};`).join("");
-  return `[out:json][timeout:25];${sets}${counts}${lists}`;
+  const sets = setsFor(kinds);
+  return (
+    `[out:json][timeout:25];` +
+    sets.map(({ set, selectors }) => `(${selectors.map((s) => `${s}${area};`).join("")})->.${set};`).join("") +
+    sets.map(({ set }) => `.${set} out count;`).join("") +
+    sets.map(({ set, limit }) => `.${set} out tags center ${limit};`).join("")
+  );
 }
 
 /** The first allowed kind a tag set belongs to, in KINDS order; null when none (or a bus or picnic shelter). */
@@ -195,7 +213,7 @@ export function featuresNote(features: Feature[], matched: number, rawElements: 
   const head = `Returned ${fmt(features.length)} outdoor features${breakdown ? ` (${breakdown})` : ""}`;
   const cut = matched > rawElements || capped;
   return cut
-    ? `${head}; the box was truncated (at most ${fmt(MAX_PER_KIND)} per kind and ${fmt(MAX_POINTS)} in all; the box holds ${fmt(matched)} matches), zoom in or pick fewer kinds`
+    ? `${head}; the box was truncated (the lowest OpenStreetMap ids of each kind, at most ${fmt(MAX_PER_KIND)} per kind and ${fmt(MAX_POINTS)} in all; the box holds ${fmt(matched)} matches), zoom in or pick fewer kinds`
     : `${head}; the box was not truncated`;
 }
 
@@ -212,7 +230,7 @@ const outdoorFeatures = defineLayer({
     "Pass kinds (for example ['hut', 'spring']) to get only those. " +
     "Caveats: volunteer-mapped, so it misses features and some are out of date; springs and taps can be dry or seasonal and a mapped spring is not tested water, so treat any wild water as needing treatment; " +
     "hut bookings, prices and winter status are not included; peaks and saddles need a name to be listed and elevations come from mapper data (peaks has Wikidata elevation and prominence for notable summits). " +
-    "Zoom in to a region under 10,000 km² first. Each kind is cut at 1,000 and the whole result at 5,000 (huts, shelters, springs and hot springs are kept first, the highest peaks first among peaks), and the coverage note says if it was cut.",
+    "Zoom in to a region under 10,000 km² first. Within a kind the query keeps the lowest OpenStreetMap ids, not the tallest or nearest (peaks that have an elevation are fetched first, up to 2,000, then up to 1,000 without one): each kind is cut at 1,000 and the whole result at 5,000, and if the 5,000 cap bites, huts, shelters and springs are kept first and the tallest of the fetched peaks. The coverage note gives the count and says if it was cut.",
   coverage: "global",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],

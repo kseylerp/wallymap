@@ -2,7 +2,7 @@
  * Whitewater rapids, river sections, put-ins and take-outs, and canoe routes from OpenStreetMap via one Overpass query:
  *   node/way["whitewater"]  ["whitewater:rapid_grade"]  ["waterway"="rapids"]   (rapids, access points, hazards; `out tags geom`)
  *   way["whitewater:section_grade"|"whitewater:section_name"]                    (graded river sections as lines)
- *   relation["route"="canoe"]                                                   (named canoe and kayak trails, `out geom`)
+ *   relation["route"="canoe"]                                                   (named canoe and kayak trails; `out body` plus only the member ways inside the box)
  * Fixtures (recorded 2026-10-09, geometry trimmed to 12 vertices): layers/__fixtures__/paddling.trentino.json
  * (Avisio valley, Trentino, Italy: graded rapids, sections, put-ins) and layers/__fixtures__/paddling.bern.json
  * (Aare near Bern, Switzerland: a route=canoe relation and whitewater access points).
@@ -19,6 +19,7 @@ import {
   bboxClause,
   returnedNote,
   checkedOn,
+  clippedRelationQuery,
   countedTotal,
   gradeNumber,
   nodeElementSchema,
@@ -28,14 +29,17 @@ import {
   relationLine,
   wayElementSchema,
   wayCenter,
+  wayGeometryById,
   wayLine,
 } from "./_shared/osm-features";
 import { layerColor } from "@/lib/render/palette";
 
 /** Most feature ways or nodes returned for each of the two element sets (points and sections). */
 export const MAX_PER_SET = 1_500;
-/** Most canoe route relations returned; each carries all its member ways' geometry. */
+/** Most canoe route relations returned. */
 export const MAX_ROUTES = 50;
+/** Most member ways of those routes fetched, and only the ones inside the box. */
+export const MAX_ROUTE_WAYS = 3_000;
 
 const inputSchema = z.object({
   /** Leave out flatwater canoe trails (route=canoe relations); keep rapids, sections and access points. */
@@ -46,19 +50,32 @@ const inputSchema = z.object({
 
 type PaddlingInput = z.infer<typeof inputSchema>;
 
-/** Overpass QL: rapids and access points, graded sections, and (optionally) canoe routes, each with a count. */
+/**
+ * Overpass QL: rapids and access points, graded sections, and (optionally) canoe routes whose member ways are clipped
+ * to the box (see clippedRelationQuery), each with an `out count` for the coverage note.
+ */
 export function buildPaddlingQuery(bbox: BBox, input: Pick<PaddlingInput, "whitewaterOnly">): string {
   const a = bboxClause(bbox);
-  const routes = !input.whitewaterOnly;
   return (
     `[out:json][timeout:25];` +
     `(nw["whitewater"]${a};nw["whitewater:rapid_grade"]${a};nw["waterway"="rapids"]${a};)->.p;` +
     `(way["whitewater:section_grade"]${a};way["whitewater:section_name"]${a};)->.s;` +
-    (routes ? `rel["route"="canoe"]${a}->.r;` : "") +
     `.p out count;.s out count;` +
-    (routes ? `.r out count;` : "") +
     `.p out tags geom ${MAX_PER_SET};.s out tags geom ${MAX_PER_SET};` +
-    (routes ? `.r out geom ${MAX_ROUTES};` : "")
+    (input.whitewaterOnly
+      ? ""
+      : clippedRelationQuery("r", ['rel["route"="canoe"]'], bbox, { routes: MAX_ROUTES, ways: MAX_ROUTE_WAYS }))
+  );
+}
+
+/** Whether an element carries any of the tags the point and section queries select on. */
+function isPaddlingTagged(tags: Record<string, string>): boolean {
+  return (
+    tags.whitewater !== undefined ||
+    tags["whitewater:rapid_grade"] !== undefined ||
+    tags["whitewater:section_grade"] !== undefined ||
+    tags["whitewater:section_name"] !== undefined ||
+    tags.waterway === "rapids"
   );
 }
 
@@ -86,6 +103,8 @@ export function normalizePaddling(json: unknown): FeatureCollection<Geometry> {
   const features: Feature<Geometry>[] = [];
   const parsed = overpassBodySchema.safeParse(json);
   if (!parsed.success) return { type: "FeatureCollection", features };
+  const routeWays = wayGeometryById(parsed.data.elements);
+  const seen = new Set<string>();
 
   for (const raw of parsed.data.elements) {
     let geometry: Geometry | null = null;
@@ -116,13 +135,15 @@ export function normalizePaddling(json: unknown): FeatureCollection<Geometry> {
       } else {
         const rel = relationElementSchema.safeParse(raw);
         if (!rel.success || rel.data.tags?.route !== "canoe") continue;
-        geometry = relationLine(rel.data.members);
+        geometry = relationLine(rel.data.members, routeWays);
         osmId = `relation/${rel.data.id}`;
         tags = rel.data.tags;
         shape = "route";
       }
     }
-    if (geometry === null) continue;
+    // Member ways of a canoe route come back as bare ways; only tagged paddling features are features.
+    if (geometry === null || seen.has(osmId) || (shape !== "route" && !isPaddlingTagged(tags))) continue;
+    seen.add(osmId);
 
     const kind = paddlingKind(tags, shape);
     const properties: Props = { kind, osmId };
@@ -164,7 +185,7 @@ const paddling = defineLayer({
     "Set whitewaterOnly to true to skip flatwater canoe routes. " +
     "Caveats: coverage is uneven, strongest in the Alps and parts of Europe and thin in many whitewater regions (the US West is sparse); a river with no features here may still be a famous run, so treat it as a lead and not a guide; " +
     "grades are volunteer-entered and change with water level and year, and nothing here reports current flow, so combine with streamflow (cfs) before paddling or rafting; closures, permits and dam releases are not included. " +
-    "Zoom in to a region under 2,500 km² first. Each of the two element sets is cut at 1,500 and canoe routes at 50, and the result says so when it trims. " +
+    "Zoom in to a region under 2,500 km² first. Each of the two element sets is cut at 1,500 and canoe routes at 50 (a route is drawn only where it passes through the box); the coverage note gives the count and says if it was trimmed. " +
     "Features are a mix of points and lines; switch the display mode to points to see them all as symbols.",
   coverage: "global",
   license: "ODbL (OpenStreetMap contributors)",
@@ -187,8 +208,8 @@ const paddling = defineLayer({
     if (!result.ok) return { error: result.error, hint: "upstream" };
 
     const data = normalizePaddling(result.json);
-    const returned = data.features.length;
-    const total = Math.max(countedTotal(result.json) ?? returned, returned);
+    const fetched = data.features.length;
+    const total = Math.max(countedTotal(result.json) ?? fetched, fetched);
     const min = input.minGrade;
     if (min !== undefined) {
       data.features = data.features.filter((f) => {
@@ -200,7 +221,10 @@ const paddling = defineLayer({
     return {
       kind: "geojson",
       data,
-      coverageNote: returnedNote(returned, total, "paddling features", "lowest OpenStreetMap ids first"),
+      coverageNote: returnedNote(data.features.length, total, "paddling features", "lowest OpenStreetMap ids first", {
+        fetched,
+        filter: "minGrade",
+      }),
       citation: osmCitation(),
     };
   },

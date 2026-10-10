@@ -1,7 +1,7 @@
 /**
  * Mountain-bike trails from OpenStreetMap via one Overpass query:
  *   way["mtb:scale"]  way["mtb:scale:imba"]   (rated ways, `out tags geom`)
- *   relation["route"="mtb"]                   (named MTB routes, `out geom`; only when includeRoutes)
+ *   relation["route"="mtb"]                   (named MTB routes; `out body` plus only the member ways inside the box, when includeRoutes)
  * Fixture: layers/__fixtures__/mtb-trails.truckee.json (Truckee / Donner Lake, CA, recorded 2026-10-09 and
  * trimmed to 12 vertices per line and 4 relation members; the live box held 151 rated ways and 1 route).
  * Tags read: mtb:scale (Singletrack Scale 0 to 6), mtb:scale:imba (IMBA 0 to 4), mtb:scale:uphill, name, ref,
@@ -17,20 +17,24 @@ import {
   bboxClause,
   returnedNote,
   checkedOn,
+  clippedRelationQuery,
   countedTotal,
   osmCitation,
   overpassBodySchema,
   relationElementSchema,
   relationLine,
   wayElementSchema,
+  wayGeometryById,
   wayLine,
 } from "./_shared/osm-features";
 import { layerColor } from "@/lib/render/palette";
 
 /** Most rated ways returned; a dense box holds thousands, each with its full geometry. */
 export const MAX_WAYS = 2_000;
-/** Most route relations returned; each carries all its member ways' geometry, so they are heavy. */
+/** Most route relations returned. */
 export const MAX_ROUTES = 100;
+/** Most member ways of those routes fetched, and only the ones inside the box. */
+export const MAX_ROUTE_WAYS = 3_000;
 
 const inputSchema = z.object({
   /** Hardest Singletrack Scale rating to keep (0 easiest, 6 hardest). Unrated imba-only ways and routes always stay. */
@@ -41,17 +45,19 @@ const inputSchema = z.object({
 
 type MtbInput = z.infer<typeof inputSchema>;
 
-/** Overpass QL: rated ways, and (optionally) route=mtb relations, each with an `out count` for the truncation note. */
+/**
+ * Overpass QL: rated ways, and (optionally) route=mtb relations whose member ways are clipped to the box
+ * (see clippedRelationQuery), each with an `out count` for the coverage note.
+ */
 export function buildMtbQuery(bbox: BBox, input: Pick<MtbInput, "includeRoutes">): string {
   const area = bboxClause(bbox);
   return (
     `[out:json][timeout:25];` +
     `way["mtb:scale"]${area}->.s;way["mtb:scale:imba"]${area}->.i;(.s;.i;)->.w;` +
-    (input.includeRoutes ? `rel["route"="mtb"]${area}->.r;` : "") +
-    `.w out count;` +
-    (input.includeRoutes ? `.r out count;` : "") +
-    `.w out tags geom ${MAX_WAYS};` +
-    (input.includeRoutes ? `.r out geom ${MAX_ROUTES};` : "")
+    `.w out count;.w out tags geom ${MAX_WAYS};` +
+    (input.includeRoutes
+      ? clippedRelationQuery("r", ['rel["route"="mtb"]'], bbox, { routes: MAX_ROUTES, ways: MAX_ROUTE_WAYS })
+      : "")
   );
 }
 
@@ -76,6 +82,8 @@ export function normalizeMtb(json: unknown): FeatureCollection<Line> {
   const features: Feature<Line>[] = [];
   const parsed = overpassBodySchema.safeParse(json);
   if (!parsed.success) return { type: "FeatureCollection", features };
+  const routeWays = wayGeometryById(parsed.data.elements);
+  const seen = new Set<string>();
 
   for (const raw of parsed.data.elements) {
     let geometry: Line | null = null;
@@ -91,12 +99,14 @@ export function normalizeMtb(json: unknown): FeatureCollection<Line> {
     } else {
       const rel = relationElementSchema.safeParse(raw);
       if (!rel.success) continue;
-      geometry = relationLine(rel.data.members);
+      geometry = relationLine(rel.data.members, routeWays);
       osmId = `relation/${rel.data.id}`;
       tags = rel.data.tags ?? {};
       isRoute = true;
     }
-    if (geometry === null) continue;
+    // A rated way can arrive twice: in the rated set and as a member of a route.
+    if (geometry === null || seen.has(osmId)) continue;
+    seen.add(osmId);
 
     const scale = mtbScale(tags["mtb:scale"]);
     const imba = imbaScale(tags["mtb:scale:imba"]);
@@ -136,7 +146,7 @@ const mtbTrails = defineLayer({
     "Use it for questions like: where can I go mountain biking near here, show beginner singletrack (set maxScale to 2), which trails are the hardest, or is there a flow trail or bike park nearby. " +
     "Caveats: ratings exist only where a mapper added them, so many good trails are missing or unrated (osm-trails shows every path, including ones with no mountain bike rating); " +
     "bikes may be banned on a rated trail, so check the land manager (public-lands, forest-roads); the rating describes the trail, not its current condition or closures. " +
-    "Zoom in to a region under 2,500 km² first. At most 2,000 rated ways and 100 routes are returned and the result says so when it trims.",
+    "Zoom in to a region under 2,500 km² first. At most 2,000 rated ways and 100 routes are returned (a route is drawn only where it passes through the box) and the coverage note gives the count and says if it was trimmed.",
   coverage: "global",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
@@ -158,8 +168,8 @@ const mtbTrails = defineLayer({
     if (!result.ok) return { error: result.error, hint: "upstream" };
 
     const data = normalizeMtb(result.json);
-    const returned = data.features.length;
-    const total = Math.max(countedTotal(result.json) ?? returned, returned);
+    const fetched = data.features.length;
+    const total = Math.max(countedTotal(result.json) ?? fetched, fetched);
     const max = input.maxScale;
     if (max !== undefined) {
       data.features = data.features.filter((f) => {
@@ -171,7 +181,10 @@ const mtbTrails = defineLayer({
     return {
       kind: "geojson",
       data,
-      coverageNote: returnedNote(returned, total, "rated trail ways and routes", "lowest OpenStreetMap ids first"),
+      coverageNote: returnedNote(data.features.length, total, "rated trail ways and routes", "lowest OpenStreetMap ids first", {
+        fetched,
+        filter: "maxScale",
+      }),
       citation: osmCitation(),
     };
   },

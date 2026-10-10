@@ -19,7 +19,14 @@ describe("buildMtbQuery", () => {
     expect(q).toContain('rel["route"="mtb"](39.28,-120.25,39.38,-120.1)');
     expect(q).toContain(".w out count;");
     expect(q).toContain(".w out tags geom 2000;");
-    expect(q).toContain(".r out geom 100;");
+  });
+
+  it("fetches route members clipped to the box, never the relation's whole geometry", () => {
+    const q = buildMtbQuery(TRUCKEE, DEFAULTS);
+    expect(q).toContain("way(r.r)(39.28,-120.25,39.38,-120.1)->.rw;");
+    expect(q).toContain(".r out body 100;");
+    expect(q).toContain(".rw out tags geom 3000;");
+    expect(q).not.toContain(".r out geom");
   });
 
   it("leaves the relations out when includeRoutes is false", () => {
@@ -84,6 +91,28 @@ describe("normalizeMtb", () => {
     expect(out.features[0].properties).toMatchObject({ v: 2, mtbScale: "2+", t: "2025-06-01", name: "Rocky", kind: "mtb" });
   });
 
+  it("draws a route from the clipped member ways and does not repeat a rated way that is also a member", () => {
+    const pts = [{ lat: 39.3, lon: -120.2 }, { lat: 39.31, lon: -120.19 }];
+    const out = normalizeMtb({
+      elements: [
+        { type: "way", id: 1, tags: { "mtb:scale": "2" }, geometry: pts },
+        { type: "way", id: 2, tags: { highway: "path" }, geometry: pts },
+        { type: "way", id: 3, tags: { highway: "path" }, geometry: pts },
+        { type: "way", id: 1, tags: { "mtb:scale": "2" }, geometry: pts },
+        {
+          type: "relation",
+          id: 9,
+          tags: { route: "mtb", name: "Rim" },
+          members: [{ type: "way", ref: 2 }, { type: "way", ref: 3 }, { type: "way", ref: 404 }],
+        },
+      ],
+    });
+    expect(out.features.map((f) => f.properties?.osmId)).toEqual(["way/1", "relation/9"]);
+    const route = out.features[1];
+    expect(route.geometry.type).toBe("MultiLineString");
+    if (route.geometry.type === "MultiLineString") expect(route.geometry.coordinates).toHaveLength(2);
+  });
+
   it("returns nothing for a malformed body", () => {
     expect(normalizeMtb(null).features).toHaveLength(0);
     expect(normalizeMtb({ elements: "x" }).features).toHaveLength(0);
@@ -136,6 +165,16 @@ describe("mtb-trails layer", () => {
     expect(vs.length).toBeGreaterThan(0);
     expect(Math.max(...vs)).toBe(0);
     expect(r.data.features.some((f) => f.properties?.kind === "route")).toBe(true);
+    // The note counts what is left after the filter and names it.
+    expect(r.coverageNote).toMatch(/^Showing \d+ of 152 rated trail ways and routes in this box \(lowest OpenStreetMap ids first after maxScale hid \d+\)/);
+  });
+
+  it("counts the filtered result in the note when nothing was truncated", async () => {
+    const elements = fixture.elements.filter((e) => e.type !== "count");
+    const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
+    const r = await layer.query(ctx(stub), { includeRoutes: true, maxScale: 0 });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.coverageNote).toBe(`Returned ${r.data.features.length} rated trail ways and routes after maxScale hid ${15 - r.data.features.length}; the box was not truncated`);
   });
 
   it("maps a failing Overpass to an upstream error after the fallback", async () => {

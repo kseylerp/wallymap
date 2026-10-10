@@ -15,6 +15,15 @@ export const HEX_DELTA_TAG = "@hexdelta";
 /** Mapbox layer and source ids for vector tile layers start with this (see components/mapTiles.ts). */
 const TILES_PREFIX = "tiles-";
 
+/**
+ * True for a feature the renderer made by grouping the layer's features (a hex tile, a column, a cluster blob). It
+ * already reflects the filtered, windowed data, so filters and the time window must not be run on it again.
+ */
+export function isAggregateFeature(feature: Feature): boolean {
+  const props = feature.properties;
+  return props?.aggregate === true || props?.cluster === true;
+}
+
 /** What deck.gl's picking returns for a click (the fields we read). */
 export type DeckPick = {
   object?: unknown;
@@ -160,7 +169,7 @@ export function isLineFeature(feature: Feature): boolean {
 /* ---------- Friendly property display ---------- */
 
 /** Keys the card shows elsewhere (title, chip, value, signals) rather than as plain rows. */
-const SPECIAL_KEYS = new Set(["name", "t", "v", "signals", "popularityNote", "tallest"]);
+const SPECIAL_KEYS = new Set(["name", "t", "v", "signals", "popularityNote", "tallest", "aggregate"]);
 /** Identifiers and links: real but rarely what a reader wants first, so they go under "Details". */
 const DETAIL_KEY = /^(id|fid|gid|ref|h3|wikidata|wikipedia|osm_?id|osm_?type|objectid|globalid|irwinid|uuid)$|(_id|Id|ID)$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:[T ][\d:.]+Z?)?$/;

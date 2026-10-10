@@ -30,7 +30,7 @@ const REQUIRED = [
   "For 'how deep is this lake', call query_lakes with name set to the lake's name; v is the maximum depth in metres.",
   "Satellite layers that change over time (greenness, snow-cover, sea-ice, flood-extent, disturbance, fire-weather, phenology, burn-severity, night-lights, forest-loss) take a date or year input; to show change, query and render once, then use set_time or compare on that layer instead of querying each date.",
   "render.mode sets how a layer draws: symbols, clusters, heat or columns for point layers, lines for lines, polygons (or columns to extrude them by value in 3D) for areas.",
-  "When the user asks where there are the most, what is the most popular or busiest, for hotspots or for density, render the point layer with mode heat.",
+  "When the user asks where there are the most, for hotspots or for density, render the point layer with mode heat; for the most popular or busiest, use heat only on point layers, and keep line layers such as trails or popularity as lines.",
   "When the user asks for clusters or to group them, render the point layer with mode clusters.",
   "When the user asks for 3D, columns, how tall or to stack them, render with mode columns (areas such as fire perimeters or glaciers extrude by their value).",
   "Otherwise omit render.mode: the map draws symbols, or clusters for a dense point layer.",

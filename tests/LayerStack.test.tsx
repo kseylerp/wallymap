@@ -578,6 +578,9 @@ describe("LayerStack: closing layers and the measure threshold (owner feedback)"
       const remove = screen.getByRole("button", { name: `Remove ${title}` });
       expect(remove.textContent).toBe("×");
       expect(remove.closest(".legend-controls")).toBeNull();
+      // A 28px+ hit area from an invisible ::after 8px past the glyph, without growing the ×.
+      expect(remove.className).toContain("after:-inset-2");
+      expect(remove.className).toContain("text-[15px]");
     }
     fireEvent.click(screen.getByRole("button", { name: "Remove OSM trails" }));
     expect(spy).toHaveBeenCalledWith({ type: "remove_layer", layerId: "osm-trails" });

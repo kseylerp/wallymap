@@ -18,9 +18,11 @@ import {
   type ColumnFeature,
 } from "@/lib/render/deck";
 import { layerIdFromDeckId, pickToSelection, pickUnderHeat, summarizeFeature } from "@/lib/render/inspect";
-import { CLUSTER_BLOB, COLUMN_WALL_ALPHAS, DARK_GREY, HEX_COLUMN, OFF_WHITE, PURPLE, WHITE } from "@/lib/render/palette";
-import { decodeState, encodeState } from "@/lib/render/permalink";
-import { CLUSTER_DEFAULT, defaultRenderMode, modeForGeometry, reduce } from "@/lib/render/reducer";
+import { CLUSTER_BLOB, COLUMN_WALL_ALPHAS, DARK_GREY, HEX_COLUMN, OFF_WHITE, PINK, PURPLE, WHITE } from "@/lib/render/palette";
+import { CLUSTER_DEFAULT, defaultRenderMode, extentZoom, modeForGeometry, reduce } from "@/lib/render/reducer";
+import { isSelectionVisible } from "@/lib/render/view";
+import { heatPointsCollection, HEAT_MIN_WEIGHT } from "@/components/mapTiles";
+import { decodeState, encodeState, MAX_FILTER_CHARS, restoreFromPermalink } from "@/lib/render/permalink";
 import { initialMapState, RENDER_MODES, type LoadedLayer, type MapState, type RenderMode, type RenderOp } from "@/lib/render/state";
 import { DECK_TERRAIN_TAG } from "@/lib/render/wally/deckTerrain";
 
@@ -32,12 +34,12 @@ afterEach(() => vi.restoreAllMocks());
 
 const citation = { source: "iNaturalist", url: "https://www.inaturalist.org", retrieved: "2026-10-09" };
 
-/** `n` sightings around Banff on a 30-wide grid ~200 m apart, named in a repeating cycle of three species. */
+/** `n` sightings around Banff on a 30-wide grid ~2 km apart (a regional extent), named in a cycle of three species. */
 function sightings(n: number): Feature[] {
   const names = ["Elk", "Bighorn sheep", "Grizzly bear"];
   return Array.from({ length: n }, (_, i) => ({
     type: "Feature" as const,
-    geometry: { type: "Point" as const, coordinates: [-115.6 + (i % 30) * 0.003, 51.15 + Math.floor(i / 30) * 0.002] },
+    geometry: { type: "Point" as const, coordinates: [-115.6 + (i % 30) * 0.03, 51.15 + Math.floor(i / 30) * 0.02] },
     properties: { name: names[i % 3], v: (i % 5) + 1 },
   }));
 }
@@ -203,15 +205,18 @@ describe("columns", () => {
   const data = species.result.kind === "geojson" ? species.result.data : null;
 
   it("stacks points into H3 cells by count (or the sum of v), with the most common names", () => {
-    const byCount = hexColumns(data!, 7, "count");
-    expect(byCount.cells.features.reduce((n, c) => n + c.properties.count, 0)).toBe(600);
+    // Ten extra sightings at the trailhead make one cell the clear tallest.
+    const hotspot = sightings(10).map((f) => ({ ...f, geometry: { type: "Point" as const, coordinates: [-115.6, 51.15] } }));
+    const busy = { type: "FeatureCollection" as const, features: [...data!.features, ...hotspot] };
+    const byCount = hexColumns(busy, 7, "count");
+    expect(byCount.cells.features.reduce((n, c) => n + c.properties.count, 0)).toBe(610);
     expect(byCount.max).toBe(Math.max(...byCount.cells.features.map((c) => c.properties.count)));
     expect(byCount.cells.features.filter((c) => c.properties.tallest)).toHaveLength(1);
     expect(byCount.caps.features).toHaveLength(byCount.cells.features.length);
     expect(byCount.label).toHaveLength(1);
     const busiest = byCount.cells.features.find((c) => c.properties.tallest)!;
     expect(busiest.properties.top).toMatch(/Elk|Bighorn sheep|Grizzly bear/);
-    expect(hexColumns(data!, 7, "count")).toBe(byCount);
+    expect(hexColumns(busy, 7, "count")).toBe(byCount);
     const byV = hexColumns(data!, 7, "v");
     const sumV = data!.features.reduce((n, f) => n + Number(f.properties?.v), 0);
     expect(byV.cells.features.reduce((n, c) => n + (c.properties.v ?? 0), 0)).toBeCloseTo(sumV);
@@ -312,8 +317,13 @@ describe("no dark line casings (owner: the black border distorts line colours)",
 
 describe("reducer defaults from the layer's hints", () => {
   it("starts a dense cluster-hinted point layer as clusters at a regional zoom, else symbols", () => {
-    expect(defaultRenderMode(species, 9)).toBe("clusters");
-    expect(defaultRenderMode(species, CLUSTER_DEFAULT.maxZoom)).toBe("points");
+    // Judged by the data's extent, not the camera: still on the globe (z1.5) or already close, a regional layer clusters.
+    expect(extentZoom(species.result.kind === "geojson" ? species.result.data : { type: "FeatureCollection", features: [] })).toBeLessThan(CLUSTER_DEFAULT.maxZoom);
+    expect(defaultRenderMode(species, 1.5)).toBe("clusters");
+    expect(defaultRenderMode(species, 16)).toBe("clusters");
+    // The same count packed into one village block fits past z12: symbols.
+    const packed = sightings(600).map((f, i) => ({ ...f, geometry: { type: "Point" as const, coordinates: [-115.57 + (i % 30) * 0.0001, 51.178 + Math.floor(i / 30) * 0.0001] } }));
+    expect(defaultRenderMode(loaded("species", packed, { cluster: true }), 1.5)).toBe("points");
     expect(defaultRenderMode(loaded("species", sightings(CLUSTER_DEFAULT.minFeatures), { cluster: true }), 9)).toBe("points");
     expect(defaultRenderMode({ ...species, style: { ...species.style, cluster: false } }, 9)).toBe("points");
     expect(defaultRenderMode(loaded("lines", [], { geometry: "line" }), 9)).toBe("lines");
@@ -378,5 +388,100 @@ describe("permalink", () => {
       const hash = encodeState({ ...stateWith(species, { mode }), basemap: "outdoors" });
       expect(decodeState(hash)?.layers).toEqual([{ id: "species", mode, visible: true }]);
     }
+  });
+});
+
+describe("review fixes", () => {
+  it("keeps a clicked column, hex tile or blob inspectable while filters and a time window are on", () => {
+    const data = species.result.kind === "geojson" ? species.result.data : null;
+    const column = hexColumns(data!, 7, "count").cells.features[0];
+    const tile = buildDeckLayers(stateWith(species, { mode: "hexbin" }))[0].props.data as Feature[];
+    const blob = clusterPoints(data!, 9).blobs[0];
+    const filtered = stateWith(species, { mode: "columns", filters: { v: { range: [3, 5] }, name: { include: ["Elk"] } } });
+    for (const feature of [column, tile[0], blob]) {
+      expect(isSelectionVisible(filtered, { layerId: "species", feature, lngLat: [-115.5, 51.2] })).toBe(true);
+    }
+    // A real feature the filters exclude still closes its card.
+    const outside = data!.features.find((f) => f.properties?.v === 1)!;
+    expect(isSelectionVisible(filtered, { layerId: "species", feature: outside, lngLat: [-115.5, 51.2] })).toBe(false);
+  });
+
+  it("carries filters in the share link, reads old links, and caps a link with too many", async () => {
+    const op: RenderOp = {
+      layerId: "species",
+      mode: "clusters",
+      visible: true,
+      filters: { v: { range: [2.5, 40] }, name: { include: ["Elk", "Bighorn sheep", "a:b,c=d+e"] } },
+    };
+    const hash = encodeState({ ...stateWith(species, op), basemap: "outdoors" });
+    expect(hash).toMatch(/&f=species:v:2\.5~40,species:name=Elk\+Bighorn%20sheep\+a%3Ab%2Cc%3Dd%2Be/);
+    expect(decodeState(hash)?.layers).toEqual([{ id: "species", mode: "clusters", visible: true, filters: op.filters }]);
+    // A link from before filters still reads, with no filters.
+    expect(decodeState("#v=-115.6,51.2,10,45,0&l=species:points:1")?.layers).toEqual([{ id: "species", mode: "points", visible: true }]);
+    // The restored op carries the filters.
+    const actions: unknown[] = [];
+    const outcome = await restoreFromPermalink(hash, (a) => actions.push(a), async () => species.result, {
+      catalog: { species: { title: "Species", style: species.style } },
+      canvas: { width: 1000, height: 800 },
+    });
+    expect(actions).toContainEqual({ type: "render", op: { layerId: "species", mode: "clusters", visible: true, filters: op.filters } });
+    expect(outcome?.filtersDropped).toBeUndefined();
+    // Hundreds of category values do not fit: the link keeps what fits and says how many entries it left out.
+    const many: RenderOp[] = Array.from({ length: 60 }, (_, i) => ({
+      layerId: `layer-${i}`,
+      mode: "points",
+      visible: true,
+      filters: { kind: { include: Array.from({ length: 8 }, (_, k) => `category number ${k}`) } },
+    }));
+    const big: MapState = { ...initialMapState, layers: Object.fromEntries(many.map((o) => [o.layerId, { ...species, id: o.layerId }])), renderOps: many };
+    const capped = encodeState(big);
+    const f = /&f=([^&]*)/.exec(capped)?.[1] ?? "";
+    expect(f.length).toBeLessThanOrEqual(MAX_FILTER_CHARS);
+    const fx = Number(/&fx=(\d+)/.exec(capped)?.[1]);
+    expect(fx).toBeGreaterThan(0);
+    expect(decodeState(capped)?.filtersDropped).toBe(fx);
+  });
+
+  it("weighs heat by the 95th percentile, so one outlier does not blank the layer, and zero v at the minimum", () => {
+    const fc = (vs: unknown[]): GeoJSON.FeatureCollection => ({
+      type: "FeatureCollection",
+      features: vs.map((v) => ({ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: { v } })),
+    });
+    const acres = [...Array.from({ length: 40 }, (_, i) => 100 + i * 10), 380_000];
+    const w = heatPointsCollection(fc(acres)).features.map((f) => f.properties?.w as number);
+    expect(w.at(-1)).toBe(1);
+    expect(w[39]).toBe(1);
+    expect(w[0]).toBeGreaterThan(0.2);
+    expect(heatPointsCollection(fc([0, 10])).features[0].properties?.w).toBe(HEAT_MIN_WEIGHT);
+    expect(heatPointsCollection(fc(["x", "y"])).features.map((f) => f.properties?.w)).toEqual([1, 1]);
+  });
+
+  it("tints cluster blobs in a requested compare color so the two sides differ", () => {
+    const [blobs] = buildDeckLayers(stateWith(species, { mode: "clusters", color: PINK }));
+    expect(props(blobs).getLineColor).toEqual(hexToRgba(PINK));
+    const fill = props(blobs).getFillColor as (f: unknown) => number[];
+    const one = (props(blobs).data as unknown[])[0];
+    expect(fill(one).slice(0, 3)).toEqual(hexToRgba(PINK).slice(0, 3));
+  });
+
+  it("makes every column tied for the top purple", () => {
+    const tied: Feature[] = [
+      ...sightings(3).map((f) => ({ ...f, geometry: { type: "Point" as const, coordinates: [-115.6, 51.15] } })),
+      ...sightings(3).map((f) => ({ ...f, geometry: { type: "Point" as const, coordinates: [-114.6, 51.65] } })),
+      { ...sightings(1)[0], geometry: { type: "Point", coordinates: [-116.2, 50.9] } },
+    ];
+    const { cells, label } = hexColumns({ type: "FeatureCollection", features: tied }, 7, "count");
+    expect(cells.features.filter((c) => c.properties.tallest).map((c) => c.properties.count)).toEqual([3, 3]);
+    expect(label).toHaveLength(2);
+    const ring = (x: number) => [[[x, 51], [x + 0.1, 51], [x + 0.1, 51.1], [x, 51.1], [x, 51]]];
+    const areas = loaded(
+      "glaciers",
+      [500, 500, 20].map((v, i) => ({ type: "Feature" as const, geometry: { type: "Polygon" as const, coordinates: ring(i) }, properties: { v } })),
+      { geometry: "polygon", extrude: "v" },
+    );
+    const [walls] = buildDeckLayers(stateWith(areas, { mode: "columns" }));
+    const fill = props(walls).getFillColor as (f: unknown) => number[];
+    const features = areas.result.kind === "geojson" ? areas.result.data.features : [];
+    expect(features.map((f) => fill(f).slice(0, 3))).toEqual([hexToRgba(PURPLE).slice(0, 3), hexToRgba(PURPLE).slice(0, 3), [255, 255, 255]]);
   });
 });

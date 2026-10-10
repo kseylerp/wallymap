@@ -13,6 +13,8 @@ import {
 import type { LayerFilters } from "@/lib/render/filters";
 import { stepWindow, timeIndex, type TimeIndex, type TimeWindow } from "@/lib/time";
 import { arrivalPitch, fitZoomOffset } from "@/lib/render/wally/terrain";
+import { WebMercatorViewport } from "@math.gl/web-mercator";
+import { featureBBox } from "@/lib/render/inspect";
 
 /**
  * When a dense point layer starts clustered (style hint `cluster`): more than `minFeatures` features while the camera
@@ -22,16 +24,48 @@ export const CLUSTER_DEFAULT = { minFeatures: 500, maxZoom: 12 } as const;
 
 const GEOMETRY_MODE: Record<LoadedLayer["style"]["geometry"], RenderMode> = { point: "points", line: "lines", polygon: "polygons" };
 
+/** The canvas a layer's extent is fitted into to judge the zoom it will be seen at (a typical desktop map). */
+const EXTENT_CANVAS = { width: 1200, height: 800 } as const;
+
+/**
+ * The zoom a result's features fit at (their combined extent in a 1200 x 800 map), or null without a usable extent.
+ * This, not the camera at load time, decides the default: the camera may still be on the globe when a query lands
+ * and only fit to the place afterwards.
+ */
+export function extentZoom(data: GeoJSON.FeatureCollection): number | null {
+  let [w, s, e, n] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const f of data.features) {
+    const b = featureBBox(f);
+    if (!b) continue;
+    [w, s, e, n] = [Math.min(w, b[0]), Math.min(s, b[1]), Math.max(e, b[2]), Math.max(n, b[3])];
+  }
+  if (!Number.isFinite(w)) return null;
+  // One point (or a stack of them) has no extent: treat it as a trailhead-scale view.
+  if (e - w < 1e-6 && n - s < 1e-6) return CLUSTER_DEFAULT.maxZoom + 2;
+  const clamp = (lat: number) => Math.max(-85, Math.min(85, lat));
+  const { zoom } = new WebMercatorViewport(EXTENT_CANVAS).fitBounds(
+    [
+      [w, clamp(s)],
+      [Math.max(e, w + 1e-6), clamp(Math.max(n, s + 1e-6))],
+    ],
+    { padding: 40 },
+  );
+  return zoom;
+}
+
 /**
  * The mode a layer draws in when nobody asked for one: its geometry's mode, except a point layer hinted `cluster` with
- * more than 500 features at a regional zoom, which starts as clusters. Heat and columns are never a default: the agent
- * picks them when the user asks for density or 3D (lib/agent/prompt.ts).
+ * more than 500 features spread over a regional extent (it fits below z12), which starts as clusters. `zoom` is the
+ * fallback when the features have no extent. Heat and columns are never a default: the agent picks them when the user
+ * asks for density or 3D (lib/agent/prompt.ts).
  */
 export function defaultRenderMode(layer: LoadedLayer, zoom: number): RenderMode {
   const { geometry, cluster } = layer.style;
   if (geometry !== "point") return GEOMETRY_MODE[geometry];
-  const count = layer.result.kind === "geojson" ? layer.result.data.features.length : 0;
-  return cluster && count > CLUSTER_DEFAULT.minFeatures && zoom < CLUSTER_DEFAULT.maxZoom ? "clusters" : "points";
+  if (layer.result.kind !== "geojson") return "points";
+  const count = layer.result.data.features.length;
+  if (!cluster || count <= CLUSTER_DEFAULT.minFeatures) return "points";
+  return (extentZoom(layer.result.data) ?? zoom) < CLUSTER_DEFAULT.maxZoom ? "clusters" : "points";
 }
 
 /**

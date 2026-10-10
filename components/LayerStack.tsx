@@ -427,8 +427,12 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
   );
 }
 
-/** The hairline ×: a text glyph (no icon font), muted until hovered. */
-const REMOVE_BUTTON = "px-1 text-[15px] leading-none text-ink-muted transition-colors duration-150 hover:text-ink";
+/**
+ * The hairline ×: a text glyph (no icon font), muted until hovered. An invisible ::after reaches 8px past the glyph on
+ * every side, so the hit area is at least 28px without the × looking or laying out any bigger.
+ */
+const REMOVE_BUTTON =
+  "relative px-1 text-[15px] leading-none text-ink-muted transition-colors duration-150 hover:text-ink after:absolute after:-inset-2 after:content-['']";
 
 /** Quiet text buttons in the panel header. */
 const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 hover:text-ink";

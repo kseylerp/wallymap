@@ -306,19 +306,30 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
 
 const HEAT_PREFIX = "heat-";
 
+/** The lightest weight a feature takes in a heatmap: a zero (or tiny) `v` still marks where the feature is. */
+export const HEAT_MIN_WEIGHT = 0.05;
+
 /**
- * One point per feature for the heatmap (lines and polygons contribute their center), weighted by `v` scaled
- * to 0..1 against the largest `v` (default 1), so acres and scores heat alike.
+ * One point per feature for the heatmap (lines and polygons contribute their center), weighted by `v` over the 95th
+ * percentile of the layer's positive `v` (nearest rank), clamped to [HEAT_MIN_WEIGHT, 1]: one huge fire no longer
+ * shrinks every other weight toward zero, and a zero `v` gets the minimum weight. A layer with no positive `v` (and a
+ * feature without a numeric `v`) weighs 1.
  */
 export function heatPointsCollection(data: FeatureCollection): FeatureCollection {
-  const raw = data.features.map((f) => {
-    const v = Number(f.properties?.v ?? 1);
-    return Number.isFinite(v) && v > 0 ? v : 1;
+  const values = data.features.map((f) => {
+    const v = f.properties?.v;
+    return typeof v === "number" && Number.isFinite(v) ? v : null;
   });
-  const max = Math.max(1e-9, ...raw);
+  const positive = values.filter((v): v is number => v !== null && v > 0).sort((a, b) => a - b);
+  const scale = positive.length > 0 ? positive[Math.max(0, Math.ceil(0.95 * positive.length) - 1)] : 0;
+  const weight = (v: number | null): number => {
+    // No positive v anywhere: nothing to weigh by, so every feature counts the same.
+    if (scale === 0 || v === null) return 1;
+    return Math.min(1, Math.max(HEAT_MIN_WEIGHT, v / scale));
+  };
   const features: FeatureCollection["features"] = [];
   data.features.forEach((f, i) => {
-    const w = raw[i] / max;
+    const w = weight(values[i]);
     const positions =
       f.geometry?.type === "Point"
         ? [f.geometry.coordinates]

@@ -91,6 +91,11 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
       if (outcome && outcome.failed.length > 0) {
         setStatus(`Could not restore ${outcome.failed.length} of ${outcome.failed.length + outcome.restored.length} layers`);
         window.setTimeout(() => setStatus(null), FAILURE_NOTICE_MS);
+      } else if (outcome?.filtersDropped) {
+        // The sharing map had more filters than a link can carry (permalink.ts MAX_FILTER_CHARS).
+        const n = outcome.filtersDropped;
+        setStatus(`${n} ${n === 1 ? "filter was" : "filters were"} too long for the link and left out`);
+        window.setTimeout(() => setStatus(null), FAILURE_NOTICE_MS);
       } else {
         setStatus(null);
       }

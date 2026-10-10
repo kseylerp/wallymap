@@ -1,12 +1,13 @@
 import type { BBox, LayerError, LayerResult, StyleHints } from "@/layers/types";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
+import type { LayerFilters } from "@/lib/render/filters";
 import { DARK_GREY } from "@/lib/render/palette";
 import { RENDER_MODES, type Basemap, type MapAction, type MapState, type RenderMode, type TimeState, type Viewport } from "@/lib/render/state";
 
 /** A time window as ISO dates (the scrubber's window, `t=`). */
 export type PermalinkTime = { start: string; end: string };
 
-export type PermalinkLayer = { id: string; mode?: RenderMode; visible: boolean };
+export type PermalinkLayer = { id: string; mode?: RenderMode; visible: boolean; filters?: LayerFilters };
 
 /** What a hash can say; every field is optional because a shared link may be partial. */
 export type PermalinkState = {
@@ -14,6 +15,8 @@ export type PermalinkState = {
   basemap?: Basemap;
   layers: PermalinkLayer[];
   time?: PermalinkTime;
+  /** How many filter entries the link that wrote this hash had to leave out to stay short (`fx=`). */
+  filtersDropped?: number;
 };
 
 /**
@@ -34,11 +37,79 @@ const BASEMAPS: readonly Basemap[] = ["outdoors-satellite", "outdoors", "satelli
 const FALLBACK_STYLE: StyleHints = { geometry: "line", color: DARK_GREY };
 const DEFAULT_MODE: Record<StyleHints["geometry"], RenderMode> = { point: "points", line: "lines", polygon: "polygons" };
 
+/** The `f=` value stays under this many characters; entries past it are left out and counted in `fx=`. */
+export const MAX_FILTER_CHARS = 1500;
+
+/** A finite number as short text: 1234.5, 0.25, -3. */
+function num(n: number): string {
+  return String(Number(n.toPrecision(12)));
+}
+
+/**
+ * Each layer's filters as `f=` entries, comma separated: `<layer>:<key>:<min>~<max>` for a range and
+ * `<layer>:<key>=<a>+<b>` for a category list. Layer ids, keys and values are URI-encoded, so `:`, `,`, `=` and `+`
+ * inside them never collide with the separators. Returns the entries that fit in MAX_FILTER_CHARS and how many did not.
+ */
+export function encodeFilters(ops: { layerId: string; filters?: LayerFilters }[]): { value: string; dropped: number } {
+  const entries: string[] = [];
+  for (const op of ops) {
+    for (const [key, f] of Object.entries(op.filters ?? {})) {
+      const head = `${encodeURIComponent(op.layerId)}:${encodeURIComponent(key)}`;
+      if (f.range && f.range.every(Number.isFinite)) entries.push(`${head}:${num(f.range[0])}~${num(f.range[1])}`);
+      if (f.include && f.include.length > 0) entries.push(`${head}=${f.include.map(encodeURIComponent).join("+")}`);
+    }
+  }
+  const kept: string[] = [];
+  let length = 0;
+  for (const entry of entries) {
+    if (length + entry.length + 1 > MAX_FILTER_CHARS) break;
+    kept.push(entry);
+    length += entry.length + 1;
+  }
+  return { value: kept.join(","), dropped: entries.length - kept.length };
+}
+
+/** Reads `f=` back into filters per layer id; malformed entries are skipped. */
+export function decodeFilters(value: string): Record<string, LayerFilters> {
+  const out: Record<string, LayerFilters> = {};
+  for (const entry of value.split(",")) {
+    const cut = entry.indexOf(":");
+    if (cut <= 0) continue;
+    const layerId = safeDecode(entry.slice(0, cut));
+    const rest = entry.slice(cut + 1);
+    if (!layerId) continue;
+    const eq = rest.indexOf("=");
+    const colon = rest.indexOf(":");
+    if (eq > 0 && (colon === -1 || eq < colon)) {
+      const key = safeDecode(rest.slice(0, eq));
+      const include = rest
+        .slice(eq + 1)
+        .split("+")
+        .map(safeDecode)
+        .filter((v): v is string => v !== null && v !== "");
+      if (!key || include.length === 0) continue;
+      const filters = (out[layerId] ??= {});
+      filters[key] = { ...filters[key], include };
+    } else if (colon > 0) {
+      const key = safeDecode(rest.slice(0, colon));
+      const [lo, hi] = rest.slice(colon + 1).split("~").map((part) => (part.trim() === "" ? NaN : Number(part)));
+      if (!key || !Number.isFinite(lo) || !Number.isFinite(hi)) continue;
+      const filters = (out[layerId] ??= {});
+      filters[key] = { ...filters[key], range: lo <= hi ? [lo, hi] : [hi, lo] };
+    }
+  }
+  return out;
+}
+
 function round(value: number, digits: number): string {
   return String(Number(value.toFixed(digits)));
 }
 
-/** Servable layers only (ids in `servable`, when given; route results and drawn layers are not replayable). `#v=<lng>,<lat>,<zoom>,<pitch>,<bearing>&b=<basemap>&l=<id:mode:visible,...>&t=<start>,<end>` (layers by id only). */
+/**
+ * Servable layers only (ids in `servable`, when given; route results and drawn layers are not replayable).
+ * `#v=<lng>,<lat>,<zoom>,<pitch>,<bearing>&b=<basemap>&l=<id:mode:visible,...>&f=<filters>&t=<start>,<end>` (layers by
+ * id; filters as `encodeFilters`, with `fx=<n>` when n entries did not fit). Links without `f=` still read.
+ */
 export function encodeState(state: PermalinkSource, servable?: Record<string, unknown>): string {
   const { longitude, latitude, zoom, pitch, bearing } = state.viewport;
   const parts = [
@@ -49,6 +120,10 @@ export function encodeState(state: PermalinkSource, servable?: Record<string, un
     .filter((op) => state.layers[op.layerId] && (!servable || op.layerId in servable))
     .map((op) => `${encodeURIComponent(op.layerId)}:${op.mode}:${op.visible ? 1 : 0}`);
   if (layers.length > 0) parts.push(`l=${layers.join(",")}`);
+  const shared = state.renderOps.filter((op) => state.layers[op.layerId] && (!servable || op.layerId in servable));
+  const { value: filters, dropped } = encodeFilters(shared);
+  if (filters) parts.push(`f=${filters}`);
+  if (dropped > 0) parts.push(`fx=${dropped}`);
   const time = timeOf(state.time);
   if (time) parts.push(`t=${encodeURIComponent(time.start)},${encodeURIComponent(time.end)}`);
   return `#${parts.join("&")}`;
@@ -102,6 +177,7 @@ export function decodeState(hash: string): PermalinkState | null {
   if (body === "") return null;
   const out: PermalinkState = { layers: [] };
   let found = false;
+  let filtersByLayer: Record<string, LayerFilters> = {};
   for (const pair of body.split("&")) {
     const eq = pair.indexOf("=");
     if (eq <= 0) continue;
@@ -118,6 +194,11 @@ export function decodeState(hash: string): PermalinkState | null {
     } else if (key === "l") {
       out.layers = parseLayers(value);
       found = found || out.layers.length > 0;
+    } else if (key === "f") {
+      filtersByLayer = decodeFilters(value);
+    } else if (key === "fx") {
+      const n = Number(value);
+      if (Number.isInteger(n) && n > 0) out.filtersDropped = n;
     } else if (key === "t") {
       const time = parseTime(value);
       if (time) {
@@ -126,6 +207,8 @@ export function decodeState(hash: string): PermalinkState | null {
       }
     }
   }
+  // Filters ride on the layers they belong to; filters for a layer the link does not load are ignored.
+  out.layers = out.layers.map((layer) => (filtersByLayer[layer.id] ? { ...layer, filters: filtersByLayer[layer.id] } : layer));
   return found ? out : null;
 }
 
@@ -154,7 +237,8 @@ export type RestoreOptions = {
   onStart?: (layerCount: number) => void;
 };
 
-export type RestoreOutcome = { restored: string[]; failed: string[] };
+/** `filtersDropped`: filter entries the sharing map left out of the link to keep it short (present when any were). */
+export type RestoreOutcome = { restored: string[]; failed: string[]; filtersDropped?: number };
 
 function isError(result: LayerResult | LayerError): result is LayerError {
   return "error" in result;
@@ -201,7 +285,7 @@ export async function restoreFromPermalink(
     ),
   );
 
-  const outcome: RestoreOutcome = { restored: [], failed: [] };
+  const outcome: RestoreOutcome = { restored: [], failed: [], ...(decoded.filtersDropped && { filtersDropped: decoded.filtersDropped }) };
   decoded.layers.forEach((layer, i) => {
     const result = results[i];
     if (isError(result)) {
@@ -218,7 +302,12 @@ export async function restoreFromPermalink(
     // A link without a mode takes the layer's default from its hints, as a fresh query would.
     dispatch({
       type: "render",
-      op: { layerId: layer.id, mode: layer.mode ?? DEFAULT_MODE[style.geometry], visible: layer.visible },
+      op: {
+        layerId: layer.id,
+        mode: layer.mode ?? DEFAULT_MODE[style.geometry],
+        visible: layer.visible,
+        ...(layer.filters && { filters: layer.filters }),
+      },
       ...(layer.mode === undefined && { defaultMode: true }),
     });
     outcome.restored.push(layer.id);

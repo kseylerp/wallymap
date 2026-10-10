@@ -199,7 +199,7 @@ function markerPosition(f: Feature): [number, number] {
  * One tile: a Point feature at the hex center whose properties carry the cell and how many features fell in it, so
  * a pick reads as a feature the inspect card can show ("N features").
  */
-export type HexFeature = Feature<GeoJSON.Point, { count: number; h3: string }>;
+export type HexFeature = Feature<GeoJSON.Point, { count: number; h3: string; aggregate: true }>;
 
 /** One result binned at one resolution: the tiles, the labelled subset, and the busiest tile's count. */
 type Binned = { hexes: HexFeature[]; labelled: HexFeature[]; max: number };
@@ -230,7 +230,7 @@ function binned(data: GeoJSON.FeatureCollection, resolution: number): Binned {
   }
   const hexes: HexFeature[] = [...counts].map(([h3, count]) => {
     const [lat, lng] = cellToLatLng(h3);
-    return { type: "Feature", geometry: { type: "Point", coordinates: [lng, lat] }, properties: { count, h3 } };
+    return { type: "Feature", geometry: { type: "Point", coordinates: [lng, lat] }, properties: { count, h3, aggregate: true } };
   });
   const entry = {
     hexes,
@@ -721,8 +721,15 @@ function clusterLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const id = `${deckLayerKey(deckId ?? op.layerId, terrain)}:clusters`;
   const { blobs, singles, max } = clusterPoints(data, zoom);
   const fade = (c: Rgba) => withOpacity(withOpacity(c, opacity), selected ? SIBLING_FADE : 1);
-  const trigger = [selectionKey(selected), opacity, max];
-  const outline = hexToRgba(CLUSTER_BLOB.outline);
+  // A requested palette color (a compare side: A purple, B pink) tints the blobs and their outline, so the sides differ.
+  const requested = requestedColor(op.color);
+  const trigger = [selectionKey(selected), opacity, max, requested ?? ""];
+  const outline = hexToRgba(requested ?? CLUSTER_BLOB.outline);
+  const fill = (count: number): Rgba => {
+    if (!requested) return clusterColor(count, max);
+    const t = max > 2 ? Math.min(1, Math.max(0, Math.log(count / 2) / Math.log(max / 2))) : 0;
+    return hexToRgba(requested, Math.round(255 * CLUSTER_BLOB.alpha * (0.45 + 0.55 * t)));
+  };
   return [
     new ScatterplotLayer<ClusterFeature>({
       id,
@@ -733,7 +740,7 @@ function clusterLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       radiusUnits: "pixels",
       filled: true,
       stroked: true,
-      getFillColor: (f) => fade(clusterColor(f.properties.point_count, max)),
+      getFillColor: (f) => fade(fill(f.properties.point_count)),
       getLineColor: fade(outline),
       getLineWidth: CLUSTER_BLOB.outlinePx,
       lineWidthUnits: "pixels",
@@ -798,7 +805,7 @@ export function columnResolution(zoom: number): number {
 /** How many named features a column's inspect card lists. */
 const COLUMN_TOP = 3;
 
-type ColumnProps = { name: string; count: number; h3: string; top?: string; v?: number; tallest: boolean };
+type ColumnProps = { name: string; count: number; h3: string; top?: string; v?: number; tallest: boolean; aggregate: true };
 /** One extruded H3 cell: its outline, how many features (and how much `v`) fell in it, and the most common names. */
 export type ColumnFeature = Feature<GeoJSON.Polygon, ColumnProps>;
 
@@ -863,14 +870,7 @@ export function hexColumns(data: GeoJSON.FeatureCollection, resolution: number, 
     if (name) cell.names.set(name, (cell.names.get(name) ?? 0) + 1);
   }
   let max = 0;
-  let tallest: string | undefined;
-  for (const [h3, cell] of cells) {
-    const value = columnValue(cell, by);
-    if (value > max) {
-      max = value;
-      tallest = h3;
-    }
-  }
+  for (const cell of cells.values()) max = Math.max(max, columnValue(cell, by));
   const heightM = getHexagonEdgeLengthAvg(resolution, UNITS.m) * COLUMN_HEIGHT_EDGES;
   const features: ColumnFeature[] = [];
   const caps: Feature[] = [];
@@ -883,12 +883,14 @@ export function hexColumns(data: GeoJSON.FeatureCollection, resolution: number, 
       .slice(0, COLUMN_TOP)
       .map(([n, c]) => (c > 1 ? `${n} ×${c}` : n))
       .join(", ");
-    const isTallest = h3 === tallest;
+    // Every cell tied for the top takes purple (and its value), not just the first one found.
+    const isTallest = max > 0 && value === max;
     const properties: ColumnProps = {
       name: `${cell.count.toLocaleString("en-US")} ${cell.count === 1 ? "feature" : "features"} in this cell`,
       count: cell.count,
       h3,
       tallest: isTallest,
+      aggregate: true,
       ...(top && { top }),
       ...(by === "v" && { v: Math.round(cell.sum * 100) / 100 }),
     };
@@ -1019,7 +1021,7 @@ function columnLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
 /** Extruded areas: the tallest stands this share of the data's diagonal, within these bounds in meters. */
 export const AREA_EXTRUDE = { share: 0.12, minM: 1500, maxM: 30000 } as const;
 
-type ExtrudedAreas = { caps: GeoJSON.FeatureCollection; max: number; heightM: number; top: Feature | undefined; label: Columned["label"] };
+type ExtrudedAreas = { caps: GeoJSON.FeatureCollection; max: number; heightM: number; tops: Set<Feature>; label: Columned["label"] };
 const extrudeCache = new WeakMap<GeoJSON.FeatureCollection, ExtrudedAreas>();
 
 const positiveV = (f: Feature) => {
@@ -1031,14 +1033,9 @@ function extrudedAreas(data: GeoJSON.FeatureCollection): ExtrudedAreas {
   const cached = extrudeCache.get(data);
   if (cached) return cached;
   let max = 0;
-  let top: Feature | undefined;
   let [w, s, e, n] = [Infinity, Infinity, -Infinity, -Infinity];
   for (const f of data.features) {
-    const v = positiveV(f);
-    if (v > max) {
-      max = v;
-      top = f;
-    }
+    max = Math.max(max, positiveV(f));
     const b = featureBBox(f);
     if (b) [w, s, e, n] = [Math.min(w, b[0]), Math.min(s, b[1]), Math.max(e, b[2]), Math.max(n, b[3])];
   }
@@ -1046,9 +1043,11 @@ function extrudedAreas(data: GeoJSON.FeatureCollection): ExtrudedAreas {
   const diag = Number.isFinite(w) ? Math.hypot((e - w) * 111_320 * Math.cos(lat), (n - s) * 110_540) : 0;
   const heightM = Math.min(AREA_EXTRUDE.maxM, Math.max(AREA_EXTRUDE.minM, diag * AREA_EXTRUDE.share));
   const z = (f: Feature) => (positiveV(f) / (max || 1)) * heightM;
+  // Every area tied for the largest value takes purple and its number.
+  const tops = new Set(max > 0 ? data.features.filter((f) => positiveV(f) === max) : []);
   const caps = data.features.flatMap((f): Feature[] => {
     const g = f.geometry;
-    const tallest = f === top;
+    const tallest = tops.has(f);
     if (g?.type === "Polygon") return [{ type: "Feature", geometry: { type: "Polygon", coordinates: g.coordinates.map((r) => liftRing(r, z(f))) }, properties: { tallest } }];
     if (g?.type === "MultiPolygon") {
       const coordinates = g.coordinates.map((poly) => poly.map((r) => liftRing(r, z(f))));
@@ -1056,9 +1055,11 @@ function extrudedAreas(data: GeoJSON.FeatureCollection): ExtrudedAreas {
     }
     return [];
   });
-  const center = top ? featureCenter(top) : null;
-  const label: Columned["label"] = top && center ? [{ position: [center[0], center[1], z(top) + heightM * 0.04 + 40], text: countLabel(Math.round(max)) }] : [];
-  const entry = { caps: { type: "FeatureCollection", features: caps } as GeoJSON.FeatureCollection, max, heightM, top, label };
+  const label: Columned["label"] = [...tops].flatMap((top) => {
+    const center = featureCenter(top);
+    return center ? [{ position: [center[0], center[1], z(top) + heightM * 0.04 + 40] as [number, number, number], text: countLabel(Math.round(max)) }] : [];
+  });
+  const entry = { caps: { type: "FeatureCollection", features: caps } as GeoJSON.FeatureCollection, max, heightM, tops, label };
   extrudeCache.set(data, entry);
   return entry;
 }
@@ -1068,14 +1069,14 @@ function extrudedAreas(data: GeoJSON.FeatureCollection): ExtrudedAreas {
  * the point columns, the largest value purple with its number. Picks return the real feature for the inspect card.
  */
 function extrudedAreaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
-  const { caps, max, heightM, top, label } = extrudedAreas(ctx.data);
+  const { caps, max, heightM, tops, label } = extrudedAreas(ctx.data);
   return columnSet(
     `${deckLayerKey(ctx.deckId ?? op.layerId, ctx.terrain)}:columns`,
     ctx.data,
     caps,
     label,
     (f) => (positiveV(f) / (max || 1)) * heightM,
-    (f) => columnWallColor(positiveV(f), max, f === top),
+    (f) => columnWallColor(positiveV(f), max, tops.has(f)),
     ctx,
     opacity,
     false,
@@ -1292,7 +1293,7 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim() ?? "";
 
 /**
  * Deck layers in three sets. `main` is everything the map overlay draws, bottom first (the terrain copy, then each
- * visible GeoJSON render op; heat ops yield none, Mapbox draws them). While a compare swipes, the compared layer's two
+ * visible GeoJSON render op; Mapbox draws the heatmap of a heat op, deck only its clicked feature's symbol). While a compare swipes, the compared layer's two
  * sides go to `a` and `b` instead (each with its own terrain copy), for the two clipped side overlays MapCanvas lays
  * over the map; otherwise both are empty. In toggle mode both sides stay in `main` and the side not showing is hidden
  * (not removed, so its buffers stay on the GPU for the next flip). Delta draws the delta collection by class.
@@ -1360,8 +1361,8 @@ export function buildDeckLayerSets(
 
 /**
  * Turns map state into deck.gl layer instances for each visible geojson render op (lines bring a casing), as one
- * list: `buildDeckLayerSets`' main set plus any swipe sides (without their own terrain copies).
- * Heat ops yield none here; Mapbox draws them.
+ * list: `buildDeckLayerSets`' main set plus any swipe sides (without their own terrain copies). Heat ops yield only
+ * their clicked feature's symbol here; Mapbox draws the heatmap.
  */
 export function buildDeckLayers(state: MapState, options: { mapboxToken?: string } = {}): Layer[] {
   const { main, a, b } = buildDeckLayerSets(state, options);

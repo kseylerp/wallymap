@@ -271,6 +271,8 @@ describe("measure threshold (the layer panel's fader on v)", () => {
     expect(withMeasureMinimum({ v: { range: [40, 100] }, kind: { include: ["a"] } }, 0, range)).toEqual({ kind: { include: ["a"] } });
     // An upper bound set in the filters panel stays.
     expect(withMeasureMinimum({ v: { range: [10, 70] } }, 30, range)).toEqual({ v: { range: [30, 70] } });
+    // Back to "All" keeps that upper bound instead of dropping the whole v range.
+    expect(withMeasureMinimum({ v: { range: [30, 70] } }, 0, range)).toEqual({ v: { range: [0, 70] } });
     expect(measureMinimum({ v: { range: [30, 70] } }, range)).toBe(30);
     expect(measureMinimum(undefined, range)).toBe(0);
   });

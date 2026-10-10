@@ -1,6 +1,7 @@
 import type { FeatureCollection } from "geojson";
 import { compareEntries, effectiveMode } from "@/lib/render/compareView";
 import { applyFilters, type LayerFilters } from "@/lib/render/filters";
+import { isAggregateFeature } from "@/lib/render/inspect";
 import { activeFilters, fullWindow } from "@/lib/render/reducer";
 import type { LoadedLayer, MapState, Selection } from "@/lib/render/state";
 import { filterByWindow, inWindow, tileUrlForTime, type TimeWindow } from "@/lib/time";
@@ -119,6 +120,9 @@ export function isSelectionVisible(state: MapState, selection: Selection): boole
   const layer = state.layers[selection.layerId];
   // Vector tile features are not filtered (only GeoJSON layers are).
   if (layer?.result.kind !== "geojson") return true;
+  // A hex tile, column or blob was built from the already filtered features: it has no `v` or `t` of its own, so
+  // running the filters on it would close its card the moment any filter is on.
+  if (isAggregateFeature(selection.feature)) return true;
   const filters = filtersOf(state, selection.layerId);
   if (filters && applyFilters({ type: "FeatureCollection", features: [selection.feature] }, filters).features.length === 0) {
     return false;

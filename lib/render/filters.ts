@@ -249,17 +249,21 @@ export function measurePosition(value: number, range: MeasureRange): number {
  * The layer panel's threshold slider as filters: a minimum on `v` through the filters engine, so the count, export
  * and permalink follow. At (or below) the data minimum the `v` filter is dropped (no filter); above it `v` keeps
  * features from `value` up to the upper bound already set in the filters panel, else the data maximum. Other
- * properties' filters are untouched.
+ * properties' filters are untouched. Back at the data minimum an upper bound below the data maximum is restored as
+ * [min, upper] rather than dropped.
  */
 export function withMeasureMinimum(filters: LayerFilters, value: number, range: MeasureRange): LayerFilters {
   const { v: current, ...rest } = filters;
-  if (!Number.isFinite(value) || value <= range.min) {
-    // A category list on `v` (rare) survives; only the range goes.
-    return current?.include?.length ? { ...rest, v: { include: current.include } } : rest;
-  }
+  const include = current?.include?.length ? { include: current.include } : {};
+  // An upper bound below the data maximum (the agent's "under 1,000 acres", the filters panel) is kept at any minimum.
   const upper = current?.range && current.range[1] < range.max ? current.range[1] : range.max;
+  if (!Number.isFinite(value) || value <= range.min) {
+    // Back at the data minimum: no minimum. A kept upper bound (or a category list on `v`) stays.
+    if (upper < range.max) return { ...rest, v: { ...include, range: [range.min, upper] } };
+    return current?.include?.length ? { ...rest, v: include } : rest;
+  }
   const lo = Math.min(value, range.max);
-  return { ...rest, v: { ...(current?.include?.length && { include: current.include }), range: [lo, Math.max(lo, upper)] } };
+  return { ...rest, v: { ...include, range: [lo, Math.max(lo, upper)] } };
 }
 
 /** The slider's position for the current filters: the `v` range's lower bound, else the data minimum. */

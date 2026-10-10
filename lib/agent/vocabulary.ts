@@ -78,6 +78,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "ports", synonyms: ["port", "busiest port", "shipping", "cargo"], notes: "150 US principal ports, v = 2023 short tons" },
   { layerId: "river-basins", synonyms: ["river basin", "watershed", "drainage basin", "what watershed", "HUC"], notes: "US hydrologic units, level follows zoom (huc2 regions to huc10); v = area km2" },
   { layerId: "hardiness-zones", synonyms: ["hardiness zone", "growing zone", "planting zone"], notes: "USDA 2023 winter-cold bands, lower 48; tiles, zone not readable" },
+  { layerId: "temperature-anomaly", synonyms: ["warming", "temperature anomaly", "hotter than normal"], notes: "lower-48 counties, v = °F vs 1901-2000; period, months" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

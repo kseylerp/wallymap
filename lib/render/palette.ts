@@ -109,6 +109,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "ports": "data",
   "river-basins": "natural",
   "hardiness-zones": "natural",
+  "temperature-anomaly": "data",
 };
 
 /** Layers that return raster tiles: the imagery carries its own colors. */

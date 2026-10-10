@@ -90,6 +90,37 @@ The layers added in M4 answer questions like these. Each line gives the question
 - "Protected areas in Patagonia": `query_protected-areas-world`.
 - "Tell me about the history of Bodie": `query_wikipedia-nearby`.
 
+## Batch F layers: water, land, climate, forests, wildlife and energy
+
+The layers added in Batch F answer questions like these.
+
+**Water and dams**
+- "How full is Lake Powell right now?": `geocode` → `set_view` → `query_reservoir-levels` with `name: "powell"` → `render` → `note`. The note gives percent full, the elevation in feet and the trend from the series. "How deep is Lake Tahoe?" still goes to `lakes`.
+- "Show dams on the Colorado River by the decade they were built": `query_dams` → `render` → `set_time` with `play` and a ten-year window; `t` is the year built.
+- "What watershed is Denver in?": `query_river-basins`; the basin level follows the zoom.
+- "Where is the Ogallala aquifer, and is the water table dropping?": `query_aquifers` for the outline, `query_groundwater` for depth to water at wells (one reading per well, no trend).
+
+**Land, mines and monuments**
+- "How has Bears Ears National Monument changed since 2021?": `query_monuments` with `version: both` → `render` → `render` with `filters` on `kind` (`2021` or `current`); the note gives both areas.
+- "Where are abandoned uranium mines near the Navajo Nation?": `query_uranium`; other mines are in `query_mines`.
+- "Where are the active mining claims near Moab?": `query_mining-claims`.
+- "Show Lahaina before and after the 2023 fire": `query_imagery-by-date` once per date with the same `sensor` → `compare` with the two pass days.
+
+**Climate**
+- "How fast is sea level rising at San Francisco?": `query_sea-level-trends`; `v` is millimetres per year.
+- "Show Miami with 3 feet of sea level rise": `query_sea-level-rise` with `feet: 3`. Each scenario is its own query; `compare` and `set_time` do not switch between feet.
+- "How much warmer than normal was Fresno County last month?": `query_temperature-anomaly` (US counties, lower 48); `v` is °F against 1901-2000.
+- "Which counties here had the most disaster declarations?": `query_disasters` (FEMA counties in the US, GDACS alerts worldwide).
+- "Where are methane plumes in the Permian Basin?": `query_methane-plumes`; `v` is kilograms per hour.
+- "Is this forest a carbon sink?": `query_carbon-flux`. "Where is the permafrost in Alaska?": `query_permafrost`.
+
+**Forests, wildlife and energy**
+- "Which sequoia groves burned in the 2020 and 2021 fires?": `query_sequoia-groves` + `query_sequoia-mortality`.
+- "Show the Lyell Glacier's retreat": `query_glaciers` → `render` → `set_time` with `play` across the survey years; the note compares `v` (km²) at each date.
+- "Where is the old-growth forest in Oregon?": `query_old-growth`. "Where did beetles kill trees in Colorado?": `query_tree-mortality`.
+- "Where do California condors live?": `query_condor-range`. "Wolf packs in Washington in 2020": `query_wolf-packs` with `year`.
+- "Wind farms and power lines in West Texas": `query_power-plants` + `query_pipelines-lines`. "Busiest ports on the Gulf Coast": `query_ports`. "Show plant hardiness zones in Oregon": `query_hardiness-zones` (map tiles; the zone at one spot is not readable).
+
 ## Time, routes, compare
 
 Beyond the six starters, these tools shape follow-up questions. They appear in the trace next to the `query_<layer>` and `render` calls.
@@ -108,7 +139,7 @@ Beyond the six starters, these tools shape follow-up questions. They appear in t
 
 ## Eval set
 
-`scripts/eval-model.mts --set` reads the questions below (the lines starting with `- ` between the markers), runs each one through the real agent with the model in `MODEL_NAME`, and prints one JSON line per question and a final `ok N/M`. It spends model credits and calls live data servers. The set covers trails, both fire layers, forest loss, snow, stream flow, campsites and roads, species, photos with popularity, public lands with wilderness, night lights with population, remoteness (which also looks up a named physical region), a walking route, fire year by year, a compare over time, a sources check, popular campsites, a physical-region outline, two "here" questions that carry a map view (`@view=[w,s,e,n]`, the bbox the browser would send) and pass without a geocode, and twelve M4 questions, one per theme: mountain biking, ski touring, climbing, lake depth, surf today, river level, weather warnings, earthquakes, rock type at a point, glaciers, greenness compared over a year, and species records drawn as a heatmap.
+`scripts/eval-model.mts --set` reads the questions below (the lines starting with `- ` between the markers), runs each one through the real agent with the model in `MODEL_NAME`, and prints one JSON line per question and a final `ok N/M`. It spends model credits and calls live data servers. The set covers trails, both fire layers, forest loss, snow, stream flow, campsites and roads, species, photos with popularity, public lands with wilderness, night lights with population, remoteness (which also looks up a named physical region), a walking route, fire year by year, a compare over time, a sources check, popular campsites, a physical-region outline, two "here" questions that carry a map view (`@view=[w,s,e,n]`, the bbox the browser would send) and pass without a geocode, and twelve M4 questions, one per theme: mountain biking, ski touring, climbing, lake depth, surf today, river level, weather warnings, earthquakes, rock type at a point, glaciers, greenness compared over a year, and species records drawn as a heatmap, and ten Batch F questions: reservoir level, dams by decade, a monument then and now, uranium mines, a sea level trend, a sea level rise scenario, methane plumes, a county temperature anomaly, sequoia fire deaths, and a glacier's retreat.
 
 ```bash
 node --env-file=.env.local --import tsx scripts/eval-model.mts --set
@@ -148,6 +179,16 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set
 - Glaciers in the Wind River Range
 - How green was the Sierra Nevada this month compared to last year?
 - Where are the most iNaturalist or GBIF records of mountain lions in Colorado?
+- How full is Lake Powell right now?
+- Show dams on the Colorado River by the decade they were built
+- How has Bears Ears National Monument changed since 2021?
+- Where are abandoned uranium mines near the Navajo Nation?
+- How fast is sea level rising at San Francisco?
+- Show Miami with 3 feet of sea level rise
+- Where are methane plumes in the Permian Basin?
+- How much warmer than normal was Fresno County last month?
+- Which sequoia groves burned in the 2020 and 2021 fires?
+- Show the Lyell Glacier's retreat
 <!-- eval:end -->
 
 ## Last run

@@ -34,6 +34,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "climbing", synonyms: ["climbing", "bouldering", "crag", "rock climbing", "sport climbing"], notes: "crags and boulders, v = route count" },
   { layerId: "paddling", synonyms: ["whitewater", "kayaking", "canoe", "rafting", "rapids", "put-in", "paddling"], notes: "rapids and canoe routes, v = class 1-6; check streamflow" },
   { layerId: "outdoor-features", synonyms: ["hut", "shelter", "spring", "water source", "viewpoint", "cave", "hot spring", "waterfall", "summit", "saddle", "pass"], notes: "backcountry points, filter by kind; peaks have v = elevation" },
+  { layerId: "lakes", synonyms: ["lake", "depth", "how deep", "reservoir", "tarn"], notes: "named lakes and reservoirs, v = max depth in metres, null when not recorded; use name to find one lake" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

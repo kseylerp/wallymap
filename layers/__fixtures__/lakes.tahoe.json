@@ -1,0 +1,688 @@
+{
+ "head": {
+  "vars": [
+   "item",
+   "label",
+   "coord",
+   "depth",
+   "area",
+   "elev",
+   "vol",
+   "wp",
+   "isRes"
+  ]
+ },
+ "results": {
+  "bindings": [
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q169962"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Lake Tahoe"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.033333333 39.083333333)"
+    },
+    "wp": {
+     "type": "uri",
+     "value": "https://en.wikipedia.org/wiki/Lake_Tahoe"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "depth": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "501"
+    },
+    "area": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "502000000"
+    },
+    "elev": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "1899.5"
+    },
+    "vol": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "150000000000"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q49300326"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Cascade Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.091944444 38.940277777)"
+    },
+    "wp": {
+     "type": "uri",
+     "value": "https://en.wikipedia.org/wiki/Cascade_Lake_(California)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q85804362"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Susie Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.127374 38.881984)"
+    },
+    "wp": {
+     "type": "uri",
+     "value": "https://en.wikipedia.org/wiki/Susie_Lake"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q5325151"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Eagle Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.122 38.9422)"
+    },
+    "wp": {
+     "type": "uri",
+     "value": "https://en.wikipedia.org/wiki/Eagle_Lake_(Desolation_Wilderness)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q5332719"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Echo Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.076 38.8428)"
+    },
+    "wp": {
+     "type": "uri",
+     "value": "https://en.wikipedia.org/wiki/Echo_Lake_(California)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q5432253"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Fallen Leaf Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.06 38.92)"
+    },
+    "wp": {
+     "type": "uri",
+     "value": "https://en.wikipedia.org/wiki/Fallen_Leaf_Lake"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q5562530"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Gilmore Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.115325 38.895641666)"
+    },
+    "wp": {
+     "type": "uri",
+     "value": "https://en.wikipedia.org/wiki/Gilmore_Lake"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q6474746"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Lake Aloha"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.149044444 38.86715)"
+    },
+    "wp": {
+     "type": "uri",
+     "value": "https://en.wikipedia.org/wiki/Lake_Aloha"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q6478664"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Lake of the Woods"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.119 38.85)"
+    },
+    "wp": {
+     "type": "uri",
+     "value": "https://en.wikipedia.org/wiki/Lake_of_the_Woods_(California)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q6684098"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Lost Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.097 38.8605)"
+    },
+    "wp": {
+     "type": "uri",
+     "value": "https://en.wikipedia.org/wiki/Lost_Lake_(El_Dorado_County,_California)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q7263253"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Pyramid Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.141 38.848)"
+    },
+    "wp": {
+     "type": "uri",
+     "value": "https://en.wikipedia.org/wiki/Pyramid_Lake_(El_Dorado_County,_California)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q7347590"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Waca Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.141666666 38.855)"
+    },
+    "wp": {
+     "type": "uri",
+     "value": "https://en.wikipedia.org/wiki/Waca_Lake"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q41413518"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Spooner Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-119.908611111 39.106944444)"
+    },
+    "wp": {
+     "type": "uri",
+     "value": "https://en.wikipedia.org/wiki/Spooner_Lake"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q41413518"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Spooner Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-119.90835 39.10927)"
+    },
+    "wp": {
+     "type": "uri",
+     "value": "https://en.wikipedia.org/wiki/Spooner_Lake"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q35698375"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Fontanillis Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.153333333 38.920833333)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q35702016"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Grass Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.112777777 38.872777777)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q35706162"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Heather Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.138333333 38.876388888)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q35729783"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Lake Audrian"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.043888888 38.818888888)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q47467373"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Lake Lily"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.0816181 38.8756555)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "elev": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "1993.0911234"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q49301658"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Dicks Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.143055555 38.911944444)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q49305753"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Middle Velma Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.150277777 38.936666666)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q49308733"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Ralston Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.099444444 38.841666666)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q49311068"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Snow Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.114722222 38.917777777)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q49314500"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Upper Echo Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.07546 38.84269)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q49314623"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Upper Velma Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.148888888 38.928333333)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q49701417"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Lake Christopher"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-119.965 38.910277777)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q49701885"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Marlette Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-119.901666666 39.173611111)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q49702397"
+    },
+    "label": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Quail Lake"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.166111111 39.07)"
+    },
+    "isRes": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    }
+   }
+  ]
+ }
+}

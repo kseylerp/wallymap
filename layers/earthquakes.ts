@@ -101,7 +101,7 @@ const earthquakes = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 5_000_000,
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("earthquakes"), unit: "magnitude", extrude: "v", heat: true },
+  style: { geometry: "point", color: layerColor("earthquakes"), unit: "M", extrude: "v", heat: true },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const url = earthquakesUrl(ctx.bbox, input.days, input.minMagnitude);

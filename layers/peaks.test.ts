@@ -5,6 +5,11 @@ import layer, { SPARQL_ENDPOINT, normalizePeaks, peaksQuery } from "./peaks";
 import fixture from "./__fixtures__/peaks.tahoe.json";
 
 /** The fixture is a real Wikidata SPARQL answer for this box (recorded 2026-10-09 with the layer's own query). */
+vi.mock("./_shared/wikimedia", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./_shared/wikimedia")>();
+  return { ...real, wikimediaFetch: (f: never, u: string, i?: never) => real.wikimediaFetch(f, u, i, { sleep: async () => {} }) };
+});
+
 const TAHOE: [number, number, number, number] = [-120.2, 38.8, -119.8, 39.2];
 const bindings = fixture.results.bindings;
 /** An item with two coordinate statements comes back as two rows; the layer keeps one point per item. */
@@ -31,6 +36,9 @@ describe("peaksQuery", () => {
     expect(q).toContain("p:P2044/psn:P2044/wikibase:quantityAmount");
     expect(q).toContain("p:P2660/psn:P2660/wikibase:quantityAmount");
     expect(q).toContain("wd:Q8502");
+    expect(q).toContain("ORDER BY DESC(?elev) DESC(?prom)");
+    expect(q).toContain("wdt:P1705");
+    expect(q).toContain('wikibase:language "en,mul"');
     expect(q).toContain("LIMIT 1000");
   });
 });
@@ -38,7 +46,7 @@ describe("peaksQuery", () => {
 describe("normalizePeaks", () => {
   const features = normalizePeaks(bindings);
 
-  it("turns each named item into a point with elevation, prominence and v", () => {
+  it("turns each named item into a point with elevation, prominence and v = elevation", () => {
     expect(bindings.length).toBeGreaterThan(uniqueItems);
     expect(features).toHaveLength(uniqueItems);
     const freel = features.find((f) => f.properties?.name === "Freel Peak");
@@ -46,22 +54,34 @@ describe("normalizePeaks", () => {
     expect(freel?.properties).toMatchObject({
       elevation: 3318,
       prominence: 959,
-      v: 959,
-      rankedBy: "prominence",
+      v: 3318,
       url: expect.stringMatching(/^https:\/\/www\.wikidata\.org\/wiki\/Q\d+$/),
     });
+    expect(freel?.properties).not.toHaveProperty("rankedBy");
   });
 
-  it("falls back to elevation for v when prominence is unknown, and omits v when neither is known", () => {
-    const withElevationOnly = bindings.find((b) => b.elev && !b.prom);
-    expect(withElevationOnly).toBeDefined();
-    const e = features.find((f) => f.properties?.name === withElevationOnly?.itemLabel?.value);
-    expect(e?.properties).toMatchObject({ rankedBy: "elevation", v: Math.round(Number(withElevationOnly?.elev?.value)) });
-    expect(e?.properties).not.toHaveProperty("prominence");
-
+  it("uses elevation for v on every peak that has one and leaves v off the rest", () => {
+    for (const f of features) {
+      const p = f.properties ?? {};
+      if (p.elevation !== undefined) expect(p.v).toBe(p.elevation);
+      else expect(p).not.toHaveProperty("v");
+    }
+    const prominenceOnly = features.find((f) => f.properties?.prominence !== undefined && f.properties?.elevation === undefined);
+    const elevationOnly = features.find((f) => f.properties?.elevation !== undefined && f.properties?.prominence === undefined);
+    expect(elevationOnly?.properties).toHaveProperty("v");
+    if (prominenceOnly) expect(prominenceOnly.properties).not.toHaveProperty("v");
     const bare = features.find((f) => f.properties?.name === "Becker Peak");
     expect(bare?.properties).not.toHaveProperty("v");
-    expect(bare?.properties).not.toHaveProperty("elevation");
+  });
+
+  it("falls back to the native label when there is no English one", () => {
+    const item = (q: string) => ({ value: `http://www.wikidata.org/entity/${q}` });
+    const out = normalizePeaks([
+      { item: item("Q10"), itemLabel: { value: "Q10" }, native: { value: "Cerro Torre" }, coord: { value: "Point(-73.1 -49.3)" }, elev: { value: "3128" } },
+      { item: item("Q11"), itemLabel: { value: "Q11" }, coord: { value: "Point(-73 -49)" } },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].properties).toMatchObject({ name: "Cerro Torre", v: 3128 });
   });
 
   it("drops unnamed items, repeated ids and bad coordinates", () => {
@@ -94,12 +114,12 @@ describe("peaks layer", () => {
     const r = geojson(await layer.query(ctx(stub, "peaks:key"), {}));
     expect(r.data.features).toHaveLength(uniqueItems);
     expect(r.citation.source).toContain("Wikidata");
-    expect(r.coverageNote).toContain("ranked by elevation");
+    expect(r.coverageNote).toBeUndefined();
 
     const [url, init] = stub.mock.calls[0] as unknown as [string, RequestInit & { cacheKey?: string }];
     expect(url).toBe(SPARQL_ENDPOINT);
     expect(init.method).toBe("POST");
-    expect((init.headers as Record<string, string>)["user-agent"]).toContain("WildMap");
+    expect((init.headers as Record<string, string>)["user-agent"]).toBe("WallyMap/0.1 (https://wallymap.vercel.app)");
     expect(new URLSearchParams(String(init.body)).get("query")).toContain("Point(-120.2 38.8)");
     expect(init.cacheKey).toBe("peaks:key");
   });
@@ -108,7 +128,7 @@ describe("peaks layer", () => {
     const many = Array.from({ length: 1000 }, (_, i) => bindings[i % bindings.length]);
     const stub = vi.fn(async () => json({ results: { bindings: many } }));
     const r = geojson(await layer.query(ctx(stub), {}));
-    expect(r.coverageNote).toContain("1,000 most prominent peaks");
+    expect(r.coverageNote).toContain("1,000 highest peaks");
   });
 
   it("says so when nothing is found", async () => {
@@ -116,6 +136,14 @@ describe("peaks layer", () => {
     const r = geojson(await layer.query(ctx(stub), {}));
     expect(r.data.features).toEqual([]);
     expect(r.coverageNote).toBe("No named peaks in Wikidata for this area");
+  });
+
+  it("retries once when Wikidata says 429 and returns the answer", async () => {
+    let calls = 0;
+    const stub = vi.fn(async () => (++calls === 1 ? new Response("slow", { status: 429 }) : json(fixture)));
+    const r = geojson(await layer.query(ctx(stub), {}));
+    expect(stub).toHaveBeenCalledTimes(2);
+    expect(r.data.features).toHaveLength(uniqueItems);
   });
 
   it("maps rate limiting, errors and timeouts to hinted errors", async () => {

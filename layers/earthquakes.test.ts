@@ -93,7 +93,7 @@ describe("earthquakes layer", () => {
     expect(layer.license).toBe("Public domain (USGS)");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.input.parse({})).toEqual({ days: 365, minMagnitude: 2.5 });
-    expect(layer.style).toMatchObject({ geometry: "point", extrude: "v", heat: true });
+    expect(layer.style).toMatchObject({ geometry: "point", unit: "M", extrude: "v", heat: true });
   });
 
   it("returns a cited FeatureCollection and passes the cache key through", async () => {

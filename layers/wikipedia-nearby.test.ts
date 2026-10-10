@@ -6,6 +6,11 @@ import geoFixture from "./__fixtures__/wikipedia-nearby.geosearch.json";
 import extractsFixture from "./__fixtures__/wikipedia-nearby.extracts.json";
 
 /** Fixtures are real English Wikipedia answers for this box (South Lake Tahoe), recorded 2026-10-09: 23 articles, 20 extracts. */
+vi.mock("./_shared/wikimedia", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./_shared/wikimedia")>();
+  return { ...real, wikimediaFetch: (f: never, u: string, i?: never) => real.wikimediaFetch(f, u, i, { sleep: async () => {} }) };
+});
+
 const SLT: [number, number, number, number] = [-120.02, 38.9, -119.94, 38.97];
 const hits = geoFixture.query.geosearch;
 const pages = extractsFixture.query.pages as Record<string, { pageid: number; extract?: string; thumbnail?: { source: string } }>;
@@ -66,12 +71,28 @@ describe("urls", () => {
 
 describe("cellsOf", () => {
   it("keeps a small view as one cell and cuts a large one into cells of at most 18 km", () => {
-    expect(cellsOf(SLT)).toEqual([SLT]);
-    const big = cellsOf([-120.4, 38.7, -119.9, 39.1]); // about 43 by 44 km
-    expect(big.length).toBe(9);
-    for (const [w, s, e, n] of big) {
+    expect(cellsOf(SLT)).toEqual({ cells: [SLT], total: 1 });
+    const { cells, total } = cellsOf([-120.4, 38.7, -119.9, 39.1]); // about 43 by 44 km
+    expect(total).toBe(9);
+    expect(cells.length).toBe(9);
+    for (const [w, s, e, n] of cells) {
       expect((n - s) * 110.57).toBeLessThanOrEqual(18.01);
       expect((e - w) * 111.32 * Math.cos((38.9 * Math.PI) / 180)).toBeLessThanOrEqual(18.01);
+    }
+  });
+
+  it("caps the number of cells, keeping the ones nearest the centre", () => {
+    const view: [number, number, number, number] = [-121, 38, -119, 40]; // about 170 by 220 km
+    const { cells, total } = cellsOf(view);
+    expect(total).toBeGreaterThan(64);
+    expect(cells).toHaveLength(64);
+    const small = cellsOf(view, 4);
+    expect(small.cells).toHaveLength(4);
+    for (const [w, s, e, n] of small.cells) {
+      expect((w + e) / 2).toBeGreaterThan(-120.3);
+      expect((w + e) / 2).toBeLessThan(-119.7);
+      expect((s + n) / 2).toBeGreaterThan(38.8);
+      expect((s + n) / 2).toBeLessThan(39.2);
     }
   });
 });
@@ -100,12 +121,13 @@ describe("buildFeatures", () => {
     );
     expect(features[0].geometry).toEqual({ type: "Point", coordinates: [-120, 39] });
     expect(features[0].properties).toEqual({
+      name: "Lake Tahoe",
       title: "Lake Tahoe",
       url: "https://en.wikipedia.org/wiki/Lake_Tahoe",
       extract: "A lake.",
       thumbnail: "https://thumb.example/a.jpg",
     });
-    expect(features[1].properties).toEqual({ title: "Ghost", url: "https://en.wikipedia.org/wiki/Ghost" });
+    expect(features[1].properties).toEqual({ name: "Ghost", title: "Ghost", url: "https://en.wikipedia.org/wiki/Ghost" });
   });
 });
 
@@ -141,7 +163,7 @@ describe("wikipedia-nearby layer", () => {
     const keys = (stub.mock.calls as unknown as [string, { cacheKey?: string; headers?: Record<string, string> }][]).map((c) => c[1].cacheKey);
     expect(new Set(keys).size).toBe(keys.length);
     expect(keys.every((k) => k?.startsWith("wikipedia-nearby:key:"))).toBe(true);
-    expect((stub.mock.calls[0] as unknown as [string, { headers: Record<string, string> }])[1].headers["user-agent"]).toContain("WildMap");
+    expect((stub.mock.calls[0] as unknown as [string, { headers: Record<string, string> }])[1].headers["user-agent"]).toBe("WallyMap/0.1 (https://wallymap.vercel.app)");
     expect(r.citation.source).toContain("CC BY-SA 4.0");
   });
 
@@ -165,6 +187,17 @@ describe("wikipedia-nearby layer", () => {
     expect(r.data.features).toHaveLength(100);
     expect(r.coverageNote).toContain("100 of 130 articles nearest the centre");
     expect(stub.mock.calls.filter((c) => String(c[0]).includes("prop=extracts"))).toHaveLength(5);
+  });
+
+  it("retries a rate-limited search once", async () => {
+    let calls = 0;
+    const stub = vi.fn(async (url: string) => {
+      if (url.includes("list=geosearch")) return ++calls === 1 ? new Response("slow", { status: 429 }) : json(geoFixture);
+      return json({ query: { pages: {} } });
+    });
+    const r = geojson(await layer.query(ctx(stub), { lang: "en" }));
+    expect(r.data.features).toHaveLength(hits.length);
+    expect(calls).toBe(2);
   });
 
   it("falls back to title and link when the summaries fail", async () => {

@@ -8,7 +8,8 @@
  *   2. prop=extracts|pageimages for those pageids: exintro=1&explaintext=1&exsentences=2&exlimit=max&piprop=thumbnail&pithumbsize=320&pilimit=max.
  *      Response: { query: { pages: { <id>: { pageid, title, extract?, thumbnail?: { source, width, height } } } }, limits: { extracts: 20, pageimages: 50 } }.
  *      `extracts` is capped at 20 pages per request, so pageids go in batches of 20.
- * Wikimedia answers 429 (plain text, not JSON) to bursts and to requests without a descriptive User-Agent; I hit it with a handful of
+ * Wikimedia answers 429 (plain text, not JSON) to bursts and to requests without a descriptive User-Agent; requests go through
+ * layers/_shared/wikimedia.ts (one User-Agent, one retry on 429 or 503). I hit it with a handful of
  * requests a few seconds apart, so the layer keeps its request count small (area cap 1,000 km2, at most 100 articles get an extract).
  * Smoke check 2026-10-09 (live, keyless, through runLayer): South Lake Tahoe box (-120.02,38.9,-119.94,38.97) returned 23 articles in 0.7 s
  *   with extracts and thumbnails (2 extract batches; in the recorded first batch all 20 had an extract and 17 a thumbnail); a 718 km2 Tahoe box
@@ -19,12 +20,14 @@ import type { Feature, Point } from "geojson";
 import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
+import { wikimediaFetch } from "./_shared/wikimedia";
 import { bodyHash } from "@/lib/fetch/cache";
 import { layerColor } from "@/lib/render/palette";
 
-const USER_AGENT = "WildMap/0.1 (open-source outdoor map agent)";
 const GEO_LIMIT = 500;
 const CELL_KM = 18;
+/** Most map squares asked for; a view that needs more keeps the ones nearest its centre. */
+const MAX_CELLS = 64;
 const KM_PER_DEG_LAT = 110.57;
 const KM_PER_DEG_LON_EQUATOR = 111.32;
 /** Articles that get an extract and thumbnail: the ones nearest the middle of the view. */
@@ -62,8 +65,19 @@ export function extractsUrl(pageIds: number[], lang = "en"): string {
   );
 }
 
-/** Splits `bbox` into cells no more than CELL_KM on a side. */
-export function cellsOf(bbox: BBox): BBox[] {
+/** Squared distance from the centre of `bbox`, with longitude scaled by cos(latitude) so degrees of longitude and latitude compare. */
+function distanceToCentre(bbox: BBox, lon: number, lat: number): number {
+  const cx = (bbox[0] + bbox[2]) / 2;
+  const cy = (bbox[1] + bbox[3]) / 2;
+  const k = Math.cos((cy * Math.PI) / 180);
+  return ((lon - cx) * k) ** 2 + (lat - cy) ** 2;
+}
+
+/**
+ * Splits `bbox` into cells no more than CELL_KM on a side. At most MAX_CELLS are kept, nearest the centre first;
+ * `total` is how many the view needed.
+ */
+export function cellsOf(bbox: BBox, max: number = MAX_CELLS): { cells: BBox[]; total: number } {
   const [west, south, east, north] = bbox;
   const midLatRad = (((south + north) / 2) * Math.PI) / 180;
   const lonStep = CELL_KM / (KM_PER_DEG_LON_EQUATOR * Math.max(Math.cos(midLatRad), 0.1));
@@ -72,13 +86,18 @@ export function cellsOf(bbox: BBox): BBox[] {
   const rows = Math.max(1, Math.ceil((north - south) / latStep - 1e-9));
   const width = (east - west) / cols;
   const height = (north - south) / rows;
-  const cells: BBox[] = [];
+  let cells: BBox[] = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       cells.push([west + c * width, south + r * height, west + (c + 1) * width, south + (r + 1) * height]);
     }
   }
-  return cells;
+  const total = cells.length;
+  if (total > max) {
+    const dist = (cell: BBox) => distanceToCentre(bbox, (cell[0] + cell[2]) / 2, (cell[1] + cell[3]) / 2);
+    cells = [...cells].sort((a, b) => dist(a) - dist(b)).slice(0, max);
+  }
+  return { cells, total };
 }
 
 const geoPageSchema = z.object({
@@ -131,12 +150,8 @@ async function pool<T, R>(items: T[], limit: number, worker: (item: T) => Promis
 /** Fetches one Wikipedia API URL and returns parsed JSON, or a short plain-words failure. */
 async function wikiJson(ctx: QueryContext, url: string, cacheKey: string | undefined): Promise<Outcome<unknown>> {
   try {
-    const res = await ctx.fetch(url, {
-      cacheKey,
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-      headers: { "user-agent": USER_AGENT },
-    });
-    if (res.status === 429) return { ok: false, error: "Wikipedia is rate-limiting requests" };
+    const res = await wikimediaFetch(ctx.fetch, url, { cacheKey });
+    if (res.status === 429 || res.status === 503) return { ok: false, error: "Wikipedia is rate-limiting requests" };
     if (!res.ok) return { ok: false, error: `Wikipedia returned ${res.status}` };
     try {
       return { ok: true, value: await res.json() };
@@ -165,7 +180,7 @@ export function articleUrl(title: string, lang = "en"): string {
 /** Points with title, url and, when known, extract and thumbnail. */
 export function buildFeatures(hits: Hit[], summaries: Map<number, Summary>, lang = "en"): Feature<Point>[] {
   return hits.map((hit) => {
-    const properties: Record<string, string> = { title: hit.title, url: articleUrl(hit.title, lang) };
+    const properties: Record<string, string> = { name: hit.title, title: hit.title, url: articleUrl(hit.title, lang) };
     const s = summaries.get(hit.pageid);
     if (s?.extract) properties.extract = s.extract;
     if (s?.thumbnail) properties.thumbnail = s.thumbnail;
@@ -178,7 +193,7 @@ const wikipediaNearby = defineLayer({
   title: "Wikipedia nearby",
   description:
     "Wikipedia articles about places, landmarks and natural features inside the view, so you can tell the user the story of a place. " +
-    "Each point is one article with title, url (the article), extract (the first two sentences of the article, plain text) and thumbnail (a small picture URL, when the article has one). " +
+    "Each point is one article with name and title (both the article title), url (the article), extract (the first two sentences of the article, plain text) and thumbnail (a small picture URL, when the article has one). " +
     "Use it for 'history of this place', 'what is that lake / peak / ruin / pass', 'what is notable around here', 'tell me about this area', or 'points of interest'; quote the extract and link the url rather than adding facts from memory. " +
     "Input lang picks the Wikipedia language edition (default 'en'; for example 'es' or 'fr'). " +
     "Caveats: only articles that have coordinates appear, so coverage follows how well the area is documented (towns, parks, peaks and historic sites are well covered, backcountry features often are not); " +
@@ -206,7 +221,10 @@ const wikipediaNearby = defineLayer({
     const notes: string[] = [];
 
     // Step 1: which articles lie in the view.
-    const cells = cellsOf(ctx.bbox);
+    const { cells, total: totalCells } = cellsOf(ctx.bbox);
+    if (totalCells > cells.length) {
+      notes.push(`Only the ${cells.length} of ${totalCells} map squares nearest the centre were searched; zoom in for the rest`);
+    }
     const geo = await pool(cells, CONCURRENCY, async (cell): Promise<Outcome<Hit[]>> => {
       const r = await wikiJson(ctx, geosearchUrl(cell, lang), `${base}:geo:${cell.map((n) => n.toFixed(4)).join(",")}`);
       if (!r.ok) return r;
@@ -232,12 +250,10 @@ const wikipediaNearby = defineLayer({
     if (capped) notes.push("Wikipedia stops at 500 articles per map square, so very dense squares have more than shown");
 
     // Keep the articles nearest the centre of the view when there are too many to fetch extracts for.
-    const cx = (ctx.bbox[0] + ctx.bbox[2]) / 2;
-    const cy = (ctx.bbox[1] + ctx.bbox[3]) / 2;
     let hits = [...byId.values()];
     if (hits.length > MAX_ARTICLES) {
       hits = hits
-        .sort((a, b) => (a.lon - cx) ** 2 + (a.lat - cy) ** 2 - ((b.lon - cx) ** 2 + (b.lat - cy) ** 2))
+        .sort((a, b) => distanceToCentre(ctx.bbox, a.lon, a.lat) - distanceToCentre(ctx.bbox, b.lon, b.lat))
         .slice(0, MAX_ARTICLES);
       notes.push(`Showing the ${MAX_ARTICLES} of ${byId.size} articles nearest the centre; zoom in for the rest`);
     }

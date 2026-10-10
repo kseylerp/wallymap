@@ -5,7 +5,8 @@
    "itemLabel",
    "coord",
    "elev",
-   "prom"
+   "prom",
+   "native"
   ]
  },
  "results": {
@@ -39,84 +40,6 @@
    {
     "item": {
      "type": "uri",
-     "value": "http://www.wikidata.org/entity/Q7263270"
-    },
-    "itemLabel": {
-     "xml:lang": "en",
-     "type": "literal",
-     "value": "Pyramid Peak"
-    },
-    "coord": {
-     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
-     "type": "literal",
-     "value": "Point(-120.158 38.845)"
-    },
-    "elev": {
-     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
-     "type": "literal",
-     "value": "3043.433991"
-    },
-    "prom": {
-     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
-     "type": "literal",
-     "value": "787.2999498"
-    }
-   },
-   {
-    "item": {
-     "type": "uri",
-     "value": "http://www.wikidata.org/entity/Q7548328"
-    },
-    "itemLabel": {
-     "xml:lang": "en",
-     "type": "literal",
-     "value": "Snow Valley Peak"
-    },
-    "coord": {
-     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
-     "type": "literal",
-     "value": "Point(-119.883 39.1538)"
-    },
-    "elev": {
-     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
-     "type": "literal",
-     "value": "2809.6519308"
-    },
-    "prom": {
-     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
-     "type": "literal",
-     "value": "382.2199524"
-    }
-   },
-   {
-    "item": {
-     "type": "uri",
-     "value": "http://www.wikidata.org/entity/Q7288369"
-    },
-    "itemLabel": {
-     "xml:lang": "en",
-     "type": "literal",
-     "value": "Ralston Peak"
-    },
-    "coord": {
-     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
-     "type": "literal",
-     "value": "Point(-120.102 38.8332)"
-    },
-    "elev": {
-     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
-     "type": "literal",
-     "value": "2816.0527434"
-    },
-    "prom": {
-     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
-     "type": "literal",
-     "value": "327.660645"
-    }
-   },
-   {
-    "item": {
-     "type": "uri",
      "value": "http://www.wikidata.org/entity/Q6206844"
     },
     "itemLabel": {
@@ -143,79 +66,27 @@
    {
     "item": {
      "type": "uri",
-     "value": "http://www.wikidata.org/entity/Q3322135"
+     "value": "http://www.wikidata.org/entity/Q7263270"
     },
     "itemLabel": {
      "xml:lang": "en",
      "type": "literal",
-     "value": "Mount Tallac"
+     "value": "Pyramid Peak"
     },
     "coord": {
      "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
      "type": "literal",
-     "value": "Point(-120.099 38.906)"
+     "value": "Point(-120.158 38.845)"
     },
     "elev": {
      "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
      "type": "literal",
-     "value": "2968.4530434"
+     "value": "3043.433991"
     },
     "prom": {
      "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
      "type": "literal",
-     "value": "211.836417"
-    }
-   },
-   {
-    "item": {
-     "type": "uri",
-     "value": "http://www.wikidata.org/entity/Q5332740"
-    },
-    "itemLabel": {
-     "xml:lang": "en",
-     "type": "literal",
-     "value": "Echo Peak"
-    },
-    "coord": {
-     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
-     "type": "literal",
-     "value": "Point(-120.073 38.8566)"
-    },
-    "elev": {
-     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
-     "type": "literal",
-     "value": "2712.4205394"
-    },
-    "prom": {
-     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
-     "type": "literal",
-     "value": "211.836417"
-    }
-   },
-   {
-    "item": {
-     "type": "uri",
-     "value": "http://www.wikidata.org/entity/Q6730348"
-    },
-    "itemLabel": {
-     "xml:lang": "en",
-     "type": "literal",
-     "value": "Maggies Peak"
-    },
-    "coord": {
-     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
-     "type": "literal",
-     "value": "Point(-120.114 38.9316)"
-    },
-    "elev": {
-     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
-     "type": "literal",
-     "value": "2652.6796218"
-    },
-    "prom": {
-     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
-     "type": "literal",
-     "value": "176.4795474"
+     "value": "787.2999498"
     }
    },
    {
@@ -247,53 +118,69 @@
    {
     "item": {
      "type": "uri",
-     "value": "http://www.wikidata.org/entity/Q6841502"
+     "value": "http://www.wikidata.org/entity/Q49024858"
     },
     "itemLabel": {
      "xml:lang": "en",
      "type": "literal",
-     "value": "Middle Mountain"
+     "value": "Dicks Peak"
     },
     "coord": {
      "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
      "type": "literal",
-     "value": "Point(-120.181 38.9566)"
+     "value": "Point(-120.1509004 38.9004581)"
     },
     "elev": {
      "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
      "type": "literal",
-     "value": "2541.1226022"
-    },
-    "prom": {
-     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
-     "type": "literal",
-     "value": "138.0746718"
+     "value": "3040"
     }
    },
    {
     "item": {
      "type": "uri",
-     "value": "http://www.wikidata.org/entity/Q7186412"
+     "value": "http://www.wikidata.org/entity/Q49024858"
     },
     "itemLabel": {
      "xml:lang": "en",
      "type": "literal",
-     "value": "Phipps Peak"
+     "value": "Dicks Peak"
     },
     "coord": {
      "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
      "type": "literal",
-     "value": "Point(-120.15 38.9546)"
+     "value": "Point(-120.151111111 38.900555555)"
     },
     "elev": {
      "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
      "type": "literal",
-     "value": "2815.7479428"
+     "value": "3040"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q3322135"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Mount Tallac"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.099 38.906)"
+    },
+    "elev": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "2968.4530434"
     },
     "prom": {
      "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
      "type": "literal",
-     "value": "132.2834604"
+     "value": "211.836417"
     }
    },
    {
@@ -351,27 +238,126 @@
    {
     "item": {
      "type": "uri",
-     "value": "http://www.wikidata.org/entity/Q4763852"
+     "value": "http://www.wikidata.org/entity/Q7288369"
     },
     "itemLabel": {
      "xml:lang": "en",
      "type": "literal",
-     "value": "Angora Peak"
+     "value": "Ralston Peak"
     },
     "coord": {
      "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
      "type": "literal",
-     "value": "Point(-120.073 38.8671)"
+     "value": "Point(-120.102 38.8332)"
     },
     "elev": {
      "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
      "type": "literal",
-     "value": "2617.6275528"
+     "value": "2816.0527434"
     },
     "prom": {
      "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
      "type": "literal",
-     "value": "51.2065008"
+     "value": "327.660645"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q7186412"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Phipps Peak"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.15 38.9546)"
+    },
+    "elev": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "2815.7479428"
+    },
+    "prom": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "132.2834604"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q7548328"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Snow Valley Peak"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-119.883 39.1538)"
+    },
+    "elev": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "2809.6519308"
+    },
+    "prom": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "382.2199524"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q7376080"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Rubicon Peak"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.133 38.9886)"
+    },
+    "elev": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "2800.2031122"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q5332740"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Echo Peak"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-120.073 38.8566)"
+    },
+    "elev": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "2712.4205394"
+    },
+    "prom": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "211.836417"
     }
    },
    {
@@ -429,64 +415,79 @@
    {
     "item": {
      "type": "uri",
-     "value": "http://www.wikidata.org/entity/Q49024858"
+     "value": "http://www.wikidata.org/entity/Q6730348"
     },
     "itemLabel": {
      "xml:lang": "en",
      "type": "literal",
-     "value": "Dicks Peak"
+     "value": "Maggies Peak"
     },
     "coord": {
      "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
      "type": "literal",
-     "value": "Point(-120.1509004 38.9004581)"
+     "value": "Point(-120.114 38.9316)"
     },
     "elev": {
      "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
      "type": "literal",
-     "value": "3040"
+     "value": "2652.6796218"
+    },
+    "prom": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "176.4795474"
     }
    },
    {
     "item": {
      "type": "uri",
-     "value": "http://www.wikidata.org/entity/Q49024858"
+     "value": "http://www.wikidata.org/entity/Q4763852"
     },
     "itemLabel": {
      "xml:lang": "en",
      "type": "literal",
-     "value": "Dicks Peak"
+     "value": "Angora Peak"
     },
     "coord": {
      "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
      "type": "literal",
-     "value": "Point(-120.151111111 38.900555555)"
+     "value": "Point(-120.073 38.8671)"
     },
     "elev": {
      "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
      "type": "literal",
-     "value": "3040"
+     "value": "2617.6275528"
+    },
+    "prom": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "51.2065008"
     }
    },
    {
     "item": {
      "type": "uri",
-     "value": "http://www.wikidata.org/entity/Q7376080"
+     "value": "http://www.wikidata.org/entity/Q6841502"
     },
     "itemLabel": {
      "xml:lang": "en",
      "type": "literal",
-     "value": "Rubicon Peak"
+     "value": "Middle Mountain"
     },
     "coord": {
      "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
      "type": "literal",
-     "value": "Point(-120.133 38.9886)"
+     "value": "Point(-120.181 38.9566)"
     },
     "elev": {
      "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
      "type": "literal",
-     "value": "2800.2031122"
+     "value": "2541.1226022"
+    },
+    "prom": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "138.0746718"
     }
    },
    {

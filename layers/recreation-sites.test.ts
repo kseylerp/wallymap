@@ -55,6 +55,13 @@ describe("kindFromName", () => {
     ["Moab Visitor Center", "visitor center"],
     ["Moab Rim Trail", "trail"],
     ["Sand Flats Recreation Area", "recreation area"],
+    ["Camp Creek Overlook", "viewpoint"],
+    ["Campbell Scenic Overlook", "viewpoint"],
+    ["Camp Richardson Trailhead", "trailhead"],
+    ["Camp Creek Boat Ramp", "water access"],
+    ["Lone Pine Camp", "campground"],
+    ["Campbell Hot Springs", "recreation area"],
+    ["Camp Sherman Store", "recreation area"],
   ])("%s is %s", (name, kind) => expect(kindFromName(name)).toBe(kind));
 });
 
@@ -76,6 +83,18 @@ describe("normalizeUsfs", () => {
     expect(kindOf("Baldwin Beach")).toBe("water access");
     expect(kindOf("Genoa Peak Road 14N32")).toBe("OHV area");
     expect(kindOf("Skunk Harbor")).toBe("trail");
+    // A specific marker group is trusted over the name; a broad one defers to a strict name match.
+    const classify = (name: string, group: string) =>
+      normalizeUsfs({
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", geometry: { type: "Point", coordinates: [-120, 39] }, properties: { recareaid: 1, recareaname: name, markeractivitygroup: group } },
+        ],
+      })[0].properties.kind;
+    expect(classify("Camp Creek Overlook", "Nature Viewing")).toBe("viewpoint");
+    expect(classify("Camp Creek Overlook", "Hiking")).toBe("viewpoint");
+    expect(classify("Pine Day Use Area", "Camping & Cabins")).toBe("campground");
+    expect(classify("Lost Lake", "Fishing")).toBe("water access");
     expect(kindOf("Zephyr Cove Stables")).toBe("recreation area");
     // The generic "Intermediate Parent Group" marker falls back to a plain recreation area.
     expect(kindOf("Lake Tahoe - East Shore")).toBe("recreation area");

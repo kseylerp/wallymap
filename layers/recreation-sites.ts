@@ -69,20 +69,29 @@ const USFS_KINDS: Record<string, string> = {
   "OHV Riding & Camping": "OHV area",
 };
 
-/** BLM names are the only hint to what a generic "Facility" or a recreation site is. */
+/**
+ * Name rules, tried in order, for sites whose own type field says too little (BLM "Facility", BLM recreation sites, and Forest Service areas
+ * filed under a broad activity group). Most specific first, so "Camp Creek Overlook" is a viewpoint and not a campground; the campground
+ * rule needs the word campground, camp site, camping area, or a name that ends in "Camp".
+ */
 const NAME_KINDS: [RegExp, string][] = [
-  [/camp/i, "campground"],
-  [/trail ?head/i, "trailhead"],
-  [/boat (ramp|launch)|launch|put[- ]in|take[- ]out|boat access/i, "water access"],
-  [/overlook|viewpoint|vista/i, "viewpoint"],
-  [/picnic|day[- ]use/i, "day use area"],
-  [/visitor|information center|interpretive/i, "visitor center"],
-  [/trail|route|loop|bike/i, "trail"],
+  [/\btrail ?head\b/i, "trailhead"],
+  [/\bboat (ramp|launch|access)\b|\b(put|take)[- ](in|out)\b/i, "water access"],
+  [/\b(overlook|viewpoint|vista)\b/i, "viewpoint"],
+  [/\b(picnic|day[- ]use)\b/i, "day use area"],
+  [/\b(visitor|information) center\b/i, "visitor center"],
+  [/\b(campgrounds?|camp ?sites?|camping area)\b|\bcamp$/i, "campground"],
+  [/\btrails?\b/i, "trail"],
 ];
 
-export function kindFromName(name: string): string {
+/** The type a name suggests, or undefined when it suggests none. */
+function kindFromNameOnly(name: string): string | undefined {
   for (const [pattern, kind] of NAME_KINDS) if (pattern.test(name)) return kind;
-  return "recreation area";
+  return undefined;
+}
+
+export function kindFromName(name: string): string {
+  return kindFromNameOnly(name) ?? "recreation area";
 }
 
 const BLM_SKIPPED_TYPES = new Set(["Activity Pass", "Permit", "Ticket Facility", "Timed Entry", "Venue Reservations", "Kiosk"]);
@@ -93,10 +102,22 @@ function pointOf(f: Feature): [number, number] | null {
   return Number.isFinite(lon) && Number.isFinite(lat) ? [lon, lat] : null;
 }
 
+/** Marker groups that name a specific kind of site; the broad ones (Hiking, Fishing, ...) are checked against the name first. */
+const USFS_SPECIFIC_GROUPS = new Set([
+  "Camping & Cabins",
+  "Trailhead",
+  "Picnicking",
+  "Beaches & Dunes",
+  "Outdoor Learning",
+  "Winter Sports",
+  "OHV Riding & Camping",
+]);
+
+/** The Forest Service's own marker group first when it is specific, then a strict name match, then the broad group. */
 function usfsKind(name: string, group: string | undefined): string {
-  if (/trail ?head/i.test(name)) return "trailhead";
-  if (/campground|\bcamp\b/i.test(name)) return "campground";
-  return (group !== undefined ? USFS_KINDS[group] : undefined) ?? "recreation area";
+  const fromGroup = group !== undefined ? USFS_KINDS[group] : undefined;
+  if (group !== undefined && USFS_SPECIFIC_GROUPS.has(group) && fromGroup !== undefined) return fromGroup;
+  return kindFromNameOnly(name) ?? fromGroup ?? "recreation area";
 }
 
 /** One point per Forest Service recreation area: the view's rows (one per activity) are merged by recareaid. */
@@ -114,7 +135,7 @@ export function normalizeUsfs(fc: FeatureCollection): SiteFeature[] {
       const name = str(p.recareaname) ?? "Unnamed recreation area";
       const properties: Record<string, string | boolean> = {
         name,
-        // The marker group is the Forest Service's own label, but a trailhead is often filed under Hiking, so the name wins for these two.
+        // The marker group is the Forest Service's own label; a trailhead is often filed under the broad Hiking group, so the name decides then.
         kind: usfsKind(name, group),
         agency: "USFS",
       };

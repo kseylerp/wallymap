@@ -81,3 +81,4 @@ import "./permafrost";
 import "./mining-claims";
 import "./imagery-by-date";
 import "./mines";
+import "./uranium";

@@ -90,6 +90,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "mining-claims", synonyms: ["mining claim", "claims", "staked claim", "lode claim", "placer claim"], notes: "BLM claims on public land, status active or closed, v = acres; shapes are survey-grid squares, not corners" },
   { layerId: "imagery-by-date", synonyms: ["satellite image on a date", "before and after", "satellite photo"], notes: "30 m true colour for date, nearest pass; compare two days" },
   { layerId: "mines", synonyms: ["mine", "abandoned mine", "gold mine", "mineral deposit", "prospect", "quarry"], notes: "USGS historic mine records (about 2011) and old-map mine symbols; kind = commodity or feature type; commodity input" },
+  { layerId: "uranium", synonyms: ["uranium", "abandoned uranium mine", "mill tailings", "Navajo uranium", "radioactive"], notes: "Navajo Nation abandoned mines (v = 2007 hazard score) and DOE mill-tailings sites; other uranium mines are in mines" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

@@ -35,6 +35,14 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "paddling", synonyms: ["whitewater", "kayaking", "canoe", "rafting", "rapids", "put-in", "paddling"], notes: "rapids and canoe routes, v = class 1-6; check streamflow" },
   { layerId: "outdoor-features", synonyms: ["hut", "shelter", "spring", "water source", "viewpoint", "cave", "hot spring", "waterfall", "summit", "saddle", "pass"], notes: "backcountry points, filter by kind; peaks have v = elevation" },
   { layerId: "lakes", synonyms: ["lake", "depth", "how deep", "reservoir", "tarn"], notes: "named lakes and reservoirs, v = max depth in metres, null when not recorded; use name to find one lake" },
+  { layerId: "gbif-occurrences", synonyms: ["occurrence records", "range map", "specimens", "museum records"], notes: "worldwide species records by Latin name; density true for a world map" },
+  { layerId: "critical-habitat", synonyms: ["endangered species habitat", "critical habitat", "threatened species"], notes: "USFWS designated habitat; species filter" },
+  { layerId: "grazing-allotments", synonyms: ["cattle", "grazing", "ranching", "wild horses", "burros"], notes: "BLM grazing areas and herd ranges" },
+  { layerId: "protected-areas-world", synonyms: ["protected area", "nature reserve", "marine reserve"], notes: "world picture, not countable; non-commercial" },
+  { layerId: "fire-hazard", synonyms: ["fire risk", "fire hazard", "fire-prone"], notes: "US long-run ranking, not a forecast" },
+  { layerId: "flood-zones", synonyms: ["floodplain", "flood zone", "FEMA"], notes: "drawn only at zoom 14 or closer" },
+  { layerId: "drought", synonyms: ["drought", "dry spell"], notes: "US weekly D0-D4; weeks input" },
+  { layerId: "glaciers", synonyms: ["glacier", "ice field"], notes: "outlines, v = area km2" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

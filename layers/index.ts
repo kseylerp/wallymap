@@ -75,3 +75,4 @@ import "./aquifers";
 import "./groundwater";
 import "./power-plants";
 import "./disasters";
+import "./monuments";

@@ -84,6 +84,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "groundwater", synonyms: ["groundwater", "water table", "depth to water", "well water level", "is the aquifer dropping"], notes: "USGS well measurements, v = depth to water in feet, one reading per well, no trend; see aquifers" },
   { layerId: "power-plants", synonyms: ["power plant", "wind farm", "solar farm", "wind turbine"], notes: "EIA plants by fuel (source plants), USGS turbines and solar with year online; v = MW" },
   { layerId: "disasters", synonyms: ["disasters", "hurricane", "disaster declaration"], notes: "GDACS alerts worldwide, FEMA county declarations; days, years" },
+  { layerId: "monuments", synonyms: ["national monument", "Bears Ears", "Grand Staircase", "conservation area", "monument boundary"], notes: "BLM monuments now vs 2021 (kind), v = area km2; compare the two for then vs now" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

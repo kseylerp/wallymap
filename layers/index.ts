@@ -40,3 +40,4 @@ import "./flood-zones";
 import "./snow-cover";
 import "./outdoor-features";
 import "./tides";
+import "./land-cover";

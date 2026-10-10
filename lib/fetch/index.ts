@@ -3,6 +3,7 @@ import { createBucket, type Bucket } from "./bucket";
 
 export { cacheKeyFor, createCache, type Cache } from "./cache";
 export { createBucket, type Bucket, type BucketOptions } from "./bucket";
+export { jsonArrayBody, jsonObjectBody, textBody } from "./validate";
 
 export type CachedFetch = (
   url: string,
@@ -14,6 +15,12 @@ export type CachedFetch = (
      * pass their own check; the default is `!looksLikeUpstreamFailure(body)`.
      */
     shouldCache?: (body: string) => boolean;
+    /**
+     * Whether a 2xx body has the shape the caller needs (see ./validate). When it returns false the body is
+     * not cached and the caller gets a 502 instead, so a maintenance page or truncated file surfaces as an
+     * upstream error rather than being stored under a shared key for a day. Checked before `shouldCache`.
+     */
+    validate?: (body: string) => boolean;
     /**
      * Abort the upstream call this many ms after it gets its rate-limit slot. Prefer this to passing
      * `signal: AbortSignal.timeout(...)`, whose clock also runs while the call waits in the rate limiter.
@@ -94,6 +101,9 @@ export function looksLikeUpstreamFailure(body: string): boolean {
   return typeof record.remark === "string" && FAILURE_REMARK.test(record.remark);
 }
 
+/** Status a fetch returns when `validate` rejects a 2xx body, so callers' `!res.ok` paths report it as upstream. */
+export const INVALID_BODY_STATUS = 502;
+
 const defaultShouldCache = (body: string): boolean => !looksLikeUpstreamFailure(body);
 
 let warnedAboutCache = false;
@@ -126,7 +136,7 @@ export function createLayerFetch(layerId: string, opts: LayerFetchOptions = {}):
   const cache = opts.cache ?? createCache();
 
   return async (url, init = {}) => {
-    const { cacheKey, ttlSeconds, shouldCache = defaultShouldCache, timeoutMs, ...requestInit } = init;
+    const { cacheKey, ttlSeconds, shouldCache = defaultShouldCache, validate, timeoutMs, ...requestInit } = init;
 
     const method = (requestInit.method ?? "GET").toUpperCase();
     const text = bodyText(requestInit.body);
@@ -155,6 +165,13 @@ export function createLayerFetch(layerId: string, opts: LayerFetchOptions = {}):
     if (response.status < 200 || response.status >= 300) return response;
 
     const responseText = await response.text();
+    if (validate !== undefined && !validate(responseText)) {
+      return new Response(responseText, {
+        status: INVALID_BODY_STATUS,
+        statusText: "Upstream returned an unexpected body",
+        headers: { "x-invalid-body": "1" },
+      });
+    }
     // A failure that arrived as a 200 is passed back to the caller but never cached.
     if (key !== null && shouldCache(responseText)) {
       try {

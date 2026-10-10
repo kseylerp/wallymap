@@ -28,6 +28,7 @@ import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { haversineKm } from "./_shared/geo";
+import { jsonObjectBody } from "@/lib/fetch/validate";
 import { layerColor } from "@/lib/render/palette";
 
 const MDAPI = "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json";
@@ -163,6 +164,10 @@ function gmtStamp(d: Date): string {
   return `${iso.slice(0, 4)}${iso.slice(5, 7)}${iso.slice(8, 10)} ${iso.slice(11, 16)}`;
 }
 
+const JSON_OBJECT_BODY = jsonObjectBody();
+/** Station lists are shared by every view for a day, so only a body with a non-empty stations array is stored. */
+export const STATION_LIST_BODY = jsonObjectBody({ listKey: "stations" });
+
 type Got = { ok: true; body: unknown } | { ok: false; error: string };
 
 async function getJson(
@@ -172,11 +177,13 @@ async function getJson(
   cacheKey: string,
   ttlSeconds: number,
   cacheErrors = false,
+  validate: (body: string) => boolean = JSON_OBJECT_BODY,
 ): Promise<Got> {
   try {
     const res = await ctx.fetch(url, {
       cacheKey,
       ttlSeconds,
+      validate,
       // A "no data" answer for a station stays true for the TTL, so caching it saves a call per view.
       ...(cacheErrors ? { shouldCache: () => true } : {}),
       timeoutMs: UPSTREAM_TIMEOUT_MS,
@@ -222,8 +229,8 @@ const tides = defineLayer({
     if (outsideUs(ctx.bbox)) return { kind: "geojson", data: EMPTY, citation, coverageNote: OUTSIDE_US_NOTE };
 
     const [predStations, liveStations] = await Promise.all([
-      getJson(ctx, `${MDAPI}?type=tidepredictions`, "NOAA tide station list", "tides:stations:predictions", STATIONS_TTL_SECONDS),
-      getJson(ctx, `${MDAPI}?type=waterlevels`, "NOAA water level station list", "tides:stations:waterlevels", STATIONS_TTL_SECONDS),
+      getJson(ctx, `${MDAPI}?type=tidepredictions`, "NOAA tide station list", "tides:stations:predictions", STATIONS_TTL_SECONDS, false, STATION_LIST_BODY),
+      getJson(ctx, `${MDAPI}?type=waterlevels`, "NOAA water level station list", "tides:stations:waterlevels", STATIONS_TTL_SECONDS, false, STATION_LIST_BODY),
     ]);
     if (!predStations.ok) return { error: predStations.error, hint: "upstream" };
     // Without the live list every station is treated as predictions-only.

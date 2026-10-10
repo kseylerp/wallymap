@@ -35,6 +35,7 @@ import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { bboxesDisjoint, outsideUs } from "./_shared/coverage";
 import { geometryBBox } from "./_shared/geo";
 import { createCache, type Cache } from "@/lib/fetch";
+import { jsonObjectBody } from "@/lib/fetch/validate";
 import { layerColor } from "@/lib/render/palette";
 
 const NWS = "https://api.weather.gov";
@@ -323,11 +324,15 @@ async function lookupPoint(ctx: QueryContext, lat: number, lon: number): Promise
   return got;
 }
 
+const JSON_OBJECT_BODY = jsonObjectBody();
+
 async function getJson(ctx: QueryContext, url: string, label: string, cacheKey: string | undefined, ttlSeconds: number, nws: boolean): Promise<Got> {
   try {
     const res = await ctx.fetch(url, {
       cacheKey,
       ttlSeconds,
+      // Point and zone answers are shared by every view for a day, so only a JSON object is stored.
+      validate: JSON_OBJECT_BODY,
       ...(nws ? { headers: { "user-agent": USER_AGENT, accept: "application/geo+json" } } : {}),
       timeoutMs: UPSTREAM_TIMEOUT_MS,
     });

@@ -27,6 +27,7 @@ import type { Feature, FeatureCollection, Point } from "geojson";
 import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
+import { jsonObjectBody } from "@/lib/fetch/validate";
 import { layerColor } from "@/lib/render/palette";
 
 const SEARCH_URL = "https://api.gbif.org/v1/occurrence/search";
@@ -346,6 +347,7 @@ async function resolveTaxon(
       // A name resolves the same way for every view, so the key leaves out the bbox.
       cacheKey: ctx.cacheKey === undefined ? undefined : `gbif:match:${name.toLowerCase()}`,
       ttlSeconds: MATCH_TTL_SECONDS,
+      validate: jsonObjectBody(),
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
     if (!res.ok) return { error: `GBIF returned ${res.status}`, hint: "upstream" };

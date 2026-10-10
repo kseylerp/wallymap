@@ -21,6 +21,7 @@ import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { bboxesDisjoint } from "./_shared/coverage";
 import { DAY_MS, dateInput, isoDay, resolveTileDate } from "./_shared/dated-tiles";
+import { textBody } from "@/lib/fetch/validate";
 import { layerColor } from "@/lib/render/palette";
 
 const BASE = "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/KML";
@@ -38,6 +39,9 @@ const inputSchema = z.object({
 });
 
 const DENSITY: Record<string, number> = { light: 1, medium: 2, heavy: 3 };
+
+/** A daily HMS file is a KML document; a day with no smoke still has the <kml> root, just no placemarks. */
+export const HMS_KML_BODY = textBody({ markers: [/<kml[\s>]/] });
 
 export function kmlUrl(day: string): string {
   return `${BASE}/${day.slice(0, 4)}/${day.slice(5, 7)}/hms_smoke${day.replaceAll("-", "")}.kml`;
@@ -185,6 +189,8 @@ const smoke = defineLayer({
           const res = await ctx.fetch(kmlUrl(day), {
             cacheKey: `hms-smoke:${day}`,
             ttlSeconds: day === today ? TODAY_TTL_SECONDS : undefined,
+            // The day's file is shared by every view for a day; a maintenance page must not stand in for it.
+            validate: HMS_KML_BODY,
             signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
           });
           if (res.status === 404) return { day, missing: true };

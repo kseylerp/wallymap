@@ -32,6 +32,7 @@ import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { haversineKm } from "./_shared/geo";
 import { createCache, type Cache } from "@/lib/fetch";
+import { textBody } from "@/lib/fetch/validate";
 import { layerColor } from "@/lib/render/palette";
 
 const LATEST_OBS = "https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt";
@@ -256,6 +257,10 @@ export function forecastFeatures(body: unknown, now: Date): FeatureCollection<Po
   return { type: "FeatureCollection", features };
 }
 
+/** NDBC files shared by every view: the latest-observations table starts with its #STN header, the station list is <stations> XML. */
+export const LATEST_OBS_BODY = textBody({ markers: [/^\s*#STN/] });
+export const STATION_LIST_BODY = textBody({ markers: [/<stations[\s>]/, /<station\s/] });
+
 type Text = { ok: true; text: string } | { ok: false; error: string };
 
 async function fetchText(
@@ -264,9 +269,10 @@ async function fetchText(
   label: string,
   cacheKey: string | undefined,
   ttlSeconds: number,
+  validate?: (body: string) => boolean,
 ): Promise<Text> {
   try {
-    const res = await ctx.fetch(url, { cacheKey, ttlSeconds, timeoutMs: UPSTREAM_TIMEOUT_MS });
+    const res = await ctx.fetch(url, { cacheKey, ttlSeconds, validate, timeoutMs: UPSTREAM_TIMEOUT_MS });
     if (!res.ok) return { ok: false, error: `${label} returned ${res.status}` };
     return { ok: true, text: await res.text() };
   } catch (err) {
@@ -469,8 +475,8 @@ async function querySeason(ctx: QueryContext, month: number, now: Date): Promise
     retrieved: now.toISOString(),
   };
   const [xml, obsText] = await Promise.all([
-    fetchText(ctx, STATIONS_XML, "NDBC station list", "surf:ndbc-stations", STATIONS_TTL_SECONDS),
-    fetchText(ctx, LATEST_OBS, "NDBC latest observations", "surf:ndbc-latest", OBS_TTL_SECONDS),
+    fetchText(ctx, STATIONS_XML, "NDBC station list", "surf:ndbc-stations", STATIONS_TTL_SECONDS, STATION_LIST_BODY),
+    fetchText(ctx, LATEST_OBS, "NDBC latest observations", "surf:ndbc-latest", OBS_TTL_SECONDS, LATEST_OBS_BODY),
   ]);
   if (!xml.ok) return { error: xml.error, hint: "upstream" };
   let buoys = parseStationList(xml.text);
@@ -530,14 +536,14 @@ const surf = defineLayer({
       retrieved: now.toISOString(),
     };
 
-    const obsText = await fetchText(ctx, LATEST_OBS, "NDBC latest observations", "surf:ndbc-latest", OBS_TTL_SECONDS);
+    const obsText = await fetchText(ctx, LATEST_OBS, "NDBC latest observations", "surf:ndbc-latest", OBS_TTL_SECONDS, LATEST_OBS_BODY);
     if (!obsText.ok) return { error: obsText.error, hint: "upstream" };
     const inside = parseLatestObs(obsText.text).filter((o) => o.wvht !== undefined && inBbox(o.lon, o.lat, ctx.bbox));
 
     let names = new Map<string, string>();
     if (inside.length > 0) {
       // Names are a nicety; a failure leaves "NDBC <id>".
-      const xml = await fetchText(ctx, STATIONS_XML, "NDBC station list", "surf:ndbc-stations", STATIONS_TTL_SECONDS);
+      const xml = await fetchText(ctx, STATIONS_XML, "NDBC station list", "surf:ndbc-stations", STATIONS_TTL_SECONDS, STATION_LIST_BODY);
       if (xml.ok) names = parseStationNames(xml.text);
     }
     const buoys = buoyFeatures(inside, names, ctx.bbox, now);

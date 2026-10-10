@@ -31,6 +31,7 @@ import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryCo
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, bboxesDisjoint, outsideUs } from "./_shared/coverage";
+import { jsonArrayBody } from "@/lib/fetch/validate";
 import { layerColor } from "@/lib/render/palette";
 
 const AWDB = "https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1";
@@ -187,6 +188,11 @@ export function joinSnotel(stations: SnotelStation[], data: SnotelData[], bbox: 
   return { type: "FeatureCollection", features };
 }
 
+/** The shared station list is cached for a day, so only a non-empty list of station rows is stored. */
+export const STATION_LIST_BODY = jsonArrayBody({
+  item: (row) => typeof row === "object" && row !== null && "stationTriplet" in row,
+});
+
 type Fetched = { ok: true; rows: unknown[] } | { ok: false; error: string };
 
 async function fetchRows(
@@ -195,9 +201,10 @@ async function fetchRows(
   label: string,
   cacheKey: string | undefined,
   ttlSeconds: number,
+  validate: (body: string) => boolean = jsonArrayBody({ minLength: 0 }),
 ): Promise<Fetched> {
   try {
-    const res = await ctx.fetch(url, { cacheKey, ttlSeconds, timeoutMs: UPSTREAM_TIMEOUT_MS });
+    const res = await ctx.fetch(url, { cacheKey, ttlSeconds, validate, timeoutMs: UPSTREAM_TIMEOUT_MS });
     if (!res.ok) return { ok: false, error: `SNOTEL ${label} returned ${res.status}` };
     const body: unknown = await res.json();
     if (!Array.isArray(body)) return { ok: false, error: `SNOTEL ${label} did not return a list` };
@@ -263,7 +270,7 @@ const snowpack = defineLayer({
 
     const stationsUrl = `${AWDB}/stations?stationTriplets=*:*:SNTL&elements=WTEQ&durations=DAILY&activeOnly=true`;
     // The full active-station list is the same for every bbox, so share one cache entry.
-    const stationsResult = await fetchRows(ctx, stationsUrl, "station search", "snowpack:stations:WTEQ", STATIONS_TTL_SECONDS);
+    const stationsResult = await fetchRows(ctx, stationsUrl, "station search", "snowpack:stations:WTEQ", STATIONS_TTL_SECONDS, STATION_LIST_BODY);
     if (!stationsResult.ok) return { error: stationsResult.error, hint: "upstream" };
 
     const inside = parseRows(StationSchema, stationsResult.rows).filter((s) => inBbox(s, ctx.bbox));

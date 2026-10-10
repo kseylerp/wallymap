@@ -148,7 +148,7 @@ This step is easy to forget and the layer is hard for the agent to find without 
 
 ## The layers today
 
-WallyMap ships 54 data layers. This table is generated from the layer registry by `pnpm exec tsx scripts/layer-table.mts --write`, which also refreshes the copy in the README.
+WallyMap ships 81 data layers. This table is generated from the layer registry by `pnpm exec tsx scripts/layer-table.mts --write`, which also refreshes the copy in the README.
 
 <!-- layers:start -->
 | Id | Title | What it shows | Source | Coverage | Key needed | Freshness |
@@ -207,6 +207,33 @@ WallyMap ships 54 data layers. This table is generated from the layer registry b
 | `geologic-unit` | Geologic unit at a point | The rock unit, age and rock type under one point | Macrostrat | Global | None | Static |
 | `fishing` | Fishing (access, boat ramps, recent catches, water temperature) | Fishing access, boat ramps, piers, recent fish sightings, water temperature | OpenStreetMap, USFS, iNaturalist, USGS | Global | `OVERPASS_URL` (optional) | Live |
 | `weather-alerts` | Weather alerts (NWS, live) and current weather | Active weather warnings and the weather right now | NOAA National Weather Service, Open-Meteo | Global | None | Live (minutes) |
+| `sequoia-groves` | Giant sequoia groves | The 96 giant sequoia groves | NPS Sequoia and Kings Canyon, USFS | Sierra Nevada, California | None | Static (2024) |
+| `sea-level-trends` | Sea level trends (NOAA tide gauges) | Measured long-term sea level trend at tide gauges (mm/yr) | NOAA CO-OPS | Global | None | Yearly |
+| `sequoia-mortality` | Giant sequoia fire survival | Giant sequoias alive or dead after the 2020 and 2021 fires | USGS | Sequoia and Kings Canyon NPs | None | Static (post-fire surveys) |
+| `reservoir-levels` | Reservoir levels | Storage, level, percent full and history of major reservoirs | US Bureau of Reclamation, California CDEC | Western US | None | Daily, 1 to 2 days behind; provisional |
+| `sea-level-rise` | Sea level rise flooding (NOAA scenarios) | Coastal land under water at high tide for 0 to 10 feet of rise | NOAA Sea Level Rise Viewer | US | None | Static scenarios |
+| `old-growth` | Old-growth and mature forest | Old-growth and mature forest acres per fireshed | US Forest Service | US | None | Static (2023 inventory) |
+| `carbon-flux` | Forest carbon flux | Forest carbon sink or source per hectare per year | Global Forest Watch (Harris et al.) | Global | None | Static (2001 to 2025 average) |
+| `condor-range` | California condor range | California condor range today and in the early 1800s | NPS Sequoia and Kings Canyon | Western North America | None | Static |
+| `dams` | Dams | Dams with storage, height, purpose, hazard and year built | USACE National Inventory of Dams | US | None | Updated yearly |
+| `wolf-packs` | Wolf packs (Washington) | Gray wolf pack ranges by year | Washington Dept. of Fish and Wildlife | Washington state | None | Yearly (2014 to 2025) |
+| `methane-plumes` | Methane plumes (Carbon Mapper) | Methane plumes and emission sources with rates | Carbon Mapper (non-commercial) | Global | None | Days to weeks after each pass |
+| `ports` | Principal US ports | The 150 principal US ports by 2023 cargo tonnage | USACE via BTS | US | None | Yearly (2023) |
+| `river-basins` | River basins and watersheds | Watersheds at a level that follows the zoom (HUC2 to HUC10) | USGS Watershed Boundary Dataset | US | None | Updated occasionally |
+| `hardiness-zones` | Plant hardiness zones | Plant hardiness zones as map tiles | USDA-ARS, Oregon State PRISM | Lower 48 states | None | Static (2023) |
+| `temperature-anomaly` | Temperature anomaly by county (NOAA) | County temperature against the 1901-2000 normal (°F) | NOAA NCEI Climate at a Glance | Lower 48 states | None | Monthly, about the 8th |
+| `pipelines-lines` | Pipelines and power lines | Gas, oil and products pipelines and high-voltage power lines | EIA, HIFLD | US | None | Updated occasionally |
+| `aquifers` | Principal aquifers | Principal aquifer outlines by rock type | USGS Principal Aquifers | US | None | Static (2003) |
+| `groundwater` | Groundwater levels | Depth to water at monitoring wells (newest reading) | USGS Water Data | US | `USGS_API_KEY` (optional) | As wells are measured |
+| `power-plants` | Power plants, wind and solar | Power plants by fuel, wind turbines and large solar, in MW | EIA, USGS wind and solar databases | US | None | Quarterly to yearly |
+| `disasters` | Disasters (GDACS alerts and FEMA declarations) | Disaster alerts worldwide and FEMA declarations per US county | GDACS, OpenFEMA | Global | None | Live (hourly) |
+| `monuments` | National monuments and conservation areas | BLM national monuments now and Utah's 2021 boundaries | BLM, Utah AGRC | US | None | Current (July 2026 changes) |
+| `tree-mortality` | Tree death (beetles, drought, disease) | Where trees died each year (beetles, drought, disease) | USFS aerial survey, California DFW | US | None | Yearly (California to 2019, US 2021 to 2025) |
+| `permafrost` | Permafrost zones | Permafrost zones from continuous to isolated | IPA Circum-Arctic map, NRCan | Northern Hemisphere | None | Static |
+| `mining-claims` | Mining claims | Active and closed mining claims on public land | BLM MLRS | US | None | Daily |
+| `imagery-by-date` | Satellite image by date (Landsat and Sentinel-2) | True-colour 30 m satellite picture on a chosen day | NASA HLS (Landsat, Sentinel-2) via GIBS | Global | None | Every few days, about 2 days behind |
+| `mines` | Mines and mineral deposits | Mines, prospects and mineral deposits by commodity | USGS MRDS, USMIN | US | None | Static (about 2011) |
+| `uranium` | Uranium legacy sites | Navajo Nation abandoned uranium mines and DOE mill-tailings sites | Navajo Nation AUM program, DOE Legacy Management | Western US | None | Static (2007 hazard scores) |
 <!-- layers:end -->
 
 ## Checklist

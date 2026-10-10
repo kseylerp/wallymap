@@ -102,6 +102,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "sea-level-rise": "raster",
   "old-growth": "natural",
   "carbon-flux": "raster",
+  "condor-range": "natural",
 };
 
 /** Layers that return raster tiles: the imagery carries its own colors. */

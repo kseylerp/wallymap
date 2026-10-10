@@ -71,6 +71,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "sea-level-rise", synonyms: ["sea level rise", "flooding by 2050", "coastal flooding"], notes: "US flood map for feet 0-10 of rise; 1 ft is about 2050" },
   { layerId: "old-growth", synonyms: ["old growth", "mature forest"], notes: "federal old-growth and mature forest per fireshed (about 250k acres), acres" },
   { layerId: "carbon-flux", synonyms: ["carbon", "carbon sink", "forest carbon"], notes: "forest CO2 sink or source tiles; product net-flux, emissions, removals" },
+  { layerId: "condor-range", synonyms: ["condor", "California condor"], notes: "current and early-1800s range outlines, not sightings" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

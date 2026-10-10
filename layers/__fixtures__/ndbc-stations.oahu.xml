@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?><stations created="2026-10-10T01:55:04UTC" count="4">
+  <station id="46026" lat="37.75" lon="-122.838" elev="0" name="SAN FRANCISCO - 18NM West of San Francisco, CA" owner="NDBC" pgm="NDBC Meteorological/Ocean" type="buoy" met="y" currents="n" waterquality="n" dart="n"/>
+  <station id="51201" lat="21.671" lon="-158.118" elev="0" name="Waimea Bay, HI (106)" owner="Pacific Islands Ocean Observing System" pgm="IOOS Partners" type="buoy" met="y" currents="n" waterquality="n" dart="n"/>
+  <station id="51202" lat="21.414" lon="-157.681" elev="0" name="Mokapu Point, HI (098)" owner="Pacific Islands Ocean Observing System" pgm="IOOS Partners" type="buoy" met="y" currents="n" waterquality="n" dart="n"/>
+  <station id="oouh1" lat="21.303" lon="-157.865" elev="1.6" name="1612340 - Honolulu, HI" owner="NOS" pgm="NOS/CO-OPS" type="fixed" met="y" currents="n" waterquality="n" dart="n"/>
+</stations>

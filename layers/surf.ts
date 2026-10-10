@@ -21,12 +21,17 @@
  * Moon Bay 2.2 m (7.2 ft) at 11 s, water 16.3 °C; 46237 San Francisco Bar 1.8 m at 11 s from the W (261°).
  * 46026 was in view but its newest row had no wave height (MM), so it was left out. forecast: true added 16
  * cells (1 s): 2.0-2.9 m now, up to 4.3 m by 2026-10-11 09:00 UTC.
+ * Season smoke (season: true), Oahu box [-158.4,21.2,-157.6,21.75], 14 s cold (18 files of ~1.5 MB through the
+ * rate limiter): 6 buoys, October means 2023-2025: Mokapu Point 1.62 m, Waimea Bay 1.58 m (January 2.40 m, p90
+ * 3.57 m: the north shore's winter season), Kaneohe 1.47 m, Barbers Point 1.07 m, Pearl Harbor 0.82 m.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
+import { haversineKm } from "./_shared/geo";
+import { createCache, type Cache } from "@/lib/fetch";
 import { layerColor } from "@/lib/render/palette";
 
 const LATEST_OBS = "https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt";
@@ -45,6 +50,8 @@ const M_TO_FT = 3.28084;
 
 const inputSchema = z.object({
   forecast: z.boolean().default(false),
+  season: z.boolean().default(false),
+  month: z.number().int().min(1).max(12).optional(),
 });
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -271,6 +278,205 @@ async function fetchText(
   }
 }
 
+// ---- Seasonal mode (season: true) ----
+
+/**
+ * NDBC historical standard meteorological files, one per buoy-year. The gzip is ~170 KB
+ * (https://www.ndbc.noaa.gov/data/historical/stdmet/{id}h{year}.txt.gz), but the cached fetch wrapper stores
+ * bodies as text, which would corrupt gzip, so the plain-text view NDBC serves for the same file is used
+ * (~1.5 MB, 0.2 s; checked 2026-10-10 for 51201h2025). Rows: "YY MM DD hh mm WDIR WSPD GST WVHT DPD APD MWD ...",
+ * every 30 minutes, missing values 99.00 (WVHT, DPD) and 999 (MWD). Raw files are not cached (too big for
+ * KV); each buoy's computed 12-month climatology (a few hundred bytes) is cached for a day instead.
+ */
+const HISTORY_URL = "https://www.ndbc.noaa.gov/view_text_file.php";
+export const SEASON_BUOY_CAP = 6;
+export const SEASON_YEARS = 3;
+const CLIMATOLOGY_TTL_SECONDS = 86_400;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+let climatologyCache: Cache | null = null;
+/** Tests swap in a fresh store; production uses the shared fetch cache (KV when configured). */
+export function setClimatologyCache(cache: Cache | null): void {
+  climatologyCache = cache;
+}
+function cacheStore(): Cache {
+  climatologyCache ??= createCache();
+  return climatologyCache;
+}
+
+export type MonthStats = { meanM: number; p90M: number; periodS: number | null; directionDeg: number | null; n: number };
+export type Climatology = { months: (MonthStats | null)[]; years: number[] };
+
+/** Accumulates one year file's wave rows into per-month samples (mutates `acc`). */
+export function addHistoryYear(text: string, acc: { h: number[]; p: number[]; d: number[] }[]): void {
+  for (const line of text.split(/\r?\n/)) {
+    if (line.startsWith("#") || line.trim() === "") continue;
+    const t = line.trim().split(/\s+/);
+    if (t.length < 12) continue;
+    const month = Number(t[1]);
+    const h = Number(t[8]);
+    if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isFinite(h) || h >= 99 || h < 0) continue;
+    const slot = acc[month - 1];
+    slot.h.push(h);
+    const p = Number(t[9]);
+    if (Number.isFinite(p) && p > 0 && p < 99) slot.p.push(p);
+    const d = Number(t[11]);
+    if (Number.isFinite(d) && d >= 0 && d <= 360) slot.d.push(d);
+  }
+}
+
+function percentile(sorted: number[], q: number): number {
+  const i = Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1));
+  return sorted[i];
+}
+
+const round2 = (x: number) => Math.round(x * 100) / 100;
+
+/** Monthly mean and 90th-percentile wave height, mean dominant period and circular-mean direction. */
+export function climatologyFrom(acc: { h: number[]; p: number[]; d: number[] }[], years: number[]): Climatology {
+  const months = acc.map((m): MonthStats | null => {
+    if (m.h.length === 0) return null;
+    const sorted = [...m.h].sort((a, b) => a - b);
+    const meanM = m.h.reduce((s, x) => s + x, 0) / m.h.length;
+    let direction: number | null = null;
+    if (m.d.length > 0) {
+      const sx = m.d.reduce((s, x) => s + Math.sin((x * Math.PI) / 180), 0);
+      const cx = m.d.reduce((s, x) => s + Math.cos((x * Math.PI) / 180), 0);
+      direction = Math.round(((Math.atan2(sx, cx) * 180) / Math.PI + 360) % 360);
+    }
+    return {
+      meanM: round2(meanM),
+      p90M: round2(percentile(sorted, 0.9)),
+      periodS: m.p.length > 0 ? Math.round((m.p.reduce((s, x) => s + x, 0) / m.p.length) * 10) / 10 : null,
+      directionDeg: direction,
+      n: m.h.length,
+    };
+  });
+  return { months, years };
+}
+
+export type BuoyStation = { id: string; name: string; lon: number; lat: number };
+
+/**
+ * Moored buoys (type="buoy") with coordinates from activestations.xml. Fixed shore stations (tide gauges,
+ * reserves) are left out: they carry no wave sensor (in the Oahu box 6 of 12 stations were fixed).
+ */
+export function parseStationList(xml: string): BuoyStation[] {
+  const out: BuoyStation[] = [];
+  for (const m of xml.matchAll(/<station\b[^>]*>/g)) {
+    const tag = m[0];
+    const id = /\bid="([^"]*)"/.exec(tag)?.[1];
+    const name = /\bname="([^"]*)"/.exec(tag)?.[1];
+    const lat = Number(/\blat="([^"]*)"/.exec(tag)?.[1]);
+    const lon = Number(/\blon="([^"]*)"/.exec(tag)?.[1]);
+    if (!id || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    if (/\btype="([^"]*)"/.exec(tag)?.[1] !== "buoy") continue;
+    out.push({ id, name: decodeEntities(name ?? id).replace(/\s+/g, " ").trim(), lat, lon });
+  }
+  return out;
+}
+
+/** Up to SEASON_BUOY_CAP stations in the bbox, nearest its centre first. */
+export function seasonStations(stations: BuoyStation[], bbox: BBox): { chosen: BuoyStation[]; inView: number } {
+  const centre: [number, number] = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+  const inView = stations
+    .filter((s) => inBbox(s.lon, s.lat, bbox))
+    .sort((a, b) => haversineKm(centre, [a.lon, a.lat]) - haversineKm(centre, [b.lon, b.lat]));
+  return { chosen: inView.slice(0, SEASON_BUOY_CAP), inView: inView.length };
+}
+
+/** One buoy's climatology: from the day cache, else the last SEASON_YEARS complete years' files. */
+async function buoyClimatology(ctx: QueryContext, id: string, now: Date): Promise<Climatology | null> {
+  const last = now.getUTCFullYear() - 1;
+  const years = Array.from({ length: SEASON_YEARS }, (_, i) => last - SEASON_YEARS + 1 + i);
+  const key = `surf:clim:v1:${id}:${years[0]}-${last}`;
+  try {
+    const hit = await cacheStore().get(key);
+    if (hit !== null) return JSON.parse(hit) as Climatology;
+  } catch {
+    // A cache outage only costs a refetch.
+  }
+  const acc = Array.from({ length: 12 }, () => ({ h: [] as number[], p: [] as number[], d: [] as number[] }));
+  const got: number[] = [];
+  for (const year of years) {
+    try {
+      const res = await ctx.fetch(
+        `${HISTORY_URL}?filename=${encodeURIComponent(id.toLowerCase())}h${year}.txt.gz&dir=data/historical/stdmet/`,
+        { shouldCache: () => false, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) },
+      );
+      if (!res.ok) continue;
+      const text = await res.text();
+      // A missing year comes back as a short HTML/error page, not a data file.
+      if (!text.startsWith("#YY")) continue;
+      addHistoryYear(text, acc);
+      got.push(year);
+    } catch {
+      continue;
+    }
+  }
+  if (got.length === 0) return null;
+  const clim = climatologyFrom(acc, got);
+  try {
+    await cacheStore().set(key, JSON.stringify(clim), CLIMATOLOGY_TTL_SECONDS);
+  } catch {
+    // Not cached this time.
+  }
+  return clim;
+}
+
+/** A climatology point for `month` (1-12); null when the buoy has no wave data that month. */
+export function seasonFeature(station: BuoyStation, clim: Climatology, month: number): Feature<Point> | null {
+  const m = clim.months[month - 1];
+  if (m === null) return null;
+  const p: Record<string, string | number | (number | null)[]> = {
+    name: station.name,
+    stationId: station.id,
+    kind: "climatology",
+    month: MONTHS[month - 1],
+    v: m.meanM,
+    waveFt: Math.round(m.meanM * M_TO_FT * 10) / 10,
+    p90M: m.p90M,
+    years: `${clim.years[0]}-${clim.years[clim.years.length - 1]}`,
+    samples: m.n,
+    monthlyMeanM: clim.months.map((x) => (x === null ? null : x.meanM)),
+    monthlyP90M: clim.months.map((x) => (x === null ? null : x.p90M)),
+    url: `https://www.ndbc.noaa.gov/station_page.php?station=${encodeURIComponent(station.id.toLowerCase())}`,
+  };
+  if (m.periodS !== null) p.periodS = m.periodS;
+  if (m.directionDeg !== null) {
+    p.directionDeg = m.directionDeg;
+    p.directionFrom = compass(m.directionDeg);
+  }
+  return { type: "Feature", geometry: { type: "Point", coordinates: [station.lon, station.lat] }, properties: p };
+}
+
+async function querySeason(ctx: QueryContext, month: number, now: Date): Promise<LayerResult | LayerError> {
+  const citation = {
+    source: "NOAA National Data Buoy Center historical standard meteorological data (public domain)",
+    url: "https://www.ndbc.noaa.gov/historical_data.shtml",
+    retrieved: now.toISOString(),
+  };
+  const xml = await fetchText(ctx, STATIONS_XML, "NDBC station list", "surf:ndbc-stations", STATIONS_TTL_SECONDS);
+  if (!xml.ok) return { error: xml.error, hint: "upstream" };
+  const { chosen, inView } = seasonStations(parseStationList(xml.text), ctx.bbox);
+  if (chosen.length === 0) {
+    return { kind: "geojson", data: EMPTY, citation, coverageNote: "No NDBC buoys in this view to build a seasonal picture from" };
+  }
+  const features: Feature<Point>[] = [];
+  let noHistory = 0;
+  const climatologies = await Promise.all(chosen.map((station) => buoyClimatology(ctx, station.id, now)));
+  chosen.forEach((station, i) => {
+    const clim = climatologies[i];
+    const f = clim === null ? null : seasonFeature(station, clim, month);
+    if (f === null) noHistory += 1;
+    else features.push(f);
+  });
+  const notes = [`Average waves in ${MONTHS[month - 1]} over the last ${SEASON_YEARS} complete years of buoy records`];
+  if (inView > chosen.length) notes.push(`Only the ${chosen.length} buoys nearest the centre of ${inView} in view are summarised; zoom in for others`);
+  if (noHistory > 0) notes.push(`${noHistory} buoy${noHistory === 1 ? "" : "s"} had no wave history for that month`);
+  return { kind: "geojson", data: { type: "FeatureCollection", features }, citation, coverageNote: notes.join("; ") };
+}
+
 const surf = defineLayer({
   id: "surf",
   title: "Surf and waves (NOAA buoys, live)",
@@ -279,9 +485,10 @@ const surf = defineLayer({
     "Default: NOAA NDBC wave buoys in view, kind 'buoy', each with name, stationId, t (UTC time of the latest observation, usually under an hour old), v (significant wave height in metres; waveFt is the same in feet), " +
     "periodS (dominant wave period in seconds; longer period means more powerful groundswell, under about 8 s is short-period wind chop), avgPeriodS, directionDeg and directionFrom (where the waves come FROM, e.g. 'WNW'), waterTempC (°C), windMs, gustMs (m/s) and windFrom, and url (the buoy page). " +
     "Set forecast to true for Open-Meteo Marine model points on a 4 x 4 grid over the view (land cells are dropped), kind 'forecast': v is the modelled wave height now, swellM and swellPeriodS the swell part, maxNext48hM and maxAt the biggest waves in the next two days. Use it where there is no buoy or to say whether swell is building. " +
-    "Example questions: 'How big is the surf at Ocean Beach right now?', 'What is the swell period off Santa Cruz?', 'Is a bigger swell coming this weekend?'. " +
+    "Set season to true (optionally month 1-12, default this month) for what is typical this time of year instead of today: kind 'climatology', one point per buoy (the 6 nearest the view's centre), v is the mean significant wave height for that month over the last 3 complete years (metres), p90M the 90th percentile (a big day), periodS and directionFrom the usual period and swell direction, and monthlyMeanM and monthlyP90M the 12-month curves (January first) to say which season a coast is best. A cold seasonal query downloads several years of buoy files and can take 10 to 20 seconds. " +
+    "Example questions: 'How big is the surf at Ocean Beach right now?', 'What is the swell period off Santa Cruz?', 'Is a bigger swell coming this weekend?', 'Where is the surf best on Oahu this time of year?'. " +
     "Caveats: buoys sit miles offshore, so breaking waves at a beach can be bigger or much smaller depending on exposure, bathymetry and tide; significant height is the average of the highest third of waves, and sets can be about twice that; " +
-    "buoys that have not reported for 12 hours and stations without a wave sensor are left out; the forecast is a coarse model, worst near shore and in bays, and is free for non-commercial use only. " +
+    "buoys that have not reported for 12 hours and stations without a wave sensor are left out; seasonal averages describe the buoy's exposure, so a north-facing and a south-facing buoy on the same island show which shore gets the swell in each season; the forecast is a coarse model, worst near shore and in bays, and is free for non-commercial use only. " +
     "Global (NDBC plus partner buoys, mostly US waters); zoom in to under 500,000 km².",
   coverage: "global",
   license: "Public domain (NOAA NDBC); forecast from Open-Meteo Marine, CC BY 4.0, free for non-commercial use only",
@@ -292,6 +499,7 @@ const surf = defineLayer({
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();
+    if (input.season) return querySeason(ctx, input.month ?? now.getUTCMonth() + 1, now);
     const citation = {
       source: input.forecast
         ? "NOAA National Data Buoy Center latest observations (public domain); Open-Meteo Marine forecast (CC BY 4.0, non-commercial)"

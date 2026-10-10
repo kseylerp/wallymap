@@ -412,6 +412,34 @@ export function turnBetween(a: number, b: number): number {
   return d === -180 ? 180 : d;
 }
 
+/** A camera as the map state stores it (lib/render/state.ts `Viewport`). */
+type Camera = { longitude: number; latitude: number; zoom: number; pitch: number; bearing: number };
+
+function sameCamera(a: Camera, b: Camera): boolean {
+  return (
+    Math.abs(a.longitude - b.longitude) <= 1e-6 &&
+    Math.abs(a.latitude - b.latitude) <= 1e-6 &&
+    Math.abs(a.zoom - b.zoom) <= 1e-6 &&
+    Math.abs(a.pitch - b.pitch) <= 1e-6 &&
+    Math.abs(a.bearing - b.bearing) <= 1e-6
+  );
+}
+
+/**
+ * Where the camera goes when a route preview ends. Normally back to the live camera the preview began from (`camera`),
+ * flat when the map was flattened meanwhile. But when the state's viewport moved during the preview (reset map, the
+ * globe button, the agent's set_view), that newer viewport wins: the map's own viewport effect has already started
+ * easing there, and rising back to the trail would undo the reset and write the trail back into the share link.
+ */
+export function previewExitCamera(
+  restore: { camera: Camera; viewport: Camera },
+  current: Camera,
+  flattened: boolean,
+): { camera: Camera; reset: boolean } {
+  if (!sameCamera(current, restore.viewport)) return { camera: current, reset: true };
+  return { camera: { ...restore.camera, pitch: flattened ? 0 : restore.camera.pitch }, reset: false };
+}
+
 function hexToRgb(hex: string): [number, number, number] {
   const n = Number.parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];

@@ -36,6 +36,7 @@ import {
   PREVIEW_DIVE_MS,
   PREVIEW_OVERVIEW_MS,
   PREVIEW_RISE_MS,
+  previewExitCamera,
   smoothBearing,
   speedKmPerMin,
 } from "@/lib/render/wally/playback";
@@ -67,6 +68,8 @@ const HEAT_PICK_RADIUS_PX = 10;
 /** Clicking a cluster blob zooms in this many levels (capped at the map's max zoom). */
 const CLUSTER_ZOOM_STEP = 1;
 const CLUSTER_EASE_MS = 450;
+/** A new viewport from the state (the agent's set_view, reset map, the globe button) eases in over this long. */
+const VIEWPORT_EASE_MS = 800;
 
 /** Imperative camera controls for the on-map buttons. */
 export type MapHandle = {
@@ -328,8 +331,9 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
   const followingRef = useRef(false);
   // The preview's position and settings as the animation loop sees them (see the playback effects below).
   const liveRef = useRef({ fraction: 0, playing: false, speed: 1, lastSent: -1, dirty: false });
-  // The camera (and padding) from before the first of back-to-back previews, kept until a real stop eases back.
-  const restoreRef = useRef<{ camera: Viewport; padding: mapboxgl.PaddingOptions } | null>(null);
+  // The camera (and padding) from before the first of back-to-back previews, kept until a real stop eases back, and
+  // the state's viewport then, so a stop can tell that something (reset map, the globe button) moved it meanwhile.
+  const restoreRef = useRef<{ camera: Viewport; padding: mapboxgl.PaddingOptions; viewport: Viewport } | null>(null);
   // The route a preview is following right now (null between a cleanup and the next start).
   const activePreviewRef = useRef<string | null>(null);
 
@@ -510,7 +514,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       zoom: target.zoom,
       pitch: target.pitch,
       bearing: target.bearing,
-      duration: 800,
+      duration: VIEWPORT_EASE_MS,
     });
   }, [state.viewport]);
 
@@ -565,7 +569,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     const line = route.line;
     const live = liveRef.current;
     // Switching straight to another preview keeps the camera from before the first one.
-    restoreRef.current ??= { camera: cameraOf(map), padding: map.getPadding() };
+    restoreRef.current ??= { camera: cameraOf(map), padding: map.getPadding(), viewport: stateRef.current.viewport };
     activePreviewRef.current = routeId;
     followingRef.current = true;
     // Keep the followed point out from under the preview dock, the chat panel or sheet, and the data console while it
@@ -893,16 +897,23 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
         dockCompactStore.set(false);
         if (!restore) return;
         // Never leave the camera in the chase: rise back to the camera the preview began from, tilt included (a map
-        // flattened meanwhile comes back flat).
+        // flattened meanwhile comes back flat). A viewport set during the preview (reset map ends the preview and
+        // moves the viewport in one commit) wins instead: this runs after the viewport effect's ease, so it eases
+        // there itself, with the preview's padding undone.
+        const exit = previewExitCamera(restore, stateRef.current.viewport, stateRef.current.flattened);
+        if (exit.reset) lastCameraRef.current = exit.camera;
+        // Interrupting the viewport effect's ease fires `moveend` at once; that half-way camera is not a report.
+        followingRef.current = true;
         map.easeTo({
-          center: [restore.camera.longitude, restore.camera.latitude],
-          zoom: restore.camera.zoom,
-          bearing: restore.camera.bearing,
-          pitch: stateRef.current.flattened ? 0 : restore.camera.pitch,
+          center: [exit.camera.longitude, exit.camera.latitude],
+          zoom: exit.camera.zoom,
+          bearing: exit.camera.bearing,
+          pitch: exit.camera.pitch,
           padding: restore.padding,
-          duration: PREVIEW_RISE_MS,
+          duration: exit.reset ? VIEWPORT_EASE_MS : PREVIEW_RISE_MS,
           easing: easeInOut,
         });
+        followingRef.current = false;
       });
     };
   }, [playbackRouteId]);

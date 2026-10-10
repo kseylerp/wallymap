@@ -2,6 +2,7 @@ import type { Feature } from "geojson";
 import { describe, expect, it } from "vitest";
 import { isMapReset, reduce } from "@/lib/render/reducer";
 import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
+import { previewExitCamera } from "@/lib/render/wally/playback";
 
 const fire = (name: string, year: number): Feature => ({
   type: "Feature",
@@ -99,5 +100,19 @@ describe("reset_map", () => {
     expect(isMapReset(initialMapState)).toBe(true);
     expect(isMapReset(run(initialMapState, { type: "set_basemap", basemap: "satellite" }))).toBe(true);
     expect(isMapReset(run(initialMapState, { type: "set_view", viewport: { zoom: 6 } }))).toBe(false);
+  });
+
+  it("ends a route preview on the globe, not back on the trail it started from", () => {
+    // MapCanvas keeps the live camera and the state's viewport from when the preview began; the preview's exit runs
+    // after the viewport effect in the commit that ends it, so it must not ease back to the trail after a reset.
+    const trail = { longitude: -119.53, latitude: 37.73, zoom: 16.09, pitch: 60, bearing: 30 };
+    const restore = { camera: trail, viewport: busy.viewport };
+    const reset = run(busy, { type: "reset_map" });
+    expect(previewExitCamera(restore, reset.viewport, reset.flattened)).toEqual({ camera: initialMapState.viewport, reset: true });
+    // Clear all (and the preview's own ×) leave the viewport alone: then the camera rises back to where it was.
+    const cleared = run(busy, { type: "clear_layers" });
+    expect(cleared.playback).toBeUndefined();
+    expect(previewExitCamera(restore, cleared.viewport, false)).toEqual({ camera: trail, reset: false });
+    expect(previewExitCamera(restore, run(busy, { type: "preview_stop" }).viewport, true)).toEqual({ camera: { ...trail, pitch: 0 }, reset: false });
   });
 });

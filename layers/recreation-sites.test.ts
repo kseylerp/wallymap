@@ -1,0 +1,200 @@
+import { describe, expect, it, vi } from "vitest";
+import type { FeatureCollection } from "geojson";
+import type { CachedFetch } from "@/lib/fetch";
+import { runLayer } from "@/lib/layers/run";
+import layer, {
+  BLM_FACILITIES_URL,
+  BLM_SITES_URL,
+  USFS_URL,
+  dedupe,
+  kindFromName,
+  normalizeBlmFacilities,
+  normalizeBlmSites,
+  normalizeUsfs,
+} from "./recreation-sites";
+import usfsRaw from "./__fixtures__/recreation-sites.usfs.tahoe.json";
+import facilitiesRaw from "./__fixtures__/recreation-sites.blm-facilities.moab.json";
+import sitesRaw from "./__fixtures__/recreation-sites.blm-sites.moab.json";
+
+const usfsFc = usfsRaw as unknown as FeatureCollection;
+const facilitiesFc = facilitiesRaw as unknown as FeatureCollection;
+const sitesFc = sitesRaw as unknown as FeatureCollection;
+
+/** Fixtures were recorded for Lake Tahoe (USFS) and Moab (BLM); the stub answers each service with its own. */
+const BBOX: [number, number, number, number] = [-120.2, 38.8, -119.8, 39.2];
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status });
+}
+
+function ctx(stub: ReturnType<typeof vi.fn>, cacheKey?: string, bbox = BBOX) {
+  return { bbox, zoom: 10, env: {}, fetch: stub as unknown as CachedFetch, cacheKey };
+}
+
+function routed(overrides: { usfs?: () => Response; facilities?: () => Response; sites?: () => Response } = {}) {
+  return vi.fn(async (url: string) => {
+    if (url.startsWith(`${USFS_URL}/query`)) return overrides.usfs ? overrides.usfs() : json(usfsFc);
+    if (url.startsWith(`${BLM_FACILITIES_URL}/query`)) return overrides.facilities ? overrides.facilities() : json(facilitiesFc);
+    if (url.startsWith(`${BLM_SITES_URL}/query`)) return overrides.sites ? overrides.sites() : json(sitesFc);
+    throw new Error(`unexpected url ${url}`);
+  });
+}
+
+function geojson(r: Awaited<ReturnType<typeof layer.query>>) {
+  if (!("kind" in r) || r.kind !== "geojson") throw new Error(`expected geojson, got ${JSON.stringify(r)}`);
+  return r;
+}
+
+describe("kindFromName", () => {
+  it.each([
+    ["Grandstaff Campground", "campground"],
+    ["Hunter Canyon Trailhead", "trailhead"],
+    ["Take Out Boat Ramp", "water access"],
+    ["Lone Mesa Viewpoint", "viewpoint"],
+    ["Moonflower Canyon Day Use Area", "day use area"],
+    ["Moab Visitor Center", "visitor center"],
+    ["Moab Rim Trail", "trail"],
+    ["Sand Flats Recreation Area", "recreation area"],
+  ])("%s is %s", (name, kind) => expect(kindFromName(name)).toBe(kind));
+});
+
+describe("normalizeUsfs", () => {
+  const sites = normalizeUsfs(usfsFc);
+
+  it("merges the one-row-per-activity view into one point per area", () => {
+    expect(usfsFc.features.length).toBe(112);
+    expect(sites).toHaveLength(12);
+    const names = sites.map((s) => s.properties.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("reads the site type from the primary marker group, with trailhead and campground names winning", () => {
+    const kindOf = (name: string) => sites.find((s) => s.properties.name === name)?.properties.kind;
+    expect(kindOf("Nevada Beach Campground and Day Use Pavilion")).toBe("campground");
+    expect(kindOf("Zephyr Cove Resort")).toBe("campground");
+    expect(kindOf("Kingsbury South Trailhead")).toBe("trailhead");
+    expect(kindOf("Baldwin Beach")).toBe("water access");
+    expect(kindOf("Genoa Peak Road 14N32")).toBe("OHV area");
+    expect(kindOf("Skunk Harbor")).toBe("trail");
+    expect(kindOf("Zephyr Cove Stables")).toBe("recreation area");
+    // The generic "Intermediate Parent Group" marker falls back to a plain recreation area.
+    expect(kindOf("Lake Tahoe - East Shore")).toBe("recreation area");
+  });
+
+  it("keeps the forest, agency, link and merged activities", () => {
+    const nevada = sites.find((s) => s.properties.name === "Nevada Beach Campground and Day Use Pavilion");
+    expect(nevada?.properties).toMatchObject({ agency: "USFS", forest: "Lake Tahoe Basin Management Unit" });
+    expect(String(nevada?.properties.activities)).toContain("Campground Camping");
+    expect(String(nevada?.properties.activities).split(", ").length).toBeGreaterThan(3);
+    expect(String(nevada?.properties.url)).toMatch(/^https:\/\/www\.fs\.usda\.gov\//);
+  });
+
+  it("keeps status only when it is open or closed and skips rows without a point", () => {
+    for (const s of sites) expect(["open", "closed", undefined]).toContain(s.properties.status);
+    const out = normalizeUsfs({
+      type: "FeatureCollection",
+      features: [{ type: "Feature", geometry: null as never, properties: { recareaid: 1, recareaname: "Ghost" } }],
+    });
+    expect(out).toEqual([]);
+  });
+});
+
+describe("normalizeBlm", () => {
+  it("drops permit, pass and kiosk rows and types the rest", () => {
+    const facilities = normalizeBlmFacilities(facilitiesFc);
+    const dropped = facilitiesFc.features.filter((f) =>
+      ["Permit", "Kiosk", "Activity Pass", "Ticket Facility", "Timed Entry", "Venue Reservations"].includes(
+        String(f.properties?.FacilityTypeDescription),
+      ),
+    ).length;
+    expect(dropped).toBeGreaterThan(0);
+    expect(facilities).toHaveLength(facilitiesFc.features.length - dropped);
+    const grandstaff = facilities.find((s) => s.properties.name === "Grandstaff Campground");
+    expect(grandstaff?.properties).toMatchObject({ kind: "campground", agency: "BLM", state: "UT" });
+    expect(String(grandstaff?.properties.url)).toContain("blm.gov");
+    expect(facilities.find((s) => s.properties.name === "Hunter Canyon Trailhead")?.properties.kind).toBe("trailhead");
+  });
+
+  it("types recreation sites by name and lower-cases their activities", () => {
+    const sites = normalizeBlmSites(sitesFc);
+    expect(sites).toHaveLength(sitesFc.features.length);
+    expect(sites.find((s) => s.properties.name === "Portal Trail")?.properties).not.toHaveProperty("activities");
+    const rim = sites.find((s) => s.properties.name === "Moab Rim Trail");
+    expect(rim?.properties).toMatchObject({ kind: "trail", agency: "BLM", activities: "hiking, off highway vehicle" });
+  });
+
+  it("merges the same name at the same place and keeps the first", () => {
+    const merged = dedupe([...normalizeBlmFacilities(facilitiesFc), ...normalizeBlmSites(sitesFc)]);
+    const all = normalizeBlmFacilities(facilitiesFc).length + normalizeBlmSites(sitesFc).length;
+    expect(merged.length).toBeLessThan(all);
+    const names = merged.map((s) => `${s.properties.name}|${s.geometry.coordinates[0].toFixed(3)}`);
+    expect(new Set(names).size).toBe(names.length);
+  });
+});
+
+describe("recreation-sites layer", () => {
+  it("declares US coverage, public domain license, no env, an empty input and the cluster hint", () => {
+    expect(layer.id).toBe("recreation-sites");
+    expect(layer.coverage).toBe("us");
+    expect(layer.license).toContain("Public domain");
+    expect(layer.requiredEnv).toEqual([]);
+    expect(layer.maxAreaKm2).toBe(10_000);
+    expect(layer.input.parse({})).toEqual({});
+    expect(layer.style).toMatchObject({ geometry: "point", cluster: true });
+  });
+
+  it("queries the three services and merges them with distinct cache suffixes", async () => {
+    const stub = routed();
+    const r = geojson(await layer.query(ctx(stub, "recreation-sites:key"), {}));
+    expect(stub).toHaveBeenCalledTimes(3);
+    const keys = (stub.mock.calls as unknown as [string, { cacheKey?: string }][]).map((c) => c[1].cacheKey);
+    expect(new Set(keys).size).toBe(3);
+    expect(keys.every((k) => k?.startsWith("recreation-sites:key:"))).toBe(true);
+    const agencies = new Set(r.data.features.map((f) => f.properties?.agency));
+    expect(agencies).toEqual(new Set(["USFS", "BLM"]));
+    expect(r.data.features.length).toBeGreaterThan(40);
+    expect(r.coverageNote).toBeUndefined();
+    expect(r.citation.source).toContain("Forest Service");
+  });
+
+  it("says when the services capped their reply", async () => {
+    const stub = routed({ usfs: () => json({ ...usfsFc, exceededTransferLimit: true }) });
+    const r = geojson(await layer.query(ctx(stub), {}));
+    expect(r.coverageNote).toContain("2,000 records");
+  });
+
+  it("keeps the sites that did load when one service fails", async () => {
+    const stub = routed({ usfs: () => new Response("down", { status: 500 }) });
+    const r = geojson(await layer.query(ctx(stub), {}));
+    expect(r.data.features.every((f) => f.properties?.agency === "BLM")).toBe(true);
+    expect(r.coverageNote).toBe("Forest Service did not respond, so its sites are missing");
+  });
+
+  it("returns a hinted error when every service fails", async () => {
+    const stub = vi.fn(async () => new Response("down", { status: 503 }));
+    expect(await layer.query(ctx(stub), {})).toEqual({
+      error: "ArcGIS service returned 503",
+      hint: "upstream",
+    });
+  });
+
+  it("returns an empty result with a note outside the US without calling anything", async () => {
+    const stub = routed();
+    const r = geojson(await layer.query(ctx(stub, undefined, [10, 45, 10.2, 45.2]), {}));
+    expect(r.data.features).toEqual([]);
+    expect(r.coverageNote).toBe("No data outside the United States");
+    expect(stub).not.toHaveBeenCalled();
+  });
+
+  it("says so when the area has no sites", async () => {
+    const empty = { type: "FeatureCollection", features: [] };
+    const stub = routed({ usfs: () => json(empty), facilities: () => json(empty), sites: () => json(empty) });
+    const r = geojson(await layer.query(ctx(stub), {}));
+    expect(r.coverageNote).toBe("No Forest Service or BLM recreation sites in this area");
+  });
+
+  it("rejects a view over the area cap through runLayer", async () => {
+    const r = await runLayer("recreation-sites", { bbox: [-122, 36, -118, 40] });
+    expect(r.status).toBe(422);
+  });
+});

@@ -34,7 +34,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "climbing", synonyms: ["climbing", "bouldering", "crag", "rock climbing", "sport climbing"], notes: "crags and boulders, v = route count" },
   { layerId: "paddling", synonyms: ["whitewater", "kayaking", "canoe", "rafting", "rapids", "put-in", "paddling"], notes: "rapids and canoe routes, v = class 1-6; check streamflow" },
   { layerId: "outdoor-features", synonyms: ["hut", "shelter", "water spring", "water source", "viewpoint", "cave", "hot spring", "waterfall", "summit", "saddle", "mountain pass"], notes: "backcountry points, filter by kind; peaks have v = elevation" },
-  { layerId: "lakes", synonyms: ["lake", "lake depth", "how deep is the lake", "reservoir", "tarn"], notes: "named lakes and reservoirs, v = max depth in metres, null when not recorded; use name to find one lake" },
+  { layerId: "lakes", synonyms: ["lake", "lake depth", "how deep is the lake", "tarn"], notes: "named lakes and reservoirs, v = max depth in metres, null when not recorded; use name to find one lake" },
   { layerId: "gbif-occurrences", synonyms: ["occurrence records", "range map", "specimens", "museum records"], notes: "worldwide species records by Latin name; density true for a world map; see species" },
   { layerId: "critical-habitat", synonyms: ["endangered species habitat", "critical habitat", "threatened species", "endangered"], notes: "USFWS designated habitat; name a species to filter" },
   { layerId: "grazing-allotments", synonyms: ["cattle", "grazing", "ranching", "wild horses", "burros", "allotment"], notes: "BLM grazing areas and wild horse and burro herds" },
@@ -67,6 +67,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "sequoia-groves", synonyms: ["sequoia", "giant sequoia grove"], notes: "Sierra Nevada groves; also query sequoia-mortality" },
   { layerId: "sea-level-trends", synonyms: ["sea level", "rising seas"], notes: "tide-gauge trend, v = mm/yr" },
   { layerId: "sequoia-mortality", synonyms: ["sequoia fire deaths", "sequoias killed"], notes: "trees alive or dead after the 2020 and 2021 Sierra fires" },
+  { layerId: "reservoir-levels", synonyms: ["reservoir", "reservoir level", "Lake Powell", "Lake Mead", "lake level", "how full is the lake"], notes: "major western reservoirs, v = storage acre-feet; elevationFt is the quoted level, pctFull, series; provisional" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

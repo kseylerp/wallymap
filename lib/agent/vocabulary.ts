@@ -72,6 +72,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "old-growth", synonyms: ["old growth", "mature forest"], notes: "federal old-growth and mature forest per fireshed (about 250k acres), acres" },
   { layerId: "carbon-flux", synonyms: ["carbon", "carbon sink", "forest carbon"], notes: "forest CO2 sink or source tiles; product net-flux, emissions, removals" },
   { layerId: "condor-range", synonyms: ["condor", "California condor"], notes: "current and early-1800s range outlines, not sightings" },
+  { layerId: "dams", synonyms: ["dam", "dams", "hydropower", "dam safety"], notes: "US National Inventory of Dams, v = storage acre-feet, t = year built (scrubber plays by decade); hazard is consequence, not safety" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

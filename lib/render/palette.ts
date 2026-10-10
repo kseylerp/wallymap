@@ -103,6 +103,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "old-growth": "natural",
   "carbon-flux": "raster",
   "condor-range": "natural",
+  "dams": "data",
 };
 
 /** Layers that return raster tiles: the imagery carries its own colors. */

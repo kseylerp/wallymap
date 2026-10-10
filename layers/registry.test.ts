@@ -47,10 +47,16 @@ describe("palette roles per layer", () => {
     expect(layerColor("fire-detections")).toBe("#F57272");
     for (const id of ["wilderness", "public-lands", "physical-regions"]) expect(layerColor(id)).toBe("#9FB693");
     for (const id of ["osm-trails", "forest-roads", "campsites", "snowpack", "streamflow"]) expect(layerColor(id)).toBe("#3A3A3C");
+    for (const id of ["earthquakes", "smoke", "fire-weather", "weather-alerts", "drought"]) expect(layerColor(id)).toBe("#F57272");
+    for (const id of ["glaciers", "critical-habitat"]) expect(layerColor(id)).toBe("#9FB693");
     expect(layerColor("unknown-layer")).toBe("#3A3A3C");
   });
 
   it("lists the raster tile layers, which draw their own imagery", () => {
-    expect([...RASTER_TILE_LAYERS].sort()).toEqual(["fire-hazard", "flood-zones", "forest-alerts", "forest-loss", "night-lights", "population", "protected-areas-world"]);
+    expect([...RASTER_TILE_LAYERS].sort()).toEqual([
+      "burn-severity", "disturbance", "fire-hazard", "flood-extent", "flood-zones", "forest-alerts", "forest-loss", "geology",
+      "greenness", "land-cover", "night-lights", "phenology", "population", "protected-areas-world", "sea-ice", "snow-cover",
+      "surface-water",
+    ]);
   });
 });

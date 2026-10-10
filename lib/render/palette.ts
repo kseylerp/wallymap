@@ -78,6 +78,23 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   lakes: "data",
   fishing: "data",
   "weather-alerts": "hazard",
+  earthquakes: "hazard",
+  smoke: "hazard",
+  "fire-weather": "hazard",
+  "recreation-sites": "data",
+  peaks: "data",
+  "wikipedia-nearby": "data",
+  "geologic-unit": "data",
+  geology: "raster",
+  greenness: "raster",
+  "snow-cover": "raster",
+  "land-cover": "raster",
+  "surface-water": "raster",
+  "flood-extent": "raster",
+  disturbance: "raster",
+  "sea-ice": "raster",
+  phenology: "raster",
+  "burn-severity": "raster",
 };
 
 /** Layers that return raster tiles: the imagery carries its own colors. */

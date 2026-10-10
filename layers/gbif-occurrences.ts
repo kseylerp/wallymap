@@ -45,7 +45,6 @@ const CACHE_TTL_SECONDS = 6 * 3600;
 const MATCH_TTL_SECONDS = 7 * 86_400;
 const DEFAULT_YEARS_BACK = 10;
 
-const currentYear = () => new Date().getUTCFullYear();
 
 const inputSchema = z.object({
   scientificName: z.string().trim().min(1).max(120).optional(),

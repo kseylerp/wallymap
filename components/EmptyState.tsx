@@ -9,16 +9,25 @@ export const EXAMPLE_QUESTIONS = [
   "What wildlife has been spotted around Banff this year?",
 ] as const;
 
-type EmptyStateProps = { onPick: (question: string) => void };
+type EmptyStateProps = { onPick: (question: string) => void; onClose?: () => void };
+
+/** The hairline ×, as in the data console: a 16px glyph whose invisible ::after reaches 6px past it, so the hit area is 28px. */
+const CLOSE_BUTTON =
+  "absolute top-3 right-3 grid size-4 place-items-center text-[16px] leading-none text-ink-muted transition-colors duration-150 hover:text-ink after:absolute after:-inset-1.5 after:content-[''] md:top-5 md:right-5";
 
 /** The welcome card centered over the globe; picking a question sends it and the chat panel takes over. */
-export function EmptyState({ onPick }: EmptyStateProps) {
+export function EmptyState({ onPick, onClose }: EmptyStateProps) {
   return (
     <div
       data-testid="empty-state"
-      className="glass-strong rise-in pointer-events-auto w-full max-w-[600px] rounded-large p-5 md:p-7"
+      className="glass-strong rise-in pointer-events-auto relative w-full max-w-[600px] rounded-large p-5 md:p-7"
       style={{ animationDelay: "120ms" }}
     >
+      {onClose && (
+        <button type="button" onClick={onClose} aria-label="Close suggestions" title="Close suggestions" className={CLOSE_BUTTON}>
+          ×
+        </button>
+      )}
       {/* Text only: the logo lives in the corner map pill. */}
       <h2 className="font-serif text-[20px] leading-tight font-medium tracking-normal text-ink">WallyMap</h2>
       <p className="mt-2 text-[14px] leading-snug text-ink-muted">

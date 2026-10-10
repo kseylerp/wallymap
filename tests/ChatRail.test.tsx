@@ -283,4 +283,24 @@ describe("ChatRail suggestions card and the data console", () => {
     );
     expect(screen.getByTestId("empty-state-overlay").className).toContain("max-md:hidden");
   });
+
+  it("hides the card when suggestions are off, and the × and the first message report back", () => {
+    const onClose = vi.fn();
+    const onSeen = vi.fn();
+    const { rerender } = render(
+      <ChatRail catalog={{}} renderOps={[]} getCanvasSize={canvas} onActions={noop} collapsed={false} onToggle={noop} suggestionsOpen={false} />,
+    );
+    expect(screen.queryByTestId("empty-state-overlay")).toBeNull();
+    rerender(
+      <ChatRail catalog={{}} renderOps={[]} getCanvasSize={canvas} onActions={noop} collapsed={false} onToggle={noop} onSuggestionsClose={onClose} onSuggestionsSeen={onSeen} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close suggestions" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSeen).not.toHaveBeenCalled();
+    chat.messages = [{ id: "1", role: "user", parts: [{ type: "text", text: "hi" }] }];
+    rerender(
+      <ChatRail catalog={{}} renderOps={[]} getCanvasSize={canvas} onActions={noop} collapsed={false} onToggle={noop} onSuggestionsClose={onClose} onSuggestionsSeen={onSeen} />,
+    );
+    expect(onSeen).toHaveBeenCalled();
+  });
 });

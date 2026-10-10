@@ -8,6 +8,7 @@ import { LayerStack, selectionSwatch } from "@/components/LayerStack";
 import { MapCanvas, type MapHandle } from "@/components/MapCanvas";
 import { MapControls } from "@/components/MapControls";
 import { MapPills } from "@/components/MapPills";
+import { useSuggestionsCard } from "@/components/useSuggestionsCard";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { sendChat } from "@/lib/agent/chatBus";
 import { bboxToViewport, type Padding } from "@/lib/render/deck";
@@ -168,6 +169,7 @@ export function App() {
     }
   }
 
+  const suggestions = useSuggestionsCard();
   const hasLayers = Object.keys(state.layers).length > 0;
   const layerPanelOpen = layersOpen && hasLayers;
   const canCompare = useMemo(() => Object.values(state.layers).some(isComparable), [state.layers]);
@@ -227,6 +229,8 @@ export function App() {
             onCompare={!layerPanelOpen && (canCompare || state.compare) ? openCompare : undefined}
             comparing={state.compare !== undefined}
             onResetMap={resetMap}
+            suggestionsOpen={suggestions.open}
+            onToggleSuggestions={suggestions.toggle}
           />
         </div>
       </header>
@@ -283,6 +287,9 @@ export function App() {
         collapsed={collapsed}
         onToggle={toggle}
         layerPanelOpen={layerPanelOpen}
+        suggestionsOpen={suggestions.open}
+        onSuggestionsClose={suggestions.close}
+        onSuggestionsSeen={suggestions.markSeen}
       />
     </div>
   );

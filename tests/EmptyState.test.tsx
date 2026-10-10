@@ -18,3 +18,19 @@ describe("EmptyState", () => {
     expect(onPick).toHaveBeenCalledWith(EXAMPLE_QUESTIONS[0]);
   });
 });
+
+describe("EmptyState close button", () => {
+  it("shows a hairline × labelled Close suggestions that calls onClose", () => {
+    const onClose = vi.fn();
+    render(<EmptyState onPick={() => {}} onClose={onClose} />);
+    const close = screen.getByRole("button", { name: "Close suggestions" });
+    expect(close.textContent).toBe("×");
+    fireEvent.click(close);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("has no × without a close handler", () => {
+    render(<EmptyState onPick={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Close suggestions" })).toBeNull();
+  });
+});

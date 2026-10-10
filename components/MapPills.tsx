@@ -33,6 +33,9 @@ type MapPillsProps = {
   comparing?: boolean;
   /** The logo was pressed: reset the map and its filters (the app decides what that means). */
   onResetMap?: () => void;
+  /** The suggestions card shows; the "i" pill reads pressed while it does. The pill shows when the toggle is set. */
+  suggestionsOpen?: boolean;
+  onToggleSuggestions?: () => void;
 };
 
 /** Every map pill: 36px, the off-white surface with ink text, a hairline rim and a barely-there shadow. */
@@ -61,6 +64,8 @@ export function MapPills({
   onCompare,
   comparing = false,
   onResetMap,
+  suggestionsOpen = false,
+  onToggleSuggestions,
 }: MapPillsProps) {
   // Export is two steps: the pill opens a confirm that lists the files and their size; only its Export button downloads.
   const [pending, setPending] = useState<ExportBundle | null>(null);
@@ -155,6 +160,21 @@ export function MapPills({
           Export
         </button>
       </div>
+
+      {onToggleSuggestions && (
+        // A single serif "i" (text, not an icon font), the size of the logo pill; it opens or closes the suggestions card.
+        <button
+          type="button"
+          aria-label="Suggestions"
+          title="Suggestions"
+          aria-pressed={suggestionsOpen}
+          onClick={onToggleSuggestions}
+          className={`${PILL} rise-in size-9 justify-center font-serif text-[18px] leading-none transition-colors duration-150 ease-out hover:bg-mist/70`}
+          style={{ animationDelay: "240ms" }}
+        >
+          i
+        </button>
+      )}
 
       {onCompare && (
         <div className={`${PILL} rise-in p-1`}>

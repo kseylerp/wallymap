@@ -42,6 +42,12 @@ type ChatRailProps = {
   onToggle: () => void;
   /** The layer panel is open on the right, so fitted results must stay left of it. */
   layerPanelOpen?: boolean;
+  /** Whether the suggestions card may show while the chat is empty (App: first visit, or the "i" pill). Default on. */
+  suggestionsOpen?: boolean;
+  /** The card's × was pressed. */
+  onSuggestionsClose?: () => void;
+  /** The first message went out, so the card counts as seen. */
+  onSuggestionsSeen?: () => void;
 };
 
 type ToolPart = Extract<UIMessage["parts"][number], { toolCallId: string }>;
@@ -313,6 +319,9 @@ export function ChatRail({
   collapsed,
   onToggle,
   layerPanelOpen = false,
+  suggestionsOpen = true,
+  onSuggestionsClose,
+  onSuggestionsSeen,
 }: ChatRailProps) {
   // Resend query results as summaries (the map already has the full data, and the route caps request size), and
   // send the map view as it is at send time, through a reader the effect below keeps current.
@@ -383,6 +392,11 @@ export function ChatRail({
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages, error]);
 
+  // Any first message, however it was sent (the card, the composer, "Ask about this"), counts as having seen the card.
+  useEffect(() => {
+    if (hasMessages) onSuggestionsSeen?.();
+  }, [hasMessages, onSuggestionsSeen]);
+
   const send = useCallback(
     (text: string) => {
       const trimmed = text.trim();
@@ -441,14 +455,14 @@ export function ChatRail({
 
   return (
     <>
-      {!hasMessages && (
+      {!hasMessages && suggestionsOpen && (
         // Leaves room at the bottom for the input pill. Below the data console (z-20, components/App.tsx), and on a
         // phone hidden while the console is open: there the card would cover all but the console's top row.
         <div
           data-testid="empty-state-overlay"
           className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center pt-[calc(var(--safe-top)+4rem)] pr-[calc(var(--safe-right)+1rem)] pb-[calc(var(--safe-bottom)+6rem)] pl-[calc(var(--safe-left)+1rem)] md:pb-[calc(var(--safe-bottom)+5rem)]${layerPanelOpen ? " max-md:hidden" : ""}`}
         >
-          <EmptyState onPick={send} />
+          <EmptyState onPick={send} onClose={onSuggestionsClose} />
         </div>
       )}
 

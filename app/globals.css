@@ -8,7 +8,7 @@
   /* Wally off-white: scaffold #FAF9F5, surface #ECEAE7, deeper #E4E1DC. The imagery is the color. */
   --paper: #faf9f5;
   --cream: #eceae7;
-  --ink: #1a1a1a;
+  --ink: #1f1f1f;
   /* 4.6:1 on --glass-strong even over black imagery (#7a7a76 measured 3.4:1 there). */
   --ink-muted: #66665f;
   --line: rgba(0, 0, 0, 0.07);
@@ -16,11 +16,11 @@
 
   /* Wally purple: links, the route gradient and small accents only. Buttons and active controls are ink. */
   --accent: #6e5bff;
-  --accent-deep: #5240f2;
   /* Primary buttons and active control states: ink with white text, in both themes. */
   --button-primary: var(--ink);
   --button-primary-text: #ffffff;
-  /* Coral: route start, progress end. Sage: selection rims, chip tint at 0.5. */
+  /* Map palette (lib/render/palette.ts, spec §11): pink (coral) route start, compare B and hazards; purple selection,
+     the time window and compare A; sage protected land; dark grey data lines and outlines. */
   --coral: #f57272;
   --sage: #9fb693;
   --sage-tint: rgba(159, 182, 147, 0.5);
@@ -31,8 +31,8 @@
   --info: #5b9bd5;
   --caution: #ff9500;
 
-  --slate: #2f3a44;
-  --moss: #5e7d5a;
+  --slate: #3a3a3c;
+  --dark-grey: #3a3a3c;
   /* Error titles only. */
   --danger: #b42318;
 
@@ -84,7 +84,6 @@
   --color-ink-muted: var(--ink-muted);
   --color-line: var(--line);
   --color-accent: var(--accent);
-  --color-accent-deep: var(--accent-deep);
   --color-primary: var(--button-primary);
   --color-on-primary: var(--button-primary-text);
   --color-coral: var(--coral);
@@ -95,7 +94,7 @@
   --color-info: var(--info);
   --color-caution: var(--caution);
   --color-slate: var(--slate);
-  --color-moss: var(--moss);
+  --color-dark-grey: var(--dark-grey);
   --color-mist: var(--mist);
   --color-danger: var(--danger);
   --color-glass: var(--glass);
@@ -682,8 +681,9 @@ textarea:focus-visible {
 }
 
 /*
- * The time scrubber (components/TimeScrubber.tsx): ink histogram bars (60% inside the window, faint outside), the
- * window as a light ink wash between two 1px ink handles with small paper grips, and text-only controls.
+ * The time scrubber (components/TimeScrubber.tsx): ink histogram bars, faint outside the window and purple inside it;
+ * the window as a light purple wash between two 1px purple handles (the playhead) with small paper grips; text-only
+ * controls. Purple is the palette's time-window color (spec §11).
  */
 .time-bar {
   min-height: 1px;
@@ -694,13 +694,14 @@ textarea:focus-visible {
     height 150ms var(--ease-out);
 }
 .time-bar[data-in-window] {
-  opacity: 0.6;
+  background: var(--accent);
+  opacity: 0.75;
 }
 .time-track {
   border-bottom: 1px solid color-mix(in srgb, var(--ink) 35%, transparent);
 }
 .time-band {
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   outline-offset: 0;
   transition:
     left 150ms var(--ease-out),
@@ -719,7 +720,7 @@ textarea:focus-visible {
   bottom: 0;
   left: 6px;
   width: 1px;
-  background: var(--ink);
+  background: var(--accent);
 }
 .time-handle::after {
   content: "";
@@ -729,7 +730,7 @@ textarea:focus-visible {
   width: 6px;
   height: 12px;
   margin-top: -6px;
-  border: 1px solid var(--ink);
+  border: 1px solid var(--accent);
   border-radius: 2px;
   background: var(--paper);
 }

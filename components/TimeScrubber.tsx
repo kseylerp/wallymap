@@ -28,9 +28,9 @@ const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 h
 
 /**
  * The time scrubber at the top of the data console: a histogram of features per bucket (ink bars, the window's
- * bars darker), a window with two handles (drag them, or arrow keys on each; drag or arrow keys on the window
+ * bars purple), a window with two handles (drag them, or arrow keys on each; drag or arrow keys on the window
  * itself move it whole), play/pause (space anywhere in the scrubber), step back and forward, slide or cumulative mode,
- * the window's dates, and × to clear. Monochrome, text only. It only shows and changes state: the play timer runs in
+ * the window's dates, and × to clear. Text only; the window and its handles are purple (palette §11). It only shows and changes state: the play timer runs in
  * the app (lib/render/useTimePlay.ts), so play goes on while the panel is closed.
  */
 export function TimeScrubber({ time, dispatch }: TimeScrubberProps) {

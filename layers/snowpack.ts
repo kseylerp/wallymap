@@ -197,7 +197,7 @@ async function fetchRows(
   ttlSeconds: number,
 ): Promise<Fetched> {
   try {
-    const res = await ctx.fetch(url, { cacheKey, ttlSeconds, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
+    const res = await ctx.fetch(url, { cacheKey, ttlSeconds, timeoutMs: UPSTREAM_TIMEOUT_MS });
     if (!res.ok) return { ok: false, error: `SNOTEL ${label} returned ${res.status}` };
     const body: unknown = await res.json();
     if (!Array.isArray(body)) return { ok: false, error: `SNOTEL ${label} did not return a list` };

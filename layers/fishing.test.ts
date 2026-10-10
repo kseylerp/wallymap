@@ -128,6 +128,26 @@ describe("fishing layer", () => {
     });
   });
 
+  it("notes when the iNaturalist (200) or Overpass (2,000) caps are hit, and that BLM is omitted", async () => {
+    const r0 = await layer.query(ctx(routedStub()), { days: 30 });
+    expect((r0 as { coverageNote?: string }).coverageNote).toMatch(/BLM fishing sites are not included/);
+    expect((r0 as { coverageNote?: string }).coverageNote).not.toMatch(/capped|most recent of/);
+
+    const manyOsm = {
+      elements: Array.from({ length: 2000 }, (_, i) => ({ type: "node", id: i, lat: 39, lon: -120, tags: { leisure: "slipway" } })),
+    };
+    const busyInat = { ...inatFixture, total_results: 950 };
+    const stub = vi.fn(async (url: string, init?: { body?: string }) => {
+      if (init?.body?.startsWith("data=")) return json(manyOsm);
+      if (url.includes("inaturalist")) return json(busyInat);
+      return routedStub()(url, init);
+    });
+    const r = await layer.query(ctx(stub), { days: 30 });
+    const note = (r as { coverageNote?: string }).coverageNote ?? "";
+    expect(note).toMatch(/capped at 2,000/);
+    expect(note).toMatch(/200 most recent of 950 fish sightings/);
+  });
+
   it("skips the US-only sources abroad", async () => {
     const stub = routedStub();
     await layer.query(ctx(stub, [6.0, 46.0, 6.5, 46.4]), { days: 30 });
@@ -135,7 +155,7 @@ describe("fishing layer", () => {
   });
 
   it("describes kinds, units, caveats and the user's words", () => {
-    for (const word of ["fishing", "boat ramp", "stocking reports are NOT available", "waterTempC", "°C", "sighting"]) {
+    for (const word of ["fishing", "boat ramp", "stocking reports are NOT available", "waterTempC", "°C", "sighting", "BLM"]) {
       expect(layer.description).toContain(word);
     }
     expect(layer.style).toMatchObject({ geometry: "point", cluster: true });

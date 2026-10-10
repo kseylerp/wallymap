@@ -8,6 +8,8 @@ import layer, {
   floodSampleLocations,
   ivFeatures,
   joinGauges,
+  namedRiverCount,
+  RIVER_POINTS,
   parseDailyMedians,
   riverSamplePoints,
   statSites,
@@ -216,6 +218,19 @@ describe("outside the US (GloFAS)", () => {
     const points = riverSamplePoints(riversFixture);
     expect(points.map((p) => p.name)).toEqual(["Le Rhône", "La Saône", "La Reyssouze"]);
     expect(floodSampleLocations(points)).toHaveLength(27);
+    expect(namedRiverCount(riversFixture)).toBe(3);
+  });
+
+  it("caps the sampled rivers at 12 per view", () => {
+    const elements = Array.from({ length: 20 }, (_, i) => ({
+      type: "way",
+      id: i,
+      center: { lat: 46, lon: 5 + i * 0.01 },
+      tags: { name: `River ${i}` },
+    }));
+    expect(RIVER_POINTS).toBe(12);
+    expect(riverSamplePoints({ elements })).toHaveLength(12);
+    expect(namedRiverCount({ elements })).toBe(20);
   });
 
   it("keeps the largest discharge of each river's 3 x 3 cells and converts it to cfs", () => {
@@ -300,6 +315,7 @@ describe("streamflow layer", () => {
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features.length).toBeGreaterThan(0);
     expect(r.data.features.every((f) => f.properties?.pctOfMedian === undefined)).toBe(true);
+    expect(r.coverageNote).toMatch(/statistics service did not answer/);
   });
 
   it("returns an empty collection with a note when the IV service has no gauges", async () => {
@@ -360,6 +376,9 @@ describe("streamflow layer", () => {
     const r = await layer.query(ctx(stub, { bbox: [4.7, 45.6, 6.3, 46.3] }), FLOW);
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(3);
+    const overpassBody = decodeURIComponent(String((stub.mock.calls[0] as unknown as [string, { body: string }])[1].body));
+    expect(overpassBody).toContain("(45.6,4.7,46.3,6.3)");
+    expect(overpassBody).toContain("out center tags 3000;");
     expect(r.data.features.every((f) => f.properties?.kind === "model")).toBe(true);
     expect(r.coverageNote).toMatch(/modelled/);
     expect(r.citation.source).toMatch(/non-commercial/);

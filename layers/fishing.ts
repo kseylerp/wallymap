@@ -41,6 +41,9 @@ const USFS_ACTIVITIES =
   "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecreationAreaActivities_01/MapServer/0";
 const INAT = "https://api.inaturalist.org/v1/observations";
 const DAY_MS = 86_400_000;
+/** Most OSM elements and iNaturalist sightings read per view; the result says when either cap is hit. */
+export const OSM_LIMIT = 2_000;
+export const INAT_LIMIT = 200;
 const WATER_TEMP_MAX_KM = 30;
 /** Recreation sites and OSM tags change slowly. */
 const PLACES_TTL_SECONDS = 86_400;
@@ -58,7 +61,7 @@ export function buildFishingQuery([west, south, east, north]: BBox): string {
   const a = `(${south},${west},${north},${east})`;
   return (
     `[out:json][timeout:25];(nwr["leisure"="fishing"]${a};nwr["leisure"="slipway"]${a};` +
-    `nwr["man_made"="pier"]["fishing"~"^(yes|designated)$"]${a};);out center tags 2000;`
+    `nwr["man_made"="pier"]["fishing"~"^(yes|designated)$"]${a};);out center tags ${OSM_LIMIT};`
   );
 }
 
@@ -125,6 +128,16 @@ export function usfsFeatures(fc: FeatureCollection): Feature<Point>[] {
   return [...byArea.values()];
 }
 
+function elementCount(json: unknown): number {
+  return typeof json === "object" && json !== null && "elements" in json && Array.isArray(json.elements) ? json.elements.length : 0;
+}
+
+function totalResults(json: unknown): number {
+  return typeof json === "object" && json !== null && "total_results" in json && typeof json.total_results === "number"
+    ? json.total_results
+    : 0;
+}
+
 /** iNaturalist fish observations as sightings. */
 export function sightingFeatures(json: unknown): { features: Feature<Point>[]; skipped: number } {
   const { data, skipped } = normalizeObservations(json);
@@ -169,7 +182,7 @@ export function inatUrl(bbox: BBox, days: number, now: Date): string {
     d1: new Date(now.getTime() - days * DAY_MS).toISOString().slice(0, 10),
     geo: "true",
     verifiable: "true",
-    per_page: "200",
+    per_page: String(INAT_LIMIT),
     order_by: "observed_on",
     order: "desc",
   });
@@ -181,7 +194,7 @@ async function inatSightings(ctx: QueryContext, days: number, now: Date) {
     const res = await ctx.fetch(inatUrl(ctx.bbox, days, now), {
       cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:inat-fish`,
       ttlSeconds: SIGHTINGS_TTL_SECONDS,
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      timeoutMs: UPSTREAM_TIMEOUT_MS,
     });
     if (!res.ok) return { ok: false as const, error: `iNaturalist returned ${res.status}` };
     return { ok: true as const, json: (await res.json()) as unknown };
@@ -202,6 +215,8 @@ const fishing = defineLayer({
     "Caveats: fish stocking reports are NOT available here (each state wildlife agency publishes its own, with no common feed), so say so and point to the state agency; " +
     "this layer does not show regulations, seasons or licence rules; OSM coverage of fishing spots is patchy (many lakes only have ramps mapped); " +
     "sightings are where people photograph fish, not a catch survey, and threatened species with hidden locations are left out; the water temperature is from the nearest stream gauge, which may be a different water body. " +
+    "Bureau of Land Management (BLM) fishing sites are omitted: BLM publishes them only through a keyed API. " +
+    "At most 2,000 OpenStreetMap places and the 200 most recent sightings are returned, and the result says when a cap is hit. " +
     "Global for OSM and iNaturalist; USFS sites and water temperature are US only. Zoom in to under 50,000 km² (about a 220 km square).",
   coverage: "global",
   license: "OpenStreetMap ODbL; USFS and USGS public domain; iNaturalist CC BY-NC / CC0 per observation",
@@ -236,7 +251,12 @@ const fishing = defineLayer({
     const features: Feature<Point>[] = [];
     const notes: string[] = [];
     const failures: string[] = [];
-    if (osm.ok) features.push(...osmFeatures(osm.json));
+    if (osm.ok) {
+      features.push(...osmFeatures(osm.json));
+      if (elementCount(osm.json) >= OSM_LIMIT) {
+        notes.push(`OpenStreetMap places were capped at ${OSM_LIMIT.toLocaleString("en-US")}, so some are missing; zoom in for all of them`);
+      }
+    }
     else failures.push(`OpenStreetMap (${osm.error})`);
     if (usfs !== null) {
       if (usfs.ok) features.push(...usfsFeatures(usfs.fc));
@@ -246,6 +266,10 @@ const fishing = defineLayer({
       const sightings = sightingFeatures(inat.json);
       features.push(...sightings.features);
       if (sightings.skipped > 0) notes.push(`${sightings.skipped} fish sightings with hidden locations were left out`);
+      const total = totalResults(inat.json);
+      if (total > INAT_LIMIT) {
+        notes.push(`Showing the ${INAT_LIMIT} most recent of ${total.toLocaleString("en-US")} fish sightings; zoom in or shorten days for the rest`);
+      }
     } else {
       failures.push(`iNaturalist (${inat.error})`);
     }
@@ -263,6 +287,7 @@ const fishing = defineLayer({
     }
     if (failures.length > 0) notes.push(`Left out because the source failed: ${failures.join("; ")}`);
     notes.push("Fish stocking reports are not included (state agencies publish them separately)");
+    if (us) notes.push("BLM fishing sites are not included (no keyless BLM source)");
 
     return {
       kind: "geojson",

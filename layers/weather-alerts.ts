@@ -11,9 +11,10 @@
  *     (https://api.weather.gov/zones/forecast/CAZ072, /zones/fire/..., /zones/county/...); CA+NV alone listed
  *     about 80 zones, too many to fetch shapes for. So the zones in view are found by sampling a 3 x 3 grid with
  *     /points/{lat},{lon} (properties.forecastZone, county, fireWeatherZone as zone URLs; cached 30 days per
- *     point, rounded to 0.01°), and a zone alert is kept when one of its zones is among them. Only those zones'
- *     shapes are fetched (/zones/{type}/{id}: a GeoJSON Feature, 20-40 KB; `/zones?id=...&include_geometry=true`
- *     returned geometry null, so one by one), at most MAX_ZONE_FETCHES, cached 30 days. Polygon alerts are kept
+ *     point, rounded to 0.01°; a 4xx answer, e.g. open water, is remembered for an hour), and a zone alert is
+ *     kept when one of its zones is among them. Only those zones' shapes are fetched (/zones/{type}/{id}: a
+ *     GeoJSON Feature, 20-40 KB; `/zones?id=...&include_geometry=true` returned geometry null, so one by one),
+ *     at most MAX_ZONE_FETCHES, cached 30 days. Polygon alerts are kept
  *     when their polygon's extent overlaps the view.
  *   - Properties used: event, severity (Extreme/Severe/Moderate/Minor/Unknown), urgency, certainty, headline,
  *     areaDesc, onset, effective, expires, ends, senderName, instruction, @id.
@@ -33,11 +34,12 @@ import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { bboxesDisjoint, outsideUs } from "./_shared/coverage";
 import { geometryBBox } from "./_shared/geo";
+import { createCache, type Cache } from "@/lib/fetch";
 import { layerColor } from "@/lib/render/palette";
 
 const NWS = "https://api.weather.gov";
 const OPEN_METEO = "https://api.open-meteo.com/v1/forecast";
-const USER_AGENT = "WildMap/0.1 (open-source outdoor map agent)";
+const USER_AGENT = "WallyMap/0.1 (https://wallymap.vercel.app)";
 const ALERTS_TTL_SECONDS = 300;
 const ZONE_TTL_SECONDS = 30 * 86_400;
 const NOW_TTL_SECONDS = 600;
@@ -284,7 +286,42 @@ export function nowFeature(body: unknown, centre: [number, number]): Feature<Poi
   return { type: "Feature", geometry: { type: "Point", coordinates: centre }, properties: p };
 }
 
-type Got = { ok: true; body: unknown } | { ok: false; error: string };
+type Got = { ok: true; body: unknown } | { ok: false; error: string; status?: number };
+
+/** How long a point NWS has no answer for (open water, outside its area: HTTP 404) is skipped. */
+const POINT_MISS_TTL_SECONDS = 3_600;
+
+let pointMissCache: Cache | null = null;
+/**
+ * The fetch cache only keeps 2xx bodies, so failed /points lookups are remembered here. Tests swap in a fresh
+ * store; production uses the shared cache (KV when configured).
+ */
+export function setPointMissCache(cache: Cache | null): void {
+  pointMissCache = cache;
+}
+function missStore(): Cache {
+  pointMissCache ??= createCache();
+  return pointMissCache;
+}
+
+/** A /points lookup that remembers a 4xx answer for an hour so each view does not repeat it. */
+async function lookupPoint(ctx: QueryContext, lat: number, lon: number): Promise<Got> {
+  const missKey = `weather-alerts:point-miss:${lat},${lon}`;
+  try {
+    if ((await missStore().get(missKey)) !== null) return { ok: false, error: "NWS has no forecast point here (cached)" };
+  } catch {
+    // Without the miss cache the lookup is simply repeated.
+  }
+  const got = await getJson(ctx, `${NWS}/points/${lat},${lon}`, "NWS point", `weather-alerts:point:${lat},${lon}`, ZONE_TTL_SECONDS, true);
+  if (!got.ok && got.status !== undefined && got.status >= 400 && got.status < 500) {
+    try {
+      await missStore().set(missKey, String(got.status), POINT_MISS_TTL_SECONDS);
+    } catch {
+      // Not remembered this time.
+    }
+  }
+  return got;
+}
 
 async function getJson(ctx: QueryContext, url: string, label: string, cacheKey: string | undefined, ttlSeconds: number, nws: boolean): Promise<Got> {
   try {
@@ -292,9 +329,9 @@ async function getJson(ctx: QueryContext, url: string, label: string, cacheKey: 
       cacheKey,
       ttlSeconds,
       ...(nws ? { headers: { "user-agent": USER_AGENT, accept: "application/geo+json" } } : {}),
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      timeoutMs: UPSTREAM_TIMEOUT_MS,
     });
-    if (!res.ok) return { ok: false, error: `${label} returned ${res.status}` };
+    if (!res.ok) return { ok: false, error: `${label} returned ${res.status}`, status: res.status };
     return { ok: true, body: await res.json() };
   } catch (err) {
     const timedOut = typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
@@ -359,9 +396,7 @@ const weatherAlerts = defineLayer({
         const needZones = alerts.some((a) => !isArea(a.geometry));
         const pointBodies = needZones
           ? await Promise.all(
-              samplePoints(ctx.bbox).map(([lat, lon]) =>
-                getJson(ctx, `${NWS}/points/${lat},${lon}`, "NWS point", `weather-alerts:point:${lat},${lon}`, ZONE_TTL_SECONDS, true),
-              ),
+              samplePoints(ctx.bbox).map(([lat, lon]) => lookupPoint(ctx, lat, lon)),
             )
           : [];
         const inView = new Set(pointBodies.flatMap((b) => (b.ok ? zonesFromPoint(b.body) : [])));

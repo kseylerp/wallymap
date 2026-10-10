@@ -163,7 +163,7 @@ async function fetchJson(
       cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:${suffix}`,
       ttlSeconds,
       ...(apiKey ? { headers: { "X-Api-Key": apiKey } } : {}),
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      timeoutMs: UPSTREAM_TIMEOUT_MS,
     });
     if (!res.ok) return { ok: false, error: `USGS ${label} returned ${res.status}` };
     const body: unknown = await res.json();
@@ -290,7 +290,10 @@ export function statSites(sites: IvSite[]): string[] {
     .sort();
 }
 
-async function fetchMedians(ctx: QueryContext, siteNos: string[]): Promise<Map<string, Map<string, number>>> {
+async function fetchMedians(
+  ctx: QueryContext,
+  siteNos: string[],
+): Promise<{ medians: Map<string, Map<string, number>>; failedBatches: number }> {
   const batches: string[][] = [];
   for (let i = 0; i < siteNos.length; i += STAT_BATCH) batches.push(siteNos.slice(i, i + STAT_BATCH));
   const bodies = await Promise.all(
@@ -303,26 +306,49 @@ async function fetchMedians(ctx: QueryContext, siteNos: string[]): Promise<Map<s
             cacheKey: `streamflow:stat:${batch.join(",")}`,
             ttlSeconds: STAT_TTL_SECONDS,
             shouldCache: (body) => body.includes("p50_va"),
-            signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+            timeoutMs: UPSTREAM_TIMEOUT_MS,
           },
         );
-        return res.ok ? await res.text() : "";
+        return res.ok ? await res.text() : null;
       } catch {
-        // Medians are an extra; a failure leaves pctOfMedian out rather than failing the layer.
-        return "";
+        // Medians are an extra; a failure leaves pctOfMedian out (with a note) rather than failing the layer.
+        return null;
       }
     }),
   );
-  const merged = new Map<string, Map<string, number>>();
-  for (const body of bodies) for (const [site, days] of parseDailyMedians(body)) merged.set(site, days);
-  return merged;
+  const medians = new Map<string, Map<string, number>>();
+  let failedBatches = 0;
+  for (const body of bodies) {
+    if (body === null || !body.includes("p50_va")) {
+      failedBatches += 1;
+      continue;
+    }
+    for (const [site, days] of parseDailyMedians(body)) medians.set(site, days);
+  }
+  return { medians, failedBatches };
 }
 
 // ---- Outside the US: GloFAS via Open-Meteo ----
 
 const FLOOD_API = "https://flood-api.open-meteo.com/v1/flood";
-/** Rivers sampled outside the US; one multi-location flood call covers them all. */
-export const RIVER_POINTS = 8;
+/** Rivers sampled outside the US (at most this many per view); one multi-location flood call covers them all. */
+export const RIVER_POINTS = 12;
+/** Most river ways read from Overpass; plenty to rank rivers by segment count, and bounds the response. */
+export const RIVER_WAY_LIMIT = 3_000;
+
+/** How many distinct named rivers an Overpass body holds. */
+export function namedRiverCount(overpassJson: unknown): number {
+  const elements =
+    typeof overpassJson === "object" && overpassJson !== null && "elements" in overpassJson && Array.isArray(overpassJson.elements)
+      ? overpassJson.elements
+      : [];
+  const names = new Set<string>();
+  for (const raw of elements) {
+    const parsed = RiverElementSchema.safeParse(raw);
+    if (parsed.success && parsed.data.tags.name.trim() !== "") names.add(parsed.data.tags.name.trim());
+  }
+  return names.size;
+}
 
 const RiverElementSchema = z.object({
   type: z.literal("way"),
@@ -446,7 +472,7 @@ async function queryOutsideUs(ctx: QueryContext, now: Date): Promise<LayerResult
   const [west, south, east, north] = ctx.bbox;
   const rivers = await overpassQuery(
     ctx,
-    `[out:json][timeout:25];way["waterway"="river"]["name"](${south},${west},${north},${east});out center tags;`,
+    `[out:json][timeout:25];way["waterway"="river"]["name"](${south},${west},${north},${east});out center tags ${RIVER_WAY_LIMIT};`,
     { cacheSuffix: "osm-rivers" },
   );
   if (!rivers.ok) return { error: rivers.error, hint: "upstream" };
@@ -464,20 +490,17 @@ async function queryOutsideUs(ctx: QueryContext, now: Date): Promise<LayerResult
     const res = await ctx.fetch(url, {
       cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:glofas`,
       ttlSeconds: 3_600,
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      timeoutMs: UPSTREAM_TIMEOUT_MS,
     });
     if (!res.ok) return { error: `Open-Meteo flood API returned ${res.status}`, hint: "upstream" };
     body = await res.json();
   } catch {
     return { error: "Open-Meteo flood API returned no usable response", hint: "upstream" };
   }
-  return {
-    kind: "geojson",
-    data: floodFeatures(points, body, now),
-    citation,
-    coverageNote:
-      "Outside the United States: modelled daily river discharge (GloFAS, 5 km grid), not gauge readings; one point per major river",
-  };
+  const notes = ["Outside the United States: modelled daily river discharge (GloFAS, 5 km grid), not gauge readings; one point per major river"];
+  const riverCount = namedRiverCount(rivers.json);
+  if (riverCount > points.length) notes.push(`Showing the ${points.length} longest of ${riverCount} named rivers in view; zoom in for the rest`);
+  return { kind: "geojson", data: floodFeatures(points, body, now), citation, coverageNote: notes.join("; ") };
 }
 
 // ---- Water Data API fallback ----
@@ -581,10 +604,18 @@ const streamflow = defineLayer({
     }
 
     const statFor = input.parameter === "00060" ? statSites(sites) : [];
-    const medians = statFor.length > 0 ? await fetchMedians(ctx, statFor) : new Map<string, Map<string, number>>();
-    const data = ivFeatures(sites, input.parameter, medians);
+    const stats =
+      statFor.length > 0 ? await fetchMedians(ctx, statFor) : { medians: new Map<string, Map<string, number>>(), failedBatches: 0 };
+    const data = ivFeatures(sites, input.parameter, stats.medians);
     const withFlow = sites.filter((s) => s.readings[input.parameter] !== undefined).length;
     const notes: string[] = [];
+    if (stats.failedBatches > 0) {
+      notes.push(
+        stats.medians.size === 0
+          ? "The USGS statistics service did not answer, so percent of median (running high or low) is missing"
+          : "The USGS statistics service failed for some gauges, so their percent of median is missing",
+      );
+    }
     if (input.parameter === "00060" && withFlow > STAT_SITE_CAP) {
       notes.push(`Percent of median is given for the ${STAT_SITE_CAP} largest-flow gauges of ${withFlow}; zoom in for the rest`);
     }

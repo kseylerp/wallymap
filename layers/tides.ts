@@ -179,7 +179,7 @@ async function getJson(
       ttlSeconds,
       // A "no data" answer for a station stays true for the TTL, so caching it saves a call per view.
       ...(cacheErrors ? { shouldCache: () => true } : {}),
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      timeoutMs: UPSTREAM_TIMEOUT_MS,
     });
     if (!res.ok) return { ok: false, error: `${label} returned ${res.status}` };
     return { ok: true, body: await res.json() };

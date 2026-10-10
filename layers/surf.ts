@@ -266,7 +266,7 @@ async function fetchText(
   ttlSeconds: number,
 ): Promise<Text> {
   try {
-    const res = await ctx.fetch(url, { cacheKey, ttlSeconds, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
+    const res = await ctx.fetch(url, { cacheKey, ttlSeconds, timeoutMs: UPSTREAM_TIMEOUT_MS });
     if (!res.ok) return { ok: false, error: `${label} returned ${res.status}` };
     return { ok: true, text: await res.text() };
   } catch (err) {
@@ -286,12 +286,15 @@ async function fetchText(
  * bodies as text, which would corrupt gzip, so the plain-text view NDBC serves for the same file is used
  * (~1.5 MB, 0.2 s; checked 2026-10-10 for 51201h2025). Rows: "YY MM DD hh mm WDIR WSPD GST WVHT DPD APD MWD ...",
  * every 30 minutes, missing values 99.00 (WVHT, DPD) and 999 (MWD). Raw files are not cached (too big for
- * KV); each buoy's computed 12-month climatology (a few hundred bytes) is cached for a day instead.
+ * KV); each buoy's computed 12-month climatology (a few hundred bytes) is cached for a week instead. Only
+ * buoys with a wave sensor are summarised: the station list has no wave flag, so a buoy qualifies when its row in
+ * the live latest_obs file carries any wave column (WVHT, DPD, APD or MWD).
  */
 const HISTORY_URL = "https://www.ndbc.noaa.gov/view_text_file.php";
 export const SEASON_BUOY_CAP = 6;
 export const SEASON_YEARS = 3;
-const CLIMATOLOGY_TTL_SECONDS = 86_400;
+/** A buoy's multi-year monthly climatology barely moves; a week of cache saves re-reading ~4.5 MB per buoy. */
+const CLIMATOLOGY_TTL_SECONDS = 7 * 86_400;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 let climatologyCache: Cache | null = null;
@@ -376,6 +379,15 @@ export function parseStationList(xml: string): BuoyStation[] {
   return out;
 }
 
+/** Ids of stations whose latest observation carries any wave column (WVHT, DPD, APD or MWD). */
+export function waveStationIds(obs: BuoyObs[]): Set<string> {
+  return new Set(
+    obs
+      .filter((o) => o.wvht !== undefined || o.dpd !== undefined || o.apd !== undefined || o.mwd !== undefined)
+      .map((o) => o.id.toUpperCase()),
+  );
+}
+
 /** Up to SEASON_BUOY_CAP stations in the bbox, nearest its centre first. */
 export function seasonStations(stations: BuoyStation[], bbox: BBox): { chosen: BuoyStation[]; inView: number } {
   const centre: [number, number] = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
@@ -402,7 +414,7 @@ async function buoyClimatology(ctx: QueryContext, id: string, now: Date): Promis
     try {
       const res = await ctx.fetch(
         `${HISTORY_URL}?filename=${encodeURIComponent(id.toLowerCase())}h${year}.txt.gz&dir=data/historical/stdmet/`,
-        { shouldCache: () => false, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) },
+        { shouldCache: () => false, timeoutMs: UPSTREAM_TIMEOUT_MS },
       );
       if (!res.ok) continue;
       const text = await res.text();
@@ -456,11 +468,22 @@ async function querySeason(ctx: QueryContext, month: number, now: Date): Promise
     url: "https://www.ndbc.noaa.gov/historical_data.shtml",
     retrieved: now.toISOString(),
   };
-  const xml = await fetchText(ctx, STATIONS_XML, "NDBC station list", "surf:ndbc-stations", STATIONS_TTL_SECONDS);
+  const [xml, obsText] = await Promise.all([
+    fetchText(ctx, STATIONS_XML, "NDBC station list", "surf:ndbc-stations", STATIONS_TTL_SECONDS),
+    fetchText(ctx, LATEST_OBS, "NDBC latest observations", "surf:ndbc-latest", OBS_TTL_SECONDS),
+  ]);
   if (!xml.ok) return { error: xml.error, hint: "upstream" };
-  const { chosen, inView } = seasonStations(parseStationList(xml.text), ctx.bbox);
+  let buoys = parseStationList(xml.text);
+  const notes = [`Average waves in ${MONTHS[month - 1]} over the last ${SEASON_YEARS} complete years of buoy records`];
+  if (obsText.ok) {
+    const waves = waveStationIds(parseLatestObs(obsText.text));
+    buoys = buoys.filter((b) => waves.has(b.id.toUpperCase()));
+  } else {
+    notes.push("Could not check which buoys measure waves (live file unavailable), so every moored buoy was tried");
+  }
+  const { chosen, inView } = seasonStations(buoys, ctx.bbox);
   if (chosen.length === 0) {
-    return { kind: "geojson", data: EMPTY, citation, coverageNote: "No NDBC buoys in this view to build a seasonal picture from" };
+    return { kind: "geojson", data: EMPTY, citation, coverageNote: "No NDBC wave buoys in this view to build a seasonal picture from" };
   }
   const features: Feature<Point>[] = [];
   let noHistory = 0;
@@ -471,8 +494,7 @@ async function querySeason(ctx: QueryContext, month: number, now: Date): Promise
     if (f === null) noHistory += 1;
     else features.push(f);
   });
-  const notes = [`Average waves in ${MONTHS[month - 1]} over the last ${SEASON_YEARS} complete years of buoy records`];
-  if (inView > chosen.length) notes.push(`Only the ${chosen.length} buoys nearest the centre of ${inView} in view are summarised; zoom in for others`);
+  if (inView > chosen.length) notes.push(`Only the ${chosen.length} wave buoys nearest the centre of ${inView} in view are summarised; zoom in for others`);
   if (noHistory > 0) notes.push(`${noHistory} buoy${noHistory === 1 ? "" : "s"} had no wave history for that month`);
   return { kind: "geojson", data: { type: "FeatureCollection", features }, citation, coverageNote: notes.join("; ") };
 }

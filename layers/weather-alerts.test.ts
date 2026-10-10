@@ -8,6 +8,7 @@ import layer, {
   nowFeature,
   parseAlerts,
   samplePoints,
+  setPointMissCache,
   statesFor,
   weatherWords,
   zonesFromPoint,
@@ -131,7 +132,7 @@ describe("weather-alerts layer", () => {
     expect(alerts).toHaveLength(1);
     expect(alerts[0][0]).toBe("https://api.weather.gov/alerts/active?status=actual&area=CA,NV");
     expect(alerts[0][1]).toMatchObject({ cacheKey: "weather-alerts:nws:CA,NV", ttlSeconds: 300 });
-    expect(alerts[0][1].headers?.["user-agent"]).toMatch(/WildMap/);
+    expect(alerts[0][1].headers?.["user-agent"]).toBe("WallyMap/0.1 (https://wallymap.vercel.app)");
     const pts = c.filter((x) => x[0].includes("/points/"));
     expect(pts).toHaveLength(9);
     expect(pts[0][1].ttlSeconds).toBe(30 * 86_400);
@@ -139,6 +140,32 @@ describe("weather-alerts layer", () => {
     const kinds = r.data.features.map((f) => f.properties?.kind);
     expect(kinds).toContain("Red Flag Warning");
     expect(kinds).toContain("now");
+  });
+
+  it("remembers points NWS has no answer for (404) for an hour instead of asking again each view", async () => {
+    const store = new Map<string, string>();
+    const ttls: number[] = [];
+    setPointMissCache({
+      get: async (k) => store.get(k) ?? null,
+      set: async (k, v, ttl) => {
+        store.set(k, v);
+        ttls.push(ttl);
+      },
+    });
+    const water = () =>
+      vi.fn(async (url: string) => {
+        if (url.includes("/points/")) return json({ status: 404, title: "Data Unavailable For Requested Point" }, 404);
+        return routedStub()(url);
+      });
+    const first = water();
+    await layer.query(ctx(first), {});
+    expect(calls(first).filter((c) => c[0].includes("/points/"))).toHaveLength(9);
+    expect(store.size).toBe(9);
+    expect(ttls.every((t) => t === 3_600)).toBe(true);
+    const second = water();
+    await layer.query(ctx(second), {});
+    expect(calls(second).filter((c) => c[0].includes("/points/"))).toHaveLength(0);
+    setPointMissCache(null);
   });
 
   it("returns only current conditions abroad, without calling NWS", async () => {

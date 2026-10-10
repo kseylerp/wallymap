@@ -14,6 +14,11 @@ export type CachedFetch = (
      * pass their own check; the default is `!looksLikeUpstreamFailure(body)`.
      */
     shouldCache?: (body: string) => boolean;
+    /**
+     * Abort the upstream call this many ms after it gets its rate-limit slot. Prefer this to passing
+     * `signal: AbortSignal.timeout(...)`, whose clock also runs while the call waits in the rate limiter.
+     */
+    timeoutMs?: number;
   },
 ) => Promise<Response>;
 
@@ -31,6 +36,32 @@ const DEFAULT_TTL_SECONDS = 86400;
 
 // One bucket per layer id, shared across createLayerFetch calls.
 const buckets = new Map<string, Bucket>();
+
+/**
+ * Hosts that tolerate more than the per-layer default and whose layers make many small calls per view (one per
+ * station, zone or point). Each gets one bucket shared by every layer, instead of the layer's own.
+ */
+export const HOST_RATES: Record<string, { capacity: number; refillPerSecond: number }> = {
+  "api.weather.gov": { capacity: 5, refillPerSecond: 5 },
+  "api.tidesandcurrents.noaa.gov": { capacity: 5, refillPerSecond: 5 },
+  "waterservices.usgs.gov": { capacity: 5, refillPerSecond: 5 },
+};
+
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+/** The bucket a request to `url` waits in: its host's shared bucket when HOST_RATES lists it, else the layer's. */
+function bucketForRequest(url: string, layerBucket: Bucket): Bucket {
+  const host = hostOf(url);
+  const rate = host === null ? undefined : HOST_RATES[host];
+  if (rate === undefined) return layerBucket;
+  return bucketFor(`host:${host}`, rate.capacity, rate.refillPerSecond);
+}
 
 function bucketFor(layerId: string, capacity: number, refillPerSecond: number): Bucket {
   let bucket = buckets.get(layerId);
@@ -95,7 +126,7 @@ export function createLayerFetch(layerId: string, opts: LayerFetchOptions = {}):
   const cache = opts.cache ?? createCache();
 
   return async (url, init = {}) => {
-    const { cacheKey, ttlSeconds, shouldCache = defaultShouldCache, ...requestInit } = init;
+    const { cacheKey, ttlSeconds, shouldCache = defaultShouldCache, timeoutMs, ...requestInit } = init;
 
     const method = (requestInit.method ?? "GET").toUpperCase();
     const text = bodyText(requestInit.body);
@@ -114,7 +145,12 @@ export function createLayerFetch(layerId: string, opts: LayerFetchOptions = {}):
     }
 
     // Only real upstream calls spend rate-limit tokens.
-    await bucket.take();
+    await bucketForRequest(url, bucket).take();
+    if (timeoutMs !== undefined) {
+      // The timeout starts now, after the wait for a slot, so queued calls are not cut short.
+      const timeout = AbortSignal.timeout(timeoutMs);
+      requestInit.signal = requestInit.signal ? AbortSignal.any([requestInit.signal, timeout]) : timeout;
+    }
     const response = await fetch(url, requestInit);
     if (response.status < 200 || response.status >= 300) return response;
 

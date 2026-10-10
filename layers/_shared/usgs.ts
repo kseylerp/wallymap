@@ -154,7 +154,7 @@ export async function fetchIv(
           cacheKey:
             ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:${suffix}${strips.length > 1 ? `:${i}` : ""}`,
           ttlSeconds,
-          signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+          timeoutMs: UPSTREAM_TIMEOUT_MS,
         });
         if (!res.ok) return { ok: false, error: `USGS instantaneous values returned ${res.status}` };
         const body: unknown = await res.json();

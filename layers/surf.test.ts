@@ -18,6 +18,7 @@ import layer, {
   seasonStations,
   SEASON_BUOY_CAP,
   setClimatologyCache,
+  waveStationIds,
 } from "./surf";
 import marineFixture from "./__fixtures__/marine.sf.json";
 
@@ -203,18 +204,36 @@ describe("seasonal climatology", () => {
   });
 });
 
+/** A live file where 51201 reports waves and 51202 only wind (no wave sensor working). */
+const OAHU_OBS = [
+  "#STN       LAT      LON  YYYY MM DD hh mm WDIR WSPD   GST WVHT  DPD APD MWD   PRES  PTDY  ATMP  WTMP  DEWP  VIS   TIDE",
+  "#text      deg      deg   yr mo day hr mn degT  m/s   m/s   m   sec sec degT   hPa   hPa  degC  degC  degC  nmi     ft",
+  "51201    21.671 -158.118 2026 10 10 01 56  MM    MM    MM  1.4  13  7.9 318     MM    MM    MM  27.1    MM   MM     MM",
+  "51202    21.414 -157.681 2026 10 10 01 56  60   6.0   8.0   MM  MM   MM  MM     MM    MM    MM    MM    MM   MM     MM",
+].join("\n");
+
 describe("surf layer, season mode", () => {
+  it("counts a station as a wave buoy when any wave column is present", () => {
+    const ids = waveStationIds(parseLatestObs(OAHU_OBS + "\n" + OBS));
+    expect(ids.has("51201")).toBe(true);
+    expect(ids.has("51202")).toBe(false);
+    // 46026's newest row lacks WVHT but still has average period and direction.
+    expect(ids.has("46026")).toBe(true);
+  });
+
   function seasonStub() {
     return vi.fn(async (url: string) => {
       if (url.includes("activestations")) return text(OAHU_XML);
+      if (url.includes("latest_obs")) return text(OAHU_OBS);
       if (url.includes("view_text_file") && url.includes("51201h")) return text(HISTORY);
       return text("<html>Unable to access file</html>");
     });
   }
 
-  it("fetches the last 3 complete years per buoy without caching the raw files, then caches the climatology a day", async () => {
+  it("fetches the last 3 complete years per wave buoy without caching the raw files, then caches the climatology a week", async () => {
     const cache = memoryCache();
-    setClimatologyCache(cache);
+    const ttls: number[] = [];
+    setClimatologyCache({ ...cache, set: async (k, v, ttl) => (ttls.push(ttl), cache.set(k, v, ttl)) });
     const stub = seasonStub();
     const r = await layer.query(ctx(stub, OAHU, "surf:k"), { forecast: false, season: true, month: 10 });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
@@ -223,16 +242,13 @@ describe("surf layer, season mode", () => {
       "51201h2023.txt.gz",
       "51201h2024.txt.gz",
       "51201h2025.txt.gz",
-      "51202h2023.txt.gz",
-      "51202h2024.txt.gz",
-      "51202h2025.txt.gz",
     ]);
     for (const [, init] of history) expect((init as { shouldCache?: (b: string) => boolean }).shouldCache?.("x")).toBe(false);
     expect(r.data.features).toHaveLength(1);
     expect(r.data.features[0].properties).toMatchObject({ stationId: "51201", kind: "climatology", month: "Oct" });
     expect(r.coverageNote).toMatch(/Oct over the last 3 complete years/);
-    expect(r.coverageNote).toMatch(/1 buoy had no wave history/);
     expect([...cache.store.keys()]).toEqual(["surf:clim:v1:51201:2023-2025"]);
+    expect(ttls).toEqual([7 * 86_400]);
 
     // Second ask: served from the cached climatology, no history downloads.
     const again = seasonStub();
@@ -241,12 +257,26 @@ describe("surf layer, season mode", () => {
     setClimatologyCache(null);
   });
 
+  it("tries every moored buoy, with a note, when the live file is unavailable", async () => {
+    setClimatologyCache(memoryCache());
+    const stub = vi.fn(async (url: string) => {
+      if (url.includes("activestations")) return text(OAHU_XML);
+      if (url.includes("latest_obs")) return new Response("down", { status: 503 });
+      if (url.includes("51201h")) return text(HISTORY);
+      return text("<html>Unable to access file</html>");
+    });
+    const r = await layer.query(ctx(stub, OAHU), { forecast: false, season: true, month: 10 });
+    expect(calls(stub).filter((c) => c[0].includes("51202h"))).toHaveLength(3);
+    expect((r as { coverageNote?: string }).coverageNote).toMatch(/every moored buoy was tried/);
+    setClimatologyCache(null);
+  });
+
   it("defaults to the current month and says when no buoy is in view", async () => {
     setClimatologyCache(memoryCache());
     const r = await layer.query(ctx(seasonStub(), OAHU), { forecast: false, season: true });
     expect((r as { coverageNote?: string }).coverageNote).toMatch(/in Oct/);
     const none = await layer.query(ctx(seasonStub(), [-120.6, 38.6, -119.8, 39.3]), { forecast: false, season: true });
-    expect(none).toMatchObject({ coverageNote: expect.stringMatching(/No NDBC buoys/) });
+    expect(none).toMatchObject({ coverageNote: expect.stringMatching(/No NDBC wave buoys/) });
     setClimatologyCache(null);
   });
 });

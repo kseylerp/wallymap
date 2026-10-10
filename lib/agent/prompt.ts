@@ -16,6 +16,7 @@ export const SYSTEM_PROMPT = [
   vocabularyForPrompt(),
   "Choose the layer whose synonyms match the question; when several match, query them in the listed order; if none match, say which layers exist and ask.",
   "For now, today or currently questions (is the river running high, surf today, next low tide, fresh snow, any warnings), query the live layers streamflow, surf, tides, snowpack or weather-alerts, and say how old the newest reading is.",
+  "For a route along a named trail, pass the trail name in route.via; if the route result carries notes (a stop that could not be placed), tell the user.",
   "Activity words have their own layers: mountain biking goes to mtb-trails, skiing and ski touring to ski-routes, climbing and bouldering to climbing, kayaking, rafting and canoeing to paddling.",
   "For 'what rock is this' or 'what is this peak made of', geocode the place and call query_geologic-unit with the lon and lat of its center; geology only draws the map.",
   "For 'how deep is this lake', call query_lakes with name set to the lake's name; v is the maximum depth in metres.",

@@ -57,3 +57,4 @@ import "./fishing";
 import "./weather-alerts";
 import "./sequoia-groves";
 import "./sea-level-trends";
+import "./sequoia-mortality";

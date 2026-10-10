@@ -4,7 +4,19 @@ import { useId, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, t
 import { LayerFilters } from "@/components/LayerFilters";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
-import { deriveFilterFields, filterSummary, type FilterField } from "@/lib/render/filters";
+import {
+  deriveFilterFields,
+  filterSummary,
+  MEASURE_STEPS,
+  measureAt,
+  measureMinimum,
+  measurePosition,
+  measureRange,
+  withMeasureMinimum,
+  type FilterField,
+  type LayerFilters as Filters,
+  type MeasureRange,
+} from "@/lib/render/filters";
 import type { Feature } from "geojson";
 import { LegendKey } from "@/components/LegendKey";
 import { COMPARE_COLORS, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
@@ -165,9 +177,62 @@ type RowProps = {
   selected: boolean;
 };
 
+/** A threshold readout: "All" at the data minimum, else "≥ 1,204 acres" (scores without a unit). */
+export function measureLabel(value: number, range: MeasureRange, unit?: string): string {
+  if (value <= range.min) return "All";
+  const text = value.toLocaleString("en-US", { maximumFractionDigits: range.integer ? 0 : 2 });
+  return unit && unit !== "score" ? `≥ ${text} ${unit}` : `≥ ${text}`;
+}
+
+/**
+ * The owner's fader: a minimum on the layer's primary measure `v` (popularity, fire acres, lake depth, wave height),
+ * applied through the filters engine so the count, export and permalink follow. At the left end there is no filter.
+ */
+function MeasureSlider({
+  layer,
+  range,
+  filters,
+  dispatch,
+}: {
+  layer: LoadedLayer;
+  range: MeasureRange;
+  filters: Filters;
+  dispatch: (action: MapAction) => void;
+}) {
+  const value = measureMinimum(filters, range);
+  const position = measurePosition(value, range);
+  return (
+    <label className="flex items-center gap-1.5">
+      <span className="sr-only">Minimum {layer.style.unit && layer.style.unit !== "score" ? layer.style.unit : "value"} for {layer.title}</span>
+      <input
+        type="range"
+        min={0}
+        max={MEASURE_STEPS}
+        step={1}
+        value={position}
+        aria-valuetext={measureLabel(value, range, layer.style.unit)}
+        onChange={(e) =>
+          dispatch({
+            type: "set_filters",
+            layerId: layer.id,
+            filters: withMeasureMinimum(filters, measureAt(Number(e.target.value), range), range),
+          })
+        }
+        data-testid="measure-slider"
+        className="layer-opacity w-[60px]"
+        style={{ ["--fill" as string]: `${Math.round((position / MEASURE_STEPS) * 100)}%` }}
+      />
+      <span aria-hidden className="text-[11px] whitespace-nowrap text-ink-muted tabular-nums">
+        {measureLabel(value, range, layer.style.unit)}
+      </span>
+    </label>
+  );
+}
+
 /**
  * One legend row: the key (also the drag handle), the title over a muted line of coverage, license and source, the
- * feature count in tabular figures, and (on hover or focus) visibility, opacity, mode and remove.
+ * feature count in tabular figures and an always-visible ×, and (on hover or focus) visibility, the measure threshold
+ * (or opacity, for layers without a numeric `v`), mode and filters.
  */
 function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps, armDrag, dropTarget, dragging, selected }: RowProps) {
   const visible = op?.visible ?? false;
@@ -180,6 +245,7 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
   const filters = op?.filters ?? {};
   const activeCount = Object.keys(filters).length;
   const summary = activeCount > 0 ? filterSummary(fields, filters) : "";
+  const range = useMemo(() => (data ? measureRange(data) : null), [data]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filtersId = `filters-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const { citation, coverageNote } = layer.result;
@@ -206,7 +272,7 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
       {...dragProps}
       className={`legend-row relative py-2.5 transition-opacity duration-150 ${dragging ? "opacity-40" : ""}`}
     >
-      <div className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-start gap-x-3">
+      <div className="grid grid-cols-[24px_minmax(0,1fr)_auto_auto] items-start gap-x-3">
         <button
           type="button"
           ref={gripRef}
@@ -237,8 +303,19 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
             </a>
           </p>
           {summary && (
-            <p data-testid="filter-summary" className="mt-0.5 truncate text-[11.5px] leading-4 text-ink-muted" title={summary}>
-              Filtered: {summary}
+            <p className="mt-0.5 flex items-baseline gap-1.5 text-[11.5px] leading-4 text-ink-muted">
+              <span data-testid="filter-summary" className="min-w-0 truncate" title={summary}>
+                Filtered: {summary}
+              </span>
+              <button
+                type="button"
+                onClick={() => dispatch({ type: "set_filters", layerId: layer.id, filters: {} })}
+                aria-label={`Remove filters on ${layer.title}`}
+                title="Clear filters"
+                className={REMOVE_BUTTON}
+              >
+                ×
+              </button>
             </p>
           )}
         </div>
@@ -263,6 +340,16 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
         ) : (
           <span className="small-caps text-right leading-[18px]">tiles</span>
         )}
+        {/* Always visible (owner: "close out measures ... when I don't want them anymore"), not only on hover. */}
+        <button
+          type="button"
+          onClick={() => dispatch({ type: "remove_layer", layerId: layer.id })}
+          aria-label={`Remove ${layer.title}`}
+          title="Remove layer"
+          className={`${REMOVE_BUTTON} -mr-1 leading-[18px]`}
+        >
+          ×
+        </button>
       </div>
 
       {/* The grid row collapses to 0 while hidden; the padding lives inside it so a collapsed row stays tight. */}
@@ -278,7 +365,8 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
               title={visible ? "Hide layer" : "Show layer"}
               className="legend-check"
             />
-            {op && (
+            {op && range && <MeasureSlider layer={layer} range={range} filters={filters} dispatch={dispatch} />}
+            {op && !range && (
               <label className="flex items-center gap-1.5">
                 <span className="sr-only">Opacity for {layer.title}</span>
                 <input
@@ -323,15 +411,6 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
                 Filters{activeCount > 0 && <span className="tabular-nums"> · {activeCount}</span>}
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => dispatch({ type: "remove_layer", layerId: layer.id })}
-              aria-label={`Remove ${layer.title}`}
-              title="Remove layer"
-              className="ml-auto px-1 text-[15px] leading-none text-ink-muted transition-colors hover:text-ink"
-            >
-              ×
-            </button>
           </div>
           {op && layer.result.kind === "geojson" && layer.style.geometry === "point" && (
             <div className="pt-1.5 pl-9">
@@ -347,6 +426,9 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
     </li>
   );
 }
+
+/** The hairline ×: a text glyph (no icon font), muted until hovered. */
+const REMOVE_BUTTON = "px-1 text-[15px] leading-none text-ink-muted transition-colors duration-150 hover:text-ink";
 
 /** Quiet text buttons in the panel header. */
 const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 hover:text-ink";

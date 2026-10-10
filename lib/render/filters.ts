@@ -200,3 +200,70 @@ export function filterSummary(fields: FilterField[], filters: LayerFilters): str
   }
   return parts.join(" · ");
 }
+
+/**
+ * The spread of a layer's primary measure `v`: its smallest and largest number, whether every value is whole, and
+ * the slider curve (1 linear; 3 when most values sit in the bottom tenth, as fire acres do, so the low end has room).
+ */
+export type MeasureRange = { min: number; max: number; integer: boolean; curve: 1 | 3 };
+
+/**
+ * The range of numeric `v` across a layer's features (popularity score, fire acres, lake depth, wave height...), or
+ * null when it has fewer than two distinct numbers: then there is nothing to threshold and the panel keeps opacity.
+ */
+export function measureRange(fc: GeoJSON.FeatureCollection): MeasureRange | null {
+  const values: number[] = [];
+  let integer = true;
+  for (const f of fc.features) {
+    const v: unknown = f.properties?.v;
+    if (typeof v !== "number" || !Number.isFinite(v)) continue;
+    values.push(v);
+    if (!Number.isInteger(v)) integer = false;
+  }
+  if (values.length < 2) return null;
+  values.sort((a, b) => a - b);
+  const min = values[0];
+  const max = values[values.length - 1];
+  if (!(max > min)) return null;
+  const median = values[Math.floor(values.length / 2)];
+  return { min, max, integer, curve: median - min < (max - min) / 10 ? 3 : 1 };
+}
+
+/** Positions on the threshold slider (an integer track, so the curve can stretch the low end). */
+export const MEASURE_STEPS = 1000;
+
+/** A slider position (0 to MEASURE_STEPS) as a `v` minimum, rounded to whole numbers for whole-number measures. */
+export function measureAt(position: number, range: MeasureRange): number {
+  const t = Math.min(1, Math.max(0, position / MEASURE_STEPS)) ** range.curve;
+  const value = range.min + (range.max - range.min) * t;
+  return range.integer ? Math.round(value) : Math.round(value * 100) / 100;
+}
+
+/** The slider position for a `v` minimum (the inverse of `measureAt`). */
+export function measurePosition(value: number, range: MeasureRange): number {
+  const t = Math.min(1, Math.max(0, (value - range.min) / (range.max - range.min)));
+  return Math.round(t ** (1 / range.curve) * MEASURE_STEPS);
+}
+
+/**
+ * The layer panel's threshold slider as filters: a minimum on `v` through the filters engine, so the count, export
+ * and permalink follow. At (or below) the data minimum the `v` filter is dropped (no filter); above it `v` keeps
+ * features from `value` up to the upper bound already set in the filters panel, else the data maximum. Other
+ * properties' filters are untouched.
+ */
+export function withMeasureMinimum(filters: LayerFilters, value: number, range: MeasureRange): LayerFilters {
+  const { v: current, ...rest } = filters;
+  if (!Number.isFinite(value) || value <= range.min) {
+    // A category list on `v` (rare) survives; only the range goes.
+    return current?.include?.length ? { ...rest, v: { include: current.include } } : rest;
+  }
+  const upper = current?.range && current.range[1] < range.max ? current.range[1] : range.max;
+  const lo = Math.min(value, range.max);
+  return { ...rest, v: { ...(current?.include?.length && { include: current.include }), range: [lo, Math.max(lo, upper)] } };
+}
+
+/** The slider's position for the current filters: the `v` range's lower bound, else the data minimum. */
+export function measureMinimum(filters: LayerFilters | undefined, range: MeasureRange): number {
+  const lo = filters?.v?.range?.[0];
+  return lo === undefined ? range.min : Math.min(range.max, Math.max(range.min, lo));
+}

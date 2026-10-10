@@ -526,3 +526,97 @@ describe("layerLegend (what the map draws, for the panel and the inspect card)",
     expect(list?.className).toContain("max-md:shrink-0");
   });
 });
+
+describe("LayerStack: closing layers and the measure threshold (owner feedback)", () => {
+  const fireCitation = { source: "NIFC", url: "https://data-nifc.opendata.arcgis.com", retrieved: "2026-10-09" };
+  const acres = [50, 120, 900, 4_000, 12_000, 60_000, 380_000];
+  const fires: LoadedLayer = {
+    id: "fire-perimeters",
+    title: "Wildfire perimeters",
+    style: { geometry: "polygon", color: PINK, unit: "acres" },
+    result: {
+      kind: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: acres.map((v, i) => ({
+          type: "Feature" as const,
+          geometry: { type: "Polygon" as const, coordinates: [[[i, 0], [i + 0.5, 0], [i + 0.5, 0.5], [i, 0]]] },
+          properties: { name: `Fire ${i}`, v, acres: v },
+        })),
+      },
+      citation: fireCitation,
+    },
+    receivedAt: "2026-10-09T00:00:00Z",
+  };
+
+  function Panel({ spy, layers }: { spy: (a: MapAction) => void; layers: LoadedLayer[] }) {
+    const [state, dispatch] = useReducer(reduce, {
+      ...initialMapState,
+      layers: Object.fromEntries(layers.map((l) => [l.id, l])),
+      renderOps: layers.map((l) => ({ layerId: l.id, mode: l.style.geometry === "polygon" ? ("polygons" as const) : ("lines" as const), visible: true })),
+    } satisfies MapState);
+    return (
+      <LayerStack
+        layers={state.layers}
+        renderOps={state.renderOps}
+        catalog={null}
+        dispatch={(a) => {
+          spy(a);
+          dispatch(a);
+        }}
+        open
+        onOpenChange={() => {}}
+        shownLayers={visibleState(state).layers}
+      />
+    );
+  }
+
+  it("shows a remove × on every row outside the hover-only controls", () => {
+    const spy = vi.fn();
+    render(<Panel spy={spy} layers={[fires, trails]} />);
+    for (const title of ["Wildfire perimeters", "OSM trails"]) {
+      const remove = screen.getByRole("button", { name: `Remove ${title}` });
+      expect(remove.textContent).toBe("×");
+      expect(remove.closest(".legend-controls")).toBeNull();
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Remove OSM trails" }));
+    expect(spy).toHaveBeenCalledWith({ type: "remove_layer", layerId: "osm-trails" });
+    expect(screen.getAllByTestId("layer-card")).toHaveLength(1);
+  });
+
+  it("replaces opacity with a minimum on v for layers with a numeric measure, through the filters engine", () => {
+    const spy = vi.fn();
+    render(<Panel spy={spy} layers={[fires, trails]} />);
+    const card = screen.getAllByTestId("layer-card").find((c) => c.getAttribute("data-layer-id") === "fire-perimeters")!;
+    expect(within(card).queryByRole("slider", { name: /Opacity/ })).toBeNull();
+    const slider = within(card).getByRole("slider", { name: "Minimum acres for Wildfire perimeters" }) as HTMLInputElement;
+    expect(slider.getAttribute("aria-valuetext")).toBe("All");
+    // Skewed acres take the cubic curve: the middle of the track is an eighth of the span, not half.
+    fireEvent.change(slider, { target: { value: "500" } });
+    const last = spy.mock.calls.at(-1)?.[0] as MapAction & { type: "set_filters" };
+    expect(last.type).toBe("set_filters");
+    const lo = last.filters.v?.range?.[0] ?? 0;
+    expect(lo).toBe(Math.round(50 + (380_000 - 50) * 0.125));
+    expect(last.filters.v?.range?.[1]).toBe(380_000);
+    expect(within(card).getByTestId("layer-count").textContent).toBe("2 / 7");
+    expect(slider.getAttribute("aria-valuetext")).toBe(`≥ ${lo.toLocaleString("en-US")} acres`);
+    // The filter summary has its own ×, which clears every filter.
+    fireEvent.click(within(card).getByRole("button", { name: "Remove filters on Wildfire perimeters" }));
+    expect(spy).toHaveBeenLastCalledWith({ type: "set_filters", layerId: "fire-perimeters", filters: {} });
+    expect(within(card).getByTestId("layer-count").textContent).toBe("7");
+    // Layers without a numeric v keep the opacity fader, and set_opacity still works.
+    const trailsCard = screen.getAllByTestId("layer-card").find((c) => c.getAttribute("data-layer-id") === "osm-trails")!;
+    fireEvent.change(within(trailsCard).getByRole("slider", { name: "Opacity for OSM trails" }), { target: { value: "0.5" } });
+    expect(spy).toHaveBeenLastCalledWith({ type: "set_opacity", layerId: "osm-trails", opacity: 0.5 });
+  });
+
+  it("drops the v filter when the slider returns to the data minimum", () => {
+    const spy = vi.fn();
+    render(<Panel spy={spy} layers={[fires]} />);
+    const slider = screen.getByRole("slider", { name: "Minimum acres for Wildfire perimeters" });
+    fireEvent.change(slider, { target: { value: "800" } });
+    fireEvent.change(slider, { target: { value: "0" } });
+    expect(spy).toHaveBeenLastCalledWith({ type: "set_filters", layerId: "fire-perimeters", filters: {} });
+    expect(screen.getByTestId("layer-count").textContent).toBe("7");
+  });
+});

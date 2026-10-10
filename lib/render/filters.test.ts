@@ -4,7 +4,19 @@ import type { Feature, FeatureCollection } from "geojson";
 import { describe, expect, it } from "vitest";
 import { normalizeFirePerimeters } from "@/layers/fire-perimeters";
 import { normalizeOverpass } from "@/layers/osm-trails";
-import { applyFilters, deriveFilterFields, filterSummary, labelFor, type FilterField } from "@/lib/render/filters";
+import {
+  applyFilters,
+  deriveFilterFields,
+  filterSummary,
+  labelFor,
+  MEASURE_STEPS,
+  measureAt,
+  measureMinimum,
+  measurePosition,
+  measureRange,
+  withMeasureMinimum,
+  type FilterField,
+} from "@/lib/render/filters";
 
 function fixture(name: string): unknown {
   return JSON.parse(fs.readFileSync(path.join(process.cwd(), "layers/__fixtures__", name), "utf8"));
@@ -231,5 +243,35 @@ describe("labelFor", () => {
   it("humanizes everything else", () => {
     expect(labelFor("fire_name")).toBe("Fire name");
     expect(labelFor("bedCount")).toBe("Bed count");
+  });
+});
+
+describe("measure threshold (the layer panel's fader on v)", () => {
+  const fc = (vs: unknown[]): GeoJSON.FeatureCollection => ({
+    type: "FeatureCollection",
+    features: vs.map((v) => ({ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: { v } })),
+  });
+
+  it("finds the range of numeric v, or null without two distinct numbers", () => {
+    expect(measureRange(fc([10, 40, 90, "x", null]))).toEqual({ min: 10, max: 90, integer: true, curve: 1 });
+    expect(measureRange(fc([0.5, 2.25, 3]))).toMatchObject({ integer: false });
+    expect(measureRange(fc([50, 60, 70, 80, 380_000]))).toMatchObject({ curve: 3 });
+    expect(measureRange(fc([5, 5, "x"]))).toBeNull();
+    expect(measureRange(fc(["a", "b"]))).toBeNull();
+  });
+
+  it("maps the slider to a minimum on v and back, with no filter at the data minimum", () => {
+    const range = { min: 0, max: 100, integer: true, curve: 1 as const };
+    expect(measureAt(0, range)).toBe(0);
+    expect(measureAt(MEASURE_STEPS / 2, range)).toBe(50);
+    expect(measurePosition(50, range)).toBe(MEASURE_STEPS / 2);
+    const cubic = { ...range, curve: 3 as const };
+    expect(measurePosition(measureAt(700, cubic), cubic)).toBeCloseTo(700, -1);
+    expect(withMeasureMinimum({}, 40, range)).toEqual({ v: { range: [40, 100] } });
+    expect(withMeasureMinimum({ v: { range: [40, 100] }, kind: { include: ["a"] } }, 0, range)).toEqual({ kind: { include: ["a"] } });
+    // An upper bound set in the filters panel stays.
+    expect(withMeasureMinimum({ v: { range: [10, 70] } }, 30, range)).toEqual({ v: { range: [30, 70] } });
+    expect(measureMinimum({ v: { range: [30, 70] } }, range)).toBe(30);
+    expect(measureMinimum(undefined, range)).toBe(0);
   });
 });

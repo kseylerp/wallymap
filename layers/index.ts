@@ -22,3 +22,4 @@ import "./popularity";
 import "./remoteness";
 import "./mtb-trails";
 import "./earthquakes";
+import "./ski-routes";

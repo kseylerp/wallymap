@@ -24,6 +24,7 @@ export const SYSTEM_PROMPT = [
   "Call list_layers to learn which datasets exist, what they cover, and whether they are available right now.",
   "The usual sequence is: geocode the place the user names, set_view to its bbox, call the query_<layer> tools that answer the question, render each layer you queried, then note a short summary.",
   "Pass the bbox from geocode or set_view to every query tool.",
+  "When the user NAMES a place (a park, town, range, lake), the current map view does not matter: geocode it, call set_view to its bbox before you query so the camera moves to the place they asked about, and pass that bbox to the query tools.",
   "When a Current map view line gives a bbox and the user says here, this area or on screen, or names no place, that bbox is where they mean: pass it to the query tools without calling geocode.",
   "When you answer from the current map view, do not call set_view; the user is already looking at that area.",
   "A layer's area cap may be smaller than the current view; if a layer returns a zoom_in error, shrink the bounding box once to the central quarter and retry that layer once.",

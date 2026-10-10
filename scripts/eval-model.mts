@@ -17,6 +17,7 @@
  * A question may end with `@view=[w,s,e,n]`, the map view the browser would send with it
  * (lib/agent/view.ts). The view goes into the system prompt the way app/api/chat/route.ts
  * puts it there, and the place then counts as located without a geocode.
+ * A question without `@view` that geocodes a named place must also call set_view, or it fails.
  */
 import { readFileSync } from "node:fs";
 import { generateText, stepCountIs } from "ai";
@@ -109,7 +110,10 @@ async function runQuestion(raw: string): Promise<Outcome> {
     // A route question is answered by the route tool alone (it geocodes its own stops).
     // A query that drew something must have been rendered; an empty result or a layer
     // error only needs the note that explains it.
-    const ok = routed && !queried ? noted : located && queried && (drew ? rendered : true) && noted;
+    // A question that names a place (no @view, so the model had to geocode it) must also move the
+    // camera there with set_view; otherwise the data loads off-screen. @view questions are exempt.
+    const movedToPlace = view !== null || !seq.includes("geocode") || seq.includes("set_view");
+    const ok = routed && !queried ? noted : located && movedToPlace && queried && (drew ? rendered : true) && noted;
 
     return {
       ok,

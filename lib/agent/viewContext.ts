@@ -40,13 +40,14 @@ export function viewSystemMessage(view: MapView): string {
   if (!view.bbox) {
     return (
       `Current map view: the whole globe (zoom ${zoom}${place}), so there is no bbox for "here". ` +
-      "Geocode the place the user names; if they name none, ask which area they mean."
+      "Geocode the place the user names, call set_view to its bbox so the camera moves there, then query; if they name none, ask which area they mean."
     );
   }
   return (
     `Current map view: bbox [${view.bbox.join(", ")}] (zoom ${zoom}, about ${widthKm(view.bbox)} km across${place}). ` +
     "When the user says here, this area, on screen, around me, in view, or names no place, use this bbox directly: " +
-    "do not geocode, and do not call set_view."
+    "do not geocode, and do not call set_view. " +
+    "When the user names a place instead, ignore this bbox: geocode the place and call set_view to its bbox before you query, so the camera moves to the place they asked about."
   );
 }
 

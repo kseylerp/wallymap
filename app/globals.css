@@ -467,8 +467,22 @@ textarea:focus-visible {
     opacity: 0;
   }
 }
-/* Visibility: an 11px square, ink when the layer shows. */
+/* A small control that still takes a 28px tap: an invisible box centered on it, at least 28px each way. */
+.hit-target {
+  position: relative;
+}
+.hit-target::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 28px);
+  height: max(100%, 28px);
+  transform: translate(-50%, -50%);
+}
+/* Visibility: an 11px square, ink when the layer shows (a 28px tap, like .hit-target). */
 .legend-check {
+  position: relative;
   width: 11px;
   height: 11px;
   flex-shrink: 0;
@@ -477,6 +491,15 @@ textarea:focus-visible {
   background: transparent;
   cursor: pointer;
   transition: background-color 150ms var(--ease-out);
+}
+.legend-check::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
 }
 .legend-check[aria-pressed="true"] {
   background: var(--ink);

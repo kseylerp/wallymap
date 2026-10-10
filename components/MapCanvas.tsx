@@ -13,6 +13,7 @@ import { buildDeckLayerSets, isClusterFeature, type Padding } from "@/lib/render
 import { pickToSelection, pickUnderHeat, type DeckPick } from "@/lib/render/inspect";
 import { viewFromCamera, type MapView } from "@/lib/agent/view";
 import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
+import { noteTile } from "@/lib/render/tileErrors";
 import { visibleState } from "@/lib/render/view";
 import {
   bearingAt,
@@ -405,12 +406,32 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       syncRouteLayers(map, stateRef.current);
     });
 
+    // Tile layers: count each template's loaded and failed tiles, so a dated layer with no image for the scrubber's
+    // date says so (lib/render/tileErrors.ts). With this listener Mapbox no longer logs errors itself, so every
+    // other error is logged here, and a tile 404 is not logged once per tile.
+    const tileTemplate = (sourceId: unknown): string | undefined => {
+      if (typeof sourceId !== "string" || !sourceId.startsWith("tiles-")) return undefined;
+      return (map.getSource(sourceId) as { tiles?: string[] } | undefined)?.tiles?.[0];
+    };
+    map.on("error", (e: { error?: unknown; sourceId?: unknown; tile?: unknown }) => {
+      const template = e.tile ? tileTemplate(e.sourceId) : undefined;
+      if (template) noteTile(template, false);
+      else console.error(e.error ?? e);
+    });
+    map.on("sourcedata", (e: { sourceId?: unknown; tile?: unknown }) => {
+      if (!e.tile) return;
+      const template = tileTemplate(e.sourceId);
+      if (template) noteTile(template, true);
+    });
+
     // Click to inspect: deck features first (they draw on top), then vector tiles; empty map deselects.
     map.on("click", (e) => {
       const hit = pickAt(map, overlay, stateRef.current, e.point);
       // A cluster blob is a group, not a feature: zoom one level in toward it so it splits (the one camera move a
       // click makes, because the user clicked a group; clicking a feature never moves the camera).
       if (hit && isClusterFeature(hit.feature)) {
+        // Not while a route preview drives the camera: its per-frame jumpTo would fight the ease.
+        if (followingRef.current) return;
         map.easeTo({
           center: hit.feature.geometry.coordinates as [number, number],
           zoom: Math.min(map.getMaxZoom(), map.getZoom() + CLUSTER_ZOOM_STEP),
@@ -809,7 +830,10 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
         const wantedZoom = zoomAt(kmPerMin, center);
         zoom = live.playing ? zoom + (wantedZoom - zoom) * Math.min(1, dt / 600) : wantedZoom;
         // On steep ground tilt up and move in fast, settle back slowly.
-        if (!live.playing || now - fitted.at > 100) fitted = { at: now, ...fitAhead(live.fraction, bearing, target, zoom, kmPerMin) };
+        // The terrain fit samples up to a few hundred heights, so it runs at most every 100 ms playing and 50 ms while
+        // scrubbing; a scrub frame that skips it comes back next frame, so the camera always ends on a fresh fit.
+        if (now - fitted.at > (live.playing ? 100 : 50)) fitted = { at: now, ...fitAhead(live.fraction, bearing, target, zoom, kmPerMin) };
+        else if (!live.playing) live.dirty = true;
         const fit = fitted;
         const wantedCloser = Math.log2(1 / fit.scale);
         if (live.playing) {

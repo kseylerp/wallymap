@@ -8,6 +8,8 @@ import { stepLabel, stepWindow, windowLabel, type Bucket, type TimeIndex, type T
 type TimeScrubberProps = {
   time: TimeState;
   dispatch: (action: MapAction) => void;
+  /** True when a dated tile layer has no image for the window's date (its tiles all failed). */
+  missingImage?: boolean;
 };
 
 /** One bucket's start as the scrubber's axis shows it: "2019", "Mar 2024" or "2024-06-01". */
@@ -33,7 +35,7 @@ const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 h
  * the window's dates, and × to clear. Text only; the window and its handles are purple (palette §11). It only shows and changes state: the play timer runs in
  * the app (lib/render/useTimePlay.ts), so play goes on while the panel is closed.
  */
-export function TimeScrubber({ time, dispatch }: TimeScrubberProps) {
+export function TimeScrubber({ time, dispatch, missingImage = false }: TimeScrubberProps) {
   const { index, window, playing, mode } = time;
   const n = index.buckets.length;
   const i = bucketAt(index, window[0]);
@@ -149,7 +151,7 @@ export function TimeScrubber({ time, dispatch }: TimeScrubberProps) {
           onClick={() => dispatch({ type: "clear_time" })}
           aria-label="Clear time window"
           title="Show all dates"
-          className="px-1 text-[15px] leading-none text-ink-muted transition-colors hover:text-ink"
+          className="hit-target px-1 text-[15px] leading-none text-ink-muted transition-colors hover:text-ink"
         >
           ×
         </button>
@@ -221,7 +223,13 @@ export function TimeScrubber({ time, dispatch }: TimeScrubberProps) {
       </div>
       <div className="mt-1 flex items-baseline justify-between text-[11px] leading-4 text-ink-muted tabular-nums">
         <span>{bucketName(index.buckets[0].start, index.bucket)}</span>
-        <span data-testid="time-step-label">{stepLabel(index)}</span>
+        {missingImage ? (
+          <span role="status" data-testid="time-missing-image" className="text-ink">
+            No image for {bucketName(index.buckets[j].start, index.bucket)}
+          </span>
+        ) : (
+          <span data-testid="time-step-label">{stepLabel(index)}</span>
+        )}
         <span>{bucketName(index.buckets[n - 1].start, index.bucket)}</span>
       </div>
 

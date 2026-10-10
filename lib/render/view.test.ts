@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { TileTime } from "@/layers/types";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
-import { featureCounts, isSelectionVisible, visibleState } from "@/lib/render/view";
+import { featureCounts, isSelectionVisible, variantsKept, visibleState } from "@/lib/render/view";
 
 const feat = (props: Record<string, unknown>): Feature => ({
   type: "Feature",
@@ -95,5 +95,14 @@ describe("visibleState", () => {
     ) as Feature[];
     expect(isSelectionVisible(s, { layerId: "fire-perimeters", feature: inside, lngLat: [0, 0] })).toBe(true);
     expect(isSelectionVisible(s, { layerId: "fire-perimeters", feature: outside, lngLat: [0, 0] })).toBe(false);
+  });
+});
+
+describe("variantsKept", () => {
+  it("keeps 64 versions of a small layer and fewer of a dense one, never under 8", () => {
+    expect(variantsKept(0)).toBe(64);
+    expect(variantsKept(500)).toBe(64);
+    expect(variantsKept(2000)).toBe(16);
+    expect(variantsKept(100_000)).toBe(8);
   });
 });

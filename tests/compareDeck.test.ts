@@ -1,5 +1,6 @@
 import type { Feature, Polygon } from "geojson";
 import { GeoJsonLayer } from "@deck.gl/layers";
+import { drawnCount } from "@/components/LayerStack";
 import { describe, expect, it } from "vitest";
 import { COMPARE_COLORS, DELTA_FILL_ALPHA } from "@/lib/render/compareView";
 import { HEX_COLUMN } from "@/lib/render/palette";
@@ -182,5 +183,16 @@ describe("swipe and toggle", () => {
     expect(sets.a).toEqual([]);
     expect(sets.b).toEqual([]);
     expect(sets.main.map((l) => l.id)).toEqual(["fire-perimeters:polygons:casing", "fire-perimeters:polygons"]);
+  });
+});
+
+describe("the layer row's count during a compare", () => {
+  it("counts the features on either side of a swipe or toggle, not side A as if filtered", () => {
+    for (const mode of ["swipe", "toggle"] as const) {
+      const v = view(mode);
+      expect(drawnCount(v.layers["fire-perimeters"], v.layers["fire-perimeters~b"])).toBe(2);
+    }
+    const plain = visibleState(base);
+    expect(drawnCount(plain.layers["fire-perimeters"], undefined)).toBe(2);
   });
 });

@@ -6,8 +6,18 @@ import { activeFilters, fullWindow } from "@/lib/render/reducer";
 import type { LoadedLayer, MapState, Selection } from "@/lib/render/state";
 import { filterByWindow, inWindow, tileUrlForTime, type TimeWindow } from "@/lib/time";
 
-/** How many derived versions of one layer are kept (a played year-by-year span fits). */
+/**
+ * How many derived versions of one layer are kept: up to 64 (a played year-by-year span fits) for small layers, fewer
+ * for dense ones, since each version's data carries its own cluster index, hex bins and columns (lib/render/deck.ts).
+ * About 32,000 features across a layer's versions, never fewer than 8 versions.
+ */
 const MAX_PER_LAYER = 64;
+const MIN_PER_LAYER = 8;
+const FEATURE_BUDGET = 32_000;
+
+export function variantsKept(features: number): number {
+  return Math.max(MIN_PER_LAYER, Math.min(MAX_PER_LAYER, Math.floor(FEATURE_BUDGET / Math.max(1, features))));
+}
 
 const stateMemo = new WeakMap<MapState, MapState>();
 const layerMemo = new WeakMap<LoadedLayer, Map<string, LoadedLayer>>();
@@ -33,7 +43,8 @@ function remember(layer: LoadedLayer, key: string, derive: () => LoadedLayer): L
   }
   const hit = byKey.get(key);
   if (hit) return hit;
-  if (byKey.size >= MAX_PER_LAYER) byKey.clear();
+  const features = layer.result.kind === "geojson" ? layer.result.data.features.length : 0;
+  if (byKey.size >= variantsKept(features)) byKey.clear();
   const next = derive();
   byKey.set(key, next);
   return next;

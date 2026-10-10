@@ -270,7 +270,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
             aria-label="Exit compare"
             title="Exit compare"
             data-testid="compare-exit"
-            className="px-1 text-[15px] leading-none text-ink-muted transition-colors hover:text-ink"
+            className="hit-target px-1 text-[15px] leading-none text-ink-muted transition-colors hover:text-ink"
           >
             ×
           </button>
@@ -362,7 +362,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
               aria-label="Exit compare"
               title="Exit compare"
               data-testid="compare-exit"
-              className="px-1 text-[15px] leading-none text-ink-muted transition-colors hover:text-ink"
+              className="hit-target px-1 text-[15px] leading-none text-ink-muted transition-colors hover:text-ink"
             >
               ×
             </button>

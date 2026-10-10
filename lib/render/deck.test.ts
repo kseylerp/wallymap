@@ -12,6 +12,7 @@ import {
   hexTileColor,
   hexToRgba,
   hexbin,
+  ignoreTileError,
   scoreRampColor,
 } from "@/lib/render/deck";
 import { DARK_GREY, OFF_WHITE, PINK, PURPLE, SAGE, WHITE as WHITE_HEX } from "@/lib/render/palette";
@@ -510,6 +511,8 @@ describe("draping on 3D terrain", () => {
     const p = props(source);
     expect(p.operation).toBe("terrain+draw");
     expect(p.pickable).toBe(false);
+    // Sea tiles the DEM lacks 404; they are skipped without a console error each.
+    expect(p.onTileError).toBe(ignoreTileError);
     expect(p.color).toEqual([0, 0, 0, 0]);
     // Unlit, and un-premultiplied at the end, or translucent draped tints darken (fire read maroon).
     expect(p.material).toEqual(UNLIT);

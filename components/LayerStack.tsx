@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useId, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { LayerFilters } from "@/components/LayerFilters";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
@@ -20,10 +20,11 @@ import {
 } from "@/lib/render/filters";
 import type { Feature } from "geojson";
 import { LegendKey } from "@/components/LegendKey";
-import { COMPARE_COLORS, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
+import { COMPARE_COLORS, compareBId, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
 import { hexbinThreshold } from "@/lib/render/deck";
 import { WHITE } from "@/lib/render/palette";
 import { POINT_MODES, type LoadedLayer, type MapAction, type MapState, type RenderMode, type RenderOp, type Selection, type TimeState } from "@/lib/render/state";
+import { hasMissingImage, missingTilesStore } from "@/lib/render/tileErrors";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
 import { hexTileLegend, legendSymbol, type LegendMode, type LegendSymbol } from "@/lib/render/wally/legend";
 
@@ -78,7 +79,7 @@ function PointModeControl({ layer, mode, dispatch }: { layer: LoadedLayer; mode:
             type="button"
             aria-pressed={current === m.value}
             onClick={() => current !== m.value && dispatch({ type: "set_style", layerId: layer.id, mode: m.value })}
-            className={`transition-colors duration-150 ${current === m.value ? "text-ink underline decoration-1 underline-offset-[3px]" : "text-ink-muted hover:text-ink"}`}
+            className={`hit-target transition-colors duration-150 ${current === m.value ? "text-ink underline decoration-1 underline-offset-[3px]" : "text-ink-muted hover:text-ink"}`}
           >
             {m.label}
           </button>
@@ -157,10 +158,22 @@ function legendModeFor(layer: LoadedLayer, op: RenderOp | undefined): LegendMode
   return layer.style.geometry === "polygon" ? "polygons" : layer.style.geometry === "line" ? "lines" : "points";
 }
 
+/**
+ * Features drawn for a layer: the visible entry's count, or, while a swipe or toggle compare draws it twice, the
+ * features on either side (side A alone read like a filter: "390 / 585" for an unfiltered layer). Null for tiles.
+ */
+export function drawnCount(shown: LoadedLayer | undefined, sideB: LoadedLayer | undefined): number | null {
+  if (shown?.result.kind !== "geojson") return null;
+  if (sideB?.result.kind !== "geojson") return shown.result.data.features.length;
+  return new Set([...shown.result.data.features, ...sideB.result.data.features]).size;
+}
+
 type RowProps = {
   layer: LoadedLayer;
   /** The layer as drawn (time window and filters applied); its count shows as shown / total when smaller. */
   shownLayer: LoadedLayer | undefined;
+  /** Side B of a swipe or toggle compare of this layer (then `shownLayer` is side A); the count is both sides'. */
+  shownLayerB?: LoadedLayer;
   op: RenderOp | undefined;
   license: string | undefined;
   dispatch: (action: MapAction) => void;
@@ -238,11 +251,11 @@ function MeasureSlider({
  * feature count in tabular figures and an always-visible ×, and (on hover or focus) visibility, the measure threshold
  * (or opacity, for layers without a numeric `v`), mode and filters.
  */
-function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps, armDrag, dropTarget, dragging, selected }: RowProps) {
+function LegendRow({ layer, shownLayer, shownLayerB, op, license, dispatch, onMove, dragProps, armDrag, dropTarget, dragging, selected }: RowProps) {
   const visible = op?.visible ?? false;
   const opacity = op?.opacity ?? 1;
   const count = layer.result.kind === "geojson" ? layer.result.data.features.length : null;
-  const shownCount = shownLayer?.result.kind === "geojson" ? shownLayer.result.data.features.length : count;
+  const shownCount = drawnCount(shownLayer, shownLayerB) ?? count;
   const data = layer.result.kind === "geojson" ? layer.result.data : null;
   const unit = layer.style.unit;
   const fields = useMemo<FilterField[]>(() => (data ? deriveFilterFields(data, { unitForV: unit }) : []), [data, unit]);
@@ -461,6 +474,9 @@ export function LayerStack({
   compareSlot,
 }: LayerStackProps) {
   const items = stackOrder(layers, renderOps);
+  // A dated tile layer whose tiles all failed for the window's date (lib/render/tileErrors.ts).
+  const missingTiles = useSyncExternalStore(missingTilesStore.subscribe, missingTilesStore.get, missingTilesStore.get);
+  const missingImage = time !== undefined && hasMissingImage(shownLayers ?? layers, missingTiles);
   const [armed, setArmed] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -489,7 +505,7 @@ export function LayerStack({
       <div data-slot="time-scrubber" className="shrink-0 empty:hidden">
         {time && (
           <>
-            <TimeScrubber time={time} dispatch={dispatch} />
+            <TimeScrubber time={time} dispatch={dispatch} missingImage={missingImage} />
             <div aria-hidden className="hairline mx-5" />
           </>
         )}
@@ -526,6 +542,7 @@ export function LayerStack({
               key={layer.id}
               layer={layer}
               shownLayer={shownLayers?.[layer.id]}
+              shownLayerB={shownLayers?.[compareBId(layer.id)]}
               op={op}
               license={catalog?.[layer.id]?.license}
               dispatch={dispatch}

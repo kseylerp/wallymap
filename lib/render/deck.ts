@@ -1268,6 +1268,9 @@ const unpremultiplyExtension = new UnpremultiplyExtension();
  * Deck's invisible copy of the map's terrain: a TerrainLayer over the same DEM, drawn fully transparent so only
  * the draped data layers show, and read by the TerrainExtension to stand pins on the slopes.
  */
+/** Deck's terrain tiles that fail (sea tiles the DEM does not have) are skipped quietly. */
+export function ignoreTileError(): void {}
+
 function terrainSourceLayer(token: string): Layer {
   return new TerrainLayer({
     id: DECK_TERRAIN_ID,
@@ -1282,6 +1285,9 @@ function terrainSourceLayer(token: string): Layer {
     material: UNLIT,
     operation: "terrain+draw",
     pickable: false,
+    // The DEM has no tiles over open ocean, so every sea tile 404s. Mapbox's terrain reads a missing tile as sea level;
+    // here it just leaves that tile flat-less, and deck's default handler would log a FetchError for each one.
+    onTileError: ignoreTileError,
     // Same GlobeView winding flip as the pins: with back-face culling on, deck draws no terrain mesh at all.
     parameters: { cullMode: "none" },
     extensions: [unpremultiplyExtension],

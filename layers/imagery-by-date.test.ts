@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { compactDescription } from "@/lib/agent/tools";
-import layer, { HIT_CHARS, probeDays, tileFor } from "./imagery-by-date";
+import layer, { probeDays, tileFor } from "./imagery-by-date";
 import probes from "./__fixtures__/hls-probe.yosemite.json";
 
 /**
@@ -32,7 +32,7 @@ async function tiles(fetch: ReturnType<typeof vi.fn>, input: Record<string, unkn
 }
 
 function calls(fetch: ReturnType<typeof vi.fn>) {
-  return fetch.mock.calls as unknown as [string, { cacheKey: string; ttlSeconds: number; shouldCache: (b: string) => boolean }][];
+  return fetch.mock.calls as unknown as [string, { cacheKey: string; ttlSeconds: number; shouldCache?: unknown }][];
 }
 
 beforeEach(() => {
@@ -85,13 +85,12 @@ describe("imagery-by-date", () => {
     expect(calls(f).every(([u]) => u.includes("HLS_L30"))).toBe(true);
   });
 
-  it("caches blank probes only, longer for old days", async () => {
+  it("caches every probe answer, blank or not, longer for old days", async () => {
     const f = stub();
     await tiles(f, { date: "2026-10-04" });
     const [, init] = calls(f)[0];
     expect(init.cacheKey).toMatch(/^imagery-by-date:probe:(landsat|sentinel):9\/85\/197:2026-10-04$/);
-    expect(init.shouldCache("x".repeat(334))).toBe(true);
-    expect(init.shouldCache("x".repeat(HIT_CHARS))).toBe(false);
+    expect(init.shouldCache).toBeUndefined();
     expect(init.ttlSeconds).toBe(86_400);
     const old = stub();
     await tiles(old, { date: "2020-06-01" });
@@ -103,8 +102,22 @@ describe("imagery-by-date", () => {
     const r = await tiles(blank, { date: "2020-06-01" });
     expect(r.data.url).toContain("HLS_S30_");
     expect(r.data.url).toContain("/2020-06-01/");
-    expect(r.coverageNote).toMatch(/no satellite pass found .* within 5 days of 2020-06-01/);
+    expect(r.coverageNote).toMatch(/no satellite pass found .* from 5 days before to 4 after 2020-06-01/);
     expect(blank).toHaveBeenCalledTimes(20);
+  });
+
+  it("does not count a failed probe as blank, and says which days could not be checked", async () => {
+    const flaky = vi.fn(async (url: string) => {
+      if (url.includes("/2026-10-01/")) return new Response("busy", { status: 503 });
+      return stub()(url);
+    });
+    const r = await tiles(flaky, { date: "2026-10-01" });
+    expect(r.data.url).toContain("/2026-09-30/");
+    expect(r.coverageNote).toContain("nearer days could not be checked (2026-10-01)");
+
+    const down = vi.fn(async () => new Response("busy", { status: 503 }));
+    const none = await tiles(down, { date: "2020-06-01" });
+    expect(none.coverageNote).toMatch(/not verified: the satellite check failed for 2020-06-01, /);
   });
 
   it("publishes a daily time template for the scrubber and compare", async () => {

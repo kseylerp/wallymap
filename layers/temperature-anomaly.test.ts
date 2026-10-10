@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import { countiesUrl, countyOffset, parseCounties } from "./_shared/counties";
+import { countiesUrl, countyOffset, parseCounties, roundedBbox } from "./_shared/counties";
 import layer, { anomalyUrl, joinAnomalies, latestCandidates, periodEnd } from "./temperature-anomaly";
 import countiesFixture from "./__fixtures__/counties.sfbay.json";
 import nceiFixture from "./__fixtures__/ncei-county-tavg.202609-1.json";
@@ -50,6 +50,8 @@ describe("county outlines", () => {
     expect(more).toBe(false);
     expect(counties.find((c) => c.fips === "06075")).toMatchObject({ stateAbbr: "CA", countyFips: "075", name: "San Francisco County" });
     expect(parseCounties({ type: "FeatureCollection", features: [], properties: { exceededTransferLimit: true } }).more).toBe(true);
+    expect(roundedBbox([-122.7041, 37.2, -121.6999, 38.20001])).toEqual([-122.71, 37.2, -121.69, 38.21]);
+    expect(roundedBbox([-180, -90, 180, 90])).toEqual([-180, -90, 180, 90]);
   });
 });
 
@@ -92,6 +94,7 @@ describe("temperature-anomaly", () => {
     expect(ncei?.[1]).toMatchObject({ cacheKey: "temperature-anomaly:202609:1", ttlSeconds: 604_800 });
     const outline = c.find(([u]) => u.includes("USA_Counties"));
     expect(outline?.[1].cacheKey).toBe("counties:v1:-122.70,37.20,-121.70,38.20:0");
+    expect(new URL(outline?.[0] ?? "").searchParams.get("geometry")).toBe("-122.7,37.2,-121.7,38.2");
   });
 
   it("falls back a month when last month is not out yet, and errors for an unpublished period", async () => {

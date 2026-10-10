@@ -23,13 +23,13 @@ function ctx(stub: ReturnType<typeof vi.fn>, bbox = HOUSTON) {
   return { bbox, zoom: 8, env: {}, fetch: stub as unknown as CachedFetch, cacheKey: "disasters:k" };
 }
 
-/** GDACS answers with the fixture's events of the requested type; page 2 ends the list like the real 204 does. */
+/** GDACS answers with the fixture's events of the requested type; page 2 is the closing 204, as the fetch wrapper passes it on. */
 function routed() {
   return vi.fn(async (url: string) => {
     if (url.includes("USA_Counties")) return json(countiesFixture);
     if (url.includes("fema.gov")) return json(femaFixture);
     const u = new URL(url);
-    if (u.searchParams.get("pagenumber") !== "1") throw new TypeError("Response constructor: Invalid response status code 204");
+    if (u.searchParams.get("pagenumber") !== "1") return new Response(null, { status: 204 });
     const code = u.searchParams.get("eventlist");
     return json({ type: "FeatureCollection", features: gdacsFixture.features.filter((f) => f.properties.eventtype === code) });
   });
@@ -119,7 +119,7 @@ describe("disasters layer", () => {
       if (!url.includes("gdacs")) return json({ type: "FeatureCollection", features: [] });
       const page = new URL(url).searchParams.get("pagenumber");
       if (page === "1") return json({ type: "FeatureCollection", features: full });
-      throw new TypeError("Response constructor: Invalid response status code 204");
+      return new Response(null, { status: 204 });
     });
     const r = await layer.query(ctx(stub, [-180, -80, 180, 80]), layer.input.parse({ days: 30 }));
     expect(r).toMatchObject({ kind: "geojson" });
@@ -142,6 +142,17 @@ describe("disasters layer", () => {
     const femaDown = vi.fn(async (url: string) => (url.includes("fema.gov") ? new Response("no", { status: 500 }) : routed()(url)));
     const r = await layer.query(ctx(femaDown), layer.input.parse({}));
     expect(r).toMatchObject({ kind: "geojson", coverageNote: expect.stringContaining("FEMA declarations could not be loaded") });
+  });
+
+  it("says to shorten years when FEMA rows are cut, and notes Connecticut", async () => {
+    const many = vi.fn(async (url: string) =>
+      url.includes("fema.gov") ? json({ ...femaFixture, metadata: { ...femaFixture.metadata, count: 20_000 } }) : routed()(url),
+    );
+    expect(await layer.query(ctx(many), layer.input.parse({}))).toMatchObject({ coverageNote: expect.stringContaining("shorten years") });
+    const ct = { type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "Point", coordinates: [-72.7, 41.7] }, properties: { FIPS: "09110", STATE_ABBR: "CT", COUNTY_FIPS: "110", NAME: "Capitol Planning Region" } }] };
+    const ctStub = vi.fn(async (url: string) => (url.includes("USA_Counties") ? json(ct) : routed()(url)));
+    const r = await layer.query(ctx(ctStub, [-73.5, 41, -72, 42]), layer.input.parse({}));
+    expect(r).toMatchObject({ coverageNote: expect.stringContaining("Connecticut has no FEMA county polygons") });
   });
 
   it("describes kinds, sources, inputs and the user's words", () => {

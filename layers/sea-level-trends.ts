@@ -97,8 +97,8 @@ const seaLevelTrends = defineLayer({
   id: "sea-level-trends",
   title: "Sea level trends (NOAA tide gauges)",
   description:
-    "How fast the sea has been rising (or falling) at long-running tide gauges, from NOAA, on US coasts and around the world (about 500 stations). " +
-    "Each point is a station with name, v (the long-term trend in millimetres per year, mm/yr), trendError (plus or minus, the 95% confidence range), " +
+    "The measured long-term rate of sea level change at about 500 NOAA tide gauges on US coasts and worldwide: v in millimetres per year (mm/yr, negative where it falls), a straight-line fit to the past record (relative to the land, so sinking land adds to it), not a forecast. " +
+    "Each point is a station with name, v (the trend, mm/yr), trendError (plus or minus, the 95% confidence range), " +
     "startYear and endYear (the record the trend is fitted to), ftPerCentury (the same rate as feet per 100 years), kind ('rising' or 'falling'), network ('US' or 'global'), annotation (NOAA's warning, e.g. a datum shift) and url (the station's trend page). " +
     "The rate is relative sea level: ocean rise plus the land sinking or rising under the gauge, which is what matters at that shore. " +
     "So it differs a lot between places: about 3 mm/yr is typical, 5 to 10 where the land sinks (Louisiana, Chesapeake Bay, Texas), and negative where land rebounds after the ice age (Alaska, Scandinavia). " +
@@ -139,11 +139,11 @@ const seaLevelTrends = defineLayer({
     }
     const all = trendFeatures(parseTrends(body), ctx.bbox);
     const features = all.slice(0, MAX_STATIONS);
-    const notes: string[] = [];
+    const notes: string[] = ["Measured long-term sea level rates at tide gauges, mm/yr relative to the land; past trends, not a forecast"];
     if (all.length > features.length) notes.push(`Showing the ${MAX_STATIONS} fastest-rising of ${all.length} stations; zoom in for the rest`);
     if (features.length === 0) notes.push("No NOAA sea level trend stations in this view; they sit on coasts");
     const data: FeatureCollection = { type: "FeatureCollection", features };
-    return { kind: "geojson", data, citation, ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}) };
+    return { kind: "geojson", data, citation, coverageNote: notes.join("; ") };
   },
 });
 

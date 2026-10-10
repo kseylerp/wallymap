@@ -13,8 +13,8 @@
  * (z9 x85 y197) from 2026-09-24 to 2026-10-08, L30 had imagery on 09-28, 09-29, 10-06, 10-07 and S30 on 09-25, 09-27,
  * 09-30, 10-02, 10-05, 10-07: a pass every one to three days with both sensors.
  * The probe searches outward from the asked day (d, d-1, d+1, d-2, ...), up to 10 days, two days at a time. A blank
- * answer is cached (a day for recent days, which may still fill in, 30 days for older ones); a hit is not cached
- * (it is a 100 KB image, and only one or two are fetched per query).
+ * answer and a hit are both cached (a day for recent days, which may still fill in, 30 days for older ones). A probe
+ * that fails (error, timeout) is not a blank: the search goes on, and the result says when a day could not be checked.
  * Live smoke 2026-10-10 through runLayer, Yosemite [-119.7,37.7,-119.5,37.8]: asked 2026-10-01 (no pass), answered
  * 2026-09-30 Sentinel-2 in 0.5 s; default date (2026-10-08) answered 2026-10-07 Landsat (both passed; Landsat's tile was
  * fuller). Lahaina [-156.75,20.8,-156.6,20.95] asked 2023-08-12, answered 2023-08-13 Sentinel-2 in 3.4 s.
@@ -35,8 +35,8 @@ export const MAX_PROBE_DAYS = 10;
 const DAYS_PER_WAVE = 2;
 /** A tile body at least this long holds imagery; blank tiles are under 1,200 bytes. */
 export const HIT_CHARS = 8_000;
-const RECENT_MISS_TTL = 86_400;
-const OLD_MISS_TTL = 30 * 86_400;
+const RECENT_PROBE_TTL = 86_400;
+const OLD_PROBE_TTL = 30 * 86_400;
 
 export const SENSORS = {
   landsat: { id: "HLS_L30_Nadir_BRDF_Adjusted_Reflectance", from: "2013-03-22", label: "Landsat 8/9 (HLS L30)" },
@@ -75,30 +75,30 @@ function probeUrl(sensor: Sensor, day: string, tile: { x: number; y: number }): 
   return gibsTileUrl(SENSORS[sensor].id, day, LEVEL).replace("{z}", String(PROBE_ZOOM)).replace("{y}", String(tile.y)).replace("{x}", String(tile.x));
 }
 
-/** Length of the probe tile's body (0 when the call failed). */
-async function probe(ctx: QueryContext, sensor: Sensor, day: string, tile: { x: number; y: number }, now: number): Promise<number> {
+/** Length of the probe tile's body, or null when the call failed (unknown, not blank). */
+async function probe(ctx: QueryContext, sensor: Sensor, day: string, tile: { x: number; y: number }, now: number): Promise<number | null> {
   const recent = Date.parse(`${day}T00:00:00Z`) > now - 7 * DAY_MS;
   try {
     const res = await ctx.fetch(probeUrl(sensor, day, tile), {
       cacheKey: `imagery-by-date:probe:${sensor}:${PROBE_ZOOM}/${tile.x}/${tile.y}:${day}`,
-      ttlSeconds: recent ? RECENT_MISS_TTL : OLD_MISS_TTL,
-      // Only blank answers are worth keeping; an image is large and is fetched again if asked.
-      shouldCache: (body) => body.length < HIT_CHARS,
+      ttlSeconds: recent ? RECENT_PROBE_TTL : OLD_PROBE_TTL,
       timeoutMs: UPSTREAM_TIMEOUT_MS,
     });
-    if (!res.ok) return 0;
+    if (!res.ok) return null;
     return (await res.text()).length;
   } catch {
-    return 0;
+    return null;
   }
 }
 
-export type Pick = { day: string; sensor: Sensor; probes: number } | { day: null; probes: number };
+/** `unchecked`: days nearer the asked day than the answer (or all days, when none had a pass) whose probes all failed. */
+export type Pick = { day: string; sensor: Sensor; probes: number; unchecked: string[] } | { day: null; probes: number; unchecked: string[] };
 
 /** The nearest day with imagery over the bbox centre, and the sensor whose tile there is fuller. */
 export async function nearestPass(ctx: QueryContext, bbox: BBox, days: string[], sensors: Sensor[], now: number): Promise<Pick> {
   const tile = tileFor((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2, PROBE_ZOOM);
   let probes = 0;
+  const unchecked: string[] = [];
   for (let i = 0; i < days.length; i += DAYS_PER_WAVE) {
     const wave = days.slice(i, i + DAYS_PER_WAVE);
     const sizes = await Promise.all(
@@ -106,11 +106,13 @@ export async function nearestPass(ctx: QueryContext, bbox: BBox, days: string[],
     );
     probes += sizes.length;
     for (const day of wave) {
-      const hits = sizes.filter((s) => s.day === day && s.size >= HIT_CHARS).sort((a, b) => b.size - a.size);
-      if (hits.length > 0) return { day, sensor: hits[0].sensor, probes };
+      const ofDay = sizes.filter((s) => s.day === day);
+      const hits = ofDay.filter((s) => s.size !== null && s.size >= HIT_CHARS).sort((a, b) => (b.size ?? 0) - (a.size ?? 0));
+      if (hits.length > 0) return { day, sensor: hits[0].sensor, probes, unchecked };
+      if (ofDay.length > 0 && ofDay.every((s) => s.size === null)) unchecked.push(day);
     }
   }
-  return { day: null, probes };
+  return { day: null, probes, unchecked };
 }
 
 const imageryByDate = defineLayer({
@@ -118,9 +120,9 @@ const imageryByDate = defineLayer({
   title: "Satellite image by date (Landsat and Sentinel-2)",
   description:
     "A true-colour satellite picture of the ground on a chosen day, at 30 m (fields, burn scars, floods, snow, new roads and clearings show; houses and cars do not), from NASA's Harmonized Landsat and Sentinel-2 (HLS), worldwide over land. " +
-    "date (YYYY-MM-DD; default the newest, about 2 days ago) is the day wanted; satellites pass a place only every few days, so the layer shows the nearest day with a pass over the view's centre (up to 5 days either side), and its coverage note names that day: tell the user. " +
+    "date (YYYY-MM-DD; default the newest, about 2 days ago) is the day wanted; satellites pass a place only every few days, so the layer shows the nearest day with a pass over the view's centre (up to 5 days before or 4 after), and its coverage note names that day: tell the user. " +
     "sensor is 'auto' (default, either satellite), 'landsat' (Landsat 8/9, from 2013) or 'sentinel' (Sentinel-2, from late 2015). " +
-    "For before and after (a fire, a flood, a shrinking lake), query once per date with the same sensor to learn the days with a pass, then use the compare tool with a and b set to those two days. " +
+    "For before and after (a fire, a flood, a shrinking lake), set sensor to 'landsat' or 'sentinel' (the same for both) and query once per date to learn the days with a pass, then use the compare tool with a and b set to those two days. " +
     "Example questions: 'Show me a satellite image of Lahaina before and after the 2023 fire', 'What did Lake Mead look like on 2022-07-15?', 'Satellite photo of this area last week'. User words: satellite image on a date, before and after, satellite photo. " +
     "Caveats: clouds are not removed, so a cloudy day looks white; edges of a satellite's strip can cut through the view, leaving part of it blank; the search only checks the centre of the view. " +
     "Returns map tiles, not features you can count or list; describe what you see in general terms. Zoom in to under 1,000,000 km² first.",
@@ -147,7 +149,10 @@ const imageryByDate = defineLayer({
     if (pick.day === null) {
       day = choice.date;
       sensor = sensors.includes("sentinel") && day >= SENSORS.sentinel.from ? "sentinel" : sensors[0];
-      note = `${SENSORS[sensor].label} for ${day}: no satellite pass found over the centre of the view within 5 days of ${asked}, so the map may be blank; try another date`;
+      note =
+        pick.unchecked.length > 0
+          ? `${SENSORS[sensor].label} for ${day}, not verified: the satellite check failed for ${pick.unchecked.join(", ")} and found no pass on the other days, so the map may be blank`
+          : `${SENSORS[sensor].label} for ${day}: no satellite pass found over the centre of the view from 5 days before to 4 after ${asked}, so the map may be blank; try another date`;
     } else {
       day = pick.day;
       sensor = pick.sensor;
@@ -155,6 +160,7 @@ const imageryByDate = defineLayer({
         day === asked
           ? `${SENSORS[sensor].label} true colour for ${day}`
           : `${SENSORS[sensor].label} true colour for ${day}, the nearest day with a pass over the view to ${asked}`;
+      if (pick.unchecked.length > 0) note += `; nearer days could not be checked (${pick.unchecked.join(", ")})`;
     }
     if (choice.note !== undefined) note += ` (${choice.note})`;
 

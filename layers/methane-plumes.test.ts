@@ -88,7 +88,8 @@ describe("methane-plumes", () => {
       url.includes("/plumes/") ? json({ bbox_count: 0, items: [] }) : json({ type: "FeatureCollection", features: [] }),
     );
     const r = await layer.query(ctx(empty), layer.input.parse({ days: 90 }));
-    expect(r).toMatchObject({ coverageNote: "No methane plumes seen here in the last 90 days (or not yet observed)" });
+    expect(r).toMatchObject({ coverageNote: expect.stringContaining("No methane plumes seen here in the last 90 days (or not yet observed)") });
+    expect((r as { coverageNote: string }).coverageNote).toMatch(/^kind 'plume' is one sighting \(v = kg\/h then\)/);
   });
 
   it("describes the unit, kinds, licence and words for the model", () => {

@@ -101,6 +101,9 @@ export function looksLikeUpstreamFailure(body: string): boolean {
   return typeof record.remark === "string" && FAILURE_REMARK.test(record.remark);
 }
 
+/** Header set on a 204 or 205 answer the wrapper passes back with no body. */
+export const EMPTY_BODY_HEADER = "x-empty-body";
+
 /** Status a fetch returns when `validate` rejects a 2xx body, so callers' `!res.ok` paths report it as upstream. */
 export const INVALID_BODY_STATUS = 502;
 
@@ -163,6 +166,11 @@ export function createLayerFetch(layerId: string, opts: LayerFetchOptions = {}):
     }
     const response = await fetch(url, requestInit);
     if (response.status < 200 || response.status >= 300) return response;
+    // 204 and 205 have no body (`new Response("", { status: 204 })` throws). Pass an empty answer back, marked and uncached:
+    // it is a signal such as "no more pages", not data.
+    if (response.status === 204 || response.status === 205) {
+      return new Response(null, { status: response.status, headers: { [EMPTY_BODY_HEADER]: "1" } });
+    }
 
     const responseText = await response.text();
     if (validate !== undefined && !validate(responseText)) {

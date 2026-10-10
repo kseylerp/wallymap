@@ -170,7 +170,7 @@ const methanePlumes = defineLayer({
   id: "methane-plumes",
   title: "Methane plumes (Carbon Mapper)",
   description:
-    "Methane leaks and plumes detected from aircraft and satellites (Carbon Mapper: Tanager, AVIRIS-3, EMIT, GAO), worldwide but only where they have flown or imaged, mostly oil and gas fields, landfills, dairies and coal mines. " +
+    "Methane leaks seen from aircraft and satellites by Carbon Mapper, as points of two kinds: 'plume' (one plume on one pass; v = its emission rate in kilograms of methane per hour, kg/h; t = when seen) and 'source' (a place where plumes recur; v = its average kg/h, t = last seen, persistence 0 to 1), only where Carbon Mapper has flown or imaged, mostly oil and gas fields, landfills, dairies and coal mines. " +
     "Two kinds of point: kind 'plume' is one plume seen on one pass, with t (observation time, UTC), v (emission rate in kilograms of methane per hour, kg/h, when estimated), uncertainty (plus or minus kg/h), sector, platform and windMs; " +
     "kind 'source' is a place where plumes keep appearing, with v (average kg/h of its plumes), t (last plume seen), firstSeen, plumeCount, persistence (0 to 1, the share of overflights that saw a plume; near 1 means it leaks most times it is checked), sector and basin. " +
     "sector is oil and gas, coal mining, landfill, wastewater, livestock (manure), power plant, manufacturing or other. days (30 to 3650, default 730) sets how far back to look. " +
@@ -199,7 +199,7 @@ const methanePlumes = defineLayer({
     const keptSources = allSources.slice(0, MAX_SOURCES);
     const features = [...keptSources, ...plumeFeatures(plumeItems)];
 
-    const notes: string[] = [];
+    const notes: string[] = ["kind 'plume' is one sighting (v = kg/h then); kind 'source' is a recurring site (v = average kg/h, persistence = share of passes with a plume)"];
     if (plumeCount > plumeItems.length) notes.push(`Showing the ${plumeItems.length} largest of ${plumeCount} plumes`);
     if (allSources.length > keptSources.length) notes.push(`Showing the ${MAX_SOURCES} largest of ${allSources.length} sources`);
     if (!plumes.ok) notes.push("Plumes could not be loaded; showing sources only");
@@ -215,7 +215,7 @@ const methanePlumes = defineLayer({
         url: "https://data.carbonmapper.org/",
         retrieved: new Date(now).toISOString(),
       },
-      ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
+      coverageNote: notes.join("; "),
     };
   },
 });

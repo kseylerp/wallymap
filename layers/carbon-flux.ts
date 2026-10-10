@@ -45,7 +45,7 @@ const carbonFlux = defineLayer({
   id: "carbon-flux",
   title: "Forest carbon flux",
   description:
-    "Global map of how much carbon forests take up or give off, from Global Forest Watch (Harris et al. 2021, updated 2025), 30 m pixels where tree canopy was at least 30% in 2000. " +
+    "Global map of how much carbon forests take up (sink, green) or give off (source, purple), in tonnes of CO2 equivalent per hectare per year averaged over 2001 to 2025, from Global Forest Watch (Harris et al. 2021, updated 2025), 30 m pixels where tree canopy was at least 30% in 2000. " +
     "product picks the map: 'net-flux' (default) is emissions minus removals, green where the forest is a carbon sink (absorbs more CO2 than it releases) and purple where it is a source (loss from clearing, fire or logging released more); " +
     "'emissions' is gross greenhouse gas emissions from tree cover loss (purple, transparent where none); 'removals' is CO2 absorbed by growing forest (green). " +
     "Values are megagrams (tonnes) of CO2 equivalent per hectare per year, averaged over 2001 to 2025; it is one long-term average, not a yearly series. " +
@@ -70,7 +70,7 @@ const carbonFlux = defineLayer({
         url: "https://www.globalforestwatch.org/",
         retrieved: new Date().toISOString(),
       },
-      coverageNote: `${LABELS[input.product]}, average per year 2001-2025, forests with at least 30% canopy`,
+      coverageNote: `${LABELS[input.product]}, Mg CO2e per hectare per year averaged over 2001-2025, forests with at least 30% canopy; ${input.product === "net-flux" ? "green = sink, purple = source" : input.product === "emissions" ? "purple = emissions" : "green = removals"}`,
     };
   },
 });

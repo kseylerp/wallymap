@@ -216,11 +216,6 @@ export function femaCountyFeatures(rows: FemaRow[], counties: { fips: string; na
   return out.sort((a, b) => Number(b.properties?.v) - Number(a.properties?.v));
 }
 
-/** The error `new Response(body, { status: 204 })` throws. */
-function isNoBodyStatus(err: unknown): boolean {
-  return err instanceof TypeError && /status code 204/.test(err.message);
-}
-
 function timedOut(err: unknown): boolean {
   return typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
 }
@@ -237,12 +232,12 @@ async function gdacsKind(ctx: QueryContext, k: (typeof GDACS_KINDS)[number], fro
         validate: (body) => body === "" || jsonObjectBody({ listKey: "features", minLength: 0 })(body),
         timeoutMs: UPSTREAM_TIMEOUT_MS,
       });
+      // GDACS ends the list with an HTTP 204, which the fetch wrapper passes back with an empty body.
       if (res.status === 204) return { ok: true, features, capped: false };
       if (!res.ok) return { ok: page > 1, features, capped: false };
       text = await res.text();
-    } catch (err) {
-      // GDACS ends the list with a 204, which the fetch wrapper cannot rebuild into a Response (it throws); that is the end.
-      return { ok: page > 1 || isNoBodyStatus(err), features, capped: false };
+    } catch {
+      return { ok: page > 1, features, capped: false };
     }
     if (text.trim() === "") return { ok: true, features, capped: false };
     let rows: unknown[] = [];
@@ -258,10 +253,14 @@ async function gdacsKind(ctx: QueryContext, k: (typeof GDACS_KINDS)[number], fro
   return { ok: true, features, capped: true };
 }
 
-async function femaPart(ctx: QueryContext, years: number, now: number): Promise<{ ok: true; features: Feature<Geometry>[]; truncated: boolean } | { ok: false; error: string }> {
+type FemaPart =
+  | { ok: true; features: Feature<Geometry>[]; rowsTruncated: boolean; countiesTruncated: boolean; connecticut: boolean }
+  | { ok: false; error: string };
+
+async function femaPart(ctx: QueryContext, years: number, now: number): Promise<FemaPart> {
   const counties = await countiesInBbox(ctx, ctx.bbox);
   if (!counties.ok) return counties;
-  if (counties.counties.length === 0) return { ok: true, features: [], truncated: false };
+  if (counties.counties.length === 0) return { ok: true, features: [], rowsTruncated: false, countiesTruncated: false, connecticut: false };
   const states = [...new Set(counties.counties.map((c) => c.fips.slice(0, 2)))].sort();
   const since = isoDay(now - years * 365.25 * DAY_MS);
   try {
@@ -275,7 +274,14 @@ async function femaPart(ctx: QueryContext, years: number, now: number): Promise<
     const body = (await res.json()) as { metadata?: { count?: number } };
     const rows = parseFema(body);
     const total = typeof body.metadata?.count === "number" ? body.metadata.count : rows.length;
-    return { ok: true, features: femaCountyFeatures(rows, counties.counties), truncated: total > rows.length || counties.truncated };
+    return {
+      ok: true,
+      features: femaCountyFeatures(rows, counties.counties),
+      rowsTruncated: total > rows.length,
+      countiesTruncated: counties.truncated,
+      // FEMA still files Connecticut under its 8 old counties; the outlines are the 2022 planning regions, so none match.
+      connecticut: counties.counties.some((c) => c.stateAbbr === "CT"),
+    };
   } catch (err) {
     return { ok: false, error: timedOut(err) ? `OpenFEMA timed out after ${UPSTREAM_TIMEOUT_MS / 1000} seconds` : "OpenFEMA returned no usable response" };
   }
@@ -285,9 +291,10 @@ const disasters = defineLayer({
   id: "disasters",
   title: "Disasters (GDACS alerts and FEMA declarations)",
   description:
-    "Recent natural disasters, from two sources. Worldwide: GDACS alerts (the UN and European Commission disaster alert system) as points, one per event, for floods, tropical cyclones (hurricanes and typhoons), droughts and large wildfires, " +
+    "Recent disasters from two sources: GDACS alerts worldwide as points (floods, cyclones, droughts, and wildfires at orange or red alert only; small green wildfire alerts are left out) and, in the US, FEMA disaster declarations joined to county polygons by FIPS (v = declarations per county). " +
+    "GDACS: GDACS alerts (the UN and European Commission disaster alert system) as points, one per event, for floods, tropical cyclones (hurricanes and typhoons), droughts and large wildfires, " +
     "with source 'GDACS', kind ('flood', 'cyclone', 'drought' or 'wildfire'), name, t (start, UTC), until (last update), alertLevel ('green' minor, 'orange' moderate, 'red' severe humanitarian impact), country, current ('yes' while ongoing), severity (e.g. maximum wind speed), url (the GDACS report) and footprintUrl (GeoJSON of the affected area or storm track). " +
-    "United States: FEMA disaster declarations as county polygons, with source 'FEMA', v (how many declarations the county had in the period), t (the latest declaration date), kind (its incident: wildfire, flood, cyclone, severe storm, winter storm, tornado and so on), latest, kinds (a count per kind) and declarations (the latest five as text). " +
+    "FEMA: county polygons with source 'FEMA', v (how many declarations the county had in the period), t (the latest declaration date), kind (its incident: wildfire, flood, cyclone, severe storm, winter storm, tornado and so on), latest, kinds (a count per kind) and declarations (the latest five as text). " +
     "days (1 to 730, default 90) is how far back GDACS alerts go; years (1 to 20, default 5) is how far back FEMA declarations go. " +
     "Example questions: 'What disasters hit Florida in the last five years?', 'Is there a hurricane near Mexico right now?', 'Which counties here had the most disaster declarations?'. User words: disasters, hurricane, disaster declaration. " +
     "Caveats: GDACS points are an event's centre, not its extent, and small wildfires (green alerts) are left out (use fire-perimeters or fire-detections); a FEMA declaration means federal aid was approved, not how bad the damage was; tribal and statewide declarations are not drawn. " +
@@ -324,7 +331,9 @@ const disasters = defineLayer({
     if (kinds.some((k) => !k.ok)) notes.push("Some GDACS event types could not be loaded");
     if (!outsideUs(ctx.bbox) && !wantFema) notes.push("Zoom in to under 3,000,000 km² to add FEMA county declarations");
     if (fema !== null && !fema.ok) notes.push(`FEMA declarations could not be loaded (${fema.error})`);
-    if (fema !== null && fema.ok && fema.truncated) notes.push("Not every FEMA declaration fit; zoom in");
+    if (fema !== null && fema.ok && fema.rowsTruncated) notes.push("Not every FEMA declaration fit (the query covers whole states); shorten years");
+    if (fema !== null && fema.ok && fema.countiesTruncated) notes.push("Too many counties to show them all; zoom in");
+    if (fema !== null && fema.ok && fema.connecticut) notes.push("Connecticut has no FEMA county polygons (FEMA uses its old counties)");
     if (features.length === 0) notes.push(`No GDACS alerts in the last ${input.days} days${wantFema ? ` and no FEMA declarations in ${input.years} years` : ""} in this view`);
 
     const data: FeatureCollection = { type: "FeatureCollection", features };

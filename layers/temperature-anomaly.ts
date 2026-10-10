@@ -143,7 +143,7 @@ const temperatureAnomaly = defineLayer({
   id: "temperature-anomaly",
   title: "Temperature anomaly by county (NOAA)",
   description:
-    "How much warmer or cooler than normal each county was, from NOAA's Climate at a Glance, for the contiguous United States only (the lower 48; not Alaska or Hawaii). " +
+    "How much warmer or cooler than normal each county was over a month, season or year (v in °F against the 1901-2000 average), from NOAA's Climate at a Glance, for the contiguous United States only (the lower 48; not Alaska or Hawaii). " +
     "Each polygon is a county with v (the anomaly in degrees Fahrenheit, °F: the period's average temperature minus the 1901-2000 average for the same months; +3 means 3 °F warmer than the 20th-century normal), " +
     "kind ('warmer', 'cooler' or 'normal'), averageF (the period's average temperature), normalF (the 1901-2000 average), warmestRank (1 = the warmest on record since 1895, out of years), period (e.g. 'September 2026'), months and t (the period's last day). " +
     "period is the final month as YYYYMM (default: the newest NOAA has published, usually last month, out about the 8th); months is 1 (that month), 3 (the three months ending then, a season) or 12 (the year ending then). " +

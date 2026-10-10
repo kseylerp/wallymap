@@ -77,8 +77,8 @@ const permafrost = defineLayer({
   id: "permafrost",
   title: "Permafrost zones",
   description:
-    "Where the ground stays frozen year-round (permafrost) across the Northern Hemisphere: Alaska, Canada, Greenland, Russia, Mongolia, the Tibetan Plateau and high mountains, from the Circum-Arctic Map of Permafrost and Ground-Ice Conditions (International Permafrost Association). " +
-    "Each polygon has kind, the share of the ground underlain by permafrost: 'continuous' (90-100%), 'discontinuous' (50-90%), 'sporadic' (10-50%) or 'isolated' (0-10%), with percent as text and v as a typical value (95, 70, 30 or 5); " +
+    "Permafrost zones (ground frozen year-round) across the Northern Hemisphere, from the IPA Circum-Arctic Map, as polygons whose kind is the share of ground frozen: 'continuous' (90-100%), 'discontinuous' (50-90%), 'sporadic' (10-50%) or 'isolated' (0-10%); Alaska, Canada, Greenland, Russia, Mongolia, the Tibetan Plateau and high mountains. " +
+    "Each polygon has kind, percent (as text) and v (a typical percent: 95, 70, 30 or 5); " +
     "groundIce (ice in the top 10-20 m: high, medium or low; high-ice ground slumps and sinks most when it thaws), landform, and relict ('yes' for old permafrost left from colder times). " +
     "Set canada to true to draw the Atlas of Canada permafrost map (Natural Resources Canada) as map tiles instead, which is more detailed for Canada but returns map tiles, not features. " +
     "Example questions: 'Is there permafrost under Fairbanks?', 'Where is the permafrost continuous in Alaska?', 'Which areas have ice-rich permafrost that could thaw?'. User words: permafrost, frozen ground, thawing ground. " +
@@ -126,12 +126,11 @@ const permafrost = defineLayer({
     });
     if (!res.ok) return { error: res.error, hint: "upstream" };
     const features = normalizePermafrost(res.fc);
-    const capped = res.truncated || (res.fc as { properties?: { exceededTransferLimit?: unknown } }).properties?.exceededTransferLimit === true;
-    const notes: string[] = [];
-    if (capped) notes.push(`Showing the ${MAX_RECORDS} largest permafrost areas; zoom in for the small ones`);
+    const notes: string[] = ["kind = share of ground frozen: continuous 90-100%, discontinuous 50-90%, sporadic 10-50%, isolated 0-10%"];
+    if (res.truncated) notes.push(`Showing the ${MAX_RECORDS} largest permafrost areas; zoom in for the small ones`);
     if (features.length === 0) notes.push("No permafrost mapped in this view");
     const data: FeatureCollection = { type: "FeatureCollection", features };
-    return { kind: "geojson", data, citation, ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}) };
+    return { kind: "geojson", data, citation, coverageNote: notes.join("; ") };
   },
 });
 

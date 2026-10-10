@@ -81,14 +81,22 @@ export function parseCounties(body: unknown): { counties: County[]; more: boolea
   return { counties, more };
 }
 
+/** The bbox grown outward to 0.01°, so nearby views share one cache entry and the query matches its key exactly. */
+export function roundedBbox([w, s, e, n]: BBox): BBox {
+  const down = (v: number) => Math.floor(Math.round(v * 1e6) / 1e4) / 100;
+  const up = (v: number) => Math.ceil(Math.round(v * 1e6) / 1e4) / 100;
+  return [Math.max(-180, down(w)), Math.max(-90, down(s)), Math.min(180, up(e)), Math.min(90, up(n))];
+}
+
 /** Every county touching the bbox (up to 6,000), read page by page and cached a week. */
 export async function countiesInBbox(ctx: QueryContext, bbox: BBox): Promise<CountiesResult> {
-  const key = bbox.map((n) => n.toFixed(2)).join(",");
+  const rounded = roundedBbox(bbox);
+  const key = rounded.map((n) => n.toFixed(2)).join(",");
   const counties: County[] = [];
   for (let page = 0; page < MAX_PAGES; page++) {
     let body: unknown;
     try {
-      const res = await ctx.fetch(countiesUrl(bbox, page), {
+      const res = await ctx.fetch(countiesUrl(rounded, page), {
         cacheKey: `counties:v1:${key}:${page}`,
         ttlSeconds: TTL_SECONDS,
         validate: jsonObjectBody({ listKey: "features", minLength: 0 }),

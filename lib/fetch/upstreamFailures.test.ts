@@ -3,7 +3,7 @@ import { overpassBodyCacheable, overpassQuery } from "@/layers/_shared/overpass"
 import { arcgisQuery } from "@/layers/_shared/arcgis";
 import { firmsBodyCacheable } from "@/layers/fire-detections";
 import type { QueryContext } from "@/layers/types";
-import { createLayerFetch, looksLikeUpstreamFailure, type Cache } from "./index";
+import { createLayerFetch, EMPTY_BODY_HEADER, looksLikeUpstreamFailure, type Cache } from "./index";
 
 /** A private Map-backed cache so tests never share entries. */
 function mapCache(): Cache & { store: Map<string, string> } {
@@ -94,5 +94,27 @@ describe("upstream failures that arrive as HTTP 200", () => {
     await f("https://firms.test/csv", { shouldCache: firmsBodyCacheable });
     expect(stub).toHaveBeenCalledTimes(2);
     expect(cache.store.size).toBe(0);
+  });
+});
+
+describe("answers with no body", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  it("passes a 204 back as an empty, marked, uncached response instead of throwing", async () => {
+    const stub = vi.fn(async () => new Response(null, { status: 204 }));
+    globalThis.fetch = stub as unknown as typeof fetch;
+    const cache = mapCache();
+    const f = createLayerFetch(`no-body-${seq++}`, { capacity: 100, refillPerSecond: 100, cache });
+    const res = await f("https://example.test/page/9", { cacheKey: "page9", validate: () => false });
+    expect(res.status).toBe(204);
+    expect(res.ok).toBe(true);
+    expect(res.headers.get(EMPTY_BODY_HEADER)).toBe("1");
+    expect(await res.text()).toBe("");
+    expect(cache.store.size).toBe(0);
+    await f("https://example.test/page/9", { cacheKey: "page9" });
+    expect(stub).toHaveBeenCalledTimes(2);
   });
 });

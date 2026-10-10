@@ -55,3 +55,4 @@ import "./smoke";
 import "./geologic-unit";
 import "./fishing";
 import "./weather-alerts";
+import "./sequoia-groves";

@@ -95,6 +95,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "sea-ice": "raster",
   phenology: "raster",
   "burn-severity": "raster",
+  "sequoia-groves": "natural",
 };
 
 /** Layers that return raster tiles: the imagery carries its own colors. */

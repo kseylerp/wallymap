@@ -64,6 +64,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "surface-water", synonyms: ["surface water", "did the lake shrink", "water history", "reservoir change"], notes: "1984-2021 history, product input; not dated" },
   { layerId: "flood-extent", synonyms: ["flooding", "flooded", "inundation", "flood extent"], notes: "daily satellite water maps, date input" },
   { layerId: "disturbance", synonyms: ["vegetation loss", "disturbance", "land clearing", "storm damage"], notes: "daily satellite alerts since 2023, date input" },
+  { layerId: "sequoia-groves", synonyms: ["sequoia", "giant sequoia grove"], notes: "Sierra Nevada groves; also query sequoia-mortality" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

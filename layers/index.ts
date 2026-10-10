@@ -74,3 +74,4 @@ import "./pipelines-lines";
 import "./aquifers";
 import "./groundwater";
 import "./power-plants";
+import "./disasters";

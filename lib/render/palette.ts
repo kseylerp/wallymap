@@ -114,6 +114,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "aquifers": "natural",
   "groundwater": "data",
   "power-plants": "data",
+  disasters: "hazard",
 };
 
 /** Layers that return raster tiles: the imagery carries its own colors. */

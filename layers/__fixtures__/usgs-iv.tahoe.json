@@ -1,0 +1,2513 @@
+{
+"name": "ns1:timeSeriesResponseType",
+"declaredType": "org.cuahsi.waterml.TimeSeriesResponseType",
+"scope": "javax.xml.bind.JAXBElement$GlobalScope",
+"value": {
+"timeSeries": [
+{
+"sourceInfo": {
+"siteName": "W FK CARSON RV AT WOODFORDS, CA",
+"siteCode": [
+{
+"value": "10310000",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 38.76962765,
+"longitude": -119.833789
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050201",
+"name": "hucCd"
+},
+{
+"value": "06",
+"name": "stateCd"
+},
+{
+"value": "06003",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "19.4",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10310000:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "KINGS CYN CK NR CARSON CITY, NV",
+"siteCode": [
+{
+"value": "10311100",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.15379796,
+"longitude": -119.8079599
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050201",
+"name": "hucCd"
+},
+{
+"value": "32",
+"name": "stateCd"
+},
+{
+"value": "32510",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "1.02",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:50:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10311100:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "ASH CYN CK NR CARSON CITY, NV",
+"siteCode": [
+{
+"value": "10311200",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.17629816,
+"longitude": -119.805738
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050201",
+"name": "hucCd"
+},
+{
+"value": "32",
+"name": "stateCd"
+},
+{
+"value": "32510",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "1.43",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:55:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10311200:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "UPPER TRUCKEE RV AT HWY 50 ABV MEYERS, CA",
+"siteCode": [
+{
+"value": "103366092",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 38.8485185,
+"longitude": -120.0271275
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "06",
+"name": "stateCd"
+},
+{
+"value": "06017",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "14.4",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:103366092:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "UPPER TRUCKEE RV AT SOUTH LAKE TAHOE, CA",
+"siteCode": [
+{
+"value": "10336610",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 38.9224078,
+"longitude": -119.9915706
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "06",
+"name": "stateCd"
+},
+{
+"value": "06017",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00010",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807042,
+"default": true
+}
+],
+"variableName": "Temperature, water, &#176;C",
+"variableDescription": "Temperature, water, degrees Celsius",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "deg C"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807042"
+},
+"values": [
+{
+"value": [
+{
+"value": "14.9",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336610:00010:00000"
+},
+{
+"sourceInfo": {
+"siteName": "UPPER TRUCKEE RV AT SOUTH LAKE TAHOE, CA",
+"siteCode": [
+{
+"value": "10336610",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 38.9224078,
+"longitude": -119.9915706
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "06",
+"name": "stateCd"
+},
+{
+"value": "06017",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "5.42",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336610:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "GENERAL C NR MEEKS BAY CA",
+"siteCode": [
+{
+"value": "10336645",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.05183077,
+"longitude": -120.1185016
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "06",
+"name": "stateCd"
+},
+{
+"value": "06017",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00010",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807042,
+"default": true
+}
+],
+"variableName": "Temperature, water, &#176;C",
+"variableDescription": "Temperature, water, degrees Celsius",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "deg C"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807042"
+},
+"values": [
+{
+"value": [
+{
+"value": "2.0",
+"qualifiers": [
+"P"
+],
+"dateTime": "2024-02-28T11:20:00.000-08:00"
+}
+]
+},
+{
+"value": [
+{
+"value": "11.2",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336645:00010:00000"
+},
+{
+"sourceInfo": {
+"siteName": "GENERAL C NR MEEKS BAY CA",
+"siteCode": [
+{
+"value": "10336645",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.05183077,
+"longitude": -120.1185016
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "06",
+"name": "stateCd"
+},
+{
+"value": "06017",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "0.84",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336645:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "BLACKWOOD C NR TAHOE CITY CA",
+"siteCode": [
+{
+"value": "10336660",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.107385,
+"longitude": -120.1621147
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "06",
+"name": "stateCd"
+},
+{
+"value": "06061",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00010",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807042,
+"default": true
+}
+],
+"variableName": "Temperature, water, &#176;C",
+"variableDescription": "Temperature, water, degrees Celsius",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "deg C"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807042"
+},
+"values": [
+{
+"value": [
+{
+"value": "2.8",
+"qualifiers": [
+"P"
+],
+"dateTime": "2024-02-16T13:25:00.000-08:00"
+}
+]
+},
+{
+"value": [
+{
+"value": "13.2",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336660:00010:00000"
+},
+{
+"sourceInfo": {
+"siteName": "BLACKWOOD C NR TAHOE CITY CA",
+"siteCode": [
+{
+"value": "10336660",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.107385,
+"longitude": -120.1621147
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "06",
+"name": "stateCd"
+},
+{
+"value": "06061",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "1.00",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336660:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "WARD C AT HWY 89 NR TAHOE PINES CA",
+"siteCode": [
+{
+"value": "10336676",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.13210688,
+"longitude": -120.1576705
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "06",
+"name": "stateCd"
+},
+{
+"value": "06061",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00010",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807042,
+"default": true
+}
+],
+"variableName": "Temperature, water, &#176;C",
+"variableDescription": "Temperature, water, degrees Celsius",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "deg C"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807042"
+},
+"values": [
+{
+"value": [
+{
+"value": "1.0",
+"qualifiers": [
+"P"
+],
+"dateTime": "2024-02-28T10:15:00.000-08:00"
+}
+]
+},
+{
+"value": [
+{
+"value": "11.7",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336676:00010:00000"
+},
+{
+"sourceInfo": {
+"siteName": "WARD C AT HWY 89 NR TAHOE PINES CA",
+"siteCode": [
+{
+"value": "10336676",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.13210688,
+"longitude": -120.1576705
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "06",
+"name": "stateCd"
+},
+{
+"value": "06061",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "0.59",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336676:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "THIRD CK NR CRYSTAL BAY, NV",
+"siteCode": [
+{
+"value": "10336698",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.24046325,
+"longitude": -119.9465774
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "32",
+"name": "stateCd"
+},
+{
+"value": "32031",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00010",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807042,
+"default": true
+}
+],
+"variableName": "Temperature, water, &#176;C",
+"variableDescription": "Temperature, water, degrees Celsius",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "deg C"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807042"
+},
+"values": [
+{
+"value": [
+{
+"value": "0.4",
+"qualifiers": [
+"P"
+],
+"dateTime": "2024-02-28T08:38:00.000-08:00"
+}
+]
+},
+{
+"value": [
+{
+"value": "-999999",
+"qualifiers": [
+"P",
+"Dis"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336698:00010:00000"
+},
+{
+"sourceInfo": {
+"siteName": "THIRD CK NR CRYSTAL BAY, NV",
+"siteCode": [
+{
+"value": "10336698",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.24046325,
+"longitude": -119.9465774
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "32",
+"name": "stateCd"
+},
+{
+"value": "32031",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "1.43",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336698:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "INCLINE CK NR CRYSTAL BAY, NV",
+"siteCode": [
+{
+"value": "10336700",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.2401855,
+"longitude": -119.9449106
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "32",
+"name": "stateCd"
+},
+{
+"value": "32031",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00010",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807042,
+"default": true
+}
+],
+"variableName": "Temperature, water, &#176;C",
+"variableDescription": "Temperature, water, degrees Celsius",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "deg C"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807042"
+},
+"values": [
+{
+"value": [
+{
+"value": "0.9",
+"qualifiers": [
+"P"
+],
+"dateTime": "2024-02-28T09:10:00.000-08:00"
+}
+]
+},
+{
+"value": [
+{
+"value": "-999999",
+"qualifiers": [
+"P",
+"Dis"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336700:00010:00000"
+},
+{
+"sourceInfo": {
+"siteName": "INCLINE CK NR CRYSTAL BAY, NV",
+"siteCode": [
+{
+"value": "10336700",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.2401855,
+"longitude": -119.9449106
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "32",
+"name": "stateCd"
+},
+{
+"value": "32031",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "2.01",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336700:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "MARLETTE CK NR CARSON CITY, NV",
+"siteCode": [
+{
+"value": "10336715",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.17213045,
+"longitude": -119.907963
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "32",
+"name": "stateCd"
+},
+{
+"value": "32031",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "0.00",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:15:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336715:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "GLENBROOK CK AT GLENBROOK, NV",
+"siteCode": [
+{
+"value": "10336730",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.08740806,
+"longitude": -119.9399057
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "32",
+"name": "stateCd"
+},
+{
+"value": "32005",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00010",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807042,
+"default": true
+}
+],
+"variableName": "Temperature, water, &#176;C",
+"variableDescription": "Temperature, water, degrees Celsius",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "deg C"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807042"
+},
+"values": [
+{
+"value": [
+{
+"value": "10.7",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336730:00010:00000"
+},
+{
+"sourceInfo": {
+"siteName": "GLENBROOK CK AT GLENBROOK, NV",
+"siteCode": [
+{
+"value": "10336730",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.08740806,
+"longitude": -119.9399057
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "32",
+"name": "stateCd"
+},
+{
+"value": "32005",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "0.05",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336730:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "TROUT CK NR TAHOE VALLEY, CA",
+"siteCode": [
+{
+"value": "10336780",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 38.9199077,
+"longitude": -119.9724036
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "06",
+"name": "stateCd"
+},
+{
+"value": "06017",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00010",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807042,
+"default": true
+}
+],
+"variableName": "Temperature, water, &#176;C",
+"variableDescription": "Temperature, water, degrees Celsius",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "deg C"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807042"
+},
+"values": [
+{
+"value": [
+{
+"value": "14.1",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336780:00010:00000"
+},
+{
+"sourceInfo": {
+"siteName": "TROUT CK NR TAHOE VALLEY, CA",
+"siteCode": [
+{
+"value": "10336780",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 38.9199077,
+"longitude": -119.9724036
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050101",
+"name": "hucCd"
+},
+{
+"value": "06",
+"name": "stateCd"
+},
+{
+"value": "06017",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "16.8",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10336780:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "TRUCKEE R A TAHOE CITY CA",
+"siteCode": [
+{
+"value": "10337500",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.16627309,
+"longitude": -120.1443373
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050102",
+"name": "hucCd"
+},
+{
+"value": "06",
+"name": "stateCd"
+},
+{
+"value": "06061",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "74.5",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T19:00:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10337500:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "TRUCKEE R NR TRUCKEE CA",
+"siteCode": [
+{
+"value": "10338000",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.29627044,
+"longitude": -120.2054519
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050102",
+"name": "hucCd"
+},
+{
+"value": "06",
+"name": "stateCd"
+},
+{
+"value": "06061",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "70.3",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:45:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10338000:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "FRANKTOWN CK NR CARSON CITY, NV",
+"siteCode": [
+{
+"value": "10348460",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.20227778,
+"longitude": -119.8710833
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050102",
+"name": "hucCd"
+},
+{
+"value": "32",
+"name": "stateCd"
+},
+{
+"value": "32031",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "1.42",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:30:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10348460:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "FRANKTOWN CK AT OLD US 395 NR FRANKTOWN, NV",
+"siteCode": [
+{
+"value": "10348505",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.27406389,
+"longitude": -119.8413528
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050102",
+"name": "hucCd"
+},
+{
+"value": "32",
+"name": "stateCd"
+},
+{
+"value": "32031",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "0.01",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:15:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10348505:00060:00000"
+},
+{
+"sourceInfo": {
+"siteName": "OPHIR CK NR STEAMBOAT, NV",
+"siteCode": [
+{
+"value": "10348520",
+"network": "NWIS",
+"agencyCode": "USGS"
+}
+],
+"timeZoneInfo": {
+"defaultTimeZone": {
+"zoneOffset": "-08:00",
+"zoneAbbreviation": "PST"
+},
+"daylightSavingsTimeZone": {
+"zoneOffset": "-07:00",
+"zoneAbbreviation": "PDT"
+},
+"siteUsesDaylightSavingsTime": true
+},
+"geoLocation": {
+"geogLocation": {
+"srs": "EPSG:4326",
+"latitude": 39.29082778,
+"longitude": -119.8309167
+},
+"localSiteXY": []
+},
+"note": [],
+"siteType": [],
+"siteProperty": [
+{
+"value": "ST",
+"name": "siteTypeCd"
+},
+{
+"value": "16050102",
+"name": "hucCd"
+},
+{
+"value": "32",
+"name": "stateCd"
+},
+{
+"value": "32031",
+"name": "countyCd"
+}
+]
+},
+"variable": {
+"variableCode": [
+{
+"value": "00060",
+"network": "NWIS",
+"vocabulary": "NWIS:UnitValues",
+"variableID": 45807197,
+"default": true
+}
+],
+"variableName": "Streamflow, ft&#179;/s",
+"variableDescription": "Discharge, cubic feet per second",
+"valueType": "Derived Value",
+"unit": {
+"unitCode": "ft3/s"
+},
+"options": {
+"option": [
+{
+"name": "Statistic",
+"optionCode": "00000"
+}
+]
+},
+"note": [],
+"noDataValue": -999999.0,
+"variableProperty": [],
+"oid": "45807197"
+},
+"values": [
+{
+"value": [
+{
+"value": "1.48",
+"qualifiers": [
+"P"
+],
+"dateTime": "2026-10-09T18:55:00.000-07:00"
+}
+]
+}
+],
+"name": "USGS:10348520:00060:00000"
+}
+]
+},
+"nil": false,
+"globalScope": true,
+"typeSubstituted": false
+}

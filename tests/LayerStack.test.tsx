@@ -432,7 +432,7 @@ describe("LayerStack filters", () => {
       filters: { sac_scale: { include: ["alpine_hiking"] } },
     });
     expect(screen.getByTestId("layer-count").textContent).toBe("2 / 8");
-    expect(screen.getByTestId("filter-summary").textContent).toBe("Filtered: sac_scale: alpine_hiking");
+    expect(screen.getByTestId("filter-summary").textContent).toBe("Filtered: Difficulty (sac_scale): alpine_hiking");
     expect(screen.getByRole("button", { name: /^Filters/ }).textContent).toBe("Filters · 1");
 
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
@@ -587,7 +587,7 @@ describe("LayerStack: closing layers and the measure threshold (owner feedback)"
     expect(screen.getAllByTestId("layer-card")).toHaveLength(1);
   });
 
-  it("replaces opacity with a minimum on v for layers with a numeric measure, through the filters engine", () => {
+  it("replaces opacity with a minimum on the measure (acres, which v copies) through the filters engine", () => {
     const spy = vi.fn();
     render(<Panel spy={spy} layers={[fires, trails]} />);
     const card = screen.getAllByTestId("layer-card").find((c) => c.getAttribute("data-layer-id") === "fire-perimeters")!;
@@ -598,9 +598,11 @@ describe("LayerStack: closing layers and the measure threshold (owner feedback)"
     fireEvent.change(slider, { target: { value: "500" } });
     const last = spy.mock.calls.at(-1)?.[0] as MapAction & { type: "set_filters" };
     expect(last.type).toBe("set_filters");
-    const lo = last.filters.v?.range?.[0] ?? 0;
+    // v copies acres, so the slider sets the same filter as the panel's Acres range: the two cannot contradict.
+    expect(last.filters.v).toBeUndefined();
+    const lo = last.filters.acres?.range?.[0] ?? 0;
     expect(lo).toBe(Math.round(50 + (380_000 - 50) * 0.125));
-    expect(last.filters.v?.range?.[1]).toBe(380_000);
+    expect(last.filters.acres?.range?.[1]).toBe(380_000);
     expect(within(card).getByTestId("layer-count").textContent).toBe("2 / 7");
     expect(slider.getAttribute("aria-valuetext")).toBe(`≥ ${lo.toLocaleString("en-US")} acres`);
     // The filter summary has its own ×, which clears every filter.

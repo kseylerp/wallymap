@@ -1,6 +1,6 @@
 "use client";
 
-import type { FilterField, LayerFilters as Filters } from "@/lib/render/filters";
+import { formatFilterNumber, type FilterField, type LayerFilters as Filters } from "@/lib/render/filters";
 import type { MapAction } from "@/lib/render/state";
 
 type LayerFiltersProps = {
@@ -18,14 +18,6 @@ type Category = Extract<FilterField, { kind: "category" }>;
 /** "mountain_hiking" reads as "mountain hiking"; the raw value stays in the chip's title. */
 function plain(value: string): string {
   return value.replace(/_/g, " ");
-}
-
-/** A range readout: whole numbers with separators (years without), decimals to two places at most. */
-function formatNumber(value: number, integer: boolean, key: string): string {
-  if (integer) return Math.round(value).toLocaleString("en-US", { useGrouping: !/year/i.test(key) });
-  const abs = Math.abs(value);
-  const digits = abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
-  return value.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
 }
 
 /** Drops float noise (0.30000000000000004 reads 0.3). */
@@ -47,8 +39,8 @@ function CategoryFilter({ field, include, onChange }: { field: Category; include
   const all = include.length === 0;
   const toggle = (value: string) => {
     const next = include.includes(value) ? include.filter((v) => v !== value) : [...include, value];
-    // Every value picked is the same as none: no restriction.
-    onChange(next.length === field.values.length ? [] : next);
+    // Every value picked is the same as none (no restriction), unless the list leaves rarer values off.
+    onChange(next.length === field.values.length && !field.more ? [] : next);
   };
   return (
     <div role="group" aria-label={field.label} className="flex flex-wrap gap-1">
@@ -68,6 +60,9 @@ function CategoryFilter({ field, include, onChange }: { field: Category; include
           <span className="filter-chip-count tabular-nums">{count.toLocaleString()}</span>
         </button>
       ))}
+      {field.more ? (
+        <span className="self-center text-[11px] text-ink-muted tabular-nums">+{field.more.toLocaleString("en-US")} more</span>
+      ) : null}
     </div>
   );
 }
@@ -101,7 +96,7 @@ function RangeFilter({
     set(Math.min(lo, next), next);
   };
   const unit = field.unit && field.unit !== "score" ? ` ${field.unit}` : "";
-  const readout = (v: number) => `${formatNumber(v, field.integer, field.key)}${unit}`;
+  const readout = (v: number) => `${formatFilterNumber(v, field.integer, field.key)}${unit}`;
   const pct = (v: number) => `${((Math.min(inputMax, Math.max(inputMin, v)) - inputMin) / inputSpan) * 100}%`;
   // The upper input sits on top; once the lower thumb is in the top half it goes on top, so it can always be pulled back.
   const loOnTop = lo - inputMin > inputSpan / 2;

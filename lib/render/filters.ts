@@ -1,5 +1,6 @@
 export type FilterField =
-  | { key: string; label: string; kind: "category"; values: { value: string; count: number }[] }
+  /** `more`: how many rarer values were left off a long list (species), which only the top values stand for. */
+  | { key: string; label: string; kind: "category"; values: { value: string; count: number }[]; more?: number }
   | { key: string; label: string; kind: "range"; min: number; max: number; unit?: string; integer: boolean };
 
 export type LayerFilters = Record<string, { include?: string[]; range?: [number, number] }>;
@@ -11,10 +12,17 @@ const MIN_FEATURES_FOR_SPAN = 20;
 /** Uniqueness only says "free text" once there are enough values to judge. */
 const MIN_VALUES_FOR_UNIQUENESS = 8;
 
-/** Properties that are identifiers, names, links or internals rather than something to filter on. */
+/** Properties that are identifiers, names, links, licences or internals rather than something to filter on. */
 const SKIPPED_KEYS = new Set([
   "osmId", "id", "name", "title", "url", "t", "signals", "popularityNote", "h3", "wikidata", "wikipedia",
+  "license", "licence", "attribution",
 ]);
+
+/**
+ * Names of kinds (a wildlife layer's species) offer their most common values even past the category cap: a valley
+ * can hold a hundred and more species, and the common ones are what a reader filters by.
+ */
+const TOP_VALUE_KEYS = new Set(["species", "scientificName", "commonName"]);
 
 function isSkippedKey(key: string): boolean {
   return SKIPPED_KEYS.has(key) || key.endsWith("Id") || key.endsWith("_id");
@@ -93,11 +101,17 @@ export function deriveFilterFields(
 
     if (hasStrings) {
       const distinct = scan.strings.size;
-      if (distinct < 2 || distinct > maxCategories) continue;
+      const topOnly = TOP_VALUE_KEYS.has(key);
+      if (distinct < 2 || (distinct > maxCategories && !topOnly)) continue;
       if (scan.present >= MIN_VALUES_FOR_UNIQUENESS && distinct / scan.present > 0.5) continue;
       const values = [...scan.strings].map(([value, count]) => ({ value, count }));
       values.sort((a, b) => b.count - a.count || (a.value < b.value ? -1 : a.value > b.value ? 1 : 0));
-      categories.push({ key, label: key === "v" ? valueLabel(opts.unitForV) : labelFor(key), kind: "category", values });
+      const field: FilterField = { key, label: key === "v" ? valueLabel(opts.unitForV) : labelFor(key), kind: "category", values };
+      if (distinct > maxCategories) {
+        field.values = values.slice(0, maxCategories);
+        field.more = distinct - maxCategories;
+      }
+      categories.push(field);
       continue;
     }
 
@@ -126,22 +140,34 @@ export function deriveFilterFields(
 
   // `v` is the layer's value channel, often a copy of a named property (fire perimeters: v = acres). The named
   // field says more, so a `v` that matches another property on every feature is not offered twice.
-  const kept = ranges.filter((field) => field.key !== "v" || !mirrorsAnotherProperty(fc, "v"));
-  return [...categories, ...kept].slice(0, MAX_FIELDS);
+  const kept = ranges.filter((field) => field.key !== "v" || mirroredKey(fc, "v") === null);
+  // A common name and a scientific name list the same species; the common name is enough.
+  const named = categories.some((field) => field.key === "species");
+  const kinds = categories.filter((field) => !(named && field.key === "scientificName"));
+  return [...kinds, ...kept].slice(0, MAX_FIELDS);
 }
 
-/** True when some other numeric property equals `key`'s value on every feature that has one. */
-function mirrorsAnotherProperty(fc: GeoJSON.FeatureCollection, key: string): boolean {
-  let candidates: Set<string> | null = null;
+/** The other numeric property that equals `key`'s value on every feature that has one (the first such), or null. */
+function mirroredKey(fc: GeoJSON.FeatureCollection, key: string): string | null {
+  let candidates: string[] | null = null;
   for (const f of fc.features) {
     const props = f.properties;
     const value = props?.[key];
     if (!props || typeof value !== "number") continue;
-    const same = Object.keys(props).filter((k) => k !== key && props[k] === value);
-    candidates = candidates === null ? new Set(same) : new Set(same.filter((k) => candidates!.has(k)));
-    if (candidates.size === 0) return false;
+    const same = Object.keys(props).filter((k) => k !== key && !isSkippedKey(k) && props[k] === value);
+    candidates = candidates === null ? same : candidates.filter((k) => same.includes(k));
+    if (candidates.length === 0) return null;
   }
-  return candidates !== null && candidates.size > 0;
+  return candidates?.[0] ?? null;
+}
+
+/**
+ * The property the threshold slider filters on: the named property `v` copies when there is one (fire perimeters:
+ * acres), so the slider and that property's range in the filters panel are one filter, not two that can contradict
+ * each other; else `v` itself.
+ */
+export function measureKey(fc: GeoJSON.FeatureCollection): string {
+  return mirroredKey(fc, "v") ?? "v";
 }
 
 function valueLabel(unitForV: string | undefined): string {
@@ -180,12 +206,24 @@ export function applyFilters(fc: GeoJSON.FeatureCollection, filters: LayerFilter
   return { ...fc, features };
 }
 
-/** One-line description of the active filters, e.g. "sac_scale: hiking, mountain_hiking · acres ≥ 500". */
+/** A filter bound as a reader sees it: whole numbers with separators (years without), decimals to two places at most. */
+export function formatFilterNumber(value: number, integer: boolean, key: string): string {
+  if (integer) return Math.round(value).toLocaleString("en-US", { useGrouping: !/year/i.test(key) });
+  const abs = Math.abs(value);
+  const digits = abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
+  return value.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
+}
+
+/**
+ * One-line description of the active filters under their panel headings, e.g. "Difficulty (sac_scale): hiking,
+ * mountain_hiking · Acres ≥ 500".
+ */
 export function filterSummary(fields: FilterField[], filters: LayerFilters): string {
   const parts: string[] = [];
   for (const [key, f] of Object.entries(filters)) {
+    const label = fields.find((x) => x.key === key)?.label ?? labelFor(key);
     if (f.include !== undefined && f.include.length > 0) {
-      parts.push(`${key}: ${f.include.join(", ")}`);
+      parts.push(`${label}: ${f.include.join(", ")}`);
     }
     if (f.range !== undefined) {
       const [lo, hi] = f.range;
@@ -193,9 +231,11 @@ export function filterSummary(fields: FilterField[], filters: LayerFilters): str
       const atMin = field?.kind === "range" && lo <= field.min;
       const atMax = field?.kind === "range" && hi >= field.max;
       if (atMin && atMax) continue;
-      if (atMax) parts.push(`${key} ≥ ${lo}`);
-      else if (atMin) parts.push(`${key} ≤ ${hi}`);
-      else parts.push(`${key} ${lo}–${hi}`);
+      const integer = field?.kind === "range" ? field.integer : Number.isInteger(lo) && Number.isInteger(hi);
+      const n = (x: number) => formatFilterNumber(x, integer, key);
+      if (atMax) parts.push(`${label} ≥ ${n(lo)}`);
+      else if (atMin) parts.push(`${label} ≤ ${n(hi)}`);
+      else parts.push(`${label} ${n(lo)}–${n(hi)}`);
     }
   }
   return parts.join(" · ");
@@ -246,28 +286,29 @@ export function measurePosition(value: number, range: MeasureRange): number {
 }
 
 /**
- * The layer panel's threshold slider as filters: a minimum on `v` through the filters engine, so the count, export
- * and permalink follow. At (or below) the data minimum the `v` filter is dropped (no filter); above it `v` keeps
+ * The layer panel's threshold slider as filters: a minimum on `key` (`measureKey`: `v`, or the property `v` copies)
+ * through the filters engine, so the count, export and permalink follow. At (or below) the data minimum the filter is
+ * dropped (no filter); above it the filter keeps
  * features from `value` up to the upper bound already set in the filters panel, else the data maximum. Other
  * properties' filters are untouched. Back at the data minimum an upper bound below the data maximum is restored as
  * [min, upper] rather than dropped.
  */
-export function withMeasureMinimum(filters: LayerFilters, value: number, range: MeasureRange): LayerFilters {
-  const { v: current, ...rest } = filters;
+export function withMeasureMinimum(filters: LayerFilters, value: number, range: MeasureRange, key: string = "v"): LayerFilters {
+  const { [key]: current, ...rest } = filters;
   const include = current?.include?.length ? { include: current.include } : {};
   // An upper bound below the data maximum (the agent's "under 1,000 acres", the filters panel) is kept at any minimum.
   const upper = current?.range && current.range[1] < range.max ? current.range[1] : range.max;
   if (!Number.isFinite(value) || value <= range.min) {
     // Back at the data minimum: no minimum. A kept upper bound (or a category list on `v`) stays.
-    if (upper < range.max) return { ...rest, v: { ...include, range: [range.min, upper] } };
-    return current?.include?.length ? { ...rest, v: include } : rest;
+    if (upper < range.max) return { ...rest, [key]: { ...include, range: [range.min, upper] } };
+    return current?.include?.length ? { ...rest, [key]: include } : rest;
   }
   const lo = Math.min(value, range.max);
-  return { ...rest, v: { ...include, range: [lo, Math.max(lo, upper)] } };
+  return { ...rest, [key]: { ...include, range: [lo, Math.max(lo, upper)] } };
 }
 
-/** The slider's position for the current filters: the `v` range's lower bound, else the data minimum. */
-export function measureMinimum(filters: LayerFilters | undefined, range: MeasureRange): number {
-  const lo = filters?.v?.range?.[0];
+/** The slider's position for the current filters: the lower bound of `key`'s range (`v` by default), else the data minimum. */
+export function measureMinimum(filters: LayerFilters | undefined, range: MeasureRange, key: string = "v"): number {
+  const lo = filters?.[key]?.range?.[0];
   return lo === undefined ? range.min : Math.min(range.max, Math.max(range.min, lo));
 }

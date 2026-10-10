@@ -9,6 +9,7 @@ import {
   filterSummary,
   MEASURE_STEPS,
   measureAt,
+  measureKey,
   measureMinimum,
   measurePosition,
   measureRange,
@@ -191,15 +192,18 @@ export function measureLabel(value: number, range: MeasureRange, unit?: string):
 function MeasureSlider({
   layer,
   range,
+  measure,
   filters,
   dispatch,
 }: {
   layer: LoadedLayer;
   range: MeasureRange;
+  /** The property the slider filters on (lib/render/filters.ts `measureKey`). */
+  measure: string;
   filters: Filters;
   dispatch: (action: MapAction) => void;
 }) {
-  const value = measureMinimum(filters, range);
+  const value = measureMinimum(filters, range, measure);
   const position = measurePosition(value, range);
   return (
     <label className="flex items-center gap-1.5">
@@ -215,7 +219,7 @@ function MeasureSlider({
           dispatch({
             type: "set_filters",
             layerId: layer.id,
-            filters: withMeasureMinimum(filters, measureAt(Number(e.target.value), range), range),
+            filters: withMeasureMinimum(filters, measureAt(Number(e.target.value), range), range, measure),
           })
         }
         data-testid="measure-slider"
@@ -246,6 +250,7 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
   const activeCount = Object.keys(filters).length;
   const summary = activeCount > 0 ? filterSummary(fields, filters) : "";
   const range = useMemo(() => (data ? measureRange(data) : null), [data]);
+  const measure = useMemo(() => (data ? measureKey(data) : "v"), [data]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filtersId = `filters-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const { citation, coverageNote } = layer.result;
@@ -365,7 +370,7 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
               title={visible ? "Hide layer" : "Show layer"}
               className="legend-check"
             />
-            {op && range && <MeasureSlider layer={layer} range={range} filters={filters} dispatch={dispatch} />}
+            {op && range && <MeasureSlider layer={layer} range={range} measure={measure} filters={filters} dispatch={dispatch} />}
             {op && !range && (
               <label className="flex items-center gap-1.5">
                 <span className="sr-only">Opacity for {layer.title}</span>

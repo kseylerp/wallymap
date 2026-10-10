@@ -53,7 +53,7 @@ describe("LayerFilters range", () => {
     const kept = applyFilters(fires, { acres: { range: range! } }).features.map((f) => f.properties?.acres);
     expect(kept).toEqual([12000.25, 50000, 221400.5]);
     // At the real max the upper thumb is unbounded, so the summary reads as a floor.
-    expect(filterSummary([acres], { acres: { range: range! } })).toBe("acres ≥ 5000");
+    expect(filterSummary([acres], { acres: { range: range! } })).toBe("Acres ≥ 5,000");
   });
 
   it("a thumb dragged to the end of the data clears that side's bound", () => {
@@ -61,7 +61,7 @@ describe("LayerFilters range", () => {
     render(<Harness spy={spy} />);
     fireEvent.change(upper(), { target: { value: "100000" } });
     expect(lastRange(spy)).toEqual([4164.94, 100000]);
-    expect(filterSummary([acres], { acres: { range: lastRange(spy)! } })).toBe("acres ≤ 100000");
+    expect(filterSummary([acres], { acres: { range: lastRange(spy)! } })).toBe("Acres ≤ 100,000");
     fireEvent.change(upper(), { target: { value: "222000" } });
     // Both ends unbounded: no filter at all.
     expect(spy).toHaveBeenLastCalledWith({ type: "set_filters", layerId: "fire-perimeters", filters: {} });

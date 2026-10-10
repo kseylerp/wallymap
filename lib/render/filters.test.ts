@@ -11,6 +11,7 @@ import {
   labelFor,
   MEASURE_STEPS,
   measureAt,
+  measureKey,
   measureMinimum,
   measurePosition,
   measureRange,
@@ -204,6 +205,42 @@ describe("applyFilters", () => {
   });
 });
 
+describe("review fixes: licence, long species lists, the measure key", () => {
+  it("never offers a licence or a link as a filter", () => {
+    const rows = Array.from({ length: 30 }, (_, i) => ({ license: ["cc-by", "cc0", "cc-by-nc"][i % 3], url: `u${i % 3}` }));
+    expect(deriveFilterFields(fc(rows))).toEqual([]);
+  });
+
+  it("offers the most common species of a long list, with the rest counted, and not the scientific name twice", () => {
+    // 40 species over 200 sightings: elk is most common, then deer.
+    const rows = Array.from({ length: 200 }, (_, i) => {
+      const n = i < 30 ? 0 : i < 50 ? 1 : 2 + (i % 38);
+      return { species: `s${n}`, scientificName: `Latin ${n}` };
+    });
+    const fields = deriveFilterFields(fc(rows));
+    expect(fields.map((f) => f.key)).toEqual(["species"]);
+    const species = fields[0] as Extract<FilterField, { kind: "category" }>;
+    expect(species.values).toHaveLength(12);
+    expect(species.values.slice(0, 2)).toEqual([{ value: "s0", count: 30 }, { value: "s1", count: 20 }]);
+    expect(species.more).toBe(40 - 12);
+    // A short list has no `more`.
+    expect(deriveFilterFields(fc(rows.slice(0, 50)))[0]).not.toHaveProperty("more");
+  });
+
+  it("puts the threshold slider on the property v copies, so it and the panel's range are one filter", () => {
+    expect(measureKey(fc([{ v: 10, acres: 10 }, { v: 2000, acres: 2000 }]))).toBe("acres");
+    expect(measureKey(fc([{ v: 10, depth: 3 }, { v: 2000, depth: 3 }]))).toBe("v");
+    const range = { min: 0, max: 100, integer: true, curve: 1 as const };
+    expect(withMeasureMinimum({ acres: { range: [0, 70] } }, 30, range, "acres")).toEqual({ acres: { range: [30, 70] } });
+    expect(measureMinimum({ acres: { range: [30, 70] } }, range, "acres")).toBe(30);
+  });
+
+  it("names a filter on v by its heading and formats the numbers", () => {
+    expect(filterSummary([], { v: { range: [130341.73, 379802] } })).toBe("Value 130,342–379,802");
+    expect(filterSummary([], { v: { range: [1.5, 2.25] } })).toBe("Value 1.5–2.25");
+  });
+});
+
 describe("filterSummary", () => {
   const fields: FilterField[] = [
     { key: "sac_scale", label: "Difficulty (sac_scale)", kind: "category", values: [{ value: "hiking", count: 2 }] },
@@ -213,12 +250,12 @@ describe("filterSummary", () => {
   it("joins categories and ranges with a middle dot", () => {
     expect(
       filterSummary(fields, { sac_scale: { include: ["hiking", "mountain_hiking"] }, acres: { range: [500, 9000] } }),
-    ).toBe("sac_scale: hiking, mountain_hiking · acres ≥ 500");
+    ).toBe("Difficulty (sac_scale): hiking, mountain_hiking · Acres ≥ 500");
   });
 
   it("formats open lower ends, closed ranges, and skips full or empty filters", () => {
-    expect(filterSummary(fields, { acres: { range: [100, 700] } })).toBe("acres ≤ 700");
-    expect(filterSummary(fields, { acres: { range: [200, 700] } })).toBe("acres 200–700");
+    expect(filterSummary(fields, { acres: { range: [100, 700] } })).toBe("Acres ≤ 700");
+    expect(filterSummary(fields, { acres: { range: [200, 700] } })).toBe("Acres 200–700");
     expect(filterSummary(fields, { acres: { range: [100, 9000] } })).toBe("");
     expect(filterSummary(fields, { sac_scale: { include: [] } })).toBe("");
     expect(filterSummary([], {})).toBe("");

@@ -208,7 +208,7 @@ describe("buildExportBundle with filters", () => {
     expect(json.features.map((f: { properties: { name: string } }) => f.properties.name)).toEqual(["B", "D"]);
     expect(json.wallymap.filters).toEqual({ sac_scale: { include: ["alpine_hiking"] } });
     const md = await files[1].blob.text();
-    expect(md).toContain("2 of 4 features exported; filtered: sac_scale: alpine_hiking");
+    expect(md).toContain("2 of 4 features exported; filtered: Difficulty (sac_scale): alpine_hiking");
     expect(md).toContain("Filters set in the layer panel apply");
   });
 });

@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2" xmlns:kml="http://www.opengis.net/kml/2.2" xmlns:atom="http://www.w3.org/2005/Atom">
+<Document>
+<name>HMS Smoke Mapping-20261008</name>
+<Placemark><description><![CDATA[<div style="width:170px;">Start Time: 2026281 1200UTC<br>End Time: 2026281 1500UTC<br>Density: Light<br>Satellite: GOES-WEST</div>]]></description>
+<styleUrl>#Smoke_Light_style</styleUrl>
+<Polygon>
+  <tessellate>1</tessellate>
+  <gx:drawOrder>0</gx:drawOrder>
+  <outerBoundaryIs>
+    <LinearRing>
+      <coordinates>
+        -92.138957,31.847885,0
+        -92.250562,31.889220,0
+        -92.362167,31.955356,0
+        -92.465504,31.971890,0
+        -92.510973,31.930555,0
+        -92.506840,31.880953,0
+        -92.420036,31.806550,0
+        -92.192692,31.769348,0
+        -92.126556,31.777615,0
+        -92.110022,31.794149,0
+        -92.105889,31.814817,0
+        -92.138957,31.847885,0
+      </coordinates>
+    </LinearRing>
+  </outerBoundaryIs>
+</Polygon>
+</Placemark>
+<Placemark><description><![CDATA[<div style="width:170px;">Start Time: 2026281 2000UTC<br>End Time: 2026281 2330UTC<br>Density: Medium<br>Satellite: GOES-EAST</div>]]></description>
+<styleUrl>#Smoke_Medium_style</styleUrl>
+<Polygon>
+  <tessellate>1</tessellate>
+  <gx:drawOrder>1</gx:drawOrder>
+  <outerBoundaryIs>
+    <LinearRing>
+      <coordinates>
+        -118.276400,48.614394,0
+        -118.275850,48.639977,0
+        -118.268780,48.662839,0
+        -118.252990,48.672637,0
+        -118.239380,48.675359,0
+        -118.226860,48.663383,0
+        -118.224690,48.649231,0
+        -118.228500,48.632357,0
+        -118.242100,48.610583,0
+        -118.251900,48.602418,0
+        -118.263880,48.602418,0
+        -118.273130,48.607317,0
+        -118.276400,48.614394,0
+      </coordinates>
+    </LinearRing>
+  </outerBoundaryIs>
+</Polygon>
+</Placemark>
+<Placemark><description><![CDATA[<div style="width:170px;">Start Time: 2026281 1500UTC<br>End Time: 2026281 1700UTC<br>Density: Heavy<br>Satellite: GOES-EAST</div>]]></description>
+<styleUrl>#Smoke_Heavy_style</styleUrl>
+<Polygon>
+  <tessellate>1</tessellate>
+  <gx:drawOrder>2</gx:drawOrder>
+  <outerBoundaryIs>
+    <LinearRing>
+      <coordinates>
+        -114.711260,47.735988,0
+        -114.711980,47.754617,0
+        -114.707140,47.772035,0
+        -114.698430,47.778083,0
+        -114.689240,47.780261,0
+        -114.667470,47.780986,0
+        -114.657060,47.777600,0
+        -114.647150,47.765745,0
+        -114.644730,47.752197,0
+        -114.649080,47.729940,0
+        -114.659240,47.723771,0
+        -114.670850,47.722683,0
+        -114.689720,47.726674,0
+        -114.700690,47.730142,0
+        -114.708110,47.732077,0
+        -114.711260,47.735988,0
+      </coordinates>
+    </LinearRing>
+  </outerBoundaryIs>
+</Polygon>
+</Placemark>
+</Document>
+</kml>

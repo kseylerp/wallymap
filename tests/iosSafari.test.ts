@@ -29,10 +29,14 @@ const px = (value: string) => Number(/^(\d+(?:\.\d+)?)px$/.exec(value.trim())?.[
 
 describe("iOS Safari on a phone", () => {
   it("never scrolls the page sideways", () => {
-    const start = css.indexOf("html,\nbody {");
-    expect(start).toBeGreaterThanOrEqual(0);
-    const block = css.slice(start, css.indexOf("}", start));
-    expect(block).toMatch(/overflow-x:\s*hidden/);
+    // body hides sideways overflow; html must not, because an overflow rule on html turns it into a scroll
+    // container on iOS Safari (broken toolbar collapse, blank band under the map).
+    const bodyStart = css.indexOf("\nbody {\n  overflow-x");
+    expect(bodyStart).toBeGreaterThanOrEqual(0);
+    const htmlStart = css.indexOf("html,\nbody {");
+    expect(htmlStart).toBeGreaterThanOrEqual(0);
+    const htmlBlock = css.slice(htmlStart, css.indexOf("}", htmlStart));
+    expect(htmlBlock).not.toMatch(/overflow-x/);
   });
 
   it("sizes the page to the dynamic viewport, with a fill-available fallback where dvh is missing", () => {

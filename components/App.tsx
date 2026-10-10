@@ -212,7 +212,7 @@ export function App() {
 
   return (
     <div
-      className="relative h-dvh w-full overflow-hidden bg-cream"
+      className="fixed inset-0 overflow-hidden bg-cream"
       style={pillsBottom === null ? undefined : { ["--console-top" as string]: `${pillsBottom + CONSOLE_GAP}px` }}
     >
       {/* The map fills the window; every control floats over it. */}

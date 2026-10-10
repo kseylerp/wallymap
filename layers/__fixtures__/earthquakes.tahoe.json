@@ -1,0 +1,286 @@
+{
+ "type": "FeatureCollection",
+ "metadata": {
+  "generated": 1791597789000,
+  "url": "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minlongitude=-121&minlatitude=38&maxlongitude=-119&maxlatitude=40&starttime=2025-10-09&minmagnitude=2.5&orderby=magnitude&limit=12",
+  "title": "USGS Earthquakes",
+  "status": 200,
+  "api": "2.8.1",
+  "limit": 12,
+  "offset": 1
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 5.68,
+    "place": "20 km ESE of Silver Springs, Nevada",
+    "time": 1776130152123,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nn00914068",
+    "felt": 6515,
+    "tsunami": 0,
+    "magType": "mwr",
+    "type": "earthquake"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.0075,
+     39.3345,
+     5
+    ]
+   },
+   "id": "nn00914068"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 5.17,
+    "place": "19 km SE of Silver Springs, Nevada",
+    "time": 1777623439870,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nn00916980",
+    "felt": 1875,
+    "tsunami": 0,
+    "magType": "mwr",
+    "type": "earthquake"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.0467,
+     39.3066,
+     5
+    ]
+   },
+   "id": "nn00916980"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 4.78,
+    "place": "19 km SE of Silver Springs, Nevada",
+    "time": 1776878617085,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nn00916046",
+    "felt": 292,
+    "tsunami": 0,
+    "magType": "mwr",
+    "type": "earthquake"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.0955,
+     39.2758,
+     3
+    ]
+   },
+   "id": "nn00916046"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 4.73,
+    "place": "20 km SE of Silver Springs, Nevada",
+    "time": 1776609556331,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nn00915543",
+    "felt": 170,
+    "tsunami": 0,
+    "magType": "mwr",
+    "type": "earthquake"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.0857,
+     39.2685,
+     6
+    ]
+   },
+   "id": "nn00915543"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 4.28,
+    "place": "20 km SE of Silver Springs, Nevada",
+    "time": 1777623355842,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nn00916977",
+    "felt": 81,
+    "tsunami": 0,
+    "magType": "mwr",
+    "type": "earthquake"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.0377,
+     39.3035,
+     7
+    ]
+   },
+   "id": "nn00916977"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 4.15,
+    "place": "18 km SE of Silver Springs, Nevada",
+    "time": 1776602611056,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nn00915459",
+    "felt": 76,
+    "tsunami": 0,
+    "magType": "mwr",
+    "type": "earthquake"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.0985,
+     39.2754,
+     3
+    ]
+   },
+   "id": "nn00915459"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 4.05,
+    "place": "18 km SE of Silver Springs, Nevada",
+    "time": 1778437333799,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nn00918221",
+    "felt": 49,
+    "tsunami": 0,
+    "magType": "mwr",
+    "type": "earthquake"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.0956,
+     39.277,
+     6
+    ]
+   },
+   "id": "nn00918221"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 3.94,
+    "place": "19 km SE of Silver Springs, Nevada",
+    "time": 1776609764633,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nn00920669",
+    "felt": 15,
+    "tsunami": 0,
+    "magType": "ml",
+    "type": "earthquake"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.0897,
+     39.2782,
+     6.8157
+    ]
+   },
+   "id": "nn00920669"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 3.92,
+    "place": "19 km SE of Silver Springs, Nevada",
+    "time": 1776141900422,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nn00914238",
+    "felt": 20,
+    "tsunami": 0,
+    "magType": "mwr",
+    "type": "earthquake"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.0512,
+     39.3045,
+     6
+    ]
+   },
+   "id": "nn00914238"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 3.72,
+    "place": "17 km SE of Silver Springs, Nevada",
+    "time": 1779968915345,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nn00919312",
+    "felt": 39,
+    "tsunami": 0,
+    "magType": "mwr",
+    "type": "earthquake"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.0524,
+     39.3251,
+     5
+    ]
+   },
+   "id": "nn00919312"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 3.65,
+    "place": "21 km NNE of Yerington, Nevada",
+    "time": 1766848828858,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nn00908938",
+    "felt": 20,
+    "tsunami": 0,
+    "magType": "mw",
+    "type": "earthquake"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.0474,
+     39.1606,
+     5
+    ]
+   },
+   "id": "nn00908938"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 3.63,
+    "place": "18 km SE of Silver Springs, Nevada",
+    "time": 1777864324169,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nn00917529",
+    "felt": 23,
+    "tsunami": 0,
+    "magType": "mwr",
+    "type": "earthquake"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.1003,
+     39.281,
+     4
+    ]
+   },
+   "id": "nn00917529"
+  }
+ ],
+ "bbox": [
+  -119.1003,
+  39.1606,
+  3,
+  -119.0075,
+  39.3345,
+  7
+ ]
+}

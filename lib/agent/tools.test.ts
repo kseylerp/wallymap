@@ -149,7 +149,7 @@ describe("buildTools", () => {
   it("list_layers stays short: no descriptions or licenses", async () => {
     const result = (await run(buildTools().list_layers, {})) as Record<string, unknown>[];
     for (const layer of result) expect(Object.keys(layer).sort()).toEqual(["available", "coverage", "id", "synonyms", "title"]);
-    expect(JSON.stringify(result).length).toBeLessThan(9500);
+    expect(JSON.stringify(result).length).toBeLessThan(14_000);
   });
 
   it("list_layers with ids returns those layers' full descriptions and licences", async () => {

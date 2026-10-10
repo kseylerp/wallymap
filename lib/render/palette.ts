@@ -99,6 +99,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "sea-level-trends": "data",
   "sequoia-mortality": "hazard",
   "reservoir-levels": "data",
+  "sea-level-rise": "raster",
 };
 
 /** Layers that return raster tiles: the imagery carries its own colors. */

@@ -68,6 +68,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "sea-level-trends", synonyms: ["sea level", "rising seas"], notes: "tide-gauge trend, v = mm/yr" },
   { layerId: "sequoia-mortality", synonyms: ["sequoia fire deaths", "sequoias killed"], notes: "trees alive or dead after the 2020 and 2021 Sierra fires" },
   { layerId: "reservoir-levels", synonyms: ["reservoir", "reservoir level", "Lake Powell", "Lake Mead", "lake level", "how full is the lake"], notes: "major western reservoirs, v = storage acre-feet; elevationFt is the quoted level, pctFull, series; provisional" },
+  { layerId: "sea-level-rise", synonyms: ["sea level rise", "flooding by 2050", "coastal flooding"], notes: "US flood map for feet 0-10 of rise; 1 ft is about 2050" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

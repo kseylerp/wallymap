@@ -59,3 +59,4 @@ import "./sequoia-groves";
 import "./sea-level-trends";
 import "./sequoia-mortality";
 import "./reservoir-levels";
+import "./sea-level-rise";

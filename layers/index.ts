@@ -39,3 +39,4 @@ import "./fire-hazard";
 import "./flood-zones";
 import "./snow-cover";
 import "./outdoor-features";
+import "./tides";

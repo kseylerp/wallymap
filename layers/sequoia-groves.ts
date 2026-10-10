@@ -5,6 +5,9 @@
  *   polygon layer, 96 features, maxRecordCount 2000, native SR NAD83 (the query asks for WGS84).
  * Fields used: Grove_Name (string), Acres (float), Land_Steward_List (string, who manages the land, e.g. "NPS SEKI",
  *   "USFS SQF GSNM", "Private, DOI BLM"). SEGI_Group and GSNM_Admin_Name are blank for most groves, so they are not used.
+ * Sources: the service lists USFS Southwest Region (Information Management Mapping and Remote Sensing Team), Sequoia and Kings
+ * Canyon National Parks, BLM, Save the Redwoods League and University of California as its copyright text, states no terms of use,
+ * and describes the set as DRAFT groves; the layer repeats that credit and says so.
  * Output properties: name, acres, v (acres), stewards (when recorded), kind ("grove").
  * Smoke through runLayer (2026-10-10): the whole range -121,35.7,-118.3,39.3 returned all 96 groves in 0.8 s (129 KB);
  * Giant Forest box -118.85,36.5,-118.7,36.65 returned 6 groves in 0.3 s (9 KB).
@@ -64,21 +67,21 @@ const sequoiaGroves = defineLayer({
   id: "sequoia-groves",
   title: "Giant sequoia groves",
   description:
-    "The 96 mapped groves of giant sequoia, the world's largest trees, on the western slope of California's Sierra Nevada, drawn as polygons. Source: the National Park Service (Sequoia and Kings Canyon), 2024 grove map. " +
+    "The 96 mapped groves of giant sequoia, the world's largest trees, on the western slope of California's Sierra Nevada, drawn as polygons. Source: a 2024 grove map hosted by Sequoia and Kings Canyon National Parks and compiled from US Forest Service, National Park Service, BLM, Save the Redwoods League and University of California data (the service labels it a draft). " +
     "Each polygon has name (the grove, such as Giant Forest or Mariposa Grove), acres and v (the same acres), stewards (who manages the land: NPS Sequoia and Kings Canyon, a national forest, BLM, state or private) and kind (always grove). " +
     "Use it for 'where are the giant sequoias', 'which sequoia groves are near here', or 'how big is this grove'. Pair it with sequoia-mortality to see how many trees the 2020 and 2021 fires killed. " +
     "Caveats: sequoias grow naturally only in this strip of California, so anywhere else returns nothing; groves range from a few acres to a few thousand. " +
     "Outlines are simplified for display and mark the grove, not each tree. Zoom in to a region under 120,000 km² (about a 350 km square, enough for the whole range) first.",
   coverage: { bbox: RANGE },
-  license: "Public domain (US National Park Service)",
+  license: "Public data, terms not stated; credit the service's listed sources: USFS Southwest Region (Information Management Mapping and Remote Sensing Team), Sequoia and Kings Canyon National Parks (NPS), BLM, Save the Redwoods League and University of California",
   requiredEnv: [],
   maxAreaKm2: 120_000,
   input: z.object({}),
-  style: { geometry: "polygon", color: layerColor("sequoia-groves"), fillOpacity: 0.3 },
+  style: { geometry: "polygon", color: layerColor("sequoia-groves"), unit: "acres", fillOpacity: 0.3 },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {
-      source: "National Park Service, Sequoia and Kings Canyon National Parks, giant sequoia grove boundaries (2024; public domain)",
+      source: "Giant sequoia grove boundaries (2024), hosted by Sequoia and Kings Canyon National Parks; compiled from USFS Southwest Region Mapping and Remote Sensing Team, NPS, BLM, Save the Redwoods League and University of California data",
       url: "https://www.nps.gov/seki/learn/nature/giant-sequoias.htm",
       retrieved: new Date().toISOString(),
     };

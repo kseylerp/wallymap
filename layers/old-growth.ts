@@ -90,7 +90,7 @@ const oldGrowth = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 300_000,
   input: z.object({}),
-  style: { geometry: "polygon", color: layerColor("old-growth"), fillOpacity: 0.35, extrude: "v" },
+  style: { geometry: "polygon", color: layerColor("old-growth"), unit: "acres", fillOpacity: 0.35, extrude: "v" },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

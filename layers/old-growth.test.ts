@@ -25,7 +25,7 @@ describe("old-growth layer", () => {
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(300_000);
     expect(layer.input.parse({})).toEqual({});
-    expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", fillOpacity: 0.35, extrude: "v" });
+    expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", unit: "acres", fillOpacity: 0.35, extrude: "v" });
   });
 
   it("normalizes firesheds to polygons with old-growth acres as v, mature acres and the survey error", () => {

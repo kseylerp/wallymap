@@ -67,8 +67,15 @@ const SOURCES: Record<Source, { url: string; fields: string[]; order: string; ki
 };
 
 const DEFAULT_MIN_KV = 100;
-/** Features requested per service; a dense view hits this and the result says so. */
+/** Most features requested from one service. */
 const MAX_PER_SERVICE = 1500;
+/** Most features in a whole result: the per-service cap shrinks when several services are asked, so `all` stays near this. */
+const MAX_TOTAL = 3000;
+
+/** Features requested per service: MAX_PER_SERVICE alone, fewer when several services share MAX_TOTAL. */
+export function perServiceCap(services: number): number {
+  return Math.min(MAX_PER_SERVICE, Math.floor(MAX_TOTAL / Math.max(1, services)));
+}
 /** The mirror is frozen; a week is plenty. */
 const TTL_SECONDS = 7 * 86_400;
 /** Display simplification in degrees (about 300 m). */
@@ -161,7 +168,7 @@ const pipelinesLines = defineLayer({
     "Set network to pick one kind: gas, crude, gas-liquids, products, transmission, pipelines (the four pipeline kinds) or all (the default). minKv (default 100) hides power lines below that voltage so the main grid stands out; use 0 for every line, 345 for the backbone. " +
     "Use it for 'where does the pipeline run', 'what power lines cross this valley', 'how close is the transmission line to the proposed solar farm' or 'is there a gas pipeline near here'. " +
     "Caveats: the source is a frozen copy of federal data from 2025 and misses newer lines; positions are approximate (good to about a street block at best), not survey-grade, and must not be used to dig or build; gas and power lines are cut into short segments, so counting features does not count pipelines. " +
-    "Gas pipelines and power lines are capped at 1,500 per view (longest gas segments and highest voltage first) and the result says when it trims. " +
+    "Each kind is capped at 1,500 lines per view (longest gas segments and highest voltage first), and a view of several kinds at about 3,000 in all (600 per kind for all, 750 for pipelines), and the result says when it trims; pick one network to see more of it. " +
     "United States only; elsewhere it returns nothing. Zoom in to a region under 150,000 km² (about a 390 km square) first.",
   coverage: "us",
   license: "Public domain (EIA / DHS HIFLD, Esri Federal User Community mirror)",
@@ -190,6 +197,7 @@ const pipelinesLines = defineLayer({
     }
 
     const sources = sourcesFor(input.network);
+    const cap = perServiceCap(sources.length);
     const results: { source: Source; res: ArcgisResult }[] = await Promise.all(
       sources.map(async (source) => ({
         source,
@@ -197,7 +205,7 @@ const pipelinesLines = defineLayer({
           where: whereFor(source, input.minKv),
           outFields: SOURCES[source].fields,
           bbox: ctx.bbox,
-          maxRecords: MAX_PER_SERVICE,
+          maxRecords: cap,
           maxAllowableOffset: SIMPLIFY_DEG,
           orderByFields: SOURCES[source].order,
           ttlSeconds: TTL_SECONDS,
@@ -215,7 +223,7 @@ const pipelinesLines = defineLayer({
     const features = ok.flatMap((r) => normalizeLines(r.res.fc, r.source));
     const notes: string[] = [];
     const trimmed = ok.filter((r) => r.res.truncated).map((r) => SOURCES[r.source].kind);
-    if (trimmed.length > 0) notes.push(`Showing the first ${MAX_PER_SERVICE.toLocaleString("en-US")} ${trimmed.join(", ")} in view; zoom in for the rest`);
+    if (trimmed.length > 0) notes.push(`Showing the first ${cap.toLocaleString("en-US")} ${trimmed.join(", ")} in view; zoom in or pick one network for the rest`);
     const failed = results.filter((r) => !r.res.ok).map((r) => SOURCES[r.source].kind);
     if (failed.length > 0) notes.push(`${failed.join(", ")} could not be loaded`);
 

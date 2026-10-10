@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { normalizeLines, sourcesFor, whereFor } from "./pipelines-lines";
+import layer, { normalizeLines, perServiceCap, sourcesFor, whereFor } from "./pipelines-lines";
 import gas from "./__fixtures__/pipelines-lines.gas.json";
 import crude from "./__fixtures__/pipelines-lines.crude.json";
 import hgl from "./__fixtures__/pipelines-lines.hgl.json";
@@ -121,7 +121,7 @@ describe("pipelines-lines layer", () => {
     const power = new URL(calls.find((c) => c[0].includes("US_Electric_Power_Transmission_Lines"))![0]);
     expect(power.searchParams.get("where")).toBe("STATUS<>'INACTIVE' AND VOLTAGE>=100");
     expect(power.searchParams.get("orderByFields")).toBe("VOLTAGE DESC");
-    expect(power.searchParams.get("resultRecordCount")).toBe("1500");
+    expect(power.searchParams.get("resultRecordCount")).toBe("600");
     expect(power.searchParams.get("geometry")).toBe(HOUSTON.join(","));
     const gasCall = new URL(calls.find((c) => c[0].includes("Natural_Gas"))![0]);
     expect(gasCall.searchParams.get("where")).toBe("1=1");
@@ -141,11 +141,18 @@ describe("pipelines-lines layer", () => {
     expect(r.coverageNote).toBeUndefined();
   });
 
+  it("shares about 3,000 features between the kinds of a view and allows 1,500 for a single kind", () => {
+    expect(perServiceCap(5)).toBe(600);
+    expect(perServiceCap(4)).toBe(750);
+    expect(perServiceCap(1)).toBe(1500);
+  });
+
   it("queries only the chosen network", async () => {
     const stub = serviceStub();
     await layer.query(ctx(stub), { network: "crude", minKv: 100 });
     const calls = stub.mock.calls as unknown as Call[];
     expect(calls).toHaveLength(1);
+    expect(new URL(calls[0][0]).searchParams.get("resultRecordCount")).toBe("1500");
     expect(calls[0][0]).toContain("/Crude_Oil_Trunk_Pipelines_1/");
   });
 
@@ -156,7 +163,7 @@ describe("pipelines-lines layer", () => {
     });
     const r = await layer.query(ctx(stub), { network: "pipelines", minKv: 100 });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
-    expect(r.coverageNote).toMatch(/1,500 natural gas pipeline/);
+    expect(r.coverageNote).toMatch(/750 natural gas pipeline/);
     expect(r.coverageNote).toMatch(/crude oil pipeline could not be loaded/);
     expect(r.data.features).toHaveLength(5 + 3 + 3);
   });

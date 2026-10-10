@@ -68,7 +68,7 @@ const condorRange = defineLayer({
     "The historic outline is a rough reconstruction (the Pacific coast from British Columbia to Baja California and inland to the Rockies). " +
     "Western North America only; elsewhere it returns nothing. Works at any size of region up to about 20 million km² (a whole continent), so no need to zoom in first.",
   coverage: { bbox: EXTENT },
-  license: "Public domain (US National Park Service)",
+  license: "Public data, terms not stated (National Park Service, Sequoia and Kings Canyon)",
   requiredEnv: [],
   maxAreaKm2: 20_000_000,
   input: z.object({}),

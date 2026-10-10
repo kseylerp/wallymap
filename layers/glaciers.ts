@@ -120,19 +120,50 @@ export function thinGeometry(geometry: Geometry | null): Geometry | null {
   return null;
 }
 
-type Row = { id: string; area: number; time: number; feature: Feature<Geometry> };
+type Row = {
+  id: string;
+  area: number;
+  time: number;
+  /** The glacier's name when it has a real one (not a region code or placeholder). */
+  name: string | undefined;
+  center: [number, number];
+  feature: Feature<Geometry>;
+};
+
+/** Two outlines of the same name and date whose centres are closer than this (degrees, about 2 km) are one glacier mapped twice. */
+const SAME_PLACE_DEG = 0.02;
+
+function centerOf(geometry: Geometry): [number, number] {
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+  const visit = (c: unknown): void => {
+    if (!Array.isArray(c)) return;
+    if (typeof c[0] === "number") {
+      west = Math.min(west, c[0]);
+      east = Math.max(east, c[0]);
+      south = Math.min(south, c[1] as number);
+      north = Math.max(north, c[1] as number);
+    } else c.forEach(visit);
+  };
+  visit((geometry as { coordinates?: unknown }).coordinates);
+  return [(west + east) / 2, (south + north) / 2];
+}
 
 /**
  * Converts WFS rows to polygons with name, glacierId, areaKm2, date, t (the source image date), v (area km2) and
- * institution. Every dated outline is kept, de-duplicated by glacier id plus date (the larger outline wins a tie), so a
- * glacier mapped in 1984 and 2014 comes back twice. The `truncated` flag is set when more than MAX_GLACIERS glaciers
- * were present: the largest by any outline are kept, with all of their outlines, oldest first.
+ * institution. Every dated outline is kept, so a glacier mapped in 1984 and 2014 comes back twice. Duplicates go two ways:
+ * the same glacier id and date keeps the larger outline, and so does a named glacier with the same date and a near-identical
+ * position under a different id (GLIMS gives Lyell Glacier two ids), whose ids are then merged under the larger one's id so
+ * the dates form one series. The `truncated` flag is set when more than MAX_GLACIERS glaciers were present: the largest by
+ * any outline are kept, with all of their outlines, oldest first.
  */
 export function normalizeGlaciers(json: unknown): { data: FeatureCollection; truncated: boolean } {
   const empty = { data: { type: "FeatureCollection", features: [] } as FeatureCollection, truncated: false };
   if (typeof json !== "object" || json === null || !("features" in json) || !Array.isArray(json.features)) return empty;
 
-  const outlines = new Map<string, Row>();
+  const rows: Row[] = [];
   let anonymous = 0;
   for (const raw of json.features as unknown[]) {
     if (typeof raw !== "object" || raw === null) continue;
@@ -147,8 +178,9 @@ export function normalizeGlaciers(json: unknown): { data: FeatureCollection; tru
     const id = str(p.glac_id) ?? `row-${anonymous++}`;
     const srcDate = typeof p.src_date === "string" ? Date.parse(p.src_date) : Number.NaN;
     const dated = Number.isFinite(srcDate);
+    const name = glacierName(p.glac_name);
     const properties: Record<string, string | number> = {
-      name: glacierName(p.glac_name) ?? "Unnamed glacier",
+      name: name ?? "Unnamed glacier",
       glacierId: id,
       areaKm2: Math.round(area * 1000) / 1000,
       v: Math.round(area * 1000) / 1000,
@@ -160,10 +192,46 @@ export function normalizeGlaciers(json: unknown): { data: FeatureCollection; tru
     const institution = str(p.chief_affl);
     if (institution !== undefined) properties.institution = institution;
 
-    const row: Row = { id, area, time: dated ? srcDate : 0, feature: { type: "Feature", geometry, properties } };
-    const key = `${id}|${dated ? srcDate : "undated"}`;
-    const kept = outlines.get(key);
-    if (kept === undefined || row.area > kept.area) outlines.set(key, row);
+    rows.push({ id, area, time: dated ? srcDate : 0, name, center: centerOf(geometry), feature: { type: "Feature", geometry, properties } });
+  }
+  rows.sort((a, b) => b.area - a.area);
+
+  // Ids that turn out to be one glacier map to the id of the larger outline.
+  const parent = new Map<string, string>();
+  const root = (id: string): string => {
+    let r = id;
+    while (parent.has(r)) r = parent.get(r) as string;
+    return r;
+  };
+
+  const seen = new Set<string>();
+  const byNameDate = new Map<string, Row[]>();
+  const unique: Row[] = [];
+  for (const r of rows) {
+    const key = `${r.id}|${r.time || "undated"}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (r.name !== undefined && r.time !== 0) {
+      const group = byNameDate.get(`${r.name}|${r.time}`) ?? [];
+      const twin = group.find((o) => Math.abs(o.center[0] - r.center[0]) < SAME_PLACE_DEG && Math.abs(o.center[1] - r.center[1]) < SAME_PLACE_DEG);
+      if (twin !== undefined) {
+        if (root(twin.id) !== root(r.id)) parent.set(root(r.id), root(twin.id));
+        continue;
+      }
+      group.push(r);
+      byNameDate.set(`${r.name}|${r.time}`, group);
+    }
+    unique.push(r);
+  }
+
+  // Merged ids now share a root, so the same date can appear twice under it: the larger outline wins.
+  const outlines = new Map<string, Row>();
+  for (const r of unique) {
+    const id = root(r.id);
+    if (id !== r.id && r.feature.properties) r.feature.properties.glacierId = id;
+    r.id = id;
+    const key = `${id}|${r.time || "undated"}`;
+    if (!outlines.has(key)) outlines.set(key, r);
   }
 
   // A glacier ranks by its biggest outline, so a shrinking glacier keeps its place whichever year is shown.
@@ -174,10 +242,10 @@ export function normalizeGlaciers(json: unknown): { data: FeatureCollection; tru
   const keep = new Set(ranked.slice(0, MAX_GLACIERS).map(([id]) => id));
   const order = new Map(ranked.map(([id], i) => [id, i]));
 
-  const rows = [...outlines.values()]
+  const kept = [...outlines.values()]
     .filter((r) => keep.has(r.id))
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0) || a.time - b.time);
-  return { data: { type: "FeatureCollection", features: rows.map((r) => r.feature) }, truncated };
+  return { data: { type: "FeatureCollection", features: kept.map((r) => r.feature) }, truncated };
 }
 
 function isTimeout(err: unknown): boolean {
@@ -193,7 +261,7 @@ const glaciers = defineLayer({
     "A glacier mapped more than once comes back once per image date with the same glacierId, so the time scrubber plays its retreat: Lyell and Maclure Glaciers in Yosemite shrink between 1984 and 2014 (Lyell from 0.37 to 0.25 km², Maclure from 0.26 to 0.14 km²). Compare v across dates of one glacierId to say how much ice it lost. " +
     "Use it to show where glaciers are, which are biggest, how much ice a range holds, and how glaciers have shrunk, for example 'where are the glaciers near Mount Rainier', 'the largest glaciers in this part of Alaska' or 'show how Lyell Glacier has retreated'. With 3D on, the map can raise glaciers by area. " +
     "Caveats: this is an inventory, not a current survey. The outlines date from about 1970 to the 2020s depending on the glacier, so the date matters and most glaciers have shrunk since; do not read the newest outline as today's ice edge. Many glaciers have only one date, and different teams and image dates make some outline changes partly mapping differences, not melt. " +
-    "A glacier can also be mapped under more than one id, so a few outlines overlap. Some small ice patches are listed as glaciers and some real glaciers are missing. " +
+    "GLIMS sometimes gives one glacier two ids (Lyell Glacier has two); named glaciers with the same date and place are merged under one glacierId, but unnamed ones can still overlap. Some small ice patches are listed as glaciers and some real glaciers are missing. " +
     "At most the 300 largest glaciers in view are returned (each with all its dated outlines) and the result says when it trims, so zoom in for the rest. Outlines are simplified for display (details under about 40 m are dropped). " +
     "Works anywhere in the world, but only for areas under 8,000 km² (about a 90 km square), so zoom in to a range or a single mountain first.",
   coverage: "global",
@@ -204,6 +272,7 @@ const glaciers = defineLayer({
   style: {
     geometry: "polygon",
     color: layerColor("glaciers"),
+    unit: "km²",
     fillOpacity: 0.3,
     extrude: "v",
   },
@@ -246,6 +315,12 @@ const glaciers = defineLayer({
     const rows =
       typeof body === "object" && body !== null && "features" in body && Array.isArray(body.features) ? body.features.length : 0;
     const notes: string[] = [];
+    const years = [...new Set(data.features.map((f) => String(f.properties?.date ?? "").slice(0, 4)).filter((y) => y !== ""))].sort();
+    if (years.length > 0) {
+      notes.push(
+        `Outlines exist only for the dates glaciers were mapped (years in view: ${years.slice(0, 8).join(", ")}${years.length > 8 ? " and more" : ""}); the ice between those dates is not shown`,
+      );
+    }
     if (truncated) {
       notes.push(`Showing the ${MAX_GLACIERS} largest glaciers in view; zoom in for smaller ones`);
     } else if (rows >= MAX_ROWS) {

@@ -59,6 +59,9 @@ describe("hardiness-zones layer", () => {
 
   it("tells the model it cannot read a zone from the tiles and where to look one up", () => {
     expect(layer.description).toMatch(/cannot read a place's zone/);
+    expect(layer.description).toMatch(/backdrop/);
+    expect(layer.description).toMatch(/one tint/);
+    expect(layer.description).not.toMatch(/Use it for 'what hardiness zone am I in'/);
     expect(layer.description).toMatch(/planthardiness\.ars\.usda\.gov/);
     expect(layer.description).toMatch(/3a/);
     expect(layer.description).toMatch(/Lower 48/);

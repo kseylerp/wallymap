@@ -241,7 +241,7 @@ const powerPlants = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 250_000,
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("power-plants"), extrude: "v", cluster: true },
+  style: { geometry: "point", color: layerColor("power-plants"), unit: "MW", extrude: "v", cluster: true },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const retrieved = new Date().toISOString();

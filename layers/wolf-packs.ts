@@ -31,6 +31,8 @@ const WASHINGTON: BBox = [-124.9, 45.5, -116.9, 49.1];
 const TTL_SECONDS = 86_400;
 const MAX_RECORDS = 2000;
 
+const FIRST_YEAR = 2014;
+
 const NOT_RECORDED = "Not recorded";
 
 const TRUNCATED_NOTE = "Showing the first 2,000 pack-years in view; pick a year for the rest";
@@ -90,7 +92,7 @@ const wolfPacks = defineLayer({
     "Ranges are the agency's estimates from collar and survey locations, drawn to be general, and they are counts of known packs, not all wolves. " +
     "Do not use them to find individual animals. Zoom in to a region under 300,000 km² (about a 550 km square, which covers the whole state) first.",
   coverage: { bbox: WASHINGTON },
-  license: "Public domain (Washington Department of Fish and Wildlife)",
+  license: "Public data, terms not stated (Washington Department of Fish and Wildlife, 2019 service)",
   requiredEnv: [],
   maxAreaKm2: 300_000,
   input: inputSchema,
@@ -109,6 +111,15 @@ const wolfPacks = defineLayer({
         data: EMPTY,
         citation,
         coverageNote: "Wolf pack outlines are published as map data only for Washington state",
+      };
+    }
+
+    if (input.year !== undefined && input.year < FIRST_YEAR) {
+      return {
+        kind: "geojson",
+        data: EMPTY,
+        citation,
+        coverageNote: `Wolf pack outlines start in ${FIRST_YEAR}, so there is no data for ${input.year}; try a year from ${FIRST_YEAR} on`,
       };
     }
 

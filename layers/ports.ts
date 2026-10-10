@@ -122,7 +122,7 @@ const ports = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
-  style: { geometry: "point", color: layerColor("ports"), extrude: "v" },
+  style: { geometry: "point", color: layerColor("ports"), unit: "short tons", extrude: "v" },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

@@ -72,15 +72,31 @@ describe("glaciers layer", () => {
   it("plays Lyell and Maclure retreat: two dated outlines each, oldest first, area shrinking", () => {
     const { data, truncated } = normalizeGlaciers(lyell);
     expect(truncated).toBe(false);
-    const lyellOutlines = data.features.filter((f) => f.properties?.glacierId === "G240728E37743N");
+    // GLIMS gives Lyell Glacier two ids with a 1984 and a 2014 outline each; they merge into one series under the larger id.
+    const lyellOutlines = data.features.filter((f) => f.properties?.name === "Lyell Glacier");
+    expect(lyellOutlines.map((f) => f.properties?.glacierId)).toEqual(["G240738E37743N", "G240738E37743N"]);
     expect(lyellOutlines.map((f) => f.properties?.t)).toEqual(["1984-09-09T00:00:00.000Z", "2014-09-09T00:00:00.000Z"]);
-    expect(lyellOutlines.map((f) => f.properties?.v)).toEqual([0.369, 0.253]);
-    expect(lyellOutlines[0].properties).toMatchObject({ name: "Lyell Glacier", date: "1984-09-09" });
+    expect(lyellOutlines.map((f) => f.properties?.v)).toEqual([0.373, 0.253]);
     const maclure = data.features.filter((f) => f.properties?.glacierId === "G240720E37746N");
     expect(maclure.map((f) => f.properties?.date)).toEqual(["1984-09-09", "2014-09-09"]);
     expect(maclure[1].properties?.v as number).toBeLessThan(maclure[0].properties?.v as number);
     const patch = data.features.filter((f) => f.properties?.glacierId === "G240775E37720N");
     expect(patch.map((f) => f.properties?.date)).toEqual(["1975-09-09", "2014-09-09"]);
+  });
+
+  it("does not merge same-named glaciers far apart, or unnamed ones near each other", () => {
+    const square = (x: number) => ({ type: "Polygon", coordinates: [[[x, 0], [x + 0.01, 0], [x + 0.01, 0.01], [x, 0.01], [x, 0]]] });
+    const row = (id: string, name: string | null, x: number, area: number) => ({
+      type: "Feature",
+      geometry: square(x),
+      properties: { line_type: "glac_bound", glac_id: id, glac_name: name, db_area: area, src_date: "2000-01-01T00:00:00Z" },
+    });
+    const far = normalizeGlaciers({ type: "FeatureCollection", features: [row("a", "North Glacier", 0, 2), row("b", "North Glacier", 1, 1)] });
+    expect(far.data.features.map((f) => f.properties?.glacierId)).toEqual(["a", "b"]);
+    const unnamed = normalizeGlaciers({ type: "FeatureCollection", features: [row("a", "CA", 0, 2), row("b", "CA", 0.005, 1)] });
+    expect(unnamed.data.features).toHaveLength(2);
+    const near = normalizeGlaciers({ type: "FeatureCollection", features: [row("a", "North Glacier", 0, 2), row("b", "North Glacier", 0.005, 1)] });
+    expect(near.data.features).toHaveLength(1);
   });
 
   it("keeps the larger outline when one glacier has two for the same date", () => {
@@ -199,7 +215,8 @@ describe("glaciers layer", () => {
     expect(calls[0][1].cacheKey).toBe("glaciers:k:glims");
     expect(calls[0][1].ttlSeconds).toBe(7 * 86_400);
     expect(r.data.features.length).toBe(6);
-    expect(r.coverageNote).toBeUndefined();
+    expect(r.coverageNote).toMatch(/Outlines exist only for the dates glaciers were mapped \(years in view: 2003, 2009, 2011, 2017\)/);
+    expect(r.coverageNote).not.toMatch(/largest/);
     expect(r.citation.source).toContain("GLIMS");
   });
 

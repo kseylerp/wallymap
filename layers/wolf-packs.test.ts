@@ -21,6 +21,7 @@ describe("wolf-packs layer", () => {
   it("declares sage polygons, no env and an optional year input", () => {
     expect(layer.id).toBe("wolf-packs");
     expect(layer.requiredEnv).toEqual([]);
+    expect(layer.license).toMatch(/terms not stated/);
     expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", fillOpacity: 0.3 });
     expect(layer.input.parse({})).toEqual({});
     expect(layer.input.parse({ year: 2023 })).toEqual({ year: 2023 });
@@ -106,6 +107,16 @@ describe("wolf-packs layer", () => {
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(0);
     expect(r.coverageNote).toMatch(/Washington/);
+  });
+
+  it("says the data starts in 2014 for an earlier year, without calling upstream", async () => {
+    const stub = vi.fn();
+    const r = await layer.query(ctx(stub), { year: 2010 });
+    expect(stub).not.toHaveBeenCalled();
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features).toHaveLength(0);
+    expect(r.coverageNote).toMatch(/start in 2014/);
+    expect(r.coverageNote).toMatch(/2010/);
   });
 
   it("maps an ArcGIS error body and an HTTP error to upstream errors", async () => {

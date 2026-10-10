@@ -20,7 +20,7 @@ describe("ports layer", () => {
     expect(layer.coverage).toBe("us");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.input.parse({})).toEqual({});
-    expect(layer.style).toEqual({ geometry: "point", color: "#3A3A3C", extrude: "v" });
+    expect(layer.style).toEqual({ geometry: "point", color: "#3A3A3C", unit: "short tons", extrude: "v" });
     expect(layer.license).toMatch(/Public domain/);
   });
 

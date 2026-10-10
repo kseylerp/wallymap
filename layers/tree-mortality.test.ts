@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { cdfwWhere, idsWhere, normalizeCdfw, normalizeIds, planYears } from "./tree-mortality";
+import layer, { cdfwWhere, idsWhere, normalizeCdfw, normalizeIds, planYears, surveyYears } from "./tree-mortality";
 import ids from "./__fixtures__/tree-mortality.ids-tahoe.json";
 import cdfw from "./__fixtures__/tree-mortality.cdfw-tahoe.json";
 
@@ -15,11 +15,19 @@ function json(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200 });
 }
 
-/** Answers the Forest Service URL with its fixture and the California URL with its fixture. */
+/** Rows of a fixture whose year falls inside the survey_year / RPT_YR range of the request's where clause. */
+function inRange(fc: FeatureCollection, url: string, field: "survey_year" | "RPT_YR"): FeatureCollection {
+  const where = new URL(url).searchParams.get("where") ?? "";
+  const m = new RegExp(`${field}>=(\\d+) AND ${field}<=(\\d+)`).exec(where);
+  if (m === null) return fc;
+  return { ...fc, features: fc.features.filter((f) => (f.properties?.[field] as number) >= Number(m[1]) && (f.properties?.[field] as number) <= Number(m[2])) };
+}
+
+/** Answers the Forest Service URL with its fixture and the California URL with its fixture, each cut to the requested years. */
 function serviceStub(overrides: { ids?: () => Response; cdfw?: () => Response } = {}) {
   return vi.fn(async (url: string) => {
-    if (url.includes("EDW_InsectandDiseaseSurvey_01")) return overrides.ids?.() ?? json(idsFc);
-    if (url.includes("biosds2783_fpu")) return overrides.cdfw?.() ?? json(cdfwFc);
+    if (url.includes("EDW_InsectandDiseaseSurvey_01")) return overrides.ids?.() ?? json(inRange(idsFc, url, "survey_year"));
+    if (url.includes("biosds2783_fpu")) return overrides.cdfw?.() ?? json(inRange(cdfwFc, url, "RPT_YR"));
     throw new Error(`unexpected url ${url}`);
   });
 }
@@ -106,43 +114,66 @@ describe("tree-mortality layer", () => {
     });
   });
 
-  it("asks only the Forest Service survey by default, mortality only, biggest first, with a week of cache", async () => {
+  it("asks only the Forest Service survey by default, one request per survey year, mortality only, biggest first", async () => {
     const stub = serviceStub();
     const r = await layer.query(ctx(stub, TAHOE, "tree-mortality:k"), {});
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
-    const [url] = urls(stub);
-    expect(urls(stub)).toHaveLength(1);
-    expect(url.origin + url.pathname).toBe("https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_InsectandDiseaseSurvey_01/MapServer/1/query");
-    expect(url.searchParams.get("where")).toBe("survey_year>=2021 AND survey_year<=2025 AND damage_type='Mortality'");
-    expect(url.searchParams.get("orderByFields")).toBe("acres DESC");
-    expect(url.searchParams.get("resultRecordCount")).toBe("1000");
-    expect(url.searchParams.get("geometry")).toBe(TAHOE.join(","));
-    expect((stub.mock.calls as unknown as Call[])[0][1].ttlSeconds).toBe(7 * 86_400);
+    const all = urls(stub);
+    expect(all).toHaveLength(5);
+    expect(all.map((u) => u.searchParams.get("where")).sort()).toEqual(
+      [2021, 2022, 2023, 2024, 2025].map((y) => `survey_year>=${y} AND survey_year<=${y} AND damage_type='Mortality'`),
+    );
+    for (const url of all) {
+      expect(url.origin + url.pathname).toBe("https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_InsectandDiseaseSurvey_01/MapServer/1/query");
+      expect(url.searchParams.get("orderByFields")).toBe("acres DESC");
+      expect(url.searchParams.get("resultRecordCount")).toBe("300");
+      expect(url.searchParams.get("geometry")).toBe(TAHOE.join(","));
+    }
+    for (const c of stub.mock.calls as unknown as Call[]) expect(c[1].ttlSeconds).toBe(7 * 86_400);
+    expect((stub.mock.calls as unknown as Call[]).map((c) => c[1].cacheKey).sort()[0]).toBe("tree-mortality:k:ids-2021-2021");
     expect(r.data.features).toHaveLength(idsFc.features.length);
     expect(r.coverageNote).toBeUndefined();
     expect(r.citation.source).toMatch(/Forest Service/);
   });
 
-  it("asks the California copy for years up to 2019", async () => {
+  it("asks the California copy once per year for years up to 2019", async () => {
     const stub = serviceStub();
     const r = await layer.query(ctx(stub), { years: { from: 2014, to: 2019 } });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     const all = urls(stub);
-    expect(all).toHaveLength(1);
+    expect(all).toHaveLength(6);
     expect(all[0].origin + all[0].pathname).toBe(
       "https://services2.arcgis.com/Uq9r85Potqm3MfRV/arcgis/rest/services/biosds2783_fpu/FeatureServer/0/query",
     );
-    expect(all[0].searchParams.get("where")).toBe("RPT_YR>=2014 AND RPT_YR<=2019 AND DMG_TYPE1='Mortality'");
+    expect(all.map((u) => u.searchParams.get("where")).sort()[0]).toBe("RPT_YR>=2014 AND RPT_YR<=2014 AND DMG_TYPE1='Mortality'");
     expect(all[0].searchParams.get("orderByFields")).toBe("NO_TREES_TOTAL DESC");
+    expect(all[0].searchParams.get("resultRecordCount")).toBe("300");
     expect(r.data.features).toHaveLength(cdfwFc.features.length);
+  });
+
+  it("falls back to one request of 1,000 for a range longer than ten survey years", async () => {
+    const stub = serviceStub();
+    await layer.query(ctx(stub), { years: { from: 2005, to: 2019 } });
+    const all = urls(stub);
+    expect(all).toHaveLength(1);
+    expect(all[0].searchParams.get("where")).toBe("RPT_YR>=2005 AND RPT_YR<=2019 AND DMG_TYPE1='Mortality'");
+    expect(all[0].searchParams.get("resultRecordCount")).toBe("1000");
+  });
+
+  it("lists the flown years of a range, leaving out 2020", () => {
+    expect(surveyYears([2018, 2022])).toEqual([2018, 2019, 2021, 2022]);
+    expect(surveyYears([2020, 2020])).toEqual([]);
   });
 
   it("queries both and warns about units and the missing 2020 when the years span them", async () => {
     const stub = serviceStub();
     const r = await layer.query(ctx(stub), { years: { from: 2018, to: 2023 } });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
-    expect(urls(stub)).toHaveLength(2);
-    expect(r.data.features).toHaveLength(cdfwFc.features.length + idsFc.features.length);
+    // California 2018 and 2019, Forest Service 2021, 2022 and 2023
+    expect(urls(stub)).toHaveLength(5);
+    const years = new Set(r.data.features.map((f) => f.properties?.year));
+    expect([...years].every((y) => (y as number) >= 2018 && (y as number) <= 2023)).toBe(true);
+    expect(r.data.features.some((f) => f.properties?.source === "USFS IDS")).toBe(true);
     expect(r.coverageNote).toMatch(/2020 was never flown/);
     expect(r.coverageNote).toMatch(/trees killed up to 2019 and percent of trees from 2021/);
   });
@@ -165,17 +196,18 @@ describe("tree-mortality layer", () => {
     expect(r.coverageNote).toMatch(/California only/);
   });
 
-  it("says which source was capped, and keeps the other when one fails", async () => {
-    const capped = serviceStub({ ids: () => json({ ...idsFc, exceededTransferLimit: true }) });
-    const a = await layer.query(ctx(capped), {});
+  it("names the years that were capped, and keeps the rest when some years fail", async () => {
+    const capped = serviceStub({ ids: () => json({ ...idsFc, features: [], exceededTransferLimit: true }) });
+    const a = await layer.query(ctx(capped), { years: { from: 2024, to: 2025 } });
     if (!("kind" in a) || a.kind !== "geojson") throw new Error("expected geojson");
-    expect(a.coverageNote).toMatch(/1,000 biggest Forest Service survey/);
+    expect(a.coverageNote).toMatch(/300 biggest Forest Service survey .* polygons for 2024 and 2025/);
 
     const half = serviceStub({ cdfw: () => new Response("no", { status: 500 }) });
     const b = await layer.query(ctx(half), { years: { from: 2018, to: 2023 } });
     if (!("kind" in b) || b.kind !== "geojson") throw new Error("expected geojson");
-    expect(b.data.features).toHaveLength(idsFc.features.length);
-    expect(b.coverageNote).toMatch(/California survey .* could not be loaded/);
+    expect(b.data.features.every((f) => f.properties?.source === "USFS IDS")).toBe(true);
+    expect(b.data.features.length).toBeGreaterThan(0);
+    expect(b.coverageNote).toMatch(/California survey .* could not be loaded for 2018 and 2019/);
   });
 
   it("returns an upstream error when the only source fails", async () => {
@@ -193,6 +225,11 @@ describe("tree-mortality layer", () => {
 
   it("rejects an oversized bbox through runLayer", async () => {
     expect((await runLayer("tree-mortality", { bbox: [-125, 36, -118, 42], zoom: 5 })).status).toBe(422);
+  });
+
+  it("says each year is fetched separately with a cap per year", () => {
+    expect(layer.description).toMatch(/Each survey year is fetched separately/);
+    expect(layer.description).toMatch(/300 polygons per year/);
   });
 
   it("explains the two units, the missing 2020 and the rough survey", () => {

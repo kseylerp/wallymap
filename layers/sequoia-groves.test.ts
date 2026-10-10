@@ -20,11 +20,13 @@ function ctx(stub: ReturnType<typeof vi.fn>, cacheKey?: string) {
 describe("sequoia-groves layer", () => {
   it("declares sage polygons, no env, no input and a public domain license", () => {
     expect(layer.id).toBe("sequoia-groves");
-    expect(layer.license).toMatch(/Public domain/);
+    expect(layer.license).toMatch(/terms not stated/);
+    expect(layer.license).toMatch(/Save the Redwoods League/);
+    expect(layer.license).toMatch(/University of California/);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(120_000);
     expect(layer.input.parse({})).toEqual({});
-    expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", fillOpacity: 0.3 });
+    expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", unit: "acres", fillOpacity: 0.3 });
   });
 
   it("normalizes grove rows to polygons with name, acres, v, stewards and kind", () => {
@@ -69,7 +71,7 @@ describe("sequoia-groves layer", () => {
     expect(calls[0][1].ttlSeconds).toBe(7 * 86_400);
     expect(calls[0][1].cacheKey).toBe("sequoia-groves:k:groves");
     expect(r.data.features.length).toBe(fixture.features.length);
-    expect(r.citation.source).toContain("National Park Service");
+    expect(r.citation.source).toContain("Sequoia and Kings Canyon");
   });
 
   it("returns a note without calling upstream when the view is outside the Sierra Nevada", async () => {

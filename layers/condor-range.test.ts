@@ -27,7 +27,7 @@ function ctx(stub: ReturnType<typeof vi.fn>, bbox = WEST, cacheKey?: string) {
 describe("condor-range layer", () => {
   it("declares sage polygons, no env and no input", () => {
     expect(layer.id).toBe("condor-range");
-    expect(layer.license).toMatch(/Public domain/);
+    expect(layer.license).toMatch(/terms not stated/);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.input.parse({})).toEqual({});
     expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", fillOpacity: 0.25 });

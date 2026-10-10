@@ -28,7 +28,7 @@ describe("power-plants layer", () => {
     expect(layer.coverage).toBe("us");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(250_000);
-    expect(layer.style).toEqual({ geometry: "point", color: "#3A3A3C", extrude: "v", cluster: true });
+    expect(layer.style).toEqual({ geometry: "point", color: "#3A3A3C", unit: "MW", extrude: "v", cluster: true });
     expect(layer.input.parse({})).toEqual({ source: "plants" });
     expect(layer.input.parse({ source: "wind-turbines" })).toEqual({ source: "wind-turbines" });
     expect(layer.input.parse({ fuel: "coal" })).toEqual({ source: "plants", fuel: "coal" });

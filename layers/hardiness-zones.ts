@@ -37,8 +37,8 @@ const hardinessZones = defineLayer({
   description:
     "The USDA Plant Hardiness Zone Map (2023 edition) for the lower 48 states: the coldest-winter bands that tell gardeners which perennial plants, shrubs and trees are likely to survive. " +
     "Zones run from 3a (coldest) to 12a (warmest), in half-zones of 5 °F, each based on the average yearly lowest winter temperature over 1991 to 2020, so zone 7a is about 0 to 5 °F and zone 9b about 25 to 30 °F. " +
-    "Use it for 'what hardiness zone am I in', 'what grows here', 'where is zone 8' or 'has my growing zone warmed'; about half the country moved to the next warmer half-zone between the 2012 map and this one. " +
-    "Returns map tiles drawn on the globe, not features you can count or list, and the tiles carry only a numeric index per band, so you cannot read a place's zone from this layer: say the layer is shown and that the zones are drawn as bands, and for a specific address point the user to the official lookup at planthardiness.ars.usda.gov. " +
+    "Use it as a backdrop for 'what grows here' or 'has my growing zone warmed' questions (about half the country moved to the next warmer half-zone between the 2012 map and this one); it is not a way to look up a zone. " +
+    "Returns map tiles drawn on the globe, not features you can count or list, and the tiles carry only a numeric index per band, so you cannot read a place's zone from this layer: the map draws every band in one tint, so it shows where the zone map applies but not which zone is which. For 'what zone am I in' or 'where is zone 8', say so and point the user to the official lookup at planthardiness.ars.usda.gov. " +
     "You cannot see the rendered map. Caveats: zones describe winter cold only, not heat, rainfall, soil or frost dates; local microclimates (cities, valleys, slopes) differ from the zone drawn. " +
     "Lower 48 states only: Alaska, Hawaii and Puerto Rico are missing from this copy. The tiles are a community copy of the USDA map, so credit both USDA and Oregon State. " +
     "Works at any size of region.",

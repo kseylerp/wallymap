@@ -18,7 +18,8 @@
  * (measure "percent of trees"); each row says which in `measure`, and a result spanning both says so in coverageNote.
  * Output properties: year, t (January 1 of the survey year), agent, host, v, measure, acres, plus treesKilled/treesPerAcre
  * (1973 to 2019) or percentAffected (2021 to 2025), source ("USFS IDS" | "CDFW ADS").
- * Smoke through runLayer (2026-10-10), all with 1,000 per source at 0.002 degree simplification: Tahoe -120.5,38.9,-120,39.3 default
+ * Each survey year is its own request (300 polygons per year, largest first) for ranges of up to ten survey years; longer ranges are one
+ * request of 1,000. The smoke numbers below are from the earlier single-request version (1,000 per source at 0.002 degree simplification): Tahoe -120.5,38.9,-120,39.3 default
  * (2021 to 2025) returned 939 Forest Service polygons in 0.4 s (426 KB); years 2014 to 2019 returned 1,000 California polygons (capped,
  * the note says so) in 0.9 s (391 KB); years 2018 to 2023 returned 728 with the 2020 and mixed-unit notes; Colorado front range
  * -106,39,-105,40 default returned 1,000 (capped) in 1.4 s (365 KB).
@@ -46,7 +47,12 @@ const NEVER_FLOWN_YEAR = 2020;
 /** Rough extent of California, the only place the 1973 to 2019 copy covers. */
 const CALIFORNIA: BBox = [-124.6, 32.4, -114.0, 42.1];
 
+/** Polygons per request when the range is too long for one request per year. */
 const MAX_RECORDS = 1000;
+/** Polygons per survey year when each year gets its own request. */
+const MAX_PER_YEAR = 300;
+/** Most survey years that get their own request; a longer range is one request. */
+const MAX_PER_YEAR_SPAN = 10;
 /** Display simplification in degrees (about 200 m). */
 const SIMPLIFY_DEG = 0.002;
 const TTL_SECONDS = 7 * 86_400;
@@ -104,6 +110,30 @@ export function idsWhere([from, to]: [number, number]): string {
 /** Where clause for the California copy. */
 export function cdfwWhere([from, to]: [number, number]): string {
   return `RPT_YR>=${from} AND RPT_YR<=${to} AND DMG_TYPE1='Mortality'`;
+}
+
+type Source = {
+  label: string;
+  url: string;
+  years: [number, number];
+  fields: string[];
+  where: (span: [number, number]) => string;
+  order: string;
+  key: string;
+  normalize: (fc: FeatureCollection) => Feature<Geometry>[];
+};
+
+/** The calendar years of a range that were flown (2020 never was). */
+export function surveyYears([from, to]: [number, number]): number[] {
+  const years: number[] = [];
+  for (let y = from; y <= to; y++) if (y !== NEVER_FLOWN_YEAR) years.push(y);
+  return years;
+}
+
+/** "2022", "2022 and 2023", "2018 to 2023" for the ranges a note names. */
+function spanList(spans: [number, number][]): string {
+  const labels = spans.map(([a, b]) => (a === b ? String(a) : `${a} to ${b}`));
+  return labels.length <= 2 ? labels.join(" and ") : `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
 }
 
 function withYear(properties: Record<string, string | number>, year: unknown): boolean {
@@ -173,7 +203,7 @@ const treeMortality = defineLayer({
     "Set years to {from, to} (for example {from: 2015, to: 2019}); leave it out for the latest survey, 2021 to 2025. Years up to 2019 return California only; 2021 and later cover the nation. " +
     "Use it for 'where are the beetle-killed trees', 'dead trees', 'how bad was the die-off in the Sierra in 2016', 'drought mortality' or 'show the pine beetle outbreak over time'. " +
     "Caveats: 2020 was never flown, so there is no data for it and the map goes blank for that year. Surveys are sketched by eye from small planes 1,000 to 2,000 feet up, so polygons are rough, miss trees hidden behind ridges, and show where trees died in that year, not how many dead trees still stand. " +
-    "Polygons are not every dead tree, and fire-killed trees are mostly not included (see fire-perimeters and burn-severity). At most 1,000 polygons per source are returned, biggest first, and the result says when it trims. " +
+    "Polygons are not every dead tree, and fire-killed trees are mostly not included (see fire-perimeters and burn-severity). Each survey year is fetched separately, at most 300 polygons per year (the biggest first), so a busy year does not crowd out the others; a range longer than ten years is fetched at once, at most 1,000 polygons per source. The result says when it trims. " +
     "Zoom in to a region under 20,000 km² (about a 140 km square) first.",
   coverage: "us",
   license: "Public domain (US Forest Service; California Department of Fish and Wildlife copy)",
@@ -205,43 +235,60 @@ const treeMortality = defineLayer({
     const notes: string[] = [];
     if (plan.includes2020) notes.push("2020 was never flown, so there is no tree death data for that year");
 
-    const jobs: Promise<{ label: string; res: ArcgisResult; normalize: (fc: FeatureCollection) => Feature<Geometry>[] }>[] = [];
     const inCalifornia = !bboxesDisjoint(ctx.bbox, CALIFORNIA);
     if (plan.cdfw !== null && !inCalifornia) notes.push("Tree death before 2020 is mapped for California only");
+
+    const sources: Source[] = [];
     if (plan.cdfw !== null && inCalifornia) {
-      const years = plan.cdfw;
-      jobs.push(
-        arcgisQuery(ctx, CDFW_URL, {
-          where: cdfwWhere(years),
-          outFields: CDFW_FIELDS,
-          bbox: ctx.bbox,
-          maxRecords: MAX_RECORDS,
-          maxAllowableOffset: SIMPLIFY_DEG,
-          orderByFields: "NO_TREES_TOTAL DESC",
-          ttlSeconds: TTL_SECONDS,
-          cacheSuffix: `cdfw-${years[0]}-${years[1]}`,
-        }).then((res) => ({ label: "California survey (1973 to 2019)", res, normalize: normalizeCdfw })),
-      );
+      sources.push({
+        label: "California survey (1973 to 2019)",
+        url: CDFW_URL,
+        years: plan.cdfw,
+        fields: CDFW_FIELDS,
+        where: cdfwWhere,
+        order: "NO_TREES_TOTAL DESC",
+        key: "cdfw",
+        normalize: normalizeCdfw,
+      });
     }
     if (plan.ids !== null) {
-      const years = plan.ids;
-      jobs.push(
-        arcgisQuery(ctx, IDS_URL, {
-          where: idsWhere(years),
-          outFields: IDS_FIELDS,
-          bbox: ctx.bbox,
-          maxRecords: MAX_RECORDS,
-          maxAllowableOffset: SIMPLIFY_DEG,
-          orderByFields: "acres DESC",
-          ttlSeconds: TTL_SECONDS,
-          cacheSuffix: `ids-${years[0]}-${years[1]}`,
-        }).then((res) => ({ label: "Forest Service survey (2021 to 2025)", res, normalize: normalizeIds })),
-      );
+      sources.push({
+        label: "Forest Service survey (2021 to 2025)",
+        url: IDS_URL,
+        years: plan.ids,
+        fields: IDS_FIELDS,
+        where: idsWhere,
+        order: "acres DESC",
+        key: "ids",
+        normalize: normalizeIds,
+      });
     }
-
-    if (jobs.length === 0) {
+    if (sources.length === 0) {
       return { kind: "geojson", data: EMPTY, citation, coverageNote: notes.join("; ") };
     }
+
+    // One request per survey year, so a busy year cannot crowd out the others; a long range falls back to one capped request.
+    const jobs = sources.flatMap((s) => {
+      const years = surveyYears(s.years);
+      const perYear = years.length <= MAX_PER_YEAR_SPAN;
+      const spans: [number, number][] = perYear ? years.map((y) => [y, y]) : [s.years];
+      const cap = perYear ? MAX_PER_YEAR : MAX_RECORDS;
+      return spans.map(async (span) => ({
+        source: s,
+        span,
+        cap,
+        res: await arcgisQuery(ctx, s.url, {
+          where: s.where(span),
+          outFields: s.fields,
+          bbox: ctx.bbox,
+          maxRecords: cap,
+          maxAllowableOffset: SIMPLIFY_DEG,
+          orderByFields: s.order,
+          ttlSeconds: TTL_SECONDS,
+          cacheSuffix: `${s.key}-${span[0]}-${span[1]}`,
+        }),
+      }));
+    });
 
     const results = await Promise.all(jobs);
     const ok = results.filter((r): r is typeof r & { res: Extract<ArcgisResult, { ok: true }> } => r.res.ok);
@@ -250,12 +297,21 @@ const treeMortality = defineLayer({
       return { error: first.ok ? "ArcGIS service returned no data" : first.error, hint: "upstream" };
     }
 
-    const features = ok.flatMap((r) => r.normalize(r.res.fc));
-    for (const r of results) {
-      if (!r.res.ok) notes.push(`The ${r.label} could not be loaded`);
-      else if (r.res.truncated) notes.push(`Showing the ${MAX_RECORDS.toLocaleString("en-US")} biggest ${r.label} polygons in view; zoom in or narrow the years for the rest`);
+    const features = ok.flatMap((r) => r.source.normalize(r.res.fc));
+    for (const s of sources) {
+      const mine = results.filter((r) => r.source === s);
+      const failed = mine.filter((r) => !r.res.ok);
+      if (failed.length > 0) notes.push(`The ${s.label} could not be loaded for ${spanList(failed.map((r) => r.span))}`);
+      const capped = mine.filter((r) => r.res.ok && r.res.truncated);
+      if (capped.length > 0) {
+        notes.push(
+          `Showing the ${capped[0].cap.toLocaleString("en-US")} biggest ${s.label} polygons for ${spanList(capped.map((r) => r.span))}; zoom in or narrow the years for the rest`,
+        );
+      }
     }
-    if (ok.length === 2) notes.push("v is trees killed up to 2019 and percent of trees from 2021, so do not compare across them");
+    if (new Set(ok.map((r) => r.source)).size === 2) {
+      notes.push("v is trees killed up to 2019 and percent of trees from 2021, so do not compare across them");
+    }
 
     return {
       kind: "geojson",

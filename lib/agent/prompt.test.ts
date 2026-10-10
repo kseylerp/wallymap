@@ -36,6 +36,12 @@ const REQUIRED = [
   "When the user asks for 3D, columns, how tall or to stack them, render with mode columns (areas such as fire perimeters or glaciers extrude by their value).",
   "Otherwise omit render.mode: the map draws symbols, or clusters for a dense point layer.",
   "A single-point lookup such as geologic-unit must be rendered before the note, so the point shows on the map and its card can open.",
+  "For how full a reservoir is or its level (how full is Lake Powell), call query_reservoir-levels with name set to the reservoir, give pctFull, elevationFt and the reading's date, and describe the trend in its series; for how deep a lake is, use lakes.",
+  "For a national monument then and now, query monuments once with version both and render it; use render.filters on kind ('2021' or 'current') to show one boundary at a time, and give each kind's areaKm2; compare needs dated layers, so do not call it for monuments.",
+  "sea-level-rise is a scenario, not a date: query it once per feet value the user asks about (1 foot is about 2050) and never use compare or set_time on it; for how fast the sea is rising, use sea-level-trends.",
+  "temperature-anomaly and the FEMA part of disasters are US county polygons joined by county: geocode the county or state, query once for the period, and quote that county's v; temperature-anomaly covers the lower 48 only.",
+  "For a satellite picture before and after an event, query imagery-by-date once per date with the same sensor, then call compare with a and b set to the pass days its coverage notes name.",
+  "Glacier outlines are dated by survey: to show a glacier's retreat, query and render glaciers once, then call set_time ONCE with play: true across the survey years, and give v at each date of one glacierId.",
 ];
 
 describe("SYSTEM_PROMPT", () => {

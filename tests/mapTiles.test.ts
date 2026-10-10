@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ensureHatchImages,
   heatColor,
+  heatEntries,
   heatLayerSpec,
   heatPointsCollection,
   insertBeforeId,
@@ -17,7 +18,11 @@ import {
 import { DARK_GREY, OFF_WHITE, PURPLE, SAGE, WHITE } from "@/lib/render/palette";
 import { hexToRgb, lightness } from "@/lib/render/ramp";
 import type { LayerResult } from "@/layers/types";
-import { initialMapState, type MapState } from "@/lib/render/state";
+import { buildDeckLayerSets } from "@/lib/render/deck";
+import { pickUnderHeat } from "@/lib/render/inspect";
+import { reduce } from "@/lib/render/reducer";
+import { initialMapState, type MapAction, type MapState } from "@/lib/render/state";
+import { visibleState } from "@/lib/render/view";
 
 const STYLE = { geometry: "polygon" as const, color: "#B9A6FF" };
 
@@ -372,6 +377,84 @@ describe("heat mode (Mapbox heatmap)", () => {
     syncHeatLayers(map, heatState("lines"));
     expect(layers.map((l) => l.id)).toEqual(["land", "road-label"]);
     expect(sources).toEqual({});
+  });
+});
+
+describe("heat mode under a compare", () => {
+  const sighting = (year: number, x: number): GeoJSON.Feature => ({
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [x, 51] },
+    properties: { species: "elk", t: `${year}-06-01T00:00:00.000Z` },
+  });
+  const wildlife: MapState["layers"][string] = {
+    id: "species",
+    title: "Wildlife",
+    style: { geometry: "point", color: "#000000" },
+    result: {
+      kind: "geojson",
+      data: { type: "FeatureCollection", features: [sighting(2019, -115.6), sighting(2020, -115.5), sighting(2024, -115.4)] },
+      citation: { source: "s", url: "u", retrieved: "r" },
+    },
+    receivedAt: "now",
+  };
+  const base = [
+    { type: "layer_loaded", layer: wildlife },
+    { type: "render", op: { layerId: "species", mode: "heat", visible: true } },
+  ] as MapAction[];
+  const compared = (mode: "swipe" | "toggle" | "delta", ...more: MapAction[]): MapState =>
+    visibleState(
+      [
+        ...base,
+        { type: "set_compare", compare: { layerId: "species", a: ["2019-01-01", "2020-12-31"], b: ["2021-01-01", "2024-12-31"], mode } },
+        ...more,
+      ].reduce(reduce, { ...initialMapState, terrain: false }),
+    );
+  const coords = (e: { data: GeoJSON.FeatureCollection }) => e.data.features.map((f) => (f.geometry as GeoJSON.Point).coordinates[0]);
+
+  it("toggle gives each side its own heatmap and shows only the side on screen", () => {
+    const a = heatEntries(compared("toggle"));
+    expect(a.map((e) => [e.id, e.shown])).toEqual([["heat-species", true], ["heat-species~b", false]]);
+    expect(coords(a[0])).toEqual([-115.6, -115.5]);
+    expect(coords(a[1])).toEqual([-115.4]);
+    const b = heatEntries(compared("toggle", { type: "compare_flip" }));
+    expect(b.map((e) => [e.id, e.shown])).toEqual([["heat-species", false], ["heat-species~b", true]]);
+
+    const { map, layers, calls } = fakeMap();
+    syncHeatLayers(map, compared("toggle"));
+    syncHeatLayers(map, compared("toggle", { type: "compare_flip" }));
+    expect(layers.map((l) => [l.id, l.layout?.visibility])).toEqual([
+      ["land", undefined],
+      ["heat-species", "none"],
+      ["heat-species~b", "visible"],
+      ["road-label", undefined],
+    ]);
+    // Flipping sides only switches visibility; nothing is uploaded again.
+    expect(calls.filter((c) => c.startsWith("setData") || c.startsWith("addSource"))).toEqual(["addSource heat-species", "addSource heat-species~b"]);
+  });
+
+  it("swipe draws no heatmap; its two sides draw as points in the clipped side overlays", () => {
+    const view = compared("swipe");
+    expect(heatEntries(view)).toEqual([]);
+    const { a, b } = buildDeckLayerSets(view, { mapboxToken: "" });
+    expect(a.map((l) => l.id)).toEqual(["species:points"]);
+    expect(b.map((l) => l.id)).toEqual(["species~b:points"]);
+  });
+
+  it("a click under a toggle's heat picks the side on screen; a swipe leaves picking to deck", () => {
+    const project = ([x]: [number, number]) => ({ x: (x + 116) * 1000, y: 0 });
+    const at = { x: 600, y: 0 }; // -115.4, side B's sighting
+    expect(pickUnderHeat(compared("toggle"), project, at, 10)).toBeNull();
+    expect(pickUnderHeat(compared("toggle", { type: "compare_flip" }), project, at, 10)).toMatchObject({ layerId: "species", side: "b" });
+    expect(pickUnderHeat(compared("swipe"), project, { x: 400, y: 0 }, 10)).toBeNull();
+  });
+
+  it("delta draws its discs only, without a heat haze under them", () => {
+    expect(heatEntries(compared("delta"))).toEqual([]);
+    const { map, layers } = fakeMap();
+    syncHeatLayers(map, visibleState(base.reduce(reduce, initialMapState)));
+    expect(layers.map((l) => l.id)).toContain("heat-species");
+    syncHeatLayers(map, compared("delta"));
+    expect(layers.map((l) => l.id)).toEqual(["land", "road-label"]);
   });
 });
 

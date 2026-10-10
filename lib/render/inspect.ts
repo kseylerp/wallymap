@@ -331,17 +331,25 @@ export function askAboutText(layerTitle: string, selection: Selection, unit?: st
 /**
  * The feature nearest a click among the visible layers drawn as heat (Mapbox draws heat, so deck has nothing to pick),
  * within `radiusPx` on screen, as a selection. Top layer first; null when nothing is that close. `project` is the
- * map's lng/lat to screen point.
+ * map's lng/lat to screen point. A compared heat layer is only heat in a toggle compare, where the side on screen is
+ * picked (side B as `side: "b"`); a swipe or delta draws it in deck, which picks it itself.
  */
 export function pickUnderHeat(
-  state: { renderOps: { layerId: string; mode: RenderMode; visible: boolean }[]; layers: Record<string, { result: { kind: string; data?: unknown } }> },
+  state: {
+    renderOps: { layerId: string; mode: RenderMode; visible: boolean }[];
+    layers: Record<string, { result: { kind: string; data?: unknown } }>;
+    compare?: { layerId: string; mode: string; side?: "a" | "b" };
+  },
   project: (lngLat: [number, number]) => { x: number; y: number },
   point: { x: number; y: number },
   radiusPx: number,
 ): Selection | null {
   for (const op of [...state.renderOps].reverse()) {
     if (op.mode !== "heat" || !op.visible) continue;
-    const loaded = state.layers[op.layerId];
+    const compared = state.compare?.layerId === op.layerId ? state.compare : undefined;
+    if (compared && compared.mode !== "toggle") continue;
+    const sideB = compared?.side === "b";
+    const loaded = state.layers[sideB ? `${op.layerId}${COMPARE_B_SUFFIX}` : op.layerId];
     if (loaded?.result.kind !== "geojson") continue;
     const data = loaded.result.data as GeoJSON.FeatureCollection;
     let best: { feature: Feature; at: [number, number]; d: number } | null = null;
@@ -352,7 +360,9 @@ export function pickUnderHeat(
       const d = Math.hypot(p.x - point.x, p.y - point.y);
       if (d <= radiusPx && (!best || d < best.d)) best = { feature, at, d };
     }
-    if (best) return { layerId: op.layerId, feature: best.feature, lngLat: best.at, screen: { x: point.x, y: point.y } };
+    if (best) {
+      return { layerId: op.layerId, feature: best.feature, lngLat: best.at, screen: { x: point.x, y: point.y }, ...(sideB && { side: "b" as const }) };
+    }
   }
   return null;
 }

@@ -20,7 +20,7 @@ import {
   type PaintOverride,
   type StyleLayerLike,
 } from "@/lib/render/hybridStyle";
-import { compareBaseId, compareBId, compareSideShown } from "@/lib/render/compareView";
+import { compareBaseId, compareBId, compareSideShown, effectiveMode } from "@/lib/render/compareView";
 import { hatchImage, hatchPatternId, HATCH_SCALE } from "@/lib/render/hatch";
 import { areaRecipe, DARK_GREY, isPaletteColor, LINE, SYMBOL, WHITE, type HatchColor } from "@/lib/render/palette";
 import { rampColor, rgbaString } from "@/lib/render/ramp";
@@ -389,9 +389,38 @@ export function heatLayerSpec(layerId: string, opacity: number): HeatmapLayerSpe
 /** The geojson result each map last received per heat source, so a data upload happens only on change. */
 const heatData = new WeakMap<MapboxMap, Map<string, FeatureCollection>>();
 
+/** One Mapbox heatmap to draw: its layer and source id, the data, the op's opacity, and whether it shows now. */
+export type HeatEntry = { id: string; data: FeatureCollection; opacity: number; shown: boolean };
+
 /**
- * Makes the map's Mapbox heatmap layers match the visible `heat` render ops. Mapbox draws heat (not deck)
- * because deck's HeatmapLayer renders nothing in globe projection. No-op until the style is loaded.
+ * The heatmaps `view` (the visible state, lib/render/view.ts) needs, one per visible `heat` op. A compared heat layer
+ * is the exception, since Mapbox draws heat on the map's own canvas, which cannot be clipped to one side of a swipe:
+ * a toggle compare gets one heatmap per side (side B under `heat-<id>~b`) with only the side on screen shown, so the
+ * flip never re-uploads; a swipe draws its two sides as points in the clipped side overlays and a delta as its
+ * discs (lib/render/deck.ts), so neither has a heatmap.
+ */
+export function heatEntries(view: MapState): HeatEntry[] {
+  const entries: HeatEntry[] = [];
+  const compare = view.compare;
+  const compareMode = effectiveMode(view);
+  for (const op of view.renderOps) {
+    if (op.mode !== "heat" || !op.visible) continue;
+    const opacity = op.opacity ?? 1;
+    const compared = compare?.layerId === op.layerId && compareMode !== undefined;
+    if (compared && compareMode !== "toggle") continue;
+    const ids = compared ? [op.layerId, compareBId(op.layerId)] : [op.layerId];
+    for (const id of ids) {
+      const loaded = view.layers[id];
+      if (loaded?.result.kind !== "geojson") continue;
+      entries.push({ id: `${HEAT_PREFIX}${id}`, data: loaded.result.data, opacity, shown: compareSideShown(view, id) });
+    }
+  }
+  return entries;
+}
+
+/**
+ * Makes the map's Mapbox heatmap layers match `heatEntries(state)`. Mapbox draws heat (not deck) because deck's
+ * HeatmapLayer renders nothing in globe projection. No-op until the style is loaded.
  */
 export function syncHeatLayers(map: MapboxMap, state: MapState): void {
   const style = loadedStyle(map);
@@ -403,19 +432,19 @@ export function syncHeatLayers(map: MapboxMap, state: MapState): void {
     heatData.set(map, uploaded);
   }
   const wanted = new Set<string>();
-  for (const op of state.renderOps) {
-    const loaded = state.layers[op.layerId];
-    if (op.mode !== "heat" || !op.visible || loaded?.result.kind !== "geojson") continue;
-    const id = `${HEAT_PREFIX}${op.layerId}`;
+  for (const { id, data, opacity, shown } of heatEntries(state)) {
     wanted.add(id);
-    const data = loaded.result.data;
     const source = map.getSource(id) as GeoJSONSource | undefined;
     if (!source) map.addSource(id, { type: "geojson", data: heatPointsCollection(data) });
     else if (uploaded.get(id) !== data) source.setData(heatPointsCollection(data));
     uploaded.set(id, data);
-    const spec = heatLayerSpec(op.layerId, op.opacity ?? 1);
-    if (!map.getLayer(id)) map.addLayer(spec, beforeId);
-    else for (const [property, value] of Object.entries(spec.paint ?? {})) map.setPaintProperty(id, property as never, value as never);
+    const spec = heatLayerSpec(id.slice(HEAT_PREFIX.length), opacity);
+    const visibility = shown ? "visible" : "none";
+    if (!map.getLayer(id)) map.addLayer({ ...spec, layout: { visibility } }, beforeId);
+    else {
+      for (const [property, value] of Object.entries(spec.paint ?? {})) map.setPaintProperty(id, property as never, value as never);
+      map.setLayoutProperty(id, "visibility", visibility);
+    }
   }
   for (const layer of style.layers) {
     if (layer.id.startsWith(HEAT_PREFIX) && !wanted.has(layer.id) && map.getLayer(layer.id)) map.removeLayer(layer.id);

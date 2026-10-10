@@ -1335,13 +1335,19 @@ export function buildDeckLayerSets(
       main.push(...safeLayersFor(op, ctx, deltaLayers));
       continue;
     }
-    // Each side draws in its compare color (A purple, B pink: palette §11), in place of the layer's own stroke.
-    const sideA = safeLayersFor({ ...op, color: COMPARE_COLORS.a }, ctx);
+    // Each side draws in its compare color (A purple, B pink: palette §11), in place of the layer's own stroke. Heat
+    // is Mapbox's and cannot be clipped to one side of the handle, so a swiped heat layer draws its sides as points
+    // (a toggle keeps the heat: components/mapTiles.ts gives each side its own heatmap).
+    const sideMode = mode === "swipe" && op.mode === "heat" ? "points" : op.mode;
+    const sideA = safeLayersFor({ ...op, mode: sideMode, color: COMPARE_COLORS.a }, ctx);
     const bId = compareBId(op.layerId);
     const loadedB = state.layers[bId];
     const sideB =
       loadedB?.result.kind === "geojson"
-        ? safeLayersFor({ ...op, color: COMPARE_COLORS.b }, { ...ctx, data: loadedB.result.data, selected: selectedB, deckId: bId })
+        ? safeLayersFor(
+            { ...op, mode: sideMode, color: COMPARE_COLORS.b },
+            { ...ctx, data: loadedB.result.data, selected: selectedB, deckId: bId },
+          )
         : [];
     if (mode === "swipe") {
       a.push(...sideA);

@@ -30,7 +30,7 @@ export type TileTime = {
   from: string;
   /** Last period published (YYYY-MM-DD or YYYY); omit when the archive runs to the present. */
   to?: string;
-  /** The newest period is not reliably processed for this many days; the scrubber stays that far behind today. */
+  /** The newest period is not reliably processed for this many days; the scrubber stays that far behind today. Negative: forecast days the scrubber may run ahead of today. */
   daysBack?: number;
 };
 

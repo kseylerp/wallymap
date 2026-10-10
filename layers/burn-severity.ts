@@ -19,6 +19,7 @@
 import { z } from "zod";
 import { defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
+import { mapServerExportTileUrl } from "./_shared/arcgis-tiles";
 import { layerColor } from "@/lib/render/palette";
 
 const SERVICE = "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MTBS_01/MapServer";
@@ -34,10 +35,7 @@ const inputSchema = z.object({
 
 /** Tile template for one year (`{year}` is left in place for the scrubber when `year` is the placeholder). */
 export function mtbsTileUrl(year: number | "{year}"): string {
-  return (
-    `${SERVICE}/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true` +
-    `&layers=show:${ALL_YEARS_LAYER}&layerDefs=${ALL_YEARS_LAYER}:year%3D${year}&f=image`
-  );
+  return `${mapServerExportTileUrl(SERVICE, { layers: `show:${ALL_YEARS_LAYER}` })}&layerDefs=${ALL_YEARS_LAYER}:year%3D${year}`;
 }
 
 const burnSeverity = defineLayer({
@@ -51,7 +49,8 @@ const burnSeverity = defineLayer({
     "Use it for 'burn severity', 'burn scars', 'where did big fires burn in 2020', 'how much of this area has burned since 1984', 'fire history'. " +
     "Example questions: which parts of the Sierra burned in 2021, show fire scars near Bend over the last decade, compare burned areas in 2012 and 2020. " +
     "For current and recent fire boundaries use fire-perimeters (these are features you can list); for fresh vegetation loss use disturbance. " +
-    "Caveats: fires under the size thresholds are missing, prescribed burns are included only when large, and a pixel burned twice appears in both years. " +
+    "Caveats: fires under the size thresholds are missing, prescribed burns are included only when large, and ground that burned again shows up under each fire year. " +
+    "Compare two dates works (pick two dates or years in compare). " +
     "The result's coverageNote states the year shown. " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "us",

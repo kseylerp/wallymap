@@ -36,6 +36,13 @@ const inputSchema = z.object({
   date: dateInput,
 });
 
+/** First day of the 16-day composite holding `day`: composites start on 1 January and every 16 days after it. */
+export function compositeStart(day: string): string {
+  const jan1 = Date.parse(`${day.slice(0, 4)}-01-01T00:00:00Z`);
+  const offset = Math.floor((Date.parse(`${day}T00:00:00Z`) - jan1) / (16 * 86_400_000)) * 16;
+  return new Date(jan1 + offset * 86_400_000).toISOString().slice(0, 10);
+}
+
 export function greennessSpec(index: keyof typeof GIBS_IDS): GibsDatedSpec {
   return {
     gibsId: GIBS_IDS[index],
@@ -58,7 +65,8 @@ const greenness = defineLayer({
     "Use it for 'how green is it', 'greenness', 'is the vegetation drought-stressed', 'when does spring green-up start', 'green vs brown season', or to compare the same place in two years by moving the date or using compare. " +
     "Example questions: how green is the Sierra this month, did the Amazon dry out compared with last year, when did the Colorado Front Range green up. " +
     "Caveats: it measures greenness of leaves, not tree species or land use; clouds and snow are screened out in a composite so patches can look stale or blank, and evergreen forest barely changes through the year. 250 m to 1 km detail, so it suits regions, not single fields. " +
-    "The result's coverageNote states the composite date shown. " +
+    "Compare two dates works (pick two dates or years in compare). " +
+    "The result's coverageNote names the 16-day composite shown. " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",
   license: "NASA GIBS / MODIS (public)",
@@ -68,7 +76,16 @@ const greenness = defineLayer({
   style: { geometry: "polygon", color: layerColor("greenness") },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
-    return gibsDatedResult(greennessSpec(input.index), input.date);
+    const r = gibsDatedResult(greennessSpec(input.index), input.date);
+    if (!("kind" in r) || r.kind !== "tiles") return r;
+    // GIBS answers with the whole composite containing the day, so name its 16 days rather than the requested day.
+    const shown = /for (\d{4}-\d{2}-\d{2})/.exec(r.coverageNote ?? "")?.[1];
+    if (shown === undefined) return r;
+    const start = compositeStart(shown);
+    const end = new Date(Date.parse(`${start}T00:00:00Z`) + 15 * 86_400_000).toISOString().slice(0, 10);
+    const name = input.index === "ndvi" ? "NDVI" : "EVI";
+    const moved = /\((.+)\)$/.exec(r.coverageNote ?? "")?.[1];
+    return { ...r, coverageNote: `${name} 16-day composite ${start} to ${end} (the composite containing ${shown})${moved ? `; ${moved}` : ""}` };
   },
 });
 

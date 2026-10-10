@@ -56,7 +56,7 @@ describe("phenology layer", () => {
     const r = await tiles({ date: "2026-10-01" });
     expect(r.data.url).toContain("&time=2026-09-08");
     expect(r.coverageNote).toContain("showing 2026-09-08");
-    expect(await layer.query(ctx(vi.fn()), { stage: "leaf", date: "2025-12-31" })).toMatchObject({ error: expect.stringContaining("2026-01-01") });
+    expect(await layer.query(ctx(vi.fn()), { stage: "leaf", date: "2025-12-31" })).toMatchObject({ error: expect.stringContaining("use year (1981 to 2024)") });
   });
 
   it("year picks the annual PRISM anomaly with a yearly {year} template", async () => {

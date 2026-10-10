@@ -44,10 +44,13 @@ describe("fire-weather layer", () => {
 
   it("publishes a daily time template from 2024-01-01 and the scrubber fills the {date}", async () => {
     const r = await tiles({});
-    expect(r.data.time).toEqual({ template: fwiTileUrl("global", "{date}"), cadence: "daily", from: "2024-01-01" });
+    expect(r.data.time).toEqual({ template: fwiTileUrl("global", "{date}"), cadence: "daily", from: "2024-01-01", daysBack: -9 });
     expect(r.data.time?.template).toContain("&time={date}");
     expect(tileUrlForTime(r.data.url, r.data.time, ["2025-01-01", "2025-07-04T00:00:00Z"], Date.now())).toContain("&time=2025-07-04");
     expect(tileUrlForTime(r.data.url, r.data.time, ["2020-01-01", "2020-02-01T00:00:00Z"], Date.now())).toContain("&time=2024-01-01");
+    // the scrubber may run into the forecast (9 days ahead) but no further
+    expect(tileUrlForTime(r.data.url, r.data.time, ["2026-01-01", "2026-10-15T00:00:00Z"], Date.now())).toContain("&time=2026-10-15");
+    expect(tileUrlForTime(r.data.url, r.data.time, ["2026-01-01", "2026-12-01T00:00:00Z"], Date.now())).toContain("&time=2026-10-18");
   });
 
   it("allows forecast days up to 9 ahead for global and clamps beyond", async () => {

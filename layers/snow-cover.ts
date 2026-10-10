@@ -22,6 +22,7 @@ import { defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { dateInput } from "./_shared/dated-tiles";
 import { gibsDatedResult, type GibsDatedSpec } from "./_shared/gibs-dated";
+import { mapServerExportTileUrl } from "./_shared/arcgis-tiles";
 import { layerColor } from "@/lib/render/palette";
 
 const NOHRSC_SERVICE = "https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer";
@@ -44,10 +45,7 @@ export const MODIS_SPEC: GibsDatedSpec = {
 
 /** Tile template for the NOHRSC snow depth analysis (ArcGIS MapServer export, Web Mercator). */
 export function nohrscDepthTileUrl(): string {
-  return (
-    `${NOHRSC_SERVICE}/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32` +
-    `&transparent=true&layers=show:${NOHRSC_DEPTH_LAYER}&f=image`
-  );
+  return mapServerExportTileUrl(NOHRSC_SERVICE, { layers: `show:${NOHRSC_DEPTH_LAYER}` });
 }
 
 const snowCover = defineLayer({
@@ -60,6 +58,7 @@ const snowCover = defineLayer({
     "Use it for 'snow cover', 'is there snow on the ground', 'how deep is the snow', 'when did the snow line retreat', 'early or late snow year' and similar. " +
     "Example questions: where is there snow in the Sierra today, how does snow cover in the Alps compare with a year ago, how deep is the snowpack in Colorado. " +
     "Caveats: the satellite sees snow only through clear sky, so cloudy days leave gaps or look patchy, forests can hide snow, and a day may be missing; it shows whether snow is there, not how deep or how much water is in it (depth mode and the snowpack layer give amounts). " +
+    "Compare two dates works (pick two dates or years in compare). " +
     "The result's coverageNote states which product and day are shown. " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",

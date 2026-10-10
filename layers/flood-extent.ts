@@ -57,6 +57,7 @@ const floodExtent = defineLayer({
     "Example questions: how far did the river spread after the storm, is the Mississippi flooded near Memphis, show the water around this town before and after the hurricane. " +
     "To tell a flood from normal water, pair it with surface-water, which shows where water usually is. " +
     "Caveats: satellites cannot see through cloud, dense forest canopy or heavy urban cover, so floods under storm clouds are often missed and the first sunny pass may come days later; shadows and dark burn scars can look like water; it shows water, not depth or damage. " +
+    "Compare two dates works (pick two dates or years in compare). " +
     "The result's coverageNote states the day shown (and when a date was moved to the newest available). " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",

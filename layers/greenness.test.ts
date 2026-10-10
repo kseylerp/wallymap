@@ -3,7 +3,7 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
 import { tileUrlForTime } from "@/lib/time";
-import layer from "./greenness";
+import layer, { compositeStart } from "./greenness";
 
 const ALPS: [number, number, number, number] = [5, 44, 15, 48];
 
@@ -39,7 +39,16 @@ describe("greenness layer", () => {
       "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_L3_NDVI_16Day/default/2026-09-14/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png",
     );
     expect(r.data).toMatchObject({ minzoom: 0, maxzoom: 9, format: "raster" });
-    expect(r.coverageNote).toContain("2026-09-14");
+    expect(r.coverageNote).toBe("NDVI 16-day composite 2026-09-14 to 2026-09-29 (the composite containing 2026-09-14)");
+  });
+
+  it("names the composite period, not the requested day", async () => {
+    const r = await tiles({ date: "2025-07-01" });
+    expect(r.coverageNote).toBe("NDVI 16-day composite 2025-06-26 to 2025-07-11 (the composite containing 2025-07-01)");
+    expect(compositeStart("2026-01-01")).toBe("2026-01-01");
+    expect(compositeStart("2026-01-16")).toBe("2026-01-01");
+    expect(compositeStart("2026-01-17")).toBe("2026-01-17");
+    expect(compositeStart("2000-03-05")).toBe("2000-03-05");
   });
 
   it("switches to EVI", async () => {

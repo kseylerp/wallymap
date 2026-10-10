@@ -145,6 +145,7 @@ const smoke = defineLayer({
     "It is a feature layer, so you can count and list the polygons and read their densities. " +
     "Caveats: the outlines are hand-drawn from satellites, so they are daytime-only, cannot see through thick cloud, and are coarse; thickness is overhead smoke (the whole column), not what you breathe; several passes a day are drawn separately, so polygons overlap and the same plume repeats; smoke outside the Americas is not mapped; a few days have no map. " +
     "For air quality at the ground check an air-quality source; for the fires themselves use fire-detections. " +
+    "Compare two dates works (pick two dates or years in compare). " +
     "Empty results carry a coverageNote saying why (no smoke mapped, a day with no map, or outside the Americas).",
   coverage: { bbox: SMOKE_EXTENT },
   license: "NOAA / NESDIS OSPO Hazard Mapping System (public)",

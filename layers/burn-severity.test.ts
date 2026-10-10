@@ -30,7 +30,7 @@ describe("burn-severity layer", () => {
   it("defaults to 2024 with a layerDefs year filter on the all-years layer", async () => {
     const r = await tiles({});
     expect(r.data.url).toBe(
-      "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MTBS_01/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&layers=show:63&layerDefs=63:year%3D2024&f=image",
+      "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MTBS_01/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&f=image&transparent=true&layers=show:63&layerDefs=63:year%3D2024",
     );
     expect(r.data).toMatchObject({ minzoom: 0, maxzoom: 14, format: "raster" });
     expect(r.coverageNote).toContain("2024");
@@ -48,9 +48,9 @@ describe("burn-severity layer", () => {
     const r = await tiles({});
     expect(r.data.time).toEqual({ template: mtbsTileUrl("{year}"), cadence: "yearly", from: "1984", to: "2024" });
     expect(r.data.time?.template).toContain("year%3D{year}");
-    expect(tileUrlForTime(r.data.url, r.data.time, ["1984-01-01", "2012-06-01T00:00:00Z"], Date.now())).toContain("year%3D2012&f=image");
-    expect(tileUrlForTime(r.data.url, r.data.time, ["1984-01-01", "2030-06-01T00:00:00Z"], Date.now())).toContain("year%3D2024&f=image");
-    expect(tileUrlForTime(r.data.url, r.data.time, ["1970-01-01", "1975-06-01T00:00:00Z"], Date.now())).toContain("year%3D1984&f=image");
+    expect(tileUrlForTime(r.data.url, r.data.time, ["1984-01-01", "2012-06-01T00:00:00Z"], Date.now())).toContain("year%3D2012");
+    expect(tileUrlForTime(r.data.url, r.data.time, ["1984-01-01", "2030-06-01T00:00:00Z"], Date.now())).toContain("year%3D2024");
+    expect(tileUrlForTime(r.data.url, r.data.time, ["1970-01-01", "1975-06-01T00:00:00Z"], Date.now())).toContain("year%3D1984");
   });
 
   it("rejects years outside 1984 to 2026 and non-integers at the input schema", () => {

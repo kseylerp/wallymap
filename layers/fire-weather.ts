@@ -62,6 +62,7 @@ const fireWeather = defineLayer({
     "Example questions: how high is the fire danger in southern California this week, is Portugal at extreme fire risk tomorrow, compare fire danger on the day of the fire with a week before. " +
     "For actual fires use fire-detections and fire-perimeters. " +
     "Caveats: it is a coarse model, so a single canyon or valley can differ a lot, and it ignores whether an ignition source or fuel actually exists; the very newest days are forecasts and change with each model run; nothing is available before 2024. " +
+    "Compare two dates works (pick two dates or years in compare). " +
     "The result's coverageNote states the day shown (and when a date was moved into the available range). " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",
@@ -85,7 +86,8 @@ const fireWeather = defineLayer({
         minzoom: 0,
         maxzoom: 12,
         format: "raster",
-        time: { template: fwiTileUrl(input.region, "{date}"), cadence: "daily", from: m.from },
+        // Negative daysBack lets the scrubber run ahead of today, into the forecast days.
+        time: { template: fwiTileUrl(input.region, "{date}"), cadence: "daily", from: m.from, daysBack: -m.daysAhead },
       },
       citation: { source: m.source, url: m.url, retrieved: new Date().toISOString() },
       coverageNote: dateNote("Fire Weather Index", choice.date, choice.note),

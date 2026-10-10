@@ -49,11 +49,12 @@ const phenology = defineLayer({
     "US map of whether spring has arrived earlier or later than usual, from the USA National Phenology Network's Spring Indices (a model of when plants first leaf out or first flower, driven by daily temperature), lower 48 states only, about 4 km. " +
     "The color is the difference in days from the 30-year average: reds mean spring came that many days early (up to 20), blues mean days late, white is about normal. " +
     "stage leaf (default) is first leaf-out (new leaves on lilac and honeysuckle, a proxy for the start of the growing season); stage bloom is first bloom. " +
-    "Without year it shows the current year, one image per day, up to about a month ago; date (YYYY-MM-DD, this calendar year) picks the day and defaults to the newest, and the time scrubber steps through the days. " +
+    "Without year it shows the current year only (the daily maps start on 1 January of this year), one image per day, up to about a month ago; date (YYYY-MM-DD, this calendar year) picks the day and defaults to the newest, and the time scrubber steps through the days. " +
     "With year (1981 to 2024) it shows that whole spring's anomaly, one image per year, so use it, or compare, to ask whether spring is arriving earlier over the decades. " +
     "Use it for 'spring arrived', 'has spring come early this year', 'when do the trees leaf out', 'early or late spring', 'growing season start', 'bloom timing'. " +
     "Example questions: did spring arrive early in the Northeast this year, was 2012 a record-early spring, compare leaf-out in 1990 and 2020 for the Midwest. " +
     "Caveats: it is a temperature-based model (calibrated on lilac and honeysuckle), not a satellite view of actual leaves, so it can be off for high mountains, evergreen forest and desert; Alaska and the rest of the world are not covered; the current year does not run to today and the latest annual map is 2024. " +
+    "Compare two dates works (pick two dates or years in compare). " +
     "The result's coverageNote states the stage and day or year shown. " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "us",
@@ -94,7 +95,9 @@ const phenology = defineLayer({
 
     const from = `${new Date(now).getUTCFullYear()}-01-01`;
     const choice = resolveTileDate(input.date, { from, latestOffsetDays: -DAYS_BACK, label: "daily spring index maps" }, now);
-    if (!choice.ok) return { error: choice.error };
+    if (!choice.ok) {
+      return { error: input.date !== undefined && input.date < from ? `Daily spring index maps cover this year only (from ${from}); for an earlier spring use year (${ANNUAL_FROM} to ${ANNUAL_TO})` : choice.error };
+    }
     return {
       kind: "tiles",
       data: {

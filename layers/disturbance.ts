@@ -39,6 +39,7 @@ const disturbance = defineLayer({
     "Example questions: any new forest loss near this Amazon road, did the wildfire strip the vegetation here, where did the hurricane flatten the forest. " +
     "For a yearly picture of tree loss use forest-loss; for confirmed burns use fire-perimeters or burn-severity. " +
     "Caveats: an alert means vegetation dropped, whatever the cause (logging, fire, flood, drought, harvest, mowing, snow, clouds missed by the filter), so it does not prove deforestation; seasonal die-back and crop harvest can trigger alerts; cloud and haze hide the ground. " +
+    "Compare two dates works (pick two dates or years in compare). " +
     "The result's coverageNote states the day shown (and when a date was moved to the newest available). " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",

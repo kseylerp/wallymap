@@ -48,13 +48,14 @@ const seaIce = defineLayer({
   id: "sea-ice",
   title: "Sea ice",
   description:
-    "Global daily maps of sea ice in the Arctic and around Antarctica (as far as 85 degrees latitude), from NASA GIBS. " +
-    "product concentration (default) is the share of the sea surface covered by ice from the GHRSST MUR analysis: a color ramp where warm colors mean nearly solid ice and cool colors mean scattered ice near the edge, with open water left clear; daily from June 2002 to about 2 days ago, about 1 to 5 km. " +
+    "Global daily maps of sea ice in the Arctic and around Antarctica, from NASA GIBS. " +
+    "product concentration (default) is the share of the sea surface covered by ice from the GHRSST MUR analysis: a color ramp where warm colors mean nearly solid ice and cool colors mean scattered ice near the edge, with open water left clear; daily from June 2002 to about 2 days ago. " +
     "product extent is the MODIS Terra ice-or-not map: ice shown in pink, daily from February 2000 to yesterday, sharper but gapped under cloud and in polar night. " +
     "date (YYYY-MM-DD) picks the day and defaults to the newest; use the time scrubber or compare to see the seasonal cycle or to compare the same date in different years (September is the Arctic minimum, March the maximum). " +
     "Use it for 'sea ice', 'how much ice is in the Arctic', 'is the Northwest Passage open', 'ice edge', 'has the ice shrunk since 2005'. " +
     "Example questions: where is the Arctic ice edge now, compare September ice in 2012 and this year, is Hudson Bay frozen yet. " +
     "Caveats: lake ice, glaciers and ice sheets are not sea ice; concentration is a modelled blend of satellite readings so thin or melting ice is uncertain near the coast; the map shows area covered, not thickness. " +
+    "Compare two dates works (pick two dates or years in compare). " +
     "The result's coverageNote states the product day shown (and when a date was moved to the newest available). " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",

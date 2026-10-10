@@ -189,6 +189,11 @@ describe("tileUrlForTime", () => {
     const open: TileTime = { template: "u/{date}", cadence: "daily", from: "2020-01-01" };
     expect(tileUrlForTime("u/x", open, ["2020-01-01", "2030-01-01T00:00:00Z"], now)).toBe("u/2026-10-09");
   });
+  it("lets a negative daysBack run ahead of today (forecast days)", () => {
+    const fc: TileTime = { template: "u/{date}", cadence: "daily", from: "2020-01-01", daysBack: -9 };
+    expect(tileUrlForTime("u/x", fc, ["2020-01-01", "2026-10-12T00:00:00Z"], now)).toBe("u/2026-10-12");
+    expect(tileUrlForTime("u/x", fc, ["2020-01-01", "2030-01-01T00:00:00Z"], now)).toBe("u/2026-10-18");
+  });
   it("snaps {date} to each cadence", () => {
     const t = (cadence: TileTime["cadence"], from = "2020-01-01"): TileTime => ({ template: "u/{date}", cadence, from });
     const w: TimeWindow = ["2020-01-01", "2024-05-17T13:00:00Z"];

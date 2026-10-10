@@ -77,7 +77,7 @@ const landCover = defineLayer({
         kind: "tiles",
         data: { url: WORLDCOVER_URL, minzoom: 0, maxzoom: 14, format: "raster" },
         citation: {
-          source: "ESA WorldCover 10 m 2021 v2 (CC BY 4.0), served by VITO Terrascope",
+          source: "ESA WorldCover 10 m 2021 v2 (CC BY 4.0), contains modified Copernicus Sentinel data (2021) processed by the ESA WorldCover consortium; served by VITO Terrascope",
           url: "https://esa-worldcover.org/",
           retrieved,
         },

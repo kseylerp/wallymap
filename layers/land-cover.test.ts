@@ -35,6 +35,7 @@ describe("land-cover layer", () => {
     expect(r.data.time).toBeUndefined();
     expect(r.coverageNote).toMatch(/WorldCover 2021/);
     expect(r.citation.source).toMatch(/CC BY 4.0/);
+    expect(r.citation.source).toMatch(/Copernicus Sentinel data/);
   });
 
   it("nlcd: true draws the 2021 NLCD map through WMS with the bbox placeholder", async () => {

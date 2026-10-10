@@ -318,11 +318,14 @@ export const BUILDINGS = SURFACE;
 
 /**
  * Cluster blobs (render mode `clusters`): circles sized by count on the gray density ramp (off-white for the smallest
- * group, dark grey for the largest, log scaled), a dark grey outline, and the count in dark grey on a white halo.
+ * group, darkening with the log of the count up to `rampMax`), a dark grey outline, and the count in dark grey on a
+ * white halo.
  * Radius grows from `minPx` with the log of the count, up to `maxPx`. Singletons keep the layer's own symbol.
  */
 export const CLUSTER_BLOB = {
   ramp: "gray" as RampName,
+  /** The busiest blob stops this far along the ramp: a full dark grey fill swallowed its dark grey count. */
+  rampMax: 0.62,
   alpha: 0.85,
   outline: DARK_GREY,
   outlinePx: 1.25,

@@ -14,6 +14,7 @@ import {
   hexColumns,
   hexToRgba,
   isClusterFeature,
+  rampRgba,
   type ColumnFeature,
 } from "@/lib/render/deck";
 import { layerIdFromDeckId, pickToSelection, pickUnderHeat, summarizeFeature } from "@/lib/render/inspect";
@@ -137,9 +138,12 @@ describe("clusters", () => {
     expect(labels).toBeInstanceOf(TextLayer);
     expect(singles).toBeInstanceOf(IconLayer);
     expect(props(blobs).pickable).toBe(true);
+    // Billboards on 3D terrain: no depth test, so a slope never cuts a blob (or a symbol) in half.
+    expect(props(blobs).parameters).toMatchObject({ depthCompare: "always" });
+    expect(props(singles).parameters).toMatchObject({ depthCompare: "always" });
     expect(props(blobs).getLineColor).toEqual(hexToRgba(CLUSTER_BLOB.outline));
     expect(props(labels).getColor).toEqual(hexToRgba(DARK_GREY));
-    expect(props(labels).outlineColor).toEqual(hexToRgba(WHITE, 230));
+    expect(props(labels).outlineColor).toEqual(hexToRgba(WHITE, 240));
     // Same ids on a rebuild.
     expect(buildDeckLayers(stateWith(species, { mode: "clusters" })).map((l) => l.id)).toEqual(layers.map((l) => l.id));
     // On deck's terrain copy the ids carry the 3D tag and the blobs stand on the surface.
@@ -153,7 +157,8 @@ describe("clusters", () => {
     expect(clusterRadius(10_000)).toBe(CLUSTER_BLOB.maxPx);
     expect(clusterRadius(20)).toBeGreaterThan(clusterRadius(5));
     expect(clusterColor(2, 100).slice(0, 3)).toEqual(hexToRgba(OFF_WHITE).slice(0, 3));
-    expect(clusterColor(100, 100).slice(0, 3)).toEqual(hexToRgba(DARK_GREY).slice(0, 3));
+    expect(clusterColor(100, 100).slice(0, 3)).toEqual(rampRgba("gray", CLUSTER_BLOB.rampMax).slice(0, 3));
+    expect(clusterColor(100, 100)[0]).toBeLessThan(clusterColor(10, 100)[0]);
   });
 
   it("marks blobs as clusters (a click zooms in) and blob picks name the layer", () => {
@@ -219,6 +224,7 @@ describe("columns", () => {
     expect(walls).toBeInstanceOf(GeoJsonLayer);
     expect(props(walls).extruded).toBe(true);
     expect(props(walls).material).toBe(false);
+    expect(props(walls).wireframe).toBe(true);
     const cells = (props(walls).data as GeoJSON.FeatureCollection).features as ColumnFeature[];
     const fill = props(walls).getFillColor as (f: unknown) => number[];
     const tallest = cells.find((c) => c.properties.tallest)!;
@@ -263,6 +269,8 @@ describe("columns", () => {
     );
     const layers = buildDeckLayers(stateWith(fires, { mode: "columns" }));
     expect(layers.map((l) => l.id)).toEqual(["fire-perimeters:columns", "fire-perimeters:columns:caps", "fire-perimeters:columns:label"]);
+    // No wireframe on areas: a detailed perimeter would draw a dark line at every vertex.
+    expect(props(layers[0]).wireframe).toBe(false);
     const elevation = props(layers[0]).getElevation as (f: unknown) => number;
     const features = fires.result.kind === "geojson" ? fires.result.data.features : [];
     expect(elevation(features[2])).toBeGreaterThan(elevation(features[1]));

@@ -556,8 +556,9 @@ function symbolLayers(op: RenderOp, { data, selected, terrain, deckId }: OpConte
       getColor: colorFor(SPRITE_TINT, opacity, selected),
       updateTriggers: { getColor: [selectionKey(selected), opacity], getIcon: [op.layerId, selectionKey(selected)] },
       // The overlay draws in deck's GlobeView, which flips the icon quads' winding; with back-face culling on,
-      // deck 9.4 draws (and picks) no icons at all there.
-      parameters: { cullMode: "none" },
+      // deck 9.4 draws (and picks) no icons at all there. No depth test either: a symbol centered on a 3D slope had
+      // its lower half buried in deck's terrain copy and read as an arch.
+      parameters: { cullMode: "none", depthCompare: "always" },
       ...terrainProps(terrain, "offset"),
     }),
   ];
@@ -630,8 +631,8 @@ function anchorOf(f: Feature): [number, number] | null {
   return validLngLat(p) ? p : null;
 }
 
-/** Supercluster settings: blobs gather points within 60 px (at Mapbox's 512 px tiles) up to z16; past it all split. */
-export const CLUSTER_INDEX = { radiusPx: 60, maxZoom: 16 } as const;
+/** Supercluster settings: blobs gather points within 40 px (at Mapbox's 512 px tiles) up to z16; past it all split. */
+export const CLUSTER_INDEX = { radiusPx: 40, maxZoom: 16 } as const;
 
 type ClusterProps = { cluster: true; cluster_id: number; point_count: number };
 /** One blob: supercluster's cluster feature (its center, id and how many features it holds). */
@@ -693,10 +694,13 @@ export function clusterRadius(count: number): number {
   return Math.min(CLUSTER_BLOB.maxPx, CLUSTER_BLOB.minPx + 4 * Math.log2(Math.max(2, count)) - 4);
 }
 
-/** A blob's fill: the gray ramp from off-white (two features) to dark grey (the largest blob), log scaled. */
+/**
+ * A blob's fill: the gray ramp from off-white (two features) toward dark grey (the largest blob), log scaled, stopping
+ * at CLUSTER_BLOB.rampMax so the dark grey count on its white halo still reads on the busiest blob.
+ */
 export function clusterColor(count: number, max: number): Rgba {
   const t = max > 2 ? Math.min(1, Math.max(0, Math.log(count / 2) / Math.log(max / 2))) : 0;
-  return rampRgba(CLUSTER_BLOB.ramp, t, Math.round(255 * CLUSTER_BLOB.alpha));
+  return rampRgba(CLUSTER_BLOB.ramp, t * CLUSTER_BLOB.rampMax, Math.round(255 * CLUSTER_BLOB.alpha));
 }
 
 const COUNT_FONT = {
@@ -734,7 +738,8 @@ function clusterLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       getLineWidth: CLUSTER_BLOB.outlinePx,
       lineWidthUnits: "pixels",
       billboard: true,
-      parameters: { cullMode: "none" },
+      // Billboards over the terrain copy: never let the slope behind a blob cut it in half.
+      parameters: { cullMode: "none", depthCompare: "always" },
       updateTriggers: { getFillColor: trigger, getLineColor: trigger },
       ...terrainProps(terrain, "offset"),
     }),
@@ -749,8 +754,11 @@ function clusterLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       getColor: fade(hexToRgba(CLUSTER_BLOB.label)),
       fontWeight: 600,
       ...COUNT_FONT,
-      outlineColor: hexToRgba(CLUSTER_BLOB.labelHalo, 230),
-      parameters: { cullMode: "none" },
+      // A wider white halo than the hex counts: the busiest blobs are dark grey under a dark grey count.
+      outlineWidth: 0.7,
+      fontSettings: { sdf: true, buffer: 6 },
+      outlineColor: hexToRgba(CLUSTER_BLOB.labelHalo, 240),
+      parameters: { cullMode: "none", depthCompare: "always" },
       updateTriggers: { getColor: trigger },
       ...terrainProps(terrain, "offset"),
     }),
@@ -772,14 +780,21 @@ function heatSelectionLayers(op: RenderOp, ctx: OpContext, opacity: number): Lay
       getSize: SYMBOL_SIZE_PX,
       sizeUnits: "pixels",
       getColor: withOpacity(SPRITE_TINT, opacity),
-      parameters: { cullMode: "none" },
+      parameters: { cullMode: "none", depthCompare: "always" },
       ...terrainProps(terrain, "offset"),
     }),
   ];
 }
 
-/** The tallest column stands this many H3 edge lengths high at the current resolution (so it scales with zoom). */
-export const COLUMN_HEIGHT_EDGES = 2.5;
+/** The tallest column stands this many H3 edge lengths high at its resolution (so it scales with zoom). */
+export const COLUMN_HEIGHT_EDGES = 3;
+/**
+ * Columns bin one H3 resolution finer than the flat tiles: a tiled cell reads at a glance, but the same cell stood up
+ * in 3D filled a pitched view.
+ */
+export function columnResolution(zoom: number): number {
+  return Math.min(15, hexResolution(zoom) + 1);
+}
 /** How many named features a column's inspect card lists. */
 const COLUMN_TOP = 3;
 
@@ -920,6 +935,7 @@ function columnSet(
   wall: (f: Feature) => Rgba,
   { selected, terrain }: OpContext,
   opacity: number,
+  wireframe = true,
 ): Layer[] {
   const c = HEX_COLUMN;
   const alpha = (a: number) => Math.round(255 * a);
@@ -935,7 +951,8 @@ function columnSet(
       data: cells,
       pickable: true,
       extruded: true,
-      wireframe: true,
+      // Hex columns show their six edges; a detailed area (a fire perimeter) would draw a dark line at every vertex.
+      wireframe,
       getElevation: height,
       getFillColor: (f: Feature) => (f === selected ? withOpacity(hexToRgba(c.top, alpha(c.topWallAlpha)), opacity) : fade(f, wall(f))),
       getLineColor: (f: Feature) => fade(f, COLUMN_EDGE),
@@ -984,7 +1001,7 @@ function columnSet(
  */
 function columnLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const by = ctx.style.extrude === "v" ? "v" : "count";
-  const { cells, caps, max, heightM, label } = hexColumns(ctx.data, hexResolution(ctx.zoom), by);
+  const { cells, caps, max, heightM, label } = hexColumns(ctx.data, columnResolution(ctx.zoom), by);
   const valueOf = (f: Feature) => (by === "v" ? Number(f.properties?.v) || 0 : Number(f.properties?.count) || 0);
   const selected = ctx.selected && cells.features.includes(ctx.selected as ColumnFeature) ? ctx.selected : undefined;
   return columnSet(
@@ -1061,6 +1078,7 @@ function extrudedAreaLayers(op: RenderOp, ctx: OpContext, opacity: number): Laye
     (f) => columnWallColor(positiveV(f), max, f === top),
     ctx,
     opacity,
+    false,
   );
 }
 

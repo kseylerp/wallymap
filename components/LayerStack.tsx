@@ -32,7 +32,7 @@ type LayerStackProps = {
   compareSlot?: ReactNode;
 };
 
-/** Modes the select offers line and area layers; areas with an `extrude` hint can also stand as 3D columns. */
+/** Modes the select offers line and area layers; areas with an `extrude` hint (or already extruded) can stand as 3D columns. */
 const MODES: { value: RenderMode; label: string }[] = [
   { value: "points", label: "Points" },
   { value: "lines", label: "Lines" },
@@ -304,7 +304,7 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
                   onChange={(e) => dispatch({ type: "set_style", layerId: layer.id, mode: e.target.value as RenderMode })}
                   className="legend-select"
                 >
-                  {[...MODES, ...(layer.style.geometry === "polygon" && layer.style.extrude ? [EXTRUDE_MODE] : [])].map((m) => (
+                  {[...MODES, ...(layer.style.geometry === "polygon" && (layer.style.extrude || op.mode === "columns") ? [EXTRUDE_MODE] : [])].map((m) => (
                     <option key={m.value} value={m.value}>
                       {m.label}
                     </option>

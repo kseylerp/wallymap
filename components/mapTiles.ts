@@ -364,8 +364,11 @@ export function heatLayerSpec(layerId: string, opacity: number): HeatmapLayerSpe
     source: id,
     paint: {
       "heatmap-weight": ["get", "w"],
-      "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 4, 8, 16, 14, 34],
-      "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.6, 14, 1.2],
+      "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 6, 8, 26, 14, 50],
+      // Wide and low, so a few hundred sightings in a valley still show the whole ramp (off-white, sage, purple) and
+      // only the true hotspots reach dark grey; at 0.6 to 1.2 (radius 16 px at z8) every group saturated to a flat
+      // dark grey blob.
+      "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.12, 9, 0.18, 14, 0.45],
       "heatmap-opacity": Math.min(1, Math.max(0, opacity)) * 0.9,
       "heatmap-color": heatColor(),
     },

@@ -31,6 +31,22 @@ describe("VOCABULARY", () => {
     }
   });
 
+  it("gives each synonym to one layer only", () => {
+    const owners = new Map<string, string>();
+    for (const entry of VOCABULARY) {
+      for (const synonym of entry.synonyms) {
+        expect(owners.get(synonym.toLowerCase()), `"${synonym}" is on ${owners.get(synonym.toLowerCase())} and ${entry.layerId}`).toBeUndefined();
+        owners.set(synonym.toLowerCase(), entry.layerId);
+      }
+    }
+  });
+
+  it("does not route common words that belong to other layers", () => {
+    // "trails in Yosemite National Park", "how deep is the snow", "fire history" each matched an unrelated layer.
+    const bare = VOCABULARY.flatMap((e) => e.synonyms.map((s) => s.toLowerCase()));
+    for (const word of ["national park", "depth", "history"]) expect(bare).not.toContain(word);
+  });
+
   it("keeps campsites paired with forest-roads", () => {
     const roads = VOCABULARY.find((e) => e.layerId === "forest-roads");
     expect(roads?.notes).toContain("also query campsites");

@@ -26,3 +26,4 @@ import "./ski-routes";
 import "./recreation-sites";
 import "./glaciers";
 import "./geology";
+import "./climbing";

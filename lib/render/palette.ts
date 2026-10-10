@@ -52,6 +52,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   campsites: "data",
   "mtb-trails": "data",
   "ski-routes": "data",
+  climbing: "data",
   species: "data",
   photos: "data",
   snowpack: "data",

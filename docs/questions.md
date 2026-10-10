@@ -152,44 +152,62 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set
 
 ## Last run
 
-Run on 2026-10-09 (M4 integration, commit fb8ef88, with the renderer-modes work still uncommitted in the tree) with model `openai/gpt-oss-120b` and a 12-step cap: **ok 32/33**. A question passes when the agent located the place (geocode or a physical-regions query), queried a layer, drew whatever came back (render or compare), and wrote a note; a route question passes when the route tool ran and a note followed.
+Run on 2026-10-10 at commit ddce0cd (after the M4 server review fixes) with model `openai/gpt-oss-120b` and a 12-step cap: **ok 29/33**. A question passes when the agent located the place (geocode, a physical-regions query, or an `@view` map view), moved the camera with `set_view` after geocoding a named place (`@view` questions are exempt), queried a layer, drew whatever came back (render or compare), and wrote a note. When nothing was drawn, the note counts only if some layer answered with zero features; a question whose every layer query errored fails however much text was written. A route question passes when the route tool ran and a note followed. The eval builds the tools with the `@view` map view, as the chat route does.
 
-| Question | ok | Tools (query_ prefix dropped) | Seconds |
-| --- | --- | --- | --- |
-| Show hiking trails around Lake Tahoe | yes | list_layers, geocode, osm-trails, render, popularity, render | 19.4 |
-| Which wildfires burned near Yosemite in the last 10 years? | yes | geocode, fire-perimeters, render, note | 8.3 |
-| Are there any active fires burning near Missoula right now? | yes | geocode, fire-detections, fire-detections, render | 7 |
-| Where has the Amazon lost the most forest since 2015? | yes | geocode, geocode, forest-loss, render, physical-regions, render, set_view, note | 14.1 |
-| How much snow is on the ground around Mount Hood? | yes | list_layers, geocode, snowpack, snowpack, render, note | 12.2 |
-| Which rivers near Jackson Hole are running high right now? | yes | geocode, geocode, streamflow, render | 19.7 |
-| Find campsites and forest roads open to vehicles near Moab | yes | geocode, campsites, forest-roads, render, render, note | 25.9 |
-| What wildlife has been spotted around Banff this year? | yes | geocode, geocode, species, render, note | 30.4 |
-| Which trails and viewpoints around Zion National Park look the most popular? | yes | geocode, set_view, osm-trails, outdoor-features, outdoor-features, popularity, render, render | 31.3 |
-| Who owns the land around Bryce Canyon, and is any of it designated wilderness? | yes | geocode, set_view, public-lands, wilderness, render, render | 17.3 |
-| Where is the night sky darkest around Great Basin National Park, and how many people live nearby? | yes | geocode, night-lights, population, render, render | 13.6 |
-| How remote is the Wind River Range? | yes | geocode, geocode, geocode, remoteness, remoteness, render, note | 33.3 |
-| Show me a walking route from Tahoe City to Emerald Bay | yes | route | 5.4 |
-| Show wildfires near Yosemite year by year since 2016 | yes | geocode, set_view, fire-perimeters, render, set_time, note | 17.6 |
-| Show only alpine-grade trails near Chamonix | yes | geocode, osm-trails, render, note | 11.8 |
-| Compare forest loss in Rondônia between 2015 and 2025 | yes | geocode, geocode, set_view, forest-loss, render, compare, note | 14.1 |
-| Which sources did you use for snow near Mount Hood? | yes | geocode, snowpack, snow-cover, render, note | 10.6 |
-| Which campsites around Moab look the most popular? | yes | list_layers, geocode, popularity-campsites, popularity-campsites, popularity-campsites, popularity-campsites, render, note | 28.4 |
-| Outline the Sierra Nevada | yes | geocode, set_view, physical-regions, physical-regions, render | 9.4 |
-| What fires are here? | yes | fire-perimeters, render, fire-detections | 15.9 |
-| Any surf here? | yes | surf, surf, render | 17.8 |
-| Mountain bike trails near Moab | yes | geocode, mtb-trails, mtb-trails, mtb-trails, render | 19.7 |
-| Ski touring routes around Chamonix | yes | geocode, set_view, ski-routes, render | 11.8 |
-| Climbing crags near Red River Gorge | yes | geocode, geocode, climbing, climbing, render | 15.4 |
-| How deep is Lake Tahoe? | yes | geocode, lakes, render | 7.9 |
-| Surf at Half Moon Bay today | yes | geocode, surf, surf, render | 12.6 |
-| Is the Carson River running high? | yes | geocode, geocode, geocode, streamflow, render, note | 17.6 |
-| Any weather warnings around Lake Tahoe? | yes | geocode, weather-alerts, render, note | 9.5 |
-| Recent earthquakes near Mammoth Lakes | yes | geocode, earthquakes, earthquakes, render, note | 21.1 |
-| What rock is Half Dome made of? | no | geocode, geocode, geocode, geologic-unit, geologic-unit, note | 13.4 |
-| Glaciers in the Wind River Range | yes | list_layers, geocode, geocode, geocode, geocode, glaciers, render, note | 16.3 |
-| How green was the Sierra Nevada this month compared to last year? | yes | geocode, greenness, greenness, compare, note | 15.5 |
-| Where are the most iNaturalist or GBIF records of mountain lions in Colorado? | yes | geocode, species, species, species, gbif-occurrences, render | 20.8 |
+The same set run once just before the query-tool descriptions were trimmed (commit 527d25b) scored **30/33**; its failures were the Zion question (used all 12 steps on queries and renders, no note), "How deep is Lake Tahoe?" (stopped after render with no note) and "What rock is Half Dome made of?" (no `set_view`, and answered from peaks and Wikipedia instead of `geologic-unit`). None of the four failures below needed a sentence the trimming removed: three are a missing `set_view`, one is the step cap.
 
-Questions that needed a zoom-in retry after an area-limit error: How remote is the Wind River Range?, Which campsites around Moab look the most popular?, Mountain bike trails near Moab, Where are the most iNaturalist or GBIF records of mountain lions in Colorado?.
+| Question | ok | Tools (query_ prefix dropped) | Layer errors | Seconds |
+| --- | --- | --- | --- | --- |
+| Show hiking trails around Lake Tahoe | yes | geocode, set_view, osm-trails, render, note |  | 15 |
+| Which wildfires burned near Yosemite in the last 10 years? | yes | geocode, set_view, fire-perimeters, render |  | 12.2 |
+| Are there any active fires burning near Missoula right now? | yes | geocode, set_view, fire-perimeters, fire-detections, render |  | 10.7 |
+| Where has the Amazon lost the most forest since 2015? | yes | geocode, set_view, forest-loss, render, population, render, note |  | 22.1 |
+| How much snow is on the ground around Mount Hood? | yes | geocode, set_view, snowpack, snow-cover, snow-cover, render, render, note |  | 21 |
+| Which rivers near Jackson Hole are running high right now? | yes | geocode, geocode, set_view, streamflow, render, note |  | 22.4 |
+| Find campsites and forest roads open to vehicles near Moab | yes | geocode, set_view, campsites, forest-roads, render, render, note |  | 14.7 |
+| What wildlife has been spotted around Banff this year? | yes | geocode, geocode, set_view, species, species, render |  | 23.2 |
+| Which trails and viewpoints around Zion National Park look the most popular? | yes | list_layers, geocode, set_view, osm-trails, outdoor-features, popularity, render, render, render, note |  | 31.7 |
+| Who owns the land around Bryce Canyon, and is any of it designated wilderness? | yes | geocode, set_view, public-lands, wilderness, render, render, note |  | 13.6 |
+| Where is the night sky darkest around Great Basin National Park, and how many people live nearby? | yes | geocode, set_view, night-lights, population, render, render |  | 14.3 |
+| How remote is the Wind River Range? | no | geocode, geocode, geocode, remoteness, render, note |  | 26 |
+| Show me a walking route from Tahoe City to Emerald Bay | yes | geocode, geocode, route, set_view |  | 13.6 |
+| Show wildfires near Yosemite year by year since 2016 | yes | geocode, set_view, fire-perimeters, render, set_time |  | 13.5 |
+| Show only alpine-grade trails near Chamonix | yes | geocode, set_view, osm-trails, render |  | 9.1 |
+| Compare forest loss in Rondônia between 2015 and 2025 | yes | geocode, set_view, forest-loss, forest-loss, render, compare, note |  | 16.5 |
+| Which sources did you use for snow near Mount Hood? | yes | geocode, set_view, snowpack, set_view, snowpack, snow-cover, render, note |  | 16 |
+| Which campsites around Moab look the most popular? | yes | geocode, set_view, campsites, popularity-campsites, popularity-campsites, popularity-campsites, render, render, note | Area is 13446 km²; zoom in to under 2500 km²; Area is 3373 km²; zoom in to under 2500 km² | 21.8 |
+| Outline the Sierra Nevada | yes | geocode, set_view, physical-regions, render, note |  | 6.7 |
+| What fires are here? | yes | fire-perimeters, render, fire-detections, note |  | 20 |
+| Any surf here? | yes | surf, surf, render, note |  | 13.3 |
+| Mountain bike trails near Moab | yes | geocode, set_view, mtb-trails, mtb-trails, mtb-trails, render, note | Area is 13446 km²; zoom in to under 2500 km²; Area is 3361 km²; zoom in to under 2500 km² | 21 |
+| Ski touring routes around Chamonix | yes | geocode, geocode, set_view, ski-routes, render, note |  | 12.1 |
+| Climbing crags near Red River Gorge | yes | geocode, geocode, set_view, climbing, climbing, climbing, render, note | Area is 12643 km²; zoom in to under 10000 km² | 16.1 |
+| How deep is Lake Tahoe? | no | geocode, lakes, render, note |  | 11.6 |
+| Surf at Half Moon Bay today | yes | geocode, set_view, surf, render, note |  | 9.3 |
+| Is the Carson River running high? | no | geocode, geocode, geocode, streamflow, render |  | 17.6 |
+| Any weather warnings around Lake Tahoe? | yes | geocode, set_view, weather-alerts, render, note |  | 12.1 |
+| Recent earthquakes near Mammoth Lakes | yes | geocode, set_view, earthquakes, render, note |  | 12.2 |
+| What rock is Half Dome made of? | no | geocode, geocode, geocode, geocode, geocode, geocode, geocode, peaks, render, peaks, geologic-unit, render |  | 23.4 |
+| Glaciers in the Wind River Range | yes | geocode, geocode, geocode, glaciers, glaciers, render, set_view, note | Area is 72016 km²; zoom in to under 8000 km² | 12.9 |
+| How green was the Sierra Nevada this month compared to last year? | yes | geocode, set_view, greenness, greenness, compare, render |  | 22.7 |
+| Where are the most iNaturalist or GBIF records of mountain lions in Colorado? | yes | species, species, species, gbif-occurrences, geocode, set_view, render, render, note | Area is 269117 km²; zoom in to under 50000 km²; Area is 67279 km²; zoom in to under 50000 km² | 41.1 |
 
-The one failure, "What rock is Half Dome made of?", answers correctly (Half Dome Granodiorite, from `geologic-unit`) but never calls `render` on the one-point result, so the pass rule counts it as not drawn. A targeted re-run failed the same way. The fix is a prompt change (render the `geologic-unit` point before the note) or a pass rule that lets a single-point lookup end in a note.
+Layer errors above are area-limit (`zoom_in`) errors; each of those questions retried a smaller box and drew a result.
+
+Why the four failures failed:
+
+- **How remote is the Wind River Range?** The answer and map are right, but it geocoded three times and never called `set_view`, so the camera stays where it was.
+- **How deep is Lake Tahoe?** Correct (501 m, from `lakes`), but no `set_view` after the geocode.
+- **Is the Carson River running high?** Correct gauge readings and percent of median, but no `set_view` after three geocodes.
+- **What rock is Half Dome made of?** Spent 7 of its 12 steps on geocodes, then `peaks` and `geologic-unit`, and ran out of steps before the note.
+
+One targeted re-run of each failure (same commit):
+
+| Question | ok | Tools (query_ prefix dropped) | Layer errors | Seconds |
+| --- | --- | --- | --- | --- |
+| How remote is the Wind River Range? | no | geocode, geocode, geocode, geocode, physical-regions, peaks, peaks, peaks, remoteness, render, note | Area is 252055 km²; zoom in to under 40000 km²; Area is 63014 km²; zoom in to under 40000 km² | 42.8 |
+| How deep is Lake Tahoe? | yes | geocode, set_view, lakes, render, note |  | 8.2 |
+| Is the Carson River running high? | no | geocode, geocode, geocode, geocode, streamflow, render |  | 18.4 |
+| What rock is Half Dome made of? | no | geocode, geocode, geocode, peaks, render, geologic-unit, render |  | 19.2 |
+
+The Lake Tahoe question passed on re-run. The other three again skipped `set_view` after several geocodes; that is a prompt-following gap with this model (the rule is in the system prompt), not a missing layer description.

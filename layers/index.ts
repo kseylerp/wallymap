@@ -33,3 +33,4 @@ import "./paddling";
 import "./gbif-occurrences";
 import "./surf";
 import "./peaks";
+import "./greenness";

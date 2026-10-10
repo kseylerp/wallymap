@@ -66,7 +66,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "disturbance", synonyms: ["vegetation loss", "disturbance", "land clearing", "storm damage"], notes: "daily satellite alerts since 2023, date input" },
   { layerId: "sequoia-groves", synonyms: ["sequoia", "giant sequoia grove"], notes: "Sierra Nevada groves; also query sequoia-mortality" },
   { layerId: "sea-level-trends", synonyms: ["sea level", "rising seas"], notes: "tide-gauge trend, v = mm/yr" },
-  layers/sequoia-mortality.ts
+  { layerId: "sequoia-mortality", synonyms: ["sequoia fire deaths", "sequoias killed"], notes: "trees alive or dead after the 2020 and 2021 Sierra fires" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

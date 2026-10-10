@@ -97,7 +97,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "burn-severity": "raster",
   "sequoia-groves": "natural",
   "sea-level-trends": "data",
-  "sequoia-mortality": "feat: sequoia-mortality layer (live and dead giant sequoias after the Castle and KNP fires)",
+  "sequoia-mortality": "hazard",
 };
 
 /** Layers that return raster tiles: the imagery carries its own colors. */

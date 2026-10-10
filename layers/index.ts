@@ -24,3 +24,4 @@ import "./mtb-trails";
 import "./earthquakes";
 import "./ski-routes";
 import "./recreation-sites";
+import "./glaciers";

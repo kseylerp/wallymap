@@ -56,6 +56,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   photos: "data",
   snowpack: "data",
   streamflow: "data",
+  glaciers: "natural",
   popularity: "score",
   "popularity-campsites": "score",
   remoteness: "score",

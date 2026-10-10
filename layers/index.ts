@@ -53,3 +53,4 @@ import "./phenology";
 import "./burn-severity";
 import "./smoke";
 import "./geologic-unit";
+import "./fishing";

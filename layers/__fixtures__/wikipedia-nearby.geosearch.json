@@ -1,0 +1,214 @@
+{
+ "batchcomplete": "",
+ "query": {
+  "geosearch": [
+   {
+    "pageid": 116844,
+    "ns": 0,
+    "title": "South Lake Tahoe, California",
+    "lat": 38.94,
+    "lon": -119.97694444444444,
+    "dist": 615.6,
+    "primary": ""
+   },
+   {
+    "pageid": 22697681,
+    "ns": 0,
+    "title": "Al Tahoe, California",
+    "lat": 38.94194444444444,
+    "lon": -119.98361111111112,
+    "dist": 833,
+    "primary": ""
+   },
+   {
+    "pageid": 4122974,
+    "ns": 0,
+    "title": "Lake Tahoe Community College",
+    "lat": 38.92611111111111,
+    "lon": -119.97194444444445,
+    "dist": 1209.3,
+    "primary": ""
+   },
+   {
+    "pageid": 29591194,
+    "ns": 0,
+    "title": "Trout Creek (Lake Tahoe)",
+    "lat": 38.941111111111105,
+    "lon": -119.99666666666667,
+    "dist": 1593.6,
+    "primary": ""
+   },
+   {
+    "pageid": 5505709,
+    "ns": 0,
+    "title": "Upper Truckee River",
+    "lat": 38.94222222222222,
+    "lon": -119.9961111111111,
+    "dist": 1608.3,
+    "primary": ""
+   },
+   {
+    "pageid": 22707612,
+    "ns": 0,
+    "title": "Bijou, California",
+    "lat": 38.946666666666665,
+    "lon": -119.96861111111112,
+    "dist": 1628.8,
+    "primary": ""
+   },
+   {
+    "pageid": 22707700,
+    "ns": 0,
+    "title": "Bijou Park, California",
+    "lat": 38.94944444444444,
+    "lon": -119.9588888888889,
+    "dist": 2431.7,
+    "primary": ""
+   },
+   {
+    "pageid": 22764866,
+    "ns": 0,
+    "title": "Tahoe Keys, California",
+    "lat": 38.931666666666665,
+    "lon": -120.01361111111112,
+    "dist": 2930.8,
+    "primary": ""
+   },
+   {
+    "pageid": 22764896,
+    "ns": 0,
+    "title": "Tahoe Valley, California",
+    "lat": 38.91361111111111,
+    "lon": -120.00444444444445,
+    "dist": 3182.5,
+    "primary": ""
+   },
+   {
+    "pageid": 249002,
+    "ns": 0,
+    "title": "Heavenly Mountain Resort",
+    "lat": 38.9353,
+    "lon": -119.94,
+    "dist": 3459.9,
+    "primary": ""
+   },
+   {
+    "pageid": 33424532,
+    "ns": 0,
+    "title": "Van Sickle Bi-State Park",
+    "lat": 38.95472222222222,
+    "lon": -119.94055555555556,
+    "dist": 4055.4,
+    "primary": ""
+   },
+   {
+    "pageid": 22732491,
+    "ns": 0,
+    "title": "Stateline, California",
+    "lat": 38.958333333333336,
+    "lon": -119.94388888888889,
+    "dist": 4060.1,
+    "primary": ""
+   },
+   {
+    "pageid": 8842756,
+    "ns": 0,
+    "title": "South Tahoe High School",
+    "lat": 38.91027777777778,
+    "lon": -120.015,
+    "dist": 4089.6,
+    "primary": ""
+   },
+   {
+    "pageid": 2383430,
+    "ns": 0,
+    "title": "Harrah's Lake Tahoe",
+    "lat": 38.959425,
+    "lon": -119.941628,
+    "dist": 4288.1,
+    "primary": ""
+   },
+   {
+    "pageid": 4188872,
+    "ns": 0,
+    "title": "Caesars Republic Lake Tahoe",
+    "lat": 38.9603,
+    "lon": -119.9424,
+    "dist": 4299.7,
+    "primary": ""
+   },
+   {
+    "pageid": 20269163,
+    "ns": 0,
+    "title": "Stateline Country Club",
+    "lat": 38.959,
+    "lon": -119.941,
+    "dist": 4300.8,
+    "primary": ""
+   },
+   {
+    "pageid": 30168392,
+    "ns": 0,
+    "title": "Lake Tahoe Outdoor Arena",
+    "lat": 38.962,
+    "lon": -119.94425,
+    "dist": 4309.5,
+    "primary": ""
+   },
+   {
+    "pageid": 5387247,
+    "ns": 0,
+    "title": "Harvey's Resort Hotel bombing",
+    "lat": 38.9602,
+    "lon": -119.942,
+    "dist": 4318.7,
+    "primary": ""
+   },
+   {
+    "pageid": 16143011,
+    "ns": 0,
+    "title": "American Century Championship",
+    "lat": 38.966,
+    "lon": -119.948,
+    "dist": 4420.4,
+    "primary": ""
+   },
+   {
+    "pageid": 5675026,
+    "ns": 0,
+    "title": "Bill's Casino Lake Tahoe",
+    "lat": 38.9611,
+    "lon": -119.9405,
+    "dist": 4482.3,
+    "primary": ""
+   },
+   {
+    "pageid": 66259549,
+    "ns": 0,
+    "title": "NHL Outdoors at Lake Tahoe",
+    "lat": 38.968,
+    "lon": -119.949,
+    "dist": 4544.3,
+    "primary": ""
+   },
+   {
+    "pageid": 5632383,
+    "ns": 0,
+    "title": "Golden Nugget Lake Tahoe",
+    "lat": 38.962362,
+    "lon": -119.940748,
+    "dist": 4558.4,
+    "primary": ""
+   },
+   {
+    "pageid": 66263624,
+    "ns": 0,
+    "title": "Edgewood Tahoe Resort",
+    "lat": 38.968,
+    "lon": -119.946,
+    "dist": 4702,
+    "primary": ""
+   }
+  ]
+ }
+}

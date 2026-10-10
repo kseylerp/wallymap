@@ -41,3 +41,4 @@ import "./snow-cover";
 import "./outdoor-features";
 import "./tides";
 import "./land-cover";
+import "./wikipedia-nearby";

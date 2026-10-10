@@ -1,0 +1,272 @@
+{
+ "bbox_count": 204,
+ "total_count": 18076,
+ "limit": 200,
+ "offset": 0,
+ "items": [
+  {
+   "id": "1b8f3a1d-a5fe-4b22-8d7b-a7daf7e2dc6f",
+   "plume_id": "tan20250421t192349c00s4001-A",
+   "gas": "CH4",
+   "geometry_json": {
+    "bbox": null,
+    "type": "Point",
+    "coordinates": [
+     -119.45857637780027,
+     35.293902753771164
+    ]
+   },
+   "scene_id": "a53d1bf6-31cc-4aa1-b03a-c911cfc18e38",
+   "scene_timestamp": "2025-04-21T19:23:49Z",
+   "instrument": "tan",
+   "mission_phase": "production",
+   "platform": "Planet Tanager 1",
+   "emission_auto": 2544.8975288222327,
+   "emission_uncertainty_auto": 910.699785099743,
+   "emission_cmf_type": "mfa",
+   "gsd": 34.94337591435183,
+   "sensitivity_mode": "standard_sensitivity",
+   "off_nadir": 16.399912317403242,
+   "plume_bounds": [
+    -119.4760186858382,
+    35.269923783356035,
+    -119.43802208977296,
+    35.30093981469866
+   ],
+   "plume_quality": null,
+   "wind_speed_avg_auto": 2.0362472534179688,
+   "wind_direction_avg_auto": 15.278239250183105,
+   "emission_version": "v3",
+   "processing_software": "3.12.0",
+   "publication_sources": [],
+   "is_offshore": false,
+   "collection": "l2c-ch4-v0",
+   "cmf_type": "mfa",
+   "sector": "1B2",
+   "status": "published",
+   "hide_emission": false,
+   "published_at": "2025-05-21T20:20:31.211Z",
+   "modified": "2025-05-21T20:20:31.209Z"
+  },
+  {
+   "id": "77b09e26-4fc7-4bf6-8dba-cc04211c0128",
+   "plume_id": "av320250915t214138-B",
+   "gas": "CH4",
+   "geometry_json": {
+    "bbox": null,
+    "type": "Point",
+    "coordinates": [
+     -119.05452297566315,
+     35.4569536564688
+    ]
+   },
+   "scene_id": "32fe9648-0e5b-4c02-b55f-0c1283415903",
+   "scene_timestamp": "2025-09-15T21:41:38Z",
+   "instrument": "av3",
+   "mission_phase": "production",
+   "platform": "AVIRIS-3",
+   "emission_auto": 1421.7928228141686,
+   "emission_uncertainty_auto": 124.80431898890512,
+   "emission_cmf_type": "mfa",
+   "gsd": null,
+   "sensitivity_mode": null,
+   "off_nadir": null,
+   "plume_bounds": [
+    -119.0559017227398,
+    35.454988686229775,
+    -119.05196625341496,
+    35.458194343378416
+   ],
+   "plume_quality": null,
+   "wind_speed_avg_auto": 3.9719934463500977,
+   "wind_direction_avg_auto": 334.0064697265625,
+   "emission_version": "v3",
+   "processing_software": "3.30.3",
+   "publication_sources": [],
+   "is_offshore": false,
+   "collection": "l2c-ch4-v0",
+   "cmf_type": "mfa",
+   "sector": "1B2",
+   "status": "published",
+   "hide_emission": false,
+   "published_at": "2025-09-23T19:12:33.051Z",
+   "modified": "2025-09-23T19:12:33.096Z"
+  },
+  {
+   "id": "2bb5bf3b-3883-4b98-baa2-9018293b70ef",
+   "plume_id": "av320241025t204912-A",
+   "gas": "CH4",
+   "geometry_json": {
+    "bbox": null,
+    "type": "Point",
+    "coordinates": [
+     -119.16433849763871,
+     35.39886479589602
+    ]
+   },
+   "scene_id": "a5ff9e59-de11-41db-b6e4-cc078567f466",
+   "scene_timestamp": "2024-10-25T20:49:12Z",
+   "instrument": "av3",
+   "mission_phase": "production",
+   "platform": "AVIRIS-3",
+   "emission_auto": 1316.3033995770186,
+   "emission_uncertainty_auto": 492.0303442827535,
+   "emission_cmf_type": "mfa",
+   "gsd": null,
+   "sensitivity_mode": null,
+   "off_nadir": null,
+   "plume_bounds": [
+    -119.16544873091793,
+    35.396022295487064,
+    -119.15981878889217,
+    35.400571952411035
+   ],
+   "plume_quality": null,
+   "wind_speed_avg_auto": 1.99369478225708,
+   "wind_direction_avg_auto": 339.5719299316406,
+   "emission_version": "v3c",
+   "processing_software": "3.53.5",
+   "publication_sources": [],
+   "is_offshore": false,
+   "collection": "l2c-ch4-v0",
+   "cmf_type": "mfa",
+   "sector": "1B2",
+   "status": "published",
+   "hide_emission": false,
+   "published_at": "2026-05-07T15:30:47.233Z",
+   "modified": "2026-05-07T15:30:47.260Z"
+  },
+  {
+   "id": "c144b1d3-1326-4685-b2f1-13d4842375c8",
+   "plume_id": "tan20250203t191818c00s4001-B",
+   "gas": "CH4",
+   "geometry_json": {
+    "bbox": null,
+    "type": "Point",
+    "coordinates": [
+     -119.4079921303452,
+     35.510369388772546
+    ]
+   },
+   "scene_id": "cd717212-476c-4dc3-8907-65074907c24d",
+   "scene_timestamp": "2025-02-03T19:18:18Z",
+   "instrument": "tan",
+   "mission_phase": "first_light",
+   "platform": "Planet Tanager 1",
+   "emission_auto": 1023.920525555744,
+   "emission_uncertainty_auto": 513.9485858270036,
+   "emission_cmf_type": "mfa",
+   "gsd": 42.10267719744354,
+   "sensitivity_mode": "standard_sensitivity",
+   "off_nadir": 29.450639051870684,
+   "plume_bounds": [
+    -119.42565528275756,
+    35.49376313474829,
+    -119.38722064914244,
+    35.52478004133227
+   ],
+   "plume_quality": null,
+   "wind_speed_avg_auto": 2.461325168609619,
+   "wind_direction_avg_auto": 351.9867248535156,
+   "emission_version": "v3",
+   "processing_software": "3.17.0",
+   "publication_sources": [],
+   "is_offshore": false,
+   "collection": "l2c-ch4-v0",
+   "cmf_type": "mfa",
+   "sector": "6A",
+   "status": "published",
+   "hide_emission": false,
+   "published_at": "2025-03-05T19:19:11.215Z",
+   "modified": "2025-03-25T22:33:53.919Z"
+  },
+  {
+   "id": "2a06394c-602c-46a0-9073-de7ccff1a6bf",
+   "plume_id": "av320250915t190342-A",
+   "gas": "CH4",
+   "geometry_json": {
+    "bbox": null,
+    "type": "Point",
+    "coordinates": [
+     -119.39087455294468,
+     35.157989874120915
+    ]
+   },
+   "scene_id": "860fb23d-ab09-451c-9a11-a7a9a2baa38c",
+   "scene_timestamp": "2025-09-15T19:03:42Z",
+   "instrument": "av3",
+   "mission_phase": "production",
+   "platform": "AVIRIS-3",
+   "emission_auto": 1005.580624251362,
+   "emission_uncertainty_auto": 166.26153739172923,
+   "emission_cmf_type": "mfa",
+   "gsd": null,
+   "sensitivity_mode": null,
+   "off_nadir": null,
+   "plume_bounds": [
+    -119.39598365199605,
+    35.155802407207716,
+    -119.3899160888802,
+    35.16076303070777
+   ],
+   "plume_quality": null,
+   "wind_speed_avg_auto": 1.7129002809524536,
+   "wind_direction_avg_auto": 37.641761779785156,
+   "emission_version": "v3",
+   "processing_software": "3.30.3",
+   "publication_sources": [],
+   "is_offshore": false,
+   "collection": "l2c-ch4-v0",
+   "cmf_type": "mfa",
+   "sector": "1B2",
+   "status": "published",
+   "hide_emission": false,
+   "published_at": "2025-09-23T19:11:43.308Z",
+   "modified": "2025-09-23T19:11:43.742Z"
+  },
+  {
+   "id": "be4d5665-5fe4-488b-bfba-7897587b8b6b",
+   "plume_id": "av320241025t194701-B",
+   "gas": "CH4",
+   "geometry_json": {
+    "bbox": null,
+    "type": "Point",
+    "coordinates": [
+     -118.94009957566178,
+     35.29162917992433
+    ]
+   },
+   "scene_id": "036001b0-feef-4b4a-96c8-94347499c7b8",
+   "scene_timestamp": "2024-10-25T19:47:01Z",
+   "instrument": "av3",
+   "mission_phase": "production",
+   "platform": "AVIRIS-3",
+   "emission_auto": null,
+   "emission_uncertainty_auto": null,
+   "emission_cmf_type": "mfa",
+   "gsd": null,
+   "sensitivity_mode": null,
+   "off_nadir": null,
+   "plume_bounds": [
+    -118.94241994866454,
+    35.28891590875616,
+    -118.93679669981326,
+    35.293505751929104
+   ],
+   "plume_quality": null,
+   "wind_speed_avg_auto": 0.950677216053009,
+   "wind_direction_avg_auto": 307.9456481933594,
+   "emission_version": "v3c",
+   "processing_software": "3.53.5",
+   "publication_sources": [],
+   "is_offshore": false,
+   "collection": "l2c-ch4-v0",
+   "cmf_type": "mfa",
+   "sector": "4B",
+   "status": "published",
+   "hide_emission": true,
+   "published_at": "2026-05-07T15:32:50.482Z",
+   "modified": "2026-05-07T15:32:51.558Z"
+  }
+ ]
+}

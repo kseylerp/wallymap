@@ -1,0 +1,238 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "bbox": [
+    -119.16433849763871,
+    35.39886479589602,
+    -119.16433849763871,
+    35.39886479589602
+   ],
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.16433849763871,
+     35.398864795896024
+    ]
+   },
+   "properties": {
+    "gas": "CH4",
+    "sector": "1B2",
+    "plume_count": 1,
+    "plume_ids": [
+     "av320241025t204912-A"
+    ],
+    "observation_scenes_names": [
+     "a5ff9e59-de11-41db-b6e4-cc078567f466:av320241025t204912",
+     "f974c07f-7b45-4ab1-a5f3-a2cc45a94535:av320241015t204646"
+    ],
+    "emission_auto": 658.1516997885093,
+    "emission_uncertainty_auto": 246.01517214137675,
+    "published_at_max": "2026-05-07",
+    "published_at_min": "2026-05-07",
+    "timestamp_max": "2024-10-25",
+    "timestamp_min": "2024-10-25",
+    "detection_date_count": 1,
+    "observation_date_count": 2,
+    "persistence": 0.5,
+    "source_name": "CH4_1B2_250m_-119.16434_35.39886?bbox=-119.5&bbox=35&bbox=-118.5&bbox=36&plume_gas=CH4&datetime=2024-10-10T00%3A00%3A00Z%2F2026-10-10T23%3A59%3A59Z",
+    "country_iso": "USA",
+    "basin_id": "481c332d-0ff8-468d-b728-4aa314e466a9",
+    "basin_name": "San Joaquin",
+    "date_count": 1
+   },
+   "id": "CH4_1B2_250m_-119.16434_35.39886?bbox=-119.5&bbox=35&bbox=-118.5&bbox=36&plume_gas=CH4&datetime=2024-10-10T00%3A00%3A00Z%2F2026-10-10T23%3A59%3A59Z"
+  },
+  {
+   "bbox": [
+    -119.3209755473793,
+    35.90090482483377,
+    -119.32066534102756,
+    35.90116964750254
+   ],
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.32082044420339,
+     35.90103723616817
+    ]
+   },
+   "properties": {
+    "gas": "CH4",
+    "sector": "4B",
+    "plume_count": 2,
+    "plume_ids": [
+     "av320241029t212542-C",
+     "tan20260416t200112c89s4001-D"
+    ],
+    "observation_scenes_names": [
+     "9014bfbc-6b0d-4675-8ccb-ced1c1531c50:tan20260416t200112c89s4001",
+     "a23fa527-57ec-4061-b50d-e3dca4459491:av320241029t212542"
+    ],
+    "emission_auto": 483.2417872776807,
+    "emission_uncertainty_auto": 153.4964362454623,
+    "published_at_max": "2026-05-16",
+    "published_at_min": "2026-05-07",
+    "timestamp_max": "2026-04-16",
+    "timestamp_min": "2024-10-29",
+    "detection_date_count": 2,
+    "observation_date_count": 2,
+    "persistence": 1.0,
+    "source_name": "CH4_4B_250m_-119.32082_35.90104?bbox=-119.5&bbox=35&bbox=-118.5&bbox=36&plume_gas=CH4&datetime=2024-10-10T00%3A00%3A00Z%2F2026-10-10T23%3A59%3A59Z",
+    "country_iso": "USA",
+    "basin_id": "481c332d-0ff8-468d-b728-4aa314e466a9",
+    "basin_name": "San Joaquin",
+    "date_count": 2
+   },
+   "id": "CH4_4B_250m_-119.32082_35.90104?bbox=-119.5&bbox=35&bbox=-118.5&bbox=36&plume_gas=CH4&datetime=2024-10-10T00%3A00%3A00Z%2F2026-10-10T23%3A59%3A59Z"
+  },
+  {
+   "bbox": [
+    -119.41125658445421,
+    35.50804786498657,
+    -119.40772455161336,
+    35.51079721621312
+   ],
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.40914624727596,
+     35.51004044617536
+    ]
+   },
+   "properties": {
+    "gas": "CH4",
+    "sector": "6A",
+    "plume_count": 16,
+    "plume_ids": [
+     "av320241015t195355-A",
+     "av320241015t200258-A",
+     "av320241025t215109-B",
+     "av320250916t181413-A",
+     "av320250916t181413-D",
+     "av320250916t181413-E",
+     "tan20250203t191818c00s4001-B",
+     "tan20250310t191856c00s4001-B",
+     "tan20250310t191856c00s4001-E",
+     "tan20250609t192940c02s4001-A",
+     "tan20250825t194057c59s4001-G",
+     "tan20250825t194057c59s4001-H",
+     "tan20251020t194835c94s4001-G",
+     "tan20251020t194835c94s4001-I",
+     "tan20260110t195107c84s4001-A",
+     "tan20260131t195725c63s4001-C"
+    ],
+    "observation_scenes_names": [
+     "1898a137-0bb0-4aa4-9dcf-75d361a60446:tan20260131t195725c63s4001",
+     "2105fe60-d979-4ec4-b2c0-e609c18e56cc:tan20251020t194835c94s4001"
+    ],
+    "emission_auto": 452.14842425827254,
+    "emission_uncertainty_auto": 183.72566178840003,
+    "published_at_max": "2026-03-02",
+    "published_at_min": "2025-03-05",
+    "timestamp_max": "2026-01-31",
+    "timestamp_min": "2024-10-15",
+    "detection_date_count": 10,
+    "observation_date_count": 10,
+    "persistence": 1.0,
+    "source_name": "CH4_6A_1000m_-119.40915_35.51004?bbox=-119.5&bbox=35&bbox=-118.5&bbox=36&plume_gas=CH4&datetime=2024-10-10T00%3A00%3A00Z%2F2026-10-10T23%3A59%3A59Z",
+    "country_iso": "USA",
+    "basin_id": "481c332d-0ff8-468d-b728-4aa314e466a9",
+    "basin_name": "San Joaquin",
+    "date_count": 10
+   },
+   "id": "CH4_6A_1000m_-119.40915_35.51004?bbox=-119.5&bbox=35&bbox=-118.5&bbox=36&plume_gas=CH4&datetime=2024-10-10T00%3A00%3A00Z%2F2026-10-10T23%3A59%3A59Z"
+  },
+  {
+   "bbox": [
+    -119.05452297566315,
+    35.4569536564688,
+    -119.05452297566315,
+    35.4569536564688
+   ],
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.0545229756631,
+     35.45695365646881
+    ]
+   },
+   "properties": {
+    "gas": "CH4",
+    "sector": "1B2",
+    "plume_count": 1,
+    "plume_ids": [
+     "av320250915t214138-B"
+    ],
+    "observation_scenes_names": [
+     "32fe9648-0e5b-4c02-b55f-0c1283415903:av320250915t214138",
+     "4e8ddd6b-2f6a-40b6-bf0c-6a4132a5e568:av320250110t215152"
+    ],
+    "emission_auto": 355.44820570354216,
+    "emission_uncertainty_auto": 31.20107974722628,
+    "published_at_max": "2025-09-23",
+    "published_at_min": "2025-09-23",
+    "timestamp_max": "2025-09-15",
+    "timestamp_min": "2025-09-15",
+    "detection_date_count": 1,
+    "observation_date_count": 4,
+    "persistence": 0.25,
+    "source_name": "CH4_1B2_250m_-119.05452_35.45695?bbox=-119.5&bbox=35&bbox=-118.5&bbox=36&plume_gas=CH4&datetime=2024-10-10T00%3A00%3A00Z%2F2026-10-10T23%3A59%3A59Z",
+    "country_iso": "USA",
+    "basin_id": "481c332d-0ff8-468d-b728-4aa314e466a9",
+    "basin_name": "San Joaquin",
+    "date_count": 1
+   },
+   "id": "CH4_1B2_250m_-119.05452_35.45695?bbox=-119.5&bbox=35&bbox=-118.5&bbox=36&plume_gas=CH4&datetime=2024-10-10T00%3A00%3A00Z%2F2026-10-10T23%3A59%3A59Z"
+  },
+  {
+   "bbox": [
+    -119.39272063217089,
+    35.15734662032932,
+    -119.39080696128224,
+    35.157989874120915
+   ],
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.39148696416453,
+     35.15768398811943
+    ]
+   },
+   "properties": {
+    "gas": "CH4",
+    "sector": "1B2",
+    "plume_count": 3,
+    "plume_ids": [
+     "av320250915t190342-A",
+     "av320250915t190342-B",
+     "tan20250915t194421c21s4001-A"
+    ],
+    "observation_scenes_names": [
+     "35aa10fd-4783-4382-bda6-c8df0a411c03:av320250110t200933",
+     "4b69ee58-29b0-493d-800e-77d880c922db:av320250109t212855"
+    ],
+    "emission_auto": 305.2147906798722,
+    "emission_uncertainty_auto": 45.96689822655018,
+    "published_at_max": "2025-10-15",
+    "published_at_min": "2025-09-23",
+    "timestamp_max": "2025-09-15",
+    "timestamp_min": "2025-09-15",
+    "detection_date_count": 1,
+    "observation_date_count": 3,
+    "persistence": 0.3333333333333333,
+    "source_name": "CH4_1B2_250m_-119.39149_35.15768?bbox=-119.5&bbox=35&bbox=-118.5&bbox=36&plume_gas=CH4&datetime=2024-10-10T00%3A00%3A00Z%2F2026-10-10T23%3A59%3A59Z",
+    "country_iso": "USA",
+    "basin_id": "481c332d-0ff8-468d-b728-4aa314e466a9",
+    "basin_name": "San Joaquin",
+    "date_count": 1
+   },
+   "id": "CH4_1B2_250m_-119.39149_35.15768?bbox=-119.5&bbox=35&bbox=-118.5&bbox=36&plume_gas=CH4&datetime=2024-10-10T00%3A00%3A00Z%2F2026-10-10T23%3A59%3A59Z"
+  }
+ ]
+}

@@ -105,6 +105,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "condor-range": "natural",
   "dams": "data",
   "wolf-packs": "natural",
+  "methane-plumes": "hazard",
 };
 
 /** Layers that return raster tiles: the imagery carries its own colors. */

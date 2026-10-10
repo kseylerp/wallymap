@@ -74,6 +74,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "condor-range", synonyms: ["condor", "California condor"], notes: "current and early-1800s range outlines, not sightings" },
   { layerId: "dams", synonyms: ["dam", "dams", "hydropower", "dam safety"], notes: "US National Inventory of Dams, v = storage acre-feet, t = year built (scrubber plays by decade); hazard is consequence, not safety" },
   { layerId: "wolf-packs", synonyms: ["wolf", "wolves"], notes: "Washington state pack ranges 2014-2025 only; year input" },
+  { layerId: "methane-plumes", synonyms: ["methane", "emissions", "methane leak", "super-emitter"], notes: "Carbon Mapper plumes and sources, v = kg/h; days input" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

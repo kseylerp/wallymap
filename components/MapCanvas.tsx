@@ -16,23 +16,27 @@ import { initialMapState, type Basemap, type MapState, type Selection, type View
 import { visibleState } from "@/lib/render/view";
 import {
   bearingAt,
+  bearingLookAheadM,
   cameraDistanceMeters,
+  chasePadding,
+  chasePitch,
+  chaseZoom,
   clearPitch,
-  DEFAULT_LOOKAHEAD_M,
   dispatchPreview,
   dockCompactStore,
   elevationStore,
-  FOLLOW_PITCH,
-  followZoom,
   followPadding,
   fractionStep,
   liveFractionStore,
   mapStateStore,
   offsetPoint,
+  OUTRO_HOLD_MS,
   positionAt,
-  PREVIEW_EASE_MS,
+  PREVIEW_DIVE_MS,
+  PREVIEW_OVERVIEW_MS,
+  PREVIEW_RISE_MS,
+  smoothBearing,
   speedKmPerMin,
-  turnBetween,
 } from "@/lib/render/wally/playback";
 import { visibleMapPadding } from "@/lib/render/viewportPadding";
 import { samplePoints } from "@/lib/render/wally/sample";
@@ -41,8 +45,10 @@ import {
   buildingsSpec,
   easeInOut,
   firstSymbolLayerId,
+  fitZoomOffset,
   fogSpec,
   PITCH_EASE_MS,
+  pitchFor,
   SKY_LAYER_ID,
   skySpec,
   TERRAIN_SOURCE_ID,
@@ -545,9 +551,10 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     }
   }, [playback]);
 
-  // Start and stop: frame the route so its terrain loads, read the profile heights, ease down into the follow
-  // camera, then follow every animation frame. Stopping (exit, route removed, basemap swap, tab hidden) eases
-  // back to the camera from before the preview, at its pitch.
+  // Start and stop: ease out to the route overview (its terrain loads and the profile reads heights there), dive
+  // into the chase camera, then follow every animation frame. At the finish the camera holds, then rises back to the
+  // overview; playing or scrubbing from there dives in again. Stopping (exit, route removed, basemap swap, tab
+  // hidden) rises back to the camera from before the preview, at its pitch.
   const playbackRouteId = playback?.routeId;
   useEffect(() => {
     const map = mapRef.current;
@@ -587,7 +594,11 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       }
       return next;
     };
+    // The clear map (the overview frames the route in it), and the same with the followed point moved down into its
+    // lower third for the chase camera (its bottom edge, against the dock, does not move).
     let padding = paddingNow();
+    const heightPx = () => map.getCanvas().clientHeight;
+    let chasePad = chasePadding(padding, heightPx());
     let cancelled = false;
     let raf = 0;
     const timers: number[] = [];
@@ -612,100 +623,27 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     liveFractionStore.set({ routeId, fraction: live.fraction });
     setRouteProgress(map, routeId, live.fraction);
 
-    const lookAhead = (kmPerMin: number) => Math.max(DEFAULT_LOOKAHEAD_M, (kmPerMin * 1000) / 60);
-    let bearing = bearingAt(line, live.fraction, lookAhead(speedKmPerMin(live.speed)));
-    let pitch: number = FOLLOW_PITCH;
-    // Follow pitch unless a ridge behind the position would hide it from the camera: then tilt up just enough.
-    const clearPitchAt = (center: [number, number], heading: number, zoom: number) => {
+    // Chase pitch (lower with 3D off) and the zoom that shows 300–600 m of trail ahead.
+    const pitchNow = () => chasePitch(stateRef.current.flattened);
+    const zoomAt = (kmPerMin: number, center: [number, number]) => chaseZoom(kmPerMin, pitchNow(), center[1], heightPx());
+    let bearing = bearingAt(line, live.fraction, bearingLookAheadM(speedKmPerMin(live.speed)));
+    let pitch = pitchNow();
+    let zoom = zoomAt(speedKmPerMin(live.speed), positionAt(line, live.fraction));
+    // The chase pitch unless a ridge behind the position would hide it from the camera: then tilt up just enough.
+    const clearPitchAt = (center: [number, number], heading: number, zoomNow: number, maxPitch: number) => {
       const ground = map.queryTerrainElevation(center, { exaggerated: true });
-      if (typeof ground !== "number") return FOLLOW_PITCH;
-      const distance = cameraDistanceMeters(zoom, center[1], map.getCanvas().clientHeight);
+      if (typeof ground !== "number") return maxPitch;
+      const distance = cameraDistanceMeters(zoomNow, center[1], heightPx());
       const rises = [1, 2, 3, 4, 5, 6, 7, 8].map((k) => {
         const behindM = (distance * k) / 8;
         const h = map.queryTerrainElevation(offsetPoint(center, heading + 180, behindM), { exaggerated: true });
         return { behindM, rise: typeof h === "number" ? h - ground : null };
       });
-      return clearPitch(distance, rises);
-    };
-    let last = 0;
-    let lastReadAt = 0;
-    let lastPaddedAt = 0;
-    let shownFraction = -1;
-    // The position this loop last published; a different value in the store is a scrub from the dock.
-    let published = live.fraction;
-    const frame = (now: number) => {
-      if (cancelled) return;
-      const dt = last ? Math.min(100, now - last) : 16;
-      last = now;
-      const kmPerMin = speedKmPerMin(live.speed);
-      let moved = live.dirty;
-      live.dirty = false;
-      const outside = liveFractionStore.get();
-      if (outside?.routeId === routeId && outside.fraction !== published) {
-        live.fraction = outside.fraction;
-        moved = true;
-      }
-      if (repad || now - lastPaddedAt > 500) {
-        repad = false;
-        lastPaddedAt = now;
-        padding = paddingNow();
-      }
-      if (live.playing && live.fraction < 1) {
-        live.fraction = Math.min(1, live.fraction + fractionStep(line, kmPerMin, dt));
-        moved = true;
-      }
-      if (moved) {
-        const target = bearingAt(line, live.fraction, lookAhead(kmPerMin));
-        // Heading-up, turned smoothly so a switchback does not whip the camera; a scrub turns at once.
-        bearing = live.playing ? bearing + turnBetween(bearing, target) * Math.min(1, dt / 400) : target;
-        const center = positionAt(line, live.fraction);
-        const zoom = followZoom(kmPerMin);
-        // Tilt up fast when a ridge is in the way, settle back down slowly.
-        const wanted = clearPitchAt(center, bearing, zoom);
-        pitch = live.playing ? pitch + (wanted - pitch) * Math.min(1, dt / (wanted < pitch ? 150 : 600)) : wanted;
-        map.jumpTo({ center, bearing, pitch, zoom, padding });
-        published = live.fraction;
-        liveFractionStore.set({ routeId, fraction: live.fraction });
-        const shown = Math.round(live.fraction * 2000) / 2000;
-        if (shown !== shownFraction) {
-          shownFraction = shown;
-          setRouteProgress(map, routeId, live.fraction);
-        }
-        // The reducer only hears about the end (which pauses there); pause and scrub send their own position,
-        // so playing does not re-render the app every frame.
-        if (live.fraction >= 1 && live.lastSent !== 1) {
-          live.lastSent = 1;
-          dispatchPreview({ type: "preview_tick", fraction: 1 });
-        }
-      }
-      // Heights the overview missed (tiles that had not loaded) fill in as the camera passes.
-      if (!complete && now - lastReadAt > 500) {
-        lastReadAt = now;
-        readHeights();
-      }
-      raf = requestAnimationFrame(frame);
+      return clearPitch(distance, rises, maxPitch);
     };
 
-    const follow = () => {
-      if (cancelled) return;
-      readHeights();
-      const kmPerMin = speedKmPerMin(live.speed);
-      const center = positionAt(line, live.fraction);
-      pitch = clearPitchAt(center, bearing, followZoom(kmPerMin));
-      padding = paddingNow();
-      map.easeTo({
-        center,
-        bearing,
-        pitch,
-        padding,
-        zoom: followZoom(kmPerMin),
-        duration: PREVIEW_EASE_MS,
-        easing: easeInOut,
-      });
-      timers.push(window.setTimeout(() => (raf = requestAnimationFrame(frame)), PREVIEW_EASE_MS + 20));
-    };
-
-    // Overview first: the whole route in view loads the terrain tiles the profile needs.
+    // The whole route in the clear part of the map with up to 40px to spare, tilted like an arrival (flat with 3D
+    // off); the same padding sets the zoom and the ease, so the route lands where the zoom was worked out for.
     let west = Infinity;
     let south = Infinity;
     let east = -Infinity;
@@ -716,49 +654,168 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       east = Math.max(east, x);
       north = Math.max(north, y);
     }
+    const overviewCamera = () => {
+      const box = map.getContainer().getBoundingClientRect();
+      const spare = Math.max(
+        0,
+        Math.min(
+          40,
+          Math.floor((box.width - padding.left - padding.right - 40) / 2),
+          Math.floor((box.height - padding.top - padding.bottom - 40) / 2),
+        ),
+      );
+      const framed = {
+        top: padding.top + spare,
+        right: padding.right + spare,
+        bottom: padding.bottom + spare,
+        left: padding.left + spare,
+      };
+      const fit = map.cameraForBounds(
+        [
+          [west, south],
+          [east, north],
+        ],
+        { padding: framed, bearing: 0, pitch: 0, maxZoom: 15 },
+      );
+      if (fit?.zoom === undefined) return null;
+      const tilt = stateRef.current.flattened ? 0 : pitchFor("explore");
+      return {
+        center: [(west + east) / 2, (south + north) / 2] as [number, number],
+        zoom: fit.zoom - fitZoomOffset(tilt),
+        bearing: 0,
+        pitch: tilt,
+        padding: framed,
+      };
+    };
+
+    // intro (out to the overview) → dive → chase → (at the finish) outro (back up at the overview) → dive → ...
+    let mode: "intro" | "dive" | "chase" | "outro" = "intro";
+    let last = 0;
+    let lastReadAt = 0;
+    let lastPaddedAt = 0;
+    let shownFraction = -1;
+    // The position this loop last published; a different value in the store is a scrub from the dock.
+    let published = live.fraction;
+
+    // Down from wherever the camera is into the chase camera at the current position, over 1.2 s.
+    const dive = () => {
+      if (cancelled) return;
+      mode = "dive";
+      readHeights();
+      const kmPerMin = speedKmPerMin(live.speed);
+      const center = positionAt(line, live.fraction);
+      bearing = bearingAt(line, live.fraction, bearingLookAheadM(kmPerMin));
+      padding = paddingNow();
+      chasePad = chasePadding(padding, heightPx());
+      zoom = zoomAt(kmPerMin, center);
+      pitch = clearPitchAt(center, bearing, zoom, pitchNow());
+      map.easeTo({ center, bearing, pitch, zoom, padding: chasePad, duration: PREVIEW_DIVE_MS, easing: easeInOut });
+      timers.push(
+        window.setTimeout(() => {
+          if (cancelled || mode !== "dive") return;
+          mode = "chase";
+          last = 0;
+          live.dirty = true;
+        }, PREVIEW_DIVE_MS + 20),
+      );
+    };
+    // Back up to the overview once the ride has finished (and is still sitting at the finish).
+    const rise = () => {
+      if (cancelled || mode !== "chase" || live.playing || live.fraction < 1) return;
+      const overview = overviewCamera();
+      if (!overview) return;
+      mode = "outro";
+      map.easeTo({ ...overview, duration: PREVIEW_RISE_MS, easing: easeInOut });
+    };
+
+    const frame = (now: number) => {
+      if (cancelled) return;
+      raf = requestAnimationFrame(frame);
+      const dt = last ? Math.min(100, now - last) : 16;
+      last = now;
+      const kmPerMin = speedKmPerMin(live.speed);
+      let moved = live.dirty;
+      live.dirty = false;
+      const outside = liveFractionStore.get();
+      if (outside?.routeId === routeId && outside.fraction !== published) {
+        live.fraction = outside.fraction;
+        moved = true;
+      }
+      // Heights the overview missed (tiles that had not loaded) fill in as the camera passes.
+      if (!complete && now - lastReadAt > 500) {
+        lastReadAt = now;
+        readHeights();
+      }
+      // The intro and the dive own the camera; a scrub meanwhile is picked up once the chase starts.
+      if (mode === "intro" || mode === "dive") {
+        if (moved) live.dirty = true;
+        return;
+      }
+      // Up at the overview after the finish: playing again (from the start) or scrubbing dives back in.
+      if (mode === "outro") {
+        if (moved || (live.playing && live.fraction < 1)) dive();
+        return;
+      }
+      if (repad || now - lastPaddedAt > 500) {
+        repad = false;
+        lastPaddedAt = now;
+        padding = paddingNow();
+        chasePad = chasePadding(padding, heightPx());
+      }
+      const wasPlaying = live.playing;
+      if (live.playing && live.fraction < 1) {
+        live.fraction = Math.min(1, live.fraction + fractionStep(line, kmPerMin, dt));
+        moved = true;
+      }
+      if (moved) {
+        const center = positionAt(line, live.fraction);
+        // Heading-up from a ~3 s look-ahead, eased and held to 45°/s so switchbacks do not whip the camera; a
+        // scrub turns at once.
+        const target = bearingAt(line, live.fraction, bearingLookAheadM(kmPerMin));
+        bearing = live.playing ? smoothBearing(bearing, target, dt) : target;
+        // The zoom eases too, so a speed change or the 3D button does not jump the camera.
+        const wantedZoom = zoomAt(kmPerMin, center);
+        zoom = live.playing ? zoom + (wantedZoom - zoom) * Math.min(1, dt / 600) : wantedZoom;
+        // Tilt up fast when a ridge is in the way, settle back down slowly.
+        const wanted = clearPitchAt(center, bearing, zoom, pitchNow());
+        pitch = live.playing ? pitch + (wanted - pitch) * Math.min(1, dt / (wanted < pitch ? 150 : 600)) : wanted;
+        map.jumpTo({ center, bearing, pitch, zoom, padding: chasePad });
+        published = live.fraction;
+        liveFractionStore.set({ routeId, fraction: live.fraction });
+        const shown = Math.round(live.fraction * 2000) / 2000;
+        if (shown !== shownFraction) {
+          shownFraction = shown;
+          setRouteProgress(map, routeId, live.fraction);
+        }
+        // The reducer only hears about the end (which pauses there); pause and scrub send their own position,
+        // so playing does not re-render the app every frame. A ride that played to the finish then rises out.
+        if (live.fraction >= 1 && live.lastSent !== 1) {
+          live.lastSent = 1;
+          dispatchPreview({ type: "preview_tick", fraction: 1 });
+          if (wasPlaying) timers.push(window.setTimeout(rise, OUTRO_HOLD_MS));
+        }
+      }
+    };
+
+    // Overview first, held at least briefly and until its tiles load (at most 1.8 s), then the dive.
+    const introStart = performance.now();
     let started = false;
     const startFollowing = () => {
-      if (started) return;
+      if (started || cancelled) return;
+      const wait = PREVIEW_OVERVIEW_MS + 250 - (performance.now() - introStart);
+      if (wait > 0) {
+        timers.push(window.setTimeout(startFollowing, wait));
+        return;
+      }
       started = true;
-      follow();
+      dive();
     };
     map.once("idle", startFollowing);
     timers.push(window.setTimeout(startFollowing, 1800));
-    // The route framed in the clear part of the map with up to 40px to spare; the same padding sets the zoom and
-    // the ease, so the route lands where the zoom was worked out for.
-    const box = map.getContainer().getBoundingClientRect();
-    const spare = Math.max(
-      0,
-      Math.min(
-        40,
-        Math.floor((box.width - padding.left - padding.right - 40) / 2),
-        Math.floor((box.height - padding.top - padding.bottom - 40) / 2),
-      ),
-    );
-    const framed = {
-      top: padding.top + spare,
-      right: padding.right + spare,
-      bottom: padding.bottom + spare,
-      left: padding.left + spare,
-    };
-    const overview = map.cameraForBounds(
-      [
-        [west, south],
-        [east, north],
-      ],
-      { padding: framed, bearing: 0, pitch: 0, maxZoom: 15 },
-    );
-    if (overview?.zoom !== undefined) {
-      map.easeTo({
-        center: [(west + east) / 2, (south + north) / 2],
-        zoom: overview.zoom,
-        bearing: 0,
-        pitch: 0,
-        padding: framed,
-        duration: PREVIEW_EASE_MS,
-        easing: easeInOut,
-      });
-    } else startFollowing();
+    const overview = overviewCamera();
+    if (overview) map.easeTo({ ...overview, duration: PREVIEW_OVERVIEW_MS, easing: easeInOut });
+    else startFollowing();
+    raf = requestAnimationFrame(frame);
 
     // Grabbing the map pauses the ride so the user can look around.
     const onDragStart = () => {
@@ -799,7 +856,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
         restoreRef.current = null;
         dockCompactStore.set(false);
         if (!restore) return;
-        // Never leave the camera in follow pitch: back to the camera the preview began from, tilt included (a map
+        // Never leave the camera in the chase: rise back to the camera the preview began from, tilt included (a map
         // flattened meanwhile comes back flat).
         map.easeTo({
           center: [restore.camera.longitude, restore.camera.latitude],
@@ -807,7 +864,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
           bearing: restore.camera.bearing,
           pitch: stateRef.current.flattened ? 0 : restore.camera.pitch,
           padding: restore.padding,
-          duration: PREVIEW_EASE_MS,
+          duration: PREVIEW_RISE_MS,
           easing: easeInOut,
         });
       });

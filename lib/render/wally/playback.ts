@@ -5,8 +5,9 @@ import { bearingDeg, cumulativeMeters, gradientColors, GRADIENT_STOPS } from "@/
 import { pitchFor } from "@/lib/render/wally/terrain";
 
 /**
- * Route preview playback (docs/superpowers/specs/2026-10-09-wallymap-m3-design.md §6): the camera follows a route
- * at Follow pitch, heading-up, while the traversed part fills in purple→coral. Everything here is pure except the
+ * Route preview playback (docs/superpowers/specs/2026-10-09-wallymap-m3-design.md §6): a chase camera follows a
+ * route at Follow pitch, heading-up, with the followed point in the lower third of the clear map so the way ahead
+ * fills the screen, while the traversed part fills in purple→coral. Everything here is pure except the
  * small preview bus at the bottom, which lets the map, the inspect card and the preview control talk without
  * threading `dispatch` through components/App.tsx.
  */
@@ -18,9 +19,23 @@ export const SPEEDS = [0.5, 1, 2, 4] as const;
 export const FOLLOW_PITCH = pitchFor("follow");
 export const FOLLOW_MIN_ZOOM = 15;
 export const FOLLOW_MAX_ZOOM = 17;
-/** Camera eases at the start and end of a preview (Wally: 300–500 ms). */
-export const PREVIEW_EASE_MS = 400;
+/** The ease from the camera before the preview up to the route overview. */
+export const PREVIEW_OVERVIEW_MS = 800;
+/** The dive from the overview down into the chase camera at the start (and again after the outro). */
+export const PREVIEW_DIVE_MS = 1200;
+/** The rise back to the overview at the end of the ride, and back to the earlier camera on exit. */
+export const PREVIEW_RISE_MS = 1200;
+/** How long the camera holds on the finish before rising to the overview. */
+export const OUTRO_HOLD_MS = 700;
 export const DEFAULT_LOOKAHEAD_M = 40;
+/** Chase pitch with 3D off: lower, so the flat map still reads as a map. */
+export const CHASE_FLAT_PITCH = pitchFor("explore");
+/** Where the followed point sits in the clear band, from its top (0) to its bottom (1): the lower third. */
+export const CHASE_POINT_AT = 0.7;
+/** The heading eases toward its target with this time constant... */
+export const BEARING_SMOOTH_MS = 900;
+/** ...and never turns faster than this. */
+export const MAX_TURN_DEG_PER_S = 45;
 /** Frame spacing for `playbackFrames`. */
 export const FPS = 60;
 
@@ -100,6 +115,85 @@ export function speedKmPerMin(multiplier: number): number {
 export function followZoom(kmPerMin: number): number {
   if (!(kmPerMin > 0)) return FOLLOW_MAX_ZOOM;
   return clamp(16 - Math.log2(kmPerMin / BASE_KM_PER_MIN), FOLLOW_MIN_ZOOM, FOLLOW_MAX_ZOOM);
+}
+
+/**
+ * How far ahead the chase heading looks: about 3 s of travel, 250 m to 1.2 km. Long enough that a run of
+ * switchbacks averages out to the way the trail is really going.
+ */
+export function bearingLookAheadM(kmPerMin: number): number {
+  const perSecond = Number.isFinite(kmPerMin) && kmPerMin > 0 ? (kmPerMin * 1000) / 60 : 0;
+  return clamp(3 * perSecond, 250, 1200);
+}
+
+/**
+ * The next heading from `current` toward `target` after `dtMs`: an exponential ease (time constant `tauMs`) that
+ * turns the short way and never faster than `maxDegPerSec`. Returns a bearing in (-180, 180].
+ */
+export function smoothBearing(
+  current: number,
+  target: number,
+  dtMs: number,
+  tauMs = BEARING_SMOOTH_MS,
+  maxDegPerSec = MAX_TURN_DEG_PER_S,
+): number {
+  const dt = Math.max(0, dtMs);
+  const turn = turnBetween(current, target);
+  const eased = turn * (1 - Math.exp(-dt / Math.max(1, tauMs)));
+  const limit = (maxDegPerSec * dt) / 1000;
+  return turnBetween(0, current + clamp(eased, -limit, limit));
+}
+
+/** The chase pitch: Follow with 3D on, lower with the map flattened. */
+export function chasePitch(flattened: boolean): number {
+  return flattened ? CHASE_FLAT_PITCH : FOLLOW_PITCH;
+}
+
+/**
+ * Padding that puts the followed point `at` of the way down the clear band `padding` leaves (Mapbox draws the
+ * camera center in the middle of the padded area, so only the top inset grows). The bottom inset, and so the
+ * edge against the dock, is unchanged: the point stays inside the band.
+ */
+export function chasePadding(padding: Insets, canvasHeight: number, at = CHASE_POINT_AT): Insets {
+  const band = canvasHeight - padding.top - padding.bottom;
+  if (!(band > 0)) return padding;
+  return { ...padding, top: padding.top + (2 * clamp(at, 0.5, 1) - 1) * band };
+}
+
+/** How high above the followed point (as a share of the canvas height) the "trail ahead" is measured to. */
+export const AHEAD_SCREEN_FRACTION = 0.2;
+
+/**
+ * Ground meters between the followed point and the screen line `AHEAD_SCREEN_FRACTION` of the canvas above it, for
+ * a camera at `zoom` and `pitch` (degrees) over flat ground. The camera sits `cameraDistanceMeters` from the point,
+ * at height D·cos p and D·sin p behind it; the ray through that screen line leaves at p + α from straight down,
+ * with tan α = fraction / 1.5 (the 36.87° field of view), and lands D·cos p·tan(p + α) − D·sin p past the point.
+ */
+export function aheadMeters(zoom: number, pitch: number, lat: number, heightPx: number): number {
+  const d = cameraDistanceMeters(zoom, lat, heightPx);
+  const p = (clamp(pitch, 0, 85) * Math.PI) / 180;
+  const ray = p + Math.atan(AHEAD_SCREEN_FRACTION / 1.5);
+  if (ray >= Math.PI / 2 - 1e-6) return Infinity;
+  return d * (Math.cos(p) * Math.tan(ray) - Math.sin(p));
+}
+
+/** Trail the chase camera shows ahead: 450 m at 1×, 300 m at 0.5×, 600 m from 2× up. */
+export function aheadTargetMeters(kmPerMin: number): number {
+  if (!(kmPerMin > 0)) return 300;
+  return clamp(450 * Math.sqrt(kmPerMin / BASE_KM_PER_MIN), 300, 600);
+}
+
+export const CHASE_MIN_ZOOM = 14.5;
+export const CHASE_MAX_ZOOM = 17.5;
+
+/**
+ * The chase zoom that shows `aheadTargetMeters` of trail ahead (see `aheadMeters`) at `pitch` on a canvas
+ * `heightPx` tall, within 14.5–17.5. Falls back to `followZoom` before the canvas has a size.
+ */
+export function chaseZoom(kmPerMin: number, pitch: number, lat: number, heightPx: number): number {
+  if (!(heightPx > 0)) return followZoom(kmPerMin);
+  const atZoom0 = aheadMeters(0, pitch, lat, heightPx);
+  return clamp(Math.log2(atZoom0 / aheadTargetMeters(kmPerMin)), CHASE_MIN_ZOOM, CHASE_MAX_ZOOM);
 }
 
 /**

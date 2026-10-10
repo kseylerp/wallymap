@@ -1,8 +1,15 @@
 import type { LineString } from "geojson";
 import { describe, expect, it } from "vitest";
 import {
+  aheadMeters,
+  aheadTargetMeters,
   bearingAt,
+  bearingLookAheadM,
   cameraDistanceMeters,
+  CHASE_POINT_AT,
+  chasePadding,
+  chasePitch,
+  chaseZoom,
   clearPitch,
   dispatchPreview,
   followZoom,
@@ -17,6 +24,9 @@ import {
   previewFeature,
   progressGradient,
   routeFromFeature,
+  MAX_TURN_DEG_PER_S,
+  metersPerPixel,
+  smoothBearing,
   turnBetween,
 } from "@/lib/render/wally/playback";
 import type { MapAction } from "@/lib/render/state";
@@ -223,5 +233,105 @@ describe("followPadding", () => {
   it("ignores obstacles outside the canvas", () => {
     const canvas = { width: 800, height: 600 };
     expect(followPadding(base, canvas, [{ left: 900, top: 0, right: 1000, bottom: 100 }])).toEqual({ padding: base, fits: true });
+  });
+});
+
+describe("chase camera heading", () => {
+  it("never turns faster than the max rate, and turns the short way", () => {
+    const next = smoothBearing(0, 170, 16);
+    expect(next).toBeGreaterThan(0);
+    expect(next).toBeLessThanOrEqual((MAX_TURN_DEG_PER_S * 16) / 1000 + 1e-9);
+    const across = smoothBearing(170, -170, 100);
+    expect(turnBetween(170, across)).toBeGreaterThan(0); // through 180, not back through 0
+    expect(turnBetween(170, across)).toBeLessThanOrEqual(MAX_TURN_DEG_PER_S * 0.1 + 1e-9);
+  });
+
+  it("eases small turns exponentially, settles without overshoot and stays in (-180, 180]", () => {
+    expect(smoothBearing(0, 2, 900)).toBeCloseTo(2 * (1 - Math.exp(-1)), 6);
+    let b = -120;
+    let worst = 0;
+    for (let t = 0; t < 10_000; t += 16) {
+      b = smoothBearing(b, 150, 16);
+      // The turn from -120 to 150 is -90° (the short way, through 180): a positive turn left would be past it.
+      worst = Math.max(worst, turnBetween(b, 150));
+      expect(b).toBeGreaterThan(-180);
+      expect(b).toBeLessThanOrEqual(180);
+    }
+    expect(worst).toBeLessThanOrEqual(1e-9);
+    expect(Math.abs(turnBetween(b, 150))).toBeLessThan(0.5);
+    expect(smoothBearing(40, 40, 16)).toBe(40);
+  });
+
+  it("looks about 3 s ahead, 250 m to 1.2 km", () => {
+    expect(bearingLookAheadM(10)).toBeCloseTo(500, 6);
+    expect(bearingLookAheadM(2)).toBe(250);
+    expect(bearingLookAheadM(40)).toBe(1200);
+    expect(bearingLookAheadM(Number.NaN)).toBe(250);
+  });
+
+  it("holds the overall heading through switchbacks the old short look-ahead whipped across", () => {
+    // Legs of ~100 m alternating 60° either side of north.
+    const coords: [number, number][] = [[-120, 39]];
+    for (let i = 0; i < 40; i++) {
+      const [x, y] = coords[coords.length - 1];
+      const side = i % 2 === 0 ? 1 : -1;
+      coords.push([x + (side * 100 * Math.sin(Math.PI / 3)) / (111_320 * Math.cos((39 * Math.PI) / 180)), y + (100 * Math.cos(Math.PI / 3)) / 110_574]);
+    }
+    const zig: LineString = { type: "LineString", coordinates: coords };
+    let longSwing = 0;
+    let shortSwing = 0;
+    for (let f = 0; f <= 0.8; f += 0.01) {
+      longSwing = Math.max(longSwing, Math.abs(turnBetween(0, bearingAt(zig, f, bearingLookAheadM(10)))));
+      shortSwing = Math.max(shortSwing, Math.abs(turnBetween(0, bearingAt(zig, f, 40))));
+    }
+    expect(shortSwing).toBeGreaterThan(50);
+    expect(longSwing).toBeLessThan(25);
+  });
+});
+
+describe("chase camera framing", () => {
+  it("puts the followed point 70% of the way down the clear band, leaving the bottom edge alone", () => {
+    const padding = { top: 104, right: 96, bottom: 40, left: 476 };
+    const height = 900;
+    const next = chasePadding(padding, height);
+    const centerY = (next.top + height - next.bottom) / 2;
+    expect(centerY).toBeCloseTo(104 + CHASE_POINT_AT * (900 - 104 - 40), 6);
+    expect(next).toMatchObject({ right: 96, bottom: 40, left: 476 });
+  });
+
+  it("keeps the point inside a phone's 80px band, clear of the dock below it", () => {
+    const height = 844;
+    const padding = { top: 57, right: 40, bottom: 707, left: 40 }; // an 80px band ending at the dock's edge
+    const next = chasePadding(padding, height);
+    const centerY = (next.top + height - next.bottom) / 2;
+    expect(centerY).toBeGreaterThan(padding.top + 80 * (2 / 3) - 1e-9); // the lower third
+    expect(centerY).toBeLessThanOrEqual(height - padding.bottom - 20); // never on or under the dock
+    expect(next.top + next.bottom).toBeLessThan(height);
+  });
+
+  it("leaves a degenerate band alone", () => {
+    const padding = { top: 500, right: 0, bottom: 500, left: 0 };
+    expect(chasePadding(padding, 900)).toBe(padding);
+  });
+
+  it("measures the trail ahead: a fifth of the canvas on a flat camera, more when tilted", () => {
+    expect(aheadMeters(16, 0, 39, 900)).toBeCloseTo(0.2 * 900 * metersPerPixel(16, 39), 6);
+    expect(aheadMeters(16, 65, 39, 900)).toBeGreaterThan(aheadMeters(16, 45, 39, 900));
+    expect(aheadMeters(17, 65, 39, 900)).toBeCloseTo(aheadMeters(16, 65, 39, 900) / 2, 6);
+    expect(aheadMeters(16, 85, 39, 900)).toBe(Infinity);
+  });
+
+  it("zooms so 300–600 m of trail is ahead, closer when slower and lower when flattened", () => {
+    expect(aheadTargetMeters(10)).toBe(450);
+    expect(aheadTargetMeters(5)).toBe(318.1980515339464);
+    expect(aheadTargetMeters(40)).toBe(600);
+    for (const kmPerMin of [5, 10, 20, 40]) {
+      const zoom = chaseZoom(kmPerMin, chasePitch(false), 39.15, 900);
+      expect(aheadMeters(zoom, chasePitch(false), 39.15, 900)).toBeCloseTo(aheadTargetMeters(kmPerMin), 3);
+    }
+    expect(chaseZoom(5, 65, 39.15, 900)).toBeGreaterThan(chaseZoom(10, 65, 39.15, 900));
+    expect(chaseZoom(10, chasePitch(true), 39.15, 900)).toBeLessThan(chaseZoom(10, chasePitch(false), 39.15, 900));
+    expect(chasePitch(true)).toBe(45);
+    expect(chaseZoom(10, 65, 39.15, 0)).toBe(16); // no canvas yet: the old follow zoom
   });
 });

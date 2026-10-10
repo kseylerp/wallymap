@@ -56,6 +56,22 @@ describe("summarizeLayerResult", () => {
     expect(summarizeLayerResult(result)).toMatchObject({ featureCount: 0, bbox: null, sample: [] });
   });
 
+  it("tells the model a tile layer is scrubbable, without the url template", () => {
+    const tiles: LayerResult = {
+      kind: "tiles",
+      data: {
+        url: "https://t.test/2026-10-06/{z}/{x}/{y}.png",
+        minzoom: 0,
+        maxzoom: 8,
+        format: "raster",
+        time: { template: "https://t.test/{date}/{z}/{x}/{y}.png", cadence: "daily", from: "2020-11-18", daysBack: 3 },
+      },
+      citation,
+    };
+    expect(summarizeLayerResult(tiles)).toMatchObject({ time: { cadence: "daily", from: "2020-11-18", daysBack: 3 } });
+    expect(JSON.stringify(summarizeLayerResult(tiles))).not.toContain("{date}");
+  });
+
   it("flattens a tiles result and passes an error through unchanged", () => {
     const tiles: LayerResult = {
       kind: "tiles",

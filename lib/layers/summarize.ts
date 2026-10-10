@@ -1,5 +1,5 @@
 import type { Geometry, GeoJsonProperties, Position } from "geojson";
-import type { BBox, Citation, LayerError, LayerResult } from "@/layers/types";
+import type { BBox, Citation, LayerError, LayerResult, TileTime } from "@/layers/types";
 
 /** What the model sees for a geojson result; the full data goes to the map only. */
 export type GeojsonSummary = {
@@ -20,6 +20,8 @@ export type TilesSummary = {
   format: "raster" | "vector";
   sourceLayer?: string;
   geometry?: "point" | "line" | "polygon";
+  /** Present when the time scrubber can move this layer: how often it updates and the range it covers. */
+  time?: Pick<TileTime, "cadence" | "from" | "to" | "daysBack">;
   citation: Citation;
   coverageNote?: string;
 };
@@ -85,6 +87,16 @@ function eachPosition(geometry: Geometry | null, visit: (p: Position) => void): 
   }
 }
 
+/** The scrubbable range without the URL template (the model has no use for it). */
+function timeSummary(t: TileTime): NonNullable<TilesSummary["time"]> {
+  return {
+    cadence: t.cadence,
+    from: t.from,
+    ...(t.to !== undefined && { to: t.to }),
+    ...(t.daysBack !== undefined && { daysBack: t.daysBack }),
+  };
+}
+
 /**
  * A small, model-sized view of a layer response: counts, extent, a few sample
  * properties and the citation instead of every feature. Errors pass through.
@@ -101,6 +113,7 @@ export function summarizeLayerResult(body: LayerResult | LayerError): LayerResul
       format: body.data.format,
       ...(body.data.sourceLayer !== undefined && { sourceLayer: body.data.sourceLayer }),
       ...(body.data.geometry !== undefined && { geometry: body.data.geometry }),
+      ...(body.data.time !== undefined && { time: timeSummary(body.data.time) }),
       citation: body.citation,
       ...(body.coverageNote !== undefined && { coverageNote: body.coverageNote }),
     };

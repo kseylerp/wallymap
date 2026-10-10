@@ -3,6 +3,7 @@ import { deltaFeatures, hexDelta, presetFor, splitWindows, type CompareMode, typ
 import { applyFilters, type LayerFilters } from "@/lib/render/filters";
 import type { CompareState, LoadedLayer, MapState } from "@/lib/render/state";
 import { createStore } from "@/lib/render/wally/playback";
+import type { TileTime } from "@/layers/types";
 import { tileUrlForTime, type TimeWindow } from "@/lib/time";
 
 /**
@@ -31,9 +32,6 @@ export function compareBaseId(id: string): string {
   return id.endsWith(B_SUFFIX) ? id.slice(0, -B_SUFFIX.length) : id;
 }
 
-/** Tile layers whose imagery is chosen by date (night lights) or year range (forest loss). */
-export const TIME_TILE_LAYERS: ReadonlySet<string> = new Set(["night-lights", "forest-loss"]);
-
 /** The layers that have a canned compare (presetFor). */
 export const PRESET_LAYERS = ["forest-loss", "night-lights", "fire-perimeters"] as const;
 export type PresetLayer = (typeof PRESET_LAYERS)[number];
@@ -42,9 +40,9 @@ export function hasPreset(layerId: string): layerId is PresetLayer {
   return (PRESET_LAYERS as readonly string[]).includes(layerId);
 }
 
-/** True when a layer can be compared: GeoJSON with dated features (`t`), or a date-driven tile layer. */
+/** True when a layer can be compared: GeoJSON with dated features (`t`), or a tile layer that publishes `data.time`. */
 export function isComparable(layer: LoadedLayer): boolean {
-  if (layer.result.kind === "tiles") return TIME_TILE_LAYERS.has(layer.id);
+  if (layer.result.kind === "tiles") return layer.result.data.time !== undefined;
   return layer.result.data.features.some((f) => {
     const t = f.properties?.t;
     return typeof t === "string" && !Number.isNaN(Date.parse(t));
@@ -71,12 +69,12 @@ export function isHexCollection(fc: FeatureCollection): boolean {
 const YEAR = (iso: string): number => new Date(iso).getUTCFullYear();
 
 /**
- * A date-driven tile URL pointed at one side's window: night lights shows the window's end date; forest loss shows the
+ * A time tile URL pointed at one side's window: `{date}` layers show the window's end date; `{year}` layers show the
  * loss from the window's start year to its end year (the scrubber's rewrite keeps the loaded start year instead).
  */
-export function compareTileUrl(layerId: string, url: string, window: TimeWindow): string {
-  const next = tileUrlForTime(layerId, url, window);
-  if (layerId !== "forest-loss" || Number.isNaN(YEAR(window[0]))) return next;
+export function compareTileUrl(url: string, time: TileTime | undefined, window: TimeWindow): string {
+  const next = tileUrlForTime(url, time, window);
+  if (!time?.template.includes("{year}") || Number.isNaN(YEAR(window[0]))) return next;
   return next.replace(/([?&]start_year=)\d+/, `$1${Math.min(YEAR(window[0]), YEAR(window[1]))}`);
 }
 
@@ -99,10 +97,10 @@ function withUrl(layer: LoadedLayer, id: string, url: string): LoadedLayer {
 
 function deriveSides(layer: LoadedLayer, filters: LayerFilters | undefined, spec: CompareSpec, withDelta: boolean): Sides {
   if (layer.result.kind === "tiles") {
-    const url = layer.result.data.url;
+    const { url, time } = layer.result.data;
     return {
-      a: withUrl(layer, layer.id, compareTileUrl(layer.id, url, spec.a)),
-      b: withUrl(layer, compareBId(layer.id), compareTileUrl(layer.id, url, spec.b)),
+      a: withUrl(layer, layer.id, compareTileUrl(url, time, spec.a)),
+      b: withUrl(layer, compareBId(layer.id), compareTileUrl(url, time, spec.b)),
     };
   }
   const data = layer.result.data;

@@ -67,7 +67,7 @@ function visibleLayer(
   }
   if (!window || !rewriteTiles) return layer;
   const tiles = layer.result;
-  const url = tileUrlForTime(layer.id, tiles.data.url, window);
+  const url = tileUrlForTime(tiles.data.url, tiles.data.time, window);
   if (url === tiles.data.url) return layer;
   return remember(layer, `u:${url}`, () => ({ ...layer, result: { ...tiles, data: { ...tiles.data, url } } }));
 }

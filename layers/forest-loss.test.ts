@@ -41,6 +41,12 @@ describe("forest-loss layer", () => {
     expect(r.data).toMatchObject({ minzoom: 3, maxzoom: 12, tileSize: 512 });
     expect(r.data.url).toContain("start_year=2015&end_year=2025&tree_cover_density_threshold=30");
     expect(r.citation.source).toContain("Global Forest Watch");
+    expect(r.data.time).toEqual({
+      template: expect.stringContaining("start_year=2015&end_year={year}&"),
+      cadence: "yearly",
+      from: "2001",
+      to: "2025",
+    });
   });
 
   it("rejects a start year after the end year", async () => {

@@ -1,5 +1,6 @@
 import type { Feature, FeatureCollection } from "geojson";
 import { describe, expect, it } from "vitest";
+import type { TileTime } from "@/layers/types";
 import type { LoadedLayer } from "@/lib/render/state";
 import { chooseBucket, filterByWindow, inWindow, stepWindow, tileUrlForTime, timeIndex, windowLabel, type TimeWindow } from "@/lib/time";
 
@@ -139,37 +140,74 @@ describe("stepWindow", () => {
 });
 
 describe("tileUrlForTime", () => {
-  const night =
-    "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Night_Lights/default/2024-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png";
-  const loss =
-    "https://tiles.globalforestwatch.org/umd_tree_cover_loss/latest/dynamic/{z}/{x}/{y}.png?render_type=true_color&start_year=2015&end_year=2025&tree_cover_density_threshold=30";
-  it("replaces the night-lights date with the window end date", () => {
-    const out = tileUrlForTime("night-lights", night, ["2023-01-01T00:00:00Z", "2023-07-15T12:00:00Z"]);
-    expect(out).toBe(night.replace("2024-01-01", "2023-07-15"));
+  const night: TileTime = {
+    template: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS/default/{date}/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png",
+    cadence: "daily",
+    from: "2020-11-18",
+    daysBack: 3,
+  };
+  const nightUrl = night.template.replace("{date}", "2024-01-01");
+  const loss: TileTime = {
+    template:
+      "https://tiles.globalforestwatch.org/umd_tree_cover_loss/latest/dynamic/{z}/{x}/{y}.png?render_type=true_color&start_year=2015&end_year={year}&tree_cover_density_threshold=30",
+    cadence: "yearly",
+    from: "2001",
+    to: "2025",
+  };
+  const lossUrl = loss.template.replace("{year}", "2025");
+  const now = Date.parse("2026-10-09T15:00:00Z");
+
+  it("replaces {date} with the window end date", () => {
+    const out = tileUrlForTime(nightUrl, night, ["2023-01-01T00:00:00Z", "2023-07-15T12:00:00Z"]);
+    expect(out).toBe(night.template.replace("{date}", "2023-07-15"));
     expect(out).toContain("{z}/{y}/{x}");
   });
-  it("sets forest-loss end_year and caps start_year", () => {
-    const a = tileUrlForTime("forest-loss", loss, ["2015-01-01T00:00:00Z", "2020-12-31T23:59:59Z"]);
+  it("replaces {year} with the window end year and caps start_year", () => {
+    const a = tileUrlForTime(lossUrl, loss, ["2015-01-01T00:00:00Z", "2020-12-31T23:59:59Z"]);
     expect(a).toContain("start_year=2015&end_year=2020&");
     expect(a).toContain("{z}/{x}/{y}.png");
     expect(a.endsWith("tree_cover_density_threshold=30")).toBe(true);
-    const b = tileUrlForTime("forest-loss", loss, ["2001-01-01T00:00:00Z", "2010-12-31T23:59:59Z"]);
+    const b = tileUrlForTime(lossUrl, loss, ["2001-01-01T00:00:00Z", "2010-12-31T23:59:59Z"]);
     expect(b).toContain("start_year=2010&end_year=2010&");
   });
-  it("leaves other layers unchanged", () => {
-    expect(tileUrlForTime("snow", night, ["2023-01-01", "2023-02-01"])).toBe(night);
+  it("leaves the url unchanged without data.time or with an unparseable window end", () => {
+    expect(tileUrlForTime(nightUrl, undefined, ["2023-01-01", "2023-02-01"])).toBe(nightUrl);
+    expect(tileUrlForTime(nightUrl, night, ["2023-01-01", "not a date"])).toBe(nightUrl);
   });
   it("clamps a window that ends in the present to the latest published period", () => {
-    const now = Date.parse("2026-10-09T15:00:00Z");
     const window: TimeWindow = ["2016-01-01T00:00:00Z", "2026-10-09T12:00:00Z"];
-    const lights = tileUrlForTime("night-lights", night, window, now);
-    expect(lights).toBe(night.replace("2024-01-01", "2026-10-06"));
-    const forest = tileUrlForTime("forest-loss", loss, window, now);
-    expect(forest).toContain("start_year=2015&end_year=2025&");
-    // A forest-loss window entirely after 2025 still draws loss through the newest year.
-    expect(tileUrlForTime("forest-loss", loss, ["2026-01-01T00:00:00Z", "2026-10-09T00:00:00Z"], now)).toContain(
-      "end_year=2025&",
-    );
+    expect(tileUrlForTime(nightUrl, night, window, now)).toBe(night.template.replace("{date}", "2026-10-06"));
+    expect(tileUrlForTime(lossUrl, loss, window, now)).toContain("start_year=2015&end_year=2025&");
+    expect(tileUrlForTime(lossUrl, loss, ["2026-01-01T00:00:00Z", "2026-10-09T00:00:00Z"], now)).toContain("end_year=2025&");
+  });
+  it("clamps to from, to and daysBack", () => {
+    expect(tileUrlForTime(nightUrl, night, ["2010-01-01", "2010-06-01T00:00:00Z"], now)).toContain("/2020-11-18/");
+    const capped: TileTime = { ...night, to: "2024-03-10", daysBack: undefined };
+    expect(tileUrlForTime(nightUrl, capped, ["2020-01-01", "2026-01-01T00:00:00Z"], now)).toContain("/2024-03-10/");
+    expect(tileUrlForTime(lossUrl, loss, ["1990-01-01", "1995-01-01T00:00:00Z"], now)).toContain("end_year=2001&");
+    // Without daysBack or to, the newest period is today.
+    const open: TileTime = { template: "u/{date}", cadence: "daily", from: "2020-01-01" };
+    expect(tileUrlForTime("u/x", open, ["2020-01-01", "2030-01-01T00:00:00Z"], now)).toBe("u/2026-10-09");
+  });
+  it("snaps {date} to each cadence", () => {
+    const t = (cadence: TileTime["cadence"], from = "2020-01-01"): TileTime => ({ template: "u/{date}", cadence, from });
+    const w: TimeWindow = ["2020-01-01", "2024-05-17T13:00:00Z"];
+    expect(tileUrlForTime("u", t("daily"), w, now)).toBe("u/2024-05-17");
+    // 2024-05-17 is day 1598 after 2020-01-01; 8-day and 16-day composites start every 8 and 16 days from `from`.
+    expect(tileUrlForTime("u", t("8day"), w, now)).toBe("u/2024-05-11");
+    expect(tileUrlForTime("u", t("16day"), w, now)).toBe("u/2024-05-03");
+    expect(tileUrlForTime("u", t("monthly"), w, now)).toBe("u/2024-05-01");
+    expect(tileUrlForTime("u", t("yearly"), w, now)).toBe("u/2024-01-01");
+  });
+  it("never snaps before from", () => {
+    const monthly: TileTime = { template: "u/{date}", cadence: "monthly", from: "2020-03-15" };
+    expect(tileUrlForTime("u", monthly, ["2020-01-01", "2020-03-20T00:00:00Z"], now)).toBe("u/2020-03-15");
+    const yearly: TileTime = { template: "u/{date}", cadence: "yearly", from: "2012-04-01" };
+    expect(tileUrlForTime("u", yearly, ["2012-01-01", "2012-12-31T00:00:00Z"], now)).toBe("u/2012-04-01");
+  });
+  it("fills every {year} in the template", () => {
+    const t: TileTime = { template: "u/{year}/{year}", cadence: "yearly", from: "2001" };
+    expect(tileUrlForTime("u", t, ["2001-01-01", "2010-06-01T00:00:00Z"], now)).toBe("u/2010/2010");
   });
 });
 

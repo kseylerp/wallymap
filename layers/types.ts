@@ -18,6 +18,22 @@ export type Coverage = "global" | "us" | { bbox: BBox };
 
 export type Citation = { source: string; url: string; retrieved: string };
 
+/**
+ * How a tile layer's URL follows the time scrubber. `template` is the tile URL with `{date}` (YYYY-MM-DD) or
+ * `{year}` (YYYY) where the time goes; the result's `url` is the same template filled with the default period.
+ * The scrubber fills the placeholder from the window end, clamped to `from`/`to`/`daysBack` and snapped to `cadence`.
+ */
+export type TileTime = {
+  template: string;
+  cadence: "daily" | "8day" | "16day" | "monthly" | "yearly";
+  /** First period published (YYYY-MM-DD or YYYY). */
+  from: string;
+  /** Last period published (YYYY-MM-DD or YYYY); omit when the archive runs to the present. */
+  to?: string;
+  /** The newest period is not reliably processed for this many days; the scrubber stays that far behind today. */
+  daysBack?: number;
+};
+
 export type LayerResult =
   | {
       kind: "geojson";
@@ -38,6 +54,8 @@ export type LayerResult =
         sourceLayer?: string;
         /** Vector tiles only: how to draw the features. */
         geometry?: "point" | "line" | "polygon";
+        /** Present when the URL can be pointed at a time window; makes the layer scrubbable. */
+        time?: TileTime;
       };
       citation: Citation;
       coverageNote?: string;
@@ -64,6 +82,14 @@ export type StyleHints = {
   unit?: string;
   /** Polygons only: fill alpha from 0 (outline only) to 1; the renderer's default when unset. */
   fillOpacity?: number;
+  /** Points only: draw columns whose height is the feature's `v` (value) or 1 per feature (`count`) when the map is in 3D. */
+  extrude?: "v" | "count";
+  /** True when a heatmap view of the points is meaningful (dense events, observations). */
+  heat?: boolean;
+  /** True for dense point layers that read better clustered at low zoom. */
+  cluster?: boolean;
+  /** Feature property holding the ISO date the time scrubber filters on; defaults to `t`. */
+  timeField?: string;
 };
 
 export type Layer<I extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawShape>> = {

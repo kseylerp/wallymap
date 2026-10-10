@@ -28,7 +28,7 @@ const inputSchema = z.object({
 });
 
 /** The raster tile template for loss between two years, counting only pixels with at least this much canopy in 2000. */
-export function lossTileUrl(startYear: number, endYear: number, canopyThreshold: string): string {
+export function lossTileUrl(startYear: number, endYear: number | "{year}", canopyThreshold: string): string {
   return (
     `${TILE_BASE}?render_type=true_color&start_year=${startYear}&end_year=${endYear}` +
     `&tree_cover_density_threshold=${canopyThreshold}`
@@ -67,6 +67,12 @@ const forestLoss = defineLayer({
         maxzoom: 12,
         format: "raster",
         tileSize: 512,
+        time: {
+          template: lossTileUrl(input.startYear, "{year}", input.canopyThreshold),
+          cadence: "yearly",
+          from: "2001",
+          to: String(FOREST_LOSS_LATEST_YEAR),
+        },
       },
       citation: {
         source:

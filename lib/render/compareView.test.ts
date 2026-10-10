@@ -1,5 +1,6 @@
 import type { Feature } from "geojson";
 import { describe, expect, it } from "vitest";
+import type { TileTime } from "@/layers/types";
 import {
   compareBaseId,
   compareBId,
@@ -27,19 +28,21 @@ const geo = (id: string, features: Feature[]): LoadedLayer => ({
   result: { kind: "geojson", data: { type: "FeatureCollection", features }, citation: { source: "s", url: "u", retrieved: "r" } },
   receivedAt: "now",
 });
-const tiles = (id: string, url: string): LoadedLayer =>
+const tiles = (id: string, url: string, time?: TileTime): LoadedLayer =>
   ({
     id,
     title: id,
     style: { geometry: "polygon", color: "#000000" },
-    result: { kind: "tiles", data: { url, minzoom: 0, maxzoom: 12, format: "raster" }, citation: { source: "s", url: "u", retrieved: "r" } },
+    result: { kind: "tiles", data: { url, minzoom: 0, maxzoom: 12, format: "raster", ...(time && { time }) }, citation: { source: "s", url: "u", retrieved: "r" } },
     receivedAt: "now",
   }) as LoadedLayer;
 
 const fires = geo("fire-perimeters", [fire("Rim", 2013), fire("Ferguson", 2018), fire("Washburn", 2022), fire("Oak", 2017)]);
 const trails = geo("osm-trails", [{ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: { name: "JMT" } }]);
-const loss = tiles("forest-loss", "https://tiles.test/{z}/{x}/{y}.png?start_year=2001&end_year=2024");
-const lights = tiles("night-lights", "https://gibs.test/VIIRS/default/2026-10-01/{z}/{y}/{x}.png");
+const lossTime: TileTime = { template: "https://tiles.test/{z}/{x}/{y}.png?start_year=2001&end_year={year}", cadence: "yearly", from: "2001", to: "2025" };
+const lightsTime: TileTime = { template: "https://gibs.test/VIIRS/default/{date}/{z}/{y}/{x}.png", cadence: "daily", from: "2012-01-01", daysBack: 3 };
+const loss = tiles("forest-loss", "https://tiles.test/{z}/{x}/{y}.png?start_year=2001&end_year=2024", lossTime);
+const lights = tiles("night-lights", "https://gibs.test/VIIRS/default/2026-10-01/{z}/{y}/{x}.png", lightsTime);
 
 const spec = { layerId: "fire-perimeters", a: ["2016-01-01", "2020-12-31"] as [string, string], b: ["2021-01-01", "2026-10-09"] as [string, string] };
 
@@ -132,12 +135,12 @@ describe("compareSides", () => {
 
 describe("compareTileUrl", () => {
   it("shows night lights on the window's end date", () => {
-    expect(compareTileUrl("night-lights", lights.result.kind === "tiles" ? lights.result.data.url : "", ["2020-01-01", "2020-01-01"])).toContain(
+    expect(compareTileUrl(lights.result.kind === "tiles" ? lights.result.data.url : "", lightsTime, ["2020-01-01", "2020-01-01"])).toContain(
       "/2020-01-01/",
     );
   });
   it("leaves other layers alone", () => {
-    expect(compareTileUrl("population", "https://x.test/{z}.png", ["2020-01-01", "2020-01-01"])).toBe("https://x.test/{z}.png");
+    expect(compareTileUrl("https://x.test/{z}.png", undefined, ["2020-01-01", "2020-01-01"])).toBe("https://x.test/{z}.png");
   });
 });
 

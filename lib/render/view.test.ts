@@ -1,5 +1,6 @@
 import type { Feature, FeatureCollection } from "geojson";
 import { describe, expect, it } from "vitest";
+import type { TileTime } from "@/layers/types";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
 import { featureCounts, isSelectionVisible, visibleState } from "@/lib/render/view";
@@ -16,12 +17,12 @@ const geo = (id: string, features: Feature[]): LoadedLayer => ({
   result: { kind: "geojson", data: { type: "FeatureCollection", features }, citation: { source: "s", url: "u", retrieved: "r" } },
   receivedAt: "now",
 });
-const raster = (id: string, url: string): LoadedLayer =>
+const raster = (id: string, url: string, time?: TileTime): LoadedLayer =>
   ({
     id,
     title: id,
     style: { geometry: "polygon", color: "#000000" },
-    result: { kind: "tiles", data: { url, minzoom: 0, maxzoom: 12, format: "raster" }, citation: { source: "s", url: "u", retrieved: "r" } },
+    result: { kind: "tiles", data: { url, minzoom: 0, maxzoom: 12, format: "raster", ...(time && { time }) }, citation: { source: "s", url: "u", retrieved: "r" } },
     receivedAt: "now",
   }) as LoadedLayer;
 
@@ -30,7 +31,12 @@ const fires = geo(
   Array.from({ length: 12 }, (_, k) => feat({ name: `F${k}`, t: `${2014 + k}-07-01T00:00:00.000Z`, acres: 100 * k })),
 );
 const undated = geo("osm-trails", [feat({ name: "A" }), feat({ name: "B" })]);
-const loss = raster("forest-loss", "https://tiles.test/{z}/{x}/{y}.png?start_year=2001&end_year=2024");
+const loss = raster("forest-loss", "https://tiles.test/{z}/{x}/{y}.png?start_year=2001&end_year=2024", {
+  template: "https://tiles.test/{z}/{x}/{y}.png?start_year=2001&end_year={year}",
+  cadence: "yearly",
+  from: "2001",
+  to: "2025",
+});
 
 function run(state: MapState, ...actions: MapAction[]): MapState {
   return actions.reduce(reduce, state);

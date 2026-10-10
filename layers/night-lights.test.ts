@@ -45,6 +45,12 @@ describe("night-lights layer", () => {
     expect(r.data.format).toBe("raster");
     expect(r.data).toMatchObject({ minzoom: 0, maxzoom: 8 });
     expect(r.coverageNote).toBe("Night lights for 2026-10-06");
+    expect(r.data.time).toEqual({
+      template: expect.stringContaining("/default/{date}/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png"),
+      cadence: "daily",
+      from: "2020-11-18",
+      daysBack: 3,
+    });
   });
 
   it("uses the 3 days ago default across a month boundary", async () => {

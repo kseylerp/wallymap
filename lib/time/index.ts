@@ -5,6 +5,7 @@
  */
 import type { FeatureCollection } from "geojson";
 import type { LoadedLayer } from "@/lib/render/state";
+import type { TileTime } from "@/layers/types";
 
 export type Bucket = "day" | "month" | "year";
 /** ISO inclusive start, inclusive end. */
@@ -133,40 +134,68 @@ export function stepWindow(index: TimeIndex, window: TimeWindow, direction: 1 | 
   return [index.buckets[i + shift].start, index.buckets[j + shift].end];
 }
 
-const NIGHT_DATE = /\/\d{4}-\d{2}-\d{2}\//;
-
 /** Newest year of tree cover loss GFW serves; later years answer 422 (layers/forest-loss.ts caps endYear here too). */
 export const FOREST_LOSS_LATEST_YEAR = 2025;
 /** The newest night-lights day that is reliably processed is about this many days back (layers/night-lights.ts). */
 export const NIGHT_LIGHTS_DAYS_BACK = 3;
 
-/**
- * Points a time-aware tile layer's URL at the window: night-lights gets the end date, forest-loss the end year
- * (start year never exceeds it). Both are clamped to the latest period the upstream publishes, so a window that
- * ends today still draws the newest imagery instead of blank tiles. Other layers are unchanged.
- */
-export function tileUrlForTime(layerId: string, url: string, window: TimeWindow, now: number = Date.now()): string {
-  const end = new Date(window[1]);
-  if (Number.isNaN(end.getTime())) return url;
-  if (layerId === "night-lights") {
-    const latest = now - NIGHT_LIGHTS_DAYS_BACK * DAY_MS;
-    const day = new Date(Math.min(end.getTime(), latest)).toISOString().slice(0, 10);
-    return url.replace(NIGHT_DATE, `/${day}/`);
-  }
-  if (layerId === "forest-loss") {
-    const endYear = Math.min(end.getUTCFullYear(), FOREST_LOSS_LATEST_YEAR);
-    const m = /[?&]start_year=(\d+)/.exec(url);
-    const startYear = m ? Math.min(Number(m[1]), endYear) : endYear;
-    return setParam(setParam(url, "start_year", startYear), "end_year", endYear);
-  }
-  return url;
+const CADENCE_DAYS = { "8day": 8, "16day": 16 } as const;
+
+function dayFloor(ms: number): number {
+  const d = new Date(ms);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
-/** Sets a query parameter by text so tile template braces ({z}/{x}/{y}) are never percent-encoded. */
-function setParam(url: string, key: string, value: number): string {
-  const re = new RegExp(`([?&]${key}=)[^&]*`);
-  if (re.test(url)) return url.replace(re, `$1${value}`);
-  return url + (url.includes("?") ? "&" : "?") + `${key}=${value}`;
+/** Parses a `from`/`to` bound (YYYY, YYYY-MM-DD or a full ISO string) to epoch ms, or null. */
+function boundMs(v: string | undefined): number | null {
+  if (v === undefined) return null;
+  const ms = Date.parse(v);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * Points a time-aware tile URL at the window using the layer's `data.time`: `{date}` gets the window end (clamped to
+ * `from`, `to` and `daysBack` days before today, then snapped down to the cadence), `{year}` gets the window's end year
+ * (clamped to `from`/`to`; a `start_year=` parameter above it is lowered to it). Because the end is clamped to the
+ * newest published period, a window that ends today still draws the newest imagery instead of blank tiles.
+ * Returns `url` unchanged when there is no `time` or the window end is not a date.
+ */
+export function tileUrlForTime(
+  url: string,
+  time: TileTime | undefined,
+  window: TimeWindow,
+  now: number = Date.now(),
+): string {
+  if (!time) return url;
+  const endMs = Date.parse(window[1]);
+  if (Number.isNaN(endMs)) return url;
+  const fromMs = boundMs(time.from);
+  const toMs = boundMs(time.to);
+
+  if (time.template.includes("{year}")) {
+    const latest = Math.min(endMs, toMs ?? Infinity, now - (time.daysBack ?? 0) * DAY_MS);
+    let year = new Date(latest).getUTCFullYear();
+    if (fromMs !== null) year = Math.max(year, new Date(fromMs).getUTCFullYear());
+    if (toMs !== null) year = Math.min(year, new Date(toMs).getUTCFullYear());
+    const filled = time.template.replace(/\{year\}/g, String(year));
+    return filled.replace(/([?&]start_year=)(\d+)/, (_m, pre: string, v: string) => `${pre}${Math.min(Number(v), year)}`);
+  }
+
+  if (!time.template.includes("{date}")) return url;
+  let ms = Math.min(endMs, toMs ?? Infinity, now - (time.daysBack ?? 0) * DAY_MS);
+  if (fromMs !== null) ms = Math.max(ms, fromMs);
+  const anchor = dayFloor(fromMs ?? Date.UTC(1970, 0, 1));
+  let day = dayFloor(ms);
+  if (time.cadence === "8day" || time.cadence === "16day") {
+    const step = CADENCE_DAYS[time.cadence] * DAY_MS;
+    day = anchor + Math.floor((day - anchor) / step) * step;
+  } else if (time.cadence === "monthly") {
+    day = floorTo(day, "month");
+  } else if (time.cadence === "yearly") {
+    day = floorTo(day, "year");
+  }
+  if (fromMs !== null) day = Math.max(day, anchor);
+  return time.template.replace(/\{date\}/g, new Date(day).toISOString().slice(0, 10));
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

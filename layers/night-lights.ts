@@ -77,6 +77,12 @@ const nightLights = defineLayer({
         minzoom: 0,
         maxzoom: GIBS_LEVEL,
         format: "raster",
+        time: {
+          template: gibsTileUrl(GIBS_LAYER_ID, "{date}", GIBS_LEVEL),
+          cadence: "daily",
+          from: EARLIEST_DATE,
+          daysBack: DEFAULT_DAYS_BACK,
+        },
       },
       citation: {
         source: "NASA GIBS: VIIRS Day/Night Band at-sensor radiance, Suomi NPP (NASA / NOAA; public)",

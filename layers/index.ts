@@ -30,3 +30,4 @@ import "./climbing";
 import "./critical-habitat";
 import "./grazing-allotments";
 import "./paddling";
+import "./gbif-occurrences";

@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Tool } from "ai";
 import "@/layers";
 import { clearRegistry, defineLayer, listLayers, registerLayer } from "@/layers";
-import { buildTools } from "@/lib/agent/tools";
+import { TOOL_DESCRIPTION_INPUT_CEILING, TOOL_DESCRIPTION_MAX_CHARS, buildTools, compactDescription } from "@/lib/agent/tools";
 
 const callOptions = { toolCallId: "test-call", messages: [], context: {} };
 
@@ -152,6 +152,34 @@ describe("buildTools", () => {
     expect(JSON.stringify(result).length).toBeLessThan(9500);
   });
 
+  it("list_layers with ids returns those layers' full descriptions and licences", async () => {
+    const result = (await run(buildTools().list_layers, { ids: ["snowpack", "surf", "nope"] })) as Record<string, string>[];
+    expect(result.map((r) => r.id)).toEqual(["snowpack", "surf"]);
+    const snowpack = listLayers().find((l) => l.id === "snowpack");
+    expect(result[0].description).toBe(snowpack?.description);
+    expect(result[0].license).toBe(snowpack?.license);
+  });
+
+  it("query tool descriptions are trimmed: no routing sections, near the cap, inputs and area limits kept", () => {
+    const tools = buildTools();
+    let total = 0;
+    for (const layer of listLayers()) {
+      const description = tools[`query_${layer.id}`].description ?? "";
+      total += description.length;
+      expect(description).not.toMatch(/User words:|Example questions?:/);
+      // Coverage and the bbox order are appended after the trimmed description.
+      expect(description.length).toBeLessThan(TOOL_DESCRIPTION_INPUT_CEILING + 200);
+      if (/km²/.test(layer.description)) expect(description).toMatch(/km²/);
+    }
+    // The 54 layer descriptions were about 88,000 characters in full.
+    expect(total).toBeLessThan(50_000);
+    const surf = tools["query_surf"].description ?? "";
+    expect(surf).toContain("Set forecast to true");
+    expect(surf).toContain("Set season to true");
+    expect(tools["query_species"].description).toContain("Set taxon");
+    expect(tools["query_lakes"].description).toMatch(/\bname\b/);
+  });
+
   it("list_layers marks a layer whose env is missing as unavailable", async () => {
     clearRegistry();
     try {
@@ -207,5 +235,49 @@ describe("buildTools", () => {
       const { default: osmTrails } = await import("@/layers/osm-trails");
       registerLayer(osmTrails);
     }
+  });
+});
+
+describe("compactDescription", () => {
+  const long = (n: number) => `${"Filler words here. ".repeat(n)}`.trim();
+
+  it("leaves a short description alone", () => {
+    expect(compactDescription("A short layer. It has v.")).toBe("A short layer. It has v.");
+  });
+
+  it("drops User words and Example questions sections", () => {
+    const text =
+      "Live snow at stations. User words: snow, powder, how much snow. Each point has v in inches. " +
+      "Example questions: 'How much snow is at Mount Rose?', 'Did it snow?'. Caveats: one clearing.";
+    expect(compactDescription(text)).toBe("Live snow at stations. Each point has v in inches. Caveats: one clearing.");
+  });
+
+  it("keeps the first sentence, input sentences and the area limit, then fills to the cap in order", () => {
+    const text = [
+      "What the layer is.",
+      long(30),
+      "Set depth to true for depth.",
+      "A caveat that fits.",
+      "Needs a region under 400,000 km².",
+    ].join(" ");
+    const out = compactDescription(text, { inputs: ["depth"], max: 120 });
+    expect(out.startsWith("What the layer is.")).toBe(true);
+    expect(out).toContain("Set depth to true for depth.");
+    expect(out).toContain("Needs a region under 400,000 km².");
+    expect(out.length).toBeLessThanOrEqual(TOOL_DESCRIPTION_MAX_CHARS);
+    // Kept sentences stay in their original order.
+    expect(out.indexOf("Set depth")).toBeLessThan(out.indexOf("km²"));
+  });
+
+  it("drops a sentence that refers back to one that was cut", () => {
+    const text = `First. ${"x".repeat(800)} is a long property list. It is given for the 30 largest gauges only. A short caveat.`;
+    const out = compactDescription(text, { max: 200 });
+    expect(out).not.toContain("It is given");
+    expect(out).toContain("A short caveat.");
+  });
+
+  it("does not split after e.g.", () => {
+    const text = `First. Event names, e.g. 'Red Flag Warning', filter it. ${"y".repeat(900)}.`;
+    expect(compactDescription(text, { max: 100 })).toBe("First. Event names, e.g. 'Red Flag Warning', filter it.");
   });
 });

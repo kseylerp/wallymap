@@ -62,6 +62,9 @@ export type LayerSummary = {
   synonyms: string;
 };
 
+/** A list_layers row asked for by id: the summary plus the layer's full description and data licence. */
+export type LayerDetail = LayerSummary & { description: string; license: string };
+
 function isAvailable(layer: Layer): boolean {
   return layer.requiredEnv.every((name) => Boolean(process.env[name]));
 }
@@ -70,6 +73,72 @@ function describeCoverage(coverage: Coverage): string {
   if (coverage === "global") return "worldwide";
   if (coverage === "us") return "the United States";
   return `the bbox [${coverage.bbox.join(", ")}]`;
+}
+
+/** Most characters of a layer's own description that go into its query tool on every turn. */
+export const TOOL_DESCRIPTION_MAX_CHARS = 700;
+
+/**
+ * Sections that only route words to layers, which the vocabulary table in the system prompt already does:
+ * "User words: ..." and "Example questions: ...", each up to the sentence that follows it.
+ */
+const ROUTING_SECTION = /\s*(?:User words|Example questions?):[\s\S]*?\.(?=\s+[A-Z(]|\s*$)/g;
+
+/** Sentences kept even past the cap: the area limit (the model must zoom in first) and "map tiles, not features" honesty. */
+const ESSENTIAL_SENTENCE = /km²|map tiles/i;
+
+/** A sentence that leans on the one before it. */
+const REFERS_BACK = /^(?:It|Its|This|These|They|That|Those)\b|^Leave (?:it|them|both) out\b/;
+
+/** Splits prose into sentences at a stop and a space, except after "e.g." and similar abbreviations. */
+function sentences(text: string): string[] {
+  return text.split(/(?<=[.!?])(?<!\b(?:e\.g|i\.e|vs|approx|Mt|St)\.)\s+/).filter(Boolean);
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Sentences that explain inputs may take a description up to this length; the rest (properties, units, caveats)
+ * only fill up to TOOL_DESCRIPTION_MAX_CHARS.
+ */
+export const TOOL_DESCRIPTION_INPUT_CEILING = 1_100;
+
+/**
+ * A layer description as its query tool carries it. The "User words" and "Example questions" sections go (the
+ * vocabulary routes words), then whole sentences are kept, in their original order, by priority: the first
+ * sentence (what the layer is) and the area-limit and map-tiles sentences always; sentences that name one of
+ * `inputs` (how to call it) up to TOOL_DESCRIPTION_INPUT_CEILING; then the rest (properties, units, caveats)
+ * while the whole stays within `max`. list_layers with ids returns the full text.
+ */
+export function compactDescription(
+  description: string,
+  { inputs = [], max = TOOL_DESCRIPTION_MAX_CHARS }: { inputs?: string[]; max?: number } = {},
+): string {
+  const stripped = description.replace(ROUTING_SECTION, "").trim();
+  if (stripped.length <= max) return stripped;
+  const all = sentences(stripped);
+  const inputPattern = inputs.length > 0 ? new RegExp(`\\b(?:${inputs.map(escapeRegExp).join("|")})\\b`) : null;
+  const keep = all.map((sentence, i) => i === 0 || ESSENTIAL_SENTENCE.test(sentence));
+  let length = all.reduce((sum, sentence, i) => (keep[i] ? sum + sentence.length + 1 : sum), 0);
+  const fill = (ceiling: number, wanted: (sentence: string) => boolean) =>
+    all.forEach((sentence, i) => {
+      if (keep[i] || !wanted(sentence) || length + sentence.length + 1 > ceiling) return;
+      // "It is given for ..." or "Leave it out ..." means nothing once the sentence it refers to is gone.
+      if (REFERS_BACK.test(sentence) && !keep[i - 1]) return;
+      keep[i] = true;
+      length += sentence.length + 1;
+    });
+  if (inputPattern) fill(Math.max(max, TOOL_DESCRIPTION_INPUT_CEILING), (sentence) => inputPattern.test(sentence));
+  fill(max, () => true);
+  return all.filter((_, i) => keep[i]).join(" ");
+}
+
+/** The input field names a layer's query tool takes (its own, before bbox and zoom are added). */
+function inputNames(layer: Layer): string[] {
+  const shape = (layer.input as { shape?: Record<string, unknown> }).shape;
+  return shape ? Object.keys(shape) : [];
 }
 
 /**
@@ -93,7 +162,8 @@ function queryTool(layer: Layer) {
     zoom: z.number().default(10),
   }) as unknown as z.ZodType<QueryArgs>;
   return tool({
-    description: `${layer.description} Covers ${describeCoverage(layer.coverage)}; data license ${layer.license}. bbox is [west, south, east, north].`,
+    // The licence and the trimmed sentences are in list_layers' detail (ids); the citation comes with each result.
+    description: `${compactDescription(layer.description, { inputs: inputNames(layer) })} Covers ${describeCoverage(layer.coverage)}. bbox is [west, south, east, north].`,
     inputSchema,
     execute: async ({ bbox, zoom, ...input }) => (await runLayer(layer.id, { bbox, zoom, input })).body,
     // The UI part keeps the full body for the map; the model gets a summary.
@@ -106,16 +176,24 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
   const tools: ToolSet = {
     list_layers: tool({
       description:
-        "List every dataset layer: its id, title, where it has coverage, whether it is available on this server, and the words that route to it. Each query_<id> tool describes its layer in full.",
-      inputSchema: z.object({}),
-      execute: async (): Promise<LayerSummary[]> =>
-        listLayers().map((layer) => ({
+        "List every dataset layer: its id, title, where it has coverage, whether it is available on this server, and the words that route to it. " +
+        "Each query_<id> tool describes its layer briefly; pass ids to get those layers' full descriptions (every caveat and input) and data licences.",
+      inputSchema: z.object({
+        ids: z.array(z.string().max(64)).max(8).optional().describe("Layer ids to describe in full; omit to list every layer"),
+      }),
+      execute: async ({ ids }): Promise<LayerSummary[] | LayerDetail[]> => {
+        const summary = (layer: Layer): LayerSummary => ({
           id: layer.id,
           title: layer.title,
           coverage: describeCoverage(layer.coverage),
           available: isAvailable(layer),
           synonyms: synonymsFor(layer.id).join(", "),
-        })),
+        });
+        if (ids === undefined || ids.length === 0) return listLayers().map(summary);
+        return listLayers()
+          .filter((layer) => ids.includes(layer.id))
+          .map((layer) => ({ ...summary(layer), description: layer.description, license: layer.license }));
+      },
     }),
     geocode: tool({
       description:

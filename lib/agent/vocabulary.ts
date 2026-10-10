@@ -82,6 +82,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "pipelines-lines", synonyms: ["pipeline", "gas pipeline", "transmission line", "power line"], notes: "gas, oil, products pipelines and 100 kV+ power lines; network, minKv inputs" },
   { layerId: "aquifers", synonyms: ["aquifer", "Ogallala", "High Plains aquifer", "principal aquifer"], notes: "US aquifer outlines by rock type (regional, 2003); for well water levels use groundwater" },
   { layerId: "groundwater", synonyms: ["groundwater", "water table", "depth to water", "well water level", "is the aquifer dropping"], notes: "USGS well measurements, v = depth to water in feet, one reading per well, no trend; see aquifers" },
+  { layerId: "power-plants", synonyms: ["power plant", "wind farm", "solar farm", "wind turbine"], notes: "EIA plants by fuel (source plants), USGS turbines and solar with year online; v = MW" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

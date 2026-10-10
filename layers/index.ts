@@ -73,3 +73,4 @@ import "./temperature-anomaly";
 import "./pipelines-lines";
 import "./aquifers";
 import "./groundwater";
+import "./power-plants";

@@ -4,6 +4,8 @@ import { FillStyleExtension, PathStyleExtension, _TerrainExtension as TerrainExt
 import { H3HexagonLayer, TerrainLayer } from "@deck.gl/geo-layers";
 import {
   SIBLING_FADE,
+  UNLIT,
+  UnpremultiplyExtension,
   bboxToViewport,
   buildDeckLayers,
   hexResolution,
@@ -208,7 +210,7 @@ describe("areas: tint, 45° hatch and an outline over a white casing", () => {
     expect((p.getFillPatternBackgroundColor as Accessor)(a)).toEqual(rgba(PINK, Math.round(255 * 0.15)));
     expect(p.getLineColor).toEqual(rgba(PINK));
     expect(p.getLineWidth).toBe(1.5);
-    expect(p.fillPatternMask).toBe(false);
+    expect(p.fillPatternMask).toBe(true);
     expect(p.fillPatternSizeUnits).toBe("pixels");
     expect(p.getFillPatternScale).toBe(0.5);
     expect((p.extensions as unknown[])[0]).toBeInstanceOf(FillStyleExtension);
@@ -510,6 +512,9 @@ describe("draping on 3D terrain", () => {
     expect(p.operation).toBe("terrain+draw");
     expect(p.pickable).toBe(false);
     expect(p.color).toEqual([0, 0, 0, 0]);
+    // Unlit, and un-premultiplied at the end, or translucent draped tints darken (fire read maroon).
+    expect(p.material).toEqual(UNLIT);
+    expect((p.extensions as unknown[])[0]).toBeInstanceOf(UnpremultiplyExtension);
     expect(p.elevationData).toBe("https://api.mapbox.com/v4/mapbox.mapbox-terrain-dem-v1/{z}/{x}/{y}@2x.pngraw?access_token=pk.test");
     const decoder = p.elevationDecoder as Record<string, number>;
     expect(decoder.rScaler).toBeCloseTo(6553.6 * 1.2);

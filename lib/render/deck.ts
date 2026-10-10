@@ -1,4 +1,4 @@
-import type { Layer } from "@deck.gl/core";
+import { LayerExtension, type Layer } from "@deck.gl/core";
 import { FillStyleExtension, PathStyleExtension, _TerrainExtension as TerrainExtension } from "@deck.gl/extensions";
 import { H3HexagonLayer, TerrainLayer } from "@deck.gl/geo-layers";
 import { GeoJsonLayer, IconLayer, TextLayer } from "@deck.gl/layers";
@@ -438,16 +438,18 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       data,
       pickable: true,
       filled: true,
-      // With the hatch on, the fill color carries the hatch line alpha (the atlas brings the line color) over the
-      // tint, which deck draws as the pattern's background.
+      // With the hatch on, the fill color is the hatch line color and alpha, masked by the pattern, over the tint,
+      // which deck draws as the pattern's background. Mask mode (not the atlas's own colors): a canvas uploads its
+      // transparent pixels as black, and the mipmaps the drape onto 3D terrain samples then darken the hatch to maroon.
       getFillColor: canvas ? hatch : tint,
       getLineColor: colorFor(hexToRgba(recipe.outline), opacity, selected, SELECT),
       getLineWidth: widthFor(recipe.outlineWidth, SELECTED_AREA.outlineWidth, selected),
       lineWidthUnits: "pixels",
       fillPatternEnabled: Boolean(canvas),
-      fillPatternAtlas: canvas,
+      // Only with a canvas: deck turns the prop into a texture and throws on an explicit undefined.
+      ...(canvas && { fillPatternAtlas: canvas }),
       fillPatternMapping: hatchAtlas().mapping,
-      fillPatternMask: false,
+      fillPatternMask: true,
       fillPatternSizeUnits: "pixels",
       getFillPattern: (f: Feature) => hatchPatternId(colorOf(f) as HatchColor, areaStep(op.layerId, recipe, f)),
       getFillPatternScale: 1 / HATCH_SCALE,
@@ -725,6 +727,27 @@ function deltaLayers(op: RenderOp, { data, selected, terrain }: OpContext): Laye
   ];
 }
 
+/** A material that leaves colors as they are: full ambient, no diffuse or specular light. */
+export const UNLIT = { ambient: 1, diffuse: 0, shininess: 1, specularColor: [0, 0, 0] as [number, number, number] };
+
+/**
+ * Un-premultiplies the terrain mesh's output. The mesh shows the draped cover, which deck stores premultiplied, and
+ * then blends it by its alpha once more, so every translucent draped color came out multiplied by its alpha twice: a
+ * 15% pink tint drew as a 15% darkening and fire read maroon on 3D terrain. Dividing by alpha at the end of the mesh's
+ * fragment shader restores the color; picking colors are left alone.
+ */
+export class UnpremultiplyExtension extends LayerExtension {
+  static extensionName = "UnpremultiplyExtension";
+  getShaders() {
+    return {
+      inject: {
+        "fs:#main-end": "if (fragColor.a > 0.0 && !bool(picking.isActive)) fragColor.rgb /= fragColor.a;",
+      },
+    };
+  }
+}
+const unpremultiplyExtension = new UnpremultiplyExtension();
+
 /**
  * Deck's invisible copy of the map's terrain: a TerrainLayer over the same DEM, drawn fully transparent so only
  * the draped data layers show, and read by the TerrainExtension to stand pins on the slopes.
@@ -738,11 +761,14 @@ function terrainSourceLayer(token: string): Layer {
     maxZoom: 14,
     // Transparent mesh: the draped layers' cover is all that reaches the screen.
     color: [0, 0, 0, 0],
-    material: false,
+    // Unlit: deck lights the mesh even with `material: false`, which shades the draped cover by slope and turned the
+    // fire tint maroon. Full ambient and nothing else passes the cover's colors through unchanged.
+    material: UNLIT,
     operation: "terrain+draw",
     pickable: false,
     // Same GlobeView winding flip as the pins: with back-face culling on, deck draws no terrain mesh at all.
     parameters: { cullMode: "none" },
+    extensions: [unpremultiplyExtension],
   });
 }
 

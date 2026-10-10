@@ -51,6 +51,6 @@ describe("palette roles per layer", () => {
   });
 
   it("lists the raster tile layers, which draw their own imagery", () => {
-    expect([...RASTER_TILE_LAYERS].sort()).toEqual(["forest-alerts", "forest-loss", "night-lights", "population"]);
+    expect([...RASTER_TILE_LAYERS].sort()).toEqual(["forest-alerts", "forest-loss", "night-lights", "population", "protected-areas-world"]);
   });
 });

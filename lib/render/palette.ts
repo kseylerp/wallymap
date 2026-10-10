@@ -50,6 +50,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "osm-trails": "data",
   "forest-roads": "data",
   campsites: "data",
+  "mtb-trails": "data",
   species: "data",
   photos: "data",
   snowpack: "data",

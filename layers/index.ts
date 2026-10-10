@@ -50,3 +50,4 @@ import "./fire-weather";
 import "./lakes";
 import "./drought";
 import "./phenology";
+import "./burn-severity";

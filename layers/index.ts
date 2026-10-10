@@ -36,3 +36,4 @@ import "./peaks";
 import "./greenness";
 import "./protected-areas-world";
 import "./fire-hazard";
+import "./flood-zones";

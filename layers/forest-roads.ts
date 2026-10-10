@@ -27,6 +27,7 @@ import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult } from "./t
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
+import { layerColor } from "@/lib/render/palette";
 
 const SERVICE_URL = "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/1";
 
@@ -123,7 +124,7 @@ const forestRoads = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 25_000,
   input: inputSchema,
-  style: { geometry: "line", color: "#F2A33A" },
+  style: { geometry: "line", color: layerColor("forest-roads") },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     if (outsideUs(ctx.bbox)) {

@@ -15,6 +15,7 @@ import { defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { gibsTileUrl } from "./_shared/gibs";
 import { NIGHT_LIGHTS_DAYS_BACK } from "@/lib/time";
+import { layerColor } from "@/lib/render/palette";
 
 const GIBS_LAYER_ID = "VIIRS_SNPP_DayNightBand_At_Sensor_Radiance";
 /** GoogleMapsCompatible_Level8: the finest zoom this layer is published at. */
@@ -58,7 +59,7 @@ const nightLights = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: "#F2C14E" },
+  style: { geometry: "polygon", color: layerColor("night-lights") },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     const now = Date.now();

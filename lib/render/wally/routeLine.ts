@@ -1,6 +1,7 @@
 import type { Feature, LineString, Point, Position } from "geojson";
 import type { ExpressionSpecification, LineLayerSpecification } from "mapbox-gl";
 import { haversineKm } from "@/layers/_shared/geo";
+import { ROUTE } from "@/lib/render/palette";
 
 /**
  * Wally route lines (docs/superpowers/specs/2026-10-09-wallymap-m3-design.md §3): a 7px white casing under a 4.5px
@@ -8,8 +9,8 @@ import { haversineKm } from "@/layers/_shared/geo";
  * Mapbox sync lives in components/routeLayers.ts.
  */
 
-export const ROUTE_START_COLOR = "#6E5BFF";
-export const ROUTE_END_COLOR = "#F57272";
+export const ROUTE_START_COLOR = ROUTE.start;
+export const ROUTE_END_COLOR = ROUTE.end;
 export const GRADIENT_STOPS = 24;
 export const CASING_WIDTH = 7;
 export const LINE_WIDTH = 4.5;
@@ -194,7 +195,7 @@ export function routeLayerSpecs(id: string): [LineLayerSpecification, LineLayerS
       source,
       filter: lineOnly,
       layout,
-      paint: { "line-color": "#FFFFFF", "line-width": CASING_WIDTH },
+      paint: { "line-color": ROUTE.casing, "line-width": CASING_WIDTH },
     },
     {
       id: `${source}-line`,
@@ -219,7 +220,7 @@ export function dartIconSpec(): { id: string; url: string; width: number; height
   const size = DART_ICON_PX * 2;
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 16 16">` +
-    `<path d="M8 1.2 L14.8 14.6 L8 11.2 L1.2 14.6 Z" fill="#FFFFFF" stroke="rgba(0,0,0,0.45)" stroke-width="0.9" stroke-linejoin="round"/>` +
+    `<path d="M8 1.2 L14.8 14.6 L8 11.2 L1.2 14.6 Z" fill="${ROUTE.dart}" stroke="rgba(0,0,0,0.45)" stroke-width="0.9" stroke-linejoin="round"/>` +
     `</svg>`;
   return { id: DART_ICON_ID, url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, width: size, height: size, pixelRatio: 2 };
 }

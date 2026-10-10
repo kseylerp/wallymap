@@ -22,6 +22,7 @@ import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryCo
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, bboxesDisjoint, outsideUs } from "./_shared/coverage";
+import { layerColor } from "@/lib/render/palette";
 
 const AWDB = "https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1";
 
@@ -166,7 +167,7 @@ const snowpack = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 400_000,
   input: inputSchema,
-  style: { geometry: "point", color: "#CFF2FF", unit: "in" },
+  style: { geometry: "point", color: layerColor("snowpack"), unit: "in" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

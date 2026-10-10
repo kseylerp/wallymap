@@ -3,7 +3,7 @@
  * and how to lighten the hillshade without breaking its zoom expression. `components/mapTiles.ts` applies them.
  */
 
-import { CONTOUR_PAINT } from "@/lib/render/palette";
+import { CONTOUR_PAINT, HYBRID_LABEL } from "@/lib/render/palette";
 
 /** The slice of a Mapbox style layer these helpers read. */
 export type StyleLayerLike = {
@@ -33,7 +33,7 @@ const LABEL_SOURCE_LAYERS = new Set(["natural_label", "poi_label", "place_label"
 export const ADMIN_LINE_PAINT = { "line-color": "rgba(255, 255, 255, 0.5)" } as const;
 /** Paint the hybrid puts on labels so they read on any photo. */
 export const LABEL_PAINT = {
-  "text-color": "#FFFFFF",
+  "text-color": HYBRID_LABEL.text,
   "text-halo-color": "rgba(26, 26, 26, 0.85)",
   "text-halo-width": 1.2,
 } as const;

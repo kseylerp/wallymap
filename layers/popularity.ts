@@ -21,6 +21,7 @@ import {
   POPULARITY_WEIGHTS,
   type PopularitySignal,
 } from "./popularity.config";
+import { layerColor } from "@/lib/render/palette";
 
 export type PopularityTarget = "trails" | "campsites";
 
@@ -220,7 +221,7 @@ function popularityLayer(target: PopularityTarget): Layer {
     optionalEnv: ["MAPILLARY_TOKEN", "OVERPASS_URL"],
     maxAreaKm2: 2_500,
     input: z.object({}),
-    style: { geometry: target === "trails" ? "line" : "point", color: "#F2A33A", unit: "score" },
+    style: { geometry: target === "trails" ? "line" : "point", color: layerColor(target === "trails" ? "popularity" : "popularity-campsites"), unit: "score" },
 
     async query(ctx): Promise<LayerResult | LayerError> {
       const area = bboxAreaKm2(ctx.bbox);

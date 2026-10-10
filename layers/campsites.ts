@@ -11,6 +11,7 @@ import type { Feature, FeatureCollection, Point } from "geojson";
 import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { overpassQuery } from "./_shared/overpass";
+import { layerColor } from "@/lib/render/palette";
 
 const inputSchema = z.object({
   backcountryOnly: z.boolean().default(false),
@@ -184,7 +185,7 @@ const campsites = defineLayer({
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 25_000,
   input: inputSchema,
-  style: { geometry: "point", color: "#F2A33A" },
+  style: { geometry: "point", color: layerColor("campsites") },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const area = bboxAreaKm2(ctx.bbox);

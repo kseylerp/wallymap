@@ -5,6 +5,7 @@ import type {
   SkyLayerSpecification,
   TerrainSpecification,
 } from "mapbox-gl";
+import { ATMOSPHERE, BUILDINGS } from "@/lib/render/palette";
 
 /**
  * Wally's 3D look (docs/superpowers/specs/2026-10-09-wallymap-m3-design.md §3): terrain on by default, a warm
@@ -75,8 +76,8 @@ export function skySpec(): SkyLayerSpecification {
       "sky-type": "atmosphere",
       "sky-atmosphere-sun": [0, 80],
       "sky-atmosphere-sun-intensity": 10,
-      "sky-atmosphere-color": "#F4E4CC",
-      "sky-atmosphere-halo-color": "#FFF3E0",
+      "sky-atmosphere-color": ATMOSPHERE.sky,
+      "sky-atmosphere-halo-color": ATMOSPHERE.skyHalo,
       "sky-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0, 7, 1],
     },
   };
@@ -89,15 +90,15 @@ export function skySpec(): SkyLayerSpecification {
 export function fogSpec(): FogSpecification {
   return {
     range: [1, 12],
-    color: "#F6EFE4",
-    "high-color": "#C9DCEB",
+    color: ATMOSPHERE.fog,
+    "high-color": ATMOSPHERE.fogHigh,
     "horizon-blend": 0.06,
-    "space-color": "#0B1020",
+    "space-color": ATMOSPHERE.space,
     "star-intensity": 0.15,
   };
 }
 
-/** Wally's buildings: flat gray extrusions from the Streets `building` layer, fading to 0.6 opacity by zoom 15. */
+/** Wally's buildings: flat off-white extrusions from the Streets `building` layer, fading to 0.6 opacity by zoom 15. */
 export function buildingsSpec(source = "composite"): FillExtrusionLayerSpecification {
   return {
     id: BUILDINGS_LAYER_ID,
@@ -107,7 +108,7 @@ export function buildingsSpec(source = "composite"): FillExtrusionLayerSpecifica
     minzoom: BUILDINGS_MIN_ZOOM,
     filter: ["==", ["get", "extrude"], "true"],
     paint: {
-      "fill-extrusion-color": "#D9D9D9",
+      "fill-extrusion-color": BUILDINGS,
       "fill-extrusion-height": ["coalesce", ["get", "height"], 0],
       "fill-extrusion-base": ["coalesce", ["get", "min_height"], 0],
       "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], BUILDINGS_MIN_ZOOM, 0, BUILDINGS_MIN_ZOOM + 1.5, 0.6],

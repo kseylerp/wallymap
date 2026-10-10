@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InspectCard, place } from "@/components/InspectCard";
 import type { LoadedLayer, Selection } from "@/lib/render/state";
+import type { LegendSymbol } from "@/lib/render/wally/legend";
 
 afterEach(cleanup);
 
@@ -34,11 +35,13 @@ describe("place", () => {
   });
 });
 
+const SWATCH: LegendSymbol = { kind: "line", color: "#3A3A3C", dash: [0, 0], casing: "#FFFFFF", width: 2.5, casingWidth: 4.5 };
+
 describe("InspectCard Escape", () => {
   const layer: LoadedLayer = {
     id: "osm-trails",
     title: "OSM trails",
-    style: { geometry: "line", color: "#2F3A44" },
+    style: { geometry: "line", color: "#3A3A3C" },
     result: {
       kind: "geojson",
       data: { type: "FeatureCollection", features: [] },
@@ -60,7 +63,7 @@ describe("InspectCard Escape", () => {
         <InspectCard
           selection={selection}
           layer={layer}
-          color="#2F3A44"
+          swatch={SWATCH}
           project={() => ({ x: 500, y: 500 })}
           onCameraChange={() => () => {}}
           onClose={onClose}
@@ -79,7 +82,7 @@ describe("InspectCard Escape", () => {
     <InspectCard
       selection={sel}
       layer={layer}
-      color="#2F3A44"
+      swatch={SWATCH}
       project={() => ({ x: 500, y: 500 })}
       onCameraChange={() => () => {}}
       onClose={() => {}}

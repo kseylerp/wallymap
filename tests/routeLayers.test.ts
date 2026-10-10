@@ -96,7 +96,7 @@ describe("routeMapLayers", () => {
     expect(above[2]).toMatchObject({ layout: { "icon-image": ["get", "icon"], "icon-anchor": "center", "icon-size": 1 } });
     expect(below[2]).toMatchObject({
       type: "circle",
-      paint: { "circle-color": "#FFFFFF", "circle-stroke-color": "#3A3A3C", "circle-stroke-opacity": 0.45 },
+      paint: { "circle-color": "#3A3A3C", "circle-stroke-color": "#FFFFFF", "circle-stroke-opacity": 0.9 },
     });
     expect(above[1]).toMatchObject({ type: "symbol", layout: { "text-size": 10 } });
   });
@@ -179,12 +179,13 @@ describe("syncRouteLayers", () => {
 });
 
 describe("routeImageSpecs", () => {
-  it("registers the dart and the monochrome start, end and via symbols at 2x", () => {
+  it("registers the dart and the palette start (pink), end and via symbols at 2x, drawn as SVG data", () => {
     expect(routeImageSpecs().map(({ id, url, pixelRatio }) => [id, url.startsWith("data:") ? "data" : url, pixelRatio])).toEqual([
       ["route-dart", "data", 2],
-      ["route-start", "/pins/route-start.svg", 2],
-      ["route-end", "/pins/route-end.svg", 2],
-      ["route-via", "/pins/route-via.svg", 2],
+      ["route-start", "data", 2],
+      ["route-end", "data", 2],
+      ["route-via", "data", 2],
     ]);
+    expect(decodeURIComponent(routeImageSpecs()[1].url)).toContain('fill="#F57272"');
   });
 });

@@ -13,8 +13,8 @@ import { tileUrlForTime, type TimeWindow } from "@/lib/time";
  * both). Tile layers (night lights, forest loss) become two raster sources and always compare by toggle.
  */
 
-/** Approved palette (spec §11): side A purple, side B wally pink, unchanged dark grey. */
-export const COMPARE_COLORS = { a: "#6E5BFF", b: "#F57272", both: "#3A3A3C" } as const;
+/** Approved palette (spec §11, lib/render/palette.ts): side A purple, side B wally pink, unchanged dark grey. */
+export { COMPARE_COLORS } from "@/lib/render/palette";
 
 /** Fill alpha for delta areas (12%, as hazard tints). */
 export const DELTA_FILL_ALPHA = 0.12;

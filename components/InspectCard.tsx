@@ -2,8 +2,10 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronRight, Copy, MessageCircle, Route, X } from "lucide-react";
+import { LegendKey } from "@/components/LegendKey";
 import { formatDate, isLineFeature, summarizeFeature, type Row } from "@/lib/render/inspect";
 import type { LoadedLayer, Selection } from "@/lib/render/state";
+import type { LegendSymbol } from "@/lib/render/wally/legend";
 import { previewFeature } from "@/lib/render/wally/playback";
 
 type Point = { x: number; y: number };
@@ -11,8 +13,8 @@ type Point = { x: number; y: number };
 type InspectCardProps = {
   selection: Selection;
   layer: LoadedLayer;
-  /** Swatch color as drawn on the map. */
-  color: string;
+  /** The feature's legend key, as drawn on the map (tint and hatch, line, or symbol). */
+  swatch: LegendSymbol;
   /** Screen position of a map point; null before the map exists. */
   project: (lngLat: [number, number]) => Point | null;
   /** Re-run on every camera frame; returns the unsubscribe function. */
@@ -106,7 +108,7 @@ function SectionLabel({ children }: { children: string }) {
 export function InspectCard({
   selection,
   layer,
-  color,
+  swatch,
   project,
   onCameraChange,
   onClose,
@@ -253,7 +255,9 @@ export function InspectCard({
         <header className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-1.5 text-[11.5px] font-medium text-ink-muted">
-              <span aria-hidden className="size-2 shrink-0 rounded-full ring-1 ring-black/20 ring-inset" style={{ backgroundColor: color }} />
+              <span aria-hidden data-testid="inspect-swatch" className="shrink-0">
+                <LegendKey symbol={swatch} size={16} />
+              </span>
               <span className="truncate">{layer.title}</span>
               {/* Picked on a compare's side B: a plain text marker, as the console labels the sides. */}
               {sideB && (

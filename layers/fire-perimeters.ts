@@ -22,6 +22,7 @@ import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult } from "./t
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
+import { layerColor } from "@/lib/render/palette";
 
 const ORG = "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services";
 const HISTORY_URL = `${ORG}/InterAgencyFirePerimeterHistory_All_Years_View/FeatureServer/0`;
@@ -169,7 +170,7 @@ const firePerimeters = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 60_000,
   input: inputSchema,
-  style: { geometry: "polygon", color: "#FF5A36", fillOpacity: 0.35 },
+  style: { geometry: "polygon", color: layerColor("fire-perimeters"), fillOpacity: 0.35 },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const retrieved = new Date();

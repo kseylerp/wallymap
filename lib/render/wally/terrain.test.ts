@@ -41,13 +41,13 @@ describe("terrain specs", () => {
     expect(fog["horizon-blend"]).toBeLessThan(0.1);
   });
 
-  it("extrudes buildings in #D9D9D9 from zoom 13.5, fading to 0.6 over 1.5 zoom levels", () => {
+  it("extrudes buildings in the off-white surface from zoom 13.5, fading to 0.6 over 1.5 zoom levels", () => {
     const spec = buildingsSpec();
     expect(spec.type).toBe("fill-extrusion");
     expect(spec.source).toBe("composite");
     expect(spec["source-layer"]).toBe("building");
     expect(spec.minzoom).toBe(13.5);
-    expect(spec.paint?.["fill-extrusion-color"]).toBe("#D9D9D9");
+    expect(spec.paint?.["fill-extrusion-color"]).toBe("#ECEAE7");
     expect(spec.paint?.["fill-extrusion-opacity"]).toEqual(["interpolate", ["linear"], ["zoom"], 13.5, 0, 15, 0.6]);
     expect(buildingsSpec("streets").source).toBe("streets");
   });

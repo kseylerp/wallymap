@@ -20,6 +20,7 @@ import {
 import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { bboxesDisjoint } from "./_shared/coverage";
+import { layerColor } from "@/lib/render/palette";
 
 const KINDS = ["range", "desert", "plain", "plateau", "basin", "peninsula", "island", "other"] as const;
 export type RegionKind = (typeof KINDS)[number];
@@ -99,7 +100,7 @@ const physicalRegions = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 30_000_000,
   input: inputSchema,
-  style: { geometry: "polygon", color: "#FFFFFF", fillOpacity: 0 },
+  style: { geometry: "polygon", color: layerColor("physical-regions"), fillOpacity: 0 },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     let fc: FeatureCollection;

@@ -14,6 +14,7 @@ import { z } from "zod";
 import { defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { gibsTileUrl } from "./_shared/gibs";
+import { layerColor } from "@/lib/render/palette";
 
 const GIBS_LAYER_ID = "GPW_Population_Density_2020";
 /** GoogleMapsCompatible_Level7: the finest zoom this layer is published at. */
@@ -35,7 +36,7 @@ const population = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
-  style: { geometry: "polygon", color: "#C0504D" },
+  style: { geometry: "polygon", color: layerColor("population") },
 
   async query(): Promise<LayerResult | LayerError> {
     return {

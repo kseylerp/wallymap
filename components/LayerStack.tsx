@@ -5,11 +5,14 @@ import { LayerFilters } from "@/components/LayerFilters";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { deriveFilterFields, filterSummary, type FilterField } from "@/lib/render/filters";
-import { COMPARE_COLORS, effectiveMode } from "@/lib/render/compareView";
-import { INK, TILE_SWATCH } from "@/lib/render/palette";
+import type { Feature } from "geojson";
+import { LegendKey } from "@/components/LegendKey";
+import { COMPARE_COLORS, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
+import { hexbinThreshold } from "@/lib/render/deck";
+import { WHITE } from "@/lib/render/palette";
 import type { LoadedLayer, MapAction, MapState, RenderMode, RenderOp, Selection, TimeState } from "@/lib/render/state";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
-import { legendSymbol, type LegendMode, type LegendSymbol } from "@/lib/render/wally/legend";
+import { hexTileLegend, legendSymbol, type LegendMode, type LegendSymbol } from "@/lib/render/wally/legend";
 
 type LayerStackProps = {
   layers: MapState["layers"];
@@ -29,8 +32,6 @@ type LayerStackProps = {
   compareSlot?: ReactNode;
 };
 
-const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
-
 const MODES: { value: RenderMode; label: string; ready: boolean }[] = [
   { value: "points", label: "Points", ready: true },
   { value: "lines", label: "Lines", ready: true },
@@ -41,35 +42,37 @@ const MODES: { value: RenderMode; label: string; ready: boolean }[] = [
 ];
 
 /**
- * The color the map actually draws for a layer (the inspect card's swatch; the panel shows no colors). GeoJSON lines
- * and polygons draw in ink unless the user or agent picked a color, and points are always ink sprites
- * (lib/render/deck.ts). Vector tiles draw polygons in ink and lines and points in the picked color, else the style
- * color (components/mapTiles.ts). Raster tiles carry their own imagery colors, so they read as a neutral gray.
+ * What the map draws for a layer, or for one of its features (the inspect card's swatch): the legend key built from
+ * the same palette recipes deck.gl and Mapbox draw with (lib/render/wally/legend.ts). Dense point layers draw as hex
+ * tiles, so their key is the tile ramp.
  */
-export function drawnColor(layer: LoadedLayer, op: RenderOp | undefined): string {
-  const picked = op?.color && HEX.test(op.color.trim()) ? op.color.trim() : undefined;
-  if (layer.result.kind === "tiles") {
-    if (layer.result.data.format === "raster") return TILE_SWATCH;
-    const geometry = layer.result.data.geometry ?? layer.style.geometry;
-    return geometry === "polygon" ? INK : (picked ?? layer.style.color);
+export function layerLegend(layer: LoadedLayer, op: RenderOp | undefined, feature?: Feature, color?: string): LegendSymbol {
+  const mode = legendModeFor(layer, op);
+  if (mode === "points" && !feature && layer.result.kind === "geojson" && layer.result.data.features.length > hexbinThreshold) {
+    return hexTileLegend();
   }
-  return op?.mode === "points" ? INK : (picked ?? INK);
+  return legendSymbol(layer.id, mode, { unit: layer.style.unit, color: color ?? op?.color, feature });
 }
 
 /**
- * The swatch for a selected feature: during a compare of its layer, the side's color (A purple, B pink) or, in delta
- * mode, the feature's class color, as the map draws them (lib/render/deck.ts); otherwise the layer's drawn color.
+ * The swatch for a selected feature, as the map draws it: during a compare of its layer, in the side's color (A purple,
+ * B pink) or, in delta mode, the feature's class color; otherwise the layer's own look for that feature.
  */
-export function selectionColor(state: MapState, selection: Selection, layer: LoadedLayer): string {
+export function selectionSwatch(state: MapState, selection: Selection, layer: LoadedLayer): LegendSymbol {
   const op = state.renderOps.find((o) => o.layerId === selection.layerId);
   const mode = state.compare?.layerId === selection.layerId ? effectiveMode(state) : undefined;
+  const feature = selection.feature;
   if (mode === "delta") {
-    const cls: unknown = selection.feature.properties?.delta;
-    return cls === "a-only" ? COMPARE_COLORS.a : cls === "b-only" ? COMPARE_COLORS.b : COMPARE_COLORS.both;
+    const cls: unknown = feature.properties?.delta;
+    const color = cls === "a-only" ? COMPARE_COLORS.a : cls === "b-only" ? COMPARE_COLORS.b : COMPARE_COLORS.both;
+    const area = feature.geometry?.type === "Polygon" || feature.geometry?.type === "MultiPolygon";
+    return area
+      ? { kind: "area", tint: color, tintAlpha: DELTA_FILL_ALPHA, hatch: color, hatchAlpha: 0, spacing: 0, outline: color, casing: WHITE }
+      : { kind: "line", color, dash: [0, 0], casing: WHITE, width: 2.5, casingWidth: 4.5 };
   }
-  // Point sprites stay ink on both sides; lines and areas take the side's color.
-  if (mode && op?.mode !== "points") return selection.side === "b" ? COMPARE_COLORS.b : COMPARE_COLORS.a;
-  return drawnColor(layer, op);
+  // Point sprites keep their own look on both sides; lines and areas take the side's color.
+  if (mode && op?.mode !== "points") return layerLegend(layer, op, feature, selection.side === "b" ? COMPARE_COLORS.b : COMPARE_COLORS.a);
+  return layerLegend(layer, op, feature);
 }
 
 /** Loaded layers top first (the last render op draws on top), then any layer still waiting for an op. */
@@ -101,71 +104,6 @@ function legendModeFor(layer: LoadedLayer, op: RenderOp | undefined): LegendMode
   }
   if (op) return op.mode;
   return layer.style.geometry === "polygon" ? "polygons" : layer.style.geometry === "line" ? "lines" : "points";
-}
-
-/** Dash lengths in the legend sample, per line width of deck's [dash, gap]: short enough to show the rhythm in 22px. */
-const DASH_SCALE = 1.5;
-/** Five gray steps, light to dark, matching the score ramp's alpha range on the map. */
-const RAMP_STEPS = [0.1, 0.25, 0.4, 0.55, 0.7];
-
-/**
- * The legend key: a 24px inline SVG in `currentColor` (ink) and white, drawn the way the map draws the layer. The
- * point key is the layer's own sprite.
- */
-function LegendKey({ symbol }: { symbol: LegendSymbol }) {
-  const hatchId = `hatch-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
-  return (
-    <svg viewBox="0 0 24 24" width={24} height={24} aria-hidden className="legend-key block shrink-0" data-kind={symbol.kind}>
-      {symbol.kind === "symbol" && symbol.spriteUrl && <image href={symbol.spriteUrl} x={0} y={0} width={24} height={24} />}
-      {symbol.kind === "line" && (
-        <>
-          <line x1={1} y1={12} x2={23} y2={12} stroke="currentColor" strokeWidth={3.5} />
-          <line
-            x1={1}
-            y1={12}
-            x2={23}
-            y2={12}
-            stroke="white"
-            strokeWidth={2}
-            strokeDasharray={
-              symbol.dash && symbol.dash[0] > 0 ? `${symbol.dash[0] * DASH_SCALE} ${symbol.dash[1] * DASH_SCALE}` : undefined
-            }
-          />
-        </>
-      )}
-      {symbol.kind === "polygon" && (
-        <rect
-          x={4.5}
-          y={4.5}
-          width={15}
-          height={15}
-          // Boundary layers (wilderness, physical regions) draw an outline only, so their key has no wash.
-          fill={symbol.fill ? "currentColor" : "none"}
-          fillOpacity={symbol.fill || undefined}
-          stroke="currentColor"
-          strokeWidth={1}
-        />
-      )}
-      {symbol.kind === "score" && (
-        <>
-          {RAMP_STEPS.map((alpha, i) => (
-            <rect key={alpha} x={2 + i * 4} y={8} width={4} height={8} fill="currentColor" fillOpacity={alpha} />
-          ))}
-          <rect x={2.25} y={8.25} width={19.5} height={7.5} fill="none" stroke="currentColor" strokeOpacity={0.35} strokeWidth={0.5} />
-        </>
-      )}
-      {symbol.kind === "tiles" && (
-        <>
-          <defs>
-            <pattern id={hatchId} width={3} height={3} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <line x1={0} y1={0} x2={0} y2={3} stroke="currentColor" strokeWidth={0.75} />
-            </pattern>
-          </defs>
-          <rect x={4.5} y={4.5} width={15} height={15} fill={`url(#${hatchId})`} stroke="currentColor" strokeWidth={1} />
-        </>
-      )}
-    </svg>
-  );
 }
 
 type RowProps = {
@@ -208,7 +146,7 @@ function LegendRow({ layer, shownLayer, op, license, dispatch, onMove, dragProps
   const filtersId = `filters-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const { citation, coverageNote } = layer.result;
   const host = hostOf(citation.url);
-  const symbol = legendSymbol(layer.id, legendModeFor(layer, op), layer.style.unit);
+  const symbol = layerLegend(layer, op);
 
   const gripRef = useRef<HTMLButtonElement>(null);
   const onHandleKey = (e: KeyboardEvent) => {

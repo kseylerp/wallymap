@@ -1,5 +1,5 @@
 import type { Layer } from "@deck.gl/core";
-import { PathStyleExtension, _TerrainExtension as TerrainExtension } from "@deck.gl/extensions";
+import { FillStyleExtension, PathStyleExtension, _TerrainExtension as TerrainExtension } from "@deck.gl/extensions";
 import { H3HexagonLayer, TerrainLayer } from "@deck.gl/geo-layers";
 import { GeoJsonLayer, IconLayer, TextLayer } from "@deck.gl/layers";
 import { WebMercatorViewport } from "@math.gl/web-mercator";
@@ -7,19 +7,27 @@ import type { Feature } from "geojson";
 import { cellToLatLng, latLngToCell } from "h3-js";
 import type { BBox, StyleHints } from "@/layers/types";
 import {
-  INK as INK_HEX,
-  lineDashFor,
-  POLYGON_INK_FILL,
-  SCORE_RAMP,
-} from "@/lib/render/palette";
-import {
+  areaRecipe,
   COMPARE_COLORS,
-  compareBId,
-  compareSideShown,
-  DELTA_FILL_ALPHA,
-  effectiveMode,
-  isHexCollection,
-} from "@/lib/render/compareView";
+  DARK_GREY,
+  HEX_COLUMN,
+  HEX_TILE,
+  isPaletteColor,
+  LINE,
+  LINE_CLASSES,
+  lineClassFor,
+  PURPLE,
+  scoreRampFor,
+  SELECTED_AREA,
+  TRAIL_LINE,
+  WHITE as WHITE_HEX,
+  type AreaRecipe,
+  type HatchColor,
+  type RampName,
+} from "@/lib/render/palette";
+import { acresStep, HATCH_SCALE, hatchAtlas, hatchAtlasCanvas, hatchPatternId } from "@/lib/render/hatch";
+import { hexToRgb, rampColor } from "@/lib/render/ramp";
+import { compareBId, compareSideShown, DELTA_FILL_ALPHA, effectiveMode, isHexCollection } from "@/lib/render/compareView";
 import { DECK_TERRAIN_ID, DECK_TERRAIN_TAG, demDecoder, demTileUrl } from "@/lib/render/wally/deckTerrain";
 import { featureCenter, HEX_DELTA_TAG } from "@/lib/render/inspect";
 import { pinIconFor } from "@/lib/render/wally/pins";
@@ -27,44 +35,23 @@ import type { MapState, RenderOp, Viewport } from "@/lib/render/state";
 
 type Rgba = [number, number, number, number];
 
-/** `--slate`: the default stroke for data drawn over imagery. */
-export const SLATE = "#2F3A44";
-const WHITE: Rgba = [255, 255, 255, 255];
-/**
- * Lines: a white stroke (dashed per layer) over a thin ink casing, so it reads on bright and dark imagery and stays
- * clear of the route's purple to coral gradient. 2.5px white over 1px of ink a side; selected, 3.5px over 1.5px.
- */
-export const LINE = { width: 2.5, casing: 1, selectedWidth: 3.5, selectedCasing: 1.5 } as const;
-/** Polygon outlines: 1px white over 0.5px of ink a side (selected: 2.5px over 1px), above a light ink wash. */
-export const POLYGON_OUTLINE = { width: 1, casing: 0.5, selectedWidth: 2.5, selectedCasing: 1 } as const;
-const POLYGON_FILL_DEFAULT = 0.1;
-/** Selected tiles take a 2.5px ink outline. */
-export const SELECTED_LINE_PX = 2.5;
-/** Score areas outline in faint ink so a dense grid reads as a surface, not a mesh. */
-const SCORE_OUTLINE_PX = 0.5;
-const SCORE_OUTLINE_ALPHA = 0.2;
-/** While a feature is selected, the rest of its layer fades to this share of its alpha. */
-export const SIBLING_FADE = 0.35;
-
 /** Parses `#rgb` or `#rrggbb` into an RGBA tuple for deck.gl. */
 export function hexToRgba(hex: string, alpha = 255): Rgba {
-  let digits = hex.trim().replace(/^#/, "");
-  if (digits.length === 3) {
-    digits = digits
-      .split("")
-      .map((c) => c + c)
-      .join("");
-  }
-  if (!/^[0-9a-fA-F]{6}$/.test(digits)) {
-    throw new Error(`Invalid hex color: ${hex}`);
-  }
-  return [
-    parseInt(digits.slice(0, 2), 16),
-    parseInt(digits.slice(2, 4), 16),
-    parseInt(digits.slice(4, 6), 16),
-    alpha,
-  ];
+  return [...hexToRgb(hex), alpha];
 }
+
+const WHITE = hexToRgba(WHITE_HEX);
+const GREY = hexToRgba(DARK_GREY);
+const SELECT = hexToRgba(PURPLE);
+/** Sprites draw their own colors; their tint only carries alpha (opacity and the selection fade). */
+const SPRITE_TINT = WHITE;
+
+/** Selected lines: TRAIL_LINE.selected (purple, 3.5px) over a white casing 1px a side wider than the line's. */
+export const SELECTED_LINE = { width: TRAIL_LINE.selected.width, casing: TRAIL_LINE.selected.width + 2 } as const;
+/** Selected tiles take a 2.5px purple outline. */
+export const SELECTED_LINE_PX = 2.5;
+/** While a feature is selected, the rest of its layer fades to this share of its alpha. */
+export const SIBLING_FADE = 0.35;
 
 export type Padding = { top: number; right: number; bottom: number; left: number };
 
@@ -84,22 +71,8 @@ export function bboxToViewport(bbox: BBox, width: number, height: number, paddin
   return { longitude, latitude, zoom, pitch: 0, bearing: 0 };
 }
 
-/** Returns `color` if it parses as hex, else undefined (a bad model-supplied color must not crash the map). */
-function usableColor(color: string | undefined): string | undefined {
-  if (color === undefined) return undefined;
-  try {
-    hexToRgba(color);
-    return color;
-  } catch {
-    return undefined;
-  }
-}
-
 type ColorAccessor = Rgba | ((f: Feature) => Rgba);
 type WidthAccessor = number | ((f: Feature) => number);
-
-/** The data ink as RGBA. */
-const INK = hexToRgba(INK_HEX);
 
 /** Scales a color's alpha by the op opacity. */
 function withOpacity([r, g, b, a]: Rgba, opacity: number): Rgba {
@@ -121,57 +94,50 @@ function selectionKey(feature: Feature | undefined): number {
 
 /**
  * A constant color, or (while one of this layer's features is selected) an accessor that keeps the selected
- * feature at full strength and fades its siblings. `selected` is matched by reference: deck hands accessors the
- * same feature objects the pick returned.
+ * feature at full strength (in `selectedColor` when given) and fades its siblings. `selected` is matched by
+ * reference: deck hands accessors the same feature objects the pick returned.
  */
-function colorFor(color: Rgba, opacity: number, selected: Feature | undefined): ColorAccessor {
+function colorFor(color: Rgba, opacity: number, selected: Feature | undefined, selectedColor?: Rgba): ColorAccessor {
   const base = withOpacity(color, opacity);
   if (!selected) return base;
+  const strong = selectedColor ? withOpacity(selectedColor, opacity) : base;
   const faded = withOpacity(base, SIBLING_FADE);
-  return (f: Feature) => (f === selected ? base : faded);
+  return (f: Feature) => (f === selected ? strong : faded);
 }
 
-/** Linear interpolation of `stops` (x ascending) at `x`, clamped at both ends. */
-function interpolate(x: number, xs: readonly number[], ys: readonly number[]): number {
-  if (x <= xs[0]) return ys[0];
-  for (let i = 1; i < xs.length; i++) {
-    if (x <= xs[i]) {
-      const t = (x - xs[i - 1]) / (xs[i] - xs[i - 1]);
-      return ys[i - 1] + (ys[i] - ys[i - 1]) * t;
-    }
-  }
-  return ys[ys.length - 1];
-}
-
-/**
- * The score ramp for a 0 to 100 `v`: white at 25% alpha up to `to` (amber by default) at 70%. Missing or
- * non-numeric `v` reads as 0.
- */
-export function scoreRampColor(v: unknown, to: string = SCORE_RAMP.to): Rgba {
-  const n = typeof v === "number" ? v : Number(v);
-  const t = Number.isFinite(n) ? Math.min(1, Math.max(0, n / 100)) : 0;
-  const from = hexToRgba(SCORE_RAMP.from);
-  const end = hexToRgba(to);
-  const alpha = SCORE_RAMP.fromAlpha + (SCORE_RAMP.toAlpha - SCORE_RAMP.fromAlpha) * t;
-  return [
-    Math.round(from[0] + (end[0] - from[0]) * t),
-    Math.round(from[1] + (end[1] - from[1]) * t),
-    Math.round(from[2] + (end[2] - from[2]) * t),
-    Math.round(255 * alpha),
-  ];
-}
-
-/** A per-feature color (the score ramp) with op opacity and the selection fade applied. */
-function rampFor(ramp: (f: Feature) => Rgba, opacity: number, selected: Feature | undefined): ColorAccessor {
+/** A per-feature color with op opacity and the selection fade applied. */
+function perFeature(color: (f: Feature) => Rgba, opacity: number, selected: Feature | undefined): (f: Feature) => Rgba {
   return (f: Feature) => {
-    const color = withOpacity(ramp(f), opacity);
-    return selected && f !== selected ? withOpacity(color, SIBLING_FADE) : color;
+    const c = withOpacity(color(f), opacity);
+    return selected && f !== selected ? withOpacity(c, SIBLING_FADE) : c;
   };
 }
 
+/** A palette ramp at `t` (0..1) as RGBA. */
+export function rampRgba(name: RampName, t: number, alpha = 255): Rgba {
+  return [...rampColor(name, t), alpha];
+}
+
+/** A 0 to 100 score as 0..1; missing or non-numeric reads as 0. */
+function scoreT(v: unknown): number {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? Math.min(1, Math.max(0, n / 100)) : 0;
+}
+
+/**
+ * Score areas (remoteness cells): the layer's ramp on `v`, more opaque as it rises (0.55 to 0.80, as the hex tiles),
+ * so a dense grid reads as a surface.
+ */
+export function scoreRampColor(v: unknown, ramp: RampName = "density"): Rgba {
+  const t = scoreT(v);
+  const [a0, a1] = HEX_TILE.alpha;
+  return rampRgba(ramp, t, Math.round(255 * (a0 + (a1 - a0) * t)));
+}
 
 const dashExtension = new PathStyleExtension({ dash: true });
+const fillExtension = new FillStyleExtension({ pattern: true });
 const terrainExtension = new TerrainExtension();
+type LayerExtensionLike = PathStyleExtension | FillStyleExtension | TerrainExtension;
 
 /**
  * Terrain props for a data layer while 3D terrain is on: symbols stand on the surface by their anchor (`offset`),
@@ -180,20 +146,11 @@ const terrainExtension = new TerrainExtension();
 function terrainProps(terrain: boolean, mode: "offset" | "drape", extensions: LayerExtensionLike[] = []) {
   return terrain ? { extensions: [...extensions, terrainExtension], terrainDrawMode: mode } : { extensions };
 }
-type LayerExtensionLike = PathStyleExtension | TerrainExtension;
 
 /** A constant width, or (while one of this layer's features is selected) `selectedWidth` for that feature. */
 function widthFor(width: number, selectedWidth: number, selected: Feature | undefined): WidthAccessor {
   if (!selected) return width;
   return (f: Feature) => (f === selected ? selectedWidth : width);
-}
-
-/** Like `colorFor`, but the selected feature takes `selectedColor` (a faint outline turns to full ink). */
-function strokeFor(color: Rgba, selectedColor: Rgba, opacity: number, selected: Feature | undefined): ColorAccessor {
-  if (!selected) return withOpacity(color, opacity);
-  const strong = withOpacity(selectedColor, opacity);
-  const faded = withOpacity(withOpacity(color, opacity), SIBLING_FADE);
-  return (f: Feature) => (f === selected ? strong : faded);
 }
 
 /** Symbols draw this size on screen: a 24px sprite around a 12px symbol, leaving room for the halo. */
@@ -289,32 +246,18 @@ export function hexbin(data: GeoJSON.FeatureCollection, resolution: number): Hex
 }
 
 /**
- * Tiles: light gray that holds up on dark imagery, from white at 55% alpha (fewest features) to `#9A9A96` at 80%
- * (busiest tile), with a light edge and ink counts on a white halo.
+ * A tile's fill (owner's board, hex tiles variant A): the gray ramp from off-white (fewest features) to dark grey
+ * (the busiest tile), log scaled, at 0.55 to 0.80 opacity.
  */
-export const HEX_TILE = {
-  from: [255, 255, 255] as const,
-  to: hexToRgba("#9A9A96"),
-  alpha: [0.55, 0.8] as const,
-  edge: [255, 255, 255, 204] as Rgba,
-  /** Tiles shrink to this share of their cell, so they read as separate cells. */
-  coverage: 0.94,
-  /** Tiles holding at least this many features show their count. */
-  labelMin: 2,
-  labelSize: 11,
-} as const;
-
-/** A tile's fill: white toward light gray, and more opaque, as its count nears `max` (log scaled). */
 export function hexTileColor(count: number, max: number): Rgba {
   const t = max > 1 ? Math.min(1, Math.max(0, Math.log(count) / Math.log(max))) : 1;
-  const { from, to, alpha } = HEX_TILE;
-  return [
-    Math.round(from[0] + (to[0] - from[0]) * t),
-    Math.round(from[1] + (to[1] - from[1]) * t),
-    Math.round(from[2] + (to[2] - from[2]) * t),
-    Math.round(255 * interpolate(t, [0, 1], alpha)),
-  ];
+  const [a0, a1] = HEX_TILE.alpha;
+  return rampRgba(HEX_TILE.ramp, t, Math.round(255 * (a0 + (a1 - a0) * t)));
 }
+
+const HEX_EDGE = hexToRgba(HEX_TILE.edge, Math.round(255 * HEX_TILE.edgeAlpha));
+const HEX_LABEL = hexToRgba(HEX_TILE.label);
+const HEX_LABEL_HALO = hexToRgba(HEX_TILE.labelHalo, 230);
 
 /** Counts as tile labels: 1,234 reads as 1.2k. */
 function countLabel(n: number): string {
@@ -344,101 +287,27 @@ type OpContext = {
   deckId?: string;
 };
 
-/** Selection, opacity and color: what every color accessor of an op depends on (see `updateTriggers`). */
-function colorTrigger(selected: Feature | undefined, opacity: number, color: string): unknown[] {
-  return [selectionKey(selected), opacity, color];
+/** A palette color asked for by the layer panel or a compare side; anything else is ignored (palette only). */
+function requestedColor(color: string | undefined): string | undefined {
+  return isPaletteColor(color) ? color.trim().toUpperCase() : undefined;
 }
 
-/** The deck layers for one render op, bottom first (lines add a white casing beneath the stroke). */
+/** The hatch density step for one area feature: fires by burned acres, others the recipe's fixed step. */
+function areaStep(layerId: string, recipe: AreaRecipe, f: Feature): number {
+  return layerId === "fire-perimeters" ? acresStep(f.properties?.acres ?? f.properties?.v) : recipe.step;
+}
+
+/** The deck layers for one render op, bottom first (lines and areas add a white casing beneath). */
 function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
-  const { data, style, selected, terrain } = ctx;
-  // Lines and outlines draw white over ink, washes in ink. A color the user or the agent asked for replaces the
-  // white stroke and the wash.
-  const requested = usableColor(op.color);
-  const stroke = requested ? hexToRgba(requested) : WHITE;
-  const fill = requested ? hexToRgba(requested) : INK;
   const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
-  const id = `${deckLayerKey(ctx.deckId ?? op.layerId, terrain)}:${op.mode}`;
-  // Color and width accessors become functions while a feature is selected, and deck only re-runs a function
-  // accessor when its trigger changes, so the trigger carries everything they depend on.
-  const trigger = colorTrigger(selected, opacity, requested ?? INK_HEX);
-  const updateTriggers = { getLineColor: trigger, getFillColor: trigger, getLineWidth: trigger };
-  const base = { id, data, pickable: true, updateTriggers };
   switch (op.mode) {
     case "points":
-      if (data.features.length > hexbinThreshold) return hexTileLayers(op, ctx, opacity);
+      if (ctx.data.features.length > hexbinThreshold) return hexTileLayers(op, ctx, opacity);
       return symbolLayers(op, ctx, opacity);
-    case "lines": {
-      const casingWidth = LINE.width + 2 * LINE.casing;
-      const selectedCasingWidth = LINE.selectedWidth + 2 * LINE.selectedCasing;
-      return [
-        new GeoJsonLayer({
-          id: `${id}:casing`,
-          data,
-          pickable: false,
-          filled: false,
-          getLineColor: colorFor(INK, opacity, selected),
-          getLineWidth: widthFor(casingWidth, selectedCasingWidth, selected),
-          lineWidthUnits: "pixels",
-          updateTriggers,
-          ...terrainProps(terrain, "drape"),
-        }),
-        new GeoJsonLayer({
-          ...base,
-          filled: false,
-          getLineColor: colorFor(stroke, opacity, selected),
-          getLineWidth: widthFor(LINE.width, LINE.selectedWidth, selected),
-          lineWidthUnits: "pixels",
-          // The dash extension stays on every core line: adding or removing an extension on a live layer (as a
-          // basemap switch would) leaves deck with a dangling dash attribute and it throws. [0, 0] draws solid.
-          getDashArray: lineDashFor(op.layerId),
-          ...terrainProps(terrain, "drape", [dashExtension]),
-        }),
-      ];
-    }
-    case "polygons": {
-      // Scores (popularity, remoteness) shade each area by `v` on a white to ink ramp under a faint ink outline, so a
-      // dense grid reads as a surface; other polygons take the white-over-ink outline over a light ink wash.
-      const score = style.unit === "score";
-      const o = POLYGON_OUTLINE;
-      const casing = new GeoJsonLayer({
-        id: `${id}:casing`,
-        data,
-        pickable: false,
-        filled: false,
-        getLineColor: colorFor(INK, opacity, selected),
-        getLineWidth: widthFor(score ? 0 : o.width + 2 * o.casing, o.selectedWidth + 2 * o.selectedCasing, selected),
-        lineWidthUnits: "pixels",
-        updateTriggers,
-        ...terrainProps(terrain, "drape"),
-      });
-      if (score) {
-        return [
-          casing,
-          new GeoJsonLayer({
-            ...base,
-            getFillColor: rampFor((f) => scoreRampColor(f.properties?.v, requested ?? SCORE_RAMP.to), opacity, selected),
-            getLineColor: strokeFor(withOpacity(INK, SCORE_OUTLINE_ALPHA), WHITE, opacity, selected),
-            getLineWidth: widthFor(SCORE_OUTLINE_PX, o.selectedWidth, selected),
-            lineWidthUnits: "pixels",
-            ...terrainProps(terrain, "drape"),
-          }),
-        ];
-      }
-      const fillShare = POLYGON_INK_FILL[op.layerId] ?? POLYGON_FILL_DEFAULT;
-      return [
-        casing,
-        new GeoJsonLayer({
-          ...base,
-          filled: fillShare > 0,
-          getFillColor: colorFor(withOpacity(fill, fillShare), opacity, selected),
-          getLineColor: colorFor(stroke, opacity, selected),
-          getLineWidth: widthFor(o.width, o.selectedWidth, selected),
-          lineWidthUnits: "pixels",
-          ...terrainProps(terrain, "drape"),
-        }),
-      ];
-    }
+    case "lines":
+      return lineLayers(op, ctx, opacity);
+    case "polygons":
+      return ctx.style.unit === "score" ? scoreAreaLayers(op, ctx, opacity) : areaLayers(op, ctx, opacity);
     case "heat":
       // Drawn by Mapbox's native heatmap (components/mapTiles.ts): deck's HeatmapLayer renders nothing in
       // GlobeView, which is what the overlay uses while the map is in globe projection.
@@ -448,9 +317,176 @@ function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
   }
 }
 
+/** The deck id prefix and the triggers every accessor of an op depends on (selection, opacity, color). */
+function opIds(op: RenderOp, ctx: OpContext, opacity: number, color: string | undefined) {
+  const id = `${deckLayerKey(ctx.deckId ?? op.layerId, ctx.terrain)}:${op.mode}`;
+  // Color and width accessors become functions while a feature is selected, and deck only re-runs a function
+  // accessor when its trigger changes, so the trigger carries everything they depend on.
+  const trigger = [selectionKey(ctx.selected), opacity, color ?? ""];
+  return { id, trigger };
+}
+
 /**
- * Point symbols: one monochrome sprite per layer family (pins.ts), centered on the point and filled solid ink
- * while selected. The sprite's alpha carries the op opacity and the selection fade.
+ * Lines over a white casing (spec §11a: white for casings only). Trails follow TRAIL_LINE (dark grey dashes over a
+ * sage core), forest roads dark grey dashes, use trails dark grey dots, other lines solid dark grey; the selected
+ * line is solid purple. Score lines (popularity) take their ramp on a dark grey casing, so the off-white low end
+ * still reads. A requested palette color (a compare side) draws solid in that color.
+ */
+function lineLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
+  const { data, selected, terrain, style } = ctx;
+  const requested = requestedColor(op.color);
+  const { id, trigger } = opIds(op, ctx, opacity, requested);
+  const updateTriggers = { getLineColor: trigger, getLineWidth: trigger, getDashArray: trigger };
+  const score = style.unit === "score" && !requested;
+  const ramp = scoreRampFor(op.layerId);
+  const classOf = (f: Feature) => LINE_CLASSES[lineClassFor(op.layerId, f.properties)];
+  const casingColor = score ? GREY : hexToRgba(WHITE_HEX, Math.round(255 * LINE.casingOpacity));
+  const casingWidth = score ? LINE.width + 2 : LINE.casing;
+  const core = (f: Feature): Rgba => {
+    if (requested) return hexToRgba(requested);
+    if (score) return rampRgba(ramp, scoreT(f.properties?.v));
+    return hexToRgba(classOf(f).color);
+  };
+  const under = (f: Feature): Rgba => {
+    const cls = classOf(f);
+    return !requested && !score && "under" in cls ? hexToRgba(cls.under) : [0, 0, 0, 0];
+  };
+  const select = (color: (f: Feature) => Rgba) =>
+    perFeature((f) => (f === selected ? SELECT : color(f)), opacity, selected);
+  // Deck's dash is in line widths; the recipes are in pixels. The selected line draws solid.
+  const dash = (f: Feature): [number, number] => {
+    if (f === selected || requested || score) return [0, 0];
+    const [on, off] = classOf(f).dash;
+    return [on / LINE.width, off / LINE.width];
+  };
+  return [
+    new GeoJsonLayer({
+      id: `${id}:casing`,
+      data,
+      pickable: false,
+      filled: false,
+      getLineColor: colorFor(casingColor, opacity, selected, WHITE),
+      getLineWidth: widthFor(casingWidth, SELECTED_LINE.casing, selected),
+      lineWidthUnits: "pixels",
+      updateTriggers,
+      ...terrainProps(terrain, "drape"),
+    }),
+    new GeoJsonLayer({
+      id: `${id}:under`,
+      data,
+      pickable: false,
+      filled: false,
+      getLineColor: perFeature((f) => (f === selected ? [0, 0, 0, 0] : under(f)), opacity, selected),
+      getLineWidth: LINE.width,
+      lineWidthUnits: "pixels",
+      updateTriggers,
+      ...terrainProps(terrain, "drape"),
+    }),
+    new GeoJsonLayer({
+      id,
+      data,
+      pickable: true,
+      filled: false,
+      getLineColor: select(core),
+      getLineWidth: widthFor(LINE.width, SELECTED_LINE.width, selected),
+      lineWidthUnits: "pixels",
+      // The dash extension stays on every core line: adding or removing an extension on a live layer (as a
+      // basemap switch would) leaves deck with a dangling dash attribute and it throws. [0, 0] draws solid.
+      getDashArray: dash,
+      updateTriggers,
+      ...terrainProps(terrain, "drape", [dashExtension]),
+    }),
+  ];
+}
+
+/**
+ * Areas (spec §11, §11a): a tint of the role color behind a 45° hatch in the same color, under an outline over a white
+ * casing. Fire perimeters are pink and hatch denser for larger fires; protected land sage; other areas dark grey. The
+ * selected area turns purple. Without a 2D canvas (tests) the hatch is off and the tint alone draws.
+ */
+function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
+  const { data, selected, terrain } = ctx;
+  const requested = requestedColor(op.color);
+  const recipe = areaRecipe(op.layerId, requested);
+  const { id, trigger } = opIds(op, ctx, opacity, requested);
+  const updateTriggers = {
+    getLineColor: trigger,
+    getFillColor: trigger,
+    getLineWidth: trigger,
+    getFillPattern: trigger,
+    getFillPatternBackgroundColor: trigger,
+  };
+  const canvas = hatchAtlasCanvas();
+  const colorOf = (f: Feature) => (f === selected ? SELECTED_AREA.color : recipe.color);
+  const tint = perFeature((f) => hexToRgba(colorOf(f), Math.round(255 * recipe.tint)), opacity, selected);
+  const hatch = perFeature((f) => hexToRgba(colorOf(f), Math.round(255 * recipe.hatchAlpha)), opacity, selected);
+  const casingWidth = recipe.outlineWidth + 2 * recipe.casing;
+  return [
+    new GeoJsonLayer({
+      id: `${id}:casing`,
+      data,
+      pickable: false,
+      filled: false,
+      getLineColor: colorFor(WHITE, opacity, selected),
+      getLineWidth: widthFor(casingWidth, SELECTED_AREA.outlineWidth + 2 * SELECTED_AREA.casing, selected),
+      lineWidthUnits: "pixels",
+      updateTriggers,
+      ...terrainProps(terrain, "drape"),
+    }),
+    new GeoJsonLayer({
+      id,
+      data,
+      pickable: true,
+      filled: true,
+      // With the hatch on, the fill color carries the hatch line alpha (the atlas brings the line color) over the
+      // tint, which deck draws as the pattern's background.
+      getFillColor: canvas ? hatch : tint,
+      getLineColor: colorFor(hexToRgba(recipe.outline), opacity, selected, SELECT),
+      getLineWidth: widthFor(recipe.outlineWidth, SELECTED_AREA.outlineWidth, selected),
+      lineWidthUnits: "pixels",
+      fillPatternEnabled: Boolean(canvas),
+      fillPatternAtlas: canvas,
+      fillPatternMapping: hatchAtlas().mapping,
+      fillPatternMask: false,
+      fillPatternSizeUnits: "pixels",
+      getFillPattern: (f: Feature) => hatchPatternId(colorOf(f) as HatchColor, areaStep(op.layerId, recipe, f)),
+      getFillPatternScale: 1 / HATCH_SCALE,
+      getFillPatternBackgroundColor: tint,
+      updateTriggers,
+      ...terrainProps(terrain, "drape", [fillExtension]),
+    }),
+  ];
+}
+
+/** Score areas (remoteness cells): the layer's ramp on `v` with white 1px edges at 0.8; the selected cell purple-edged. */
+function scoreAreaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
+  const { data, selected, terrain } = ctx;
+  const requested = requestedColor(op.color);
+  const { id, trigger } = opIds(op, ctx, opacity, requested);
+  const ramp = scoreRampFor(op.layerId);
+  const fill = (f: Feature): Rgba => {
+    const c = scoreRampColor(f.properties?.v, ramp);
+    return requested ? hexToRgba(requested, c[3]) : c;
+  };
+  return [
+    new GeoJsonLayer({
+      id,
+      data,
+      pickable: true,
+      filled: true,
+      getFillColor: perFeature(fill, opacity, selected),
+      getLineColor: colorFor(HEX_EDGE, opacity, selected, SELECT),
+      getLineWidth: widthFor(1, SELECTED_LINE_PX, selected),
+      lineWidthUnits: "pixels",
+      updateTriggers: { getFillColor: trigger, getLineColor: trigger, getLineWidth: trigger },
+      ...terrainProps(terrain, "drape"),
+    }),
+  ];
+}
+
+/**
+ * Point symbols (pins.ts): a shape per layer family, centered on the point; the selected one fills purple. The
+ * sprite's alpha carries the op opacity and the selection fade.
  */
 function symbolLayers(op: RenderOp, { data, selected, terrain, deckId }: OpContext, opacity: number): Layer[] {
   return [
@@ -462,7 +498,7 @@ function symbolLayers(op: RenderOp, { data, selected, terrain, deckId }: OpConte
       getIcon: (f) => atlasIcon(pinIconFor(op.layerId, f, f === selected)),
       getSize: SYMBOL_SIZE_PX,
       sizeUnits: "pixels",
-      getColor: colorFor(WHITE, opacity, selected),
+      getColor: colorFor(SPRITE_TINT, opacity, selected),
       updateTriggers: { getColor: [selectionKey(selected), opacity], getIcon: [op.layerId, selectionKey(selected)] },
       // The overlay draws in deck's GlobeView, which flips the icon quads' winding; with back-face culling on,
       // deck 9.4 draws (and picks) no icons at all there.
@@ -473,8 +509,9 @@ function symbolLayers(op: RenderOp, { data, selected, terrain, deckId }: OpConte
 }
 
 /**
- * Dense point layers as flat light-gray H3 tiles at a zoom-dependent resolution, with an ink count on grouped
- * tiles. A picked tile is a `HexFeature`, so the inspect card shows its count.
+ * Dense point layers as flat H3 tiles at a zoom-dependent resolution (owner's board, variant A): the gray ramp, white
+ * 1px edges, a dark grey count on a white halo on grouped tiles. A picked tile is a `HexFeature`, so the inspect card
+ * shows its count.
  */
 function hexTileLayers(op: RenderOp, { data, selected: picked, zoom, terrain, deckId }: OpContext, opacity: number): Layer[] {
   const id = `${deckLayerKey(deckId ?? op.layerId, terrain)}:points`;
@@ -499,7 +536,7 @@ function hexTileLayers(op: RenderOp, { data, selected: picked, zoom, terrain, de
       coverage: HEX_TILE.coverage,
       getFillColor: (f) => fade(f, hexTileColor(f.properties.count, max)),
       stroked: true,
-      getLineColor: (f) => (f === selected ? withOpacity(INK, opacity) : fade(f, HEX_TILE.edge)),
+      getLineColor: (f) => (f === selected ? withOpacity(SELECT, opacity) : fade(f, HEX_EDGE)),
       getLineWidth: (f) => (f === selected ? SELECTED_LINE_PX : 1),
       lineWidthUnits: "pixels",
       updateTriggers: { getFillColor: trigger, getLineColor: trigger, getLineWidth: trigger },
@@ -513,13 +550,13 @@ function hexTileLayers(op: RenderOp, { data, selected: picked, zoom, terrain, de
       getText: (f) => countLabel(f.properties.count),
       getSize: HEX_TILE.labelSize,
       sizeUnits: "pixels",
-      getColor: (f) => fade(f, INK),
+      getColor: (f) => fade(f, HEX_LABEL),
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
       fontWeight: 500,
       characterSet: "0123456789.k",
       fontSettings: { sdf: true },
       outlineWidth: 0.35,
-      outlineColor: [255, 255, 255, 230],
+      outlineColor: HEX_LABEL_HALO,
       billboard: true,
       parameters: { cullMode: "none" },
       updateTriggers: { getColor: trigger },
@@ -538,8 +575,8 @@ const DELTA_RGB = {
 
 /** Delta strokes: 1.5px outlines and 2.5px lines in the class color over a 1px white casing a side; points 5px discs. */
 export const DELTA_STROKE = { polygon: 1.5, line: 2.5, casing: 1, pointRadius: 5 } as const;
-/** Hex delta columns: the largest |B − A| stands this many meters tall, at the translucent-3D alpha (spec §11). */
-export const HEX_DELTA = { maxHeightM: 4000, alpha: 0.55 } as const;
+/** Hex delta columns: the largest |B − A| stands this many meters tall. */
+export const HEX_DELTA = { maxHeightM: 4000 } as const;
 
 /** The class color for a delta feature (a-only purple, b-only pink, both dark grey); unknown reads as both. */
 export function deltaColor(f: Feature): Rgba {
@@ -552,21 +589,41 @@ function isArea(f: Feature): boolean {
   return t === "Polygon" || t === "MultiPolygon";
 }
 
-const hexDeltaMax = new WeakMap<GeoJSON.FeatureCollection, number>();
-function maxAbsV(data: GeoJSON.FeatureCollection): number {
-  let max = hexDeltaMax.get(data);
-  if (max === undefined) {
-    max = data.features.reduce((m, f) => Math.max(m, Math.abs(Number(f.properties?.v) || 0)), 0);
-    hexDeltaMax.set(data, max);
+/** Per hex delta collection: the largest |v|, the tallest cell, and each cell's cap lifted to its column height. */
+type Columns = { max: number; top: Feature | undefined; caps: Feature[] };
+const columnsCache = new WeakMap<GeoJSON.FeatureCollection, Columns>();
+
+const absV = (f: Feature) => Math.abs(Number(f.properties?.v) || 0);
+
+function columnsOf(data: GeoJSON.FeatureCollection): Columns {
+  let entry = columnsCache.get(data);
+  if (entry) return entry;
+  let max = 0;
+  let top: Feature | undefined;
+  for (const f of data.features) {
+    if (absV(f) > max) {
+      max = absV(f);
+      top = f;
+    }
   }
-  return max;
+  const height = (f: Feature) => (absV(f) / (max || 1)) * HEX_DELTA.maxHeightM;
+  // Caps sit a hair above the column tops so they never z-fight with them.
+  const caps = data.features.flatMap((f): Feature[] => {
+    if (f.geometry?.type !== "Polygon") return [];
+    const z = height(f) * 1.002 + 2;
+    const rings = f.geometry.coordinates.map((ring) => ring.map(([lng, lat]) => [lng, lat, z]));
+    return [{ type: "Feature", geometry: { type: "Polygon", coordinates: rings }, properties: { ...f.properties, top: f === top } }];
+  });
+  entry = { max, top, caps };
+  columnsCache.set(data, entry);
+  return entry;
 }
 
 /**
  * The compared layer in delta mode: each feature stroked in its class color (A only purple, B only pink, both dark
- * grey) over a white casing, areas filled at 12% of it, points as solid discs. H3 cells extrude instead: height is
- * |B − A| (tallest = 4,000 m), color the sign class, translucent with dark grey edges. Hatching comes with the
- * palette task.
+ * grey) over a white casing, areas filled at 12% of it, points as solid discs. H3 cells extrude instead (owner's
+ * board, columns variant C): height is |B − A| (tallest = 4,000 m), translucent white walls with dark grey edges and
+ * white caps outlined in dark grey; only the tallest column takes purple, with its value.
  */
 function deltaLayers(op: RenderOp, { data, selected, terrain }: OpContext): Layer[] {
   const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
@@ -577,23 +634,60 @@ function deltaLayers(op: RenderOp, { data, selected, terrain }: OpContext): Laye
   };
   const trigger = [selectionKey(selected), opacity];
   if (isHexCollection(data)) {
-    const max = maxAbsV(data) || 1;
+    const { max, top, caps } = columnsOf(data);
+    const c = HEX_COLUMN;
+    const alpha = (a: number) => Math.round(255 * a);
+    const isTop = (f: Feature) => f === top || f.properties?.top === true;
+    // No terrain extension on these columns, so no 3D tag on the id either. Their own tag keeps them off the flat
+    // H3HexagonLayer's id (`<id>:points` while 3D is off): deck must not update one layer class in place of another.
+    const columnsId = `${op.layerId}${HEX_DELTA_TAG}:${op.mode}`;
+    const label = top
+      ? [{ position: [...(featureCenter(top) ?? [0, 0]), (absV(top) / (max || 1)) * HEX_DELTA.maxHeightM + 60], text: countLabel(Math.round(absV(top))) }]
+      : [];
     return [
       new GeoJsonLayer({
-        // No terrain extension on these columns, so no 3D tag on the id either. Their own tag keeps them off the flat
-        // H3HexagonLayer's id (`<id>:points` while 3D is off): deck must not update one layer class in place of another.
-        id: `${op.layerId}${HEX_DELTA_TAG}:${op.mode}`,
+        id: columnsId,
         data,
         pickable: true,
         extruded: true,
         wireframe: true,
-        getElevation: (f: Feature) => (Math.abs(Number(f.properties?.v) || 0) / max) * HEX_DELTA.maxHeightM,
-        getFillColor: (f: Feature) => fade(f, withOpacity(deltaColor(f), HEX_DELTA.alpha)),
-        getLineColor: (f: Feature) => fade(f, DELTA_RGB.both),
+        getElevation: (f: Feature) => (absV(f) / (max || 1)) * HEX_DELTA.maxHeightM,
+        getFillColor: (f: Feature) => fade(f, isTop(f) ? hexToRgba(c.top, alpha(c.topWallAlpha)) : hexToRgba(c.wall, alpha(c.wallAlpha))),
+        getLineColor: (f: Feature) => fade(f, hexToRgba(c.edge, alpha(c.edgeAlpha))),
         lineWidthUnits: "pixels",
         getLineWidth: 1,
         material: false,
         updateTriggers: { getFillColor: trigger, getLineColor: trigger },
+      }),
+      new GeoJsonLayer({
+        id: `${columnsId}:caps`,
+        data: { type: "FeatureCollection", features: caps } as GeoJSON.FeatureCollection,
+        pickable: false,
+        filled: true,
+        stroked: true,
+        getFillColor: (f: Feature) => withOpacity(isTop(f) ? hexToRgba(c.top, alpha(c.topCapAlpha)) : hexToRgba(c.cap, alpha(c.capAlpha)), opacity),
+        getLineColor: (f: Feature) => withOpacity(isTop(f) ? hexToRgba(c.top) : hexToRgba(c.capOutline), opacity),
+        getLineWidth: c.capOutlinePx,
+        lineWidthUnits: "pixels",
+        updateTriggers: { getFillColor: trigger, getLineColor: trigger },
+      }),
+      new TextLayer<{ position: number[]; text: string }>({
+        id: `${columnsId}:label`,
+        data: label,
+        pickable: false,
+        getPosition: (d) => d.position as [number, number, number],
+        getText: (d) => d.text,
+        getSize: HEX_TILE.labelSize + 1,
+        sizeUnits: "pixels",
+        getColor: hexToRgba(c.label),
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+        fontWeight: 600,
+        characterSet: "0123456789.k",
+        fontSettings: { sdf: true },
+        outlineWidth: 0.35,
+        outlineColor: hexToRgba(c.labelHalo, 230),
+        billboard: true,
+        parameters: { cullMode: "none", depthCompare: "always" },
       }),
     ];
   }

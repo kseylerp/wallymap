@@ -4,8 +4,9 @@ import path from "node:path";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { useReducer } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { drawnColor, LayerStack } from "@/components/LayerStack";
-import { INK } from "@/lib/render/palette";
+import { layerLegend, LayerStack } from "@/components/LayerStack";
+import { DARK_GREY, PALETTE, PINK, PURPLE, SAGE } from "@/lib/render/palette";
+import { pinIconFor } from "@/lib/render/wally/pins";
 import { reduce } from "@/lib/render/reducer";
 import { visibleState } from "@/lib/render/view";
 import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
@@ -115,7 +116,7 @@ describe("LayerStack", () => {
     expect(spy).toHaveBeenCalledWith({ type: "set_style", layerId: "osm-trails", mode: "heat" });
   });
 
-  it("renders a monochrome legend row: key, title, count, and no color picker", () => {
+  it("renders a legend row: key, title, count, and no color picker", () => {
     render(<Harness spy={vi.fn()} />);
     const stack = screen.getByTestId("layer-stack");
     expect(within(stack).getByText("Layers")).toBeTruthy();
@@ -126,27 +127,29 @@ describe("LayerStack", () => {
     expect(slot?.childElementCount).toBe(0);
 
     const [trailsRow, landsRow] = screen.getAllByTestId("layer-card");
-    // Trails draw as lines: a solid line sample, white over ink.
+    // Trails draw as TRAIL_LINE: a white casing, a sage core and dark grey 8px dashes.
     const trailsKey = trailsRow.querySelector("svg.legend-key")!;
     expect(trailsKey.getAttribute("data-kind")).toBe("line");
-    expect(trailsKey.querySelectorAll("line")).toHaveLength(2);
-    expect(trailsKey.querySelector("line[stroke-dasharray]")).toBeNull();
-    // Public lands are vector tile areas, which Mapbox tints gray: an outlined square with a 10% wash.
+    expect([...trailsKey.querySelectorAll("line")].map((l) => l.getAttribute("stroke"))).toEqual(["#FFFFFF", "#9FB693", "#3A3A3C"]);
+    expect(trailsKey.querySelector("line[stroke-dasharray]")?.getAttribute("stroke-dasharray")).toBe("8 8");
+    // Public lands are vector tile areas, which Mapbox draws as protected land: a sage tint under a sage hatch.
     const landsKey = landsRow.querySelector("svg.legend-key")!;
-    expect(landsKey.getAttribute("data-kind")).toBe("polygon");
-    expect(landsKey.querySelector("rect")?.getAttribute("fill-opacity")).toBe("0.1");
+    expect(landsKey.getAttribute("data-kind")).toBe("area");
+    expect(landsKey.querySelector("rect")?.getAttribute("fill")).toBe("#9FB693");
+    expect(landsKey.querySelector("rect")?.getAttribute("fill-opacity")).toBe("0.12");
+    expect(landsKey.querySelector("pattern line")?.getAttribute("stroke")).toBe("#9FB693");
     // The row controls keep their padding inside the collapsing track, so a collapsed row has no dead space.
     const track = trailsRow.querySelector(".legend-controls")!;
     expect(track.firstElementChild?.className).toBe("");
     expect(track.querySelector(".pt-2")).toBeTruthy();
 
-    // No swatches, no color popover, no inline colors.
+    // No color popover and no inline colors; keys draw in palette colors only.
     expect(screen.queryByRole("button", { name: /Color for/ })).toBeNull();
     expect(stack.querySelector("[style*='background-color']")).toBeNull();
     for (const el of stack.querySelectorAll("svg *")) {
       for (const attr of ["fill", "stroke"]) {
         const value = el.getAttribute(attr);
-        if (value) expect(["currentColor", "white", "none"].includes(value) || value.startsWith("url(#")).toBe(true);
+        if (value) expect(["currentColor", "none"].includes(value) || value.startsWith("url(#") || PALETTE.has(value)).toBe(true);
       }
     }
     // The source is a dashed link.
@@ -177,17 +180,19 @@ describe("LayerStack", () => {
       />,
     );
     const [campRow, roadRow, lightsRow] = screen.getAllByTestId("layer-card");
-    expect(campRow.querySelector("image")?.getAttribute("href")).toBe("/pins/camp.svg");
+    expect(campRow.querySelector("image")?.getAttribute("href")).toBe(
+      pinIconFor("campsites", { type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: {} }).url,
+    );
     // Hidden layers say so on the row (the key fades) and in the visibility box.
     expect(campRow.getAttribute("data-hidden")).toBe("true");
     expect(within(campRow).getByRole("button", { name: "Show Campsites" }).getAttribute("aria-pressed")).toBe("false");
-    expect(roadRow.querySelector("line[stroke-dasharray]")?.getAttribute("stroke-dasharray")).toBe("6 4.5");
+    expect(roadRow.querySelector("line[stroke-dasharray]")?.getAttribute("stroke-dasharray")).toBe("10 7.5");
     expect(lightsRow.querySelector("svg.legend-key")?.getAttribute("data-kind")).toBe("tiles");
     expect(lightsRow.querySelector("pattern")).toBeTruthy();
     expect(within(lightsRow).getByText("tiles")).toBeTruthy();
   });
 
-  it("keys boundary polygons (wilderness) as an outline with no wash", () => {
+  it("keys protected land (wilderness) as a sage tint and hatch under a dark grey outline", () => {
     const wild: LoadedLayer = { ...trails, id: "wilderness", title: "Wilderness", style: { geometry: "polygon", color: "#B9A6FF" } };
     render(
       <LayerStack
@@ -199,9 +204,10 @@ describe("LayerStack", () => {
         onOpenChange={() => {}}
       />,
     );
-    const rect = screen.getByTestId("layer-card").querySelector("svg.legend-key rect")!;
-    expect(rect.getAttribute("fill")).toBe("none");
-    expect(rect.getAttribute("fill-opacity")).toBeNull();
+    const rects = [...screen.getByTestId("layer-card").querySelectorAll("svg.legend-key rect")];
+    expect(rects[0].getAttribute("fill")).toBe("#9FB693");
+    expect(rects[1].getAttribute("fill")).toMatch(/^url\(#hatch-/);
+    expect(rects.at(-1)?.getAttribute("stroke")).toBe("#3A3A3C");
   });
 
   it("reorders with the arrow keys on the grip, and removes and clears layers", () => {
@@ -402,43 +408,45 @@ describe("LayerStack filters", () => {
   });
 });
 
-describe("drawnColor", () => {
+describe("layerLegend (what the map draws, for the panel and the inspect card)", () => {
   const nightLights: LoadedLayer = {
     ...lands,
     id: "night-lights",
-    style: { geometry: "polygon", color: "#F2C14E" },
+    style: { geometry: "polygon", color: "#3A3A3C" },
     result: { kind: "tiles", data: { url: "https://example.test/{z}/{x}/{y}.png", minzoom: 0, maxzoom: 8, format: "raster" }, citation },
   };
+  const fires: LoadedLayer = { ...trails, id: "fire-perimeters", style: { geometry: "polygon", color: "#F57272" } };
+  const big: GeoJSON.Feature = { type: "Feature", geometry: null as never, properties: { acres: 200_000 } };
 
-  it("shows ink, not the registry color, for GeoJSON (the research look draws data in ink)", () => {
-    const species: LoadedLayer = { ...trails, id: "species", style: { geometry: "point", color: "#E24BB1" } };
-    expect(drawnColor(species, { layerId: "species", mode: "points", visible: true })).toBe(INK);
-    // Point sprites stay ink even with a picked color.
-    expect(drawnColor(species, { layerId: "species", mode: "points", color: "#FF5A36", visible: true })).toBe(INK);
-    const fires: LoadedLayer = { ...trails, id: "fire-perimeters", style: { geometry: "polygon", color: "#FF5A36" } };
-    expect(drawnColor(fires, { layerId: "fire-perimeters", mode: "polygons", visible: true })).toBe(INK);
+  it("keys a fire perimeter as pink tint and hatch at its own density", () => {
+    const op = { layerId: "fire-perimeters", mode: "polygons" as const, visible: true };
+    expect(layerLegend(fires, op)).toMatchObject({ kind: "area", tint: PINK, hatch: PINK, outline: PINK });
+    expect(layerLegend(fires, op, big)).toMatchObject({ spacing: 3 });
+    expect(layerLegend(fires, op, big, PURPLE)).toMatchObject({ tint: PURPLE });
   });
 
-  it("shows ink for vector tile polygons and the style color for vector tile lines", () => {
-    const vector = (geometry: "polygon" | "line"): LoadedLayer => ({
-      ...lands,
-      style: { geometry, color: "#B9A6FF" },
+  it("keys points by their sprite, and dense point layers by the hex tile ramp", () => {
+    const species: LoadedLayer = { ...trails, id: "species", style: { geometry: "point", color: "#3A3A3C" } };
+    expect(layerLegend(species, { layerId: "species", mode: "points", visible: true }).kind).toBe("symbol");
+    const many: LoadedLayer = {
+      ...species,
       result: {
-        kind: "tiles",
-        data: { url: "https://example.test/{z}/{x}/{y}.pbf", minzoom: 0, maxzoom: 14, format: "vector", sourceLayer: "x", geometry },
-        citation,
-      },
-    });
-    expect(drawnColor(vector("polygon"), undefined)).toBe(INK);
-    expect(drawnColor(vector("line"), undefined)).toBe("#B9A6FF");
+        ...species.result,
+        data: {
+          type: "FeatureCollection",
+          features: Array.from({ length: 2001 }, () => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [0, 0] }, properties: {} })),
+        },
+      } as LoadedLayer["result"],
+    };
+    expect(layerLegend(many, { layerId: "species", mode: "points", visible: true }).kind).toBe("ramp");
   });
 
-  it("shows a neutral gray for raster tiles, which draw their own colors", () => {
-    expect(drawnColor(nightLights, { layerId: "night-lights", mode: "polygons", visible: true })).toBe("#9A9A96");
+  it("keys raster tiles as a dark grey hatch", () => {
+    expect(layerLegend(nightLights, { layerId: "night-lights", mode: "polygons", visible: true })).toEqual({ kind: "tiles", color: DARK_GREY });
   });
 
-  it("prefers a color picked in the panel", () => {
-    expect(drawnColor(trails, { layerId: "osm-trails", mode: "lines", color: "#FF5A36", visible: true })).toBe("#FF5A36");
+  it("keys vector tile areas (public lands) as sage protected land", () => {
+    expect(layerLegend(lands, undefined)).toMatchObject({ kind: "area", tint: SAGE });
   });
 
   it("docks the compare slot under the time scrubber, above the layers", () => {

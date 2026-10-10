@@ -3,6 +3,7 @@ import type { Feature, FeatureCollection, LineString } from "geojson";
 import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { overpassQuery } from "./_shared/overpass";
+import { layerColor } from "@/lib/render/palette";
 
 export { overpassFailure } from "./_shared/overpass";
 
@@ -127,7 +128,7 @@ const osmTrails = defineLayer({
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 2500,
   input: inputSchema,
-  style: { geometry: "line", color: "#2F3A44" },
+  style: { geometry: "line", color: layerColor("osm-trails") },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const area = bboxAreaKm2(ctx.bbox);

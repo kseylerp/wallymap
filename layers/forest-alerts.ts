@@ -18,6 +18,7 @@
 import { z } from "zod";
 import { defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
+import { layerColor } from "@/lib/render/palette";
 
 const TILE_BASE = "https://tiles.globalforestwatch.org/gfw_integrated_alerts/latest/dynamic/{z}/{x}/{y}.png";
 
@@ -52,7 +53,7 @@ const forestAlerts = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
-  style: { geometry: "polygon", color: "#E1498C" },
+  style: { geometry: "polygon", color: layerColor("forest-alerts") },
 
   async query(): Promise<LayerResult | LayerError> {
     const now = new Date();

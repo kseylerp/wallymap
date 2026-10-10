@@ -14,6 +14,7 @@ import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult } from "./t
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
+import { layerColor } from "@/lib/render/palette";
 
 const SERVICE_URL =
   "https://services1.arcgis.com/ERdCHt0sNM6dENSD/arcgis/rest/services/Wilderness_Areas_in_the_United_States/FeatureServer/0";
@@ -89,7 +90,7 @@ const wilderness = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 400_000,
   input: z.object({}),
-  style: { geometry: "polygon", color: "#B9A6FF", fillOpacity: 0.22 },
+  style: { geometry: "polygon", color: layerColor("wilderness"), fillOpacity: 0.22 },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

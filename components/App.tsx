@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { ChatRail } from "@/components/ChatRail";
 import { CompareControl, CompareSwipe, openCompareAction, useCompareTicker } from "@/components/CompareControl";
 import { InspectCard } from "@/components/InspectCard";
-import { LayerStack, selectionColor } from "@/components/LayerStack";
+import { LayerStack, selectionSwatch } from "@/components/LayerStack";
 import { MapCanvas, type MapHandle } from "@/components/MapCanvas";
 import { MapControls } from "@/components/MapControls";
 import { MapPills } from "@/components/MapPills";
@@ -248,7 +248,7 @@ export function App() {
           key={`${selected.layerId}:${selected.side ?? "a"}:${selected.lngLat.join(",")}`}
           selection={selected}
           layer={selectedLayer}
-          color={selectionColor(state, selected, selectedLayer)}
+          swatch={selectionSwatch(state, selected, selectedLayer)}
           project={project}
           onCameraChange={onCameraChange}
           onClose={deselect}

@@ -21,35 +21,51 @@ import {
   type StyleLayerLike,
 } from "@/lib/render/hybridStyle";
 import { compareBaseId, compareBId, compareSideShown } from "@/lib/render/compareView";
-import { INK, WHITE } from "@/lib/render/palette";
+import { hatchImage, hatchPatternId, HATCH_SCALE } from "@/lib/render/hatch";
+import { areaRecipe, DARK_GREY, isPaletteColor, LINE, SYMBOL, WHITE, type HatchColor } from "@/lib/render/palette";
+import { rampColor, rgbaString } from "@/lib/render/ramp";
 import { featureCenter } from "@/lib/render/inspect";
 import type { Basemap, MapState } from "@/lib/render/state";
 
 const PREFIX = "tiles-";
 
 /**
- * Public land is a gray tint, not a manager palette (spec §10, research look): ink at 10% regionally, fading to 3% at
- * trailhead zooms so trails and symbols read. The PAD-US `agency` stays in the picked properties but draws nothing.
+ * Vector tile areas (public lands) draw with the deck area recipe (lib/render/palette.ts): a tint of the role color
+ * (sage for protected land) fading with zoom so trails and symbols read at trailhead zooms, a 45° hatch in the same
+ * color (Mapbox `fill-pattern`, images from lib/render/hatch.ts), and a dark grey outline over a white casing. The
+ * PAD-US `agency` stays in the picked properties but draws nothing.
  */
-export function landFillOpacity(opacity = 1): ExpressionSpecification {
+export function landFillOpacity(opacity = 1, tint = 0.12): ExpressionSpecification {
   const stops: [number, number][] = [
-    [9, 0.1],
-    [12, 0.08],
-    [13.5, 0.05],
-    [15, 0.03],
+    [9, tint],
+    [12, tint * 0.8],
+    [13.5, tint * 0.5],
+    [15, tint * 0.3],
   ];
   return ["interpolate", ["linear"], ["zoom"], ...stops.flatMap(([z, o]) => [z, Math.round(o * opacity * 1000) / 1000])];
 }
 
-/** Polygon outlines: a 1px white line at 70% between two 0.5px ink edges (white over ink, as deck draws areas). */
-export const LAND_OUTLINE = { width: 1, casing: 0.5, opacity: 0.7 } as const;
+/** The hatch over vector tile areas: full strength regionally, half by trailhead zooms. */
+export function landHatchOpacity(opacity = 1, alpha = 0.9): ExpressionSpecification {
+  const at = (o: number) => Math.round(o * alpha * opacity * 1000) / 1000;
+  return ["interpolate", ["linear"], ["zoom"], 12, at(1), 15, at(0.5)];
+}
+
+/** Polygon outlines on vector tiles: the outline over a white casing, at 80%. */
+export const LAND_OUTLINE = { opacity: 0.8 } as const;
 
 type VectorLayerSpec = FillLayerSpecification | LineLayerSpecification | CircleLayerSpecification;
 
+/** The hatch pattern a vector tile area layer draws with (its id is a Mapbox image added by `ensureHatchImages`). */
+export function vectorHatchPattern(id: string, color?: string): string {
+  const recipe = areaRecipe(id, color);
+  return hatchPatternId(recipe.color as HatchColor, recipe.step);
+}
+
 /**
- * The Mapbox layers that draw one vector tile layer: for polygons an ink tint (fading with zoom) under a white
- * outline cased in ink, else one line or circle layer in the style color. Every layer reads source `tiles-<id>`;
- * the first layer is `tiles-<id>` (the one picking queries), then `tiles-<id>-casing` and `tiles-<id>-line`.
+ * The Mapbox layers that draw one vector tile layer: for polygons a tint (fading with zoom), a hatch, then an outline
+ * over a white casing; lines dark grey over a white casing; points off-white circles stroked dark grey. Every layer
+ * reads source `tiles-<id>`; picking queries `tiles-<id>` (the tint, the line core or the circles).
  */
 export function vectorTileLayerSpecs(
   id: string,
@@ -57,16 +73,16 @@ export function vectorTileLayerSpecs(
   sourceLayer: string,
   geometry: "point" | "line" | "polygon",
   visible: boolean,
-  /** The layer panel's color and opacity (render op), when set. Polygons ignore the color: they stay gray. */
+  /** The layer panel's color (a palette color only) and opacity (render op), when set. */
   paint: { color?: string; opacity?: number } = {},
 ): VectorLayerSpec[] {
   const layerId = `${PREFIX}${id}`;
-  const color = paint.color ?? style.color;
+  const requested = isPaletteColor(paint.color) ? paint.color.trim().toUpperCase() : undefined;
   const opacity = Math.min(1, Math.max(0, paint.opacity ?? 1));
   const common = { source: layerId, "source-layer": sourceLayer };
   const layout = { visibility: visible ? ("visible" as const) : ("none" as const) };
   if (geometry === "polygon") {
-    const o = LAND_OUTLINE;
+    const r = areaRecipe(id, requested);
     const lineLayout = { ...layout, "line-join": "round" as const };
     return [
       {
@@ -74,33 +90,47 @@ export function vectorTileLayerSpecs(
         type: "fill",
         ...common,
         layout,
-        paint: { "fill-color": INK, "fill-opacity": landFillOpacity(opacity) },
+        paint: { "fill-color": r.color, "fill-opacity": landFillOpacity(opacity, r.tint) },
       },
       {
-        // The ink edges: a 0.5px line either side of a 1px gap, which the white line fills.
+        id: `${layerId}-hatch`,
+        type: "fill",
+        ...common,
+        layout,
+        paint: { "fill-pattern": vectorHatchPattern(id, requested), "fill-opacity": landHatchOpacity(opacity, r.hatchAlpha) },
+      },
+      {
         id: `${layerId}-casing`,
         type: "line",
         ...common,
         layout: lineLayout,
-        paint: { "line-color": INK, "line-width": o.casing, "line-gap-width": o.width, "line-opacity": o.opacity * opacity },
+        paint: { "line-color": WHITE, "line-width": r.outlineWidth + 2 * r.casing, "line-opacity": LAND_OUTLINE.opacity * opacity },
       },
       {
         id: `${layerId}-line`,
         type: "line",
         ...common,
         layout: lineLayout,
-        paint: { "line-color": WHITE, "line-width": o.width, "line-opacity": o.opacity * opacity },
+        paint: { "line-color": r.outline, "line-width": r.outlineWidth, "line-opacity": LAND_OUTLINE.opacity * opacity },
       },
     ];
   }
   if (geometry === "line") {
+    const lineLayout = { ...layout, "line-join": "round" as const, "line-cap": "round" as const };
     return [
+      {
+        id: `${layerId}-casing`,
+        type: "line",
+        ...common,
+        layout: lineLayout,
+        paint: { "line-color": WHITE, "line-width": LINE.casing, "line-opacity": LINE.casingOpacity * opacity },
+      },
       {
         id: layerId,
         type: "line",
         ...common,
-        layout: { ...layout, "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": color, "line-width": 2, "line-opacity": 0.9 * opacity },
+        layout: lineLayout,
+        paint: { "line-color": requested ?? DARK_GREY, "line-width": LINE.width, "line-opacity": opacity },
       },
     ];
   }
@@ -111,15 +141,25 @@ export function vectorTileLayerSpecs(
       ...common,
       layout,
       paint: {
-        "circle-color": color,
+        "circle-color": requested ?? SYMBOL.fill,
         "circle-radius": 4,
-        "circle-stroke-color": WHITE,
-        "circle-stroke-width": 1,
-        "circle-opacity": opacity,
+        "circle-stroke-color": SYMBOL.stroke,
+        "circle-stroke-width": SYMBOL.strokeWidth,
+        "circle-opacity": opacity * SYMBOL.fillOpacity,
         "circle-stroke-opacity": opacity,
       },
     },
   ];
+}
+
+/** Adds every hatch pattern the style needs as a Mapbox image (once per style: a style swap drops images). */
+export function ensureHatchImages(map: MapboxMap, ids: Iterable<string>): void {
+  for (const id of ids) {
+    if (map.hasImage(id)) continue;
+    const match = /^hatch-([0-9A-F]{6})-(\d)$/.exec(id);
+    if (!match) continue;
+    map.addImage(id, hatchImage(`#${match[1]}` as HatchColor, Number(match[2])), { pixelRatio: HATCH_SCALE });
+  }
 }
 
 /** The first label (symbol) layer, so data drawn before it sits under place names; undefined puts it on top. */
@@ -203,6 +243,10 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
         color,
         opacity,
       });
+      ensureHatchImages(
+        map,
+        specs.flatMap((spec) => (spec.type === "fill" && typeof spec.paint?.["fill-pattern"] === "string" ? [spec.paint["fill-pattern"]] : [])),
+      );
       for (const spec of specs) {
         wantedLayers.add(spec.id);
         order.push(spec.id);
@@ -288,22 +332,27 @@ export function heatPointsCollection(data: FeatureCollection): FeatureCollection
   return { type: "FeatureCollection", features };
 }
 
-/** Heat color: the monochrome research ramp, transparent white up to near-black ink. The layer panel's color is ignored. */
+/** Heat stops: (density, ramp position, alpha). Density 0 is transparent. */
+const HEAT_STOPS: [number, number, number][] = [
+  [0.2, 0.08, 0.35],
+  [0.4, 0.35, 0.55],
+  [0.6, 0.6, 0.7],
+  [0.8, 0.82, 0.8],
+  [1, 1, 0.85],
+];
+
+/**
+ * Heat color: the density ramp (off-white → sage → purple → dark grey, OKLCH, lib/render/ramp.ts), growing more
+ * opaque with density. The layer panel's color is ignored.
+ */
 export function heatColor(): ExpressionSpecification {
   return [
     "interpolate",
     ["linear"],
     ["heatmap-density"],
     0,
-    "rgba(255,255,255,0)",
-    0.2,
-    "rgba(255,255,255,0.35)",
-    0.5,
-    "rgba(154,154,150,0.6)",
-    0.8,
-    "rgba(90,90,88,0.75)",
-    1,
-    "rgba(31,31,31,0.85)",
+    rgbaString(rampColor("density", 0), 0),
+    ...HEAT_STOPS.flatMap(([d, t, a]) => [d, rgbaString(rampColor("density", t), a)]),
   ] as ExpressionSpecification;
 }
 

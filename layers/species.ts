@@ -16,6 +16,7 @@ import type { Feature, FeatureCollection, Point } from "geojson";
 import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
+import { layerColor } from "@/lib/render/palette";
 
 const ENDPOINT = "https://api.inaturalist.org/v1/observations";
 const PER_PAGE = 200;
@@ -168,7 +169,7 @@ const species = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 50_000,
   input: inputSchema,
-  style: { geometry: "point", color: "#E24BB1" },
+  style: { geometry: "point", color: layerColor("species") },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const area = bboxAreaKm2(ctx.bbox);

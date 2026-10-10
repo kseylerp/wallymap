@@ -26,6 +26,7 @@ import { defineLayer, type LayerError, type LayerResult, type QueryContext } fro
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
+import { layerColor } from "@/lib/render/palette";
 
 const BASE = "https://api.waterdata.usgs.gov/ogcapi/v0/collections";
 
@@ -190,7 +191,7 @@ const streamflow = defineLayer({
   optionalEnv: ["USGS_API_KEY"],
   maxAreaKm2: 400_000,
   input: inputSchema,
-  style: { geometry: "point", color: "#3FA9F5", unit: "cfs" },
+  style: { geometry: "point", color: layerColor("streamflow"), unit: "cfs" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

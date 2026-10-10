@@ -1,61 +1,121 @@
 import type { Feature } from "geojson";
-import { lineDashFor, POLYGON_INK_FILL } from "@/lib/render/palette";
+import { acresStep } from "@/lib/render/hatch";
+import {
+  areaRecipe,
+  DARK_GREY,
+  HATCH_SPACINGS,
+  HEX_TILE,
+  isPaletteColor,
+  LINE,
+  LINE_CLASSES,
+  lineClassFor,
+  scoreRampFor,
+  WHITE,
+  type RampName,
+} from "@/lib/render/palette";
+import { rampColor, rgbToHex } from "@/lib/render/ramp";
 import type { RenderMode } from "@/lib/render/state";
 import { pinIconFor } from "@/lib/render/wally/pins";
 
 /**
- * The layer panel's legend key for one layer (spec §10, "research look"): what the map draws for it, in the same
- * monochrome terms. Points show their symbol sprite (pins.ts), lines a sample with the layer's dash pattern (the
- * same `lineDashFor` deck draws with), polygons an outlined square with the layer's ink wash (none for boundary
- * layers), score layers a gray ramp, raster tiles a hatched square. The panel draws each key as an inline SVG in `currentColor`.
+ * The legend key for one layer (the layer panel) or one feature (the inspect card's swatch): exactly what the map
+ * draws, from the same palette recipes deck.gl and Mapbox draw with. Points show their sprite, lines their casing,
+ * core and dash, areas their tint, hatch and outline, scores and heat their ramp, raster tiles a dark grey hatch.
  */
-export type LegendKind = "symbol" | "line" | "polygon" | "tiles" | "score";
+export type LegendSymbol =
+  | { kind: "symbol"; spriteUrl: string }
+  | { kind: "line"; color: string; under?: string; dash: [number, number]; casing: string; width: number; casingWidth: number }
+  | {
+      kind: "area";
+      tint: string;
+      tintAlpha: number;
+      hatch: string;
+      hatchAlpha: number;
+      /** Hatch spacing in CSS pixels. */
+      spacing: number;
+      outline: string;
+      casing: string;
+    }
+  | { kind: "ramp"; colors: string[] }
+  | { kind: "tiles"; color: string };
 
-export type LegendSymbol = {
-  kind: LegendKind;
-  /** Points: the layer's symbol sprite in `public/pins/`. */
-  spriteUrl?: string;
-  /** Lines: deck's [dash, gap] in line widths; [0, 0] is solid. */
-  dash?: [number, number];
-  /** Polygons: the ink wash as a share of ink, 0 for an outline only. */
-  fill?: number;
-};
+export type LegendKind = LegendSymbol["kind"];
 
 /**
  * How a layer is drawn: a render mode, `tiles` for raster imagery, or `vector-polygons` for vector tile areas
- * (public lands), which Mapbox draws as a gray tint (components/mapTiles.ts).
+ * (public lands), which Mapbox draws with the same area recipe (components/mapTiles.ts).
  */
 export type LegendMode = RenderMode | "tiles" | "vector-polygons";
 
-/** Deck's wash for polygon layers not listed in POLYGON_INK_FILL. */
-const POLYGON_FILL_DEFAULT = 0.1;
-/** Vector tile areas: the regional stop of the public-lands tint (landFillOpacity in components/mapTiles.ts). */
-const VECTOR_TILE_FILL = 0.1;
-
 /** Layers that shade areas by a 0 to 100 score, when the caller does not pass the layer's unit. */
-const SCORE_LAYERS: ReadonlySet<string> = new Set(["remoteness", "popularity"]);
+const SCORE_LAYERS: ReadonlySet<string> = new Set(["remoteness", "popularity", "popularity-campsites"]);
 
 /** A feature with no properties: campsite layers then read as camp sites (triangles), not parking. */
 const BLANK: Feature = { type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: {} };
 
-/**
- * The legend key for a layer drawn in `mode`. `unit` is the layer's style unit; `"score"` polygons get the ramp.
- * Heat reads as a ramp too (density, not features); columns and hexbin are not drawn yet and fall back to symbols.
- */
-export function legendSymbol(layerId: string, mode: LegendMode, unit?: string): LegendSymbol {
+/** Five samples of a ramp, low to high, as hex. */
+export function rampSamples(name: RampName): string[] {
+  return [0, 0.25, 0.5, 0.75, 1].map((t) => rgbToHex(rampColor(name, t)));
+}
+
+export type LegendOptions = {
+  /** The layer's style unit; `"score"` shades by a ramp. */
+  unit?: string;
+  /** A palette color the layer panel or a compare side drew the layer in. */
+  color?: string;
+  /** The one feature the key stands for (the inspect card): its own hatch density and symbol. */
+  feature?: Feature;
+};
+
+function isScore(layerId: string, unit?: string): boolean {
+  return unit === "score" || (unit === undefined && SCORE_LAYERS.has(layerId));
+}
+
+/** The legend key for a layer drawn in `mode`. */
+export function legendSymbol(layerId: string, mode: LegendMode, { unit, color, feature }: LegendOptions = {}): LegendSymbol {
+  const requested = isPaletteColor(color) ? color.toUpperCase() : undefined;
   switch (mode) {
     case "tiles":
-      return { kind: "tiles" };
+      return { kind: "tiles", color: DARK_GREY };
     case "vector-polygons":
-      return { kind: "polygon", fill: VECTOR_TILE_FILL };
-    case "lines":
-      return { kind: "line", dash: lineDashFor(layerId) };
-    case "polygons":
-      if (unit === "score" || (unit === undefined && SCORE_LAYERS.has(layerId))) return { kind: "score" };
-      return { kind: "polygon", fill: POLYGON_INK_FILL[layerId] ?? POLYGON_FILL_DEFAULT };
+    case "polygons": {
+      if (mode === "polygons" && isScore(layerId, unit)) return { kind: "ramp", colors: rampSamples(scoreRampFor(layerId)) };
+      const r = areaRecipe(layerId, requested);
+      const step = layerId === "fire-perimeters" && feature ? acresStep(feature.properties?.acres ?? feature.properties?.v) : r.step;
+      return {
+        kind: "area",
+        tint: r.color,
+        tintAlpha: r.tint,
+        hatch: r.color,
+        hatchAlpha: r.hatchAlpha,
+        spacing: HATCH_SPACINGS[step],
+        outline: r.outline,
+        casing: WHITE,
+      };
+    }
+    case "lines": {
+      const cls = LINE_CLASSES[lineClassFor(layerId, feature?.properties)];
+      const scoreColor = isScore(layerId, unit) && feature ? rgbToHex(rampColor(scoreRampFor(layerId), Number(feature.properties?.v) / 100)) : undefined;
+      const base = {
+        kind: "line" as const,
+        casing: WHITE,
+        width: LINE.width,
+        casingWidth: LINE.casing,
+        dash: [...cls.dash] as [number, number],
+      };
+      if (requested) return { ...base, color: requested, dash: [0, 0] };
+      if (scoreColor) return { ...base, color: scoreColor, casing: DARK_GREY, dash: [0, 0] };
+      if (isScore(layerId, unit)) return { kind: "ramp", colors: rampSamples(scoreRampFor(layerId)) };
+      return "under" in cls ? { ...base, color: cls.color, under: cls.under } : { ...base, color: cls.color };
+    }
     case "heat":
-      return { kind: "score" };
+      return { kind: "ramp", colors: rampSamples("density") };
     default:
-      return { kind: "symbol", spriteUrl: pinIconFor(layerId, BLANK).url };
+      return { kind: "symbol", spriteUrl: pinIconFor(layerId, feature ?? BLANK).url };
   }
+}
+
+/** The legend key for dense point layers drawn as hex tiles: the gray tile ramp. */
+export function hexTileLegend(): LegendSymbol {
+  return { kind: "ramp", colors: rampSamples(HEX_TILE.ramp) };
 }

@@ -25,6 +25,7 @@ import {
   ROAD_HIGHWAYS,
   ROAD_PADDING_KM,
 } from "./remoteness.config";
+import { layerColor } from "@/lib/render/palette";
 
 const inputSchema = z.object({
   resolution: z.number().int().min(5).max(8).default(7),
@@ -256,7 +257,7 @@ const remoteness = defineLayer({
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 60_000,
   input: inputSchema,
-  style: { geometry: "polygon", color: "#FFFFFF", unit: "score" },
+  style: { geometry: "polygon", color: layerColor("remoteness"), unit: "score" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const area = bboxAreaKm2(ctx.bbox);

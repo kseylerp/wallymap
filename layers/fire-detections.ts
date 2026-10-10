@@ -12,6 +12,7 @@ import type { Feature, FeatureCollection, Point } from "geojson";
 import { defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
+import { layerColor } from "@/lib/render/palette";
 
 const SOURCES = ["VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "MODIS_NRT"] as const;
 
@@ -112,7 +113,7 @@ const fireDetections = defineLayer({
   requiredEnv: ["FIRMS_MAP_KEY"],
   maxAreaKm2: 2_000_000,
   input: inputSchema,
-  style: { geometry: "point", color: "#FF5A36", unit: "MW" },
+  style: { geometry: "point", color: layerColor("fire-detections"), unit: "MW" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const key = ctx.env.FIRMS_MAP_KEY;

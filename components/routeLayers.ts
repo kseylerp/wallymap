@@ -9,7 +9,8 @@ import type {
   SymbolLayerSpecification,
 } from "mapbox-gl";
 import type { MapState, RouteState } from "@/lib/render/state";
-import { SLATE, WHITE } from "@/lib/render/palette";
+import { ROUTE } from "@/lib/render/palette";
+import { routePinUrl } from "@/lib/render/wally/pins";
 import { progressGradient } from "@/lib/render/wally/playback";
 import {
   DART_ICON_ID,
@@ -36,10 +37,11 @@ const DATA_PREFIXES = ["tiles-", "heat-"];
 const LABEL_FONT = ["DIN Pro Medium", "Arial Unicode MS Regular"];
 const UNITS = "mi" as const;
 
+/** Waypoint symbols drawn from the palette (lib/render/wally/pins.ts): the start pink, end and via off-white. */
 export const PIN_IMAGES = {
-  start: { id: "route-start", url: "/pins/route-start.svg" },
-  end: { id: "route-end", url: "/pins/route-end.svg" },
-  via: { id: "route-via", url: "/pins/route-via.svg" },
+  start: { id: "route-start", url: routePinUrl("start") },
+  end: { id: "route-end", url: routePinUrl("end") },
+  via: { id: "route-via", url: routePinUrl("via") },
 } as const;
 /** Draw order among pins (higher on top): the start ring stays visible on a loop. */
 const PIN_SORT = { start: 2, end: 1, via: 0 } as const;
@@ -71,9 +73,9 @@ export function routeMapLayers(id: string): { below: LayerSpecification[]; above
     filter: kindIs("mile"),
     paint: {
       "circle-radius": 5,
-      "circle-color": WHITE,
-      "circle-stroke-color": SLATE,
-      "circle-stroke-opacity": 0.45,
+      "circle-color": ROUTE.mileDot,
+      "circle-stroke-color": ROUTE.mileRing,
+      "circle-stroke-opacity": 0.9,
       "circle-stroke-width": 1.5,
       "circle-pitch-alignment": "map",
     },
@@ -106,7 +108,7 @@ export function routeMapLayers(id: string): { below: LayerSpecification[]; above
       "text-offset": [0.9, 0],
       "text-allow-overlap": true,
     },
-    paint: { "text-color": SLATE, "text-halo-color": WHITE, "text-halo-width": 1.4 },
+    paint: { "text-color": ROUTE.label, "text-halo-color": ROUTE.casing, "text-halo-width": 1.4 },
   };
   const pins: SymbolLayerSpecification = {
     id: `${source}-pins`,
@@ -215,7 +217,7 @@ export function setRouteProgress(map: MapboxMap, routeId: string, fraction: numb
 
 type ImageSpec = { id: string; url: string; width: number; height: number; pixelRatio: number };
 
-/** The dart and the three monochrome waypoint symbols (24×24 drawings on a 48 px canvas, drawn at 2x). */
+/** The dart and the three waypoint symbols (24×24 drawings on a 48 px canvas, drawn at 2x). */
 export function routeImageSpecs(): ImageSpec[] {
   return [
     dartIconSpec(),

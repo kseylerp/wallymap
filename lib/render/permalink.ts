@@ -1,5 +1,6 @@
 import type { BBox, LayerError, LayerResult, StyleHints } from "@/layers/types";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
+import { DARK_GREY } from "@/lib/render/palette";
 import type { Basemap, MapAction, MapState, RenderMode, TimeState, Viewport } from "@/lib/render/state";
 
 /** A time window as ISO dates (the scrubber's window, `t=`). */
@@ -31,7 +32,7 @@ function timeOf(time: PermalinkSource["time"]): PermalinkTime | undefined {
 
 const BASEMAPS: readonly Basemap[] = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"];
 const RENDER_MODES: readonly RenderMode[] = ["points", "lines", "polygons", "heat", "columns", "hexbin"];
-const FALLBACK_STYLE: StyleHints = { geometry: "line", color: "#2F3A44" };
+const FALLBACK_STYLE: StyleHints = { geometry: "line", color: DARK_GREY };
 const DEFAULT_MODE: Record<StyleHints["geometry"], RenderMode> = { point: "points", line: "lines", polygon: "polygons" };
 
 function round(value: number, digits: number): string {

@@ -17,6 +17,7 @@ import { z } from "zod";
 import { defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { FOREST_LOSS_LATEST_YEAR } from "@/lib/time";
+import { layerColor } from "@/lib/render/palette";
 
 const TILE_BASE = "https://tiles.globalforestwatch.org/umd_tree_cover_loss/latest/dynamic/{z}/{x}/{y}.png";
 
@@ -52,7 +53,7 @@ const forestLoss = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: "#E1498C" },
+  style: { geometry: "polygon", color: layerColor("forest-loss") },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     if (input.startYear > input.endYear) {

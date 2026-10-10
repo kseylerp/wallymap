@@ -2,6 +2,7 @@ import type { Feature, Polygon } from "geojson";
 import { GeoJsonLayer } from "@deck.gl/layers";
 import { describe, expect, it } from "vitest";
 import { COMPARE_COLORS, DELTA_FILL_ALPHA } from "@/lib/render/compareView";
+import { HEX_COLUMN } from "@/lib/render/palette";
 import { buildDeckLayers, buildDeckLayerSets, deltaColor, DELTA_STROKE, hexToRgba } from "@/lib/render/deck";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
@@ -87,7 +88,54 @@ describe("delta rendering", () => {
     expect(props(hex).extruded).toBe(true);
     const [f] = (props(hex).data as GeoJSON.FeatureCollection).features;
     expect((props(hex).getElevation as (f: unknown) => number)(f)).toBe(4000);
-    expect((props(hex).getFillColor as Accessor)(f).slice(0, 3)).toEqual(hexToRgba(COMPARE_COLORS.b).slice(0, 3));
+    // Columns variant C: translucent white walls with white caps; only the tallest takes purple, with its value.
+    expect((props(hex).getFillColor as Accessor)(f)).toEqual(hexToRgba(HEX_COLUMN.top, Math.round(255 * HEX_COLUMN.topWallAlpha)));
+    expect((props(hex).getLineColor as Accessor)(f)).toEqual(hexToRgba(HEX_COLUMN.edge, Math.round(255 * HEX_COLUMN.edgeAlpha)));
+    const layers = buildDeckLayers(visibleState(s), opts);
+    expect(layers.map((l) => l.id)).toEqual(["remoteness@hexdelta:polygons", "remoteness@hexdelta:polygons:caps", "remoteness@hexdelta:polygons:label"]);
+    const caps = props(layers[1]).data as GeoJSON.FeatureCollection;
+    const ring = (caps.features[0].geometry as GeoJSON.Polygon).coordinates[0];
+    expect(ring[0][2]).toBeGreaterThan(4000);
+    expect((props(layers[1]).getLineColor as Accessor)(caps.features[0])).toEqual(hexToRgba(HEX_COLUMN.top));
+    expect((props(layers[2]).data as { text: string }[])[0].text).toBe("20");
+  });
+
+  it("draws shorter delta columns as translucent white volumes with white caps outlined dark grey", () => {
+    const cell = (h3: string, x: number, year: number, v: number): Feature => ({
+      type: "Feature",
+      geometry: square(x),
+      properties: { h3, v, t: `${year}-01-01T00:00:00.000Z` },
+    });
+    const twoCells: LoadedLayer = {
+      ...fires,
+      id: "remoteness",
+      result: {
+        ...fires.result,
+        data: {
+          type: "FeatureCollection",
+          features: [
+            cell("8a2a1072b59ffff", -120, 2018, 10),
+            cell("8a2a1072b59ffff", -120, 2022, 30),
+            cell("8a2a1072b5b7fff", -118, 2018, 10),
+            cell("8a2a1072b5b7fff", -118, 2022, 15),
+          ],
+        },
+      } as LoadedLayer["result"],
+    };
+    const s = run(
+      { ...initialMapState, terrain: false },
+      { type: "layer_loaded", layer: twoCells },
+      { type: "render", op: { layerId: "remoteness", mode: "polygons", visible: true } },
+      { type: "set_compare", compare: { ...spec, layerId: "remoteness", mode: "delta" } },
+    );
+    const [walls, caps] = buildDeckLayers(visibleState(s), opts);
+    expect(props(walls).extruded).toBe(true);
+    const features = (props(walls).data as GeoJSON.FeatureCollection).features;
+    const short = features.find((f) => Math.abs(Number(f.properties?.v)) < 20)!;
+    expect((props(walls).getFillColor as Accessor)(short)).toEqual(hexToRgba(HEX_COLUMN.wall, Math.round(255 * HEX_COLUMN.wallAlpha)));
+    const shortCap = (props(caps).data as GeoJSON.FeatureCollection).features.find((f) => f.properties?.top === false)!;
+    expect((props(caps).getFillColor as Accessor)(shortCap)).toEqual(hexToRgba(HEX_COLUMN.cap, Math.round(255 * HEX_COLUMN.capAlpha)));
+    expect((props(caps).getLineColor as Accessor)(shortCap)).toEqual(hexToRgba(HEX_COLUMN.capOutline));
   });
 });
 

@@ -16,13 +16,14 @@
  *                    "Private Conservation Land"; private parcels usually have no agency, only a "Private ..." designation
  *       access       open | restricted | closed | unknown (raw Pub_Access)
  *       category     protected_area | wilderness | state_park | nature_reserve | managed_forest | national_park | national_monument
- *   The map draws these polygons as a gray ink tint (not colored by manager); see landFillOpacity in components/mapTiles.ts.
+ *   The map draws these polygons as a sage tint and 45° hatch (not colored by manager); see vectorTileLayerSpecs in components/mapTiles.ts.
  * No upstream call is made by the layer: it only hands the tile URL to the map.
  */
 import { z } from "zod";
 import { defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
+import { layerColor } from "@/lib/render/palette";
 
 export const PADUS_TILE_URL = "https://storage.googleapis.com/wally-tiles/padus/v1/{z}/{x}/{y}.pbf";
 export const PADUS_SOURCE_LAYER = "padus";
@@ -50,7 +51,7 @@ const publicLands = defineLayer({
   optionalEnv: ["PADUS_TILES_URL"],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
-  style: { geometry: "polygon", color: "#B9A6FF", fillOpacity: 0.28 },
+  style: { geometry: "polygon", color: layerColor("public-lands"), fillOpacity: 0.28 },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     // Outside the US the tiles are simply empty, so they are returned anyway along with the note.

@@ -1,68 +1,63 @@
 import type { Map as MapboxMap } from "mapbox-gl";
 import { describe, expect, it } from "vitest";
 import {
+  ensureHatchImages,
+  heatColor,
   heatLayerSpec,
   heatPointsCollection,
   insertBeforeId,
   LAND_OUTLINE,
   landFillOpacity,
+  landHatchOpacity,
   syncHeatLayers,
   syncTileLayers,
+  vectorHatchPattern,
   vectorTileLayerSpecs,
 } from "@/components/mapTiles";
+import { DARK_GREY, OFF_WHITE, PURPLE, SAGE, WHITE } from "@/lib/render/palette";
+import { hexToRgb, lightness } from "@/lib/render/ramp";
 import type { LayerResult } from "@/layers/types";
 import { initialMapState, type MapState } from "@/lib/render/state";
 
 const STYLE = { geometry: "polygon" as const, color: "#B9A6FF" };
 
 describe("vectorTileLayerSpecs", () => {
-  it("builds an ink tint and a white outline cased in ink for polygons, keyed tiles-<id>", () => {
+  it("draws public land as the sage area recipe: tint, 45° hatch, a dark grey outline over a white casing", () => {
     const specs = vectorTileLayerSpecs("public-lands", STYLE, "padus", "polygon", true);
-    expect(specs).toHaveLength(3);
-    const [fill, casing, line] = specs;
+    expect(specs.map((s) => s.id)).toEqual(["tiles-public-lands", "tiles-public-lands-hatch", "tiles-public-lands-casing", "tiles-public-lands-line"]);
+    const [fill, hatch, casing, line] = specs;
     expect(fill).toMatchObject({
-      id: "tiles-public-lands",
       type: "fill",
       source: "tiles-public-lands",
       "source-layer": "padus",
       layout: { visibility: "visible" },
-      paint: { "fill-color": "#1F1F1F", "fill-opacity": landFillOpacity(1) },
+      paint: { "fill-color": SAGE, "fill-opacity": landFillOpacity(1, 0.12) },
     });
-    // 0.5px of ink either side of the 1px white line.
-    expect(casing).toMatchObject({
-      id: "tiles-public-lands-casing",
-      type: "line",
+    expect(hatch).toMatchObject({
+      type: "fill",
       source: "tiles-public-lands",
-      "source-layer": "padus",
-      paint: { "line-color": "#1F1F1F", "line-width": 0.5, "line-gap-width": 1, "line-opacity": 0.7 },
+      paint: { "fill-pattern": "hatch-9FB693-1", "fill-opacity": landHatchOpacity(1, 0.9) },
     });
-    expect(line).toMatchObject({
-      id: "tiles-public-lands-line",
-      type: "line",
-      source: "tiles-public-lands",
-      "source-layer": "padus",
-      layout: { visibility: "visible" },
-      paint: { "line-color": "#FFFFFF", "line-width": 1, "line-opacity": 0.7 },
-    });
-    expect(LAND_OUTLINE).toEqual({ width: 1, casing: 0.5, opacity: 0.7 });
+    expect(vectorHatchPattern("public-lands")).toBe("hatch-9FB693-1");
+    expect(casing).toMatchObject({ type: "line", paint: { "line-color": WHITE, "line-width": 2.5, "line-opacity": 0.8 } });
+    expect(line).toMatchObject({ type: "line", layout: { visibility: "visible" }, paint: { "line-color": DARK_GREY, "line-width": 1, "line-opacity": 0.8 } });
+    expect(LAND_OUTLINE).toEqual({ opacity: 0.8 });
   });
 
-  it("draws no manager or agency colors: every area is the same gray, whatever its agency", () => {
-    const specs = vectorTileLayerSpecs("public-lands", STYLE, "padus", "polygon", true);
-    const json = JSON.stringify(specs);
+  it("draws no manager or agency colors: every area is the same sage, whatever its agency", () => {
+    const json = JSON.stringify(vectorTileLayerSpecs("public-lands", STYLE, "padus", "polygon", true));
     expect(json).not.toContain("agency");
-    expect(json).not.toContain("#B9A6FF");
     expect(json).not.toMatch(/"match"|"case"/);
   });
 
-  it("keeps public land gray even when a color was picked, and scales the outline by the panel opacity", () => {
-    const [fill, casing, line] = vectorTileLayerSpecs("public-lands", STYLE, "padus", "polygon", true, {
-      color: "#FF5A36",
-      opacity: 0.5,
-    });
-    expect((fill as { paint: Record<string, unknown> }).paint["fill-color"]).toBe("#1F1F1F");
-    expect((casing as { paint: Record<string, unknown> }).paint["line-opacity"]).toBe(0.35);
-    expect((line as { paint: Record<string, unknown> }).paint["line-opacity"]).toBe(0.35);
+  it("takes a palette color picked in the panel, ignores any other, and scales by the panel opacity", () => {
+    const [fill, hatch, casing, line] = vectorTileLayerSpecs("public-lands", STYLE, "padus", "polygon", true, { color: "#FF5A36", opacity: 0.5 });
+    expect((fill as { paint: Record<string, unknown> }).paint["fill-color"]).toBe(SAGE);
+    expect((casing as { paint: Record<string, unknown> }).paint["line-opacity"]).toBe(0.4);
+    expect((line as { paint: Record<string, unknown> }).paint["line-opacity"]).toBe(0.4);
+    expect((hatch as { paint: Record<string, unknown> }).paint["fill-opacity"]).toEqual(landHatchOpacity(0.5, 0.9));
+    const [purple] = vectorTileLayerSpecs("public-lands", STYLE, "padus", "polygon", true, { color: PURPLE });
+    expect((purple as { paint: Record<string, unknown> }).paint["fill-color"]).toBe(PURPLE);
   });
 
   it("hides every spec when not visible", () => {
@@ -71,26 +66,44 @@ describe("vectorTileLayerSpecs", () => {
     }
   });
 
-  it("draws lines as a single line layer in the style color", () => {
+  it("draws lines dark grey over a white casing", () => {
     const specs = vectorTileLayerSpecs("roads", { geometry: "line", color: "#123456" }, "roads", "line", true);
-    expect(specs).toHaveLength(1);
-    expect(specs[0]).toMatchObject({ id: "tiles-roads", type: "line", "source-layer": "roads", paint: { "line-color": "#123456" } });
+    expect(specs.map((s) => s.id)).toEqual(["tiles-roads-casing", "tiles-roads"]);
+    expect(specs[0]).toMatchObject({ type: "line", paint: { "line-color": WHITE, "line-width": 4.5 } });
+    expect(specs[1]).toMatchObject({ type: "line", "source-layer": "roads", paint: { "line-color": DARK_GREY, "line-width": 2.5 } });
   });
 
-  it("draws points as a single circle layer in the style color", () => {
+  it("draws points as off-white circles stroked dark grey", () => {
     const specs = vectorTileLayerSpecs("pts", { geometry: "point", color: "#654321" }, "pts", "point", true);
     expect(specs).toHaveLength(1);
-    expect(specs[0]).toMatchObject({ id: "tiles-pts", type: "circle", paint: { "circle-color": "#654321" } });
+    expect(specs[0]).toMatchObject({ id: "tiles-pts", type: "circle", paint: { "circle-color": OFF_WHITE, "circle-stroke-color": DARK_GREY } });
   });
 });
 
 describe("landFillOpacity", () => {
-  it("interpolates the gray tint on zoom: 0.10, 0.08, 0.05, 0.03", () => {
-    expect(landFillOpacity()).toEqual(["interpolate", ["linear"], ["zoom"], 9, 0.1, 12, 0.08, 13.5, 0.05, 15, 0.03]);
+  it("interpolates the tint on zoom, fading to 30% of it by trailhead zooms", () => {
+    expect(landFillOpacity(1, 0.1)).toEqual(["interpolate", ["linear"], ["zoom"], 9, 0.1, 12, 0.08, 13.5, 0.05, 15, 0.03]);
   });
 
   it("scales every stop by the layer panel opacity", () => {
-    expect(landFillOpacity(0.5)).toEqual(["interpolate", ["linear"], ["zoom"], 9, 0.05, 12, 0.04, 13.5, 0.025, 15, 0.015]);
+    expect(landFillOpacity(0.5, 0.1)).toEqual(["interpolate", ["linear"], ["zoom"], 9, 0.05, 12, 0.04, 13.5, 0.025, 15, 0.015]);
+  });
+});
+
+describe("ensureHatchImages", () => {
+  it("adds each hatch pattern once, at 2x, and skips ids that are not hatches", () => {
+    const added: string[] = [];
+    const images = new Set<string>();
+    const map = {
+      hasImage: (id: string) => images.has(id),
+      addImage: (id: string, image: { width: number; height: number }, options: { pixelRatio: number }) => {
+        added.push(`${id} ${image.width}x${image.height} @${options.pixelRatio}`);
+        images.add(id);
+      },
+    } as unknown as MapboxMap;
+    ensureHatchImages(map, ["hatch-9FB693-1", "hatch-9FB693-1", "not-a-hatch"]);
+    ensureHatchImages(map, ["hatch-9FB693-1"]);
+    expect(added).toEqual(["hatch-9FB693-1 72x72 @2"]);
   });
 });
 
@@ -107,7 +120,13 @@ function fakeMap(initialLayers: FakeLayer[] = [{ id: "land", type: "background" 
   const layers: FakeLayer[] = initialLayers.map((l) => ({ ...l }));
   const sources: Record<string, { type: string; tiles?: string[]; tileSize?: number; data?: unknown }> = {};
   const calls: string[] = [];
+  const images = new Set<string>();
   const map = {
+    hasImage: (id: string) => images.has(id),
+    addImage: (id: string) => {
+      calls.push(`addImage ${id}`);
+      images.add(id);
+    },
     getStyle: () => ({ layers: layers.map((l) => ({ ...l })), sources: { ...sources } }),
     getLayer: (id: string) => layers.find((l) => l.id === id),
     getSource: (id: string) =>
@@ -178,19 +197,22 @@ function stateWith(options: { url?: string; visible?: boolean; raster?: { tileSi
 }
 
 describe("syncTileLayers", () => {
-  it("adds the vector source and its three layers once, under the first label, however often it runs", () => {
+  it("adds the vector source, its hatch image and its four layers once, under the first label, however often it runs", () => {
     const { map, calls, layers } = fakeMap();
     syncTileLayers(map, stateWith());
     syncTileLayers(map, stateWith());
     expect(calls.filter((c) => c.startsWith("addSource"))).toEqual(["addSource tiles-public-lands"]);
+    expect(calls.filter((c) => c.startsWith("addImage"))).toEqual(["addImage hatch-9FB693-1"]);
     expect(calls.filter((c) => c.startsWith("addLayer"))).toEqual([
       "addLayer tiles-public-lands",
+      "addLayer tiles-public-lands-hatch",
       "addLayer tiles-public-lands-casing",
       "addLayer tiles-public-lands-line",
     ]);
     expect(layers.map((l) => l.id)).toEqual([
       "land",
       "tiles-public-lands",
+      "tiles-public-lands-hatch",
       "tiles-public-lands-casing",
       "tiles-public-lands-line",
       "road-label",
@@ -204,6 +226,7 @@ describe("syncTileLayers", () => {
     syncTileLayers(map, initialMapState);
     expect(calls).toEqual([
       "removeLayer tiles-public-lands",
+      "removeLayer tiles-public-lands-hatch",
       "removeLayer tiles-public-lands-casing",
       "removeLayer tiles-public-lands-line",
       "removeSource tiles-public-lands",
@@ -212,14 +235,14 @@ describe("syncTileLayers", () => {
     expect(sources).toEqual({});
   });
 
-  it("toggles layout visibility on all three layers", () => {
+  it("toggles layout visibility on all four layers", () => {
     const { map, layers } = fakeMap();
     syncTileLayers(map, stateWith({ visible: true }));
     syncTileLayers(map, stateWith({ visible: false }));
     const ours = () => layers.filter((l) => l.id.startsWith("tiles-")).map((l) => l.layout?.visibility);
-    expect(ours()).toEqual(["none", "none", "none"]);
+    expect(ours()).toEqual(["none", "none", "none", "none"]);
     syncTileLayers(map, stateWith({ visible: true }));
-    expect(ours()).toEqual(["visible", "visible", "visible"]);
+    expect(ours()).toEqual(["visible", "visible", "visible", "visible"]);
   });
 
   it("drops and re-adds the source when the tile URL changes", () => {
@@ -230,11 +253,13 @@ describe("syncTileLayers", () => {
     syncTileLayers(map, stateWith({ url: next }));
     expect(calls.filter((c) => !c.startsWith("setLayout") && !c.startsWith("moveLayer"))).toEqual([
       "removeLayer tiles-public-lands",
+      "removeLayer tiles-public-lands-hatch",
       "removeLayer tiles-public-lands-casing",
       "removeLayer tiles-public-lands-line",
       "removeSource tiles-public-lands",
       "addSource tiles-public-lands",
       "addLayer tiles-public-lands",
+      "addLayer tiles-public-lands-hatch",
       "addLayer tiles-public-lands-casing",
       "addLayer tiles-public-lands-line",
     ]);
@@ -277,7 +302,7 @@ describe("syncTileLayers with layer panel settings", () => {
     const faded = stateWith({ visible: true });
     faded.renderOps = [{ ...faded.renderOps[0], opacity: 0.5 }];
     syncTileLayers(vector.map, faded);
-    expect(vector.layers.find((l) => l.id === "tiles-public-lands")?.paint).toMatchObject({ "fill-opacity": landFillOpacity(0.5) });
+    expect(vector.layers.find((l) => l.id === "tiles-public-lands")?.paint).toMatchObject({ "fill-opacity": landFillOpacity(0.5, 0.12) });
   });
 
   it("stacks tile layers in render-op order and restacks after a reorder", () => {
@@ -320,25 +345,21 @@ describe("heat mode (Mapbox heatmap)", () => {
     ]);
   });
 
-  it("builds a heatmap layer with opacity and the monochrome gray ramp", () => {
+  it("builds a heatmap layer with opacity and the density ramp (off-white → sage → purple → dark grey)", () => {
     const spec = heatLayerSpec("fires", 0.5);
     expect(spec).toMatchObject({ id: "heat-fires", type: "heatmap", source: "heat-fires" });
     expect(spec.paint?.["heatmap-opacity"]).toBeCloseTo(0.45);
-    expect(spec.paint?.["heatmap-color"]).toEqual([
-      "interpolate",
-      ["linear"],
-      ["heatmap-density"],
-      0,
-      "rgba(255,255,255,0)",
-      0.2,
-      "rgba(255,255,255,0.35)",
-      0.5,
-      "rgba(154,154,150,0.6)",
-      0.8,
-      "rgba(90,90,88,0.75)",
-      1,
-      "rgba(31,31,31,0.85)",
-    ]);
+    const color = spec.paint?.["heatmap-color"] as unknown[];
+    expect(color).toEqual(heatColor());
+    expect(color.slice(0, 5)).toEqual(["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(250, 249, 245, 0)"]);
+    expect(color.at(-1)).toBe(`rgba(${hexToRgb(DARK_GREY).join(", ")}, 0.85)`);
+    // Lightness falls and opacity rises with density.
+    const stops = color.slice(5).filter((_, i) => i % 2 === 1) as string[];
+    const parsed = stops.map((c) => c.match(/[\d.]+/g)!.map(Number));
+    for (let i = 1; i < parsed.length; i++) {
+      expect(lightness(parsed[i].slice(0, 3) as [number, number, number])).toBeLessThan(lightness(parsed[i - 1].slice(0, 3) as [number, number, number]));
+      expect(parsed[i][3]).toBeGreaterThan(parsed[i - 1][3]);
+    }
   });
 
   it("adds the heat source and layer under the labels, uploads data once, and removes them when the mode changes", () => {

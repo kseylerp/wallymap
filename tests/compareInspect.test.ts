@@ -1,10 +1,9 @@
 import type { Feature } from "geojson";
 import { describe, expect, it } from "vitest";
-import { selectionColor } from "@/components/LayerStack";
+import { selectionSwatch } from "@/components/LayerStack";
 import { COMPARE_COLORS, compareBId } from "@/lib/render/compareView";
 import { buildDeckLayerSets } from "@/lib/render/deck";
 import { layerIdFromDeckId, pickToSelection } from "@/lib/render/inspect";
-import { INK } from "@/lib/render/palette";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
 import { isSelectionVisible, visibleState } from "@/lib/render/view";
@@ -91,11 +90,11 @@ describe("inspecting a compare's side B (toggle)", () => {
     expect(isSelectionVisible(loaded, selection)).toBe(false);
   });
 
-  it("shows the side's compare color in the card swatch, ink otherwise", () => {
+  it("shows the side's compare color in the card swatch, the layer's own look otherwise", () => {
     const selection = { layerId: "fire-perimeters", feature: washburn, lngLat: [0, 0] as [number, number] };
-    expect(selectionColor(toggle, { ...selection, side: "b" }, fires)).toBe(COMPARE_COLORS.b);
-    expect(selectionColor(toggle, selection, fires)).toBe(COMPARE_COLORS.a);
-    expect(selectionColor(loaded, selection, fires)).toBe(INK);
+    expect(selectionSwatch(toggle, { ...selection, side: "b" }, fires)).toMatchObject({ kind: "area", tint: COMPARE_COLORS.b, hatch: COMPARE_COLORS.b });
+    expect(selectionSwatch(toggle, selection, fires)).toMatchObject({ kind: "area", tint: COMPARE_COLORS.a });
+    expect(selectionSwatch(loaded, selection, fires)).toMatchObject({ kind: "area", tint: "#F57272", outline: "#F57272" });
   });
 });
 

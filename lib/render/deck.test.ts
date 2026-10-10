@@ -1,6 +1,6 @@
 import { IconLayer, TextLayer } from "@deck.gl/layers";
 import { describe, expect, it } from "vitest";
-import { PathStyleExtension, _TerrainExtension as TerrainExtension } from "@deck.gl/extensions";
+import { FillStyleExtension, PathStyleExtension, _TerrainExtension as TerrainExtension } from "@deck.gl/extensions";
 import { H3HexagonLayer, TerrainLayer } from "@deck.gl/geo-layers";
 import {
   SIBLING_FADE,
@@ -12,12 +12,14 @@ import {
   hexbin,
   scoreRampColor,
 } from "@/lib/render/deck";
-import { lineDashFor } from "@/lib/render/palette";
+import { DARK_GREY, OFF_WHITE, PINK, PURPLE, SAGE, WHITE as WHITE_HEX } from "@/lib/render/palette";
+import { pinIconFor } from "@/lib/render/wally/pins";
 import { pickToSelection } from "@/lib/render/inspect";
 import { initialMapState, type LoadedLayer, type MapState } from "@/lib/render/state";
 import { DECK_TERRAIN_TAG } from "@/lib/render/wally/deckTerrain";
 
-const INK = [31, 31, 31, 255];
+const rgba = (hex: string, alpha = 255) => hexToRgba(hex, alpha);
+const GREY = rgba(DARK_GREY);
 const WHITE = [255, 255, 255, 255];
 type Props = Record<string, unknown>;
 const props = (l: { props: unknown }) => l.props as Props;
@@ -107,148 +109,184 @@ describe("buildDeckLayers", () => {
   });
 });
 
-describe("lines: white over a thin ink casing, dashed per layer", () => {
-  it("draws a 2.5px white line over a 4.5px ink casing (1px a side), only the line pickable", () => {
-    const [casing, line] = buildDeckLayers(trails());
-    expect(casing.id).toBe("osm-trails:lines:casing");
-    expect(line.id).toBe("osm-trails:lines");
-    expect(props(casing)).toMatchObject({ pickable: false, filled: false, getLineColor: INK, getLineWidth: 4.5, lineWidthUnits: "pixels" });
-    expect(props(line)).toMatchObject({ pickable: true, filled: false, getLineColor: WHITE, getLineWidth: 2.5, lineWidthUnits: "pixels" });
+describe("lines: dark grey over a white casing, told apart by dash and order", () => {
+  const informal: GeoJSON.Feature = { ...a, properties: { informal: true } };
+
+  it("draws trails as TRAIL_LINE: a white casing at 0.9, a solid sage core, dark grey dashes on top; only the top pickable", () => {
+    const [casing, under, line] = buildDeckLayers(trails());
+    expect([casing.id, under.id, line.id]).toEqual(["osm-trails:lines:casing", "osm-trails:lines:under", "osm-trails:lines"]);
+    expect(props(casing)).toMatchObject({ pickable: false, filled: false, getLineColor: rgba(WHITE_HEX, 230), getLineWidth: 4.5, lineWidthUnits: "pixels" });
+    expect((props(under).getLineColor as Accessor)(a)).toEqual(rgba(SAGE));
+    expect(props(under).pickable).toBe(false);
+    expect(props(line)).toMatchObject({ pickable: true, filled: false, getLineWidth: 2.5, lineWidthUnits: "pixels" });
+    expect((props(line).getLineColor as Accessor)(a)).toEqual(GREY);
+    // 8px dashes and 8px breaks, in widths of the 2.5px line.
+    expect((props(line).getDashArray as (f: unknown) => number[])(a)).toEqual([8 / 2.5, 8 / 2.5]);
     expect(props(casing).data).toBe(props(line).data);
   });
 
-  it("ignores the registry color: no colored lines, on any basemap", () => {
-    for (const basemap of ["outdoors", "outdoors-satellite", "satellite"] as const) {
-      expect(props(buildDeckLayers({ ...trails(), basemap })[1]).getLineColor).toEqual(WHITE);
-    }
+  it("dots use trails sage, dashes forest roads, and draws other lines solid dark grey with no sage core", () => {
+    const dash = (state: MapState, f: GeoJSON.Feature) => (props(buildDeckLayers(state)[2]).getDashArray as (f: unknown) => number[])(f);
+    expect(dash(trails(), informal)).toEqual([1, 6 / 2.5]);
+    expect((props(buildDeckLayers(trails())[2]).getLineColor as Accessor)(informal)).toEqual(rgba(SAGE));
+    expect((props(buildDeckLayers(trails())[1]).getLineColor as Accessor)(informal)[3]).toBe(0);
+    expect(dash(stateOf("forest-roads", [a], {}, { geometry: "line" }), a)).toEqual([10 / 2.5, 7.5 / 2.5]);
+    const river = buildDeckLayers(stateOf("some-river", [a], {}, { geometry: "line" }));
+    expect(dash(stateOf("some-river", [a], {}, { geometry: "line" }), a)).toEqual([0, 0]);
+    expect((props(river[1]).getLineColor as Accessor)(a)[3]).toBe(0);
+    expect((props(river[2]).getLineColor as Accessor)(a)).toEqual(GREY);
+    expect((props(river[2]).extensions as unknown[])[0]).toBeInstanceOf(PathStyleExtension);
   });
 
-  it("still honors a color the user or agent asked for, and falls back to white on bad hex", () => {
-    expect(props(buildDeckLayers(trails({ color: "#00ff00" }))[1]).getLineColor).toEqual([0, 255, 0, 255]);
-    expect(props(buildDeckLayers(trails({ color: "notahex" }))[1]).getLineColor).toEqual(WHITE);
-  });
-
-  it("marks layers by the white line's dash: trails solid, forest roads dashed 4/3, others a stable pattern", () => {
-    expect(lineDashFor("osm-trails")).toEqual([0, 0]);
-    expect(lineDashFor("forest-roads")).toEqual([4, 3]);
-    expect(lineDashFor("something-new")).toEqual(lineDashFor("something-new"));
-    expect([[4, 3], [2, 2], [8, 3]]).toContainEqual(lineDashFor("something-new"));
-    const [casing, line] = buildDeckLayers(stateOf("forest-roads", [a], {}, { geometry: "line" }));
-    expect(props(line).getDashArray).toEqual([4, 3]);
-    expect((props(line).extensions as unknown[])[0]).toBeInstanceOf(PathStyleExtension);
-    expect(props(casing).getDashArray).toBeUndefined();
+  it("honors a palette color asked for (a compare side) as a solid line, and ignores any other color", () => {
+    const line = (color: string) => props(buildDeckLayers(trails({ color }))[2]);
+    expect((line(PURPLE).getLineColor as Accessor)(a)).toEqual(rgba(PURPLE));
+    expect((line(PURPLE).getDashArray as (f: unknown) => number[])(a)).toEqual([0, 0]);
+    expect((line("#00ff00").getLineColor as Accessor)(a)).toEqual(GREY);
+    expect((line("notahex").getLineColor as Accessor)(a)).toEqual(GREY);
   });
 
   it("keeps the same extensions across a basemap switch (deck throws if they change on a live layer)", () => {
-    const ext = (basemap: MapState["basemap"]) => props(buildDeckLayers({ ...trails(), basemap })[1]).extensions as unknown[];
+    const ext = (basemap: MapState["basemap"]) => props(buildDeckLayers({ ...trails(), basemap })[2]).extensions as unknown[];
     expect(ext("outdoors")).toEqual(ext("outdoors-satellite"));
     expect(ext("outdoors")[0]).toBe(ext("satellite")[0]);
   });
 
   it("multiplies opacity into every color's alpha", () => {
-    const [casing, line] = buildDeckLayers(trails({ opacity: 0.5 }));
-    expect(props(casing).getLineColor).toEqual([31, 31, 31, 128]);
-    expect(props(line).getLineColor).toEqual([255, 255, 255, 128]);
+    const [casing, , line] = buildDeckLayers(trails({ opacity: 0.5 }));
+    expect(props(casing).getLineColor).toEqual([255, 255, 255, 115]);
+    expect((props(line).getLineColor as Accessor)(a)).toEqual([...GREY.slice(0, 3), 128]);
   });
 
-  it("draws the selected line 3.5px white over 1.5px of ink a side, fades its siblings, and re-triggers", () => {
+  it("draws the selected line solid purple 3.5px on a white casing, fades its siblings, and re-triggers", () => {
     const plain = buildDeckLayers(trails());
-    const [casing, line] = buildDeckLayers(select(trails(), a));
+    const [casing, under, line] = buildDeckLayers(select(trails(), a));
     const color = props(line).getLineColor as Accessor;
-    expect(color(a)).toEqual(WHITE);
+    expect(color(a)).toEqual(rgba(PURPLE));
     expect(color(b)[3]).toBe(Math.round(255 * SIBLING_FADE));
+    expect((props(line).getDashArray as (f: unknown) => number[])(a)).toEqual([0, 0]);
+    expect((props(under).getLineColor as Accessor)(a)[3]).toBe(0);
     expect((props(line).getLineWidth as WidthAccessor)(a)).toBe(3.5);
     expect((props(line).getLineWidth as WidthAccessor)(b)).toBe(2.5);
-    expect((props(casing).getLineWidth as WidthAccessor)(a)).toBe(6.5);
+    expect((props(casing).getLineColor as Accessor)(a)).toEqual(WHITE);
+    expect((props(casing).getLineWidth as WidthAccessor)(a)).toBe(5.5);
     expect((props(casing).getLineWidth as WidthAccessor)(b)).toBe(4.5);
-    expect((props(casing).getLineColor as Accessor)(b)[3]).toBe(Math.round(255 * SIBLING_FADE));
     const triggers = (l: { props: unknown }) => props(l).updateTriggers as Record<string, unknown>;
-    for (const accessor of ["getLineColor", "getLineWidth"]) {
-      expect(triggers(line)[accessor]).not.toEqual(triggers(plain[1])[accessor]);
+    for (const accessor of ["getLineColor", "getLineWidth", "getDashArray"]) {
+      expect(triggers(line)[accessor]).not.toEqual(triggers(plain[2])[accessor]);
       expect(triggers(casing)[accessor]).not.toEqual(triggers(plain[0])[accessor]);
     }
   });
 
+  it("draws score lines (popularity) in their ramp on a dark grey casing", () => {
+    const state = stateOf("popularity", [a, b], {}, { geometry: "line", unit: "score" });
+    const [casing, , line] = buildDeckLayers(state);
+    expect(props(casing).getLineColor).toEqual(GREY);
+    expect((props(line).getLineColor as Accessor)(a)).toEqual(rgba(OFF_WHITE));
+    expect((props(line).getLineColor as Accessor)(b)).toEqual(rgba(PURPLE));
+  });
+
   it("leaves other layers alone when a feature of a different layer is selected", () => {
     const state = { ...trails(), selected: { layerId: "campsites", feature: a, lngLat: [-120, 39] as [number, number] } };
-    expect(props(buildDeckLayers(state)[1]).getLineColor).toEqual(WHITE);
+    expect((props(buildDeckLayers(state)[2]).getLineColor as Accessor)(a)).toEqual(GREY);
   });
 });
 
-describe("polygons: white outline over ink, light ink wash", () => {
+describe("areas: tint, 45° hatch and an outline over a white casing", () => {
   const polys = (layerId: string, op: Partial<MapState["renderOps"][number]> = {}) =>
     stateOf(layerId, [a, b], op, { geometry: "polygon" });
+  const fire = (acres: number): GeoJSON.Feature => ({ ...a, properties: { acres, v: acres } });
 
-  it("outlines in 1px white over 0.5px of ink a side, above a 10% ink fill by default (fire perimeters too)", () => {
-    for (const id of ["fire-perimeters", "something-new"]) {
-      const [casing, poly] = buildDeckLayers(polys(id));
-      expect(casing.id).toBe(`${id}:polygons:casing`);
-      expect(props(casing)).toMatchObject({ pickable: false, filled: false, getLineColor: INK, getLineWidth: 2 });
-      const p = props(poly);
-      expect(poly.id).toBe(`${id}:polygons`);
-      expect(p.pickable).toBe(true);
-      expect(p.getFillColor).toEqual([31, 31, 31, Math.round(255 * 0.1)]);
-      expect(p.getLineColor).toEqual(WHITE);
-      expect(p.getLineWidth).toBe(1);
-      expect(p.lineWidthUnits).toBe("pixels");
-    }
+  it("draws fire perimeters pink: 15% tint, pink hatch, a 1.5px pink outline over a 3.5px white casing", () => {
+    const [casing, poly] = buildDeckLayers(polys("fire-perimeters"));
+    expect(casing.id).toBe("fire-perimeters:polygons:casing");
+    expect(props(casing)).toMatchObject({ pickable: false, filled: false, getLineColor: WHITE, getLineWidth: 3.5 });
+    const p = props(poly);
+    expect(poly.id).toBe("fire-perimeters:polygons");
+    expect(p.pickable).toBe(true);
+    expect(p.filled).toBe(true);
+    expect((p.getFillPatternBackgroundColor as Accessor)(a)).toEqual(rgba(PINK, Math.round(255 * 0.15)));
+    expect(p.getLineColor).toEqual(rgba(PINK));
+    expect(p.getLineWidth).toBe(1.5);
+    expect(p.fillPatternMask).toBe(false);
+    expect(p.fillPatternSizeUnits).toBe("pixels");
+    expect(p.getFillPatternScale).toBe(0.5);
+    expect((p.extensions as unknown[])[0]).toBeInstanceOf(FillStyleExtension);
+    // No 2D canvas in tests: the hatch is off and the fill is the tint.
+    expect(p.fillPatternEnabled).toBe(false);
+    expect((p.getFillColor as Accessor)(a)).toEqual(rgba(PINK, Math.round(255 * 0.15)));
   });
 
-  it("outlines boundaries (wilderness, public lands, regions) with no fill", () => {
+  it("hatches larger fires denser, in five steps", () => {
+    const pattern = props(buildDeckLayers(polys("fire-perimeters"))[1]).getFillPattern as (f: unknown) => string;
+    expect([50, 500, 5_000, 50_000, 500_000].map((acres) => pattern(fire(acres)))).toEqual([0, 1, 2, 3, 4].map((s) => `hatch-F57272-${s}`));
+    const mapping = props(buildDeckLayers(polys("fire-perimeters"))[1]).fillPatternMapping as Record<string, unknown>;
+    expect(mapping["hatch-F57272-4"]).toBeDefined();
+  });
+
+  it("tints and hatches protected land sage under a dark grey outline; other areas dark grey", () => {
     for (const id of ["wilderness", "public-lands", "physical-regions"]) {
-      expect(props(buildDeckLayers(polys(id))[1]).filled).toBe(false);
+      const p = props(buildDeckLayers(polys(id))[1]);
+      expect((p.getFillPatternBackgroundColor as Accessor)(a)).toEqual(rgba(SAGE, Math.round(255 * 0.12)));
+      expect((p.getFillPattern as (f: unknown) => string)(a)).toBe("hatch-9FB693-1");
+      expect(p.getLineColor).toEqual(GREY);
     }
+    const other = props(buildDeckLayers(polys("something-new"))[1]);
+    expect((other.getFillPattern as (f: unknown) => string)(a)).toBe("hatch-3A3A3C-1");
   });
 
-  it("applies op opacity to fill and outline", () => {
+  it("draws a compare side in its color: tint, hatch and outline", () => {
+    const p = props(buildDeckLayers(polys("fire-perimeters", { color: PURPLE }))[1]);
+    expect((p.getFillPattern as (f: unknown) => string)(fire(500))).toBe("hatch-6E5BFF-1");
+    expect(p.getLineColor).toEqual(rgba(PURPLE));
+  });
+
+  it("applies op opacity to tint and outline", () => {
     const [casing, poly] = buildDeckLayers(polys("fire-perimeters", { opacity: 0.5 }));
-    expect(props(poly).getFillColor).toEqual([31, 31, 31, 13]);
-    expect(props(poly).getLineColor).toEqual([255, 255, 255, 128]);
-    expect(props(casing).getLineColor).toEqual([31, 31, 31, 128]);
+    expect((props(poly).getFillPatternBackgroundColor as Accessor)(a)).toEqual(rgba(PINK, 19));
+    expect(props(poly).getLineColor).toEqual(rgba(PINK, 128));
+    expect(props(casing).getLineColor).toEqual([255, 255, 255, 128]);
   });
 
-  it("outlines the selected polygon 2.5px white over 1px of ink a side", () => {
+  it("turns the selected area purple with a 2.5px outline, and fades the rest", () => {
     const [casing, poly] = buildDeckLayers(select(polys("fire-perimeters"), a));
     const p = props(poly);
+    expect((p.getLineColor as Accessor)(a)).toEqual(rgba(PURPLE));
+    expect((p.getFillPattern as (f: unknown) => string)(a)).toMatch(/^hatch-6E5BFF-/);
     expect((p.getLineWidth as WidthAccessor)(a)).toBe(2.5);
-    expect((p.getLineWidth as WidthAccessor)(b)).toBe(1);
+    expect((p.getLineWidth as WidthAccessor)(b)).toBe(1.5);
     expect((props(casing).getLineWidth as WidthAccessor)(a)).toBe(4.5);
-    expect((p.getFillColor as Accessor)(b)[3]).toBe(Math.round(26 * SIBLING_FADE));
+    expect((p.getFillPatternBackgroundColor as Accessor)(b)[3]).toBe(Math.round(38 * SIBLING_FADE));
   });
 });
 
-describe("score ramp", () => {
-  it("runs from white at 25% alpha (v 0) to ink at 70% (v 100)", () => {
-    expect(scoreRampColor(0)).toEqual([255, 255, 255, 64]);
-    expect(scoreRampColor(100)).toEqual([31, 31, 31, 179]);
-    expect(scoreRampColor(50)).toEqual([143, 143, 143, 121]);
-  });
-
-  it("clamps out-of-range scores and treats a missing v as 0", () => {
+describe("score areas", () => {
+  it("ramp by v with 0.55 to 0.80 opacity", () => {
+    expect(scoreRampColor(0)).toEqual(rgba(OFF_WHITE, 140));
+    expect(scoreRampColor(100)).toEqual(rgba(DARK_GREY, 204));
+    expect(scoreRampColor(100, "remoteness")).toEqual(rgba(DARK_GREY, 204));
     expect(scoreRampColor(250)).toEqual(scoreRampColor(100));
     expect(scoreRampColor(-5)).toEqual(scoreRampColor(0));
     expect(scoreRampColor(undefined)).toEqual(scoreRampColor(0));
   });
 
-  it("shades score polygons (remoteness) by v in gray under a faint ink outline; selected, white over ink", () => {
+  it("shades remoteness cells by its ramp (off-white → sage → dark grey) with white 1px edges; selected purple", () => {
     const state = stateOf("remoteness", [a, b], {}, { geometry: "polygon", unit: "score" });
-    const [casing, poly] = buildDeckLayers(state);
-    const p = props(poly);
-    expect((p.getFillColor as Accessor)(a)).toEqual([255, 255, 255, 64]);
-    expect((p.getFillColor as Accessor)(b)).toEqual([31, 31, 31, 179]);
-    expect(p.getLineColor).toEqual([31, 31, 31, 51]);
-    expect(p.getLineWidth).toBe(0.5);
-    expect(props(casing).getLineWidth).toBe(0);
-    const [selCasing, selPoly] = buildDeckLayers(select(state, b));
-    expect((props(selPoly).getLineColor as Accessor)(b)).toEqual(WHITE);
-    expect((props(selPoly).getLineWidth as WidthAccessor)(b)).toBe(2.5);
-    expect((props(selCasing).getLineWidth as WidthAccessor)(b)).toBe(4.5);
-    expect((props(selCasing).getLineWidth as WidthAccessor)(a)).toBe(0);
+    const layers = buildDeckLayers(state);
+    expect(layers).toHaveLength(1);
+    const p = props(layers[0]);
+    expect((p.getFillColor as Accessor)(a)).toEqual(rgba(OFF_WHITE, 140));
+    expect((p.getFillColor as Accessor)(b)).toEqual(rgba(DARK_GREY, 204));
+    expect(p.getLineColor).toEqual(rgba(WHITE_HEX, 204));
+    expect(p.getLineWidth).toBe(1);
+    const [sel] = buildDeckLayers(select(state, b));
+    expect((props(sel).getLineColor as Accessor)(b)).toEqual(rgba(PURPLE));
+    expect((props(sel).getLineWidth as WidthAccessor)(b)).toBe(2.5);
   });
 });
 
 describe("point symbols", () => {
-  it("draws up to 2,000 points as 24px monochrome symbols centered on the point", () => {
+  it("draws up to 2,000 points as 24px symbols centered on the point", () => {
     const layers = buildDeckLayers(stateOf("campsites", points(2000)));
     expect(layers).toHaveLength(1);
     const [symbols] = layers;
@@ -263,8 +301,9 @@ describe("point symbols", () => {
     const getIcon = p.getIcon as (f: GeoJSON.Feature) => { url: string; width: number; height: number; anchorY: number };
     const [camp, parking] = points(2);
     // Rasterized at 2x, anchored at the center.
-    expect(getIcon(camp)).toMatchObject({ url: "/pins/camp.svg", width: 48, height: 48, anchorY: 24 });
-    expect(getIcon(parking).url).toBe("/pins/parking.svg");
+    expect(getIcon(camp)).toMatchObject({ url: pinIconFor("campsites", camp).url, width: 48, height: 48, anchorY: 24 });
+    expect(getIcon(parking).url).toBe(pinIconFor("campsites", parking).url);
+    expect(getIcon(parking).url).not.toBe(getIcon(camp).url);
     // The same definition every call, so the atlas is not rebuilt per frame.
     expect(getIcon(camp)).toBe(getIcon(points(1)[0]));
     expect((p.getPosition as Accessor)(camp)).toEqual([-120, 39]);
@@ -280,18 +319,25 @@ describe("point symbols", () => {
     expect((p.getPosition as Accessor)(line)).toEqual([1, 1]);
   });
 
-  it("fills the selected symbol solid ink at full alpha and fades its siblings to 35%", () => {
+  it("fills the selected symbol purple at full alpha and fades its siblings to 35%", () => {
     const features = points(3);
     const plain = props(buildDeckLayers(stateOf("species", features))[0]);
     const p = props(buildDeckLayers(select(stateOf("species", features), features[1]))[0]);
     expect((p.getColor as Accessor)(features[1])).toEqual(WHITE);
     expect((p.getColor as Accessor)(features[0])).toEqual([255, 255, 255, Math.round(255 * SIBLING_FADE)]);
     const getIcon = p.getIcon as (f: GeoJSON.Feature) => { url: string };
-    expect(getIcon(features[1]).url).toBe("/pins/species-selected.svg");
-    expect(getIcon(features[0]).url).toBe("/pins/species.svg");
+    expect(getIcon(features[1]).url).toBe(pinIconFor("species", features[1], true).url);
+    expect(decodeURIComponent(getIcon(features[1]).url)).toContain(`fill="${PURPLE}"`);
+    expect(getIcon(features[0]).url).toBe(pinIconFor("species", features[0]).url);
     const triggers = (q: Props) => q.updateTriggers as Record<string, unknown>;
     expect(triggers(p).getIcon).not.toEqual(triggers(plain).getIcon);
     expect(triggers(p).getColor).not.toEqual(triggers(plain).getColor);
+  });
+
+  it("draws fire detections as pink symbols", () => {
+    const p = props(buildDeckLayers(stateOf("fire-detections", points(2)))[0]);
+    const getIcon = p.getIcon as (f: GeoJSON.Feature) => { url: string };
+    expect(decodeURIComponent(getIcon(points(1)[0]).url)).toContain(`fill="${PINK}"`);
   });
 
   it("applies op opacity, and re-triggers getColor when it changes", () => {
@@ -316,26 +362,23 @@ describe("H3 tiles for dense points", () => {
     expect([0, 6, 6.9, 7, 8.5, 9, 10.9, 11, 12.9, 13, 18].map(hexResolution)).toEqual([3, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]);
   });
 
-  it("draws flat light-gray tiles with a light edge, no color", () => {
+  it("draws flat tiles on the gray ramp with white edges at 0.8", () => {
     const p = props(buildDeckLayers(stateOf("species", dense(2001), {}, { zoom: 10 }))[0]);
     expect(p.pickable).toBe(true);
     expect(p.extruded).toBe(false);
+    expect(p.coverage).toBe(0.94);
     const hexes = p.data as { properties: { count: number; h3: string } }[];
     expect(hexes.reduce((n, h) => n + h.properties.count, 0)).toBe(2001);
     expect((p.getHexagon as (f: unknown) => string)(hexes[0])).toBe(hexes[0].properties.h3);
     expect((p.getLineColor as Accessor)(hexes[0])).toEqual([255, 255, 255, 204]);
-    for (const h of hexes) {
-      const [r, g, bl] = (p.getFillColor as Accessor)(h);
-      // Neutral gray between #9A9A96 and white.
-      expect(r).toBe(g);
-      expect(r).toBeGreaterThanOrEqual(154);
-      expect(bl).toBeGreaterThanOrEqual(150);
-    }
   });
 
-  it("runs from white at 55% (fewest) to #9A9A96 at 80% (busiest), through the fill accessor", () => {
-    expect(hexTileColor(1, 100)).toEqual([255, 255, 255, Math.round(255 * 0.55)]);
-    expect(hexTileColor(100, 100)).toEqual([154, 154, 150, Math.round(255 * 0.8)]);
+  it("runs from off-white at 55% (fewest) to dark grey at 80% (busiest), log scaled, through the fill accessor", () => {
+    expect(hexTileColor(1, 100)).toEqual(rgba(OFF_WHITE, Math.round(255 * 0.55)));
+    expect(hexTileColor(100, 100)).toEqual(rgba(DARK_GREY, Math.round(255 * 0.8)));
+    const mid = hexTileColor(10, 100);
+    expect(mid[0]).toBeLessThan(250);
+    expect(mid[0]).toBeGreaterThan(58);
     const tiles: GeoJSON.Feature[] = [
       ...Array.from({ length: 1990 }, () => dense(1)[0]),
       ...dense(11).map((f, i) => ({ ...f, geometry: { type: "Point" as const, coordinates: [-121 + i * 0.5, 40] } })),
@@ -345,8 +388,8 @@ describe("H3 tiles for dense points", () => {
     const fill = p.getFillColor as Accessor;
     const busiest = hexes.find((h) => h.properties.count === 1990)!;
     const single = hexes.find((h) => h.properties.count === 1)!;
-    expect(fill(busiest)).toEqual([154, 154, 150, 204]);
-    expect(fill(single)).toEqual([255, 255, 255, 140]);
+    expect(fill(busiest)).toEqual(rgba(DARK_GREY, 204));
+    expect(fill(single)).toEqual(rgba(OFF_WHITE, 140));
   });
 
   it("skips features with invalid coordinates instead of throwing", () => {
@@ -362,13 +405,13 @@ describe("H3 tiles for dense points", () => {
     }
   });
 
-  it("labels grouped tiles with an 11px ink count on a white halo, reusing the label list", () => {
+  it("labels grouped tiles with an 11px dark grey count on a white halo, reusing the label list", () => {
     const [hex, labels] = buildDeckLayers(stateOf("species", dense(2001), {}, { zoom: 10 }));
     const all = props(hex).data as { properties: { count: number } }[];
     const p = props(labels);
     const labelled = p.data as { properties: { count: number } }[];
     expect(labelled.length).toBe(all.filter((h) => h.properties.count >= 2).length);
-    expect((p.getColor as Accessor)(labelled[0])).toEqual(INK);
+    expect((p.getColor as Accessor)(labelled[0])).toEqual(GREY);
     expect(p.outlineColor).toEqual([255, 255, 255, 230]);
     expect(p.fontSettings).toMatchObject({ sdf: true });
     expect(p.getSize).toBe(11);
@@ -396,12 +439,12 @@ describe("H3 tiles for dense points", () => {
     expect(sel?.feature.properties).toMatchObject({ count: expect.any(Number), h3: expect.any(String) });
   });
 
-  it("outlines the selected tile in 2.5px ink and fades the others and their labels", () => {
+  it("outlines the selected tile in 2.5px purple and fades the others and their labels", () => {
     const base = stateOf("species", dense(2001), {}, { zoom: 10 });
     const tiles = props(buildDeckLayers(base)[0]).data as GeoJSON.Feature[];
     const [hex, labels] = buildDeckLayers(select(base, tiles[0]));
     const p = props(hex);
-    expect((p.getLineColor as Accessor)(tiles[0])).toEqual(INK);
+    expect((p.getLineColor as Accessor)(tiles[0])).toEqual(rgba(PURPLE));
     expect((p.getLineWidth as WidthAccessor)(tiles[0])).toBe(2.5);
     expect((p.getLineWidth as WidthAccessor)(tiles[1])).toBe(1);
     const fill = p.getFillColor as Accessor;
@@ -473,15 +516,16 @@ describe("draping on 3D terrain", () => {
     expect(decoder.offset).toBeCloseTo(-12000);
   });
 
-  it("drapes lines (casing and core, keeping the dash extension) and polygons", () => {
-    const [, casing, core] = buildDeckLayers(on(trails()), { mapboxToken: TOKEN });
-    for (const l of [casing, core]) {
+  it("drapes lines (casing, sage core and dashes, keeping the dash extension) and polygons (keeping the hatch)", () => {
+    const [, casing, under, core] = buildDeckLayers(on(trails()), { mapboxToken: TOKEN });
+    for (const l of [casing, under, core]) {
       expect(terrainOf(l)).toBe(true);
       expect(props(l).terrainDrawMode).toBe("drape");
     }
     expect((props(core).extensions as unknown[])[0]).toBeInstanceOf(PathStyleExtension);
     const poly = on(stateOf("fire-perimeters", [a], {}, { geometry: "polygon" }));
     for (const l of buildDeckLayers(poly, { mapboxToken: TOKEN }).slice(1)) expect(props(l).terrainDrawMode).toBe("drape");
+    expect((props(buildDeckLayers(poly, { mapboxToken: TOKEN })[2]).extensions as unknown[])[0]).toBeInstanceOf(FillStyleExtension);
   });
 
   it("stands symbols on the surface (offset)", () => {
@@ -544,14 +588,14 @@ describe("switching 3D on and off", () => {
 
   it("keeps the untagged ids and no terrain extension with 3D off", () => {
     const layers = buildDeckLayers(flat(trails()), { mapboxToken: TOKEN });
-    expect(layers.map((l) => l.id)).toEqual(["osm-trails:lines:casing", "osm-trails:lines"]);
+    expect(layers.map((l) => l.id)).toEqual(["osm-trails:lines:casing", "osm-trails:lines:under", "osm-trails:lines"]);
     expect(layers.some(terrainOf)).toBe(false);
     // The dash extension stays: it does not depend on terrain.
-    expect((props(layers[1]).extensions as unknown[])[0]).toBeInstanceOf(PathStyleExtension);
+    expect((props(layers[2]).extensions as unknown[])[0]).toBeInstanceOf(PathStyleExtension);
   });
 
   it("still maps a draped layer's pick back to its app layer", () => {
-    const [, , core] = buildDeckLayers(on(trails()), { mapboxToken: TOKEN });
+    const [, , , core] = buildDeckLayers(on(trails()), { mapboxToken: TOKEN });
     const selection = pickToSelection({ object: a, layer: { id: core.id }, coordinate: [-120, 39] }, { "osm-trails": {} });
     expect(selection?.layerId).toBe("osm-trails");
   });
@@ -561,9 +605,9 @@ describe("update triggers follow layer panel edits while the card is open", () =
   it("change with opacity and color for lines and polygons", () => {
     const triggers = (state: MapState, accessor: string) =>
       (props(buildDeckLayers(select(state, a)).at(-1)!).updateTriggers as Record<string, unknown>)[accessor];
-    for (const accessor of ["getFillColor", "getLineColor", "getLineWidth"]) {
+    for (const accessor of ["getLineColor", "getLineWidth", "getDashArray"]) {
       expect(triggers(trails({ opacity: 0.5 }), accessor)).not.toEqual(triggers(trails({ opacity: 1 }), accessor));
-      expect(triggers(trails({ color: "#FF5A36" }), accessor)).not.toEqual(triggers(trails(), accessor));
+      expect(triggers(trails({ color: PINK }), accessor)).not.toEqual(triggers(trails(), accessor));
     }
   });
 });

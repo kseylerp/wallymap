@@ -23,6 +23,7 @@ import type { Feature, FeatureCollection, Point } from "geojson";
 import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
+import { layerColor } from "@/lib/render/palette";
 
 const SOURCES = ["commons", "mapillary"] as const;
 type Source = (typeof SOURCES)[number];
@@ -287,7 +288,7 @@ const photos = defineLayer({
   optionalEnv: ["MAPILLARY_TOKEN"],
   maxAreaKm2: 2_500,
   input: inputSchema,
-  style: { geometry: "point", color: "#FFD23F" },
+  style: { geometry: "point", color: layerColor("photos") },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const area = bboxAreaKm2(ctx.bbox);

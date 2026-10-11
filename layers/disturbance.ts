@@ -47,7 +47,7 @@ const disturbance = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("disturbance") },
+  style: { geometry: "polygon", color: layerColor("disturbance"), raster: { saturation: -0.35, swatch: "#E8503A" } },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     return gibsDatedResult(SPEC, input.date);

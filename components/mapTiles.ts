@@ -24,6 +24,7 @@ import { compareBaseId, compareBId, compareSideShown, effectiveMode } from "@/li
 import { hatchImage, hatchPatternId, HATCH_SCALE } from "@/lib/render/hatch";
 import { areaRecipe, DARK_GREY, isPaletteColor, LINE, SYMBOL, WHITE, type HatchColor } from "@/lib/render/palette";
 import { rampColor, rgbaString } from "@/lib/render/ramp";
+import { rasterPaint } from "@/lib/render/rasterCalm";
 import { featureCenter } from "@/lib/render/inspect";
 import type { Basemap, MapState } from "@/lib/render/state";
 
@@ -167,7 +168,6 @@ export function insertBeforeId(styleLayers: readonly { id: string; type: string 
   return styleLayers.find((layer) => layer.type === "symbol")?.id;
 }
 
-const RASTER_OPACITY = 0.8;
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 /** Loaded layers bottom first: render-op order (a compare's side B right above its side A), then any layer without an op. */
@@ -274,17 +274,14 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
     // A compare in toggle mode hides the side not showing by opacity, not visibility, so both sides keep their tiles
     // loaded and the 1 Hz flip is instant.
     const shown = compareSideShown(state, loaded.id) ? 1 : 0;
-    const rasterOpacity = RASTER_OPACITY * opacity * shown;
+    // The layer's raster hint calms third-party colors (lib/render/rasterCalm.ts); paint only, so the scrubber and
+    // compare keep working on the same source.
+    const paint = rasterPaint(loaded.style.raster, opacity * shown);
     if (!map.getLayer(id)) {
-      map.addLayer({
-        id,
-        type: "raster",
-        source: id,
-        paint: { "raster-opacity": rasterOpacity, "raster-opacity-transition": { duration: 0 } },
-      });
+      map.addLayer({ id, type: "raster", source: id, paint: { ...paint, "raster-opacity-transition": { duration: 0 } } });
     }
     map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
-    map.setPaintProperty(id, "raster-opacity", rasterOpacity);
+    for (const [property, value] of Object.entries(paint)) map.setPaintProperty(id, property as never, value as never);
   }
 
   // Restack when the layer panel reordered layers that were already on the map (new ones arrive in order).

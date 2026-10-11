@@ -73,7 +73,7 @@ const greenness = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("greenness") },
+  style: { geometry: "polygon", color: layerColor("greenness"), raster: { saturation: -0.5, swatch: "#2E9E3E" } },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     const r = gibsDatedResult(greennessSpec(input.index), input.date);

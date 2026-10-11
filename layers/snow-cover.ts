@@ -66,7 +66,7 @@ const snowCover = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("snow-cover") },
+  style: { geometry: "polygon", color: layerColor("snow-cover"), raster: { saturation: -0.6, brightnessMax: 0.92, swatch: "#BFE8FF" } },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     if (!input.depth) return gibsDatedResult(MODIS_SPEC, input.date);

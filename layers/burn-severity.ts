@@ -58,7 +58,7 @@ const burnSeverity = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("burn-severity") },
+  style: { geometry: "polygon", color: layerColor("burn-severity"), raster: { saturation: -0.35, swatch: "#D8402A" } },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     const partial = input.year > LAST_COMPLETE_YEAR ? " (partial year: only the fires mapped so far)" : "";

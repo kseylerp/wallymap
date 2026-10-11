@@ -20,6 +20,7 @@ import {
 } from "@/lib/render/filters";
 import type { Feature } from "geojson";
 import { LegendKey } from "@/components/LegendKey";
+import { rasterKeyFilter } from "@/lib/render/rasterCalm";
 import { COMPARE_COLORS, compareBId, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
 import { hexbinThreshold } from "@/lib/render/deck";
 import { WHITE } from "@/lib/render/palette";
@@ -269,6 +270,11 @@ function LegendRow({ layer, shownLayer, shownLayerB, op, license, dispatch, onMo
   const { citation, coverageNote } = layer.result;
   const host = hostOf(citation.url);
   const symbol = layerLegend(layer, op);
+  // A raster layer's key shows the tiles' raw color through the same filter the map applies (lib/render/rasterCalm.ts).
+  const isRaster = layer.result.kind === "tiles" && layer.result.data.format === "raster" && symbol.kind === "tiles";
+  const swatch = isRaster ? layer.style.raster?.swatch : undefined;
+  const keySymbol: LegendSymbol = symbol.kind === "tiles" && swatch ? { ...symbol, color: swatch } : symbol;
+  const keyFilter = isRaster ? rasterKeyFilter(layer.style.raster) : "";
 
   const gripRef = useRef<HTMLButtonElement>(null);
   const onHandleKey = (e: KeyboardEvent) => {
@@ -302,7 +308,9 @@ function LegendRow({ layer, shownLayer, shownLayerB, op, license, dispatch, onMo
           onKeyDown={onHandleKey}
           className="-my-[3px] flex h-6 w-6 cursor-grab items-center justify-center rounded-[4px] text-ink active:cursor-grabbing disabled:cursor-default"
         >
-          <LegendKey symbol={symbol} />
+          <span className="flex" style={keyFilter ? { filter: keyFilter } : undefined}>
+            <LegendKey symbol={keySymbol} />
+          </span>
         </button>
         <div className="min-w-0">
           <p className={`truncate text-[13px] leading-[18px] ${visible ? "text-ink" : "text-ink-muted"}`} title={layer.title}>

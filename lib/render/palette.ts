@@ -386,3 +386,12 @@ export const CLUSTER_BLOB = {
  * follow HEX_COLUMN.
  */
 export const COLUMN_WALL_ALPHAS = [0.34, 0.26, 0.18] as const;
+
+/**
+ * Third-party raster tiles (NASA GIBS, GFW, USGS ...) arrive in their own saturated colors. Mapbox raster paint calms
+ * them: with no per-layer hint every raster is desaturated this much and drawn at this opacity. A layer's
+ * `style.raster` overrides either; `raster: null` (imagery) skips both.
+ */
+export const RASTER_CALM = { saturation: -0.55, opacity: 0.72 } as const;
+/** The opacity raster tiles drawn as served (`raster: null`) keep. */
+export const RASTER_AS_SERVED_OPACITY = 0.8;

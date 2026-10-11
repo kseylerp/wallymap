@@ -57,7 +57,7 @@ const carbonFlux = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("carbon-flux") },
+  style: { geometry: "polygon", color: layerColor("carbon-flux"), raster: { saturation: -0.45, swatch: "#2E9E3E" } },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     return {

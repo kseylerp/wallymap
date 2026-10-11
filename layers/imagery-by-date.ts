@@ -131,7 +131,7 @@ const imageryByDate = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 1_000_000,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("imagery-by-date") },
+  style: { geometry: "polygon", color: layerColor("imagery-by-date"), raster: null },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = Date.now();

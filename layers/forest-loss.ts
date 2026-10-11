@@ -53,7 +53,7 @@ const forestLoss = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("forest-loss") },
+  style: { geometry: "polygon", color: layerColor("forest-loss"), raster: { saturation: -0.35, swatch: "#DC6699" } },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     if (input.startYear > input.endYear) {

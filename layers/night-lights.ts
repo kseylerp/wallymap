@@ -59,7 +59,7 @@ const nightLights = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("night-lights") },
+  style: { geometry: "polygon", color: layerColor("night-lights"), raster: { opacity: 0.8, swatch: "#FFD27A" } },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     const now = Date.now();

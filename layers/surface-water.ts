@@ -51,7 +51,7 @@ const surfaceWater = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("surface-water") },
+  style: { geometry: "polygon", color: layerColor("surface-water"), raster: { saturation: -0.5, hueRotate: 40, swatch: "#2F7BFF" } },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     return {

@@ -53,7 +53,7 @@ const forestAlerts = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
-  style: { geometry: "polygon", color: layerColor("forest-alerts") },
+  style: { geometry: "polygon", color: layerColor("forest-alerts"), raster: { saturation: -0.35, swatch: "#E8368F" } },
 
   async query(): Promise<LayerResult | LayerError> {
     const now = new Date();

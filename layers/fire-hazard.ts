@@ -39,7 +39,7 @@ const fireHazard = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
-  style: { geometry: "polygon", color: layerColor("fire-hazard") },
+  style: { geometry: "polygon", color: layerColor("fire-hazard"), raster: { saturation: -0.45, swatch: "#E8503A" } },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

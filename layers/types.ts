@@ -95,6 +95,24 @@ export type StyleHints = {
   cluster?: boolean;
   /** Feature property holding the ISO date the time scrubber filters on; defaults to `t`. */
   timeField?: string;
+  /**
+   * Raster tiles only: how Mapbox calms a third-party image so it sits in the palette (raster paint cannot recolor
+   * pixels, only desaturate, rotate hue, flatten contrast and fade). Unset takes the renderer's default for third-party
+   * rasters (saturation -0.55, opacity 0.72); `null` draws the tiles as served (imagery, the satellite look).
+   * `swatch` is the tiles' raw color, so the layer panel's key can show it through the same filter.
+   */
+  raster?: RasterHint | null;
+};
+
+/** Mapbox raster paint, in Mapbox's units: saturation and contrast -1..1, hueRotate degrees, brightness 0..1, opacity 0..1. */
+export type RasterHint = {
+  saturation?: number;
+  hueRotate?: number;
+  contrast?: number;
+  brightnessMin?: number;
+  brightnessMax?: number;
+  opacity?: number;
+  swatch?: string;
 };
 
 export type Layer<I extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawShape>> = {

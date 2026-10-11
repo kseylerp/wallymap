@@ -17,7 +17,7 @@ import {
 } from "@/components/mapTiles";
 import { DARK_GREY, OFF_WHITE, PURPLE, SAGE, WHITE } from "@/lib/render/palette";
 import { hexToRgb, lightness } from "@/lib/render/ramp";
-import type { LayerResult } from "@/layers/types";
+import type { LayerResult, StyleHints } from "@/layers/types";
 import { buildDeckLayerSets } from "@/lib/render/deck";
 import { pickUnderHeat } from "@/lib/render/inspect";
 import { reduce } from "@/lib/render/reducer";
@@ -301,13 +301,60 @@ describe("syncTileLayers with layer panel settings", () => {
   it("scales raster and vector opacity by the render op", () => {
     const raster = fakeMap();
     syncTileLayers(raster.map, twoRasters(["a", "b"], 0.5));
-    expect(raster.layers.find((l) => l.id === "tiles-a")?.paint).toMatchObject({ "raster-opacity": 0.4 });
+    expect(raster.layers.find((l) => l.id === "tiles-a")?.paint).toMatchObject({ "raster-opacity": 0.36 });
     const vector = fakeMap();
     syncTileLayers(vector.map, stateWith({ visible: true }));
     const faded = stateWith({ visible: true });
     faded.renderOps = [{ ...faded.renderOps[0], opacity: 0.5 }];
     syncTileLayers(vector.map, faded);
     expect(vector.layers.find((l) => l.id === "tiles-public-lands")?.paint).toMatchObject({ "fill-opacity": landFillOpacity(0.5, 0.12) });
+  });
+
+  it("calms third-party rasters by default and applies a layer's raster hint to the Mapbox paint", () => {
+    const withStyle = (style: StyleHints): MapState => {
+      const state = twoRasters(["a", "b"]);
+      state.layers.a = { ...state.layers.a, style };
+      return state;
+    };
+    const plain = fakeMap();
+    syncTileLayers(plain.map, twoRasters(["a", "b"]));
+    expect(plain.layers.find((l) => l.id === "tiles-a")?.paint).toMatchObject({
+      "raster-opacity": 0.72,
+      "raster-saturation": -0.55,
+      "raster-hue-rotate": 0,
+      "raster-brightness-max": 1,
+    });
+    const hinted = fakeMap();
+    const raster = { saturation: -0.5, hueRotate: 40, contrast: 0.1, brightnessMin: 0.05, brightnessMax: 0.92, opacity: 0.6 };
+    syncTileLayers(hinted.map, withStyle({ ...STYLE, raster }));
+    expect(hinted.layers.find((l) => l.id === "tiles-a")?.paint).toMatchObject({
+      "raster-saturation": -0.5,
+      "raster-hue-rotate": 40,
+      "raster-contrast": 0.1,
+      "raster-brightness-min": 0.05,
+      "raster-brightness-max": 0.92,
+      "raster-opacity": 0.6,
+    });
+    // Panel opacity and a compare side hidden by opacity still scale the hint's opacity.
+    const faded = withStyle({ ...STYLE, raster });
+    faded.renderOps = [{ layerId: "a", mode: "polygons", visible: true, opacity: 0.5 }];
+    syncTileLayers(hinted.map, faded);
+    expect(hinted.layers.find((l) => l.id === "tiles-a")?.paint?.["raster-opacity"]).toBeCloseTo(0.3);
+  });
+
+  it("leaves raster: null layers (imagery) as served, with only the existing 0.8 opacity", () => {
+    const { map, layers } = fakeMap();
+    const state = twoRasters(["a", "b"]);
+    state.layers.a = { ...state.layers.a, style: { ...STYLE, raster: null } };
+    syncTileLayers(map, state);
+    expect(layers.find((l) => l.id === "tiles-a")?.paint).toMatchObject({
+      "raster-opacity": 0.8,
+      "raster-saturation": 0,
+      "raster-hue-rotate": 0,
+      "raster-contrast": 0,
+      "raster-brightness-min": 0,
+      "raster-brightness-max": 1,
+    });
   });
 
   it("stacks tile layers in render-op order and restacks after a reorder", () => {

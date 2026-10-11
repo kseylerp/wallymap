@@ -65,7 +65,7 @@ const floodExtent = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("flood-extent") },
+  style: { geometry: "polygon", color: layerColor("flood-extent"), raster: { saturation: -0.5, hueRotate: 40, swatch: "#1E5BFF" } },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     return gibsDatedResult(SPECS[input.source], input.date);

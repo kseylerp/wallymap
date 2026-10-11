@@ -65,7 +65,7 @@ const landCover = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("land-cover") },
+  style: { geometry: "polygon", color: layerColor("land-cover"), raster: { saturation: -0.4, opacity: 0.65, swatch: "#6AA84F" } },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     const retrieved = new Date().toISOString();

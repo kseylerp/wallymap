@@ -36,7 +36,7 @@ const population = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
-  style: { geometry: "polygon", color: layerColor("population") },
+  style: { geometry: "polygon", color: layerColor("population"), raster: { opacity: 0.8, swatch: "#FFD27A" } },
 
   async query(): Promise<LayerResult | LayerError> {
     return {

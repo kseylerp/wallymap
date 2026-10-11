@@ -1,22 +1,24 @@
 import { ChevronRight } from "lucide-react";
+import { FIRST_VISIT } from "@/lib/suggestions";
 
-export const EXAMPLE_QUESTIONS = [
-  "Show hiking trails around Lake Tahoe",
-  "Which wildfires burned near Yosemite in the last 10 years?",
-  "Where has the Amazon lost the most forest since 2015?",
-  "How much snow is on the ground around Mount Hood?",
-  "Find campsites and forest roads open to vehicles near Moab",
-  "What wildlife has been spotted around Banff this year?",
-] as const;
+/** The six starter questions a first-time visitor sees. */
+export const EXAMPLE_QUESTIONS = FIRST_VISIT;
 
-type EmptyStateProps = { onPick: (question: string) => void; onClose?: () => void };
+type EmptyStateProps = {
+  onPick: (question: string) => void;
+  onClose?: () => void;
+  /** The questions to show; the six starters when unset. */
+  questions?: readonly string[];
+  /** Shows a "More" link that swaps in a fresh set. */
+  onMore?: () => void;
+};
 
 /** The hairline ×, as in the data console: a 16px glyph whose invisible ::after reaches 6px past it, so the hit area is 28px. */
 const CLOSE_BUTTON =
   "absolute top-3 right-3 grid size-4 place-items-center text-[16px] leading-none text-ink-muted transition-colors duration-150 hover:text-ink after:absolute after:-inset-1.5 after:content-[''] md:top-5 md:right-5";
 
 /** The welcome card centered over the globe; picking a question sends it and the chat panel takes over. */
-export function EmptyState({ onPick, onClose }: EmptyStateProps) {
+export function EmptyState({ onPick, onClose, questions = EXAMPLE_QUESTIONS, onMore }: EmptyStateProps) {
   return (
     <div
       data-testid="empty-state"
@@ -34,7 +36,7 @@ export function EmptyState({ onPick, onClose }: EmptyStateProps) {
         Ask the map. Every answer is drawn, cited, and exportable.
       </p>
       <ul className="mt-4 grid grid-cols-1 gap-1.5 sm:mt-5 sm:grid-cols-2 sm:gap-2">
-        {EXAMPLE_QUESTIONS.map((q, i) => (
+        {questions.map((q, i) => (
           <li key={q} className="rise-in" style={{ animationDelay: `${220 + i * 50}ms` }}>
             <button
               type="button"
@@ -52,6 +54,15 @@ export function EmptyState({ onPick, onClose }: EmptyStateProps) {
           </li>
         ))}
       </ul>
+      {onMore && (
+        <button
+          type="button"
+          onClick={onMore}
+          className="mt-3 text-[13px] text-ink-muted underline-offset-4 transition-colors duration-150 hover:text-ink hover:underline"
+        >
+          More
+        </button>
+      )}
     </div>
   );
 }

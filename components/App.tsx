@@ -293,6 +293,8 @@ export function App() {
         onToggle={toggle}
         layerPanelOpen={layerPanelOpen}
         suggestionsOpen={suggestions.open}
+        suggestionQuestions={suggestions.questions}
+        onSuggestionsMore={suggestions.more}
         onSuggestionsClose={suggestions.close}
         onSuggestionsSeen={suggestions.markSeen}
       />

@@ -44,6 +44,10 @@ type ChatRailProps = {
   layerPanelOpen?: boolean;
   /** Whether the suggestions card may show (App: first visit, or the "i" pill), also mid-conversation. Unset: shows while the chat is empty. */
   suggestionsOpen?: boolean;
+  /** The questions the card shows; unset: the six starters. */
+  suggestionQuestions?: readonly string[];
+  /** The card's "More" link was pressed. */
+  onSuggestionsMore?: () => void;
   /** The card's × was pressed. */
   onSuggestionsClose?: () => void;
   /** The first message went out, so the card counts as seen. */
@@ -355,6 +359,8 @@ export function ChatRail({
   onToggle,
   layerPanelOpen = false,
   suggestionsOpen,
+  suggestionQuestions,
+  onSuggestionsMore,
   onSuggestionsClose,
   onSuggestionsSeen,
 }: ChatRailProps) {
@@ -509,7 +515,12 @@ export function ChatRail({
           data-testid="empty-state-overlay"
           className={`pointer-events-none absolute inset-0 ${hasMessages ? "z-30" : "z-10"} flex items-center justify-center pt-[calc(var(--safe-top)+4rem)] pr-[calc(var(--safe-right)+1rem)] pb-[calc(var(--safe-bottom)+6rem)] pl-[calc(var(--safe-left)+1rem)] md:pb-[calc(var(--safe-bottom)+5rem)]${layerPanelOpen ? " max-md:hidden" : ""}`}
         >
-          <EmptyState onPick={pickSuggestion} onClose={onSuggestionsClose} />
+          <EmptyState
+            onPick={pickSuggestion}
+            onClose={onSuggestionsClose}
+            questions={suggestionQuestions}
+            onMore={onSuggestionsMore}
+          />
         </div>
       )}
 

@@ -20,9 +20,12 @@
  * (lib/agent/view.ts). The view goes into the system prompt and into buildTools the way
  * app/api/chat/route.ts passes it, and the place then counts as located without a geocode.
  * A question without `@view` that geocodes a named place must also call set_view, or it fails.
- * An `@view` question whose view is too wide for a layer (a zoom_in error) passes only when the model did not call
- * set_view, got at most one zoom_in error per layer (no shrinking and retrying), and wrote a note or reply asking the
- * user to zoom in; anything it did draw must still be rendered.
+ * An `@view` question whose view is too wide for a layer (a zoom_in error) must still answer at that scale: it passes
+ * only when the model did not call set_view, got at most one zoom_in error per layer (no shrinking and retrying), and
+ * at least one query succeeded and was drawn and rendered (the error's widerScale layers). A reply that only asks the
+ * user to zoom in is a refusal and fails.
+ * Every question also fails when a note (or, with no note, the closing text) runs over NOTE_MAX_WORDS words or a heading appears twice across the notes
+ * and the closing text (the note is the answer; the text after it is only follow-ups).
  */
 import { readFileSync } from "node:fs";
 import { generateText, stepCountIs } from "ai";
@@ -35,6 +38,9 @@ import { parseMapView, systemForTurn } from "@/lib/agent/viewContext";
 
 
 const model = process.env.MODEL_NAME ?? "(unset)";
+
+/** Longest note that passes: the prompt asks for about 120 words. */
+const NOTE_MAX_WORDS = 150;
 
 type ToolCall = { toolName: string; output?: unknown };
 
@@ -73,6 +79,27 @@ function readEvalSet(): string[] {
 }
 
 type Outcome = { ok: boolean; line: Record<string, unknown> };
+
+function wordCount(markdown: string): number {
+  return markdown.replace(/[#*_`>|-]+/g, " ").split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+}
+
+/** Headings in markdown: "# Title", a bold-only line, or a "Label:" line, lowercased. */
+function headingsOf(markdown: string): string[] {
+  const out: string[] = [];
+  for (const line of markdown.split("\n")) {
+    const m = /^\s*(?:#{1,6}\s+(.+?)\s*|(?:\*\*|__)(.+?)(?:\*\*|__)\s*|([A-Z][\w' -]{1,40}):\s*)$/.exec(line);
+    const title = m && (m[1] ?? m[2] ?? m[3]);
+    if (title) out.push(title.replace(/[*_:]/g, "").trim().toLowerCase());
+  }
+  return out;
+}
+
+/** Headings that appear more than once across all the notes and the closing text. */
+function duplicatedHeadings(texts: string[]): string[] {
+  const all = texts.flatMap(headingsOf);
+  return [...new Set(all.filter((h, i) => all.indexOf(h) !== i))];
+}
 
 /** Splits a trailing `@view=[w,s,e,n]` off a question into the view a ~1000px-wide map would send for that box. */
 function splitView(raw: string): { question: string; view: MapView | null } {
@@ -139,19 +166,31 @@ async function runQuestion(raw: string): Promise<Outcome> {
     const askedToZoomIn = /zoom(?:ing)? in|zoom closer|closer view|smaller area/i.test(reply);
     // Also a model that read the layer's km² limit and asked without querying at all.
     const wideView = view !== null && (zoomInLayers.length > 0 || (!queried && askedToZoomIn));
-    const wideViewOk = !seq.includes("set_view") && zoomInPerLayer <= 1 && askedToZoomIn && (drew ? rendered : true);
-    const ok = wideView
-      ? wideViewOk
-      : routed && !queried
-        ? noted
-        : located && movedToPlace && queried && (drew ? rendered : answeredEmpty) && noted;
+    // Answering at this scale: some query came back without an error, and what it drew was rendered.
+    const succeeded = queryCalls.filter((c) => c.output !== undefined && !isLayerError(c.output)).length;
+    const wideViewOk = !seq.includes("set_view") && zoomInPerLayer <= 1 && succeeded >= 1 && drew && rendered;
+    // Brevity: the note is the answer, and nothing is said twice.
+    const notes = calls.filter((c) => c.toolName === "note").map((c) => noteText(c.output));
+    // With no note, the closing text is the answer and is held to the same length.
+    const noteWords = (notes.length > 0 ? notes : [result.text]).map(wordCount);
+    const dupHeadings = duplicatedHeadings([...notes, result.text]);
+    const brief = noteWords.every((n) => n <= NOTE_MAX_WORDS) && dupHeadings.length === 0;
+    const ok =
+      brief &&
+      (wideView
+        ? wideViewOk
+        : routed && !queried
+          ? noted
+          : located && movedToPlace && queried && (drew ? rendered : answeredEmpty) && noted);
 
     return {
       ok,
       line: {
         question,
         ...(view ? { view: view.bbox, geocoded: seq.includes("geocode"), movedCamera: seq.includes("set_view") } : {}),
-        ...(wideView ? { zoomInErrors: zoomInLayers.length, zoomInPerLayer, askedToZoomIn } : {}),
+        ...(wideView ? { zoomInErrors: zoomInLayers.length, zoomInPerLayer, askedToZoomIn, succeeded } : {}),
+        noteWords,
+        ...(dupHeadings.length > 0 ? { dupHeadings } : {}),
         model,
         ok,
         seq,
@@ -161,6 +200,7 @@ async function runQuestion(raw: string): Promise<Outcome> {
         tokens: { in: result.totalUsage.inputTokens, out: result.totalUsage.outputTokens },
         seconds: seconds(),
         finish: result.finishReason,
+        textWords: wordCount(result.text),
         textStart: result.text.replace(/\s+/g, " ").slice(0, 120),
       },
     };

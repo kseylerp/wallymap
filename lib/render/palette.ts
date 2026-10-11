@@ -281,18 +281,36 @@ export function lineRampFor(layerId: string): RampName {
 
 // ---- Symbols ----
 
-/** Point symbols (owner's board, variant A): dark grey 1.5px stroke, off-white fill at 0.85, a white 3.5px halo. */
+/**
+ * Point symbols (owner's board, variant A), tuned to read on all three basemaps (owner, 2026-10-11): a dark grey 1.75px
+ * stroke at full opacity, off-white fill at 0.85 (0.6 on the hollow classes, ring and square, so they still read as
+ * marks on dark or busy ground), and a white halo 3.5px wide across the outline (1.75px a side) at 0.9. The symbol is
+ * `sizeMax` px from zoom `sizeMaxZoom` up, easing down to `sizeMin` px at `sizeMinZoom` and never below. Strokes and
+ * halos stay these exact pixel widths at every size.
+ */
 export const SYMBOL = {
   stroke: DARK_GREY,
-  strokeWidth: 1.5,
+  strokeWidth: 1.75,
   fill: OFF_WHITE,
   fillOpacity: 0.85,
+  hollowFillOpacity: 0.6,
   halo: WHITE,
   haloWidth: 3.5,
-  haloOpacity: 0.85,
+  haloOpacity: 0.9,
   selectedFill: PURPLE,
   hazardFill: PINK,
+  sizeMax: 14,
+  sizeMin: 10,
+  sizeMaxZoom: 11,
+  sizeMinZoom: 6,
 } as const;
+
+/** The symbol's on-screen size in whole pixels at a map zoom: 10 at zoom 6 and below, 14 at zoom 11 and above. */
+export function symbolSizePx(zoom: number): number {
+  const z = Number.isFinite(zoom) ? zoom : SYMBOL.sizeMinZoom;
+  const t = Math.min(1, Math.max(0, (z - SYMBOL.sizeMinZoom) / (SYMBOL.sizeMaxZoom - SYMBOL.sizeMinZoom)));
+  return Math.round(SYMBOL.sizeMin + t * (SYMBOL.sizeMax - SYMBOL.sizeMin));
+}
 
 // ---- Hex tiles and columns ----
 

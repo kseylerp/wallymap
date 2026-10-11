@@ -22,6 +22,7 @@ import {
   PURPLE,
   scoreRampFor,
   SELECTED_AREA,
+  symbolSizePx,
   TRAIL_LINE,
   WHITE as WHITE_HEX,
   type AreaRecipe,
@@ -139,7 +140,7 @@ export function scoreRampColor(v: unknown, ramp: RampName = "density"): Rgba {
 const dashExtension = new PathStyleExtension({ dash: true });
 const fillExtension = new FillStyleExtension({ pattern: true });
 const terrainExtension = new TerrainExtension();
-type LayerExtensionLike = PathStyleExtension | FillStyleExtension | TerrainExtension;
+type LayerExtensionLike = PathStyleExtension | FillStyleExtension | TerrainExtension | UnpremultiplySpriteExtension;
 
 /**
  * Terrain props for a data layer while 3D terrain is on: symbols stand on the surface by their anchor (`offset`),
@@ -155,7 +156,26 @@ function widthFor(width: number, selectedWidth: number, selected: Feature | unde
   return (f: Feature) => (f === selected ? selectedWidth : width);
 }
 
-/** Symbols draw this size on screen: a 24px sprite around a 12px symbol, leaving room for the halo. */
+/**
+ * Un-premultiplies the icon sprites. The atlas keeps each sprite premultiplied (its color already scaled by its alpha)
+ * and the layer then blends by alpha once more, so every translucent part of a symbol drew as its color times its alpha
+ * twice: the 0.85 off-white fill came out a grey 0.72 and the 0.9 white halo a dull 0.81, which on the green topographic
+ * basemap made the symbols read as faint rings. Dividing the color by the sprite's own alpha at the end of the
+ * fragment shader gives the drawn color back (the tint's opacity still scales only the alpha); picking is left alone.
+ */
+export class UnpremultiplySpriteExtension extends LayerExtension {
+  static extensionName = "UnpremultiplySpriteExtension";
+  getShaders() {
+    return {
+      inject: {
+        "fs:#main-end": "if (texColor.a > 0.0 && !bool(picking.isActive)) fragColor.rgb = fragColor.rgb / texColor.a;",
+      },
+    };
+  }
+}
+const unpremultiplySpriteExtension = new UnpremultiplySpriteExtension();
+
+/** Symbols draw their 24px sprite 1:1 on screen: the 10 to 14px symbol (SYMBOL, palette.ts) sits in it with room for the halo. */
 const SYMBOL_SIZE_PX = 24;
 /** Sprites are rasterized into the icon atlas at 2x so they stay sharp on high-density screens. */
 const ATLAS_SCALE = 2;
@@ -545,23 +565,24 @@ function scoreAreaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[]
  * Point symbols (pins.ts): a shape per layer family, centered on the point; the selected one fills purple. The
  * sprite's alpha carries the op opacity and the selection fade.
  */
-function symbolLayers(op: RenderOp, { data, selected, terrain, deckId }: OpContext, opacity: number): Layer[] {
+function symbolLayers(op: RenderOp, { data, selected, zoom, terrain, deckId }: OpContext, opacity: number): Layer[] {
+  const size = symbolSizePx(zoom);
   return [
     new IconLayer<Feature>({
       id: `${deckLayerKey(deckId ?? op.layerId, terrain)}:points`,
       data: data.features,
       pickable: true,
       getPosition: markerPosition,
-      getIcon: (f) => atlasIcon(pinIconFor(op.layerId, f, f === selected)),
+      getIcon: (f) => atlasIcon(pinIconFor(op.layerId, f, f === selected, size)),
       getSize: SYMBOL_SIZE_PX,
       sizeUnits: "pixels",
       getColor: colorFor(SPRITE_TINT, opacity, selected),
-      updateTriggers: { getColor: [selectionKey(selected), opacity], getIcon: [op.layerId, selectionKey(selected)] },
+      updateTriggers: { getColor: [selectionKey(selected), opacity], getIcon: [op.layerId, selectionKey(selected), size] },
       // The overlay draws in deck's GlobeView, which flips the icon quads' winding; with back-face culling on,
       // deck 9.4 draws (and picks) no icons at all there. No depth test either: a symbol centered on a 3D slope had
       // its lower half buried in deck's terrain copy and read as an arch.
       parameters: { cullMode: "none", depthCompare: "always" },
-      ...terrainProps(terrain, "offset"),
+      ...terrainProps(terrain, "offset", [unpremultiplySpriteExtension]),
     }),
   ];
 }
@@ -779,18 +800,19 @@ function clusterLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
 function heatSelectionLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const { selected, terrain, deckId } = ctx;
   if (!selected || !ctx.data.features.includes(selected)) return [];
+  const size = symbolSizePx(ctx.zoom);
   return [
     new IconLayer<Feature>({
       id: `${deckLayerKey(deckId ?? op.layerId, terrain)}:heat`,
       data: [selected],
       pickable: true,
       getPosition: markerPosition,
-      getIcon: (f) => atlasIcon(pinIconFor(op.layerId, f, true)),
+      getIcon: (f) => atlasIcon(pinIconFor(op.layerId, f, true, size)),
       getSize: SYMBOL_SIZE_PX,
       sizeUnits: "pixels",
       getColor: withOpacity(SPRITE_TINT, opacity),
       parameters: { cullMode: "none", depthCompare: "always" },
-      ...terrainProps(terrain, "offset"),
+      ...terrainProps(terrain, "offset", [unpremultiplySpriteExtension]),
     }),
   ];
 }

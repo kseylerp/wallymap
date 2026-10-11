@@ -1,6 +1,7 @@
 import type { Feature } from "geojson";
 import { describe, expect, it } from "vitest";
-import { DARK_GREY, OFF_WHITE, PALETTE, PINK, PURPLE, WHITE } from "@/lib/render/palette";
+import { DARK_GREY, OFF_WHITE, PALETTE, PINK, PURPLE, SYMBOL, symbolSizePx, WHITE } from "@/lib/render/palette";
+import { UnpremultiplySpriteExtension } from "@/lib/render/deck";
 import { PIN_SYMBOLS, pinIconFor, pinSymbolFor, routePinUrl } from "@/lib/render/wally/pins";
 
 const point = (properties: Record<string, unknown> = {}): Feature => ({
@@ -59,26 +60,76 @@ describe("symbol sprites (owner's board, points variant A)", () => {
     }
   });
 
-  it.each(["camp", "gauge", "point", "photo"])("%s fills off-white at 0.85 in a 1.5px dark grey stroke on a white halo", (symbol) => {
-    const svg = svgOf(pinIconFor(layerFor[symbol], point()).url);
-    expect(svg).toContain(`fill="${OFF_WHITE}" fill-opacity="0.85" stroke="${DARK_GREY}" stroke-width="1.5"`);
-    expect(svg).toContain(`stroke="${WHITE}" stroke-opacity="0.85" stroke-width="3.5"`);
+  it("keeps the symbol constants the owner ruled: 1.75px stroke, 3.5px halo at 0.9, 14px down to 10px", () => {
+    expect(SYMBOL).toMatchObject({
+      strokeWidth: 1.75,
+      fillOpacity: 0.85,
+      hollowFillOpacity: 0.6,
+      haloWidth: 3.5,
+      haloOpacity: 0.9,
+      sizeMax: 14,
+      sizeMin: 10,
+      stroke: DARK_GREY,
+      halo: WHITE,
+      selectedFill: PURPLE,
+      hazardFill: PINK,
+    });
   });
 
-  it.each(["species", "snow", "trailhead"])("%s is hollow, and fills purple when selected", (symbol) => {
-    expect(svgOf(pinIconFor(layerFor[symbol], point()).url)).toContain(`fill="none" stroke="${DARK_GREY}" stroke-width="1.5"`);
+  it.each([6, 8, 9.5, 11, 14])("draws the stroke and halo at true pixel widths at the zoom %s size", (zoom) => {
+    const size = symbolSizePx(zoom);
+    const svg = svgOf(pinIconFor("something-new", point(), false, size).url);
+    const scale = Number(/scale\(([\d.]+)\)/.exec(svg)?.[1] ?? 1);
+    const widths = [...svg.matchAll(/stroke-width="([\d.]+)"/g)].map((m) => Number(m[1]) * scale);
+    expect(widths[0]).toBeCloseTo(SYMBOL.strokeWidth + SYMBOL.haloWidth, 2); // halo, under the outline
+    expect(widths[1]).toBeCloseTo(SYMBOL.strokeWidth, 2);
+    expect(svg).toContain(`stroke="${WHITE}" stroke-opacity="0.9"`);
+    expect(svg).toContain(`stroke="${DARK_GREY}"`);
+    expect(svg).not.toMatch(/stroke-opacity="[\d.]+"[^>]*stroke="#3A3A3C"/); // the outline is fully opaque
+  });
+
+  it("sizes symbols 10px at zoom 6 and below, 14px from zoom 11, never outside that", () => {
+    expect(symbolSizePx(0)).toBe(10);
+    expect(symbolSizePx(6)).toBe(10);
+    expect(symbolSizePx(11)).toBe(14);
+    expect(symbolSizePx(12.8)).toBe(14);
+    expect(symbolSizePx(22)).toBe(14);
+    expect(symbolSizePx(Number.NaN)).toBe(10);
+    for (let z = 6; z < 11; z += 0.25) expect(symbolSizePx(z + 0.25)).toBeGreaterThanOrEqual(symbolSizePx(z));
+    for (let z = 0; z <= 22; z += 0.5) expect(symbolSizePx(z)).toBeGreaterThanOrEqual(10);
+  });
+
+  it("scales the shape with the size (a 14px circle is 14/12 of the 12px drawing)", () => {
+    expect(svgOf(pinIconFor("something-new", point(), false, 14).url)).toContain("scale(1.1667)");
+    expect(svgOf(pinIconFor("something-new", point(), false, 10).url)).toContain("scale(0.8333)");
+  });
+
+  it.each(["camp", "gauge", "point", "photo"])("%s fills off-white at 0.85 in a dark grey stroke on a white halo", (symbol) => {
+    const svg = svgOf(pinIconFor(layerFor[symbol], point(), false, 12).url);
+    expect(svg).toContain(`fill="${OFF_WHITE}" fill-opacity="0.85" stroke="${DARK_GREY}" stroke-width="1.75"`);
+    expect(svg).toContain(`stroke="${WHITE}" stroke-opacity="0.9" stroke-width="5.25"`);
+  });
+
+  it.each(["species", "snow", "trailhead"])("%s (hollow class) fills off-white at 0.6, and purple when selected", (symbol) => {
+    expect(svgOf(pinIconFor(layerFor[symbol], point(), false, 12).url)).toContain(
+      `fill="${OFF_WHITE}" fill-opacity="0.6" stroke="${DARK_GREY}" stroke-width="1.75"`,
+    );
     expect(svgOf(pinIconFor(layerFor[symbol], point(), true).url)).toContain(`fill="${PURPLE}"`);
+  });
+
+  it("keeps the dotted ring's centre dot", () => {
+    expect(svgOf(pinIconFor("trailheads", point()).url)).toContain(`r="1.6" fill="${DARK_GREY}"`);
+  });
+
+  it.each(["fire-detections", "earthquakes", "methane-plumes", "uranium", "weather-alerts"])("%s draws pink with a dark grey stroke", (layerId) => {
+    const svg = svgOf(pinIconFor(layerId, point()).url);
+    expect(svg).toContain(`fill="${PINK}" fill-opacity="1" stroke="${DARK_GREY}"`);
   });
 
   it("selects with a purple fill, never solid ink", () => {
     const svg = svgOf(pinIconFor("campsites", point(), true).url);
     expect(svg).toContain(`fill="${PURPLE}"`);
     expect(svg).not.toContain("#1F1F1F");
-  });
-
-  it("draws fire detections as pink symbols with a dark grey stroke (hazards)", () => {
-    const svg = svgOf(pinIconFor("fire-detections", point()).url);
-    expect(svg).toContain(`fill="${PINK}" fill-opacity="1" stroke="${DARK_GREY}"`);
   });
 
   it("fills score symbols by their ramp, low scores off-white", () => {
@@ -116,5 +167,13 @@ describe("routePinUrl", () => {
     expect(svgOf(routePinUrl("start"))).toContain(`fill="${PINK}"`);
     expect(svgOf(routePinUrl("end"))).toContain(`fill="${OFF_WHITE}"`);
     expect(svgOf(routePinUrl("via"))).toContain('r="4"');
+  });
+});
+
+describe("sprite blending", () => {
+  it("un-premultiplies the icon sprites so translucent fills and halos draw at the alpha the palette says", () => {
+    const inject = new UnpremultiplySpriteExtension().getShaders().inject as Record<string, string>;
+    expect(inject["fs:#main-end"]).toContain("fragColor.rgb / texColor.a");
+    expect(inject["fs:#main-end"]).toContain("picking.isActive");
   });
 });

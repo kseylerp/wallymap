@@ -23,7 +23,7 @@ import { ToolTrace } from "@/components/ToolTrace";
 import { TopoHeartbeat } from "@/components/TopoHeartbeat";
 import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
 import { onChatSend } from "@/lib/agent/chatBus";
-import { dedupeNoteAndText } from "@/lib/agent/dedupe";
+import { answerAfterNote, noteForDisplay, notesBeforeText } from "@/lib/agent/dedupe";
 import { extractFollowUps } from "@/lib/agent/followups";
 import { buildChatBody, type MapView } from "@/lib/agent/view";
 import type { Padding } from "@/lib/render/deck";
@@ -171,17 +171,23 @@ type AnswerCardProps = {
    * finished, so pills do not flicker in and out as bullets arrive.
    */
   done: boolean;
+  /**
+   * The markdown of the notes this text follows. The note is the answer, so the text then shows only its closing
+   * follow-ups (or what does not repeat the note), never a second copy of the answer or its Sources and Next steps.
+   */
+  afterNote?: string;
 } & FollowUpProps;
 
 /**
  * An assistant answer: plain markdown on the panel, no bubble. A finished answer's closing follow-up questions
  * become plain text rows (full width, 44px, hairline separators, a "→" at 60% ink).
  */
-const AnswerCard = memo(function AnswerCard({ text, done, onFollowUp }: AnswerCardProps) {
-  const { body, followUps } = useMemo(
-    () => (done ? extractFollowUps(text) : { body: text, followUps: [] as string[] }),
-    [text, done],
-  );
+const AnswerCard = memo(function AnswerCard({ text, done, afterNote, onFollowUp }: AnswerCardProps) {
+  const { body, followUps } = useMemo(() => {
+    if (afterNote !== undefined) return answerAfterNote(text, afterNote, done);
+    return done ? extractFollowUps(text) : { body: text, followUps: [] as string[] };
+  }, [text, done, afterNote]);
+  if (!body.trim() && followUps.length === 0) return null;
   return (
     <div className="px-1">
       {body.trim() && <Markdown text={body} />}
@@ -250,7 +256,7 @@ function toolExtras(part: ToolPart, onFollowUp: FollowUpProps["onFollowUp"], onZ
   const note = name === "note" ? noteMarkdown(output) : null;
   const layerError = layerErrorOf(name, output);
   // A note arrives whole with its tool output, so it is always finished.
-  if (note !== null) return <AnswerCard text={note} done onFollowUp={onFollowUp} />;
+  if (note !== null) return <AnswerCard text={noteForDisplay(note)} done onFollowUp={onFollowUp} />;
   if (layerError !== null) {
     const zoom = layerError.suggestedZoom;
     return (
@@ -303,17 +309,17 @@ const MessageView = memo(function MessageView({ message, streaming, onFollowUp, 
     );
     chips = [];
   };
-  // When the model repeats its note as closing text, show only the text (it carries the follow-ups).
-  const repeatedNotes = dedupeNoteAndText(message.parts);
+  // The note is the answer: text after a note shows only its follow-ups, never the note again.
+  const notesBefore = notesBeforeText(message.parts);
   message.parts.forEach((part, i) => {
     if (part.type === "text") {
       if (!part.text.trim()) return;
       flushChips();
       const done = part.state === "done" || (part.state === undefined && !streaming);
-      blocks.push(<AnswerCard key={i} text={part.text} done={done} onFollowUp={onFollowUp} />);
+      blocks.push(<AnswerCard key={i} text={part.text} done={done} afterNote={notesBefore.get(i)} onFollowUp={onFollowUp} />);
     } else if (isToolUIPart(part)) {
       chips.push(<ToolTraceView key={part.toolCallId} part={part} />);
-      const extras = repeatedNotes.has(i) ? null : toolExtras(part, onFollowUp, onZoomTo);
+      const extras = toolExtras(part, onFollowUp, onZoomTo);
       if (extras !== null) {
         flushChips();
         blocks.push(<div key={`${part.toolCallId}-extras`}>{extras}</div>);

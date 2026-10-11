@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { Tool } from "ai";
 import "@/layers";
 import type { BBox } from "@/layers/types";
-import { buildTools, isWithinView } from "@/lib/agent/tools";
+import { listLayers } from "@/layers/registry";
+import { WIDER_SCALE, buildTools, isWithinView, widerScaleFor } from "@/lib/agent/tools";
 
 vi.mock("@/lib/agent/geocode", () => ({
   geocode: vi.fn(async () => ({ bbox: [24, 56.8, 24.3, 57], center: [24.1, 56.9], name: "Riga" })),
@@ -45,6 +46,44 @@ describe("query tools answering from the current view", () => {
     const named = await run(tools["query_osm-trails"], { bbox: BALTIC, zoom: 6, namedOnly: false });
     expect(named).toMatchObject({ hint: "zoom_in" });
     expect(named).not.toHaveProperty("suggestedZoom");
+  });
+});
+
+// The owner's Tierra del Fuego view: "great hikes around here" with no place named.
+const PATAGONIA: BBox = [-75, -55.5, -66, -51];
+
+describe("zoom_in errors for the current view name layers that answer at this scale", () => {
+  it("osm-trails over southern Patagonia offers the protected-areas tiles, not US-only or capped layers", async () => {
+    const tools = buildTools({ view: { bbox: PATAGONIA, zoom: 5.3, center: [-70.5, -53.25] } });
+    const result = await run(tools["query_osm-trails"], { bbox: PATAGONIA, zoom: 5, namedOnly: false });
+    expect(result).toMatchObject({ hint: "zoom_in", widerScale: ["query_protected-areas-world"] });
+  });
+
+  it("keeps layers whose cap fits a smaller view, and passes the input a layer needs", () => {
+    const fuego: BBox = [-68.5, -55, -67, -54.5];
+    expect(widerScaleFor("osm-trails", fuego)).toEqual([
+      "query_peaks",
+      "query_outdoor-features",
+      "query_protected-areas-world",
+    ]);
+    expect(widerScaleFor("species", PATAGONIA)).toEqual(["query_gbif-occurrences with density: true"]);
+    expect(widerScaleFor("campsites", [-112, 37, -109, 40])).toContain("query_public-lands");
+  });
+
+  it("is left out when the query was not about the view", async () => {
+    const named = await run(buildTools()["query_osm-trails"], { bbox: PATAGONIA, zoom: 5, namedOnly: false });
+    expect(named).not.toHaveProperty("widerScale");
+  });
+
+  it("only names registered layers, and each query tool says what to use at a wider scale", () => {
+    const ids = listLayers().map((l) => l.id);
+    for (const [id, hints] of Object.entries(WIDER_SCALE)) {
+      expect(ids).toContain(id);
+      for (const hint of hints) expect(ids).toContain(hint.layerId);
+    }
+    expect(buildTools()["query_osm-trails"].description).toContain(
+      "At a wider scale, use peaks, outdoor-features, recreation-sites, popularity, protected-areas-world, wilderness.",
+    );
   });
 });
 

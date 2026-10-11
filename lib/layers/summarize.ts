@@ -22,6 +22,10 @@ export type TilesSummary = {
   geometry?: "point" | "line" | "polygon";
   /** Present when the time scrubber can move this layer: how often it updates and the range it covers. */
   time?: Pick<TileTime, "cadence" | "from" | "to" | "daysBack">;
+  /** The years the drawn tiles cover, read from the tile URL; `time` is only the range the scrubber can reach. */
+  drawnYears?: string;
+  /** What the drawn tiles mean at any scale (a state on one day, or a change), when the layer is easy to misread. */
+  shows?: string;
   citation: Citation;
   coverageNote?: string;
 };
@@ -98,13 +102,48 @@ function timeSummary(t: TileTime): NonNullable<TilesSummary["time"]> {
 }
 
 /**
- * A small, model-sized view of a layer response: counts, extent, a few sample
- * properties and the citation instead of every feature. Errors pass through.
+ * What a tile layer's picture means, for layers whose picture is easy to misread at a wide view. Keyed by layer id;
+ * `years` is the drawn range when the tile URL carries one. These are facts about the data, so the note can only say
+ * what the tiles show.
  */
-export function summarizeLayerResult(body: LayerResult | LayerError): LayerResultSummary | LayerError {
+const TILE_MEANING: Record<string, (years: string | undefined) => string> = {
+  "flood-extent": () =>
+    "All open water detected on that one day: every lake, fjord, river and coastal inlet in view shows as water, not only floods. " +
+    "It is a state, not a change, so it cannot show water rising or falling by itself. " +
+    "For rise or shrink use surface-water with product change, or compare two flood-extent dates.",
+  "surface-water": () =>
+    "A 1984-2021 history, not a recent date. Only product change (lost red, gained green) or transitions shows change; occurrence, seasonality and recurrence show where water usually is.",
+  "forest-loss": (years) =>
+    `Tree cover lost in ${years ?? "the years drawn"} only, from any cause (logging, fire, storms, plantation harvest); quote these years, not the archive range in time.`,
+  "land-cover": () => "One snapshot of what covers the ground, not change.",
+  greenness: () => "Vegetation greenness for one period, a state, not change; compare two dates for change.",
+  "snow-cover": () => "Snow on the ground on one day, a state, not change; compare two dates for change.",
+  "sea-ice": () => "Sea ice on one day, a state, not change; compare two dates for change.",
+  "night-lights": () => "Night brightness for one period, a state, not change; compare two dates for change.",
+  "protected-areas-world": () =>
+    "Where protected areas (parks, reserves) are, as a picture: not trails, and not countable or nameable from the tiles.",
+  "gbif-occurrences": () => "How many records were reported per place, which follows where people look, not how many animals live there.",
+};
+
+/** "2015-2025" from a tile URL's start_year and end_year parameters, or undefined when it has none. */
+export function drawnYearsOf(url: string): string | undefined {
+  const start = /[?&]start_year=(\d{4})(?:&|$)/.exec(url)?.[1];
+  const end = /[?&]end_year=(\d{4})(?:&|$)/.exec(url)?.[1];
+  if (start === undefined || end === undefined) return undefined;
+  return start === end ? start : `${start}-${end}`;
+}
+
+/**
+ * A small, model-sized view of a layer response: counts, extent, a few sample
+ * properties and the citation instead of every feature. Errors pass through. `layerId` adds, for tile layers that
+ * are easy to misread, what the picture means (`shows`).
+ */
+export function summarizeLayerResult(body: LayerResult | LayerError, layerId?: string): LayerResultSummary | LayerError {
   if ("error" in body) return body;
 
   if (body.kind === "tiles") {
+    const drawnYears = drawnYearsOf(body.data.url);
+    const meaning = layerId === undefined ? undefined : TILE_MEANING[layerId];
     return {
       kind: "tiles",
       url: body.data.url,
@@ -114,6 +153,8 @@ export function summarizeLayerResult(body: LayerResult | LayerError): LayerResul
       ...(body.data.sourceLayer !== undefined && { sourceLayer: body.data.sourceLayer }),
       ...(body.data.geometry !== undefined && { geometry: body.data.geometry }),
       ...(body.data.time !== undefined && { time: timeSummary(body.data.time) }),
+      ...(drawnYears !== undefined && { drawnYears }),
+      ...(meaning !== undefined && { shows: meaning(drawnYears) }),
       citation: body.citation,
       ...(body.coverageNote !== undefined && { coverageNote: body.coverageNote }),
     };

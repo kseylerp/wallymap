@@ -26,7 +26,7 @@ export function compactMessages<M extends UIMessage>(messages: M[]): M[] {
       }
       if (!part.type.startsWith("tool-query_") || !isFullLayerResult(part.output)) return part;
       changed = true;
-      return { ...part, output: summarizeLayerResult(part.output) };
+      return { ...part, output: summarizeLayerResult(part.output, part.type.slice("tool-query_".length)) };
     });
     return changed ? { ...message, parts } : message;
   });

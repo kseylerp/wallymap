@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { normalizeOverpass } from "@/layers/osm-trails";
 import fixture from "@/layers/__fixtures__/osm-trails.tahoe.json";
 import type { LayerResult } from "@/layers/types";
-import { SAMPLE_MAX_CHARS, SAMPLE_VALUE_MAX_CHARS, isFullLayerResult, sampleOf, summarizeLayerResult } from "./summarize";
+import {
+  SAMPLE_MAX_CHARS,
+  SAMPLE_VALUE_MAX_CHARS,
+  drawnYearsOf,
+  isFullLayerResult,
+  sampleOf,
+  summarizeLayerResult,
+} from "./summarize";
 
 const citation = { source: "Test", url: "https://example.test", retrieved: "2026-10-09T00:00:00Z" };
 
@@ -143,5 +150,41 @@ describe("sampleOf", () => {
     const small = sampleOf([{ properties: { a: 1 } }, { properties: { b: 2 } }, { properties: null }]);
     expect(small).toEqual([{ a: 1 }, { b: 2 }, null]);
     expect(JSON.stringify(sampleOf([{ properties: { a: "z".repeat(119) } }, { properties: { b: 2 } }])).length).toBeLessThan(SAMPLE_MAX_CHARS);
+  });
+});
+
+describe("tile summaries say what the picture means", () => {
+  const tiles = (url: string, time?: { template: string; cadence: "yearly"; from: string; to: string }): LayerResult => ({
+    kind: "tiles",
+    data: { url, minzoom: 3, maxzoom: 12, format: "raster", ...(time && { time }) },
+    citation,
+  });
+  const LOSS = "https://tiles.globalforestwatch.org/umd_tree_cover_loss/latest/dynamic/{z}/{x}/{y}.png?render_type=true_color&start_year=2015&end_year=2025&tree_cover_density_threshold=30";
+
+  it("forest-loss carries the exact years drawn, apart from the scrubber's archive range", () => {
+    const summary = summarizeLayerResult(
+      tiles(LOSS, { template: LOSS.replace("end_year=2025", "end_year={year}"), cadence: "yearly", from: "2001", to: "2025" }),
+      "forest-loss",
+    );
+    expect(summary).toMatchObject({ drawnYears: "2015-2025", time: { from: "2001", to: "2025" } });
+    expect((summary as { shows: string }).shows).toContain("Tree cover lost in 2015-2025 only");
+  });
+
+  it("flood-extent says it shows all open water on one day, not change, and how to show change", () => {
+    const summary = summarizeLayerResult(tiles("https://gibs.example/OPERA/{z}/{y}/{x}.png"), "flood-extent") as { shows: string };
+    expect(summary.shows).toMatch(/All open water detected on that one day/);
+    expect(summary.shows).toMatch(/not a change/);
+    expect(summary.shows).toMatch(/surface-water with product change/);
+  });
+
+  it("leaves shows out without a layer id or for layers that read plainly", () => {
+    expect(summarizeLayerResult(tiles(LOSS))).not.toHaveProperty("shows");
+    expect(summarizeLayerResult(tiles("https://example.test/{z}/{x}/{y}.png"), "geology")).not.toHaveProperty("shows");
+  });
+
+  it("reads drawn years only from start_year and end_year", () => {
+    expect(drawnYearsOf(LOSS)).toBe("2015-2025");
+    expect(drawnYearsOf("https://x.test/t.png?start_year=2020&end_year=2020")).toBe("2020");
+    expect(drawnYearsOf("https://x.test/t.png?year=2020")).toBeUndefined();
   });
 });

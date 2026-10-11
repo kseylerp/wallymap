@@ -1,7 +1,7 @@
 import { tool, type JSONValue, type ToolSet } from "ai";
 import { z } from "zod";
-import { listLayers } from "@/layers/registry";
-import { BBoxSchema, type BBox, type Coverage, type Layer } from "@/layers/types";
+import { getLayer, listLayers } from "@/layers/registry";
+import { BBoxSchema, bboxAreaKm2, type BBox, type Coverage, type Layer, type LayerError } from "@/layers/types";
 import { runLayer } from "@/lib/layers/run";
 import { isFullLayerResult, summarizeLayerResult } from "@/lib/layers/summarize";
 import type { Basemap, RenderMode, TimeMode } from "@/lib/render/state";
@@ -154,10 +154,94 @@ function inputNames(layer: Layer): string[] {
  * GeoJSON) becomes a short summary; errors and results the browser already
  * summarized before resending the history pass through unchanged.
  */
-export function layerResultForModel(output: unknown): JSONValue {
-  if (isFullLayerResult(output)) return summarizeLayerResult(output);
+export function layerResultForModel(output: unknown, layerId?: string): JSONValue {
+  if (isFullLayerResult(output)) return summarizeLayerResult(output, layerId);
   return output as JSONValue;
 }
+
+/** One "at a wider scale, use" suggestion: a layer, and the input that makes it work over a wide view. */
+export type WiderScaleHint = { layerId: string; input?: Record<string, string | number | boolean> };
+
+/**
+ * At a wider scale, use: for a layer with a small area cap, the layers that answer the same kind of question over a
+ * view too wide for it, best first. Each query_<id> tool names them, and a zoom_in error for the user's current view
+ * lists the ones whose cap and coverage fit that view (`widerScale`), so the model can still draw an answer at the
+ * scale the user is looking at instead of only asking them to zoom in.
+ */
+export const WIDER_SCALE: Record<string, WiderScaleHint[]> = {
+  "osm-trails": [
+    { layerId: "peaks" },
+    { layerId: "outdoor-features" },
+    { layerId: "recreation-sites" },
+    { layerId: "popularity" },
+    { layerId: "protected-areas-world" },
+    { layerId: "wilderness" },
+  ],
+  popularity: [{ layerId: "peaks" }, { layerId: "outdoor-features" }, { layerId: "recreation-sites" }, { layerId: "protected-areas-world" }],
+  "mtb-trails": [{ layerId: "recreation-sites" }, { layerId: "public-lands" }, { layerId: "protected-areas-world" }],
+  "ski-routes": [{ layerId: "peaks" }, { layerId: "snow-cover" }],
+  paddling: [{ layerId: "streamflow" }, { layerId: "surface-water" }],
+  photos: [{ layerId: "peaks" }, { layerId: "outdoor-features" }, { layerId: "protected-areas-world" }],
+  "wikipedia-nearby": [{ layerId: "outdoor-features" }, { layerId: "peaks" }, { layerId: "protected-areas-world" }],
+  campsites: [{ layerId: "recreation-sites" }, { layerId: "public-lands" }, { layerId: "protected-areas-world" }, { layerId: "wilderness" }],
+  "forest-roads": [{ layerId: "public-lands" }, { layerId: "recreation-sites" }],
+  climbing: [{ layerId: "peaks" }, { layerId: "geology" }],
+  "outdoor-features": [{ layerId: "peaks" }, { layerId: "protected-areas-world" }],
+  "recreation-sites": [{ layerId: "public-lands" }, { layerId: "wilderness" }, { layerId: "protected-areas-world" }],
+  peaks: [{ layerId: "physical-regions" }, { layerId: "protected-areas-world" }],
+  species: [{ layerId: "gbif-occurrences", input: { density: true } }],
+  fishing: [{ layerId: "streamflow" }, { layerId: "surface-water" }],
+  lakes: [{ layerId: "surface-water" }],
+  glaciers: [{ layerId: "snow-cover" }, { layerId: "land-cover" }],
+  "tree-mortality": [{ layerId: "forest-loss" }, { layerId: "disturbance" }],
+  remoteness: [{ layerId: "night-lights" }, { layerId: "population" }, { layerId: "protected-areas-world" }],
+  "mining-claims": [{ layerId: "public-lands" }],
+  mines: [{ layerId: "geology" }],
+};
+
+/** "query_peaks" or "query_gbif-occurrences with density: true". */
+function hintText({ layerId, input }: WiderScaleHint): string {
+  const args = Object.entries(input ?? {}).map(([key, value]) => `${key}: ${String(value)}`);
+  return args.length > 0 ? `query_${layerId} with ${args.join(", ")}` : `query_${layerId}`;
+}
+
+/** Rough boxes of the lower 48, Alaska and Hawaii, for layers whose coverage is "us". */
+const US_BOXES: BBox[] = [
+  [-125, 24, -66, 50],
+  [-170, 51, -129, 72],
+  [-161, 18, -154, 23],
+];
+
+function intersects(a: BBox, b: BBox): boolean {
+  return a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
+}
+
+function coversBBox(coverage: Coverage, bbox: BBox): boolean {
+  if (coverage === "global") return true;
+  if (coverage === "us") return US_BOXES.some((box) => intersects(box, bbox));
+  return intersects(coverage.bbox, bbox);
+}
+
+/** The wider-scale layers for `layerId` that exist, are available, cover `bbox` and accept its area. */
+export function widerScaleFor(layerId: string, bbox: BBox): string[] {
+  const area = bboxAreaKm2(bbox);
+  return (WIDER_SCALE[layerId] ?? [])
+    .filter((hint) => {
+      const layer = getLayer(hint.layerId);
+      return layer !== undefined && isAvailable(layer) && area <= layer.maxAreaKm2 && coversBBox(layer.coverage, bbox);
+    })
+    .map(hintText);
+}
+
+/** The query tool's sentence naming its wider-scale layers, or "" when it has none. */
+function widerScaleSentence(layerId: string): string {
+  const hints = WIDER_SCALE[layerId];
+  if (!hints || hints.length === 0) return "";
+  return ` At a wider scale, use ${hints.map((h) => hintText(h).replace(/^query_/, "")).join(", ")}.`;
+}
+
+/** A zoom_in error for the user's view, with the layers that can answer at that scale. */
+export type ZoomInError = LayerError & { widerScale?: string[] };
 
 /** Query-tool input: the layer's own input fields plus the area to search. */
 type QueryArgs = { bbox: BBox; zoom: number } & Record<string, unknown>;
@@ -185,11 +269,20 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined) {
   }) as unknown as z.ZodType<QueryArgs>;
   return tool({
     // The licence and the trimmed sentences are in list_layers' detail (ids); the citation comes with each result.
-    description: `${compactDescription(layer.description, { inputs: inputNames(layer) })} Covers ${describeCoverage(layer.coverage)}. bbox is [west, south, east, north].`,
+    description: `${compactDescription(layer.description, { inputs: inputNames(layer) })} Covers ${describeCoverage(layer.coverage)}.${widerScaleSentence(layer.id)} bbox is [west, south, east, north].`,
     inputSchema,
-    execute: async ({ bbox, zoom, ...input }) => (await runLayer(layer.id, { bbox, zoom, input, fromView: fromView(bbox) })).body,
+    execute: async ({ bbox, zoom, ...input }) => {
+      const view = fromView(bbox);
+      const body = (await runLayer(layer.id, { bbox, zoom, input, fromView: view })).body;
+      // The user is looking at a view too wide for this layer: name the layers that can still answer at this scale.
+      if (view && "error" in body && body.hint === "zoom_in") {
+        const widerScale = widerScaleFor(layer.id, view.bbox);
+        return { ...body, widerScale } satisfies ZoomInError;
+      }
+      return body;
+    },
     // The UI part keeps the full body for the map; the model gets a summary.
-    toModelOutput: ({ output }) => ({ type: "json", value: layerResultForModel(output) }),
+    toModelOutput: ({ output }) => ({ type: "json", value: layerResultForModel(output, layer.id) }),
   });
 }
 

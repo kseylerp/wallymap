@@ -1,3 +1,5 @@
+import { formatValue } from "@/lib/format";
+
 export type FilterField =
   /** `more`: how many rarer values were left off a long list (species), which only the top values stand for. */
   | { key: string; label: string; kind: "category"; values: { value: string; count: number }[]; more?: number }
@@ -207,11 +209,10 @@ export function applyFilters(fc: GeoJSON.FeatureCollection, filters: LayerFilter
 }
 
 /** A filter bound as a reader sees it: whole numbers with separators (years without), decimals to two places at most. */
-export function formatFilterNumber(value: number, integer: boolean, key: string): string {
-  if (integer) return Math.round(value).toLocaleString("en-US", { useGrouping: !/year/i.test(key) });
+export function formatFilterNumber(value: number, integer: boolean, key: string, unit?: string): string {
+  if (integer) return formatValue(key, Math.round(value), unit, 0);
   const abs = Math.abs(value);
-  const digits = abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
-  return value.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
+  return formatValue(key, value, unit, abs >= 100 ? 0 : abs >= 10 ? 1 : 2);
 }
 
 /**
@@ -232,7 +233,7 @@ export function filterSummary(fields: FilterField[], filters: LayerFilters): str
       const atMax = field?.kind === "range" && hi >= field.max;
       if (atMin && atMax) continue;
       const integer = field?.kind === "range" ? field.integer : Number.isInteger(lo) && Number.isInteger(hi);
-      const n = (x: number) => formatFilterNumber(x, integer, key);
+      const n = (x: number) => formatFilterNumber(x, integer, key, field?.kind === "range" ? field.unit : undefined);
       if (atMax) parts.push(`${label} ≥ ${n(lo)}`);
       else if (atMin) parts.push(`${label} ≤ ${n(hi)}`);
       else parts.push(`${label} ${n(lo)}–${n(hi)}`);

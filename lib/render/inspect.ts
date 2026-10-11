@@ -1,5 +1,6 @@
 import type { Feature, Geometry, Position } from "geojson";
 import type { BBox } from "@/layers/types";
+import { formatValue as formatNumber } from "@/lib/format";
 import { RENDER_MODES, type RenderMode, type Selection } from "@/lib/render/state";
 import { DECK_TERRAIN_TAG } from "@/lib/render/wally/deckTerrain";
 
@@ -231,12 +232,9 @@ export function formatDate(value: string): string {
 export function formatValue(value: unknown, unit?: string, key = ""): string {
   if (value === null || value === undefined || value === "") return "n/a";
   if (typeof value === "boolean") return value ? "Yes" : "No";
-  // Years read as "2021", not "2,021".
-  if (typeof value === "number" && /year/i.test(key)) return String(value);
   if (typeof value === "number") {
-    const text = Number.isInteger(value)
-      ? value.toLocaleString("en-US")
-      : value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+    // Years read as "2021", not "2,021" (lib/format.ts decides from the key and unit).
+    const text = formatNumber(key, value, unit);
     return unit ? `${text} ${unit}` : text;
   }
   if (typeof value === "string") {
@@ -294,7 +292,7 @@ export function summarizeFeature(feature: Feature, unit?: string, maxRows = 8): 
     value =
       unit === "score"
         ? { key: "v", label: "Score", value: `${formatValue(props.v)} / 100` }
-        : { key: "v", label: twin ? friendlyKey(twin) : "Value", value: formatValue(props.v, unit) };
+        : { key: "v", label: twin ? friendlyKey(twin) : "Value", value: formatValue(props.v, unit, twin) };
   }
   const signalsObj = asObject(props.signals);
   const signals: Row[] = signalsObj

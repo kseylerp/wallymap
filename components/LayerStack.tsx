@@ -20,6 +20,7 @@ import {
 } from "@/lib/render/filters";
 import type { Feature } from "geojson";
 import { LegendKey } from "@/components/LegendKey";
+import { formatValue } from "@/lib/format";
 import { rasterKeyFilter } from "@/lib/render/rasterCalm";
 import { COMPARE_COLORS, compareBId, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
 import { hexbinThreshold } from "@/lib/render/deck";
@@ -193,9 +194,9 @@ type RowProps = {
 };
 
 /** A threshold readout: "All" at the data minimum, else "≥ 1,204 acres" (scores without a unit). */
-export function measureLabel(value: number, range: MeasureRange, unit?: string): string {
+export function measureLabel(value: number, range: MeasureRange, unit?: string, key = "v"): string {
   if (value <= range.min) return "All";
-  const text = value.toLocaleString("en-US", { maximumFractionDigits: range.integer ? 0 : 2 });
+  const text = formatValue(key, value, unit, range.integer ? 0 : 2);
   return unit && unit !== "score" ? `≥ ${text} ${unit}` : `≥ ${text}`;
 }
 
@@ -228,7 +229,7 @@ function MeasureSlider({
         max={MEASURE_STEPS}
         step={1}
         value={position}
-        aria-valuetext={measureLabel(value, range, layer.style.unit)}
+        aria-valuetext={measureLabel(value, range, layer.style.unit, measure)}
         onChange={(e) =>
           dispatch({
             type: "set_filters",
@@ -241,7 +242,7 @@ function MeasureSlider({
         style={{ ["--fill" as string]: `${Math.round((position / MEASURE_STEPS) * 100)}%` }}
       />
       <span aria-hidden className="text-[11px] whitespace-nowrap text-ink-muted tabular-nums">
-        {measureLabel(value, range, layer.style.unit)}
+        {measureLabel(value, range, layer.style.unit, measure)}
       </span>
     </label>
   );

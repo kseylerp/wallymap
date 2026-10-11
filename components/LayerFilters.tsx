@@ -1,5 +1,6 @@
 "use client";
 
+import { formatValue } from "@/lib/format";
 import { formatFilterNumber, type FilterField, type LayerFilters as Filters } from "@/lib/render/filters";
 import type { MapAction } from "@/lib/render/state";
 
@@ -53,15 +54,15 @@ function CategoryFilter({ field, include, onChange }: { field: Category; include
           type="button"
           aria-pressed={include.includes(value)}
           onClick={() => toggle(value)}
-          title={`${value}: ${count.toLocaleString()}`}
+          title={`${value}: ${formatValue("count", count)}`}
           className="filter-chip"
         >
           {plain(value)}{" "}
-          <span className="filter-chip-count tabular-nums">{count.toLocaleString()}</span>
+          <span className="filter-chip-count tabular-nums">{formatValue("count", count)}</span>
         </button>
       ))}
       {field.more ? (
-        <span className="self-center text-[11px] text-ink-muted tabular-nums">+{field.more.toLocaleString("en-US")} more</span>
+        <span className="self-center text-[11px] text-ink-muted tabular-nums">+{formatValue("count", field.more)} more</span>
       ) : null}
     </div>
   );
@@ -96,7 +97,7 @@ function RangeFilter({
     set(Math.min(lo, next), next);
   };
   const unit = field.unit && field.unit !== "score" ? ` ${field.unit}` : "";
-  const readout = (v: number) => `${formatFilterNumber(v, field.integer, field.key)}${unit}`;
+  const readout = (v: number) => `${formatFilterNumber(v, field.integer, field.key, field.unit)}${unit}`;
   const pct = (v: number) => `${((Math.min(inputMax, Math.max(inputMin, v)) - inputMin) / inputSpan) * 100}%`;
   // The upper input sits on top; once the lower thumb is in the top half it goes on top, so it can always be pulled back.
   const loOnTop = lo - inputMin > inputSpan / 2;

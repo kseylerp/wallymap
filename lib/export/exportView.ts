@@ -1,4 +1,5 @@
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
+import { formatValue } from "@/lib/format";
 import { zipStored } from "@/lib/export/zip";
 import type { MapState } from "@/lib/render/state";
 import { compareSummary } from "@/lib/render/compare";
@@ -145,7 +146,7 @@ export function buildExportBundle(state: MapState, catalog: LayerCatalog | null,
         blob: new Blob([JSON.stringify(collection)], { type: "application/geo+json" }),
       });
     }
-    const shown = narrowed.shown !== undefined ? `; ${narrowed.shown.toLocaleString("en-US")} of ${narrowed.total?.toLocaleString("en-US")} features exported` : "";
+    const shown = narrowed.shown !== undefined ? `; ${formatValue("count", narrowed.shown)} of ${narrowed.total === undefined ? "" : formatValue("count", narrowed.total)} features exported` : "";
     bullets.push(
       `- **${layer.title}** (\`${layer.id}\`${layer.result.kind === "tiles" ? ", map tiles, not exported as data" : ""}): ` +
         `${citation.source}, <${citation.url}>, retrieved ${retrieved}, license: ${license}${shown}${filterNote ? `; filtered: ${filterNote}` : ""}`,
@@ -185,7 +186,7 @@ export function buildExportBundle(state: MapState, catalog: LayerCatalog | null,
 function compareMarkdown(note: CompareNote, title: string): string[] {
   const side = (w: [string, string], label: string | undefined) => `${w[0]} to ${w[1]} (${label ?? windowText(w)})`;
   const counts = note.counts
-    ? ` Delta: ${note.counts.aOnly.toLocaleString("en-US")} A only, ${note.counts.bOnly.toLocaleString("en-US")} B only, ${note.counts.both.toLocaleString("en-US")} both.`
+    ? ` Delta: ${formatValue("count", note.counts.aOnly)} A only, ${formatValue("count", note.counts.bOnly)} B only, ${formatValue("count", note.counts.both)} both.`
     : "";
   return [
     "## Compare",

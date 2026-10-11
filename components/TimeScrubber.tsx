@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { formatValue } from "@/lib/format";
 import { bucketAt } from "@/lib/render/reducer";
 import type { MapAction, TimeMode, TimeState } from "@/lib/render/state";
 import { stepLabel, stepWindow, windowLabel, type Bucket, type TimeIndex, type TimeWindow } from "@/lib/time";
@@ -170,7 +171,7 @@ export function TimeScrubber({ time, dispatch, missingImage = false }: TimeScrub
           {index.buckets.map((b, k) => (
             <div
               key={b.start}
-              title={imagesOnly ? bucketName(b.start, index.bucket) : `${bucketName(b.start, index.bucket)}: ${b.count.toLocaleString()}`}
+              title={imagesOnly ? bucketName(b.start, index.bucket) : `${bucketName(b.start, index.bucket)}: ${formatValue("count", b.count)}`}
               data-in-window={(k >= i && k <= j) || undefined}
               className="time-bar flex-1"
               style={{ height: imagesOnly ? "30%" : b.count > 0 ? `${Math.max(4, (b.count / max) * 100)}%` : "1px" }}
@@ -265,11 +266,11 @@ export function TimeScrubber({ time, dispatch, missingImage = false }: TimeScrub
         </div>
         {imagesOnly ? (
           <span className="ml-auto text-[11.5px] text-ink-muted tabular-nums" title="The image shown, of the images on the scrubber">
-            <span className="text-ink">{(j + 1).toLocaleString()}</span> / {n.toLocaleString()}
+            <span className="text-ink">{formatValue("count", j + 1)}</span> / {formatValue("count", n)}
           </span>
         ) : (
           <span className="ml-auto text-[11.5px] text-ink-muted tabular-nums" title="Dated features in the window, of all dated features">
-            <span className="text-ink">{shown.toLocaleString()}</span> / {total.toLocaleString()}
+            <span className="text-ink">{formatValue("count", shown)}</span> / {formatValue("count", total)}
           </span>
         )}
       </div>

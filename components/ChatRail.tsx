@@ -13,6 +13,7 @@ import {
   type FormEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  useSyncExternalStore,
 } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { WallyMark } from "@/components/Brand";
@@ -20,6 +21,13 @@ import { DotSpinner } from "@/components/DotSpinner";
 import { EmptyState } from "@/components/EmptyState";
 import { PreviewControl } from "@/components/PreviewControl";
 import { ToolTrace } from "@/components/ToolTrace";
+import {
+  createTimingStore,
+  stampTimingMetadata,
+  timingsFromMetadata,
+  type ToolTiming,
+  type ToolTimings,
+} from "@/lib/trace-timing";
 import { TopoHeartbeat } from "@/components/TopoHeartbeat";
 import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
 import { onChatSend } from "@/lib/agent/chatBus";
@@ -239,9 +247,10 @@ function ErrorCard({ title, children }: { title: string; children: ReactNode }) 
   );
 }
 
-function ToolTraceView({ part }: { part: ToolPart }) {
+function ToolTraceView({ part, timing }: { part: ToolPart; timing?: ToolTiming }) {
   return (
     <ToolTrace
+      timing={timing}
       name={getToolName(part)}
       state={part.state}
       input={part.input}
@@ -283,13 +292,15 @@ function toolExtras(part: ToolPart, onFollowUp: FollowUpProps["onFollowUp"], onZ
 
 type MessageViewProps = {
   message: UIMessage;
+  /** Client-recorded start and end of each tool call, by tool call id. */
+  timings: ToolTimings;
   /** True only for the assistant message currently streaming in. */
   streaming: boolean;
 } & FollowUpProps &
   ZoomToProps;
 
 /** Memoized so typing in the input does not re-render (and re-parse the markdown of) the conversation. */
-const MessageView = memo(function MessageView({ message, streaming, onFollowUp, onZoomTo }: MessageViewProps) {
+const MessageView = memo(function MessageView({ message, timings, streaming, onFollowUp, onZoomTo }: MessageViewProps) {
   if (message.role === "user") {
     const text = message.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
     // No bubble: an accent chevron marks the user's line.
@@ -316,6 +327,7 @@ const MessageView = memo(function MessageView({ message, streaming, onFollowUp, 
   };
   // The note is the answer: text after a note shows only its follow-ups, never the note again.
   const notesBefore = notesBeforeText(message.parts);
+  const saved = timingsFromMetadata(message);
   message.parts.forEach((part, i) => {
     if (part.type === "text") {
       if (!part.text.trim()) return;
@@ -323,7 +335,7 @@ const MessageView = memo(function MessageView({ message, streaming, onFollowUp, 
       const done = part.state === "done" || (part.state === undefined && !streaming);
       blocks.push(<AnswerCard key={i} text={part.text} done={done} afterNote={notesBefore.get(i)} onFollowUp={onFollowUp} />);
     } else if (isToolUIPart(part)) {
-      chips.push(<ToolTraceView key={part.toolCallId} part={part} />);
+      chips.push(<ToolTraceView key={part.toolCallId} part={part} timing={saved[part.toolCallId] ?? timings[part.toolCallId]} />);
       const extras = toolExtras(part, onFollowUp, onZoomTo);
       if (extras !== null) {
         flushChips();
@@ -381,6 +393,9 @@ export function ChatRail({
   // A fixed id: without one the SDK picks a random id during render, which Cache Components rejects at prerender.
   const { messages, sendMessage, setMessages, clearError, status, error, stop } = useChat({ id: "wildmap", transport });
   const [draft, setDraft] = useState("");
+  // Each tool call is timed once, by the client, when it is first seen and when its result lands.
+  const [timingStore] = useState(createTimingStore);
+  const timings = useSyncExternalStore(timingStore.subscribe, timingStore.get, timingStore.get);
   const appliedRef = useRef<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -429,6 +444,17 @@ export function ChatRail({
     }
     if (actions.length > 0) onActions(actions);
   }, [messages, catalog, renderOps, getCanvasSize, onActions, open, layerPanelOpen]);
+
+  useEffect(() => {
+    timingStore.observe(messages, Date.now());
+  }, [timingStore, messages]);
+
+  // Once the stream settles, keep the finished timings on the messages themselves so they travel with them.
+  useEffect(() => {
+    if (busy) return;
+    const stamped = stampTimingMetadata(messages, timings);
+    if (stamped) setMessages(stamped);
+  }, [busy, messages, timings, setMessages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
@@ -624,6 +650,7 @@ export function ChatRail({
                 <MessageView
                   key={m.id}
                   message={m}
+                  timings={timings}
                   streaming={status === "streaming" && m.id === lastId}
                   onFollowUp={busy ? undefined : followUp}
                   onZoomTo={zoomTo}

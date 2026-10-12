@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { durationOf, formatDuration, type ToolTiming } from "@/lib/trace-timing";
 
 const INPUT_PREVIEW_CHARS = 300;
 
@@ -11,6 +12,8 @@ type ToolTraceProps = {
   input: unknown;
   output: unknown;
   errorText?: string;
+  /** When the call was first seen and when its result landed; the row shows only the difference. */
+  timing?: ToolTiming;
 };
 
 function featureCount(output: unknown): number | null {
@@ -33,20 +36,13 @@ const labelFor = (name: string) => name.replace(/_/g, " ");
 /**
  * One hairline row per tool call, in the research-console style: a small-caps monospace label, a 1px ink ring
  * while the call runs and a "·" once it is done, the feature count, and the elapsed time in tabular figures at the
- * right. The input is behind a disclosure. No colors, no spinner.
+ * right. The time is the step's own, from its call to its result, and fixed once the result is in. The input is
+ * behind a disclosure. No colors, no spinner.
  */
-export function ToolTrace({ name, state, input, output, errorText }: ToolTraceProps) {
+export function ToolTrace({ name, state, input, output, errorText, timing }: ToolTraceProps) {
   const [open, setOpen] = useState(false);
-  // Timed from when this row first mounts (the part first appears) until its output lands.
-  const [startedAt] = useState(() => performance.now());
-  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const finished = state === "output-available" || state === "output-error" || state === "output-denied";
-
-  useEffect(() => {
-    if (!finished || elapsedMs !== null) return;
-    const frame = requestAnimationFrame(() => setElapsedMs(Math.round(performance.now() - startedAt)));
-    return () => cancelAnimationFrame(frame);
-  }, [finished, elapsedMs, startedAt]);
+  const elapsedMs = finished ? durationOf(timing) : null;
 
   const count = featureCount(output);
   const failed = state === "output-error";
@@ -69,7 +65,7 @@ export function ToolTrace({ name, state, input, output, errorText }: ToolTracePr
         <span className="trace-label font-mono">{labelFor(name)}</span>
         {failed && <span>· failed</span>}
         {count !== null && <span className="tabular-nums">· {count.toLocaleString()} features</span>}
-        <span className="ml-auto pl-2 tabular-nums">{finished && elapsedMs !== null ? `${elapsedMs} ms` : ""}</span>
+        <span className="ml-auto pl-2 tabular-nums">{elapsedMs !== null ? formatDuration(elapsedMs) : ""}</span>
       </button>
       {open && (
         <pre className="max-h-48 overflow-auto border-t border-line py-2 pl-4 font-mono text-[11px] break-all whitespace-pre-wrap text-ink-muted">

@@ -4,6 +4,8 @@ import fixture from "@/layers/__fixtures__/osm-trails.tahoe.json";
 import routeGeometry from "@/layers/__fixtures__/osm-trails.routes-geom.guiana.json";
 import type { LayerResult } from "@/layers/types";
 import {
+  DATE_YEARS_MAX,
+  SAMPLES_KEY,
   SAMPLE_MAX_CHARS,
   SAMPLE_VALUE_MAX_CHARS,
   TOP_SIZE,
@@ -11,6 +13,7 @@ import {
   isFullLayerResult,
   sampleOf,
   summarizeLayerResult,
+  type GeojsonSummary,
 } from "./summarize";
 
 const citation = { source: "Test", url: "https://example.test", retrieved: "2026-10-09T00:00:00Z" };
@@ -24,7 +27,8 @@ describe("summarizeLayerResult", () => {
     expect(summary).toMatchObject({ kind: "geojson", featureCount: data.features.length });
     if (!("kind" in summary) || summary.kind !== "geojson") throw new Error("expected geojson");
     expect(summary.geometryTypes).toEqual({ LineString: data.features.length });
-    expect(summary.sample).toHaveLength(3);
+    expect(summary[SAMPLES_KEY]).toHaveLength(3);
+    expect(summary.totalLengthKm).toBeGreaterThan(0);
     expect(summary).not.toHaveProperty("features");
     expect(summary).not.toHaveProperty("data");
     const [w, s, e, n] = summary.bbox ?? [];
@@ -54,7 +58,7 @@ describe("summarizeLayerResult", () => {
       featureCount: 2,
       geometryTypes: { Point: 1, Polygon: 1 },
       bbox: [-121, 38, -119, 40],
-      sample: [{ a: 1 }, null],
+      [SAMPLES_KEY]: [{ a: 1 }, null],
       citation,
       coverageNote: "US only",
     });
@@ -62,7 +66,8 @@ describe("summarizeLayerResult", () => {
 
   it("gives a null bbox for an empty collection", () => {
     const result: LayerResult = { kind: "geojson", citation, data: { type: "FeatureCollection", features: [] } };
-    expect(summarizeLayerResult(result)).toMatchObject({ featureCount: 0, bbox: null, sample: [] });
+    expect(summarizeLayerResult(result)).toMatchObject({ featureCount: 0, bbox: null, [SAMPLES_KEY]: [] });
+    expect(summarizeLayerResult(result)).not.toHaveProperty("stats");
   });
 
   it("tells the model a tile layer is scrubbable, without the url template", () => {
@@ -219,5 +224,80 @@ describe("summarizeLayerResult top", () => {
     };
     expect(summary.top).toHaveLength(TOP_SIZE);
     expect(summary.top[0]).toBe("Park 19, 19 km²");
+  });
+});
+
+describe("summarizeLayerResult stats", () => {
+  type Poly = { name: string; glacierId: string; v: number; t?: string };
+  const square = (x: number) => ({
+    type: "Polygon" as const,
+    coordinates: [[[x, 43], [x + 0.01, 43], [x + 0.01, 43.01], [x, 43]]],
+  });
+  const glaciers = (rows: Poly[]): LayerResult => ({
+    kind: "geojson",
+    citation,
+    data: {
+      type: "FeatureCollection",
+      features: rows.map((p, i) => ({ type: "Feature" as const, geometry: square(-109.6 + i * 0.02), properties: p })),
+    },
+  });
+  // The owner's Wind River transcript: the first features were small, so the sample said 0.18 to 0.29 km² while Gannett is ~3 km².
+  const small = Array.from({ length: 40 }, (_, i): Poly => ({ name: "Unnamed glacier", glacierId: `G${i}`, v: 0.18 + (i % 12) / 100, t: "2015-08-01T00:00:00.000Z" }));
+  const windRiver = glaciers([
+    ...small,
+    { name: "Gannett Glacier", glacierId: "GAN", v: 3.4, t: "1966-08-01T00:00:00.000Z" },
+    { name: "Gannett Glacier", glacierId: "GAN", v: 3.06, t: "2015-08-01T00:00:00.000Z" },
+    { name: "Dinwoody Glacier", glacierId: "DIN", v: 2.5, t: "2015-08-01T00:00:00.000Z" },
+  ]);
+
+  it("covers every feature, not the first few: the largest glacier, the total and the mean", () => {
+    const summary = summarizeLayerResult(windRiver, "glaciers", { unit: "km²", geometry: "polygon" }) as GeojsonSummary;
+    expect(summary.stats).toMatchObject({ unit: "km²", count: 42, max: 3.06 });
+    expect(summary.stats?.top[0]).toEqual({ name: "Gannett Glacier", v: 3.06, date: "2015-08-01" });
+    expect(summary.stats?.top[1].name).toBe("Dinwoody Glacier");
+    expect(summary.stats?.top).toHaveLength(5);
+    const smallSum = small.reduce((a, r) => a + r.v, 0);
+    expect(summary.stats?.sum).toBeCloseTo(smallSum + 3.06 + 2.5, 1);
+    expect(summary.totalArea).toEqual({ value: summary.stats?.sum, unit: "km²" });
+    expect(summary.stats?.basis).toMatch(/newest dated feature of each of 42 glaciers \(43 features/);
+    expect(summary[SAMPLES_KEY].length).toBeLessThanOrEqual(3);
+  });
+
+  it("gives the date span and the distinct years the scrubber covers", () => {
+    const summary = summarizeLayerResult(windRiver, "glaciers", { unit: "km²" }) as GeojsonSummary;
+    expect(summary.dates).toMatchObject({ from: "1966-08-01", to: "2015-08-01", years: ["1966", "2015"], yearCount: 2, dated: 43 });
+    expect(summary.dates?.scrubber).toMatch(/^Already open in the layer panel over 1966 to 2015;/);
+  });
+
+  it("leaves out the year list past DATE_YEARS_MAX and reads the layer's own time field", () => {
+    const rows = Array.from({ length: DATE_YEARS_MAX + 3 }, (_, i) => ({ name: `F${i}`, glacierId: `G${i}`, v: i, when: `${2000 + i}-06-01` }));
+    const result: LayerResult = {
+      kind: "geojson",
+      citation,
+      data: { type: "FeatureCollection", features: rows.map((p) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [0, 0] }, properties: p })) },
+    };
+    const summary = summarizeLayerResult(result, "fire-perimeters", { unit: "acres", timeField: "when" }) as GeojsonSummary;
+    expect(summary.dates).toMatchObject({ from: "2000-06-01", to: "2014-06-01", yearCount: 15 });
+    expect(summary.dates).not.toHaveProperty("years");
+    expect(summary.stats).toMatchObject({ count: 15, min: 0, max: 14, mean: 7, sum: 105 });
+    expect(summary.stats).not.toHaveProperty("basis");
+    expect(summary).not.toHaveProperty("totalArea");
+  });
+
+  it("totals the length of line layers and gives no area for a non-area v", () => {
+    const result: LayerResult = {
+      kind: "geojson",
+      citation,
+      data: {
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", properties: { name: "A", v: 1 }, geometry: { type: "LineString", coordinates: [[0, 0], [0, 1]] } },
+          { type: "Feature", properties: { name: "B", v: 2 }, geometry: { type: "MultiLineString", coordinates: [[[0, 0], [1, 0]]] } },
+        ],
+      },
+    };
+    const summary = summarizeLayerResult(result, undefined, { unit: "km" }) as GeojsonSummary;
+    expect(summary.totalLengthKm).toBeCloseTo(222.4, 0);
+    expect(summary).not.toHaveProperty("totalArea");
   });
 });

@@ -53,8 +53,11 @@ const REQUIRED = [
   "For a satellite picture before and after an event, query imagery-by-date once per date with the same sensor, then call compare with a and b set to the pass days its coverage notes name.",
   "Glacier outlines are dated by survey: to show a glacier's retreat, query and render glaciers once, then call set_time ONCE with play: true across the survey years, and give v at each date of one glacierId.",
   "For 'good X', 'best X' or 'where to X' questions about a place (good hiking in French Guiana, best parks in Utah), query the layers that hold candidates (for hiking: osm-trails, then peaks, outdoor-features with kinds hut, viewpoint and waterfall, and protected-areas-world), never context layers such as population or night-lights.",
-  "For those questions the note names 3 to 6 concrete candidates taken from the returned features (each result's top list and sample), each with its number and a one-line reason: a route's name and length in km, a park's name and area in km², a peak's name and elevation in m; write one opening line, the candidates as a list, one caveat and nothing else (no line about what the map shows), since the candidates are the findings.",
+  "For those questions the note names 3 to 6 concrete candidates taken from the returned features (each result's top list and stats.top), each with its number and a one-line reason: a route's name and length in km, a park's name and area in km², a peak's name and elevation in m; write one opening line, the candidates as a list, one caveat and nothing else (no line about what the map shows), since the candidates are the findings.",
   "The note never mentions a layer that was not asked for as the main answer; layers drawn for context get at most one clause.",
+  "Numbers in the note come from stats, totalArea, totalLengthKm and dates, which cover every feature: name the largest from stats.top and give the total; never quote a range or a largest from the samples, and never write the word sample in the note.",
+  "When a result has dates, the time scrubber is already open in the layer panel: say so in the note with the years it spans (dates.from to dates.to), and never offer showing change over time as a follow-up question.",
+  "For glaciers in a place, the note gives how many glaciers there are (stats.count), their total area (totalArea) and the largest glacier by name and area from stats.top.",
 ];
 
 describe("SYSTEM_PROMPT", () => {
@@ -74,5 +77,12 @@ describe("SYSTEM_PROMPT zoom_in rules", () => {
     for (const line of SYSTEM_PROMPT.split("\n").filter((l) => l.includes("central quarter"))) {
       expect(line).toContain("NAMED a place");
     }
+  });
+});
+
+describe("SYSTEM_PROMPT stats rules (the owner's Wind River glaciers transcript)", () => {
+  it("describes the summary's samples as not representative, never as the source of numbers", () => {
+    expect(SYSTEM_PROMPT).not.toContain("sample properties");
+    expect(SYSTEM_PROMPT).toContain("a few samples that are not representative");
   });
 });

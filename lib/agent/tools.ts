@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getLayer, listLayers } from "@/layers/registry";
 import { BBoxSchema, bboxAreaKm2, type BBox, type Coverage, type Layer, type LayerError } from "@/layers/types";
 import { runLayer } from "@/lib/layers/run";
-import { isFullLayerResult, summarizeLayerResult } from "@/lib/layers/summarize";
+import { isFullLayerResult, summarizeLayerResult, type SummaryStyle } from "@/lib/layers/summarize";
 import type { Basemap, RenderMode, TimeMode } from "@/lib/render/state";
 import { geocode } from "./geocode";
 import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
@@ -154,8 +154,8 @@ function inputNames(layer: Layer): string[] {
  * GeoJSON) becomes a short summary; errors and results the browser already
  * summarized before resending the history pass through unchanged.
  */
-export function layerResultForModel(output: unknown, layerId?: string): JSONValue {
-  if (isFullLayerResult(output)) return summarizeLayerResult(output, layerId);
+export function layerResultForModel(output: unknown, layerId?: string, style?: SummaryStyle): JSONValue {
+  if (isFullLayerResult(output)) return summarizeLayerResult(output, layerId, style);
   return output as JSONValue;
 }
 
@@ -294,8 +294,8 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined) {
       }
       return body;
     },
-    // The UI part keeps the full body for the map; the model gets a summary.
-    toModelOutput: ({ output }) => ({ type: "json", value: layerResultForModel(output, layer.id) }),
+    // The UI part keeps the full body for the map; the model gets a summary with v's statistics in the layer's unit.
+    toModelOutput: ({ output }) => ({ type: "json", value: layerResultForModel(output, layer.id, layer.style) }),
   });
 }
 

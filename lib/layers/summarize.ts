@@ -1,6 +1,42 @@
 import type { Geometry, GeoJsonProperties, Position } from "geojson";
-import type { BBox, Citation, LayerError, LayerResult, TileTime } from "@/layers/types";
+import type { BBox, Citation, LayerError, LayerResult, StyleHints, TileTime } from "@/layers/types";
 import { formatValue } from "@/lib/format";
+
+/** The key the few sample features go under, so the model reads them as examples and never quotes them as the range. */
+export const SAMPLES_KEY = "samples (not representative)";
+
+/** One of the largest features by v. */
+export type TopValue = { name: string; v: number; date?: string };
+
+/** Statistics of the numeric value v over every feature (not a sample), in the layer's unit. */
+export type ValueStats = {
+  unit?: string;
+  count: number;
+  min: number;
+  max: number;
+  mean: number;
+  sum: number;
+  /** Largest first, at most STATS_TOP_SIZE. */
+  top: TopValue[];
+  /**
+   * Set when one thing is mapped once per date (a glacier outline per survey): the stats then cover the newest dated
+   * feature of each, so the sum is not counted twice, and this says so.
+   */
+  basis?: string;
+};
+
+/** The dates of the features (the time field the scrubber reads), so the note can say what range the scrubber spans. */
+export type DateSpan = {
+  from: string;
+  to: string;
+  /** Distinct years, when there are at most DATE_YEARS_MAX of them. */
+  years?: string[];
+  yearCount: number;
+  /** How many features carry a date. */
+  dated: number;
+  /** The time scrubber opens over these dates on its own, which the note says rather than offering it. */
+  scrubber: string;
+};
 
 /** What the model sees for a geojson result; the full data goes to the map only. */
 export type GeojsonSummary = {
@@ -8,7 +44,15 @@ export type GeojsonSummary = {
   featureCount: number;
   geometryTypes: Record<string, number>;
   bbox: BBox | null;
-  sample: GeoJsonProperties[];
+  /** Over every feature with a numeric v. */
+  stats?: ValueStats;
+  /** Lines only: the length of every line together, in km. */
+  totalLengthKm?: number;
+  /** Polygons whose v is an area: the stats' sum, named as the total area. */
+  totalArea?: { value: number; unit: string };
+  /** Present when features carry dates: the time scrubber is open over this span. */
+  dates?: DateSpan;
+  [SAMPLES_KEY]: GeoJsonProperties[];
   /** For layers whose features are candidates to name (routes, parks): the largest few as short text, largest first. */
   top?: string[];
   citation: Citation;
@@ -172,6 +216,134 @@ function topOf(layerId: string | undefined, features: { properties: GeoJsonPrope
   return top.length > 0 ? top : undefined;
 }
 
+/** Most features listed in `stats.top`. */
+export const STATS_TOP_SIZE = 5;
+/** Most distinct years listed in `dates.years`; more only gives the count. */
+export const DATE_YEARS_MAX = 12;
+/** Longest name kept in `stats.top`. */
+const TOP_NAME_MAX_CHARS = 80;
+
+/** Units of v that are areas, so the sum of a polygon layer's v is its total area. */
+const AREA_UNITS = new Set(["km²", "km2", "m²", "m2", "ha", "acres", "mi²", "mi2"]);
+
+/**
+ * Layers that map one thing once per date under a shared id (glaciers: one outline per survey). Their stats use the
+ * newest dated feature of each id, so a glacier outlined in 1966 and 2015 counts once.
+ */
+const SERIES_ID: Record<string, { field: string; label: string }> = {
+  glaciers: { field: "glacierId", label: "glacier" },
+};
+
+/** A number rounded to what a note can quote: whole above 100, 2 decimals above 1, else 3. */
+function round(n: number): number {
+  const places = Math.abs(n) >= 100 ? 0 : Math.abs(n) >= 1 ? 2 : 3;
+  const f = 10 ** places;
+  return Math.round(n * f) / f;
+}
+
+/** A feature's readable name, or undefined. */
+function nameOf(p: Props): string | undefined {
+  return text(p.name) ?? text(p.title);
+}
+
+function dateOf(p: Props, field: string): number | undefined {
+  const raw = p[field];
+  const ms = typeof raw === "string" ? Date.parse(raw) : typeof raw === "number" ? raw : Number.NaN;
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
+const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/** v over every feature: count, min, max, mean, sum and the largest few by name, or undefined when no feature has a numeric v. */
+function statsOf(
+  features: { properties: GeoJsonProperties }[],
+  unit: string | undefined,
+  timeField: string,
+  series: { field: string; label: string } | undefined,
+): ValueStats | undefined {
+  let rows = features.flatMap((f) => {
+    const p = (f.properties ?? {}) as Props;
+    const v = num(p.v);
+    return v === undefined ? [] : [{ p, v, t: dateOf(p, timeField) }];
+  });
+  if (rows.length === 0) return undefined;
+
+  let basis: string | undefined;
+  if (series !== undefined && rows.some((r) => text(r.p[series.field]) !== undefined)) {
+    const newest = new Map<string, (typeof rows)[number]>();
+    rows.forEach((r, i) => {
+      const id = text(r.p[series.field]) ?? `#${i}`;
+      const held = newest.get(id);
+      if (held === undefined || (r.t ?? -Infinity) > (held.t ?? -Infinity)) newest.set(id, r);
+    });
+    if (newest.size < rows.length) {
+      basis = `newest dated feature of each of ${newest.size} ${series.label}s (${rows.length} features in all, some ${series.label}s mapped on several dates)`;
+    }
+    rows = [...newest.values()];
+  }
+
+  const values = rows.map((r) => r.v);
+  const sum = values.reduce((a, b) => a + b, 0);
+  const top = [...rows]
+    .sort((a, b) => b.v - a.v)
+    .slice(0, STATS_TOP_SIZE)
+    .map((r): TopValue => {
+      const name = nameOf(r.p) ?? "Unnamed";
+      const date = r.t === undefined ? undefined : isoDay(r.t);
+      return {
+        name: name.length > TOP_NAME_MAX_CHARS ? `${name.slice(0, TOP_NAME_MAX_CHARS - 1)}…` : name,
+        v: round(r.v),
+        ...(date !== undefined && { date }),
+      };
+    });
+  return {
+    ...(unit !== undefined && { unit }),
+    count: rows.length,
+    min: round(values.reduce((a, b) => Math.min(a, b))),
+    max: round(values.reduce((a, b) => Math.max(a, b))),
+    mean: round(sum / rows.length),
+    sum: round(sum),
+    top,
+    ...(basis !== undefined && { basis }),
+  };
+}
+
+/** The span of the features' dates, or undefined when none carries one. */
+function datesOf(features: { properties: GeoJsonProperties }[], timeField: string): DateSpan | undefined {
+  const times = features.flatMap((f) => {
+    const t = f.properties ? dateOf(f.properties as Props, timeField) : undefined;
+    return t === undefined ? [] : [t];
+  });
+  if (times.length === 0) return undefined;
+  const years = [...new Set(times.map((t) => isoDay(t).slice(0, 4)))].sort();
+  const span = years.length === 1 ? years[0] : `${years[0]} to ${years[years.length - 1]}`;
+  return {
+    from: isoDay(times.reduce((a, b) => Math.min(a, b))),
+    to: isoDay(times.reduce((a, b) => Math.max(a, b))),
+    ...(years.length <= DATE_YEARS_MAX && { years }),
+    yearCount: years.length,
+    dated: times.length,
+    scrubber: `Already open in the layer panel over ${span}; say so in the note and do not offer it as a follow-up.`,
+  };
+}
+
+/** Great-circle distance in km between two [lon, lat] positions. */
+function haversineKm(a: Position, b: Position): number {
+  const rad = Math.PI / 180;
+  const dLat = (b[1] - a[1]) * rad;
+  const dLon = (b[0] - a[0]) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * rad) * Math.cos(b[1] * rad) * Math.sin(dLon / 2) ** 2;
+  return 12_742 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** The length of a line geometry in km (0 for other geometries). */
+function lineLengthKm(geometry: Geometry | null): number {
+  const along = (line: Position[]) => line.reduce((km, p, i) => (i === 0 ? 0 : km + haversineKm(line[i - 1], p)), 0);
+  if (geometry?.type === "LineString") return along(geometry.coordinates);
+  if (geometry?.type === "MultiLineString") return geometry.coordinates.reduce((km, line) => km + along(line), 0);
+  return 0;
+}
+
 /** "2015-2025" from a tile URL's start_year and end_year parameters, or undefined when it has none. */
 export function drawnYearsOf(url: string): string | undefined {
   const start = /[?&]start_year=(\d{4})(?:&|$)/.exec(url)?.[1];
@@ -180,12 +352,20 @@ export function drawnYearsOf(url: string): string | undefined {
   return start === end ? start : `${start}-${end}`;
 }
 
+/** What the summary reads from a layer's style: v's unit, the date field and the geometry. */
+export type SummaryStyle = Partial<Pick<StyleHints, "unit" | "timeField" | "geometry">>;
+
 /**
- * A small, model-sized view of a layer response: counts, extent, a few sample
- * properties and the citation instead of every feature. Errors pass through. `layerId` adds, for tile layers that
- * are easy to misread, what the picture means (`shows`), and for routes and parks the largest few by name (`top`).
+ * A small, model-sized view of a layer response: counts, extent, statistics of v over every feature, the dates the
+ * time scrubber spans, a few sample properties (labelled not representative) and the citation instead of every
+ * feature. Errors pass through. `layerId` adds, for tile layers that are easy to misread, what the picture means
+ * (`shows`), and for routes and parks the largest few by name (`top`). `style` gives v's unit and the date field.
  */
-export function summarizeLayerResult(body: LayerResult | LayerError, layerId?: string): LayerResultSummary | LayerError {
+export function summarizeLayerResult(
+  body: LayerResult | LayerError,
+  layerId?: string,
+  style: SummaryStyle = {},
+): LayerResultSummary | LayerError {
   if ("error" in body) return body;
 
   if (body.kind === "tiles") {
@@ -225,12 +405,23 @@ export function summarizeLayerResult(body: LayerResult | LayerError, layerId?: s
   }
 
   const top = topOf(layerId, features);
+  const timeField = style.timeField ?? "t";
+  const stats = statsOf(features, style.unit, timeField, layerId === undefined ? undefined : SERIES_ID[layerId]);
+  const dates = datesOf(features, timeField);
+  const lines = (geometryTypes.LineString ?? 0) + (geometryTypes.MultiLineString ?? 0);
+  const polygons = (geometryTypes.Polygon ?? 0) + (geometryTypes.MultiPolygon ?? 0);
+  const totalLengthKm = lines > 0 ? round(features.reduce((km, f) => km + lineLengthKm(f.geometry), 0)) : undefined;
+  const areaUnit = style.unit !== undefined && AREA_UNITS.has(style.unit) ? style.unit : undefined;
   return {
     kind: "geojson",
     featureCount: features.length,
     geometryTypes,
     bbox: west <= east ? [west, south, east, north] : null,
-    sample: sampleOf(features),
+    ...(stats !== undefined && { stats }),
+    ...(totalLengthKm !== undefined && { totalLengthKm }),
+    ...(stats !== undefined && polygons > 0 && areaUnit !== undefined && { totalArea: { value: stats.sum, unit: areaUnit } }),
+    ...(dates !== undefined && { dates }),
+    [SAMPLES_KEY]: sampleOf(features),
     ...(top !== undefined && { top }),
     citation: body.citation,
     ...(body.coverageNote !== undefined && { coverageNote: body.coverageNote }),

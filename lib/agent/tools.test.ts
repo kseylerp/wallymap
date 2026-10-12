@@ -77,6 +77,32 @@ describe("buildTools", () => {
     expect(await t.toModelOutput({ toolCallId: "c2", input: {}, output: error })).toEqual({ type: "json", value: error });
   });
 
+  it("query_glaciers gives the model stats over every outline in km², not just the first few", async () => {
+    const t = buildTools()["query_glaciers"];
+    if (!t.toModelOutput) throw new Error("query tool has no toModelOutput");
+    const square = { type: "Polygon", coordinates: [[[-109.6, 43.1], [-109.5, 43.1], [-109.5, 43.2], [-109.6, 43.1]]] };
+    const outline = (name: string, glacierId: string, v: number) => ({
+      type: "Feature",
+      geometry: square,
+      properties: { name, glacierId, v, areaKm2: v, t: "2015-08-01T00:00:00.000Z" },
+    });
+    const output = {
+      kind: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [outline("Unnamed glacier", "A", 0.2), outline("Unnamed glacier", "B", 0.29), outline("Gannett Glacier", "GAN", 3.06)],
+      },
+      citation: { source: "GLIMS", url: "https://www.glims.org/", retrieved: "2026-10-11T00:00:00Z" },
+    };
+    const modelOutput = await t.toModelOutput({ toolCallId: "c1", input: {}, output });
+    if (modelOutput.type !== "json") throw new Error("expected json model output");
+    expect(modelOutput.value).toMatchObject({
+      stats: { unit: "km²", count: 3, max: 3.06, sum: 3.55, top: [{ name: "Gannett Glacier", v: 3.06 }, { v: 0.29 }, { v: 0.2 }] },
+      totalArea: { value: 3.55, unit: "km²" },
+      dates: { from: "2015-08-01", to: "2015-08-01", years: ["2015"] },
+    });
+  });
+
   it("echoes its input from the view, basemap, render and note tools", async () => {
     const tools = buildTools();
     const view = { bbox: [-120.2, 38.85, -120, 39], pitch: 45 };

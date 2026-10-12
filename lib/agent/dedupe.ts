@@ -1,4 +1,5 @@
 import { extractFollowUps } from "./followups";
+import { VOCABULARY } from "./vocabulary";
 
 /** The few fields of a UI message part this check reads. Real `UIMessage` parts satisfy it. */
 export type DedupePart = {
@@ -133,6 +134,28 @@ export function answerAfterNote(text: string, note: string, done = true): Trimme
   const list = trailingList(cleaned);
   if (list !== "") return { body: list, followUps: [] };
   return { body: dropRepeats(dropSections(cleaned, REPEATED_HEADING), note), followUps: [] };
+}
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** "[id]", "(id)" or "(source: id)" where id is exactly a registered layer id; not a link's "](...)" target or label. */
+const LAYER_ID_MARKER = new RegExp(
+  `[ \\t]*(?<!\\])(?:\\[|\\()(?:sources?:\\s*)?(?:${[...VOCABULARY.map((e) => e.layerId)]
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRegExp)
+    .join("|")})(?:\\]|\\))(?!\\()`,
+  "g",
+);
+
+/**
+ * Removes the inline citation markers the model sometimes writes: "【...】" in any form (including one still being
+ * streamed, with no closing bracket yet) and a layer id alone in brackets or parentheses, with the space before it.
+ * The Sources line under every answer already lists citations. Ordinary brackets and parentheses stay.
+ */
+export function stripCitationMarkers(text: string): string {
+  return text
+    .replace(/[ \t]*【[^】]*(?:】|$)/g, "")
+    .replace(LAYER_ID_MARKER, "");
 }
 
 /** A note card's markdown without a Sources section: the sources line under the answer already lists them. */

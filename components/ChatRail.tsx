@@ -23,7 +23,7 @@ import { ToolTrace } from "@/components/ToolTrace";
 import { TopoHeartbeat } from "@/components/TopoHeartbeat";
 import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
 import { onChatSend } from "@/lib/agent/chatBus";
-import { answerAfterNote, noteForDisplay, notesBeforeText } from "@/lib/agent/dedupe";
+import { answerAfterNote, noteForDisplay, notesBeforeText, stripCitationMarkers } from "@/lib/agent/dedupe";
 import { extractFollowUps } from "@/lib/agent/followups";
 import { buildChatBody, type MapView } from "@/lib/agent/view";
 import type { Padding } from "@/lib/render/deck";
@@ -186,7 +186,8 @@ type AnswerCardProps = {
  * An assistant answer: plain markdown on the panel, no bubble. A finished answer's closing follow-up questions
  * become plain text rows (full width, 44px, hairline separators, a "→" at 60% ink).
  */
-const AnswerCard = memo(function AnswerCard({ text, done, afterNote, onFollowUp }: AnswerCardProps) {
+const AnswerCard = memo(function AnswerCard({ text: rawText, done, afterNote, onFollowUp }: AnswerCardProps) {
+  const text = useMemo(() => stripCitationMarkers(rawText), [rawText]);
   const { body, followUps } = useMemo(() => {
     if (afterNote !== undefined) return answerAfterNote(text, afterNote, done);
     return done ? extractFollowUps(text) : { body: text, followUps: [] as string[] };

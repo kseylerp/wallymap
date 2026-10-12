@@ -6,6 +6,7 @@ const REQUIRED = [
   "Prefer tools over prose.",
   "Every claim cites a layer.",
   "Sources are listed under every answer automatically from each queried layer's citation; never write a Sources line or section, and never cite a layer you did not query.",
+  "Sources are cited only by that automatic Sources line; never write layer ids or bracketed markers such as 【wikipedia-nearby】 or [osm-trails] inside sentences.",
   "State coverage gaps plainly.",
   "Never invent coordinates; every geometry comes from a tool result.",
   "End with two or three follow-up questions as a bulleted list.",

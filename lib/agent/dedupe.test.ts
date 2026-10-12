@@ -4,6 +4,7 @@ import {
   noteForDisplay,
   notesBeforeText,
   repeatShare,
+  stripCitationMarkers,
   type DedupePart,
 } from "@/lib/agent/dedupe";
 import { HIKES_NOTE, HIKES_PARTS, HIKES_TEXT, WATER_NOTE, WATER_PARTS, WATER_TEXT } from "./__fixtures__/patagonia-transcript";
@@ -114,5 +115,29 @@ describe("noteForDisplay", () => {
     expect(noteForDisplay(`${NOTE}\n\n**Sources**\nOpenStreetMap`)).toBe(NOTE);
     expect(noteForDisplay(`${NOTE}\n\n**Sources:** OpenStreetMap`)).toBe(NOTE);
     expect(noteForDisplay(NOTE)).toBe(NOTE);
+  });
+});
+
+describe("stripCitationMarkers", () => {
+  it("removes the CJK-bracket marker from the Bodie sentence", () => {
+    expect(
+      stripCitationMarkers("Bodie was abandoned, leaving the preserved ruins we see today【wikipedia-nearby】."),
+    ).toBe("Bodie was abandoned, leaving the preserved ruins we see today.");
+  });
+
+  it("removes any 【...】 token, even an unfinished one while streaming", () => {
+    expect(stripCitationMarkers("Two peaks【1†source】 stand out.")).toBe("Two peaks stand out.");
+    expect(stripCitationMarkers("Two peaks stand out 【wikipedia-ne")).toBe("Two peaks stand out");
+  });
+
+  it("removes a bracketed or parenthesized layer id with the space before it", () => {
+    expect(stripCitationMarkers("Trails cross the ridge [osm-trails].")).toBe("Trails cross the ridge.");
+    expect(stripCitationMarkers("Seen 40 times (wikipedia-nearby).")).toBe("Seen 40 times.");
+    expect(stripCitationMarkers("Seen 40 times (source: gbif-occurrences).")).toBe("Seen 40 times.");
+  });
+
+  it("leaves ordinary brackets, unknown ids and markdown links alone", () => {
+    const keep = "The pass (elev. 3,000 m) is [closed] in winter, see [osm-trails](https://example.com) and (not-a-layer).";
+    expect(stripCitationMarkers(keep)).toBe(keep);
   });
 });

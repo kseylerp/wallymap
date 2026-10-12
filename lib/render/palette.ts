@@ -286,7 +286,8 @@ export function lineRampFor(layerId: string): RampName {
  * stroke at full opacity, off-white fill at 0.85 (0.6 on the hollow classes, ring and square, so they still read as
  * marks on dark or busy ground), and a white halo 3.5px wide across the outline (1.75px a side) at 0.9. The symbol is
  * `sizeMax` px from zoom `sizeMaxZoom` up, easing down to `sizeMin` px at `sizeMinZoom` and never below. Strokes and
- * halos stay these exact pixel widths at every size.
+ * halos stay these exact pixel widths at every size. Glyph layers (owner, 2026-10-11: "try for simple icons") put a
+ * line glyph inside the disc: its 24×24 drawing shrunk to `glyphScale` and stroked dark grey `glyphStrokeWidth` px.
  */
 export const SYMBOL = {
   stroke: DARK_GREY,
@@ -303,6 +304,8 @@ export const SYMBOL = {
   sizeMin: 10,
   sizeMaxZoom: 11,
   sizeMinZoom: 6,
+  glyphScale: 0.42,
+  glyphStrokeWidth: 1.25,
 } as const;
 
 /** The symbol's on-screen size in whole pixels at a map zoom: 10 at zoom 6 and below, 14 at zoom 11 and above. */

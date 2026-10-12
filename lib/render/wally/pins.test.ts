@@ -1,8 +1,10 @@
 import type { Feature } from "geojson";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { DARK_GREY, OFF_WHITE, PALETTE, PINK, PURPLE, SYMBOL, symbolSizePx, WHITE } from "@/lib/render/palette";
 import { UnpremultiplySpriteExtension } from "@/lib/render/deck";
-import { PIN_SYMBOLS, pinIconFor, pinSymbolFor, routePinUrl } from "@/lib/render/wally/pins";
+import { GLYPHS, LAYER_GLYPHS, PIN_SYMBOLS, pinGlyphFor, pinIconFor, pinSymbolFor, routePinUrl, type PinGlyph } from "@/lib/render/wally/pins";
 
 const point = (properties: Record<string, unknown> = {}): Feature => ({
   type: "Feature",
@@ -38,9 +40,14 @@ describe("pinSymbolFor", () => {
     ["forest-roads", "road"],
     ["trailheads", "trailhead"],
     ["something-new", "point"],
-  ])("maps %s to the %s symbol", (layerId, symbol) => {
+  ])("keeps %s's plain %s shape as its fallback", (layerId, symbol) => {
     expect(pinSymbolFor(layerId, point())).toBe(symbol);
-    expect(pinIconFor(layerId, point()).id.startsWith(`${symbol}-`)).toBe(true);
+  });
+
+  it("draws unmapped layers (and roads) as their plain shape, with no glyph", () => {
+    expect(pinIconFor("something-new", point()).id.startsWith("point-")).toBe(true);
+    expect(pinIconFor("forest-roads", point()).id.startsWith("road-")).toBe(true);
+    expect(svgOf(pinIconFor("something-new", point()).url)).not.toContain("stroke-linecap");
   });
 
   it("tells camp sites (triangle) from parking (square) by kind", () => {
@@ -110,15 +117,11 @@ describe("symbol sprites (owner's board, points variant A)", () => {
     expect(svg).toContain(`stroke="${WHITE}" stroke-opacity="0.9" stroke-width="5.25"`);
   });
 
-  it.each(["species", "snow", "trailhead"])("%s (hollow class) fills off-white at 0.6, and purple when selected", (symbol) => {
+  it.each(["species", "snow", "trailhead"])("%s (a glyph layer) draws the off-white disc at 0.85, and purple when selected", (symbol) => {
     expect(svgOf(pinIconFor(layerFor[symbol], point(), false, 12).url)).toContain(
-      `fill="${OFF_WHITE}" fill-opacity="0.6" stroke="${DARK_GREY}" stroke-width="1.75"`,
+      `fill="${OFF_WHITE}" fill-opacity="0.85" stroke="${DARK_GREY}" stroke-width="1.75"`,
     );
     expect(svgOf(pinIconFor(layerFor[symbol], point(), true).url)).toContain(`fill="${PURPLE}"`);
-  });
-
-  it("keeps the dotted ring's centre dot", () => {
-    expect(svgOf(pinIconFor("trailheads", point()).url)).toContain(`r="1.6" fill="${DARK_GREY}"`);
   });
 
   it.each(["fire-detections", "earthquakes", "methane-plumes", "uranium", "weather-alerts"])("%s draws pink with a dark grey stroke", (layerId) => {
@@ -147,18 +150,127 @@ describe("symbol sprites (owner's board, points variant A)", () => {
     }
   });
 
-  it("draws the shapes the legend promises", () => {
-    expect(svgOf(pinIconFor("campsites", point()).url)).toMatch(/<path d="M12 6\.2 18\.2 17H5\.8Z"/); // triangle
+  it("draws the plain shapes where no glyph applies", () => {
     expect(svgOf(pinIconFor("campsites", point({ kind: "parking" })).url)).toContain("<rect"); // square
-    expect(svgOf(pinIconFor("streamflow", point()).url)).toMatch(/<path d="M12 5\.6 18\.4 12 12 18\.4 5\.6 12Z"/); // diamond
     expect(svgOf(pinIconFor("forest-roads", point()).url)).toContain('stroke-dasharray="3 2"'); // dashed line
-    expect(svgOf(pinIconFor("trailheads", point()).url)).toContain(`r="1.6" fill="${DARK_GREY}"`); // dotted ring
+    expect(svgOf(pinIconFor("something-new", point()).url)).toContain('<circle cx="12" cy="12" r="5.5"'); // disc
   });
 
   it("is a 24×24 sprite anchored at its center, shared per symbol and fill", () => {
     const icon = pinIconFor("species", point());
     expect(icon).toMatchObject({ width: 24, height: 24, anchorY: 12 });
     expect(pinIconFor("species", point({ other: 1 }))).toBe(icon);
+  });
+});
+
+/** The glyph path drawn inside a sprite, or undefined. */
+const glyphPathOf = (svg: string) => /<path d="([^"]+)" fill="none" stroke="#3A3A3C" stroke-width="[\d.]+" stroke-linecap="round"/.exec(svg)?.[1];
+
+describe("glyphs (owner, 2026-10-11: \"try for simple icons\")", () => {
+  it.each([
+    ["trailheads", "chevron"],
+    ["outdoor-features", "chevron"],
+    ["peaks", "mountain"],
+    ["lakes", "wave"],
+    ["surface-water", "wave"],
+    ["streamflow", "drop"],
+    ["groundwater", "drop"],
+    ["snowpack", "asterisk"],
+    ["snow-cover", "asterisk"],
+    ["tides", "waves"],
+    ["surf", "waves"],
+    ["fishing", "hook"],
+    ["campsites", "tent"],
+    ["popularity-campsites", "tent"],
+    ["recreation-sites", "tent"],
+    ["species", "leaf"],
+    ["gbif-occurrences", "leaf"],
+    ["photos", "camera"],
+    ["wikipedia-nearby", "info"],
+    ["climbing", "carabiner"],
+    ["earthquakes", "arcs"],
+    ["weather-alerts", "exclamation"],
+    ["fire-detections", "flame"],
+    ["methane-plumes", "cloud"],
+    ["uranium", "trefoil"],
+    ["mines", "pick"],
+    ["dams", "dam"],
+    ["power-plants", "bolt"],
+    ["ports", "anchor"],
+    ["sea-level-trends", "staff"],
+    ["tree-mortality", "tree"],
+    ["sequoia-mortality", "tree"],
+  ] as const)("draws %s with the %s glyph inside the disc", (layerId, glyph) => {
+    expect(pinGlyphFor(layerId, point())).toBe(glyph);
+    const icon = pinIconFor(layerId, point());
+    expect(icon.id.startsWith(`${glyph}-`)).toBe(true);
+    const svg = svgOf(icon.url);
+    expect(svg).toContain('<circle cx="12" cy="12" r="5.5"');
+    expect(glyphPathOf(svg)).toBe(GLYPHS[glyph]);
+  });
+
+  it.each(["mtb-trails", "ski-routes", "paddling", "glaciers", "monuments", "condor-range", "wolf-packs", "forest-roads", "something-new"])(
+    "gives %s no glyph (lines, polygons and unmapped layers fall back)",
+    (layerId) => {
+      expect(pinGlyphFor(layerId, point())).toBeNull();
+      expect(glyphPathOf(svgOf(pinIconFor(layerId, point()).url))).toBeUndefined();
+    },
+  );
+
+  it("keeps parking lots on campsite layers as the plain square", () => {
+    expect(pinGlyphFor("campsites", point({ kind: "parking" }))).toBeNull();
+    expect(svgOf(pinIconFor("campsites", point({ kind: "parking" })).url)).toContain("<rect");
+  });
+
+  const files = path.resolve(__dirname, "../../../public/pins");
+
+  it("draws every glyph from its public/pins file: 24×24, 1.5px round strokes, no fill, dark grey, at most three strokes", () => {
+    expect(readdirSync(files).filter((f) => f.endsWith(".svg")).sort()).toEqual(Object.keys(GLYPHS).map((g) => `${g}.svg`).sort());
+    for (const [name, d] of Object.entries(GLYPHS)) {
+      const file = readFileSync(path.join(files, `${name}.svg`), "utf8");
+      expect(file).toContain('viewBox="0 0 24 24"');
+      expect(file).toContain('fill="none"');
+      expect(file).toContain(`stroke="${DARK_GREY}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"`);
+      expect(file).not.toMatch(/<(text|image|use|circle|rect)\b/);
+      expect([...file.matchAll(/<path d="([^"]+)"/g)].map((m) => m[1])).toEqual([d]);
+      expect(d.match(/M/gi)?.length, name).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("maps every layer to a glyph that exists", () => {
+    for (const glyph of Object.values(LAYER_GLYPHS)) expect(GLYPHS).toHaveProperty(glyph);
+  });
+
+  it.each([10, 12, 14])("draws the glyph stroke at true pixel width on a %spx symbol, rasterized at 2x", (size) => {
+    const svg = svgOf(pinIconFor("peaks", point(), false, size).url);
+    const outer = size / 12; // the drawing is laid out for a 12px symbol
+    const width = Number(/stroke-width="([\d.]+)" stroke-linecap="round"/.exec(svg)?.[1]);
+    expect(width * outer * SYMBOL.glyphScale).toBeCloseTo(SYMBOL.glyphStrokeWidth, 2);
+    expect(svg).toContain('width="48" height="48" viewBox="0 0 24 24"'); // 2x for retina
+    expect(pinIconFor("peaks", point(), false, size)).toMatchObject({ width: 24, height: 24, anchorY: 12 });
+  });
+
+  it.each(["fire-detections", "earthquakes", "weather-alerts", "methane-plumes", "uranium", "tree-mortality"])(
+    "%s keeps the pink hazard disc with a dark grey glyph",
+    (layerId) => {
+      const svg = svgOf(pinIconFor(layerId, point()).url);
+      expect(svg).toContain(`fill="${PINK}" fill-opacity="1" stroke="${DARK_GREY}"`);
+      expect(glyphPathOf(svg)).toBe(GLYPHS[pinGlyphFor(layerId, point()) as PinGlyph]);
+    },
+  );
+
+  it("selects with a purple disc and keeps the glyph dark grey", () => {
+    const svg = svgOf(pinIconFor("gbif-occurrences", point(), true).url);
+    expect(svg).toContain(`fill="${PURPLE}" fill-opacity="1" stroke="${DARK_GREY}"`);
+    expect(glyphPathOf(svg)).toBe(GLYPHS.leaf);
+    expect([...colors(svg)].every((c) => PALETTE.has(c))).toBe(true);
+  });
+
+  it("caches one sprite per glyph, fill and size", () => {
+    expect(pinIconFor("lakes", point())).toBe(pinIconFor("lakes", point({ name: "Tahoe" })));
+    expect(pinIconFor("lakes", point()).id).toBe(pinIconFor("surface-water", point()).id);
+    expect(pinIconFor("lakes", point()).id).not.toBe(pinIconFor("lakes", point(), true).id);
+    expect(pinIconFor("lakes", point(), false, 12).id).not.toBe(pinIconFor("lakes", point(), false, 14).id);
   });
 });
 

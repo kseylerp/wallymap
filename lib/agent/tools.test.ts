@@ -103,6 +103,33 @@ describe("buildTools", () => {
     });
   });
 
+  it("geocode returns the first answer with repeated: true when the same text is asked again in a turn", async () => {
+    vi.stubEnv("MAPBOX_TOKEN", "test-mapbox-token");
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          features: [{ properties: { name: "Lake Tahoe", bbox: [-120.5, 38.6, -119.7, 39.4], coordinates: { longitude: -120.1, latitude: 39.1 } } }],
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const tools = buildTools({ view: { bbox: [-121, 38, -119, 40], zoom: 8, center: [-120, 39] } });
+      const first = await run(tools.geocode, { place: "Lake Tahoe" });
+      expect(first).not.toHaveProperty("repeated");
+      expect(await run(tools.geocode, { place: "lake  tahoe." })).toEqual({ ...(first as object), repeated: true });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      // The lookup leans toward the place on screen.
+      expect(new URL(String((fetchMock.mock.calls[0] as unknown[])[0])).searchParams.get("proximity")).toBe("-120,39");
+      // A new turn (new tools) asks Mapbox again.
+      await run(buildTools().geocode, { place: "Lake Tahoe" });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("echoes its input from the view, basemap, render and note tools", async () => {
     const tools = buildTools();
     const view = { bbox: [-120.2, 38.85, -120, 39], pitch: 45 };

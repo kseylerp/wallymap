@@ -277,4 +277,76 @@ describe("geocode", () => {
       expect(calls.ne).toBe(1);
     });
   });
+
+  describe("range-like names", () => {
+    // Live 2026-10-11: v6 answered "Wind River Range" with a street in Jacksonville, Florida, and "Wind River Range,
+    // Wyoming" with the town of Wind River; Search Box knows the range as a POI on Gannett Peak.
+    const WIND_RIVER_TOWN = { name: "Wind River", full_address: "Wind River, Wyoming, United States", bbox: [-108.891, 42.981, -108.877, 42.991], coordinates: { longitude: -108.88, latitude: 42.98 } };
+    const poi = (name: string, poi_category: string[], longitude: number, latitude: number, place_formatted: string) => ({
+      properties: { name, feature_type: "poi", poi_category, place_formatted, coordinates: { longitude, latitude } },
+    });
+
+    function routed(v6: unknown[], searchBox: unknown[]) {
+      const urls: URL[] = [];
+      globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(String(input));
+        urls.push(url);
+        if (url.host === NE_HOST) return jsonResponse(regions);
+        if (url.pathname.includes("searchbox")) return jsonResponse({ features: searchBox });
+        return jsonResponse({ features: v6.map((properties) => ({ properties })) });
+      }) as typeof fetch;
+      return urls;
+    }
+
+    it("treats ranges, mountains and sierras as range-like, but not towns or lakes", async () => {
+      const { isRangeLike } = await import("@/lib/agent/geocode");
+      expect(["Wind River Range", "Bighorn Mountains", "Sierra Nevada", "the Alps"].every(isRangeLike)).toBe(true);
+      expect(["Lake Tahoe", "Truckee", "Andes", "Mountain View"].some(isRangeLike)).toBe(false);
+    });
+
+    it("keeps a town whose name is exactly the range-like text (Beverly Hills)", async () => {
+      const urls = routed([{ name: "Beverly Hills", bbox: [-118.43, 34.05, -118.38, 34.1], coordinates: { longitude: -118.4, latitude: 34.07 } }], []);
+      expect(await geocode("Beverly Hills")).toMatchObject({ name: "Beverly Hills", source: "mapbox" });
+      expect(urls.some((u) => u.pathname.includes("searchbox"))).toBe(false);
+    });
+
+    it("answers the Wind River Range with the range's own point, boxed under the glacier cap, not the town", async () => {
+      const urls = routed(
+        [WIND_RIVER_TOWN],
+        [
+          poi("Wind River Range", ["government"], -109.85, 42.87, "Pinedale, Wyoming 82941, United States"),
+          poi("Wind River Range", [], -109.6526, 43.1835, "Dubois, Wyoming 82513, United States"),
+        ],
+      );
+      const result = await geocode("Wind River Range, Wyoming", { proximity: [-110, 43] });
+      if ("error" in result) throw new Error("expected a match");
+      expect(result.center).toEqual([-109.6526, 43.1835]);
+      expect(result.name).toBe("Wind River Range, Dubois, Wyoming 82513, United States");
+      const { bboxAreaKm2 } = await import("@/layers/types");
+      expect(bboxAreaKm2(result.bbox)).toBeGreaterThan(5_000);
+      expect(bboxAreaKm2(result.bbox)).toBeLessThan(8_000);
+      const v6 = urls.find((u) => u.pathname.includes("geocode/v6"));
+      expect(v6?.searchParams.get("types")).toBe("region,district,place,locality");
+      const searchBox = urls.find((u) => u.pathname.includes("searchbox"));
+      expect(searchBox?.searchParams.get("types")).toBe("poi");
+      expect(searchBox?.searchParams.get("proximity")).toBe("-110,43");
+    });
+
+    it("needs the exact name: Bighorn Mountain is not the Bighorn Mountains, so the town stays", async () => {
+      routed([WIND_RIVER_TOWN], [poi("Bighorn Mountain", ["mountain"], -105.6, 40.4, "Estes Park, Colorado")]);
+      expect(await geocode("Bighorn Mountains")).toMatchObject({ name: "Wind River, Wyoming, United States", source: "mapbox" });
+    });
+
+    it("finds the landform when the place geocoder has no match at all", async () => {
+      routed([], [poi("Ruby Mountains", [], -115.475, 40.622, "Spring Creek, Nevada")]);
+      expect(await geocode("Ruby Mountains")).toMatchObject({ center: [-115.475, 40.622], source: "mapbox" });
+    });
+
+    it("never asks Search Box for a name that is not range-like", async () => {
+      const urls = routed([{ name: "Truckee", coordinates: { longitude: -120.18, latitude: 39.33 } }], []);
+      await geocode("Truckee");
+      expect(urls.some((u) => u.pathname.includes("searchbox"))).toBe(false);
+      expect(urls[0].searchParams.has("types")).toBe(false);
+    });
+  });
 });

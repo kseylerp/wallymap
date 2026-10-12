@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
+import { setViewFollowsInStep, toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
+import type { UIMessage } from "ai";
 import { bboxToViewport } from "@/lib/render/deck";
 import type { LayerResult } from "@/layers/types";
 import type { RenderOp } from "@/lib/render/state";
@@ -193,8 +194,23 @@ describe("toolResultToActions", () => {
     ]);
   });
 
-  it("geocode, note and list_layers change nothing on the map", () => {
-    expect(toolResultToActions("geocode", { place: "Tahoe" }, { bbox: [0, 0, 1, 1] }, canvas, catalog, [])).toEqual([]);
+  it("a successful geocode moves the camera to the place's bbox, like set_view", () => {
+    const bbox = [-110.1, 42.83, -109.2, 43.53];
+    const output = { bbox, center: [-109.65, 43.18], name: "Wind River Range, Wyoming", source: "mapbox" };
+    const { longitude, latitude, zoom } = bboxToViewport(bbox as [number, number, number, number], canvas.width, canvas.height);
+    expect(toolResultToActions("geocode", { place: "Wind River Range" }, output, canvas, catalog, [])).toEqual([
+      { type: "set_view", viewport: { longitude, latitude, zoom, bearing: 0 }, fit: true },
+    ]);
+  });
+
+  it("a geocode followed by set_view in the same step, or a failed geocode, does not move the camera", () => {
+    const output = { bbox: [0, 0, 1, 1], center: [0.5, 0.5], name: "X", source: "mapbox" };
+    expect(toolResultToActions("geocode", {}, output, canvas, catalog, [], { setViewFollows: true })).toEqual([]);
+    expect(toolResultToActions("geocode", {}, { error: "No match for Nowhere" }, canvas, catalog, [])).toEqual([]);
+    expect(toolResultToActions("geocode", {}, { center: [0, 0] }, canvas, catalog, [])).toEqual([]);
+  });
+
+  it("note and list_layers change nothing on the map", () => {
     expect(toolResultToActions("note", { markdown: "hi" }, { markdown: "hi" }, canvas, catalog, [])).toEqual([]);
     expect(toolResultToActions("list_layers", {}, [], canvas, catalog, [])).toEqual([]);
   });
@@ -268,5 +284,20 @@ describe("toolResultToActions for route", () => {
   it("ignores a malformed route", () => {
     expect(toolResultToActions("route", {}, { id: "x", line: { type: "LineString", coordinates: [[0, 0]] } }, canvas, catalog)).toEqual([]);
     expect(toolResultToActions("route", {}, { line }, canvas, catalog)).toEqual([]);
+  });
+});
+
+describe("setViewFollowsInStep", () => {
+  const tool = (name: string, id: string) =>
+    ({ type: `tool-${name}`, toolCallId: id, state: "output-available", input: {}, output: {} }) as UIMessage["parts"][number];
+  const step = { type: "step-start" } as UIMessage["parts"][number];
+
+  it("is true only for a set_view after the geocode and before the next step", () => {
+    const sameStep = [step, tool("geocode", "a"), tool("set_view", "b"), step, tool("query_glaciers", "c")];
+    expect(setViewFollowsInStep(sameStep, 1)).toBe(true);
+    const nextStep = [step, tool("geocode", "a"), step, tool("set_view", "b")];
+    expect(setViewFollowsInStep(nextStep, 1)).toBe(false);
+    const before = [step, tool("set_view", "b"), tool("geocode", "a")];
+    expect(setViewFollowsInStep(before, 2)).toBe(false);
   });
 });

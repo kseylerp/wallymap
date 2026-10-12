@@ -29,7 +29,7 @@ import {
   type ToolTimings,
 } from "@/lib/trace-timing";
 import { TopoHeartbeat } from "@/components/TopoHeartbeat";
-import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
+import { setViewFollowsInStep, toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
 import { onChatSend } from "@/lib/agent/chatBus";
 import { answerAfterNote, noteForDisplay, notesBeforeText, stripCitationMarkers } from "@/lib/agent/dedupe";
 import { extractFollowUps } from "@/lib/agent/followups";
@@ -431,11 +431,13 @@ export function ChatRail({
     const actions: MapAction[] = [];
     for (const message of messages) {
       if (message.role !== "assistant") continue;
-      for (const part of message.parts) {
+      for (const [index, part] of message.parts.entries()) {
         if (!isToolUIPart(part) || part.state !== "output-available" || part.preliminary) continue;
         if (applied.has(part.toolCallId)) continue;
         applied.add(part.toolCallId);
-        const next = toolResultToActions(getToolName(part), part.input, part.output, canvas, catalog, ops);
+        // A geocode moves the camera itself unless the model frames the place with set_view in the same step.
+        const context = { setViewFollows: setViewFollowsInStep(message.parts, index) };
+        const next = toolResultToActions(getToolName(part), part.input, part.output, canvas, catalog, ops, context);
         for (const action of next) {
           if (action.type === "render") ops = [...ops.filter((op) => op.layerId !== action.op.layerId), action.op];
         }

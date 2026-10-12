@@ -1,3 +1,4 @@
+import { getToolName, isToolUIPart, type UIMessage } from "ai";
 import type { BBox, LayerResult, StyleHints } from "@/layers/types";
 import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import type { LayerFilters } from "@/lib/render/filters";
@@ -239,8 +240,38 @@ function compareActions(output: Obj): MapAction[] {
 }
 
 /**
+ * A successful `geocode` result: the user named a place, so the camera fits its bbox. An error, or a result without a
+ * bbox, moves nothing.
+ */
+function geocodeActions(output: Obj, canvas: Canvas): MapAction[] {
+  if (typeof output.error === "string" || !isBBox(output.bbox)) return [];
+  return setViewActions({ bbox: output.bbox }, canvas);
+}
+
+/**
+ * True when a `set_view` call comes after the part at `index` in the same step (before the next step-start), so the
+ * model's own framing wins over the geocode's automatic move.
+ */
+export function setViewFollowsInStep(parts: UIMessage["parts"], index: number): boolean {
+  for (let i = index + 1; i < parts.length; i++) {
+    const part = parts[i];
+    if (part.type === "step-start") return false;
+    if (isToolUIPart(part) && getToolName(part) === "set_view") return true;
+  }
+  return false;
+}
+
+/** Context for one tool result that its own output cannot carry. */
+export type ToolResultContext = {
+  /** A set_view call follows this one in the same step (see setViewFollowsInStep). */
+  setViewFollows?: boolean;
+};
+
+/**
  * Pure mapping from one finished tool call to the map actions it implies.
  * Malformed or unknown outputs map to no actions, so a bad model reply cannot break the map.
+ * A successful geocode moves the camera to the place's bbox, unless `context.setViewFollows` (the explicit set_view
+ * in the same step frames it instead).
  */
 export function toolResultToActions(
   toolName: string,
@@ -249,6 +280,7 @@ export function toolResultToActions(
   canvas: Canvas,
   catalog: LayerCatalog,
   existingOps: RenderOp[] = [],
+  context: ToolResultContext = {},
 ): MapAction[] {
   // `input` is accepted for symmetry with the tool part; every mapped tool echoes what it needs in `output`.
   void input;
@@ -257,6 +289,8 @@ export function toolResultToActions(
     return queryActions(toolName.slice(QUERY_PREFIX.length), output, catalog, existingOps);
   }
   switch (toolName) {
+    case "geocode":
+      return context.setViewFollows ? [] : geocodeActions(output, canvas);
     case "set_view":
       return setViewActions(output, canvas);
     case "set_basemap":

@@ -299,10 +299,17 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined) {
   });
 }
 
+/** The text of a geocode as the per-turn repeat guard compares it: case, punctuation and spacing ignored. */
+export function geocodeKey(place: string): string {
+  return place.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
 /** Builds the agent's tool set from the current layer registry. `view` is the map the user is looking at; the route tool biases its place lookups to it. */
 export function buildTools({ view = null }: { view?: MapView | null } = {}): ToolSet {
   // Tools are built per request, so this is per turn: once a place is geocoded, queries are about that place.
   let geocoded = false;
+  // This turn's geocode lookups by text, so a repeat returns the first answer instead of calling Mapbox again.
+  const geocodes = new Map<string, ReturnType<typeof geocode>>();
   const fromView: ViewSource = (bbox) =>
     view?.bbox && !geocoded && isWithinView(bbox, view.bbox) ? { bbox: view.bbox, zoom: view.zoom } : undefined;
   const tools: ToolSet = {
@@ -338,11 +345,20 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
     geocode: tool({
       description:
         "Find a place by name. Returns its bbox [west, south, east, north], center [lon, lat], and full name. " +
-        "Named mountain ranges, deserts, plateaus and similar regions (for example the Andes) come back as the whole region, with source \"natural-earth\".",
+        "Named mountain ranges, deserts, plateaus and similar regions (for example the Andes) come back as the whole region, with source \"natural-earth\"; " +
+        "a smaller range (the Wind River Range) comes back as a box about 76 km across around its high point. The map camera moves to the bbox by itself. " +
+        "Geocode each place once: asking for the same text again returns the first answer with repeated: true.",
       inputSchema: z.object({ place: z.string().min(1) }),
       execute: async ({ place }) => {
         geocoded = true;
-        return geocode(place);
+        // Retrying the same text gets the same answer: hand back the first one, marked, so the model stops looping.
+        const key = geocodeKey(place);
+        const earlier = geocodes.get(key);
+        if (earlier !== undefined) return { ...(await earlier), repeated: true };
+        // Bias toward what the user is looking at, when they are looking at somewhere (not the whole globe).
+        const lookup = geocode(place, view?.bbox ? { proximity: view.center } : {});
+        geocodes.set(key, lookup);
+        return lookup;
       },
     }),
     set_view: tool({

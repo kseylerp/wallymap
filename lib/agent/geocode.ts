@@ -56,6 +56,57 @@ async function regionResult(place: string): Promise<GeocodeResult | null> {
   }
 }
 
+/**
+ * Names of mountain ranges and similar landforms ("Wind River Range", "Bighorn Mountains", "Sierra Nevada"). Mapbox's
+ * place geocoder has no natural features, so for these it answers with a street or a town of the same name: "Wind River
+ * Range" was a street in Jacksonville, Florida, and "Wind River Range, Wyoming" the town of Wind River.
+ */
+const RANGE_LIKE = /\b(?:range|ranges|mountains|mtns|sierra|cordillera|massif|hills|highlands|plateau|icefield|ice field|alps)\b/i;
+
+export function isRangeLike(place: string): boolean {
+  return RANGE_LIKE.test(place);
+}
+
+/** Place types asked of the place geocoder for a range-like name: areas and settlements, never streets or addresses. */
+const RANGE_PLACE_TYPES = "region,district,place,locality";
+
+/**
+ * Half the side of the box put around a landform that Mapbox knows only as a point (its POI sits on the high point):
+ * about 76 km across, so the core of a range like the Wind Rivers (its glaciers around Gannett Peak) fits under the
+ * glacier layer's 8,000 km² cap.
+ */
+const LANDFORM_HALF_SPAN_KM = 38;
+
+/** A box of LANDFORM_HALF_SPAN_KM around a point, square on the ground. */
+function landformBBox([lng, lat]: [number, number]): BBox {
+  const dLat = LANDFORM_HALF_SPAN_KM / 110.57;
+  const dLng = LANDFORM_HALF_SPAN_KM / (111.32 * Math.max(0.1, Math.cos((lat * Math.PI) / 180)));
+  return [lng - dLng, lat - dLat, lng + dLng, lat + dLat];
+}
+
+/**
+ * A range-like name as a Search Box point of interest of exactly that name (ignoring case, accents and "the"): a natural one (category mountain, peak, ...)
+ * first, then one with no category (how Mapbox lists most ranges), never a business that only shares the name, and
+ * then Mapbox's own order (which follows `proximity`). Null when none matches or the search fails.
+ */
+async function landformResult(place: string, proximity: [number, number] | undefined, token: string): Promise<GeocodeResult | null> {
+  const name = place.split(",")[0];
+  try {
+    const found = await fetchCandidates(place, { proximity }, token, "poi");
+    const ranked = found
+      // Exactly the name, plurals included: "Bighorn Mountain" in Colorado is not the Bighorn Mountains.
+      .filter((c) => c.type === "poi" && normalize(c.name) === normalize(name))
+      .map((c) => ({ c, rank: isNaturalFeature(c) ? 0 : c.categories.length === 0 ? 1 : 2 }))
+      .filter(({ rank }) => rank < 2)
+      .sort((a, b) => a.rank - b.rank || a.c.order - b.c.order);
+    const best = ranked[0]?.c;
+    if (best === undefined) return null;
+    return { bbox: landformBBox(best.center), center: best.center, name: best.label, source: "mapbox" };
+  } catch {
+    return null;
+  }
+}
+
 /** How long one Mapbox lookup may take before it is abandoned, so a hung call cannot hold a chat step. */
 const GEOCODE_TIMEOUT_MS = 15_000;
 
@@ -67,6 +118,9 @@ export function scrubToken(text: string, token: string): string {
 /**
  * Forward-geocodes a place name with Mapbox Geocoding v6. Never throws. `proximity` ([lng, lat]) biases the
  * match toward that point, so "Emerald Bay" next to Tahoe City is not Laguna Beach's Emerald Bay.
+ * When Mapbox finds only a point or a town, a named physical region (Natural Earth) wins, and for a range-like name
+ * (isRangeLike) so does a Search Box landform of that exact name, boxed to about 76 km; range-like names also never
+ * resolve to streets.
  */
 export async function geocode(
   place: string,
@@ -80,6 +134,8 @@ export async function geocode(
   const url = new URL(ENDPOINT);
   url.searchParams.set("q", place);
   url.searchParams.set("limit", "1");
+  const rangeLike = isRangeLike(place);
+  if (rangeLike) url.searchParams.set("types", RANGE_PLACE_TYPES);
   if (opts.proximity) url.searchParams.set("proximity", `${opts.proximity[0]},${opts.proximity[1]}`);
   url.searchParams.set("access_token", token);
 
@@ -89,21 +145,24 @@ export async function geocode(
       return { error: `Geocoding failed with HTTP ${res.status}` };
     }
     const body = responseSchema.safeParse(await res.json());
-    if (!body.success || body.data.features.length === 0) {
-      return { error: `No match for ${place}` };
-    }
-    const feature = featureSchema.safeParse(body.data.features[0]);
-    if (!feature.success) {
-      return { error: `No match for ${place}` };
+    const feature = body.success && body.data.features.length > 0 ? featureSchema.safeParse(body.data.features[0]) : undefined;
+    if (!feature?.success) {
+      const landform = rangeLike ? await landformResult(place, opts.proximity, token) : null;
+      return landform ?? { error: `No match for ${place}` };
     }
 
     const { name, full_address, bbox, coordinates } = feature.data.properties;
     const center: [number, number] = [coordinates.longitude, coordinates.latitude];
 
-    // Mapbox answers "the Andes" or "Sierra Nevada" with a town or a point; a named physical region is better.
+    // Mapbox answers "the Andes" or "Sierra Nevada" with a town or a point; a named physical region is better, and for
+    // a range Natural Earth lacks ("Wind River Range"), a landform point of that name.
     if (bbox === undefined || isSmall(bbox)) {
-      const region = await regionResult(place);
+      const region = (await regionResult(place)) ?? (rangeLike && place.includes(",") ? await regionResult(place.split(",")[0]) : null);
       if (region) return region;
+      // A town of exactly that name (Beverly Hills) is what the user meant; a town that only shares part of it is not.
+      const sameName = name !== undefined && normalize(name) === normalize(place.split(",")[0]);
+      const landform = rangeLike && !sameName ? await landformResult(place, opts.proximity, token) : null;
+      if (landform) return landform;
     }
 
     return {
@@ -235,11 +294,11 @@ function label(name: string, type: string | undefined, where: string | undefined
   return type === "address" ? where : `${name}, ${where}`;
 }
 
-async function fetchCandidates(query: string, opts: WaypointOptions, token: string): Promise<Candidate[]> {
+async function fetchCandidates(query: string, opts: WaypointOptions, token: string, types = WAYPOINT_TYPES): Promise<Candidate[]> {
   const url = new URL(SEARCH_BOX_ENDPOINT);
   url.searchParams.set("q", query);
   url.searchParams.set("limit", String(WAYPOINT_LIMIT));
-  url.searchParams.set("types", WAYPOINT_TYPES);
+  url.searchParams.set("types", types);
   if (opts.proximity) url.searchParams.set("proximity", `${opts.proximity[0]},${opts.proximity[1]}`);
   if (opts.bbox) url.searchParams.set("bbox", opts.bbox.join(","));
   url.searchParams.set("access_token", token);

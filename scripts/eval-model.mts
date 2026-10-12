@@ -19,9 +19,10 @@
  * A question may end with `@view=[w,s,e,n]`, the map view the browser would send with it
  * (lib/agent/view.ts). The view goes into the system prompt and into buildTools the way
  * app/api/chat/route.ts passes it, and the place then counts as located without a geocode.
- * A question without `@view` that geocodes a named place must also call set_view, or it fails.
+ * A question without `@view` that geocodes a named place must also move the camera there, or it fails: a successful
+ * geocode moves it by itself (lib/agent/applyToolResult.ts), and so does set_view.
  * An `@view` question whose view is too wide for a layer (a zoom_in error) must still answer at that scale: it passes
- * only when the model did not call set_view, got at most one zoom_in error per layer (no shrinking and retrying), and
+ * only when the model did not move the camera (set_view or a successful geocode), got at most one zoom_in error per layer (no shrinking and retrying), and
  * at least one query succeeded and was drawn and rendered (the error's widerScale layers). A reply that only asks the
  * user to zoom in is a refusal and fails.
  * Every question also fails when a note (or, with no note, the closing text) runs over NOTE_MAX_WORDS words or a heading appears twice across the notes
@@ -31,7 +32,9 @@
 import { readFileSync } from "node:fs";
 import { generateText, stepCountIs } from "ai";
 import "@/layers";
+import { getLayer } from "@/layers/registry";
 import { getModel } from "@/lib/agent/provider";
+import { isFullLayerResult, summarizeLayerResult, type GeojsonSummary } from "@/lib/layers/summarize";
 import { buildTools } from "@/lib/agent/tools";
 import { SYSTEM_PROMPT } from "@/lib/agent/prompt";
 import type { MapView } from "@/lib/agent/view";
@@ -121,9 +124,43 @@ function goodHikingRule(calls: ToolCall[], notes: string[]): RuleResult {
   return { ok, candidateQueries: answered.map((c) => c.toolName), contextQueried, placesNamed: named.length, named: named.slice(0, 8) };
 }
 
+/** True for a geocode that found a place (the browser moves the camera to its bbox). */
+function geocodeMoved(c: ToolCall): boolean {
+  return c.toolName === "geocode" && !!c.output && typeof c.output === "object" && !isLayerError(c.output) && "bbox" in c.output;
+}
+
+/** The camera moved to the place: a successful geocode, or set_view. */
+function cameraMoved(calls: ToolCall[]): boolean {
+  return calls.some((c) => c.toolName === "set_view" || geocodeMoved(c));
+}
+
+/**
+ * "Glaciers in the Wind River Range" (the owner's transcript: four geocodes, a 53,570 km² box over the glacier cap, a
+ * shrunk retry, no camera move, and a note that read 0.18-0.29 km² off three sample features while Gannett Glacier is
+ * ~3 km²): passes only with at most 2 geocode calls, a camera move, and a note that names the largest named glacier in
+ * the returned stats (stats.top, over every outline), gives a total area in km², and never says "sample".
+ */
+function windRiverGlaciersRule(calls: ToolCall[], notes: string[]): RuleResult {
+  const geocodes = calls.filter((c) => c.toolName === "geocode").length;
+  const style = getLayer("glaciers")?.style;
+  const summaries = calls
+    .filter((c) => c.toolName === "query_glaciers" && isFullLayerResult(c.output))
+    .map((c) => summarizeLayerResult(c.output as Parameters<typeof summarizeLayerResult>[0], "glaciers", style) as GeojsonSummary);
+  const top = summaries.flatMap((s) => s.stats?.top ?? []).sort((a, b) => b.v - a.v);
+  const largest = top.find((t) => !/^unnamed/i.test(t.name))?.name;
+  const note = notes.join("\n");
+  const namesLargest = largest !== undefined && comparable(note).includes(comparable(largest));
+  const statesTotal = /total[^.\n]*?\d[\d,.]*\s*km(?:²|2)|\d[\d,.]*\s*km(?:²|2)[^.\n]*?\btotal\b/i.test(note);
+  const saysSample = /\bsampl/i.test(note);
+  const moved = cameraMoved(calls);
+  const ok = geocodes <= 2 && moved && namesLargest && statesTotal && !saysSample;
+  return { ok, geocodes, cameraMoved: moved, largest, namesLargest, statesTotal, saysSample };
+}
+
 /** Extra pass rules for particular questions, keyed by the question in lower case. */
 const QUESTION_RULES: Record<string, (calls: ToolCall[], notes: string[]) => RuleResult> = {
   "good hiking in french guiana": goodHikingRule,
+  "glaciers in the wind river range": windRiverGlaciersRule,
 };
 
 function wordCount(markdown: string): number {
@@ -202,8 +239,10 @@ async function runQuestion(raw: string): Promise<Outcome> {
     // A query that drew something must have been rendered. When nothing was drawn, the note passes
     // only if some layer answered with zero features; layer errors and a note alone are a failure.
     // A question that names a place (no @view, so the model had to geocode it) must also move the
-    // camera there with set_view; otherwise the data loads off-screen. @view questions are exempt.
-    const movedToPlace = view !== null || !seq.includes("geocode") || seq.includes("set_view");
+    // camera there; otherwise the data loads off-screen. A successful geocode moves it by itself, as does
+    // set_view. @view questions are exempt.
+    const moved = cameraMoved(calls);
+    const movedToPlace = view !== null || !seq.includes("geocode") || moved;
     // A view too wide for a layer: ask the user to zoom in once, rather than shrink the box, retry and move the camera.
     const zoomInLayers = queryCalls.filter((c) => isZoomInError(c.output)).map((c) => c.toolName);
     const zoomInPerLayer = Math.max(0, ...zoomInLayers.map((t) => zoomInLayers.filter((u) => u === t).length));
@@ -213,7 +252,7 @@ async function runQuestion(raw: string): Promise<Outcome> {
     const wideView = view !== null && (zoomInLayers.length > 0 || (!queried && askedToZoomIn));
     // Answering at this scale: some query came back without an error, and what it drew was rendered.
     const succeeded = queryCalls.filter((c) => c.output !== undefined && !isLayerError(c.output)).length;
-    const wideViewOk = !seq.includes("set_view") && zoomInPerLayer <= 1 && succeeded >= 1 && drew && rendered;
+    const wideViewOk = !moved && zoomInPerLayer <= 1 && succeeded >= 1 && drew && rendered;
     // Brevity: the note is the answer, and nothing is said twice.
     const notes = calls.filter((c) => c.toolName === "note").map((c) => noteText(c.output));
     // With no note, the closing text is the answer and is held to the same length.
@@ -236,7 +275,7 @@ async function runQuestion(raw: string): Promise<Outcome> {
       ok,
       line: {
         question,
-        ...(view ? { view: view.bbox, geocoded: seq.includes("geocode"), movedCamera: seq.includes("set_view") } : {}),
+        ...(view ? { view: view.bbox, geocoded: seq.includes("geocode"), movedCamera: moved } : {}),
         ...(wideView ? { zoomInErrors: zoomInLayers.length, zoomInPerLayer, askedToZoomIn, succeeded } : {}),
         noteWords,
         ...(dupHeadings.length > 0 ? { dupHeadings } : {}),

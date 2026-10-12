@@ -26,6 +26,7 @@
  * user to zoom in is a refusal and fails.
  * Every question also fails when a note (or, with no note, the closing text) runs over NOTE_MAX_WORDS words or a heading appears twice across the notes
  * and the closing text (the note is the answer; the text after it is only follow-ups).
+ * Some questions carry their own extra rule (QUESTION_RULES), matched on the question in lower case.
  */
 import { readFileSync } from "node:fs";
 import { generateText, stepCountIs } from "ai";
@@ -79,6 +80,51 @@ function readEvalSet(): string[] {
 }
 
 type Outcome = { ok: boolean; line: Record<string, unknown> };
+
+const isLayerError = (output: unknown) => !!output && typeof output === "object" && "error" in output;
+
+/** Feature names in a query output (full geojson results only). */
+function featureNames(output: unknown): string[] {
+  const features = (output as { kind?: string; data?: { features?: { properties?: Record<string, unknown> | null }[] } } | undefined)?.data?.features;
+  if (!Array.isArray(features)) return [];
+  return features.flatMap((f) => (typeof f.properties?.name === "string" ? [f.properties.name] : []));
+}
+
+/** Lower case, straight apostrophes, single spaces: how a name and the note are compared. */
+function comparable(text: string): string {
+  return text.toLowerCase().replace(/[\u2018\u2019`]/g, "'").replace(/\s+/g, " ");
+}
+
+type RuleResult = { ok: boolean; [detail: string]: unknown };
+
+/**
+ * "good hiking in French Guiana" (the owner's transcript, where a too-wide trails query fell back to protected-area
+ * tiles, a region outline and population density): passes only when at least one query that holds hiking candidates
+ * succeeded (osm-trails with named routes, peaks, outdoor-features or protected-areas-world), population and
+ * night-lights were not queried, and the note (the closing text when there is none), within NOTE_MAX_WORDS, names at
+ * least 3 places from the returned features.
+ */
+function goodHikingRule(calls: ToolCall[], notes: string[]): RuleResult {
+  const CANDIDATES = ["query_osm-trails", "query_peaks", "query_outdoor-features", "query_protected-areas-world"];
+  const answered = calls.filter((c) => {
+    if (!CANDIDATES.includes(c.toolName) || c.output === undefined || isLayerError(c.output)) return false;
+    if (c.toolName !== "query_osm-trails") return true;
+    const features = (c.output as { data?: { features?: { properties?: { kind?: unknown } | null }[] } }).data?.features ?? [];
+    return features.some((f) => f.properties?.kind === "route");
+  });
+  const contextQueried = calls.some((c) => c.toolName === "query_population" || c.toolName === "query_night-lights");
+  const note = comparable(notes.join("\n"));
+  const names = [...new Set(answered.flatMap((c) => featureNames(c.output)).map(comparable))].filter((n) => n.length >= 4);
+  const named = names.filter((n) => note.includes(n));
+  const words = wordCount(notes.join("\n"));
+  const ok = answered.length > 0 && !contextQueried && words <= NOTE_MAX_WORDS && named.length >= 3;
+  return { ok, candidateQueries: answered.map((c) => c.toolName), contextQueried, placesNamed: named.length, named: named.slice(0, 8) };
+}
+
+/** Extra pass rules for particular questions, keyed by the question in lower case. */
+const QUESTION_RULES: Record<string, (calls: ToolCall[], notes: string[]) => RuleResult> = {
+  "good hiking in french guiana": goodHikingRule,
+};
 
 function wordCount(markdown: string): number {
   return markdown.replace(/[#*_`>|-]+/g, " ").split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
@@ -137,7 +183,6 @@ async function runQuestion(raw: string): Promise<Outcome> {
     const seq = calls.map((c) => c.toolName);
     const features = calls.map((c) => featureCount(c.output)).filter((n): n is number => n !== null);
     const queryCalls = calls.filter((c) => c.toolName.startsWith("query_"));
-    const isLayerError = (output: unknown) => !!output && typeof output === "object" && "error" in output;
     const layerErrors = queryCalls
       .filter((c) => isLayerError(c.output))
       .map((c) => String((c.output as { error: string }).error).slice(0, 80));
@@ -175,8 +220,12 @@ async function runQuestion(raw: string): Promise<Outcome> {
     const noteWords = (notes.length > 0 ? notes : [result.text]).map(wordCount);
     const dupHeadings = duplicatedHeadings([...notes, result.text]);
     const brief = noteWords.every((n) => n <= NOTE_MAX_WORDS) && dupHeadings.length === 0;
+    // With no note, the closing text is the answer, as for noteWords.
+    const answer = notes.length > 0 ? notes : [result.text];
+    const rule = QUESTION_RULES[question.trim().toLowerCase()]?.(calls, answer);
     const ok =
       brief &&
+      (rule?.ok ?? true) &&
       (wideView
         ? wideViewOk
         : routed && !queried
@@ -191,6 +240,7 @@ async function runQuestion(raw: string): Promise<Outcome> {
         ...(wideView ? { zoomInErrors: zoomInLayers.length, zoomInPerLayer, askedToZoomIn, succeeded } : {}),
         noteWords,
         ...(dupHeadings.length > 0 ? { dupHeadings } : {}),
+        ...(rule ? { rule, answer: answer.join("\n") } : {}),
         model,
         ok,
         seq,

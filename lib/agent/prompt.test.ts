@@ -52,6 +52,9 @@ const REQUIRED = [
   "temperature-anomaly and the FEMA part of disasters are US county polygons joined by county: geocode the county or state, query once for the period, and quote that county's v; temperature-anomaly covers the lower 48 only.",
   "For a satellite picture before and after an event, query imagery-by-date once per date with the same sensor, then call compare with a and b set to the pass days its coverage notes name.",
   "Glacier outlines are dated by survey: to show a glacier's retreat, query and render glaciers once, then call set_time ONCE with play: true across the survey years, and give v at each date of one glacierId.",
+  "For 'good X', 'best X' or 'where to X' questions about a place (good hiking in French Guiana, best parks in Utah), query the layers that hold candidates (for hiking: osm-trails, then peaks, outdoor-features with kinds hut, viewpoint and waterfall, and protected-areas-world), never context layers such as population or night-lights.",
+  "For those questions the note names 3 to 6 concrete candidates taken from the returned features (each result's top list and sample), each with its number and a one-line reason: a route's name and length in km, a park's name and area in km², a peak's name and elevation in m; write one opening line, the candidates as a list, one caveat and nothing else (no line about what the map shows), since the candidates are the findings.",
+  "The note never mentions a layer that was not asked for as the main answer; layers drawn for context get at most one clause.",
 ];
 
 describe("SYSTEM_PROMPT", () => {

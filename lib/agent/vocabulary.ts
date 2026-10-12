@@ -12,7 +12,7 @@ export type VocabularyEntry = {
 };
 
 export const VOCABULARY: VocabularyEntry[] = [
-  { layerId: "osm-trails", synonyms: ["trail", "hike", "path"], notes: "named footpaths and tracks", gist: "hiking paths and tracks with difficulty and surface" },
+  { layerId: "osm-trails", synonyms: ["trail", "hike", "path"], notes: "paths under 2,500 km², named hiking routes with length up to 400,000 km²", gist: "hiking paths, or named hiking routes over wide areas" },
   { layerId: "fire-perimeters", synonyms: ["wildfire", "fire", "burn", "burned area"], notes: "fire outlines; also query fire-detections", gist: "current and past wildfire outlines with acres and year" },
   { layerId: "fire-detections", synonyms: ["active fire", "hotspot"], notes: "satellite heat sources from recent days, not smoke", gist: "satellite fire hotspots from the last few days" },
   { layerId: "forest-loss", synonyms: ["deforestation", "logging", "clearcut", "tree loss"], notes: "yearly loss; also query forest-alerts", gist: "where tree cover was lost, year by year" },
@@ -40,7 +40,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "gbif-occurrences", synonyms: ["occurrence records", "range map", "specimens", "museum records"], notes: "worldwide species records by Latin name; density true for a world map; see species", gist: "species records by scientific name, or world density" },
   { layerId: "critical-habitat", synonyms: ["critical habitat", "threatened species", "endangered"], notes: "USFWS designated habitat; name a species to filter", gist: "designated habitat for threatened and endangered species" },
   { layerId: "grazing-allotments", synonyms: ["cattle", "grazing", "ranching", "wild horses", "burros", "allotment"], notes: "BLM grazing areas and wild horse and burro herds", gist: "BLM grazing allotments and wild horse and burro areas" },
-  { layerId: "protected-areas-world", synonyms: ["protected area", "nature reserve", "marine reserve", "national park boundary"], notes: "worldwide picture, not countable; non-commercial licence", gist: "protected areas worldwide, drawn as map tiles" },
+  { layerId: "protected-areas-world", synonyms: ["protected area", "nature reserve", "marine reserve", "national park boundary"], notes: "named parks with area under 500,000 km², a picture wider; non-commercial licence", gist: "named parks and reserves worldwide, with designation and area" },
   { layerId: "fire-hazard", synonyms: ["fire risk", "fire hazard", "fire-prone"], notes: "US long-run hazard ranking, not a forecast; see fire-perimeters", gist: "long-run wildfire hazard potential in five classes" },
   { layerId: "flood-zones", synonyms: ["floodplain", "flood zone", "flood risk", "FEMA"], notes: "FEMA zones, drawn only at zoom 14 or closer; streamflow is live", gist: "FEMA flood hazard zones, drawn when zoomed in" },
   { layerId: "drought", synonyms: ["drought", "dry spell", "water shortage"], notes: "weekly US categories D0-D4, weeks input", gist: "weekly US drought categories D0 to D4" },

@@ -1,5 +1,6 @@
 import type { Geometry, GeoJsonProperties, Position } from "geojson";
 import type { BBox, Citation, LayerError, LayerResult, TileTime } from "@/layers/types";
+import { formatValue } from "@/lib/format";
 
 /** What the model sees for a geojson result; the full data goes to the map only. */
 export type GeojsonSummary = {
@@ -8,6 +9,8 @@ export type GeojsonSummary = {
   geometryTypes: Record<string, number>;
   bbox: BBox | null;
   sample: GeoJsonProperties[];
+  /** For layers whose features are candidates to name (routes, parks): the largest few as short text, largest first. */
+  top?: string[];
   citation: Citation;
   coverageNote?: string;
 };
@@ -121,9 +124,53 @@ const TILE_MEANING: Record<string, (years: string | undefined) => string> = {
   "sea-ice": () => "Sea ice on one day, a state, not change; compare two dates for change.",
   "night-lights": () => "Night brightness for one period, a state, not change; compare two dates for change.",
   "protected-areas-world": () =>
-    "Where protected areas (parks, reserves) are, as a picture: not trails, and not countable or nameable from the tiles.",
+    "Where protected areas (parks, reserves) are, as a picture: not trails, and not countable or nameable from the tiles. Under 500,000 km² the layer returns named parks instead.",
   "gbif-occurrences": () => "How many records were reported per place, which follows where people look, not how many animals live there.",
 };
+
+/** Most features listed in `top`. */
+export const TOP_SIZE = 8;
+
+type Props = Record<string, unknown>;
+
+const text = (value: unknown): string | undefined => (typeof value === "string" && value.trim() !== "" ? value.trim() : undefined);
+const num = (value: unknown): number | undefined => (typeof value === "number" && Number.isFinite(value) ? value : undefined);
+
+/**
+ * How to name one feature in `top`, per layer: "Piste de Bélizon, 207.1 km (regional route)" or
+ * "Nouragues, National Nature Reserve, 1,066 km² (GUF)". Null leaves the feature out (a trail that is not a route).
+ */
+const TOP_FEATURE: Record<string, (p: Props) => string | null> = {
+  "osm-trails": (p) => {
+    const name = text(p.name);
+    const km = num(p.lengthKm);
+    if (p.kind !== "route" || name === undefined || km === undefined) return null;
+    const network = text(p.network);
+    return `${name}, ${formatValue("lengthKm", km, "km", 1)} km${network ? ` (${network} route)` : ""}`;
+  },
+  "protected-areas-world": (p) => {
+    const name = text(p.name);
+    if (name === undefined) return null;
+    const area = num(p.areaKm2);
+    const parts = [name, text(p.designation), area === undefined ? undefined : `${formatValue("areaKm2", area, "km²", 1)} km²`];
+    const country = text(p.country);
+    return `${parts.filter(Boolean).join(", ")}${country ? ` (${country})` : ""}`;
+  },
+};
+
+/** The largest TOP_SIZE features by v, named by the layer's TOP_FEATURE, or undefined for other layers or none. */
+function topOf(layerId: string | undefined, features: { properties: GeoJsonProperties }[]): string[] | undefined {
+  const describe = layerId === undefined ? undefined : TOP_FEATURE[layerId];
+  if (describe === undefined) return undefined;
+  const v = (p: GeoJsonProperties) => num(p?.v) ?? -Infinity;
+  const top = [...features]
+    .sort((a, b) => v(b.properties) - v(a.properties))
+    .map((f) => (f.properties ? describe(f.properties) : null))
+    .filter((line): line is string => line !== null)
+    .slice(0, TOP_SIZE)
+    .map(clip);
+  return top.length > 0 ? top : undefined;
+}
 
 /** "2015-2025" from a tile URL's start_year and end_year parameters, or undefined when it has none. */
 export function drawnYearsOf(url: string): string | undefined {
@@ -136,7 +183,7 @@ export function drawnYearsOf(url: string): string | undefined {
 /**
  * A small, model-sized view of a layer response: counts, extent, a few sample
  * properties and the citation instead of every feature. Errors pass through. `layerId` adds, for tile layers that
- * are easy to misread, what the picture means (`shows`).
+ * are easy to misread, what the picture means (`shows`), and for routes and parks the largest few by name (`top`).
  */
 export function summarizeLayerResult(body: LayerResult | LayerError, layerId?: string): LayerResultSummary | LayerError {
   if ("error" in body) return body;
@@ -177,12 +224,14 @@ export function summarizeLayerResult(body: LayerResult | LayerError, layerId?: s
     });
   }
 
+  const top = topOf(layerId, features);
   return {
     kind: "geojson",
     featureCount: features.length,
     geometryTypes,
     bbox: west <= east ? [west, south, east, north] : null,
     sample: sampleOf(features),
+    ...(top !== undefined && { top }),
     citation: body.citation,
     ...(body.coverageNote !== undefined && { coverageNote: body.coverageNote }),
   };

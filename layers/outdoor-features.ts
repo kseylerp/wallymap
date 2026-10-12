@@ -57,6 +57,16 @@ export const MAX_PEAKS_WITH_ELE = 2_000;
 /** Most points returned in all. */
 export const MAX_POINTS = 5_000;
 
+/** Largest region for all kinds (springs, taps and peaks are dense). */
+export const ALL_KINDS_MAX_AREA_KM2 = 10_000;
+/**
+ * Kinds sparse enough to ask for over a whole small country: huts, viewpoints and waterfalls in French Guiana
+ * (136,000 km²) came back in 1.3 s, in a 100,000 km² Alps box in 20 s (2,200 huts, 10,651 viewpoints, 3,355 waterfalls).
+ */
+export const WIDE_KINDS = ["hut", "viewpoint", "waterfall"] as const satisfies readonly Kind[];
+/** Largest region when only WIDE_KINDS are asked for. */
+export const WIDE_KINDS_MAX_AREA_KM2 = 150_000;
+
 const inputSchema = z.object({
   /** Only these kinds; all kinds when left out. */
   kinds: z.array(z.enum(KINDS)).min(1).optional(),
@@ -230,26 +240,31 @@ const outdoorFeatures = defineLayer({
     "Pass kinds (for example ['hut', 'spring']) to get only those. " +
     "Caveats: volunteer-mapped, so it misses features and some are out of date; springs and taps can be dry or seasonal and a mapped spring is not tested water, so treat any wild water as needing treatment; " +
     "hut bookings, prices and winter status are not included; peaks and saddles need a name to be listed and elevations come from mapper data (peaks has Wikidata elevation and prominence for notable summits). " +
-    "Zoom in to a region under 10,000 km² first. Within a kind the query keeps the lowest OpenStreetMap ids, not the tallest or nearest (peaks that have an elevation are fetched first, up to 2,000, then up to 1,000 without one): each kind is cut at 1,000 and the whole result at 5,000, and if the 5,000 cap bites, huts, shelters and springs are kept first and the tallest of the fetched peaks. The coverage note gives the count and says if it was cut.",
+    "Zoom in to under 10,000 km² first, or up to 150,000 km² with kinds limited to hut, viewpoint and waterfall. Within a kind the query keeps the lowest OpenStreetMap ids, not the tallest or nearest (peaks that have an elevation are fetched first, up to 2,000, then up to 1,000 without one): each kind is cut at 1,000 and the whole result at 5,000, and if the 5,000 cap bites, huts, shelters and springs are kept first and the tallest of the fetched peaks. The coverage note gives the count and says if it was cut.",
   coverage: "global",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],
-  maxAreaKm2: 10_000,
+  // The widest any request may be; a request for other kinds is held to ALL_KINDS_MAX_AREA_KM2 in query().
+  maxAreaKm2: WIDE_KINDS_MAX_AREA_KM2,
   input: inputSchema,
   // M4 hint: extrude v (peaks), cluster (Task 0's StyleHints fields).
   style: { geometry: "point", color: layerColor("outdoor-features"), extrude: "v", cluster: true },
 
   async query(ctx, input: FeaturesInput): Promise<LayerResult | LayerError> {
+    const kinds = input.kinds ?? KINDS;
+    const wide = kinds.every((k) => (WIDE_KINDS as readonly Kind[]).includes(k));
+    const cap = wide ? WIDE_KINDS_MAX_AREA_KM2 : ALL_KINDS_MAX_AREA_KM2;
     const area = bboxAreaKm2(ctx.bbox);
-    if (area > outdoorFeatures.maxAreaKm2) {
+    if (area > cap) {
       return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${outdoorFeatures.maxAreaKm2} km²`,
+        error: wide
+          ? `Area is ${Math.round(area)} km²; zoom in to under ${cap} km²`
+          : `Area is ${Math.round(area)} km²; zoom in to under ${cap} km², or pass kinds hut, viewpoint and waterfall only for up to ${WIDE_KINDS_MAX_AREA_KM2} km²`,
         hint: "zoom_in",
       };
     }
 
-    const kinds = input.kinds ?? KINDS;
     const result = await overpassQuery(ctx, buildFeaturesQuery(ctx.bbox, kinds), {
       cacheSuffix: `outdoor-features:${KINDS.filter((k) => kinds.includes(k)).join(",")}`,
     });

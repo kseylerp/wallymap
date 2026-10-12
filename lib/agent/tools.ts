@@ -160,32 +160,40 @@ export function layerResultForModel(output: unknown, layerId?: string): JSONValu
 }
 
 /** One "at a wider scale, use" suggestion: a layer, and the input that makes it work over a wide view. */
-export type WiderScaleHint = { layerId: string; input?: Record<string, string | number | boolean> };
+export type WiderScaleHint = { layerId: string; input?: Record<string, string | number | boolean | string[]> };
+
+/**
+ * outdoor-features takes a region up to 150,000 km² only for huts, viewpoints and waterfalls (all kinds stop at
+ * 10,000 km²), so every suggestion of it asks for those kinds.
+ */
+const WIDE_OUTDOOR_FEATURES: WiderScaleHint = { layerId: "outdoor-features", input: { kinds: ["hut", "viewpoint", "waterfall"] } };
 
 /**
  * At a wider scale, use: for a layer with a small area cap, the layers that answer the same kind of question over a
  * view too wide for it, best first. Each query_<id> tool names them, and a zoom_in error for the user's current view
  * lists the ones whose cap and coverage fit that view (`widerScale`), so the model can still draw an answer at the
  * scale the user is looking at instead of only asking them to zoom in.
+ * Hiking and trail questions fall back to places worth hiking to (peaks; huts, viewpoints and waterfalls; recreation
+ * sites; protected areas), never to where people live (population, night-lights): osm-trails itself already answers
+ * up to 400,000 km² with named routes.
  */
 export const WIDER_SCALE: Record<string, WiderScaleHint[]> = {
   "osm-trails": [
     { layerId: "peaks" },
-    { layerId: "outdoor-features" },
+    WIDE_OUTDOOR_FEATURES,
     { layerId: "recreation-sites" },
-    { layerId: "popularity" },
     { layerId: "protected-areas-world" },
-    { layerId: "wilderness" },
   ],
-  popularity: [{ layerId: "peaks" }, { layerId: "outdoor-features" }, { layerId: "recreation-sites" }, { layerId: "protected-areas-world" }],
+  popularity: [{ layerId: "osm-trails" }, { layerId: "peaks" }, WIDE_OUTDOOR_FEATURES, { layerId: "recreation-sites" }, { layerId: "protected-areas-world" }],
   "mtb-trails": [{ layerId: "recreation-sites" }, { layerId: "public-lands" }, { layerId: "protected-areas-world" }],
   "ski-routes": [{ layerId: "peaks" }, { layerId: "snow-cover" }],
   paddling: [{ layerId: "streamflow" }, { layerId: "surface-water" }],
-  photos: [{ layerId: "peaks" }, { layerId: "outdoor-features" }, { layerId: "protected-areas-world" }],
-  "wikipedia-nearby": [{ layerId: "outdoor-features" }, { layerId: "peaks" }, { layerId: "protected-areas-world" }],
+  photos: [{ layerId: "peaks" }, WIDE_OUTDOOR_FEATURES, { layerId: "protected-areas-world" }],
+  "wikipedia-nearby": [WIDE_OUTDOOR_FEATURES, { layerId: "peaks" }, { layerId: "protected-areas-world" }],
   campsites: [{ layerId: "recreation-sites" }, { layerId: "public-lands" }, { layerId: "protected-areas-world" }, { layerId: "wilderness" }],
   "forest-roads": [{ layerId: "public-lands" }, { layerId: "recreation-sites" }],
   climbing: [{ layerId: "peaks" }, { layerId: "geology" }],
+  // Its own zoom_in error already says that huts, viewpoints and waterfalls alone reach 150,000 km².
   "outdoor-features": [{ layerId: "peaks" }, { layerId: "protected-areas-world" }],
   "recreation-sites": [{ layerId: "public-lands" }, { layerId: "wilderness" }, { layerId: "protected-areas-world" }],
   peaks: [{ layerId: "physical-regions" }, { layerId: "protected-areas-world" }],
@@ -199,9 +207,14 @@ export const WIDER_SCALE: Record<string, WiderScaleHint[]> = {
   mines: [{ layerId: "geology" }],
 };
 
-/** "query_peaks" or "query_gbif-occurrences with density: true". */
-function hintText({ layerId, input }: WiderScaleHint): string {
-  const args = Object.entries(input ?? {}).map(([key, value]) => `${key}: ${String(value)}`);
+/**
+ * "query_peaks", "query_gbif-occurrences with density: true" or "query_outdoor-features with kinds: [\"hut\",...]";
+ * `short` (for the tool descriptions sent every turn) writes a list as "kinds hut/viewpoint/waterfall".
+ */
+function hintText({ layerId, input }: WiderScaleHint, style: "full" | "short" = "full"): string {
+  const args = Object.entries(input ?? {}).map(([key, value]) =>
+    Array.isArray(value) ? (style === "short" ? `${key} ${value.join("/")}` : `${key}: ${JSON.stringify(value)}`) : `${key}: ${String(value)}`,
+  );
   return args.length > 0 ? `query_${layerId} with ${args.join(", ")}` : `query_${layerId}`;
 }
 
@@ -230,14 +243,14 @@ export function widerScaleFor(layerId: string, bbox: BBox): string[] {
       const layer = getLayer(hint.layerId);
       return layer !== undefined && isAvailable(layer) && area <= layer.maxAreaKm2 && coversBBox(layer.coverage, bbox);
     })
-    .map(hintText);
+    .map((hint) => hintText(hint));
 }
 
 /** The query tool's sentence naming its wider-scale layers, or "" when it has none. */
 function widerScaleSentence(layerId: string): string {
   const hints = WIDER_SCALE[layerId];
   if (!hints || hints.length === 0) return "";
-  return ` At a wider scale, use ${hints.map((h) => hintText(h).replace(/^query_/, "")).join(", ")}.`;
+  return ` At a wider scale, use ${hints.map((h) => hintText(h, "short").replace(/^query_/, "")).join(", ")}.`;
 }
 
 /** A zoom_in error for the user's view, with the layers that can answer at that scale. */

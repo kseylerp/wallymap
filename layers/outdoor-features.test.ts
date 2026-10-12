@@ -135,10 +135,10 @@ describe("normalizeFeatures", () => {
 });
 
 describe("outdoor-features layer", () => {
-  it("declares global ODbL coverage, a 10,000 km2 cap, point style with 3D columns and clustering, and the activity words", () => {
+  it("declares global ODbL coverage, a 150,000 km2 cap (huts, viewpoints and waterfalls only), point style with 3D columns and clustering, and the activity words", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toContain("ODbL");
-    expect(layer.maxAreaKm2).toBe(10_000);
+    expect(layer.maxAreaKm2).toBe(150_000);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toContain("OVERPASS_URL");
     expect(layer.style).toMatchObject({ geometry: "point", extrude: "v", cluster: true });
@@ -192,6 +192,18 @@ describe("outdoor-features layer", () => {
     expect(r.coverageNote).toContain("the box was truncated");
   });
 
+  it("takes up to 150,000 km2 when only huts, viewpoints and waterfalls are asked for", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify({ elements: [] }), { status: 200 }));
+    // French Guiana, about 136,000 km².
+    const guiana = { bbox: [-54.6, 2.1, -51.6, 5.8] as [number, number, number, number], zoom: 7, env: {}, fetch: stub as unknown as CachedFetch };
+    expect(geojson(await layer.query(guiana, { kinds: ["hut", "viewpoint", "waterfall"] })).data.features).toEqual([]);
+    expect(stub).toHaveBeenCalledTimes(1);
+    expect(await layer.query(guiana, { kinds: ["viewpoint", "spring"] })).toMatchObject({ hint: "zoom_in" });
+    const wider = { ...guiana, bbox: [-60, 0, -51, 6] as [number, number, number, number] };
+    expect(await layer.query(wider, { kinds: ["hut"] })).toMatchObject({ hint: "zoom_in" });
+    expect(stub).toHaveBeenCalledTimes(1);
+  });
+
   it("maps a failing Overpass to an upstream error after the fallback", async () => {
     const stub = vi.fn(async () => new Response("slow down", { status: 429 }));
     const r = await layer.query(ctx(stub), {});
@@ -199,10 +211,13 @@ describe("outdoor-features layer", () => {
     expect(stub).toHaveBeenCalledTimes(2);
   });
 
-  it("returns 422 zoom_in from runLayer over 10,000 km2 and 400 for an unknown kind", async () => {
+  it("returns 422 zoom_in from runLayer over 10,000 km2 for all kinds and 400 for an unknown kind", async () => {
     const big = await runLayer("outdoor-features", { bbox: [-121, 38, -119, 40] });
     expect(big.status).toBe(422);
     expect(big.body).toMatchObject({ hint: "zoom_in" });
+    expect((big.body as { error: string }).error).toContain("pass kinds hut, viewpoint and waterfall only");
+    const springs = await runLayer("outdoor-features", { bbox: [-121, 38, -119, 40], input: { kinds: ["hut", "spring"] } });
+    expect(springs.status).toBe(422);
     const bad = await runLayer("outdoor-features", { bbox: TAHOE, input: { kinds: ["castle"] } });
     expect(bad.status).toBe(400);
   });

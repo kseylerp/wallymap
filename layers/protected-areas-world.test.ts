@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
-import layer, { WDPA_TILE_URL } from "./protected-areas-world";
+import layer, { MAX_AREAS, WDPA_POLYGONS, WDPA_TILE_URL, normalizeProtectedAreas, simplifyOffset } from "./protected-areas-world";
+import guiana from "./__fixtures__/protected-areas-world.guiana.json";
+import type { FeatureCollection } from "geojson";
 
 const WORLD: [number, number, number, number] = [-179, -60, 179, 80];
 
@@ -50,9 +52,74 @@ describe("protected-areas-world layer", () => {
     expect(r.status).toBe(200);
   });
 
-  it("describes protection in the words people use and warns about the licence and the picture-only output", () => {
+  it("describes protection in the words people use and warns about the licence and the picture-only output when wide", () => {
     expect(layer.description).toMatch(/protected/i);
     expect(layer.description).toMatch(/non-commercial/i);
-    expect(layer.description).toMatch(/not features you can list/i);
+    expect(layer.description).toContain("under 500,000 km² it returns named polygons");
+    expect(layer.description).toMatch(/a picture you cannot list, count or name/i);
+  });
+});
+
+// French Guiana, about 136,000 km²: under the features cap, so the layer returns named polygons.
+const GUIANA: [number, number, number, number] = [-54.6, 2.1, -51.6, 5.8];
+
+describe("protected-areas-world named polygons for a region", () => {
+  const ctxAt = (stub: ReturnType<typeof vi.fn>) => ({ bbox: GUIANA, zoom: 7, env: {}, fetch: stub as unknown as CachedFetch });
+
+  it("queries the WDPA polygon layer largest first, capped and simplified", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(guiana), { status: 200 }));
+    await layer.query(ctxAt(stub), {});
+    const url = new URL(String((stub.mock.calls[0] as unknown[])[0]));
+    expect(url.origin + url.pathname).toBe(`${WDPA_POLYGONS}/query`);
+    expect(url.searchParams.get("orderByFields")).toBe("gis_area DESC");
+    expect(url.searchParams.get("resultRecordCount")).toBe(String(MAX_AREAS));
+    expect(url.searchParams.get("maxAllowableOffset")).toBe(String(simplifyOffset(GUIANA)));
+    expect(url.searchParams.get("outFields")).toContain("desig_eng");
+  });
+
+  it("returns named parks with designation, IUCN category and area, largest first, and keeps the licence note", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(guiana), { status: 200 }));
+    const r = await layer.query(ctxAt(stub), {});
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const names = r.data.features.map((f) => f.properties?.name);
+    expect(names[0]).toBe("Guyane (Parc Amazonien)");
+    expect(names).toContain("Guyane (Parc Amazonien) [Aire D'Adhésion]");
+    expect(names).not.toContain("No Geometry Reserve");
+    expect(r.data.features.find((f) => f.properties?.name === "Nouragues")?.properties).toMatchObject({
+      designation: "National Nature Reserve",
+      iucn: "IV",
+      areaKm2: 1066,
+      v: 1066,
+      country: "GUF",
+    });
+    expect(r.coverageNote).toMatch(/^5 protected areas in this region, largest first; .*non-commercial/);
+    expect(r.citation.source).toMatch(/non-commercial/i);
+  });
+
+  it("leaves out IUCN placeholders and says when the service capped the list", async () => {
+    const fc = normalizeProtectedAreas({
+      type: "FeatureCollection",
+      features: [{ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: { name: "X", iucn_cat: "Not Reported", gis_area: 2.34 } }],
+    } as FeatureCollection);
+    expect(fc.features[0].properties).toEqual({ name: "X", areaKm2: 2.3, v: 2.3 });
+
+    const capped = { ...guiana, exceededTransferLimit: true };
+    const stub = vi.fn(async () => new Response(JSON.stringify(capped), { status: 200 }));
+    const r = await layer.query(ctxAt(stub), {});
+    expect(r).toMatchObject({ kind: "geojson", coverageNote: expect.stringMatching(/^The 5 largest protected areas in this region/) });
+  });
+
+  it("falls back to the tiles when the service fails", async () => {
+    const stub = vi.fn(async () => new Response("down", { status: 500 }));
+    const r = await layer.query(ctxAt(stub), {});
+    if (!("kind" in r) || r.kind !== "tiles") throw new Error("expected tiles");
+    expect(r.coverageNote).toMatch(/could not be loaded.*non-commercial/);
+  });
+
+  it("summarizes the largest parks by name for the note", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(guiana), { status: 200 }));
+    const summary = summarizeLayerResult(await layer.query(ctxAt(stub), {}), "protected-areas-world");
+    expect(summary).toHaveProperty("top");
+    expect((summary as { top: string[] }).top[0]).toBe("Guyane (Parc Amazonien), National Park - Core Area, 20,218 km² (GUF)");
   });
 });

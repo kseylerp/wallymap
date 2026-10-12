@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { normalizeOverpass } from "@/layers/osm-trails";
+import { normalizeOverpass, normalizeRoutes } from "@/layers/osm-trails";
 import fixture from "@/layers/__fixtures__/osm-trails.tahoe.json";
+import routeGeometry from "@/layers/__fixtures__/osm-trails.routes-geom.guiana.json";
 import type { LayerResult } from "@/layers/types";
 import {
   SAMPLE_MAX_CHARS,
   SAMPLE_VALUE_MAX_CHARS,
+  TOP_SIZE,
   drawnYearsOf,
   isFullLayerResult,
   sampleOf,
@@ -186,5 +188,36 @@ describe("tile summaries say what the picture means", () => {
     expect(drawnYearsOf(LOSS)).toBe("2015-2025");
     expect(drawnYearsOf("https://x.test/t.png?start_year=2020&end_year=2020")).toBe("2020");
     expect(drawnYearsOf("https://x.test/t.png?year=2020")).toBeUndefined();
+  });
+});
+
+describe("summarizeLayerResult top", () => {
+  it("names the longest hiking routes with length and network, so the note can list them", () => {
+    const result: LayerResult = { kind: "geojson", data: normalizeRoutes(routeGeometry), citation };
+    const summary = summarizeLayerResult(result, "osm-trails") as { top: string[] };
+    expect(summary.top).toHaveLength(4);
+    expect(summary.top[0]).toMatch(/^Piste de Bélizon, \d+(\.\d)? km \(regional route\)$/);
+    expect(summary.top[1]).toMatch(/^Molokoï, /);
+  });
+
+  it("is left out for path answers, other layers and no layer id", () => {
+    const paths: LayerResult = { kind: "geojson", data: normalizeOverpass(fixture), citation };
+    expect(summarizeLayerResult(paths, "osm-trails")).not.toHaveProperty("top");
+    const routes: LayerResult = { kind: "geojson", data: normalizeRoutes(routeGeometry), citation };
+    expect(summarizeLayerResult(routes)).not.toHaveProperty("top");
+    expect(summarizeLayerResult(routes, "mtb-trails")).not.toHaveProperty("top");
+  });
+
+  it("keeps at most TOP_SIZE, largest v first", () => {
+    const features = Array.from({ length: 20 }, (_, i) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [0, 0] },
+      properties: { name: `Park ${i}`, areaKm2: i, v: i },
+    }));
+    const summary = summarizeLayerResult({ kind: "geojson", data: { type: "FeatureCollection", features }, citation }, "protected-areas-world") as {
+      top: string[];
+    };
+    expect(summary.top).toHaveLength(TOP_SIZE);
+    expect(summary.top[0]).toBe("Park 19, 19 km²");
   });
 });

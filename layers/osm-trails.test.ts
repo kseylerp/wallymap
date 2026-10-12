@@ -1,7 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
-import layer, { MAX_TRAILS, buildOverpassQuery, countedWays, normalizeOverpass, overpassFailure } from "./osm-trails";
+import layer, {
+  MAX_ROUTES,
+  MAX_TRAILS,
+  ROUTE_KM_BUDGET,
+  buildOverpassQuery,
+  buildRouteGeometryQuery,
+  buildRouteScanQuery,
+  countedWays,
+  distanceTagKm,
+  normalizeOverpass,
+  normalizeRoutes,
+  overpassFailure,
+  pickRoutes,
+  routeLengthKm,
+  routesNote,
+  simplifyLine,
+} from "./osm-trails";
 import fixture from "./__fixtures__/osm-trails.tahoe.json";
+import routeScan from "./__fixtures__/osm-trails.routes-scan.guiana.json";
+import routeGeometry from "./__fixtures__/osm-trails.routes-geom.guiana.json";
 
 const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
 
@@ -40,13 +58,14 @@ describe("osm-trails layer", () => {
     expect(first.geometry.coordinates[0]).toEqual([way.geometry[0].lon, way.geometry[0].lat]);
   });
 
-  it("rejects a bbox over 2500 km2 with zoom_in", async () => {
+  it("rejects a bbox over 400,000 km2 with zoom_in", async () => {
     const stub = vi.fn();
     const r = await layer.query(
-      { bbox: [-122, 36, -119, 39], zoom: 7, env: {}, fetch: stub as unknown as CachedFetch },
+      { bbox: [-125, 30, -110, 45], zoom: 5, env: {}, fetch: stub as unknown as CachedFetch },
       { namedOnly: false },
     );
     expect(r).toMatchObject({ hint: "zoom_in" });
+    expect((r as { error: string }).error).toContain("under 400000 km²");
     expect(stub).not.toHaveBeenCalled();
   });
 
@@ -207,5 +226,117 @@ describe("osm-trails layer", () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
     const r = await layer.query({ bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch }, { namedOnly: false });
     expect(r).not.toHaveProperty("coverageNote");
+  });
+});
+
+// French Guiana, about 136,000 km²: too wide for paths, so the layer answers with named hiking routes.
+const GUIANA: [number, number, number, number] = [-54.6, 2.1, -51.6, 5.8];
+
+describe("osm-trails named routes over a wide box", () => {
+  const ctx = (stub: ReturnType<typeof vi.fn>) => ({ bbox: GUIANA, zoom: 7, env: {}, fetch: stub as unknown as CachedFetch });
+
+  it("scans hiking and foot route relations with a count, then fetches the chosen ones clipped to the box", () => {
+    expect(buildRouteScanQuery(GUIANA)).toBe(
+      '[out:json][timeout:25];relation["route"~"^(hiking|foot)$"]["name"](2.1,-54.6,5.8,-51.6)->.r;.r out count;.r out tags bb 5000;',
+    );
+    expect(buildRouteGeometryQuery(GUIANA, [1, 2])).toBe("[out:json][timeout:25];relation(id:1,2);out geom(2.1,-54.6,5.8,-51.6);");
+  });
+
+  it("reads distance tags in km, miles or metres, and distrusts one that does not fit the route's extent", () => {
+    expect(distanceTagKm("3.9 km")).toBe(3.9);
+    expect(distanceTagKm("12,5")).toBe(12.5);
+    expect(distanceTagKm("10 mi")).toBeCloseTo(16.09, 2);
+    expect(distanceTagKm("about 5")).toBeUndefined();
+    const bounds = { minlat: 45, minlon: 7, maxlat: 45.02, maxlon: 7.02 };
+    // 5,956 "km" on a route 2.7 km across was metres: fall back to the extent.
+    expect(routeLengthKm({ distance: "5956" }, bounds)).toBeCloseTo(2.7, 1);
+    expect(routeLengthKm({ distance: "6" }, bounds)).toBe(6);
+  });
+
+  it("picks the longest routes first and stops at the km budget (keeping at least 20)", () => {
+    expect(pickRoutes(routeScan, GUIANA)[0]).toBe(18158451); // Piste de Bélizon, 205 km
+    // Each route's extent lies inside the box: 0.8 degrees across (about 125 km) or 0.02 (about 3 km).
+    const relation = (id: number, km: number) => {
+      const size = km > 100 ? 0.8 : 0.02;
+      return { type: "relation", id, tags: { name: `R${id}`, distance: String(km) }, bounds: { minlat: 3, minlon: -53, maxlat: 3 + size, maxlon: -53 + size } };
+    };
+    const long = { elements: Array.from({ length: 300 }, (_, i) => relation(i + 1, 1_000)) };
+    expect(pickRoutes(long, GUIANA)).toHaveLength(20);
+    const short = { elements: Array.from({ length: 300 }, (_, i) => relation(i + 1, 5)) };
+    expect(pickRoutes(short, GUIANA)).toHaveLength(MAX_ROUTES);
+    expect(ROUTE_KM_BUDGET).toBeGreaterThan(20 * 5);
+  });
+
+  it("normalizes routes to lines, longest first, with name, length and network", () => {
+    const fc = normalizeRoutes(routeGeometry);
+    expect(fc.features.map((f) => f.properties?.name)).toEqual(["Piste de Bélizon", "Molokoï", "Sentier du Rorota", "Boucle Cascades"]);
+    const belizon = fc.features[0].properties ?? {};
+    expect(belizon).toMatchObject({ kind: "route", osmId: "relation/18158451", network: "regional", distanceKm: 205 });
+    expect(belizon.v).toBe(belizon.lengthKm);
+    expect(belizon.v as number).toBeGreaterThan(150);
+    expect(fc.features.every((f) => f.geometry.type === "LineString" || f.geometry.type === "MultiLineString")).toBe(true);
+  });
+
+  it("splits a member way where it leaves the box and drops routes with nothing inside", () => {
+    const p = (lat: number, lon: number) => ({ lat, lon });
+    const body = {
+      elements: [
+        {
+          type: "relation",
+          id: 1,
+          tags: { name: "Split" },
+          members: [{ type: "way", geometry: [p(3, -53), p(3.1, -53), null, p(3.3, -53), p(3.4, -53)] }],
+        },
+        { type: "relation", id: 2, tags: { name: "Outside" }, members: [{ type: "way", geometry: [] }] },
+      ],
+    };
+    const fc = normalizeRoutes(body);
+    expect(fc.features).toHaveLength(1);
+    expect(fc.features[0].geometry).toEqual({
+      type: "MultiLineString",
+      coordinates: [
+        [[-53, 3], [-53, 3.1]],
+        [[-53, 3.3], [-53, 3.4]],
+      ],
+    });
+  });
+
+  it("simplifies a line but keeps its ends", () => {
+    const line = [[0, 0], [1, 0.0001], [2, 0], [3, 1]];
+    expect(simplifyLine(line, 0.01)).toEqual([[0, 0], [2, 0], [3, 1]]);
+  });
+
+  it("answers a wide box with named routes from two Overpass calls and a coverage note", async () => {
+    const stub = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(routeScan), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(routeGeometry), { status: 200 }));
+    const r = await layer.query(ctx(stub), { namedOnly: false });
+    expect(stub).toHaveBeenCalledTimes(2);
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features[0].properties?.name).toBe("Piste de Bélizon");
+    expect(r.coverageNote).toBe("Showing 4 of 17 named hiking routes (longest first); individual paths appear under 2,500 km²");
+    const second = decodeURIComponent(String((stub.mock.calls[1][1] as RequestInit).body));
+    expect(second).toContain("relation(id:18158451,");
+  });
+
+  it("says so when the box holds no named routes, without a second call", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify({ elements: [{ type: "count", id: 0, tags: { relations: "0" } }] }), { status: 200 }));
+    const r = await layer.query(ctx(stub), { namedOnly: false });
+    expect(stub).toHaveBeenCalledTimes(1);
+    expect(r).toMatchObject({ kind: "geojson", coverageNote: routesNote(0, 0) });
+    expect(routesNote(0, 0)).toContain("No named hiking routes");
+    expect(routesNote(17, 17)).toBe("17 named hiking routes; individual paths appear under 2,500 km²");
+  });
+
+  it("maps a failing scan to an upstream error", async () => {
+    const stub = vi.fn(async () => new Response("busy", { status: 429 }));
+    expect(await layer.query(ctx(stub), { namedOnly: false })).toMatchObject({ hint: "upstream" });
+  });
+
+  it("describes both scales for the model", () => {
+    expect(layer.maxAreaKm2).toBe(400_000);
+    expect(layer.description).toContain("Under 2,500 km²");
+    expect(layer.description).toContain("named hiking routes");
   });
 });

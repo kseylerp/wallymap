@@ -32,8 +32,8 @@ import {
  */
 
 const PREFIX = "route-";
-/** Data layers from components/mapTiles.ts. */
-const DATA_PREFIXES = ["tiles-", "heat-"];
+/** Data layers from components/mapTiles.ts (vector and raster tiles, heatmaps, native data lines). */
+const DATA_PREFIXES = ["tiles-", "heat-", "lines-"];
 const LABEL_FONT = ["DIN Pro Medium", "Arial Unicode MS Regular"];
 const UNITS = "mi" as const;
 

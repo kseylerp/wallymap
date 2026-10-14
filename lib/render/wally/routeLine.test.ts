@@ -1,12 +1,11 @@
 import type { LineString, MultiLineString, Position } from "geojson";
 import { describe, expect, it } from "vitest";
 import {
+  chainParts,
   dartIconSpec,
   directionDarts,
   gradientColors,
   gradientExpression,
-  gradientPaths,
-  gradientRgbAt,
   lineLengthMeters,
   markerInterval,
   METERS_PER_MILE,
@@ -149,44 +148,33 @@ describe("route line styling", () => {
   });
 });
 
-describe("gradient paths for deck lines", () => {
-  const line: LineString = { type: "LineString", coordinates: [[-105, 40], [-105, 40.1], [-105, 40.3]] };
-
-  it("runs the 24 stops: purple at the start, pink at the end, the stops between", () => {
-    expect(gradientRgbAt(0)).toEqual([0x6e, 0x5b, 0xff]);
-    expect(gradientRgbAt(1)).toEqual([0xf5, 0x72, 0x72]);
-    const colors = gradientColors();
-    const stop = (i: number) => [Number.parseInt(colors[i].slice(1, 3), 16), Number.parseInt(colors[i].slice(3, 5), 16), Number.parseInt(colors[i].slice(5, 7), 16)];
-    expect(gradientRgbAt(5 / 23).map(Math.round)).toEqual(stop(5));
-    expect(gradientRgbAt(-1)).toEqual(gradientRgbAt(0));
-    expect(gradientRgbAt(Number.NaN)).toEqual(gradientRgbAt(0));
+// Named routes now draw as native Mapbox lines with `line-gradient` (lib/render/nativeLines.ts), so the deck gradient
+// paths (gradientPaths, gradientRgbAt) and their tests are gone; a route relation's ways are chained instead, since
+// Mapbox's line-progress restarts on every line of a feature.
+describe("chainParts: a route relation's ways as continuous lines for the native gradient", () => {
+  it("leaves a LineString alone", () => {
+    const line: LineString = { type: "LineString", coordinates: [[0, 0], [0, 1]] };
+    expect(chainParts(line)).toBe(line);
   });
 
-  it("gives every vertex its fraction by length, 0 at the start and 1 at the end, cutting long segments", () => {
-    const [{ path, t }] = gradientPaths(line);
-    expect(path[0]).toEqual([-105, 40]);
-    expect(path[path.length - 1]).toEqual([-105, 40.3]);
-    expect(t[0]).toBe(0);
-    expect(t[t.length - 1]).toBeCloseTo(1, 6);
-    expect(t.every((x, i) => i === 0 || x > t[i - 1])).toBe(true);
-    // The original middle vertex is 1/3 of the way along.
-    expect(t[path.findIndex((p) => p[1] === 40.1)]).toBeCloseTo(1 / 3, 2);
-    // No piece is longer than 1/96 of the line, so the color can change along a two-segment line.
-    expect(path.length).toBeGreaterThan(90);
+  it("chains ways that meet end to end, reversing ways drawn the other way, into one LineString", () => {
+    const multi: MultiLineString = {
+      type: "MultiLineString",
+      coordinates: [
+        [[0, 1], [0, 2]],
+        [[0, 3], [0, 2]],
+        [[0, 0], [0, 1]],
+        [[0, 3], [0, 4]],
+      ],
+    };
+    expect(chainParts(multi)).toEqual({ type: "LineString", coordinates: [[0, 0], [0, 1], [0, 2], [0, 3], [0, 4]] });
   });
 
-  it("runs one gradient across the parts of a multi-line in order", () => {
-    const multi: MultiLineString = { type: "MultiLineString", coordinates: [[[0, 0], [0, 0.1]], [[0, 0.2], [0, 0.3]]] };
-    const [first, second] = gradientPaths(multi);
-    expect(first.t[0]).toBe(0);
-    expect(first.t[first.t.length - 1]).toBeCloseTo(0.5, 2);
-    expect(second.t[0]).toBeCloseTo(0.5, 2);
-    expect(second.t[second.t.length - 1]).toBeCloseTo(1, 6);
-  });
-
-  it("skips parts with fewer than two usable vertices and does not divide by zero", () => {
-    expect(gradientPaths({ type: "LineString", coordinates: [[0, 0]] })).toEqual([]);
-    const dot = gradientPaths({ type: "LineString", coordinates: [[1, 1], [1, 1]] });
-    expect(dot[0].t.every((x) => x === 0)).toBe(true);
+  it("keeps stretches that do not touch apart, and drops parts with fewer than two usable vertices", () => {
+    const multi: MultiLineString = {
+      type: "MultiLineString",
+      coordinates: [[[0, 0], [0, 1]], [[5, 5], [5, 6]], [[9, 9]], [[0, 1], [Number.NaN, 2], [0, 2]]],
+    };
+    expect(chainParts(multi)).toEqual({ type: "MultiLineString", coordinates: [[[0, 0], [0, 1], [0, 2]], [[5, 5], [5, 6]]] });
   });
 });

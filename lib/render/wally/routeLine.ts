@@ -175,54 +175,47 @@ export function gradientColors(): string[] {
   });
 }
 
-let stopRgb: [number, number, number][] | undefined;
+/** Two positions this close (degrees) are the same vertex: where one way of a route relation ends, the next begins. */
+const JOIN_EPSILON = 1e-9;
 
-/** The gradient color (RGB, 0 to 255) a fraction `t` (0 start, 1 end) along a line: the 24 stops, blended between. */
-export function gradientRgbAt(t: number): [number, number, number] {
-  const stops = (stopRgb ??= gradientColors().map(hexToRgb));
-  const x = Math.min(1, Math.max(0, Number.isFinite(t) ? t : 0)) * (stops.length - 1);
-  const i = Math.min(stops.length - 2, Math.floor(x));
-  const f = x - i;
-  const [a, b] = [stops[i], stops[i + 1]];
-  return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+function samePosition(a: Position, b: Position): boolean {
+  return Math.abs(a[0] - b[0]) <= JOIN_EPSILON && Math.abs(a[1] - b[1]) <= JOIN_EPSILON;
 }
 
-/** A stretch of a line with the fraction (0 to 1, by length along the whole feature) at each of its vertices. */
-export type GradientPath = { path: Position[]; t: number[] };
-
-/** A path is cut so that no piece is longer than this share of the feature, so a few long segments still shade smoothly. */
-const GRADIENT_PIECES = 4 * GRADIENT_STOPS;
-
 /**
- * A line feature as paths with a gradient fraction at every vertex: 0 at the start of the first part, 1 at the end
- * of the last, by length (parts of a MultiLineString run on in the order given, since a route made of many ways has no
- * better order). Long segments are cut so the color can change along them; deck draws one color per segment.
+ * A route made of many ways (an OSM route relation) as few continuous lines as its ways allow: parts that meet end to
+ * end are chained in order, reversing a way that runs the other way. Mapbox's `line-progress` runs 0 to 1 along each
+ * line of a feature on its own, so a route left as a hundred short ways would repeat the purple → pink gradient on
+ * every way; chained, the gradient runs the length of each continuous stretch. Parts with fewer than two finite
+ * positions are dropped; one chain comes back as a LineString.
  */
-export function gradientPaths(geometry: LineString | MultiLineString): GradientPath[] {
-  const parts = geometry.type === "LineString" ? [geometry.coordinates] : geometry.coordinates;
-  const clean = parts.map((part) => part.filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]))).filter((part) => part.length >= 2);
-  const cums = clean.map(cumulativeMeters);
-  const total = cums.reduce((sum, cum) => sum + cum[cum.length - 1], 0);
-  const maxStep = total / GRADIENT_PIECES;
-  let before = 0;
-  return clean.map((part, k) => {
-    const cum = cums[k];
-    const path: Position[] = [part[0]];
-    const t: number[] = [total > 0 ? before / total : 0];
-    for (let i = 1; i < part.length; i++) {
-      const span = cum[i] - cum[i - 1];
-      const pieces = maxStep > 0 ? Math.max(1, Math.ceil(span / maxStep)) : 1;
-      for (let j = 1; j <= pieces; j++) {
-        const f = j / pieces;
-        const [x0, y0] = part[i - 1];
-        const [x1, y1] = part[i];
-        path.push(f === 1 ? part[i] : [x0 + (x1 - x0) * f, y0 + (y1 - y0) * f]);
-        t.push(total > 0 ? (before + cum[i - 1] + span * f) / total : 0);
+export function chainParts(geometry: LineString | MultiLineString): LineString | MultiLineString {
+  if (geometry.type === "LineString") return geometry;
+  const rest = geometry.coordinates
+    .map((part) => part.filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1])))
+    .filter((part) => part.length >= 2);
+  const chains: Position[][] = [];
+  while (rest.length > 0) {
+    let chain = rest.shift()!;
+    for (let joined = true; joined; ) {
+      joined = false;
+      for (let i = 0; i < rest.length; i++) {
+        const part = rest[i];
+        const head = chain[0];
+        const tail = chain[chain.length - 1];
+        if (samePosition(tail, part[0])) chain = [...chain, ...part.slice(1)];
+        else if (samePosition(tail, part[part.length - 1])) chain = [...chain, ...[...part].reverse().slice(1)];
+        else if (samePosition(head, part[part.length - 1])) chain = [...part.slice(0, -1), ...chain];
+        else if (samePosition(head, part[0])) chain = [...[...part].reverse().slice(0, -1), ...chain];
+        else continue;
+        rest.splice(i, 1);
+        joined = true;
+        break;
       }
     }
-    before += cum[cum.length - 1];
-    return { path, t };
-  });
+    chains.push(chain);
+  }
+  return chains.length === 1 ? { type: "LineString", coordinates: chains[0] } : { type: "MultiLineString", coordinates: chains };
 }
 
 /** `line-gradient` over `line-progress` with 24 evenly spaced stops (needs a source with `lineMetrics: true`). */

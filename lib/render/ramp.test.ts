@@ -17,9 +17,8 @@ describe("palette ramps (OKLCH)", () => {
     ["popularity", OFF_WHITE, PURPLE],
     ["remoteness", OFF_WHITE, DARK_GREY],
     ["gray", OFF_WHITE, DARK_GREY],
-    ["popularityLine", SAGE, PURPLE],
-    ["densityLine", SAGE, DARK_GREY],
-    ["remotenessLine", SAGE, DARK_GREY],
+    // One line ramp for every score and facet line (owner, 2026-10-14: no dark grey line cores).
+    ["scoreLine", SAGE, PURPLE],
   ] as const)("%s runs from %s to %s", (name, low, high) => {
     expect(hex(name, 0)).toBe(low);
     expect(hex(name, 1)).toBe(high);
@@ -33,8 +32,9 @@ describe("palette ramps (OKLCH)", () => {
   });
 
   it("starts every line ramp at sage, never off-white (off-white lines read as white on satellite)", () => {
-    expect(rgbToHex(interpolateStops(RAMPS.popularityLine, 0.5))).toBe(PINK);
-    for (const name of ["popularityLine", "densityLine", "remotenessLine"] as const) expect(RAMPS[name][0]).toBe(SAGE);
+    expect(rgbToHex(interpolateStops(RAMPS.scoreLine, 0.5))).toBe(PINK);
+    expect(RAMPS.scoreLine[0]).toBe(SAGE);
+    expect(RAMPS.scoreLine).not.toContain(DARK_GREY);
   });
 
   it.each(Object.keys(RAMPS) as RampName[])("%s falls in lightness monotonically", (name) => {

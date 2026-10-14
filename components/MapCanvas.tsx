@@ -5,12 +5,13 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import mapboxgl from "mapbox-gl";
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { MapSetupNotice } from "@/components/MapSetupNotice";
-import { syncHeatLayers, syncSatelliteHybrid, syncTileLayers } from "@/components/mapTiles";
+import { drawnLineEntries, syncHeatLayers, syncLineLayers, syncSatelliteHybrid, syncTileLayers } from "@/components/mapTiles";
 import { ensureRouteImages, setRouteProgress, syncRouteLayers } from "@/components/routeLayers";
 import { basemapStyleUrl } from "@/lib/render/basemaps";
 import { swipeStore } from "@/lib/render/compareView";
 import { buildDeckLayerSets, isClusterFeature, type Padding } from "@/lib/render/deck";
 import { pickToSelection, pickUnderHeat, type DeckPick } from "@/lib/render/inspect";
+import { lineLayerId, linePickToSelection, PICKABLE_PARTS } from "@/lib/render/nativeLines";
 import { viewFromCamera, type MapView } from "@/lib/agent/view";
 import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
 import { noteTile } from "@/lib/render/tileErrors";
@@ -288,7 +289,34 @@ function inspectableTileLayers(map: mapboxgl.Map, state: MapState): string[] {
   return ids;
 }
 
-/** The deck feature under a screen point, then the top vector tile feature, as a selection. */
+/**
+ * The native data line under a screen point (lib/render/nativeLines.ts), within the pick slop, mapped back to its app
+ * layer and the original feature, so the card and the selection are what a deck pick gave.
+ */
+function pickLine(map: mapboxgl.Map, state: MapState, point: mapboxgl.Point): Selection | null {
+  const entries = drawnLineEntries(map);
+  const layers = [...entries.values()]
+    .filter((e) => e.shown)
+    .flatMap((e) => PICKABLE_PARTS.map((part) => lineLayerId(e.id, part)))
+    .filter((id) => map.getLayer(id));
+  if (layers.length === 0) return null;
+  const r = PICK_RADIUS_PX;
+  const [top] = map.queryRenderedFeatures(
+    [
+      [point.x - r, point.y - r],
+      [point.x + r, point.y + r],
+    ],
+    { layers },
+  );
+  if (!top) return null;
+  const { lng, lat } = map.unproject(point);
+  return linePickToSelection(top, entries, state.layers, [lng, lat], { x: point.x, y: point.y });
+}
+
+/**
+ * What a click at a screen point selects: a deck symbol, hex tile or cluster (drawn on top), else a native data line,
+ * else a deck area, else the nearest feature under a heatmap, else the top vector tile feature.
+ */
 function pickAt(map: mapboxgl.Map, overlay: MapboxOverlay, state: MapState, point: mapboxgl.Point): Selection | null {
   let info: DeckPick | null = null;
   try {
@@ -297,6 +325,11 @@ function pickAt(map: mapboxgl.Map, overlay: MapboxOverlay, state: MapState, poin
     // Deck is not initialized yet (no WebGL context); fall through to the tiles.
   }
   const fromDeck = pickToSelection(info, state.layers);
+  const type = fromDeck?.feature.geometry?.type;
+  if (fromDeck && (type === "Point" || type === "MultiPoint")) return fromDeck;
+  // A line within the slop wins over the translucent area it crosses (deck draws areas over Mapbox's lines).
+  const line = pickLine(map, state, point);
+  if (line) return line;
   if (fromDeck) return fromDeck;
   // Heat is drawn by Mapbox and has no features to pick: take the nearest real feature under the cursor instead.
   const underHeat = pickUnderHeat(
@@ -407,6 +440,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       sync3D(map, wantsTerrain(stateRef.current));
       syncTileLayers(map, visibleState(stateRef.current));
       syncHeatLayers(map, visibleState(stateRef.current));
+      syncLineLayers(map, visibleState(stateRef.current));
       ensureRouteImages(map);
       syncRouteLayers(map, stateRef.current);
     });
@@ -472,7 +506,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     };
   }, []);
 
-  // Deck layers, tile layers and Mapbox heatmaps follow every state change, through the visible view (time window
+  // Deck layers, tile layers, Mapbox heatmaps and native data lines follow every state change, through the visible view (time window
   // and filters). Routes are not filtered. A tile URL the time window rewrote waits 150 ms, so playing or dragging
   // the scrubber does not re-request tiles for every step it passes.
   const tileTimerRef = useRef<number | null>(null);
@@ -498,6 +532,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       }, TILE_TIME_DEBOUNCE_MS);
     }
     syncHeatLayers(map, view);
+    syncLineLayers(map, view);
     syncRouteLayers(map, state);
   }, [state]);
   useEffect(

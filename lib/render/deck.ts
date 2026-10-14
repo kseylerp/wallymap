@@ -1,7 +1,7 @@
 import { LayerExtension, type Layer } from "@deck.gl/core";
-import { FillStyleExtension, PathStyleExtension, _TerrainExtension as TerrainExtension } from "@deck.gl/extensions";
+import { FillStyleExtension, _TerrainExtension as TerrainExtension } from "@deck.gl/extensions";
 import { H3HexagonLayer, TerrainLayer } from "@deck.gl/geo-layers";
-import { GeoJsonLayer, IconLayer, PathLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
+import { GeoJsonLayer, IconLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import { WebMercatorViewport } from "@math.gl/web-mercator";
 import type { Feature } from "geojson";
 import { cellToBoundary, cellToLatLng, getHexagonEdgeLengthAvg, latLngToCell, UNITS } from "h3-js";
@@ -16,14 +16,12 @@ import {
   HEX_TILE,
   isPaletteColor,
   LINE,
-  LINE_CLASSES,
-  lineClassFor,
-  lineRampFor,
+  lineColorFor,
   PURPLE,
   scoreRampFor,
   SELECTED_AREA,
+  SIBLING_FADE,
   symbolSizePx,
-  TRAIL_LINE,
   WHITE as WHITE_HEX,
   type AreaRecipe,
   type HatchColor,
@@ -35,7 +33,7 @@ import { compareBId, compareSideShown, DELTA_FILL_ALPHA, effectiveMode, isHexCol
 import { DECK_TERRAIN_ID, DECK_TERRAIN_TAG, demDecoder, demTileUrl } from "@/lib/render/wally/deckTerrain";
 import { featureBBox, featureCenter, HEX_DELTA_TAG } from "@/lib/render/inspect";
 import { pinIconFor } from "@/lib/render/wally/pins";
-import { gradientPaths, gradientRgbAt } from "@/lib/render/wally/routeLine";
+import { drawsNativeLines, isLineGeometry, SELECTED_LINE } from "@/lib/render/nativeLines";
 import type { MapState, RenderMode, RenderOp, Viewport } from "@/lib/render/state";
 
 type Rgba = [number, number, number, number];
@@ -50,12 +48,10 @@ const SELECT = hexToRgba(PURPLE);
 /** Sprites draw their own colors; their tint only carries alpha (opacity and the selection fade). */
 const SPRITE_TINT = WHITE;
 
-/** Selected lines: TRAIL_LINE.selected (purple, 3.5px) over a white casing 1px a side wider than the line's. */
-export const SELECTED_LINE = { width: TRAIL_LINE.selected.width, casing: TRAIL_LINE.selected.width + 2 } as const;
 /** Selected tiles take a 2.5px purple outline. */
 export const SELECTED_LINE_PX = 2.5;
-/** While a feature is selected, the rest of its layer fades to this share of its alpha. */
-export const SIBLING_FADE = 0.35;
+/** While a feature is selected, the rest of its layer fades to this share of its alpha (palette.ts). */
+export { SIBLING_FADE };
 
 export type Padding = { top: number; right: number; bottom: number; left: number };
 
@@ -138,10 +134,9 @@ export function scoreRampColor(v: unknown, ramp: RampName = "density"): Rgba {
   return rampRgba(ramp, t, Math.round(255 * (a0 + (a1 - a0) * t)));
 }
 
-const dashExtension = new PathStyleExtension({ dash: true });
 const fillExtension = new FillStyleExtension({ pattern: true });
 const terrainExtension = new TerrainExtension();
-type LayerExtensionLike = PathStyleExtension | FillStyleExtension | TerrainExtension | UnpremultiplySpriteExtension;
+type LayerExtensionLike = FillStyleExtension | TerrainExtension | UnpremultiplySpriteExtension;
 
 /**
  * Terrain props for a data layer while 3D terrain is on: symbols stand on the surface by their anchor (`offset`),
@@ -163,7 +158,9 @@ export function metersPerPixel(zoom: number, latitude: number): number {
 }
 
 /**
- * How a line layer states its pixel widths. Flat, it just asks deck for pixels. While the layer drapes on terrain deck
+ * How a deck stroke states its pixel widths (area outlines, and a swiped compare's line sides: every other line is a
+ * native Mapbox line, lib/render/nativeLines.ts, which Mapbox drapes at true pixel widths). Flat, it just asks deck for
+ * pixels. While the layer drapes on terrain deck
  * draws it into an offscreen cover texture per terrain tile, and a pixel width there is a width in that texture's
  * pixels: a tile's texture is capped at 2048px and holds a different number of pixels per screen pixel for each tile
  * zoom, and deck counts it in device pixels, so on a 2x screen at zoom 10.9 a 2.5px trail came out 8 to 14px wide
@@ -369,14 +366,16 @@ function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
     case "clusters":
       return clusterLayers(op, ctx, opacity);
     case "columns":
-      // Areas extrude by `v`; lines have no column form. Points stack into H3 columns. In 2D both draw flat.
-      if (ctx.style.geometry === "line") return lineLayers(op, ctx, opacity);
+      // Areas extrude by `v`; lines have no column form (Mapbox draws them: lib/render/nativeLines.ts). Points stack
+      // into H3 columns. In 2D both draw flat.
+      if (ctx.style.geometry === "line") return [];
       if (ctx.style.geometry === "polygon") {
         return ctx.threeD ? extrudedAreaLayers(op, ctx, opacity) : polygonLayers({ ...op, mode: "polygons" }, ctx, opacity);
       }
       return ctx.threeD ? columnLayers(op, ctx, opacity) : hexTileLayers(op, ctx, opacity);
     case "lines":
-      return lineLayers(op, ctx, opacity);
+      // Native Mapbox line layers (lib/render/nativeLines.ts, synced by components/mapTiles.ts), crisp on 3D terrain.
+      return [];
     case "polygons":
       return polygonLayers(op, ctx, opacity);
     case "heat":
@@ -420,111 +419,27 @@ function opIds(op: RenderOp, ctx: OpContext, opacity: number, color: string | un
   return { id, trigger };
 }
 
-/** One stretch of a route feature for the gradient layer: its vertices and the gradient color at each, opaque. */
-type GradientRecord = { feature: Feature; path: [number, number][]; colors: Rgba[] };
-
-/** The gradient records of a route feature (one per part), made once per feature object so a pan or a selection reuses them. */
-const gradientRecords = new WeakMap<Feature, GradientRecord[]>();
-function recordsFor(f: Feature): GradientRecord[] {
-  let records = gradientRecords.get(f);
-  if (!records) {
-    const g = f.geometry;
-    records =
-      g?.type === "LineString" || g?.type === "MultiLineString"
-        ? gradientPaths(g).map(({ path, t }) => ({
-            feature: f,
-            path: path.map((p): [number, number] => [p[0], p[1]]),
-            colors: t.map((x): Rgba => [...gradientRgbAt(x).map(Math.round), 255] as Rgba),
-          }))
-        : [];
-    gradientRecords.set(f, records);
-  }
-  return records;
-}
-
-/** Every gradient record of a result, in feature order (cached per result, so the layer's data prop is stable). */
-const gradientData = new WeakMap<GeoJSON.FeatureCollection, GradientRecord[]>();
-function routeRecords(data: GeoJSON.FeatureCollection, isRoute: (f: Feature) => boolean): GradientRecord[] {
-  let all = gradientData.get(data);
-  if (!all) {
-    all = data.features.filter(isRoute).flatMap(recordsFor);
-    gradientData.set(data, all);
-  }
-  return all;
-}
-
-const CLEAR: Rgba = [0, 0, 0, 0];
-
 /**
- * Lines over a white casing (spec §11a: white for casings only, never a dark outline). Trails follow TRAIL_LINE (dark
- * grey dashes over a sage core), forest roads dark grey dashes, use trails sage dots, other lines solid dark grey; the
- * selected line is solid purple. Named routes (lineClassFor: `kind` "route" or a `route` property) run Wally's route
- * gradient, purple at the start to pink at the end, 3px solid over a slightly wider white casing: a second path layer
- * (`:gradient`, above the core, not pickable) draws them with a color at every vertex, while the pickable core layer
- * keeps them as clear lines so a click still finds the route. Score lines (popularity) take their ramp. A requested
- * palette color (a compare side) draws solid in that color. No lighting or shadow touches a line: path layers are unlit
- * and the terrain mesh they drape on is too (UNLIT below).
+ * A swiped compare's line sides, for the two clipped side overlays only: Mapbox cannot clip a native line layer to one
+ * side of the swipe handle, so these stay in deck (every other data line is native, lib/render/nativeLines.ts). Solid
+ * in the side's color (A purple, B pink) at 2.5px over a white 4.5px casing at 0.9; the selected line purple 3.5px.
  */
-function lineLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
-  const { data, selected, terrain, style } = ctx;
+function swipeLineLayers(op: RenderOp, ctx: OpContext): Layer[] {
+  const { data, selected, terrain } = ctx;
+  const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
   const requested = requestedColor(op.color);
-  const { id, trigger } = opIds(op, ctx, opacity, requested);
-  const updateTriggers = { getLineColor: trigger, getLineWidth: trigger, getDashArray: trigger };
+  const { id, trigger } = opIds({ ...op, mode: "lines" }, ctx, opacity, requested);
+  const updateTriggers = { getLineColor: trigger, getLineWidth: trigger };
   const widths = pixelWidths(ctx);
-  const score = style.unit === "score" && !requested;
-  // Line ramps start at sage: an off-white low end reads as plain white on satellite.
-  const ramp = lineRampFor(op.layerId);
-  const classOf = (f: Feature) => LINE_CLASSES[lineClassFor(op.layerId, f.properties)];
-  // A requested color (a compare side) and score ramps replace the class look, routes included.
-  const isRoute = (f: Feature) => !requested && !score && "gradient" in classOf(f);
-  // Every line casing is white (spec §11a, owner: "the black border around trails ... distorts any line colour"),
-  // score lines too: a dark casing shifted how the ramp read.
-  const casingColor = hexToRgba(WHITE_HEX, Math.round(255 * LINE.casingOpacity));
-  const routes = routeRecords(data, isRoute);
-  const routeCasing = LINE_CLASSES.route.casing;
-  const casingWidth: WidthAccessor | number =
-    routes.length > 0
-      ? (f: Feature) => (f === selected ? SELECTED_LINE.casing : isRoute(f) ? routeCasing : LINE.casing)
-      : widthFor(LINE.casing, SELECTED_LINE.casing, selected);
-  const core = (f: Feature): Rgba => {
-    if (requested) return hexToRgba(requested);
-    if (score) return rampRgba(ramp, scoreT(f.properties?.v));
-    // Routes draw in the gradient layer above; the pickable core line under it stays clear.
-    if (isRoute(f)) return CLEAR;
-    return hexToRgba(classOf(f).color);
-  };
-  const under = (f: Feature): Rgba => {
-    const cls = classOf(f);
-    return !requested && !score && "under" in cls ? hexToRgba(cls.under) : [0, 0, 0, 0];
-  };
-  const select = (color: (f: Feature) => Rgba) =>
-    perFeature((f) => (f === selected ? SELECT : color(f)), opacity, selected);
-  // Deck's dash is in line widths; the recipes are in pixels. The selected line draws solid.
-  const dash = (f: Feature): [number, number] => {
-    if (f === selected || requested || score) return [0, 0];
-    const [on, off] = classOf(f).dash;
-    return [on / LINE.width, off / LINE.width];
-  };
-  const layers: Layer[] = [
+  const color = hexToRgba(requested ? lineColorFor(requested) : COMPARE_COLORS.a);
+  return [
     new GeoJsonLayer({
       id: `${id}:casing`,
       data,
       pickable: false,
       filled: false,
-      getLineColor: colorFor(casingColor, opacity, selected, WHITE),
-      getLineWidth: casingWidth,
-      lineWidthUnits: widths.units,
-      lineWidthScale: widths.scale,
-      updateTriggers,
-      ...terrainProps(terrain, "drape"),
-    }),
-    new GeoJsonLayer({
-      id: `${id}:under`,
-      data,
-      pickable: false,
-      filled: false,
-      getLineColor: perFeature((f) => (f === selected ? [0, 0, 0, 0] : under(f)), opacity, selected),
-      getLineWidth: LINE.width,
+      getLineColor: colorFor(hexToRgba(WHITE_HEX, Math.round(255 * LINE.casingOpacity)), opacity, selected, WHITE),
+      getLineWidth: widthFor(LINE.casing, SELECTED_LINE.casing, selected),
       lineWidthUnits: widths.units,
       lineWidthScale: widths.scale,
       updateTriggers,
@@ -535,40 +450,14 @@ function lineLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       data,
       pickable: true,
       filled: false,
-      getLineColor: select(core),
+      getLineColor: colorFor(color, opacity, selected, SELECT),
       getLineWidth: widthFor(LINE.width, SELECTED_LINE.width, selected),
       lineWidthUnits: widths.units,
       lineWidthScale: widths.scale,
-      // The dash extension stays on every core line: adding or removing an extension on a live layer (as a
-      // basemap switch would) leaves deck with a dangling dash attribute and it throws. [0, 0] draws solid.
-      getDashArray: dash,
       updateTriggers,
-      ...terrainProps(terrain, "drape", [dashExtension]),
+      ...terrainProps(terrain, "drape"),
     }),
   ];
-  if (routes.length > 0) {
-    // The selected route is the purple core line above; its siblings fade like every other line's.
-    const gradientColor = (r: GradientRecord): Rgba[] => {
-      if (r.feature === selected) return r.colors.map(() => CLEAR);
-      const alpha = opacity * (selected ? SIBLING_FADE : 1);
-      return alpha === 1 ? r.colors : r.colors.map(([R, G, B, A]): Rgba => [R, G, B, Math.round(A * alpha)]);
-    };
-    layers.push(
-      new PathLayer<GradientRecord>({
-        id: `${id}:gradient`,
-        data: routes,
-        pickable: false,
-        getPath: (r) => r.path,
-        getColor: gradientColor,
-        getWidth: LINE_CLASSES.route.width,
-        widthUnits: widths.units,
-        widthScale: widths.scale,
-        updateTriggers: { getColor: trigger },
-        ...terrainProps(terrain, "drape"),
-      }),
-    );
-  }
-  return layers;
 }
 
 /**
@@ -1269,7 +1158,19 @@ function columnsOf(data: GeoJSON.FeatureCollection): Columns {
  * board, columns variant C): height is |B − A| (tallest = 4,000 m), translucent white walls with dark grey edges and
  * white caps outlined in dark grey; only the tallest column takes purple, with its value.
  */
-function deltaLayers(op: RenderOp, { data, selected, terrain }: OpContext): Layer[] {
+/** A delta collection without its lines (Mapbox strokes those: lib/render/nativeLines.ts), made once per collection. */
+const withoutLinesMemo = new WeakMap<GeoJSON.FeatureCollection, GeoJSON.FeatureCollection>();
+function withoutLines(data: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
+  let out = withoutLinesMemo.get(data);
+  if (!out) {
+    const kept = data.features.filter((f) => !isLineGeometry(f.geometry));
+    out = kept.length === data.features.length ? data : { ...data, features: kept };
+    withoutLinesMemo.set(data, out);
+  }
+  return out;
+}
+
+function deltaLayers(op: RenderOp, { data: all, selected, terrain }: OpContext): Layer[] {
   const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
   const id = `${deckLayerKey(op.layerId, terrain)}:${op.mode}`;
   const fade = (f: Feature, c: Rgba): Rgba => {
@@ -1277,7 +1178,8 @@ function deltaLayers(op: RenderOp, { data, selected, terrain }: OpContext): Laye
     return selected && f !== selected ? withOpacity(base, SIBLING_FADE) : base;
   };
   const trigger = [selectionKey(selected), opacity];
-  if (isHexCollection(data)) {
+  if (isHexCollection(all)) {
+    const data = all;
     const { max, top, caps } = columnsOf(data);
     const c = HEX_COLUMN;
     const alpha = (a: number) => Math.round(255 * a);
@@ -1335,6 +1237,9 @@ function deltaLayers(op: RenderOp, { data, selected, terrain }: OpContext): Laye
       }),
     ];
   }
+  // Delta lines are native Mapbox lines (lib/render/nativeLines.ts); deck keeps the areas and points.
+  const data = withoutLines(all);
+  if (data.features.length === 0) return [];
   const updateTriggers = { getFillColor: trigger, getLineColor: trigger, getLineWidth: trigger };
   const strokeWidth = (f: Feature) => (isArea(f) ? DELTA_STROKE.polygon : DELTA_STROKE.line);
   return [
@@ -1472,7 +1377,11 @@ export function buildDeckLayerSets(
     // is Mapbox's and cannot be clipped to one side of the handle, so a swiped heat layer draws its sides as points
     // (a toggle keeps the heat: components/mapTiles.ts gives each side its own heatmap).
     const sideMode = mode === "swipe" && op.mode === "heat" ? "points" : op.mode;
-    const sideA = safeLayersFor({ ...op, mode: sideMode, color: COMPARE_COLORS.a }, ctx);
+    // Toggled lines are native Mapbox layers (lib/render/nativeLines.ts); swiped lines stay in deck, which can clip.
+    const nativeLines = drawsNativeLines(op, loaded.style);
+    if (nativeLines && mode !== "swipe") continue;
+    const build = nativeLines ? swipeLineLayers : geoJsonLayersFor;
+    const sideA = safeLayersFor({ ...op, mode: sideMode, color: COMPARE_COLORS.a }, ctx, build);
     const bId = compareBId(op.layerId);
     const loadedB = state.layers[bId];
     const sideB =
@@ -1480,6 +1389,7 @@ export function buildDeckLayerSets(
         ? safeLayersFor(
             { ...op, mode: sideMode, color: COMPARE_COLORS.b },
             { ...ctx, data: loadedB.result.data, selected: selectedB, deckId: bId },
+            build,
           )
         : [];
     if (mode === "swipe") {

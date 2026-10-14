@@ -152,27 +152,25 @@ export function layerColor(layerId: string): string {
 // ---- Lines ----
 
 /**
- * Trails (owner, style board: "some combo of white, black, sage with dashes, breaks, change in order, sort of like
- * line B"). The owner is still choosing between variants on the style board, so the whole recipe lives here and a
- * swap is a change to this constant only. Today: railroad-style alternating dashes, dark grey over a solid sage core,
- * on a white casing. `under` draws solid, `over` draws dashed on top of it (`dash` in pixels, [on, off]).
+ * Data lines draw as native Mapbox line layers (lib/render/nativeLines.ts): crisp, constant pixel widths at every zoom,
+ * draped by Mapbox itself on 3D terrain, as the Wally app draws its polylines. Owner (2026-10-14): no dark grey line
+ * cores anywhere; dark grey stays for area outlines and symbol strokes. Every line sits on a white casing two pixels
+ * wider than its core at 0.9; the selected line is purple 3.5px.
  */
 export const TRAIL_LINE = {
   casing: { color: WHITE, width: 4.5, opacity: 0.9 },
   width: 2.5,
-  under: SAGE,
-  over: { color: DARK_GREY, dash: [8, 8] as [number, number] },
+  color: SAGE,
   selected: { color: PURPLE, width: 3.5 },
 } as const;
 
 /**
- * One line class: a core color (optionally over a solid `under` color) with a dash in pixels ([0, 0] solid). A
- * `gradient` class runs the Wally route gradient (start color to end color, along the line) instead of one core color;
- * `width` and `casing` override the data line widths (LINE) for the class.
+ * One line class: a core color with a dash in pixels ([on, off]; [0, 0] solid). A `gradient` class runs the Wally
+ * route gradient (start color to end color, along the line) instead of one core color; `width` and `casing` override
+ * the data line widths (LINE) for the class.
  */
 export type LineRecipe = {
   color: string;
-  under?: string;
   dash: [number, number];
   gradient?: readonly [start: string, end: string];
   width?: number;
@@ -180,21 +178,32 @@ export type LineRecipe = {
 };
 
 /**
- * Line classes (owner's board, lines B + C): a dark grey core on a white casing, with one quiet palette hue per class
- * where a class exists, told apart by dash and order. Trails as TRAIL_LINE, forest roads dark grey dashes, use
- * (informal, unmaintained) trails sage dots, other data lines (streams, water) solid dark grey. Selected lines purple.
- * Named routes (see `isRouteProperties`) take Wally's route gradient, purple at the start to pink at the end, 3px
- * over a white casing with no dash, exactly as the route tool draws a route (lib/render/wally/routeLine.ts).
+ * Line classes: sage cores on a white casing, told apart by dash. Trails and other data lines (streams, mtb, pistes)
+ * solid sage, forest roads sage dashes, use (informal, unmaintained) trails sage dots (round caps make a dash as long as
+ * the line is wide a dot). Selected lines purple. Named routes (see `isRouteProperties`) take Wally's route gradient,
+ * purple at the start to pink at the end, 3px over a white casing with no dash, as the route tool draws a route
+ * (lib/render/wally/routeLine.ts). Score lines (popularity) take the sage → pink → purple ramp (`lineRampFor`).
  */
 export const LINE_CLASSES = {
-  trail: { color: TRAIL_LINE.over.color, under: TRAIL_LINE.under, dash: TRAIL_LINE.over.dash },
-  road: { color: DARK_GREY, dash: [10, 7.5] },
-  /** Short dashes as long as the line is wide read as dots at 2.5px (deck has no round dash caps). */
+  trail: { color: TRAIL_LINE.color, dash: [0, 0] },
+  road: { color: SAGE, dash: [10, 7.5] },
   useTrail: { color: SAGE, dash: [2.5, 6] },
-  solid: { color: DARK_GREY, dash: [0, 0] },
+  solid: { color: SAGE, dash: [0, 0] },
   /** Named routes: the Wally gradient (the route tool's ROUTE.start to ROUTE.end), solid, a pixel wider than a path. */
   route: { color: PURPLE, dash: [0, 0], gradient: [PURPLE, PINK], width: 3, casing: 5 },
 } as const satisfies Record<string, LineRecipe>;
+
+/** While a feature is selected, the rest of its layer fades to this share of its alpha. */
+export const SIBLING_FADE = 0.35;
+
+/** Compare delta lines by class: A only purple, B only pink, unchanged sage (never a dark grey line). */
+export const DELTA_LINE_COLORS = { "a-only": PURPLE, "b-only": PINK, both: SAGE } as const;
+
+/** A palette color asked for on a line: dark grey and ink read as sage, since no line core is ever dark. */
+export function lineColorFor(color: string): string {
+  const c = color.trim().toUpperCase();
+  return c === DARK_GREY || c === INK ? SAGE : c;
+}
 
 export type LineClass = keyof typeof LINE_CLASSES;
 
@@ -287,12 +296,8 @@ export const RAMPS = {
   remoteness: [OFF_WHITE, SAGE, DARK_GREY],
   /** Owner's board, hex tiles variant A: a plain gray ramp. */
   gray: [OFF_WHITE, DARK_GREY],
-  /** Score lines (trail popularity): sage → pink → purple. */
-  popularityLine: [SAGE, PINK, PURPLE],
-  /** Density-ramped lines: sage → purple → dark grey. */
-  densityLine: [SAGE, PURPLE, DARK_GREY],
-  /** Remoteness-ramped lines: sage → dark grey. */
-  remotenessLine: [SAGE, DARK_GREY],
+  /** Score and facet lines (trail popularity, difficulty): sage → pink → purple. Never dark grey on a line. */
+  scoreLine: [SAGE, PINK, PURPLE],
 } as const satisfies Record<string, readonly string[]>;
 export type RampName = keyof typeof RAMPS;
 
@@ -306,11 +311,12 @@ export function scoreRampFor(layerId: string): RampName {
   return "density";
 }
 
-/** Which ramp a score layer's lines use: its area ramp's line twin, which starts at sage instead of off-white. */
-export function lineRampFor(layerId: string): RampName {
-  if (layerId === "remoteness") return "remotenessLine";
-  if (layerId.startsWith("popularity")) return "popularityLine";
-  return "densityLine";
+/**
+ * Which ramp a layer's score lines use: sage → pink → purple for every layer (owner, 2026-10-14: no dark grey line
+ * cores), which starts at sage instead of off-white so the low end never reads as plain white on satellite.
+ */
+export function lineRampFor(_layerId: string): RampName {
+  return "scoreLine";
 }
 
 // ---- Symbols ----

@@ -22,7 +22,9 @@ import {
 } from "@/lib/render/hybridStyle";
 import { compareBaseId, compareBId, compareSideShown, effectiveMode } from "@/lib/render/compareView";
 import { hatchImage, hatchPatternId, HATCH_SCALE } from "@/lib/render/hatch";
-import { areaRecipe, DARK_GREY, isPaletteColor, LINE, SYMBOL, WHITE, type HatchColor } from "@/lib/render/palette";
+import { areaRecipe, isPaletteColor, LINE, LINE_CLASSES, lineColorFor, SYMBOL, WHITE, type HatchColor } from "@/lib/render/palette";
+import { lineEntries, lineLayerSpecs, LINES_PREFIX, lineSourceData, lineSourceId, type LineEntry } from "@/lib/render/nativeLines";
+import { routeBeforeId } from "@/components/routeLayers";
 import { rampColor, rgbaString } from "@/lib/render/ramp";
 import { rasterPaint } from "@/lib/render/rasterCalm";
 import { featureCenter } from "@/lib/render/inspect";
@@ -66,7 +68,7 @@ export function vectorHatchPattern(id: string, color?: string): string {
 
 /**
  * The Mapbox layers that draw one vector tile layer: for polygons a tint (fading with zoom), a hatch, then an outline
- * over a white casing; lines dark grey over a white casing; points off-white circles stroked dark grey. Every layer
+ * over a white casing; lines sage over a white casing (never a dark grey line core); points off-white circles stroked dark grey. Every layer
  * reads source `tiles-<id>`; picking queries `tiles-<id>` (the tint, the line core or the circles).
  */
 export function vectorTileLayerSpecs(
@@ -132,7 +134,7 @@ export function vectorTileLayerSpecs(
         type: "line",
         ...common,
         layout: lineLayout,
-        paint: { "line-color": requested ?? DARK_GREY, "line-width": LINE.width, "line-opacity": opacity },
+        paint: { "line-color": requested ? lineColorFor(requested) : LINE_CLASSES.solid.color, "line-width": LINE.width, "line-opacity": opacity },
       },
     ];
   }
@@ -456,6 +458,101 @@ export function syncHeatLayers(map: MapboxMap, state: MapState): void {
       uploaded.delete(sourceId);
     }
   }
+}
+
+/* ---------- Native data lines (lib/render/nativeLines.ts) ---------- */
+
+/** Per map: the collection each line source last received, the spec each line layer last got, and the entries drawn. */
+const lineUploads = new WeakMap<MapboxMap, Map<string, FeatureCollection>>();
+const lineApplied = new WeakMap<MapboxMap, Map<string, LineLayerSpecification>>();
+const linesDrawn = new WeakMap<MapboxMap, Map<string, LineEntry>>();
+
+/** The line entries the map draws right now, by drawn id (what a click on a native line maps back into). */
+export function drawnLineEntries(map: MapboxMap): ReadonlyMap<string, LineEntry> {
+  return linesDrawn.get(map) ?? new Map();
+}
+
+/**
+ * Where data lines go: under the route tool's lines when a route is on the map, else where routes go (above the
+ * style's roads, under its labels: routeBeforeId). Vector tile areas and heatmaps sit lower, under the roads.
+ */
+export function lineBeforeId(styleLayers: readonly { id: string; type: string }[]): string | undefined {
+  return styleLayers.find((l) => l.id.startsWith("route-"))?.id ?? routeBeforeId(styleLayers);
+}
+
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * Makes the map's native line sources and layers match `lineEntries(view)`, where `view` is the visible state (filters,
+ * time window and compare applied, lib/render/view.ts). A source gets `setData` only when its collection changed (the
+ * collections are memoized per data object, so a pan or a selection uploads nothing); a selection, opacity or toggle
+ * flip only sets the paint, filter and visibility that changed. Layers keep render-op order. No-op until the style
+ * has loaded; the map calls it again on `style.load` because a style swap drops every source and layer.
+ */
+export function syncLineLayers(map: MapboxMap, view: MapState): void {
+  const style = loadedStyle(map);
+  if (!style) return;
+  let uploaded = lineUploads.get(map);
+  let applied = lineApplied.get(map);
+  if (!uploaded || !applied) {
+    uploaded = new Map();
+    applied = new Map();
+    lineUploads.set(map, uploaded);
+    lineApplied.set(map, applied);
+  }
+  const beforeId = lineBeforeId(style.layers);
+  const entries = lineEntries(view);
+  const wantedSources = new Set<string>();
+  const order: string[] = [];
+  for (const entry of entries) {
+    const sourceId = lineSourceId(entry.id);
+    wantedSources.add(sourceId);
+    const data = lineSourceData(entry);
+    const source = map.getSource(sourceId) as GeoJSONSource | undefined;
+    if (!source) map.addSource(sourceId, { type: "geojson", data, lineMetrics: true });
+    else if (uploaded.get(sourceId) !== data) source.setData(data);
+    uploaded.set(sourceId, data);
+    for (const spec of lineLayerSpecs(entry)) {
+      order.push(spec.id);
+      const before = applied.get(spec.id);
+      if (!map.getLayer(spec.id)) {
+        map.addLayer(spec, beforeId);
+      } else if (before && !sameJson(before, spec)) {
+        const paint = { ...before.paint, ...spec.paint } as Record<string, unknown>;
+        for (const key of Object.keys(paint)) {
+          const next = (spec.paint as Record<string, unknown> | undefined)?.[key];
+          const prev = (before.paint as Record<string, unknown> | undefined)?.[key];
+          if (!sameJson(prev, next)) map.setPaintProperty(spec.id, key as never, next as never);
+        }
+        if (!sameJson(before.filter, spec.filter)) map.setFilter(spec.id, spec.filter ?? null);
+        if (before.layout?.visibility !== spec.layout?.visibility) map.setLayoutProperty(spec.id, "visibility", spec.layout?.visibility ?? "visible");
+      }
+      applied.set(spec.id, spec);
+    }
+  }
+  const wanted = new Set(order);
+  for (const layer of style.layers) {
+    if (layer.id.startsWith(LINES_PREFIX) && !wanted.has(layer.id) && map.getLayer(layer.id)) {
+      map.removeLayer(layer.id);
+      applied.delete(layer.id);
+    }
+  }
+  for (const sourceId of Object.keys(style.sources)) {
+    if (sourceId.startsWith(LINES_PREFIX) && !wantedSources.has(sourceId) && map.getSource(sourceId)) {
+      map.removeSource(sourceId);
+      uploaded.delete(sourceId);
+    }
+  }
+  // Render-op order, bottom first: move only when the drawn order differs (a reorder in the layer panel).
+  const after = loadedStyle(map)?.layers ?? [];
+  const current = after.map((l) => l.id).filter((id) => wanted.has(id));
+  if (!sameJson(current, order)) {
+    const target = lineBeforeId(after);
+    for (const id of order) map.moveLayer(id, target);
+  }
+  linesDrawn.set(map, new Map(entries.map((e) => [e.id, e])));
 }
 
 const SATELLITE_ID = "wildmap-satellite";

@@ -15,7 +15,7 @@ import {
   vectorHatchPattern,
   vectorTileLayerSpecs,
 } from "@/components/mapTiles";
-import { DARK_GREY, OFF_WHITE, PURPLE, SAGE, WHITE } from "@/lib/render/palette";
+import { DARK_GREY, OFF_WHITE, PINK, PURPLE, SAGE, WHITE } from "@/lib/render/palette";
 import { hexToRgb, lightness } from "@/lib/render/ramp";
 import type { LayerResult, StyleHints } from "@/layers/types";
 import { buildDeckLayerSets } from "@/lib/render/deck";
@@ -71,11 +71,15 @@ describe("vectorTileLayerSpecs", () => {
     }
   });
 
-  it("draws lines dark grey over a white casing", () => {
+  // Owner, 2026-10-14: no dark grey line cores anywhere; vector tile lines are sage like every data line.
+  it("draws lines sage over a white casing", () => {
     const specs = vectorTileLayerSpecs("roads", { geometry: "line", color: "#123456" }, "roads", "line", true);
     expect(specs.map((s) => s.id)).toEqual(["tiles-roads-casing", "tiles-roads"]);
     expect(specs[0]).toMatchObject({ type: "line", paint: { "line-color": WHITE, "line-width": 4.5 } });
-    expect(specs[1]).toMatchObject({ type: "line", "source-layer": "roads", paint: { "line-color": DARK_GREY, "line-width": 2.5 } });
+    expect(specs[1]).toMatchObject({ type: "line", "source-layer": "roads", paint: { "line-color": SAGE, "line-width": 2.5 } });
+    // A requested dark grey reads as sage too; other palette colors stand.
+    expect(vectorTileLayerSpecs("roads", { geometry: "line", color: "#123456" }, "roads", "line", true, { color: DARK_GREY })[1].paint).toMatchObject({ "line-color": SAGE });
+    expect(vectorTileLayerSpecs("roads", { geometry: "line", color: "#123456" }, "roads", "line", true, { color: PINK })[1].paint).toMatchObject({ "line-color": PINK });
   });
 
   it("draws points as off-white circles stroked dark grey", () => {

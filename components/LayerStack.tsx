@@ -26,7 +26,7 @@ import { rasterKeyFilter } from "@/lib/render/rasterCalm";
 import { currentScenarioValue, scenarioOf, scenarioValueText } from "@/lib/render/scenario";
 import { COMPARE_COLORS, compareBId, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
 import { hexbinThreshold } from "@/lib/render/deck";
-import { isRouteProperties, WHITE } from "@/lib/render/palette";
+import { DELTA_LINE_COLORS, isRouteProperties, LINE, WHITE } from "@/lib/render/palette";
 import { POINT_MODES, type LoadedLayer, type MapAction, type MapState, type RenderMode, type RenderOp, type Selection, type TimeState } from "@/lib/render/state";
 import { hasMissingImage, missingTilesStore } from "@/lib/render/tileErrors";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
@@ -140,9 +140,11 @@ export function selectionSwatch(state: MapState, selection: Selection, layer: Lo
     const cls: unknown = feature.properties?.delta;
     const color = cls === "a-only" ? COMPARE_COLORS.a : cls === "b-only" ? COMPARE_COLORS.b : COMPARE_COLORS.both;
     const area = feature.geometry?.type === "Polygon" || feature.geometry?.type === "MultiPolygon";
+    // Unchanged lines draw sage, never a dark grey line (DELTA_LINE_COLORS); unchanged areas keep the dark grey outline.
+    const lineColor = cls === "a-only" || cls === "b-only" ? DELTA_LINE_COLORS[cls] : DELTA_LINE_COLORS.both;
     return area
       ? { kind: "area", tint: color, tintAlpha: DELTA_FILL_ALPHA, hatch: color, hatchAlpha: 0, spacing: 0, outline: color, casing: WHITE }
-      : { kind: "line", color, dash: [0, 0], casing: WHITE, width: 2.5, casingWidth: 4.5 };
+      : { kind: "line", color: lineColor, dash: [0, 0], casing: WHITE, width: LINE.width, casingWidth: LINE.casing };
   }
   // Point sprites keep their own look on both sides; lines and areas take the side's color.
   if (mode && op?.mode !== "points") return layerLegend(layer, op, feature, selection.side === "b" ? COMPARE_COLORS.b : COMPARE_COLORS.a);

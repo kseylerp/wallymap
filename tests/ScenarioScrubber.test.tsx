@@ -71,6 +71,15 @@ describe("ScenarioScrubber", () => {
     expect(seen.state.scenario?.playing).toBe(false);
   });
 
+  it("steps aside while a scenario compare is on the layer", () => {
+    const compared = reduce(start, {
+      type: "set_compare",
+      compare: { layerId: "sea-level-rise", a: ["", ""], b: ["", ""], mode: "swipe", scenario: { a: 1, b: 5 } },
+    });
+    const { container } = render(<ScenarioScrubbers state={compared} dispatch={() => {}} />);
+    expect(container.innerHTML).toBe("");
+  });
+
   it("renders nothing without a scenario layer", () => {
     const { container } = render(<ScenarioScrubbers state={initialMapState} dispatch={() => {}} />);
     expect(container.innerHTML).toBe("");

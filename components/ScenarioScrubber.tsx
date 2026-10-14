@@ -27,9 +27,13 @@ export function scenarioLayers(layers: MapState["layers"]): LoadedLayer[] {
     .sort((a, b) => Date.parse(a.receivedAt) - Date.parse(b.receivedAt));
 }
 
-/** One scrubber per loaded scenario layer, for the data console's scenario slot; nothing when there is none. */
-export function ScenarioScrubbers({ state, dispatch }: { state: Pick<MapState, "layers" | "scenario">; dispatch: (action: MapAction) => void }) {
-  const layers = scenarioLayers(state.layers);
+/**
+ * One scrubber per loaded scenario layer, for the data console's scenario slot; nothing when there is none. A layer
+ * under a scenario compare has none: the compare's A and B amounts are what the map shows.
+ */
+export function ScenarioScrubbers({ state, dispatch }: { state: Pick<MapState, "layers" | "scenario" | "compare">; dispatch: (action: MapAction) => void }) {
+  const compared = state.compare?.scenario ? state.compare.layerId : undefined;
+  const layers = scenarioLayers(state.layers).filter((l) => l.id !== compared);
   if (layers.length === 0) return null;
   return (
     <>

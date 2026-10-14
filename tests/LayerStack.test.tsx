@@ -91,7 +91,7 @@ describe("LayerStack", () => {
     fireEvent.change(slider, { target: { value: "0.35" } });
     expect(spy).toHaveBeenCalledWith({ type: "set_opacity", layerId: "osm-trails", opacity: 0.35 });
     expect(slider.value).toBe("0.35");
-    expect(within(screen.getAllByTestId("layer-card")[0]).getByText("35%")).toBeTruthy();
+    expect(slider.getAttribute("aria-valuetext")).toBe("35%");
   });
 
   it("gives the opacity slider a visible keyboard focus ring on its thumb", () => {
@@ -610,41 +610,27 @@ describe("LayerStack: closing layers and the measure threshold (owner feedback)"
     expect(screen.getAllByTestId("layer-card")).toHaveLength(1);
   });
 
-  it("replaces opacity with a minimum on the measure (acres, which v copies) through the filters engine", () => {
+  it("has no generic Value slider: a facet slider in the layer's unit filters, and a small opacity stays (owner, Moab)", () => {
     const spy = vi.fn();
-    render(<Panel spy={spy} layers={[fires, trails]} />);
+    const facetFires: LoadedLayer = { ...fires, style: { ...fires.style, facets: [{ key: "acres", label: "Burned area", kind: "range", unit: "acres", encode: "size" }] } };
+    render(<Panel spy={spy} layers={[facetFires, trails]} />);
     const card = screen.getAllByTestId("layer-card").find((c) => c.getAttribute("data-layer-id") === "fire-perimeters")!;
-    expect(within(card).queryByRole("slider", { name: /Opacity/ })).toBeNull();
-    const slider = within(card).getByRole("slider", { name: "Minimum acres for Wildfire perimeters" }) as HTMLInputElement;
-    expect(slider.getAttribute("aria-valuetext")).toBe("All");
-    // Skewed acres take the cubic curve: the middle of the track is an eighth of the span, not half.
-    fireEvent.change(slider, { target: { value: "500" } });
+    expect(within(card).queryByTestId("measure-slider")).toBeNull();
+    expect(card.textContent).not.toMatch(/Value ≥/);
+    // The facet is always visible, outside the hover-only controls, labelled in the layer's words.
+    const facets = within(card).getByTestId("facet-controls");
+    expect(facets.closest(".legend-controls")).toBeNull();
+    expect(facets.textContent).toContain("Burned area");
+    fireEvent.change(within(facets).getByRole("slider", { name: "Burned area from" }), { target: { value: "1000" } });
     const last = spy.mock.calls.at(-1)?.[0] as MapAction & { type: "set_filters" };
-    expect(last.type).toBe("set_filters");
-    // v copies acres, so the slider sets the same filter as the panel's Acres range: the two cannot contradict.
-    expect(last.filters.v).toBeUndefined();
-    const lo = last.filters.acres?.range?.[0] ?? 0;
-    expect(lo).toBe(Math.round(50 + (380_000 - 50) * 0.125));
+    expect(last).toMatchObject({ type: "set_filters", layerId: "fire-perimeters" });
+    expect(last.filters.acres?.range?.[0]).toBe(1000);
     expect(last.filters.acres?.range?.[1]).toBe(380_000);
-    expect(within(card).getByTestId("layer-count").textContent).toBe("2 / 7");
-    expect(slider.getAttribute("aria-valuetext")).toBe(`≥ ${lo.toLocaleString("en-US")} acres`);
-    // The filter summary has its own ×, which clears every filter.
-    fireEvent.click(within(card).getByRole("button", { name: "Remove filters on Wildfire perimeters" }));
-    expect(spy).toHaveBeenLastCalledWith({ type: "set_filters", layerId: "fire-perimeters", filters: {} });
-    expect(within(card).getByTestId("layer-count").textContent).toBe("7");
-    // Layers without a numeric v keep the opacity fader, and set_opacity still works.
-    const trailsCard = screen.getAllByTestId("layer-card").find((c) => c.getAttribute("data-layer-id") === "osm-trails")!;
-    fireEvent.change(within(trailsCard).getByRole("slider", { name: "Opacity for OSM trails" }), { target: { value: "0.5" } });
-    expect(spy).toHaveBeenLastCalledWith({ type: "set_opacity", layerId: "osm-trails", opacity: 0.5 });
-  });
-
-  it("drops the v filter when the slider returns to the data minimum", () => {
-    const spy = vi.fn();
-    render(<Panel spy={spy} layers={[fires]} />);
-    const slider = screen.getByRole("slider", { name: "Minimum acres for Wildfire perimeters" });
-    fireEvent.change(slider, { target: { value: "800" } });
-    fireEvent.change(slider, { target: { value: "0" } });
-    expect(spy).toHaveBeenLastCalledWith({ type: "set_filters", layerId: "fire-perimeters", filters: {} });
-    expect(screen.getByTestId("layer-count").textContent).toBe("7");
+    expect(within(card).getByTestId("layer-count").textContent).toBe("4 / 7");
+    // Opacity: a 24px hairline slider at the row's end, on every layer.
+    const opacity = within(card).getByRole("slider", { name: "Opacity for Wildfire perimeters" });
+    expect(opacity.className).toContain("w-6");
+    fireEvent.change(opacity, { target: { value: "0.5" } });
+    expect(spy).toHaveBeenLastCalledWith({ type: "set_opacity", layerId: "fire-perimeters", opacity: 0.5 });
   });
 });

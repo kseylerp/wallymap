@@ -1,5 +1,6 @@
 import type { Geometry, GeoJsonProperties, Position } from "geojson";
-import type { BBox, Citation, LayerError, LayerResult, StyleHints, TileTime } from "@/layers/types";
+import type { BBox, Citation, FieldHelp, LayerError, LayerResult, StyleHints, TileTime } from "@/layers/types";
+import { declaredGroups, facetValueKey } from "@/lib/render/facets";
 import { formatValue } from "@/lib/format";
 
 /** The key the few sample features go under, so the model reads them as examples and never quotes them as the range. */
@@ -61,6 +62,19 @@ export type GeojsonSummary = {
   truncated?: true;
   /** With truncated: what was ranked out and how the kept features were chosen; the note says so in one clause. */
   rankedOut?: string;
+  /** The layer's facets (spec §12a): the property render.filters takes, and each label's values with its count here. */
+  facets?: FacetSummary[];
+  /** What the layer's numbers and codes mean (spec §12b), by property: the note explains a score in these words. */
+  help?: Record<string, string>;
+};
+
+/** A facet as the model sees it: `values` maps each chip label to the raw values render.filters includes. */
+export type FacetSummary = {
+  key: string;
+  label: string;
+  kind: "category" | "range";
+  values?: { label: string; include: string[]; count: number }[];
+  unit?: string;
 };
 
 export type TilesSummary = {
@@ -359,7 +373,39 @@ export function drawnYearsOf(url: string): string | undefined {
 }
 
 /** What the summary reads from a layer's style: v's unit, the date field and the geometry. */
-export type SummaryStyle = Partial<Pick<StyleHints, "unit" | "timeField" | "geometry">>;
+export type SummaryStyle = Partial<Pick<StyleHints, "unit" | "timeField" | "geometry" | "facets">>;
+
+/** The facets of a result: category labels with the raw values they stand for and their counts (zero counts left out). */
+function facetSummaries(style: SummaryStyle, features: { properties: GeoJsonProperties }[]): FacetSummary[] | undefined {
+  const facets = style.facets ?? [];
+  if (facets.length === 0) return undefined;
+  return facets.map((facet): FacetSummary => {
+    const base = { key: facet.key, label: facet.label, kind: facet.kind, ...(facet.unit && { unit: facet.unit }) };
+    if (facet.kind !== "category") return base;
+    const counts = new Map<string, number>();
+    for (const f of features) {
+      const key = facetValueKey(f.properties?.[facet.key]);
+      if (key !== undefined) counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const values = declaredGroups(facet)
+      .map((g) => ({ label: g.label, include: g.values, count: g.values.reduce((n, v) => n + (counts.get(v) ?? 0), 0) }))
+      .filter((g) => g.count > 0);
+    return { ...base, values };
+  });
+}
+
+/** Help for `v` and the facet keys, as one line each: the sentence, then its scale and source. */
+function helpLines(help: Record<string, FieldHelp> | undefined, style: SummaryStyle): Record<string, string> | undefined {
+  if (!help) return undefined;
+  const keys = new Set(["v", ...(style.facets ?? []).map((f) => f.key)]);
+  const out: Record<string, string> = {};
+  for (const key of keys) {
+    const h = help[key];
+    if (!h) continue;
+    out[key] = [h.text, h.scale && `Scale: ${h.scale}.`, h.source && `Source: ${h.source}.`].filter(Boolean).join(" ");
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
 
 /**
  * A small, model-sized view of a layer response: counts, extent, statistics of v over every feature, the dates the
@@ -371,6 +417,7 @@ export function summarizeLayerResult(
   body: LayerResult | LayerError,
   layerId?: string,
   style: SummaryStyle = {},
+  fieldHelp?: Record<string, FieldHelp>,
 ): LayerResultSummary | LayerError {
   if ("error" in body) return body;
 
@@ -419,6 +466,8 @@ export function summarizeLayerResult(
   const polygons = (geometryTypes.Polygon ?? 0) + (geometryTypes.MultiPolygon ?? 0);
   const totalLengthKm = lines > 0 ? round(features.reduce((km, f) => km + lineLengthKm(f.geometry), 0)) : undefined;
   const areaUnit = style.unit !== undefined && AREA_UNITS.has(style.unit) ? style.unit : undefined;
+  const facets = facetSummaries(style, features);
+  const help = helpLines(fieldHelp, style);
   return {
     kind: "geojson",
     featureCount: features.length,
@@ -433,6 +482,8 @@ export function summarizeLayerResult(
     citation: body.citation,
     ...(body.coverageNote !== undefined && { coverageNote: body.coverageNote }),
     ...truncationOf(body),
+    ...(facets !== undefined && { facets }),
+    ...(help !== undefined && { help }),
   };
 }
 

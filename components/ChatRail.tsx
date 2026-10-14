@@ -435,6 +435,12 @@ export function ChatRail({
         if (!isToolUIPart(part) || part.state !== "output-available" || part.preliminary) continue;
         if (applied.has(part.toolCallId)) continue;
         applied.add(part.toolCallId);
+        // Each answer is a turn: the first result of a new answer forgets the last turn's named place, so a "here"
+        // question never moves the camera to it.
+        if (!applied.has(`turn:${message.id}`)) {
+          applied.add(`turn:${message.id}`);
+          actions.push({ type: "turn_start" });
+        }
         // A geocode moves the camera itself unless the model frames the place with set_view in the same step.
         const context = { setViewFollows: setViewFollowsInStep(message.parts, index) };
         const next = toolResultToActions(getToolName(part), part.input, part.output, canvas, catalog, ops, context);

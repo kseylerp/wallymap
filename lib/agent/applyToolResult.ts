@@ -1,12 +1,13 @@
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
-import type { BBox, LayerResult, StyleHints } from "@/layers/types";
+import type { BBox, CardSpec, FieldHelp, LayerResult, StyleHints } from "@/layers/types";
 import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import type { LayerFilters } from "@/lib/render/filters";
 import { ROUTE_ERROR_ID } from "@/lib/render/reducer";
-import { RENDER_MODES, type Basemap, type CompareState, type MapAction, type RenderMode, type RenderOp, type RouteState, type TimeMode, type Viewport } from "@/lib/render/state";
+import { repairToolName } from "@/lib/agent/toolNames";
+import { RENDER_MODES, VIEW_KINDS, type ViewKind, type Basemap, type CompareState, type MapAction, type RenderMode, type RenderOp, type RouteState, type TimeMode, type Viewport } from "@/lib/render/state";
 
 /** Layer titles and styles by id, fetched by the browser from `GET /api/layers`. */
-export type LayerCatalog = Record<string, { title: string; style: StyleHints; license?: string }>;
+export type LayerCatalog = Record<string, { title: string; style: StyleHints; license?: string; fieldHelp?: Record<string, FieldHelp>; card?: CardSpec }>;
 
 /** The map canvas size, and the screen area a fitted bbox must stay clear of (floating panels). */
 type Canvas = { width: number; height: number; padding?: Padding };
@@ -104,6 +105,8 @@ function renderActions(output: Obj, catalog: LayerCatalog): MapAction[] {
   // Filters replace the layer's current ones ({} clears them); without them the panel's filters stay.
   const filters = parseFilters(output.filters);
   if (filters) op.filters = filters;
+  // The standard view the agent named (spec §12); without one the reducer picks it from the data on a new layer.
+  if (VIEW_KINDS.includes(output.view as ViewKind)) op.view = output.view as ViewKind;
   const actions: MapAction[] = [asked ? { type: "render", op } : { type: "render", op, defaultMode: true }];
   // `scenario` moves a scenario layer's scrubber (sea level rise feet); the reducer snaps it and ignores other layers.
   if (isNumber(output.scenario)) actions.push({ type: "set_scenario", layerId, value: output.scenario });
@@ -126,6 +129,8 @@ function queryActions(layerId: string, output: Obj, catalog: LayerCatalog, exist
         style,
         result: output,
         receivedAt: new Date().toISOString(),
+        ...(entry?.fieldHelp && { fieldHelp: entry.fieldHelp }),
+        ...(entry?.card && { card: entry.card }),
       },
     },
   ];
@@ -267,12 +272,31 @@ function compareActions(output: Obj): MapAction[] {
 }
 
 /**
- * A successful `geocode` result: the user named a place, so the camera fits its bbox. An error, or a result without a
- * bbox, moves nothing.
+ * A successful `geocode` result: the user named a place. The camera does not jump to the geocoded region (spec §12): it
+ * fits the features this turn's queries return for the place, or the place's bbox when nothing drawable comes back
+ * (the reducer's `place`). An error, or a result without a bbox, names nothing.
  */
-function geocodeActions(output: Obj, canvas: Canvas): MapAction[] {
+function geocodeActions(output: Obj): MapAction[] {
   if (typeof output.error === "string" || !isBBox(output.bbox)) return [];
-  return setViewActions({ bbox: output.bbox }, canvas);
+  return [{ type: "place_named", bbox: output.bbox }];
+}
+
+/** The tools that are not layer queries, for canonicalToolName. */
+export const FIXED_TOOL_NAMES = ["list_layers", "geocode", "set_view", "set_basemap", "render", "set_time", "compare", "route", "note"] as const;
+
+/**
+ * The tool a finished call really is: a name with chat-template junk on it (`query_climbing<|channel|>commentary`)
+ * becomes the one tool it means among the fixed tools and the catalog's query tools, so the result lands on the
+ * canonical layer id and no phantom layer row appears. A name that means no tool is returned unchanged.
+ */
+export function canonicalToolName(name: string, catalog: LayerCatalog): string {
+  const known = [...FIXED_TOOL_NAMES, ...Object.keys(catalog).map((id) => `${QUERY_PREFIX}${id}`)];
+  return repairToolName(name, known) ?? name;
+}
+
+/** A layer id from a query tool name stripped of junk the catalog cannot check (no catalog yet): `climbing<|...` → `climbing`. */
+function cleanLayerId(id: string): string {
+  return id.replace(/<\|[\s\S]*$/, "").trim();
 }
 
 /**
@@ -312,18 +336,27 @@ export function toolResultToActions(
   // `input` is accepted for symmetry with the tool part; every mapped tool echoes what it needs in `output`.
   void input;
   if (!isObject(output)) return [];
-  if (toolName.startsWith(QUERY_PREFIX)) {
-    return queryActions(toolName.slice(QUERY_PREFIX.length), output, catalog, existingOps);
+  const name = canonicalToolName(toolName, catalog);
+  if (name.startsWith(QUERY_PREFIX)) {
+    const layerId = cleanLayerId(name.slice(QUERY_PREFIX.length));
+    return layerId === "" ? [] : queryActions(layerId, output, catalog, existingOps);
   }
-  switch (toolName) {
+  switch (name) {
     case "geocode":
-      return context.setViewFollows ? [] : geocodeActions(output, canvas);
+      return context.setViewFollows ? [] : geocodeActions(output);
     case "set_view":
-      return setViewActions(output, canvas);
+      // The agent framed the view itself: this turn's results stop moving the camera.
+    {
+      const moves = setViewActions(output, canvas);
+      return moves.some((a) => a.type === "set_view") ? [...moves, { type: "place_framed" }] : moves;
+    }
+    case "note":
+      // The answer is written: a named place nothing was fitted to yet gets the camera now.
+      return [{ type: "place_settle" }];
     case "set_basemap":
       return BASEMAPS.includes(output.style as Basemap) ? [{ type: "set_basemap", basemap: output.style as Basemap }] : [];
     case "render":
-      return renderActions(output, catalog);
+      return renderActions({ ...output, layerId: typeof output.layerId === "string" ? cleanLayerId(output.layerId) : output.layerId }, catalog);
     case "route":
       return routeActions(output, canvas);
     case "set_time":

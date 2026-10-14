@@ -320,7 +320,15 @@ export async function restoreFromPermalink(
     const style = entry?.style ?? FALLBACK_STYLE;
     dispatch({
       type: "layer_loaded",
-      layer: { id: layer.id, title: entry?.title ?? layer.id, style, result, receivedAt: new Date().toISOString() },
+      layer: {
+        id: layer.id,
+        title: entry?.title ?? layer.id,
+        style,
+        result,
+        receivedAt: new Date().toISOString(),
+        ...(entry?.fieldHelp && { fieldHelp: entry.fieldHelp }),
+        ...(entry?.card && { card: entry.card }),
+      },
     });
     // A link without a mode takes the layer's default from its hints, as a fresh query would.
     dispatch({

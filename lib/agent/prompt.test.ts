@@ -62,6 +62,10 @@ const REQUIRED = [
   "When a result is truncated (truncated: true), the note says so in one clause and ranks by the field used, from its coverageNote and rankedOut (for example, the 2,000 largest of 4,512 by capacity in MW), and takes its numbers from what was kept.",
   "Scenario layers (sea level rise) are explored with the scenario scrubber or compare between two amounts, never by re-querying per amount; a scenario is not a date, so never call set_time on it (1 foot of sea level rise is about 2050), and for how fast the sea is rising, use sea-level-trends.",
   "Never shrink the box yourself when a wide result came back: a truncated result already answers the whole area asked about, so do not re-query a smaller slice of it.",
+  "Every answer is drawn as one standard view; name it with render.view on the main layer: change for then vs now or what changed (two versions or two dates of one layer), timeline for dated features over time, ranked for the largest, most, deepest, highest or how full, density for where there are the most or hotspots, detail for one thing (tell me about, how deep is), scenario for a scenario amount, route for a route.",
+  "A change view opens the compare on its own, fitted to both versions: for monuments then and now, render monuments with view change (2021 against current) and give both areaKm2 and the difference; do not call compare for it.",
+  "A ranked view sizes the symbols by the layer's measure and keeps the top ten on its slider: name the top three to six with their numbers and units, and explain a score in plain words from the layer's description (what it measures, who computed it, its scale).",
+  "Facets are a layer's own filters (difficulty, class, grade, kind): when the user names a facet value (hard mountain bike trails, alpine routes, current boundary), pass it in render.filters on the facet's property, never re-query to filter.",
 ];
 
 describe("SYSTEM_PROMPT", () => {
@@ -101,5 +105,11 @@ describe("SYSTEM_PROMPT geocode and stats rules (the owner's Wind River glaciers
   it("describes the summary's samples as not representative, never as the source of numbers", () => {
     expect(SYSTEM_PROMPT).not.toContain("sample properties");
     expect(SYSTEM_PROMPT).toContain("a few samples that are not representative");
+  });
+});
+
+describe("SYSTEM_PROMPT standard views (spec §12)", () => {
+  it("names all seven views and when to use each", () => {
+    for (const view of ["change", "timeline", "ranked", "density", "detail", "scenario", "route"]) expect(SYSTEM_PROMPT).toContain(` ${view} for `);
   });
 });

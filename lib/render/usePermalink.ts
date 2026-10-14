@@ -23,8 +23,10 @@ async function fetchCatalog(): Promise<LayerCatalog> {
   try {
     const res = await fetch("/api/layers");
     if (!res.ok) return {};
-    const entries = (await res.json()) as { id: string; title: string; style: LayerCatalog[string]["style"]; license?: string }[];
-    return Object.fromEntries(entries.map((e) => [e.id, { title: e.title, style: e.style, license: e.license }]));
+    const entries = (await res.json()) as ({ id: string } & LayerCatalog[string])[];
+    return Object.fromEntries(
+      entries.map((e) => [e.id, { title: e.title, style: e.style, license: e.license, ...(e.fieldHelp && { fieldHelp: e.fieldHelp }), ...(e.card && { card: e.card }) }]),
+    );
   } catch {
     return {};
   }

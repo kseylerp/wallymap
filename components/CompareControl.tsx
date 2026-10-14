@@ -5,6 +5,7 @@ import { compareSummary, presetFor, type CompareMode } from "@/lib/render/compar
 import {
   COMPARE_COLORS,
   compareHidden,
+  compareSides,
   compareSideText,
   defaultCompare,
   effectiveMode,
@@ -18,6 +19,9 @@ import {
 import type { CompareState, LoadedLayer, MapAction, MapState } from "@/lib/render/state";
 import { scenarioOf, scenarioValueText } from "@/lib/render/scenario";
 import { visibleState } from "@/lib/render/view";
+import { DELTA_COLORS } from "@/lib/render/palette";
+import { changeMeasures } from "@/lib/render/views";
+import { formatValue } from "@/lib/format";
 
 /** Toggle mode flips A and B this often (spec §7: 1 Hz). */
 export const FLIP_MS = 1000;
@@ -210,6 +214,16 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
   const drawn = mode === "delta" ? visibleState(state).layers[compare.layerId] : undefined;
   const deltaData = drawn?.result.kind === "geojson" ? drawn.result.data : null;
   const summary = useMemo(() => (deltaData ? compareSummary(deltaData) : null), [deltaData]);
+  // Both sides' totals and the difference (spec §12 change view): areas for monuments, the measure, or counts.
+  const filters = state.renderOps.find((op) => op.layerId === compare.layerId)?.filters;
+  const measures = useMemo(() => {
+    if (layer.result.kind !== "geojson") return null;
+    const sides = compareSides(layer, filters, compare, false);
+    if (sides.a.result.kind !== "geojson" || sides.b.result.kind !== "geojson") return null;
+    return changeMeasures(layer, sides.a.result.data, sides.b.result.data);
+  }, [layer, filters, compare]);
+  // In delta, A only (lost) is pink and B only (gained) purple (spec §12); swipe and toggle keep A purple, B pink.
+  const sideColor = (which: "a" | "b") => (mode === "delta" ? (which === "a" ? DELTA_COLORS["a-only"] : DELTA_COLORS["b-only"]) : COMPARE_COLORS[which]);
 
   const set = (next: Partial<CompareState>) => {
     const { side: _side, ...rest } = compare;
@@ -311,7 +325,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
   const sideRow = (which: "a" | "b") => {
     const w = compare[which];
     const label = which === "a" ? compare.aLabel : compare.bLabel;
-    const color = which === "a" ? COMPARE_COLORS.a : COMPARE_COLORS.b;
+    const color = sideColor(which);
     const name = which.toUpperCase();
     return (
       // 280px of console: the two dates fill the row, so an agent's label for the side gets its own line under them.
@@ -319,7 +333,12 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
         <div className="flex min-w-0 items-center gap-1.5">
           <Swatch color={color} />
           <span className="w-3 shrink-0 text-[12px] font-medium text-ink">{name}</span>
-          {contract ? (
+          {compare.by ? (
+            // A compare by version names its side (2021 boundary); there are no dates to edit.
+            <span className="min-w-0 truncate text-[12px] text-ink" data-testid={`compare-version-${which}`}>
+              {compareSideText(compare, which, layer)}
+            </span>
+          ) : contract ? (
             <>
               {amountField(which)}
               <span className="min-w-0 truncate text-[11.5px] text-ink-muted">{contract.label}</span>
@@ -334,7 +353,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
             </>
           )}
         </div>
-        {label && (
+        {label && !compare.by && (
           <p className="truncate pl-[34px] text-[11.5px] leading-4 text-ink-muted" title={label}>
             {label}
           </p>
@@ -482,25 +501,49 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
 
           <ul aria-label="Legend" className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-ink-muted">
             <li className="flex items-center gap-1.5">
-              <Swatch color={COMPARE_COLORS.a} />
-              A only{summary && <span className="text-ink tabular-nums">{summary.aOnly.toLocaleString()}</span>}
+              <Swatch color={sideColor("a")} />
+              {mode === "delta" ? `only ${compareSideText(compare, "a", layer)}` : "A only"}
+              {summary && <span className="text-ink tabular-nums">{summary.aOnly.toLocaleString()}</span>}
             </li>
             <li className="flex items-center gap-1.5">
-              <Swatch color={COMPARE_COLORS.b} />
-              B only{summary && <span className="text-ink tabular-nums">{summary.bOnly.toLocaleString()}</span>}
+              <Swatch color={sideColor("b")} />
+              {mode === "delta" ? `only ${compareSideText(compare, "b", layer)}` : "B only"}
+              {summary && <span className="text-ink tabular-nums">{summary.bOnly.toLocaleString()}</span>}
             </li>
             <li className="flex items-center gap-1.5">
-              <Swatch color={COMPARE_COLORS.both} />
+              <Swatch color={mode === "delta" ? DELTA_COLORS.both : COMPARE_COLORS.both} />
               both{summary && <span className="text-ink tabular-nums">{summary.both.toLocaleString()}</span>}
             </li>
             {mode !== "delta" && (
               <li className="ml-auto text-[11px]">{mode === "swipe" ? "Drag the handle" : "Space pauses"}</li>
             )}
           </ul>
+          {measures && <ChangeLine compare={compare} layer={layer} measures={measures} />}
         </div>
       </div>
       <div aria-hidden className="hairline mx-5" />
     </>
+  );
+}
+
+/** "2021 boundary 5,944 km² · Current boundary 487 km² · difference −5,457 km²": both values and the difference. */
+export function changeText(aText: string, bText: string, m: ReturnType<typeof changeMeasures>): string {
+  const n = (x: number) => formatValue(m.key ?? "count", Math.round(x * 10) / 10, m.unit, Math.abs(x) >= 100 ? 0 : 1);
+  const unit = m.unit ? ` ${m.unit}` : "";
+  if (m.a.total === undefined || m.b.total === undefined || m.difference === undefined) {
+    const d = m.b.count - m.a.count;
+    return `${aText} ${m.a.count.toLocaleString()} · ${bText} ${m.b.count.toLocaleString()} · difference ${d > 0 ? "+" : d < 0 ? "−" : ""}${Math.abs(d).toLocaleString()}`;
+  }
+  const d = m.difference;
+  return `${aText} ${n(m.a.total)}${unit} · ${bText} ${n(m.b.total)}${unit} · difference ${d > 0 ? "+" : d < 0 ? "−" : ""}${n(Math.abs(d))}${unit}`;
+}
+
+function ChangeLine({ compare, layer, measures }: { compare: CompareState; layer: LoadedLayer; measures: ReturnType<typeof changeMeasures> }) {
+  const text = changeText(compareSideText(compare, "a", layer), compareSideText(compare, "b", layer), measures);
+  return (
+    <p data-testid="compare-change" className="mt-1.5 text-[11.5px] leading-4 text-ink tabular-nums" title={measures.label}>
+      {text}
+    </p>
   );
 }
 

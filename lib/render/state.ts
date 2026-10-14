@@ -1,5 +1,5 @@
 import type { Feature, LineString } from "geojson";
-import type { LayerResult, StyleHints } from "@/layers/types";
+import type { BBox, CardSpec, FieldHelp, LayerResult, StyleHints } from "@/layers/types";
 import type { CompareSpec } from "@/lib/render/compare";
 import type { LayerFilters } from "@/lib/render/filters";
 import type { TimeIndex, TimeWindow } from "@/lib/time";
@@ -34,6 +34,13 @@ export const POINT_MODES: readonly { value: RenderMode; label: string }[] = [
   { value: "columns", label: "Columns" },
 ];
 
+/**
+ * The standard views (spec §12): every answer is drawn as one of these, the same way every time. The agent names it on
+ * the render op; the reducer picks one from the data when it does not (lib/render/views.ts `defaultView`).
+ */
+export const VIEW_KINDS = ["change", "timeline", "ranked", "density", "detail", "scenario", "route"] as const;
+export type ViewKind = (typeof VIEW_KINDS)[number];
+
 export type RenderOp = {
   layerId: string;
   mode: RenderMode;
@@ -43,6 +50,8 @@ export type RenderOp = {
   opacity?: number;
   /** Attribute filters from the layer panel or the agent (lib/render/filters.ts); unset shows every feature. */
   filters?: LayerFilters;
+  /** The standard view the layer is drawn in (spec §12): its encoding, legend wording and console controls. */
+  view?: ViewKind;
 };
 
 /** The feature the user clicked: what the inspect card shows and the map highlights. */
@@ -63,6 +72,10 @@ export type LoadedLayer = {
   style: StyleHints;
   result: LayerResult;
   receivedAt: string;
+  /** The layer's field help (spec §12b), from the catalog: the inspect card's "i" beside each field that has some. */
+  fieldHelp?: Record<string, FieldHelp>;
+  /** How the inspect card lays out this layer's features (layers/types.ts CardSpec), from the catalog. */
+  card?: CardSpec;
 };
 
 /** A route drawn Wally-style (gradient line, darts, mile markers, waypoint pins): a `route` result, a GPX, a trail. */
@@ -109,7 +122,21 @@ export type MapState = {
    * the layer's tile URL from it. A re-query of the layer drops it (the new query's amount shows).
    */
   scenario?: ScenarioState;
+  /**
+   * A place the user named this turn (its geocoded bbox): while it is set, the camera fits what the queries return
+   * (spec §12: the returned features, never the geocoded region), or the place itself when nothing drawable came back.
+   * A new turn, or the agent framing the view itself with set_view, drops it; "here" questions never set it.
+   */
+  place?: PlaceState;
+  /** The latest camera fit the reducer asked for; the app turns it into a viewport with the panels' padding. */
+  camera?: CameraRequest;
 };
+
+/** The named place of this turn: its bbox, the layers loaded for it since, and whether the camera has fitted yet. */
+export type PlaceState = { bbox: BBox; layers: string[]; moved: boolean };
+
+/** A camera fit: the bbox, a sequence number (each request is new), and `lowerThird` to leave room above for the card. */
+export type CameraRequest = { bbox: BBox; seq: number; lowerThird?: boolean };
 
 /** The scenario scrubber's state: which layer, the amount shown (one of its `data.scenario.values`) and whether Play steps it. */
 export type ScenarioState = { layerId: string; value: number; playing: boolean };
@@ -219,4 +246,14 @@ export type MapAction =
   /** One play step: the next amount; at the last one, play stops. */
   | { type: "scenario_tick" }
   /** Back to the queried amount. */
-  | { type: "clear_scenario" };
+  | { type: "clear_scenario" }
+  /** The user named a place (a geocode result): the camera fits this turn's returned features, else this bbox. */
+  | { type: "place_named"; bbox: BBox }
+  /** The agent framed the view itself (set_view): this turn's results no longer move the camera. */
+  | { type: "place_framed" }
+  /** The answer is written (the note): a named place that nothing was fitted to yet gets the camera now. */
+  | { type: "place_settle" }
+  /** A new answer starts: the last turn's place is forgotten, so a "here" question never moves the camera. */
+  | { type: "turn_start" }
+  /** Applies a standard view's preset to a drawn layer (spec §12): encoding, console, selection and camera. */
+  | { type: "set_view_kind"; layerId: string; view: ViewKind };

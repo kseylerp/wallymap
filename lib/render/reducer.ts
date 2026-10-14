@@ -8,13 +8,16 @@ import {
   type RenderMode,
   type RenderOp,
   type TimeState,
+  type ViewKind,
   type Viewport,
 } from "@/lib/render/state";
-import type { LayerFilters } from "@/lib/render/filters";
+import type { BBox } from "@/layers/types";
+import { boundsOf, changeCompare, defaultView, padBBox, rankedFilters, unionBBox, viewTarget } from "@/lib/render/views";
+import { applyFilters, type LayerFilters } from "@/lib/render/filters";
 import { stepWindow, timeIndex, type TimeIndex, type TimeWindow } from "@/lib/time";
 import { arrivalPitch, fitZoomOffset } from "@/lib/render/wally/terrain";
 import { WebMercatorViewport } from "@math.gl/web-mercator";
-import { featureBBox } from "@/lib/render/inspect";
+import { featureBBox, featureCenter } from "@/lib/render/inspect";
 import { currentScenarioValue, scenarioOf, snapScenarioValue } from "@/lib/render/scenario";
 
 /**
@@ -350,6 +353,72 @@ export function isMapReset(state: MapState): boolean {
   );
 }
 
+// ---- Camera and standard views (spec §12) ----
+
+function sameBBox(a: BBox | undefined, b: BBox): boolean {
+  return a !== undefined && a.every((x, i) => Math.abs(x - b[i]) < 1e-9);
+}
+
+/**
+ * Asks the app to fit the camera to `bbox` (padded to a minimum span), only while a named place is this turn's
+ * (spec §12: "here" questions never move the camera). The same box asked for twice in a row is not asked again.
+ */
+function fitCamera(state: MapState, bbox: BBox | null, lowerThird = false): MapState {
+  if (!state.place || !bbox) return state;
+  const target = padBBox(bbox);
+  const place = state.place.moved ? state.place : { ...state.place, moved: true };
+  if (sameBBox(state.camera?.bbox, target) && Boolean(state.camera?.lowerThird) === lowerThird) return { ...state, place };
+  const camera = { bbox: target, seq: (state.camera?.seq ?? 0) + 1, ...(lowerThird && { lowerThird: true }) };
+  return { ...state, place, camera };
+}
+
+/** The union of every feature loaded for this turn's place: what a named-place answer fits to. */
+function placeBounds(state: MapState): BBox | null {
+  let out: BBox | null = null;
+  for (const id of state.place?.layers ?? []) {
+    const layer = state.layers[id];
+    if (layer?.result.kind !== "geojson") continue;
+    const op = state.renderOps.find((o) => o.layerId === id);
+    const data = op?.filters ? applyFilters(layer.result.data, op.filters) : layer.result.data;
+    out = unionBBox(out, boundsOf(data.features));
+  }
+  return out;
+}
+
+/**
+ * A standard view's preset on a drawn layer (spec §12): change opens the compare (delta) on the layer's two versions or
+ * dates; ranked puts the facet slider at the top N; density draws a point layer as clusters (heat stays heat); detail
+ * selects the one feature. Then, for a named place, the camera fits what the view shows (the union of both sides for
+ * change, the top N for ranked, the feature in the lower third for detail). The op remembers the view for the legend.
+ */
+export function applyView(state: MapState, layerId: string, view: ViewKind): MapState {
+  const layer = state.layers[layerId];
+  const index = state.renderOps.findIndex((op) => op.layerId === layerId);
+  if (!layer || index === -1) return state;
+  let op: RenderOp = { ...state.renderOps[index], view };
+  let next: MapState = state;
+  if (view === "ranked") {
+    const filters = rankedFilters(layer, op.filters);
+    op = filters ? { ...op, filters } : op;
+    if (layer.style.geometry === "point" && op.mode !== "points") op = { ...op, mode: "points" };
+  }
+  if (view === "density" && layer.style.geometry === "point" && op.mode !== "heat" && op.mode !== "clusters") op = { ...op, mode: "clusters" };
+  next = { ...next, renderOps: next.renderOps.map((o, i) => (i === index ? op : o)) };
+  if (view === "change" && next.compare?.layerId !== layerId) {
+    const compare = changeCompare(layer);
+    if (compare) next = startCompare(next, compare);
+  }
+  let lowerThird = false;
+  if (view === "detail" && layer.result.kind === "geojson") {
+    const data = op.filters ? applyFilters(layer.result.data, op.filters) : layer.result.data;
+    const feature = data.features.length === 1 ? data.features[0] : undefined;
+    const at = feature && featureCenter(feature);
+    if (feature && at) next = { ...next, selected: { layerId, feature, lngLat: at } };
+    lowerThird = true;
+  }
+  return fitCamera(next, viewTarget(view, layer, op.filters) ?? (next.place && !next.place.moved ? next.place.bbox : null), lowerThird);
+}
+
 /**
  * Pure reducer: always returns new objects and never mutates `state`. Selecting or deselecting a feature never
  * moves the camera; only `set_view` and the 3D button do.
@@ -374,8 +443,8 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       if (state.basemap === action.basemap) return state;
       // A style swap drops the route layers the preview draws on, so the preview ends with it.
       return { ...state, basemap: action.basemap, playback: undefined };
-    case "layer_loaded":
-      return withTimeIndex(
+    case "layer_loaded": {
+      const loaded = withTimeIndex(
         {
           ...state,
           layers: { ...state.layers, [action.layer.id]: action.layer },
@@ -390,6 +459,12 @@ function reduceAction(state: MapState, action: MapAction): MapState {
         },
         true,
       );
+      // A named place's answer: the camera fits every feature returned for it so far (or the place, for tiles or none).
+      if (!loaded.place) return loaded;
+      const layers = loaded.place.layers.includes(action.layer.id) ? loaded.place.layers : [...loaded.place.layers, action.layer.id];
+      const placed = { ...loaded, place: { ...loaded.place, layers } };
+      return fitCamera(placed, placeBounds(placed) ?? (placed.place.moved ? null : placed.place.bbox));
+    }
     case "layer_error":
       return {
         ...state,
@@ -418,8 +493,15 @@ function reduceAction(state: MapState, action: MapAction): MapState {
             );
       // Heat draws no features of its own, so a selection on a layer that turns into heat would point at nothing drawn.
       const selected = op.mode === "heat" ? dropSelectionOf(state, op.layerId) : state.selected;
-      const next = { ...state, renderOps, selected };
-      return withShownChange(state, next, action.op.layerId);
+      const next = withShownChange(state, { ...state, renderOps, selected }, action.op.layerId);
+      // The view: the one the agent named, else (on the layer's first op) the one its data asks for; a restyle without
+      // a view keeps the layer's.
+      const view = action.op.view ?? (index === -1 && loaded ? defaultView(loaded, op.filters) : undefined);
+      if (!view) {
+        if (index === -1 || !state.renderOps[index].view) return next;
+        return { ...next, renderOps: next.renderOps.map((o) => (o.layerId === op.layerId ? { ...o, view: state.renderOps[index].view } : o)) };
+      }
+      return applyView(next, action.op.layerId, view);
     }
     case "toggle_layer": {
       const next = updateOp(state, action.layerId, (op) => ({ ...op, visible: !op.visible }));
@@ -492,6 +574,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
         pendingTime: undefined,
         compare: undefined,
         scenario: undefined,
+        place: undefined,
       };
     case "reset_map":
       // Compose the layer panel's "Clear all" with the starting camera; basemap and 3D stay as they are.
@@ -618,5 +701,14 @@ function reduceAction(state: MapState, action: MapAction): MapState {
     }
     case "clear_scenario":
       return state.scenario ? { ...state, scenario: undefined } : state;
+    case "place_named":
+      return { ...state, place: { bbox: action.bbox, layers: [], moved: false } };
+    case "place_framed":
+    case "turn_start":
+      return state.place ? { ...state, place: undefined } : state;
+    case "place_settle":
+      return state.place && !state.place.moved ? fitCamera(state, state.place.bbox) : state;
+    case "set_view_kind":
+      return applyView(state, action.layerId, action.view);
   }
 }

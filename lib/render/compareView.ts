@@ -6,6 +6,7 @@ import { createStore } from "@/lib/render/wally/playback";
 import { currentScenarioValue, scenarioOf, scenarioTileUrl, scenarioValueText } from "@/lib/render/scenario";
 import type { TileTime } from "@/layers/types";
 import { tileUrlForTime, type TimeWindow } from "@/lib/time";
+import { versionSides, versionsFacet } from "@/lib/render/facets";
 
 /**
  * Compare over time, the view half (spec §7): what the map draws for the compared layer. The pure engine is
@@ -43,9 +44,33 @@ export function hasPreset(layerId: string): layerId is PresetLayer {
   return (PRESET_LAYERS as readonly string[]).includes(layerId);
 }
 
-/** True when a layer can be compared: GeoJSON with dated features (`t`), or a tile layer that publishes `data.time` or `data.scenario`. */
+/**
+ * The compare by version of a layer with a `versions` facet (monument boundaries 2021 against current), or null: the
+ * earliest version present as A, the newest as B, labelled in the facet's words, delta (spec §12 change view).
+ */
+export function versionCompare(layer: LoadedLayer): CompareState | null {
+  if (layer.result.kind !== "geojson") return null;
+  const facet = versionsFacet(layer.style);
+  const sides = facet ? versionSides(facet, layer.result.data) : null;
+  if (!facet || !sides) return null;
+  return {
+    layerId: layer.id,
+    a: ["", ""],
+    b: ["", ""],
+    mode: "delta",
+    by: { key: facet.key, a: sides.a.values, b: sides.b.values },
+    aLabel: sides.a.label,
+    bLabel: sides.b.label,
+  };
+}
+
+/**
+ * True when a layer can be compared: GeoJSON with dated features (`t`) or two versions (a `versions` facet), or a tile
+ * layer that publishes `data.time` or `data.scenario`.
+ */
 export function isComparable(layer: LoadedLayer): boolean {
   if (layer.result.kind === "tiles") return layer.result.data.time !== undefined || layer.result.data.scenario !== undefined;
+  if (versionCompare(layer)) return true;
   return layer.result.data.features.some((f) => {
     const t = f.properties?.t;
     return typeof t === "string" && !Number.isNaN(Date.parse(t));
@@ -152,7 +177,8 @@ export function compareSides(
     memo.set(layer, byKey);
   }
   const amounts = spec.scenario ? `${spec.scenario.a}~${spec.scenario.b}` : "";
-  const key = `${spec.a.join("|")}#${spec.b.join("|")}#${filters ? JSON.stringify(filters) : ""}#${amounts}`;
+  const by = spec.by ? JSON.stringify(spec.by) : "";
+  const key = `${spec.a.join("|")}#${spec.b.join("|")}#${filters ? JSON.stringify(filters) : ""}#${amounts}#${by}`;
   const hit = byKey.get(key);
   if (hit && (hit.delta || !withDelta || layer.result.kind === "tiles")) return hit;
   if (hit) {
@@ -198,6 +224,8 @@ function isoDay(iso: string): string {
  */
 export function defaultCompare(layer: LoadedLayer, today: Date, state?: Pick<MapState, "scenario" | "layers">): CompareState {
   if (hasPreset(layer.id)) return presetFor(layer.id, today);
+  const byVersion = versionCompare(layer);
+  if (byVersion) return byVersion;
   const scenario = scenarioOf(layer);
   if (scenario) return defaultScenarioCompare(layer, scenario.values, state);
   const mode: CompareMode = layer.result.kind === "tiles" ? "toggle" : "delta";

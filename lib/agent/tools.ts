@@ -4,9 +4,10 @@ import { getLayer, listLayers } from "@/layers/registry";
 import { BBoxSchema, bboxAreaKm2, hardMaxAreaKm2, type BBox, type Coverage, type Layer, type LayerError } from "@/layers/types";
 import { runLayer } from "@/lib/layers/run";
 import { isFullLayerResult, summarizeLayerResult, type SummaryStyle } from "@/lib/layers/summarize";
-import type { Basemap, RenderMode, TimeMode } from "@/lib/render/state";
+import { VIEW_KINDS, type Basemap, type RenderMode, type TimeMode } from "@/lib/render/state";
 import { geocode } from "./geocode";
 import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
+import { repairToolName } from "./toolNames";
 import { gistFor } from "./vocabulary";
 import type { MapView } from "./view";
 
@@ -158,8 +159,8 @@ function inputNames(layer: Layer): string[] {
  * GeoJSON) becomes a short summary; errors and results the browser already
  * summarized before resending the history pass through unchanged.
  */
-export function layerResultForModel(output: unknown, layerId?: string, style?: SummaryStyle): JSONValue {
-  if (isFullLayerResult(output)) return summarizeLayerResult(output, layerId, style);
+export function layerResultForModel(output: unknown, layerId?: string, style?: SummaryStyle, fieldHelp?: Layer["fieldHelp"]): JSONValue {
+  if (isFullLayerResult(output)) return summarizeLayerResult(output, layerId, style, fieldHelp) as JSONValue;
   return output as JSONValue;
 }
 
@@ -276,6 +277,9 @@ export function wideSentence(layer: Pick<Layer, "maxAreaKm2" | "hardMaxAreaKm2" 
 }
 
 /** A zoom_in error for the user's view, with the layers that can answer at that scale. */
+export { repairToolName };
+
+/** A zoom_in error for the user's view, with the layers that can answer at this scale. */
 export type ZoomInError = LayerError & { widerScale?: string[] };
 
 /** Query-tool input: the layer's own input fields plus the area to search. */
@@ -317,31 +321,12 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined) {
       return body;
     },
     // The UI part keeps the full body for the map; the model gets a summary with v's statistics in the layer's unit.
-    toModelOutput: ({ output }) => ({ type: "json", value: layerResultForModel(output, layer.id, layer.style) }),
+    toModelOutput: ({ output }) => ({ type: "json", value: layerResultForModel(output, layer.id, layer.style, layer.fieldHelp) }),
   });
 }
 
-/**
- * Junk some models leave on a tool name: a chat-template token and what follows it (`query_power-plants<|channel|>commentary`),
- * or a stray quote, bracket or space.
- */
-const TOOL_NAME_JUNK = /(?:<\|[\s\S]*|[\s"'`<>()[\]{}:;,.]+[\s\S]*)$/;
-
 /** Tool names already repaired and logged, so each is logged once per server process. */
 const repairedLogged = new Set<string>();
-
-/**
- * The registered tool a garbled name means, or null: the name with trailing junk (`<|channel|>commentary`, `<|...|>`)
- * cut off, when that prefix is exactly one registered tool name, or the start of exactly one.
- */
-export function repairToolName(name: string, toolNames: readonly string[]): string | null {
-  if (toolNames.includes(name)) return name;
-  const prefix = name.replace(TOOL_NAME_JUNK, "").trim();
-  if (prefix === "" || prefix === name) return null;
-  if (toolNames.includes(prefix)) return prefix;
-  const matches = toolNames.filter((t) => t.startsWith(prefix));
-  return matches.length === 1 ? matches[0] : null;
-}
 
 /**
  * For streamText / generateText `repairToolCall`: renames a call whose tool name carries trailing junk to the one tool
@@ -405,7 +390,8 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
       description:
         "Find a place by name. Returns its bbox [west, south, east, north], center [lon, lat], and full name. " +
         "Named mountain ranges, deserts, plateaus and similar regions (for example the Andes) come back as the whole region, with source \"natural-earth\"; " +
-        "a smaller range (the Wind River Range) comes back as a box about 76 km across around its high point. The map camera moves to the bbox by itself. " +
+        "a smaller range (the Wind River Range) comes back as a box about 76 km across around its high point. " +
+        "The map camera moves to the place by itself: it fits the features your queries return there (or this bbox when none come back). " +
         "Geocode each place once: asking for the same text again returns the first answer with repeated: true.",
       inputSchema: z.object({ place: z.string().min(1) }),
       execute: async ({ place }) => {
@@ -449,13 +435,18 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
         "extrude areas by their value v in 3D (fire perimeters by acres, glaciers). Omit mode to keep the layer's " +
         "current style (new layers start as symbols, or clusters when dense). filters narrows it by its own properties " +
         "(the query summary's sample properties name them), e.g. { sac_scale: { include: [\"alpine_hiking\"] } } or " +
-        "{ acres: { range: [1000, 1000000] } }; they replace the layer's filters, and {} clears them.",
+        "{ acres: { range: [1000, 1000000] } }; they replace the layer's filters, and {} clears them. view names the " +
+        "standard view the answer is drawn in: change (two versions or two dates of one layer: then vs now, what changed), " +
+        "timeline (dated features: over time, year by year, since), ranked (largest, most, deepest, highest, how full), " +
+        "density (where are the most, hotspots, many points), detail (one thing: tell me about, how deep is), scenario (a " +
+        "scenario amount such as sea level rise) or route; omit it and the map picks one from the data.",
       inputSchema: z.object({
         layerId: z.string(),
         mode: z.enum(TOOL_RENDER_MODES).optional(),
         color: z.string().optional().describe("Only set when the user asked for a specific color; otherwise omit"),
         filters: LayerFiltersSchema.optional().describe("Show only features matching every entry; omit to keep the current filters"),
         scenario: z.number().optional().describe("Scenario layers: amount to show, e.g. sea level rise feet"),
+        view: z.enum(VIEW_KINDS).optional().describe("The standard view: change, timeline, ranked, density, detail, scenario or route"),
       }),
       execute: async (input) => input,
     }),

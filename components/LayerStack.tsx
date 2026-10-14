@@ -4,29 +4,18 @@ import { useId, useMemo, useRef, useState, useSyncExternalStore, type DragEvent,
 import { LayerFilters } from "@/components/LayerFilters";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
-import {
-  applyFilters,
-  deriveFilterFields,
-  filterSummary,
-  MEASURE_STEPS,
-  measureAt,
-  measureKey,
-  measureMinimum,
-  measurePosition,
-  measureRange,
-  withMeasureMinimum,
-  type FilterField,
-  type LayerFilters as Filters,
-  type MeasureRange,
-} from "@/lib/render/filters";
+import { applyFilters, deriveFilterFields, filterSummary, type FilterField, type MeasureRange } from "@/lib/render/filters";
+import { FacetControls } from "@/components/FacetControls";
+import { facetsOf } from "@/lib/render/facets";
+import { viewCaption } from "@/lib/render/views";
 import type { Feature } from "geojson";
 import { LegendKey } from "@/components/LegendKey";
 import { formatValue } from "@/lib/format";
 import { rasterKeyFilter } from "@/lib/render/rasterCalm";
 import { currentScenarioValue, scenarioOf, scenarioValueText } from "@/lib/render/scenario";
-import { COMPARE_COLORS, compareBId, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
+import { compareBId, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
 import { hexbinThreshold } from "@/lib/render/deck";
-import { DELTA_LINE_COLORS, isRouteProperties, LINE, WHITE } from "@/lib/render/palette";
+import { COMPARE_COLORS, DELTA_COLORS, DELTA_LINE_COLORS, isRouteProperties, LINE, WHITE } from "@/lib/render/palette";
 import { POINT_MODES, type LoadedLayer, type MapAction, type MapState, type RenderMode, type RenderOp, type Selection, type TimeState } from "@/lib/render/state";
 import { hasMissingImage, missingTilesStore } from "@/lib/render/tileErrors";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
@@ -52,6 +41,8 @@ type LayerStackProps = {
   scenarioSlot?: ReactNode;
   /** The scenario scrubber's state: a scenario layer's row slider shows the amount it holds. */
   scenario?: MapState["scenario"];
+  /** The compare on screen, for the change view's legend sentence. */
+  compare?: MapState["compare"];
 };
 
 /** Modes the select offers line and area layers; areas with an `extrude` hint (or already extruded) can stand as 3D columns. */
@@ -138,7 +129,7 @@ export function selectionSwatch(state: MapState, selection: Selection, layer: Lo
   const feature = selection.feature;
   if (mode === "delta") {
     const cls: unknown = feature.properties?.delta;
-    const color = cls === "a-only" ? COMPARE_COLORS.a : cls === "b-only" ? COMPARE_COLORS.b : COMPARE_COLORS.both;
+    const color = cls === "a-only" || cls === "b-only" ? DELTA_COLORS[cls] : DELTA_COLORS.both;
     const area = feature.geometry?.type === "Polygon" || feature.geometry?.type === "MultiPolygon";
     // Unchanged lines draw sage, never a dark grey line (DELTA_LINE_COLORS); unchanged areas keep the dark grey outline.
     const lineColor = cls === "a-only" || cls === "b-only" ? DELTA_LINE_COLORS[cls] : DELTA_LINE_COLORS.both;
@@ -215,6 +206,7 @@ type RowProps = {
   dropTarget: boolean;
   dragging: boolean;
   selected: boolean;
+  compare?: MapState["compare"];
 };
 
 /** A threshold readout: "All" at the data minimum, else "≥ 1,204 acres" (scores without a unit). */
@@ -222,54 +214,6 @@ export function measureLabel(value: number, range: MeasureRange, unit?: string, 
   if (value <= range.min) return "All";
   const text = formatValue(key, value, unit, range.integer ? 0 : 2);
   return unit && unit !== "score" ? `≥ ${text} ${unit}` : `≥ ${text}`;
-}
-
-/**
- * The owner's fader: a minimum on the layer's primary measure `v` (popularity, fire acres, lake depth, wave height),
- * applied through the filters engine so the count, export and permalink follow. At the left end there is no filter.
- */
-function MeasureSlider({
-  layer,
-  range,
-  measure,
-  filters,
-  dispatch,
-}: {
-  layer: LoadedLayer;
-  range: MeasureRange;
-  /** The property the slider filters on (lib/render/filters.ts `measureKey`). */
-  measure: string;
-  filters: Filters;
-  dispatch: (action: MapAction) => void;
-}) {
-  const value = measureMinimum(filters, range, measure);
-  const position = measurePosition(value, range);
-  return (
-    <label className="flex items-center gap-1.5">
-      <span className="sr-only">Minimum {layer.style.unit && layer.style.unit !== "score" ? layer.style.unit : "value"} for {layer.title}</span>
-      <input
-        type="range"
-        min={0}
-        max={MEASURE_STEPS}
-        step={1}
-        value={position}
-        aria-valuetext={measureLabel(value, range, layer.style.unit, measure)}
-        onChange={(e) =>
-          dispatch({
-            type: "set_filters",
-            layerId: layer.id,
-            filters: withMeasureMinimum(filters, measureAt(Number(e.target.value), range), range, measure),
-          })
-        }
-        data-testid="measure-slider"
-        className="layer-opacity w-[60px]"
-        style={{ ["--fill" as string]: `${Math.round((position / MEASURE_STEPS) * 100)}%` }}
-      />
-      <span aria-hidden className="text-[11px] whitespace-nowrap text-ink-muted tabular-nums">
-        {measureLabel(value, range, layer.style.unit, measure)}
-      </span>
-    </label>
-  );
 }
 
 /**
@@ -311,19 +255,38 @@ function ScenarioRowSlider({ layer, value, dispatch }: { layer: LoadedLayer; val
  * feature count in tabular figures and an always-visible ×, and (on hover or focus) visibility, the measure threshold
  * (or opacity, for layers without a numeric `v`), mode and filters.
  */
-function LegendRow({ layer, shownLayer, shownLayerB, op, license, scenarioValue, dispatch, onMove, dragProps, armDrag, dropTarget, dragging, selected }: RowProps) {
+function LegendRow({
+  layer,
+  shownLayer,
+  shownLayerB,
+  op,
+  license,
+  scenarioValue,
+  dispatch,
+  onMove,
+  dragProps,
+  armDrag,
+  dropTarget,
+  dragging,
+  selected,
+  compare,
+}: RowProps) {
   const visible = op?.visible ?? false;
   const opacity = op?.opacity ?? 1;
   const count = layer.result.kind === "geojson" ? layer.result.data.features.length : null;
   const shownCount = drawnCount(shownLayer, shownLayerB) ?? count;
   const data = layer.result.kind === "geojson" ? layer.result.data : null;
   const unit = layer.style.unit;
-  const fields = useMemo<FilterField[]>(() => (data ? deriveFilterFields(data, { unitForV: unit }) : []), [data, unit]);
+  const facets = facetsOf(layer.style);
+  // The free-form panel keeps every other field; the facets have their own controls in the row.
+  const fields = useMemo<FilterField[]>(
+    () => (data ? deriveFilterFields(data, { unitForV: unit }).filter((f) => !facets.some((x) => x.key === f.key)) : []),
+    [data, unit, facets],
+  );
   const filters = op?.filters ?? {};
   const activeCount = Object.keys(filters).length;
   const summary = activeCount > 0 ? filterSummary(fields, filters) : "";
-  const range = useMemo(() => (data ? measureRange(data) : null), [data]);
-  const measure = useMemo(() => (data ? measureKey(data) : "v"), [data]);
+  const caption = op?.visible ? viewCaption(op.view, layer, compare) : undefined;
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filtersId = `filters-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const { citation, coverageNote } = layer.result;
@@ -387,6 +350,11 @@ function LegendRow({ layer, shownLayer, shownLayerB, op, license, scenarioValue,
               {host ?? citation.source}
             </a>
           </p>
+          {caption && (
+            <p data-testid="view-caption" className="mt-0.5 text-[11.5px] leading-4 text-ink-muted">
+              {caption}
+            </p>
+          )}
           {summary && (
             <p className="mt-0.5 flex items-baseline gap-1.5 text-[11.5px] leading-4 text-ink-muted">
               <span data-testid="filter-summary" className="min-w-0 truncate" title={summary}>
@@ -437,6 +405,19 @@ function LegendRow({ layer, shownLayer, shownLayerB, op, license, scenarioValue,
         </button>
       </div>
 
+      {/* Facets (spec §12a) are always visible, never behind a disclosure or hover. */}
+      {op && data && facets.length > 0 && (
+        <FacetControls
+          layerId={layer.id}
+          title={layer.title}
+          facets={facets}
+          data={data}
+          filters={filters}
+          geometry={layer.style.geometry}
+          fieldHelp={layer.fieldHelp}
+          dispatch={dispatch}
+        />
+      )}
       {/* The grid row collapses to 0 while hidden; the padding lives inside it so a collapsed row stays tight. */}
       <div className="legend-controls">
         <div>
@@ -450,28 +431,7 @@ function LegendRow({ layer, shownLayer, shownLayerB, op, license, scenarioValue,
               title={visible ? "Hide layer" : "Show layer"}
               className="legend-check"
             />
-            {op && range && <MeasureSlider layer={layer} range={range} measure={measure} filters={filters} dispatch={dispatch} />}
-            {op && !range && scenarioValue !== undefined && (
-              <ScenarioRowSlider layer={layer} value={scenarioValue} dispatch={dispatch} />
-            )}
-            {op && !range && scenarioValue === undefined && (
-              <label className="flex items-center gap-1.5">
-                <span className="sr-only">Opacity for {layer.title}</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={opacity}
-                  onChange={(e) => dispatch({ type: "set_opacity", layerId: layer.id, opacity: Number(e.target.value) })}
-                  className="layer-opacity w-[60px]"
-                  style={{ ["--fill" as string]: `${Math.round(opacity * 100)}%` }}
-                />
-                <span aria-hidden className="w-7 text-right text-[11px] text-ink-muted tabular-nums">
-                  {Math.round(opacity * 100)}%
-                </span>
-              </label>
-            )}
+            {op && scenarioValue !== undefined && <ScenarioRowSlider layer={layer} value={scenarioValue} dispatch={dispatch} />}
             {op && layer.result.kind === "geojson" && layer.style.geometry !== "point" && (
               <label>
                 <span className="sr-only">Draw {layer.title} as</span>
@@ -498,6 +458,24 @@ function LegendRow({ layer, shownLayer, shownLayerB, op, license, scenarioValue,
               >
                 Filters{activeCount > 0 && <span className="tabular-nums"> · {activeCount}</span>}
               </button>
+            )}
+            {/* Opacity: a small hairline slider at the row's end (owner: transparency stays). */}
+            {op && (
+              <label className="ml-auto flex items-center" title={`Opacity ${Math.round(opacity * 100)}%`}>
+                <span className="sr-only">Opacity for {layer.title}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={opacity}
+                  aria-valuetext={`${Math.round(opacity * 100)}%`}
+                  onChange={(e) => dispatch({ type: "set_opacity", layerId: layer.id, opacity: Number(e.target.value) })}
+                  data-testid="opacity-slider"
+                  className="layer-opacity layer-opacity-small w-6"
+                  style={{ ["--fill" as string]: `${Math.round(opacity * 100)}%` }}
+                />
+              </label>
             )}
           </div>
           {op && layer.result.kind === "geojson" && layer.style.geometry === "point" && (
@@ -544,6 +522,7 @@ export function LayerStack({
   compareSlot,
   scenarioSlot,
   scenario,
+  compare,
 }: LayerStackProps) {
   const items = stackOrder(layers, renderOps);
   // A dated tile layer whose tiles all failed for the window's date (lib/render/tileErrors.ts).
@@ -628,6 +607,7 @@ export function LayerStack({
               dropTarget={overId === layer.id && dragId !== null && dragId !== layer.id}
               dragging={dragId === layer.id}
               selected={selectedLayerId === layer.id}
+              compare={compare}
               dragProps={{
                 // Only the key starts a drag, so the slider and text stay usable.
                 draggable: armed === layer.id,

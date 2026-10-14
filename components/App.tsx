@@ -48,14 +48,14 @@ function writeSessionFlag(key: string, value: boolean): void {
   }
 }
 
-type CatalogEntry = { id: string; title: string; style: LayerCatalog[string]["style"]; license?: string };
+type CatalogEntry = { id: string; title: string } & LayerCatalog[string];
 
 async function fetchCatalog(): Promise<LayerCatalog> {
   try {
     const res = await fetch("/api/layers");
     if (!res.ok) return {};
     const entries = (await res.json()) as CatalogEntry[];
-    return Object.fromEntries(entries.map((e) => [e.id, { title: e.title, style: e.style, license: e.license }]));
+    return Object.fromEntries(entries.map((e) => [e.id, { title: e.title, style: e.style, license: e.license, ...(e.fieldHelp && { fieldHelp: e.fieldHelp }), ...(e.card && { card: e.card }) }]));
   } catch {
     // Without a catalog, layers still draw with the fallback title and style.
     return {};
@@ -213,6 +213,21 @@ export function App() {
     dispatch({ type: "set_view", viewport: { longitude, latitude, zoom, bearing: 0, ...pitch }, fit: true });
   }, [selected, collapsed, layerPanelOpen, state.flattened]);
 
+  // The reducer's camera fits (spec §12: a named place's returned features, a view's target), turned into a viewport
+  // in the part of the map the panels leave visible. Each request is applied once, by its sequence number.
+  const cameraSeqRef = useRef(0);
+  const camera = state.camera;
+  useEffect(() => {
+    if (!camera || camera.seq === cameraSeqRef.current) return;
+    cameraSeqRef.current = camera.seq;
+    const size = canvasSizeRef.current;
+    const padding = visibleMapPadding({ ...size, panelOpen: !collapsed, isMobile: size.width < PHONE_MAX_WIDTH, layerPanelOpen });
+    // A detail view leaves the upper two thirds for the inspect card: the feature sits in the lower third.
+    const fitted = camera.lowerThird ? { ...padding, top: padding.top + Math.round((size.height - padding.top - padding.bottom) / 3) } : padding;
+    const { longitude, latitude, zoom } = bboxToViewport(camera.bbox, size.width, size.height, fitted);
+    dispatch({ type: "set_view", viewport: { longitude, latitude, zoom: Math.min(zoom, 15), bearing: 0 }, fit: true });
+  }, [camera, collapsed, layerPanelOpen]);
+
   return (
     <div
       className="fixed inset-0 overflow-hidden bg-cream"
@@ -262,6 +277,7 @@ export function App() {
           compareSlot={<CompareControl state={state} dispatch={dispatch} />}
           scenarioSlot={<ScenarioScrubbers state={state} dispatch={dispatch} />}
           scenario={state.scenario}
+          compare={state.compare}
         />
       </div>
 

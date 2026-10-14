@@ -319,3 +319,33 @@ describe("summarizeLayerResult truncation", () => {
     expect(plain).not.toHaveProperty("rankedOut");
   });
 });
+
+describe("summarizeLayerResult: facets and help for the model (spec §12a, §12b)", () => {
+  it("lists each facet label with the raw values render.filters takes and their counts, and the help for v", () => {
+    const features = [0, 3, 3, 5].map((v) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [0, 0] }, properties: { v } }));
+    const out = summarizeLayerResult(
+      { kind: "geojson", data: { type: "FeatureCollection", features }, citation: { source: "s", url: "u", retrieved: "r" } },
+      "mtb-trails",
+      {
+        facets: [
+          { key: "v", label: "Difficulty", kind: "category", values: [{ value: 0, label: "Easy" }, { value: 3, label: "Hard" }, { value: 4, label: "Expert" }, { value: 5, label: "Expert" }] },
+        ],
+      },
+      { v: { text: "Singletrack Scale.", scale: "0 (easiest) to 6 (hardest)", source: "OSM wiki" } },
+    );
+    if ("error" in out || out.kind !== "geojson") throw new Error("expected a geojson summary");
+    expect(out.facets).toEqual([
+      {
+        key: "v",
+        label: "Difficulty",
+        kind: "category",
+        values: [
+          { label: "Easy", include: ["0"], count: 1 },
+          { label: "Hard", include: ["3"], count: 2 },
+          { label: "Expert", include: ["4", "5"], count: 1 },
+        ],
+      },
+    ]);
+    expect(out.help?.v).toBe("Singletrack Scale. Scale: 0 (easiest) to 6 (hardest). Source: OSM wiki.");
+  });
+});

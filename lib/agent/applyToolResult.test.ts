@@ -25,7 +25,8 @@ describe("toolResultToActions", () => {
     const actions = toolResultToActions("set_view", { bbox }, { bbox }, canvas, catalog, []);
     const { longitude, latitude, zoom } = bboxToViewport([...bbox], canvas.width, canvas.height);
     // No pitch: the reducer picks the arrival pitch and backs the zoom off for it (`fit`).
-    expect(actions).toEqual([{ type: "set_view", viewport: { longitude, latitude, zoom, bearing: 0 }, fit: true }]);
+    // The agent framed it: this turn's results no longer move the camera.
+    expect(actions).toEqual([{ type: "set_view", viewport: { longitude, latitude, zoom, bearing: 0 }, fit: true }, { type: "place_framed" }]);
   });
 
   it("set_view with a bbox passes an explicit pitch and bearing through", () => {
@@ -39,6 +40,7 @@ describe("toolResultToActions", () => {
     expect(toolResultToActions("set_view", output, output, canvas, catalog, [])).toEqual([
       { type: "set_terrain", terrain: false },
       { type: "set_view", viewport: { longitude: 6.87, latitude: 45.92, zoom: 12 } },
+      { type: "place_framed" },
     ]);
     expect(toolResultToActions("set_view", {}, { terrain: true }, canvas, catalog, [])).toEqual([
       { type: "set_terrain", terrain: true },
@@ -50,6 +52,7 @@ describe("toolResultToActions", () => {
     const actions = toolResultToActions("set_view", output, output, canvas, catalog, []);
     expect(actions).toEqual([
       { type: "set_view", viewport: { longitude: 6.87, latitude: 45.92, zoom: 11, pitch: 45 } },
+      { type: "place_framed" },
     ]);
   });
 
@@ -194,13 +197,10 @@ describe("toolResultToActions", () => {
     ]);
   });
 
-  it("a successful geocode moves the camera to the place's bbox, like set_view", () => {
+  it("a successful geocode names the place: the camera fits what the queries return there, not the geocoded box (spec §12)", () => {
     const bbox = [-110.1, 42.83, -109.2, 43.53];
     const output = { bbox, center: [-109.65, 43.18], name: "Wind River Range, Wyoming", source: "mapbox" };
-    const { longitude, latitude, zoom } = bboxToViewport(bbox as [number, number, number, number], canvas.width, canvas.height);
-    expect(toolResultToActions("geocode", { place: "Wind River Range" }, output, canvas, catalog, [])).toEqual([
-      { type: "set_view", viewport: { longitude, latitude, zoom, bearing: 0 }, fit: true },
-    ]);
+    expect(toolResultToActions("geocode", { place: "Wind River Range" }, output, canvas, catalog, [])).toEqual([{ type: "place_named", bbox }]);
   });
 
   it("a geocode followed by set_view in the same step, or a failed geocode, does not move the camera", () => {
@@ -210,8 +210,8 @@ describe("toolResultToActions", () => {
     expect(toolResultToActions("geocode", {}, { center: [0, 0] }, canvas, catalog, [])).toEqual([]);
   });
 
-  it("note and list_layers change nothing on the map", () => {
-    expect(toolResultToActions("note", { markdown: "hi" }, { markdown: "hi" }, canvas, catalog, [])).toEqual([]);
+  it("note settles a named place nothing was fitted to; list_layers changes nothing on the map", () => {
+    expect(toolResultToActions("note", { markdown: "hi" }, { markdown: "hi" }, canvas, catalog, [])).toEqual([{ type: "place_settle" }]);
     expect(toolResultToActions("list_layers", {}, [], canvas, catalog, [])).toEqual([]);
   });
 
@@ -299,5 +299,28 @@ describe("setViewFollowsInStep", () => {
     expect(setViewFollowsInStep(nextStep, 1)).toBe(false);
     const before = [step, tool("set_view", "b"), tool("geocode", "a")];
     expect(setViewFollowsInStep(before, 2)).toBe(false);
+  });
+});
+
+describe("tool names and views at the tool-call level", () => {
+  const climbingCatalog: LayerCatalog = { climbing: { title: "Climbing", style: { geometry: "point", color: "#3A3A3C" } } };
+  const body: LayerResult = { ...result, data: { type: "FeatureCollection", features: [] } };
+
+  it("writes a repaired query_climbing<|channel|>commentary call to the canonical layer id (no phantom layer row)", () => {
+    const actions = toolResultToActions("query_climbing<|channel|>commentary", {}, body, canvas, climbingCatalog, []);
+    const loaded = actions.find((a) => a.type === "layer_loaded");
+    expect(loaded?.type === "layer_loaded" && loaded.layer.id).toBe("climbing");
+    expect(loaded?.type === "layer_loaded" && loaded.layer.title).toBe("Climbing");
+    expect(JSON.stringify(actions)).not.toContain("<|");
+    // Even before the catalog lists the layer, the junk never becomes part of an id.
+    const bare = toolResultToActions("query_climbing<|channel|>commentary", {}, body, canvas, {}, []);
+    expect(JSON.stringify(bare)).not.toContain("<|");
+  });
+
+  it("passes render.view to the op, and ignores a view it does not know", () => {
+    const [ranked] = toolResultToActions("render", {}, { layerId: "huts", view: "ranked" }, canvas, catalog, []);
+    expect(ranked).toMatchObject({ type: "render", op: { layerId: "huts", view: "ranked" } });
+    const [odd] = toolResultToActions("render", {}, { layerId: "huts", view: "gallery" }, canvas, catalog, []);
+    expect(odd.type === "render" && odd.op.view).toBeUndefined();
   });
 });

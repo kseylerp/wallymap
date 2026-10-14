@@ -7,8 +7,15 @@ import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
  */
 
 export type CompareMode = "swipe" | "toggle" | "delta";
-/** `a` and `b` are inclusive ISO windows `[start, end]`; date-only strings cover the whole UTC day. */
-export type CompareSpec = { layerId: string; a: [string, string]; b: [string, string]; mode: CompareMode };
+/**
+ * `a` and `b` are inclusive ISO windows `[start, end]`; date-only strings cover the whole UTC day. With `by`, the sides
+ * are two versions of the same features named by a property instead (monument boundaries: `kind` 2021 against
+ * current), and the windows are not used.
+ */
+export type CompareSpec = { layerId: string; a: [string, string]; b: [string, string]; mode: CompareMode; by?: CompareBy };
+
+/** A compare by version: features whose `key` is one of `a` are side A, one of `b` side B; without the key, both. */
+export type CompareBy = { key: string; a: string[]; b: string[] };
 export type DeltaClass = "a-only" | "b-only" | "both";
 
 type Props = Record<string, unknown>;
@@ -106,6 +113,7 @@ function inWindow(t: number, w: [string, string]): boolean {
  * with no usable `t` belong to both windows. Returns new collections; features are shared, not cloned.
  */
 export function splitWindows(fc: FeatureCollection, spec: CompareSpec): { a: FeatureCollection; b: FeatureCollection } {
+  if (spec.by) return splitVersions(fc, spec.by);
   const a: Feature[] = [];
   const b: Feature[] = [];
   for (const f of fc.features) {
@@ -118,6 +126,24 @@ export function splitWindows(fc: FeatureCollection, spec: CompareSpec): { a: Fea
     }
     if (inWindow(t, spec.a)) a.push(f);
     if (inWindow(t, spec.b)) b.push(f);
+  }
+  return { a: { type: "FeatureCollection", features: a }, b: { type: "FeatureCollection", features: b } };
+}
+
+/** Features by version (`CompareBy`): side A has the `a` values, side B the `b` values; features without the key go to both. */
+export function splitVersions(fc: FeatureCollection, by: CompareBy): { a: FeatureCollection; b: FeatureCollection } {
+  const a: Feature[] = [];
+  const b: Feature[] = [];
+  for (const f of fc.features) {
+    const raw = propsOf(f)[by.key];
+    const value = typeof raw === "string" || typeof raw === "number" ? String(raw) : undefined;
+    if (value === undefined) {
+      a.push(f);
+      b.push(f);
+      continue;
+    }
+    if (by.a.includes(value)) a.push(f);
+    if (by.b.includes(value)) b.push(f);
   }
   return { a: { type: "FeatureCollection", features: a }, b: { type: "FeatureCollection", features: b } };
 }

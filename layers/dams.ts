@@ -20,7 +20,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, WHOLE_US_KM2, outsideUs } from "./_shared/coverage";
@@ -112,6 +112,69 @@ export function normalizeDams(fc: FeatureCollection): FeatureCollection {
   return { type: "FeatureCollection", features };
 }
 
+const NID_URL = "https://nid.sec.usace.army.mil";
+
+const FACETS: Facet[] = [
+  { key: "storageAf", label: "Storage", kind: "range", unit: "acre-feet", encode: "size" },
+  {
+    key: "hazard",
+    label: "Hazard potential",
+    kind: "category",
+    values: [
+      { value: "Low", label: "Low" },
+      { value: "Significant", label: "Significant" },
+      { value: "High", label: "High" },
+      { value: "Undetermined", label: "Undetermined" },
+    ],
+  },
+];
+
+const STORAGE: FieldHelp = {
+  text:
+    "The dam's storage capacity in acre-feet as the National Inventory of Dams reports it (NID storage); one acre-foot is about 1,233 cubic " +
+    "metres.",
+  unit: "acre-feet",
+  source: "US Army Corps of Engineers, National Inventory of Dams",
+  url: NID_URL,
+};
+
+const HELP: Record<string, FieldHelp> = {
+  storageAf: STORAGE,
+  v: STORAGE,
+  hazard: {
+    text:
+      "What would happen downstream if the dam failed or was mis-operated, not how likely that is or how sound the dam is. High: loss of human " +
+      "life is probable. Significant: no probable loss of life, but economic loss, environmental damage or disruption of lifeline facilities. " +
+      "Low: no probable loss of life and low economic and environmental losses, mostly on the owner's property.",
+    scale: "Low, Significant, High (Undetermined when not assessed)",
+    source: "US Army Corps of Engineers, National Inventory of Dams",
+    url: NID_URL,
+  },
+  condition: {
+    text:
+      "The dam's most recent condition assessment as reported to the National Inventory of Dams (for example Satisfactory, Fair, Poor, " +
+      "Unsatisfactory).",
+    source: "US Army Corps of Engineers, National Inventory of Dams",
+    url: NID_URL,
+  },
+  heightFt: { text: "The dam's height in feet as the inventory reports it.", unit: "ft" },
+  nidId: { text: "The dam's identifier in the National Inventory of Dams." },
+  kind: { text: "The dam's primary purpose as the inventory gives it." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "storageAf", label: "Storage", unit: "acre-feet" },
+  facts: [
+    { key: "hazard", label: "Hazard potential" },
+    { key: "heightFt", label: "Height", unit: "ft", format: "int" },
+    { key: "yearCompleted", label: "Completed" },
+    { key: "purpose", label: "Purpose" },
+    { key: "river", label: "River" },
+    { key: "owner", label: "Owner" },
+    { key: "condition", label: "Condition" },
+  ],
+};
+
 const dams = defineLayer({
   id: "dams",
   title: "Dams",
@@ -125,7 +188,9 @@ const dams = defineLayer({
   hardMaxAreaKm2: WHOLE_US_KM2,
   wide: { orderBy: "storage in acre-feet", limit: MAX_DAMS },
   input: z.object({}),
-  style: { geometry: "point", color: layerColor("dams"), unit: "acre-feet", extrude: "v", cluster: true },
+  style: { geometry: "point", color: layerColor("dams"), unit: "acre-feet", extrude: "v", cluster: true, facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

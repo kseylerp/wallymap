@@ -38,7 +38,7 @@
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { bboxesDisjoint } from "./_shared/coverage";
@@ -298,6 +298,47 @@ function inBbox([lon, lat]: [number, number], [w, s, e, n]: BBox): boolean {
   return lon >= w && lon <= e && lat >= s && lat <= n;
 }
 
+const FACETS: Facet[] = [
+  { key: "pctFull", label: "Percent full", kind: "range", unit: "%", encode: "size" },
+  { key: "storageAf", label: "Storage", kind: "range", unit: "acre-feet" },
+];
+
+const STORAGE: FieldHelp = {
+  text: "Water held in the reservoir on the reading date; for Reclamation sites live storage (the water above the lowest outlet). Provisional data.",
+  unit: "acre-feet",
+  source: "US Bureau of Reclamation; California DWR (CDEC)",
+  url: "https://cdec.water.ca.gov/reportapp/javareports?name=RES",
+};
+
+const HELP: Record<string, FieldHelp> = {
+  storageAf: STORAGE,
+  v: STORAGE,
+  pctFull: {
+    text:
+      "Storage as a percent of the reservoir's official capacity (live capacity for Reclamation sites), computed by this app; only where a " +
+      "capacity is known.",
+    unit: "%",
+  },
+  capacityAf: { text: "The official capacity used for percent full, from Reclamation's and CDEC's published figures.", unit: "acre-feet" },
+  elevationFt: {
+    text: "Water surface elevation above sea level, the level quoted for Lake Powell and Lake Mead (Reclamation sites only).",
+    unit: "ft",
+  },
+  series: { text: "Past readings: monthly means for up to 10 years, yearly means beyond; in feet when seriesUnit is ft, else acre-feet." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "storageAf", label: "Storage", unit: "acre-feet" },
+  facts: [
+    { key: "pctFull", label: "Percent full", unit: "%" },
+    { key: "capacityAf", label: "Capacity", unit: "acre-feet", format: "int" },
+    { key: "elevationFt", label: "Water level", unit: "ft" },
+    { key: "lastDate", label: "Reading", format: "date" },
+    { key: "river", label: "River" },
+    { key: "source", label: "Source" },
+  ],
+};
+
 const reservoirLevels = defineLayer({
   id: "reservoir-levels",
   title: "Reservoir levels",
@@ -324,7 +365,9 @@ const reservoirLevels = defineLayer({
       .optional()
       .describe("Only reservoirs whose name contains this text, case-insensitive (for example 'powell')."),
   }),
-  style: { geometry: "point", color: layerColor("reservoir-levels"), unit: "acre-feet", extrude: "v" },
+  style: { geometry: "point", color: layerColor("reservoir-levels"), unit: "acre-feet", extrude: "v", facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

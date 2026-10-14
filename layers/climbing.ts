@@ -17,7 +17,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { overpassQuery, type OverpassResult } from "./_shared/overpass";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
@@ -382,6 +382,88 @@ export function climbingNote(args: {
   return note;
 }
 
+const KIND_LABELS: Record<string, string> = { crag: "Crag", boulder: "Boulder", area: "Area", gym: "Gym" };
+const SOURCE_LABELS: Record<string, string> = {
+  osm: "OpenStreetMap",
+  openbeta: "OpenBeta",
+  "osm+openbeta": "OpenStreetMap + OpenBeta",
+};
+
+const FACETS: Facet[] = [
+  { key: "v", label: "Routes", kind: "range", unit: "routes", encode: "size" },
+  { key: "kind", label: "Kind", kind: "category", values: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+];
+
+const BY_DISCIPLINE: FieldHelp = {
+  text:
+    "Routes of each style in OpenBeta: trad (protected with removable gear), sport (bolted), boulder (short problems climbed over pads) " +
+    "and top rope; crowd-sourced counts.",
+  source: "OpenBeta",
+  url: "https://openbeta.io/",
+};
+
+const HELP: Record<string, FieldHelp> = {
+  v: {
+    text:
+      "How many climbing routes or boulder problems the place has: OpenBeta's total climbs, or OpenStreetMap's climbing:routes tag (else the sum " +
+      "of its per-style counts); when both sources list the place, the larger number. Crowd-sourced, so treat it as a guide.",
+    unit: "routes",
+    source: "OpenBeta and OpenStreetMap contributors",
+    url: "https://wiki.openstreetmap.org/wiki/Key:climbing",
+  },
+  grades: {
+    text:
+      "The range of grades, easiest to hardest: Yosemite Decimal System (5.6, 5.10a...) for roped routes and the V scale for boulders from " +
+      "OpenBeta, or the OpenStreetMap climbing:grade tags with their system in brackets.",
+    source: "OpenBeta and OpenStreetMap contributors",
+    url: "https://wiki.openstreetmap.org/wiki/Key:climbing",
+  },
+  sport: BY_DISCIPLINE,
+  trad: BY_DISCIPLINE,
+  boulder: BY_DISCIPLINE,
+  toprope: BY_DISCIPLINE,
+  routesByDiscipline: BY_DISCIPLINE,
+  disciplines: {
+    text:
+      "Climbing styles OpenStreetMap lists for the place (climbing:sport, climbing:trad, climbing:boulder, climbing:toprope, ice, mixed and so " +
+      "on).",
+    source: "OpenStreetMap wiki, Key:climbing",
+    url: "https://wiki.openstreetmap.org/wiki/Key:climbing",
+  },
+  orientation: { text: "Which way the rock faces (climbing:orientation), which tells you when it gets sun." },
+  maxLengthM: { text: "Length of the longest route, from the OpenStreetMap climbing:length:max tag.", unit: "m" },
+  source: { text: "Which database the place came from; 'osm+openbeta' means both list it and the two were merged into one point." },
+  region: { text: "The OpenBeta areas the crag sits in, broadest first." },
+  fee: { text: "Whether a fee is charged, from the OpenStreetMap fee tag." },
+  t: { text: "The date a mapper last checked the place on the ground (check_date), when tagged." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Routes" },
+  facts: [
+    { key: "grades", label: "Grades" },
+    {
+      key: "routesByDiscipline",
+      label: "Routes by discipline",
+      parts: [
+        { key: "trad", label: "trad" },
+        { key: "sport", label: "sport" },
+        { key: "boulder", label: "boulder" },
+        { key: "toprope", label: "top rope" },
+      ],
+    },
+    { key: "disciplines", label: "Disciplines", format: "list" },
+    { key: "maxLengthM", label: "Longest route", unit: "m", format: "m" },
+    { key: "orientation", label: "Faces" },
+    { key: "region", label: "Region" },
+    { key: "source", label: "Source", values: SOURCE_LABELS },
+  ],
+  links: [
+    { key: "url", label: "Open on OpenBeta" },
+    { key: "website", label: "Website" },
+  ],
+};
+
 const climbing = defineLayer({
   id: "climbing",
   title: "Climbing crags, boulders and areas",
@@ -404,7 +486,9 @@ const climbing = defineLayer({
   wide: { orderBy: "route count", limit: 1000 },
   input: inputSchema,
   // M4 hint: extrude v, heat (Task 0's StyleHints fields).
-  style: { geometry: "point", color: layerColor("climbing"), extrude: "v", heat: true },
+  style: { geometry: "point", color: layerColor("climbing"), extrude: "v", heat: true, facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input: ClimbingInput): Promise<LayerResult | LayerError> {
     const [osmResult, openbeta]: [OverpassResult, Awaited<ReturnType<typeof fetchOpenbeta>>] = await Promise.all([

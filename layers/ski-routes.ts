@@ -14,7 +14,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { overpassCounts, overpassQuery } from "./_shared/overpass";
 import { buildNamedGeometryQuery, buildNamedScanQuery, longestNamedFirst, pickNamedByLength } from "./osm-trails";
@@ -190,6 +190,76 @@ async function queryWide(ctx: QueryContext, input: SkiInput): Promise<LayerResul
   };
 }
 
+const RANK_LABELS: Record<number, string> = { 1: "Easy", 2: "Easy", 3: "Moderate", 4: "Hard", 5: "Expert", 6: "Expert" };
+const KIND_LABELS: Record<string, string> = { downhill: "Downhill", nordic: "Nordic", skitour: "Ski touring", sled: "Sled", route: "Route" };
+const DIFFICULTY_LABELS: Record<string, string> = {
+  novice: "Novice",
+  easy: "Easy",
+  intermediate: "Intermediate",
+  advanced: "Advanced",
+  expert: "Expert",
+  freeride: "Freeride",
+  extreme: "Extreme",
+};
+
+const FACETS: Facet[] = [
+  {
+    key: "v",
+    label: "Difficulty",
+    kind: "category",
+    encode: "color",
+    values: [1, 2, 3, 4, 5, 6].map((value) => ({ value, label: RANK_LABELS[value] })),
+  },
+  { key: "kind", label: "Kind", kind: "category", values: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+];
+
+const HELP: Record<string, FieldHelp> = {
+  difficulty: {
+    text:
+      "The difficulty of the ski run as tagged in OpenStreetMap (piste:difficulty): on downhill runs it follows the local colours " +
+      "(novice and easy green, intermediate blue, advanced black, expert double black, freeride orange or yellow); on ski tours the SAC ski " +
+      "scale L to EX.",
+    scale: "novice, easy, intermediate, advanced, expert, freeride, extreme",
+    source: "OpenStreetMap wiki, Key:piste:difficulty",
+    url: "https://wiki.openstreetmap.org/wiki/Key:piste:difficulty",
+  },
+  v: {
+    text: "The piste:difficulty tag as a rank, computed by this app: 1 novice, 2 easy, 3 intermediate, 4 advanced, 5 expert, 6 freeride or extreme.",
+    scale: "1 (easiest) to 6 (hardest)",
+    source: "OpenStreetMap wiki, Key:piste:difficulty",
+    url: "https://wiki.openstreetmap.org/wiki/Key:piste:difficulty",
+  },
+  kind: {
+    text:
+      "The piste type (piste:type): downhill, nordic (cross-country), skitour (ski touring), sled, or route for a named ski route made of many " +
+      "segments; other types such as snow_park also appear.",
+    source: "OpenStreetMap wiki, Key:piste:type",
+    url: "https://wiki.openstreetmap.org/wiki/Key:piste:type",
+  },
+  grooming: {
+    text: "How the trail is groomed (piste:grooming), for nordic trails classic, skating or both; backcountry means not groomed.",
+    source: "OpenStreetMap wiki, Key:piste:grooming",
+    url: "https://wiki.openstreetmap.org/wiki/Key:piste:grooming",
+  },
+  status: { text: "The piste:status tag as mapped (for example open or closed); it is not a live conditions report." },
+  lit: { text: "True when the piste is lit for night skiing (piste:lit)." },
+  network: { text: "The trail system the piste belongs to, from the OpenStreetMap network tag." },
+  t: { text: "The date a mapper last checked the piste on the ground (check_date), when tagged." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Difficulty rank" },
+  facts: [
+    { key: "difficulty", label: "Difficulty", values: DIFFICULTY_LABELS },
+    { key: "kind", label: "Kind", values: KIND_LABELS },
+    { key: "grooming", label: "Grooming" },
+    { key: "network", label: "Trail system" },
+    { key: "lit", label: "Lit at night" },
+    { key: "status", label: "Status" },
+    { key: "t", label: "Last checked", format: "date" },
+  ],
+};
+
 const skiRoutes = defineLayer({
   id: "ski-routes",
   title: "Ski runs, nordic trails and ski touring routes",
@@ -209,7 +279,9 @@ const skiRoutes = defineLayer({
   maxAreaKm2: 2500,
   wide: { mode: "named", orderBy: "length in km", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "line", color: layerColor("ski-routes") },
+  style: { geometry: "line", color: layerColor("ski-routes"), facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     if (ctx.wide === true) return queryWide(ctx, input);

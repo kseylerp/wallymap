@@ -8,7 +8,17 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Position } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type Layer, type LayerError, type LayerResult } from "./types";
+import {
+  bboxAreaKm2,
+  defineLayer,
+  type BBox,
+  type CardSpec,
+  type Facet,
+  type FieldHelp,
+  type Layer,
+  type LayerError,
+  type LayerResult,
+} from "./types";
 import { registerLayer } from "./registry";
 import { MAPILLARY_CELL_DEG, MAPILLARY_MAX_CELLS, tileBBox } from "./photos";
 import { GridIndex, lineMidpoint } from "./_shared/geo";
@@ -204,6 +214,35 @@ const SHARED_DESCRIPTION =
   "Coverage is global but the signals are richer in the US and Europe, where OpenStreetMap and photo coverage is denser; " +
   "if a signal's source fails the score uses the others and the result says which were left out. Zoom in to a region under 2,500 km² (about a 50 km square) first.";
 
+const pct = (weight: number) => `${Math.round(weight * 100)}%`;
+
+const SCORE: FieldHelp = {
+  text:
+    "An estimate computed by this app, not a visitor count: each feature's signals (geotagged photos within 500 m, parking spaces within 1 km, " +
+    "a Wikipedia or Wikidata link, informal trails within 500 m, and having a name) are ranked against the other features in view and weighted " +
+    `${pct(POPULARITY_WEIGHTS.photosWithin500m)}, ${pct(POPULARITY_WEIGHTS.parkingCapacityWithin1km)}, ${pct(POPULARITY_WEIGHTS.hasWikiLink)}, ` +
+    `${pct(POPULARITY_WEIGHTS.informalTrailsWithin500m)} and ${pct(POPULARITY_WEIGHTS.named)}; a missing signal is dropped and the rest reweighted.`,
+  scale: "0 (quietest in view) to 100 (busiest-looking in view); compares features in the same view only",
+  source: "This app, from OpenStreetMap, Wikimedia Commons and Mapillary",
+};
+
+const FACETS: Facet[] = [{ key: "v", label: "Popularity", kind: "range", unit: "score" }];
+
+const HELP: Record<string, FieldHelp> = {
+  v: SCORE,
+  signals: {
+    text:
+      "The raw signals behind the score: photos (geotagged photos within 500 m), parking (spaces within 1 km), wiki (has a Wikipedia or Wikidata " +
+      "link), informal (informal trails within 500 m) and named; null when that source failed.",
+  },
+  popularityNote: { text: "Always 'estimate': the score is built from public signals, not measured foot traffic." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Popularity score" },
+  facts: [{ key: "name", label: "Name" }],
+};
+
 /** Builds the popularity layer for one target; trails and campsites are registered as separate layers so each has the right style. */
 function popularityLayer(target: PopularityTarget): Layer {
   const layer = defineLayer({
@@ -221,7 +260,14 @@ function popularityLayer(target: PopularityTarget): Layer {
     optionalEnv: ["MAPILLARY_TOKEN", "OVERPASS_URL"],
     maxAreaKm2: 2_500,
     input: z.object({}),
-    style: { geometry: target === "trails" ? "line" : "point", color: layerColor(target === "trails" ? "popularity" : "popularity-campsites"), unit: "score" },
+    style: {
+      geometry: target === "trails" ? "line" : "point",
+      color: layerColor(target === "trails" ? "popularity" : "popularity-campsites"),
+      unit: "score",
+      facets: FACETS,
+    },
+    fieldHelp: HELP,
+    card: CARD,
 
     async query(ctx): Promise<LayerResult | LayerError> {
       const area = bboxAreaKm2(ctx.bbox);

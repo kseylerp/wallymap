@@ -30,7 +30,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { WHOLE_US_KM2 } from "./_shared/coverage";
@@ -554,6 +554,50 @@ async function querySeason(ctx: QueryContext, month: number, now: Date): Promise
   };
 }
 
+const FACETS: Facet[] = [
+  { key: "v", label: "Wave height", kind: "range", unit: "m", encode: "size" },
+  { key: "periodS", label: "Period", kind: "range", unit: "s" },
+];
+
+const NDBC_URL = "https://www.ndbc.noaa.gov/";
+
+const HELP: Record<string, FieldHelp> = {
+  v: {
+    text:
+      "Significant wave height: the average height of the highest third of the waves, the standard NOAA buoy measure (sets can be about twice it); " +
+      "for forecast points the model value now, for seasonal points the month's mean over the last 3 years.",
+    unit: "m",
+    source: "NOAA National Data Buoy Center; Open-Meteo Marine for forecasts",
+    url: NDBC_URL,
+  },
+  waveFt: { text: "The same significant wave height in feet.", unit: "ft" },
+  periodS: {
+    text: "Dominant wave period: seconds between the most energetic waves; longer means more powerful groundswell, under about 8 s is wind chop.",
+    unit: "s",
+    source: "NOAA National Data Buoy Center",
+    url: NDBC_URL,
+  },
+  avgPeriodS: { text: "Average period of all the waves, in seconds.", unit: "s" },
+  directionFrom: { text: "The compass direction the dominant waves come from." },
+  p90M: { text: "The 90th percentile of wave height for the month at this buoy over the last 3 years: a big day.", unit: "m" },
+  swellM: { text: "Height of the swell part of the modelled waves (not the local wind sea).", unit: "m" },
+  maxNext48hM: { text: "The biggest modelled wave height in the next 48 hours, at maxAt.", unit: "m" },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Wave height", unit: "m" },
+  facts: [
+    { key: "waveFt", label: "In feet", unit: "ft" },
+    { key: "periodS", label: "Period", unit: "s" },
+    { key: "directionFrom", label: "From" },
+    { key: "waterTempC", label: "Water", unit: "°C" },
+    { key: "windMs", label: "Wind", unit: "m/s" },
+    { key: "maxNext48hM", label: "Biggest in 48 h", unit: "m" },
+    { key: "p90M", label: "Big day (90th percentile)", unit: "m" },
+  ],
+  links: [{ key: "url", label: "NOAA buoy page" }],
+};
+
 const surf = defineLayer({
   id: "surf",
   title: "Surf and waves (NOAA buoys, live)",
@@ -575,7 +619,9 @@ const surf = defineLayer({
   hardMaxAreaKm2: WHOLE_US_KM2,
   wide: { orderBy: "wave height in metres", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("surf"), unit: "m", timeField: "t" },
+  style: { geometry: "point", color: layerColor("surf"), unit: "m", timeField: "t", facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

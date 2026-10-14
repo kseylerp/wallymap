@@ -16,6 +16,9 @@ import {
   type LayerError,
   type LayerResult,
   type QueryContext,
+  type CardSpec,
+  type Facet,
+  type FieldHelp,
 } from "./types";
 import { registerLayer } from "./registry";
 import { overpassQuery } from "./_shared/overpass";
@@ -504,6 +507,92 @@ function withinSacScale(feature: Feature, max: (typeof SAC_SCALES)[number]): boo
   return scaleWithin(scale === undefined ? undefined : String(scale), max);
 }
 
+const SAC_LABELS: Record<(typeof SAC_SCALES)[number], string> = {
+  hiking: "Hiking (T1)",
+  mountain_hiking: "Mountain hiking (T2)",
+  demanding_mountain_hiking: "Demanding mountain hiking (T3)",
+  alpine_hiking: "Alpine hiking (T4)",
+  demanding_alpine_hiking: "Demanding alpine (T5)",
+  difficult_alpine_hiking: "Difficult alpine (T6)",
+};
+
+const HIGHWAY_LABELS: Record<string, string> = { path: "Path", footway: "Footway", track: "Track" };
+
+const FACETS: Facet[] = [
+  {
+    key: "sac_scale",
+    label: "Difficulty",
+    kind: "category",
+    encode: "color",
+    values: SAC_SCALES.map((value) => ({ value, label: SAC_LABELS[value] })),
+  },
+  { key: "highway", label: "Kind", kind: "category", values: Object.entries(HIGHWAY_LABELS).map(([value, label]) => ({ value, label })) },
+];
+
+const ROUTE_KM: FieldHelp = {
+  text: "Kilometres of this named hiking route drawn inside the view, measured by this app along its mapped ways (routes only).",
+  unit: "km",
+  source: "OpenStreetMap contributors",
+};
+
+const HELP: Record<string, FieldHelp> = {
+  sac_scale: {
+    text:
+      "How hard the hike is on the Swiss Alpine Club (SAC) hiking scale, as an OpenStreetMap mapper tagged it: T1 is a trail well cleared " +
+      "over level or inclined terrain, T6 includes longer climbing pitches with severe exposure.",
+    scale: "T1 (easiest) to T6 (hardest)",
+    source: "OpenStreetMap wiki, Key:sac_scale",
+    url: "https://wiki.openstreetmap.org/wiki/Key:sac_scale",
+  },
+  trail_visibility: {
+    text: "How easy the path is to see and follow on the ground, as tagged in OpenStreetMap.",
+    scale: "excellent, good, intermediate, bad, horrible, no",
+    source: "OpenStreetMap wiki, Key:trail_visibility",
+    url: "https://wiki.openstreetmap.org/wiki/Key:trail_visibility",
+  },
+  highway: {
+    text:
+      "The OpenStreetMap way type: path (a hiking or multi-use path), footway (mainly for people on foot) or track (an unpaved farm or forest " +
+      "road).",
+    source: "OpenStreetMap wiki, Key:highway",
+    url: "https://wiki.openstreetmap.org/wiki/Key:highway",
+  },
+  informal: {
+    text: "True when OpenStreetMap marks the path informal: a social trail made by use, not built or signed by a land manager.",
+    source: "OpenStreetMap wiki, Key:informal",
+    url: "https://wiki.openstreetmap.org/wiki/Key:informal",
+  },
+  v: ROUTE_KM,
+  lengthKm: ROUTE_KM,
+  distanceKm: {
+    text: "The whole route's length from its OpenStreetMap distance tag, kept only when it is believable against the route's extent.",
+    unit: "km",
+  },
+  network: {
+    text: "The route network from the OpenStreetMap network tag: international (iwn), national (nwn), regional (rwn) or local (lwn).",
+    source: "OpenStreetMap wiki, Key:network",
+    url: "https://wiki.openstreetmap.org/wiki/Key:network",
+  },
+  osmcSymbol: {
+    text: "The waymark painted along the route, in OpenStreetMap's osmc:symbol code (way colour, background and symbol).",
+    source: "OpenStreetMap wiki, Key:osmc:symbol",
+    url: "https://wiki.openstreetmap.org/wiki/Key:osmc:symbol",
+  },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "lengthKm", label: "Length in view", unit: "km" },
+  facts: [
+    { key: "sac_scale", label: "Difficulty", values: SAC_LABELS },
+    { key: "highway", label: "Kind", values: HIGHWAY_LABELS },
+    { key: "trail_visibility", label: "Visibility" },
+    { key: "surface", label: "Surface" },
+    { key: "distanceKm", label: "Full length", format: "km" },
+    { key: "network", label: "Network" },
+  ],
+  links: [{ key: "website", label: "Website" }],
+};
+
 const osmTrails = defineLayer({
   id: "osm-trails",
   title: "OpenStreetMap trails",
@@ -518,7 +607,9 @@ const osmTrails = defineLayer({
   hardMaxAreaKm2: ROUTE_MAX_AREA_KM2,
   wide: { mode: "named", orderBy: "length in km", limit: MAX_ROUTES },
   input: inputSchema,
-  style: { geometry: "line", color: layerColor("osm-trails") },
+  style: { geometry: "line", color: layerColor("osm-trails"), facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     // run.ts enforces the hard cap; popularity calls this query directly, so it is checked here too.

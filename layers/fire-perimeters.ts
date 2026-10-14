@@ -22,7 +22,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { LOWER_48_KM2, OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -170,6 +170,37 @@ export function offsetFor(bbox: BBox, wide = false): number {
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
+const FACETS: Facet[] = [
+  { key: "acres", label: "Acres burned", kind: "range", unit: "acres", encode: "size" },
+  { key: "year", label: "Year", kind: "range" },
+];
+
+const ACRES: FieldHelp = {
+  text:
+    "Burned area in acres, measured from the mapped fire perimeter (GIS acres) by the National Interagency Fire Center's data; " +
+    "outlines are simplified, so treat it as approximate.",
+  unit: "acres",
+  source: "NIFC Interagency Fire Perimeter History and WFIGS Interagency Perimeters",
+  url: "https://data-nifc.opendata.arcgis.com/",
+};
+
+const HELP: Record<string, FieldHelp> = {
+  acres: ACRES,
+  v: ACRES,
+  year: { text: "The fire year (the year the fire was discovered)." },
+  t: { text: "When the fire was discovered; fires before 2020 show January 1 of their fire year because the history records only the year." },
+  agency: { text: "The agency with jurisdiction where the fire started, as the record gives it." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "acres", label: "Acres burned", unit: "acres" },
+  facts: [
+    { key: "year", label: "Year" },
+    { key: "t", label: "Discovered", format: "date" },
+    { key: "agency", label: "Agency" },
+  ],
+};
+
 const firePerimeters = defineLayer({
   id: "fire-perimeters",
   title: "Wildfire perimeters",
@@ -189,7 +220,9 @@ const firePerimeters = defineLayer({
   hardMaxAreaKm2: LOWER_48_KM2,
   wide: { orderBy: "acres burned", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("fire-perimeters"), fillOpacity: 0.35 },
+  style: { geometry: "polygon", color: layerColor("fire-perimeters"), fillOpacity: 0.35, facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const retrieved = new Date();

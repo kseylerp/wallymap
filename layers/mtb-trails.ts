@@ -14,7 +14,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { overpassCounts, overpassQuery } from "./_shared/overpass";
 import { buildNamedGeometryQuery, buildNamedScanQuery, longestNamedFirst, pickNamedByLength } from "./osm-trails";
@@ -183,6 +183,75 @@ async function queryWide(ctx: QueryContext, input: MtbInput): Promise<LayerResul
   };
 }
 
+const SCALE_LABELS: Record<number, string> = { 0: "Easy", 1: "Easy", 2: "Moderate", 3: "Hard", 4: "Expert", 5: "Expert", 6: "Expert" };
+const KIND_LABELS: Record<string, string> = { mtb: "Rated trail", imba: "IMBA rated", route: "Route" };
+
+const FACETS: Facet[] = [
+  {
+    key: "v",
+    label: "Difficulty",
+    kind: "category",
+    encode: "color",
+    values: [0, 1, 2, 3, 4, 5, 6].map((value) => ({ value, label: SCALE_LABELS[value] })),
+  },
+  { key: "kind", label: "Kind", kind: "category", values: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+];
+
+const SINGLETRACK: FieldHelp = {
+  text:
+    "How hard the trail is to ride on the Singletrack Scale (mtb:scale), as an OpenStreetMap mapper tagged it: 0 is gravel or packed earth " +
+    "with no particular difficulties, 6 is not rideable at all; a + or - or a range like 1-2 counts as its harder end.",
+  scale: "0 (easiest) to 6 (hardest)",
+  source: "OpenStreetMap wiki, Key:mtb:scale",
+  url: "https://wiki.openstreetmap.org/wiki/Key:mtb:scale",
+};
+
+const HELP: Record<string, FieldHelp> = {
+  v: SINGLETRACK,
+  mtbScale: {
+    ...SINGLETRACK,
+    text: "The Singletrack Scale rating exactly as tagged (for example 2+ or 1-2), shown when it differs from the number.",
+  },
+  imba: {
+    text: "The IMBA trail difficulty rating (mtb:scale:imba) as tagged in OpenStreetMap, used mostly on purpose-built and bike park trails.",
+    scale: "0 (easiest) to 4 (hardest)",
+    source: "OpenStreetMap wiki, Key:mtb:scale:imba",
+    url: "https://wiki.openstreetmap.org/wiki/Key:mtb:scale:imba",
+  },
+  uphill: {
+    text:
+      "How hard the trail is to ride uphill (mtb:scale:uphill): 0 is a firm surface almost any rider can climb, 5 is too steep or rough to ride " +
+      "up.",
+    scale: "0 (easiest) to 5 (push or carry)",
+    source: "OpenStreetMap wiki, Key:mtb:scale",
+    url: "https://wiki.openstreetmap.org/wiki/Key:mtb:scale",
+  },
+  kind: {
+    text:
+      "mtb: a segment rated on the Singletrack Scale; imba: a segment with only an IMBA rating; route: a named mountain bike route made of many " +
+      "segments.",
+  },
+  bicycle: {
+    text: "Whether bikes are allowed, from the OpenStreetMap bicycle tag (yes, designated, permissive, no and so on); check the land manager too.",
+    source: "OpenStreetMap wiki, Key:bicycle",
+    url: "https://wiki.openstreetmap.org/wiki/Key:bicycle",
+  },
+  t: { text: "The date a mapper last checked the trail on the ground (check_date), when tagged." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Singletrack Scale" },
+  facts: [
+    { key: "kind", label: "Kind", values: KIND_LABELS },
+    { key: "imba", label: "IMBA rating" },
+    { key: "uphill", label: "Uphill rating" },
+    { key: "surface", label: "Surface" },
+    { key: "bicycle", label: "Bikes" },
+    { key: "operator", label: "Operator" },
+    { key: "t", label: "Last checked", format: "date" },
+  ],
+};
+
 const mtbTrails = defineLayer({
   id: "mtb-trails",
   title: "Mountain bike trails",
@@ -202,7 +271,9 @@ const mtbTrails = defineLayer({
   maxAreaKm2: 2500,
   wide: { mode: "named", orderBy: "length in km", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "line", color: layerColor("mtb-trails") },
+  style: { geometry: "line", color: layerColor("mtb-trails"), facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     if (ctx.wide === true) return queryWide(ctx, input);

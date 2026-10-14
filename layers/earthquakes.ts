@@ -16,7 +16,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
@@ -114,6 +114,45 @@ export function normalizeEarthquakes(raw: unknown[]): FeatureCollection<Point> {
   return { type: "FeatureCollection", features };
 }
 
+const FACETS: Facet[] = [
+  { key: "v", label: "Magnitude", kind: "range", unit: "M", encode: "size" },
+  { key: "depthKm", label: "Depth", kind: "range", unit: "km" },
+];
+
+const HELP: Record<string, FieldHelp> = {
+  v: {
+    text:
+      "The earthquake's magnitude as the USGS catalog reports it, measured from seismic waves by the method named in magType; the scale is " +
+      "logarithmic, so each whole step is about 32 times more energy.",
+    source: "USGS Earthquake Hazards Program, Magnitude Types",
+    url: "https://www.usgs.gov/programs/earthquake-hazards/magnitude-types",
+  },
+  magType: {
+    text:
+      "How the magnitude was measured: for example ml (local, Richter's original method), md (duration of shaking, used for very small events), " +
+      "mb (body waves) or mww and mw (moment magnitude, the USGS authoritative value when computed).",
+    source: "USGS Earthquake Hazards Program, Magnitude Types",
+    url: "https://www.usgs.gov/programs/earthquake-hazards/magnitude-types",
+  },
+  depthKm: { text: "How far below the surface the earthquake started (its hypocentre).", unit: "km" },
+  felt: { text: "How many people reported feeling it to the USGS Did You Feel It? survey." },
+  kind: { text: "The event type in the catalog: earthquake, or a non-quake event such as a quarry blast or explosion." },
+  tsunami: { text: "'possible' when the USGS flagged the event for possible tsunami (it is not a tsunami warning)." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Magnitude" },
+  facts: [
+    { key: "t", label: "When", format: "date" },
+    { key: "depthKm", label: "Depth", format: "km" },
+    { key: "magType", label: "Magnitude type" },
+    { key: "felt", label: "Felt reports", format: "int" },
+    { key: "kind", label: "Event type" },
+    { key: "tsunami", label: "Tsunami flag" },
+  ],
+  links: [{ key: "url", label: "USGS event page" }],
+};
+
 const earthquakes = defineLayer({
   id: "earthquakes",
   title: "Earthquakes",
@@ -133,7 +172,9 @@ const earthquakes = defineLayer({
   maxAreaKm2: 5_000_000,
   wide: { orderBy: "magnitude", rank: "strongest", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("earthquakes"), unit: "M", extrude: "v", heat: true },
+  style: { geometry: "point", color: layerColor("earthquakes"), unit: "M", extrude: "v", heat: true, facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     // Wide (over 5,000,000 km², up to the hard cap): the strongest events, capped at the strategy's limit, plus a count.

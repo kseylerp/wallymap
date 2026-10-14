@@ -24,7 +24,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -201,6 +201,60 @@ export function normalizeUsmin(fc: FeatureCollection): Feature<Point>[] {
   return out;
 }
 
+const FACETS: Facet[] = [
+  {
+    key: "kind",
+    label: "Commodity",
+    kind: "category",
+    values: Object.keys(COMMODITY_CODES).map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })),
+  },
+  {
+    key: "status",
+    label: "Status",
+    kind: "category",
+    values: ["Occurrence", "Prospect", "Past Producer", "Producer", "Plant", "Unknown"].map((value) => ({ value, label: value })),
+  },
+];
+
+const MRDS_URL_PAGE = "https://mrdata.usgs.gov/mrds/";
+
+const HELP: Record<string, FieldHelp> = {
+  kind: {
+    text:
+      "For MRDS sites the main commodity (the first one listed for the deposit); for USMIN symbols the feature type drawn on the old topographic " +
+      "map.",
+  },
+  status: {
+    text:
+      "The development status recorded in the USGS Mineral Resources Data System when the record was last updated (systematic updates stopped in " +
+      "2011), so it does not say whether a mine operates today.",
+    scale: "Occurrence, Prospect, Past Producer, Producer, Plant, Unknown",
+    source: "USGS Mineral Resources Data System",
+    url: MRDS_URL_PAGE,
+  },
+  commodities: { text: "Every commodity the MRDS record lists, main one first." },
+  grade: {
+    text: "The letter code in the MRDS grade field, as the record gives it.",
+    source: "USGS Mineral Resources Data System",
+    url: MRDS_URL_PAGE,
+  },
+  topoName: { text: "The USGS topographic map the mine symbol was digitised from." },
+  topoYear: { text: "The date of that topographic map: the symbol shows what was there then." },
+  source: { text: "MRDS: the USGS Mineral Resources Data System (deposits); USMIN: USGS mine symbols digitised from topographic maps." },
+};
+
+const CARD: CardSpec = {
+  facts: [
+    { key: "status", label: "Status" },
+    { key: "commodities", label: "Commodities", format: "list" },
+    { key: "topoName", label: "Topographic map" },
+    { key: "topoYear", label: "Map year" },
+    { key: "county", label: "County" },
+    { key: "source", label: "Record" },
+  ],
+  links: [{ key: "url", label: "MRDS record" }],
+};
+
 const mines = defineLayer({
   id: "mines",
   title: "Mines and mineral deposits",
@@ -221,7 +275,9 @@ const mines = defineLayer({
       .default("both")
       .describe("Which record: 'mrds' (deposits with commodities), 'usmin' (mine symbols from topographic maps) or 'both' (default)."),
   }),
-  style: { geometry: "point", color: layerColor("mines"), cluster: true },
+  style: { geometry: "point", color: layerColor("mines"), cluster: true, facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

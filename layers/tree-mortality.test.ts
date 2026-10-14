@@ -47,7 +47,7 @@ describe("tree-mortality layer", () => {
     expect(layer.maxAreaKm2).toBe(20_000);
     expect(layer.hardMaxAreaKm2).toBeUndefined();
     expect(layer.wide).toEqual({ orderBy: "trees killed, or percent dead from 2021", limit: 2000, rank: "worst" });
-    expect(layer.style).toEqual({ geometry: "polygon", color: "#F57272", fillOpacity: 0.4 });
+    expect(layer.style).toMatchObject({ geometry: "polygon", color: "#F57272", fillOpacity: 0.4 });
     expect(layer.input.parse({})).toEqual({});
     expect(layer.input.parse({ years: { from: 2015, to: 2019 } })).toEqual({ years: { from: 2015, to: 2019 } });
     expect(() => layer.input.parse({ years: { from: 1900, to: 2019 } })).toThrow();

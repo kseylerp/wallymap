@@ -17,7 +17,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { overpassCounts, overpassQuery } from "./_shared/overpass";
 import {
@@ -237,6 +237,84 @@ export function normalizePaddling(json: unknown): FeatureCollection<Geometry> {
   return { type: "FeatureCollection", features };
 }
 
+/** Class numbers gradeNumber can emit, each under its class (a + or - half step stays in the class it is written with). */
+const CLASS_VALUES: [number, string][] = [
+  [0.5, "Class I"],
+  [1, "Class I"],
+  [1.5, "Class I"],
+  [2, "Class II"],
+  [2.5, "Class II"],
+  [3, "Class III"],
+  [3.5, "Class III"],
+  [4, "Class IV"],
+  [4.5, "Class IV"],
+  [5, "Class V"],
+  [5.5, "Class V"],
+  [6, "Class VI"],
+  [6.5, "Class VI"],
+];
+
+const KIND_LABELS: Record<PaddlingKind, string> = {
+  rapid: "Rapid",
+  section: "Section",
+  access: "Put-in or take-out",
+  hazard: "Hazard",
+  portage: "Portage",
+  route: "Canoe route",
+  feature: "Other feature",
+};
+
+const FACETS: Facet[] = [
+  { key: "v", label: "Class", kind: "category", encode: "color", values: CLASS_VALUES.map(([value, label]) => ({ value, label })) },
+  { key: "kind", label: "Kind", kind: "category", values: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+];
+
+const SCALE_URL = "https://americanwhitewater.org/content/Wiki/safety:internation_scale_of_river_difficulty";
+
+const HELP: Record<string, FieldHelp> = {
+  grade: {
+    text:
+      "The whitewater grade as tagged in OpenStreetMap (whitewater:rapid_grade or whitewater:section_grade), on the International Scale of River " +
+      "Difficulty: Class I easy, II novice, III intermediate, IV advanced, V expert, VI extreme and exploratory; ratings change with water level.",
+    scale: "Class I (easiest) to Class VI (hardest)",
+    source: "American Whitewater, International Scale of River Difficulty",
+    url: SCALE_URL,
+  },
+  v: {
+    text:
+      "The grade as a number, computed by this app: the class (Roman or Arabic), plus a half for + or minus a half for -, " +
+      "and a range such as III-IV counts as its harder end.",
+    scale: "1 (Class I) to 6 (Class VI)",
+    source: "American Whitewater, International Scale of River Difficulty",
+    url: SCALE_URL,
+  },
+  kind: {
+    text:
+      "What the feature is for a paddler: a rapid, a graded river section, an access point (put-in or take-out), a hazard such as a weir, " +
+      "a portage, a canoe route, or another feature such as a play wave.",
+  },
+  whitewater: {
+    text: "The raw OpenStreetMap whitewater tag (for example rapid, put_in, egress, hazard, portage_way).",
+    source: "OpenStreetMap wiki, Key:whitewater",
+    url: "https://wiki.openstreetmap.org/wiki/Key:whitewater",
+  },
+  distanceKm: { text: "The canoe route's length from its OpenStreetMap distance tag.", unit: "km" },
+  river: { text: "The river's name, when the section carries its own section name." },
+  t: { text: "The date a mapper last checked the feature on the ground (check_date), when tagged." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Whitewater class" },
+  facts: [
+    { key: "grade", label: "Grade as tagged" },
+    { key: "kind", label: "Kind", values: KIND_LABELS },
+    { key: "river", label: "River" },
+    { key: "distanceKm", label: "Length", format: "km" },
+    { key: "network", label: "Network" },
+    { key: "t", label: "Last checked", format: "date" },
+  ],
+};
+
 const paddling = defineLayer({
   id: "paddling",
   title: "Whitewater rapids, put-ins and canoe routes",
@@ -258,7 +336,9 @@ const paddling = defineLayer({
   // Rapids and access points have no length, so the wide answer keeps the named ones in OpenStreetMap id order.
   wide: { mode: "named", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "line", color: layerColor("paddling") },
+  style: { geometry: "line", color: layerColor("paddling"), facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     if (ctx.wide === true) return queryWide(ctx, input);

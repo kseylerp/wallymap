@@ -19,7 +19,7 @@
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { rankedSparql, wikimediaFetch } from "./_shared/wikimedia";
@@ -149,6 +149,37 @@ export function normalizePeaks(bindings: Binding[]): Feature<Point>[] {
   return features;
 }
 
+const FACETS: Facet[] = [
+  { key: "elevation", label: "Elevation", kind: "range", unit: "m", encode: "size" },
+  { key: "prominence", label: "Prominence", kind: "range", unit: "m" },
+];
+
+const ELEVATION: FieldHelp = {
+  text: "Height of the summit above sea level as entered in Wikidata (P2044); editors' figures, not survey-checked.",
+  unit: "m",
+  source: "Wikidata",
+  url: "https://www.wikidata.org/wiki/Property:P2044",
+};
+
+const HELP: Record<string, FieldHelp> = {
+  elevation: ELEVATION,
+  v: ELEVATION,
+  prominence: {
+    text:
+      "How far the peak rises above the lowest saddle that links it to a higher peak, the standard measure of how independent a summit is, " +
+      "from Wikidata (P2660).",
+    unit: "m",
+    source: "Wikidata",
+    url: "https://www.wikidata.org/wiki/Property:P2660",
+  },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "elevation", label: "Elevation", unit: "m" },
+  facts: [{ key: "prominence", label: "Prominence", format: "m" }],
+  links: [{ key: "url", label: "Wikidata" }],
+};
+
 const peaks = defineLayer({
   id: "peaks",
   title: "Peaks",
@@ -166,7 +197,9 @@ const peaks = defineLayer({
   maxAreaKm2: 40_000,
   wide: { orderBy: "prominence", rank: "most prominent", limit: LIMIT },
   input: z.object({}),
-  style: { geometry: "point", color: layerColor("peaks"), unit: "m", extrude: "v" },
+  style: { geometry: "point", color: layerColor("peaks"), unit: "m", extrude: "v", facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     // Wide (over 40,000 km², up to the hard cap): the most prominent peaks, capped at the strategy's limit.

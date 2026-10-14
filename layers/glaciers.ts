@@ -30,7 +30,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
@@ -298,6 +298,32 @@ function isTimeout(err: unknown): boolean {
   return typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
 }
 
+const FACETS: Facet[] = [{ key: "areaKm2", label: "Area", kind: "range", unit: "km²", encode: "size" }];
+
+const AREA: FieldHelp = {
+  text: "The glacier's area in this outline as GLIMS records it (db_area), for the date of the image it was mapped from.",
+  unit: "km²",
+  source: "GLIMS Glacier Database (NSIDC / University of Arizona)",
+  url: "https://www.glims.org/",
+};
+
+const HELP: Record<string, FieldHelp> = {
+  areaKm2: AREA,
+  v: AREA,
+  date: { text: "When the satellite or aerial image behind this outline was taken; the ice has usually changed since." },
+  glacierId: { text: "The GLIMS glacier id; outlines of one glacier from different dates share it." },
+  institution: { text: "The team that mapped this outline for GLIMS." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "areaKm2", label: "Area", unit: "km²" },
+  facts: [
+    { key: "date", label: "Mapped from image of", format: "date" },
+    { key: "institution", label: "Mapped by" },
+    { key: "glacierId", label: "GLIMS id" },
+  ],
+};
+
 const glaciers = defineLayer({
   id: "glaciers",
   title: "Glaciers",
@@ -322,7 +348,10 @@ const glaciers = defineLayer({
     unit: "km²",
     fillOpacity: 0.3,
     extrude: "v",
+    facets: FACETS,
   },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     // Wide (over 8,000 km², up to the hard cap): the largest outlines by area, server-sorted and capped at the strategy's

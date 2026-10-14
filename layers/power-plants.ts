@@ -26,7 +26,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
@@ -248,6 +248,51 @@ function isTimeout(err: unknown): boolean {
   return typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
 }
 
+const FACETS: Facet[] = [
+  {
+    key: "kind",
+    label: "Fuel",
+    kind: "category",
+    values: FUELS.map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })),
+  },
+  { key: "mw", label: "Capacity", kind: "range", unit: "MW", encode: "size" },
+];
+
+const CAPACITY: FieldHelp = {
+  text:
+    "Generating capacity in megawatts: for EIA plants the summer capacity of the plant's primary fuel, for a wind turbine its own rating " +
+    "(else the project's average per turbine), for a solar project its AC capacity.",
+  unit: "MW",
+  source: "US EIA (EIA-860, EIA-860M, EIA-923); USGS wind turbine and large-scale solar databases",
+  url: "https://www.eia.gov/electricity/data/eia860/",
+};
+
+const HELP: Record<string, FieldHelp> = {
+  mw: CAPACITY,
+  v: CAPACITY,
+  kind: { text: "The primary energy source: for EIA plants the fuel group the plant mostly uses; wind and solar for the USGS databases." },
+  nameplateMw: { text: "Nameplate capacity: the maximum output the generators are rated for, usually above the summer capacity.", unit: "MW" },
+  projectMw: { text: "Capacity of the whole wind project this turbine belongs to.", unit: "MW" },
+  mwDc: { text: "The solar project's DC capacity (panel rating), higher than its AC output to the grid.", unit: "MW" },
+  dataPeriod: { text: "The month of the EIA data the plant record comes from." },
+  hubHeightM: { text: "Height of the turbine hub above the ground.", unit: "m" },
+  rotorDiameterM: { text: "Diameter of the circle the blades sweep.", unit: "m" },
+  year: { text: "The year the wind or solar project came online." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "mw", label: "Capacity", unit: "MW" },
+  facts: [
+    { key: "kind", label: "Fuel" },
+    { key: "technology", label: "Technology" },
+    { key: "utility", label: "Utility" },
+    { key: "project", label: "Project" },
+    { key: "turbines", label: "Turbines in project", format: "int" },
+    { key: "year", label: "Online since" },
+    { key: "state", label: "State" },
+  ],
+};
+
 const powerPlants = defineLayer({
   id: "power-plants",
   title: "Power plants, wind and solar",
@@ -269,7 +314,9 @@ const powerPlants = defineLayer({
   hardMaxAreaKm2: WHOLE_US_KM2,
   wide: { orderBy: "capacity in MW", limit: MAX_PLANTS },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("power-plants"), unit: "MW", extrude: "v", cluster: true },
+  style: { geometry: "point", color: layerColor("power-plants"), unit: "MW", extrude: "v", cluster: true, facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const retrieved = new Date().toISOString();

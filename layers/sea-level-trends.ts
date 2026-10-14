@@ -20,7 +20,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { jsonObjectBody } from "@/lib/fetch/validate";
@@ -97,6 +97,46 @@ export function trendFeatures(trends: Trend[], [w, s, e, n]: BBox): Feature<Poin
     });
 }
 
+const FACETS: Facet[] = [
+  { key: "v", label: "Trend", kind: "range", unit: "mm/yr" },
+  {
+    key: "kind",
+    label: "Direction",
+    kind: "category",
+    values: [
+      { value: "falling", label: "Falling" },
+      { value: "rising", label: "Rising" },
+    ],
+  },
+];
+
+const HELP: Record<string, FieldHelp> = {
+  v: {
+    text:
+      "NOAA's straight-line fit to the station's whole record of monthly mean sea level, relative to the land under the gauge (ocean rise plus " +
+      "land sinking or rising); a past trend, not a forecast.",
+    unit: "mm/yr",
+    source: "NOAA CO-OPS (Tides and Currents), Sea Level Trends",
+    url: "https://tidesandcurrents.noaa.gov/sltrends/",
+  },
+  trendError: { text: "Plus or minus range of the trend at 95% confidence; a wide range or a short record means an uncertain trend.", unit: "mm/yr" },
+  ftPerCentury: { text: "The same trend as feet per 100 years, computed by this app.", unit: "ft per century" },
+  annotation: { text: "NOAA's note on the station's record, for example a datum shift or an earthquake that moved the gauge." },
+  network: { text: "US for NOAA's own stations, global for the international stations NOAA also analyses." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Sea level trend", unit: "mm/yr" },
+  facts: [
+    { key: "trendError", label: "Uncertainty (±)", unit: "mm/yr" },
+    { key: "ftPerCentury", label: "Per century", unit: "ft" },
+    { key: "startYear", label: "Record from" },
+    { key: "endYear", label: "Record to" },
+    { key: "annotation", label: "NOAA note" },
+  ],
+  links: [{ key: "url", label: "NOAA station trend page" }],
+};
+
 const seaLevelTrends = defineLayer({
   id: "sea-level-trends",
   title: "Sea level trends (NOAA tide gauges)",
@@ -116,7 +156,9 @@ const seaLevelTrends = defineLayer({
   maxAreaKm2: 30_000_000,
   wide: { orderBy: "trend in mm/yr", rank: "fastest-rising", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("sea-level-trends"), unit: "mm/yr" },
+  style: { geometry: "point", color: layerColor("sea-level-trends"), unit: "mm/yr", facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

@@ -9,7 +9,7 @@
 import { z } from "zod";
 import { cellToBoundary, cellToLatLng, getHexagonAreaAvg, latLngToCell, polygonToCells } from "h3-js";
 import type { Feature, FeatureCollection, Geometry, Polygon, Position } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { getLayer, registerLayer } from "./registry";
 import { overpassQuery } from "./_shared/overpass";
 import { outsideUs } from "./_shared/coverage";
@@ -240,6 +240,30 @@ function tooManyCells(count: number, resolution: number): LayerError {
   };
 }
 
+const pct = (weight: number) => `${Math.round(weight * 100)}%`;
+
+const FACETS: Facet[] = [{ key: "v", label: "Remoteness", kind: "range", unit: "score" }];
+
+const HELP: Record<string, FieldHelp> = {
+  v: {
+    text:
+      "An estimate computed by this app from map data, not a measure of solitude: distance from the hexagon centre to the nearest " +
+      `OpenStreetMap road or track (on a log scale up to ${ROAD_DISTANCE_CAP_KM} km, ${pct(REMOTENESS_WEIGHTS.roadDistance)}), ` +
+      `inside designated US wilderness (${pct(REMOTENESS_WEIGHTS.wilderness)}, US only) ` +
+      `and no camp site within ${CAMP_RADIUS_KM} km (${pct(REMOTENESS_WEIGHTS.noCamps)}).`,
+    scale: "0 (on a road, by a campground) to 100 (far from roads, in wilderness); outside the US at most 80",
+    source: "This app, from OpenStreetMap and the wilderness and campsites layers",
+  },
+  signals: {
+    text:
+      "The raw signals behind the score: roadDistanceKm (to the nearest mapped road or track, capped), inWilderness, and campsitesWithin2km; " +
+      "null when that source was unavailable.",
+  },
+  h3: { text: "The H3 hexagon cell id (Uber's hexagonal grid) this score is for." },
+};
+
+const CARD: CardSpec = { measure: { key: "v", label: "Remoteness score" } };
+
 const remoteness = defineLayer({
   id: "remoteness",
   title: "Remoteness score",
@@ -257,7 +281,9 @@ const remoteness = defineLayer({
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 60_000,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("remoteness"), unit: "score" },
+  style: { geometry: "polygon", color: layerColor("remoteness"), unit: "score", facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const area = bboxAreaKm2(ctx.bbox);

@@ -141,6 +141,68 @@ export type StyleHints = {
    * `swatch` is the tiles' raw color, so the layer panel's key can show it through the same filter.
    */
   raster?: RasterHint | null;
+  /**
+   * The one or two attributes people filter this layer by (spec §12a), in the layer's own words: shown inline in the
+   * layer row as chips (categories) or a two-handle slider (ranges), applied through the filters engine. The first
+   * facet with an `encode` drives the map (difficulty on the sage → pink → purple line ramp). Checked at registry load
+   * (layers/facets.ts).
+   */
+  facets?: Facet[];
+};
+
+/**
+ * One facet (spec §12a). `key` is the feature property it reads. A category facet lists its `values` in order (easy
+ * to hard: the order is the ramp's); several values may share a label, and then one chip stands for all of them
+ * (Singletrack Scale 0 and 1 are both "Easy"). A range facet reads a number in `unit`. `encode` is how the map shows it:
+ * `color` (lines on the ordinal ramp, points and areas by class), `dash`, `width`, or `size` (point symbols, column
+ * height, hatch density). `versions` marks a category whose values are versions of the same features (monument
+ * boundaries 2021 and current): the change view compares the first value present against the last.
+ */
+export type Facet = {
+  key: string;
+  label: string;
+  kind: "category" | "range";
+  values?: FacetValue[];
+  unit?: string;
+  encode?: "color" | "dash" | "width" | "size";
+  versions?: boolean;
+};
+
+export type FacetValue = { value: string | number; label: string };
+
+/**
+ * Plain help for one property the inspect card shows (spec §12b): one sentence on what it means, its unit and scale,
+ * who computed it and the source link, in the source's own words where it documents the field.
+ */
+export type FieldHelp = { text: string; unit?: string; scale?: string; source?: string; url?: string };
+
+/**
+ * How the inspect card presents a feature of this layer (spec §12b, owner 2026-10-14): the measure line ("Routes 5 ⓘ",
+ * never "VALUE 5"), the facts in plain labels and units, and links by name ("Open on OpenBeta"). Properties the schema
+ * does not name go under a collapsed Details with humanised labels.
+ */
+export type CardSpec = {
+  /** The headline number: usually `v` under its own name. */
+  measure?: { key: string; label: string; unit?: string; help?: FieldHelp };
+  facts?: CardFact[];
+  /** Properties holding URLs, shown as named links. */
+  links?: { key: string; label: string }[];
+};
+
+/**
+ * One fact row. `format`: int (whole number), 1dp (one decimal), km and m (distance in that unit), date (a calendar
+ * date), list (comma or array items joined with " · "), link (a URL as a named link). `values` spells out codes
+ * ("osm+openbeta" → "OpenStreetMap + OpenBeta"). `parts` folds several numeric properties into one line ("trad 1 ·
+ * sport 4"), each under its own word; the row shows when any part has a value. Help defaults to the layer's fieldHelp.
+ */
+export type CardFact = {
+  key: string;
+  label: string;
+  unit?: string;
+  format?: "int" | "1dp" | "km" | "m" | "date" | "list" | "link";
+  help?: FieldHelp;
+  values?: Record<string, string>;
+  parts?: { key: string; label: string }[];
 };
 
 /** Mapbox raster paint, in Mapbox's units: saturation and contrast -1..1, hueRotate degrees, brightness 0..1, opacity 0..1. */
@@ -180,6 +242,10 @@ export type Layer<I extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawSha
   // assignable to the default Layer in the registry.
   query(ctx: QueryContext, input: z.infer<I>): Promise<LayerResult | LayerError>;
   style: StyleHints;
+  /** Help for the properties the inspect card shows, by property key (`v` included): the card's serif "i" (spec §12b). */
+  fieldHelp?: Record<string, FieldHelp>;
+  /** How the inspect card lays out a feature (measure, facts, links); without it the card lists every property. */
+  card?: CardSpec;
 };
 
 /** How many times maxAreaKm2 a layer with a `wide` strategy answers by default before the hard zoom_in error. */

@@ -28,7 +28,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, bboxesDisjoint, outsideUs } from "./_shared/coverage";
@@ -204,6 +204,54 @@ export function normalizeCdfw(fc: FeatureCollection): Feature<Geometry>[] {
   return features;
 }
 
+const IDS_PAGE = "https://www.fs.usda.gov/science-technology/data-tools-products/fhp-mapping-reporting/detection-surveys";
+
+const FACETS: Facet[] = [
+  { key: "treesKilled", label: "Trees killed", kind: "range", unit: "trees", encode: "size" },
+  { key: "year", label: "Year", kind: "range" },
+];
+
+const TREES: FieldHelp = {
+  text:
+    "Trees killed in the polygon that year, estimated by aerial survey observers (California 1973 to 2019 only; later years record a percent of " +
+    "trees instead).",
+  unit: "trees",
+  source: "California Department of Fish and Wildlife copy of the USFS Region 5 Aerial Detection Survey",
+};
+
+const HELP: Record<string, FieldHelp> = {
+  treesKilled: TREES,
+  v: {
+    text:
+      "Not one unit: for 1973 to 2019 rows the number of trees killed, for 2021 to 2025 rows the percent of trees dead (the middle of the " +
+      "survey's class); the measure field says which, so do not compare across the two.",
+    source: "US Forest Service Insect and Disease Survey; CDFW copy of the USFS Region 5 Aerial Detection Survey",
+  },
+  measure: { text: "What v counts on this polygon: 'trees killed' (1973 to 2019) or 'percent of trees' (2021 to 2025)." },
+  percentAffected: {
+    text: "The survey's class for the share of trees dead in the polygon, for example Moderate (11-29%), sketched by eye from the aircraft.",
+    source: "US Forest Service Insect and Disease Survey",
+    url: IDS_PAGE,
+  },
+  treesPerAcre: { text: "Trees killed per acre in the polygon, from the aerial survey.", unit: "trees per acre" },
+  agent: { text: "What killed the trees, as the survey crew recorded it (a beetle, a disease, drought and so on)." },
+  host: { text: "The tree species or group that died." },
+  year: { text: "The survey year; 2020 was never flown." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Trees killed or percent dead" },
+  facts: [
+    { key: "agent", label: "Cause" },
+    { key: "host", label: "Trees" },
+    { key: "year", label: "Survey year" },
+    { key: "percentAffected", label: "Share dead" },
+    { key: "treesPerAcre", label: "Trees killed per acre", format: "1dp" },
+    { key: "acres", label: "Area", unit: "acres", format: "int" },
+    { key: "forestType", label: "Forest type" },
+  ],
+};
+
 const treeMortality = defineLayer({
   id: "tree-mortality",
   title: "Tree death (beetles, drought, disease)",
@@ -223,7 +271,9 @@ const treeMortality = defineLayer({
   maxAreaKm2: 20_000,
   wide: { orderBy: "trees killed, or percent dead from 2021", limit: WIDE_LIMIT, rank: "worst" },
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("tree-mortality"), fillOpacity: 0.4 },
+  style: { geometry: "polygon", color: layerColor("tree-mortality"), fillOpacity: 0.4, facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

@@ -10,6 +10,8 @@ export async function GET(): Promise<Response> {
       coverage: l.coverage,
       license: l.license,
       style: l.style,
+      ...(l.fieldHelp && { fieldHelp: l.fieldHelp }),
+      ...(l.card && { card: l.card }),
     })),
   );
 }

@@ -23,7 +23,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { layerColor } from "@/lib/render/palette";
@@ -143,6 +143,52 @@ export function offsetFor(bbox: BBox, wide = false): number {
 /** Most polygons in a wide result; the whole dataset is under 70, so this only bounds the request. */
 const WIDE_LIMIT = 1000;
 
+const FACETS: Facet[] = [
+  {
+    key: "kind",
+    label: "Boundary",
+    kind: "category",
+    versions: true,
+    values: [
+      { value: "2021", label: "2021 boundary" },
+      { value: "current", label: "Current boundary" },
+    ],
+  },
+  {
+    key: "designation",
+    label: "Designation",
+    kind: "category",
+    values: [...new Set(Object.values(DESIGNATIONS))].map((value) => ({ value, label: value })),
+  },
+];
+
+const AREA: FieldHelp = {
+  text: "Area of the outline in square kilometres, computed by this app from the simplified polygon (within about 1%).",
+  unit: "km²",
+};
+
+const HELP: Record<string, FieldHelp> = {
+  areaKm2: AREA,
+  v: AREA,
+  kind: {
+    text:
+      "current: the boundary as BLM draws it now; 2021: the Utah monument boundary before the changes, from Utah AGRC's copy of the historic BLM " +
+      "extent.",
+  },
+  designation: { text: "The BLM National Conservation Lands designation: national monument, national conservation area or a similar unit." },
+  source: { text: "Which dataset the outline came from." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "areaKm2", label: "Area", unit: "km²" },
+  facts: [
+    { key: "kind", label: "Boundary", values: { current: "Current boundary", "2021": "2021 boundary" } },
+    { key: "designation", label: "Designation" },
+    { key: "state", label: "State" },
+    { key: "source", label: "Source" },
+  ],
+};
+
 const monuments = defineLayer({
   id: "monuments",
   title: "National monuments and conservation areas",
@@ -159,7 +205,9 @@ const monuments = defineLayer({
       .default("both")
       .describe("Which boundaries: 'current' (as BLM draws them now), '2021' (the Utah monuments before the changes) or 'both' (default)."),
   }),
-  style: { geometry: "polygon", color: layerColor("monuments"), fillOpacity: 0.2 },
+  style: { geometry: "polygon", color: layerColor("monuments"), fillOpacity: 0.2, facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

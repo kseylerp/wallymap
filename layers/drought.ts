@@ -26,7 +26,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
@@ -210,6 +210,47 @@ function isTimeout(err: unknown): boolean {
   return typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
 }
 
+const DROUGHT_URL = "https://droughtmonitor.unl.edu/About/AbouttheData/DroughtClassification.aspx";
+
+const FACETS: Facet[] = [
+  {
+    key: "kind",
+    label: "Category",
+    kind: "category",
+    values: [
+      { value: "D0", label: "D0 Abnormally Dry" },
+      { value: "D1", label: "D1 Moderate Drought" },
+      { value: "D2", label: "D2 Severe Drought" },
+      { value: "D3", label: "D3 Extreme Drought" },
+      { value: "D4", label: "D4 Exceptional Drought" },
+    ],
+  },
+];
+
+const CATEGORY: FieldHelp = {
+  text:
+    "The U.S. Drought Monitor category: D0 Abnormally Dry (going into or coming out of drought), D1 Moderate Drought, D2 Severe Drought, " +
+    "D3 Extreme Drought, D4 Exceptional Drought; authors set it each week from many indicators plus local expert reports.",
+  scale: "D0 (abnormally dry) to D4 (exceptional drought); 0 to 4 as a number",
+  source: "U.S. Drought Monitor (NDMC, USDA, NOAA), Drought Classification",
+  url: DROUGHT_URL,
+};
+
+const HELP: Record<string, FieldHelp> = {
+  kind: CATEGORY,
+  v: CATEGORY,
+  category: CATEGORY,
+  week: { text: "The Tuesday the weekly map is valid for." },
+};
+
+const CARD: CardSpec = {
+  facts: [
+    { key: "kind", label: "Category" },
+    { key: "category", label: "Drought level" },
+    { key: "week", label: "Week of", format: "date" },
+  ],
+};
+
 const drought = defineLayer({
   id: "drought",
   title: "Drought",
@@ -227,7 +268,9 @@ const drought = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 16_000_000,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("drought"), fillOpacity: 0.5 },
+  style: { geometry: "polygon", color: layerColor("drought"), fillOpacity: 0.5, facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

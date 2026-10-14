@@ -29,7 +29,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, WHOLE_US_KM2, bboxesDisjoint, outsideUs } from "./_shared/coverage";
@@ -243,6 +243,61 @@ function stamp(ms: number): string {
   return new Date(ms).toISOString().slice(0, 16).replace("T", " ");
 }
 
+const FACETS: Facet[] = [
+  { key: "v", label: "Snow depth", kind: "range", unit: "in", encode: "size" },
+  {
+    key: "type",
+    label: "Snow type",
+    kind: "category",
+    values: [
+      { value: "no snow", label: "No snow" },
+      { value: "powder", label: "Powder" },
+      { value: "settled", label: "Settled" },
+      { value: "wet/dense", label: "Wet or dense" },
+    ],
+  },
+];
+
+const SNOTEL_URL = "https://wcc.sc.egov.usda.gov/";
+
+const HELP: Record<string, FieldHelp> = {
+  v: {
+    text:
+      "Snow depth at the station's latest hourly reading, measured by the SNOTEL depth sensor over one flat clearing; it jitters by an inch or " +
+      "two.",
+    unit: "in",
+    source: "USDA NRCS SNOTEL",
+    url: SNOTEL_URL,
+  },
+  swe: {
+    text: "Snow water equivalent: the water you would get by melting the snow, the standard measure of how much water the snowpack holds.",
+    unit: "in",
+    source: "USDA NRCS SNOTEL",
+    url: SNOTEL_URL,
+  },
+  density: {
+    text: "Snow water equivalent divided by depth, computed by this app: a whole-column average, left out under 2 inches of snow.",
+    unit: "kg/m³",
+  },
+  type: {
+    text: "The density as a class, set by this app: powder under 150 kg/m³, settled 150 to 300, wet/dense over 300, no snow when the depth is 0.",
+  },
+  new24h: { text: "How much the depth rose over the last 24 hours (0 when it settled or melted); 1 to 2 inches may be sensor noise.", unit: "in" },
+  tempC: { text: "Air temperature at the latest reading.", unit: "°C" },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Snow depth", unit: "in" },
+  facts: [
+    { key: "swe", label: "Snow water equivalent", unit: "in" },
+    { key: "new24h", label: "New in 24 h", unit: "in" },
+    { key: "type", label: "Snow type" },
+    { key: "tempC", label: "Air temperature", unit: "°C" },
+    { key: "elevationFt", label: "Elevation", unit: "ft", format: "int" },
+    { key: "t", label: "Reading", format: "date" },
+  ],
+};
+
 const snowpack = defineLayer({
   id: "snowpack",
   title: "Snowpack (SNOTEL, live)",
@@ -266,7 +321,9 @@ const snowpack = defineLayer({
   hardMaxAreaKm2: WHOLE_US_KM2,
   wide: { orderBy: "snow depth in inches", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("snowpack"), unit: "in", timeField: "t" },
+  style: { geometry: "point", color: layerColor("snowpack"), unit: "in", timeField: "t", facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const now = new Date();

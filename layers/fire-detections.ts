@@ -13,7 +13,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
@@ -108,6 +108,51 @@ function timeOf(feature: Feature): number {
   return typeof t === "string" ? Date.parse(t) : -Infinity;
 }
 
+const FACETS: Facet[] = [
+  {
+    key: "confidence",
+    label: "Confidence",
+    kind: "category",
+    values: [
+      { value: "l", label: "Low" },
+      { value: "n", label: "Nominal" },
+      { value: "h", label: "High" },
+    ],
+  },
+  { key: "v", label: "Fire power", kind: "range", unit: "MW" },
+];
+
+const HELP: Record<string, FieldHelp> = {
+  v: {
+    text:
+      "Fire radiative power: the heat the fire gave off in the satellite pixel at the moment of the pass, in megawatts, " +
+      "as NASA's fire product measures it; higher means burning more intensely.",
+    unit: "MW",
+    source: "NASA FIRMS",
+    url: "https://www.earthdata.nasa.gov/data/tools/firms/faq",
+  },
+  confidence: {
+    text:
+      "How sure the fire algorithm is that the pixel is a fire. VIIRS: l (low, often sun glint or a weak heat signal), n (nominal, a strong " +
+      "heat signal free of sun glint) or h (high, a saturated pixel). MODIS: a number from 0 (very low) to 100 (very high), which NASA calls " +
+      "experimental.",
+    scale: "VIIRS l, n, h; MODIS 0 to 100",
+    source: "NASA FIRMS",
+    url: "https://www.earthdata.nasa.gov/data/tools/firms/faq",
+  },
+  daynight: { text: "D when the satellite saw the fire on a daytime pass, N on a night pass." },
+  t: { text: "UTC time of the satellite pass that saw the hotspot." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Fire radiative power", unit: "MW" },
+  facts: [
+    { key: "t", label: "Seen", format: "date" },
+    { key: "confidence", label: "Confidence", values: { l: "Low", n: "Nominal", h: "High" } },
+    { key: "daynight", label: "Pass", values: { D: "Day", N: "Night" } },
+  ],
+};
+
 const fireDetections = defineLayer({
   id: "fire-detections",
   title: "Active fire detections",
@@ -127,7 +172,9 @@ const fireDetections = defineLayer({
   maxAreaKm2: 2_000_000,
   wide: { orderBy: "detection time", rank: "newest", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("fire-detections"), unit: "MW" },
+  style: { geometry: "point", color: layerColor("fire-detections"), unit: "MW", facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const key = ctx.env.FIRMS_MAP_KEY;

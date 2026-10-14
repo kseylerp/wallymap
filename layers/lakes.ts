@@ -21,7 +21,7 @@
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { rankedSparql, wikimediaFetch } from "./_shared/wikimedia";
@@ -151,6 +151,53 @@ export function normalizeLakes(bindings: Binding[]): Feature<Point>[] {
   return features;
 }
 
+const FACETS: Facet[] = [
+  { key: "depthM", label: "Depth", kind: "range", unit: "m", encode: "size" },
+  {
+    key: "kind",
+    label: "Kind",
+    kind: "category",
+    values: [
+      { value: "lake", label: "Lake" },
+      { value: "reservoir", label: "Reservoir" },
+    ],
+  },
+];
+
+const DEPTH: FieldHelp = {
+  text: "The lake's maximum depth as entered in Wikidata (property P4511); not survey-checked, and empty means not recorded, not shallow.",
+  unit: "m",
+  source: "Wikidata",
+  url: "https://www.wikidata.org/wiki/Property:P4511",
+};
+
+const HELP: Record<string, FieldHelp> = {
+  depthM: DEPTH,
+  v: DEPTH,
+  areaKm2: { text: "Surface area from Wikidata (P2046).", unit: "km²", url: "https://www.wikidata.org/wiki/Property:P2046" },
+  elevationM: {
+    text: "Height of the water surface above sea level, from Wikidata (P2044).",
+    unit: "m",
+    url: "https://www.wikidata.org/wiki/Property:P2044",
+  },
+  volumeKm3: { text: "Volume of water from Wikidata (P2234).", unit: "km³", url: "https://www.wikidata.org/wiki/Property:P2234" },
+  kind: { text: "reservoir when Wikidata says the lake is a reservoir, otherwise lake." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "depthM", label: "Maximum depth", unit: "m" },
+  facts: [
+    { key: "kind", label: "Kind", values: { lake: "Lake", reservoir: "Reservoir" } },
+    { key: "areaKm2", label: "Area", unit: "km²" },
+    { key: "elevationM", label: "Surface elevation", format: "m" },
+    { key: "volumeKm3", label: "Volume", unit: "km³" },
+  ],
+  links: [
+    { key: "wikipedia", label: "Wikipedia" },
+    { key: "url", label: "Wikidata" },
+  ],
+};
+
 const lakes = defineLayer({
   id: "lakes",
   title: "Lakes and reservoirs",
@@ -177,7 +224,9 @@ const lakes = defineLayer({
       .optional()
       .describe("Only lakes whose English name contains this text, case-insensitive (for example 'tahoe')."),
   }),
-  style: { geometry: "point", color: layerColor("lakes"), unit: "m", cluster: true },
+  style: { geometry: "point", color: layerColor("lakes"), unit: "m", cluster: true, facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     // Wide (over 20,000 km², up to the hard cap): the largest lakes by area, capped at the strategy's limit.

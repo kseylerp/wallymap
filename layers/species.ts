@@ -22,7 +22,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
@@ -180,6 +180,27 @@ function isTimeout(err: unknown): boolean {
   return typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
 }
 
+const HELP: Record<string, FieldHelp> = {
+  v: { text: "Always 1: each point is one sighting, so where points pile up is where people see and post things." },
+  license: {
+    text:
+      "The licence the observer chose for the observation (for example cc-by-nc or cc0); all-rights-reserved when none; cite or link it when " +
+      "showing it.",
+    source: "iNaturalist",
+    url: "https://www.inaturalist.org/",
+  },
+  observedOn: { text: "The date the organism was seen, as the observer entered it." },
+};
+
+const CARD: CardSpec = {
+  facts: [
+    { key: "scientificName", label: "Scientific name" },
+    { key: "observedOn", label: "Seen on", format: "date" },
+    { key: "license", label: "Licence" },
+  ],
+  links: [{ key: "url", label: "Observation on iNaturalist" }],
+};
+
 const species = defineLayer({
   id: "species",
   title: "Species sightings",
@@ -200,6 +221,8 @@ const species = defineLayer({
   wide: { orderBy: "date observed", rank: "most recent", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("species") },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

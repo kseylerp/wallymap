@@ -18,7 +18,17 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import {
+  bboxAreaKm2,
+  defineLayer,
+  type BBox,
+  type CardSpec,
+  type Facet,
+  type FieldHelp,
+  type LayerError,
+  type LayerResult,
+  type QueryContext,
+} from "./types";
 import { registerLayer } from "./registry";
 import { mapServerExportTileUrl } from "./_shared/arcgis-tiles";
 import { arcgisQuery } from "./_shared/arcgis";
@@ -133,6 +143,57 @@ async function queryFeatures(ctx: QueryContext): Promise<LayerResult> {
   };
 }
 
+const IUCN_URL = "https://www.iucn.org/theme/protected-areas/about/protected-area-categories";
+
+const IUCN_NAMES: Record<string, string> = {
+  Ia: "Ia Strict Nature Reserve",
+  Ib: "Ib Wilderness Area",
+  II: "II National Park",
+  III: "III Natural Monument or Feature",
+  IV: "IV Habitat/Species Management Area",
+  V: "V Protected Landscape/Seascape",
+  VI: "VI Protected area with sustainable use of natural resources",
+};
+
+const FACETS: Facet[] = [
+  { key: "iucn", label: "IUCN category", kind: "category", values: Object.entries(IUCN_NAMES).map(([value, label]) => ({ value, label })) },
+  { key: "areaKm2", label: "Area", kind: "range", unit: "km²" },
+];
+
+const AREA: FieldHelp = {
+  text: "The area of the mapped polygon in the World Database on Protected Areas, or the reported area when none is mapped.",
+  unit: "km²",
+};
+
+const HELP: Record<string, FieldHelp> = {
+  iucn: {
+    text:
+      "The IUCN management category, which says how an area is managed: Ia Strict Nature Reserve, Ib Wilderness Area, II National Park, III " +
+      "Natural Monument or Feature, IV Habitat/Species Management Area, V Protected Landscape/Seascape, VI Protected area with sustainable use of " +
+      "natural resources.",
+    scale: "Ia, Ib, II, III, IV, V, VI (absent when not reported or not assigned)",
+    source: "IUCN Protected Area Management Categories",
+    url: IUCN_URL,
+  },
+  areaKm2: AREA,
+  v: AREA,
+  designation: { text: "The legal designation in English as the country reports it (National Park, Nature Reserve and so on)." },
+  statusYear: { text: "The year the area was designated or its current status was set." },
+  realm: { text: "Whether the area is terrestrial, marine or coastal (both)." },
+  country: { text: "The ISO 3166 three-letter code of the country that reported the area." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "areaKm2", label: "Area", unit: "km²" },
+  facts: [
+    { key: "designation", label: "Designation" },
+    { key: "iucn", label: "IUCN category", values: IUCN_NAMES },
+    { key: "statusYear", label: "Designated" },
+    { key: "realm", label: "Realm" },
+    { key: "country", label: "Country" },
+  ],
+};
+
 const protectedAreasWorld = defineLayer({
   id: "protected-areas-world",
   title: "Protected areas of the world",
@@ -150,7 +211,9 @@ const protectedAreasWorld = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
-  style: { geometry: "polygon", color: layerColor("protected-areas-world") },
+  style: { geometry: "polygon", color: layerColor("protected-areas-world"), facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     if (bboxAreaKm2(ctx.bbox) <= FEATURES_MAX_AREA_KM2) return queryFeatures(ctx);

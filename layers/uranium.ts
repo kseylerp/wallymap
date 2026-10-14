@@ -20,7 +20,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -117,6 +117,80 @@ export function normalizeDoe(fc: FeatureCollection, thisYear: number): Feature<P
   return out;
 }
 
+const KIND_LABELS: Record<string, string> = {
+  "abandoned mine": "Abandoned mine",
+  "mill tailings site": "Mill tailings site",
+  "leasing program": "Leasing program",
+};
+
+const FACETS: Facet[] = [
+  { key: "hazardScore", label: "Hazard score", kind: "range", unit: "score", encode: "size" },
+  { key: "kind", label: "Kind", kind: "category", values: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+];
+
+const EPA = {
+  source: "Navajo Nation EPA and US EPA, Navajo abandoned uranium mine screening assessment (2007)",
+  url: "https://www.epa.gov/navajo-nation-uranium-cleanup",
+};
+
+const HAZARD: FieldHelp = {
+  text:
+    "The composite screening score from the 2007 Navajo Nation EPA and US EPA assessment of abandoned uranium mines, built from the groundwater, " +
+    "soil, air and surface-water pathway scores: a screening estimate of potential hazard, not a measured exposure, and later cleanup is not " +
+    "reflected.",
+  scale: "10 to about 17,600; higher is a higher estimated hazard",
+  ...EPA,
+};
+
+const pathway = (what: string): FieldHelp => ({
+  text: `The 2007 screening score for the ${what} pathway, one of the four parts of the composite hazard score; an estimate, not a measurement.`,
+  ...EPA,
+});
+
+const HELP: Record<string, FieldHelp> = {
+  hazardScore: HAZARD,
+  v: HAZARD,
+  groundwaterScore: pathway("groundwater"),
+  soilScore: pathway("soil"),
+  airScore: pathway("air"),
+  surfaceWaterScore: pathway("surface-water"),
+  chapter: { text: "The Navajo Nation chapter (local government area) the mine is in." },
+  program: {
+    text:
+      "The DOE program: UMTRCA Title I (abandoned mill sites cleaned up by DOE), Title II (licensed mill sites handed to DOE for long-term care " +
+      "after cleanup) or ULP (the Uranium Leasing Program).",
+    source: "US Department of Energy, Office of Legacy Management",
+    url: "https://www.energy.gov/lm/office-legacy-management",
+  },
+  transferYear: { text: "The year the site was transferred to DOE Legacy Management for long-term care." },
+  expectedTransferYear: { text: "The year the site is expected to be transferred to DOE Legacy Management." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Hazard score" },
+  facts: [
+    { key: "kind", label: "Kind", values: KIND_LABELS },
+    {
+      key: "pathwayScores",
+      label: "Pathway scores",
+      parts: [
+        { key: "groundwaterScore", label: "groundwater" },
+        { key: "soilScore", label: "soil" },
+        { key: "airScore", label: "air" },
+        { key: "surfaceWaterScore", label: "surface water" },
+      ],
+    },
+    { key: "chapter", label: "Chapter" },
+    { key: "aliases", label: "Also called" },
+    { key: "program", label: "Program" },
+    { key: "transferYear", label: "Transferred" },
+  ],
+  links: [
+    { key: "url", label: "DOE site page" },
+    { key: "factSheet", label: "Fact sheet" },
+  ],
+};
+
 const uranium = defineLayer({
   id: "uranium",
   title: "Uranium legacy sites",
@@ -129,7 +203,9 @@ const uranium = defineLayer({
   maxAreaKm2: 20_000_000,
   wide: { mode: "named", limit: MAX_RECORDS },
   input: z.object({}),
-  style: { geometry: "point", color: layerColor("uranium"), unit: "score" },
+  style: { geometry: "point", color: layerColor("uranium"), unit: "score", facets: FACETS },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

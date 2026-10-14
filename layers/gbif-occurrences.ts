@@ -29,7 +29,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { jsonObjectBody } from "@/lib/fetch/validate";
@@ -211,6 +211,57 @@ function isTimeout(err: unknown): boolean {
   return typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
 }
 
+const BASIS_URL = "https://docs.gbif.org/course-data-use/en/basis-of-record.html";
+
+const FACETS: Facet[] = [
+  { key: "year", label: "Year", kind: "range" },
+  {
+    key: "basisOfRecord",
+    label: "Record type",
+    kind: "category",
+    values: [
+      "human observation",
+      "machine observation",
+      "preserved specimen",
+      "living specimen",
+      "fossil specimen",
+      "material sample",
+      "material citation",
+      "observation",
+      "occurrence",
+    ].map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })),
+  },
+];
+
+const YEAR: FieldHelp = { text: "The year the organism was seen or collected, as the record gives it." };
+
+const HELP: Record<string, FieldHelp> = {
+  year: YEAR,
+  v: YEAR,
+  basisOfRecord: {
+    text:
+      "What kind of evidence the record is: a human observation (seen by a person), a machine observation (a photo, sound or camera-trap record), " +
+      "a preserved specimen in a collection, a living specimen in a zoo or garden, a fossil specimen, or a citation in a publication.",
+    source: "GBIF, Basis of record",
+    url: BASIS_URL,
+  },
+  uncertaintyM: { text: "How far the true position may be from the point, as the record states (records vaguer than 5 km are left out).", unit: "m" },
+  dataset: { text: "The dataset that published the record to GBIF (for example iNaturalist research-grade observations or a museum collection)." },
+  license: { text: "The licence the record's publisher set; cite or link the record when showing it." },
+};
+
+const CARD: CardSpec = {
+  facts: [
+    { key: "scientificName", label: "Scientific name" },
+    { key: "t", label: "Date", format: "date" },
+    { key: "basisOfRecord", label: "Record type" },
+    { key: "dataset", label: "Dataset" },
+    { key: "uncertaintyM", label: "Position uncertainty", format: "m" },
+    { key: "license", label: "Licence" },
+  ],
+  links: [{ key: "url", label: "Source record" }],
+};
+
 const gbifOccurrences = defineLayer({
   id: "gbif-occurrences",
   title: "GBIF occurrence records",
@@ -237,7 +288,10 @@ const gbifOccurrences = defineLayer({
     color: layerColor("gbif-occurrences"),
     heat: true,
     cluster: true,
+    facets: FACETS,
   },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

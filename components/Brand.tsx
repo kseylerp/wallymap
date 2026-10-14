@@ -39,14 +39,14 @@ export function Wordmark({ variant = "pill" }: WordmarkProps) {
     return (
       <div className="flex items-center gap-3">
         <WallyMark size={40} />
-        <span className="font-serif text-[2.1rem] leading-none font-semibold tracking-[-0.02em] text-ink">WallyMap</span>
+        <span className="font-serif text-[2.1rem] leading-none font-semibold tracking-[-0.04em] text-ink">WallyMap</span>
       </div>
     );
   }
   return (
     <div className="glass-strong flex h-10 items-center gap-2 rounded-pill px-2 md:pr-4">
       <WallyMark size={24} />
-      <h1 className="sr-only font-serif text-[1.15rem] leading-none font-semibold tracking-[-0.01em] text-ink md:not-sr-only">
+      <h1 className="sr-only font-serif text-[1.15rem] leading-none font-semibold tracking-[-0.03em] text-ink md:not-sr-only">
         WallyMap
       </h1>
     </div>

@@ -216,12 +216,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Compact Geologica headings (Kyle, 2026-10-14), as on wally.guide and the app. */
 h1,
 h2,
 h3,
 h4 {
-  letter-spacing: -0.01em;
-  line-height: 1.2;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
 }
 
 :focus-visible {
@@ -330,7 +331,7 @@ textarea:focus-visible {
 .chat-markdown h4 {
   font-family: var(--font-serif);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.03em;
   color: var(--ink);
 }
 .chat-markdown h1 {
@@ -401,8 +402,8 @@ textarea:focus-visible {
 .chat-markdown .answer-title {
   font-family: var(--font-serif);
   font-size: 1.12rem;
-  letter-spacing: -0.01em;
-  line-height: 1.25;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
 }
 .chat-markdown .answer-title strong {
   font-weight: 600;

@@ -6,7 +6,8 @@
  *   https://coast.noaa.gov/arcgis/rest/services/dc_slr/slr_{n}ft/MapServer/tile/{z}/{y}/{x}   (n = 0 to 10)
  *   - Web Mercator (wkid 102100), 256 px PNG8, cached "down to Level ID 16" (z 16 answered 200 over Oakland; z 17 404s).
  *     Empty tiles are tiny transparent PNGs (192 bytes) or 404s outside the coast, both of which Mapbox draws as nothing.
- *   - Half-foot services exist too (slr_1_5ft); this layer sticks to whole feet.
+ *   - Half-foot services exist too (slr_0_5ft ... slr_9_5ft; slr_0_5ft, slr_1_5ft and slr_9_5ft answered 200 on
+ *     2026-10-14). The agent's `feet` input stays whole; the scenario scrubber (data.scenario) offers every half foot.
  *   - CORS: access-control-allow-origin echoes the Origin. copyrightText "NOAA Office for Coastal Management".
  *   - The service description: inundation of n ft above current Mean Higher High Water (MHHW), drawn as it would appear at
  *     the highest high tides, hydrologically connected areas only; screening level, no erosion, subsidence or future
@@ -17,7 +18,7 @@
  * tile 1.8 KB at 0 ft, 7.3 KB at 2 ft, 23.8 KB at 6 ft. runLayer over Miami with feet 2 returned the slr_2ft template in 1 ms.
  */
 import { z } from "zod";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type TileScenario } from "./types";
 import { registerLayer } from "./registry";
 import { bboxesDisjoint, OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
@@ -33,9 +34,27 @@ export function touchesAlaska(bbox: BBox): boolean {
   return !bboxesDisjoint(bbox, ALASKA);
 }
 
-export function slrTileUrl(feet: number): string {
-  return `https://coast.noaa.gov/arcgis/rest/services/dc_slr/slr_${feet}ft/MapServer/tile/{z}/{y}/{x}`;
+/** The NOAA service name's spelling of an amount: 3 -> "3", 0.5 -> "0_5". */
+export function slrToken(feet: number): string {
+  return String(feet).replace(".", "_");
 }
+
+export function slrTileUrl(feet: number): string {
+  return `https://coast.noaa.gov/arcgis/rest/services/dc_slr/slr_${slrToken(feet)}ft/MapServer/tile/{z}/{y}/{x}`;
+}
+
+/** Every half foot from 0 to 10, the amounts NOAA publishes a tile service for. */
+export const SLR_FEET: number[] = Array.from({ length: 21 }, (_, i) => i / 2);
+
+/** The scenario scrubber's contract: the same URL with `{value}` for the amount, over every half foot. */
+export const SLR_SCENARIO: TileScenario = {
+  param: "feet",
+  label: "Sea level rise",
+  unit: "ft",
+  values: SLR_FEET,
+  template: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/slr_{value}ft/MapServer/tile/{z}/{y}/{x}",
+  tokens: SLR_FEET.map(slrToken),
+};
 
 const seaLevelRise = defineLayer({
   id: "sea-level-rise",
@@ -44,7 +63,7 @@ const seaLevelRise = defineLayer({
     "Map of the US coastal land that would be under water at high tide if the sea rose by a given number of feet, from the NOAA Sea Level Rise Viewer, drawn as blue water over the land. " +
     "feet (0 to 10, default 3) is the rise above today's average highest daily tide (mean higher high water, MHHW); feet 0 shows what high tide already covers. " +
     "Choosing feet: NOAA's 2022 interagency report expects about 1 foot of rise on US coasts between 2020 and 2050 (more on the Gulf and East coasts), so use feet 1 for 'flooding by 2050' and 2 for a high 2050 case; its 2100 scenarios (global average) are 1.0 ft low, 1.6 intermediate-low, 3.3 intermediate, 4.9 intermediate-high and 6.6 high, and most US coasts get somewhat more. " +
-    "To show two scenarios, query once with each feet value and describe the difference; the compare tool only moves layers through time, so it cannot switch between feet. " +
+    "For another amount call render with scenario (feet, halves allowed), for two call compare with scenario [a, b]; never re-query per amount. " +
     "Example questions: 'What would 3 feet of sea level rise flood in Miami?', 'Which parts of the Bay Area flood by 2050?', 'Is this neighbourhood at risk from rising seas?'. User words: sea level rise, flooding by 2050, coastal flooding. " +
     "Caveats: it is a screening map: no levees failing, storm surge, waves, erosion, land sinking or future construction, and low areas cut off from the sea are left out; do not use it for one house or for insurance. " +
     "Covers the coastal contiguous US, Hawaii, Puerto Rico and the US Virgin Islands; Alaska has no tiles, so it draws nothing there. " +
@@ -67,7 +86,7 @@ const seaLevelRise = defineLayer({
     }
     return {
       kind: "tiles",
-      data: { url: slrTileUrl(input.feet), minzoom: 0, maxzoom: 16, format: "raster" },
+      data: { url: slrTileUrl(input.feet), minzoom: 0, maxzoom: 16, format: "raster", scenario: SLR_SCENARIO },
       citation,
       coverageNote: `Land flooded at high tide with ${input.feet} ft of sea level rise above today's MHHW${touchesAlaska(ctx.bbox) ? "; Alaska has no sea level rise tiles, so nothing draws there" : ""}`,
     };

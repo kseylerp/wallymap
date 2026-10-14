@@ -5,6 +5,7 @@ import { compareSummary, presetFor, type CompareMode } from "@/lib/render/compar
 import {
   COMPARE_COLORS,
   compareHidden,
+  compareSideText,
   defaultCompare,
   effectiveMode,
   hasPreset,
@@ -15,6 +16,7 @@ import {
   type PresetLayer,
 } from "@/lib/render/compareView";
 import type { CompareState, LoadedLayer, MapAction, MapState } from "@/lib/render/state";
+import { scenarioOf, scenarioValueText } from "@/lib/render/scenario";
 import { visibleState } from "@/lib/render/view";
 
 /** Toggle mode flips A and B this often (spec §7: 1 Hz). */
@@ -102,7 +104,7 @@ export function compareEntry(state: MapState): { comparable: LoadedLayer[]; open
 /** The action that opens a compare on the layer `compareEntry` picks, or null when nothing can be compared. */
 export function openCompareAction(state: MapState, today: Date = new Date()): MapAction | null {
   const { opening } = compareEntry(state);
-  return opening ? { type: "set_compare", compare: defaultCompare(opening, today) } : null;
+  return opening ? { type: "set_compare", compare: defaultCompare(opening, today, state) } : null;
 }
 
 /**
@@ -124,12 +126,14 @@ export function CompareControl({ state, dispatch }: CompareControlProps) {
       <>
         <div role="group" aria-label="Compare over time" className="flex items-baseline gap-3 px-5 pt-3.5 pb-3">
           <h2 className="small-caps">Compare</h2>
-          <p className="min-w-0 flex-1 truncate text-[12px] text-ink-muted">{opening.title} at two times</p>
+          <p className="min-w-0 flex-1 truncate text-[12px] text-ink-muted">
+            {opening.title} at two {scenarioOf(opening) ? "amounts" : "times"}
+          </p>
           <button
             type="button"
             data-testid="compare-open"
-            title={`Compare ${opening.title} at two times`}
-            onClick={() => dispatch({ type: "set_compare", compare: defaultCompare(opening, new Date()) })}
+            title={`Compare ${opening.title} at two ${scenarioOf(opening) ? "amounts" : "times"}`}
+            onClick={() => dispatch({ type: "set_compare", compare: defaultCompare(opening, new Date(), state) })}
             className={TEXT_BUTTON}
           >
             Start
@@ -177,7 +181,8 @@ export function useCompareTicker(state: MapState, dispatch: (action: MapAction) 
 export function CompareSwipe({ state }: { state: MapState }) {
   const compare = state.compare;
   if (!compare || effectiveMode(state) !== "swipe" || compareHidden(state) || !state.layers[compare.layerId]) return null;
-  return <SwipeHandle aText={compare.aLabel ?? windowText(compare.a)} bText={compare.bLabel ?? windowText(compare.b)} />;
+  const layer = state.layers[compare.layerId];
+  return <SwipeHandle aText={compareSideText(compare, "a", layer)} bText={compareSideText(compare, "b", layer)} />;
 }
 
 type StripProps = {
@@ -227,8 +232,8 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
   if (short && !expanded) {
     // "2016–2020" reads as "2016–20" here, so the line fits the 280px console.
     const compact = (text: string) => text.replace(/^(\d{2})(\d{2})–\1(\d{2})$/, "$1$2–$3");
-    const aText = compare.aLabel ?? compact(windowText(compare.a));
-    const bText = compare.bLabel ?? compact(windowText(compare.b));
+    const aText = compact(compareSideText(compare, "a", layer));
+    const bText = compact(compareSideText(compare, "b", layer));
     return (
       <>
         <div
@@ -280,6 +285,29 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
     );
   }
 
+  const contract = compare.scenario ? scenarioOf(layer) : undefined;
+  /** A scenario compare's side: the amount as a select over the layer's amounts ("1 ft"), in place of the date fields. */
+  const amountField = (which: "a" | "b") => {
+    if (!contract || !compare.scenario) return null;
+    const scenario = compare.scenario;
+    const name = which.toUpperCase();
+    return (
+      <select
+        aria-label={`${name} ${contract.label.toLowerCase()}`}
+        value={String(scenario[which])}
+        onChange={(e) => set({ scenario: { ...scenario, [which]: Number(e.target.value) }, [which === "a" ? "aLabel" : "bLabel"]: undefined })}
+        data-testid={`compare-amount-${which}`}
+        className="compare-date h-6 min-w-0 rounded-[4px] bg-transparent px-1 text-[12px] text-ink tabular-nums outline-none hover:bg-mist/60 focus-visible:bg-mist/70"
+      >
+        {contract.values.map((v) => (
+          <option key={v} value={String(v)}>
+            {scenarioValueText(v, contract.unit)}
+          </option>
+        ))}
+      </select>
+    );
+  };
+
   const sideRow = (which: "a" | "b") => {
     const w = compare[which];
     const label = which === "a" ? compare.aLabel : compare.bLabel;
@@ -291,11 +319,20 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
         <div className="flex min-w-0 items-center gap-1.5">
           <Swatch color={color} />
           <span className="w-3 shrink-0 text-[12px] font-medium text-ink">{name}</span>
-          <DateField label={`${name} from`} value={w[0].slice(0, 10)} onCommit={(v) => setWindow(which, 0, v)} />
-          <span aria-hidden className="text-[12px] text-ink-muted">
-            –
-          </span>
-          <DateField label={`${name} to`} value={w[1].slice(0, 10)} onCommit={(v) => setWindow(which, 1, v)} />
+          {contract ? (
+            <>
+              {amountField(which)}
+              <span className="min-w-0 truncate text-[11.5px] text-ink-muted">{contract.label}</span>
+            </>
+          ) : (
+            <>
+              <DateField label={`${name} from`} value={w[0].slice(0, 10)} onCommit={(v) => setWindow(which, 0, v)} />
+              <span aria-hidden className="text-[12px] text-ink-muted">
+                –
+              </span>
+              <DateField label={`${name} to`} value={w[1].slice(0, 10)} onCommit={(v) => setWindow(which, 1, v)} />
+            </>
+          )}
         </div>
         {label && (
           <p className="truncate pl-[34px] text-[11.5px] leading-4 text-ink-muted" title={label}>
@@ -326,7 +363,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
                 value={layer.id}
                 onChange={(e) => {
                   const next = comparable.find((l) => l.id === e.target.value);
-                  if (next) dispatch({ type: "set_compare", compare: { ...defaultCompare(next, new Date()), mode: compare.mode } });
+                  if (next) dispatch({ type: "set_compare", compare: { ...defaultCompare(next, new Date(), state), mode: compare.mode } });
                 }}
                 className="min-w-0 flex-1 truncate bg-transparent text-[13px] text-ink outline-none"
               >
@@ -417,7 +454,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
             ) : mode === "toggle" && (
               <div className="ml-auto flex items-center gap-2">
                 <span className="text-[11.5px] text-ink-muted tabular-nums">
-                  {compare.side === "b" ? (compare.bLabel ?? windowText(compare.b)) : (compare.aLabel ?? windowText(compare.a))}
+                  {compareSideText(compare, compare.side === "b" ? "b" : "a", layer)}
                 </span>
                 <button
                   type="button"

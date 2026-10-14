@@ -56,6 +56,8 @@ export type LayerResult =
         geometry?: "point" | "line" | "polygon";
         /** Present when the URL can be pointed at a time window; makes the layer scrubbable. */
         time?: TileTime;
+        /** Present when the URL can be pointed at other amounts (sea level rise feet); shows the scenario scrubber. */
+        scenario?: TileScenario;
       };
       citation: Citation;
       coverageNote?: string;
@@ -148,3 +150,19 @@ export function bboxAreaKm2(bbox: BBox): number {
   const heightKm = (north - south) * KM_PER_DEG_LAT;
   return widthKm * heightKm;
 }
+
+/**
+ * How a tile layer's URL follows the scenario scrubber (components/ScenarioScrubber.tsx): one tile service per amount,
+ * e.g. sea level rise in feet. `template` is the tile URL with `{value}` where the amount goes; the result's `url` is
+ * the template filled with the queried amount. `param` is the layer input the amount came from (`feet`), `label` the
+ * scrubber's title ("Sea level rise"), `values` the amounts offered in order. `tokens`, when the service names do not
+ * spell the number plainly, lists what fills `{value}` for each entry of `values` ("0_5" for 0.5).
+ */
+export type TileScenario = {
+  param: string;
+  label: string;
+  unit: "ft" | "m" | "in" | (string & {});
+  values: number[];
+  template: string;
+  tokens?: string[];
+};

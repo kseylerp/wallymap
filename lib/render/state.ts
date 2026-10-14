@@ -103,13 +103,32 @@ export type MapState = {
    * and B. While it exists the compared layer ignores the scrubber's window; other layers keep it.
    */
   compare?: CompareState;
+  /**
+   * The scenario scrubber (components/ScenarioScrubber.tsx): the amount a scenario tile layer (sea level rise, its
+   * `data.scenario`) is drawn at, when the user or the agent moved it off the queried amount. lib/render/view.ts rewrites
+   * the layer's tile URL from it. A re-query of the layer drops it (the new query's amount shows).
+   */
+  scenario?: ScenarioState;
 };
+
+/** The scenario scrubber's state: which layer, the amount shown (one of its `data.scenario.values`) and whether Play steps it. */
+export type ScenarioState = { layerId: string; value: number; playing: boolean };
 
 /**
  * A compare: the spec, optional labels for the two sides, and (toggle mode) the side on screen, A by default, and
  * whether the 1 Hz flip is paused. The permalink does not record it (lib/render/permalink.ts).
  */
-export type CompareState = CompareSpec & { aLabel?: string; bLabel?: string; side?: "a" | "b"; paused?: boolean };
+export type CompareState = CompareSpec & {
+  aLabel?: string;
+  bLabel?: string;
+  side?: "a" | "b";
+  paused?: boolean;
+  /**
+   * A scenario compare (a tile layer with `data.scenario`): side A and B draw these two amounts, and the windows `a` and
+   * `b` are not used (lib/render/compareView.ts).
+   */
+  scenario?: { a: number; b: number };
+};
 
 /** "slide" moves the whole window each step; "cumulative" keeps the start at the first date and grows the end. */
 export type TimeMode = "slide" | "cumulative";
@@ -192,4 +211,12 @@ export type MapAction =
   | { type: "compare_flip" }
   /** Pauses or resumes toggle mode's flip (space, or Pause in the console). */
   | { type: "set_compare_paused"; paused: boolean }
-  | { type: "clear_compare" };
+  | { type: "clear_compare" }
+  /** Shows a scenario layer at `value` (snapped to its nearest listed amount); ignored for a layer without a scenario. */
+  | { type: "set_scenario"; layerId: string; value: number }
+  /** Play or pause the scenario scrubber; playing from the last amount starts over at the first. */
+  | { type: "set_scenario_playing"; layerId: string; playing: boolean }
+  /** One play step: the next amount; at the last one, play stops. */
+  | { type: "scenario_tick" }
+  /** Back to the queried amount. */
+  | { type: "clear_scenario" };

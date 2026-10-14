@@ -104,7 +104,10 @@ function renderActions(output: Obj, catalog: LayerCatalog): MapAction[] {
   // Filters replace the layer's current ones ({} clears them); without them the panel's filters stay.
   const filters = parseFilters(output.filters);
   if (filters) op.filters = filters;
-  return [asked ? { type: "render", op } : { type: "render", op, defaultMode: true }];
+  const actions: MapAction[] = [asked ? { type: "render", op } : { type: "render", op, defaultMode: true }];
+  // `scenario` moves a scenario layer's scrubber (sea level rise feet); the reducer snaps it and ignores other layers.
+  if (isNumber(output.scenario)) actions.push({ type: "set_scenario", layerId, value: output.scenario });
+  return actions;
 }
 
 function queryActions(layerId: string, output: Obj, catalog: LayerCatalog, existingOps: RenderOp[]): MapAction[] {
@@ -228,10 +231,34 @@ function isWindow(value: unknown): value is [string, string] {
   );
 }
 
-/** A `compare` result: the two windows and the mode, passed through as the compare state; malformed output maps to nothing. */
+function isAmounts(value: unknown): value is [number, number] {
+  return Array.isArray(value) && value.length === 2 && value.every(isNumber);
+}
+
+/** The windows a scenario compare carries: not used, so empty unless the model sent real ones. */
+const NO_WINDOW: [string, string] = ["", ""];
+
+/**
+ * A `compare` result: the two windows and the mode, passed through as the compare state; malformed output maps to
+ * nothing. With `scenario: [a, b]` (two amounts of a scenario layer, sea level rise feet) the windows may be left out,
+ * and a scenario compare swipes unless toggle was asked for (delta has no features to diff on tiles).
+ */
 function compareActions(output: Obj): MapAction[] {
-  const { layerId, a, b, mode, aLabel, bLabel } = output;
-  if (typeof layerId !== "string" || layerId === "" || !isWindow(a) || !isWindow(b)) return [];
+  const { layerId, a, b, mode, aLabel, bLabel, scenario } = output;
+  if (typeof layerId !== "string" || layerId === "") return [];
+  if (isAmounts(scenario)) {
+    const compare: CompareState = {
+      layerId,
+      a: isWindow(a) ? a : NO_WINDOW,
+      b: isWindow(b) ? b : NO_WINDOW,
+      mode: mode === "toggle" ? "toggle" : "swipe",
+      scenario: { a: scenario[0], b: scenario[1] },
+    };
+    if (typeof aLabel === "string") compare.aLabel = aLabel;
+    if (typeof bLabel === "string") compare.bLabel = bLabel;
+    return [{ type: "set_compare", compare }];
+  }
+  if (!isWindow(a) || !isWindow(b)) return [];
   if (!COMPARE_MODES.includes(mode as (typeof COMPARE_MODES)[number])) return [];
   const compare: CompareState = { layerId, a, b, mode: mode as CompareState["mode"] };
   if (typeof aLabel === "string") compare.aLabel = aLabel;

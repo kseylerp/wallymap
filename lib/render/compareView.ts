@@ -3,6 +3,7 @@ import { deltaFeatures, hexDelta, presetFor, splitWindows, type CompareMode, typ
 import { applyFilters, type LayerFilters } from "@/lib/render/filters";
 import type { CompareState, LoadedLayer, MapState } from "@/lib/render/state";
 import { createStore } from "@/lib/render/wally/playback";
+import { currentScenarioValue, scenarioOf, scenarioTileUrl, scenarioValueText } from "@/lib/render/scenario";
 import type { TileTime } from "@/layers/types";
 import { tileUrlForTime, type TimeWindow } from "@/lib/time";
 
@@ -11,7 +12,9 @@ import { tileUrlForTime, type TimeWindow } from "@/lib/time";
  * lib/render/compare.ts; this file turns a `MapState.compare` into layers. Swipe and toggle draw the layer twice: side
  * A under the layer's own id and side B under `compareBId(id)` (a view-only layer with no render op, so the layer
  * panel and the export never list it). Delta draws one collection whose features carry `delta` (a-only, b-only,
- * both). Tile layers (night lights, forest loss) become two raster sources and always compare by toggle.
+ * both). Tile layers (night lights, forest loss) become two raster sources and compare by toggle; a scenario tile layer
+ * (sea level rise, `data.scenario`) compares two amounts instead of two windows, by swipe (lib/render/tileSides.ts draws
+ * its sides in the clipped overlays) or toggle.
  */
 
 /** Approved palette (spec §11, lib/render/palette.ts): side A purple, side B wally pink, unchanged dark grey. */
@@ -40,18 +43,22 @@ export function hasPreset(layerId: string): layerId is PresetLayer {
   return (PRESET_LAYERS as readonly string[]).includes(layerId);
 }
 
-/** True when a layer can be compared: GeoJSON with dated features (`t`), or a tile layer that publishes `data.time`. */
+/** True when a layer can be compared: GeoJSON with dated features (`t`), or a tile layer that publishes `data.time` or `data.scenario`. */
 export function isComparable(layer: LoadedLayer): boolean {
-  if (layer.result.kind === "tiles") return layer.result.data.time !== undefined;
+  if (layer.result.kind === "tiles") return layer.result.data.time !== undefined || layer.result.data.scenario !== undefined;
   return layer.result.data.features.some((f) => {
     const t = f.properties?.t;
     return typeof t === "string" && !Number.isNaN(Date.parse(t));
   });
 }
 
-/** Modes a layer supports: tiles have no features to split or diff, so they only toggle. */
+/**
+ * Modes a layer supports: tiles have no features to split or diff, so they toggle; a scenario tile layer also swipes
+ * (its two amounts draw as deck bitmaps in the clipped side overlays, lib/render/tileSides.ts).
+ */
 export function modesFor(layer: LoadedLayer | undefined): CompareMode[] {
-  return layer?.result.kind === "tiles" ? ["toggle"] : ["swipe", "toggle", "delta"];
+  if (layer?.result.kind !== "tiles") return ["swipe", "toggle", "delta"];
+  return layer.result.data.scenario ? ["swipe", "toggle"] : ["toggle"];
 }
 
 /** The mode actually drawn: the asked-for mode when the layer supports it, else toggle. */
@@ -95,9 +102,19 @@ function withUrl(layer: LoadedLayer, id: string, url: string): LoadedLayer {
   return { ...layer, id, result: { ...layer.result, data: { ...layer.result.data, url } } };
 }
 
-function deriveSides(layer: LoadedLayer, filters: LayerFilters | undefined, spec: CompareSpec, withDelta: boolean): Sides {
+/** A compare's spec, with the two amounts of a scenario compare when it has them (CompareState["scenario"]). */
+export type CompareSides = CompareSpec & Pick<CompareState, "scenario">;
+
+function deriveSides(layer: LoadedLayer, filters: LayerFilters | undefined, spec: CompareSides, withDelta: boolean): Sides {
   if (layer.result.kind === "tiles") {
-    const { url, time } = layer.result.data;
+    const { url, time, scenario } = layer.result.data;
+    // A scenario compare draws two amounts where a time compare draws two windows.
+    if (scenario && spec.scenario) {
+      return {
+        a: withUrl(layer, layer.id, scenarioTileUrl(scenario, spec.scenario.a)),
+        b: withUrl(layer, compareBId(layer.id), scenarioTileUrl(scenario, spec.scenario.b)),
+      };
+    }
     return {
       a: withUrl(layer, layer.id, compareTileUrl(url, time, spec.a)),
       b: withUrl(layer, compareBId(layer.id), compareTileUrl(url, time, spec.b)),
@@ -126,7 +143,7 @@ function withDeltaOf(layer: LoadedLayer, sides: Sides): Sides {
 export function compareSides(
   layer: LoadedLayer,
   filters: LayerFilters | undefined,
-  spec: CompareSpec,
+  spec: CompareSides,
   withDelta: boolean = spec.mode === "delta",
 ): Sides {
   let byKey = memo.get(layer);
@@ -134,7 +151,8 @@ export function compareSides(
     byKey = new Map();
     memo.set(layer, byKey);
   }
-  const key = `${spec.a.join("|")}#${spec.b.join("|")}#${filters ? JSON.stringify(filters) : ""}`;
+  const amounts = spec.scenario ? `${spec.scenario.a}~${spec.scenario.b}` : "";
+  const key = `${spec.a.join("|")}#${spec.b.join("|")}#${filters ? JSON.stringify(filters) : ""}#${amounts}`;
   const hit = byKey.get(key);
   if (hit && (hit.delta || !withDelta || layer.result.kind === "tiles")) return hit;
   if (hit) {
@@ -178,8 +196,10 @@ function isoDay(iso: string): string {
  * The compare the Compare button opens for a layer: its preset when it has one, else the dated span cut into two
  * halves (earlier half A, later half B), in the layer's natural mode (delta for features, toggle for tiles).
  */
-export function defaultCompare(layer: LoadedLayer, today: Date): CompareState {
+export function defaultCompare(layer: LoadedLayer, today: Date, state?: Pick<MapState, "scenario" | "layers">): CompareState {
   if (hasPreset(layer.id)) return presetFor(layer.id, today);
+  const scenario = scenarioOf(layer);
+  if (scenario) return defaultScenarioCompare(layer, scenario.values, state);
   const mode: CompareMode = layer.result.kind === "tiles" ? "toggle" : "delta";
   let lo = Infinity;
   let hi = -Infinity;
@@ -204,6 +224,30 @@ export function defaultCompare(layer: LoadedLayer, today: Date): CompareState {
     b: [isoDay(new Date(mid + 86_400_000).toISOString()), isoDay(new Date(hi).toISOString())],
     mode,
   };
+}
+
+/** The amounts a scenario compare opens on: A 1 and B 5 when listed (sea level rise in feet), else the amount shown and the last. */
+const SCENARIO_DEFAULT = { a: 1, b: 5 } as const;
+
+function defaultScenarioCompare(layer: LoadedLayer, values: number[], state?: Pick<MapState, "scenario" | "layers">): CompareState {
+  const listed = values.includes(SCENARIO_DEFAULT.a) && values.includes(SCENARIO_DEFAULT.b);
+  const shown = (state && currentScenarioValue(state, layer.id)) ?? values[0];
+  const last = values[values.length - 1];
+  const scenario = listed ? { ...SCENARIO_DEFAULT } : { a: shown === last ? values[0] : shown, b: last };
+  // The windows are not used by a scenario compare; empty, they never read as dates.
+  return { layerId: layer.id, a: ["", ""], b: ["", ""], mode: "swipe", scenario };
+}
+
+/**
+ * How a compare side is named on screen: the agent's label, else a scenario amount ("5 ft") or the window
+ * (`windowText`).
+ */
+export function compareSideText(compare: CompareState, which: "a" | "b", layer: LoadedLayer | undefined): string {
+  const label = which === "a" ? compare.aLabel : compare.bLabel;
+  if (label) return label;
+  const unit = scenarioOf(layer)?.unit;
+  if (compare.scenario && unit !== undefined) return scenarioValueText(compare.scenario[which], unit);
+  return windowText(compare[which]);
 }
 
 /** True while the compared layer is hidden in the layer panel: nothing is drawn, so toggle does not tick. */

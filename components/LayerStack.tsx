@@ -22,6 +22,7 @@ import type { Feature } from "geojson";
 import { LegendKey } from "@/components/LegendKey";
 import { formatValue } from "@/lib/format";
 import { rasterKeyFilter } from "@/lib/render/rasterCalm";
+import { currentScenarioValue, scenarioOf, scenarioValueText } from "@/lib/render/scenario";
 import { COMPARE_COLORS, compareBId, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
 import { hexbinThreshold } from "@/lib/render/deck";
 import { WHITE } from "@/lib/render/palette";
@@ -46,6 +47,10 @@ type LayerStackProps = {
   shownLayers?: MapState["layers"];
   /** The compare control (components/CompareControl.tsx), docked under the time scrubber; it brings its own hairline. */
   compareSlot?: ReactNode;
+  /** The scenario scrubbers (components/ScenarioScrubber.tsx), docked under the time scrubber; they bring their own hairlines. */
+  scenarioSlot?: ReactNode;
+  /** The scenario scrubber's state: a scenario layer's row slider shows the amount it holds. */
+  scenario?: MapState["scenario"];
 };
 
 /** Modes the select offers line and area layers; areas with an `extrude` hint (or already extruded) can stand as 3D columns. */
@@ -178,6 +183,8 @@ type RowProps = {
   shownLayerB?: LoadedLayer;
   op: RenderOp | undefined;
   license: string | undefined;
+  /** The amount a scenario layer shows (MapState.scenario, else the queried one); undefined for other layers. */
+  scenarioValue?: number;
   dispatch: (action: MapAction) => void;
   onMove: (delta: 1 | -1) => void;
   dragProps: {
@@ -249,11 +256,45 @@ function MeasureSlider({
 }
 
 /**
+ * A scenario layer's row slider (sea level rise), in place of opacity: the amounts on the scenario scrubber, with the
+ * one shown ("3 ft"). Opacity stays available to the agent (render, set_opacity).
+ */
+function ScenarioRowSlider({ layer, value, dispatch }: { layer: LoadedLayer; value: number; dispatch: (action: MapAction) => void }) {
+  const scenario = scenarioOf(layer);
+  if (!scenario) return null;
+  const { values, unit, label } = scenario;
+  const at = Math.max(0, values.indexOf(value));
+  const fill = values.length > 1 ? (at / (values.length - 1)) * 100 : 100;
+  return (
+    <label className="flex items-center gap-1.5">
+      <span className="sr-only">
+        {label} for {layer.title}
+      </span>
+      <input
+        type="range"
+        min={0}
+        max={values.length - 1}
+        step={1}
+        value={at}
+        aria-valuetext={scenarioValueText(value, unit)}
+        onChange={(e) => dispatch({ type: "set_scenario", layerId: layer.id, value: values[Number(e.target.value)] })}
+        data-testid="scenario-row-slider"
+        className="layer-opacity w-[60px]"
+        style={{ ["--fill" as string]: `${Math.round(fill)}%` }}
+      />
+      <span aria-hidden className="w-9 text-right text-[11px] text-ink-muted tabular-nums">
+        {scenarioValueText(value, unit)}
+      </span>
+    </label>
+  );
+}
+
+/**
  * One legend row: the key (also the drag handle), the title over a muted line of coverage, license and source, the
  * feature count in tabular figures and an always-visible ×, and (on hover or focus) visibility, the measure threshold
  * (or opacity, for layers without a numeric `v`), mode and filters.
  */
-function LegendRow({ layer, shownLayer, shownLayerB, op, license, dispatch, onMove, dragProps, armDrag, dropTarget, dragging, selected }: RowProps) {
+function LegendRow({ layer, shownLayer, shownLayerB, op, license, scenarioValue, dispatch, onMove, dragProps, armDrag, dropTarget, dragging, selected }: RowProps) {
   const visible = op?.visible ?? false;
   const opacity = op?.opacity ?? 1;
   const count = layer.result.kind === "geojson" ? layer.result.data.features.length : null;
@@ -393,7 +434,10 @@ function LegendRow({ layer, shownLayer, shownLayerB, op, license, dispatch, onMo
               className="legend-check"
             />
             {op && range && <MeasureSlider layer={layer} range={range} measure={measure} filters={filters} dispatch={dispatch} />}
-            {op && !range && (
+            {op && !range && scenarioValue !== undefined && (
+              <ScenarioRowSlider layer={layer} value={scenarioValue} dispatch={dispatch} />
+            )}
+            {op && !range && scenarioValue === undefined && (
               <label className="flex items-center gap-1.5">
                 <span className="sr-only">Opacity for {layer.title}</span>
                 <input
@@ -481,6 +525,8 @@ export function LayerStack({
   time,
   shownLayers,
   compareSlot,
+  scenarioSlot,
+  scenario,
 }: LayerStackProps) {
   const items = stackOrder(layers, renderOps);
   // A dated tile layer whose tiles all failed for the window's date (lib/render/tileErrors.ts).
@@ -518,6 +564,8 @@ export function LayerStack({
             <div aria-hidden className="hairline mx-5" />
           </>
         )}
+        {/* The scenario scrubber (sea level rise amounts) shares the slot, under the time scrubber. */}
+        {scenarioSlot}
       </div>
       {/* Compare over time sits under the scrubber; empty (nothing to compare), the slot takes no space. */}
       <div data-slot="compare" className="shrink-0 empty:hidden">
@@ -554,6 +602,7 @@ export function LayerStack({
               shownLayerB={shownLayers?.[compareBId(layer.id)]}
               op={op}
               license={catalog?.[layer.id]?.license}
+              scenarioValue={currentScenarioValue({ layers, scenario }, layer.id)}
               dispatch={dispatch}
               onMove={(delta) => {
                 if (index !== -1) dispatch({ type: "reorder", layerId: layer.id, toIndex: index + delta });

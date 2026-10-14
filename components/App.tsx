@@ -5,6 +5,7 @@ import { ChatRail } from "@/components/ChatRail";
 import { CompareControl, CompareSwipe, openCompareAction, useCompareTicker } from "@/components/CompareControl";
 import { InspectCard } from "@/components/InspectCard";
 import { LayerStack, selectionSwatch } from "@/components/LayerStack";
+import { ScenarioScrubbers, useScenarioPlay } from "@/components/ScenarioScrubber";
 import { MapCanvas, type MapHandle } from "@/components/MapCanvas";
 import { MapControls } from "@/components/MapControls";
 import { MapPills } from "@/components/MapPills";
@@ -66,6 +67,8 @@ export function App() {
   const permalink = usePermalink(state, dispatch);
   // The scrubber's play steps here, so it keeps going while the layer panel is closed.
   useTimePlay(state.time?.playing ?? false, dispatch);
+  // The scenario scrubber's play (sea level rise amounts), here for the same reason.
+  useScenarioPlay(state.scenario?.playing ?? false, dispatch);
   // Compare's 1 Hz toggle flip and its space key, here so they keep going while the data console is closed.
   useCompareTicker(state, dispatch);
   const [catalog, setCatalog] = useState<LayerCatalog | null>(null);
@@ -257,6 +260,8 @@ export function App() {
           time={state.time}
           shownLayers={view.layers}
           compareSlot={<CompareControl state={state} dispatch={dispatch} />}
+          scenarioSlot={<ScenarioScrubbers state={state} dispatch={dispatch} />}
+          scenario={state.scenario}
         />
       </div>
 

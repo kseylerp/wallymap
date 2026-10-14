@@ -26,6 +26,7 @@ import { areaRecipe, DARK_GREY, isPaletteColor, LINE, SYMBOL, WHITE, type HatchC
 import { rampColor, rgbaString } from "@/lib/render/ramp";
 import { rasterPaint } from "@/lib/render/rasterCalm";
 import { featureCenter } from "@/lib/render/inspect";
+import { isTileSwipe } from "@/lib/render/tileSides";
 import type { Basemap, MapState } from "@/lib/render/state";
 
 const PREFIX = "tiles-";
@@ -273,7 +274,10 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
     }
     // A compare in toggle mode hides the side not showing by opacity, not visibility, so both sides keep their tiles
     // loaded and the 1 Hz flip is instant.
-    const shown = compareSideShown(state, loaded.id) ? 1 : 0;
+    // A swiped scenario compare draws its two sides as deck bitmaps in the clipped overlays (lib/render/tileSides.ts),
+    // so its Mapbox rasters stay loaded but transparent.
+    const swiped = isTileSwipe(state) && compareBaseId(loaded.id) === state.compare?.layerId;
+    const shown = compareSideShown(state, loaded.id) && !swiped ? 1 : 0;
     // The layer's raster hint calms third-party colors (lib/render/rasterCalm.ts); paint only, so the scrubber and
     // compare keep working on the same source.
     const paint = rasterPaint(loaded.style.raster, opacity * shown);

@@ -124,6 +124,9 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
   const start = state.time?.window[0];
   const end = state.time?.window[1];
   const { viewport, basemap, layers, renderOps } = state;
+  // The scenario scrubber's layer and amount only, so a play/pause alone does not rewrite the hash.
+  const scenarioLayer = state.scenario?.layerId;
+  const scenarioValue = state.scenario?.value;
   const untouched = isInitialView(state);
   useEffect(() => {
     if (!ready || !catalog) return;
@@ -134,7 +137,8 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
         // A fresh page with nothing to share keeps a clean URL.
         if (untouched && window.location.hash === "") return;
         const time = start !== undefined && end !== undefined ? { start, end } : undefined;
-        const hash = untouched ? "" : encodeState({ viewport, basemap, layers, renderOps, time }, servable);
+        const scenario = scenarioLayer !== undefined && scenarioValue !== undefined ? { layerId: scenarioLayer, value: scenarioValue } : undefined;
+        const hash = untouched ? "" : encodeState({ viewport, basemap, layers, renderOps, time, scenario }, servable);
         const url = window.location.pathname + window.location.search + hash;
         window.history.replaceState(window.history.state, "", url);
       } catch {
@@ -142,7 +146,7 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
       }
     }, WRITE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [ready, catalog, untouched, viewport, basemap, layers, renderOps, start, end]);
+  }, [ready, catalog, untouched, viewport, basemap, layers, renderOps, start, end, scenarioLayer, scenarioValue]);
 
   return { status };
 }

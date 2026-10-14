@@ -4,6 +4,7 @@ import { applyFilters, type LayerFilters } from "@/lib/render/filters";
 import { isAggregateFeature } from "@/lib/render/inspect";
 import { activeFilters, fullWindow } from "@/lib/render/reducer";
 import type { LoadedLayer, MapState, Selection } from "@/lib/render/state";
+import { scenarioOf, scenarioTileUrl } from "@/lib/render/scenario";
 import { filterByWindow, inWindow, tileUrlForTime, type TimeWindow } from "@/lib/time";
 
 /**
@@ -60,11 +61,19 @@ function filtersOf(state: MapState, layerId: string): LayerFilters | undefined {
   return activeFilters(state.renderOps.find((op) => op.layerId === layerId)?.filters);
 }
 
+/** The scenario layer's tile URL at the scrubber's amount, or undefined when the scrubber is not on this layer. */
+function scenarioUrl(state: MapState, layer: LoadedLayer): string | undefined {
+  const contract = scenarioOf(layer);
+  if (!contract || state.scenario?.layerId !== layer.id || !contract.values.includes(state.scenario.value)) return undefined;
+  return scenarioTileUrl(contract, state.scenario.value);
+}
+
 function visibleLayer(
   layer: LoadedLayer,
   filters: LayerFilters | undefined,
   window: TimeWindow | undefined,
   rewriteTiles: boolean,
+  scenario?: string,
 ): LoadedLayer {
   if (layer.result.kind === "geojson") {
     if (!window && !filters) return layer;
@@ -77,9 +86,10 @@ function visibleLayer(
       return withData(layer, window ? filterByWindow(kept, window) : kept);
     });
   }
-  if (!window || !rewriteTiles) return layer;
   const tiles = layer.result;
-  const url = tileUrlForTime(tiles.data.url, tiles.data.time, window);
+  // The scenario scrubber's amount; a layer that follows time is pointed at the window (no layer publishes both).
+  const base = scenario ?? tiles.data.url;
+  const url = window && rewriteTiles ? tileUrlForTime(base, tiles.data.time, window) : base;
   if (url === tiles.data.url) return layer;
   return remember(layer, `u:${url}`, () => ({ ...layer, result: { ...tiles, data: { ...tiles.data, url } } }));
 }
@@ -87,7 +97,8 @@ function visibleLayer(
 /**
  * What the map, the layer counts, the inspect card and the export show: `state` with each GeoJSON layer's features
  * narrowed by its render op's attribute filters and to the time window (features without `t` always stay), and time-aware tile layers (night lights, forest
- * loss) pointed at the window's end once the window is narrower than the whole span. Pure and memoized: the same
+ * loss) pointed at the window's end once the window is narrower than the whole span, and a scenario tile layer (sea level
+ * rise) pointed at the scenario scrubber's amount (`MapState.scenario`). Pure and memoized: the same
  * state gives the same object, the same layer and window give the same data object (so deck does not re-upload),
  * and nothing to narrow returns `state` itself. While a compare is on, the compared layer is replaced by its compare
  * entries (lib/render/compareView.ts): side A under its id and side B under `compareBId(id)`, or the delta collection.
@@ -108,7 +119,7 @@ export function visibleState(state: MapState): MapState {
       changed = true;
       continue;
     }
-    const next = visibleLayer(layer, filtersOf(state, id), window, rewriteTiles);
+    const next = visibleLayer(layer, filtersOf(state, id), window, rewriteTiles, scenarioUrl(state, layer));
     if (next !== layer) changed = true;
     layers[id] = next;
   }

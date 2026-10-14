@@ -14,6 +14,7 @@ import { pickToSelection, pickUnderHeat, type DeckPick } from "@/lib/render/insp
 import { viewFromCamera, type MapView } from "@/lib/agent/view";
 import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
 import { noteTile } from "@/lib/render/tileErrors";
+import { tileSwipeLayers } from "@/lib/render/tileSides";
 import { visibleState } from "@/lib/render/view";
 import {
   bearingAt,
@@ -169,7 +170,11 @@ type DeckLayerSets = { main: Layer[]; a: Layer[]; b: Layer[] };
 function safeDeckLayers(state: MapState): DeckLayerSets {
   try {
     // The visible view: features outside the time window (and filtered out in the layer panel) are not drawn.
-    return buildDeckLayerSets(visibleState(state));
+    const view = visibleState(state);
+    const sets = buildDeckLayerSets(view);
+    // A swiped scenario tile layer (sea level rise) draws its two amounts in the side overlays too.
+    const tiles = tileSwipeLayers(view);
+    return tiles.a.length + tiles.b.length === 0 ? sets : { ...sets, a: [...sets.a, ...tiles.a], b: [...sets.b, ...tiles.b] };
   } catch (error) {
     console.error("MapCanvas: could not build deck.gl layers", error);
     return { main: [], a: [], b: [] };

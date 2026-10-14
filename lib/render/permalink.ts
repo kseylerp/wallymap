@@ -9,6 +9,9 @@ export type PermalinkTime = { start: string; end: string };
 
 export type PermalinkLayer = { id: string; mode?: RenderMode; visible: boolean; filters?: LayerFilters };
 
+/** A scenario layer's amount on the scenario scrubber (`s=<layer>:<value>`). */
+export type PermalinkScenario = { layerId: string; value: number };
+
 /** What a hash can say; every field is optional because a shared link may be partial. */
 export type PermalinkState = {
   viewport?: Viewport;
@@ -17,6 +20,7 @@ export type PermalinkState = {
   time?: PermalinkTime;
   /** How many filter entries the link that wrote this hash had to leave out to stay short (`fx=`). */
   filtersDropped?: number;
+  scenario?: PermalinkScenario;
 };
 
 /**
@@ -26,6 +30,8 @@ export type PermalinkState = {
 export type PermalinkSource = Pick<MapState, "viewport" | "basemap" | "layers" | "renderOps"> & {
   /** The scrubber's state (its window is written) or a window as start and end. */
   time?: PermalinkTime | Pick<TimeState, "window">;
+  /** The scenario scrubber's amount (`MapState.scenario`); written only for a layer the link loads. */
+  scenario?: PermalinkScenario;
 };
 
 function timeOf(time: PermalinkSource["time"]): PermalinkTime | undefined {
@@ -108,7 +114,8 @@ function round(value: number, digits: number): string {
 /**
  * Servable layers only (ids in `servable`, when given; route results and drawn layers are not replayable).
  * `#v=<lng>,<lat>,<zoom>,<pitch>,<bearing>&b=<basemap>&l=<id:mode:visible,...>&f=<filters>&t=<start>,<end>` (layers by
- * id; filters as `encodeFilters`, with `fx=<n>` when n entries did not fit). Links without `f=` still read.
+ * id; filters as `encodeFilters`, with `fx=<n>` when n entries did not fit), and `s=<layer>:<value>` for the scenario
+ * scrubber's amount (sea level rise feet). Links without `f=` or `s=` still read.
  */
 export function encodeState(state: PermalinkSource, servable?: Record<string, unknown>): string {
   const { longitude, latitude, zoom, pitch, bearing } = state.viewport;
@@ -126,6 +133,10 @@ export function encodeState(state: PermalinkSource, servable?: Record<string, un
   if (dropped > 0) parts.push(`fx=${dropped}`);
   const time = timeOf(state.time);
   if (time) parts.push(`t=${encodeURIComponent(time.start)},${encodeURIComponent(time.end)}`);
+  const scenario = state.scenario;
+  if (scenario && Number.isFinite(scenario.value) && shared.some((op) => op.layerId === scenario.layerId)) {
+    parts.push(`s=${encodeURIComponent(scenario.layerId)}:${num(scenario.value)}`);
+  }
   return `#${parts.join("&")}`;
 }
 
@@ -159,6 +170,15 @@ function parseLayers(value: string): PermalinkLayer[] {
     });
   }
   return layers;
+}
+
+function parseScenario(value: string): PermalinkScenario | null {
+  const cut = value.lastIndexOf(":");
+  if (cut <= 0) return null;
+  const layerId = safeDecode(value.slice(0, cut));
+  const raw = value.slice(cut + 1);
+  const n = raw.trim() === "" ? NaN : Number(raw);
+  return layerId && Number.isFinite(n) ? { layerId, value: n } : null;
 }
 
 function parseTime(value: string): PermalinkTime | null {
@@ -199,6 +219,9 @@ export function decodeState(hash: string): PermalinkState | null {
     } else if (key === "fx") {
       const n = Number(value);
       if (Number.isInteger(n) && n > 0) out.filtersDropped = n;
+    } else if (key === "s") {
+      const scenario = parseScenario(value);
+      if (scenario) out.scenario = scenario;
     } else if (key === "t") {
       const time = parseTime(value);
       if (time) {
@@ -314,5 +337,7 @@ export async function restoreFromPermalink(
   });
   // After the layers, so the window lands on the time index they build (or waits for one).
   if (decoded.time) dispatch({ type: "set_time_window", window: [decoded.time.start, decoded.time.end] });
+  // After the layers too: the reducer snaps the amount to the layer's scenario and ignores it for a layer that failed.
+  if (decoded.scenario) dispatch({ type: "set_scenario", layerId: decoded.scenario.layerId, value: decoded.scenario.value });
   return outcome;
 }

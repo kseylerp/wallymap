@@ -15,6 +15,7 @@ import { stepWindow, timeIndex, type TimeIndex, type TimeWindow } from "@/lib/ti
 import { arrivalPitch, fitZoomOffset } from "@/lib/render/wally/terrain";
 import { WebMercatorViewport } from "@math.gl/web-mercator";
 import { featureBBox } from "@/lib/render/inspect";
+import { currentScenarioValue, scenarioOf, snapScenarioValue } from "@/lib/render/scenario";
 
 /**
  * When a dense point layer starts clustered (style hint `cluster`): more than `minFeatures` features while the camera
@@ -253,7 +254,8 @@ function ordered(w: [string, string]): [string, string] {
  * Changing only the windows of the compare that is on (same layer and mode, e.g. a date edited in the console) keeps
  * the side on screen and the pause.
  */
-function startCompare(state: MapState, compare: CompareState): MapState {
+function startCompare(state: MapState, input: CompareState): MapState {
+  const compare = withSnappedScenario(state, input);
   const current = state.compare;
   const sameCompare = current?.layerId === compare.layerId && current.mode === compare.mode;
   const next: CompareState = {
@@ -264,7 +266,44 @@ function startCompare(state: MapState, compare: CompareState): MapState {
     paused: sameCompare ? current.paused : undefined,
   };
   const time = state.time?.playing ? { ...state.time, playing: false } : state.time;
-  return { ...state, compare: next, time, selected: dropSelectionOf(state, compare.layerId) };
+  const scenario = state.scenario?.playing ? { ...state.scenario, playing: false } : state.scenario;
+  return { ...state, compare: next, time, scenario, selected: dropSelectionOf(state, compare.layerId) };
+}
+
+/**
+ * A scenario compare's two amounts snapped to the layer's listed values; the scenario is dropped when the layer has no
+ * scenario (the compare then falls back to its windows) or an amount is not a number.
+ */
+function withSnappedScenario(state: MapState, compare: CompareState): CompareState {
+  if (!compare.scenario) return compare;
+  const contract = scenarioOf(state.layers[compare.layerId]);
+  const a = contract && snapScenarioValue(contract, compare.scenario.a);
+  const b = contract && snapScenarioValue(contract, compare.scenario.b);
+  if (a === undefined || b === undefined) {
+    const { scenario: _dropped, ...rest } = compare;
+    void _dropped;
+    return rest;
+  }
+  return { ...compare, scenario: { a, b } };
+}
+
+// ---- Scenario scrubber ----
+
+/** Drops the scenario state when it is on `layerId` (the layer was removed or re-queried). */
+function dropScenarioOf(state: MapState, layerId: string): MapState["scenario"] {
+  return state.scenario?.layerId === layerId ? undefined : state.scenario;
+}
+
+/** Plays or pauses a scenario layer's scrubber; play from the last amount starts over at the first. */
+function setScenarioPlaying(state: MapState, layerId: string, playing: boolean): MapState {
+  const contract = scenarioOf(state.layers[layerId]);
+  if (!contract || contract.values.length === 0) return state;
+  if (!playing) {
+    return state.scenario?.layerId === layerId && state.scenario.playing ? { ...state, scenario: { ...state.scenario, playing: false } } : state;
+  }
+  const value = currentScenarioValue(state, layerId) ?? contract.values[0];
+  const atEnd = contract.values.indexOf(value) >= contract.values.length - 1;
+  return { ...state, scenario: { layerId, value: atEnd ? contract.values[0] : value, playing: true } };
 }
 
 /**
@@ -302,6 +341,7 @@ export function isMapReset(state: MapState): boolean {
     state.time === undefined &&
     state.pendingTime === undefined &&
     state.compare === undefined &&
+    state.scenario === undefined &&
     a.longitude === b.longitude &&
     a.latitude === b.latitude &&
     a.zoom === b.zoom &&
@@ -345,6 +385,8 @@ function reduceAction(state: MapState, action: MapAction): MapState {
           errors: state.errors.filter((e) => e.layerId !== action.layer.id),
           // A reload replaces the features, so the old selection no longer points at anything drawn.
           selected: dropSelectionOf(state, action.layer.id),
+          // A re-query of a scenario layer shows the amount it asked for, not the scrubber's.
+          scenario: dropScenarioOf(state, action.layer.id),
         },
         true,
       );
@@ -429,6 +471,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
           errors: state.errors.filter((e) => e.layerId !== action.layerId),
           selected: dropSelectionOf(state, action.layerId),
           compare: dropCompareOf(state, action.layerId),
+          scenario: dropScenarioOf(state, action.layerId),
           // The last layer gone ends the conversation's map: a time window still waiting for a dated layer is dropped
           // too, so it never lands on a layer opened much later.
           ...(Object.keys(layers).length === 0 && { pendingTime: undefined }),
@@ -448,6 +491,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
         time: undefined,
         pendingTime: undefined,
         compare: undefined,
+        scenario: undefined,
       };
     case "reset_map":
       // Compose the layer panel's "Clear all" with the starting camera; basemap and 3D stay as they are.
@@ -551,5 +595,28 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       return state.compare
         ? { ...state, compare: undefined, selected: dropComparedSelection(state, state.compare.mode, undefined) }
         : state;
+    case "set_scenario": {
+      const contract = scenarioOf(state.layers[action.layerId]);
+      const value = contract && snapScenarioValue(contract, action.value);
+      if (value === undefined) return state;
+      const current = state.scenario;
+      if (current?.layerId === action.layerId && current.value === value) return state;
+      // Moving the scrubber by hand (or the agent setting an amount) keeps play going only on the same layer.
+      return { ...state, scenario: { layerId: action.layerId, value, playing: current?.layerId === action.layerId && current.playing } };
+    }
+    case "set_scenario_playing":
+      return setScenarioPlaying(state, action.layerId, action.playing);
+    case "scenario_tick": {
+      const scenario = state.scenario;
+      if (!scenario?.playing) return state;
+      const values = scenarioOf(state.layers[scenario.layerId])?.values;
+      if (!values) return { ...state, scenario: undefined };
+      const at = values.indexOf(scenario.value);
+      // Nothing left to step to: play ends on the last amount.
+      if (at < 0 || at >= values.length - 1) return { ...state, scenario: { ...scenario, playing: false } };
+      return { ...state, scenario: { ...scenario, value: values[at + 1] } };
+    }
+    case "clear_scenario":
+      return state.scenario ? { ...state, scenario: undefined } : state;
   }
 }

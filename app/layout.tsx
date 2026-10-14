@@ -1,12 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Outfit } from "next/font/google";
+import { Geologica } from "next/font/google";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./globals.css";
 
-// Outfit for headings (Kyle, 2026-10-09) — the title face on wally.guide and
-// the Wally app. Text is the system font, Light.
-const outfit = Outfit({
-  variable: "--font-outfit",
+// Geologica for headings (Kyle, 2026-10-14) — the title face on wally.guide
+// and the Wally app. Text is the system font, Light.
+const geologica = Geologica({
+  variable: "--font-geologica",
   subsets: ["latin"],
   weight: ["600", "700"],
 });
@@ -32,7 +32,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${outfit.variable} h-full antialiased`}>
+    <html lang="en" className={`${geologica.variable} h-full antialiased`}>
       <body className="h-full overflow-hidden">{children}</body>
     </html>
   );

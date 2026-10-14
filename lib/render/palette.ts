@@ -200,8 +200,12 @@ export const LINE_CLASSES = {
 /** While a feature is selected, the rest of its layer fades to this share of its alpha. */
 export const SIBLING_FADE = 0.35;
 
-/** Compare delta lines by class: A only purple, B only pink, unchanged sage (never a dark grey line). */
-export const DELTA_LINE_COLORS = { "a-only": PURPLE, "b-only": PINK, both: SAGE } as const;
+/**
+ * The change view's delta (spec §12): what only A had (lost) wally pink with a pink hatch, what only B has (gained)
+ * purple, unchanged dark grey; lines draw unchanged sage (never a dark grey line).
+ */
+export const DELTA_COLORS = { "a-only": PINK, "b-only": PURPLE, both: DARK_GREY } as const;
+export const DELTA_LINE_COLORS = { "a-only": PINK, "b-only": PURPLE, both: SAGE } as const;
 
 /** A palette color asked for on a line: dark grey and ink read as sage, since no line core is ever dark. */
 export function lineColorFor(color: string): string {

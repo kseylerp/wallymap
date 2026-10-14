@@ -68,7 +68,8 @@ function CategoryFilter({ field, include, onChange }: { field: Category; include
   );
 }
 
-function RangeFilter({
+/** A two-handle range on one numeric field, its bounds under it in tabular figures in the field's unit. */
+export function RangeFilter({
   field,
   range,
   onChange,

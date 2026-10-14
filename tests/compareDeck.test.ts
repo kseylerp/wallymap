@@ -3,7 +3,7 @@ import { GeoJsonLayer } from "@deck.gl/layers";
 import { drawnCount } from "@/components/LayerStack";
 import { describe, expect, it } from "vitest";
 import { COMPARE_COLORS, DELTA_FILL_ALPHA } from "@/lib/render/compareView";
-import { HEX_COLUMN } from "@/lib/render/palette";
+import { DARK_GREY, DELTA_COLORS, HEX_COLUMN, PINK, PURPLE } from "@/lib/render/palette";
 import { buildDeckLayers, buildDeckLayerSets, deltaColor, DELTA_STROKE, hexToRgba } from "@/lib/render/deck";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
@@ -59,12 +59,13 @@ describe("delta rendering", () => {
     expect(features.map((f) => f.properties?.delta)).toEqual(["a-only", "b-only"]);
   });
 
-  it("strokes A only purple and B only pink, and fills areas at 12%", () => {
+  it("strokes A only (lost) pink and B only (gained) purple, and fills areas at 12% (spec §12 change view)", () => {
     const line = props(main).getLineColor as Accessor;
     const fill = props(main).getFillColor as Accessor;
-    expect(line(features[0])).toEqual(hexToRgba(COMPARE_COLORS.a));
-    expect(line(features[1])).toEqual(hexToRgba(COMPARE_COLORS.b));
-    expect(fill(features[0])).toEqual(hexToRgba(COMPARE_COLORS.a, Math.round(255 * DELTA_FILL_ALPHA)));
+    expect(line(features[0])).toEqual(hexToRgba(DELTA_COLORS["a-only"]));
+    expect(line(features[1])).toEqual(hexToRgba(DELTA_COLORS["b-only"]));
+    expect(DELTA_COLORS).toEqual({ "a-only": PINK, "b-only": PURPLE, both: DARK_GREY });
+    expect(fill(features[0])).toEqual(hexToRgba(DELTA_COLORS["a-only"], Math.round(255 * DELTA_FILL_ALPHA)));
     expect((props(main).getLineWidth as (f: unknown) => number)(features[0])).toBe(DELTA_STROKE.polygon);
   });
 

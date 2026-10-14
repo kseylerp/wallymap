@@ -18,6 +18,7 @@ import {
   type LineClass,
 } from "@/lib/render/palette";
 import { rampColor, rgbToHex } from "@/lib/render/ramp";
+import { facetColorStops, facetValueKey, primaryFacet } from "@/lib/render/facets";
 import type { MapState, RenderOp, Selection } from "@/lib/render/state";
 import { chainParts, gradientExpression } from "@/lib/render/wally/routeLine";
 
@@ -59,8 +60,13 @@ export type LineLook =
   | { kind: "ramp" }
   /** One palette color asked for: a compare side (A purple, B pink) or the layer panel. */
   | { kind: "solid"; color: string }
-  /** A compare delta: A only purple, B only pink, unchanged sage. */
-  | { kind: "delta" };
+  /** A compare delta (the change view): A only pink, B only purple, unchanged sage. */
+  | { kind: "delta" }
+  /**
+   * The primary facet (spec §12a): each class of `key` on the sage → pink → purple ramp, easy to hard, in the facet's
+   * declared order (`stops`: raw value to color); a value the facet does not name draws sage.
+   */
+  | { kind: "facet"; key: string; stops: [string, string][] };
 
 /** One drawn line layer: what the sync uploads and styles, and what a pick maps back into. */
 export type LineEntry = {
@@ -152,14 +158,21 @@ export function lineEntries(view: MapState): LineEntry[] {
       continue;
     }
     const requested = isPaletteColor(op.color) ? lineColorFor(op.color) : undefined;
-    const look: LineLook = requested ? { kind: "solid", color: requested } : loaded.style.unit === "score" ? { kind: "ramp" } : { kind: "classes" };
+    const facet = primaryFacet(loaded.style);
+    const look: LineLook = requested
+      ? { kind: "solid", color: requested }
+      : facet?.encode === "color" && facet.kind === "category"
+        ? { kind: "facet", key: facet.key, stops: facetColorStops(facet) }
+        : loaded.style.unit === "score"
+          ? { kind: "ramp" }
+          : { kind: "classes" };
     entries.push({ id: op.layerId, layerId: op.layerId, data, look, opacity, shown: true, selected: indexOf(data, picked?.feature) });
   }
   return entries;
 }
 
 /** Source feature properties: the index back into the entry's data, the line class, and what the paint reads. */
-export type LineProps = { i: number; cls: LineClass | "delta"; v: number | null; delta?: string };
+export type LineProps = { i: number; cls: LineClass | "delta"; v: number | null; delta?: string; fv?: string };
 
 const sourceMemo = new WeakMap<FeatureCollection, Map<string, FeatureCollection>>();
 
@@ -171,7 +184,7 @@ const sourceMemo = new WeakMap<FeatureCollection, Map<string, FeatureCollection>
  * ways are chained so the gradient runs along it (chainParts).
  */
 export function lineSourceData(entry: Pick<LineEntry, "data" | "layerId" | "look">): FeatureCollection {
-  const key = `${entry.layerId}|${entry.look.kind}`;
+  const key = `${entry.layerId}|${entry.look.kind}${entry.look.kind === "facet" ? `|${entry.look.key}` : ""}`;
   let byKey = sourceMemo.get(entry.data);
   if (!byKey) {
     byKey = new Map();
@@ -188,6 +201,7 @@ export function lineSourceData(entry: Pick<LineEntry, "data" | "layerId" | "look
     const n = Number(f.properties?.v);
     const properties: LineProps = { i, cls, v: Number.isFinite(n) ? n : null };
     if (kind === "delta") properties.delta = String(f.properties?.delta ?? "both");
+    if (entry.look.kind === "facet") properties.fv = facetValueKey(f.properties?.[entry.look.key]) ?? "";
     const geometry = cls === "route" && (g.type === "LineString" || g.type === "MultiLineString") ? chainParts(g) : g;
     features.push({ type: "Feature", geometry, properties });
   });
@@ -214,6 +228,12 @@ export function rampLineColor(layerId: string): ExpressionSpecification {
   return ["interpolate", ["linear"], ["to-number", ["get", "v"], 0], ...stops] as ExpressionSpecification;
 }
 
+/** The `line-color` of a facet line: a `match` on the facet value (`fv`), unnamed values sage. */
+export function facetLineColor(stops: [string, string][]): string | ExpressionSpecification {
+  if (stops.length === 0) return SAGE;
+  return ["match", ["get", "fv"], ...stops.flat(), SAGE] as ExpressionSpecification;
+}
+
 /** Classes drawn in the core layer (not routes), with their colors and dashes. */
 const CORE_CLASSES = (Object.keys(LINE_CLASSES) as LineClass[]).filter((c) => !("gradient" in LINE_CLASSES[c]));
 /** Classes whose core is a solid `under` color with dashes of `color` drawn over it (T1 trails). */
@@ -238,6 +258,8 @@ function coreColor(entry: Pick<LineEntry, "look" | "layerId">): string | Express
       return ["match", ["get", "delta"], "a-only", DELTA_LINE_COLORS["a-only"], "b-only", DELTA_LINE_COLORS["b-only"], DELTA_LINE_COLORS.both];
     case "classes":
       return ["match", ["get", "cls"], ...CORE_CLASSES.flatMap((c) => [c, coreOf(c)]), SAGE] as ExpressionSpecification;
+    case "facet":
+      return facetLineColor(entry.look.stops);
   }
 }
 

@@ -46,7 +46,8 @@ export const GLYPHS = {
   leaf: "M5.5 18.5C5.5 10 10.5 5.5 19 5.5c0 8.5-4.5 13-13.5 13ZM5.5 18.5l7.5-7.5",
   camera: "M3.5 8.5h4l1.5-2.5h6l1.5 2.5h4V19h-17Z M12 10.25a3.25 3.25 0 1 0 0 6.5 3.25 3.25 0 0 0 0-6.5Z",
   info: "M12 10.5V18M12 6.5v0",
-  carabiner: "M6.5 9V5H12a6 6 0 0 1 6 6v2a6 6 0 0 1-6 6H6.5v-4",
+  /** Climbing: a two-bolt anchor with the rope hanging from it (owner, 2026-10-14: the carabiner "D" read as a zero at 14px). */
+  bolts: "M8 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM8 8l4 5 4-5a2 2 0 1 1 0-4 2 2 0 0 1 0 4M12 13v7",
   arcs: "M8.5 17a3.5 3.5 0 0 1 7 0M4 17a8 8 0 0 1 16 0",
   exclamation: "M12 5v9M12 18.5v0",
   flame: "M12 3.5c.4 3.3 5.5 5.6 5.5 10.5a5.5 5.5 0 0 1-11 0c0-2.3 1.1-4 2.3-5.1.1 1.7.8 2.8 1.7 3.4C10.6 9.4 10.4 6.3 12 3.5Z M12 20c-1.5 0-2.5-1-2.5-2.4 0-1.6 1.3-2.6 2.5-4.4 1.2 1.8 2.5 2.8 2.5 4.4 0 1.4-1 2.4-2.5 2.4",
@@ -85,7 +86,7 @@ export const LAYER_GLYPHS: Readonly<Record<string, PinGlyph>> = {
   wildlife: "leaf",
   photos: "camera",
   "wikipedia-nearby": "info",
-  climbing: "carabiner",
+  climbing: "bolts",
   earthquakes: "arcs",
   "weather-alerts": "exclamation",
   disasters: "exclamation",

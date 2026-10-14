@@ -187,7 +187,7 @@ describe("glyphs (owner, 2026-10-11: \"try for simple icons\")", () => {
     ["gbif-occurrences", "leaf"],
     ["photos", "camera"],
     ["wikipedia-nearby", "info"],
-    ["climbing", "carabiner"],
+    ["climbing", "bolts"],
     ["earthquakes", "arcs"],
     ["weather-alerts", "exclamation"],
     ["fire-detections", "flame"],

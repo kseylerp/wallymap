@@ -12,11 +12,13 @@ import {
   CLUSTER_BLOB,
   COLUMN_WALL_ALPHAS,
   COMPARE_COLORS,
+  DELTA_COLORS,
   HEX_COLUMN,
   HEX_TILE,
   isPaletteColor,
   LINE,
   lineColorFor,
+  PINK,
   PURPLE,
   scoreRampFor,
   SELECTED_AREA,
@@ -35,6 +37,8 @@ import { featureBBox, featureCenter, HEX_DELTA_TAG } from "@/lib/render/inspect"
 import { pinIconFor } from "@/lib/render/wally/pins";
 import { drawsNativeLines, isLineGeometry, SELECTED_LINE } from "@/lib/render/nativeLines";
 import type { MapState, RenderMode, RenderOp, Viewport } from "@/lib/render/state";
+import { extentOf, hatchStepOf, primaryFacet, sizeScale, topFeatures } from "@/lib/render/facets";
+import { RANKED_LABELS } from "@/lib/render/views";
 
 type Rgba = [number, number, number, number];
 
@@ -336,9 +340,31 @@ function requestedColor(color: string | undefined): string | undefined {
   return isPaletteColor(color) ? color.trim().toUpperCase() : undefined;
 }
 
-/** The hatch density step for one area feature: fires by burned acres, others the recipe's fixed step. */
-function areaStep(layerId: string, recipe: AreaRecipe, f: Feature): number {
-  return layerId === "fire-perimeters" ? acresStep(f.properties?.acres ?? f.properties?.v) : recipe.step;
+/** The extent of a number across a collection, made once per collection and key. */
+const extentMemo = new WeakMap<GeoJSON.FeatureCollection, Map<string, [number, number] | null>>();
+function memoExtent(data: GeoJSON.FeatureCollection, key: string): [number, number] | null {
+  let byKey = extentMemo.get(data);
+  if (!byKey) {
+    byKey = new Map();
+    extentMemo.set(data, byKey);
+  }
+  if (!byKey.has(key)) byKey.set(key, extentOf(data, key));
+  return byKey.get(key) ?? null;
+}
+
+/** The range facet that sizes features (`encode: "size"`, spec §12a): symbol size, hatch density. */
+function sizeFacetKey(style: StyleHints): string | undefined {
+  const facet = primaryFacet(style);
+  return facet?.kind === "range" && facet.encode === "size" ? facet.key : undefined;
+}
+
+/**
+ * The hatch density step for one area feature: fires by burned acres (fixed acre steps), another area layer with a
+ * size facet (glacier area) by its share of the data's range, others the recipe's fixed step.
+ */
+function areaStep(layerId: string, recipe: AreaRecipe, f: Feature, sized?: { key: string; extent: [number, number] | null }): number {
+  if (layerId === "fire-perimeters") return acresStep(f.properties?.acres ?? f.properties?.v);
+  return sized ? hatchStepOf(f.properties?.[sized.key], sized.extent) : recipe.step;
 }
 
 /** Modes that already warned about falling back, so a bad mode warns once rather than on every frame. */
@@ -359,8 +385,9 @@ function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
   const mode: RenderMode = op.mode;
   switch (mode) {
     case "points":
-      if (ctx.data.features.length > hexbinThreshold) return hexTileLayers(op, ctx, opacity);
-      return symbolLayers(op, ctx, opacity);
+      // A ranked view keeps its symbols (sized, named) however many there are: the slider holds the top N.
+      if (ctx.data.features.length > hexbinThreshold && op.view !== "ranked") return hexTileLayers(op, ctx, opacity);
+      return [...symbolLayers(op, ctx, opacity), ...rankedLabelLayers(op, ctx, opacity)];
     case "hexbin":
       return hexTileLayers(op, ctx, opacity);
     case "clusters":
@@ -483,6 +510,8 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const tint = perFeature((f) => hexToRgba(colorOf(f), Math.round(255 * recipe.tint)), opacity, selected);
   const hatch = perFeature((f) => hexToRgba(colorOf(f), Math.round(255 * recipe.hatchAlpha)), opacity, selected);
   const casingWidth = recipe.outlineWidth + 2 * recipe.casing;
+  const sizeKey = sizeFacetKey(ctx.style);
+  const sized = sizeKey ? { key: sizeKey, extent: memoExtent(data, sizeKey) } : undefined;
   return [
     new GeoJsonLayer({
       id: `${id}:casing`,
@@ -515,7 +544,7 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       fillPatternMapping: hatchAtlas().mapping,
       fillPatternMask: true,
       fillPatternSizeUnits: "pixels",
-      getFillPattern: (f: Feature) => hatchPatternId(colorOf(f) as HatchColor, areaStep(op.layerId, recipe, f)),
+      getFillPattern: (f: Feature) => hatchPatternId(colorOf(f) as HatchColor, areaStep(op.layerId, recipe, f, sized)),
       getFillPatternScale: 1 / HATCH_SCALE,
       getFillPatternBackgroundColor: tint,
       updateTriggers,
@@ -556,8 +585,10 @@ function scoreAreaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[]
  * Point symbols (pins.ts): a shape per layer family, centered on the point; the selected one fills purple. The
  * sprite's alpha carries the op opacity and the selection fade.
  */
-function symbolLayers(op: RenderOp, { data, selected, zoom, terrain, deckId }: OpContext, opacity: number): Layer[] {
+function symbolLayers(op: RenderOp, { data, selected, zoom, terrain, deckId, style }: OpContext, opacity: number): Layer[] {
   const size = symbolSizePx(zoom);
+  // A ranked view sizes the symbols by the layer's measure and names its top few (spec §12).
+  const ranked = op.view === "ranked" ? rankedSizing(data, style) : undefined;
   return [
     new IconLayer<Feature>({
       id: `${deckLayerKey(deckId ?? op.layerId, terrain)}:points`,
@@ -565,15 +596,53 @@ function symbolLayers(op: RenderOp, { data, selected, zoom, terrain, deckId }: O
       pickable: true,
       getPosition: markerPosition,
       getIcon: (f) => atlasIcon(pinIconFor(op.layerId, f, f === selected, size)),
-      getSize: SYMBOL_SIZE_PX,
+      getSize: ranked ? (f: Feature) => SYMBOL_SIZE_PX * sizeScale(f.properties?.[ranked.key], ranked.extent) : SYMBOL_SIZE_PX,
       sizeUnits: "pixels",
       getColor: colorFor(SPRITE_TINT, opacity, selected),
-      updateTriggers: { getColor: [selectionKey(selected), opacity], getIcon: [op.layerId, selectionKey(selected), size] },
+      updateTriggers: {
+        getColor: [selectionKey(selected), opacity],
+        getIcon: [op.layerId, selectionKey(selected), size],
+        getSize: [ranked?.key ?? "", ranked?.extent?.join(",") ?? ""],
+      },
       // The overlay draws in deck's GlobeView, which flips the icon quads' winding; with back-face culling on,
       // deck 9.4 draws (and picks) no icons at all there. No depth test either: a symbol centered on a 3D slope had
       // its lower half buried in deck's terrain copy and read as an arch.
       parameters: { cullMode: "none", depthCompare: "always" },
       ...terrainProps(terrain, "offset", [unpremultiplySpriteExtension]),
+    }),
+  ];
+}
+
+/** A ranked point layer's sizing: the measure key (the size facet, else `v`), its extent, and the top features to name. */
+function rankedSizing(data: GeoJSON.FeatureCollection, style: StyleHints): { key: string; extent: [number, number] | null; top: Feature[] } {
+  const key = sizeFacetKey(style) ?? "v";
+  return { key, extent: memoExtent(data, key), top: topFeatures(data, key, RANKED_LABELS) };
+}
+
+/** Name labels for a ranked view's top features: dark grey on a white halo, above the symbol. */
+function rankedLabelLayers(op: RenderOp, { data, terrain, deckId, style }: OpContext, opacity: number): Layer[] {
+  if (op.view !== "ranked" || style.geometry !== "point") return [];
+  const { top, key, extent } = rankedSizing(data, style);
+  const labelled = top.filter((f) => typeof f.properties?.name === "string" && f.properties.name !== "");
+  if (labelled.length === 0) return [];
+  return [
+    new TextLayer<Feature>({
+      id: `${deckLayerKey(deckId ?? op.layerId, terrain)}:points:labels`,
+      data: labelled,
+      pickable: false,
+      getPosition: markerPosition,
+      getText: (f) => String(f.properties?.name),
+      getSize: 11,
+      sizeUnits: "pixels",
+      getPixelOffset: (f) => [0, -Math.round((SYMBOL_SIZE_PX * sizeScale(f.properties?.[key], extent)) / 2) - 8],
+      getColor: hexToRgba(HEX_TILE.label, Math.round(255 * opacity)),
+      characterSet: "auto",
+      fontSettings: { sdf: true },
+      outlineWidth: 0.3,
+      outlineColor: hexToRgba(HEX_TILE.labelHalo, Math.round(230 * opacity)),
+      billboard: true,
+      parameters: { cullMode: "none", depthCompare: "always" },
+      ...terrainProps(terrain, "offset"),
     }),
   ];
 }
@@ -1101,9 +1170,9 @@ function extrudedAreaLayers(op: RenderOp, ctx: OpContext, opacity: number): Laye
 // ---- Compare delta (spec §7, palette §11) ----
 
 const DELTA_RGB = {
-  "a-only": hexToRgba(COMPARE_COLORS.a),
-  "b-only": hexToRgba(COMPARE_COLORS.b),
-  both: hexToRgba(COMPARE_COLORS.both),
+  "a-only": hexToRgba(DELTA_COLORS["a-only"]),
+  "b-only": hexToRgba(DELTA_COLORS["b-only"]),
+  both: hexToRgba(DELTA_COLORS.both),
 } as const;
 
 /** Delta strokes: 1.5px outlines and 2.5px lines in the class color over a 1px white casing a side; points 5px discs. */
@@ -1111,7 +1180,7 @@ export const DELTA_STROKE = { polygon: 1.5, line: 2.5, casing: 1, pointRadius: 5
 /** Hex delta columns: the largest |B − A| stands this many meters tall. */
 export const HEX_DELTA = { maxHeightM: 4000 } as const;
 
-/** The class color for a delta feature (a-only purple, b-only pink, both dark grey); unknown reads as both. */
+/** The class color for a delta feature (a-only pink, b-only purple, both dark grey); unknown reads as both. */
 export function deltaColor(f: Feature): Rgba {
   const cls: unknown = f.properties?.delta;
   return cls === "a-only" || cls === "b-only" ? DELTA_RGB[cls] : DELTA_RGB.both;
@@ -1120,6 +1189,20 @@ export function deltaColor(f: Feature): Rgba {
 function isArea(f: Feature): boolean {
   const t = f.geometry?.type;
   return t === "Polygon" || t === "MultiPolygon";
+}
+
+/** The hatch density of a change view's lost areas (index into HATCH_SPACINGS: 6 px). */
+export const DELTA_HATCH_STEP = 2;
+
+const lostMemo = new WeakMap<GeoJSON.FeatureCollection, GeoJSON.FeatureCollection>();
+/** A delta's A-only areas (what was lost), made once per collection. */
+export function lostAreas(data: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
+  let out = lostMemo.get(data);
+  if (!out) {
+    out = { type: "FeatureCollection", features: data.features.filter((f) => f.properties?.delta === "a-only" && isArea(f)) };
+    lostMemo.set(data, out);
+  }
+  return out;
 }
 
 /** Per hex delta collection: the largest |v|, the tallest cell, and each cell's cap lifted to its column height. */
@@ -1242,7 +1325,34 @@ function deltaLayers(op: RenderOp, { data: all, selected, terrain }: OpContext):
   if (data.features.length === 0) return [];
   const updateTriggers = { getFillColor: trigger, getLineColor: trigger, getLineWidth: trigger };
   const strokeWidth = (f: Feature) => (isArea(f) ? DELTA_STROKE.polygon : DELTA_STROKE.line);
+  // What only A had (lost) carries a pink hatch over its tint (spec §12), so it reads as gone on any basemap.
+  const canvas = hatchAtlasCanvas();
+  const lost = lostAreas(data);
+  const hatch: Layer[] =
+    canvas && lost.features.length > 0
+      ? [
+          new GeoJsonLayer({
+            id: `${id}:lost`,
+            data: lost,
+            pickable: false,
+            filled: true,
+            stroked: false,
+            getFillColor: (f: Feature) => fade(f, hexToRgba(PINK, 230)),
+            fillPatternEnabled: true,
+            fillPatternAtlas: canvas,
+            fillPatternMapping: hatchAtlas().mapping,
+            fillPatternMask: true,
+            fillPatternSizeUnits: "pixels",
+            getFillPattern: () => hatchPatternId(PINK as HatchColor, DELTA_HATCH_STEP),
+            getFillPatternScale: 1 / HATCH_SCALE,
+            getFillPatternBackgroundColor: [0, 0, 0, 0],
+            updateTriggers: { getFillColor: trigger },
+            ...terrainProps(terrain, "drape", [fillExtension]),
+          }),
+        ]
+      : [];
   return [
+    ...hatch,
     new GeoJsonLayer({
       id: `${id}:casing`,
       data,

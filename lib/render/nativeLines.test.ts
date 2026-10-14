@@ -266,14 +266,15 @@ describe("filters, time window and compare reach the line source", () => {
     expect((sets.b[1].props as unknown as { getLineColor: number[] }).getLineColor.slice(0, 3)).toEqual([245, 114, 114]);
   });
 
-  it("strokes a delta's lines natively by class (A purple, B pink, unchanged sage), and keeps them out of deck", () => {
+  it("strokes a delta's lines natively by class (A only pink, B only purple, unchanged sage), and keeps them out of deck", () => {
     const view = visibleState(trails("delta"));
     const [entry] = lineEntries(view);
     expect(entry.look).toEqual({ kind: "delta" });
     const data = lineSourceData(entry);
     expect(data.features.map((f) => f.properties?.delta)).toEqual(["a-only", "b-only"]);
     const core = byPart(lineLayerSpecs(entry), "core");
-    expect(paint(core)["line-color"]).toEqual(["match", ["get", "delta"], "a-only", PURPLE, "b-only", PINK, SAGE]);
+    // The change view: lost (A only) pink, gained (B only) purple, unchanged sage (spec §12).
+    expect(paint(core)["line-color"]).toEqual(["match", ["get", "delta"], "a-only", PINK, "b-only", PURPLE, SAGE]);
     expect(buildDeckLayerSets(view, { mapboxToken: "" }).main).toHaveLength(0);
   });
 });
@@ -431,5 +432,43 @@ describe("syncLineLayers", () => {
   it("does nothing before the style has loaded", () => {
     const map = { getStyle: () => { throw new Error("Style is not done loading"); } } as unknown as MapboxMap;
     expect(() => syncLineLayers(map, stateOf("osm-trails", [a]))).not.toThrow();
+  });
+});
+
+describe("the primary facet drives the line color (spec §12a: difficulty on the sage → pink → purple ramp)", () => {
+  const difficulty = {
+    facets: [
+      {
+        key: "v",
+        label: "Difficulty",
+        kind: "category" as const,
+        encode: "color" as const,
+        values: [
+          { value: 0, label: "Easy" },
+          { value: 2, label: "Moderate" },
+          { value: 3, label: "Hard" },
+          { value: 5, label: "Expert" },
+        ],
+      },
+    ],
+  };
+  const trails = [line(-120, { v: 0 }), line(-119, { v: 3 }), line(-118, { v: 5 })];
+
+  it("matches each class to its ramp color on the facet value, and an unnamed value draws sage", () => {
+    const [entry] = lineEntries(visibleState(stateOf("mtb-trails", trails, {}, difficulty)));
+    expect(entry.look.kind).toBe("facet");
+    expect(lineSourceData(entry).features.map((f) => f.properties?.fv)).toEqual(["0", "3", "5"]);
+    const color = paint(byPart(lineLayerSpecs(entry), "core"))["line-color"] as unknown[];
+    expect(color.slice(0, 2)).toEqual(["match", ["get", "fv"]]);
+    expect(color[3]).toBe(SAGE);
+    expect(color.at(-2)).toBe(PURPLE);
+    expect(color.at(-1)).toBe(SAGE);
+  });
+
+  it("follows the facet filter (only hard trails) and a color asked for still wins", () => {
+    const hard = lineEntries(visibleState(stateOf("mtb-trails", trails, { filters: { v: { include: ["3"] } } }, difficulty)));
+    expect(hard[0].data.features).toHaveLength(1);
+    const asked = lineEntries(visibleState(stateOf("mtb-trails", trails, { color: PINK }, difficulty)));
+    expect(asked[0].look).toEqual({ kind: "solid", color: PINK });
   });
 });

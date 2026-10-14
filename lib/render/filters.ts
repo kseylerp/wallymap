@@ -176,9 +176,11 @@ function valueLabel(unitForV: string | undefined): string {
   return unitForV === "score" ? "Score (0–100)" : "Value";
 }
 
+/** A property as a category: strings and booleans as text, and numbers by their decimal text (a facet's Singletrack 3). */
 function categoryOf(value: unknown): string | undefined {
   if (typeof value === "string") return value;
   if (typeof value === "boolean") return String(value);
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return undefined;
 }
 

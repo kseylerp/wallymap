@@ -11,21 +11,25 @@
  *     filtered to the bbox here. Stations without a wave height (land and met-only stations) are left out.
  *   - https://www.ndbc.noaa.gov/activestations.xml (273 KB, 1,354 stations) for names: `<station id="46026"
  *     ... name="SAN FRANCISCO - 18NM West of San Francisco, CA" .../>`. Cached a day, shared key.
- * Forecast (input forecast: true): https://marine-api.open-meteo.com/v1/marine with comma-separated
- * latitude/longitude lists (one JSON object per point in an array) and hourly=wave_height,wave_period,
- * wave_direction,swell_wave_height,swell_wave_period, forecast_days=2, timezone=GMT. Land cells return null
- * for every hour (Lake Tahoe returned nulls; a Bay point 0.56 m), so a 4 x 4 grid over the bbox is sampled and
- * only cells with waves are kept. Open-Meteo is free for non-commercial use only (CC BY 4.0 data).
+ * Forecast (input forecast: true): modelled waves at named surf spots, added on top of the buoys. Spots come from
+ * OpenStreetMap (Overpass: sport=surfing, surfing=yes, and named beaches with surf, point or reef in the name) and
+ * Wikidata (surf spot Q2368508, surf break Q3482498, with coordinates), deduplicated within 1 km, at most 40, Wikidata
+ * first then OSM-tagged then name matches, nearest the view's centre first. https://marine-api.open-meteo.com/v1/marine
+ * takes comma-separated latitude/longitude lists (one JSON object per point in an array, one object for a single point)
+ * with hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period, forecast_days=2, timezone=GMT.
+ * The model grid is 1/12 degree (about 9 km) and a coastal point snaps to a nearby sea cell, so neighbouring spots can
+ * share a value; land-locked points return null for every hour (Lake Tahoe), and those are tried 1, 2 and 3 km away
+ * on four bearings before the spot is dropped. A regular grid over the bbox is never drawn: it put 16 symbols in open
+ * ocean off Monterey for a Half Moon Bay question. Open-Meteo is free for non-commercial use only (CC BY 4.0 data).
  *
  * Live smoke 2026-10-10 02:15 UTC, San Francisco box [-123.2,37.3,-122.3,38.0], 0.4 s: 2 buoys; 46012 Half
  * Moon Bay 2.2 m (7.2 ft) at 11 s, water 16.3 °C; 46237 San Francisco Bar 1.8 m at 11 s from the W (261°).
- * 46026 was in view but its newest row had no wave height (MM), so it was left out. forecast: true added 16
- * cells (1 s): 2.0-2.9 m now, up to 4.3 m by 2026-10-11 09:00 UTC.
+ * 46026 was in view but its newest row had no wave height (MM), so it was left out.
  * Season smoke (season: true), Oahu box [-158.4,21.2,-157.6,21.75], 14 s cold (18 files of ~1.5 MB through the
  * rate limiter): 6 buoys, October means 2023-2025: Mokapu Point 1.62 m, Waimea Bay 1.58 m (January 2.40 m, p90
  * 3.57 m: the north shore's winter season), Kaneohe 1.47 m, Barbers Point 1.07 m, Pearl Harbor 0.82 m.
  * Wide smoke through runLayer (2026-10-14), eastern Pacific [-130,20,-110,45] (5.2 million km²): 44 buoys in 0.4 s
- * (one global file, so wide costs nothing extra); forecast: true 55 points in 1.4 s; season: true 6 summarised plus
+ * (one global file, so wide costs nothing extra); forecast: true 40 spots at most; season: true 6 summarised plus
  * 37 listed as kind 'station' in 15.3 s cold.
  */
 import { z } from "zod";
@@ -35,6 +39,8 @@ import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { WHOLE_US_KM2 } from "./_shared/coverage";
 import { haversineKm } from "./_shared/geo";
+import { overpassQuery } from "./_shared/overpass";
+import { wikimediaFetch } from "./_shared/wikimedia";
 import { createCache, type Cache } from "@/lib/fetch";
 import { textBody } from "@/lib/fetch/validate";
 import { layerColor } from "@/lib/render/palette";
@@ -50,7 +56,6 @@ const FORECAST_TTL_SECONDS = 1_800;
 /** Observations older than this are a buoy that has gone quiet. */
 const MAX_OBS_AGE_HOURS = 12;
 const HOUR_MS = 3_600_000;
-const GRID = 4;
 const M_TO_FT = 3.28084;
 /** Most points a wide (over 500,000 km²) result carries; NDBC has about 200 wave buoys worldwide, so rarely reached. */
 export const WIDE_LIMIT = 1000;
@@ -195,23 +200,128 @@ export function keepLargest(features: Feature<Point>[], limit: number): { featur
   return { features: [...features].sort((a, b) => vOf(b) - vOf(a)).slice(0, limit), total: features.length };
 }
 
-/** Cell centres of a GRID x GRID sampling of the bbox, as [lon, lat]. */
-export function forecastGrid([w, s, e, n]: BBox): [number, number][] {
-  const out: [number, number][] = [];
-  for (let j = 0; j < GRID; j++) {
-    for (let i = 0; i < GRID; i++) {
-      out.push([
-        Number((w + ((i + 0.5) * (e - w)) / GRID).toFixed(4)),
-        Number((s + ((j + 0.5) * (n - s)) / GRID).toFixed(4)),
-      ]);
-    }
+// ---- Forecast at named surf spots ----
+
+/** A place people surf: a name and a coordinate. `rank` 0 is Wikidata's surf spot, 1 an OSM-tagged surf spot, 2 a beach whose name suggests surf. */
+export type Spot = { name: string; lat: number; lon: number; source: "OpenStreetMap" | "Wikidata"; rank: number };
+
+/** Most forecast spots a result carries. */
+export const SPOT_CAP = 40;
+/** Spots closer than this are one break. */
+const SPOT_DEDUPE_KM = 1;
+/** Seaward nudges tried when the model has no value at a spot: 1, 2 then 3 km. */
+export const NUDGE_STEPS_KM = [1, 2, 3];
+/** Directions tried at each nudge distance, west first (the Pacific and Atlantic-facing US coasts) then the rest. */
+const NUDGE_BEARINGS = [270, 180, 90, 0];
+/** Points per Open-Meteo request, which keeps the URL short. */
+const MARINE_CHUNK = 40;
+const SPOTS_TTL_SECONDS = 7 * 86_400;
+const SPARQL_ENDPOINT = "https://query.wikidata.org/sparql";
+
+/**
+ * Overpass QL for named-or-not surf places in the bbox: anything tagged sport=surfing or surfing=yes, plus named beaches
+ * whose name says surf, point or reef (the fallback for coasts nobody tagged). `out center` gives ways one position.
+ */
+export function surfSpotsQuery([west, south, east, north]: BBox): string {
+  const box = `(${south},${west},${north},${east})`;
+  return (
+    `[out:json][timeout:25];(` +
+    `nwr["sport"="surfing"]${box};` +
+    `nwr["surfing"="yes"]${box};` +
+    `nwr["natural"="beach"]["name"~"surf|point|reef",i]${box};` +
+    `);out tags center 300;`
+  );
+}
+
+const osmElementSchema = z.object({
+  type: z.string(),
+  lat: z.number().optional(),
+  lon: z.number().optional(),
+  center: z.object({ lat: z.number(), lon: z.number() }).optional(),
+  tags: z.record(z.string(), z.string()).optional(),
+});
+
+/** Named surf places from an Overpass body; unnamed elements, shops and schools are dropped (no name, no feature). */
+export function parseOsmSpots(json: unknown): Spot[] {
+  const elements = typeof json === "object" && json !== null ? (json as { elements?: unknown }).elements : undefined;
+  if (!Array.isArray(elements)) return [];
+  const out: Spot[] = [];
+  for (const raw of elements) {
+    const parsed = osmElementSchema.safeParse(raw);
+    if (!parsed.success) continue;
+    const { lat, lon, center, tags } = parsed.data;
+    const name = tags?.name?.trim();
+    const at = lat !== undefined && lon !== undefined ? { lat, lon } : center;
+    if (!name || !at || tags === undefined) continue;
+    if (tags.shop || tags.amenity || tags.tourism === "hotel") continue;
+    const tagged = tags.sport === "surfing" || tags.surfing === "yes";
+    out.push({ name, lat: at.lat, lon: at.lon, source: "OpenStreetMap", rank: tagged ? 1 : 2 });
   }
   return out;
 }
 
+/** Wikidata's surf spots (Q2368508) and surf breaks (Q3482498) with coordinates in the bbox. */
+export function surfSpotsSparql([west, south, east, north]: BBox): string {
+  return `SELECT ?item ?label ?coord WHERE {
+  SERVICE wikibase:box {
+    ?item wdt:P625 ?coord .
+    bd:serviceParam wikibase:cornerSouthWest "Point(${west} ${south})"^^geo:wktLiteral .
+    bd:serviceParam wikibase:cornerNorthEast "Point(${east} ${north})"^^geo:wktLiteral .
+  }
+  VALUES ?class { wd:Q2368508 wd:Q3482498 }
+  ?item wdt:P31/wdt:P279* ?class .
+  ?item rdfs:label ?label . FILTER(LANG(?label) = "en")
+}
+LIMIT 200`;
+}
+
+const sparqlSchema = z.object({
+  results: z.object({
+    bindings: z.array(z.object({ label: z.object({ value: z.string() }), coord: z.object({ value: z.string() }) })),
+  }),
+});
+
+/** Spots from a SPARQL JSON body; `Point(lon lat)` coordinates. */
+export function parseWikidataSpots(json: unknown): Spot[] {
+  const parsed = sparqlSchema.safeParse(json);
+  if (!parsed.success) return [];
+  const out: Spot[] = [];
+  for (const b of parsed.data.results.bindings) {
+    const m = /^Point\(\s*(-?[\d.]+(?:e-?\d+)?)\s+(-?[\d.]+(?:e-?\d+)?)\s*\)$/i.exec(b.coord.value.trim());
+    if (!m) continue;
+    const lon = Number(m[1]);
+    const lat = Number(m[2]);
+    const name = b.label.value.trim();
+    if (name && Number.isFinite(lon) && Number.isFinite(lat)) out.push({ name, lat, lon, source: "Wikidata", rank: 0 });
+  }
+  return out;
+}
+
+/**
+ * Up to `cap` distinct spots: best source first (Wikidata, OSM-tagged, name fallback), nearest the bbox centre within a
+ * source, and a spot within a kilometre of one already kept is the same break. Returns the kept spots and how many
+ * distinct spots there were before the cap.
+ */
+export function pickSpots(spots: Spot[], bbox: BBox, cap = SPOT_CAP): { spots: Spot[]; distinct: number } {
+  const centre: [number, number] = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+  const dist = (s: Spot) => haversineKm(centre, [s.lon, s.lat]);
+  const ordered = spots.filter((s) => inBbox(s.lon, s.lat, bbox)).sort((a, b) => a.rank - b.rank || dist(a) - dist(b));
+  const kept: Spot[] = [];
+  for (const s of ordered) {
+    if (kept.every((k) => haversineKm([k.lon, k.lat], [s.lon, s.lat]) >= SPOT_DEDUPE_KM)) kept.push(s);
+  }
+  return { spots: kept.slice(0, cap), distinct: kept.length };
+}
+
+/** [lat, lon] `km` away from the point on a compass bearing (small distances, flat-earth maths). */
+export function offsetKm(lat: number, lon: number, bearingDeg: number, km: number): [number, number] {
+  const rad = (bearingDeg * Math.PI) / 180;
+  const dLat = (km * Math.cos(rad)) / 111.32;
+  const dLon = (km * Math.sin(rad)) / (111.32 * Math.max(0.01, Math.cos((lat * Math.PI) / 180)));
+  return [Number((lat + dLat).toFixed(5)), Number((lon + dLon).toFixed(5))];
+}
+
 const MarineSchema = z.object({
-  latitude: z.number(),
-  longitude: z.number(),
   hourly: z.object({
     time: z.array(z.string()),
     wave_height: z.array(z.number().nullable()),
@@ -222,55 +332,59 @@ const MarineSchema = z.object({
   }),
 });
 
+/** A modelled sea state now plus the biggest wave height in the forecast; no `name` or position (the spot owns those). */
+export type Marine = Record<string, string | number>;
+
 /**
- * Forecast points from a marine-API body: one per distinct sea cell (land cells are all null), `t`/`v` for
- * the current hour, plus the largest wave height in the forecast and when it comes.
+ * One marine-API point's properties: `t`/`v` for the current hour, the largest wave height in the forecast and when it
+ * comes. Null when the model has no wave height now (land, or a cell it does not cover).
  */
-export function forecastFeatures(body: unknown, now: Date): FeatureCollection<Point> {
-  const rows = Array.isArray(body) ? body : [body];
-  const seen = new Set<string>();
-  const features: Feature<Point>[] = [];
+export function marineProps(raw: unknown, now: Date): Marine | null {
+  const parsed = MarineSchema.safeParse(raw);
+  if (!parsed.success) return null;
+  const { hourly } = parsed.data;
   const hourStart = Math.floor(now.getTime() / HOUR_MS) * HOUR_MS;
-  for (const raw of rows) {
-    const parsed = MarineSchema.safeParse(raw);
-    if (!parsed.success) continue;
-    const { latitude, longitude, hourly } = parsed.data;
-    const key = `${latitude},${longitude}`;
-    if (seen.has(key)) continue;
-    const times = hourly.time.map((t) => Date.parse(`${t}:00Z`));
-    let nowIdx = times.findIndex((t) => t >= hourStart);
-    if (nowIdx < 0) nowIdx = times.length - 1;
-    const height = hourly.wave_height[nowIdx];
-    if (typeof height !== "number") continue;
-    seen.add(key);
-    let maxIdx = nowIdx;
-    for (let i = nowIdx; i < times.length; i++) {
-      const h = hourly.wave_height[i];
-      if (typeof h === "number" && h > (hourly.wave_height[maxIdx] ?? -1)) maxIdx = i;
-    }
-    const p: Record<string, string | number> = {
-      name: `Forecast ${latitude.toFixed(2)}, ${longitude.toFixed(2)}`,
-      kind: "forecast",
-      t: new Date(times[nowIdx]).toISOString(),
-      v: height,
-      waveFt: Math.round(height * M_TO_FT * 10) / 10,
-      maxNext48hM: hourly.wave_height[maxIdx] ?? height,
-      maxAt: new Date(times[maxIdx]).toISOString(),
-    };
-    const period = hourly.wave_period?.[nowIdx];
-    if (typeof period === "number") p.periodS = period;
-    const dir = hourly.wave_direction?.[nowIdx];
-    if (typeof dir === "number") {
-      p.directionDeg = dir;
-      p.directionFrom = compass(dir);
-    }
-    const swell = hourly.swell_wave_height?.[nowIdx];
-    if (typeof swell === "number") p.swellM = swell;
-    const swellPeriod = hourly.swell_wave_period?.[nowIdx];
-    if (typeof swellPeriod === "number") p.swellPeriodS = swellPeriod;
-    features.push({ type: "Feature", geometry: { type: "Point", coordinates: [longitude, latitude] }, properties: p });
+  const times = hourly.time.map((t) => Date.parse(`${t}:00Z`));
+  let nowIdx = times.findIndex((t) => t >= hourStart);
+  if (nowIdx < 0) nowIdx = times.length - 1;
+  const height = hourly.wave_height[nowIdx];
+  if (typeof height !== "number") return null;
+  let maxIdx = nowIdx;
+  for (let i = nowIdx; i < times.length; i++) {
+    const h = hourly.wave_height[i];
+    if (typeof h === "number" && h > (hourly.wave_height[maxIdx] ?? -1)) maxIdx = i;
   }
-  return { type: "FeatureCollection", features };
+  const p: Marine = {
+    t: new Date(times[nowIdx]).toISOString(),
+    v: height,
+    waveFt: Math.round(height * M_TO_FT * 10) / 10,
+    maxNext48hM: hourly.wave_height[maxIdx] ?? height,
+    maxAt: new Date(times[maxIdx]).toISOString(),
+  };
+  const period = hourly.wave_period?.[nowIdx];
+  if (typeof period === "number") p.periodS = period;
+  const dir = hourly.wave_direction?.[nowIdx];
+  if (typeof dir === "number") {
+    p.directionDeg = dir;
+    p.directionFrom = compass(dir);
+  }
+  const swell = hourly.swell_wave_height?.[nowIdx];
+  if (typeof swell === "number") p.swellM = swell;
+  const swellPeriod = hourly.swell_wave_period?.[nowIdx];
+  if (typeof swellPeriod === "number") p.swellPeriodS = swellPeriod;
+  return p;
+}
+
+/** The marine API's rows in request order: an array for several points, one object for a single point. */
+export function marineRows(body: unknown): unknown[] {
+  return Array.isArray(body) ? body : [body];
+}
+
+/** A forecast point for a surf spot, drawn at the spot; `nudgedKm` says the model value is from that far away. */
+export function spotFeature(spot: Spot, marine: Marine, nudgedKm: number): Feature<Point> {
+  const p: Record<string, string | number> = { name: spot.name, kind: "forecast", spotSource: spot.source, ...marine };
+  if (nudgedKm > 0) p.nudgedKm = nudgedKm;
+  return { type: "Feature", geometry: { type: "Point", coordinates: [spot.lon, spot.lat] }, properties: p };
 }
 
 /** NDBC files shared by every view: the latest-observations table starts with its #STN header, the station list is <stations> XML. */
@@ -298,6 +412,116 @@ async function fetchText(
       error: timedOut ? `${label} timed out after ${UPSTREAM_TIMEOUT_MS / 1000} seconds` : `${label} returned no usable response`,
     };
   }
+}
+
+type SpotLookup = { spots: Spot[]; failures: string[] };
+
+/** Surf spots in the bbox from OpenStreetMap and Wikidata; a source that fails is reported, not fatal. */
+async function lookupSpots(ctx: QueryContext): Promise<SpotLookup> {
+  const wikidata = async (): Promise<{ ok: true; json: unknown } | { ok: false; error: string }> => {
+    try {
+      const res = await wikimediaFetch(ctx.fetch, SPARQL_ENDPOINT, {
+        method: "POST",
+        headers: { accept: "application/sparql-results+json", "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ query: surfSpotsSparql(ctx.bbox) }).toString(),
+        cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:surf-wikidata`,
+        ttlSeconds: SPOTS_TTL_SECONDS,
+      });
+      if (!res.ok) return { ok: false, error: `Wikidata returned ${res.status}` };
+      return { ok: true, json: await res.json() };
+    } catch {
+      return { ok: false, error: "Wikidata returned no usable response" };
+    }
+  };
+  const [osm, wd] = await Promise.all([overpassQuery(ctx, surfSpotsQuery(ctx.bbox), { cacheSuffix: "surf-spots" }), wikidata()]);
+  const spots: Spot[] = [];
+  const failures: string[] = [];
+  if (osm.ok) spots.push(...parseOsmSpots(osm.json));
+  else failures.push(osm.error);
+  if (wd.ok) spots.push(...parseWikidataSpots(wd.json));
+  else failures.push(wd.error);
+  return { spots, failures };
+}
+
+type MarineBatch = { values: (Marine | null)[]; failed: boolean[]; error?: string };
+
+/** The model's sea state at each [lat, lon], in order; `failed` marks points whose request did not answer (as opposed to land, which is null). */
+async function marineBatch(ctx: QueryContext, points: [number, number][], keyPart: string, now: Date): Promise<MarineBatch> {
+  const values: (Marine | null)[] = points.map(() => null);
+  const failed: boolean[] = points.map(() => false);
+  let error: string | undefined;
+  const chunks: number[] = [];
+  for (let i = 0; i < points.length; i += MARINE_CHUNK) chunks.push(i);
+  await Promise.all(
+    chunks.map(async (start, c) => {
+      const part = points.slice(start, start + MARINE_CHUNK);
+      const url =
+        `${MARINE_API}?latitude=${part.map((p) => p[0]).join(",")}&longitude=${part.map((p) => p[1]).join(",")}` +
+        `&hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period&forecast_days=2&timezone=GMT`;
+      const res = await fetchText(
+        ctx,
+        url,
+        "Open-Meteo Marine",
+        ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:marine:${keyPart}:${c}`,
+        FORECAST_TTL_SECONDS,
+      );
+      let rows: unknown[] | null = null;
+      if (res.ok) {
+        try {
+          rows = marineRows(JSON.parse(res.text));
+        } catch {
+          rows = null;
+        }
+      } else {
+        error = res.error;
+      }
+      if (rows === null) {
+        error ??= "Open-Meteo Marine returned no usable response";
+        part.forEach((_, i) => (failed[start + i] = true));
+        return;
+      }
+      part.forEach((_, i) => (values[start + i] = marineProps(rows[i], now)));
+    }),
+  );
+  return { values, failed, ...(error !== undefined && { error }) };
+}
+
+/**
+ * Forecast points at the spots, drawn at each spot. A spot the model has no value for (it answers null on land) is tried
+ * 1, 2 then 3 km away on four compass bearings, the first with a value standing in; with none it is dropped.
+ */
+export async function forecastAtSpots(
+  ctx: QueryContext,
+  spots: Spot[],
+  now: Date,
+): Promise<{ features: Feature<Point>[]; dropped: number; nudged: number; error?: string }> {
+  const first = await marineBatch(ctx, spots.map((s) => [s.lat, s.lon]), "0", now);
+  const values = [...first.values];
+  const nudgedKm = spots.map(() => 0);
+  const failed = first.failed;
+  for (const [round, km] of NUDGE_STEPS_KM.entries()) {
+    const pending = values.flatMap((v, i) => (v === null && !failed[i] ? [i] : []));
+    if (pending.length === 0) break;
+    const points = pending.flatMap((i) => NUDGE_BEARINGS.map((b) => offsetKm(spots[i].lat, spots[i].lon, b, km)));
+    const res = await marineBatch(ctx, points, String(round + 1), now);
+    pending.forEach((spotIndex, p) => {
+      for (let b = 0; b < NUDGE_BEARINGS.length; b++) {
+        const v = res.values[p * NUDGE_BEARINGS.length + b];
+        if (v !== null) {
+          values[spotIndex] = v;
+          nudgedKm[spotIndex] = km;
+          return;
+        }
+      }
+    });
+  }
+  const features: Feature<Point>[] = [];
+  let dropped = 0;
+  values.forEach((v, i) => {
+    if (v !== null) features.push(spotFeature(spots[i], v, nudgedKm[i]));
+    else if (!failed[i]) dropped += 1;
+  });
+  return { features, dropped, nudged: nudgedKm.filter((k) => k > 0).length, ...(first.error !== undefined && { error: first.error }) };
 }
 
 // ---- Seasonal mode (season: true) ----
@@ -565,7 +789,7 @@ const HELP: Record<string, FieldHelp> = {
   v: {
     text:
       "Significant wave height: the average height of the highest third of the waves, the standard NOAA buoy measure (sets can be about twice it); " +
-      "for forecast points the model value now, for seasonal points the month's mean over the last 3 years.",
+      "for forecast spots the model value now (modelled, not measured), for seasonal points the month's mean over the last 3 years.",
     unit: "m",
     source: "NOAA National Data Buoy Center; Open-Meteo Marine for forecasts",
     url: NDBC_URL,
@@ -581,6 +805,7 @@ const HELP: Record<string, FieldHelp> = {
   directionFrom: { text: "The compass direction the dominant waves come from." },
   p90M: { text: "The 90th percentile of wave height for the month at this buoy over the last 3 years: a big day.", unit: "m" },
   swellM: { text: "Height of the swell part of the modelled waves (not the local wind sea).", unit: "m" },
+  nudgedKm: { text: "Present when the model has no waves at the spot itself: the forecast was read this many kilometres out to sea.", unit: "km" },
   maxNext48hM: { text: "The biggest modelled wave height in the next 48 hours, at maxAt.", unit: "m" },
 };
 
@@ -605,17 +830,17 @@ const surf = defineLayer({
     "Live ocean wave conditions for surf, swell and boating questions. User words: surf, swell, waves, wave height, period, how big is it, is it firing, water temperature, buoy. " +
     "Default: NOAA NDBC wave buoys in view, kind 'buoy', each with name, stationId, t (UTC time of the latest observation, usually under an hour old), v (significant wave height in metres; waveFt is the same in feet), " +
     "periodS (dominant wave period in seconds; longer period means more powerful groundswell, under about 8 s is short-period wind chop), avgPeriodS, directionDeg and directionFrom (where the waves come FROM), waterTempC (°C), windMs, gustMs (m/s) and windFrom, and url (the buoy page). " +
-    "Set forecast to true for Open-Meteo Marine model points on a 4 x 4 grid over the view (land cells are dropped), kind 'forecast': v is the modelled wave height now, swellM and swellPeriodS the swell part, maxNext48hM and maxAt the biggest waves in the next two days. Use it where there is no buoy or to say whether swell is building. " +
+    "Set forecast to true to add Open-Meteo Marine model forecasts at named surf spots in view (up to 40, from OpenStreetMap and Wikidata, each named for the spot and drawn on it), kind 'forecast': v is the modelled wave height now, swellM and swellPeriodS the swell part, maxNext48hM and maxAt the biggest waves in the next two days, and nudgedKm when the value was read 1 to 3 km out to sea because the model has no waves at the shore. Forecasts are modelled at named surf spots, buoys are measured; buoys are always included and the forecast spots come on top. The model grid is about 9 km, so neighbouring spots can share values. Use it for a named break, where there is no buoy, or to say whether swell is building. " +
     "Set season to true (optionally month 1-12, default this month) for what is typical this time of year instead of today: kind 'climatology', one point per buoy (the 6 nearest the view's centre), v is the mean significant wave height for that month over the last 3 complete years (metres), p90M the 90th percentile (a big day), periodS and directionFrom the usual period and swell direction, and monthlyMeanM and monthlyP90M the 12-month curves (January first) to say which season a coast is best. A cold seasonal query downloads several years of buoy files and can take 10 to 20 seconds. " +
     "Example questions: 'How big is the surf at Ocean Beach right now?', 'Where is the surf best on Oahu this time of year?'. " +
     "Caveats: buoys sit miles offshore, so breaking waves at a beach can be bigger or much smaller depending on exposure, bathymetry and tide; significant height is the average of the highest third of waves, and sets can be about twice that; " +
-    "buoys that have not reported for 12 hours and stations without a wave sensor are left out; seasonal averages describe the buoy's exposure, so a north-facing and a south-facing buoy on the same island show which shore gets the swell in each season; the forecast is a coarse model, worst near shore and in bays, and is free for non-commercial use only. " +
+    "buoys that have not reported for 12 hours and stations without a wave sensor are left out; seasonal averages describe the buoy's exposure, so a north-facing and a south-facing buoy on the same island show which shore gets the swell in each season; the forecast is a coarse 9 km model, worst near shore and in bays, and shows open-water waves, not what breaks on the reef or sandbar, and is free for non-commercial use only. " +
     "Global (NDBC plus partner buoys, mostly US waters); over 500,000 km² up to 1,000 buoys, biggest waves first.",
   coverage: "global",
   license: "Public domain (NOAA NDBC); forecast from Open-Meteo Marine, CC BY 4.0, free for non-commercial use only",
   requiredEnv: [],
   maxAreaKm2: 500_000,
-  // One global buoy file, a fixed 4 x 4 forecast grid and 6 seasonal buoys at most, so the cost does not grow with the box.
+  // One global buoy file, at most 40 forecast spots and 6 seasonal buoys at most, so the cost does not grow with the box.
   hardMaxAreaKm2: WHOLE_US_KM2,
   wide: { orderBy: "wave height in metres", limit: WIDE_LIMIT },
   input: inputSchema,
@@ -649,33 +874,30 @@ const surf = defineLayer({
     const notes: string[] = [];
 
     if (input.forecast) {
-      const grid = forecastGrid(ctx.bbox);
-      const url =
-        `${MARINE_API}?latitude=${grid.map((g) => g[1]).join(",")}&longitude=${grid.map((g) => g[0]).join(",")}` +
-        `&hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period&forecast_days=2&timezone=GMT`;
-      const marine = await fetchText(
-        ctx,
-        url,
-        "Open-Meteo Marine",
-        ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:marine`,
-        FORECAST_TTL_SECONDS,
-      );
-      if (!marine.ok) {
-        if (features.length === 0) return { error: marine.error, hint: "upstream" };
-        notes.push(`The wave forecast failed (${marine.error}); showing buoys only`);
+      const lookup = await lookupSpots(ctx);
+      const { spots, distinct } = pickSpots(lookup.spots, ctx.bbox);
+      const failedLookup = lookup.failures.length > 0 ? ` (${lookup.failures.join("; ")})` : "";
+      if (spots.length === 0) {
+        notes.push(`No named surf spots in view${failedLookup}`);
+        if (lookup.failures.length === 2 && features.length === 0) return { error: lookup.failures[0], hint: "upstream" };
       } else {
-        let body: unknown = null;
-        try {
-          body = JSON.parse(marine.text);
-        } catch {
-          body = null;
+        const forecast = await forecastAtSpots(ctx, spots, now);
+        if (forecast.features.length === 0 && forecast.error !== undefined) {
+          if (features.length === 0) return { error: forecast.error, hint: "upstream" };
+          notes.push(`The wave forecast failed (${forecast.error}); showing buoys only`);
+        } else {
+          features.push(...forecast.features);
+          notes.push(
+            `${buoys.features.length} NOAA buoy${buoys.features.length === 1 ? "" : "s"} (measured) and ${forecast.features.length} surf spot${forecast.features.length === 1 ? "" : "s"} (modelled forecast)`,
+          );
+          if (forecast.nudged > 0) notes.push(`${forecast.nudged} spot${forecast.nudged === 1 ? "" : "s"} read from the model up to 3 km out to sea (nudgedKm)`);
+          if (forecast.dropped > 0) notes.push(`${forecast.dropped} spot${forecast.dropped === 1 ? "" : "s"} left out: the model has no waves within 3 km`);
+          if (distinct > spots.length) notes.push(`Showing ${spots.length} of ${distinct} surf spots in view (nearest the centre first); zoom in for the rest`);
+          if (lookup.failures.length > 0) notes.push(`Some spot sources failed${failedLookup}`);
         }
-        const forecast = forecastFeatures(body, now);
-        features.push(...forecast.features);
-        if (forecast.features.length === 0) notes.push("The wave model has no sea cells in this view (all land)");
       }
     } else if (buoys.features.length === 0) {
-      notes.push("No reporting NDBC wave buoys in this view; ask again with forecast true for modelled waves");
+      notes.push("No reporting NDBC wave buoys in this view; ask again with forecast true for modelled waves at named surf spots");
     }
 
     const kept = ctx.wide ? keepLargest(features, ctx.wideStrategy?.limit ?? WIDE_LIMIT) : { features, total: undefined };

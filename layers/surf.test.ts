@@ -9,8 +9,16 @@ import layer, {
   buoyFeatures,
   climatologyFrom,
   compass,
-  forecastFeatures,
-  forecastGrid,
+  forecastAtSpots,
+  marineProps,
+  NUDGE_STEPS_KM,
+  offsetKm,
+  parseOsmSpots,
+  parseWikidataSpots,
+  pickSpots,
+  SPOT_CAP,
+  surfSpotsQuery,
+  surfSpotsSparql,
   keepLargest,
   parseLatestObs,
   parseStationList,
@@ -23,6 +31,7 @@ import layer, {
   WIDE_LIMIT,
 } from "./surf";
 import { hardMaxAreaKm2 } from "./types";
+import { haversineKm } from "./_shared/geo";
 import marineFixture from "./__fixtures__/marine.sf.json";
 
 /** Recorded 2026-10-10 ~02:11 UTC: latest_obs trimmed to 11 stations, activestations to 5, marine for SF's 4 x 4 grid. */
@@ -54,6 +63,8 @@ function routedStub() {
   return vi.fn(async (url: string) => {
     if (url.includes("latest_obs")) return text(OBS);
     if (url.includes("activestations")) return text(XML);
+    if (url.includes("overpass")) return text(JSON.stringify(OSM_SPOTS));
+    if (url.includes("wikidata")) return text(JSON.stringify(WD_SPOTS));
     return text(JSON.stringify(marineFixture));
   });
 }
@@ -129,30 +140,148 @@ describe("buoyFeatures", () => {
   });
 });
 
+/** One marine row for the fixture's first point, as the API returns it for a single point. */
+const MARINE_ROW = (marineFixture as unknown[])[2];
+const NULL_ROW = { latitude: 39, longitude: -120, hourly: { time: ["2026-10-10T02:00", "2026-10-10T03:00"], wave_height: [null, null] } };
+
+const OSM_SPOTS = {
+  elements: [
+    { type: "node", id: 1, lat: 37.4953, lon: -122.4968, tags: { name: "Mavericks", sport: "surfing" } },
+    { type: "way", id: 2, center: { lat: 37.4955, lon: -122.4975 }, tags: { name: "Mavericks Beach", natural: "beach", surfing: "yes" } },
+    { type: "node", id: 3, lat: 37.5, lon: -122.45, tags: { sport: "surfing" } },
+    { type: "node", id: 4, lat: 37.51, lon: -122.46, tags: { name: "Surf Shack", shop: "surf", sport: "surfing" } },
+    { type: "way", id: 5, center: { lat: 37.46, lon: -122.44 }, tags: { name: "Venice Beach Point", natural: "beach" } },
+  ],
+};
+const WD_SPOTS = {
+  results: {
+    bindings: [
+      { label: { value: "Mavericks" }, coord: { value: "Point(-122.469922 37.485211)" } },
+      { label: { value: "Bad" }, coord: { value: "nonsense" } },
+    ],
+  },
+};
+
+describe("surf spots", () => {
+  it("asks Overpass for surfing-tagged places and surf-ish beach names inside the bbox", () => {
+    const q = surfSpotsQuery([-122.6, 37.35, -122.35, 37.55]);
+    expect(q).toContain('nwr["sport"="surfing"](37.35,-122.6,37.55,-122.35)');
+    expect(q).toContain('nwr["surfing"="yes"]');
+    expect(q).toContain('["name"~"surf|point|reef",i]');
+    expect(surfSpotsSparql([-123, 36.5, -121.5, 38])).toContain('"Point(-123 36.5)"');
+  });
+
+  it("keeps named spots only, with a rank for how surely they are surf spots, and drops shops", () => {
+    const spots = parseOsmSpots(OSM_SPOTS);
+    expect(spots.map((s) => [s.name, s.rank])).toEqual([
+      ["Mavericks", 1],
+      ["Mavericks Beach", 1],
+      ["Venice Beach Point", 2],
+    ]);
+    expect(spots[1]).toMatchObject({ lat: 37.4955, lon: -122.4975 });
+    expect(parseOsmSpots({ nope: true })).toEqual([]);
+  });
+
+  it("reads Wikidata Point(lon lat) and skips unreadable coordinates", () => {
+    expect(parseWikidataSpots(WD_SPOTS)).toEqual([{ name: "Mavericks", lat: 37.485211, lon: -122.469922, source: "Wikidata", rank: 0 }]);
+    expect(parseWikidataSpots("x")).toEqual([]);
+  });
+
+  it("merges sources within 1 km, preferring Wikidata, and caps at 40 nearest the centre", () => {
+    const box: [number, number, number, number] = [-122.6, 37.35, -122.35, 37.55];
+    const all = [...parseOsmSpots(OSM_SPOTS), ...parseWikidataSpots(WD_SPOTS)];
+    const { spots, distinct } = pickSpots(all, box);
+    // OSM Mavericks is 1.7 km from Wikidata's coordinate (kept both); Mavericks Beach is within 1 km of OSM Mavericks.
+    expect(spots.map((s) => s.name)).toEqual(["Mavericks", "Mavericks", "Venice Beach Point"]);
+    expect(spots[0].source).toBe("Wikidata");
+    expect(spots.filter((s) => s.name === "Mavericks Beach")).toHaveLength(0);
+    expect(distinct).toBe(3);
+
+    const many: typeof all = Array.from({ length: 60 }, (_, i) => ({
+      name: `Spot ${i}`,
+      lat: 36.6 + i * 0.02,
+      lon: -122.5,
+      source: "OpenStreetMap" as const,
+      rank: 1,
+    }));
+    const tall: [number, number, number, number] = [-122.6, 36.5, -122.35, 38];
+    const capped = pickSpots(many, tall);
+    expect(capped.spots).toHaveLength(SPOT_CAP);
+    expect(capped.distinct).toBe(60);
+    expect(pickSpots([{ name: "Out", lat: 10, lon: 10, source: "Wikidata", rank: 0 }], box).spots).toEqual([]);
+  });
+
+  it("offsets a point about the stated distance on a bearing", () => {
+    const [lat, lon] = offsetKm(37.5, -122.5, 270, 1);
+    expect(lat).toBeCloseTo(37.5, 4);
+    expect(haversineKm([-122.5, 37.5], [lon, lat])).toBeCloseTo(1, 1);
+    expect(offsetKm(37.5, -122.5, 0, 2)[0]).toBeGreaterThan(37.5);
+  });
+});
+
 describe("forecast", () => {
-  it("samples a 4 x 4 grid of cell centres", () => {
-    const grid = forecastGrid([0, 0, 4, 4]);
-    expect(grid).toHaveLength(16);
-    expect(grid[0]).toEqual([0.5, 0.5]);
-    expect(grid[15]).toEqual([3.5, 3.5]);
+  it("gives the current hour's waves and the biggest in the next 48 hours for one point", () => {
+    const p = marineProps(MARINE_ROW, NOW);
+    expect(p).not.toBeNull();
+    expect(p?.t).toBe("2026-10-10T02:00:00.000Z");
+    expect(typeof p?.v).toBe("number");
+    expect(Number(p?.maxNext48hM)).toBeGreaterThanOrEqual(Number(p?.v));
+    expect(typeof p?.periodS).toBe("number");
+    expect(p).not.toHaveProperty("name");
   });
 
-  it("gives the current hour's waves and the biggest in the next 48 hours per sea cell", () => {
-    const fc = forecastFeatures(marineFixture, NOW);
-    expect(fc.features.length).toBeGreaterThan(0);
-    for (const f of fc.features) {
-      const p = f.properties ?? {};
-      expect(p.kind).toBe("forecast");
-      expect(p.t).toBe("2026-10-10T02:00:00.000Z");
-      expect(typeof p.v).toBe("number");
-      expect(Number(p.maxNext48hM)).toBeGreaterThanOrEqual(Number(p.v));
-      expect(typeof p.periodS).toBe("number");
-    }
+  it("is null where every hour is null (land)", () => {
+    expect(marineProps(NULL_ROW, NOW)).toBeNull();
+    expect(marineProps("junk", NOW)).toBeNull();
   });
 
-  it("drops land cells, whose hours are all null", () => {
-    const land = { latitude: 39, longitude: -120, hourly: { time: ["2026-10-10T02:00"], wave_height: [null] } };
-    expect(forecastFeatures([land], NOW).features).toHaveLength(0);
+  function marineByCoords() {
+    // Null at the shore of the first spot; waves 1 km west of it; the second spot has waves at the shore; the third has none within 3 km.
+    return vi.fn(async (url: string) => {
+      if (!url.includes("marine-api")) return text("{}");
+      const u = new URL(url);
+      const lats = u.searchParams.get("latitude")!.split(",").map(Number);
+      const lons = u.searchParams.get("longitude")!.split(",").map(Number);
+      const rows = lats.map((lat, i) => {
+        const lon = lons[i];
+        const openWater = Math.abs(lat - 37.1) < 0.0005 && Math.abs(lon + 122.1) < 0.0005;
+        const westOfShore = Math.abs(lat - 37.2) < 0.0005 && lon < -122.31 && lon > -122.33;
+        return openWater || westOfShore ? MARINE_ROW : NULL_ROW;
+      });
+      return text(JSON.stringify(rows.length === 1 ? rows[0] : rows));
+    });
+  }
+
+  const SPOTS = [
+    { name: "Shore Null", lat: 37.2, lon: -122.3, source: "OpenStreetMap" as const, rank: 1 },
+    { name: "Open Water", lat: 37.1, lon: -122.1, source: "Wikidata" as const, rank: 0 },
+    { name: "Lake", lat: 39.0, lon: -120.0, source: "OpenStreetMap" as const, rank: 1 },
+  ];
+
+  it("reads a nudged point when the model is null at the shore, and drops a spot with none within 3 km", async () => {
+    const stub = marineByCoords();
+    const r = await forecastAtSpots(ctx(stub), SPOTS, NOW);
+    expect(r.features.map((f) => f.properties?.name)).toEqual(["Shore Null", "Open Water"]);
+    const [shore, open] = r.features;
+    expect(shore.properties).toMatchObject({ kind: "forecast", nudgedKm: 1, spotSource: "OpenStreetMap" });
+    expect(open.properties).not.toHaveProperty("nudgedKm");
+    // Features sit on the spot, not on the nudged model point.
+    expect(shore.geometry.coordinates).toEqual([-122.3, 37.2]);
+    expect(r.dropped).toBe(1);
+    expect(r.nudged).toBe(1);
+    // First request has the 3 spots; then 4 bearings each for the 2 still null at 1 km, then Lake alone at 2 and 3 km.
+    const lens = calls(stub).map((c) => new URL(c[0]).searchParams.get("latitude")!.split(",").length);
+    expect(lens).toEqual([3, 8, 4, 4]);
+    expect(NUDGE_STEPS_KM).toEqual([1, 2, 3]);
+  });
+
+  it("does not nudge points whose request failed", async () => {
+    const down = vi.fn(async () => new Response("busy", { status: 429 }));
+    const r = await forecastAtSpots(ctx(down), SPOTS, NOW);
+    expect(r.features).toHaveLength(0);
+    expect(r.dropped).toBe(0);
+    expect(r.error).toMatch(/429/);
+    expect(down).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -298,19 +427,42 @@ describe("surf layer", () => {
     expect(stub).toHaveBeenCalledTimes(2);
   });
 
-  it("adds Open-Meteo Marine forecast points when forecast is true", async () => {
+  it("adds forecasts at named surf spots on top of the buoys, never grid points", async () => {
     const stub = routedStub();
     const r = await layer.query(ctx(stub, SF, "surf:k"), { forecast: true, season: false });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
-    const marine = calls(stub).find((c) => c[0].includes("marine-api.open-meteo.com"));
+    const all = calls(stub);
+    const marine = all.find((c) => c[0].includes("marine-api.open-meteo.com"));
     expect(marine).toBeDefined();
     const url = new URL(marine![0]);
-    expect(url.searchParams.get("latitude")?.split(",")).toHaveLength(16);
+    // Mavericks (Wikidata), the OSM Mavericks pair merged to one (100 m apart), and Venice Beach Point; the unnamed and shop elements are gone.
+    expect(url.searchParams.get("latitude")?.split(",")).toHaveLength(3);
     expect(url.searchParams.get("hourly")).toBe("wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period");
-    expect(marine![1].cacheKey).toBe("surf:k:marine");
-    const kinds = new Set(r.data.features.map((f) => f.properties?.kind));
-    expect(kinds).toEqual(new Set(["buoy", "forecast"]));
+    expect(marine![1].cacheKey).toBe("surf:k:marine:0:0");
+    const overpass = all.find((c) => c[0].includes("overpass"))!;
+    expect(overpass[1]).toMatchObject({ method: "POST", headers: { "user-agent": expect.stringContaining("WallyMap") } });
+    const forecasts = r.data.features.filter((f) => f.properties?.kind === "forecast");
+    expect(forecasts.map((f) => f.properties?.name)).toEqual(["Mavericks", "Mavericks Beach", "Venice Beach Point"]);
+    expect(forecasts.map((f) => f.properties?.spotSource)).toEqual(["Wikidata", "OpenStreetMap", "OpenStreetMap"]);
+    expect(forecasts.some((f) => String(f.properties?.name).startsWith("Forecast "))).toBe(false);
+    expect(new Set(r.data.features.map((f) => f.properties?.kind))).toEqual(new Set(["buoy", "forecast"]));
+    expect(r.coverageNote).toMatch(/^2 NOAA buoys \(measured\) and 3 surf spots \(modelled forecast\)/);
     expect(r.citation.source).toMatch(/non-commercial/);
+  });
+
+  it("returns the buoys with a note when there are no named surf spots in view", async () => {
+    const stub = vi.fn(async (url: string) => {
+      if (url.includes("latest_obs")) return text(OBS);
+      if (url.includes("activestations")) return text(XML);
+      if (url.includes("overpass")) return text(JSON.stringify({ elements: [] }));
+      if (url.includes("wikidata")) return text(JSON.stringify({ results: { bindings: [] } }));
+      throw new Error("marine must not be asked without spots");
+    });
+    const r = await layer.query(ctx(stub), { forecast: true, season: false });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features).toHaveLength(2);
+    expect(r.data.features.every((f) => f.properties?.kind === "buoy")).toBe(true);
+    expect(r.coverageNote).toBe("No named surf spots in view");
   });
 
   it("suggests the forecast when no buoy is in view, without fetching names", async () => {
@@ -326,6 +478,8 @@ describe("surf layer", () => {
     const marineDown = vi.fn(async (url: string) => {
       if (url.includes("latest_obs")) return text(OBS);
       if (url.includes("activestations")) return text(XML);
+      if (url.includes("overpass")) return text(JSON.stringify(OSM_SPOTS));
+      if (url.includes("wikidata")) return text(JSON.stringify(WD_SPOTS));
       return new Response("busy", { status: 429 });
     });
     const r = await layer.query(ctx(marineDown), { forecast: true, season: false });
@@ -335,6 +489,16 @@ describe("surf layer", () => {
 
     const down = vi.fn(async () => new Response("no", { status: 503 }));
     expect(await layer.query(ctx(down), { forecast: false, season: false })).toMatchObject({ hint: "upstream" });
+
+    const spotsDown = vi.fn(async (url: string) => {
+      if (url.includes("latest_obs")) return text(OBS);
+      if (url.includes("activestations")) return text(XML);
+      return new Response("busy", { status: 429 });
+    });
+    const s = await layer.query(ctx(spotsDown), { forecast: true, season: false });
+    if (!("kind" in s) || s.kind !== "geojson") throw new Error("expected geojson");
+    expect(s.data.features).toHaveLength(2);
+    expect(s.coverageNote).toMatch(/No named surf spots in view \(Overpass returned 429; Wikidata returned 429\)/);
   });
 
   it("describes units, freshness, licence and the user's words", () => {

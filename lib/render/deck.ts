@@ -1,7 +1,7 @@
 import { LayerExtension, type Layer } from "@deck.gl/core";
 import { FillStyleExtension, PathStyleExtension, _TerrainExtension as TerrainExtension } from "@deck.gl/extensions";
 import { H3HexagonLayer, TerrainLayer } from "@deck.gl/geo-layers";
-import { GeoJsonLayer, IconLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
+import { GeoJsonLayer, IconLayer, PathLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import { WebMercatorViewport } from "@math.gl/web-mercator";
 import type { Feature } from "geojson";
 import { cellToBoundary, cellToLatLng, getHexagonEdgeLengthAvg, latLngToCell, UNITS } from "h3-js";
@@ -35,6 +35,7 @@ import { compareBId, compareSideShown, DELTA_FILL_ALPHA, effectiveMode, isHexCol
 import { DECK_TERRAIN_ID, DECK_TERRAIN_TAG, demDecoder, demTileUrl } from "@/lib/render/wally/deckTerrain";
 import { featureBBox, featureCenter, HEX_DELTA_TAG } from "@/lib/render/inspect";
 import { pinIconFor } from "@/lib/render/wally/pins";
+import { gradientPaths, gradientRgbAt } from "@/lib/render/wally/routeLine";
 import type { MapState, RenderMode, RenderOp, Viewport } from "@/lib/render/state";
 
 type Rgba = [number, number, number, number];
@@ -154,6 +155,26 @@ function terrainProps(terrain: boolean, mode: "offset" | "drape", extensions: La
 function widthFor(width: number, selectedWidth: number, selected: Feature | undefined): WidthAccessor {
   if (!selected) return width;
   return (f: Feature) => (f === selected ? selectedWidth : width);
+}
+
+/** Meters one CSS pixel spans on the ground at a Mapbox zoom (512px tiles) and latitude. */
+export function metersPerPixel(zoom: number, latitude: number): number {
+  return (40_075_016.686 * Math.cos((latitude * Math.PI) / 180)) / (512 * 2 ** zoom);
+}
+
+/**
+ * How a line layer states its pixel widths. Flat, it just asks deck for pixels. While the layer drapes on terrain deck
+ * draws it into an offscreen cover texture per terrain tile, and a pixel width there is a width in that texture's
+ * pixels: a tile's texture is capped at 2048px and holds a different number of pixels per screen pixel for each tile
+ * zoom, and deck counts it in device pixels, so on a 2x screen at zoom 10.9 a 2.5px trail came out 8 to 14px wide
+ * (and blocky, upscaled) beside the same trail at 4px in the next tile over. Meters are the same in every texture, so
+ * a draped layer asks for the meters one pixel spans at the map's current zoom and center (the camera in state, which
+ * updates when a move ends) and keeps the owner's pixel widths (2.5 core, 4.5 casing, 3.5 selected, 3 route).
+ */
+function pixelWidths(ctx: Pick<OpContext, "terrain" | "zoom" | "latitude">) {
+  if (!ctx.terrain) return { units: "pixels", scale: 1 } as const;
+  const scale = metersPerPixel(ctx.zoom, ctx.latitude);
+  return { units: "meters", scale: Number.isFinite(scale) && scale > 0 ? scale : 1 } as const;
 }
 
 /**
@@ -303,6 +324,8 @@ type OpContext = {
   style: StyleHints;
   selected: Feature | undefined;
   zoom: number;
+  /** The map's center latitude, to turn a pixel width into meters while a layer drapes on terrain. */
+  latitude: number;
   /** Deck's terrain layer is in the stack: drape and offset this op's layers on it. */
   terrain: boolean;
   /** The map is in 3D (terrain wanted and not flattened): columns extrude; in 2D they draw flat. */
@@ -397,29 +420,77 @@ function opIds(op: RenderOp, ctx: OpContext, opacity: number, color: string | un
   return { id, trigger };
 }
 
+/** One stretch of a route feature for the gradient layer: its vertices and the gradient color at each, opaque. */
+type GradientRecord = { feature: Feature; path: [number, number][]; colors: Rgba[] };
+
+/** The gradient records of a route feature (one per part), made once per feature object so a pan or a selection reuses them. */
+const gradientRecords = new WeakMap<Feature, GradientRecord[]>();
+function recordsFor(f: Feature): GradientRecord[] {
+  let records = gradientRecords.get(f);
+  if (!records) {
+    const g = f.geometry;
+    records =
+      g?.type === "LineString" || g?.type === "MultiLineString"
+        ? gradientPaths(g).map(({ path, t }) => ({
+            feature: f,
+            path: path.map((p): [number, number] => [p[0], p[1]]),
+            colors: t.map((x): Rgba => [...gradientRgbAt(x).map(Math.round), 255] as Rgba),
+          }))
+        : [];
+    gradientRecords.set(f, records);
+  }
+  return records;
+}
+
+/** Every gradient record of a result, in feature order (cached per result, so the layer's data prop is stable). */
+const gradientData = new WeakMap<GeoJSON.FeatureCollection, GradientRecord[]>();
+function routeRecords(data: GeoJSON.FeatureCollection, isRoute: (f: Feature) => boolean): GradientRecord[] {
+  let all = gradientData.get(data);
+  if (!all) {
+    all = data.features.filter(isRoute).flatMap(recordsFor);
+    gradientData.set(data, all);
+  }
+  return all;
+}
+
+const CLEAR: Rgba = [0, 0, 0, 0];
+
 /**
  * Lines over a white casing (spec §11a: white for casings only, never a dark outline). Trails follow TRAIL_LINE (dark
  * grey dashes over a sage core), forest roads dark grey dashes, use trails sage dots, other lines solid dark grey; the
- * selected line is solid purple. Score lines (popularity) take their ramp. A requested palette color (a compare side)
- * draws solid in that color. No lighting or shadow touches a line: path layers are unlit and the terrain mesh they
- * drape on is too (UNLIT below).
+ * selected line is solid purple. Named routes (lineClassFor: `kind` "route" or a `route` property) run Wally's route
+ * gradient, purple at the start to pink at the end, 3px solid over a slightly wider white casing: a second path layer
+ * (`:gradient`, above the core, not pickable) draws them with a color at every vertex, while the pickable core layer
+ * keeps them as clear lines so a click still finds the route. Score lines (popularity) take their ramp. A requested
+ * palette color (a compare side) draws solid in that color. No lighting or shadow touches a line: path layers are unlit
+ * and the terrain mesh they drape on is too (UNLIT below).
  */
 function lineLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const { data, selected, terrain, style } = ctx;
   const requested = requestedColor(op.color);
   const { id, trigger } = opIds(op, ctx, opacity, requested);
   const updateTriggers = { getLineColor: trigger, getLineWidth: trigger, getDashArray: trigger };
+  const widths = pixelWidths(ctx);
   const score = style.unit === "score" && !requested;
   // Line ramps start at sage: an off-white low end reads as plain white on satellite.
   const ramp = lineRampFor(op.layerId);
   const classOf = (f: Feature) => LINE_CLASSES[lineClassFor(op.layerId, f.properties)];
+  // A requested color (a compare side) and score ramps replace the class look, routes included.
+  const isRoute = (f: Feature) => !requested && !score && "gradient" in classOf(f);
   // Every line casing is white (spec §11a, owner: "the black border around trails ... distorts any line colour"),
   // score lines too: a dark casing shifted how the ramp read.
   const casingColor = hexToRgba(WHITE_HEX, Math.round(255 * LINE.casingOpacity));
-  const casingWidth = LINE.casing;
+  const routes = routeRecords(data, isRoute);
+  const routeCasing = LINE_CLASSES.route.casing;
+  const casingWidth: WidthAccessor | number =
+    routes.length > 0
+      ? (f: Feature) => (f === selected ? SELECTED_LINE.casing : isRoute(f) ? routeCasing : LINE.casing)
+      : widthFor(LINE.casing, SELECTED_LINE.casing, selected);
   const core = (f: Feature): Rgba => {
     if (requested) return hexToRgba(requested);
     if (score) return rampRgba(ramp, scoreT(f.properties?.v));
+    // Routes draw in the gradient layer above; the pickable core line under it stays clear.
+    if (isRoute(f)) return CLEAR;
     return hexToRgba(classOf(f).color);
   };
   const under = (f: Feature): Rgba => {
@@ -434,15 +505,16 @@ function lineLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
     const [on, off] = classOf(f).dash;
     return [on / LINE.width, off / LINE.width];
   };
-  return [
+  const layers: Layer[] = [
     new GeoJsonLayer({
       id: `${id}:casing`,
       data,
       pickable: false,
       filled: false,
       getLineColor: colorFor(casingColor, opacity, selected, WHITE),
-      getLineWidth: widthFor(casingWidth, SELECTED_LINE.casing, selected),
-      lineWidthUnits: "pixels",
+      getLineWidth: casingWidth,
+      lineWidthUnits: widths.units,
+      lineWidthScale: widths.scale,
       updateTriggers,
       ...terrainProps(terrain, "drape"),
     }),
@@ -453,7 +525,8 @@ function lineLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       filled: false,
       getLineColor: perFeature((f) => (f === selected ? [0, 0, 0, 0] : under(f)), opacity, selected),
       getLineWidth: LINE.width,
-      lineWidthUnits: "pixels",
+      lineWidthUnits: widths.units,
+      lineWidthScale: widths.scale,
       updateTriggers,
       ...terrainProps(terrain, "drape"),
     }),
@@ -464,7 +537,8 @@ function lineLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       filled: false,
       getLineColor: select(core),
       getLineWidth: widthFor(LINE.width, SELECTED_LINE.width, selected),
-      lineWidthUnits: "pixels",
+      lineWidthUnits: widths.units,
+      lineWidthScale: widths.scale,
       // The dash extension stays on every core line: adding or removing an extension on a live layer (as a
       // basemap switch would) leaves deck with a dangling dash attribute and it throws. [0, 0] draws solid.
       getDashArray: dash,
@@ -472,6 +546,29 @@ function lineLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       ...terrainProps(terrain, "drape", [dashExtension]),
     }),
   ];
+  if (routes.length > 0) {
+    // The selected route is the purple core line above; its siblings fade like every other line's.
+    const gradientColor = (r: GradientRecord): Rgba[] => {
+      if (r.feature === selected) return r.colors.map(() => CLEAR);
+      const alpha = opacity * (selected ? SIBLING_FADE : 1);
+      return alpha === 1 ? r.colors : r.colors.map(([R, G, B, A]): Rgba => [R, G, B, Math.round(A * alpha)]);
+    };
+    layers.push(
+      new PathLayer<GradientRecord>({
+        id: `${id}:gradient`,
+        data: routes,
+        pickable: false,
+        getPath: (r) => r.path,
+        getColor: gradientColor,
+        getWidth: LINE_CLASSES.route.width,
+        widthUnits: widths.units,
+        widthScale: widths.scale,
+        updateTriggers: { getColor: trigger },
+        ...terrainProps(terrain, "drape"),
+      }),
+    );
+  }
+  return layers;
 }
 
 /**
@@ -484,6 +581,7 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const requested = requestedColor(op.color);
   const recipe = areaRecipe(op.layerId, requested);
   const { id, trigger } = opIds(op, ctx, opacity, requested);
+  const widths = pixelWidths(ctx);
   const updateTriggers = {
     getLineColor: trigger,
     getFillColor: trigger,
@@ -504,7 +602,8 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       filled: false,
       getLineColor: colorFor(WHITE, opacity, selected),
       getLineWidth: widthFor(casingWidth, SELECTED_AREA.outlineWidth + 2 * SELECTED_AREA.casing, selected),
-      lineWidthUnits: "pixels",
+      lineWidthUnits: widths.units,
+      lineWidthScale: widths.scale,
       updateTriggers,
       ...terrainProps(terrain, "drape"),
     }),
@@ -519,7 +618,8 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       getFillColor: canvas ? hatch : tint,
       getLineColor: colorFor(hexToRgba(recipe.outline), opacity, selected, SELECT),
       getLineWidth: widthFor(recipe.outlineWidth, SELECTED_AREA.outlineWidth, selected),
-      lineWidthUnits: "pixels",
+      lineWidthUnits: widths.units,
+      lineWidthScale: widths.scale,
       fillPatternEnabled: Boolean(canvas),
       // Only with a canvas: deck turns the prop into a texture and throws on an explicit undefined.
       ...(canvas && { fillPatternAtlas: canvas }),
@@ -540,6 +640,7 @@ function scoreAreaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[]
   const { data, selected, terrain } = ctx;
   const requested = requestedColor(op.color);
   const { id, trigger } = opIds(op, ctx, opacity, requested);
+  const widths = pixelWidths(ctx);
   const ramp = scoreRampFor(op.layerId);
   const fill = (f: Feature): Rgba => {
     const c = scoreRampColor(f.properties?.v, ramp);
@@ -554,7 +655,8 @@ function scoreAreaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[]
       getFillColor: perFeature(fill, opacity, selected),
       getLineColor: colorFor(HEX_EDGE, opacity, selected, SELECT),
       getLineWidth: widthFor(1, SELECTED_LINE_PX, selected),
-      lineWidthUnits: "pixels",
+      lineWidthUnits: widths.units,
+      lineWidthScale: widths.scale,
       updateTriggers: { getFillColor: trigger, getLineColor: trigger, getLineWidth: trigger },
       ...terrainProps(terrain, "drape"),
     }),
@@ -1354,6 +1456,7 @@ export function buildDeckLayerSets(
       style: loaded.style,
       selected,
       zoom: state.viewport.zoom,
+      latitude: state.viewport.latitude,
       terrain,
       threeD: state.terrain && !state.flattened,
     };

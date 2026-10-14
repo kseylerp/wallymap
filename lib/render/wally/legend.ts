@@ -17,6 +17,7 @@ import {
 import { rampColor, rgbToHex } from "@/lib/render/ramp";
 import type { RenderMode } from "@/lib/render/state";
 import { pinIconFor } from "@/lib/render/wally/pins";
+import { gradientColors } from "@/lib/render/wally/routeLine";
 
 /**
  * The legend key for one layer (the layer panel) or one feature (the inspect card's swatch): exactly what the map
@@ -37,6 +38,8 @@ export type LegendSymbol =
       outline: string;
       casing: string;
     }
+  /** A named route: Wally's route gradient, start to end, on a white casing. */
+  | { kind: "gradient"; colors: string[]; casing: string; width: number; casingWidth: number }
   | { kind: "ramp"; colors: string[] }
   | { kind: "tiles"; color: string };
 
@@ -66,6 +69,8 @@ export type LegendOptions = {
   color?: string;
   /** The one feature the key stands for (the inspect card): its own hatch density and symbol. */
   feature?: Feature;
+  /** A layer key (no feature) for a layer whose drawn features are all named routes: the gradient key. */
+  routes?: boolean;
 };
 
 function isScore(layerId: string, unit?: string): boolean {
@@ -73,7 +78,7 @@ function isScore(layerId: string, unit?: string): boolean {
 }
 
 /** The legend key for a layer drawn in `mode`. */
-export function legendSymbol(layerId: string, mode: LegendMode, { unit, color, feature }: LegendOptions = {}): LegendSymbol {
+export function legendSymbol(layerId: string, mode: LegendMode, { unit, color, feature, routes }: LegendOptions = {}): LegendSymbol {
   const requested = isPaletteColor(color) ? color.toUpperCase() : undefined;
   switch (mode) {
     case "tiles":
@@ -95,7 +100,7 @@ export function legendSymbol(layerId: string, mode: LegendMode, { unit, color, f
       };
     }
     case "lines": {
-      const cls = LINE_CLASSES[lineClassFor(layerId, feature?.properties)];
+      const cls = LINE_CLASSES[routes && !feature ? "route" : lineClassFor(layerId, feature?.properties)];
       const scoreColor = isScore(layerId, unit) && feature ? rgbToHex(rampColor(lineRampFor(layerId), Number(feature.properties?.v) / 100)) : undefined;
       const base = {
         kind: "line" as const,
@@ -107,6 +112,7 @@ export function legendSymbol(layerId: string, mode: LegendMode, { unit, color, f
       if (requested) return { ...base, color: requested, dash: [0, 0] };
       if (scoreColor) return { ...base, color: scoreColor, dash: [0, 0] };
       if (isScore(layerId, unit)) return { kind: "ramp", colors: rampSamples(lineRampFor(layerId)) };
+      if ("gradient" in cls) return { kind: "gradient", colors: gradientColors(), casing: WHITE, width: cls.width, casingWidth: cls.casing };
       return "under" in cls ? { ...base, color: cls.color, under: cls.under } : { ...base, color: cls.color };
     }
     case "heat":

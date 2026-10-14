@@ -165,13 +165,26 @@ export const TRAIL_LINE = {
   selected: { color: PURPLE, width: 3.5 },
 } as const;
 
-/** One line class: a core color (optionally over a solid `under` color) with a dash in pixels ([0, 0] solid). */
-export type LineRecipe = { color: string; under?: string; dash: [number, number] };
+/**
+ * One line class: a core color (optionally over a solid `under` color) with a dash in pixels ([0, 0] solid). A
+ * `gradient` class runs the Wally route gradient (start color to end color, along the line) instead of one core color;
+ * `width` and `casing` override the data line widths (LINE) for the class.
+ */
+export type LineRecipe = {
+  color: string;
+  under?: string;
+  dash: [number, number];
+  gradient?: readonly [start: string, end: string];
+  width?: number;
+  casing?: number;
+};
 
 /**
  * Line classes (owner's board, lines B + C): a dark grey core on a white casing, with one quiet palette hue per class
  * where a class exists, told apart by dash and order. Trails as TRAIL_LINE, forest roads dark grey dashes, use
  * (informal, unmaintained) trails sage dots, other data lines (streams, water) solid dark grey. Selected lines purple.
+ * Named routes (see `isRouteProperties`) take Wally's route gradient, purple at the start to pink at the end, 3px
+ * over a white casing with no dash, exactly as the route tool draws a route (lib/render/wally/routeLine.ts).
  */
 export const LINE_CLASSES = {
   trail: { color: TRAIL_LINE.over.color, under: TRAIL_LINE.under, dash: TRAIL_LINE.over.dash },
@@ -179,12 +192,33 @@ export const LINE_CLASSES = {
   /** Short dashes as long as the line is wide read as dots at 2.5px (deck has no round dash caps). */
   useTrail: { color: SAGE, dash: [2.5, 6] },
   solid: { color: DARK_GREY, dash: [0, 0] },
+  /** Named routes: the Wally gradient (the route tool's ROUTE.start to ROUTE.end), solid, a pixel wider than a path. */
+  route: { color: PURPLE, dash: [0, 0], gradient: [PURPLE, PINK], width: 3, casing: 5 },
 } as const satisfies Record<string, LineRecipe>;
 
 export type LineClass = keyof typeof LINE_CLASSES;
 
-/** The line class of a feature on a line layer: OSM trails (use trails when `informal`), forest roads, else solid. */
+/**
+ * True when a feature is a named route rather than a plain segment: `kind` is "route" (mtb-trails and paddling route
+ * relations, osm-trails' wide-scale hiking routes, ski-routes relations with no piste type) or it carries a `route`
+ * property (ski-routes sets `route: true` on piste and route relations of every kind; osm-trails sets the OSM route
+ * type, "hiking"). A `route` of false, "no" or "false" does not count.
+ */
+export function isRouteProperties(properties?: Record<string, unknown> | null): boolean {
+  if (!properties) return false;
+  if (properties.kind === "route") return true;
+  const route = properties.route;
+  if (typeof route === "string") return !["", "no", "false", "0"].includes(route.trim().toLowerCase());
+  return route === true;
+}
+
+/**
+ * The line class of a feature on a line layer: a named route (any layer: `kind` "route" or a `route` property) takes the
+ * Wally gradient; else OSM trails (use trails when `informal`), forest roads, else solid. Plain paths and piste ways
+ * that are not routes keep their own class.
+ */
 export function lineClassFor(layerId: string, properties?: Record<string, unknown> | null): LineClass {
+  if (isRouteProperties(properties)) return "route";
   if (layerId === "osm-trails") return properties?.informal === true ? "useTrail" : "trail";
   if (layerId === "forest-roads") return "road";
   return "solid";

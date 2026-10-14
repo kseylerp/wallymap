@@ -488,6 +488,29 @@ describe("layerLegend (what the map draws, for the panel and the inspect card)",
     expect(layerLegend(many, { layerId: "species", mode: "points", visible: true }).kind).toBe("ramp");
   });
 
+  it("keys a line layer of only routes (or one filtered down to routes) with the Wally gradient", () => {
+    const line = (kind: string, route?: boolean): GeoJSON.Feature => ({
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: [[0, 0], [1, 1]] },
+      properties: { kind, ...(route && { route }) },
+    });
+    const ski = (features: GeoJSON.Feature[]): LoadedLayer => ({
+      ...trails,
+      id: "ski-routes",
+      style: { geometry: "line", color: "#3A3A3C" },
+      result: { ...trails.result, data: { type: "FeatureCollection", features } } as LoadedLayer["result"],
+    });
+    const op = { layerId: "ski-routes", mode: "lines" as const, visible: true };
+    expect(layerLegend(ski([line("nordic", true), line("route", true)]), op)).toMatchObject({ kind: "gradient" });
+    // A mix keeps the key of its plain segments; a filter down to the routes brings the gradient.
+    const mixed = ski([line("nordic"), line("nordic", true)]);
+    expect(layerLegend(mixed, op)).toMatchObject({ kind: "line", color: DARK_GREY });
+    expect(layerLegend(mixed, { ...op, filters: { route: { include: ["true"] } } })).toMatchObject({ kind: "gradient" });
+    expect(layerLegend(mixed, op, line("nordic", true))).toMatchObject({ kind: "gradient" });
+    expect(layerLegend(mixed, op, line("nordic", true), PINK)).toMatchObject({ kind: "line", color: PINK });
+    expect(layerLegend(ski([]), op)).toMatchObject({ kind: "line" });
+  });
+
   it("keys raster tiles as a dark grey hatch", () => {
     expect(layerLegend(nightLights, { layerId: "night-lights", mode: "polygons", visible: true })).toEqual({ kind: "tiles", color: DARK_GREY });
   });

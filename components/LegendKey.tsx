@@ -10,6 +10,7 @@ import type { LegendSymbol } from "@/lib/render/wally/legend";
  */
 export function LegendKey({ symbol, size = 24 }: { symbol: LegendSymbol; size?: number }) {
   const hatchId = `hatch-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const gradientId = `${hatchId}-gradient`;
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className="legend-key block shrink-0" data-kind={symbol.kind}>
       {symbol.kind === "symbol" && <image href={symbol.spriteUrl} x={0} y={0} width={24} height={24} />}
@@ -26,6 +27,19 @@ export function LegendKey({ symbol, size = 24 }: { symbol: LegendSymbol; size?: 
             strokeWidth={symbol.width}
             strokeDasharray={symbol.dash[0] > 0 ? `${symbol.dash[0]} ${symbol.dash[1]}` : undefined}
           />
+        </>
+      )}
+      {symbol.kind === "gradient" && (
+        <>
+          <defs>
+            <linearGradient id={gradientId} gradientUnits="userSpaceOnUse" x1={1} y1={0} x2={23} y2={0}>
+              {symbol.colors.map((color, i) => (
+                <stop key={i} offset={i / (symbol.colors.length - 1)} stopColor={color} />
+              ))}
+            </linearGradient>
+          </defs>
+          <line x1={1} y1={12} x2={23} y2={12} stroke={symbol.casing} strokeWidth={symbol.casingWidth} />
+          <line x1={1} y1={12} x2={23} y2={12} stroke={`url(#${gradientId})`} strokeWidth={symbol.width} />
         </>
       )}
       {symbol.kind === "area" && (

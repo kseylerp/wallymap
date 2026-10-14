@@ -36,6 +36,28 @@ describe("legendSymbol", () => {
     expect(legendSymbol("some-river", "lines")).toMatchObject({ color: DARK_GREY, dash: [0, 0] });
   });
 
+  it("keys a route feature with the Wally gradient on a white casing, whatever its layer", () => {
+    const route: Feature = { ...blank, properties: { kind: "route" } };
+    for (const layerId of ["ski-routes", "mtb-trails", "paddling", "osm-trails"]) {
+      const key = legendSymbol(layerId, "lines", { feature: route });
+      expect(key).toMatchObject({ kind: "gradient", casing: WHITE, width: 3 });
+      if (key.kind === "gradient") {
+        expect(key.colors).toHaveLength(24);
+        expect(key.colors[0]).toBe(PURPLE);
+        expect(key.colors[23]).toBe(PINK);
+        expect(key.casingWidth).toBeGreaterThan(key.width);
+      }
+    }
+    expect(legendSymbol("ski-routes", "lines", { feature: { ...blank, properties: { kind: "nordic", route: true } } }).kind).toBe("gradient");
+  });
+
+  it("keys a layer of only routes with the gradient, a plain path or piste way as before, a compare side solid", () => {
+    expect(legendSymbol("mtb-trails", "lines", { routes: true }).kind).toBe("gradient");
+    expect(legendSymbol("ski-routes", "lines", { feature: { ...blank, properties: { kind: "nordic" } } })).toMatchObject({ kind: "line", color: DARK_GREY, dash: [0, 0] });
+    const route: Feature = { ...blank, properties: { kind: "route" } };
+    expect(legendSymbol("mtb-trails", "lines", { feature: route, color: PINK })).toMatchObject({ kind: "line", color: PINK, dash: [0, 0] });
+  });
+
   it("keys fire perimeters pink: tint, hatch and outline", () => {
     expect(legendSymbol("fire-perimeters", "polygons")).toEqual({
       kind: "area",

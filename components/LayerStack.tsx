@@ -5,6 +5,7 @@ import { LayerFilters } from "@/components/LayerFilters";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import {
+  applyFilters,
   deriveFilterFields,
   filterSummary,
   MEASURE_STEPS,
@@ -25,7 +26,7 @@ import { rasterKeyFilter } from "@/lib/render/rasterCalm";
 import { currentScenarioValue, scenarioOf, scenarioValueText } from "@/lib/render/scenario";
 import { COMPARE_COLORS, compareBId, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
 import { hexbinThreshold } from "@/lib/render/deck";
-import { WHITE } from "@/lib/render/palette";
+import { isRouteProperties, WHITE } from "@/lib/render/palette";
 import { POINT_MODES, type LoadedLayer, type MapAction, type MapState, type RenderMode, type RenderOp, type Selection, type TimeState } from "@/lib/render/state";
 import { hasMissingImage, missingTilesStore } from "@/lib/render/tileErrors";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
@@ -103,6 +104,9 @@ function PointModeControl({ layer, mode, dispatch }: { layer: LoadedLayer; mode:
  */
 export function layerLegend(layer: LoadedLayer, op: RenderOp | undefined, feature?: Feature, color?: string): LegendSymbol {
   const mode = legendModeFor(layer, op);
+  if (mode === "lines" && !feature && !color && !op?.color && allRoutes(layer, op)) {
+    return legendSymbol(layer.id, mode, { unit: layer.style.unit, routes: true });
+  }
   const dense = layer.result.kind === "geojson" && layer.result.data.features.length > hexbinThreshold;
   const point = layer.style.geometry === "point";
   // Hex tiles and point columns key as the tile ramp (a picked cell too); clusters as the layer's symbol; extruded
@@ -111,6 +115,17 @@ export function layerLegend(layer: LoadedLayer, op: RenderOp | undefined, featur
   if (mode === "clusters") return legendSymbol(layer.id, "points", { unit: layer.style.unit, color: color ?? op?.color, feature });
   if (mode === "columns") return legendSymbol(layer.id, "polygons", { unit: layer.style.unit, color: color ?? op?.color, feature });
   return legendSymbol(layer.id, mode, { unit: layer.style.unit, color: color ?? op?.color, feature });
+}
+
+/**
+ * True when every feature the map draws for a layer (its data with the layer's filters applied, so a filter down to
+ * routes counts) is a named route, which draws in Wally's gradient: then the layer's key is the gradient too. A layer
+ * that mixes routes with plain segments keeps the key of its plain segments; a picked route has the gradient swatch.
+ */
+function allRoutes(layer: LoadedLayer, op: RenderOp | undefined): boolean {
+  if (layer.result.kind !== "geojson") return false;
+  const { features } = op?.filters ? applyFilters(layer.result.data, op.filters) : layer.result.data;
+  return features.length > 0 && features.every((f) => isRouteProperties(f.properties));
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { Feature, LineString, Point, Position } from "geojson";
+import type { Feature, LineString, MultiLineString, Point, Position } from "geojson";
 import type { ExpressionSpecification, LineLayerSpecification } from "mapbox-gl";
 import { haversineKm } from "@/layers/_shared/geo";
 import { ROUTE } from "@/lib/render/palette";
@@ -172,6 +172,56 @@ export function gradientColors(): string[] {
   return Array.from({ length: GRADIENT_STOPS }, (_, i) => {
     const t = i / (GRADIENT_STOPS - 1);
     return rgbToHex([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
+  });
+}
+
+let stopRgb: [number, number, number][] | undefined;
+
+/** The gradient color (RGB, 0 to 255) a fraction `t` (0 start, 1 end) along a line: the 24 stops, blended between. */
+export function gradientRgbAt(t: number): [number, number, number] {
+  const stops = (stopRgb ??= gradientColors().map(hexToRgb));
+  const x = Math.min(1, Math.max(0, Number.isFinite(t) ? t : 0)) * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(x));
+  const f = x - i;
+  const [a, b] = [stops[i], stops[i + 1]];
+  return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+}
+
+/** A stretch of a line with the fraction (0 to 1, by length along the whole feature) at each of its vertices. */
+export type GradientPath = { path: Position[]; t: number[] };
+
+/** A path is cut so that no piece is longer than this share of the feature, so a few long segments still shade smoothly. */
+const GRADIENT_PIECES = 4 * GRADIENT_STOPS;
+
+/**
+ * A line feature as paths with a gradient fraction at every vertex: 0 at the start of the first part, 1 at the end
+ * of the last, by length (parts of a MultiLineString run on in the order given, since a route made of many ways has no
+ * better order). Long segments are cut so the color can change along them; deck draws one color per segment.
+ */
+export function gradientPaths(geometry: LineString | MultiLineString): GradientPath[] {
+  const parts = geometry.type === "LineString" ? [geometry.coordinates] : geometry.coordinates;
+  const clean = parts.map((part) => part.filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]))).filter((part) => part.length >= 2);
+  const cums = clean.map(cumulativeMeters);
+  const total = cums.reduce((sum, cum) => sum + cum[cum.length - 1], 0);
+  const maxStep = total / GRADIENT_PIECES;
+  let before = 0;
+  return clean.map((part, k) => {
+    const cum = cums[k];
+    const path: Position[] = [part[0]];
+    const t: number[] = [total > 0 ? before / total : 0];
+    for (let i = 1; i < part.length; i++) {
+      const span = cum[i] - cum[i - 1];
+      const pieces = maxStep > 0 ? Math.max(1, Math.ceil(span / maxStep)) : 1;
+      for (let j = 1; j <= pieces; j++) {
+        const f = j / pieces;
+        const [x0, y0] = part[i - 1];
+        const [x1, y1] = part[i];
+        path.push(f === 1 ? part[i] : [x0 + (x1 - x0) * f, y0 + (y1 - y0) * f]);
+        t.push(total > 0 ? (before + cum[i - 1] + span * f) / total : 0);
+      }
+    }
+    before += cum[cum.length - 1];
+    return { path, t };
   });
 }
 

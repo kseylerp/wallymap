@@ -2,12 +2,12 @@
 
 WallyMap is an open-source research tool for the outdoors: a chat agent that puts outdoor data on a Mapbox map, with every answer drawn, cited, and exportable. Ask a question in plain language, and the agent picks the right data layers and shows them on the map: trails, fire, forest loss, snow, water, campsites, wildlife, photos, public lands, and computed popularity and remoteness scores. It runs on Next.js, and you bring your own model: OpenRouter, Anthropic directly, or any OpenAI-compatible server.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/kseylerp/mapagent)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/kseylerp/wallymap)
 
 ## Quickstart
 
 ```bash
-git clone https://github.com/kseylerp/mapagent
+git clone https://github.com/kseylerp/wallymap
 cd mapagent
 cp .env.example .env.local
 pnpm i

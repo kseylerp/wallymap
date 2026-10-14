@@ -103,3 +103,19 @@ Approved colors only: wally pink `#F57272`, purple `#6E5BFF`, sage `#9FB693`, of
 ### 11b. Owner picks from the style board (2026-10-09, later)
 
 Points = board A (monochrome shapes, off-white fill, white halo; selection purple). Density hex tiles = board A (gray ramp off-white → dark grey, 0.55 → 0.80, log scale, white edges, counts), not hatching; hatching stays for polygons and public-lands tiles. Extruded hex columns = board C (translucent white volumes with dark-grey caps; only the tallest cell takes purple). Trails = board T1 (alternating dark-grey / sage 8 px dashes on a white casing). Other polylines = board B + C: dark-grey core on a white casing, one quiet palette hue per class (forest roads dark-grey dashed, use trails sage dots, selected purple); routes unchanged. Also requested: point clusters (blobs with counts) and heatmaps as render modes for dense point layers (follow-up task).
+
+## 12. Standard views (owner, 2026-10-14: "we need standardized views to show a wide range of data/change/details")
+
+Every answer is rendered as one of seven views. The agent names the view on the render op (`render.view`), the reducer defaults it from the data when the agent does not, and the client renders each view the same way every time.
+
+| view | when | camera | encoding | console | note |
+|---|---|---|---|---|---|
+| change | two sets or two dates/amounts of the same layer ("then vs now", "what changed") | fit to the union of both | lost (A-only) pink hatch, gained (B-only) purple, unchanged dark grey; tiles: swipe | compare strip prefilled (delta default; swipe, toggle) with both areas/counts and the difference | states both values and the difference |
+| timeline | dated features or time tiles ("over time", "year by year", "since") | fit to the features | the layer's normal encoding | scrubber open; cumulative for growth questions, slide for "when"; play ready | states the span and the peak period |
+| ranked | features with a magnitude ("largest", "most", "deepest", "how full") | fit to the top-N | proportional symbols or 3D columns by `v`; top-N labelled | the facet slider at the top-N threshold | lists the top 3–6 with numbers and units |
+| density | many points ("where are the most", "hotspots", > 500 points) | fit to the data | clusters (default) or heat (when asked) | mode control on clusters/heat | states the densest places |
+| detail | one thing ("tell me about", "how deep is", a click) | fit to the feature, lower third | the feature selected (purple) | inspect card open | the card's facts |
+| scenario | a parameter layer (sea-level rise amount) | fit to the tiles' coast | the calmed tiles | scenario scrubber at the asked amount | states the amount and the conversion |
+| route | a route request | overview → preview | Wally gradient line, mile markers | preview dock, profile | distance, gain, time |
+
+Rules: after a query for a named place the camera fits the returned features (padding for the panels), never the geocoded region; "here" questions never move the camera; the legend always names the encoding in words (what pink means in this view); a view's console controls are open when the answer arrives, so the next question is one click, not a sentence.

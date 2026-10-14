@@ -80,9 +80,9 @@ describe("tokens in app/globals.css", () => {
     expect(css).not.toContain("prefers-color-scheme");
   });
 
-  it("uses the system font (light) for UI text and Outfit for headings, as on wally.guide", () => {
+  it("uses the system font (light) for UI text and Geologica for headings, as on wally.guide", () => {
     expect(css).toContain("--font-sans: -apple-system");
-    expect(css).toContain("--font-serif: var(--font-outfit)");
+    expect(css).toContain("--font-serif: var(--font-geologica)");
     expect(css).not.toContain("--font-geist");
     expect(css).not.toContain("--font-source-serif");
   });

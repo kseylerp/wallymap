@@ -20,7 +20,8 @@
  * (lib/agent/view.ts). The view goes into the system prompt and into buildTools the way
  * app/api/chat/route.ts passes it, and the place then counts as located without a geocode.
  * A question without `@view` that geocodes a named place must also move the camera there, or it fails: a successful
- * geocode moves it by itself (lib/agent/applyToolResult.ts), and so does set_view.
+ * geocode names the place, and the map then fits the features returned for it (lib/render/reducer.ts, spec §12), as
+ * set_view moves it.
  * An `@view` question whose view is too wide for a layer (a zoom_in error) must still answer at that scale: it passes
  * only when the model did not move the camera (set_view or a successful geocode), got at most one zoom_in error per layer (no shrinking and retrying), and
  * at least one query succeeded and was drawn and rendered (the error's widerScale layers). A reply that only asks the
@@ -31,14 +32,19 @@
  */
 import { readFileSync } from "node:fs";
 import { generateText, stepCountIs } from "ai";
-import "@/layers";
-import { getLayer } from "@/layers/registry";
+import { getLayer, listLayers } from "@/layers";
 import { getModel } from "@/lib/agent/provider";
 import { isFullLayerResult, summarizeLayerResult, type GeojsonSummary } from "@/lib/layers/summarize";
 import { buildTools, repairToolCall } from "@/lib/agent/tools";
 import { SYSTEM_PROMPT } from "@/lib/agent/prompt";
 import type { MapView } from "@/lib/agent/view";
 import { parseMapView, systemForTurn } from "@/lib/agent/viewContext";
+import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
+import { reduce } from "@/lib/render/reducer";
+import { initialMapState, type MapState } from "@/lib/render/state";
+import { visibleState } from "@/lib/render/view";
+import { lineEntries } from "@/lib/render/nativeLines";
+import { boundsOf } from "@/lib/render/views";
 
 
 const model = process.env.MODEL_NAME ?? "(unset)";
@@ -183,24 +189,98 @@ function largestByV(calls: ToolCall[], toolName: string): { name: string; v: num
   return best;
 }
 
+/** The map the browser would end on: every tool result through the client's mapping and the reducer, in order. */
+function mapAfter(calls: ToolCall[]): MapState {
+  const catalog: LayerCatalog = Object.fromEntries(
+    listLayers().map((l) => [l.id, { title: l.title, style: l.style, license: l.license, ...(l.fieldHelp && { fieldHelp: l.fieldHelp }), ...(l.card && { card: l.card }) }]),
+  );
+  let state = reduce(initialMapState, { type: "turn_start" });
+  for (const c of calls) {
+    if (c.output === undefined) continue;
+    for (const action of toolResultToActions(c.toolName, c.input, c.output, { width: 1440, height: 900 }, catalog, state.renderOps)) state = reduce(state, action);
+  }
+  return state;
+}
+
+function contains(outer: number[] | undefined, inner: number[] | null): boolean {
+  if (!outer || !inner) return false;
+  const eps = 1e-6;
+  return outer[0] <= inner[0] + eps && outer[1] <= inner[1] + eps && outer[2] >= inner[2] - eps && outer[3] >= inner[3] - eps;
+}
+
+/**
+ * "How has Bears Ears changed since 2021?" (the owner's Bears Ears case: the camera stayed Utah-wide, two thin
+ * outlines, no change encoding): passes only when the map ends in the change view: a compare by version on monuments'
+ * kind with both the 2021 and the current boundary drawn (lost and gained), and the camera fitted to the union of both.
+ */
+function bearsEarsChangeRule(calls: ToolCall[]): RuleResult {
+  const state = mapAfter(calls);
+  const compare = state.compare;
+  const drawn = visibleState(state).layers.monuments;
+  const features = drawn?.result.kind === "geojson" ? drawn.result.data.features : [];
+  const classes = [...new Set(features.map((f) => f.properties?.delta))];
+  const union = boundsOf(features);
+  const ok = compare?.layerId === "monuments" && compare.by?.key === "kind" && classes.includes("a-only") && classes.includes("b-only") && contains(state.camera?.bbox, union);
+  return { ok, view: state.renderOps.find((o) => o.layerId === "monuments")?.view, by: compare?.by, classes, camera: state.camera?.bbox, union };
+}
+
+/**
+ * "Show only hard mountain bike trails near Moab" (the owner's Moab case: a "Value ≥ 4" slider and no difficulty
+ * filter): passes only when mtb-trails is filtered on its difficulty facet through render.filters so that hard trails
+ * (Singletrack 3) are drawn and nothing easier is, and the lines take the facet ramp.
+ */
+function moabHardRule(calls: ToolCall[]): RuleResult {
+  const state = mapAfter(calls);
+  const op = state.renderOps.find((o) => o.layerId === "mtb-trails");
+  // The facet chips write an include list; a range from 3 up is the same filter written by hand.
+  const filter = op?.filters?.v;
+  const drawn = visibleState(state).layers["mtb-trails"];
+  const values = drawn?.result.kind === "geojson" ? drawn.result.data.features.map((f) => Number(f.properties?.v)) : [];
+  const look = lineEntries(visibleState(state)).find((e) => e.layerId === "mtb-trails")?.look.kind;
+  const ok = filter !== undefined && values.includes(3) && values.every((v) => v >= 3) && look === "facet";
+  return { ok, filter, drawn: values.length, look };
+}
+
+/**
+ * "Which uranium mines near the Navajo Nation score highest?" (the owner: "if you list a score on the detail card it
+ * needs an i-icon"): passes only when uranium ends in the ranked view and the model's summary carried the hazard
+ * score's help text, and the note names the highest-scoring site.
+ */
+function uraniumRankedRule(calls: ToolCall[], notes: string[]): RuleResult {
+  const state = mapAfter(calls);
+  const view = state.renderOps.find((o) => o.layerId === "uranium")?.view;
+  const layer = getLayer("uranium");
+  const query = calls.find((c) => c.toolName === "query_uranium" && c.output !== undefined && !isLayerError(c.output));
+  const summary = query && isFullLayerResult(query.output) ? summarizeLayerResult(query.output, "uranium", layer?.style, layer?.fieldHelp) : undefined;
+  const help = summary && "kind" in summary && summary.kind === "geojson" ? summary.help : undefined;
+  const largest = largestByV(calls, "query_uranium");
+  const namesLargest = largest !== undefined && comparable(notes.join("\n")).includes(comparable(largest.name));
+  const ok = view === "ranked" && help !== undefined && Object.values(help).some((t) => /Navajo/.test(t)) && namesLargest;
+  return { ok, view, help: help ? Object.keys(help) : [], largest, namesLargest };
+}
+
 /**
  * "wind farms in West Texas" over a 392,000 km² view (the owner's case: power-plants errored over its 250,000 km² cap,
  * the model shrank the box to a 3°x3° slice and drew 9 sites): passes only when a power-plants query answered with at
- * least 100 features, every power-plants query used a box at least 90% of the view's area (no shrinking), none came
- * back as a zoom_in error, and the note names the largest site by MW among the returned features.
+ * least 100 features, power-plants was queried once, its box was at least 90% of the region's area (the region the user
+ * named, when the model geocoded it, else the view: no shrinking), none came back as a zoom_in error, and the note names
+ * the largest site by MW among the returned features.
  */
 function westTexasWindRule(calls: ToolCall[], notes: string[], view: MapView | null): RuleResult {
   const plants = calls.filter((c) => c.toolName === "query_power-plants");
   const answered = plants.filter((c) => c.output !== undefined && !isLayerError(c.output));
   const most = Math.max(0, ...answered.map((c) => featureCount(c.output) ?? 0));
-  const viewArea = view?.bbox ? areaKm2(view.bbox) : undefined;
+  // Geocoding the region the user named ("West Texas") is allowed: its box, not the view's, is the one not to shrink.
+  const named = calls.filter(geocodeMoved).map((c) => bboxOf(c.output)).find((b) => b !== undefined);
+  const region = named ?? view?.bbox;
+  const viewArea = region ? areaKm2(region) : undefined;
   const boxes = plants.map((c) => bboxOf(c.input)).filter((b): b is [number, number, number, number] => b !== undefined);
   const shrank = viewArea !== undefined && boxes.some((b) => areaKm2(b) < viewArea * 0.9);
   const zoomIn = plants.some((c) => isZoomInError(c.output));
   const largest = largestByV(calls, "query_power-plants");
   const namesLargest = largest !== undefined && comparable(notes.join("\n")).includes(comparable(largest.name));
-  const ok = most >= 100 && !shrank && !zoomIn && namesLargest;
-  return { ok, features: most, shrank, zoomIn, largest, namesLargest, boxes };
+  const ok = most >= 100 && plants.length === 1 && !shrank && !zoomIn && namesLargest;
+  return { ok, features: most, queries: plants.length, region, shrank, zoomIn, largest, namesLargest, boxes };
 }
 
 /** "dams in the Colorado River basin": a basin-wide box must answer (wide, largest by storage), not error and shrink. */
@@ -220,6 +300,9 @@ const QUESTION_RULES: Record<string, (calls: ToolCall[], notes: string[], view: 
   "glaciers in the wind river range": windRiverGlaciersRule,
   "wind farms in west texas": westTexasWindRule,
   "dams in the colorado river basin": coloradoDamsRule,
+  "how has bears ears changed since 2021?": bearsEarsChangeRule,
+  "show only hard mountain bike trails near moab": moabHardRule,
+  "which uranium mines near the navajo nation score highest?": uraniumRankedRule,
 };
 
 /** Every coverage note the queries returned, so a wide result's "Showing the N largest of M" line is in the output. */

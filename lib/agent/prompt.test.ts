@@ -65,7 +65,9 @@ const REQUIRED = [
   "Every answer is drawn as one standard view; name it with render.view on the main layer: change for then vs now or what changed (two versions or two dates of one layer), timeline for dated features over time, ranked for the largest, most, deepest, highest or how full, density for where there are the most or hotspots, detail for one thing (tell me about, how deep is), scenario for a scenario amount, route for a route.",
   "A change view opens the compare on its own, fitted to both versions: for monuments then and now, render monuments with view change (2021 against current) and give both areaKm2 and the difference; do not call compare for it.",
   "A ranked view sizes the symbols by the layer's measure and keeps the top ten on its slider: name the top three to six with their numbers and units, and explain a score in plain words from the layer's description (what it measures, who computed it, its scale).",
-  "Facets are a layer's own filters (difficulty, class, grade, kind): when the user names a facet value (hard mountain bike trails, alpine routes, current boundary), pass it in render.filters on the facet's property, never re-query to filter.",
+  "Facets are a layer's own filters (difficulty, class, grade, kind): when the user names a facet value (hard mountain bike trails, alpine routes, current boundary), query the layer without inputs that narrow it (such as maxScale), then pass that label's include values from the query summary's facets in render.filters on the facet's property; never re-query to filter.",
+  "Render every layer whose query succeeded, tile layers included: a layer you queried but did not render is not on the map.",
+  "When the user names a place, or asks about things that live in one (sequoia groves are in the Sierra Nevada), geocode that place first and pass its bbox; never make up a bbox. Inside a wide map view, geocode a region the user names (West Texas) and query each layer once with that bbox, never a smaller slice.",
 ];
 
 describe("SYSTEM_PROMPT", () => {

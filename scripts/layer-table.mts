@@ -118,6 +118,17 @@ function keyText(l: Layer): string {
 
 const cell = (s: string) => s.replace(/\|/g, "\\|");
 
+/** The layer's facets (spec §12a) as the layer row labels them, the one that drives the map first; "" without any. */
+function facetText(l: Layer): string {
+  return (l.style.facets ?? [])
+    .map((f) => {
+      if (f.kind === "range") return `${f.label}${f.unit ? ` (${f.unit})` : ""}`;
+      const labels = [...new Set((f.values ?? []).map((v) => v.label))];
+      return labels.length <= 6 ? `${f.label}: ${labels.join(", ")}` : `${f.label} (${labels.length} classes)`;
+    })
+    .join("; ");
+}
+
 const km2 = (n: number) => Math.round(n).toLocaleString("en-US");
 
 /** "Any", "2,500", or "250,000; to 50,000,000 the 2,000 largest by capacity in MW". */
@@ -136,11 +147,11 @@ export function layerTable(): string {
   const rows = listLayers().map((l) => {
     const m = META[l.id];
     if (!m) throw new Error(`scripts/layer-table.mts has no entry for layer "${l.id}"`);
-    return `| \`${l.id}\` | ${cell(l.title)} | ${cell(m.shows)} | ${cell(m.source)} | ${coverageText(l)} | ${cell(areaText(l))} | ${keyText(l)} | ${cell(m.freshness)} |`;
+    return `| \`${l.id}\` | ${cell(l.title)} | ${cell(m.shows)} | ${cell(m.source)} | ${coverageText(l)} | ${cell(areaText(l))} | ${keyText(l)} | ${cell(m.freshness)} | ${cell(facetText(l))} |`;
   });
   return [
-    "| Id | Title | What it shows | Source | Coverage | Area (km²) | Key needed | Freshness |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| Id | Title | What it shows | Source | Coverage | Area (km²) | Key needed | Freshness | Facets |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ...rows,
   ].join("\n");
 }

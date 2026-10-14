@@ -13,10 +13,12 @@
  * crownTorchPercent, diameterCm, observed (ISO date), t (the fire's start date). No `v`: the count is the feature count.
  * Check (2026-10-10): all 2,940 trees with a named grove land inside that grove's outline extent from sequoia-groves (0 outside).
  * Smoke through runLayer (2026-10-10): box -119,35.8,-118.3,36.8 returned 2,959 trees (1,484 live, 1,475 dead) in 0.5 s (910 KB).
+ * Wide (over 400,000 km², up to 1,600,000): the same file, biggest trunks first, capped at 3,000 so the whole survey still fits.
+ *   Smoke 2026-10-14, California box -124.5,32.5,-114,42: all 2,959 of 2,959 in 0.6 s (largest a dead 762 cm tree in Suwanee grove).
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { bboxesDisjoint } from "./_shared/coverage";
@@ -26,6 +28,11 @@ import { layerColor } from "@/lib/render/palette";
 const CSV_URL = "https://www.sciencebase.gov/catalog/file/get/63d40479d34e06fef150e7b4?name=Sequoia_stemdata.csv";
 const CSV_CACHE_KEY = "sequoia-mortality:stemdata-v4";
 const TTL_SECONDS = 7 * 86_400;
+/**
+ * Most trees a wide view carries: more than the whole survey (2,959 trees with a status), so a wide view still shows every
+ * tree and counts stay right; the file is one cached download whatever the box.
+ */
+const WIDE_LIMIT = 3_000;
 
 /** The burned groves of Sequoia and Kings Canyon, with margin. */
 const RANGE: BBox = [-119.0, 35.8, -118.3, 36.8];
@@ -202,12 +209,13 @@ const sequoiaMortality = defineLayer({
     "There is no v: count the points. Points cluster at low zoom. " +
     "Use it for 'how many giant sequoias died in the fires', 'which groves lost the most trees' or 'did the big trees survive'; filter by kind to compare live and dead. " +
     "Caveats: these are the roughly 3,000 trees in the USGS survey (Redwood Mountain, Homers Nose, Suwanee, Garfield and a dozen other groves), not every sequoia, so the share dead is for the surveyed trees, and the surveyed trees skew to the areas that burned. " +
-    "Trees the crews could not find on a later visit (77) are left out. It only covers the southern Sierra Nevada. Zoom in to a region under 400,000 km² first. " +
+    "Trees the crews could not find on a later visit (77) are left out. Southern Sierra Nevada only; over 400,000 km² it still returns every tree. " +
     "Pair it with sequoia-groves for the grove outlines.",
   coverage: { bbox: RANGE },
   license: "Public domain (USGS)",
   requiredEnv: [],
   maxAreaKm2: 400_000,
+  wide: { orderBy: "trunk diameter in cm", limit: WIDE_LIMIT },
   input: z.object({}),
   style: { geometry: "point", color: layerColor("sequoia-mortality"), cluster: true },
 
@@ -224,14 +232,6 @@ const sequoiaMortality = defineLayer({
         data: { type: "FeatureCollection", features: [] },
         citation,
         coverageNote: "The tree survey covers only Sequoia and Kings Canyon National Parks in California",
-      };
-    }
-
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > sequoiaMortality.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${sequoiaMortality.maxAreaKm2} km²`,
-        hint: "zoom_in",
       };
     }
 
@@ -254,11 +254,19 @@ const sequoiaMortality = defineLayer({
       };
     }
 
-    const { features, notFound } = parseStems(text, ctx.bbox);
+    const parsed = parseStems(text, ctx.bbox);
+    const { notFound } = parsed;
+    let features = parsed.features;
+    // Wide: biggest trunks first, capped at the strategy's limit (which the whole survey fits under), with the count in the box.
+    const wideLimit = ctx.wide ? ctx.wideStrategy?.limit : undefined;
+    if (wideLimit !== undefined) {
+      features = [...features].sort((a, b) => Number(b.properties?.diameterCm ?? -1) - Number(a.properties?.diameterCm ?? -1)).slice(0, wideLimit);
+    }
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features },
       citation,
+      ...(wideLimit !== undefined && { total: parsed.features.length }),
       ...(notFound > 0 && features.length > 0
         ? { coverageNote: `${notFound} surveyed trees that could not be found on a later visit are left out` }
         : {}),

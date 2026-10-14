@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { LIMIT, normalizeWells, sinceYear } from "./groundwater";
+import { hardMaxAreaKm2 } from "./types";
+import layer, { LIMIT, WIDE_LIMIT, normalizeWells, sinceYear } from "./groundwater";
 import fixture from "./__fixtures__/groundwater.kearney.json";
 
 /** A real Water Data API answer for this box (parameter 72019, measured 2024 or later), recorded 2026-10-10, cut to its first 12 wells. */
@@ -82,6 +83,8 @@ describe("groundwater layer", () => {
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toEqual(["USGS_API_KEY"]);
     expect(layer.maxAreaKm2).toBe(40_000);
+    expect(layer.wide).toEqual({ limit: 2000, rank: "first" });
+    expect(hardMaxAreaKm2(layer)).toBe(160_000);
     expect(layer.input.parse({})).toEqual({});
     expect(layer.input.safeParse({ sinceYear: 1800 }).success).toBe(false);
     expect(layer.style).toMatchObject({ geometry: "point", unit: "ft", extrude: "v" });
@@ -151,6 +154,40 @@ describe("groundwater layer", () => {
   it("is registered, validates sinceYear and rejects an oversized area through runLayer", async () => {
     expect((await runLayer("groundwater", { bbox: KEARNEY, input: { sinceYear: "recent" } })).status).toBe(400);
     expect((await runLayer("groundwater", { bbox: [-105, 38, -95, 44] })).status).toBe(422);
+  });
+
+  it("answers a wide box (about 150,000 km²) with one 2,000-well page, deepest first, and the count of all wells", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) =>
+      new URL(String(input)).searchParams.get("resulttype") === "hits" ? json({ type: "FeatureCollection", features: [], numberMatched: 2492 }) : json(fixture),
+    );
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("groundwater", { bbox: [-102, 39, -98, 43], zoom: 6 });
+      expect(res.status).toBe(200);
+      const urls = stub.mock.calls.map((c) => new URL(String(c[0])));
+      expect(urls.find((u) => !u.searchParams.has("resulttype"))?.searchParams.get("limit")).toBe(String(WIDE_LIMIT));
+      const hits = urls.find((u) => u.searchParams.get("resulttype") === "hits");
+      expect(hits?.searchParams.get("bbox")).toBe("-102,39,-98,43");
+      expect(hits?.searchParams.get("time")).toBe("2021-01-01T00:00:00Z/..");
+      if (!("data" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
+      const depths = res.body.data.features.map((f) => Number(f.properties?.v));
+      expect(depths).toEqual([...depths].sort((a, b) => b - a));
+      expect(res.body).toMatchObject({
+        total: 2492,
+        truncated: true,
+        coverageNote: "Showing the 12 first of 2,492; zoom in under 40,000 km² for all; Latest manual measurement per well since 2021; depth is feet below land surface",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("drops the in-view cap note in wide mode and leaves the total out when the count fails", async () => {
+    const many = { features: Array.from({ length: LIMIT }, (_, i) => fixture.features[i % fixture.features.length]) };
+    const stub = vi.fn(async (url: string) => (new URL(url).searchParams.get("resulttype") === "hits" ? json({}, 500) : json(many)));
+    const r = geojson(await layer.query({ ...ctx(stub), wide: true, wideStrategy: layer.wide }, {}));
+    expect(r.total).toBeUndefined();
+    expect(r.coverageNote).not.toMatch(/in no particular order/);
   });
 
   it("describes depth to water, the sign convention and that it is not a trend", () => {

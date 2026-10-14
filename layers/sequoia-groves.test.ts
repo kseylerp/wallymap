@@ -25,6 +25,8 @@ describe("sequoia-groves layer", () => {
     expect(layer.license).toMatch(/University of California/);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(120_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "acres", limit: 1000 });
     expect(layer.input.parse({})).toEqual({});
     expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", unit: "acres", fillOpacity: 0.3 });
   });
@@ -90,9 +92,32 @@ describe("sequoia-groves layer", () => {
     expect(await layer.query(ctx(http), {})).toMatchObject({ hint: "upstream" });
   });
 
-  it("refuses a huge area through runLayer", async () => {
+  it("answers a wide box largest first with a count, and runLayer writes the note", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      return url.searchParams.get("returnCountOnly") === "true" ? json({ count: 96 }) : json(fixture);
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("sequoia-groves", { bbox: [-122, 35, -117, 40], zoom: 6 });
+      expect(res.status).toBe(200);
+      const data = stub.mock.calls.map((c) => new URL(String(c[0]))).find((u) => !u.searchParams.has("returnCountOnly"));
+      expect(data?.searchParams.get("orderByFields")).toBe("Acres DESC");
+      expect(data?.searchParams.get("resultRecordCount")).toBe("1000");
+      expect(res.body).toMatchObject({
+        total: 96,
+        truncated: true,
+        coverageNote: `Showing the ${fixture.features.length} largest of 96 (ranked by acres); zoom in under 120,000 km² for all`,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("refuses through runLayer only a box over four times the soft cap", async () => {
     const res = await runLayer("sequoia-groves", { bbox: [-125, 30, -115, 40], zoom: 5 });
     expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 480000 km²$/) });
   });
 
   it("describes the groves and points to the fire-death layer", () => {

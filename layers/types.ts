@@ -34,14 +34,29 @@ export type TileTime = {
   daysBack?: number;
 };
 
+/**
+ * Set by lib/layers/run.ts on a result fetched with the layer's WIDE strategy (a box over maxAreaKm2) that left features
+ * out: what was kept and what was ranked out, so the model never reads a top-N as the whole box.
+ */
+export type Truncation = {
+  truncated: true;
+  /** One clause on what was left out and how the kept features were chosen. */
+  rankedOut: string;
+};
+
 export type LayerResult =
-  | {
+  | ({
       kind: "geojson";
       data: FeatureCollection;
       citation: Citation;
       coverageNote?: string;
-    }
-  | {
+      /**
+       * Wide results only: how many features the source holds in the box (a count pre-check), when the result keeps
+       * fewer. lib/layers/run.ts states it in the coverage note ("the 2,000 largest of 4,512").
+       */
+      total?: number;
+    } & Partial<Truncation>)
+  | ({
       kind: "tiles";
       data: {
         url: string;
@@ -61,7 +76,7 @@ export type LayerResult =
       };
       citation: Citation;
       coverageNote?: string;
-    };
+    } & Partial<Truncation>);
 
 export type LayerError = {
   error: string;
@@ -73,6 +88,21 @@ export type LayerError = {
   suggestedZoom?: number;
 };
 
+/**
+ * How a layer answers a box wider than its maxAreaKm2 (up to its hard cap) instead of erroring: a bounded, ranked fetch.
+ * `ranked` (the default) keeps the `limit` largest by `orderBy`; `named` keeps only named features (OSM `[name]`, the
+ * most-linked articles), up to `limit`; `tiles` draws a density picture instead of single features.
+ */
+export type WideStrategy = {
+  /** What the kept features are ranked by, in the words the note quotes: "capacity (MW)", "storage (acre-feet)". */
+  orderBy?: string;
+  /** Most features a wide result carries. */
+  limit: number;
+  mode?: "ranked" | "named" | "tiles";
+  /** The word for the kept features in the note when ranked: "largest" (default), "strongest", "newest", "most recent". */
+  rank?: string;
+};
+
 export type QueryContext = {
   bbox: BBox;
   zoom: number;
@@ -81,6 +111,13 @@ export type QueryContext = {
   fetch: CachedFetch;
   /** Stable key for this request (layer id, bbox rounded to 3 decimals, sorted input); pass it as `cacheKey` to ctx.fetch. */
   cacheKey?: string;
+  /**
+   * True when the box is over the layer's maxAreaKm2 (and under its hard cap): fetch with `wideStrategy` (bounded and
+   * ranked) and set `total` on the result when the source can count. lib/layers/run.ts writes the coverage note.
+   */
+  wide?: boolean;
+  /** The layer's `wide`, passed along when `wide` is true. */
+  wideStrategy?: WideStrategy;
 };
 
 export type StyleHints = {
@@ -126,13 +163,36 @@ export type Layer<I extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawSha
   requiredEnv: string[];
   /** Env vars the layer reads when set but works without; only these and requiredEnv reach ctx.env. */
   optionalEnv?: string[];
+  /**
+   * Above this area the layer switches to its `wide` strategy (a bounded, ranked fetch) instead of erroring; a layer
+   * without `wide` errors above it as before.
+   */
   maxAreaKm2: number;
+  /**
+   * The only hard area limit: above it the query returns a zoom_in error. Defaults to 4 x maxAreaKm2 for a layer with
+   * `wide` (see hardMaxAreaKm2), or to the coverage extent for national sources.
+   */
+  hardMaxAreaKm2?: number;
+  /** How to fetch between maxAreaKm2 and the hard cap. */
+  wide?: WideStrategy;
   input: I;
   // Method syntax keeps parameter checking bivariant so Layer<specific> is
   // assignable to the default Layer in the registry.
   query(ctx: QueryContext, input: z.infer<I>): Promise<LayerResult | LayerError>;
   style: StyleHints;
 };
+
+/** How many times maxAreaKm2 a layer with a `wide` strategy answers by default before the hard zoom_in error. */
+export const DEFAULT_WIDE_FACTOR = 4;
+
+/**
+ * The area above which a layer returns a zoom_in error: its hardMaxAreaKm2, else 4 x maxAreaKm2 when it has a `wide`
+ * strategy, else maxAreaKm2 (no wide strategy, so nothing to fall back on).
+ */
+export function hardMaxAreaKm2(layer: Pick<Layer, "maxAreaKm2" | "hardMaxAreaKm2" | "wide">): number {
+  if (layer.hardMaxAreaKm2 !== undefined) return Math.max(layer.hardMaxAreaKm2, layer.maxAreaKm2);
+  return layer.wide === undefined ? layer.maxAreaKm2 : layer.maxAreaKm2 * DEFAULT_WIDE_FACTOR;
+}
 
 /** Identity helper so each layer file gets its input type inferred. */
 export function defineLayer<I extends z.ZodObject<z.ZodRawShape>>(layer: Layer<I>): Layer<I> {

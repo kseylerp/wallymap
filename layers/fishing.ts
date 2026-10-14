@@ -16,6 +16,10 @@
  *   - USGS water temperature (NWIS instantaneous values, parameter 00010; see _shared/usgs.ts): each access,
  *     ramp and pier point gets the nearest gauge's reading within 30 km (waterTempC, waterTempSite,
  *     waterTempKm, waterTempAt). US only.
+ * Wide (over 50,000 km², up to 1,500,000 km²), each source stays bounded: OpenStreetMap through the shared namedOverpassQuery (at
+ * most 2,000 named places, with counts), USFS at most 2,000 activity rows, iNaturalist its one page of 200 newest, and
+ * water temperature only while the box needs at most WIDE_TEMP_STRIPS USGS strips. No total is set: the sources count
+ * different things (OSM elements, USFS activity rows, sightings), so no honest sum exists.
  * Fish stocking reports are published separately by each state wildlife agency with no common API; they are
  * not included, and the description says so.
  *
@@ -26,14 +30,14 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point, Position } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { outsideUs } from "./_shared/coverage";
-import { overpassQuery } from "./_shared/overpass";
+import { namedOverpassQuery, overpassCounts, overpassQuery } from "./_shared/overpass";
 import { arcgisQuery } from "./_shared/arcgis";
 import { haversineKm } from "./_shared/geo";
-import { fetchIv, parseIv, type IvSite } from "./_shared/usgs";
+import { fetchIv, ivStrips, parseIv, type IvSite } from "./_shared/usgs";
 import { normalizeObservations } from "./species";
 import { layerColor } from "@/lib/render/palette";
 
@@ -45,6 +49,8 @@ const DAY_MS = 86_400_000;
 export const OSM_LIMIT = 2_000;
 export const INAT_LIMIT = 200;
 const WATER_TEMP_MAX_KM = 30;
+/** In a wide box, water temperature is fetched only when the box splits into at most this many 25 square degree strips. */
+export const WIDE_TEMP_STRIPS = 4;
 /** Recreation sites and OSM tags change slowly. */
 const PLACES_TTL_SECONDS = 86_400;
 const SIGHTINGS_TTL_SECONDS = 3_600;
@@ -56,13 +62,17 @@ const inputSchema = z.object({
 
 type Props = Record<string, string | number | boolean>;
 
+const OSM_SELECTORS = ['nwr["leisure"="fishing"]', 'nwr["leisure"="slipway"]', 'nwr["man_made"="pier"]["fishing"~"^(yes|designated)$"]'];
+
 /** Overpass QL for fishing spots, boat ramps and fishing piers; bbox order (south,west,north,east). */
 export function buildFishingQuery([west, south, east, north]: BBox): string {
   const a = `(${south},${west},${north},${east})`;
-  return (
-    `[out:json][timeout:25];(nwr["leisure"="fishing"]${a};nwr["leisure"="slipway"]${a};` +
-    `nwr["man_made"="pier"]["fishing"~"^(yes|designated)$"]${a};);out center tags ${OSM_LIMIT};`
-  );
+  return `[out:json][timeout:25];(${OSM_SELECTORS.map((sel) => `${sel}${a};`).join("")});out center tags ${OSM_LIMIT};`;
+}
+
+/** Overpass QL for a wide box: the named fishing places only, at most `limit`, after counts of all and of the named. */
+export function buildWideFishingQuery(bbox: BBox, limit: number): string {
+  return namedOverpassQuery({ selectors: OSM_SELECTORS, bbox, geometry: "point", limit });
 }
 
 const OsmSchema = z.object({
@@ -128,8 +138,10 @@ export function usfsFeatures(fc: FeatureCollection): Feature<Point>[] {
   return [...byArea.values()];
 }
 
+/** Elements in an Overpass body, not counting `out count` rows. */
 function elementCount(json: unknown): number {
-  return typeof json === "object" && json !== null && "elements" in json && Array.isArray(json.elements) ? json.elements.length : 0;
+  const elements = typeof json === "object" && json !== null && "elements" in json && Array.isArray(json.elements) ? json.elements : [];
+  return elements.filter((e: unknown) => (e as { type?: unknown } | null)?.type !== "count").length;
 }
 
 function totalResults(json: unknown): number {
@@ -211,56 +223,75 @@ const fishing = defineLayer({
     "Points by kind: 'access' (OpenStreetMap fishing spots, and US Forest Service recreation areas that list fishing, with activities such as 'Lake and Pond Fishing', forest, url and status), " +
     "'ramp' (boat ramps / slipways from OpenStreetMap, with access and fee where tagged), 'pier' (fishing piers), and 'sighting' (fish observations on iNaturalist in the last `days` days, default 30, with species, scientificName, t = when seen, url). " +
     "In the United States, access, ramp and pier points also get the nearest USGS gauge's live water temperature within 30 km: waterTempC (°C), waterTempSite, waterTempKm and waterTempAt; trout feed best around 10 to 18 °C and are stressed above about 20 °C. " +
-    "Example questions: 'Where can I launch a boat on Lake Tahoe?', 'What fish have people caught near here this month?', 'Is the river too warm for trout?'. " +
+    "Example questions: 'What fish have people caught near here this month?', 'Is the river too warm for trout?'. " +
     "Caveats: fish stocking reports are NOT available here (each state wildlife agency publishes its own, with no common feed), so say so and point to the state agency; " +
     "this layer does not show regulations, seasons or licence rules; OSM coverage of fishing spots is patchy (many lakes only have ramps mapped); " +
     "sightings are where people photograph fish, not a catch survey, and threatened species with hidden locations are left out; the water temperature is from the nearest stream gauge, which may be a different water body. " +
     "Bureau of Land Management (BLM) fishing sites are omitted: BLM publishes them only through a keyed API. " +
     "At most 2,000 OpenStreetMap places and the 200 most recent sightings are returned, and the result says when a cap is hit. " +
-    "Global for OSM and iNaturalist; USFS sites and water temperature are US only. Zoom in to under 50,000 km² (about a 220 km square).",
+    "Global for OSM and iNaturalist; USFS sites and water temperature are US only. Over 50,000 km² it keeps only named OSM places and says what it left out.",
   coverage: "global",
   license: "OpenStreetMap ODbL; USFS and USGS public domain; iNaturalist CC BY-NC / CC0 per observation",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 50_000,
+  // Every source is bounded in wide mode (named OSM, capped USFS rows, one iNaturalist page, few USGS strips).
+  hardMaxAreaKm2: 1_500_000,
+  wide: { mode: "named", limit: 2000 },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("fishing"), cluster: true, timeField: "t" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > fishing.maxAreaKm2) {
-      return { error: `Area is ${Math.round(area)} km²; zoom in to under ${fishing.maxAreaKm2} km²`, hint: "zoom_in" };
-    }
     const now = new Date();
     const us = !outsideUs(ctx.bbox);
+    const wide = ctx.wide === true;
+    const wideLimit = Math.min(OSM_LIMIT, ctx.wideStrategy?.limit ?? OSM_LIMIT);
+    // Water temperature costs one USGS request per 25 square degree strip; a very wide box skips it.
+    const temperatures = us && (!wide || ivStrips(ctx.bbox).length <= WIDE_TEMP_STRIPS);
     const [osm, usfs, inat, temps] = await Promise.all([
-      overpassQuery(ctx, buildFishingQuery(ctx.bbox), { cacheSuffix: "osm-fishing" }),
+      wide
+        ? overpassQuery(ctx, buildWideFishingQuery(ctx.bbox, wideLimit), { cacheSuffix: "osm-fishing:named" })
+        : overpassQuery(ctx, buildFishingQuery(ctx.bbox), { cacheSuffix: "osm-fishing" }),
       us
         ? arcgisQuery(ctx, USFS_ACTIVITIES, {
             where: "parentactivityname='Fishing'",
             outFields: ["recareaid", "recareaname", "recareaurl", "forestname", "activityname", "openstatus"],
             bbox: ctx.bbox,
+            ...(wide && { resultRecordCount: wideLimit, orderByFields: "recareaid" }),
             cacheSuffix: "usfs-fishing",
             ttlSeconds: PLACES_TTL_SECONDS,
           })
         : Promise.resolve(null),
       inatSightings(ctx, input.days, now),
-      us ? fetchIv(ctx, ["00010"], "usgs-temp", TEMP_TTL_SECONDS) : Promise.resolve(null),
+      temperatures ? fetchIv(ctx, ["00010"], "usgs-temp", TEMP_TTL_SECONDS) : Promise.resolve(null),
     ]);
 
     const features: Feature<Point>[] = [];
     const notes: string[] = [];
     const failures: string[] = [];
+    const fmt = (n: number) => n.toLocaleString("en-US");
     if (osm.ok) {
       features.push(...osmFeatures(osm.json));
-      if (elementCount(osm.json) >= OSM_LIMIT) {
-        notes.push(`OpenStreetMap places were capped at ${OSM_LIMIT.toLocaleString("en-US")}, so some are missing; zoom in for all of them`);
+      if (wide) {
+        const [all, named] = overpassCounts(osm.json);
+        if (all !== undefined && named !== undefined) {
+          const listed = elementCount(osm.json);
+          notes.push(
+            listed < named
+              ? `OpenStreetMap: the first ${fmt(listed)} of ${fmt(named)} named places (${fmt(all)} in all; unnamed ones, most boat ramps, are left out)`
+              : `OpenStreetMap: ${fmt(named)} named places of ${fmt(all)} in the box; unnamed ones (most boat ramps) are left out`,
+          );
+        }
+      } else if (elementCount(osm.json) >= OSM_LIMIT) {
+        notes.push(`OpenStreetMap places were capped at ${fmt(OSM_LIMIT)}, so some are missing; zoom in for all of them`);
       }
     }
     else failures.push(`OpenStreetMap (${osm.error})`);
     if (usfs !== null) {
-      if (usfs.ok) features.push(...usfsFeatures(usfs.fc));
-      else failures.push(`USFS recreation sites (${usfs.error})`);
+      if (usfs.ok) {
+        features.push(...usfsFeatures(usfs.fc));
+        if (wide && usfs.truncated) notes.push(`USFS fishing areas stop at the first ${fmt(wideLimit)} activity rows`);
+      } else failures.push(`USFS recreation sites (${usfs.error})`);
     }
     if (inat.ok) {
       const sightings = sightingFeatures(inat.json);
@@ -273,6 +304,7 @@ const fishing = defineLayer({
     } else {
       failures.push(`iNaturalist (${inat.error})`);
     }
+    if (us && !temperatures) notes.push("Water temperatures are left out over this wide a box");
     if (temps !== null) {
       if (temps.ok) {
         const n = attachWaterTemps(features, parseIv(temps.bodies, now));
@@ -281,7 +313,7 @@ const fishing = defineLayer({
         failures.push(`USGS water temperature (${temps.error})`);
       }
     }
-    const sources = 2 + (us ? 2 : 0);
+    const sources = 2 + (us ? 1 : 0) + (temperatures ? 1 : 0);
     if (failures.length === sources) {
       return { error: `Every fishing source failed: ${failures.join("; ")}`, hint: "upstream" };
     }

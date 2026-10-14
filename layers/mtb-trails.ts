@@ -7,12 +7,17 @@
  * Tags read: mtb:scale (Singletrack Scale 0 to 6), mtb:scale:imba (IMBA 0 to 4), mtb:scale:uphill, name, ref,
  * highway, surface, bicycle, operator, check_date (becomes `t`).
  * Live smoke check: Truckee / Donner Lake, CA (39.28,-120.25 to 39.38,-120.1), 2026-10-09: 154 features (72 mtb, 81 imba-only, 1 route), no truncation.
+ * Wide mode (over 2,500 km², up to 10,000): a scan of the named rated ways and routes (ids and bounds), then the
+ * geometry of the 1,000 longest inside the box (see buildNamedScanQuery in osm-trails), with `total` every rated way and route.
+ * Live smoke check (wide), 2026-10-14: central Utah (-112.5,38 to -111.5,39, about 9,700 km²): 63 named of 72, 2.1 s;
+ * Moab (-110,38.3 to -109.2,38.9): 373 named of 444 (27 routes, Kokopelli's Trail first), 3.0 s.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
-import { overpassQuery } from "./_shared/overpass";
+import { overpassCounts, overpassQuery } from "./_shared/overpass";
+import { buildNamedGeometryQuery, buildNamedScanQuery, longestNamedFirst, pickNamedByLength } from "./osm-trails";
 import {
   bboxClause,
   returnedNote,
@@ -35,6 +40,8 @@ export const MAX_WAYS = 2_000;
 export const MAX_ROUTES = 100;
 /** Most member ways of those routes fetched, and only the ones inside the box. */
 export const MAX_ROUTE_WAYS = 3_000;
+/** Most named trails and routes in a wide answer (the wide strategy's limit). */
+export const WIDE_LIMIT = 1_000;
 
 const inputSchema = z.object({
   /** Hardest Singletrack Scale rating to keep (0 easiest, 6 hardest). Unrated imba-only ways and routes always stay. */
@@ -135,6 +142,47 @@ export function normalizeMtb(json: unknown): FeatureCollection<Line> {
   return { type: "FeatureCollection", features };
 }
 
+/** Keeps ways rated at or below `max` on the Singletrack Scale; IMBA-only ways and routes have no v and always stay. */
+function withinScale(features: Feature<Line>[], max: number | undefined): Feature<Line>[] {
+  if (max === undefined) return features;
+  return features.filter((f) => {
+    const v: unknown = f.properties?.v;
+    return typeof v !== "number" || v <= max;
+  });
+}
+
+/**
+ * Wide mode: the longest named rated ways and route=mtb relations in the box, from a scan (counts, ids, bounds) and a
+ * geometry fetch of the picked ones. `total` counts every rated way and route in the box, named or not; run.ts writes
+ * the coverage note.
+ */
+async function queryWide(ctx: QueryContext, input: MtbInput): Promise<LayerResult | LayerError> {
+  const limit = ctx.wideStrategy?.limit ?? WIDE_LIMIT;
+  const selectors = ['way["mtb:scale"]', 'way["mtb:scale:imba"]', ...(input.includeRoutes ? ['rel["route"="mtb"]'] : [])];
+  const scan = await overpassQuery(ctx, buildNamedScanQuery(selectors, ["name"], ctx.bbox), { cacheSuffix: "mtb-trails:scan" });
+  if (!scan.ok) return { error: scan.error, hint: "upstream" };
+  // Every rated way and route in the box, named or not, so the note can say how many were left out.
+  const total = overpassCounts(scan.json)[0];
+
+  const picked = pickNamedByLength(scan.json, ctx.bbox, limit, MAX_ROUTES);
+  let features: Feature<Line>[] = [];
+  if (picked.ways.length + picked.relations.length > 0) {
+    const body = await overpassQuery(ctx, buildNamedGeometryQuery(ctx.bbox, picked, MAX_ROUTE_WAYS));
+    if (!body.ok) return { error: body.error, hint: "upstream" };
+    features = longestNamedFirst(normalizeMtb(body.json).features, limit);
+  }
+  const kept = withinScale(features, input.maxScale);
+  const hidden = features.length - kept.length;
+
+  return {
+    kind: "geojson",
+    data: { type: "FeatureCollection", features: kept },
+    ...(total !== undefined && { total }),
+    ...(hidden > 0 && { coverageNote: `maxScale hid ${hidden.toLocaleString("en-US")} of the named trails` }),
+    citation: osmCitation(),
+  };
+}
+
 const mtbTrails = defineLayer({
   id: "mtb-trails",
   title: "Mountain bike trails",
@@ -146,23 +194,18 @@ const mtbTrails = defineLayer({
     "Use it for questions like: where can I go mountain biking near here, show beginner singletrack (set maxScale to 2), which trails are the hardest, or is there a flow trail or bike park nearby. " +
     "Caveats: ratings exist only where a mapper added them, so many good trails are missing or unrated (osm-trails shows every path, including ones with no mountain bike rating); " +
     "bikes may be banned on a rated trail, so check the land manager (public-lands, forest-roads); the rating describes the trail, not its current condition or closures. " +
-    "Zoom in to a region under 2,500 km² first. At most 2,000 rated ways and 100 routes are returned (a route is drawn only where it passes through the box) and the coverage note gives the count and says if it was trimmed.",
+    "At most 2,000 rated ways and 100 routes are returned (a route is drawn only where it crosses the box) and the note gives the count; over 2,500 km² only the 1,000 longest named ones.",
   coverage: "global",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 2500,
+  wide: { mode: "named", orderBy: "length in km", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "line", color: layerColor("mtb-trails") },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > mtbTrails.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${mtbTrails.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
+    if (ctx.wide === true) return queryWide(ctx, input);
 
     const result = await overpassQuery(ctx, buildMtbQuery(ctx.bbox, input), { cacheSuffix: "mtb-trails" });
     if (!result.ok) return { error: result.error, hint: "upstream" };
@@ -170,13 +213,7 @@ const mtbTrails = defineLayer({
     const data = normalizeMtb(result.json);
     const fetched = data.features.length;
     const total = Math.max(countedTotal(result.json) ?? fetched, fetched);
-    const max = input.maxScale;
-    if (max !== undefined) {
-      data.features = data.features.filter((f) => {
-        const v: unknown = f.properties?.v;
-        return typeof v !== "number" || v <= max;
-      });
-    }
+    data.features = withinScale(data.features, input.maxScale);
 
     return {
       kind: "geojson",

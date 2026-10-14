@@ -15,6 +15,8 @@
  * 1897-2025 (annotation "Possible datum shift"), Richmond 3.35 ±0.72, Alameda 0.94 ±0.18. The Battery (NY) is 2.94 mm/yr.
  * Through runLayer: SF Bay 6 stations in 2.1 s cold; Gulf Coast [-95,28,-88,31] 11 stations, fastest Eagle Point TX 12.19 mm/yr
  * (4 ft per century), Grand Isle LA 9.13, Galveston Pier 21 6.63.
+ * Wide (over 30,000,000 km², up to 120,000,000): the same list, up to 1,000 (more than all 509), total = stations in the box.
+ * Smoke 2026-10-14, box -170,0,-50,70 (North America and the North Pacific): all 188 of 188 in 2.7 s, Eagle Point TX 12.19 mm/yr first.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
@@ -27,6 +29,8 @@ import { layerColor } from "@/lib/render/palette";
 export const TRENDS_URL = "https://api.tidesandcurrents.noaa.gov/dpapi/prod/webapi/product/sealvltrends.json?units=metric";
 const TTL_SECONDS = 7 * 86_400;
 export const MAX_STATIONS = 300;
+/** Most stations in a wide view: more than the whole list (509 on 2026-10-10), so a wide view shows every gauge in it. */
+const WIDE_LIMIT = 1_000;
 const MM_PER_FOOT = 304.8;
 
 const inputSchema = z.object({});
@@ -105,11 +109,12 @@ const seaLevelTrends = defineLayer({
     "1 mm/yr is about 4 inches per century. Example questions: 'How fast is the sea rising in San Francisco?', 'Where is sea level rising fastest on the Gulf Coast?', 'Is sea level falling anywhere?'. " +
     "User words: sea level, sea level trend, rising seas. " +
     "Caveats: it is a straight-line fit to the past, not a forecast, and it does not show the recent speed-up; a short record (under 30 years) or a wide trendError is uncertain. " +
-    "For a map of what a given rise would flood, use sea-level-rise. Shows up to 300 stations, fastest rise first; zoom in to under 30,000,000 km².",
+    "For a map of what a given rise would flood, use sea-level-rise. Shows up to 300 stations, fastest rise first (1,000 over 30,000,000 km²).",
   coverage: "global",
   license: "Public domain (NOAA CO-OPS)",
   requiredEnv: [],
   maxAreaKm2: 30_000_000,
+  wide: { orderBy: "trend in mm/yr", rank: "fastest-rising", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("sea-level-trends"), unit: "mm/yr" },
 
@@ -138,12 +143,16 @@ const seaLevelTrends = defineLayer({
       };
     }
     const all = trendFeatures(parseTrends(body), ctx.bbox);
-    const features = all.slice(0, MAX_STATIONS);
+    // Wide (over 30,000,000 km², up to 120,000,000): the same list, fastest rise first, up to the strategy's limit; run.ts writes the note.
+    const wideLimit = ctx.wide ? ctx.wideStrategy?.limit : undefined;
+    const features = all.slice(0, wideLimit ?? MAX_STATIONS);
     const notes: string[] = ["Measured long-term sea level rates at tide gauges, mm/yr relative to the land; past trends, not a forecast"];
-    if (all.length > features.length) notes.push(`Showing the ${MAX_STATIONS} fastest-rising of ${all.length} stations; zoom in for the rest`);
+    if (wideLimit === undefined && all.length > features.length) {
+      notes.push(`Showing the ${MAX_STATIONS} fastest-rising of ${all.length} stations; zoom in for the rest`);
+    }
     if (features.length === 0) notes.push("No NOAA sea level trend stations in this view; they sit on coasts");
     const data: FeatureCollection = { type: "FeatureCollection", features };
-    return { kind: "geojson", data, citation, coverageNote: notes.join("; ") };
+    return { kind: "geojson", data, citation, ...(wideLimit !== undefined && { total: all.length }), coverageNote: notes.join("; ") };
   },
 });
 

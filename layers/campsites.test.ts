@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { buildCampsitesQuery, normalizeCampsites, wayCentroid } from "./campsites";
+import layer, { buildCampsitesQuery, buildWideCampsitesQuery, normalizeCampsites, wayCentroid } from "./campsites";
 import fixture from "./__fixtures__/campsites.tahoe.json";
 
 const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
@@ -174,10 +174,12 @@ describe("normalizeCampsites", () => {
 });
 
 describe("campsites layer", () => {
-  it("declares global ODbL coverage and a 25,000 km2 cap", () => {
+  it("declares global ODbL coverage, a 25,000 km2 soft cap and a named wide mode up to 1,500,000 km2", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toContain("ODbL");
     expect(layer.maxAreaKm2).toBe(25_000);
+    expect(layer.hardMaxAreaKm2).toBe(1_500_000);
+    expect(layer.wide).toEqual({ mode: "named", limit: 2000 });
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toContain("OVERPASS_URL");
   });
@@ -226,10 +228,54 @@ describe("campsites layer", () => {
     expect(r.coverageNote).toBe("Showing 5,000 of 5,101 sites (all camp sites, then the largest parking lots); zoom in for the rest");
   });
 
-  it("returns 422 zoom_in from runLayer for a bbox over 25,000 km2", async () => {
-    const res = await runLayer("campsites", { bbox: [-122, 37, -119, 40] });
+  it("returns 422 zoom_in from runLayer only over 1,500,000 km2", async () => {
+    const res = await runLayer("campsites", { bbox: [-130, 25, -65, 50] });
     expect(res.status).toBe(422);
-    expect(res.body).toMatchObject({ hint: "zoom_in" });
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/under 1500000 km²$/) });
+  });
+
+  it("asks for named camp sites only (no parking) with counts in a wide box", () => {
+    const q = buildWideCampsitesQuery([-114, 37, -109, 42], { backcountryOnly: true }, 2000);
+    expect(q).toContain('nwr["tourism"="camp_site"]["backcountry"="yes"](37,-114,42,-109)');
+    // The named ones are filtered from the first set, not searched for again (a second search is ten times slower).
+    expect(q).toContain('.all out count;nwr.all["name"]->.named;.named out count;');
+    expect(q.match(/\(37,-114,42,-109\)/g)).toHaveLength(1);
+    expect(q).toContain(".named out tags center 2000;");
+    expect(q).not.toContain("parking");
+  });
+
+  it("answers a Utah-sized box wide: named camp sites with way centres, the count of all as total, and a note through runLayer", async () => {
+    const body = {
+      elements: [
+        { type: "count", id: 0, tags: { nodes: "3000", ways: "1512", relations: "0", total: "4512" } },
+        { type: "count", id: 0, tags: { nodes: "1200", ways: "600", relations: "0", total: "1800" } },
+        { type: "node", id: 1, lat: 38, lon: -111, tags: { tourism: "camp_site", name: "Devils Garden" } },
+        { type: "way", id: 2, center: { lat: 39, lon: -112 }, tags: { tourism: "camp_site", name: "Oak Creek" } },
+        { type: "relation", id: 3, center: { lat: 40, lon: -113 }, tags: { tourism: "camp_site", name: "Group Site" } },
+      ],
+    };
+    const stub = vi.fn(async () => new Response(JSON.stringify(body), { status: 200 }));
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("campsites", { bbox: [-114, 37, -109, 42], zoom: 6 });
+      expect(res.status).toBe(200);
+      expect(stub).toHaveBeenCalledTimes(1);
+      const init = (stub.mock.calls[0] as unknown as [string, RequestInit])[1];
+      const ql = decodeURIComponent(String(init.body).replace(/^data=/, ""));
+      expect(ql).toContain(".named out tags center 2000;");
+      expect(ql).not.toContain("parking");
+      if (!("kind" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
+      expect(res.body.data.features.map((f) => f.geometry)).toEqual([
+        { type: "Point", coordinates: [-111, 38] },
+        { type: "Point", coordinates: [-112, 39] },
+        { type: "Point", coordinates: [-113, 40] },
+      ]);
+      expect(res.body.total).toBe(4512);
+      expect(res.body.truncated).toBe(true);
+      expect(res.body.coverageNote).toBe("Showing the 3 named of 4,512; zoom in under 25,000 km² for all; Parking lots are left out at this scale");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("rejects non-boolean input through runLayer", async () => {

@@ -5,6 +5,7 @@ import { runLayer } from "@/lib/layers/run";
 import layer, {
   attachWaterTemps,
   buildFishingQuery,
+  buildWideFishingQuery,
   inatUrl,
   osmFeatures,
   sightingFeatures,
@@ -160,10 +161,61 @@ describe("fishing layer", () => {
     }
     expect(layer.style).toMatchObject({ geometry: "point", cluster: true });
     expect(layer.maxAreaKm2).toBe(50_000);
+    expect(layer.hardMaxAreaKm2).toBe(1_500_000);
+    expect(layer.wide).toEqual({ mode: "named", limit: 2000 });
   });
 
-  it("rejects an oversized bbox and bad input through runLayer", async () => {
-    expect((await runLayer("fishing", { bbox: [-125, 35, -118, 42] })).status).toBe(422);
+  it("rejects a box over 1,500,000 km2 and bad input through runLayer", async () => {
+    expect((await runLayer("fishing", { bbox: [-130, 25, -65, 50] })).status).toBe(422);
     expect((await runLayer("fishing", { bbox: TAHOE, input: { days: 0 } })).status).toBe(400);
+  });
+
+  it("asks Overpass for named fishing places with counts in a wide box", () => {
+    const q = buildWideFishingQuery([-124, 33, -110, 42], 2000);
+    expect(q).toContain('nwr["leisure"="slipway"](33,-124,42,-110)');
+    expect(q).toContain('nwr.all["name"]->.named;');
+    expect(q).toContain(".all out count;");
+    expect(q).toContain(".named out tags center 2000;");
+  });
+
+  it("bounds every source in wide mode, skips water temperature over four USGS strips and sets no total", async () => {
+    const named = {
+      elements: [
+        { type: "count", id: 0, tags: { total: "9400" } },
+        { type: "count", id: 0, tags: { total: "1200" } },
+        { type: "node", id: 1, lat: 38, lon: -120, tags: { leisure: "slipway", name: "North Ramp" } },
+      ],
+    };
+    const stub = vi.fn(async (url: string, init?: { body?: string }) => {
+      if (init?.body?.startsWith("data=")) return json(named);
+      if (url.includes("apps.fs.usda.gov")) return json({ ...usfsFixture, exceededTransferLimit: true });
+      if (url.includes("inaturalist")) return json(inatFixture);
+      return json(tempFixture);
+    });
+    // About 14 x 9 degrees: six USGS strips, so no water temperature.
+    const r = await layer.query({ ...ctx(stub, [-124, 33, -110, 42]), wide: true, wideStrategy: layer.wide }, { days: 30 });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const calls = stub.mock.calls as unknown as [string, { body?: string }][];
+    expect(calls).toHaveLength(3);
+    expect(calls.some(([u]) => u.includes("waterservices"))).toBe(false);
+    const ql = decodeURIComponent(String(calls.find(([, i]) => i?.body?.startsWith("data="))?.[1].body));
+    expect(ql).toContain(".named out tags center 2000;");
+    const usfs = new URL(calls.find(([u]) => u.includes("apps.fs.usda.gov"))![0]);
+    expect(usfs.searchParams.get("resultRecordCount")).toBe("2000");
+    const inat = new URL(calls.find(([u]) => u.includes("inaturalist"))![0]);
+    expect(inat.searchParams.get("per_page")).toBe("200");
+    expect(inat.searchParams.get("order_by")).toBe("observed_on");
+    expect(r.total).toBeUndefined();
+    expect(r.coverageNote).toMatch(/OpenStreetMap: the first 1 of 1,200 named places \(9,400 in all; unnamed ones/);
+    expect(r.coverageNote).toMatch(/USFS fishing areas stop at the first 2,000 activity rows/);
+    expect(r.coverageNote).toMatch(/Water temperatures are left out/);
+    expect(r.coverageNote).not.toMatch(/zoom in for all/);
+  });
+
+  it("keeps water temperature in a wide box of at most four strips", async () => {
+    const stub = routedStub();
+    // 9 x 6 degrees (about 500,000 km²): three strips.
+    await layer.query({ ...ctx(stub, [-124, 36, -115, 42]), wide: true, wideStrategy: layer.wide }, { days: 30 });
+    expect((stub.mock.calls as unknown as [string][]).filter(([u]) => u.includes("waterservices"))).toHaveLength(3);
   });
 });

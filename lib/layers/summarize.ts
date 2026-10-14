@@ -57,6 +57,10 @@ export type GeojsonSummary = {
   top?: string[];
   citation: Citation;
   coverageNote?: string;
+  /** Wide results that left features out: always true when present. */
+  truncated?: true;
+  /** With truncated: what was ranked out and how the kept features were chosen; the note says so in one clause. */
+  rankedOut?: string;
 };
 
 export type TilesSummary = {
@@ -75,6 +79,8 @@ export type TilesSummary = {
   shows?: string;
   citation: Citation;
   coverageNote?: string;
+  truncated?: true;
+  rankedOut?: string;
 };
 
 export type LayerResultSummary = GeojsonSummary | TilesSummary;
@@ -384,6 +390,7 @@ export function summarizeLayerResult(
       ...(meaning !== undefined && { shows: meaning(drawnYears) }),
       citation: body.citation,
       ...(body.coverageNote !== undefined && { coverageNote: body.coverageNote }),
+      ...truncationOf(body),
     };
   }
 
@@ -425,7 +432,14 @@ export function summarizeLayerResult(
     ...(top !== undefined && { top }),
     citation: body.citation,
     ...(body.coverageNote !== undefined && { coverageNote: body.coverageNote }),
+    ...truncationOf(body),
   };
+}
+
+/** `truncated: true` and the rankedOut line of a wide result that left features out; nothing otherwise. */
+function truncationOf(body: LayerResult): { truncated?: true; rankedOut?: string } {
+  if (body.truncated !== true) return {};
+  return { truncated: true, ...(body.rankedOut !== undefined && { rankedOut: body.rankedOut }) };
 }
 
 /** True for a full LayerResult (as opposed to an error or an already-summarized result). */

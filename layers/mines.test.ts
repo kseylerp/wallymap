@@ -2,7 +2,18 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { COMMODITY_CODES, MRDS_URL, USMIN_URL, commodityWhere, commoditiesOf, normalizeMrds, normalizeUsmin } from "./mines";
+import { hardMaxAreaKm2 } from "./types";
+import layer, {
+  COMMODITY_CODES,
+  MRDS_NAMED,
+  MRDS_URL,
+  USMIN_NAMED,
+  USMIN_URL,
+  commodityWhere,
+  commoditiesOf,
+  normalizeMrds,
+  normalizeUsmin,
+} from "./mines";
 import mrdsRaw from "./__fixtures__/mines.mrds.json";
 import usminRaw from "./__fixtures__/mines.usmin.json";
 
@@ -98,6 +109,8 @@ describe("mines layer", () => {
     expect(layer.license).toContain("Public domain");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(15_000);
+    expect(layer.wide).toEqual({ mode: "named", limit: 2000 });
+    expect(hardMaxAreaKm2(layer)).toBe(60_000);
     expect(layer.input.parse({})).toEqual({ source: "both" });
     expect(layer.input.safeParse({ commodity: "uranium", source: "mrds" }).success).toBe(true);
     expect(layer.input.safeParse({ commodity: "unobtainium" }).success).toBe(false);
@@ -168,6 +181,56 @@ describe("mines layer", () => {
     expect(stub).not.toHaveBeenCalled();
     expect((await runLayer("mines", { bbox: [-111, 36, -108, 40] })).status).toBe(422);
     expect((await runLayer("mines", { bbox: MOAB, input: { commodity: "cheese" } })).status).toBe(400);
+  });
+
+  it("answers a wide box (about 31,000 km²) with named sites, the limit split between records, and a count of all", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      const counting = url.searchParams.get("returnCountOnly") === "true";
+      if (String(input).startsWith(MRDS_URL)) return counting ? json({ count: 3932 }) : json(mrds);
+      return counting ? json({ count: 6010 }) : json(usmin);
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("mines", { bbox: [-110.5, 38, -108.5, 39.6], zoom: 7 });
+      expect(res.status).toBe(200);
+      const urls = stub.mock.calls.map((c) => new URL(String(c[0])));
+      const data = urls.filter((u) => !u.searchParams.has("returnCountOnly"));
+      const counts = urls.filter((u) => u.searchParams.has("returnCountOnly"));
+      expect(data.map((u) => u.searchParams.get("where")).sort()).toEqual([USMIN_NAMED, MRDS_NAMED].sort());
+      expect(data.every((u) => u.searchParams.get("resultRecordCount") === "1000")).toBe(true);
+      expect(counts.map((u) => u.searchParams.get("where"))).toEqual(["1=1", "1=1"]);
+      expect(res.body).toMatchObject({
+        total: 9942,
+        truncated: true,
+        coverageNote: expect.stringMatching(/^Showing the 20 named of 9,942; zoom in under 15,000 km² for all; MRDS is a historic record/),
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps the commodity filter on both the named query and the count in wide mode, with the whole limit for MRDS", async () => {
+    const stub = vi.fn(async (url: string) => (new URL(url).searchParams.get("returnCountOnly") === "true" ? json({ count: 3471 }) : json(mrds)));
+    const r = geojson(
+      await layer.query({ ...ctx(stub, [-110.5, 38, -108.5, 39.6], "mines:w"), wide: true, wideStrategy: layer.wide }, { commodity: "uranium", source: "both" }),
+    );
+    expect(r.total).toBe(3471);
+    expect(r.coverageNote).not.toMatch(/zoom in/);
+    const urls = (stub.mock.calls as unknown as [string][]).map((c) => new URL(c[0]));
+    expect(urls.find((u) => !u.searchParams.has("returnCountOnly"))?.searchParams.get("where")).toBe(`(${commodityWhere("U")}) AND ${MRDS_NAMED}`);
+    expect(urls.find((u) => !u.searchParams.has("returnCountOnly"))?.searchParams.get("resultRecordCount")).toBe("2000");
+    expect(urls.find((u) => u.searchParams.has("returnCountOnly"))?.searchParams.get("where")).toBe(commodityWhere("U"));
+  });
+
+  it("leaves the total out of a wide answer when a record fails", async () => {
+    const stub = vi.fn(async (url: string) => {
+      if (url.startsWith(USMIN_URL)) return json({}, 500);
+      return new URL(url).searchParams.get("returnCountOnly") === "true" ? json({ count: 3932 }) : json(mrds);
+    });
+    const r = geojson(await layer.query({ ...ctx(stub), wide: true, wideStrategy: layer.wide }, { source: "both" }));
+    expect(r.total).toBeUndefined();
+    expect(r.coverageNote).toContain("Missing USMIN");
   });
 
   it("tells the model the data are historic and old workings are unsafe", () => {

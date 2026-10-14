@@ -29,6 +29,9 @@ describe("condor-range layer", () => {
     expect(layer.id).toBe("condor-range");
     expect(layer.license).toMatch(/terms not stated/);
     expect(layer.requiredEnv).toEqual([]);
+    expect(layer.maxAreaKm2).toBe(20_000_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "area", limit: 1000 });
     expect(layer.input.parse({})).toEqual({});
     expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", fillOpacity: 0.25 });
   });
@@ -85,6 +88,28 @@ describe("condor-range layer", () => {
   it("simplifies coarser over a wide view, within bounds", () => {
     expect(simplifyOffset([0, 0, 0.1, 0.1])).toBe(0.002);
     expect(simplifyOffset(WEST)).toBe(0.05);
+  });
+
+  it("answers a box over 20 million km² largest first with a count from both services", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (new URL(url).searchParams.get("returnCountOnly") === "true") return json({ count: url.includes("/Historic_Range/") ? 1 : 3 });
+      return json(url.includes("/Historic_Range/") ? historicFc : currentFc);
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("condor-range", { bbox: [-170, 18, -60, 72], zoom: 2 });
+      expect(res.status).toBe(200);
+      const data = stub.mock.calls.map((c) => new URL(String(c[0]))).filter((u) => !u.searchParams.has("returnCountOnly"));
+      expect(data).toHaveLength(2);
+      for (const u of data) {
+        expect(u.searchParams.get("orderByFields")).toBe("Shape__Area DESC");
+        expect(u.searchParams.get("resultRecordCount")).toBe("1000");
+      }
+      expect(res.body).toMatchObject({ total: 4, coverageNote: "Showing all 4 in this wide view (ranked by area)" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("refuses a whole hemisphere through runLayer", async () => {

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import type { QueryContext } from "../types";
-import { arcgisQuery } from "./arcgis";
+import { arcgisCount, arcgisQuery } from "./arcgis";
 
 const SERVICE = "https://services.example.test/arcgis/rest/services/Trails/FeatureServer/0";
 const BBOX: [number, number, number, number] = [-120.2, 38.85, -120, 39];
@@ -130,5 +130,51 @@ describe("arcgisQuery", () => {
     expect(r.ok).toBe(false);
     if (r.ok) throw new Error("expected failure");
     expect(r.error).toContain("timed out");
+  });
+});
+
+describe("arcgisQuery wide fetches", () => {
+  it("sends orderByFields and resultRecordCount, and with withCount asks returnCountOnly alongside", async () => {
+    const stub = vi.fn(async (url: string) =>
+      new URL(url).searchParams.get("returnCountOnly") === "true"
+        ? new Response(JSON.stringify({ count: 4512 }), { status: 200 })
+        : new Response(JSON.stringify({ ...fc, exceededTransferLimit: true }), { status: 200 }),
+    );
+    const r = await arcgisQuery(ctxWith(stub, "k"), SERVICE, {
+      outFields: ["NAME"],
+      bbox: BBOX,
+      where: "A=1",
+      orderByFields: "Total_MW DESC",
+      resultRecordCount: 2000,
+      withCount: true,
+      cacheSuffix: "plants",
+    });
+    expect(r).toMatchObject({ ok: true, truncated: true, total: 4512 });
+    const urls = stub.mock.calls.map((c) => new URL(c[0] as string));
+    const data = urls.find((u) => !u.searchParams.has("returnCountOnly"))!;
+    const count = urls.find((u) => u.searchParams.has("returnCountOnly"))!;
+    expect(data.searchParams.get("orderByFields")).toBe("Total_MW DESC");
+    expect(data.searchParams.get("resultRecordCount")).toBe("2000");
+    expect(count.searchParams.get("where")).toBe("A=1");
+    expect(count.searchParams.get("geometry")).toBe(BBOX.join(","));
+    expect(count.searchParams.get("f")).toBe("json");
+    const keys = (stub.mock.calls as unknown as [string, { cacheKey?: string }][]).map((c) => c[1].cacheKey);
+    expect(keys).toEqual(expect.arrayContaining(["k:plants", "k:plants:count"]));
+  });
+
+  it("leaves total out when the count fails, without failing the query", async () => {
+    const stub = vi.fn(async (url: string) =>
+      new URL(url).searchParams.get("returnCountOnly") === "true"
+        ? new Response("nope", { status: 500 })
+        : new Response(JSON.stringify(fc), { status: 200 }),
+    );
+    const r = await arcgisQuery(ctxWith(stub), SERVICE, { outFields: ["NAME"], bbox: BBOX, withCount: true });
+    expect(r.ok).toBe(true);
+    expect(r).not.toHaveProperty("total");
+  });
+
+  it("arcgisCount returns null for an answer without a number", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify({ error: { message: "x" } }), { status: 200 }));
+    expect(await arcgisCount(ctxWith(stub), SERVICE, { bbox: BBOX })).toBeNull();
   });
 });

@@ -6,12 +6,15 @@
  *                                                    # <!-- layers:start --> and <!-- layers:end --> in README.md
  *                                                    # and docs/layers.md (and the layer count before it)
  *
- * id, title, coverage and key columns come from the registry. "Shows", "Source" and
+ * id, title, coverage, area and key columns come from the registry. "Area (km²)" gives the soft cap (maxAreaKm2: all
+ * features up to it) and, for a layer with a wide strategy, the hard cap up to which it still answers with its largest
+ * or named features ranked by one field; past the hard cap a query is a zoom_in error. "Shows", "Source" and
  * "Freshness" are not on the Layer type, so they are written here; the script throws
  * when a registered layer has no entry, so the table cannot silently go stale.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { listLayers, type Layer } from "@/layers";
+import { hardMaxAreaKm2 } from "@/layers/types";
 
 const META: Record<string, { shows: string; source: string; freshness: string; coverage?: string }> = {
   "osm-trails": { shows: "Hiking paths and tracks with difficulty and surface", source: "OpenStreetMap", freshness: "Live (cached up to a day)" },
@@ -115,15 +118,29 @@ function keyText(l: Layer): string {
 
 const cell = (s: string) => s.replace(/\|/g, "\\|");
 
+const km2 = (n: number) => Math.round(n).toLocaleString("en-US");
+
+/** "Any", "2,500", or "250,000; to 50,000,000 the 2,000 largest by capacity in MW". */
+export function areaText(l: Layer): string {
+  if (!Number.isFinite(l.maxAreaKm2)) return "Any";
+  const hard = hardMaxAreaKm2(l);
+  if (l.wide === undefined || hard <= l.maxAreaKm2) return km2(l.maxAreaKm2);
+  const w = l.wide;
+  const by = w.orderBy ? ` by ${w.orderBy}` : "";
+  const kept =
+    w.mode === "tiles" ? "a density map" : w.mode === "named" ? `the ${km2(w.limit)} named${by}` : `the ${km2(w.limit)} ${w.rank ?? "largest"}${by}`;
+  return `${km2(l.maxAreaKm2)}; to ${Number.isFinite(hard) ? km2(hard) : "any size"} ${kept}`;
+}
+
 export function layerTable(): string {
   const rows = listLayers().map((l) => {
     const m = META[l.id];
     if (!m) throw new Error(`scripts/layer-table.mts has no entry for layer "${l.id}"`);
-    return `| \`${l.id}\` | ${cell(l.title)} | ${cell(m.shows)} | ${cell(m.source)} | ${coverageText(l)} | ${keyText(l)} | ${cell(m.freshness)} |`;
+    return `| \`${l.id}\` | ${cell(l.title)} | ${cell(m.shows)} | ${cell(m.source)} | ${coverageText(l)} | ${cell(areaText(l))} | ${keyText(l)} | ${cell(m.freshness)} |`;
   });
   return [
-    "| Id | Title | What it shows | Source | Coverage | Key needed | Freshness |",
-    "| --- | --- | --- | --- | --- | --- | --- |",
+    "| Id | Title | What it shows | Source | Coverage | Area (km²) | Key needed | Freshness |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ...rows,
   ].join("\n");
 }

@@ -18,10 +18,12 @@
  * Smoke through runLayer (2026-10-10): Houston -97,29,-95,31, network all, returned 1,929 lines in 0.5 s (698 KB: 914 gas,
  * 23 crude, 18 gas liquids, 18 products, 956 power lines of 100 kV and up); Tahoe -120.4,38.7,-119.8,39.3 returned 13 lines (5 KB);
  * Houston with network transmission and minKv 345 returned 83 lines (38 KB).
+ * Smoke wide (2026-10-14): West Texas -104,29,-96,35 (about 392,000 km²), network all, returned 1,330 lines of 6,842 in 5.3 s
+ * (503 KB, 600 per service, simplified to 0.008 degrees).
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -80,6 +82,14 @@ export function perServiceCap(services: number): number {
 const TTL_SECONDS = 7 * 86_400;
 /** Display simplification in degrees (about 300 m). */
 const SIMPLIFY_DEG = 0.003;
+/** Most lines in a wide result (all kinds together), the longest (power lines: highest voltage) first. */
+const WIDE_LIMIT = 3000;
+
+/** Simplification for a wide box: about a thousandth of its longer side, never finer than SIMPLIFY_DEG, so the payload stays small. */
+export function wideOffset(bbox: BBox): number {
+  const span = Math.max(bbox[2] - bbox[0], bbox[3] - bbox[1]);
+  return Math.max(SIMPLIFY_DEG, Math.round((span / 1000) * 1e4) / 1e4);
+}
 
 const inputSchema = z.object({
   network: z.enum(NETWORKS).default("all"),
@@ -169,11 +179,12 @@ const pipelinesLines = defineLayer({
     "Use it for 'where does the pipeline run', 'what power lines cross this valley', 'how close is the transmission line to the proposed solar farm' or 'is there a gas pipeline near here'. " +
     "Caveats: the source is a frozen copy of federal data from 2025 and misses newer lines; positions are approximate (good to about a street block at best), not survey-grade, and must not be used to dig or build; gas and power lines are cut into short segments, so counting features does not count pipelines. " +
     "Each kind is capped at 1,500 lines per view (longest gas segments and highest voltage first), and a view of several kinds at about 3,000 in all (600 per kind for all, 750 for pipelines), and the result says when it trims; pick one network to see more of it. " +
-    "United States only; elsewhere it returns nothing. Zoom in to a region under 150,000 km² (about a 390 km square) first.",
+    "United States only; elsewhere it returns nothing. Over 150,000 km² (a 390 km square) it keeps the 3,000 longest (power lines: highest kV) and the total.",
   coverage: "us",
   license: "Public domain (EIA / DHS HIFLD, Esri Federal User Community mirror)",
   requiredEnv: [],
   maxAreaKm2: 150_000,
+  wide: { orderBy: "length, power lines by voltage", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "line", color: layerColor("pipelines-lines") },
 
@@ -188,16 +199,10 @@ const pipelinesLines = defineLayer({
       return { kind: "geojson", data: EMPTY, citation, coverageNote: OUTSIDE_US_NOTE };
     }
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > pipelinesLines.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${pipelinesLines.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
     const sources = sourcesFor(input.network);
-    const cap = perServiceCap(sources.length);
+    // Wide (over 150,000 km²): the strategy's limit shared across the services, coarser lines, and a count per service.
+    const wideLimit = ctx.wide ? ctx.wideStrategy?.limit : undefined;
+    const cap = Math.min(perServiceCap(sources.length), Math.floor((wideLimit ?? Infinity) / sources.length));
     const results: { source: Source; res: ArcgisResult }[] = await Promise.all(
       sources.map(async (source) => ({
         source,
@@ -205,9 +210,10 @@ const pipelinesLines = defineLayer({
           where: whereFor(source, input.minKv),
           outFields: SOURCES[source].fields,
           bbox: ctx.bbox,
-          maxRecords: cap,
-          maxAllowableOffset: SIMPLIFY_DEG,
+          resultRecordCount: cap,
+          maxAllowableOffset: ctx.wide ? wideOffset(ctx.bbox) : SIMPLIFY_DEG,
           orderByFields: SOURCES[source].order,
+          withCount: ctx.wide === true,
           ttlSeconds: TTL_SECONDS,
           cacheSuffix: `pl-${source}`,
         }),
@@ -223,14 +229,19 @@ const pipelinesLines = defineLayer({
     const features = ok.flatMap((r) => normalizeLines(r.res.fc, r.source));
     const notes: string[] = [];
     const trimmed = ok.filter((r) => r.res.truncated).map((r) => SOURCES[r.source].kind);
-    if (trimmed.length > 0) notes.push(`Showing the first ${cap.toLocaleString("en-US")} ${trimmed.join(", ")} in view; zoom in or pick one network for the rest`);
+    if (trimmed.length > 0 && !ctx.wide) notes.push(`Showing the first ${cap.toLocaleString("en-US")} ${trimmed.join(", ")} in view; zoom in or pick one network for the rest`);
     const failed = results.filter((r) => !r.res.ok).map((r) => SOURCES[r.source].kind);
     if (failed.length > 0) notes.push(`${failed.join(", ")} could not be loaded`);
+
+    // The total is the sum of every service's count, so it only stands when each service answered one.
+    const counts = results.map((r) => (r.res.ok ? r.res.total : undefined));
+    const total = ctx.wide && counts.every((c) => c !== undefined) ? counts.reduce((a: number, c) => a + (c ?? 0), 0) : undefined;
 
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features },
       citation,
+      ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },

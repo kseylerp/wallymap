@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import type { QueryContext } from "../types";
-import { overpassFailure, overpassQuery } from "./overpass";
+import { namedOverpassQuery, overpassCounts, overpassFailure, overpassQuery } from "./overpass";
 
 const PUBLIC = "https://overpass-api.de/api/interpreter";
 const GOOD = { elements: [{ type: "node", id: 1 }] };
@@ -24,6 +24,7 @@ describe("overpassQuery", () => {
     expect(init.method).toBe("POST");
     expect(init.body).toBe(`data=${encodeURIComponent("[out:json];node(1);out;")}`);
     expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect((init.headers as Record<string, string>)["user-agent"]).toContain("WallyMap");
   });
 
   it("uses OVERPASS_URL first, then retries once on the public endpoint after a 429", async () => {
@@ -35,6 +36,8 @@ describe("overpassQuery", () => {
     const r = await overpassQuery(ctxWith(stub, { env }), "q");
     expect(r).toEqual({ ok: true, json: GOOD });
     expect(stub.mock.calls.map((c) => c[0])).toEqual([env.OVERPASS_URL, PUBLIC]);
+    // The public endpoint answers 406 without a User-Agent.
+    expect(((stub.mock.calls[1] as unknown as [string, RequestInit])[1].headers as Record<string, string>)["user-agent"]).toContain("WallyMap");
   });
 
   it("reports a 429 on both attempts as a failure carrying the status", async () => {
@@ -84,5 +87,28 @@ describe("overpassFailure", () => {
     expect(overpassFailure({ remark: "out of memory", elements: [] })).toBe("out of memory");
     expect(overpassFailure({ version: 0.6 })).not.toBeNull();
     expect(overpassFailure(null)).not.toBeNull();
+  });
+});
+
+describe("namedOverpassQuery", () => {
+  it("counts every match, filters the named from that set without a second search, and sends at most limit as centers", () => {
+    const q = namedOverpassQuery({ selectors: ['nwr["tourism"="camp_site"]'], bbox: [-110, 40, -100, 45], geometry: "point", limit: 2000 });
+    expect(q).toBe(
+      '[out:json][timeout:25];(nwr["tourism"="camp_site"](40,-110,45,-100);)->.all;.all out count;' +
+        'nwr.all["name"]->.named;.named out count;.named out tags center 2000;',
+    );
+  });
+
+  it("clips line geometry to the box", () => {
+    const q = namedOverpassQuery({ selectors: ['relation["route"="mtb"]', 'way["mtb:scale"]'], bbox: [-1, 2, 3, 4], geometry: "line", limit: 500 });
+    expect(q).toContain('(relation["route"="mtb"](2,-1,4,3);way["mtb:scale"](2,-1,4,3);)->.all;');
+    expect(q).toContain('nwr.all["name"]->.named;');
+    expect(q.endsWith(".named out tags geom(2,-1,4,3) 500;")).toBe(true);
+  });
+
+  it("overpassCounts reads each out count total in order", () => {
+    const body = { elements: [{ type: "count", tags: { total: "9400" } }, { type: "count", tags: { total: "2100" } }, { type: "node", id: 1 }] };
+    expect(overpassCounts(body)).toEqual([9400, 2100]);
+    expect(overpassCounts(null)).toEqual([]);
   });
 });

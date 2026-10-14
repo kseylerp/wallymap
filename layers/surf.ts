@@ -24,12 +24,16 @@
  * Season smoke (season: true), Oahu box [-158.4,21.2,-157.6,21.75], 14 s cold (18 files of ~1.5 MB through the
  * rate limiter): 6 buoys, October means 2023-2025: Mokapu Point 1.62 m, Waimea Bay 1.58 m (January 2.40 m, p90
  * 3.57 m: the north shore's winter season), Kaneohe 1.47 m, Barbers Point 1.07 m, Pearl Harbor 0.82 m.
+ * Wide smoke through runLayer (2026-10-14), eastern Pacific [-130,20,-110,45] (5.2 million km²): 44 buoys in 0.4 s
+ * (one global file, so wide costs nothing extra); forecast: true 55 points in 1.4 s; season: true 6 summarised plus
+ * 37 listed as kind 'station' in 15.3 s cold.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
+import { WHOLE_US_KM2 } from "./_shared/coverage";
 import { haversineKm } from "./_shared/geo";
 import { createCache, type Cache } from "@/lib/fetch";
 import { textBody } from "@/lib/fetch/validate";
@@ -48,6 +52,8 @@ const MAX_OBS_AGE_HOURS = 12;
 const HOUR_MS = 3_600_000;
 const GRID = 4;
 const M_TO_FT = 3.28084;
+/** Most points a wide (over 500,000 km²) result carries; NDBC has about 200 wave buoys worldwide, so rarely reached. */
+export const WIDE_LIMIT = 1000;
 
 const inputSchema = z.object({
   forecast: z.boolean().default(false),
@@ -177,6 +183,16 @@ export function buoyFeatures(obs: BuoyObs[], names: Map<string, string>, bbox: B
     features.push({ type: "Feature", geometry: { type: "Point", coordinates: [o.lon, o.lat] }, properties: p });
   }
   return { type: "FeatureCollection", features };
+}
+
+/**
+ * A wide result's cut: the `limit` points with the largest wave height v, and the count before the cut when there
+ * was one.
+ */
+export function keepLargest(features: Feature<Point>[], limit: number): { features: Feature<Point>[]; total?: number } {
+  if (features.length <= limit) return { features };
+  const vOf = (f: Feature) => (typeof f.properties?.v === "number" ? f.properties.v : -Infinity);
+  return { features: [...features].sort((a, b) => vOf(b) - vOf(a)).slice(0, limit), total: features.length };
 }
 
 /** Cell centres of a GRID x GRID sampling of the bbox, as [lon, lat]. */
@@ -394,13 +410,30 @@ export function waveStationIds(obs: BuoyObs[]): Set<string> {
   );
 }
 
-/** Up to SEASON_BUOY_CAP stations in the bbox, nearest its centre first. */
-export function seasonStations(stations: BuoyStation[], bbox: BBox): { chosen: BuoyStation[]; inView: number } {
+/** Up to SEASON_BUOY_CAP stations in the bbox, nearest its centre first; `others` are the rest in view, in the same order. */
+export function seasonStations(
+  stations: BuoyStation[],
+  bbox: BBox,
+): { chosen: BuoyStation[]; inView: number; others: BuoyStation[] } {
   const centre: [number, number] = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
   const inView = stations
     .filter((s) => inBbox(s.lon, s.lat, bbox))
     .sort((a, b) => haversineKm(centre, [a.lon, a.lat]) - haversineKm(centre, [b.lon, b.lat]));
-  return { chosen: inView.slice(0, SEASON_BUOY_CAP), inView: inView.length };
+  return { chosen: inView.slice(0, SEASON_BUOY_CAP), inView: inView.length, others: inView.slice(SEASON_BUOY_CAP) };
+}
+
+/** A wide seasonal result's point for a buoy that was not summarised: where it is, kind 'station', no v. */
+export function buoySiteFeature(station: BuoyStation): Feature<Point> {
+  return {
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [station.lon, station.lat] },
+    properties: {
+      name: station.name,
+      stationId: station.id,
+      kind: "station",
+      url: `https://www.ndbc.noaa.gov/station_page.php?station=${encodeURIComponent(station.id.toLowerCase())}`,
+    },
+  };
 }
 
 /** One buoy's climatology: from the day cache, else the last SEASON_YEARS complete years' files. */
@@ -487,7 +520,7 @@ async function querySeason(ctx: QueryContext, month: number, now: Date): Promise
   } else {
     notes.push("Could not check which buoys measure waves (live file unavailable), so every moored buoy was tried");
   }
-  const { chosen, inView } = seasonStations(buoys, ctx.bbox);
+  const { chosen, inView, others } = seasonStations(buoys, ctx.bbox);
   if (chosen.length === 0) {
     return { kind: "geojson", data: EMPTY, citation, coverageNote: "No NDBC wave buoys in this view to build a seasonal picture from" };
   }
@@ -500,9 +533,25 @@ async function querySeason(ctx: QueryContext, month: number, now: Date): Promise
     if (f === null) noHistory += 1;
     else features.push(f);
   });
-  if (inView > chosen.length) notes.push(`Only the ${chosen.length} wave buoys nearest the centre of ${inView} in view are summarised; zoom in for others`);
+  if (ctx.wide) {
+    // Wide: the other wave buoys in view are listed without values (up to the limit), so the count is honest.
+    const limit = ctx.wideStrategy?.limit ?? WIDE_LIMIT;
+    features.push(...others.slice(0, Math.max(0, limit - features.length)).map(buoySiteFeature));
+    if (inView > chosen.length) notes.push(`Only the ${chosen.length} wave buoys nearest the centre are summarised; the others are kind 'station' without values`);
+  } else if (inView > chosen.length) {
+    notes.push(`Only the ${chosen.length} wave buoys nearest the centre of ${inView} in view are summarised; zoom in for others`);
+  }
   if (noHistory > 0) notes.push(`${noHistory} buoy${noHistory === 1 ? "" : "s"} had no wave history for that month`);
-  return { kind: "geojson", data: { type: "FeatureCollection", features }, citation, coverageNote: notes.join("; ") };
+  // Summarised buoys plus every other wave buoy in view: the count when the limit cut the list.
+  const candidates = chosen.length - noHistory + others.length;
+  const total = ctx.wide && features.length < candidates ? candidates : undefined;
+  return {
+    kind: "geojson",
+    data: { type: "FeatureCollection", features },
+    citation,
+    coverageNote: notes.join("; "),
+    ...(total !== undefined && { total }),
+  };
 }
 
 const surf = defineLayer({
@@ -511,17 +560,20 @@ const surf = defineLayer({
   description:
     "Live ocean wave conditions for surf, swell and boating questions. User words: surf, swell, waves, wave height, period, how big is it, is it firing, water temperature, buoy. " +
     "Default: NOAA NDBC wave buoys in view, kind 'buoy', each with name, stationId, t (UTC time of the latest observation, usually under an hour old), v (significant wave height in metres; waveFt is the same in feet), " +
-    "periodS (dominant wave period in seconds; longer period means more powerful groundswell, under about 8 s is short-period wind chop), avgPeriodS, directionDeg and directionFrom (where the waves come FROM, e.g. 'WNW'), waterTempC (°C), windMs, gustMs (m/s) and windFrom, and url (the buoy page). " +
+    "periodS (dominant wave period in seconds; longer period means more powerful groundswell, under about 8 s is short-period wind chop), avgPeriodS, directionDeg and directionFrom (where the waves come FROM), waterTempC (°C), windMs, gustMs (m/s) and windFrom, and url (the buoy page). " +
     "Set forecast to true for Open-Meteo Marine model points on a 4 x 4 grid over the view (land cells are dropped), kind 'forecast': v is the modelled wave height now, swellM and swellPeriodS the swell part, maxNext48hM and maxAt the biggest waves in the next two days. Use it where there is no buoy or to say whether swell is building. " +
     "Set season to true (optionally month 1-12, default this month) for what is typical this time of year instead of today: kind 'climatology', one point per buoy (the 6 nearest the view's centre), v is the mean significant wave height for that month over the last 3 complete years (metres), p90M the 90th percentile (a big day), periodS and directionFrom the usual period and swell direction, and monthlyMeanM and monthlyP90M the 12-month curves (January first) to say which season a coast is best. A cold seasonal query downloads several years of buoy files and can take 10 to 20 seconds. " +
-    "Example questions: 'How big is the surf at Ocean Beach right now?', 'What is the swell period off Santa Cruz?', 'Is a bigger swell coming this weekend?', 'Where is the surf best on Oahu this time of year?'. " +
+    "Example questions: 'How big is the surf at Ocean Beach right now?', 'Where is the surf best on Oahu this time of year?'. " +
     "Caveats: buoys sit miles offshore, so breaking waves at a beach can be bigger or much smaller depending on exposure, bathymetry and tide; significant height is the average of the highest third of waves, and sets can be about twice that; " +
     "buoys that have not reported for 12 hours and stations without a wave sensor are left out; seasonal averages describe the buoy's exposure, so a north-facing and a south-facing buoy on the same island show which shore gets the swell in each season; the forecast is a coarse model, worst near shore and in bays, and is free for non-commercial use only. " +
-    "Global (NDBC plus partner buoys, mostly US waters); zoom in to under 500,000 km².",
+    "Global (NDBC plus partner buoys, mostly US waters); over 500,000 km² up to 1,000 buoys, biggest waves first.",
   coverage: "global",
   license: "Public domain (NOAA NDBC); forecast from Open-Meteo Marine, CC BY 4.0, free for non-commercial use only",
   requiredEnv: [],
   maxAreaKm2: 500_000,
+  // One global buoy file, a fixed 4 x 4 forecast grid and 6 seasonal buoys at most, so the cost does not grow with the box.
+  hardMaxAreaKm2: WHOLE_US_KM2,
+  wide: { orderBy: "wave height in metres", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("surf"), unit: "m", timeField: "t" },
 
@@ -580,10 +632,12 @@ const surf = defineLayer({
       notes.push("No reporting NDBC wave buoys in this view; ask again with forecast true for modelled waves");
     }
 
+    const kept = ctx.wide ? keepLargest(features, ctx.wideStrategy?.limit ?? WIDE_LIMIT) : { features, total: undefined };
     return {
       kind: "geojson",
-      data: features.length === 0 ? EMPTY : { type: "FeatureCollection", features },
+      data: kept.features.length === 0 ? EMPTY : { type: "FeatureCollection", features: kept.features },
       citation,
+      ...(kept.total !== undefined && { total: kept.total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },

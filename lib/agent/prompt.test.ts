@@ -48,7 +48,6 @@ const REQUIRED = [
   "A single-point lookup such as geologic-unit must be rendered before the note, so the point shows on the map and its card can open.",
   "For how full a reservoir is or its level (how full is Lake Powell), call query_reservoir-levels with name set to the reservoir, give pctFull, elevationFt and the reading's date, and describe the trend in its series; for how deep a lake is, use lakes.",
   "For a national monument then and now, query monuments once with version both and render it; use render.filters on kind ('2021' or 'current') to show one boundary at a time, and give each kind's areaKm2; compare needs dated layers, so do not call it for monuments.",
-  "sea-level-rise is a scenario, not a date: query it once per feet value the user asks about (1 foot is about 2050) and never use compare or set_time on it; for how fast the sea is rising, use sea-level-trends.",
   "temperature-anomaly and the FEMA part of disasters are US county polygons joined by county: geocode the county or state, query once for the period, and quote that county's v; temperature-anomaly covers the lower 48 only.",
   "For a satellite picture before and after an event, query imagery-by-date once per date with the same sensor, then call compare with a and b set to the pass days its coverage notes name.",
   "Glacier outlines are dated by survey: to show a glacier's retreat, query and render glaciers once, then call set_time ONCE with play: true across the survey years, and give v at each date of one glacierId.",
@@ -59,11 +58,22 @@ const REQUIRED = [
   "Numbers in the note come from stats, totalArea, totalLengthKm and dates, which cover every feature: name the largest from stats.top and give the total; never quote a range or a largest from the samples, and never write the word sample in the note.",
   "When a result has dates, the time scrubber is already open in the layer panel: say so in the note with the years it spans (dates.from to dates.to), and never offer showing change over time as a follow-up question.",
   "For glaciers in a place, the note gives how many glaciers there are (stats.count), their total area (totalArea) and the largest glacier by name and area from stats.top.",
+  "A box wider than a layer's usual area still answers: the layer returns its largest (or named) features ranked by one field, and only a box past its hard limit returns a zoom_in error.",
+  "When a result is truncated (truncated: true), the note says so in one clause and ranks by the field used, from its coverageNote and rankedOut (for example, the 2,000 largest of 4,512 by capacity in MW), and takes its numbers from what was kept.",
+  "Scenario layers (sea level rise) are explored with the scenario scrubber or compare between two amounts, never by re-querying per amount; a scenario is not a date, so never call set_time on it (1 foot of sea level rise is about 2050), and for how fast the sea is rising, use sea-level-trends.",
+  "Never shrink the box yourself when a wide result came back: a truncated result already answers the whole area asked about, so do not re-query a smaller slice of it.",
 ];
 
 describe("SYSTEM_PROMPT", () => {
   it.each(REQUIRED)("contains %s", (sentence) => {
     expect(SYSTEM_PROMPT).toContain(sentence);
+  });
+});
+
+describe("SYSTEM_PROMPT scenario rules", () => {
+  it("no longer asks for one sea-level-rise query per amount", () => {
+    expect(SYSTEM_PROMPT).not.toContain("once per feet value");
+    expect(SYSTEM_PROMPT).not.toMatch(/sea-level-rise[^\n]*never use compare/);
   });
 });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { buildFeaturesQuery, classify, KINDS, normalizeFeatures } from "./outdoor-features";
+import layer, { buildFeaturesQuery, buildWideFeaturesQuery, classify, KINDS, normalizeFeatures } from "./outdoor-features";
 import fixture from "./__fixtures__/outdoor-features.tahoe.json";
 
 const TAHOE: [number, number, number, number] = [-120.3, 38.8, -119.9, 39.1];
@@ -135,10 +135,12 @@ describe("normalizeFeatures", () => {
 });
 
 describe("outdoor-features layer", () => {
-  it("declares global ODbL coverage, a 150,000 km2 cap (huts, viewpoints and waterfalls only), point style with 3D columns and clustering, and the activity words", () => {
+  it("declares global ODbL coverage, a 10,000 km2 soft cap with a named wide mode to 1,500,000 km2, point style with 3D columns and clustering, and the activity words", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toContain("ODbL");
-    expect(layer.maxAreaKm2).toBe(150_000);
+    expect(layer.maxAreaKm2).toBe(10_000);
+    expect(layer.hardMaxAreaKm2).toBe(1_500_000);
+    expect(layer.wide).toEqual({ mode: "named", limit: 2000 });
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toContain("OVERPASS_URL");
     expect(layer.style).toMatchObject({ geometry: "point", extrude: "v", cluster: true });
@@ -192,16 +194,72 @@ describe("outdoor-features layer", () => {
     expect(r.coverageNote).toContain("the box was truncated");
   });
 
-  it("takes up to 150,000 km2 when only huts, viewpoints and waterfalls are asked for", async () => {
-    const stub = vi.fn(async () => new Response(JSON.stringify({ elements: [] }), { status: 200 }));
-    // French Guiana, about 136,000 km².
-    const guiana = { bbox: [-54.6, 2.1, -51.6, 5.8] as [number, number, number, number], zoom: 7, env: {}, fetch: stub as unknown as CachedFetch };
-    expect(geojson(await layer.query(guiana, { kinds: ["hut", "viewpoint", "waterfall"] })).data.features).toEqual([]);
-    expect(stub).toHaveBeenCalledTimes(1);
-    expect(await layer.query(guiana, { kinds: ["viewpoint", "spring"] })).toMatchObject({ hint: "zoom_in" });
-    const wider = { ...guiana, bbox: [-60, 0, -51, 6] as [number, number, number, number] };
-    expect(await layer.query(wider, { kinds: ["hut"] })).toMatchObject({ hint: "zoom_in" });
-    expect(stub).toHaveBeenCalledTimes(1);
+  it("asks for the named elements of the requested kinds, peaks with or without an elevation, in a wide box", () => {
+    const q = buildWideFeaturesQuery([5, 44, 14, 48], ["peak", "hut"]);
+    expect(q).toContain('nwr["tourism"~"^(alpine_hut|wilderness_hut)$"](44,5,48,14)');
+    expect(q).toContain('nwr["natural"="peak"](44,5,48,14)');
+    expect(q).toContain('nwr.all["name"]->.named;');
+    expect(q).not.toContain('"ele"');
+    expect(q).not.toContain("spring");
+  });
+
+  it("folds kinds that share a key into one search in a wide box", () => {
+    const q = buildWideFeaturesQuery([5, 44, 14, 48], KINDS);
+    expect(q).toContain('nwr["natural"~"^(hot_spring|spring|cave_entrance|saddle|peak)$"](44,5,48,14)');
+    expect(q).toContain('nwr["tourism"~"^(alpine_hut|wilderness_hut|viewpoint)$"](44,5,48,14)');
+    expect(q).toContain('nwr["waterway"="waterfall"](44,5,48,14)');
+    expect(q).toContain('nwr["amenity"="drinking_water"](44,5,48,14)');
+    expect(q).toContain('node["mountain_pass"="yes"](44,5,48,14)');
+    expect(q).toContain('nwr["amenity"="shelter"]');
+    expect(q.match(/\(44,5,48,14\)/g)).toHaveLength(7);
+    expect(q).toContain('(nwr.named["mountain_pass"="yes"];nwr.named["highway"="mountain_pass"];)->.pass;');
+    expect(q).toContain(".all out count;");
+    expect(q).toContain('(nwr.named["tourism"~"^(alpine_hut|wilderness_hut)$"];)->.hut;.hut out tags center 1000;');
+    expect(q.indexOf(".hut out tags")).toBeLessThan(q.indexOf(".peak out tags"));
+  });
+
+  it("answers an Alps box wide through runLayer: named features, the count of all as total, and a per-kind note", async () => {
+    const body = {
+      elements: [
+        { type: "count", id: 0, tags: { total: "98000" } },
+        { type: "count", id: 0, tags: { total: "41000" } },
+        { type: "node", id: 1, lat: 46, lon: 7, tags: { tourism: "alpine_hut", name: "Monte Rosa Hut" } },
+        { type: "node", id: 2, lat: 45.8, lon: 6.9, tags: { natural: "peak", name: "Mont Blanc", ele: "4808" } },
+        { type: "way", id: 3, center: { lat: 47, lon: 11 }, tags: { waterway: "waterfall", name: "Krimml Falls" } },
+      ],
+    };
+    const stub = vi.fn(async () => new Response(JSON.stringify(body), { status: 200 }));
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("outdoor-features", { bbox: [5, 44, 14, 48], zoom: 6 });
+      expect(res.status).toBe(200);
+      expect(stub).toHaveBeenCalledTimes(1);
+      const init = (stub.mock.calls[0] as unknown as [string, RequestInit])[1];
+      expect(decodeURIComponent(String(init.body))).toContain(".hut out tags center 1000;");
+      if (!("kind" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
+      // Kind priority order: huts first, peaks last.
+      expect(res.body.data.features.map((f) => f.properties?.kind)).toEqual(["hut", "waterfall", "peak"]);
+      expect(res.body.total).toBe(98000);
+      expect(res.body.truncated).toBe(true);
+      expect(res.body.coverageNote).toBe("Showing the 3 named of 98,000; zoom in under 10,000 km² for all; By kind: 1 hut, 1 waterfall, 1 peak");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps huts ahead of peaks and the tallest fetched peaks when a wide answer passes 2,000", async () => {
+    const elements = [
+      { type: "count", id: 0, tags: { total: "9000" } },
+      { type: "count", id: 0, tags: { total: "3000" } },
+      ...Array.from({ length: 5 }, (_, i) => ({ type: "node", id: 5000 + i, lat: 46, lon: 7, tags: { tourism: "alpine_hut", name: `H${i}` } })),
+      ...Array.from({ length: 2500 }, (_, i) => ({ type: "node", id: i + 1, lat: 46, lon: 7, tags: { natural: "peak", name: `P${i}`, ele: String(1000 + i) } })),
+    ];
+    const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
+    const r = geojson(await layer.query({ ...ctx(stub), bbox: [5, 44, 14, 48], wide: true, wideStrategy: layer.wide }, {}));
+    expect(r.data.features).toHaveLength(2000);
+    expect(r.data.features.slice(0, 5).every((f) => f.properties?.kind === "hut")).toBe(true);
+    expect(r.data.features[5].properties?.v).toBe(3499);
+    expect(r.total).toBe(9000);
   });
 
   it("maps a failing Overpass to an upstream error after the fallback", async () => {
@@ -211,13 +269,10 @@ describe("outdoor-features layer", () => {
     expect(stub).toHaveBeenCalledTimes(2);
   });
 
-  it("returns 422 zoom_in from runLayer over 10,000 km2 for all kinds and 400 for an unknown kind", async () => {
-    const big = await runLayer("outdoor-features", { bbox: [-121, 38, -119, 40] });
+  it("returns 422 zoom_in from runLayer only over 1,500,000 km2 and 400 for an unknown kind", async () => {
+    const big = await runLayer("outdoor-features", { bbox: [-130, 25, -65, 50] });
     expect(big.status).toBe(422);
-    expect(big.body).toMatchObject({ hint: "zoom_in" });
-    expect((big.body as { error: string }).error).toContain("pass kinds hut, viewpoint and waterfall only");
-    const springs = await runLayer("outdoor-features", { bbox: [-121, 38, -119, 40], input: { kinds: ["hut", "spring"] } });
-    expect(springs.status).toBe(422);
+    expect(big.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/under 1500000 km²$/) });
     const bad = await runLayer("outdoor-features", { bbox: TAHOE, input: { kinds: ["castle"] } });
     expect(bad.status).toBe(400);
   });

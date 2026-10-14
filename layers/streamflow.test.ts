@@ -4,6 +4,8 @@ import { runLayer } from "@/lib/layers/run";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import layer, {
+  MAX_IV_STRIPS,
+  WIDE_LIMIT,
   floodFeatures,
   floodSampleLocations,
   ivFeatures,
@@ -12,9 +14,11 @@ import layer, {
   RIVER_POINTS,
   parseDailyMedians,
   riverSamplePoints,
+  keepLargest,
   statSites,
   STAT_SITE_CAP,
 } from "./streamflow";
+import { hardMaxAreaKm2 } from "./types";
 import { ivStrips, parseIv } from "./_shared/usgs";
 import latestFixture from "./__fixtures__/usgs-latest.tahoe.json";
 import locationsFixture from "./__fixtures__/usgs-locations.tahoe.json";
@@ -403,10 +407,91 @@ describe("streamflow layer", () => {
     expect(layer.optionalEnv).toEqual(["USGS_API_KEY", "OVERPASS_URL"]);
   });
 
-  it("rejects an oversized bbox and bad input through runLayer", async () => {
+  it("rejects a box over the hard cap and bad input through runLayer", async () => {
     const big = await runLayer("streamflow", { bbox: [-125, 31, -110, 49], zoom: 4 });
     expect(big.status).toBe(422);
+    expect(big.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/under 1600000 km²$/) });
     const bad = await runLayer("streamflow", { bbox: TAHOE, input: { parameter: "00010" } });
     expect(bad.status).toBe(400);
+  });
+});
+
+/** One synthetic IV discharge series for a site, read at 2026-10-09 18:45 Pacific. */
+function ivSeries(siteNo: string, lon: number, lat: number, cfs: number) {
+  return {
+    sourceInfo: { siteName: `GAUGE ${siteNo}`, siteCode: [{ value: siteNo }], geoLocation: { geogLocation: { latitude: lat, longitude: lon } } },
+    variable: { variableCode: [{ value: "00060" }], noDataValue: -999999 },
+    values: [{ value: [{ value: String(cfs), dateTime: "2026-10-09T18:45:00.000-07:00" }] }],
+  };
+}
+
+describe("streamflow wide mode (over 400,000 km²)", () => {
+  beforeEach(() => {
+    vi.setSystemTime(IV_NOW);
+  });
+
+  it("declares every gauge up to 1,000, highest flow first, under the default hard cap", () => {
+    expect(layer.wide).toEqual({ orderBy: "current flow or gage height", limit: 1000 });
+    expect(WIDE_LIMIT).toBe(1000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(hardMaxAreaKm2(layer)).toBe(1_600_000);
+    expect(layer.description).toMatch(/Over 400,000 km² it returns up to 1,000 gauges, highest flow first/);
+    expect(layer.description).not.toMatch(/Needs a region under/);
+  });
+
+  it("keeps the largest v when more gauges than the limit are in the box, and counts them all", () => {
+    const fc = {
+      type: "FeatureCollection" as const,
+      features: [3, undefined, 10, 1].map((v, i) => ({
+        type: "Feature" as const,
+        geometry: { type: "Point" as const, coordinates: [i, 0] },
+        properties: v === undefined ? { name: `g${i}` } : { name: `g${i}`, v },
+      })),
+    };
+    const cut = keepLargest(fc, 2);
+    expect(cut.total).toBe(4);
+    expect(cut.data.features.map((f) => f.properties?.v)).toEqual([10, 3]);
+    expect(keepLargest(fc, 4)).toEqual({ data: fc });
+  });
+
+  it("splits a wide box into IV strips, ranks by flow, cuts at the limit and sets total", async () => {
+    const stub = vi.fn(async (url: string) => {
+      if (!url.includes("/nwis/iv/")) return new Response("no", { status: 400 });
+      const [w, s] = (param(url, "bBox") ?? "").split(",").map(Number);
+      return json({ value: { timeSeries: [ivSeries(`${Math.abs(w)}1`, w + 0.5, s + 0.5, Math.round(200 - w)), ivSeries(`${Math.abs(w)}2`, w + 1, s + 1, 5)] } });
+    });
+    const bbox: typeof TAHOE = [-112, 36, -102, 42];
+    const r = await layer.query({ ...ctx(stub, { bbox }), wide: true, wideStrategy: { ...layer.wide!, limit: 3 } }, FLOW);
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const ivCalls = callsOf(stub).filter((c) => c[0].includes("/nwis/iv/"));
+    expect(ivCalls).toHaveLength(3);
+    expect(r.total).toBe(6);
+    // One big gauge per strip (200 - west edge) outranks the three 5 cfs ones.
+    expect(r.data.features.map((f) => f.properties?.v)).toEqual([312, 309, 305]);
+    expect(r.coverageNote ?? "").not.toMatch(/zoom in for the rest$/);
+  });
+
+  it("refuses a far-north box that would need more than the strip cap, without fetching", async () => {
+    const stub = vi.fn();
+    const r = await layer.query({ ...ctx(stub, { bbox: [-170, 55, -128, 72] }), wide: true, wideStrategy: layer.wide }, FLOW);
+    expect(r).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(new RegExp(`at most ${MAX_IV_STRIPS}`)) });
+    expect(stub).not.toHaveBeenCalled();
+  });
+
+  it("answers a 600,000 km² box through runLayer with a wide note instead of zoom_in", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (!url.includes("/nwis/iv/")) return new Response("no", { status: 400 });
+      const [w, s] = (param(url, "bBox") ?? "").split(",").map(Number);
+      return json({ value: { timeSeries: [ivSeries(`${Math.abs(Math.round(w))}9`, w + 0.5, s + 0.5, 42)] } });
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("streamflow", { bbox: [-112.5, 36.5, -102.5, 42.5], zoom: 5 });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ coverageNote: expect.stringMatching(/^Showing all 3 in this wide view \(ranked by current flow or gage height\)/) });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

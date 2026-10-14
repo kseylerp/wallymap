@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { WIKIMEDIA_USER_AGENT } from "./_shared/wikimedia";
-import layer, { LIMIT, SPARQL_ENDPOINT, lakesQuery, normalizeLakes } from "./lakes";
+import layer, { LIMIT, SPARQL_ENDPOINT, lakesQuery, normalizeLakes, wideLakesQuery } from "./lakes";
 import fixture from "./__fixtures__/lakes.tahoe.json";
 
 /** The fixture is a real Wikidata SPARQL answer for this box (recorded 2026-10-09 with the layer's own query, no name filter). */
@@ -39,6 +39,16 @@ describe("lakesQuery", () => {
   it("adds a lower-cased, escaped name filter", () => {
     expect(lakesQuery(TAHOE, "  Tahoe ")).toContain('FILTER(CONTAINS(LCASE(STR(?label)), "tahoe"))');
     expect(lakesQuery(TAHOE, 'a"b\\c')).toContain('"a\\"b\\\\c"');
+  });
+});
+
+describe("wideLakesQuery", () => {
+  it("keeps the box query and name filter but ranks by area alone, with slack for repeated items", () => {
+    const q = wideLakesQuery([-94.4, 45.4, -91, 48], 1000, "mille");
+    expect(q).toContain('wikibase:cornerSouthWest "Point(-94.4 45.4)"^^geo:wktLiteral');
+    expect(q).toContain('FILTER(CONTAINS(LCASE(STR(?label)), "mille"))');
+    expect(q).not.toContain("DESC(?depth)");
+    expect(q.endsWith("ORDER BY DESC(?area)\nLIMIT 1050")).toBe(true);
   });
 });
 
@@ -93,6 +103,8 @@ describe("lakes layer", () => {
     expect(layer.license).toBe("CC0 (Wikidata)");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(20_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "area", limit: 1000 });
     expect(layer.input.parse({})).toEqual({});
     expect(layer.input.parse({ name: " tahoe " })).toEqual({ name: "tahoe" });
     expect(layer.style).toMatchObject({ geometry: "point", cluster: true, unit: "m" });
@@ -158,8 +170,40 @@ describe("lakes layer", () => {
     expect(await layer.query(ctx(slow), {})).toMatchObject({ error: expect.stringContaining("timed out"), hint: "upstream" });
   });
 
-  it("rejects a view over the area cap through runLayer", async () => {
+  it("rejects a view over the hard cap (4 x 20,000 km²) through runLayer", async () => {
     const r = await runLayer("lakes", { bbox: [-110, 35, -105, 40] });
     expect(r.status).toBe(422);
+    expect(r.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 80000 km²$/) });
+  });
+
+  it("answers a Minnesota box of about 70,000 km² wide, keeping the name filter and leaving the cap note to run.ts", async () => {
+    const stub = vi.fn(async () => json(fixture));
+    vi.stubGlobal("fetch", stub);
+    try {
+      const r = await runLayer("lakes", { bbox: [-94.4, 45.4, -91, 48], zoom: 6, input: { name: "tahoe" } });
+      expect(r.status).toBe(200);
+      const init = stub.mock.calls[0] as unknown as [string, RequestInit];
+      const query = new URLSearchParams(String(init[1].body)).get("query") ?? "";
+      expect(query).toContain('"tahoe"');
+      expect(query).toContain("ORDER BY DESC(?area)\nLIMIT 1050");
+      expect(r.body).toMatchObject({
+        coverageNote: `Showing all ${uniqueItems} in this wide view (ranked by area); 1 of 27 lakes have a recorded maximum depth; a null depth means not recorded`,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps at most the wide limit in wide mode", async () => {
+    const row = (i: number) => ({
+      item: { value: `http://www.wikidata.org/entity/Q${i}` },
+      label: { value: `Lake ${i}` },
+      coord: { value: "Point(-93 46)" },
+      area: { value: String(1e9 - i) },
+    });
+    const stub = vi.fn(async () => json({ results: { bindings: Array.from({ length: 1050 }, (_, i) => row(i)) } }));
+    const r = geojson(await layer.query({ ...ctx(stub), wide: true, wideStrategy: layer.wide }, {}));
+    expect(r.data.features).toHaveLength(1000);
+    expect(r.coverageNote).not.toContain("largest lakes");
   });
 });

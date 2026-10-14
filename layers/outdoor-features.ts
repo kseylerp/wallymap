@@ -11,13 +11,18 @@
  *   viewpoint  nwr[tourism=viewpoint]
  * `out tags center` gives ways and relations a centre point. Fixture: layers/__fixtures__/outdoor-features.tahoe.json
  * (Desolation Wilderness and Lake Tahoe west shore, CA, recorded 2026-10-09, 42 elements across all kinds).
+ * Wide (over 10,000 km², up to 1,500,000 km²): one search per OSM key for every requested kind, an `out count` of every
+ * match and of the named ones, then the named ones of each kind (at most 1,000 per kind, lowest ids, in kind priority
+ * order); the result keeps 2,000 by kind priority and the tallest fetched peaks, so huts are not crowded out by peaks.
+ * Unnamed springs, taps, viewpoints and shelters are left out at that scale. The named ones are filtered from the
+ * first set rather than searched for again (see namedOverpassQuery in _shared/overpass.ts for why).
  * Live smoke check: Desolation Wilderness / Lake Tahoe south-west (38.8,-120.3 to 39.1,-119.9), 2026-10-09: 136 features (4 hut, 1 shelter, 8 spring, 12 waterfall, 8 pass or saddle, 57 peak, 31 viewpoint, 15 drinking_water), no truncation.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
-import { overpassQuery } from "./_shared/overpass";
+import { overpassCounts, overpassQuery } from "./_shared/overpass";
 import {
   bboxClause,
   checkedOn,
@@ -57,15 +62,8 @@ export const MAX_PEAKS_WITH_ELE = 2_000;
 /** Most points returned in all. */
 export const MAX_POINTS = 5_000;
 
-/** Largest region for all kinds (springs, taps and peaks are dense). */
+/** Largest region for the full listing of every kind (springs, taps and peaks are dense); wider boxes go named-only. */
 export const ALL_KINDS_MAX_AREA_KM2 = 10_000;
-/**
- * Kinds sparse enough to ask for over a whole small country: huts, viewpoints and waterfalls in French Guiana
- * (136,000 km²) came back in 1.3 s, in a 100,000 km² Alps box in 20 s (2,200 huts, 10,651 viewpoints, 3,355 waterfalls).
- */
-export const WIDE_KINDS = ["hut", "viewpoint", "waterfall"] as const satisfies readonly Kind[];
-/** Largest region when only WIDE_KINDS are asked for. */
-export const WIDE_KINDS_MAX_AREA_KM2 = 150_000;
 
 const inputSchema = z.object({
   /** Only these kinds; all kinds when left out. */
@@ -113,6 +111,64 @@ export function buildFeaturesQuery(bbox: BBox, kinds: readonly Kind[] = KINDS): 
     sets.map(({ set, selectors }) => `(${selectors.map((s) => `${s}${area};`).join("")})->.${set};`).join("") +
     sets.map(({ set }) => `.${set} out count;`).join("") +
     sets.map(({ set, limit }) => `.${set} out tags center ${limit};`).join("")
+  );
+}
+
+/** Plain key=value tags of the kinds a wide query can fold into one search per key; values are regex alternatives. */
+const WIDE_TAGS: Partial<Record<Kind, [key: string, values: string]>> = {
+  hut: ["tourism", "alpine_hut|wilderness_hut"],
+  viewpoint: ["tourism", "viewpoint"],
+  hot_spring: ["natural", "hot_spring"],
+  spring: ["natural", "spring"],
+  cave: ["natural", "cave_entrance"],
+  peak: ["natural", "peak"],
+  saddle: ["natural", "saddle"],
+  waterfall: ["waterway", "waterfall"],
+  drinking_water: ["amenity", "drinking_water"],
+};
+
+/** The other kinds' wide selectors: their own, minus the name requirement (the named filter comes after the count). */
+const WIDE_OTHER: Partial<Record<Kind, string[]>> = {
+  shelter: SELECTORS.shelter,
+  pass: ['node["mountain_pass"="yes"]', 'node["highway"="mountain_pass"]'],
+};
+
+/** Tag filters (without the element type) that pick one kind out of the named set in a wide query. */
+function wideFilters(kind: Kind): string[] {
+  const tag = WIDE_TAGS[kind];
+  if (tag !== undefined) return [tag[1].includes("|") ? `["${tag[0]}"~"^(${tag[1]})$"]` : `["${tag[0]}"="${tag[1]}"]`];
+  return (WIDE_OTHER[kind] ?? SELECTORS[kind]).map((sel) => sel.replace(/^(nwr|node|way|relation)/, ""));
+}
+
+/**
+ * Overpass QL for a wide box: counts of every match and of the named ones, then each requested kind's named elements
+ * (at most `perKind` each) in kind priority order. Each search scans the whole box, so kinds sharing a key are folded
+ * into one search (natural~spring|peak|...): over Utah all eleven kinds took 14 s folded against 52 s with one search
+ * per kind (2026-10-14). The per-kind sets are filtered from the named set in memory.
+ */
+export function buildWideFeaturesQuery(bbox: BBox, kinds: readonly Kind[], perKind: number = MAX_PER_KIND): string {
+  const wanted = KINDS.filter((k) => kinds.includes(k));
+  const byKey = new Map<string, string[]>();
+  const selectors: string[] = [];
+  for (const kind of wanted) {
+    const tag = WIDE_TAGS[kind];
+    if (tag === undefined) {
+      selectors.push(...(WIDE_OTHER[kind] ?? SELECTORS[kind]));
+      continue;
+    }
+    byKey.set(tag[0], [...(byKey.get(tag[0]) ?? []), tag[1]]);
+  }
+  for (const [key, values] of byKey) {
+    const alt = values.join("|");
+    selectors.push(alt.includes("|") ? `nwr["${key}"~"^(${alt})$"]` : `nwr["${key}"="${alt}"]`);
+  }
+  const area = bboxClause(bbox);
+  const perKindOut = wanted
+    .map((kind) => `(${wideFilters(kind).map((f) => `nwr.named${f};`).join("")})->.${kind};.${kind} out tags center ${perKind};`)
+    .join("");
+  return (
+    `[out:json][timeout:25];(${selectors.map((sel) => `${sel}${area};`).join("")})->.all;.all out count;` +
+    `nwr.all["name"]->.named;.named out count;${perKindOut}`
   );
 }
 
@@ -201,16 +257,19 @@ function priority(f: Feature): number {
   return KINDS.indexOf(f.properties?.kind as Kind);
 }
 
-/** Keeps the first MAX_POINTS by kind priority, the highest peaks first within the peaks. */
-function capPoints(features: Feature<Point>[]): Feature<Point>[] {
+/** Keeps the first `max` (MAX_POINTS by default) by kind priority, the highest peaks first within the peaks. */
+function capPoints(features: Feature<Point>[], max: number = MAX_POINTS): Feature<Point>[] {
   const ele = (f: Feature) => (typeof f.properties?.v === "number" ? f.properties.v : -1);
   return [...features]
     .sort((a, b) => priority(a) - priority(b) || (a.properties?.kind === "peak" ? ele(b) - ele(a) : 0))
-    .slice(0, MAX_POINTS);
+    .slice(0, max);
 }
 
-/** "Returned 120 outdoor features (4 hut, 30 spring, ...); the box was not truncated" or the cut version. */
-export function featuresNote(features: Feature[], matched: number, rawElements: number, capped: boolean): string {
+/**
+ * "Returned 120 outdoor features (4 hut, 30 spring, ...); the box was not truncated" or the cut version. In a wide box
+ * (`wide`) only the per-kind breakdown, since the run adds the named-of-total note itself.
+ */
+export function featuresNote(features: Feature[], matched: number, rawElements: number, capped: boolean, wide = false): string {
   const counts = new Map<string, number>();
   for (const f of features) {
     const kind = String(f.properties?.kind);
@@ -220,6 +279,7 @@ export function featuresNote(features: Feature[], matched: number, rawElements: 
     .map((k) => `${counts.get(k)} ${k}`)
     .join(", ");
   const fmt = (n: number) => n.toLocaleString("en-US");
+  if (wide) return `By kind: ${breakdown || "none"}`;
   const head = `Returned ${fmt(features.length)} outdoor features${breakdown ? ` (${breakdown})` : ""}`;
   const cut = matched > rawElements || capped;
   return cut
@@ -240,33 +300,43 @@ const outdoorFeatures = defineLayer({
     "Pass kinds (for example ['hut', 'spring']) to get only those. " +
     "Caveats: volunteer-mapped, so it misses features and some are out of date; springs and taps can be dry or seasonal and a mapped spring is not tested water, so treat any wild water as needing treatment; " +
     "hut bookings, prices and winter status are not included; peaks and saddles need a name to be listed and elevations come from mapper data (peaks has Wikidata elevation and prominence for notable summits). " +
-    "Zoom in to under 10,000 km² first, or up to 150,000 km² with kinds limited to hut, viewpoint and waterfall. Within a kind the query keeps the lowest OpenStreetMap ids, not the tallest or nearest (peaks that have an elevation are fetched first, up to 2,000, then up to 1,000 without one): each kind is cut at 1,000 and the whole result at 5,000, and if the 5,000 cap bites, huts, shelters and springs are kept first and the tallest of the fetched peaks. The coverage note gives the count and says if it was cut.",
+    "Over 10,000 km² it lists up to 2,000 named features (unnamed ones left out) and how many there are in all. Within a kind the query keeps the lowest OpenStreetMap ids, not the tallest or nearest (peaks that have an elevation are fetched first, up to 2,000, then up to 1,000 without one): each kind is cut at 1,000 and the whole result at 5,000, and if the 5,000 cap bites, huts, shelters and springs are kept first and the tallest of the fetched peaks. The coverage note gives the count and says if it was cut.",
   coverage: "global",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],
-  // The widest any request may be; a request for other kinds is held to ALL_KINDS_MAX_AREA_KM2 in query().
-  maxAreaKm2: WIDE_KINDS_MAX_AREA_KM2,
+  maxAreaKm2: ALL_KINDS_MAX_AREA_KM2,
+  // Named-only listing with counts; the Alps (about 320,000 km²) is well inside it.
+  hardMaxAreaKm2: 1_500_000,
+  wide: { mode: "named", limit: 2000 },
   input: inputSchema,
   // M4 hint: extrude v (peaks), cluster (Task 0's StyleHints fields).
   style: { geometry: "point", color: layerColor("outdoor-features"), extrude: "v", cluster: true },
 
   async query(ctx, input: FeaturesInput): Promise<LayerResult | LayerError> {
     const kinds = input.kinds ?? KINDS;
-    const wide = kinds.every((k) => (WIDE_KINDS as readonly Kind[]).includes(k));
-    const cap = wide ? WIDE_KINDS_MAX_AREA_KM2 : ALL_KINDS_MAX_AREA_KM2;
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > cap) {
+    const cacheKinds = KINDS.filter((k) => kinds.includes(k)).join(",");
+
+    // Wide: one named-only set over every requested kind, bounded by the strategy's limit; the first count is the total.
+    if (ctx.wide) {
+      const limit = Math.min(MAX_POINTS, ctx.wideStrategy?.limit ?? 2000);
+      const wide = await overpassQuery(ctx, buildWideFeaturesQuery(ctx.bbox, kinds, Math.min(MAX_PER_KIND, limit)), {
+        cacheSuffix: `outdoor-features:named:${cacheKinds}`,
+      });
+      if (!wide.ok) return { error: wide.error, hint: "upstream" };
+      const features = capPoints(normalizeFeatures(wide.json, kinds).features, limit);
+      const [all] = overpassCounts(wide.json);
       return {
-        error: wide
-          ? `Area is ${Math.round(area)} km²; zoom in to under ${cap} km²`
-          : `Area is ${Math.round(area)} km²; zoom in to under ${cap} km², or pass kinds hut, viewpoint and waterfall only for up to ${WIDE_KINDS_MAX_AREA_KM2} km²`,
-        hint: "zoom_in",
+        kind: "geojson",
+        data: { type: "FeatureCollection", features },
+        ...(all !== undefined && { total: all }),
+        coverageNote: featuresNote(features, all ?? features.length, features.length, false, true),
+        citation: osmCitation(),
       };
     }
 
     const result = await overpassQuery(ctx, buildFeaturesQuery(ctx.bbox, kinds), {
-      cacheSuffix: `outdoor-features:${KINDS.filter((k) => kinds.includes(k)).join(",")}`,
+      cacheSuffix: `outdoor-features:${cacheKinds}`,
     });
     if (!result.ok) return { error: result.error, hint: "upstream" };
 

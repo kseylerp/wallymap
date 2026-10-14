@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { normalizeObservations, observationsUrl } from "./species";
+import layer, { INAT_GBIF_DATASET, inatDensityUrl, normalizeObservations, observationsUrl } from "./species";
 import raw from "./__fixtures__/species.tahoe.json";
 
 const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
@@ -160,6 +160,8 @@ describe("species layer", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(50_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "date observed", rank: "most recent", limit: 2000 });
     expect(layer.style).toEqual({ geometry: "point", color: "#3A3A3C" });
     expect(layer.license).toBe("CC BY-NC / CC0 per observation (iNaturalist)");
   });
@@ -247,10 +249,63 @@ describe("species layer", () => {
     expect(r.coverageNote).toContain("page 2 failed");
   });
 
-  it("returns 422 zoom_in from runLayer for a bbox over 50,000 km2", async () => {
-    const res = await runLayer("species", { bbox: [-122, 37, -119, 41] });
+  it("returns 422 zoom_in from runLayer only over the hard cap (4 x 50,000 km²)", async () => {
+    const res = await runLayer("species", { bbox: [-124, 35, -118, 42] });
     expect(res.status).toBe(422);
-    expect(res.body).toMatchObject({ hint: "zoom_in" });
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 200000 km²$/) });
+  });
+
+  it("answers a wide box with no taxon as GBIF density tiles of iNaturalist research-grade observations, without calling upstream", async () => {
+    const stub = vi.fn();
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("species", { bbox: [-122, 37, -119, 41] });
+      expect(stub).not.toHaveBeenCalled();
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        kind: "tiles",
+        data: { url: inatDensityUrl(365, new Date()), format: "raster", tileSize: 256 },
+        truncated: true,
+        coverageNote: expect.stringContaining("density map"),
+      });
+      expect(inatDensityUrl(365, new Date())).toContain(`datasetKey=${INAT_GBIF_DATASET}&year=2025,2026`);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("answers a wide box with a taxon with the 2,000 most recent from slim v2 pages started 600 ms apart, and total_results", async () => {
+    const stub = vi.fn(async (url: string) => {
+      const n = Number(params(url).get("page"));
+      return json(page(n * 1000, 200, 26626, n));
+    });
+    const promise = layer.query(
+      { ...ctx(stub, "species:w"), bbox: [-123, 37, -120, 40], wide: true, wideStrategy: layer.wide },
+      { ...DEFAULTS, taxon: "birds" },
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(stub).toHaveBeenCalledTimes(1);
+    // The other nine start on the 600 ms beat without waiting for each answer.
+    await vi.advanceTimersByTimeAsync(600 * 9);
+    expect(stub).toHaveBeenCalledTimes(10);
+    const r = await promise;
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const urls = (stub.mock.calls as unknown as [string][]).map((c) => new URL(c[0]));
+    expect(urls[0].origin + urls[0].pathname).toBe("https://api.inaturalist.org/v2/observations");
+    expect(urls[0].searchParams.get("fields")).toContain("taxon.preferred_common_name");
+    expect(urls[0].searchParams.get("order_by")).toBe("observed_on");
+    expect(urls.map((u) => u.searchParams.get("page"))).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
+    expect(r.data.features).toHaveLength(2000);
+    expect(r.total).toBe(26626);
+    expect(r.coverageNote).toBeUndefined();
+  });
+
+  it("in wide mode quotes no total when every page was fetched", async () => {
+    const stub = vi.fn(async () => json(page(1, 150, 150)));
+    const r = await layer.query({ ...ctx(stub), wide: true, wideStrategy: layer.wide }, { ...DEFAULTS, taxon: "mule deer" });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features).toHaveLength(150);
+    expect(r.total).toBeUndefined();
   });
 
   it("rejects out-of-range days through runLayer", async () => {

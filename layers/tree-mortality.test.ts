@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { cdfwWhere, idsWhere, normalizeCdfw, normalizeIds, planYears, surveyYears } from "./tree-mortality";
+import layer, { cdfwWhere, idsWhere, normalizeCdfw, normalizeIds, offsetFor, planYears, surveyYears } from "./tree-mortality";
 import ids from "./__fixtures__/tree-mortality.ids-tahoe.json";
 import cdfw from "./__fixtures__/tree-mortality.cdfw-tahoe.json";
 
@@ -45,6 +45,8 @@ describe("tree-mortality layer", () => {
     expect(layer.coverage).toBe("us");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(20_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "trees killed, or percent dead from 2021", limit: 2000, rank: "worst" });
     expect(layer.style).toEqual({ geometry: "polygon", color: "#F57272", fillOpacity: 0.4 });
     expect(layer.input.parse({})).toEqual({});
     expect(layer.input.parse({ years: { from: 2015, to: 2019 } })).toEqual({ years: { from: 2015, to: 2019 } });
@@ -223,8 +225,60 @@ describe("tree-mortality layer", () => {
     expect(r.coverageNote).toBe("No data outside the United States");
   });
 
-  it("rejects an oversized bbox through runLayer", async () => {
-    expect((await runLayer("tree-mortality", { bbox: [-125, 36, -118, 42], zoom: 5 })).status).toBe(422);
+  it("rejects through runLayer only a box over four times the soft cap", async () => {
+    const res = await runLayer("tree-mortality", { bbox: [-125, 36, -118, 42], zoom: 5 });
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 80000 km²$/) });
+  });
+
+  it("simplifies a wide box more coarsely, within bounds", () => {
+    expect(offsetFor(TAHOE)).toBe(0.002);
+    expect(offsetFor([-121.5, 38.5, -119.5, 40], true)).toBe(0.004);
+    expect(offsetFor([-125, 36, -118, 42], true)).toBe(0.01);
+  });
+
+  it("answers a wide box worst first: one request over the whole range, ordered by v, with a count", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (new URL(url).searchParams.get("returnCountOnly") === "true") return json({ count: 700 });
+      return json({ ...inRange(idsFc, url, "survey_year"), exceededTransferLimit: true });
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("tree-mortality", { bbox: [-121.5, 38.5, -119.5, 40], zoom: 7 });
+      expect(res.status).toBe(200);
+      const data = stub.mock.calls.map((c) => new URL(String(c[0]))).filter((u) => !u.searchParams.has("returnCountOnly"));
+      expect(data).toHaveLength(1);
+      expect(data[0].searchParams.get("where")).toBe("survey_year>=2021 AND survey_year<=2025 AND damage_type='Mortality'");
+      expect(data[0].searchParams.get("orderByFields")).toBe("percent_mid DESC, acres DESC");
+      expect(data[0].searchParams.get("resultRecordCount")).toBe("2000");
+      expect(data[0].searchParams.get("maxAllowableOffset")).toBe("0.004");
+      expect(res.body).toMatchObject({
+        total: 700,
+        truncated: true,
+        coverageNote: `Showing the ${idsFc.features.length} worst of 700 (ranked by trees killed, or percent dead from 2021); zoom in under 20,000 km² for all`,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("orders the California copy by trees killed in wide mode and shares the limit across both sources", async () => {
+    const stub = vi.fn(async (url: string) => {
+      if (new URL(url).searchParams.get("returnCountOnly") === "true") return json({ count: 10 });
+      return url.includes("biosds2783_fpu") ? json(inRange(cdfwFc, url, "RPT_YR")) : json(inRange(idsFc, url, "survey_year"));
+    });
+    const r = await layer.query(
+      { ...ctx(stub, [-121.5, 38.5, -119.5, 40]), wide: true, wideStrategy: layer.wide },
+      { years: { from: 2016, to: 2022 } },
+    );
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const data = urls(stub).filter((u) => !u.searchParams.has("returnCountOnly"));
+    expect(data).toHaveLength(2);
+    expect(data.find((u) => u.pathname.includes("biosds2783_fpu"))?.searchParams.get("orderByFields")).toBe("NO_TREES_TOTAL DESC");
+    expect(data.every((u) => u.searchParams.get("resultRecordCount") === "1000")).toBe(true);
+    expect(r.total).toBe(20);
+    expect(r.coverageNote).not.toMatch(/Showing the/);
   });
 
   it("says each year is fetched separately with a cap per year", () => {

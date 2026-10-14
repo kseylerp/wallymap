@@ -21,10 +21,15 @@
  * (28 vague ones dropped; 339,209 records match, so the cap note shows) in 3.5 s, 233 KB; scientificName "Puma concolor",
  * from 2000: 14 points in 0.8 s. Density with "Puma concolor" resolved to taxonKey 2435099 and returned the tile
  * template; "mountain lion" is rejected as not a scientific name.
+ * Wide mode: points need a box under 50,000 km² (maxAreaKm2). Over it, with no hard cap, the layer answers with the
+ * density tiles for the same name and years instead of an error: GBIF search has no sort order to rank by and records are
+ * about 8 KB each, so 2,000 of them would be a 16 MB arbitrary sample. run.ts says the map is a density map.
+ * Smoke wide 2026-10-14 (through runLayer): California -125,32,-114,42, scientificName "Puma concolor", points asked for, returned the
+ * density tile template (taxonKey 2435099) in 0.5 s.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { jsonObjectBody } from "@/lib/fetch/validate";
@@ -37,7 +42,6 @@ const DENSITY_STYLE = "purpleYellow.point";
 
 const PAGE_SIZE = 300;
 const MAX_PAGES = 2;
-const MAX_AREA_KM2 = 50_000;
 /** Points whose recorded position is vaguer than this are region centroids, not places. */
 const MAX_UNCERTAINTY_M = 5_000;
 /** Records change daily but slowly; six hours keeps repeat questions cheap. */
@@ -219,11 +223,14 @@ const gbifOccurrences = defineLayer({
     "Caveats: records show where people and institutions looked, not where animals are: roads, trails, towns and parks look busy and remote land looks empty, and absence of points is not absence of the species. " +
     "The position of some records is deliberately blurred or vague; records vaguer than 5 km are left out, and threatened species are often generalised. " +
     "Points come back roughly newest first (GBIF's own order), at most 600 per request, and the result says when it trims, so narrow the years or name, zoom in, or switch to density for the full picture. Dense places can have tens of thousands of records. " +
-    "Points need a region under 50,000 km² (about a 220 km square); zoom in first, or use density.",
+    "Over 50,000 km² (about a 220 km square) points come back as the density map instead.",
   coverage: "global",
   license: "CC0 / CC BY / CC BY-NC per record (GBIF)",
   requiredEnv: [],
-  maxAreaKm2: Number.POSITIVE_INFINITY,
+  maxAreaKm2: 50_000,
+  // Density tiles cover the world, so there is no hard cap.
+  hardMaxAreaKm2: Number.POSITIVE_INFINITY,
+  wide: { mode: "tiles", limit: 0 },
   input: inputSchema,
   style: {
     geometry: "point",
@@ -240,7 +247,8 @@ const gbifOccurrences = defineLayer({
       retrieved: now.toISOString(),
     };
 
-    if (input.density) {
+    // Over 50,000 km² points switch to the density map rather than erroring.
+    if (input.density || ctx.wide) {
       let taxonKey = input.taxonKey;
       if (taxonKey === undefined && input.scientificName !== undefined) {
         const matched = await resolveTaxon(ctx, input.scientificName);
@@ -257,14 +265,6 @@ const gbifOccurrences = defineLayer({
           tileSize: 256,
         },
         citation,
-      };
-    }
-
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > MAX_AREA_KM2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${MAX_AREA_KM2} km², or set density to true for a map of the whole region`,
-        hint: "zoom_in",
       };
     }
 

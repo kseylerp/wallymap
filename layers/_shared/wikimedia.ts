@@ -56,3 +56,13 @@ export async function wikimediaFetch(
   await sleep(wait);
   return attempt();
 }
+
+/**
+ * A SPARQL SELECT ranked for a layer's WIDE mode: the query (its own trailing ORDER BY and LIMIT dropped) followed by
+ * `ORDER BY DESC(?v) LIMIT n`, so the Wikidata Query Service returns the n largest by `?v` instead of an arbitrary n.
+ * Rows without `?v` sort last.
+ */
+export function rankedSparql(query: string, limit: number, variable = "v"): string {
+  const body = query.replace(/\s*LIMIT\s+\d+\s*$/i, "").replace(/\s*ORDER\s+BY\s[^{}]*$/i, "").trimEnd();
+  return `${body}\nORDER BY DESC(?${variable})\nLIMIT ${Math.max(1, Math.floor(limit))}`;
+}

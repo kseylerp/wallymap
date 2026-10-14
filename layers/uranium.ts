@@ -15,12 +15,14 @@
  *   DOE points: kind "mill tailings site" (Title I or II) or "leasing program", name, state, program, siteId, url, factSheet, transferYear.
  * Smoke check 2026-10-10 (live, through runLayer): the lower 48 box returned 666 points (602 Navajo mines, 64 DOE sites) in 0.3 s; a Four Corners
  *   box -112,35,-106,38 returned 616 (Tract 15, Oljato chapter, composite score 170, first).
+ * Wide (over 20,000,000 km², up to 80,000,000): named sites only, 1,000 per dataset, plus a count of every site. Smoke 2026-10-14, box
+ *   -170,15,-60,72 (North America): all 666 named of 666 in 1.9 s.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
-import { arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
+import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
 
@@ -30,6 +32,11 @@ export const DOE_URL = "https://services7.arcgis.com/Oak1TVjJMSpGVWPC/arcgis/res
 export const DOE_WHERE = "siteRegulatoryDriver IN ('UMTRCA Title I', 'UMTRCA Title II', 'ULP')";
 /** Both datasets are static (one is a 2007 study). */
 const TTL_SECONDS = 7 * 86_400;
+/** Most sites per dataset in a view; also the wide limit. */
+const MAX_RECORDS = 2000;
+/** Wide views keep named sites only ("sorts after a space" also skips blank names). Every site had a name on 2026-10-14. */
+export const NAVAJO_NAMED = "Mine_Name > ' '";
+export const DOE_NAMED = `(${DOE_WHERE}) AND featureName > ' '`;
 
 function str(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
@@ -114,12 +121,13 @@ const uranium = defineLayer({
   id: "uranium",
   title: "Uranium legacy sites",
   description:
-    "Legacy uranium sites in the western US: 602 abandoned uranium mines on the Navajo Nation and about 60 Department of Energy mill-tailings sites. Each point has name, kind ('abandoned mine', 'mill tailings site' or 'leasing program') and source. Navajo mines have v and hazardScore (a 2007 screening score, 10 to about 17,600; higher means a higher estimated hazard, not a measured exposure, and later cleanup is not reflected), chapter and region. DOE sites have program (Title I or II), state, url and transferYear. Not every uranium mine: for historic mines elsewhere use mines with commodity uranium. Old workings and tailings can be dangerous. Zoom in to under 20,000,000 km² (the lower 48 fits).",
+    "Legacy uranium sites in the western US: 602 abandoned mines on the Navajo Nation and about 60 Department of Energy mill-tailings sites. Each point has name, kind ('abandoned mine', 'mill tailings site' or 'leasing program') and source. Navajo mines have v and hazardScore (a 2007 screening score, 10 to about 17,600; higher is a higher estimated hazard, not a measured exposure; later cleanup not reflected), chapter and region. DOE sites have program (Title I or II), state, url and transferYear. Not every uranium mine: for historic mines elsewhere use mines with commodity uranium. Old workings and tailings can be dangerous. The lower 48 fits; over 20,000,000 km², named sites and the total.",
   coverage: "us",
   license:
     "Navajo mines: published by the New Mexico Community Data Collaborative from Navajo Nation EPA and US EPA screening (no licence stated); DOE sites: US Department of Energy (public domain)",
   requiredEnv: [],
   maxAreaKm2: 20_000_000,
+  wide: { mode: "named", limit: MAX_RECORDS },
   input: z.object({}),
   style: { geometry: "point", color: layerColor("uranium"), unit: "score" },
 
@@ -134,28 +142,28 @@ const uranium = defineLayer({
       return { kind: "geojson", data: { type: "FeatureCollection", features: [] }, citation, coverageNote: OUTSIDE_US_NOTE };
     }
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > uranium.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${uranium.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
-    const [navajo, doe] = await Promise.all([
+    // Wide (over 20,000,000 km²): named sites only, the limit shared between the two datasets, and a count of every site.
+    const wide = ctx.wide === true && ctx.wideStrategy !== undefined;
+    const perDataset = wide ? Math.floor((ctx.wideStrategy?.limit ?? MAX_RECORDS) / 2) : MAX_RECORDS;
+    const [navajo, doe, navajoCount, doeCount] = await Promise.all([
       arcgisQuery(ctx, NAVAJO_URL, {
         outFields: ["Mine_Name", "Aliases", "Mine_ID", "Chapter", "Region", "GrndWtrScr", "Soil_Scr", "Air_Scr", "SurfWtrScr", "Comp_Scr"],
+        where: wide ? NAVAJO_NAMED : undefined,
         bbox: ctx.bbox,
+        resultRecordCount: perDataset,
         ttlSeconds: TTL_SECONDS,
         cacheSuffix: "uranium:navajo",
       }),
       arcgisQuery(ctx, DOE_URL, {
         outFields: ["featureName", "siteStateCode", "siteRegulatoryDriver", "siteWebPageURL", "siteFactSheetURL", "siteTransferYear", "subSiteId"],
-        where: DOE_WHERE,
+        where: wide ? DOE_NAMED : DOE_WHERE,
         bbox: ctx.bbox,
+        resultRecordCount: perDataset,
         ttlSeconds: TTL_SECONDS,
         cacheSuffix: "uranium:doe",
       }),
+      wide ? arcgisCount(ctx, NAVAJO_URL, { bbox: ctx.bbox, ttlSeconds: TTL_SECONDS, cacheSuffix: "uranium:navajo" }) : null,
+      wide ? arcgisCount(ctx, DOE_URL, { where: DOE_WHERE, bbox: ctx.bbox, ttlSeconds: TTL_SECONDS, cacheSuffix: "uranium:doe" }) : null,
     ]);
 
     const features: Feature<Point>[] = [];
@@ -167,7 +175,7 @@ const uranium = defineLayer({
         return;
       }
       features.push(...normalize(res.fc));
-      if (res.truncated) notes.push(`Showing 2,000 ${label} records; zoom in for the rest`);
+      if (res.truncated && !wide) notes.push(`Showing 2,000 ${label} records; zoom in for the rest`);
     };
     take(navajo, "Navajo mines", normalizeNavajo);
     take(doe, "DOE sites", (fc) => normalizeDoe(fc, new Date().getUTCFullYear()));
@@ -180,10 +188,14 @@ const uranium = defineLayer({
       notes.push("Hazard scores are from a 2007 screening and do not reflect cleanup since");
     }
 
+    // The total counts every site in the box, so it is only given when both datasets answered and counted.
+    const total = failed.length === 0 && navajoCount !== null && doeCount !== null ? navajoCount + doeCount : undefined;
+
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features },
       citation,
+      ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },

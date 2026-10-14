@@ -1,6 +1,15 @@
 import { z } from "zod";
 import { getLayer } from "@/layers/registry";
-import { BBoxSchema, bboxAreaKm2, type BBox, type Layer, type LayerError, type LayerResult } from "@/layers/types";
+import {
+  BBoxSchema,
+  bboxAreaKm2,
+  hardMaxAreaKm2,
+  type BBox,
+  type Layer,
+  type LayerError,
+  type LayerResult,
+  type WideStrategy,
+} from "@/layers/types";
 import { cacheKeyFor, createLayerFetch } from "@/lib/fetch";
 
 export type RunLayerParams = {
@@ -39,6 +48,56 @@ function layerEnv(layer: Layer): Record<string, string | undefined> {
   return env;
 }
 
+const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
+
+/** "largest", "named", "newest": the word for what a wide result kept. */
+function keptWord(wide: WideStrategy): string {
+  if (wide.mode === "named") return "named";
+  return wide.rank ?? "largest";
+}
+
+/**
+ * The coverage note and truncation for a result fetched with the layer's wide strategy: "Showing the 2,000 largest of
+ * 4,512 (ranked by capacity (MW)); zoom in under 250,000 km² for all". A ranked result that kept fewer than its limit and
+ * has no count kept everything; a named result without a count always left the unnamed out.
+ */
+export function wideOutcome(
+  layer: Pick<Layer, "maxAreaKm2">,
+  wide: WideStrategy,
+  result: LayerResult,
+): { note: string; truncated: boolean; rankedOut?: string } {
+  const zoomFor = `zoom in under ${fmt(layer.maxAreaKm2)} km² for all`;
+  if (result.kind === "tiles") {
+    return {
+      note: `Showing a density map at this scale instead of single features; ${zoomFor}`,
+      truncated: true,
+      rankedOut: `Single features are not listed over this wide box, only their density as map tiles; ${zoomFor}.`,
+    };
+  }
+  const shown = result.data.features.length;
+  const total = result.total !== undefined && result.total >= shown ? result.total : undefined;
+  const ranked = wide.orderBy === undefined ? "" : ` (ranked by ${wide.orderBy})`;
+  const truncated =
+    total !== undefined ? total > shown : wide.mode === "named" ? true : shown >= wide.limit;
+  if (!truncated) {
+    return { note: `Showing all ${fmt(shown)} in this wide view${ranked}`, truncated: false };
+  }
+  const word = keptWord(wide);
+  const of = total === undefined ? "" : ` of ${fmt(total)}`;
+  const by = wide.orderBy === undefined ? "" : ` by ${wide.orderBy}`;
+  const left =
+    total === undefined
+      ? `Any past the ${word} ${fmt(shown)}${by} are left out`
+      : wide.mode === "named"
+        ? `${fmt(total - shown)} more in this box (unnamed, or past the ${fmt(shown)} named) are left out`
+        : `${fmt(total - shown)} more in this box rank below these${by} and are left out`;
+  return {
+    note: `Showing the ${fmt(shown)} ${word}${of}${ranked}; ${zoomFor}`,
+    truncated: true,
+    rankedOut: `${left}; featureCount, stats and top cover only the ${fmt(shown)} shown; ${zoomFor}.`,
+  };
+}
+
 /**
  * Validates a request and runs one registered layer. Shared by the HTTP route
  * and the agent tools, so both return the same statuses. Never throws.
@@ -59,18 +118,21 @@ export async function runLayer(id: string, params: RunLayerParams): Promise<RunL
     return { status: 400, body: { error: `Invalid input: ${z.prettifyError(input.error)}` } };
   }
 
+  // Over maxAreaKm2 a layer with a wide strategy answers with a bounded, ranked fetch; only the hard cap is an error.
   const area = bboxAreaKm2(bbox.data);
-  if (area > layer.maxAreaKm2) {
+  const hardMax = hardMaxAreaKm2(layer);
+  if (area > hardMax) {
     const body: LayerError = {
-      error: `Area is ${Math.round(area)} km²; zoom in to under ${layer.maxAreaKm2} km²`,
+      error: `Area is ${Math.round(area)} km²; zoom in to under ${hardMax} km²`,
       hint: "zoom_in",
     };
     // Measured on the view itself: that is what the user would zoom, even when the query box was a part of it.
     if (params.fromView) {
-      body.suggestedZoom = suggestedZoomFor(bboxAreaKm2(params.fromView.bbox), params.fromView.zoom, layer.maxAreaKm2);
+      body.suggestedZoom = suggestedZoomFor(bboxAreaKm2(params.fromView.bbox), params.fromView.zoom, hardMax);
     }
     return { status: 422, body };
   }
+  const wide = area > layer.maxAreaKm2 && layer.wide !== undefined ? layer.wide : undefined;
 
   const missing = layer.requiredEnv.find((name) => !process.env[name]);
   if (missing !== undefined) {
@@ -87,7 +149,9 @@ export async function runLayer(id: string, params: RunLayerParams): Promise<RunL
         zoom: params.zoom ?? DEFAULT_ZOOM,
         env: layerEnv(layer),
         fetch: createLayerFetch(id),
-        cacheKey: cacheKeyFor(layer.id, bbox.data, input.data),
+        // A wide fetch differs from the plain one for the same box, so it gets its own cache key.
+        cacheKey: `${cacheKeyFor(layer.id, bbox.data, input.data)}${wide ? ":wide" : ""}`,
+        ...(wide && { wide: true, wideStrategy: wide }),
       },
       input.data,
     );
@@ -96,7 +160,14 @@ export async function runLayer(id: string, params: RunLayerParams): Promise<RunL
       const status = result.hint === "zoom_in" ? 422 : 503;
       return { status, body: result };
     }
-    return { status: 200, body: result };
+    if (!wide) return { status: 200, body: result };
+    const outcome = wideOutcome(layer, wide, result);
+    const body: LayerResult = {
+      ...result,
+      coverageNote: [outcome.note, result.coverageNote].filter(Boolean).join("; "),
+      ...(outcome.truncated && outcome.rankedOut !== undefined && { truncated: true as const, rankedOut: outcome.rankedOut }),
+    };
+    return { status: 200, body };
   } catch (err) {
     return { status: 503, body: { error: String(err), hint: "upstream" } };
   }

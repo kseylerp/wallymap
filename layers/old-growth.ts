@@ -12,12 +12,14 @@
  * Smoke through runLayer (2026-10-10): Oregon Cascades box -122.5,43,-120.5,45 returned 59 firesheds in 0.4 s (235 KB); the McCredie
  * Springs fireshed holds 130,822 acres of old growth, the most in that box. Washington Cascades -123.5,47,-121.5,48.5 returned 26 (62 KB);
  * Utah -110,40,-109,41 returned 19 (121 KB).
+ * Smoke wide (2026-10-14): Pacific Northwest -125,42,-116,49 (about 600,000 km²) returned all 390 firesheds of 390 in 2.6 s (1.2 MB:
+ * federal-land firesheds carry many small holes, which simplification cannot remove), McCredie Springs first.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
-import { arcgisQuery } from "./_shared/arcgis";
+import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
 
@@ -31,6 +33,9 @@ const MAX_RECORDS = 200;
 /** Estimates are for 2020s inventory cycles and change slowly. */
 const TTL_SECONDS = 7 * 86_400;
 
+/** Most firesheds in a wide result: five of the service's 200-row pages, fetched in parallel. */
+const WIDE_LIMIT = 1000;
+
 const TRUNCATED_NOTE = "Showing the 200 firesheds with the most old growth in view; zoom in for the rest";
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -43,10 +48,24 @@ function num(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-/** Display simplification in degrees: finer when zoomed in; firesheds are 1,000 km² blocks, so little detail is needed. */
-export function simplifyOffset(bbox: BBox): number {
+/**
+ * Display simplification in degrees: finer when zoomed in; firesheds are 1,000 km² blocks, so little detail is needed.
+ * A wide box (over the soft cap) may go to 0.05 degrees.
+ */
+export function simplifyOffset(bbox: BBox, wide = false): number {
   const span = Math.max(bbox[2] - bbox[0], bbox[3] - bbox[1]);
-  return Math.min(0.02, Math.max(0.002, span / 200));
+  return Math.min(wide ? 0.05 : 0.02, Math.max(0.002, span / 200));
+}
+
+/**
+ * The same context with `resultOffset` added to every request URL, so arcgisQuery can fetch a later page of an ordered
+ * query (the shared helper has no offset parameter and this service pages at 200).
+ */
+export function pageContext(ctx: QueryContext, offset: number): QueryContext {
+  if (offset === 0) return ctx;
+  const fetch = ((url: string, init?: Parameters<QueryContext["fetch"]>[1]) =>
+    ctx.fetch(`${url}&resultOffset=${offset}`, init)) as QueryContext["fetch"];
+  return { ...ctx, fetch };
 }
 
 /** Converts service rows to polygons with readable names and `v` = old-growth acres. */
@@ -84,11 +103,12 @@ const oldGrowth = defineLayer({
     "Use it for 'where is old growth', 'which national forests have the most mature forest' or 'how much ancient forest is left near here'. " +
     "Caveats: the figures are sample-based estimates (plots), so small firesheds and rare forest types carry large error, and the polygon is the whole fireshed, not the stands: old growth is not located inside it. " +
     "Only federal land is counted, so private, state and tribal forest are not. At most 200 firesheds are returned, those with the most old growth first, and the result says when it trims. " +
-    "United States only. Zoom in to a region under 300,000 km² (about a 550 km square) first.",
+    "United States only. Over 300,000 km² (a 550 km square) it keeps the 1,000 with the most old growth.",
   coverage: "us",
   license: "Public domain (US Forest Service)",
   requiredEnv: [],
   maxAreaKm2: 300_000,
+  wide: { orderBy: "old-growth acres", limit: WIDE_LIMIT },
   input: z.object({}),
   style: { geometry: "polygon", color: layerColor("old-growth"), unit: "acres", fillOpacity: 0.35, extrude: "v" },
 
@@ -103,30 +123,34 @@ const oldGrowth = defineLayer({
       return { kind: "geojson", data: EMPTY, citation, coverageNote: OUTSIDE_US_NOTE };
     }
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > oldGrowth.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${oldGrowth.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
-    const res = await arcgisQuery(ctx, SERVICE_URL, {
-      outFields: FIELDS,
-      bbox: ctx.bbox,
-      maxRecords: MAX_RECORDS,
-      maxAllowableOffset: simplifyOffset(ctx.bbox),
-      orderByFields: "OLD_GROWTH_ACRES DESC",
-      ttlSeconds: TTL_SECONDS,
-      cacheSuffix: "oldgrowth",
-    });
-    if (!res.ok) return { error: res.error, hint: "upstream" };
+    // Wide (over 300,000 km²): a count first, then only the ordered pages it calls for (the service pages at 200, at most
+    // five for the strategy's 1,000), in parallel and with coarser lines. A failed count fetches every page.
+    const wide = ctx.wide === true;
+    const total = wide ? await arcgisCount(ctx, SERVICE_URL, { bbox: ctx.bbox, ttlSeconds: TTL_SECONDS, cacheSuffix: "oldgrowth" }) : null;
+    const maxPages = wide ? Math.max(1, Math.ceil((ctx.wideStrategy?.limit ?? WIDE_LIMIT) / MAX_RECORDS)) : 1;
+    const pages = total === null ? maxPages : Math.min(maxPages, Math.max(1, Math.ceil(total / MAX_RECORDS)));
+    const query = (offset: number): Promise<ArcgisResult> =>
+      arcgisQuery(pageContext(ctx, offset), SERVICE_URL, {
+        outFields: FIELDS,
+        bbox: ctx.bbox,
+        maxRecords: MAX_RECORDS,
+        maxAllowableOffset: simplifyOffset(ctx.bbox, wide),
+        orderByFields: "OLD_GROWTH_ACRES DESC",
+        ttlSeconds: TTL_SECONDS,
+        cacheSuffix: offset === 0 ? "oldgrowth" : `oldgrowth:${offset}`,
+      });
+    const results = await Promise.all(Array.from({ length: pages }, (_, i) => query(i * MAX_RECORDS)));
+    const first = results[0];
+    if (!first.ok) return { error: first.error, hint: "upstream" };
+    // A later page that fails just shortens the result; the count still says how many there are.
+    const features = results.flatMap((r) => (r.ok ? normalizeOldGrowth(r.fc).features : []));
 
     return {
       kind: "geojson",
-      data: normalizeOldGrowth(res.fc),
+      data: { type: "FeatureCollection", features },
       citation,
-      ...(res.truncated ? { coverageNote: TRUNCATED_NOTE } : {}),
+      ...(total !== null && { total }),
+      ...(first.truncated && !wide ? { coverageNote: TRUNCATED_NOTE } : {}),
     };
   },
 });

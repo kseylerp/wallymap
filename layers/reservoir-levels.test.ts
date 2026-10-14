@@ -95,6 +95,7 @@ describe("reservoir-levels layer", () => {
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.license).toContain("Public domain");
     expect(layer.maxAreaKm2).toBe(3_000_000);
+    expect(layer.wide).toEqual({ orderBy: "storage in acre-feet", limit: 1000 });
     expect(layer.input.parse({})).toEqual({ years: 5 });
     expect(layer.input.safeParse({ years: 61 }).success).toBe(false);
     expect(layer.style).toMatchObject({ geometry: "point", unit: "acre-feet", extrude: "v" });
@@ -179,6 +180,18 @@ describe("reservoir-levels layer", () => {
     const usbrCalls = (wide.mock.calls as unknown as Call[]).filter((c) => c[0].includes("usbr.gov"));
     expect(usbrCalls.length).toBe(MAX_USBR_SITES * 2);
     expect(west.coverageNote).toMatch(/largest of \d+ Reclamation reservoirs/);
+  });
+
+  it("in a wide view keeps the Reclamation cap, gives every covered reservoir in the box as the total, and drops the zoom hint", async () => {
+    const stub = upstream();
+    const r = geojson(await layer.query({ ...ctx(stub, WEST), wide: true, wideStrategy: layer.wide }, { years: 1 }));
+    const usbrCalls = (stub.mock.calls as unknown as Call[]).filter((c) => c[0].includes("usbr.gov"));
+    expect(usbrCalls.length).toBe(MAX_USBR_SITES * 2);
+    expect(r.total).toBe(SITES.length);
+    expect(r.coverageNote).toContain("At most 6 Reclamation reservoirs (the largest) per request; set name for the others");
+    expect(r.coverageNote).not.toMatch(/zoom in/);
+    const powell = geojson(await layer.query({ ...ctx(upstream(), POWELL_VIEW), wide: true, wideStrategy: layer.wide }, { years: 1 }));
+    expect(powell.total).toBeUndefined();
   });
 
   it("notes a reservoir whose files fail and keeps the rest", async () => {

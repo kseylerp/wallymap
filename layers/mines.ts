@@ -18,12 +18,15 @@
  * Smoke check 2026-10-10 (live, through runLayer): Moab box -109.8,38.4,-109.4,38.7 returned 296 points in 0.6 s (169 MRDS, 127 USMIN; first MRDS "Discovery",
  *   uranium, copper, vanadium, Past Producer); commodity uranium with source mrds returned 128 in 0.4 s; commodity gold over the San Gabriel Mountains
  *   -118.3,34,-118,34.3 returned 8 sites.
+ * Wide (over 15,000 km², up to 60,000): named sites only (USMIN stores a blank name as one space, so most of its symbols drop out),
+ *   2,000 split between the records asked, plus a count of every site in the box. Smoke 2026-10-14, box -111,36,-108.5,38.4 (59,000 km²):
+ *   1,962 named (1,000 MRDS, all 962 named USMIN) of 9,942 in 1.0 s.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
-import { arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
+import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
 
@@ -33,6 +36,14 @@ export const USMIN_URL =
 /** The records are decades old and change rarely. */
 const TTL_SECONDS = 7 * 86_400;
 const TRUNCATED_NOTE = "Showing 2,000 records";
+/** Most points a view carries per record; also the wide limit. */
+const MAX_RECORDS = 2000;
+/**
+ * Wide views keep named sites only. USMIN stores "no name" as a single space, so "sorts after a space" means named. Written
+ * without IS NOT NULL ... AND, which the usgs.gov firewall blocked once in testing (2026-10-14).
+ */
+export const MRDS_NAMED = "site_name > ' '";
+export const USMIN_NAMED = "ftr_name > ' '";
 
 /** MRDS commodity codes to plain names (the common ones; others fall back to the code). */
 export const COMMODITY_NAMES: Record<string, string> = {
@@ -194,11 +205,12 @@ const mines = defineLayer({
   id: "mines",
   title: "Mines and mineral deposits",
   description:
-    "Mines, prospects, quarries and mineral deposits in the US from two USGS records: MRDS (deposits with their commodities) and USMIN (mine, shaft and tunnel symbols copied from old topographic maps). Each point has name, kind (MRDS: main commodity such as gold or uranium; USMIN: feature type such as Mine, Adit, Quarry) and source; MRDS adds status (Producer, Past Producer, Prospect, Occurrence), commodities and url, USMIN adds topoName and topoYear. commodity filters MRDS; source picks one record. MRDS stopped updating around 2011, so most sites are closed and new mines are missing, and a point does not mean a mine is open or safe. At most 2,000 per record. Zoom in to under 15,000 km².",
+    "Mines, prospects, quarries and mineral deposits in the US from two USGS records: MRDS (deposits and commodities) and USMIN (mine, shaft and tunnel symbols from old topographic maps). Each point has name, kind (MRDS: main commodity such as gold or uranium; USMIN: feature type such as Mine, Adit, Quarry) and source; MRDS adds status (Producer, Past Producer, Prospect, Occurrence), commodities and url, USMIN topoName and topoYear. commodity filters MRDS; source picks one record. MRDS stopped updating around 2011, so most sites are closed and new mines missing, and a point does not mean a mine is open or safe. At most 2,000 per record; over 15,000 km², 2,000 named sites and the total.",
   coverage: "us",
   license: "Public domain (USGS MRDS and USMIN)",
   requiredEnv: [],
   maxAreaKm2: 15_000,
+  wide: { mode: "named", limit: MAX_RECORDS },
   input: z.object({
     commodity: z
       .enum(Object.keys(COMMODITY_CODES) as [CommodityName, ...CommodityName[]])
@@ -222,14 +234,6 @@ const mines = defineLayer({
       return { kind: "geojson", data: EMPTY, citation, coverageNote: OUTSIDE_US_NOTE };
     }
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > mines.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${mines.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
     const notes: string[] = [];
     // USMIN symbols have no commodity, so asking for one means MRDS only.
     const source = input.commodity !== undefined ? "mrds" : input.source;
@@ -237,24 +241,39 @@ const mines = defineLayer({
       notes.push("USMIN symbols carry no commodity, so the commodity filter shows MRDS sites only");
     }
 
-    const [mrds, usmin] = await Promise.all([
+    // Wide (over 15,000 km²): named sites only, the limit shared between the records asked, and a count of every site in
+    // the box (named or not) for the note.
+    const wide = ctx.wide === true && ctx.wideStrategy !== undefined;
+    const perRecord = wide ? Math.floor((ctx.wideStrategy?.limit ?? MAX_RECORDS) / (source === "both" ? 2 : 1)) : MAX_RECORDS;
+    const commodity = input.commodity === undefined ? undefined : commodityWhere(COMMODITY_CODES[input.commodity]);
+    const mrdsWhere = !wide ? commodity : commodity === undefined ? MRDS_NAMED : `(${commodity}) AND ${MRDS_NAMED}`;
+    const mrdsSuffix = `mines:mrds:${input.commodity ?? "all"}`;
+
+    const [mrds, usmin, mrdsCount, usminCount] = await Promise.all([
       source !== "usmin"
         ? arcgisQuery(ctx, MRDS_URL, {
             outFields: ["dep_id", "site_name", "dev_stat", "code_list", "grade"],
-            where: input.commodity === undefined ? undefined : commodityWhere(COMMODITY_CODES[input.commodity]),
+            where: mrdsWhere,
             bbox: ctx.bbox,
+            resultRecordCount: perRecord,
             ttlSeconds: TTL_SECONDS,
-            cacheSuffix: `mines:mrds:${input.commodity ?? "all"}`,
+            cacheSuffix: mrdsSuffix,
           })
         : null,
       source !== "mrds"
         ? arcgisQuery(ctx, USMIN_URL, {
             outFields: ["ftr_type", "ftr_name", "topo_name", "topo_date", "state", "county"],
+            where: wide ? USMIN_NAMED : undefined,
             bbox: ctx.bbox,
+            resultRecordCount: perRecord,
             ttlSeconds: TTL_SECONDS,
             cacheSuffix: "mines:usmin",
           })
         : null,
+      wide && source !== "usmin"
+        ? arcgisCount(ctx, MRDS_URL, { where: commodity, bbox: ctx.bbox, ttlSeconds: TTL_SECONDS, cacheSuffix: mrdsSuffix })
+        : 0,
+      wide && source !== "mrds" ? arcgisCount(ctx, USMIN_URL, { bbox: ctx.bbox, ttlSeconds: TTL_SECONDS, cacheSuffix: "mines:usmin" }) : 0,
     ]);
 
     const features: Feature<Point>[] = [];
@@ -266,7 +285,7 @@ const mines = defineLayer({
         return;
       }
       features.push(...normalize(res.fc));
-      if (res.truncated) notes.push(`${TRUNCATED_NOTE} from ${label}; zoom in for the rest`);
+      if (res.truncated && !wide) notes.push(`${TRUNCATED_NOTE} from ${label}; zoom in for the rest`);
     };
     take(mrds, "MRDS", normalizeMrds);
     take(usmin, "USMIN", normalizeUsmin);
@@ -280,10 +299,14 @@ const mines = defineLayer({
       notes.push("MRDS is a historic record (about 2011): most sites are closed or only prospects");
     }
 
+    // The total counts every site in the box, so it is only given when every record asked answered and counted.
+    const total = wide && failed.length === 0 && mrdsCount !== null && usminCount !== null ? mrdsCount + usminCount : undefined;
+
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features },
       citation,
+      ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },

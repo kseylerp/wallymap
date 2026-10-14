@@ -2,7 +2,7 @@ import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from 
 import "@/layers";
 import { SYSTEM_PROMPT } from "@/lib/agent/prompt";
 import { getModel } from "@/lib/agent/provider";
-import { buildTools } from "@/lib/agent/tools";
+import { buildTools, repairToolCall } from "@/lib/agent/tools";
 import type { MapView } from "@/lib/agent/view";
 import { parseMapView, systemForTurn } from "@/lib/agent/viewContext";
 import { chatRules, limitRequest } from "@/lib/fetch/rateLimit";
@@ -85,6 +85,8 @@ export async function POST(req: Request): Promise<Response> {
       tools,
       messages: await convertToModelMessages(messages, { tools }),
       stopWhen: stepCountIs(MAX_STEPS),
+      // Some models glue template tokens onto a tool name (query_power-plants<|channel|>commentary); map it back.
+      repairToolCall,
     });
     return result.toUIMessageStreamResponse({ onError: errorMessage });
   } catch (err) {

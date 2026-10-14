@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { SERVICE_URL, byCaseNumberDesc, normalizeClaims } from "./mining-claims";
+import { hardMaxAreaKm2 } from "./types";
+import layer, { NAMED, SERVICE_URL, byCaseNumberDesc, normalizeClaims } from "./mining-claims";
 import activeRaw from "./__fixtures__/mining-claims.active.json";
 import closedRaw from "./__fixtures__/mining-claims.closed.json";
 
@@ -94,6 +95,8 @@ describe("mining-claims layer", () => {
     expect(layer.license).toContain("Public domain");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(2_500);
+    expect(layer.wide).toEqual({ mode: "named", limit: 2000 });
+    expect(hardMaxAreaKm2(layer)).toBe(10_000);
     expect(layer.input.parse({})).toEqual({ status: "active" });
     expect(layer.input.safeParse({ status: "all" }).success).toBe(false);
     expect(layer.style).toMatchObject({ geometry: "polygon", color: "#F57272" });
@@ -155,6 +158,39 @@ describe("mining-claims layer", () => {
     expect(stub).not.toHaveBeenCalled();
     expect((await runLayer("mining-claims", { bbox: [-110, 38, -108, 40] })).status).toBe(422);
     expect((await runLayer("mining-claims", { bbox: MOAB, input: { status: "x" } })).status).toBe(400);
+  });
+
+  it("answers a wide box (about 5,400 km²) with named claims, the limit split by status, and a count of all claims", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const counting = new URL(url).searchParams.get("returnCountOnly") === "true";
+      if (url.startsWith(`${SERVICE_URL}/1/`)) return counting ? json({ count: 2438 }) : json({ ...active, exceededTransferLimit: true });
+      return counting ? json({ count: 28528 }) : json({ ...closed, exceededTransferLimit: true });
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("mining-claims", { bbox: [-110, 38.2, -109.2, 38.9], zoom: 8, input: { status: "both" } });
+      expect(res.status).toBe(200);
+      const urls = stub.mock.calls.map((c) => new URL(String(c[0])));
+      const data = urls.filter((u) => !u.searchParams.has("returnCountOnly"));
+      expect(data).toHaveLength(2);
+      for (const u of data) {
+        expect(u.searchParams.get("where")).toBe(NAMED);
+        expect(u.searchParams.get("resultRecordCount")).toBe("1000");
+      }
+      expect(urls.filter((u) => u.searchParams.has("returnCountOnly")).map((u) => u.searchParams.get("where"))).toEqual(["1=1", "1=1"]);
+      expect(res.body).toMatchObject({ total: 30966, truncated: true, coverageNote: "Showing the 16 named of 30,966; zoom in under 2,500 km² for all" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("gives the whole wide limit to one status and leaves the total out when the count fails", async () => {
+    const stub = vi.fn(async (url: string) => (new URL(url).searchParams.get("returnCountOnly") === "true" ? json({}, 500) : json(active)));
+    const r = geojson(await layer.query({ ...ctx(stub), wide: true, wideStrategy: layer.wide }, { status: "active" }));
+    expect(r.total).toBeUndefined();
+    const data = (stub.mock.calls as unknown as [string][]).map((c) => new URL(c[0])).find((u) => !u.searchParams.has("returnCountOnly"));
+    expect(data?.searchParams.get("resultRecordCount")).toBe("2000");
   });
 
   it("warns that claims are survey-grid squares and not for deciding where to stake", () => {

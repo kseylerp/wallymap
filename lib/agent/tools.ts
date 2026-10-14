@@ -1,7 +1,7 @@
-import { tool, type JSONValue, type ToolSet } from "ai";
+import { NoSuchToolError, tool, type JSONValue, type ToolCallRepairFunction, type ToolSet } from "ai";
 import { z } from "zod";
 import { getLayer, listLayers } from "@/layers/registry";
-import { BBoxSchema, bboxAreaKm2, type BBox, type Coverage, type Layer, type LayerError } from "@/layers/types";
+import { BBoxSchema, bboxAreaKm2, hardMaxAreaKm2, type BBox, type Coverage, type Layer, type LayerError } from "@/layers/types";
 import { runLayer } from "@/lib/layers/run";
 import { isFullLayerResult, summarizeLayerResult, type SummaryStyle } from "@/lib/layers/summarize";
 import type { Basemap, RenderMode, TimeMode } from "@/lib/render/state";
@@ -84,7 +84,7 @@ function rowCoverage(coverage: Coverage): string {
 }
 
 /** Most characters of a layer's own description that go into its query tool on every turn. */
-export const TOOL_DESCRIPTION_MAX_CHARS = 700;
+export const TOOL_DESCRIPTION_MAX_CHARS = 600;
 
 /**
  * Sections that only route words to layers, which the vocabulary table in the system prompt already does:
@@ -94,6 +94,7 @@ const ROUTING_SECTION = /\s*(?:User words|Example questions?):[\s\S]*?\.(?=\s+[A
 
 /** Sentences kept even past the cap: the area limit (the model must zoom in first) and "map tiles, not features" honesty. */
 const ESSENTIAL_SENTENCE = /km²|map tiles/i;
+const MAP_TILES_SENTENCE = /map tiles/i;
 
 /** A sentence that leans on the one before it. */
 const REFERS_BACK = /^(?:It|Its|This|These|They|That|Those)\b|^Leave (?:it|them|both) out\b/;
@@ -116,19 +117,22 @@ export const TOOL_DESCRIPTION_INPUT_CEILING = 1_100;
 /**
  * A layer description as its query tool carries it. The "User words" and "Example questions" sections go (the
  * vocabulary routes words), then whole sentences are kept, in their original order, by priority: the first
- * sentence (what the layer is) and the area-limit and map-tiles sentences always; sentences that name one of
+ * sentence (what the layer is) and the area-limit and map-tiles sentences always (with `wide`, only map tiles: the
+ * query tool states the area limits in wideSentence); sentences that name one of
  * `inputs` (how to call it) up to TOOL_DESCRIPTION_INPUT_CEILING; then the rest (properties, units, caveats)
  * while the whole stays within `max`. list_layers with ids returns the full text.
  */
 export function compactDescription(
   description: string,
-  { inputs = [], max = TOOL_DESCRIPTION_MAX_CHARS }: { inputs?: string[]; max?: number } = {},
+  { inputs = [], max = TOOL_DESCRIPTION_MAX_CHARS, wide = false }: { inputs?: string[]; max?: number; wide?: boolean } = {},
 ): string {
   const stripped = description.replace(ROUTING_SECTION, "").trim();
   if (stripped.length <= max) return stripped;
   const all = sentences(stripped);
   const inputPattern = inputs.length > 0 ? new RegExp(`\\b(?:${inputs.map(escapeRegExp).join("|")})\\b`) : null;
-  const keep = all.map((sentence, i) => i === 0 || ESSENTIAL_SENTENCE.test(sentence));
+  // A layer with a wide strategy gets its area limits from wideSentence, so its own km² sentences only fill.
+  const essential = wide ? MAP_TILES_SENTENCE : ESSENTIAL_SENTENCE;
+  const keep = all.map((sentence, i) => i === 0 || essential.test(sentence));
   let length = all.reduce((sum, sentence, i) => (keep[i] ? sum + sentence.length + 1 : sum), 0);
   const fill = (ceiling: number, wanted: (sentence: string) => boolean) =>
     all.forEach((sentence, i) => {
@@ -163,8 +167,8 @@ export function layerResultForModel(output: unknown, layerId?: string, style?: S
 export type WiderScaleHint = { layerId: string; input?: Record<string, string | number | boolean | string[]> };
 
 /**
- * outdoor-features takes a region up to 150,000 km² only for huts, viewpoints and waterfalls (all kinds stop at
- * 10,000 km²), so every suggestion of it asks for those kinds.
+ * outdoor-features answers up to 1,500,000 km² with named features only (over 10,000 km²); every suggestion of it asks for
+ * huts, viewpoints and waterfalls, the kinds worth hiking to, so peaks do not crowd them out of the 2,000 kept.
  */
 const WIDE_OUTDOOR_FEATURES: WiderScaleHint = { layerId: "outdoor-features", input: { kinds: ["hut", "viewpoint", "waterfall"] } };
 
@@ -193,7 +197,7 @@ export const WIDER_SCALE: Record<string, WiderScaleHint[]> = {
   campsites: [{ layerId: "recreation-sites" }, { layerId: "public-lands" }, { layerId: "protected-areas-world" }, { layerId: "wilderness" }],
   "forest-roads": [{ layerId: "public-lands" }, { layerId: "recreation-sites" }],
   climbing: [{ layerId: "peaks" }, { layerId: "geology" }],
-  // Its own zoom_in error already says that huts, viewpoints and waterfalls alone reach 150,000 km².
+  // Past its 1,500,000 km² hard limit, fall back to these.
   "outdoor-features": [{ layerId: "peaks" }, { layerId: "protected-areas-world" }],
   "recreation-sites": [{ layerId: "public-lands" }, { layerId: "wilderness" }, { layerId: "protected-areas-world" }],
   peaks: [{ layerId: "physical-regions" }, { layerId: "protected-areas-world" }],
@@ -241,7 +245,7 @@ export function widerScaleFor(layerId: string, bbox: BBox): string[] {
   return (WIDER_SCALE[layerId] ?? [])
     .filter((hint) => {
       const layer = getLayer(hint.layerId);
-      return layer !== undefined && isAvailable(layer) && area <= layer.maxAreaKm2 && coversBBox(layer.coverage, bbox);
+      return layer !== undefined && isAvailable(layer) && area <= hardMaxAreaKm2(layer) && coversBBox(layer.coverage, bbox);
     })
     .map((hint) => hintText(hint));
 }
@@ -251,6 +255,24 @@ function widerScaleSentence(layerId: string): string {
   const hints = WIDER_SCALE[layerId];
   if (!hints || hints.length === 0) return "";
   return ` At a wider scale, use ${hints.map((h) => hintText(h, "short").replace(/^query_/, "")).join(", ")}.`;
+}
+
+const km2 = (n: number) => `${Math.round(n).toLocaleString("en-US")} km²`;
+
+/**
+ * The query tool's sentence on its wide strategy, or "" without one: over maxAreaKm2 (up to the hard cap) the layer
+ * still answers, with the N largest (or named) and a note, so the model must not shrink the box itself.
+ */
+export function wideSentence(layer: Pick<Layer, "maxAreaKm2" | "hardMaxAreaKm2" | "wide">): string {
+  const wide = layer.wide;
+  if (wide === undefined || !Number.isFinite(layer.maxAreaKm2)) return "";
+  const hard = hardMaxAreaKm2(layer);
+  const upTo = Number.isFinite(hard) ? ` (to ${km2(hard)})` : "";
+  const limit = wide.limit.toLocaleString("en-US");
+  const by = wide.orderBy ? ` by ${wide.orderBy}` : "";
+  const kept =
+    wide.mode === "tiles" ? "a density map" : wide.mode === "named" ? `the ${limit} named${by}` : `the ${limit} ${wide.rank ?? "largest"}${by}`;
+  return ` Over ${km2(layer.maxAreaKm2)}${upTo} it returns ${kept}; never shrink the box.`;
 }
 
 /** A zoom_in error for the user's view, with the layers that can answer at that scale. */
@@ -282,7 +304,7 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined) {
   }) as unknown as z.ZodType<QueryArgs>;
   return tool({
     // The licence and the trimmed sentences are in list_layers' detail (ids); the citation comes with each result.
-    description: `${compactDescription(layer.description, { inputs: inputNames(layer) })} Covers ${describeCoverage(layer.coverage)}.${widerScaleSentence(layer.id)} bbox is [west, south, east, north].`,
+    description: `${compactDescription(layer.description, { inputs: inputNames(layer), wide: layer.wide !== undefined })} Covers ${describeCoverage(layer.coverage)}.${wideSentence(layer)}${widerScaleSentence(layer.id)} bbox is [west, south, east, north].`,
     inputSchema,
     execute: async ({ bbox, zoom, ...input }) => {
       const view = fromView(bbox);
@@ -298,6 +320,43 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined) {
     toModelOutput: ({ output }) => ({ type: "json", value: layerResultForModel(output, layer.id, layer.style) }),
   });
 }
+
+/**
+ * Junk some models leave on a tool name: a chat-template token and what follows it (`query_power-plants<|channel|>commentary`),
+ * or a stray quote, bracket or space.
+ */
+const TOOL_NAME_JUNK = /(?:<\|[\s\S]*|[\s"'`<>()[\]{}:;,.]+[\s\S]*)$/;
+
+/** Tool names already repaired and logged, so each is logged once per server process. */
+const repairedLogged = new Set<string>();
+
+/**
+ * The registered tool a garbled name means, or null: the name with trailing junk (`<|channel|>commentary`, `<|...|>`)
+ * cut off, when that prefix is exactly one registered tool name, or the start of exactly one.
+ */
+export function repairToolName(name: string, toolNames: readonly string[]): string | null {
+  if (toolNames.includes(name)) return name;
+  const prefix = name.replace(TOOL_NAME_JUNK, "").trim();
+  if (prefix === "" || prefix === name) return null;
+  if (toolNames.includes(prefix)) return prefix;
+  const matches = toolNames.filter((t) => t.startsWith(prefix));
+  return matches.length === 1 ? matches[0] : null;
+}
+
+/**
+ * For streamText / generateText `repairToolCall`: renames a call whose tool name carries trailing junk to the one tool
+ * it means (logging each repaired name once); anything else, including a bad input, is left to fail as before.
+ */
+export const repairToolCall: ToolCallRepairFunction<ToolSet> = async ({ toolCall, tools, error }) => {
+  if (!NoSuchToolError.isInstance(error)) return null;
+  const fixed = repairToolName(toolCall.toolName, Object.keys(tools));
+  if (fixed === null || fixed === toolCall.toolName) return null;
+  if (!repairedLogged.has(toolCall.toolName)) {
+    repairedLogged.add(toolCall.toolName);
+    console.warn(`Repaired tool name ${JSON.stringify(toolCall.toolName)} to ${fixed}`);
+  }
+  return { ...toolCall, toolName: fixed };
+};
 
 /** The text of a geocode as the per-turn repeat guard compares it: case, punctuation and spacing ignored. */
 export function geocodeKey(place: string): string {
@@ -396,6 +455,7 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
         mode: z.enum(TOOL_RENDER_MODES).optional(),
         color: z.string().optional().describe("Only set when the user asked for a specific color; otherwise omit"),
         filters: LayerFiltersSchema.optional().describe("Show only features matching every entry; omit to keep the current filters"),
+        scenario: z.number().optional().describe("Scenario layers: amount to show, e.g. sea level rise feet"),
       }),
       execute: async (input) => input,
     }),
@@ -424,13 +484,21 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
         "fire-perimeters 2016-2020 vs 2021-today (delta: a [\"2016-01-01\", \"2020-12-31\"], b [\"2021-01-01\", today]).",
       inputSchema: z.object({
         layerId: z.string().min(1),
-        a: CompareWindowSchema.describe("First window [start, end]"),
-        b: CompareWindowSchema.describe("Second window [start, end]"),
+        a: CompareWindowSchema.optional().describe("First window [start, end]; omit for a scenario compare"),
+        b: CompareWindowSchema.optional().describe("Second window [start, end]; omit for a scenario compare"),
+        scenario: z
+          .tuple([z.number(), z.number()])
+          .optional()
+          .describe("Scenario layers: the two amounts to compare, e.g. sea level rise feet [1, 6]"),
         mode: z.enum(COMPARE_MODES).default("delta"),
         aLabel: z.string().optional().describe("Short name for window A, e.g. \"2015\""),
         bLabel: z.string().optional().describe("Short name for window B, e.g. \"2025\""),
       }),
-      execute: async (input) => input,
+      // A compare needs either the two time windows or the two scenario amounts.
+      execute: async (input) =>
+        input.scenario !== undefined || (input.a !== undefined && input.b !== undefined)
+          ? input
+          : { error: "compare needs both windows a and b, or scenario with two amounts" },
     }),
     route: tool({
       description:

@@ -12,6 +12,8 @@
  * (Chinle, 10,617 km2, first) in 0.7 s; the lower 48 box (-125,24,-66,50, 15 million km2) at zoom 4 returned 18 regions in 3.8 s
  * (Missouri Region first); at zoom 7 or with level huc8 it steps up to regions (huc4 is limited to 3.5 million km2); huc4 over a
  * 9 x 6 degree box is about 9 s per 200 units upstream, which is why the finer levels have smaller area limits. States can include "CN" (Canada).
+ * Smoke wide 2026-10-14 (live, through runLayer): the US with Alaska -170,18,-60,72 (about 50 million km2) returned all 21 regions of 21
+ * in 7.1 s (51 KB at 0.08 degrees), Alaska Region first.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
@@ -64,6 +66,9 @@ export function levelForArea(wanted: Level, area: number): Level {
   return LEVELS[i];
 }
 
+/** Most units in a wide result (over 20 million km² only regions are drawn, and there are 22). */
+const WIDE_LIMIT = 1000;
+
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
 function str(value: unknown): string | undefined {
@@ -104,11 +109,12 @@ const riverBasins = defineLayer({
   id: "river-basins",
   title: "River basins and watersheds",
   description:
-    "US drainage basins from the USGS Watershed Boundary Dataset: the land that drains to one river or outlet. Each polygon has name, huc (hydrologic unit code; longer codes nest inside shorter ones), kind and hucLevel (huc2 regions to huc10 watersheds), v and areaSqKm, and states. The level follows the zoom, or set level; a level too fine for the view steps up to a coarser one and the result says so. Outlines are simplified and a basin is not a legal boundary. At most 2,000 units, largest first. Zoom in to under 20,000,000 km² (huc4 under 3,500,000, huc6 1,000,000, huc8 250,000, huc10 40,000).",
+    "US drainage basins from the USGS Watershed Boundary Dataset: the land that drains to one river or outlet. Each polygon has name, huc (hydrologic unit code; longer codes nest inside shorter ones), kind and hucLevel (huc2 regions to huc10 watersheds), v and areaSqKm, and states. The level follows the zoom, or set level; a level too fine for the view steps up to a coarser one and the result says so. Outlines are simplified and a basin is not a legal boundary. At most 2,000 units, largest first. Limits: huc4 3,500,000 km², huc6 1,000,000, huc8 250,000, huc10 40,000; over 20,000,000 it gives regions and a total.",
   coverage: "us",
   license: "Public domain (USGS Watershed Boundary Dataset)",
   requiredEnv: [],
   maxAreaKm2: 20_000_000,
+  wide: { orderBy: "area in km²", limit: WIDE_LIMIT },
   input: z.object({
     level: z
       .enum(LEVELS)
@@ -128,15 +134,10 @@ const riverBasins = defineLayer({
       return { kind: "geojson", data: EMPTY, citation, coverageNote: OUTSIDE_US_NOTE };
     }
 
+    // A level too fine for the view steps up to a coarser one, whether it came from the zoom or from `level`. Over the
+    // soft cap (20 million km²) that is always regions, never an error; wide mode also simplifies twice as coarsely.
     const area = bboxAreaKm2(ctx.bbox);
-    if (area > riverBasins.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${riverBasins.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
-    // A level too fine for the view steps up to a coarser one, whether it came from the zoom or from `level`.
+    const wide = ctx.wide === true;
     const wanted = input.level ?? levelForZoom(ctx.zoom);
     const level = levelForArea(wanted, area);
     const spec = LEVEL_SPECS[level];
@@ -144,8 +145,9 @@ const riverBasins = defineLayer({
     const res = await arcgisQuery(ctx, `${SERVICE_URL}/${spec.layer}`, {
       outFields: [spec.field, "name", "areasqkm", "states"],
       bbox: ctx.bbox,
-      maxAllowableOffset: spec.offset,
+      maxAllowableOffset: wide ? spec.offset * 2 : spec.offset,
       orderByFields: "areasqkm DESC",
+      ...(wide && { resultRecordCount: ctx.wideStrategy?.limit ?? WIDE_LIMIT, withCount: true }),
       ttlSeconds: TTL_SECONDS,
       cacheSuffix: `river-basins:${level}`,
     });
@@ -154,12 +156,13 @@ const riverBasins = defineLayer({
     const data = normalizeBasins(res.fc, level);
     const notes: string[] = [];
     if (level !== wanted) notes.push(`Showing ${spec.noun} (${level}) because ${wanted} is too fine for this view; zoom in for finer basins`);
-    if (res.truncated) notes.push(`Showing the 2,000 largest ${spec.noun}; zoom in for the rest`);
+    if (res.truncated && !wide) notes.push(`Showing the 2,000 largest ${spec.noun}; zoom in for the rest`);
     if (data.features.length === 0) notes.push("No watershed boundaries for this area");
     return {
       kind: "geojson",
       data,
       citation,
+      ...(res.total !== undefined && { total: res.total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },

@@ -32,10 +32,13 @@
  * Smoke check 2026-10-10 (live, through runLayer): Lake Powell elevation 3,519.03 ft and storage 5.208 million acre-feet
  * on 2026-10-08 (22% of live capacity, 23,314,000); Lake Mead 1,037.61 ft, 6.814 million on 2026-10-08; Hetch Hetchy 280,357 acre-feet
  * on 2026-10-08 (78% of 360,000); Shasta 2.406 million on 2026-10-09.
+ * Wide (over 3,000,000 km², up to 12,000,000): the same fetch, which is already bounded by the site list and the 6 Reclamation
+ * sites; when that cap cuts, the total is every covered reservoir in the box. Smoke 2026-10-14, box -125,30,-100,46 (the West,
+ * 3,900,000 km²): 21 of 35 in 9.6 s (the time is the rate limit spacing 14 calls), Lake Mead 6.81 million acre-feet first.
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { bboxesDisjoint } from "./_shared/coverage";
@@ -299,11 +302,12 @@ const reservoirLevels = defineLayer({
   id: "reservoir-levels",
   title: "Reservoir levels",
   description:
-    "Water level and storage of about 35 major western reservoirs (Lake Powell, Lake Mead, Flaming Gorge, Shasta, Oroville, Hetch Hetchy and more) from the Bureau of Reclamation and California's CDEC; provisional data. Each point has v and storageAf (live storage in acre-feet), elevationFt (the level quoted for Powell and Mead; Reclamation sites only), pctFull (percent of official live capacity, where known), lastDate and t (usually 1 to 2 days old), and series ({t, v} points: monthly means for up to 10 years, yearly beyond; feet when seriesUnit is 'ft'). years (1 to 60, default 5) sets the series span; name picks one reservoir. Small lakes are missing and at most 6 Reclamation sites return per view. Zoom in to under 3,000,000 km².",
+    "Water level and storage of about 35 major western reservoirs (Lake Powell, Lake Mead, Flaming Gorge, Shasta, Oroville, Hetch Hetchy and more) from the Bureau of Reclamation and California's CDEC; provisional data. Each point has v and storageAf (live storage in acre-feet), elevationFt (the level quoted for Powell and Mead; Reclamation sites only), pctFull (percent of official live capacity, where known), lastDate and t (usually 1 to 2 days old), and series ({t, v} points: monthly means for up to 10 years, yearly beyond; feet when seriesUnit is 'ft'). years (1 to 60, default 5) sets the series span; name picks one reservoir. Small lakes are missing and at most 6 Reclamation sites return per view, even over 3,000,000 km².",
   coverage: { bbox: [-123.5, 32, -104, 43.5] },
   license: "Public domain (US Bureau of Reclamation, California DWR); provisional data",
   requiredEnv: [],
   maxAreaKm2: 3_000_000,
+  wide: { orderBy: "storage in acre-feet", limit: 1_000 },
   input: z.object({
     years: z
       .number()
@@ -328,13 +332,6 @@ const reservoirLevels = defineLayer({
       url: "https://www.usbr.gov/uc/water/hydrodata/",
       retrieved: new Date().toISOString(),
     };
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > reservoirLevels.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${reservoirLevels.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
     if (bboxesDisjoint(ctx.bbox, SITES_EXTENT)) {
       return {
         kind: "geojson",
@@ -347,12 +344,20 @@ const reservoirLevels = defineLayer({
     const needle = input.name?.toLowerCase();
     const inView = SITES.filter((s) => inBbox(s.coordinates, ctx.bbox) && (!needle || s.name.toLowerCase().includes(needle)));
     const usbrAll = inView.filter((s) => s.source === "usbr").sort((a, b) => (b.capacityAf ?? b.sizeAf ?? 0) - (a.capacityAf ?? a.sizeAf ?? 0));
+    // A wide box (over 3,000,000 km²) is answered the same way: the site list is short, but every Reclamation site costs two
+    // calls through the layer's rate limit (5 at once, then 1 a second), and all 20 took 38 s on 2026-10-14.
     const usbr = usbrAll.slice(0, MAX_USBR_SITES);
     const cdec = inView.filter((s) => s.source === "cdec");
     const notes: string[] = [];
     if (usbrAll.length > usbr.length) {
-      notes.push(`Showing the ${MAX_USBR_SITES} largest of ${usbrAll.length} Reclamation reservoirs in view; zoom in or set name for the rest`);
+      // In a wide view run.ts states the count ("the 21 largest of 35"); this note then only says why and how to get the rest.
+      notes.push(
+        ctx.wide
+          ? `At most ${MAX_USBR_SITES} Reclamation reservoirs (the largest) per request; set name for the others`
+          : `Showing the ${MAX_USBR_SITES} largest of ${usbrAll.length} Reclamation reservoirs in view; zoom in or set name for the rest`,
+      );
     }
+    const total = ctx.wide && usbrAll.length > usbr.length ? inView.length : undefined;
     if (inView.length === 0) {
       notes.push(
         needle
@@ -401,6 +406,7 @@ const reservoirLevels = defineLayer({
       kind: "geojson",
       data: { type: "FeatureCollection", features },
       citation,
+      ...(total !== undefined && { total }),
       coverageNote: notes.join("; "),
     };
   },

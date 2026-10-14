@@ -31,6 +31,8 @@ describe("critical-habitat layer", () => {
     expect(layer.license).toBe("Public domain (US Fish and Wildlife Service)");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(300_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "area", limit: 1000 });
     expect(layer.input.parse({})).toEqual({ includeProposed: true });
     expect(layer.style).toMatchObject({ geometry: "polygon", fillOpacity: 0.25 });
   });
@@ -79,6 +81,7 @@ describe("critical-habitat layer", () => {
     expect(simplifyOffset([-120.4, 38.7, -120.3, 38.8])).toBe(0.001);
     expect(simplifyOffset([-122, 43, -119, 46])).toBeCloseTo(0.02, 5);
     expect(simplifyOffset([-130, 30, -100, 50])).toBe(0.03);
+    expect(simplifyOffset([-130, 30, -100, 50], true)).toBe(0.05);
   });
 
   it("queries the final and proposed layers with the bbox, fields and a one day cache, and merges them", async () => {
@@ -155,7 +158,49 @@ describe("critical-habitat layer", () => {
     expect(r.coverageNote).toMatch(/outside the United States/i);
   });
 
-  it("is registered, validates input and rejects a huge area through runLayer", async () => {
+  it("answers a wide box largest first, with both layers counted and runLayer's note", async () => {
+    const stub = vi.fn(async (url: string) => {
+      const proposed = url.includes("/FeatureServer/2/query");
+      if (new URL(url).searchParams.get("returnCountOnly") === "true") return json({ count: proposed ? 12 : 136 });
+      return json(proposed ? proposedFc : finalFc);
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("critical-habitat", { bbox: [-124, 32, -114, 42], zoom: 5 });
+      expect(res.status).toBe(200);
+      const data = stub.mock.calls.map((c) => new URL(String(c[0]))).filter((u) => !u.searchParams.has("returnCountOnly"));
+      expect(data).toHaveLength(2);
+      for (const u of data) {
+        expect(u.searchParams.get("orderByFields")).toBe("Shape__Area DESC");
+        expect(u.searchParams.get("resultRecordCount")).toBe("1000");
+        expect(u.searchParams.get("maxAllowableOffset")).toBe("0.05");
+      }
+      const shown = finalFc.features.length + proposedFc.features.length;
+      expect(res.body).toMatchObject({
+        total: 148,
+        truncated: true,
+        coverageNote: `Showing the ${shown} largest of 148 (ranked by area); zoom in under 300,000 km² for all`,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("leaves the total out of a wide result when the proposed layer failed", async () => {
+    const stub = vi.fn(async (url: string) => {
+      if (url.includes("/FeatureServer/2/query")) return new Response("no", { status: 500 });
+      return new URL(url).searchParams.get("returnCountOnly") === "true" ? json({ count: 136 }) : json(finalFc);
+    });
+    const r = await layer.query({ ...ctx(stub), bbox: [-124, 32, -114, 42], wide: true, wideStrategy: layer.wide }, { includeProposed: true });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.total).toBeUndefined();
+    expect(r.coverageNote).toBe("Proposed critical habitat could not be loaded; only final designations are shown");
+    const only = await layer.query({ ...ctx(stub), bbox: [-124, 32, -114, 42], wide: true, wideStrategy: layer.wide }, { includeProposed: false });
+    if (!("kind" in only) || only.kind !== "geojson") throw new Error("expected geojson");
+    expect(only.total).toBe(136);
+  });
+
+  it("is registered, validates input and rejects through runLayer only a box over four times the soft cap", async () => {
     expect((await runLayer("critical-habitat", { bbox: [-120, 30, -80, 45] })).status).toBe(422);
     expect((await runLayer("critical-habitat", { bbox: TAHOE, input: { species: "" } })).status).toBe(400);
   });

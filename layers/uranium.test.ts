@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { DOE_URL, DOE_WHERE, NAVAJO_URL, normalizeDoe, normalizeNavajo } from "./uranium";
+import { bboxAreaKm2, hardMaxAreaKm2 } from "./types";
+import layer, { DOE_NAMED, DOE_URL, DOE_WHERE, NAVAJO_NAMED, NAVAJO_URL, normalizeDoe, normalizeNavajo } from "./uranium";
 import doeRaw from "./__fixtures__/uranium.doe.json";
 import navajoRaw from "./__fixtures__/uranium.navajo.json";
 
@@ -106,6 +107,8 @@ describe("uranium layer", () => {
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.input.parse({})).toEqual({});
     expect(layer.maxAreaKm2).toBe(20_000_000);
+    expect(layer.wide).toEqual({ mode: "named", limit: 2000 });
+    expect(hardMaxAreaKm2(layer)).toBe(80_000_000);
     expect(layer.style).toMatchObject({ geometry: "point", color: "#F57272" });
   });
 
@@ -146,6 +149,31 @@ describe("uranium layer", () => {
     expect(geojson(await layer.query(ctx(stub, [5, 45, 6, 46]), {})).coverageNote).toBe("No data outside the United States");
     expect(stub).not.toHaveBeenCalled();
     expect((await runLayer("uranium", { bbox: [-180, -80, 180, 80] })).status).toBe(422);
+  });
+
+  it("answers a box wider than the lower 48 with named sites and a count of all, and says when it kept everything", async () => {
+    const box: [number, number, number, number] = [-130, 20, -60, 55];
+    expect(bboxAreaKm2(box)).toBeGreaterThan(20_000_000);
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const counting = new URL(url).searchParams.get("returnCountOnly") === "true";
+      if (url.startsWith(NAVAJO_URL)) return counting ? json({ count: 8 }) : json(navajo);
+      return counting ? json({ count: 5 }) : json(doe);
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("uranium", { bbox: box, zoom: 3 });
+      expect(res.status).toBe(200);
+      const urls = stub.mock.calls.map((c) => new URL(String(c[0])));
+      const data = urls.filter((u) => !u.searchParams.has("returnCountOnly"));
+      expect(data.map((u) => u.searchParams.get("where")).sort()).toEqual([DOE_NAMED, NAVAJO_NAMED].sort());
+      expect(data.every((u) => u.searchParams.get("resultRecordCount") === "1000")).toBe(true);
+      expect(urls.filter((u) => u.searchParams.has("returnCountOnly")).map((u) => u.searchParams.get("where")).sort()).toEqual(["1=1", DOE_WHERE].sort());
+      expect(res.body).toMatchObject({ total: 13, coverageNote: expect.stringMatching(/^Showing all 13 in this wide view; Hazard scores/) });
+      expect(res.body).not.toHaveProperty("truncated");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("warns that scores are not exposure measures and points to mines for other uranium sites", () => {

@@ -28,6 +28,8 @@ describe("power-plants layer", () => {
     expect(layer.coverage).toBe("us");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(250_000);
+    expect(layer.hardMaxAreaKm2).toBe(50_000_000);
+    expect(layer.wide).toEqual({ orderBy: "capacity in MW", limit: 2000 });
     expect(layer.style).toEqual({ geometry: "point", color: "#3A3A3C", unit: "MW", extrude: "v", cluster: true });
     expect(layer.input.parse({})).toEqual({ source: "plants" });
     expect(layer.input.parse({ source: "wind-turbines" })).toEqual({ source: "wind-turbines" });
@@ -195,8 +197,47 @@ describe("power-plants layer", () => {
     expect(r.coverageNote).toBe("No data outside the United States");
   });
 
-  it("rejects an oversized bbox through runLayer", async () => {
-    expect((await runLayer("power-plants", { bbox: [-125, 30, -105, 45], zoom: 4 })).status).toBe(422);
+  it("errors through runLayer only for a box wider than the whole US", async () => {
+    const res = await runLayer("power-plants", { bbox: [-180, -60, 180, 80], zoom: 1 });
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 50000000 km²$/) });
+  });
+
+  it("answers the owner's West Texas box (392,000 km²) wide: largest first, a count, and a note naming the total", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      return url.searchParams.get("returnCountOnly") === "true" ? json({ count: 4512 }) : json({ ...eiaFc, exceededTransferLimit: true });
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("power-plants", { bbox: [-104, 29, -96, 35], zoom: 6, input: { fuel: "wind" } });
+      expect(res.status).toBe(200);
+      const urls = stub.mock.calls.map((c) => new URL(String(c[0])));
+      const data = urls.find((u) => !u.searchParams.has("returnCountOnly"));
+      expect(data?.searchParams.get("orderByFields")).toBe("Total_MW DESC");
+      expect(data?.searchParams.get("resultRecordCount")).toBe("2000");
+      expect(data?.searchParams.get("where")).toBe("PrimSource='wind'");
+      expect(res.body).toMatchObject({
+        total: 4512,
+        truncated: true,
+        coverageNote: `Showing the ${eiaFc.features.length} largest of 4,512 (ranked by capacity in MW); zoom in under 250,000 km² for all`,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("counts wind turbines with a PostgREST aggregate in wide mode", async () => {
+    const stub = vi.fn(async (url: string) => (url.includes("select=count") ? json([{ count: 15980 }]) : json(wind)));
+    const r = await layer.query(
+      { ...ctx(stub, [-104, 29, -96, 35], "power-plants:k"), wide: true, wideStrategy: layer.wide },
+      { source: "wind-turbines" },
+    );
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.total).toBe(15980);
+    const urls = (stub.mock.calls as unknown as Call[]).map((c) => c[0]);
+    expect(urls.some((u) => new URL(u).searchParams.get("limit") === "2001")).toBe(true);
+    expect(r.coverageNote).toBeUndefined();
   });
 
   it("says the plants mirror lags EIA and warns against double counting wind and solar", () => {

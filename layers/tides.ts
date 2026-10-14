@@ -20,13 +20,16 @@
  * Live smoke 2026-10-10 02:20 UTC, San Francisco Bay box [-122.7,37.6,-122.2,38.0]: 38 stations in view, 8
  * queried (8 s cold, rate-limited; cached after); San Francisco (Golden Gate, 9414290) next high 5.27 ft at
  * 06:49 UTC then low 1.22 ft at 12:19, observed 2.50 ft above MLLW at 02:06 UTC. 3 of the 8 had a live gauge.
+ * Wide smoke through runLayer (2026-10-14), US west coast [-125,32,-117,49] (1.27 million km²), 3.8 s: all 433
+ * stations, 8 with tide times (live gauges nearest the centre; Arena Cove next 5.79 ft first), 425 listed without.
+ * In wide mode the per-station calls stay at MAX_STATIONS, so the cost does not grow with the box.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
-import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
+import { OUTSIDE_US_NOTE, WHOLE_US_KM2, outsideUs } from "./_shared/coverage";
 import { haversineKm } from "./_shared/geo";
 import { jsonObjectBody } from "@/lib/fetch/validate";
 import { layerColor } from "@/lib/render/palette";
@@ -36,6 +39,8 @@ const DATAGETTER = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter";
 const APPLICATION = "WildMap";
 
 export const MAX_STATIONS = 8;
+/** Most stations a wide (over 50,000 km²) result lists; only MAX_STATIONS of them carry tide times. */
+export const WIDE_LIMIT = 1000;
 const STATIONS_TTL_SECONDS = 86_400;
 /** Predictions are fixed in advance; 15 minutes keeps "next tide" from going stale. */
 const PREDICTIONS_TTL_SECONDS = 900;
@@ -79,15 +84,47 @@ function inBbox(s: TideStation, [w, so, e, n]: BBox): boolean {
   return s.lng >= w && s.lng <= e && s.lat >= so && s.lat <= n;
 }
 
-/** Stations to query: live gauges first, then nearest the view's centre, capped at MAX_STATIONS. */
-export function pickStations(stations: TideStation[], live: Set<string>, bbox: BBox): TideStation[] {
+/** Stations in the bbox, live gauges first, then nearest the view's centre. */
+function orderedStations(stations: TideStation[], live: Set<string>, bbox: BBox): TideStation[] {
   const centre: [number, number] = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
   return stations
     .filter((s) => inBbox(s, bbox))
     .map((s) => ({ s, live: live.has(s.id), d: haversineKm(centre, [s.lng, s.lat]) }))
     .sort((a, b) => Number(b.live) - Number(a.live) || a.d - b.d)
-    .slice(0, MAX_STATIONS)
     .map((x) => x.s);
+}
+
+/** Stations to query: live gauges first, then nearest the view's centre, capped at MAX_STATIONS. */
+export function pickStations(stations: TideStation[], live: Set<string>, bbox: BBox): TideStation[] {
+  return orderedStations(stations, live, bbox).slice(0, MAX_STATIONS);
+}
+
+/** A wide result's point for a station that was not queried: where it is, no tide times (no t or v). */
+export function stationOnlyFeature(station: TideStation, live: boolean): Feature<Point> {
+  const p: Record<string, string | number> = {
+    name: station.name,
+    stationId: station.id,
+    kind: "station",
+    url: `https://tidesandcurrents.noaa.gov/stationhome.html?id=${station.id}`,
+  };
+  if (live) p.liveGauge = "yes";
+  if (station.state) p.state = station.state;
+  return { type: "Feature", geometry: { type: "Point", coordinates: [station.lng, station.lat] }, properties: p };
+}
+
+/**
+ * A wide result: the queried stations (largest next tide first), then every other station in view as a point
+ * without times (live gauges first, then nearest the centre), cut at `limit`, with the count before the cut.
+ */
+export function wideStations(
+  queried: Feature<Point>[],
+  others: TideStation[],
+  live: Set<string>,
+  limit: number,
+): { features: Feature<Point>[]; total?: number } {
+  const vOf = (f: Feature) => (typeof f.properties?.v === "number" ? f.properties.v : -Infinity);
+  const all = [...queried].sort((a, b) => vOf(b) - vOf(a)).concat(others.map((s) => stationOnlyFeature(s, live.has(s.id))));
+  return all.length > limit ? { features: all.slice(0, limit), total: all.length } : { features: all };
 }
 
 /** "2026-10-10 06:49" in UTC to ms. */
@@ -208,14 +245,17 @@ const tides = defineLayer({
     "nextType and kind ('high' or 'low', which comes next), thenType, thenT and thenV (the one after), upcoming (the next four highs and lows as text, times in UTC), and url (the station page). " +
     "Stations with a live gauge also have observedNow (water level measured within the last few minutes, feet above MLLW) and observedAt; when observedNow differs from the prediction by a foot or more, wind or a storm surge is pushing the water. " +
     "Predictions are astronomical and published in advance; convert UTC to local time when answering. " +
-    "Example questions: 'When is low tide at Half Moon Bay tomorrow?', 'Is the tide coming in at the Golden Gate right now?', 'Good time for tide pooling this weekend?'. " +
-    "Caveats: at most 8 stations are queried per view (live gauges first, then the closest to the centre), so zoom in for a specific beach; " +
+    "Example questions: 'When is low tide at Half Moon Bay tomorrow?', 'Is the tide coming in at the Golden Gate right now?'. " +
+    "Caveats: only 8 stations per view get tide times (live gauges first, then nearest the centre), so zoom in for a specific beach; over 50,000 km² the rest (up to 1,000) are kind 'station' without times; " +
     "subordinate stations are offsets from a nearby reference station and less exact; a station's tide can differ a lot from a bay or river mouth a few miles away. " +
-    "US coasts and territories only; zoom in to under 50,000 km².",
+    "US coasts and territories only.",
   coverage: "us",
   license: "Public domain (NOAA CO-OPS)",
   requiredEnv: [],
   maxAreaKm2: 50_000,
+  // The station list is national and readings stay capped at 8 stations, so any US box answers.
+  hardMaxAreaKm2: WHOLE_US_KM2,
+  wide: { orderBy: "next tide height in feet", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("tides"), unit: "ft", timeField: "t" },
 
@@ -236,11 +276,12 @@ const tides = defineLayer({
     // Without the live list every station is treated as predictions-only.
     const live = new Set(liveStations.ok ? parseStations(liveStations.body).map((s) => s.id) : []);
     const all = parseStations(predStations.body);
-    const inView = all.filter((s) => inBbox(s, ctx.bbox)).length;
+    const ordered = orderedStations(all, live, ctx.bbox);
+    const inView = ordered.length;
     if (inView === 0) {
       return { kind: "geojson", data: EMPTY, citation, coverageNote: "No NOAA tide stations in this view" };
     }
-    const chosen = pickStations(all, live, ctx.bbox);
+    const chosen = ordered.slice(0, MAX_STATIONS);
     const begin = encodeURIComponent(gmtStamp(new Date(now.getTime() - 60_000)));
 
     const results = await Promise.all(
@@ -277,12 +318,24 @@ const tides = defineLayer({
     }
 
     const notes: string[] = [];
-    if (inView > chosen.length) notes.push(`Showing ${chosen.length} of ${inView} tide stations in view; zoom in for the rest`);
+    let total: number | undefined;
+    if (ctx.wide) {
+      // Wide: every station in view (up to the limit); only the queried ones carry tide times.
+      const wide = wideStations(features, ordered.slice(chosen.length), live, ctx.wideStrategy?.limit ?? WIDE_LIMIT);
+      features.splice(0, features.length, ...wide.features);
+      total = wide.total;
+      if (inView > chosen.length) {
+        notes.push(`Tide times for the ${chosen.length} stations nearest the centre (live gauges first); the others are listed without times`);
+      }
+    } else if (inView > chosen.length) {
+      notes.push(`Showing ${chosen.length} of ${inView} tide stations in view; zoom in for the rest`);
+    }
     if (failed > 0) notes.push(`${failed} station${failed === 1 ? "" : "s"} did not answer`);
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features },
       citation,
+      ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },

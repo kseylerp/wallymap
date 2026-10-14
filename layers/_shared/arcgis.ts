@@ -11,6 +11,13 @@ export type ArcgisParams = {
   maxAllowableOffset?: number;
   /** ArcGIS `orderByFields`, e.g. "GIS_ACRES DESC"; matters when the result may be capped. */
   orderByFields?: string;
+  /** ArcGIS `resultRecordCount`; an alias of maxRecords that wins when both are set (wide fetches pass the strategy's limit). */
+  resultRecordCount?: number;
+  /**
+   * Also ask the service how many features match (`returnCountOnly`, in parallel), so a capped result can say "the 2,000
+   * largest of 4,512". The count is `total` on the result; a failed count leaves it out rather than failing the query.
+   */
+  withCount?: boolean;
   cacheSuffix?: string;
   /** Cache lifetime for this request; omit for the fetch wrapper's default. */
   ttlSeconds?: number;
@@ -22,6 +29,8 @@ export type ArcgisResult =
       fc: FeatureCollection;
       /** True when the service capped the result (`exceededTransferLimit`), so features were left out. */
       truncated: boolean;
+      /** With `withCount`: how many features match the where clause in the bbox. */
+      total?: number;
     }
   | { ok: false; error: string; status?: number };
 
@@ -59,15 +68,63 @@ function exceededTransferLimit(json: unknown): boolean {
   return typeof nested === "object" && nested !== null && "exceededTransferLimit" in nested && nested.exceededTransferLimit === true;
 }
 
+/** The search parameters every query of a bbox shares: the where clause and the envelope in WGS84. */
+function bboxSearch(where: string | undefined, bbox: BBox): URLSearchParams {
+  return new URLSearchParams({
+    where: where ?? "1=1",
+    geometry: bbox.join(","),
+    geometryType: "esriGeometryEnvelope",
+    inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects",
+  });
+}
+
+export type ArcgisCountParams = Pick<ArcgisParams, "where" | "bbox" | "cacheSuffix" | "ttlSeconds">;
+
+/**
+ * How many features of an ArcGIS layer match `where` inside `bbox` (`returnCountOnly=true`), or null when the service
+ * fails, times out or answers without a count. Cheap on every FeatureServer and MapServer; used so a wide result can
+ * state the total it ranked from.
+ */
+export async function arcgisCount(ctx: QueryContext, serviceUrl: string, params: ArcgisCountParams): Promise<number | null> {
+  const search = bboxSearch(params.where, params.bbox);
+  search.set("returnCountOnly", "true");
+  search.set("f", "json");
+  const url = `${serviceUrl}/query?${search.toString()}`;
+  const cacheKey =
+    ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:${params.cacheSuffix ?? `arcgis:${bodyHash(url)}`}:count`;
+  try {
+    const res = await ctx.fetch(url, {
+      cacheKey,
+      ttlSeconds: params.ttlSeconds,
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const json: unknown = await res.json();
+    const count = typeof json === "object" && json !== null && "count" in json ? json.count : undefined;
+    return typeof count === "number" && Number.isFinite(count) && count >= 0 ? count : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Queries an ArcGIS FeatureServer/MapServer layer for features intersecting a bbox,
  * returning GeoJSON in WGS84. `serviceUrl` is the layer URL without `/query`.
+ * With `withCount`, the matching count is fetched alongside and returned as `total`.
  */
 export async function arcgisQuery(
   ctx: QueryContext,
   serviceUrl: string,
   params: ArcgisParams,
 ): Promise<ArcgisResult> {
+  if (params.withCount) {
+    const [result, total] = await Promise.all([
+      arcgisQuery(ctx, serviceUrl, { ...params, withCount: false }),
+      arcgisCount(ctx, serviceUrl, params),
+    ]);
+    return result.ok && total !== null ? { ...result, total } : result;
+  }
   const search = new URLSearchParams({
     where: params.where ?? "1=1",
     outFields: params.outFields.join(","),
@@ -77,7 +134,7 @@ export async function arcgisQuery(
     outSR: "4326",
     spatialRel: "esriSpatialRelIntersects",
     f: "geojson",
-    resultRecordCount: String(params.maxRecords ?? DEFAULT_MAX_RECORDS),
+    resultRecordCount: String(params.resultRecordCount ?? params.maxRecords ?? DEFAULT_MAX_RECORDS),
   });
   if (params.maxAllowableOffset !== undefined) {
     search.set("maxAllowableOffset", String(params.maxAllowableOffset));

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { buildMtbQuery, imbaScale, mtbScale, normalizeMtb } from "./mtb-trails";
+import { hardMaxAreaKm2 } from "./types";
+import layer, { WIDE_LIMIT, buildMtbQuery, imbaScale, mtbScale, normalizeMtb } from "./mtb-trails";
 import fixture from "./__fixtures__/mtb-trails.truckee.json";
 
 const TRUCKEE: [number, number, number, number] = [-120.25, 39.28, -120.1, 39.38];
@@ -124,6 +125,8 @@ describe("mtb-trails layer", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toContain("ODbL");
     expect(layer.maxAreaKm2).toBe(2500);
+    expect(layer.wide).toEqual({ mode: "named", orderBy: "length in km", limit: 1000 });
+    expect(hardMaxAreaKm2(layer)).toBe(10_000);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toContain("OVERPASS_URL");
     expect(layer.style.geometry).toBe("line");
@@ -184,11 +187,88 @@ describe("mtb-trails layer", () => {
     expect(stub).toHaveBeenCalledTimes(2);
   });
 
-  it("returns 422 zoom_in from runLayer for a bbox over 2,500 km2 and 400 for a bad input", async () => {
-    const big = await runLayer("mtb-trails", { bbox: [-121, 39, -120, 40] });
+  it("returns 422 zoom_in from runLayer for a bbox over the 10,000 km2 hard cap and 400 for a bad input", async () => {
+    const big = await runLayer("mtb-trails", { bbox: [-122, 39, -120, 40] });
     expect(big.status).toBe(422);
     expect(big.body).toMatchObject({ hint: "zoom_in" });
     const bad = await runLayer("mtb-trails", { bbox: TRUCKEE, input: { maxScale: 9 } });
     expect(bad.status).toBe(400);
+  });
+});
+
+// Central Utah, about 9,700 km²: over the 2,500 km² soft cap, under the 10,000 km² hard cap.
+const UTAH: [number, number, number, number] = [-112.5, 38, -111.5, 39];
+
+describe("mtb-trails wide mode", () => {
+  const count = (total: number) => ({ type: "count", id: 0, tags: { total: String(total) } });
+  const bounds = (lat: number, size: number) => ({ minlat: lat, minlon: -112, maxlat: lat + size, maxlon: -112 + size });
+  const scan = {
+    elements: [
+      count(72),
+      count(3),
+      { type: "way", id: 11, bounds: bounds(38.5, 0.01) },
+      { type: "way", id: 12, bounds: bounds(38.5, 0.1) },
+      { type: "relation", id: 21, bounds: bounds(38.2, 0.6) },
+    ],
+  };
+  const line = (from: number, to: number) => [
+    { lat: from, lon: -112 },
+    { lat: to, lon: -112 },
+  ];
+  const geometry = {
+    elements: [
+      { type: "way", id: 11, tags: { name: "Short", "mtb:scale": "3" }, geometry: line(38.5, 38.51) },
+      { type: "way", id: 12, tags: { name: "Long", "mtb:scale:imba": "2" }, geometry: line(38.5, 38.6) },
+      { type: "relation", id: 21, tags: { route: "mtb", name: "Big Loop" }, members: [{ type: "way", ref: 31, role: "" }] },
+      { type: "way", id: 31, geometry: line(38.2, 38.8) },
+    ],
+  };
+  const respond = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) =>
+    new Response(JSON.stringify(decodeURIComponent(String(init?.body)).includes("out ids bb") ? scan : geometry), { status: 200 }),
+  );
+
+  it("answers through runLayer with the longest named trails, every rated way as total and run.ts's note", async () => {
+    respond.mockClear();
+    vi.stubGlobal("fetch", respond);
+    try {
+      const res = await runLayer("mtb-trails", { bbox: UTAH, zoom: 8 });
+      expect(res.status).toBe(200);
+      const bodies = respond.mock.calls.map((c) => decodeURIComponent(String((c[1] as RequestInit).body)));
+      expect(bodies[0]).toContain('way["mtb:scale"](38,-112.5,39,-111.5);');
+      expect(bodies[0]).toContain('(way.all["name"];rel.all["name"];)->.named;.named out count;.named out ids bb 5000;');
+      expect(bodies[1]).toContain("way(id:12,11);out tags geom;rel(id:21)->.r;");
+      if (!("kind" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
+      expect(res.body.data.features.map((f) => f.properties?.name)).toEqual(["Big Loop", "Long", "Short"]);
+      expect(res.body.data.features.map((f) => f.properties?.kind)).toEqual(["route", "imba", "mtb"]);
+      expect(res.body).toMatchObject({
+        total: 72,
+        truncated: true,
+        coverageNote: "Showing the 3 named of 72 (ranked by length in km); zoom in under 2,500 km² for all",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps the limit, applies maxScale and says what it hid", async () => {
+    respond.mockClear();
+    const r = await layer.query(
+      { bbox: UTAH, zoom: 8, env: {}, fetch: respond as unknown as CachedFetch, wide: true, wideStrategy: { mode: "named", limit: 2 } },
+      { includeRoutes: true, maxScale: 2 },
+    );
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(WIDE_LIMIT).toBe(1000);
+    // The limit of 2 picks the relation and the long way; the short one is never fetched.
+    expect(decodeURIComponent(String((respond.mock.calls[1][1] as RequestInit).body))).toContain("way(id:12);");
+    expect(r.data.features.map((f) => f.properties?.name)).toEqual(["Big Loop", "Long"]);
+    expect(r.total).toBe(72);
+    expect(r.coverageNote).toBeUndefined();
+
+    const scaled = await layer.query(
+      { bbox: UTAH, zoom: 8, env: {}, fetch: respond as unknown as CachedFetch, wide: true, wideStrategy: layer.wide },
+      { includeRoutes: false, maxScale: 2 },
+    );
+    if (!("kind" in scaled) || scaled.kind !== "geojson") throw new Error("expected geojson");
+    expect(scaled.coverageNote).toBe("maxScale hid 1 of the named trails");
   });
 });

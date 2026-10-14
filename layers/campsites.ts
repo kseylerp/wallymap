@@ -5,12 +5,14 @@
  * Fixture: layers/__fixtures__/campsites.tahoe.json (Lake Tahoe west shore, recorded 2026-10-09 with
  * `out tags geom`). Tags read: name, backcountry, tents, caravans, fee (yes/no), capacity (integer), wikidata, wikipedia (passed through for the popularity layer).
  * Ways are reduced to the area centroid of their geometry (vertex average for open lines).
+ * Wide (over 25,000 km², up to 1,500,000 km²): camp sites only, through the shared namedOverpassQuery (`out tags center`,
+ * at most 2,000 named sites after an `out count` of every camp site and of the named ones); parking is left out at that scale.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
-import { overpassQuery } from "./_shared/overpass";
+import { namedOverpassQuery, overpassCounts, overpassQuery } from "./_shared/overpass";
 import { layerColor } from "@/lib/render/palette";
 
 const inputSchema = z.object({
@@ -42,6 +44,14 @@ const waySchema = z.object({
   tags: tagsSchema.optional(),
 });
 
+/** A way or relation from `out tags center` (the wide query): Overpass's own centre instead of the geometry. */
+const centeredSchema = z.object({
+  type: z.enum(["way", "relation"]),
+  id: z.number(),
+  center: z.object({ lat: z.number(), lon: z.number() }),
+  tags: tagsSchema.optional(),
+});
+
 const responseSchema = z.object({ elements: z.array(z.unknown()) });
 
 /** Overpass QL for campsites (and optionally parking with a capacity). Overpass bbox order is (south,west,north,east). */
@@ -57,6 +67,12 @@ export function buildCampsitesQuery(
     parts.push(`node["amenity"="parking"]["capacity"]${area};`, `way["amenity"="parking"]["capacity"]${area};`);
   }
   return `[out:json][timeout:25];(${parts.join("")});out tags geom;`;
+}
+
+/** Overpass QL for a wide box: named camp sites only (no parking), at most `limit`, after counts of all and of the named. */
+export function buildWideCampsitesQuery(bbox: BBox, input: Pick<CampsitesInput, "backcountryOnly">, limit: number): string {
+  const camp = input.backcountryOnly ? '["tourism"="camp_site"]["backcountry"="yes"]' : '["tourism"="camp_site"]';
+  return namedOverpassQuery({ selectors: [`nwr${camp}`], bbox, geometry: "point", limit });
 }
 
 /**
@@ -106,7 +122,10 @@ function wholeNumber(value: string | undefined): number | undefined {
   return Number(value);
 }
 
-/** Converts an Overpass `out tags geom` response into point features, skipping anything without a usable position. */
+/**
+ * Converts an Overpass `out tags geom` (or, for the wide query, `out tags center`) response into point features,
+ * skipping anything without a usable position.
+ */
 export function normalizeCampsites(json: unknown): FeatureCollection<Point> {
   const features: Feature<Point>[] = [];
   const parsed = responseSchema.safeParse(json);
@@ -124,10 +143,18 @@ export function normalizeCampsites(json: unknown): FeatureCollection<Point> {
       tags = node.data.tags ?? {};
     } else {
       const way = waySchema.safeParse(raw);
-      if (!way.success) continue;
-      center = wayCentroid(way.data.geometry);
-      osmId = `way/${way.data.id}`;
-      tags = way.data.tags ?? {};
+      const centered = way.success ? null : centeredSchema.safeParse(raw);
+      if (way.success) {
+        center = wayCentroid(way.data.geometry);
+        osmId = `way/${way.data.id}`;
+        tags = way.data.tags ?? {};
+      } else if (centered?.success) {
+        center = [centered.data.center.lon, centered.data.center.lat];
+        osmId = `${centered.data.type}/${centered.data.id}`;
+        tags = centered.data.tags ?? {};
+      } else {
+        continue;
+      }
     }
     if (center === null) continue;
 
@@ -177,22 +204,38 @@ const campsites = defineLayer({
     "Use it to find places to camp or where to leave a car near a trail. " +
     "Set backcountryOnly to true to keep only camp sites tagged as backcountry (it never hides parking); set includeParking to false to get camp sites alone. " +
     "Caveats: OpenStreetMap is volunteer-mapped, so it misses many sites and is not a reservation or availability source; fees, seasons and rules may be out of date or missing; " +
-    "free dispersed camping spots are mostly not mapped here (see forest-roads for the drivable Forest Service roads), and parking is any lot with a capacity, not only trailhead lots. " +
-    "Zoom in to a region under 25,000 km² (about a 160 km square) first. At most 5,000 points are returned (all camp sites first, then the largest parking lots) and the result says so when it trims.",
+    "free dispersed camping spots are mostly not mapped here (see forest-roads for the drivable Forest Service roads). " +
+    "Over 25,000 km² (about a 160 km square) it returns up to 2,000 named camp sites (no parking) and how many there are in all. At most 5,000 points are returned (all camp sites first, then the largest parking lots) and the result says so when it trims.",
   coverage: "global",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 25_000,
+  // A named-only Overpass listing with counts stays bounded over a whole US state or a small country.
+  hardMaxAreaKm2: 1_500_000,
+  wide: { mode: "named", limit: 2000 },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("campsites") },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > campsites.maxAreaKm2) {
+    const citation = {
+      source: "OpenStreetMap contributors (ODbL)",
+      url: "https://www.openstreetmap.org/copyright",
+      retrieved: new Date().toISOString(),
+    };
+
+    // Wide: named camp sites only, bounded by the strategy's limit; the first count (every camp site) is the total.
+    if (ctx.wide) {
+      const limit = ctx.wideStrategy?.limit ?? 2000;
+      const wide = await overpassQuery(ctx, buildWideCampsitesQuery(ctx.bbox, input, limit), { cacheSuffix: "campsites:named" });
+      if (!wide.ok) return { error: wide.error, hint: "upstream" };
+      const [all] = overpassCounts(wide.json);
       return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${campsites.maxAreaKm2} km²`,
-        hint: "zoom_in",
+        kind: "geojson",
+        data: normalizeCampsites(wide.json),
+        citation,
+        ...(all !== undefined && { total: all }),
+        ...(input.includeParking ? { coverageNote: "Parking lots are left out at this scale" } : {}),
       };
     }
 
@@ -223,11 +266,7 @@ const campsites = defineLayer({
             coverageNote: `Showing ${MAX_POINTS.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} sites (all camp sites, then the largest parking lots); zoom in for the rest`,
           }
         : {}),
-      citation: {
-        source: "OpenStreetMap contributors (ODbL)",
-        url: "https://www.openstreetmap.org/copyright",
-        retrieved: new Date().toISOString(),
-      },
+      citation,
     };
   },
 });

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { earthquakesUrl, normalizeEarthquakes } from "./earthquakes";
+import layer, { earthquakesCountUrl, earthquakesUrl, normalizeEarthquakes } from "./earthquakes";
 import fixture from "./__fixtures__/earthquakes.tahoe.json";
 
 /** The fixture is a real USGS response for this box (365 days to 2026-10-09, M2.5+, biggest 12 events). */
@@ -42,6 +42,15 @@ describe("earthquakesUrl", () => {
     expect(url.searchParams.get("minmagnitude")).toBe("2.5");
     expect(url.searchParams.get("orderby")).toBe("magnitude");
     expect(url.searchParams.get("limit")).toBe("5000");
+  });
+
+  it("builds a count URL for the same search without order or limit", () => {
+    const url = new URL(earthquakesCountUrl(BOX, 365, 2.5, NOW));
+    expect(url.origin + url.pathname).toBe("https://earthquake.usgs.gov/fdsnws/event/1/count");
+    expect(url.searchParams.get("minlongitude")).toBe("-121");
+    expect(url.searchParams.get("starttime")).toBe("2025-10-09");
+    expect(url.searchParams.has("limit")).toBe(false);
+    expect(new URL(earthquakesUrl(BOX, 365, 2.5, NOW, 2000)).searchParams.get("limit")).toBe("2000");
   });
 
   it("goes back the requested number of days", () => {
@@ -93,6 +102,9 @@ describe("earthquakes layer", () => {
     expect(layer.license).toBe("Public domain (USGS)");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.input.parse({})).toEqual({ days: 365, minMagnitude: 2.5 });
+    expect(layer.maxAreaKm2).toBe(5_000_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "magnitude", rank: "strongest", limit: 2000 });
     expect(layer.style).toMatchObject({ geometry: "point", unit: "M", extrude: "v", heat: true });
   });
 
@@ -155,8 +167,32 @@ describe("earthquakes layer", () => {
     ).toMatchObject({ error: "USGS earthquake service returned no response", hint: "upstream" });
   });
 
-  it("rejects a view over the area cap through runLayer", async () => {
+  it("rejects a view over the hard cap (4 x 5,000,000 km²) through runLayer", async () => {
     const r = await runLayer("earthquakes", { bbox: [-170, -60, 170, 70] });
     expect(r.status).toBe(422);
+    expect(r.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 20000000 km²$/) });
+  });
+
+  it("answers an Alaska-wide box wide: the 2,000 strongest, a count, and a note naming the total", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes("/count?") ? json({ count: 5983, maxAllowed: 20000 }) : json(fixture),
+    );
+    vi.stubGlobal("fetch", stub);
+    try {
+      const r = await runLayer("earthquakes", { bbox: [-170, 45, -130, 72], zoom: 3 });
+      expect(r.status).toBe(200);
+      const urls = stub.mock.calls.map((c) => new URL(String(c[0])));
+      const query = urls.find((u) => u.pathname.endsWith("/query"));
+      expect(query?.searchParams.get("orderby")).toBe("magnitude");
+      expect(query?.searchParams.get("limit")).toBe("2000");
+      expect(urls.some((u) => u.pathname.endsWith("/count"))).toBe(true);
+      expect(r.body).toMatchObject({
+        total: 5983,
+        truncated: true,
+        coverageNote: "Showing the 12 strongest of 5,983 (ranked by magnitude); zoom in under 5,000,000 km² for all",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

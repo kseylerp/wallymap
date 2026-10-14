@@ -16,10 +16,12 @@
  * -122,43,-119,46 returned 3 species in 0.8 s (1.0 MB, mostly the northern spotted owl); the proposed layer returned
  * Quitobaquito tryonia for -113.1,31.9,-112.9,32.0. Units are simplified by an offset that grows with the view
  * (see simplifyOffset) because one unit can be a whole river system.
+ * Smoke wide (2026-10-14): California -124,32,-114,42 (about 1 million km²) returned 127 units of 148 (final plus proposed) in
+ * 1.1 s (392 KB); the 21 missing are too small to survive the 0.05 degree simplification, so the note sends the reader closer.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -48,10 +50,13 @@ function str(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
 }
 
-/** Display simplification in degrees: finer when zoomed in, coarser over a wide view (one unit can be a whole river system). */
-export function simplifyOffset(bbox: BBox): number {
+/**
+ * Display simplification in degrees: finer when zoomed in, coarser over a wide view (one unit can be a whole river system).
+ * A wide box (over the soft cap) may go coarser still, up to 0.05 degrees, to keep the payload small.
+ */
+export function simplifyOffset(bbox: BBox, wide = false): number {
   const span = Math.max(bbox[2] - bbox[0], bbox[3] - bbox[1]);
-  return Math.min(0.03, Math.max(0.001, span / 150));
+  return Math.min(wide ? 0.05 : 0.03, Math.max(0.001, span / 150));
 }
 
 /** SQL string literal body: quotes doubled, LIKE wildcards stripped so a name cannot widen the match. */
@@ -110,11 +115,12 @@ const criticalHabitat = defineLayer({
     "Caveats: critical habitat only binds federal actions and permits, so it is not a closure and does not by itself mean entry is restricted. " +
     "Many listed species have no critical habitat designated, so an empty map does not mean no protected species are present; the species layer shows sightings. " +
     "Boundaries are simplified for display and some units are drawn coarsely; do not use them for legal or permit decisions. " +
-    "United States only; elsewhere it returns nothing. Zoom in to a region under 300,000 km² (about a 550 km square) first.",
+    "United States only; elsewhere it returns nothing. Over 300,000 km² (about a 550 km square) it keeps the 1,000 largest units and gives the total.",
   coverage: "us",
   license: "Public domain (US Fish and Wildlife Service)",
   requiredEnv: [],
   maxAreaKm2: 300_000,
+  wide: { orderBy: "area", limit: MAX_RECORDS },
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("critical-habitat"), fillOpacity: 0.25 },
 
@@ -129,21 +135,16 @@ const criticalHabitat = defineLayer({
       return { kind: "geojson", data: EMPTY, citation, coverageNote: OUTSIDE_US_NOTE };
     }
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > criticalHabitat.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${criticalHabitat.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
     const where = speciesWhere(input.species);
+    // Wide (over 300,000 km²): largest units first, capped at the strategy's limit, coarser lines, and a count per layer.
+    const wide = ctx.wide === true;
     const common = {
       where,
       outFields: FIELDS,
       bbox: ctx.bbox,
-      maxRecords: MAX_RECORDS,
-      maxAllowableOffset: simplifyOffset(ctx.bbox),
+      resultRecordCount: Math.min(MAX_RECORDS, (wide ? ctx.wideStrategy?.limit : undefined) ?? MAX_RECORDS),
+      maxAllowableOffset: simplifyOffset(ctx.bbox, wide),
+      ...(wide && { orderByFields: "Shape__Area DESC", withCount: true }),
       ttlSeconds: TTL_SECONDS,
     };
     const [finalRes, proposedRes] = await Promise.all([
@@ -164,12 +165,22 @@ const criticalHabitat = defineLayer({
         notes.push("Proposed critical habitat could not be loaded; only final designations are shown");
       }
     }
-    if (truncated) notes.push(TRUNCATED_NOTE);
+    if (truncated && !wide) notes.push(TRUNCATED_NOTE);
+    // The total adds the proposed count only when the proposed layer was asked for and answered one.
+    const total =
+      finalRes.total === undefined
+        ? undefined
+        : proposedRes === null
+          ? finalRes.total
+          : proposedRes.ok && proposedRes.total !== undefined
+            ? finalRes.total + proposedRes.total
+            : undefined;
 
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features },
       citation,
+      ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },

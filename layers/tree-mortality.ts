@@ -23,10 +23,12 @@
  * (2021 to 2025) returned 939 Forest Service polygons in 0.4 s (426 KB); years 2014 to 2019 returned 1,000 California polygons (capped,
  * the note says so) in 0.9 s (391 KB); years 2018 to 2023 returned 728 with the 2020 and mixed-unit notes; Colorado front range
  * -106,39,-105,40 default returned 1,000 (capped) in 1.4 s (365 KB).
+ * Smoke wide (2026-10-14, through runLayer): northern Sierra -121.5,38.5,-119.5,40 (about 29,000 km²) default returned the 2,000 worst of
+ * 6,551 Forest Service polygons in 1.0 s (796 KB); years 2015 to 2022 returned 2,000 of 17,571 (1,000 per source) in 14.9 s (827 KB).
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, bboxesDisjoint, outsideUs } from "./_shared/coverage";
@@ -55,6 +57,14 @@ const MAX_PER_YEAR = 300;
 const MAX_PER_YEAR_SPAN = 10;
 /** Display simplification in degrees (about 200 m). */
 const SIMPLIFY_DEG = 0.002;
+/** Most polygons in a wide result, shared between the requests (one per survey year, or one per source for long ranges). */
+const WIDE_LIMIT = 2000;
+
+/** Simplification for a view: SIMPLIFY_DEG, or for a wide box about a 500th of its width, up to 0.01 degrees. */
+export function offsetFor(bbox: BBox, wide = false): number {
+  if (!wide) return SIMPLIFY_DEG;
+  return Math.min(0.01, Math.max(SIMPLIFY_DEG, Math.round(((bbox[2] - bbox[0]) / 500) * 10_000) / 10_000));
+}
 const TTL_SECONDS = 7 * 86_400;
 
 const inputSchema = z.object({
@@ -119,6 +129,8 @@ type Source = {
   fields: string[];
   where: (span: [number, number]) => string;
   order: string;
+  /** Order in wide mode: by the field behind v, so the kept polygons are the worst die-off. */
+  wideOrder: string;
   key: string;
   normalize: (fc: FeatureCollection) => Feature<Geometry>[];
 };
@@ -204,11 +216,12 @@ const treeMortality = defineLayer({
     "Use it for 'where are the beetle-killed trees', 'dead trees', 'how bad was the die-off in the Sierra in 2016', 'drought mortality' or 'show the pine beetle outbreak over time'. " +
     "Caveats: 2020 was never flown, so there is no data for it and the map goes blank for that year. Surveys are sketched by eye from small planes 1,000 to 2,000 feet up, so polygons are rough, miss trees hidden behind ridges, and show where trees died in that year, not how many dead trees still stand. " +
     "Polygons are not every dead tree, and fire-killed trees are mostly not included (see fire-perimeters and burn-severity). Each survey year is fetched separately, at most 300 polygons per year (the biggest first), so a busy year does not crowd out the others; a range longer than ten years is fetched at once, at most 1,000 polygons per source. The result says when it trims. " +
-    "Zoom in to a region under 20,000 km² (about a 140 km square) first.",
+    "Over 20,000 km² (a 140 km square) it keeps the 2,000 worst by v.",
   coverage: "us",
   license: "Public domain (US Forest Service; California Department of Fish and Wildlife copy)",
   requiredEnv: [],
   maxAreaKm2: 20_000,
+  wide: { orderBy: "trees killed, or percent dead from 2021", limit: WIDE_LIMIT, rank: "worst" },
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("tree-mortality"), fillOpacity: 0.4 },
 
@@ -221,14 +234,6 @@ const treeMortality = defineLayer({
 
     if (outsideUs(ctx.bbox)) {
       return { kind: "geojson", data: EMPTY, citation, coverageNote: OUTSIDE_US_NOTE };
-    }
-
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > treeMortality.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${treeMortality.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
     }
 
     const plan = planYears(input.years);
@@ -247,6 +252,7 @@ const treeMortality = defineLayer({
         fields: CDFW_FIELDS,
         where: cdfwWhere,
         order: "NO_TREES_TOTAL DESC",
+        wideOrder: "NO_TREES_TOTAL DESC",
         key: "cdfw",
         normalize: normalizeCdfw,
       });
@@ -259,6 +265,8 @@ const treeMortality = defineLayer({
         fields: IDS_FIELDS,
         where: idsWhere,
         order: "acres DESC",
+        // percent_mid is a class midpoint with few values, so acres breaks the ties.
+        wideOrder: "percent_mid DESC, acres DESC",
         key: "ids",
         normalize: normalizeIds,
       });
@@ -268,11 +276,15 @@ const treeMortality = defineLayer({
     }
 
     // One request per survey year, so a busy year cannot crowd out the others; a long range falls back to one capped request.
+    // Wide (over 20,000 km²): one request per source over the whole range, ordered by the field behind v and sharing the
+    // strategy's limit, each with a count. Per-year requests would double with the counts and wait in the layer's rate limit.
+    const wide = ctx.wide === true;
+    const wideCap = wide ? Math.floor((ctx.wideStrategy?.limit ?? WIDE_LIMIT) / sources.length) : undefined;
     const jobs = sources.flatMap((s) => {
       const years = surveyYears(s.years);
-      const perYear = years.length <= MAX_PER_YEAR_SPAN;
+      const perYear = !wide && years.length <= MAX_PER_YEAR_SPAN;
       const spans: [number, number][] = perYear ? years.map((y) => [y, y]) : [s.years];
-      const cap = perYear ? MAX_PER_YEAR : MAX_RECORDS;
+      const cap = wideCap ?? (perYear ? MAX_PER_YEAR : MAX_RECORDS);
       return spans.map(async (span) => ({
         source: s,
         span,
@@ -282,8 +294,9 @@ const treeMortality = defineLayer({
           outFields: s.fields,
           bbox: ctx.bbox,
           maxRecords: cap,
-          maxAllowableOffset: SIMPLIFY_DEG,
-          orderByFields: s.order,
+          maxAllowableOffset: offsetFor(ctx.bbox, wide),
+          orderByFields: wide ? s.wideOrder : s.order,
+          withCount: wide,
           ttlSeconds: TTL_SECONDS,
           cacheSuffix: `${s.key}-${span[0]}-${span[1]}`,
         }),
@@ -303,7 +316,7 @@ const treeMortality = defineLayer({
       const failed = mine.filter((r) => !r.res.ok);
       if (failed.length > 0) notes.push(`The ${s.label} could not be loaded for ${spanList(failed.map((r) => r.span))}`);
       const capped = mine.filter((r) => r.res.ok && r.res.truncated);
-      if (capped.length > 0) {
+      if (capped.length > 0 && !wide) {
         notes.push(
           `Showing the ${capped[0].cap.toLocaleString("en-US")} biggest ${s.label} polygons for ${spanList(capped.map((r) => r.span))}; zoom in or narrow the years for the rest`,
         );
@@ -313,10 +326,15 @@ const treeMortality = defineLayer({
       notes.push("v is trees killed up to 2019 and percent of trees from 2021, so do not compare across them");
     }
 
+    // The total adds every request's count, so it only stands when each one answered with a count.
+    const counts = results.map((r) => (r.res.ok ? r.res.total : undefined));
+    const total = wide && counts.every((c) => c !== undefined) ? counts.reduce((a: number, c) => a + (c ?? 0), 0) : undefined;
+
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features },
       citation,
+      ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },

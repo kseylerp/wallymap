@@ -19,12 +19,15 @@
  * Smoke check 2026-10-10 (live, through runLayer): Moab box -109.8,38.4,-109.4,38.7 returned 1,346 active claims in 0.9 s (WES-1, a 20.66 acre
  *   lode claim, case UT105832859); with status both it hit the 2,000 closed-claim cap (3,346 claims in 0.5 s); a Los Angeles forest box
  *   -118.5,34,-118,34.4 returned 1 active claim (AN 30). One cold call to the service took 17 s once, so expect the occasional slow answer.
+ * Wide (over 2,500 km², up to 10,000): named claims only (CSE_NAME > ' '), 2,000 split between the statuses asked, plus a count of every
+ *   claim in the box. Smoke 2026-10-14 could not run: the whole gis.blm.gov/nlsdb server answered 404 (the BLM recreation services had
+ *   moved to gis.blm.gov/natl the same day), so the wide path is checked by tests only.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
-import { arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
+import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
 
@@ -34,6 +37,10 @@ export type Status = keyof typeof LAYERS;
 const FIELDS = ["CSE_NAME", "CSE_NR", "CSE_DISP", "BLM_PROD", "RCRD_ACRS", "QLTY", "MC_PATENTED"];
 /** Claim records change as filings arrive, but a day is fresh enough. */
 const TTL_SECONDS = 86_400;
+/** Most claims per status in a view; also the wide limit. */
+const MAX_CLAIMS = 2000;
+/** Wide views keep named claims only ("sorts after a space" also skips blank names, and avoids IS NOT NULL ... AND). */
+export const NAMED = "CSE_NAME > ' '";
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
@@ -81,11 +88,12 @@ const miningClaims = defineLayer({
   id: "mining-claims",
   title: "Mining claims",
   description:
-    "BLM mining claims on US public land (mostly the West): staked claims for minerals that can limit other land use. Each polygon has name, caseNumber, claimType (lode, placer, mill site, tunnel site), disposition, kind ('active' or 'closed'), v and acres, and locationQuality. status picks active (default), closed (lapsed, far more numerous) or both. Claims are drawn from legal descriptions on the survey grid, so a claim shows as the section or quarter-section it names, not its corners, and many share one square; do not use it to decide where to stake or camp. It does not say which mineral. At most 2,000 per status. Zoom in to under 2,500 km².",
+    "BLM mining claims on US public land (mostly the West): staked claims for minerals that can limit other land use. Each polygon has name, caseNumber, claimType (lode, placer, mill site, tunnel site), disposition, kind ('active' or 'closed'), v and acres, and locationQuality. status picks active (default), closed (lapsed, far more) or both. Claims are drawn from legal descriptions on the survey grid, so a claim shows as the section or quarter-section named, not its corners, and many share one square; do not use it to decide where to stake or camp. No mineral is named. At most 2,000 per status; over 2,500 km², 2,000 named claims and the total.",
   coverage: "us",
   license: "Public domain (US Bureau of Land Management, MLRS)",
   requiredEnv: [],
   maxAreaKm2: 2_500,
+  wide: { mode: "named", limit: MAX_CLAIMS },
   input: z.object({
     status: z
       .enum(["active", "closed", "both"])
@@ -105,26 +113,33 @@ const miningClaims = defineLayer({
       return { kind: "geojson", data: EMPTY, citation, coverageNote: OUTSIDE_US_NOTE };
     }
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > miningClaims.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${miningClaims.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
     const statuses: Status[] = input.status === "both" ? ["active", "closed"] : [input.status];
-    const results = await Promise.all(
-      statuses.map((status) =>
-        arcgisQuery(ctx, `${SERVICE_URL}/${LAYERS[status]}`, {
-          outFields: FIELDS,
-          bbox: ctx.bbox,
-          maxAllowableOffset: 0.0001,
-          ttlSeconds: TTL_SECONDS,
-          cacheSuffix: `mining-claims:${status}`,
-        }),
+    // Wide (over 2,500 km²): named claims only, the limit shared between the statuses asked, and a count of every claim
+    // in the box for the note.
+    const wide = ctx.wide === true && ctx.wideStrategy !== undefined;
+    const perStatus = wide ? Math.floor((ctx.wideStrategy?.limit ?? MAX_CLAIMS) / statuses.length) : MAX_CLAIMS;
+    const [results, counts] = await Promise.all([
+      Promise.all(
+        statuses.map((status) =>
+          arcgisQuery(ctx, `${SERVICE_URL}/${LAYERS[status]}`, {
+            outFields: FIELDS,
+            where: wide ? NAMED : undefined,
+            bbox: ctx.bbox,
+            resultRecordCount: perStatus,
+            maxAllowableOffset: 0.0001,
+            ttlSeconds: TTL_SECONDS,
+            cacheSuffix: `mining-claims:${status}`,
+          }),
+        ),
       ),
-    );
+      wide
+        ? Promise.all(
+            statuses.map((status) =>
+              arcgisCount(ctx, `${SERVICE_URL}/${LAYERS[status]}`, { bbox: ctx.bbox, ttlSeconds: TTL_SECONDS, cacheSuffix: `mining-claims:${status}` }),
+            ),
+          )
+        : null,
+    ]);
 
     const features: Feature<Geometry>[] = [];
     const notes: string[] = [];
@@ -138,7 +153,7 @@ const miningClaims = defineLayer({
       // The service has no filing date and sorting it by case number takes 14 s, so the cap keeps an arbitrary 2,000; within
       // a status the newest case numbers (a stand-in for filing order) come first.
       features.push(...normalizeClaims(res.fc, status).sort(byCaseNumberDesc));
-      if (res.truncated) notes.push(`Showing an arbitrary 2,000 ${status} claims, not the newest; zoom in for the rest`);
+      if (res.truncated && !wide) notes.push(`Showing an arbitrary 2,000 ${status} claims, not the newest; zoom in for the rest`);
     });
     if (failed.length === statuses.length) {
       return { error: `Mining claims unavailable: ${failed.join("; ")}`, hint: "upstream" };
@@ -147,10 +162,14 @@ const miningClaims = defineLayer({
     if (features.length === 0 && failed.length === 0) {
       notes.push(input.status === "both" ? "No mining claims in this area" : `No ${input.status} mining claims in this area`);
     }
+    // The total counts every claim in the box, so it is only given when every status asked answered and counted.
+    const total =
+      counts !== null && failed.length === 0 && counts.every((c) => c !== null) ? counts.reduce<number>((sum, c) => sum + (c ?? 0), 0) : undefined;
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features },
       citation,
+      ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },

@@ -17,12 +17,22 @@
  *   0.05 degree squares and only the 8 nearest the centre are asked for.
  *
  * Both APIs limit how big one request may be, so the bbox is cut into squares (Commons ~15 km, Mapillary 0.05 degrees).
+ *
+ * Wide mode (over 2,500 km², up to the default hard cap of 10,000 km²): geosearch has no popularity order and Mapillary only
+ * answers tiny squares, so the layer asks Wikidata (https://query.wikidata.org/sparql) for the items in the box that have a
+ * Commons photo (P18), ranked by how many Wikipedia language editions cover them (wikibase:sitelinks), the best-known 500,
+ * box first (optimizer hint). Each point is that place's photo. This is a different picture from photo density, which the
+ * note says; Mapillary is left out.
+ * Smoke wide 2026-10-14 (through runLayer): Yosemite -120,37.5,-119.3,38.05 (about 3,700 km²) returned all 263 places in 5.4 s, Yosemite
+ *   National Park first. A Paris box 1.8,48.4,3.2,49.2 (about 9,100 km², near the cap and as dense as Wikidata gets) took 6.5 s, 16.7 s
+ *   and twice over 25 s (a timeout) on different tries that day, so dense capital-city boxes near the cap can fail on a cold cache.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
+import { rankedSparql, wikimediaFetch } from "./_shared/wikimedia";
 import { layerColor } from "@/lib/render/palette";
 
 const SOURCES = ["commons", "mapillary"] as const;
@@ -48,6 +58,11 @@ const MAPILLARY_CAPPED_AT = 1900;
 export const MAPILLARY_CELL_DEG = 0.05;
 export const MAPILLARY_MAX_CELLS = 8;
 const MAPILLARY_TTL_SECONDS = 86_400;
+
+const SPARQL_ENDPOINT = "https://query.wikidata.org/sparql";
+/** Most places a wide result carries, the best-known. */
+const WIDE_LIMIT = 500;
+const WIDE_NOTE = "over 2,500 km² this shows the best-known places that have a Commons photo, not where photos were taken";
 
 /** Requests in flight at once; the layer's rate limiter queues anything beyond its burst. */
 const CONCURRENCY = 4;
@@ -141,6 +156,82 @@ const mapillaryPageSchema = z.object({
 });
 
 type PhotoFeature = Feature<Point>;
+
+/** Wide-mode SPARQL: items in the box with a Commons photo, the `limit` covered by the most Wikipedia language editions. */
+export function widePhotosQuery(bbox: BBox, limit: number): string {
+  const [west, south, east, north] = bbox;
+  return rankedSparql(
+    `SELECT ?item ?itemLabel ?links ?coord ?image WHERE {
+  {
+    SELECT ?item ?links (SAMPLE(?c) AS ?coord) (SAMPLE(?img) AS ?image) WHERE {
+      hint:Query hint:optimizer "None" .
+      SERVICE wikibase:box {
+        ?item wdt:P625 ?c .
+        bd:serviceParam wikibase:cornerSouthWest "Point(${west} ${south})"^^geo:wktLiteral .
+        bd:serviceParam wikibase:cornerNorthEast "Point(${east} ${north})"^^geo:wktLiteral .
+      }
+      ?item wikibase:sitelinks ?links .
+      ?item wdt:P18 ?img .
+    }
+    GROUP BY ?item ?links
+    ORDER BY DESC(?links)
+    LIMIT ${limit}
+  }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul". }
+}`,
+    limit,
+    "links",
+  );
+}
+
+const wideSchema = z.object({
+  results: z.object({
+    bindings: z.array(
+      z.object({
+        item: z.object({ value: z.string() }),
+        itemLabel: z.object({ value: z.string() }).optional(),
+        links: z.object({ value: z.string() }).optional(),
+        coord: z.object({ value: z.string() }),
+        image: z.object({ value: z.string() }),
+      }),
+    ),
+  }),
+});
+
+/**
+ * Wide points: one per place, at its coordinate, with source "commons", title (the photo's file name), name (the place),
+ * url (the file page), languages (Wikipedia editions covering the place), wikidata and v 1. Null when the answer is malformed.
+ */
+export function widePhotoFeatures(json: unknown): PhotoFeature[] | null {
+  const parsed = wideSchema.safeParse(json);
+  if (!parsed.success) return null;
+  const features: PhotoFeature[] = [];
+  for (const b of parsed.data.results.bindings) {
+    const m = /^Point\(\s*(-?[\d.]+(?:e-?\d+)?)\s+(-?[\d.]+(?:e-?\d+)?)\s*\)$/i.exec(b.coord.value.trim());
+    if (!m) continue;
+    let file: string;
+    try {
+      file = decodeURIComponent(b.image.value.split("/").pop() ?? "");
+    } catch {
+      continue;
+    }
+    if (file === "") continue;
+    const id = b.item.value.split("/").pop() ?? b.item.value;
+    const label = b.itemLabel?.value.trim();
+    const properties: Record<string, string | number> = {
+      source: "commons",
+      title: file,
+      v: 1,
+      url: `https://commons.wikimedia.org/wiki/${encodeURIComponent(`File:${file}`.replace(/ /g, "_")).replace(/%3A/g, ":")}`,
+      wikidata: id,
+    };
+    if (label && label !== id) properties.name = label;
+    const links = Number(b.links?.value);
+    if (Number.isFinite(links)) properties.languages = links;
+    features.push({ type: "Feature", geometry: { type: "Point", coordinates: [Number(m[1]), Number(m[2])] }, properties });
+  }
+  return features;
+}
 
 function commonsFeature(hit: { pageid: number; title: string; lat: number; lon: number }): PhotoFeature {
   const title = hit.title.replace(/^File:/, "");
@@ -280,25 +371,19 @@ const photos = defineLayer({
     "Caveats: this shows where people photograph, not what is there; roads and towns dominate Mapillary because it is mostly dashcam and phone capture, and remote trails often have none. " +
     "Photo licences differ (Commons files are free licences, Mapillary images are CC BY-SA 4.0); link the url rather than reusing the image. " +
     "The two services limit how much one request can cover, so large views are cut into squares: Commons is asked for every square (up to 500 photos each), but Mapillary only for the 8 small squares (about 5 km across) nearest the centre, " +
-    "and very busy squares are capped (Mapillary at about 2,000 images), so counts in dense areas are lower bounds. The result says when any of this applies. " +
-    "At most 5,000 points are returned (evenly thinned). Zoom in to a region under 2,500 km² (about a 50 km square) first; for Mapillary, zoom in much further, to a few square kilometres in a city.",
+    "and very busy squares are capped (Mapillary at about 2,000 images), so counts in dense areas are lower bounds. " +
+    "At most 5,000 points are returned (evenly thinned). For Mapillary, zoom in to a few square kilometres in a city. " +
+    "Over 2,500 km² (about a 50 km square) it returns photos of the 500 best-known places, Commons only.",
   coverage: "global",
   license: "Wikimedia Commons (various free licenses); Mapillary (CC BY-SA 4.0)",
   requiredEnv: [],
   optionalEnv: ["MAPILLARY_TOKEN"],
   maxAreaKm2: 2_500,
+  wide: { mode: "named", orderBy: "number of Wikipedia languages", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("photos") },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > photos.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${photos.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
     const wanted = new Set<Source>(input.sources);
     const token = ctx.env.MAPILLARY_TOKEN?.trim() ?? "";
     const useMapillary = wanted.has("mapillary") && token !== "";
@@ -310,6 +395,13 @@ const photos = defineLayer({
         return { error: "Mapillary needs MAPILLARY_TOKEN; ask for sources ['commons'] instead", hint: "unavailable" };
       }
       notes.push(NO_TOKEN_NOTE);
+    }
+
+    if (ctx.wide) {
+      if (!useCommons) {
+        return { error: "Mapillary images load only for small areas; zoom in under 2,500 km², or ask for sources ['commons']", hint: "zoom_in" };
+      }
+      return widePhotos(ctx, useMapillary ? [...notes, "Mapillary is left out at this scale"] : notes);
     }
 
     const errors: string[] = [];
@@ -428,6 +520,45 @@ const photos = defineLayer({
     };
   },
 });
+
+/** Wide mode: the photos of the best-known places in the box, from Wikidata, capped at the strategy's limit. */
+async function widePhotos(ctx: QueryContext, notes: string[]): Promise<LayerResult | LayerError> {
+  const limit = Math.min(WIDE_LIMIT, ctx.wideStrategy?.limit ?? WIDE_LIMIT);
+  let res: Response;
+  try {
+    res = await wikimediaFetch(ctx.fetch, SPARQL_ENDPOINT, {
+      method: "POST",
+      headers: { accept: "application/sparql-results+json", "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ query: widePhotosQuery(ctx.bbox, limit) }).toString(),
+      cacheKey: `${ctx.cacheKey ?? "photos"}:wikidata`,
+    });
+  } catch (err) {
+    return { error: isTimeout(err) ? `Wikidata timed out after ${UPSTREAM_TIMEOUT_MS / 1000} seconds; zoom in and try again` : "Wikidata returned no response", hint: "upstream" };
+  }
+  if (res.status === 429 || res.status === 503) return { error: "Wikidata is rate-limiting requests; try again in a minute", hint: "upstream" };
+  if (!res.ok) return { error: `Wikidata returned ${res.status}`, hint: "upstream" };
+  let json: unknown;
+  try {
+    json = await res.json();
+  } catch {
+    return { error: "Wikidata returned a response that is not JSON", hint: "upstream" };
+  }
+  const features = widePhotoFeatures(json);
+  if (features === null) return { error: "Wikidata returned an unexpected response", hint: "upstream" };
+  const rows = (json as { results: { bindings: unknown[] } }).results.bindings.length;
+  return {
+    kind: "geojson",
+    data: { type: "FeatureCollection", features },
+    // A ranked list shorter than its limit holds every such place in the box, so run.ts can say "all".
+    ...(rows < limit && { total: features.length }),
+    coverageNote: [WIDE_NOTE, ...notes].join("; "),
+    citation: {
+      source: "Wikidata (CC0) places with a Wikimedia Commons photo (P18), ranked by Wikipedia sitelinks; photos under their own free licences",
+      url: "https://commons.wikimedia.org/",
+      retrieved: new Date().toISOString(),
+    },
+  };
+}
 
 registerLayer(photos);
 

@@ -35,7 +35,7 @@ import "@/layers";
 import { getLayer } from "@/layers/registry";
 import { getModel } from "@/lib/agent/provider";
 import { isFullLayerResult, summarizeLayerResult, type GeojsonSummary } from "@/lib/layers/summarize";
-import { buildTools } from "@/lib/agent/tools";
+import { buildTools, repairToolCall } from "@/lib/agent/tools";
 import { SYSTEM_PROMPT } from "@/lib/agent/prompt";
 import type { MapView } from "@/lib/agent/view";
 import { parseMapView, systemForTurn } from "@/lib/agent/viewContext";
@@ -46,7 +46,7 @@ const model = process.env.MODEL_NAME ?? "(unset)";
 /** Longest note that passes: the prompt asks for about 120 words. */
 const NOTE_MAX_WORDS = 150;
 
-type ToolCall = { toolName: string; output?: unknown };
+type ToolCall = { toolName: string; input?: unknown; output?: unknown };
 
 function isZoomInError(output: unknown): boolean {
   return !!output && typeof output === "object" && (output as { hint?: unknown }).hint === "zoom_in";
@@ -157,11 +157,78 @@ function windRiverGlaciersRule(calls: ToolCall[], notes: string[]): RuleResult {
   return { ok, geocodes, cameraMoved: moved, largest, namesLargest, statesTotal, saysSample };
 }
 
+/** The bbox a query call was made with, when its input carried one. */
+function bboxOf(input: unknown): [number, number, number, number] | undefined {
+  const bbox = input && typeof input === "object" ? (input as { bbox?: unknown }).bbox : undefined;
+  return Array.isArray(bbox) && bbox.length === 4 && bbox.every((n) => typeof n === "number") ? (bbox as [number, number, number, number]) : undefined;
+}
+
+/** Rough area of a bbox in km², as lib/layers/run.ts measures it. */
+function areaKm2([w, s, e, n]: [number, number, number, number]): number {
+  return (e - w) * 111.32 * Math.cos((((s + n) / 2) * Math.PI) / 180) * (n - s) * 110.57;
+}
+
+/** The largest feature by v in the full outputs of one layer's successful queries. */
+function largestByV(calls: ToolCall[], toolName: string): { name: string; v: number } | undefined {
+  let best: { name: string; v: number } | undefined;
+  for (const c of calls) {
+    if (c.toolName !== toolName || isLayerError(c.output)) continue;
+    const features = (c.output as { data?: { features?: { properties?: Record<string, unknown> | null }[] } } | undefined)?.data?.features ?? [];
+    for (const f of features) {
+      const v = f.properties?.v;
+      const name = f.properties?.name;
+      if (typeof v === "number" && typeof name === "string" && (best === undefined || v > best.v)) best = { name, v };
+    }
+  }
+  return best;
+}
+
+/**
+ * "wind farms in West Texas" over a 392,000 km² view (the owner's case: power-plants errored over its 250,000 km² cap,
+ * the model shrank the box to a 3°x3° slice and drew 9 sites): passes only when a power-plants query answered with at
+ * least 100 features, every power-plants query used a box at least 90% of the view's area (no shrinking), none came
+ * back as a zoom_in error, and the note names the largest site by MW among the returned features.
+ */
+function westTexasWindRule(calls: ToolCall[], notes: string[], view: MapView | null): RuleResult {
+  const plants = calls.filter((c) => c.toolName === "query_power-plants");
+  const answered = plants.filter((c) => c.output !== undefined && !isLayerError(c.output));
+  const most = Math.max(0, ...answered.map((c) => featureCount(c.output) ?? 0));
+  const viewArea = view?.bbox ? areaKm2(view.bbox) : undefined;
+  const boxes = plants.map((c) => bboxOf(c.input)).filter((b): b is [number, number, number, number] => b !== undefined);
+  const shrank = viewArea !== undefined && boxes.some((b) => areaKm2(b) < viewArea * 0.9);
+  const zoomIn = plants.some((c) => isZoomInError(c.output));
+  const largest = largestByV(calls, "query_power-plants");
+  const namesLargest = largest !== undefined && comparable(notes.join("\n")).includes(comparable(largest.name));
+  const ok = most >= 100 && !shrank && !zoomIn && namesLargest;
+  return { ok, features: most, shrank, zoomIn, largest, namesLargest, boxes };
+}
+
+/** "dams in the Colorado River basin": a basin-wide box must answer (wide, largest by storage), not error and shrink. */
+function coloradoDamsRule(calls: ToolCall[], notes: string[]): RuleResult {
+  const dams = calls.filter((c) => c.toolName === "query_dams");
+  const most = Math.max(0, ...dams.filter((c) => !isLayerError(c.output)).map((c) => featureCount(c.output) ?? 0));
+  const zoomIn = dams.filter((c) => isZoomInError(c.output)).length;
+  const largest = largestByV(calls, "query_dams");
+  const namesLargest = largest !== undefined && comparable(notes.join("\n")).includes(comparable(largest.name));
+  const ok = most > 0 && zoomIn === 0 && dams.length <= 2;
+  return { ok, features: most, damQueries: dams.length, zoomIn, largest, namesLargest, boxes: dams.map((c) => bboxOf(c.input)) };
+}
+
 /** Extra pass rules for particular questions, keyed by the question in lower case. */
-const QUESTION_RULES: Record<string, (calls: ToolCall[], notes: string[]) => RuleResult> = {
+const QUESTION_RULES: Record<string, (calls: ToolCall[], notes: string[], view: MapView | null) => RuleResult> = {
   "good hiking in french guiana": goodHikingRule,
   "glaciers in the wind river range": windRiverGlaciersRule,
+  "wind farms in west texas": westTexasWindRule,
+  "dams in the colorado river basin": coloradoDamsRule,
 };
+
+/** Every coverage note the queries returned, so a wide result's "Showing the N largest of M" line is in the output. */
+function coverageNotes(calls: ToolCall[]): string[] {
+  return calls.flatMap((c) => {
+    const note = c.output && typeof c.output === "object" ? (c.output as { coverageNote?: unknown }).coverageNote : undefined;
+    return c.toolName.startsWith("query_") && typeof note === "string" ? [`${c.toolName.slice(6)}: ${note}`] : [];
+  });
+}
 
 function wordCount(markdown: string): number {
   return markdown.replace(/[#*_`>|-]+/g, " ").split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
@@ -208,13 +275,14 @@ async function runQuestion(raw: string): Promise<Outcome> {
       tools: buildTools({ view }),
       prompt: question,
       stopWhen: stepCountIs(12),
+      repairToolCall,
     });
 
     const calls: ToolCall[] = [];
     for (const step of result.steps) {
-      for (const r of step.toolResults) calls.push({ toolName: r.toolName, output: r.output });
+      for (const r of step.toolResults) calls.push({ toolName: r.toolName, input: r.input, output: r.output });
       for (const c of step.toolCalls) {
-        if (!step.toolResults.some((r) => r.toolCallId === c.toolCallId)) calls.push({ toolName: c.toolName });
+        if (!step.toolResults.some((r) => r.toolCallId === c.toolCallId)) calls.push({ toolName: c.toolName, input: c.input });
       }
     }
     const seq = calls.map((c) => c.toolName);
@@ -261,7 +329,7 @@ async function runQuestion(raw: string): Promise<Outcome> {
     const brief = noteWords.every((n) => n <= NOTE_MAX_WORDS) && dupHeadings.length === 0;
     // With no note, the closing text is the answer, as for noteWords.
     const answer = notes.length > 0 ? notes : [result.text];
-    const rule = QUESTION_RULES[question.trim().toLowerCase()]?.(calls, answer);
+    const rule = QUESTION_RULES[question.trim().toLowerCase()]?.(calls, answer, view);
     const ok =
       brief &&
       (rule?.ok ?? true) &&
@@ -286,6 +354,7 @@ async function runQuestion(raw: string): Promise<Outcome> {
         features,
         tiles,
         layerErrors,
+        coverageNotes: coverageNotes(calls),
         tokens: { in: result.totalUsage.inputTokens, out: result.totalUsage.outputTokens },
         seconds: seconds(),
         finish: result.finishReason,

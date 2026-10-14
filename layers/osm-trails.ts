@@ -1,6 +1,22 @@
+/**
+ * Hiking paths and named hiking routes from OpenStreetMap via Overpass. Under PATH_MAX_AREA_KM2 (the soft cap) one query
+ * returns the path, footway and track ways; between it and ROUTE_MAX_AREA_KM2 (the hard cap) run.ts calls the layer in
+ * wide mode and it answers with named hiking route relations, longest inside the box first (scan, then geometry).
+ * It also exports the scan-then-fetch helpers the other OSM line layers (mtb-trails, ski-routes) use for their own
+ * wide mode: buildNamedScanQuery, pickNamedByLength, buildNamedGeometryQuery and longestNamedFirst.
+ * Live smoke check (wide), 2026-10-14: Utah and Colorado (-112,36 to -106,41, about 290,000 km²): 150 routes kept of 170 named (longest the CDT Colorado Section, 912 km inside the box), 5.7 s.
+ */
 import { z } from "zod";
-import type { Feature, FeatureCollection, LineString, MultiLineString, Position } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import type { Feature, FeatureCollection, Geometry, LineString, MultiLineString, Position } from "geojson";
+import {
+  bboxAreaKm2,
+  defineLayer,
+  hardMaxAreaKm2,
+  type BBox,
+  type LayerError,
+  type LayerResult,
+  type QueryContext,
+} from "./types";
 import { registerLayer } from "./registry";
 import { overpassQuery } from "./_shared/overpass";
 import { haversineKm } from "./_shared/geo";
@@ -20,11 +36,11 @@ const SAC_SCALES = [
 /** Most trails returned. A dense 2,500 km² box holds tens of thousands of ways (tens of MB with geometry). */
 export const MAX_TRAILS = 2_000;
 
-/** Largest box that gets individual paths; a wider one gets named hiking routes instead. */
+/** Largest box that gets individual paths (the layer's maxAreaKm2); a wider one gets named hiking routes instead. */
 export const PATH_MAX_AREA_KM2 = 2_500;
-/** Largest box that gets named hiking routes; the layer errors above it. */
+/** Largest box that gets named hiking routes (the layer's hardMaxAreaKm2); the layer errors above it. */
 export const ROUTE_MAX_AREA_KM2 = 400_000;
-/** Most routes returned, longest first. */
+/** Most routes returned, longest first (the wide strategy's limit). */
 export const MAX_ROUTES = 150;
 /** Most routes read (tags and bounds only) to pick the longest from; Overpass cuts by id past this. */
 export const ROUTE_SCAN_MAX = 5_000;
@@ -146,7 +162,7 @@ export function routesNote(shown: number, total: number): string {
   return `${head}; ${paths}`;
 }
 
-/** Step 1: every named hiking route relation in the box, tags and bounds only, with an `out count`. */
+/** Step 1: every named hiking route relation in the box, tags and bounds only, with an `out count` of how many there are. */
 export function buildRouteScanQuery(bbox: BBox): string {
   const [west, south, east, north] = bbox;
   return `[out:json][timeout:25];${ROUTE_SELECTOR}(${south},${west},${north},${east})->.r;.r out count;.r out tags bb ${ROUTE_SCAN_MAX};`;
@@ -204,10 +220,10 @@ function shareInside(bounds: Bounds | undefined, bbox: BBox): number {
 
 /**
  * The relation ids to draw from a step-1 body: longest inside the box first (estimated from each route's length and
- * how much of its extent is in the box), up to MAX_ROUTES, stopping once ROUTE_KM_BUDGET km are taken (MIN_ROUTES
- * always). `sacScaleMax` drops routes tagged harder than it.
+ * how much of its extent is in the box), up to `max` (MAX_ROUTES by default), stopping once ROUTE_KM_BUDGET km are
+ * taken (MIN_ROUTES always). `sacScaleMax` drops routes tagged harder than it.
  */
-export function pickRoutes(json: unknown, bbox: BBox, sacScaleMax?: (typeof SAC_SCALES)[number]): number[] {
+export function pickRoutes(json: unknown, bbox: BBox, sacScaleMax?: (typeof SAC_SCALES)[number], max = MAX_ROUTES): number[] {
   const parsed = responseSchema.safeParse(json);
   if (!parsed.success) return [];
   const ranked: { id: number; km: number }[] = [];
@@ -222,7 +238,7 @@ export function pickRoutes(json: unknown, bbox: BBox, sacScaleMax?: (typeof SAC_
   const ids: number[] = [];
   let km = 0;
   for (const route of ranked) {
-    if (ids.length >= MAX_ROUTES || (ids.length >= MIN_ROUTES && km >= ROUTE_KM_BUDGET)) break;
+    if (ids.length >= max || (ids.length >= MIN_ROUTES && km >= ROUTE_KM_BUDGET)) break;
     ids.push(route.id);
     km += route.km;
   }
@@ -363,27 +379,116 @@ export function normalizeRoutes(json: unknown, tolerance = 0): FeatureCollection
   return { type: "FeatureCollection", features };
 }
 
-/** Named hiking routes in a box between PATH_MAX_AREA_KM2 and ROUTE_MAX_AREA_KM2: two Overpass calls (scan, then geometry). */
+/**
+ * Named hiking routes in a box between PATH_MAX_AREA_KM2 and ROUTE_MAX_AREA_KM2: two Overpass calls (scan, then
+ * geometry). `total` is the number of named routes in the box. In wide mode run.ts writes the coverage note, so the
+ * layer only adds one when the box holds no routes at all.
+ */
 async function queryRoutes(ctx: QueryContext, input: OsmTrailsInput): Promise<LayerResult | LayerError> {
   const citation = {
     source: "OpenStreetMap contributors (ODbL)",
     url: "https://www.openstreetmap.org/copyright",
     retrieved: new Date().toISOString(),
   };
+  const wide = ctx.wide === true;
+  const max = Math.min(MAX_ROUTES, (wide ? ctx.wideStrategy?.limit : undefined) ?? MAX_ROUTES);
   const scan = await overpassQuery(ctx, buildRouteScanQuery(ctx.bbox), { cacheSuffix: "osm-trails:routes:scan" });
   if (!scan.ok) return { error: scan.error, hint: "upstream" };
 
-  const ids = pickRoutes(scan.json, ctx.bbox, input.sacScaleMax);
+  const ids = pickRoutes(scan.json, ctx.bbox, input.sacScaleMax, max);
   const scanned = responseSchema.safeParse(scan.json).data?.elements.filter((e) => (e as { type?: unknown }).type === "relation").length ?? 0;
   const total = Math.max(counted(scan.json, "relations") ?? scanned, scanned);
   if (ids.length === 0) {
-    return { kind: "geojson", data: { type: "FeatureCollection", features: [] }, coverageNote: routesNote(0, total), citation };
+    return { kind: "geojson", data: { type: "FeatureCollection", features: [] }, total, coverageNote: routesNote(0, total), citation };
   }
 
   const geometry = await overpassQuery(ctx, buildRouteGeometryQuery(ctx.bbox, ids));
   if (!geometry.ok) return { error: geometry.error, hint: "upstream" };
   const data = normalizeRoutes(geometry.json, routeTolerance(ctx.bbox));
-  return { kind: "geojson", data, coverageNote: routesNote(data.features.length, total), citation };
+  return {
+    kind: "geojson",
+    data,
+    total,
+    ...(wide ? {} : { coverageNote: routesNote(data.features.length, total) }),
+    citation,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Wide mode for the other OSM line layers (mtb-trails, ski-routes): the longest named features, ranked from a scan.
+// ---------------------------------------------------------------------------------------------------------------
+
+/**
+ * Step 1 of a wide named answer: every match of `selectors` in the box counted, then the ones carrying any of
+ * `nameKeys` counted and listed as ids and bounds only (no tags, no geometry), at most ROUTE_SCAN_MAX. Read the two
+ * counts with overpassCounts (every match, then the named) and pick with pickNamedByLength.
+ */
+export function buildNamedScanQuery(selectors: string[], nameKeys: string[], bbox: BBox): string {
+  const [west, south, east, north] = bbox;
+  const area = `(${south},${west},${north},${east})`;
+  const named = nameKeys.map((key) => `way.all["${key}"];rel.all["${key}"];`).join("");
+  return (
+    `[out:json][timeout:25];(${selectors.map((sel) => `${sel}${area};`).join("")})->.all;.all out count;` +
+    `(${named})->.named;.named out count;.named out ids bb ${ROUTE_SCAN_MAX};`
+  );
+}
+
+const scannedSchema = z.object({ type: z.enum(["way", "relation"]), id: z.number(), bounds: boundsSchema.optional() });
+
+/**
+ * The way and relation ids to draw from a step-1 scan: longest inside the box first (each one's extent, scaled by
+ * how much of it lies in the box), at most `limit` in all and `maxRelations` relations.
+ */
+export function pickNamedByLength(json: unknown, bbox: BBox, limit: number, maxRelations: number): { ways: number[]; relations: number[] } {
+  const ranked: { type: "way" | "relation"; id: number; km: number }[] = [];
+  for (const raw of responseSchema.safeParse(json).data?.elements ?? []) {
+    const el = scannedSchema.safeParse(raw);
+    if (!el.success) continue;
+    ranked.push({ ...el.data, km: routeLengthKm({}, el.data.bounds) * shareInside(el.data.bounds, bbox) });
+  }
+  ranked.sort((a, b) => b.km - a.km || a.id - b.id);
+  const ways: number[] = [];
+  const relations: number[] = [];
+  for (const el of ranked) {
+    if (ways.length + relations.length >= limit) break;
+    if (el.type === "way") ways.push(el.id);
+    else if (relations.length < maxRelations) relations.push(el.id);
+  }
+  return { ways, relations };
+}
+
+/**
+ * Step 2: the picked ways with their tags and geometry, and the picked relations with `out body` plus only their
+ * member ways inside the box as bare geometry (`out skel geom`, no tags, so a member is never drawn as a feature of
+ * its own). The body has the same shape as the layers' normal answers, so their normalizers read it unchanged.
+ */
+export function buildNamedGeometryQuery(bbox: BBox, picked: { ways: number[]; relations: number[] }, maxRouteWays: number): string {
+  const [west, south, east, north] = bbox;
+  const area = `(${south},${west},${north},${east})`;
+  return (
+    `[out:json][timeout:25];` +
+    (picked.ways.length > 0 ? `way(id:${picked.ways.join(",")});out tags geom;` : "") +
+    (picked.relations.length > 0
+      ? `rel(id:${picked.relations.join(",")})->.r;way(r.r)${area}->.rw;.r out body;.rw out skel geom ${maxRouteWays};`
+      : "")
+  );
+}
+
+/** Kilometres drawn by a line or multi-line geometry (0 for anything else). */
+export function geometryKm(geometry: Geometry | null): number {
+  if (geometry?.type === "LineString") return lineKm(geometry.coordinates);
+  if (geometry?.type === "MultiLineString") return geometry.coordinates.reduce((sum, line) => sum + lineKm(line), 0);
+  return 0;
+}
+
+/** The named features (a `name` property), longest first, at most `limit`. */
+export function longestNamedFirst<T extends Feature>(features: T[], limit: number): T[] {
+  return features
+    .filter((f) => typeof f.properties?.name === "string")
+    .map((f) => ({ f, km: geometryKm(f.geometry) }))
+    .sort((a, b) => b.km - a.km)
+    .slice(0, limit)
+    .map(({ f }) => f);
 }
 
 /** True when a sac_scale value is absent, or at or below `max` in difficulty order. */
@@ -404,24 +509,26 @@ const osmTrails = defineLayer({
   title: "OpenStreetMap trails",
   description:
     "Hiking paths, footways and tracks from OpenStreetMap, with difficulty (sac_scale), visibility and surface tags where mapped, plus wikidata or wikipedia when the trail has an article. " +
-    "Under 2,500 km² it returns the paths; from there up to 400,000 km² it returns named hiking routes instead, longest first (up to 150): kind 'route', name, v = lengthKm (km inside the region), distanceKm, network and sac_scale.",
+    "Under 2,500 km² it returns the paths; up to 400,000 km² the 150 longest named hiking routes instead (the note gives the total): kind 'route', name, v = lengthKm (km inside the region), distanceKm, network and sac_scale.",
   coverage: "global",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],
-  maxAreaKm2: ROUTE_MAX_AREA_KM2,
+  maxAreaKm2: PATH_MAX_AREA_KM2,
+  hardMaxAreaKm2: ROUTE_MAX_AREA_KM2,
+  wide: { mode: "named", orderBy: "length in km", limit: MAX_ROUTES },
   input: inputSchema,
   style: { geometry: "line", color: layerColor("osm-trails") },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
+    // run.ts enforces the hard cap; popularity calls this query directly, so it is checked here too.
     const area = bboxAreaKm2(ctx.bbox);
-    if (area > osmTrails.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${osmTrails.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
+    const hardMax = hardMaxAreaKm2(osmTrails);
+    if (area > hardMax) {
+      return { error: `Area is ${Math.round(area)} km²; zoom in to under ${hardMax} km²`, hint: "zoom_in" };
     }
-    if (area > PATH_MAX_AREA_KM2) return queryRoutes(ctx, input);
+    // Wide mode from run.ts; the area test covers a direct call over the path cap.
+    if (ctx.wide === true || area > PATH_MAX_AREA_KM2) return queryRoutes(ctx, input);
 
     const result = await overpassQuery(ctx, buildOverpassQuery(ctx.bbox, input));
     if (!result.ok) {

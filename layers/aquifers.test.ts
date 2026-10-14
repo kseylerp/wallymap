@@ -79,6 +79,8 @@ describe("aquifers layer", () => {
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.input.parse({})).toEqual({});
     expect(layer.maxAreaKm2).toBe(6_000_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "area", limit: 1000 });
     expect(layer.style).toMatchObject({ geometry: "polygon", color: "#9FB693" });
   });
 
@@ -125,11 +127,38 @@ describe("aquifers layer", () => {
     expect(geojson(await layer.query(ctx(capped, NEBRASKA), {})).coverageNote).toBe("Showing the 2,000 largest aquifer polygons; zoom in for the rest");
   });
 
-  it("returns nothing outside the US without calling out, and rejects an oversized area through runLayer", async () => {
+  it("returns nothing outside the US without calling out, and rejects through runLayer only a box over four times the soft cap", async () => {
     const stub = vi.fn();
     expect(geojson(await layer.query(ctx(stub, [5, 45, 6, 46]), {})).coverageNote).toBe("No data outside the United States");
     expect(stub).not.toHaveBeenCalled();
-    expect((await runLayer("aquifers", { bbox: [-125, 24, -66, 50] })).status).toBe(422);
+    const res = await runLayer("aquifers", { bbox: [-170, 0, 10, 80] });
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 24000000 km²$/) });
+  });
+
+  it("answers the lower 48 wide from the Esri copy: largest first, 1,000 at most, and a count", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      return url.searchParams.get("returnCountOnly") === "true" ? json({ count: 2950 }) : json({ ...nebraska, exceededTransferLimit: true });
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("aquifers", { bbox: [-125, 24, -66, 50], zoom: 4 });
+      expect(res.status).toBe(200);
+      const data = stub.mock.calls.map((c) => String(c[0])).find((u) => !u.includes("returnCountOnly"));
+      expect(data?.startsWith(ESRI_COPY)).toBe(true);
+      const params = new URL(data ?? "").searchParams;
+      expect(params.get("orderByFields")).toBe("Shape__Area DESC");
+      expect(params.get("resultRecordCount")).toBe("1000");
+      expect(params.get("maxAllowableOffset")).toBe("0.295");
+      expect(res.body).toMatchObject({
+        total: 2950,
+        truncated: true,
+        coverageNote: `Showing the ${nebraska.features.length} largest of 2,950 (ranked by area); zoom in under 6,000,000 km² for all`,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("describes the aquifer in the words people use and points to groundwater for wells", () => {

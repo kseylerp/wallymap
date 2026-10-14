@@ -26,6 +26,8 @@
  * 3 zones, rate-limited; cached after): 2 alerts in view: Red Flag Warning (Severe, NWS Reno, 18:00 UTC Oct 10
  * to 04:00 UTC Oct 11) and Lake Wind Advisory for the Greater Lake Tahoe Area (Moderate); now 13.3 °C, wind
  * 14.8 km/h gusting 24.5, clear.
+ * Wide smoke through runLayer (2026-10-14), Texas [-106,26,-93,36.5] (1.44 million km²), 5.7 s cold (one alerts call
+ * for 6 states, 25 points, zone shapes): 23 alerts in view, Flash Flood Warnings (Severe) first, plus the now point.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, MultiPolygon, Point, Polygon, Position } from "geojson";
@@ -45,6 +47,13 @@ const ALERTS_TTL_SECONDS = 300;
 const ZONE_TTL_SECONDS = 30 * 86_400;
 const NOW_TTL_SECONDS = 600;
 export const MAX_ZONE_FETCHES = 30;
+/** Most alerts a wide (over 400,000 km²) result carries, most severe first. */
+export const WIDE_LIMIT = 1000;
+/**
+ * Sample grid side over a wide box: 5 x 5 = 25 /points lookups over up to 1.6 million km² keeps about the density of
+ * 3 x 3 over 400,000 km², and with the 30 zone shapes stays near 11 seconds cold under NWS's 5 requests a second.
+ */
+export const WIDE_GRID = 5;
 const STATE_PAD_DEG = 0.25;
 
 /** Rough state and territory extents [west, south, east, north], for choosing which states to ask NWS about. */
@@ -129,13 +138,13 @@ function overlaps(g: Geometry, bbox: BBox): boolean {
 
 const GRID = 3;
 
-/** Cell centres of a 3 x 3 grid over the bbox as [lat, lon] rounded to 0.01°, deduplicated. */
-export function samplePoints([w, s, e, n]: BBox): [number, number][] {
+/** Cell centres of a grid x grid sampling (3 x 3 by default) over the bbox as [lat, lon] rounded to 0.01°, deduplicated. */
+export function samplePoints([w, s, e, n]: BBox, grid = GRID): [number, number][] {
   const out = new Map<string, [number, number]>();
-  for (let j = 0; j < GRID; j++) {
-    for (let i = 0; i < GRID; i++) {
-      const lat = Math.round((s + ((j + 0.5) * (n - s)) / GRID) * 100) / 100;
-      const lon = Math.round((w + ((i + 0.5) * (e - w)) / GRID) * 100) / 100;
+  for (let j = 0; j < grid; j++) {
+    for (let i = 0; i < grid; i++) {
+      const lat = Math.round((s + ((j + 0.5) * (n - s)) / grid) * 100) / 100;
+      const lon = Math.round((w + ((i + 0.5) * (e - w)) / grid) * 100) / 100;
       out.set(`${lat},${lon}`, [lat, lon]);
     }
   }
@@ -352,14 +361,17 @@ const weatherAlerts = defineLayer({
     "Each alert is an area with kind and event (e.g. 'Red Flag Warning', 'Avalanche Warning', 'Winter Storm Warning', 'Flood Watch', 'Wind Advisory'), severity (Extreme, Severe, Moderate, Minor) and v as its rank (4 to 1), " +
     "t (onset, UTC), expires (when it ends, UTC), headline, urgency, certainty, areaDesc (the named zones), senderName (the NWS office), instruction (what to do) and url. Alerts are sorted most severe first. " +
     "Set event to filter by name, e.g. 'red flag' or 'avalanche'. One extra point, kind 'now', is current conditions from the Open-Meteo model at the view's centre: temperatureC (v), windKmh, gustKmh, precipitationMm, snowfallCm and weather (e.g. 'snow showers'), t = the 15-minute model time. " +
-    "Alerts are live (refreshed every 5 minutes). Example questions: 'Are there any red flag warnings near Tahoe?', 'Is there an avalanche warning for the Wasatch?', 'What is the weather on the mountain right now?'. " +
+    "Alerts are live (refreshed every 5 minutes). Example questions: 'Are there any red flag warnings near Tahoe?', 'Is there an avalanche warning for the Wasatch?'. " +
     "Caveats: alerts are United States only and land zones only (marine warnings are left out; use surf for sea state); an alert's area is its whole forecast zone, which can be larger than the hazard; " +
     "zones in view are found by sampling 9 points across it, so a small zone between them can be missed; avalanche warnings come from NWS only when an avalanche centre asks for one, so check the local avalanche centre; " +
-    "the 'now' point is a model value, not a station reading, free for non-commercial use only. Zoom in to under 400,000 km².",
+    "the 'now' point is a model value, not a station reading, free for non-commercial use only. Over 400,000 km² it samples 25 points and keeps the 1,000 most severe alerts.",
   coverage: "global",
   license: "Public domain (NOAA NWS); current conditions from Open-Meteo, CC BY 4.0, free for non-commercial use only",
   requiredEnv: [],
   maxAreaKm2: 400_000,
+  // Default hard cap (1.6 million km², about Texas plus a neighbour): the alerts call is per state and the
+  // /points and zone lookups stay capped (WIDE_GRID, MAX_ZONE_FETCHES), so the cost does not grow past it.
+  wide: { orderBy: "severity", limit: WIDE_LIMIT, rank: "most severe" },
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("weather-alerts"), fillOpacity: 0.25, timeField: "t" },
 
@@ -382,6 +394,7 @@ const weatherAlerts = defineLayer({
     const features: Feature[] = [];
     const states = outsideUs(ctx.bbox) ? [] : statesFor(ctx.bbox);
     let alertsError: string | null = null;
+    let alertTotal: number | undefined;
 
     if (states.length === 0) {
       notes.push("NWS alerts cover the United States only");
@@ -401,7 +414,7 @@ const weatherAlerts = defineLayer({
         const needZones = alerts.some((a) => !isArea(a.geometry));
         const pointBodies = needZones
           ? await Promise.all(
-              samplePoints(ctx.bbox).map(([lat, lon]) => lookupPoint(ctx, lat, lon)),
+              samplePoints(ctx.bbox, ctx.wide ? WIDE_GRID : GRID).map(([lat, lon]) => lookupPoint(ctx, lat, lon)),
             )
           : [];
         const inView = new Set(pointBodies.flatMap((b) => (b.ok ? zonesFromPoint(b.body) : [])));
@@ -417,7 +430,10 @@ const weatherAlerts = defineLayer({
           }
         });
         const placed = alertFeatures(alerts, inView, zones, ctx.bbox, input.event);
-        features.push(...placed.features);
+        // Alerts arrive most severe first, so a wide cut keeps the most severe.
+        const limit = ctx.wide ? (ctx.wideStrategy?.limit ?? WIDE_LIMIT) : Infinity;
+        if (placed.features.length > limit) alertTotal = placed.features.length;
+        features.push(...placed.features.slice(0, limit));
         if (placed.features.length === 0) notes.push(input.event ? `No active "${input.event}" alerts in view` : "No active NWS alerts in view");
         if (placed.unplaced > 0) {
           notes.push(
@@ -431,6 +447,8 @@ const weatherAlerts = defineLayer({
     const point = current.ok ? nowFeature(current.body, centre) : null;
     if (point !== null) features.push(point);
     else notes.push("Current conditions were unavailable");
+    // The total counts every feature the source had, so it includes the 'now' point like the shown count does.
+    if (alertTotal !== undefined && point !== null) alertTotal += 1;
 
     if (alertsError !== null) {
       if (point === null) return { error: alertsError, hint: "upstream" };
@@ -438,7 +456,13 @@ const weatherAlerts = defineLayer({
     }
 
     const data: FeatureCollection = { type: "FeatureCollection", features };
-    return { kind: "geojson", data, citation, ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}) };
+    return {
+      kind: "geojson",
+      data,
+      citation,
+      ...(alertTotal !== undefined && { total: alertTotal }),
+      ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
+    };
   },
 });
 

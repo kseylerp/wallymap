@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { joinSnotel, snowType, type SnotelData, type SnotelStation } from "./snowpack";
+import layer, { WIDE_LIMIT, joinSnotel, keepDeepest, snowType, type SnotelData, type SnotelStation } from "./snowpack";
+import { hardMaxAreaKm2 } from "./types";
 import stationsFixture from "./__fixtures__/snotel-stations.json";
 import hourlyFixture from "./__fixtures__/snotel-hourly.tahoe.json";
 
@@ -199,8 +200,61 @@ describe("snowpack layer", () => {
     expect(layer.maxAreaKm2).toBe(400_000);
   });
 
-  it("rejects an oversized bbox through runLayer", async () => {
-    const big = await runLayer("snowpack", { bbox: [-125, 31, -110, 49], zoom: 4 });
+  it("rejects only a box bigger than the whole US through runLayer", async () => {
+    const big = await runLayer("snowpack", { bbox: [-180, -60, 180, 80], zoom: 1 });
     expect(big.status).toBe(422);
+    expect(big.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/under 50000000 km²$/) });
+  });
+});
+
+describe("snowpack wide mode (over 400,000 km²)", () => {
+  it("declares every station up to 1,000, deepest snow first, up to the whole US", () => {
+    expect(layer.wide).toEqual({ orderBy: "snow depth in inches", limit: 1000 });
+    expect(WIDE_LIMIT).toBe(1000);
+    expect(hardMaxAreaKm2(layer)).toBe(50_000_000);
+    expect(layer.description).toMatch(/Over 400,000 km² it returns up to 1,000 stations, deepest snow first/);
+    expect(layer.description).not.toMatch(/Needs a region under/);
+  });
+
+  it("keeps the deepest stations at the limit (no reading last) and counts them all", () => {
+    const fc = {
+      type: "FeatureCollection" as const,
+      features: [2, undefined, 40, 0].map((v, i) => ({
+        type: "Feature" as const,
+        geometry: { type: "Point" as const, coordinates: [-120, 39] },
+        properties: v === undefined ? { name: `s${i}` } : { name: `s${i}`, v },
+      })),
+    };
+    const cut = keepDeepest(fc, 3);
+    expect(cut.total).toBe(4);
+    expect(cut.data.features.map((f) => f.properties?.v)).toEqual([40, 2, 0]);
+    expect(keepDeepest(fc, 4)).toEqual({ data: fc });
+  });
+
+  it("answers the whole West through runLayer: one station list, data in batches of 100, a wide note", async () => {
+    const many: SnotelStation[] = Array.from({ length: 250 }, (_, i) => ({
+      stationTriplet: `${i}:UT:SNTL`,
+      name: `Station ${i}`,
+      latitude: 32 + (i % 16),
+      longitude: -124 + (i % 21),
+    }));
+    const stub = vi.fn(async (input: RequestInfo | URL) => json(String(input).includes("/stations?") ? many : []));
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("snowpack", { bbox: [-125, 31, -102, 49], zoom: 4 });
+      expect(res.status).toBe(200);
+      const dataCalls = stub.mock.calls.filter((c) => String(c[0]).includes("/data?"));
+      expect(dataCalls).toHaveLength(3);
+      expect(res.body).toMatchObject({ coverageNote: expect.stringMatching(/^Showing all 250 in this wide view \(ranked by snow depth in inches\)/) });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("cuts a wide result at the strategy's limit with total", async () => {
+    const r = await layer.query({ ...ctx(routedStub()), wide: true, wideStrategy: { ...layer.wide!, limit: 5 } }, {});
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features).toHaveLength(5);
+    expect(r.total).toBe(17);
   });
 });

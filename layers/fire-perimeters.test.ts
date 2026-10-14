@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { historyWhere, normalizeFirePerimeters, wfigsWhere } from "./fire-perimeters";
+import layer, { historyWhere, normalizeFirePerimeters, offsetFor, wfigsWhere } from "./fire-perimeters";
 import raw from "./__fixtures__/fire-perimeters.tahoe.json";
 import type { FeatureCollection } from "geojson";
 
@@ -184,10 +184,55 @@ describe("fire-perimeters layer", () => {
     expect(r.coverageNote).toBe("No data outside the United States");
   });
 
-  it("rejects an oversized bbox with zoom_in through runLayer", async () => {
-    const res = await runLayer("fire-perimeters", { bbox: [-125, 32, -110, 45], zoom: 5 });
+  it("answers any box up to the lower 48, ranked by acres burned above 60,000 km²", () => {
+    expect(layer.maxAreaKm2).toBe(60_000);
+    expect(layer.hardMaxAreaKm2).toBe(16_000_000);
+    expect(layer.wide).toEqual({ orderBy: "acres burned", limit: 500 });
+    expect(offsetFor(CALDOR_AREA)).toBe(0.0005);
+    expect(offsetFor([-125, 32, -110, 45], true)).toBe(0.05);
+    expect(offsetFor([-125, 24, -66, 50], true)).toBe(0.1);
+  });
+
+  it("rejects with zoom_in through runLayer only a box wider than the lower 48", async () => {
+    const res = await runLayer("fire-perimeters", { bbox: [-180, 0, 0, 80], zoom: 2 });
     expect(res.status).toBe(422);
-    expect(res.body).toMatchObject({ hint: "zoom_in" });
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 16000000 km²$/) });
+  });
+
+  it("answers the far West wide: both services biggest first, sharing the limit, with a summed count", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const history = url.includes("InterAgencyFirePerimeterHistory_All_Years_View");
+      if (new URL(url).searchParams.get("returnCountOnly") === "true") return json({ count: history ? 1200 : 800 });
+      return json({ ...(history ? fixture.history : fixture.wfigs), exceededTransferLimit: true });
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("fire-perimeters", { bbox: [-125, 32, -110, 45], zoom: 5 });
+      expect(res.status).toBe(200);
+      const data = stub.mock.calls.map((c) => new URL(String(c[0]))).filter((u) => !u.searchParams.has("returnCountOnly"));
+      expect(data).toHaveLength(2);
+      for (const u of data) {
+        expect(u.searchParams.get("resultRecordCount")).toBe("250");
+        expect(u.searchParams.get("maxAllowableOffset")).toBe("0.05");
+      }
+      expect(data.find((u) => u.pathname.includes("WFIGS"))?.searchParams.get("orderByFields")).toBe("poly_GISAcres DESC");
+      expect(res.body).toMatchObject({ total: 2000, truncated: true });
+      expect((res.body as { coverageNote?: string }).coverageNote).toMatch(/largest of 2,000 \(ranked by acres burned\); zoom in under 60,000 km² for all$/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("gives WFIGS the whole wide limit when the window starts in 2020 or later", async () => {
+    const stub = vi.fn(async (url: string) => (new URL(url).searchParams.get("returnCountOnly") === "true" ? json({ count: 640 }) : json(fixture.wfigs)));
+    const r = await layer.query({ ...ctx(stub), bbox: [-125, 32, -110, 45], wide: true, wideStrategy: layer.wide }, { yearsBack: 5, minAcres: 100 });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.total).toBe(640);
+    expect(r.coverageNote).toBeUndefined();
+    const urls = (stub.mock.calls as unknown as [string][]).map((c) => new URL(c[0]));
+    expect(urls.every((u) => u.pathname.includes("WFIGS"))).toBe(true);
+    expect(urls.find((u) => !u.searchParams.has("returnCountOnly"))?.searchParams.get("resultRecordCount")).toBe("500");
   });
 
   it("rejects out-of-range input through runLayer", async () => {

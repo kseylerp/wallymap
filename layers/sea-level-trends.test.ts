@@ -62,6 +62,31 @@ describe("sea-level-trends", () => {
     expect(layer.style).toMatchObject({ geometry: "point", unit: "mm/yr" });
   });
 
+  it("answers a box over 30,000,000 km² with every station in it, fastest rise first, and the count", async () => {
+    expect(layer.maxAreaKm2).toBe(30_000_000);
+    expect(layer.wide).toEqual({ orderBy: "trend in mm/yr", rank: "fastest-rising", limit: 1000 });
+    const stub = ok();
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("sea-level-trends", { bbox: [-170, 0, -50, 70], zoom: 2 });
+      expect(res.status).toBe(200);
+      if (!("data" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
+      const rates = res.body.data.features.map((f) => Number(f.properties?.v));
+      expect(rates).toEqual([...rates].sort((a, b) => b - a));
+      expect(res.body).toMatchObject({ total: rates.length, coverageNote: expect.stringMatching(/^Showing all \d+ in this wide view \(ranked by trend in mm\/yr\); Measured/) });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("cuts a wide answer at the strategy's limit, keeping the fastest-rising, with no note of its own about the cut", async () => {
+    const r = await layer.query({ ...ctx(ok(), [-180, -80, 180, 80]), wide: true, wideStrategy: { ...layer.wide, limit: 2 } as typeof layer.wide }, {});
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features).toHaveLength(2);
+    expect(r.total).toBe(9);
+    expect(r.coverageNote).not.toMatch(/zoom in/);
+  });
+
   it("rejects an oversized bbox through runLayer", async () => {
     expect((await runLayer("sea-level-trends", { bbox: [-180, -80, 180, 80] })).status).toBe(422);
   });

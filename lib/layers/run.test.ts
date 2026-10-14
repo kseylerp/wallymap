@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { z } from "zod";
-import { defineLayer, type LayerError, type LayerResult, type QueryContext } from "@/layers/types";
+import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult, type QueryContext } from "@/layers/types";
 import { registerLayer, clearRegistry } from "@/layers/registry";
-import { runLayer, suggestedZoomFor } from "@/lib/layers/run";
+import { runLayer, suggestedZoomFor, wideOutcome } from "@/lib/layers/run";
 
 const BBOX = [-120, 38, -119, 39];
 
@@ -143,6 +143,108 @@ describe("runLayer", () => {
     expect(fromView.status).toBe(422);
     expect(fromView.body).toMatchObject({ hint: "zoom_in", suggestedZoom: expect.any(Number) });
     expect(query).not.toHaveBeenCalled();
+  });
+});
+
+describe("runLayer wide strategy", () => {
+  // About 12,300 km² at 38-39°N; the fake's soft cap is 5,000 and its hard cap 4 x 5,000.
+  const WIDE_BOX = [-120, 38, -118.8, 39];
+  const points = (n: number) => ({
+    type: "FeatureCollection" as const,
+    features: Array.from({ length: n }, (_, i) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [-119.5, 38.5] },
+      properties: { v: n - i },
+    })),
+  });
+  const wideLayer = defineLayer({
+    ...fake,
+    id: "wide",
+    maxAreaKm2: 5_000,
+    wide: { orderBy: "capacity in MW", limit: 3 },
+  });
+
+  beforeEach(() => {
+    clearRegistry();
+    query.mockClear();
+    registerLayer(wideLayer);
+  });
+
+  it("queries under maxAreaKm2 without the wide flag", async () => {
+    query.mockImplementation(async () => passthroughResult);
+    const res = await runLayer("wide", { bbox: BBOX.map((n, i) => (i === 2 ? -119.5 : i === 3 ? 38.5 : n)) });
+    expect(res).toEqual({ status: 200, body: passthroughResult });
+    expect(query.mock.calls[0][0].wide).toBeUndefined();
+  });
+
+  it("between the caps, queries with ctx.wide and the strategy, and notes what was ranked out", async () => {
+    query.mockImplementation(async () => ({ ...passthroughResult, data: points(3), total: 4_512 }));
+    const res = await runLayer("wide", { bbox: WIDE_BOX });
+    expect(res.status).toBe(200);
+    const [ctx] = query.mock.calls[0];
+    expect(ctx.wide).toBe(true);
+    expect(ctx.wideStrategy).toEqual({ orderBy: "capacity in MW", limit: 3 });
+    expect(ctx.cacheKey).toMatch(/:wide$/);
+    expect(res.body).toMatchObject({
+      coverageNote: "Showing the 3 largest of 4,512 (ranked by capacity in MW); zoom in under 5,000 km² for all",
+      truncated: true,
+      rankedOut: expect.stringMatching(/^4,509 more in this box rank below these by capacity in MW and are left out;/),
+    });
+  });
+
+  it("keeps the layer's own note after the wide note, and says all when nothing was left out", async () => {
+    query.mockImplementation(async () => ({ ...passthroughResult, data: points(2), coverageNote: "Data from 2025" }));
+    const res = await runLayer("wide", { bbox: WIDE_BOX });
+    expect(res.body).toMatchObject({ coverageNote: "Showing all 2 in this wide view (ranked by capacity in MW); Data from 2025" });
+    expect(res.body).not.toHaveProperty("truncated");
+  });
+
+  it("errors only above the hard cap, 4 x maxAreaKm2 by default, with suggestedZoom against it", async () => {
+    const huge = [-125, 30, -110, 45] as [number, number, number, number];
+    const res = await runLayer("wide", { bbox: huge, fromView: { bbox: huge, zoom: 5 } });
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ error: expect.stringMatching(/zoom in to under 20000 km²$/), hint: "zoom_in" });
+    expect((res.body as { suggestedZoom: number }).suggestedZoom).toBe(suggestedZoomFor(bboxAreaKm2(huge), 5, 20_000));
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("honours an explicit hardMaxAreaKm2", async () => {
+    clearRegistry();
+    registerLayer(defineLayer({ ...wideLayer, hardMaxAreaKm2: 5_000_000 }));
+    query.mockImplementation(async () => ({ ...passthroughResult, data: points(3) }));
+    const res = await runLayer("wide", { bbox: [-125, 30, -110, 45] });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ truncated: true, coverageNote: expect.stringMatching(/^Showing the 3 largest \(ranked/) });
+  });
+});
+
+describe("wideOutcome", () => {
+  const layer = { maxAreaKm2: 2_500 };
+  const fc = (n: number): Extract<LayerResult, { kind: "geojson" }> => ({
+    kind: "geojson",
+    data: {
+      type: "FeatureCollection",
+      features: Array.from({ length: n }, () => ({ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: {} })),
+    },
+    citation: passthroughResult.citation,
+  });
+
+  it("calls named results named, and counts the unnamed as left out", () => {
+    const out = wideOutcome(layer, { mode: "named", limit: 1_000 }, { ...fc(400), total: 9_000 });
+    expect(out.note).toBe("Showing the 400 named of 9,000; zoom in under 2,500 km² for all");
+    expect(out.rankedOut).toMatch(/^8,600 more in this box \(unnamed/);
+  });
+
+  it("treats a named result without a count as truncated, and a tile result as a density map", () => {
+    expect(wideOutcome(layer, { mode: "named", limit: 1_000 }, fc(10)).truncated).toBe(true);
+    const tiles = wideOutcome(layer, { mode: "tiles", limit: 0 }, { kind: "tiles", data: { url: "u", minzoom: 0, maxzoom: 9, format: "raster" }, citation: passthroughResult.citation });
+    expect(tiles).toMatchObject({ truncated: true, note: expect.stringMatching(/^Showing a density map/) });
+  });
+
+  it("uses the layer's rank word", () => {
+    expect(wideOutcome(layer, { orderBy: "magnitude", rank: "strongest", limit: 2 }, fc(2)).note).toBe(
+      "Showing the 2 strongest (ranked by magnitude); zoom in under 2,500 km² for all",
+    );
   });
 });
 

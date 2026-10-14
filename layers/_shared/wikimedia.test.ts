@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
-import { WIKIMEDIA_USER_AGENT, retryDelayMs, wikimediaFetch } from "./wikimedia";
+import { WIKIMEDIA_USER_AGENT, rankedSparql, retryDelayMs, wikimediaFetch } from "./wikimedia";
 
 function stubOf(...responses: Response[]) {
   const queue = [...responses];
@@ -66,5 +66,17 @@ describe("wikimediaFetch", () => {
     const bad = stubOf(new Response("nope", { status: 500 }));
     expect((await wikimediaFetch(asFetch(bad), "https://x.test/", {}, { sleep })).status).toBe(500);
     expect(bad).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("rankedSparql", () => {
+  it("replaces a trailing ORDER BY and LIMIT with ORDER BY DESC(?v) LIMIT n", () => {
+    const q = "SELECT ?item ?v WHERE { ?item wdt:P2044 ?v . }\nORDER BY ?item\nLIMIT 3000";
+    expect(rankedSparql(q, 1000)).toBe("SELECT ?item ?v WHERE { ?item wdt:P2044 ?v . }\nORDER BY DESC(?v)\nLIMIT 1000");
+  });
+
+  it("keeps an ORDER BY inside a subquery and ranks by another variable on request", () => {
+    const q = "SELECT ?a ?p WHERE { { SELECT ?a WHERE { ?a ?b ?c } ORDER BY ?a LIMIT 5 } ?a wdt:P2660 ?p }";
+    expect(rankedSparql(q, 10, "p")).toBe(`${q}\nORDER BY DESC(?p)\nLIMIT 10`);
   });
 });

@@ -7,7 +7,8 @@
  *     Fields used: recareaid, recareaname, recareaurl, forestname, markeractivitygroup (the area's primary marker, one value per area:
  *     "Camping & Cabins", "Trailhead", "Picnicking", "Beaches & Dunes", "Outdoor Learning", ...; `markertype` is only an image path),
  *     activityname (one per row), openstatus ("open" | "closed" | "none", refreshed nightly from the Recreation Portal).
- *   BLM:  https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recreation_Sites_Facilities/MapServer/0 (Facilities) and /1 (Sites)
+ *   BLM:  https://gis.blm.gov/natl/rest/services/recreation/BLM_Natl_Recreation_Sites_Facilities/MapServer/0 (Facilities) and /1 (Sites)
+ *     (moved from gis.blm.gov/arcgis, which redirects there, by 2026-10-14)
  *     Facilities: FacilityName, FacilityTypeDescription ("Campground" | "Facility" | "Kiosk" | "Permit" | "Activity Pass" | "Ticket Facility" |
  *     "Timed Entry" | "Venue Reservations"), BLMFacURL, State, Reservable ("-1" yes, "0" no). "Facility" is generic (trailheads, overlooks,
  *     boat ramps), so the site type is read from the name; permit and pass rows are administrative and are skipped.
@@ -16,21 +17,27 @@
  *   (10 campgrounds, 9 trailheads, 10 OHV areas, 4 water access, 3 visitor centers, ...) in 0.35 s; Moab box (-109.8,38.4,-109.3,38.8)
  *   returned 91 sites (27 campgrounds, 31 trailheads, 6 viewpoints, ...) from Manti-La Sal National Forest and BLM, after dropping BLM permit rows
  *   and merging same-name BLM facilities and sites.
+ * Wide (over 10,000 km², up to 1,500,000): the Forest Service view is asked for distinct area rows (returnDistinctValues with f=json,
+ *   point from its longitude and latitude columns, no activities), BLM for named rows of the shown types, then up to 2,000 are taken
+ *   from the two agencies in turn; the total counts distinct areas, shown-type facilities and sites. Smoke 2026-10-14, box
+ *   -114,36,-105,42 (520,000 km², Utah and Colorado): 2,000 named (1,102 USFS, 898 BLM) of 3,607 in 2.7 s.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
-import { arcgisQuery } from "./_shared/arcgis";
+import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
+import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
 
 export const USFS_URL =
   "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecreationAreaActivities_01/MapServer/0";
+// The BLM services moved from gis.blm.gov/arcgis to gis.blm.gov/natl (the old path redirects, checked 2026-10-14).
 export const BLM_FACILITIES_URL =
-  "https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recreation_Sites_Facilities/MapServer/0";
+  "https://gis.blm.gov/natl/rest/services/recreation/BLM_Natl_Recreation_Sites_Facilities/MapServer/0";
 export const BLM_SITES_URL =
-  "https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recreation_Sites_Facilities/MapServer/1";
+  "https://gis.blm.gov/natl/rest/services/recreation/BLM_Natl_Recreation_Sites_Facilities/MapServer/1";
 
 const USFS_FIELDS = ["recareaid", "recareaname", "recareaurl", "forestname", "markeractivitygroup", "activityname", "openstatus"];
 const BLM_FACILITY_FIELDS = ["FacilityName", "FacilityTypeDescription", "BLMFacURL", "State", "Reservable"];
@@ -40,6 +47,10 @@ const BLM_SITE_FIELDS = ["RecAreaName", "BLMRecURL", "State", "ActivityNames"];
 const TTL_SECONDS = 86_400;
 const MAX_POINTS = 5_000;
 const MAX_ACTIVITIES = 12;
+/** Most sites a wide view carries. */
+const WIDE_LIMIT = 2_000;
+/** One row per Forest Service area (no activities) for wide views: the view's columns that do not change between its rows. */
+const USFS_AREA_FIELDS = ["recareaid", "recareaname", "recareaurl", "forestname", "markeractivitygroup", "openstatus", "longitude", "latitude"];
 
 const CAPPED_NOTE = "Showing only part of the sites because the services cap each reply at 2,000 records; zoom in for the rest";
 
@@ -95,6 +106,8 @@ export function kindFromName(name: string): string {
 }
 
 const BLM_SKIPPED_TYPES = new Set(["Activity Pass", "Permit", "Ticket Facility", "Timed Entry", "Venue Reservations", "Kiosk"]);
+/** Wide views count and fetch only the BLM facility types that are shown. */
+export const BLM_SHOWN_FACILITIES = `FacilityTypeDescription NOT IN (${[...BLM_SKIPPED_TYPES].map((t) => `'${t}'`).join(", ")})`;
 
 function pointOf(f: Feature): [number, number] | null {
   if (f.geometry?.type !== "Point") return null;
@@ -226,6 +239,85 @@ export function dedupe(features: SiteFeature[]): SiteFeature[] {
   return out;
 }
 
+/**
+ * Query URL for one row per Forest Service area in a bbox: `returnDistinctValues` over the columns that are the same on every
+ * activity row, with the point read from the longitude and latitude columns (distinct rows cannot carry geometry, and the
+ * view's f=geojson rejects distinct). With `countOnly`, the number of areas instead.
+ */
+export function usfsAreasUrl(bbox: BBox, limit: number, countOnly = false): string {
+  const search = new URLSearchParams({
+    where: "1=1",
+    geometry: bbox.join(","),
+    geometryType: "esriGeometryEnvelope",
+    inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects",
+    returnDistinctValues: "true",
+    returnGeometry: "false",
+    f: "json",
+  });
+  if (countOnly) {
+    search.set("outFields", "recareaid");
+    search.set("returnCountOnly", "true");
+  } else {
+    search.set("outFields", USFS_AREA_FIELDS.join(","));
+    search.set("orderByFields", "recareaid");
+    search.set("resultRecordCount", String(limit));
+  }
+  return `${USFS_URL}/query?${search.toString()}`;
+}
+
+/** Distinct area rows (`{ features: [{ attributes }] }`) as the GeoJSON points normalizeUsfs reads. */
+export function usfsAreaRows(json: unknown): FeatureCollection {
+  const rows = typeof json === "object" && json !== null && "features" in json && Array.isArray(json.features) ? json.features : [];
+  const features: Feature[] = [];
+  for (const row of rows as unknown[]) {
+    const a = typeof row === "object" && row !== null && "attributes" in row ? (row.attributes as Record<string, unknown>) : null;
+    const lon = Number(a?.longitude);
+    const lat = Number(a?.latitude);
+    if (a === null || !Number.isFinite(lon) || !Number.isFinite(lat) || (lon === 0 && lat === 0)) continue;
+    features.push({ type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] }, properties: a });
+  }
+  return { type: "FeatureCollection", features };
+}
+
+async function usfsJson(ctx: QueryContext, url: string, suffix: string): Promise<{ ok: true; json: Record<string, unknown> } | { ok: false; error: string }> {
+  try {
+    const res = await ctx.fetch(url, {
+      cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:${suffix}`,
+      ttlSeconds: TTL_SECONDS,
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+    if (!res.ok) return { ok: false, error: `ArcGIS service returned ${res.status}` };
+    const json: unknown = await res.json();
+    if (typeof json !== "object" || json === null) return { ok: false, error: "ArcGIS service returned no JSON object" };
+    if ("error" in json) return { ok: false, error: "ArcGIS service error" };
+    return { ok: true, json: json as Record<string, unknown> };
+  } catch {
+    return { ok: false, error: "ArcGIS service returned no response" };
+  }
+}
+
+/** Wide Forest Service fetch: one row per area, at most `limit`, plus the number of areas in the box. */
+async function usfsAreas(ctx: QueryContext, limit: number): Promise<{ res: ArcgisResult; count: number | null }> {
+  const [rows, count] = await Promise.all([
+    usfsJson(ctx, usfsAreasUrl(ctx.bbox, limit), "usfs-areas"),
+    usfsJson(ctx, usfsAreasUrl(ctx.bbox, limit, true), "usfs-areas:count"),
+  ]);
+  const n = count.ok && typeof count.json.count === "number" ? count.json.count : null;
+  if (!rows.ok) return { res: rows, count: n };
+  return { res: { ok: true, fc: usfsAreaRows(rows.json), truncated: rows.json.exceededTransferLimit === true }, count: n };
+}
+
+/** Takes from the two lists in turn until `limit`, so neither agency crowds out the other. */
+export function interleave<T>(a: T[], b: T[], limit: number): T[] {
+  const out: T[] = [];
+  for (let i = 0; out.length < limit && (i < a.length || i < b.length); i++) {
+    if (i < a.length) out.push(a[i]);
+    if (out.length < limit && i < b.length) out.push(b[i]);
+  }
+  return out;
+}
+
 const inputSchema = z.object({});
 
 const recreationSites = defineLayer({
@@ -235,16 +327,18 @@ const recreationSites = defineLayer({
     "Developed recreation sites on US federal land: Forest Service recreation areas (national forests and grasslands) and Bureau of Land Management recreation sites and facilities. " +
     "Each point has name, kind (campground, trailhead, day use area, water access for boat ramps and beaches, viewpoint, trail, visitor center, winter sports, OHV area, or recreation area when it is none of those), " +
     "agency (USFS or BLM), a link (url) to the agency page, and for Forest Service areas the forest and a list of activities (hiking, swimming, picnicking and so on) plus status (open or closed as the nightly feed reports it). " +
-    "Use it for 'campgrounds near here', 'trailheads', 'boat ramps', 'picnic areas', 'where can I camp on Forest Service land', 'recreation sites', or to pick a base for a trip; filter by kind to narrow to one type. " +
+    "Use it for 'campgrounds near here', 'trailheads', 'boat ramps', 'picnic areas', 'where can I camp on Forest Service land', or to pick a base for a trip; filter by kind for one type. " +
     "Caveats: the site type comes from the agencies' own labels (BLM only says 'facility', so its type is inferred from the name and can be wrong); " +
     "this is the agencies' listing, not a booking system, so fees, dates and reservations must be checked on the linked page or recreation.gov; the closed flag is not a live closure notice. " +
     "It does not include National Park Service, state park or private campgrounds (use the campsites layer for those, which comes from OpenStreetMap). " +
     "United States only. Each service returns at most 2,000 records per request and the Forest Service data is one record per activity, so very busy views can be partial and the result says when that happens. " +
-    "Zoom in to a region under 10,000 km² (about a 100 km square) first.",
+    "Over 10,000 km² (about a 100 km square), up to 2,000 named sites, one per area, and the total.",
   coverage: "us",
   license: "Public domain (USDA Forest Service; Bureau of Land Management)",
   requiredEnv: [],
   maxAreaKm2: 10_000,
+  hardMaxAreaKm2: 1_500_000,
+  wide: { mode: "named", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("recreation-sites"), cluster: true },
 
@@ -259,13 +353,7 @@ const recreationSites = defineLayer({
       return { kind: "geojson", data: EMPTY, citation, coverageNote: OUTSIDE_US_NOTE };
     }
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > recreationSites.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${recreationSites.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
+    if (ctx.wide === true && ctx.wideStrategy !== undefined) return queryWide(ctx, ctx.wideStrategy.limit, citation);
 
     const [usfs, blmFacilities, blmSites] = await Promise.all([
       arcgisQuery(ctx, USFS_URL, {
@@ -331,6 +419,65 @@ const recreationSites = defineLayer({
     };
   },
 });
+
+/**
+ * Wide views (over 10,000 km², up to 1,500,000): one row per Forest Service area (its activities left out), named BLM facilities
+ * of the shown types and named BLM sites, each at most `limit`, then taken in turn from the two agencies up to `limit`. The total
+ * is the number of areas, shown-type facilities and sites in the box (a BLM facility and site with the same name count twice).
+ */
+async function queryWide(ctx: QueryContext, limit: number, citation: LayerResult["citation"]): Promise<LayerResult | LayerError> {
+  const [usfs, blmFacilities, blmSites, facilitiesCount, sitesCount] = await Promise.all([
+    usfsAreas(ctx, limit),
+    arcgisQuery(ctx, BLM_FACILITIES_URL, {
+      outFields: BLM_FACILITY_FIELDS,
+      where: `${BLM_SHOWN_FACILITIES} AND FacilityName > ' '`,
+      bbox: ctx.bbox,
+      orderByFields: "OBJECTID",
+      resultRecordCount: limit,
+      ttlSeconds: TTL_SECONDS,
+      cacheSuffix: "blm-facilities",
+    }),
+    arcgisQuery(ctx, BLM_SITES_URL, {
+      outFields: BLM_SITE_FIELDS,
+      where: "RecAreaName > ' '",
+      bbox: ctx.bbox,
+      orderByFields: "OBJECTID",
+      resultRecordCount: limit,
+      ttlSeconds: TTL_SECONDS,
+      cacheSuffix: "blm-sites",
+    }),
+    arcgisCount(ctx, BLM_FACILITIES_URL, { where: BLM_SHOWN_FACILITIES, bbox: ctx.bbox, ttlSeconds: TTL_SECONDS, cacheSuffix: "blm-facilities" }),
+    arcgisCount(ctx, BLM_SITES_URL, { bbox: ctx.bbox, ttlSeconds: TTL_SECONDS, cacheSuffix: "blm-sites" }),
+  ]);
+
+  const runs = [
+    { name: "Forest Service", res: usfs.res },
+    { name: "BLM facilities", res: blmFacilities },
+    { name: "BLM sites", res: blmSites },
+  ];
+  const failed = runs.filter((r) => !r.res.ok);
+  if (failed.length === runs.length) {
+    const first = failed[0].res;
+    return { error: first.ok ? "unknown error" : first.error, hint: "upstream" };
+  }
+  const notes = failed.map((r) => `${r.name} did not respond, so its sites are missing`);
+  const features = interleave(
+    usfs.res.ok ? normalizeUsfs(usfs.res.fc) : [],
+    dedupe([...(blmFacilities.ok ? normalizeBlmFacilities(blmFacilities.fc) : []), ...(blmSites.ok ? normalizeBlmSites(blmSites.fc) : [])]),
+    limit,
+  );
+  const counts = [usfs.count, facilitiesCount, sitesCount];
+  const total = failed.length === 0 && counts.every((c) => c !== null) ? counts.reduce<number>((sum, c) => sum + (c ?? 0), 0) : undefined;
+  if (features.length === 0 && notes.length === 0) notes.push("No Forest Service or BLM recreation sites in this area");
+
+  return {
+    kind: "geojson",
+    data: { type: "FeatureCollection", features },
+    citation,
+    ...(total !== undefined && { total }),
+    ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
+  };
+}
 
 registerLayer(recreationSites);
 

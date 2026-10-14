@@ -17,10 +17,13 @@
  * Smoke check 2026-10-10 (live, through runLayer): Utah-Arizona box -112,36.5,-108.5,38.5 returned 8 polygons in 0.4 s (2021: Grand Staircase-Escalante
  *   7,576 km2, Bears Ears 5,666 and 263; current: Bears Ears 487, Grand Staircase-Escalante 730, Canyons of the Ancients, Vermilion Cliffs, Baaj Nwaavjo
  *   I'tah Kukveni 3,856); the lower 48 with version "current" returned 56 polygons in 1.3 s.
+ * Smoke wide 2026-10-14 (live, through runLayer): the US with Alaska -170,18,-60,72 (about 50 million km²) returned 1,003 polygons of
+ *   1,081 in 2.8 s (286 KB). The current layer now holds 1,078 polygons, 942 of them California Coastal National Monument rocks, so
+ *   a wide view keeps the 1,000 largest and leaves out only the smallest rocks.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { layerColor } from "@/lib/render/palette";
@@ -131,11 +134,14 @@ export function normalizeHistoric(fc: FeatureCollection): Feature<Geometry>[] {
   return out;
 }
 
-/** Simplification in degrees: about 1/500 of the view width, between 0.0005 and 0.02. */
-export function offsetFor(bbox: BBox): number {
+/** Simplification in degrees: about 1/500 of the view width, between 0.0005 and 0.02 (0.05 over a wide box). */
+export function offsetFor(bbox: BBox, wide = false): number {
   const width = bbox[2] - bbox[0];
-  return Math.min(0.02, Math.max(0.0005, Math.round((width / 500) * 100_000) / 100_000));
+  return Math.min(wide ? 0.05 : 0.02, Math.max(0.0005, Math.round((width / 500) * 100_000) / 100_000));
 }
+
+/** Most polygons in a wide result; the whole dataset is under 70, so this only bounds the request. */
+const WIDE_LIMIT = 1000;
 
 const monuments = defineLayer({
   id: "monuments",
@@ -146,6 +152,7 @@ const monuments = defineLayer({
   license: "Public domain (BLM National Conservation Lands; Utah AGRC copy of 2021 boundaries)",
   requiredEnv: [],
   maxAreaKm2: 20_000_000,
+  wide: { orderBy: "area", limit: WIDE_LIMIT },
   input: z.object({
     version: z
       .enum(["both", "current", "2021"])
@@ -161,15 +168,10 @@ const monuments = defineLayer({
       retrieved: new Date().toISOString(),
     };
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > monuments.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${monuments.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
-    const offset = offsetFor(ctx.bbox);
+    // Wide (over 20 million km²): largest first, capped at the strategy's limit, coarser lines, and a count per service.
+    const wide = ctx.wide === true;
+    const wideLimit = wide ? ctx.wideStrategy?.limit : undefined;
+    const offset = offsetFor(ctx.bbox, wide);
     const wantCurrent = input.version !== "2021";
     const wantHistoric = input.version !== "current";
     const [current, historic] = await Promise.all([
@@ -178,6 +180,7 @@ const monuments = defineLayer({
             outFields: ["NCA_NAME", "Label", "sma_code", "STATE_ADMN", "STATE_GEOG", "NLCS_ID"],
             bbox: ctx.bbox,
             maxAllowableOffset: offset,
+            ...(wide && { orderByFields: "Shape.STArea() DESC", resultRecordCount: wideLimit, withCount: true }),
             ttlSeconds: TTL_SECONDS,
             cacheSuffix: "monuments:current",
           })
@@ -188,6 +191,7 @@ const monuments = defineLayer({
             where: "NLCS_TYPE = 'National Monument'",
             bbox: ctx.bbox,
             maxAllowableOffset: offset,
+            ...(wide && { orderByFields: "Shape__Area DESC", resultRecordCount: wideLimit, withCount: true }),
             ttlSeconds: TTL_SECONDS,
             cacheSuffix: "monuments:2021",
           })
@@ -221,10 +225,14 @@ const monuments = defineLayer({
         (a.properties?.kind === b.properties?.kind ? 0 : a.properties?.kind === "2021" ? -1 : 1) ||
         Number(b.properties?.v ?? 0) - Number(a.properties?.v ?? 0),
     );
+    // The total adds each asked service's count, so it only stands when every one answered with a count.
+    const counts = [current, historic].filter((r) => r !== null).map((r) => (r.ok ? r.total : undefined));
+    const total = wide && counts.every((c) => c !== undefined) ? counts.reduce((a: number, c) => a + (c ?? 0), 0) : undefined;
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features },
       citation,
+      ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },

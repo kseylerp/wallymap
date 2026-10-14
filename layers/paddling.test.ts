@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { buildPaddlingQuery, normalizePaddling, paddlingKind } from "./paddling";
+import { hardMaxAreaKm2 } from "./types";
+import layer, { WIDE_LIMIT, buildPaddlingQuery, buildWidePaddlingQuery, normalizePaddling, paddlingKind } from "./paddling";
 import trentino from "./__fixtures__/paddling.trentino.json";
 import bern from "./__fixtures__/paddling.bern.json";
 
@@ -143,6 +144,8 @@ describe("paddling layer", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toContain("ODbL");
     expect(layer.maxAreaKm2).toBe(2500);
+    expect(layer.wide).toEqual({ mode: "named", limit: 1000 });
+    expect(hardMaxAreaKm2(layer)).toBe(10_000);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toContain("OVERPASS_URL");
     expect(layer.style.geometry).toBe("line");
@@ -193,11 +196,81 @@ describe("paddling layer", () => {
     expect(stub).toHaveBeenCalledTimes(2);
   });
 
-  it("returns 422 zoom_in from runLayer over 2,500 km2 and 400 for a bad minGrade", async () => {
+  it("returns 422 zoom_in from runLayer over the 10,000 km2 hard cap and 400 for a bad minGrade", async () => {
     const big = await runLayer("paddling", { bbox: [10, 45, 12, 47] });
     expect(big.status).toBe(422);
     expect(big.body).toMatchObject({ hint: "zoom_in" });
     const bad = await runLayer("paddling", { bbox: TRENTINO, input: { minGrade: 9 } });
     expect(bad.status).toBe(400);
+  });
+});
+
+// The Aare from Bern to Thun, about 7,200 km²: over the 2,500 km² soft cap, under the 10,000 km² hard cap.
+const AARE: [number, number, number, number] = [7, 46.3, 8.2, 47];
+
+describe("paddling wide mode", () => {
+  const count = (total: number) => ({ type: "count", id: 0, tags: { total: String(total) } });
+  const body = {
+    elements: [
+      count(59),
+      count(3),
+      { type: "node", id: 1, lat: 46.75, lon: 7.6, tags: { whitewater: "put_in", name: "Thun" } },
+      { type: "node", id: 2, lat: 46.8, lon: 7.55, tags: { whitewater: "rapid", "whitewater:rapid_grade": "3" } },
+      {
+        type: "way",
+        id: 3,
+        tags: { "whitewater:section_grade": "2", "whitewater:section_name": "Aareschlucht", name: "Aare" },
+        geometry: [
+          { lat: 46.7, lon: 8.1 },
+          { lat: 46.72, lon: 8.15 },
+        ],
+      },
+      { type: "relation", id: 4, tags: { route: "canoe", name: "Aare Canoe Trail" }, members: [{ type: "way", ref: 5 }] },
+      {
+        type: "way",
+        id: 5,
+        geometry: [
+          { lat: 46.9, lon: 7.4 },
+          { lat: 46.95, lon: 7.45 },
+        ],
+      },
+    ],
+  };
+
+  it("answers through runLayer with the named features only, every feature as total and run.ts's note", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(body), { status: 200 }));
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("paddling", { bbox: AARE, zoom: 8 });
+      expect(res.status).toBe(200);
+      expect(stub).toHaveBeenCalledTimes(1);
+      const query = decodeURIComponent(String((stub.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+      expect(query).toContain('node.all["whitewater:rapid_name"];');
+      expect(query).toContain(`.nw out tags geom ${WIDE_LIMIT};`);
+      expect(query).toContain("rel.named->.r;");
+      if (!("kind" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
+      expect(res.body.data.features.map((f) => f.properties?.kind)).toEqual(["access", "section", "route"]);
+      expect(res.body.data.features[1].properties).toMatchObject({ name: "Aareschlucht", river: "Aare", v: 2 });
+      expect(res.body).toMatchObject({
+        total: 59,
+        truncated: true,
+        coverageNote: "Showing the 3 named of 59; zoom in under 2,500 km² for all",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("skips canoe routes for whitewaterOnly and notes what minGrade hid", async () => {
+    expect(buildWidePaddlingQuery(AARE, { whitewaterOnly: true }, 10)).not.toContain("canoe");
+    const stub = vi.fn(async () => new Response(JSON.stringify(body), { status: 200 }));
+    const r = await layer.query(
+      { bbox: AARE, zoom: 8, env: {}, fetch: stub as unknown as CachedFetch, wide: true, wideStrategy: layer.wide },
+      { whitewaterOnly: false, minGrade: 2 },
+    );
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features.map((f) => f.properties?.name)).toEqual(["Aareschlucht"]);
+    expect(r.total).toBe(59);
+    expect(r.coverageNote).toBe("minGrade hid 2 of the named features");
   });
 });

@@ -7,12 +7,17 @@
  * Tags read: piste:type, piste:difficulty, piste:name, name, ref, piste:grooming, piste:status, piste:lit,
  * network, check_date (becomes `t`). Closed outline areas (area=yes) are skipped so they do not overdraw the runs.
  * Live smoke check: Chamonix, France (45.85,6.8 to 46,7.05), 2026-10-09: 317 features (151 downhill, 103 nordic, 37 skitour, 26 other), no truncation; Truckee CA nordic only: 260.
+ * Wide mode (over 2,500 km², up to 10,000): a scan of the named piste ways and ski routes (ids and bounds), then the
+ * geometry of the 1,000 longest inside the box (see buildNamedScanQuery in osm-trails), with `total` every piste way and route.
+ * Live smoke check (wide), 2026-10-14: Valais and Aosta (6.5,45.5 to 7.5,46.3, about 8,700 km²): 1,000 kept of 7,657
+ * (4,621 named), 9.0 s.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
-import { overpassQuery } from "./_shared/overpass";
+import { overpassCounts, overpassQuery } from "./_shared/overpass";
+import { buildNamedGeometryQuery, buildNamedScanQuery, longestNamedFirst, pickNamedByLength } from "./osm-trails";
 import {
   bboxClause,
   returnedNote,
@@ -35,6 +40,8 @@ export const MAX_WAYS = 2_000;
 export const MAX_ROUTES = 50;
 /** Most member ways of those routes fetched, and only the ones inside the box. */
 export const MAX_ROUTE_WAYS = 3_000;
+/** Most named pistes and routes in a wide answer (the wide strategy's limit). */
+export const WIDE_LIMIT = 1_000;
 
 export const PISTE_KINDS = ["downhill", "nordic", "skitour", "sled"] as const;
 
@@ -56,16 +63,20 @@ function relationSelectors(kind: SkiInput["kind"]): string[] {
   return kind === undefined ? [`rel${route}`] : [`rel${route}["piste:type"="${kind}"]`, `rel${route}[!"piste:type"]`];
 }
 
+/** Selector for piste ways (of one kind when set), leaving out closed outline areas. */
+function waySelector(kind: SkiInput["kind"]): string {
+  return `way${kind === undefined ? '["piste:type"]' : `["piste:type"="${kind}"]`}["area"!="yes"]`;
+}
+
 /**
  * Overpass QL: piste ways and (optionally) route=ski and route=piste relations whose member ways are clipped to the
  * box (see clippedRelationQuery), each with an `out count` for the coverage note.
  */
 export function buildSkiQuery(bbox: BBox, input: Pick<SkiInput, "kind" | "includeRoutes">): string {
   const area = bboxClause(bbox);
-  const type = input.kind === undefined ? '["piste:type"]' : `["piste:type"="${input.kind}"]`;
   return (
     `[out:json][timeout:25];` +
-    `way${type}["area"!="yes"]${area}->.w;` +
+    `${waySelector(input.kind)}${area}->.w;` +
     `.w out count;.w out tags geom ${MAX_WAYS};` +
     (input.includeRoutes
       ? clippedRelationQuery("r", relationSelectors(input.kind), bbox, { routes: MAX_ROUTES, ways: MAX_ROUTE_WAYS })
@@ -149,6 +160,36 @@ export function normalizeSki(json: unknown, kind?: (typeof PISTE_KINDS)[number])
   return { type: "FeatureCollection", features };
 }
 
+/**
+ * Wide mode: the longest named piste ways and ski routes in the box (a name or piste:name), from a scan (counts, ids,
+ * bounds) and a geometry fetch of the picked ones. `total` counts every piste way and route in the box, named or not;
+ * run.ts writes the coverage note.
+ */
+async function queryWide(ctx: QueryContext, input: SkiInput): Promise<LayerResult | LayerError> {
+  const limit = ctx.wideStrategy?.limit ?? WIDE_LIMIT;
+  const selectors = [waySelector(input.kind), ...(input.includeRoutes ? relationSelectors(input.kind) : [])];
+  const scan = await overpassQuery(ctx, buildNamedScanQuery(selectors, ["name", "piste:name"], ctx.bbox), {
+    cacheSuffix: "ski-routes:scan",
+  });
+  if (!scan.ok) return { error: scan.error, hint: "upstream" };
+  const total = overpassCounts(scan.json)[0];
+
+  const picked = pickNamedByLength(scan.json, ctx.bbox, limit, MAX_ROUTES);
+  let features: Feature<Line>[] = [];
+  if (picked.ways.length + picked.relations.length > 0) {
+    const body = await overpassQuery(ctx, buildNamedGeometryQuery(ctx.bbox, picked, MAX_ROUTE_WAYS));
+    if (!body.ok) return { error: body.error, hint: "upstream" };
+    features = longestNamedFirst(normalizeSki(body.json, input.kind).features, limit);
+  }
+
+  return {
+    kind: "geojson",
+    data: { type: "FeatureCollection", features },
+    ...(total !== undefined && { total }),
+    citation: osmCitation(),
+  };
+}
+
 const skiRoutes = defineLayer({
   id: "ski-routes",
   title: "Ski runs, nordic trails and ski touring routes",
@@ -160,23 +201,18 @@ const skiRoutes = defineLayer({
     "Set kind to focus on one type. " +
     "Caveats: this is volunteer mapping of marked pistes, not avalanche terrain or a conditions report (backcountry skiing routes are sparsely mapped outside the Alps; combine with snowpack for snow depth); " +
     "difficulty colors differ by country, lifts and open or closed status are not included, and trails may be closed or ungroomed. " +
-    "Zoom in to a region under 2,500 km² first. At most 2,000 piste ways and 50 routes are returned (a route is drawn only where it passes through the box) and the coverage note gives the count and says if it was trimmed.",
+    "At most 2,000 piste ways and 50 routes are returned (a route is drawn only where it crosses the box) and the note gives the count; over 2,500 km² only the 1,000 longest named ones.",
   coverage: "global",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 2500,
+  wide: { mode: "named", orderBy: "length in km", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "line", color: layerColor("ski-routes") },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > skiRoutes.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${skiRoutes.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
+    if (ctx.wide === true) return queryWide(ctx, input);
 
     const result = await overpassQuery(ctx, buildSkiQuery(ctx.bbox, input), { cacheSuffix: "ski-routes" });
     if (!result.ok) return { error: result.error, hint: "upstream" };

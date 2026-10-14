@@ -11,6 +11,7 @@ import layer, {
   compass,
   forecastFeatures,
   forecastGrid,
+  keepLargest,
   parseLatestObs,
   parseStationList,
   parseStationNames,
@@ -19,7 +20,9 @@ import layer, {
   SEASON_BUOY_CAP,
   setClimatologyCache,
   waveStationIds,
+  WIDE_LIMIT,
 } from "./surf";
+import { hardMaxAreaKm2 } from "./types";
 import marineFixture from "./__fixtures__/marine.sf.json";
 
 /** Recorded 2026-10-10 ~02:11 UTC: latest_obs trimmed to 11 stations, activestations to 5, marine for SF's 4 x 4 grid. */
@@ -347,6 +350,69 @@ describe("surf layer", () => {
   it("rejects bad input and an oversized bbox through runLayer", async () => {
     expect((await runLayer("surf", { bbox: SF, input: { forecast: "yes" } })).status).toBe(400);
     expect((await runLayer("surf", { bbox: SF, input: { season: true, month: 13 } })).status).toBe(400);
-    expect((await runLayer("surf", { bbox: [-130, 20, -110, 45] })).status).toBe(422);
+    const huge = await runLayer("surf", { bbox: [-180, -60, 180, 80] });
+    expect(huge.status).toBe(422);
+    expect(huge.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/under 50000000 km²$/) });
+  });
+});
+
+describe("surf wide mode (over 500,000 km²)", () => {
+  it("declares every buoy up to 1,000, biggest waves first, with a hard cap of the US-sized 50 million km²", () => {
+    expect(layer.wide).toEqual({ orderBy: "wave height in metres", limit: 1000 });
+    expect(WIDE_LIMIT).toBe(1000);
+    expect(hardMaxAreaKm2(layer)).toBe(50_000_000);
+    expect(layer.description).toMatch(/over 500,000 km² up to 1,000 buoys, biggest waves first/);
+    expect(layer.description).not.toMatch(/zoom in to under/);
+  });
+
+  it("answers a 2.3 million km² box through runLayer from the one global file, with a wide note", async () => {
+    const stub = routedStub();
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("surf", { bbox: [-130, 20, -110, 45] });
+      expect(res.status).toBe(200);
+      expect(stub.mock.calls.filter((c) => String(c[0]).includes("latest_obs"))).toHaveLength(1);
+      expect(res.body).toMatchObject({ coverageNote: expect.stringMatching(/^Showing all \d+ in this wide view \(ranked by wave height in metres\)/) });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("cuts at the limit by wave height and counts every point", async () => {
+    const r = await layer.query({ ...ctx(routedStub(), [-130, 20, -110, 45]), wide: true, wideStrategy: { ...layer.wide!, limit: 2 } }, { forecast: false, season: false });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const all = buoyFeatures(parseLatestObs(OBS), new Map(), [-130, 20, -110, 45], NOW).features;
+    expect(all.length).toBeGreaterThan(2);
+    expect(r.total).toBe(all.length);
+    const top = all.map((f) => Number(f.properties?.v)).sort((a, b) => b - a).slice(0, 2);
+    expect(r.data.features.map((f) => f.properties?.v)).toEqual(top);
+    expect(keepLargest(all, all.length)).toEqual({ features: all });
+  });
+
+  it("summarises 6 buoys in a wide seasonal view and lists the rest as kind 'station', counting them at the limit", async () => {
+    setClimatologyCache(memoryCache());
+    const xml =
+      `<stations>` +
+      Array.from({ length: 8 }, (_, i) => `<station id="9900${i}" lat="${20 + i}" lon="${-150 - i}" name="Buoy ${i}" type="buoy"/>`).join("") +
+      `</stations>`;
+    const stub = vi.fn(async (url: string) => {
+      if (url.includes("activestations")) return text(xml);
+      if (url.includes("latest_obs")) return new Response("down", { status: 503 });
+      return text(HISTORY);
+    });
+    const box: [number, number, number, number] = [-160, 18, -148, 30];
+    const r = await layer.query({ ...ctx(stub, box), wide: true, wideStrategy: layer.wide }, { forecast: false, season: true, month: 10 });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features.filter((f) => f.properties?.kind === "climatology")).toHaveLength(SEASON_BUOY_CAP);
+    expect(r.data.features.filter((f) => f.properties?.kind === "station")).toHaveLength(2);
+    expect(r.total).toBeUndefined();
+    expect(r.coverageNote).toMatch(/the others are kind 'station' without values/);
+    expect(r.coverageNote).not.toMatch(/zoom in/);
+
+    const cut = await layer.query({ ...ctx(stub, box), wide: true, wideStrategy: { ...layer.wide!, limit: 7 } }, { forecast: false, season: true, month: 10 });
+    if (!("kind" in cut) || cut.kind !== "geojson") throw new Error("expected geojson");
+    expect(cut.data.features).toHaveLength(7);
+    expect(cut.total).toBe(8);
+    setClimatologyCache(null);
   });
 });

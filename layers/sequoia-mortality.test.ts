@@ -132,6 +132,8 @@ describe("sequoia-mortality layer", () => {
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.input.parse({})).toEqual({});
     expect(layer.style).toEqual({ geometry: "point", color: "#F57272", cluster: true });
+    expect(layer.maxAreaKm2).toBe(400_000);
+    expect(layer.wide).toEqual({ orderBy: "trunk diameter in cm", limit: 3000 });
     expect(layer.license).toMatch(/USGS/);
   });
 
@@ -165,6 +167,33 @@ describe("sequoia-mortality layer", () => {
       throw new Error("offline");
     });
     expect(await layer.query(ctx(down), {})).toMatchObject({ hint: "upstream" });
+  });
+
+  it("answers a box over 400,000 km² with every tree in it, biggest trunks first, and the count", async () => {
+    const stub = vi.fn(async () => text(CSV));
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("sequoia-mortality", { bbox: [-123, 33, -114, 39], zoom: 5 });
+      expect(res.status).toBe(200);
+      if (!("data" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
+      expect(res.body.data.features).toHaveLength(25);
+      const diameters = res.body.data.features.map((f) => Number(f.properties?.diameterCm ?? -1));
+      expect(diameters).toEqual([...diameters].sort((a, b) => b - a));
+      expect(res.body).toMatchObject({ total: 25, coverageNote: "Showing all 25 in this wide view (ranked by trunk diameter in cm); 4 surveyed trees that could not be found on a later visit are left out" });
+      expect(res.body).not.toHaveProperty("truncated");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("cuts a wide answer to the strategy's limit, keeping the biggest trunks", async () => {
+    const stub = vi.fn(async () => text(CSV));
+    const r = await layer.query({ ...ctx(stub), wide: true, wideStrategy: { orderBy: "trunk diameter in cm", limit: 5 } }, {});
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features).toHaveLength(5);
+    expect(r.total).toBe(25);
+    const all = parseStems(CSV).features.map((f) => Number(f.properties?.diameterCm ?? -1)).sort((a, b) => b - a);
+    expect(r.data.features.map((f) => Number(f.properties?.diameterCm ?? -1))).toEqual(all.slice(0, 5));
   });
 
   it("rejects a huge area through runLayer", async () => {

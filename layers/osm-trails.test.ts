@@ -1,17 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
+import { runLayer } from "@/lib/layers/run";
+import { hardMaxAreaKm2 } from "./types";
 import layer, {
   MAX_ROUTES,
   MAX_TRAILS,
   ROUTE_KM_BUDGET,
+  buildNamedGeometryQuery,
+  buildNamedScanQuery,
   buildOverpassQuery,
   buildRouteGeometryQuery,
   buildRouteScanQuery,
   countedWays,
   distanceTagKm,
+  longestNamedFirst,
   normalizeOverpass,
   normalizeRoutes,
   overpassFailure,
+  pickNamedByLength,
   pickRoutes,
   routeLengthKm,
   routesNote,
@@ -58,7 +64,7 @@ describe("osm-trails layer", () => {
     expect(first.geometry.coordinates[0]).toEqual([way.geometry[0].lon, way.geometry[0].lat]);
   });
 
-  it("rejects a bbox over 400,000 km2 with zoom_in", async () => {
+  it("rejects a bbox over the 400,000 km2 hard cap with zoom_in", async () => {
     const stub = vi.fn();
     const r = await layer.query(
       { bbox: [-125, 30, -110, 45], zoom: 5, env: {}, fetch: stub as unknown as CachedFetch },
@@ -335,8 +341,81 @@ describe("osm-trails named routes over a wide box", () => {
   });
 
   it("describes both scales for the model", () => {
-    expect(layer.maxAreaKm2).toBe(400_000);
+    expect(layer.maxAreaKm2).toBe(2_500);
+    expect(layer.hardMaxAreaKm2).toBe(400_000);
+    expect(hardMaxAreaKm2(layer)).toBe(400_000);
+    expect(layer.wide).toEqual({ mode: "named", orderBy: "length in km", limit: MAX_ROUTES });
     expect(layer.description).toContain("Under 2,500 km²");
     expect(layer.description).toContain("named hiking routes");
+  });
+
+  it("answers a wide box through runLayer with the named routes, the route count as total and run.ts's note", async () => {
+    const stub = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) =>
+      new Response(JSON.stringify(decodeURIComponent(String(init?.body)).includes("out tags bb") ? routeScan : routeGeometry), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("osm-trails", { bbox: GUIANA, zoom: 7 });
+      expect(res.status).toBe(200);
+      expect(stub).toHaveBeenCalledTimes(2);
+      expect(res.body).toMatchObject({
+        kind: "geojson",
+        total: 17,
+        truncated: true,
+        coverageNote: "Showing the 4 named of 17 (ranked by length in km); zoom in under 2,500 km² for all",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("caps the routes at the wide strategy's limit and leaves the note to run.ts", async () => {
+    const stub = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(routeScan), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(routeGeometry), { status: 200 }));
+    const wide = { mode: "named" as const, orderBy: "length in km", limit: 2 };
+    const r = await layer.query({ ...ctx(stub), wide: true, wideStrategy: wide }, { namedOnly: false });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.total).toBe(17);
+    expect(r.coverageNote).toBeUndefined();
+    const second = decodeURIComponent(String((stub.mock.calls[1][1] as RequestInit).body));
+    expect(second).toMatch(/relation\(id:\d+,\d+\);/);
+  });
+});
+
+describe("named-line helpers for the other OSM layers' wide mode", () => {
+  const BOX: [number, number, number, number] = [-112.5, 38, -111.5, 39];
+
+  it("scans every match and the named ones with counts, ids and bounds only", () => {
+    expect(buildNamedScanQuery(['way["mtb:scale"]', 'rel["route"="mtb"]'], ["name"], BOX)).toBe(
+      '[out:json][timeout:25];(way["mtb:scale"](38,-112.5,39,-111.5);rel["route"="mtb"](38,-112.5,39,-111.5);)->.all;.all out count;' +
+        '(way.all["name"];rel.all["name"];)->.named;.named out count;.named out ids bb 5000;',
+    );
+  });
+
+  it("picks the longest inside the box first, within the limit and the relation cap", () => {
+    const box = (id: number, type: string, size: number) => ({ type, id, bounds: { minlat: 38.2, minlon: -112, maxlat: 38.2 + size, maxlon: -112 + size } });
+    const scan = { elements: [{ type: "count", id: 0, tags: { total: "9" } }, box(1, "way", 0.01), box(2, "way", 0.1), box(3, "relation", 0.5), box(4, "relation", 0.4)] };
+    expect(pickNamedByLength(scan, BOX, 10, 5)).toEqual({ ways: [2, 1], relations: [3, 4] });
+    expect(pickNamedByLength(scan, BOX, 2, 5)).toEqual({ ways: [], relations: [3, 4] });
+    expect(pickNamedByLength(scan, BOX, 10, 1)).toEqual({ ways: [2, 1], relations: [3] });
+  });
+
+  it("fetches the picked ways with tags and the relations with bare member geometry inside the box", () => {
+    expect(buildNamedGeometryQuery(BOX, { ways: [2, 1], relations: [3] }, 3000)).toBe(
+      "[out:json][timeout:25];way(id:2,1);out tags geom;rel(id:3)->.r;way(r.r)(38,-112.5,39,-111.5)->.rw;.r out body;.rw out skel geom 3000;",
+    );
+    expect(buildNamedGeometryQuery(BOX, { ways: [], relations: [3] }, 10)).not.toContain("way(id:");
+  });
+
+  it("keeps the named features, longest first, up to the limit", () => {
+    const line = (name: string | undefined, lat: number) => ({
+      type: "Feature" as const,
+      geometry: { type: "LineString" as const, coordinates: [[-112, 38.2], [-112, lat]] },
+      properties: name === undefined ? {} : { name },
+    });
+    const kept = longestNamedFirst([line("short", 38.21), line(undefined, 38.9), line("long", 38.5), line("mid", 38.3)], 2);
+    expect(kept.map((f) => f.properties.name)).toEqual(["long", "mid"]);
   });
 });

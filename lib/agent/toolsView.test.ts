@@ -68,8 +68,10 @@ describe("zoom_in errors for the current view name layers that answer at this sc
       'query_outdoor-features with kinds: ["hut","viewpoint","waterfall"]',
       "query_protected-areas-world",
     ]);
-    // Huts, viewpoints and waterfalls fit a small country (French Guiana, about 136,000 km²); peaks do not.
+    // A small country (French Guiana, about 136,000 km²) is over peaks' 40,000 km² but under its hard cap (4 x), so
+    // peaks answers it with the most prominent, as do huts, viewpoints and waterfalls.
     expect(widerScaleFor("osm-trails", [-54.6, 2.1, -51.6, 5.8])).toEqual([
+      "query_peaks",
       'query_outdoor-features with kinds: ["hut","viewpoint","waterfall"]',
       "query_protected-areas-world",
     ]);

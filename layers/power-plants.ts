@@ -26,11 +26,11 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
-import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
+import { OUTSIDE_US_NOTE, WHOLE_US_KM2, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
 
 const PLANTS_URL = "https://services2.arcgis.com/FiaPA4ga0iQKduv3/ArcGIS/rest/services/Power_Plants_in_the_US/FeatureServer/0";
@@ -111,6 +111,31 @@ export function usgsUrl(base: string, fields: string[], order: string, bbox: BBo
   search.set("order", order);
   search.set("limit", String(cap + 1));
   return `${base}?${search.toString()}`;
+}
+
+/** PostgREST aggregate count of the USGS wind or solar rows in a bbox (`select=count()`), for a wide result's total. */
+export function usgsCountUrl(base: string, bbox: BBox): string {
+  const [west, south, east, north] = bbox;
+  const search = new URLSearchParams();
+  search.append("xlong", `gte.${west}`);
+  search.append("xlong", `lte.${east}`);
+  search.append("ylat", `gte.${south}`);
+  search.append("ylat", `lte.${north}`);
+  search.set("select", "count()");
+  return `${base}?${search.toString()}`;
+}
+
+/** The count from a `select=count()` answer (`[{"count":15980}]`), or undefined on any failure. */
+async function usgsCount(ctx: QueryContext, url: string, cacheKey: string | undefined): Promise<number | undefined> {
+  try {
+    const res = await ctx.fetch(url, { cacheKey, ttlSeconds: TTL_SECONDS, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
+    if (!res.ok) return undefined;
+    const body: unknown = await res.json();
+    const count = Array.isArray(body) ? (body[0] as { count?: unknown } | undefined)?.count : undefined;
+    return typeof count === "number" && Number.isFinite(count) ? count : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** EIA plants as points with MW as v and the fuel as kind. */
@@ -235,11 +260,14 @@ const powerPlants = defineLayer({
     "Caveats: the plants list comes from a copy of EIA data with a data period of February 2025 (see dataPeriod), so it lags EIA and misses newer plants, retirements and renamed ones. The plants source also lists wind and solar plants, so do not add its wind and solar counts to the USGS ones. " +
     "Capacity is what a plant can produce, not what it did produce. About half the older wind turbines have no rating; their v is the project average per turbine. " +
     "Plants are capped at 2,000 per view (largest first), turbines at 3,000 and solar projects at 2,000, and the result says when it trims. Points cluster at low zoom. " +
-    "United States only; elsewhere it returns nothing. Zoom in to a region under 250,000 km² (about a 500 km square) first.",
+    "United States only; elsewhere it returns nothing. Any box up to the whole US answers: over 250,000 km² (about a 500 km square) it returns the 2,000 largest by MW (turbines and solar projects likewise) and its note says how many there are in all, so pass the whole region asked about (West Texas, the Great Plains) rather than a slice of it.",
   coverage: "us",
   license: "Public domain (US EIA via Esri Federal User Community; USGS US Wind Turbine and Large-Scale Solar PV databases)",
   requiredEnv: [],
   maxAreaKm2: 250_000,
+  // Ranking the whole country costs one count and one ordered page, so the hard cap is the US itself.
+  hardMaxAreaKm2: WHOLE_US_KM2,
+  wide: { orderBy: "capacity in MW", limit: MAX_PLANTS },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("power-plants"), unit: "MW", extrude: "v", cluster: true },
 
@@ -268,21 +296,17 @@ const powerPlants = defineLayer({
       return { kind: "geojson", data: EMPTY, citation, coverageNote: OUTSIDE_US_NOTE };
     }
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > powerPlants.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${powerPlants.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
+    // Wide (over 250,000 km²): the same largest-first fetch, capped at the strategy's limit, plus a count for the note.
+    const wideLimit = ctx.wide ? ctx.wideStrategy?.limit : undefined;
 
     if (input.source === "plants") {
       const res = await arcgisQuery(ctx, PLANTS_URL, {
         where: plantsWhere(input.fuel),
         outFields: PLANT_FIELDS,
         bbox: ctx.bbox,
-        maxRecords: MAX_PLANTS,
+        resultRecordCount: Math.min(MAX_PLANTS, wideLimit ?? MAX_PLANTS),
         orderByFields: "Total_MW DESC",
+        withCount: ctx.wide === true,
         ttlSeconds: TTL_SECONDS,
         cacheSuffix: "plants",
       });
@@ -291,16 +315,23 @@ const powerPlants = defineLayer({
         kind: "geojson",
         data: normalizePlants(res.fc),
         citation,
-        ...(res.truncated ? { coverageNote: `Showing the ${MAX_PLANTS.toLocaleString("en-US")} largest plants in view; zoom in or pick a fuel for the rest` } : {}),
+        ...(res.total !== undefined && { total: res.total }),
+        ...(res.truncated && !ctx.wide
+          ? { coverageNote: `Showing the ${MAX_PLANTS.toLocaleString("en-US")} largest plants in view; zoom in or pick a fuel for the rest` }
+          : {}),
       };
     }
 
     const wind = input.source === "wind-turbines";
-    const cap = wind ? MAX_TURBINES : MAX_PROJECTS;
+    const cap = Math.min(wind ? MAX_TURBINES : MAX_PROJECTS, wideLimit ?? Infinity);
     const url = wind
       ? usgsUrl(WIND_URL, WIND_FIELDS, "t_cap.desc.nullslast", ctx.bbox, cap)
       : usgsUrl(SOLAR_URL, SOLAR_FIELDS, "p_cap_ac.desc.nullslast", ctx.bbox, cap);
     const label = wind ? "USGS wind turbine database" : "USGS solar database";
+
+    const counting = ctx.wide
+      ? usgsCount(ctx, usgsCountUrl(wind ? WIND_URL : SOLAR_URL, ctx.bbox), ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:${wind ? "wind" : "solar"}:count`)
+      : Promise.resolve(undefined);
 
     let rows: unknown;
     try {
@@ -321,11 +352,13 @@ const powerPlants = defineLayer({
 
     const trimmed = rows.length > cap;
     const data = wind ? normalizeTurbines(rows.slice(0, cap)) : normalizeSolar(rows.slice(0, cap));
+    const total = await counting;
     return {
       kind: "geojson",
       data,
       citation,
-      ...(trimmed
+      ...(total !== undefined && { total }),
+      ...(trimmed && !ctx.wide
         ? {
             coverageNote: `Showing the ${cap.toLocaleString("en-US")} largest ${wind ? "turbines" : "solar projects"} in view; zoom in for the rest`,
           }

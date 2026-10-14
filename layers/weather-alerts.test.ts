@@ -11,6 +11,8 @@ import layer, {
   setPointMissCache,
   statesFor,
   weatherWords,
+  WIDE_GRID,
+  WIDE_LIMIT,
   zonesFromPoint,
   zonesToFetch,
 } from "./weather-alerts";
@@ -18,6 +20,7 @@ import alertsFixture from "./__fixtures__/nws-alerts.ca-nv.json";
 import pointsFixture from "./__fixtures__/nws-points.tahoe.json";
 import zonesFixture from "./__fixtures__/nws-zones.tahoe.json";
 import nowFixture from "./__fixtures__/openmeteo-now.tahoe.json";
+import { hardMaxAreaKm2 } from "./types";
 
 /**
  * Recorded 2026-10-10 ~02:28 UTC: /alerts/active?area=CA,NV trimmed to 10 of 46 alerts (those touching Tahoe
@@ -192,8 +195,59 @@ describe("weather-alerts layer", () => {
   });
 
   it("rejects an oversized bbox and bad input through runLayer", async () => {
-    expect((await runLayer("weather-alerts", { bbox: [-125, 30, -110, 49] })).status).toBe(422);
+    const big = await runLayer("weather-alerts", { bbox: [-125, 30, -110, 49] });
+    expect(big.status).toBe(422);
+    expect(big.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/under 1600000 km²$/) });
     expect((await runLayer("weather-alerts", { bbox: TAHOE, input: { event: "" } })).status).toBe(400);
+  });
+});
+
+describe("weather-alerts wide mode (over 400,000 km²)", () => {
+  /** California and Nevada, about 1 million km². */
+  const CA_NV: [number, number, number, number] = [-124.5, 32.5, -114, 42];
+
+  it("declares the 1,000 most severe alerts under the default hard cap", () => {
+    expect(layer.wide).toEqual({ orderBy: "severity", limit: 1000, rank: "most severe" });
+    expect(WIDE_LIMIT).toBe(1000);
+    expect(hardMaxAreaKm2(layer)).toBe(1_600_000);
+    expect(layer.description).toMatch(/Over 400,000 km² it samples 25 points and keeps the 1,000 most severe alerts/);
+    expect(layer.description).not.toMatch(/Zoom in to under/);
+  });
+
+  it("samples a 5 x 5 grid instead of 3 x 3, one alerts call, and cuts at the limit with total", async () => {
+    expect(samplePoints(CA_NV, WIDE_GRID)).toHaveLength(25);
+    const stub = routedStub();
+    const full = await layer.query({ ...ctx(stub, CA_NV), wide: true, wideStrategy: layer.wide }, {});
+    if (!("kind" in full) || full.kind !== "geojson") throw new Error("expected geojson");
+    expect(calls(stub).filter((x) => x[0].includes("/points/"))).toHaveLength(25);
+    expect(calls(stub).filter((x) => x[0].includes("/alerts/active"))).toHaveLength(1);
+    const alerts = full.data.features.filter((f) => f.properties?.kind !== "now");
+    expect(alerts.length).toBeGreaterThan(1);
+    expect(full.total).toBeUndefined();
+
+    const cut = await layer.query({ ...ctx(routedStub(), CA_NV), wide: true, wideStrategy: { ...layer.wide!, limit: 1 } }, {});
+    if (!("kind" in cut) || cut.kind !== "geojson") throw new Error("expected geojson");
+    expect(cut.data.features.map((f) => f.properties?.kind)).toEqual([alerts[0].properties?.kind, "now"]);
+    expect(cut.total).toBe(alerts.length + 1);
+  });
+
+  it("answers the owner-sized Texas box (1.4 million km²) through runLayer instead of zoom_in", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("open-meteo")) return json(nowFixture);
+      if (url.includes("/alerts/active")) return json({ type: "FeatureCollection", features: [] });
+      return json({}, 404);
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("weather-alerts", { bbox: [-106, 26, -93, 36.5] });
+      expect(res.status).toBe(200);
+      const area = stub.mock.calls.map((c) => String(c[0])).find((u) => u.includes("/alerts/active"));
+      expect(new URL(area!).searchParams.get("area")?.split(",")).toContain("TX");
+      expect(res.body).toMatchObject({ coverageNote: expect.stringMatching(/^Showing all 1 in this wide view \(ranked by severity\)/) });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

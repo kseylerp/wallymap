@@ -10,10 +10,12 @@
  * Output `kind`: "allotment" | "herd-management-area" | "herd-area"; `v` is acres.
  * Smoke through runLayer (2026-10-09): central Nevada -117,39,-116,40 returned 26 allotments, 10 herd management
  * areas and 13 herd areas in 0.7 s (see the test for the recorded counts).
+ * Smoke wide (2026-10-14): Nevada -119,37,-114,42 (about 240,000 km²) returned 535 polygons of 1,024 (333 per service) in 1.6 s
+ * (276 KB); the first, cold call took 24 s, so the BLM servers are sometimes slow to wake.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -31,6 +33,8 @@ const HA_FIELDS = ["HA_NAME", "HA_NO", "ADMIN_ST", "ADMIN_AGCY", "HERD_TYPE", "B
 /** Boundaries change rarely, so a day is a safe cache lifetime. */
 const TTL_SECONDS = 86_400;
 const MAX_RECORDS = 2000;
+/** Most polygons in a wide result, shared equally between the services asked. */
+const WIDE_LIMIT = 1000;
 
 const TRUNCATED_NOTE = "Showing the 2,000 largest allotments or herd areas in view; zoom in for all";
 
@@ -58,10 +62,10 @@ function known(value: unknown): string | undefined {
 
 const ANIMALS: Record<string, string> = { HORSE: "horses", BURRO: "burros", BOTH: "horses and burros" };
 
-/** Display simplification in degrees: grows with the view because allotments are large. */
-export function simplifyOffset(bbox: BBox): number {
+/** Display simplification in degrees: grows with the view because allotments are large, and up to 0.04 over a wide box. */
+export function simplifyOffset(bbox: BBox, wide = false): number {
   const span = Math.max(bbox[2] - bbox[0], bbox[3] - bbox[1]);
-  return Math.min(0.02, Math.max(0.001, span / 400));
+  return Math.min(wide ? 0.04 : 0.02, Math.max(0.001, span / 400));
 }
 
 /** Converts service rows of one kind to polygons with readable names, `kind` and `v` (acres). */
@@ -114,11 +118,12 @@ const grazingAllotments = defineLayer({
     "Herd areas are historic ranges, so a herd area outside a herd management area usually has no animals today, and herd management areas are the better place to look for wild horses. Animals are not located, only their ranges. " +
     "United States only (mostly the western states; Alaska has no BLM allotments in this dataset). Boundaries are simplified for display, so edges are not survey-grade. " +
     "At most 2,000 polygons per group are returned, largest first, and the result says when that cap is hit. " +
-    "Zoom in to a region under 150,000 km² (about a 390 km square) first.",
+    "Over 150,000 km² (about a 390 km square) it keeps the 1,000 largest and gives the total.",
   coverage: "us",
   license: "Public domain (Bureau of Land Management)",
   requiredEnv: [],
   maxAreaKm2: 150_000,
+  wide: { orderBy: "acres", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("grazing-allotments"), fillOpacity: 0.18 },
 
@@ -133,18 +138,15 @@ const grazingAllotments = defineLayer({
       return { kind: "geojson", data: EMPTY, citation, coverageNote: OUTSIDE_US_NOTE };
     }
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > grazingAllotments.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${grazingAllotments.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
+    // Wide (over 150,000 km²): the strategy's limit shared between the services, coarser lines, and a count per service.
+    const wide = ctx.wide === true;
+    const services = input.show === "both" ? 3 : input.show === "herds" ? 2 : 1;
+    const wideLimit = wide ? ctx.wideStrategy?.limit : undefined;
     const common = {
       bbox: ctx.bbox,
-      maxRecords: MAX_RECORDS,
-      maxAllowableOffset: simplifyOffset(ctx.bbox),
+      resultRecordCount: wideLimit === undefined ? MAX_RECORDS : Math.min(MAX_RECORDS, Math.floor(wideLimit / services)),
+      maxAllowableOffset: simplifyOffset(ctx.bbox, wide),
+      withCount: wide,
       ttlSeconds: TTL_SECONDS,
     };
     type Part = { label: string; kind: GrazingKind; result: Promise<ArcgisResult> };
@@ -189,12 +191,16 @@ const grazingAllotments = defineLayer({
       features.push(...normalizeGrazing(part.result.fc, part.kind));
       truncated = truncated || part.result.truncated;
     }
-    if (truncated) notes.push(TRUNCATED_NOTE);
+    if (truncated && !wide) notes.push(TRUNCATED_NOTE);
+    // The total is the sum of every service's count, so it only stands when each service answered one.
+    const counts = settled.map((p) => (p.result.ok ? p.result.total : undefined));
+    const total = wide && counts.every((c) => c !== undefined) ? counts.reduce((a: number, c) => a + (c ?? 0), 0) : undefined;
 
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features },
       citation,
+      ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },

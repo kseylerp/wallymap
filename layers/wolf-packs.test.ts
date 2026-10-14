@@ -21,6 +21,9 @@ describe("wolf-packs layer", () => {
   it("declares sage polygons, no env and an optional year input", () => {
     expect(layer.id).toBe("wolf-packs");
     expect(layer.requiredEnv).toEqual([]);
+    expect(layer.maxAreaKm2).toBe(300_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "year", limit: 1000, rank: "newest" });
     expect(layer.license).toMatch(/terms not stated/);
     expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", fillOpacity: 0.3 });
     expect(layer.input.parse({})).toEqual({});
@@ -126,8 +129,27 @@ describe("wolf-packs layer", () => {
     expect(await layer.query(ctx(http), {})).toMatchObject({ hint: "upstream" });
   });
 
-  it("rejects an oversized bbox through runLayer", async () => {
-    expect((await runLayer("wolf-packs", { bbox: [-125, 40, -110, 50], zoom: 4 })).status).toBe(422);
+  it("rejects through runLayer only a box over four times the soft cap", async () => {
+    const res = await runLayer("wolf-packs", { bbox: [-125, 40, -110, 50], zoom: 4 });
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 1200000 km²$/) });
+  });
+
+  it("answers the Pacific Northwest wide: newest first, one request (the server's count is unreliable), and runLayer's note", async () => {
+    const stub = vi.fn(async () => json(fixture));
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("wolf-packs", { bbox: [-125, 44, -114, 50], zoom: 5 });
+      expect(res.status).toBe(200);
+      expect(stub).toHaveBeenCalledTimes(1);
+      const data = new URL(String((stub.mock.calls[0] as unknown as [string])[0]));
+      expect(data.searchParams.get("orderByFields")).toBe("Year DESC");
+      expect(data.searchParams.get("resultRecordCount")).toBe("1000");
+      expect(res.body).toMatchObject({ coverageNote: `Showing all ${fixture.features.length} in this wide view (ranked by year)` });
+      expect(res.body).not.toHaveProperty("truncated");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("says Washington only and names California's PDFs", () => {

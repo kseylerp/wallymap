@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { commonsUrl, mapillaryUrl, tileBBox } from "./photos";
+import layer, { commonsUrl, mapillaryUrl, tileBBox, widePhotoFeatures, widePhotosQuery } from "./photos";
 import commonsFixture from "./__fixtures__/photos.commons.json";
 import mapillaryFixture from "./__fixtures__/photos.mapillary.json";
 
@@ -104,6 +104,8 @@ describe("photos layer", () => {
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toEqual(["MAPILLARY_TOKEN"]);
     expect(layer.maxAreaKm2).toBe(2_500);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ mode: "named", orderBy: "number of Wikipedia languages", limit: 500 });
     expect(layer.style).toEqual({ geometry: "point", color: "#3A3A3C" });
     expect(layer.license).toBe("Wikimedia Commons (various free licenses); Mapillary (CC BY-SA 4.0)");
   });
@@ -374,9 +376,87 @@ describe("photos layer", () => {
     expect((await runLayer("photos", { bbox: SLT, input: { sources: ["flickr"] } })).status).toBe(400);
   });
 
-  it("returns 422 zoom_in from runLayer for a bbox over 2,500 km2", async () => {
-    const res = await runLayer("photos", { bbox: [-121, 38, -120, 39] });
+  it("returns 422 zoom_in from runLayer only over the hard cap (4 x 2,500 km²)", async () => {
+    const res = await runLayer("photos", { bbox: [-121.5, 38, -120, 39] });
     expect(res.status).toBe(422);
-    expect(res.body).toMatchObject({ hint: "zoom_in" });
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 10000 km²$/) });
+  });
+});
+
+describe("wide mode (over 2,500 km²)", () => {
+  const WIDE: [number, number, number, number] = [-120, 37.5, -119.3, 38.05];
+  const row = (q: number, label: string, file: string, links: number) => ({
+    item: { value: `http://www.wikidata.org/entity/Q${q}` },
+    itemLabel: { value: label },
+    links: { value: String(links) },
+    coord: { value: "Point(-119.6 37.75)" },
+    image: { value: `http://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}` },
+  });
+  const sparql = { results: { bindings: [row(1, "Half Dome", "Half Dome from Glacier Point.jpg", 40), row(2, "Q2", "Some Lake.jpg", 3)] } };
+
+  it("asks Wikidata for places with a photo, box first, ranked by Wikipedia languages", () => {
+    const q = widePhotosQuery(WIDE, 500);
+    expect(q).toContain('hint:Query hint:optimizer "None"');
+    expect(q).toContain("?item wdt:P18 ?img");
+    expect(q).toContain('wikibase:cornerNorthEast "Point(-119.3 38.05)"^^geo:wktLiteral');
+    expect(q.endsWith("ORDER BY DESC(?links)\nLIMIT 500")).toBe(true);
+  });
+
+  it("turns each place into its photo's point with the file page, the place name and its language count", () => {
+    const features = widePhotoFeatures(sparql);
+    expect(features?.map((f) => f.properties)).toEqual([
+      {
+        source: "commons",
+        title: "Half Dome from Glacier Point.jpg",
+        name: "Half Dome",
+        v: 1,
+        url: "https://commons.wikimedia.org/wiki/File:Half_Dome_from_Glacier_Point.jpg",
+        wikidata: "Q1",
+        languages: 40,
+      },
+      { source: "commons", title: "Some Lake.jpg", v: 1, url: "https://commons.wikimedia.org/wiki/File:Some_Lake.jpg", wikidata: "Q2", languages: 3 },
+    ]);
+    expect(widePhotoFeatures({ nope: 1 })).toBeNull();
+  });
+
+  it("answers a 3,700 km² box through runLayer from Wikidata alone, all of them when under the limit, with Mapillary left out", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).startsWith("https://query.wikidata.org/sparql")) return json(sparql);
+      throw new Error(`unexpected url ${String(input)}`);
+    });
+    vi.stubGlobal("fetch", stub);
+    vi.stubEnv("MAPILLARY_TOKEN", TOKEN);
+    try {
+      const r = await runLayer("photos", { bbox: WIDE, zoom: 8 });
+      expect(r.status).toBe(200);
+      expect(stub).toHaveBeenCalledTimes(1);
+      expect(r.body).toMatchObject({
+        total: 2,
+        coverageNote:
+          "Showing all 2 in this wide view (ranked by number of Wikipedia languages); over 2,500 km² this shows the best-known places that have a Commons photo, not where photos were taken; Mapillary is left out at this scale",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("quotes no total when the list filled its limit, refuses Mapillary alone, and maps Wikidata failures", async () => {
+    const full = { results: { bindings: Array.from({ length: 500 }, (_, i) => row(i, `Place ${i}`, `P${i}.jpg`, 500 - i)) } };
+    const stub = vi.fn(async () => json(full));
+    const wide = { wide: true, wideStrategy: layer.wide };
+    const r = geojson(await layer.query({ ...ctx(stub, { bbox: WIDE }), ...wide }, { sources: ["commons"] }));
+    expect(r.data.features).toHaveLength(500);
+    expect(r.total).toBeUndefined();
+
+    const none = vi.fn();
+    expect(await layer.query({ ...ctx(none, { bbox: WIDE, token: TOKEN }), ...wide }, { sources: ["mapillary"] })).toMatchObject({ hint: "zoom_in" });
+    expect(none).not.toHaveBeenCalled();
+
+    const down = vi.fn(async () => new Response("boom", { status: 500 }));
+    expect(await layer.query({ ...ctx(down, { bbox: WIDE }), ...wide }, { sources: ["commons"] })).toEqual({
+      error: "Wikidata returned 500",
+      hint: "upstream",
+    });
   });
 });

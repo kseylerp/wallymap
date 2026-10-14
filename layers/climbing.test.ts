@@ -206,10 +206,12 @@ describe("mergeCrags", () => {
 });
 
 describe("climbing layer", () => {
-  it("declares global coverage, a 10,000 km2 cap, 3D and heat hints and the activity words", () => {
+  it("declares global coverage, a 10,000 km2 soft cap ranked by route count above it, 3D and heat hints and the activity words", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toContain("ODbL");
     expect(layer.maxAreaKm2).toBe(10_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "route count", limit: 1000 });
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.style).toMatchObject({ geometry: "point", extrude: "v", heat: true });
     for (const word of ["bouldering", "crag", "OpenBeta"]) expect(layer.description).toContain(word);
@@ -293,9 +295,49 @@ describe("climbing layer", () => {
     expect(r).toEqual({ error: "Overpass returned 500; OpenBeta returned 503", hint: "upstream" });
   });
 
-  it("returns 422 zoom_in from runLayer over 10,000 km2", async () => {
-    const res = await runLayer("climbing", { bbox: [-85, 36, -83, 38] });
+  it("returns 422 zoom_in from runLayer only over the default hard cap of 40,000 km2", async () => {
+    const res = await runLayer("climbing", { bbox: [-86, 36, -83, 38] });
     expect(res.status).toBe(422);
-    expect(res.body).toMatchObject({ hint: "zoom_in" });
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/under 40000 km²$/) });
+  });
+
+  it("keeps the 1,000 places with the most routes in wide mode and counts every merged place as total", async () => {
+    const many = Array.from({ length: 1500 }, (_, i) => ({
+      uuid: `u${i}`,
+      area_name: `Crag ${i}`,
+      totalClimbs: i,
+      metadata: { lat: 37 + i * 0.001, lng: -84 + i * 0.001, leaf: true, isBoulder: false },
+    }));
+    const osm = { elements: [{ type: "count", id: 0, tags: { total: "1" } }, { type: "node", id: 1, lat: 36.5, lon: -84.5, tags: { sport: "climbing", climbing: "crag", name: "Wall", "climbing:routes": "2000" } }] };
+    const stub = reply(osm, { data: { cragsWithin: many } });
+    vi.stubGlobal("fetch", stub);
+    try {
+      // About 35,000 km² around the Red River Gorge and the Obed.
+      const res = await runLayer("climbing", { bbox: [-85, 36.2, -83, 38], zoom: 7 });
+      expect(res.status).toBe(200);
+      expect(stub).toHaveBeenCalledTimes(2);
+      if (!("kind" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
+      const v = res.body.data.features.map((f) => f.properties?.v as number);
+      expect(v).toHaveLength(1000);
+      expect(v[0]).toBe(2000);
+      expect(Math.min(...v)).toBe(1500 - 999);
+      expect(res.body.total).toBe(1501);
+      expect(res.body.truncated).toBe(true);
+      expect(res.body.coverageNote).toBe(
+        "Showing the 1,000 largest of 1,501 (ranked by route count); zoom in under 10,000 km² for all; Returned 1,000 climbing places (1 from OpenStreetMap, 1,500 from OpenBeta)",
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("leaves total out in wide mode when Overpass held more than it sent, and says the ranking saw part of the box", async () => {
+    const osm = { elements: [{ type: "count", id: 0, tags: { total: "3500" } }, ...osmFixture.elements.filter((e) => e.type !== "count")] };
+    const r = geojson(
+      await layer.query({ ...ctx(reply(osm, openbetaFixture)), wide: true, wideStrategy: layer.wide }, DEFAULTS),
+    );
+    expect(r.total).toBeUndefined();
+    expect(r.coverageNote).toContain("ranked from part of the box (OpenStreetMap stopped at 3,000 (lowest ids kept))");
+    expect(r.coverageNote).not.toContain("zoom in");
   });
 });

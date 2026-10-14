@@ -56,7 +56,8 @@ export function viewSystemMessage(view: MapView): string {
     "When the user says here, this area, on screen, around me, in view, or names no place, use this bbox directly: " +
     "do not geocode, and do not call set_view. " +
     "When the user names a place instead, ignore this bbox: geocode the place and call set_view to its bbox before you query, so the camera moves to the place they asked about. " +
-    `This view covers about ${areaKm2(view.bbox).toLocaleString("en-US")} km²; a layer with a smaller km² limit returns a zoom_in error for it, ` +
+    `This view covers about ${areaKm2(view.bbox).toLocaleString("en-US")} km²; a layer whose hard km² limit is smaller returns a zoom_in error for it ` +
+    "(over a layer's usual limit it still answers, with its largest or named features and a note), " +
     "and then you ask the user to zoom in or name a place instead of shrinking this bbox."
   );
 }

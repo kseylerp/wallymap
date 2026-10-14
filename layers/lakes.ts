@@ -13,17 +13,26 @@
  *   name "Tahoe" over a 2 x 1.3 degree box it returned just Lake Tahoe in 0.7 s. A Swiss box (7,46,9.5,47.5, about 21,000 km2) returned 311
  *   lakes (69 with depth; Maggiore 372 m, Como 410 m) in 13.5 s and a Finnish lake-district box (25,61,28,63) hit the 500-row cap in 13.5 s,
  *   which is why the area cap is 20,000 km2 (the 25 s client timeout is the limit).
+ * Wide mode (over 20,000 km², up to the default hard cap of 80,000 km²) runs wideLakesQuery: the 1,000 largest by area, no count.
+ * Smoke wide 2026-10-14 (through runLayer): Minnesota -94.4,45.4,-91,48 (about 70,000 km²) returned 1,000 lakes in 4.5 s (7 with depth);
+ *   with name "mille" the same box returned 3 in 2.7 s, Mille Lacs Lake first. Raw WDQS timings for the ranked query that day, cold: Minnesota
+ *   -94.5,45.5,-91,48 (about 73,000 km²) 1,000 rows in 2.0 s; northern California 1.1 s; the Alps 6,45,10,47.5 21.6 s; Finnish lakes
+ *   24,61,29,63.8 (about 78,000 km², the densest lake country) between 13 and 29 s, so that one can time out on a cold cache.
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
-import { wikimediaFetch } from "./_shared/wikimedia";
+import { rankedSparql, wikimediaFetch } from "./_shared/wikimedia";
 import { layerColor } from "@/lib/render/palette";
 
 export const SPARQL_ENDPOINT = "https://query.wikidata.org/sparql";
 export const LIMIT = 500;
+/** Most lakes a wide result (over 20,000 km²) carries, the largest by area. */
+export const WIDE_LIMIT = 1_000;
+/** Extra rows a wide query asks for, so items repeated under two coordinates do not leave the result short of its limit. */
+const WIDE_SLACK = 50;
 /** Lakes do not move and Wikidata edits are slow-moving. */
 const TTL_SECONDS = 7 * 86_400;
 
@@ -58,6 +67,15 @@ export function lakesQuery(bbox: BBox, name?: string): string {
 GROUP BY ?item ?label ?coord
 ORDER BY DESC(?area) DESC(?depth)
 LIMIT ${LIMIT}`;
+}
+
+/**
+ * The wide-mode query (over 20,000 km²): the same lakes, name filter included, ranked by area alone with rows that have no
+ * area last. The box query is kept because most lakes outside Europe have no area in Wikidata (14 of about 1,400 in a
+ * Minnesota box), so starting from the items that have one would drop nearly all of them.
+ */
+export function wideLakesQuery(bbox: BBox, limit: number, name?: string): string {
+  return rankedSparql(lakesQuery(bbox, name), limit + WIDE_SLACK, "area");
 }
 
 const valueSchema = z.object({ value: z.string() });
@@ -143,12 +161,13 @@ const lakes = defineLayer({
     "Set the name input (case-insensitive, matches part of the name) to find one lake in a big view, for example name 'tahoe'. " +
     "Caveats: depth is missing for most small lakes, tarns and reservoirs, so a null depth means 'not recorded', not 'shallow'; check the nulls before ranking, and say so when the lake asked about has none. " +
     "Depth is the maximum, not the average, as entered by Wikidata editors and not survey-checked; area, elevation and volume are also often missing. " +
-    "Many small lakes have no Wikidata entry, and unnamed items are left out. At most 500 lakes are returned, largest by area first, and the result says when that cap is hit. " +
-    "Works worldwide. Zoom in to a region under 20,000 km² (about a 140 km square) first, or set name.",
+    "Many small lakes have no Wikidata entry, and unnamed items are left out. At most 500 lakes are returned, largest by area first. " +
+    "Works worldwide. Over 20,000 km² (about a 140 km square) it returns the 1,000 largest by area.",
   coverage: "global",
   license: "CC0 (Wikidata)",
   requiredEnv: [],
   maxAreaKm2: 20_000,
+  wide: { orderBy: "area", limit: WIDE_LIMIT },
   input: z.object({
     name: z
       .string()
@@ -161,13 +180,9 @@ const lakes = defineLayer({
   style: { geometry: "point", color: layerColor("lakes"), unit: "m", cluster: true },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > lakes.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${lakes.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
+    // Wide (over 20,000 km², up to the hard cap): the largest lakes by area, capped at the strategy's limit.
+    const wideLimit = ctx.wide ? Math.min(WIDE_LIMIT, ctx.wideStrategy?.limit ?? WIDE_LIMIT) : undefined;
+    const query = wideLimit === undefined ? lakesQuery(ctx.bbox, input.name) : wideLakesQuery(ctx.bbox, wideLimit, input.name);
 
     let res: Response;
     try {
@@ -177,7 +192,7 @@ const lakes = defineLayer({
           accept: "application/sparql-results+json",
           "content-type": "application/x-www-form-urlencoded",
         },
-        body: new URLSearchParams({ query: lakesQuery(ctx.bbox, input.name) }).toString(),
+        body: new URLSearchParams({ query }).toString(),
         cacheKey: ctx.cacheKey,
         ttlSeconds: TTL_SECONDS,
       });
@@ -202,9 +217,11 @@ const lakes = defineLayer({
     const parsed = responseSchema.safeParse(json);
     if (!parsed.success) return { error: "Wikidata returned an unexpected response", hint: "upstream" };
 
-    const features = normalizeLakes(parsed.data.results.bindings);
+    const all = normalizeLakes(parsed.data.results.bindings);
+    const features = wideLimit === undefined ? all : all.slice(0, wideLimit);
     const notes: string[] = [];
-    if (parsed.data.results.bindings.length >= LIMIT) {
+    // In wide mode run.ts writes the "showing the N largest" note.
+    if (wideLimit === undefined && parsed.data.results.bindings.length >= LIMIT) {
       notes.push(`Showing the ${LIMIT} largest lakes by area; zoom in or set name for the rest`);
     }
     if (features.length === 0) {

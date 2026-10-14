@@ -11,10 +11,12 @@
  * Output properties: pack, year, status, kind (status, or "Not recorded" before 2022), t (January 1 of the year).
  * Smoke through runLayer (2026-10-10): Washington -124.9,45.5,-116.9,49.1 all years returned 377 pack-years in 0.4 s
  * (125 KB), with year 2023 only 45 (16 KB); northeast corner -118.5,48.4,-117,49 returned 144 (62 KB).
+ * Smoke wide (2026-10-14): Pacific Northwest -125,44,-114,50 (about 590,000 km²) returned all 377 pack-years in 1.1 s (122 KB),
+ * newest first; no total, because the server's count undercounts a bbox (282).
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { bboxesDisjoint } from "./_shared/coverage";
@@ -34,6 +36,9 @@ const MAX_RECORDS = 2000;
 const FIRST_YEAR = 2014;
 
 const NOT_RECORDED = "Not recorded";
+
+/** Most pack-years in a wide result, newest first (there are under 400 in all, so this only bounds the request). */
+const WIDE_LIMIT = 1000;
 
 const TRUNCATED_NOTE = "Showing the first 2,000 pack-years in view; pick a year for the rest";
 
@@ -90,11 +95,12 @@ const wolfPacks = defineLayer({
     "Use it for 'where are the wolves in Washington', 'how many wolf packs are there' or 'have wolves reached the Cascades'. " +
     "Caveats: Washington only, because it is the one western state that publishes pack outlines as map data (California publishes reports as PDFs only, and Oregon, Idaho and Montana are not in this layer). " +
     "Ranges are the agency's estimates from collar and survey locations, drawn to be general, and they are counts of known packs, not all wolves. " +
-    "Do not use them to find individual animals. Zoom in to a region under 300,000 km² (about a 550 km square, which covers the whole state) first.",
+    "Do not use them to find individual animals. Over 300,000 km² (more than the whole state) it keeps the 1,000 newest pack-years.",
   coverage: { bbox: WASHINGTON },
   license: "Public data, terms not stated (Washington Department of Fish and Wildlife, 2019 service)",
   requiredEnv: [],
   maxAreaKm2: 300_000,
+  wide: { orderBy: "year", limit: WIDE_LIMIT, rank: "newest" },
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("wolf-packs"), fillOpacity: 0.3 },
 
@@ -123,20 +129,15 @@ const wolfPacks = defineLayer({
       };
     }
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > wolfPacks.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${wolfPacks.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
+    // Wide (over 300,000 km²): newest first, capped at the strategy's limit. No count: this server's returnCountOnly
+    // undercounts a bbox (282 for a box whose query returns all 377 rows, 2026-10-14), and the whole layer fits the limit anyway.
     const res = await arcgisQuery(ctx, SERVICE_URL, {
       where: yearWhere(input.year),
       outFields: FIELDS,
       bbox: ctx.bbox,
       maxRecords: MAX_RECORDS,
       maxAllowableOffset: simplifyOffset(ctx.bbox),
+      ...(ctx.wide && { orderByFields: "Year DESC", resultRecordCount: ctx.wideStrategy?.limit ?? WIDE_LIMIT }),
       ttlSeconds: TTL_SECONDS,
       cacheSuffix: "wolves",
     });
@@ -146,7 +147,7 @@ const wolfPacks = defineLayer({
       kind: "geojson",
       data: normalizePacks(res.fc),
       citation,
-      ...(res.truncated ? { coverageNote: TRUNCATED_NOTE } : {}),
+      ...(res.truncated && !ctx.wide ? { coverageNote: TRUNCATED_NOTE } : {}),
     };
   },
 });

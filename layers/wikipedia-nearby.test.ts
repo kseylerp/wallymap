@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { articleUrl, buildFeatures, cellsOf, cleanExtract, extractsUrl, geosearchUrl } from "./wikipedia-nearby";
+import layer, { articleUrl, buildFeatures, cellsOf, cleanExtract, extractsUrl, geosearchUrl, wideArticlesQuery, wideHits } from "./wikipedia-nearby";
 import geoFixture from "./__fixtures__/wikipedia-nearby.geosearch.json";
 import extractsFixture from "./__fixtures__/wikipedia-nearby.extracts.json";
 
@@ -138,6 +138,8 @@ describe("wikipedia-nearby layer", () => {
     expect(layer.license).toContain("CC BY-SA 4.0");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(1_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ mode: "named", orderBy: "number of Wikipedia languages", limit: 500 });
     expect(layer.input.parse({})).toEqual({ lang: "en" });
     expect(() => layer.input.parse({ lang: "en.evil.com/" })).toThrow();
     expect(layer.style).toMatchObject({ geometry: "point", cluster: true });
@@ -234,8 +236,78 @@ describe("wikipedia-nearby layer", () => {
     expect(await layer.query(ctx(slow), input)).toMatchObject({ error: expect.stringContaining("timed out"), hint: "upstream" });
   });
 
-  it("rejects a view over the area cap through runLayer", async () => {
+  it("rejects a view over the hard cap (4 x 1,000 km²) through runLayer", async () => {
     const r = await runLayer("wikipedia-nearby", { bbox: [-121, 38, -120, 39] });
     expect(r.status).toBe(422);
+    expect(r.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 4000 km²$/) });
+  });
+});
+
+describe("wide mode (over 1,000 km²)", () => {
+  const WIDE: [number, number, number, number] = [-120.3, 38.8, -119.8, 39.2];
+  const row = (q: number, title: string, lon: number, links: number) => ({
+    item: { value: `http://www.wikidata.org/entity/Q${q}` },
+    title: { value: title },
+    coord: { value: `Point(${lon} 39)` },
+    links: { value: String(links) },
+  });
+  const sparql = { results: { bindings: [row(1, "Lake Tahoe", -120.03, 60), row(1, "Lake Tahoe", -120.04, 60), row(2, "Emerald Bay", -120.1, 12)] } };
+
+  it("asks Wikidata for articles in the box, box first, ranked by Wikipedia languages", () => {
+    const q = wideArticlesQuery(WIDE, "fr", 500);
+    expect(q).toContain('hint:Query hint:optimizer "None"');
+    expect(q).toContain('wikibase:cornerSouthWest "Point(-120.3 38.8)"^^geo:wktLiteral');
+    expect(q).toContain("schema:isPartOf <https://fr.wikipedia.org/>");
+    expect(q.endsWith("ORDER BY DESC(?links)\nLIMIT 500")).toBe(true);
+  });
+
+  it("keeps one hit per article and counts the raw rows", () => {
+    const r = wideHits(sparql);
+    expect(r?.rows).toBe(3);
+    expect(r?.hits.map((h) => [h.title, h.languages])).toEqual([["Lake Tahoe", 60], ["Emerald Bay", 12]]);
+    expect(wideHits({ nope: true })).toBeNull();
+  });
+
+  it("answers a 1,900 km² box through runLayer with the best-known articles, extracts by title, and all of them when under the limit", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://query.wikidata.org/sparql")) return json(sparql);
+      if (url.includes("prop=extracts")) {
+        expect(new URL(url).searchParams.get("titles")).toBe("Lake Tahoe|Emerald Bay");
+        return json({ query: { pages: { "5": { pageid: 5, title: "Lake Tahoe", extract: "Lake Tahoe is a lake." }, "-1": { title: "Emerald Bay", missing: "" } } } });
+      }
+      throw new Error(`unexpected url ${url}`);
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const r = await runLayer("wikipedia-nearby", { bbox: WIDE, zoom: 9 });
+      expect(r.status).toBe(200);
+      expect(stub.mock.calls.some((c) => String(c[0]).includes("list=geosearch"))).toBe(false);
+      const body = r.body as { data: { features: { properties: Record<string, unknown> }[] }; total?: number; coverageNote?: string };
+      expect(body.data.features.map((f) => f.properties)).toEqual([
+        { name: "Lake Tahoe", title: "Lake Tahoe", url: "https://en.wikipedia.org/wiki/Lake_Tahoe", extract: "Lake Tahoe is a lake.", languages: 60 },
+        { name: "Emerald Bay", title: "Emerald Bay", url: "https://en.wikipedia.org/wiki/Emerald_Bay", languages: 12 },
+      ]);
+      expect(body.total).toBe(2);
+      expect(body.coverageNote).toBe("Showing all 2 in this wide view (ranked by number of Wikipedia languages)");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("quotes no total when the ranked list filled its limit, and maps Wikidata failures to upstream errors", async () => {
+    const full = { results: { bindings: Array.from({ length: 500 }, (_, i) => row(i, `Place ${i}`, -120, 500 - i)) } };
+    const stub = vi.fn(async (url: string) => (url.startsWith("https://query.wikidata.org") ? json(full) : json({ query: { pages: {} } })));
+    const r = geojson(await layer.query({ ...ctx(stub, "w", WIDE), wide: true, wideStrategy: layer.wide }, { lang: "en" }));
+    expect(r.data.features).toHaveLength(500);
+    expect(r.total).toBeUndefined();
+    expect(r.coverageNote).toBe("only the 100 best-known have an extract");
+    expect(stub.mock.calls.filter((c) => String(c[0]).includes("prop=extracts"))).toHaveLength(5);
+
+    const down = vi.fn(async () => new Response("boom", { status: 500 }));
+    expect(await layer.query({ ...ctx(down, "w", WIDE), wide: true, wideStrategy: layer.wide }, { lang: "en" })).toEqual({
+      error: "Wikidata returned 500",
+      hint: "upstream",
+    });
   });
 });

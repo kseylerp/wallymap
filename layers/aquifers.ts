@@ -16,10 +16,12 @@
  * The lower 48 box (-125,24,-66,50) returned the 2,000-polygon cap (about 2.4 MB), hence the 6 million km2 limit.
  * Smoke check 2026-10-10 (live, through runLayer): Nebraska box -102,40,-98,42 returned the High Plains Aquifer (alias Ogallala, unconsolidated
  *   sand and gravel) from the Esri copy in 0.4 s; a Nevada-Utah box -120,38,-114,41 returned 123 polygons from the Nevada copy in 0.6 s.
+ * Smoke wide 2026-10-14 (live, through runLayer): the lower 48 -125,24,-66,50 (about 15 million km2) returned the 1,000 largest of 2,609
+ *   polygons from the Esri copy in 0.8 s (529 KB at 0.295 degrees), High Plains Aquifer first.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -60,10 +62,13 @@ function inside(view: BBox, extent: BBox): boolean {
   return view[0] >= extent[0] && view[1] >= extent[1] && view[2] <= extent[2] && view[3] <= extent[3];
 }
 
-/** Simplification in degrees for a view: about 1/400 of its width, between 0.002 and 0.2. */
-export function offsetFor(bbox: BBox): number {
+/**
+ * Simplification in degrees for a view: about 1/400 of its width, between 0.002 and 0.2. A wide box (over the soft cap) uses
+ * 1/200 of its width, up to 0.4: the lower 48 drops from about 1.9 MB to 0.55 MB for the 1,000 largest polygons.
+ */
+export function offsetFor(bbox: BBox, wide = false): number {
   const width = bbox[2] - bbox[0];
-  return Math.min(0.2, Math.max(0.002, Math.round((width / 400) * 10_000) / 10_000));
+  return Math.min(wide ? 0.4 : 0.2, Math.max(0.002, Math.round((width / (wide ? 200 : 400)) * 10_000) / 10_000));
 }
 
 /** Aquifer polygons with a readable name and the rock type spelled out in `kind`. */
@@ -87,13 +92,18 @@ export function normalizeAquifers(fc: FeatureCollection): FeatureCollection {
   return { type: "FeatureCollection", features };
 }
 
+/** Most polygons in a wide result, largest first. */
+const WIDE_LIMIT = 1000;
+
 async function fromService(ctx: QueryContext, url: string, tag: string) {
   return arcgisQuery(ctx, url, {
     outFields: FIELDS,
     bbox: ctx.bbox,
     where: "ROCK_TYPE <> 999",
     orderByFields: "Shape__Area DESC",
-    maxAllowableOffset: offsetFor(ctx.bbox),
+    maxAllowableOffset: offsetFor(ctx.bbox, ctx.wide === true),
+    // Wide (over 6 million km²): the strategy's limit and a count, so the note can say how many polygons there are in all.
+    ...(ctx.wide && { resultRecordCount: ctx.wideStrategy?.limit ?? WIDE_LIMIT, withCount: true }),
     ttlSeconds: TTL_SECONDS,
     cacheSuffix: `aquifers:${tag}`,
   });
@@ -103,12 +113,13 @@ const aquifers = defineLayer({
   id: "aquifers",
   title: "Principal aquifers",
   description:
-    "Principal aquifers of the United States (the rock or sand layers that hold pumped groundwater), including the High Plains (Ogallala) aquifer. Each polygon has name, kind (the rock: sand and gravel, sandstone, carbonate rock, igneous and metamorphic), rockType, aquiferCode, and alias 'Ogallala' on the High Plains. It shows the shallowest principal aquifer at 1:2.5 million scale (2003), so it is regional, the glacial aquifers of the northern states are missing, and it is not a well map; use groundwater for water levels. Read from third-party copies of USGS data. Zoom in to under 6,000,000 km².",
+    "Principal aquifers of the United States (the rock or sand layers that hold pumped groundwater), including the High Plains (Ogallala) aquifer. Each polygon has name, kind (the rock: sand and gravel, sandstone, carbonate rock, igneous and metamorphic), rockType, aquiferCode, and alias 'Ogallala' on the High Plains. It shows the shallowest principal aquifer at 1:2.5 million scale (2003), so it is regional, the glacial aquifers of the northern states are missing, and it is not a well map; use groundwater for water levels. Read from third-party copies of USGS data. Over 6,000,000 km² it keeps the 1,000 largest.",
   coverage: "us",
   license:
     "USGS Principal Aquifers (public domain, 2003), served from third-party copies: Nevada Division of Water Resources (western US) and Esri Living Atlas USA Aquifers (rest of the US, Esri terms of use)",
   requiredEnv: [],
   maxAreaKm2: 6_000_000,
+  wide: { orderBy: "area", limit: WIDE_LIMIT },
   input: z.object({}),
   style: { geometry: "polygon", color: layerColor("aquifers"), fillOpacity: 0.2 },
 
@@ -124,14 +135,6 @@ const aquifers = defineLayer({
       return { kind: "geojson", data: EMPTY, citation, coverageNote: OUTSIDE_US_NOTE };
     }
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > aquifers.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${aquifers.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
     const west = inside(ctx.bbox, NEVADA_EXTENT);
     let res = await fromService(ctx, west ? NEVADA_COPY : ESRI_COPY, west ? "nv" : "esri");
     // The Nevada server is a state agency's; if it is down the Esri copy has the same polygons.
@@ -140,12 +143,13 @@ const aquifers = defineLayer({
 
     const data = normalizeAquifers(res.fc);
     const notes: string[] = [];
-    if (res.truncated) notes.push("Showing the 2,000 largest aquifer polygons; zoom in for the rest");
+    if (res.truncated && !ctx.wide) notes.push("Showing the 2,000 largest aquifer polygons; zoom in for the rest");
     if (data.features.length === 0) notes.push("No principal aquifer is mapped here (the glacial aquifers of the northern states are not in this dataset)");
     return {
       kind: "geojson",
       data,
       citation,
+      ...(res.total !== undefined && { total: res.total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },

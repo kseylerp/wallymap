@@ -23,10 +23,14 @@
  * Smoke after keeping every dated outline (2026-10-10): Lyell/Maclure box -119.30,37.70,-119.20,37.78 returned 86 outlines in 3.3 s
  * (54 KB); Sierra box above 249 outlines in 1.1 s (151 KB); Eklutna box 141 in 0.8 s (225 KB); Mount Rainier box -121.9,46.7,-121.5,47.0
  * 440 outlines in 0.7 s (627 KB).
+ * Wide mode (over 8,000 km², up to the default hard cap of 32,000 km²): the 1,500 largest outline rows (sortBy db_area D, maxFeatures),
+ * every glacier among them kept with the one-outline-per-date series, thinned to about 400 m, plus a WFS 1.1 hits count quoted when the
+ * row limit cut some off. Smoke wide 2026-10-14 (through runLayer): Chugach -149,60.6,-145,61.8 (about 28,600 km²) returned 1,134 outlines
+ * of 6,621 in 5.2 s (2.2 MB out; GLIMS sent about 37 MB raw), Columbia Glacier first.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
@@ -45,6 +49,10 @@ const TTL_SECONDS = 7 * 86_400;
 const MAX_CACHED_CHARS = 4_000_000;
 /** Vertices closer than this (degrees, about 40 m) to the last kept one are dropped from the display geometry. */
 const MIN_VERTEX_STEP_DEG = 0.0004;
+/** Most outlines a wide result (over 8,000 km²) carries, the largest by area. */
+const WIDE_LIMIT = 1_500;
+/** Coarser thinning for a wide view (about 400 m), seen at a scale where 40 m detail is far below a pixel. */
+const WIDE_VERTEX_STEP_DEG = 0.004;
 
 const inputSchema = z.object({});
 
@@ -67,54 +75,87 @@ function glacierName(raw: unknown): string | undefined {
   return name;
 }
 
-/** WFS request URL for outlines inside a bbox. */
-export function glimsUrl(bbox: BBox): string {
+function outlineFilter(bbox: BBox): string {
   const [west, south, east, north] = bbox;
+  return `BBOX(entity_geom,${west},${south},${east},${north},'EPSG:4326') AND line_type='glac_bound'`;
+}
+
+/** WFS request URL for outlines inside a bbox, largest first, at most `rows` of them. */
+export function glimsUrl(bbox: BBox, rows: number = MAX_ROWS): string {
   const search = new URLSearchParams({
     service: "WFS",
     version: "1.0.0",
     request: "GetFeature",
     typeName: "GLIMS:GLIMS_Glacier_Outlines",
     outputFormat: "application/json",
-    maxFeatures: String(MAX_ROWS),
+    maxFeatures: String(rows),
     sortBy: "db_area D",
-    cql_filter: `BBOX(entity_geom,${west},${south},${east},${north},'EPSG:4326') AND line_type='glac_bound'`,
+    cql_filter: outlineFilter(bbox),
   });
   return `${ENDPOINT}?${search.toString()}`;
 }
 
+/** WFS 1.1 `resultType=hits` URL: the number of outlines in the box (`numberOfFeatures` in a small XML answer), no geometry. */
+export function glimsCountUrl(bbox: BBox): string {
+  const search = new URLSearchParams({
+    service: "WFS",
+    version: "1.1.0",
+    request: "GetFeature",
+    typeName: "GLIMS:GLIMS_Glacier_Outlines",
+    resultType: "hits",
+    cql_filter: outlineFilter(bbox),
+  });
+  return `${ENDPOINT}?${search.toString()}`;
+}
+
+/** The outline count from a hits answer, or undefined on any failure. */
+async function glimsCount(ctx: QueryContext, bbox: BBox): Promise<number | undefined> {
+  try {
+    const res = await ctx.fetch(glimsCountUrl(bbox), {
+      cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:glims:count`,
+      ttlSeconds: TTL_SECONDS,
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+    if (!res.ok) return undefined;
+    const m = /numberOfFeatures="(\d+)"/.exec(await res.text());
+    return m === null ? undefined : Number(m[1]);
+  } catch {
+    return undefined;
+  }
+}
+
 const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
 
-/** Drops vertices within MIN_VERTEX_STEP_DEG of the last kept one; a ring that collapses below 4 positions is dropped. */
-function thinRing(ring: Position[]): Position[] | null {
+/** Drops vertices within `step` degrees of the last kept one; a ring that collapses below 4 positions is dropped. */
+function thinRing(ring: Position[], step: number): Position[] | null {
   if (ring.length < 4) return null;
   const out: Position[] = [[round4(ring[0][0]), round4(ring[0][1])]];
   for (let i = 1; i < ring.length - 1; i++) {
     const last = out[out.length - 1];
     const p: Position = [round4(ring[i][0]), round4(ring[i][1])];
-    if (Math.abs(p[0] - last[0]) >= MIN_VERTEX_STEP_DEG || Math.abs(p[1] - last[1]) >= MIN_VERTEX_STEP_DEG) out.push(p);
+    if (Math.abs(p[0] - last[0]) >= step || Math.abs(p[1] - last[1]) >= step) out.push(p);
   }
   out.push(out[0]);
   return out.length >= 4 ? out : null;
 }
 
-function thinPolygon(rings: Position[][]): Position[][] | null {
+function thinPolygon(rings: Position[][], step: number): Position[][] | null {
   const [outer, ...holes] = rings;
-  const thinnedOuter = outer ? thinRing(outer) : null;
+  const thinnedOuter = outer ? thinRing(outer, step) : null;
   if (thinnedOuter === null) return null;
-  const thinnedHoles = holes.map(thinRing).filter((r): r is Position[] => r !== null);
+  const thinnedHoles = holes.map((r) => thinRing(r, step)).filter((r): r is Position[] => r !== null);
   return [thinnedOuter, ...thinnedHoles];
 }
 
-/** Display geometry with the vertex count cut by thinning; null when nothing is left. */
-export function thinGeometry(geometry: Geometry | null): Geometry | null {
+/** Display geometry with the vertex count cut by thinning (MIN_VERTEX_STEP_DEG by default); null when nothing is left. */
+export function thinGeometry(geometry: Geometry | null, step: number = MIN_VERTEX_STEP_DEG): Geometry | null {
   if (geometry === null) return null;
   if (geometry.type === "Polygon") {
-    const rings = thinPolygon(geometry.coordinates);
+    const rings = thinPolygon(geometry.coordinates, step);
     return rings === null ? null : { type: "Polygon", coordinates: rings };
   }
   if (geometry.type === "MultiPolygon") {
-    const polygons = geometry.coordinates.map(thinPolygon).filter((p): p is Position[][] => p !== null);
+    const polygons = geometry.coordinates.map((p) => thinPolygon(p, step)).filter((p): p is Position[][] => p !== null);
     return polygons.length === 0 ? null : { type: "MultiPolygon", coordinates: polygons };
   }
   return null;
@@ -156,10 +197,15 @@ function centerOf(geometry: Geometry): [number, number] {
  * institution. Every dated outline is kept, so a glacier mapped in 1984 and 2014 comes back twice. Duplicates go two ways:
  * the same glacier id and date keeps the larger outline, and so does a named glacier with the same date and a near-identical
  * position under a different id (GLIMS gives Lyell Glacier two ids), whose ids are then merged under the larger one's id so
- * the dates form one series. The `truncated` flag is set when more than MAX_GLACIERS glaciers were present: the largest by
- * any outline are kept, with all of their outlines, oldest first.
+ * the dates form one series. The `truncated` flag is set when more than `maxGlaciers` glaciers were present: the largest by
+ * any outline are kept, with all of their outlines, oldest first. A wide view passes no glacier cap (its row limit bounds it)
+ * and a coarser vertex step.
  */
-export function normalizeGlaciers(json: unknown): { data: FeatureCollection; truncated: boolean } {
+export function normalizeGlaciers(
+  json: unknown,
+  options: { maxGlaciers?: number; stepDeg?: number } = {},
+): { data: FeatureCollection; truncated: boolean } {
+  const maxGlaciers = options.maxGlaciers ?? MAX_GLACIERS;
   const empty = { data: { type: "FeatureCollection", features: [] } as FeatureCollection, truncated: false };
   if (typeof json !== "object" || json === null || !("features" in json) || !Array.isArray(json.features)) return empty;
 
@@ -172,7 +218,7 @@ export function normalizeGlaciers(json: unknown): { data: FeatureCollection; tru
     if (str(p.line_type) !== undefined && p.line_type !== "glac_bound") continue;
     const area = num(p.db_area);
     if (area === undefined) continue;
-    const geometry = thinGeometry(f.geometry ?? null);
+    const geometry = thinGeometry(f.geometry ?? null, options.stepDeg);
     if (geometry === null) continue;
 
     const id = str(p.glac_id) ?? `row-${anonymous++}`;
@@ -238,8 +284,8 @@ export function normalizeGlaciers(json: unknown): { data: FeatureCollection; tru
   const biggest = new Map<string, number>();
   for (const r of outlines.values()) biggest.set(r.id, Math.max(biggest.get(r.id) ?? 0, r.area));
   const ranked = [...biggest.entries()].sort((a, b) => b[1] - a[1]);
-  const truncated = ranked.length > MAX_GLACIERS;
-  const keep = new Set(ranked.slice(0, MAX_GLACIERS).map(([id]) => id));
+  const truncated = ranked.length > maxGlaciers;
+  const keep = new Set(ranked.slice(0, maxGlaciers).map(([id]) => id));
   const order = new Map(ranked.map(([id], i) => [id, i]));
 
   const kept = [...outlines.values()]
@@ -262,12 +308,13 @@ const glaciers = defineLayer({
     "Use it to show where glaciers are, which are biggest, how much ice a range holds, and how glaciers have shrunk, for example 'where are the glaciers near Mount Rainier', 'the largest glaciers in this part of Alaska' or 'show how Lyell Glacier has retreated'. With 3D on, the map can raise glaciers by area. " +
     "Caveats: this is an inventory, not a current survey. The outlines date from about 1970 to the 2020s depending on the glacier, so the date matters and most glaciers have shrunk since; do not read the newest outline as today's ice edge. Many glaciers have only one date, and different teams and image dates make some outline changes partly mapping differences, not melt. " +
     "GLIMS sometimes gives one glacier two ids (Lyell Glacier has two); named glaciers with the same date and place are merged under one glacierId, but unnamed ones can still overlap. Some small ice patches are listed as glaciers and some real glaciers are missing. " +
-    "At most the 300 largest glaciers in view are returned (each with all its dated outlines) and the result says when it trims, so zoom in for the rest. Outlines are simplified for display (details under about 40 m are dropped). " +
-    "Works anywhere in the world, but only for areas under 8,000 km² (about a 90 km square), so zoom in to a range or a single mountain first.",
+    "At most the 300 largest glaciers in view are returned (each with all its dated outlines). Outlines are simplified for display (details under about 40 m are dropped). " +
+    "Works worldwide. Over 8,000 km² (about a 90 km square) it returns the 1,500 largest outlines, drawn coarser (about 400 m).",
   coverage: "global",
   license: "Free to use, cite GLIMS (NSIDC / University of Arizona)",
   requiredEnv: [],
   maxAreaKm2: 8_000,
+  wide: { orderBy: "area in km²", limit: WIDE_LIMIT },
   input: inputSchema,
   style: {
     geometry: "polygon",
@@ -278,17 +325,15 @@ const glaciers = defineLayer({
   },
 
   async query(ctx): Promise<LayerResult | LayerError> {
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > glaciers.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${glaciers.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
+    // Wide (over 8,000 km², up to the hard cap): the largest outlines by area, server-sorted and capped at the strategy's
+    // limit, with a parallel hits count. GLIMS has no simplification, so the raw answer stays large (about 37 MB for 1,500
+    // Alaska outlines) and is thinned to about 400 m here.
+    const wideRows = ctx.wide ? Math.min(WIDE_LIMIT, ctx.wideStrategy?.limit ?? WIDE_LIMIT) : undefined;
+    const counting = wideRows === undefined ? Promise.resolve(undefined) : glimsCount(ctx, ctx.bbox);
 
     let body: unknown;
     try {
-      const res = await ctx.fetch(glimsUrl(ctx.bbox), {
+      const res = await ctx.fetch(glimsUrl(ctx.bbox, wideRows ?? MAX_ROWS), {
         cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:glims`,
         ttlSeconds: TTL_SECONDS,
         shouldCache: (text) => text.length <= MAX_CACHED_CHARS && text.trimStart().startsWith("{"),
@@ -311,9 +356,13 @@ const glaciers = defineLayer({
       };
     }
 
-    const { data, truncated } = normalizeGlaciers(body);
+    const { data, truncated } =
+      wideRows === undefined ? normalizeGlaciers(body) : normalizeGlaciers(body, { maxGlaciers: Infinity, stepDeg: WIDE_VERTEX_STEP_DEG });
     const rows =
       typeof body === "object" && body !== null && "features" in body && Array.isArray(body.features) ? body.features.length : 0;
+    // The count is of outline rows (repeats included), so it is only quoted when the row limit cut some off.
+    const count = await counting;
+    const total = wideRows !== undefined && rows >= wideRows && count !== undefined && count > data.features.length ? count : undefined;
     const notes: string[] = [];
     const years = [...new Set(data.features.map((f) => String(f.properties?.date ?? "").slice(0, 4)).filter((y) => y !== ""))].sort();
     if (years.length > 0) {
@@ -321,7 +370,9 @@ const glaciers = defineLayer({
         `Outlines exist only for the dates glaciers were mapped (years in view: ${years.slice(0, 8).join(", ")}${years.length > 8 ? " and more" : ""}); the ice between those dates is not shown`,
       );
     }
-    if (truncated) {
+    if (wideRows !== undefined) {
+      // run.ts writes the "showing the N largest" note.
+    } else if (truncated) {
       notes.push(`Showing the ${MAX_GLACIERS} largest glaciers in view; zoom in for smaller ones`);
     } else if (rows >= MAX_ROWS) {
       notes.push(`Showing the ${MAX_ROWS} biggest outlines in view; some later outlines of smaller glaciers may be missing, so zoom in`);
@@ -330,6 +381,7 @@ const glaciers = defineLayer({
     return {
       kind: "geojson",
       data,
+      ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
       citation: {
         source: "GLIMS Glacier Database (Raup et al.; NSIDC / University of Arizona), outlines from many contributing institutions",

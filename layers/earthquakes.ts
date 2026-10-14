@@ -10,16 +10,21 @@
  *   the California-sized box (-125,32,-114,42) counted 1,352 events at M2.5+ for the year (fdsnws `count`).
  * The service answers HTTP 400 when a request would match more than 20,000 events and sends no `limit`; this layer always
  * sends limit=5000 and orders by magnitude, so a capped result keeps the biggest events and says so in coverageNote.
+ * Wide mode (over 5,000,000 km², up to the default hard cap of 20,000,000 km²) sends limit=2000 with the same order and asks the
+ * fdsnws `count` endpoint for the total. Smoke wide 2026-10-14 (through runLayer): Alaska and the Aleutians -170,45,-130,72, M2.5+ for
+ * 365 days, returned the 2,000 strongest of 5,983 in 4.8 s (590 KB).
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
 
 const ENDPOINT = "https://earthquake.usgs.gov/fdsnws/event/1/query";
 const LIMIT = 5_000;
+/** Most events a wide result (over 5,000,000 km²) carries, the strongest. */
+const WIDE_LIMIT = 2_000;
 /** New events arrive within minutes of a quake, so recent results go stale quickly. */
 const TTL_SECONDS = 900;
 const DAY_MS = 86_400_000;
@@ -29,14 +34,40 @@ const inputSchema = z.object({
   minMagnitude: z.number().min(-1).max(9).default(2.5),
 });
 
-/** USGS query URL; time window starts `days` back from `now` (date only, UTC). */
-export function earthquakesUrl(bbox: BBox, days: number, minMagnitude: number, now: number = Date.now()): string {
+/** The shared query string: bbox, a date-only start `days` back from `now` (UTC) and the smallest magnitude. */
+function searchParams(bbox: BBox, days: number, minMagnitude: number, now: number): string {
   const [west, south, east, north] = bbox;
   const start = new Date(now - days * DAY_MS).toISOString().slice(0, 10);
   return (
-    `${ENDPOINT}?format=geojson&minlongitude=${west}&minlatitude=${south}&maxlongitude=${east}&maxlatitude=${north}` +
-    `&starttime=${start}&minmagnitude=${minMagnitude}&orderby=magnitude&limit=${LIMIT}`
+    `format=geojson&minlongitude=${west}&minlatitude=${south}&maxlongitude=${east}&maxlatitude=${north}` +
+    `&starttime=${start}&minmagnitude=${minMagnitude}`
   );
+}
+
+/** USGS query URL, strongest first, at most `limit` events. */
+export function earthquakesUrl(bbox: BBox, days: number, minMagnitude: number, now: number = Date.now(), limit: number = LIMIT): string {
+  return `${ENDPOINT}?${searchParams(bbox, days, minMagnitude, now)}&orderby=magnitude&limit=${limit}`;
+}
+
+/** USGS `count` URL for the same search (`{"count":1352,"maxAllowed":20000}`), for a wide result's total. */
+export function earthquakesCountUrl(bbox: BBox, days: number, minMagnitude: number, now: number = Date.now()): string {
+  return `${ENDPOINT.replace(/\/query$/, "/count")}?${searchParams(bbox, days, minMagnitude, now)}`;
+}
+
+/** The count from a `count` answer, or undefined on any failure. */
+async function countEvents(ctx: QueryContext, url: string): Promise<number | undefined> {
+  try {
+    const res = await ctx.fetch(url, {
+      cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:count`,
+      ttlSeconds: TTL_SECONDS,
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+    if (!res.ok) return undefined;
+    const body = (await res.json()) as { count?: unknown };
+    return typeof body.count === "number" && Number.isFinite(body.count) ? body.count : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 const eventSchema = z.object({
@@ -94,17 +125,22 @@ const earthquakes = defineLayer({
     "Input days sets how far back to look (default 365, up to 3650) and minMagnitude the smallest quake to include (default 2.5; lower it to 1.0 to see small tremors, though coverage of tiny quakes is uneven). " +
     "Caveats: magnitude is on a logarithmic scale, so a 5 releases about 32 times the energy of a 4; quakes below about 2.5 are only recorded where seismometer networks are dense (California, Nevada, the Pacific Northwest, Alaska, Hawaii); " +
     "new events and revised magnitudes can change in the first hours; this shows what happened, not a forecast. " +
-    "At most 5,000 events are returned, biggest first, and the result says when that cap is hit. " +
-    "Zoom in to a region under 5,000,000 km² (about a 2,200 km square) first.",
+    "At most 5,000 events, biggest first. " +
+    "Over 5,000,000 km² (about a 2,200 km square) it returns the 2,000 strongest.",
   coverage: "global",
   license: "Public domain (USGS)",
   requiredEnv: [],
   maxAreaKm2: 5_000_000,
+  wide: { orderBy: "magnitude", rank: "strongest", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("earthquakes"), unit: "M", extrude: "v", heat: true },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
-    const url = earthquakesUrl(ctx.bbox, input.days, input.minMagnitude);
+    // Wide (over 5,000,000 km², up to the hard cap): the strongest events, capped at the strategy's limit, plus a count.
+    const now = Date.now();
+    const limit = ctx.wide ? Math.min(LIMIT, ctx.wideStrategy?.limit ?? WIDE_LIMIT) : LIMIT;
+    const url = earthquakesUrl(ctx.bbox, input.days, input.minMagnitude, now, limit);
+    const counting = ctx.wide ? countEvents(ctx, earthquakesCountUrl(ctx.bbox, input.days, input.minMagnitude, now)) : Promise.resolve(undefined);
     let res: Response;
     try {
       res = await ctx.fetch(url, {
@@ -134,16 +170,19 @@ const earthquakes = defineLayer({
 
     const data = normalizeEarthquakes(parsed.data.features);
     const notes: string[] = [];
-    if (parsed.data.features.length >= LIMIT) {
+    // In wide mode run.ts writes the "showing the N strongest" note.
+    if (!ctx.wide && parsed.data.features.length >= LIMIT) {
       notes.push(`Showing the ${LIMIT.toLocaleString("en-US")} largest events; zoom in or raise minMagnitude for the rest`);
     }
     if (data.features.length === 0) {
       notes.push(`No earthquakes of magnitude ${input.minMagnitude} or more in the last ${input.days} days in this area`);
     }
 
+    const total = await counting;
     return {
       kind: "geojson",
       data,
+      ...(total !== undefined && { total }),
       citation: {
         source: "U.S. Geological Survey Earthquake Catalog (public domain)",
         url: "https://earthquake.usgs.gov/earthquakes/search/",

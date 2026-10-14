@@ -301,3 +301,21 @@ describe("summarizeLayerResult stats", () => {
     expect(summary).not.toHaveProperty("totalArea");
   });
 });
+
+describe("summarizeLayerResult truncation", () => {
+  it("carries truncated and rankedOut from a wide result, and leaves both out otherwise", () => {
+    const data = { type: "FeatureCollection" as const, features: [] };
+    const wide: LayerResult = {
+      kind: "geojson",
+      data,
+      citation,
+      coverageNote: "Showing the 2,000 largest of 4,512 (ranked by capacity in MW); zoom in under 250,000 km² for all",
+      truncated: true,
+      rankedOut: "2,512 more in this box rank below these by capacity in MW and are left out",
+    };
+    expect(summarizeLayerResult(wide)).toMatchObject({ truncated: true, rankedOut: wide.rankedOut, coverageNote: wide.coverageNote });
+    const plain = summarizeLayerResult({ kind: "geojson", data, citation });
+    expect(plain).not.toHaveProperty("truncated");
+    expect(plain).not.toHaveProperty("rankedOut");
+  });
+});

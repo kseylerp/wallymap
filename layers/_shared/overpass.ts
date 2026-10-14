@@ -1,8 +1,11 @@
 import { bodyHash } from "@/lib/fetch/cache";
-import type { QueryContext } from "../types";
+import type { BBox, QueryContext } from "../types";
 import { UPSTREAM_TIMEOUT_MS } from "./constants";
 
 export const PUBLIC_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
+
+/** The public endpoint answers 406 to requests without a descriptive User-Agent, so every attempt sends this one. */
+export const OVERPASS_USER_AGENT = "WallyMap/0.1 (https://wallymap.vercel.app)";
 
 export type OverpassResult =
   | { ok: true; json: unknown }
@@ -35,7 +38,7 @@ export function overpassBodyCacheable(body: string): boolean {
 /**
  * POSTs an Overpass QL query (form-encoded as `data=`). Tries `ctx.env.OVERPASS_URL`
  * (blank counts as unset) then retries once on the public endpoint; a 200 whose body
- * carries a failure remark counts as a failure. Each attempt is capped at 25 seconds.
+ * carries a failure remark counts as a failure. Each attempt is capped at 25 seconds and sends OVERPASS_USER_AGENT.
  */
 export async function overpassQuery(
   ctx: QueryContext,
@@ -66,7 +69,7 @@ export async function overpassQuery(
         shouldCache: overpassBodyCacheable,
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
         method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
+        headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": OVERPASS_USER_AGENT },
         body: `data=${encodeURIComponent(query)}`,
       });
       if (!res.ok) {
@@ -87,4 +90,42 @@ export async function overpassQuery(
     }
   }
   return status === undefined ? { ok: false, error } : { ok: false, error, status };
+}
+
+export type NamedOverpassParams = {
+  /** Overpass selectors without the bbox, such as `nwr["tourism"="camp_site"]` or `relation["route"="mtb"]`. */
+  selectors: string[];
+  bbox: BBox;
+  /** point: `out center` (one position per node, way or relation); line: ways and relations with geometry clipped to the box. */
+  geometry: "point" | "line";
+  /** Most elements sent (Overpass's own `out` cap). */
+  limit: number;
+  /** Server-side timeout in seconds; the client still gives up at UPSTREAM_TIMEOUT_MS. */
+  timeoutSeconds?: number;
+};
+
+/**
+ * Overpass QL for a layer's WIDE `named` mode: one bbox search for every match and its `out count`, then the named ones
+ * filtered from that set (not searched for again: over Utah a second search took 27 s against 2.5 s for the filter,
+ * measured 2026-10-14), their `out count`, and at most `limit` of them, so the note can say "the 2,000 named of 9,400".
+ * Points come back as `out center`; lines as `out geom(<bbox>)`, which clips way and relation member geometry to the
+ * box, so a 300 km route costs only its part inside. Read the two counts with `overpassCounts` ([all, named]).
+ */
+export function namedOverpassQuery({ selectors, bbox, geometry, limit, timeoutSeconds = 25 }: NamedOverpassParams): string {
+  const [west, south, east, north] = bbox;
+  const box = `(${south},${west},${north},${east})`;
+  const all = selectors.map((sel) => `${sel}${box};`).join("");
+  const out = geometry === "point" ? `out tags center ${limit};` : `out tags geom${box} ${limit};`;
+  return `[out:json][timeout:${timeoutSeconds}];(${all})->.all;.all out count;nwr.all["name"]->.named;.named out count;.named ${out}`;
+}
+
+/** The `total` of each `out count` element in a body, in order (for namedOverpassQuery: every match, then the named). */
+export function overpassCounts(json: unknown): number[] {
+  const elements = typeof json === "object" && json !== null ? (json as { elements?: unknown }).elements : undefined;
+  if (!Array.isArray(elements)) return [];
+  return elements.flatMap((el) => {
+    if (typeof el !== "object" || el === null || (el as { type?: unknown }).type !== "count") return [];
+    const n = Number((el as { tags?: { total?: unknown } }).tags?.total);
+    return Number.isFinite(n) ? [n] : [];
+  });
 }

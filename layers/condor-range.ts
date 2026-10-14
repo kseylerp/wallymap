@@ -10,10 +10,11 @@
  * Output properties: name, kind ("current" | "experimental" | "historic"), era ("today" | "early 1800s").
  * Smoke through runLayer (2026-10-10): box -125,29,-107,52 returned 4 polygons in 0.2 s (3 KB); the Sequoia box
  * -119.8,35.5,-118.8,36.5 returned the current California range and the historic range.
+ * Smoke wide (2026-10-14): North America -170,18,-60,72 (about 50 million km²) returned all 4 polygons of 4 in 0.5 s (3 KB).
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { bboxesDisjoint } from "./_shared/coverage";
@@ -28,6 +29,9 @@ const EXTENT: BBox = [-125.5, 29.8, -107.8, 51.6];
 
 /** Range maps change when releases change; a week is plenty. */
 const TTL_SECONDS = 7 * 86_400;
+
+/** Most polygons in a wide result (there are four in all, so this only bounds the request). */
+const WIDE_LIMIT = 1000;
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
@@ -66,11 +70,12 @@ const condorRange = defineLayer({
     "Use it for 'where do condors live', 'can I see a condor here' or 'how much has the condor's range shrunk'. Compare it with species or gbif-occurrences for real sightings. " +
     "Caveats: these are broad range outlines, not nesting sites or flight paths, and a condor can wander far outside them; being inside the outline does not mean condors are likely to be seen. " +
     "The historic outline is a rough reconstruction (the Pacific coast from British Columbia to Baja California and inland to the Rockies). " +
-    "Western North America only; elsewhere it returns nothing. Works at any size of region up to about 20 million km² (a whole continent), so no need to zoom in first.",
+    "Western North America only; elsewhere it returns nothing. Works at any size of region (over 20 million km² it adds a total), so no need to zoom in first.",
   coverage: { bbox: EXTENT },
   license: "Public data, terms not stated (National Park Service, Sequoia and Kings Canyon)",
   requiredEnv: [],
   maxAreaKm2: 20_000_000,
+  wide: { orderBy: "area", limit: WIDE_LIMIT },
   input: z.object({}),
   style: { geometry: "polygon", color: layerColor("condor-range"), fillOpacity: 0.25 },
 
@@ -90,18 +95,12 @@ const condorRange = defineLayer({
       };
     }
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > condorRange.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${condorRange.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
+    // Wide (over 20 million km²): largest first, capped at the strategy's limit, with a count from each service.
     const params = {
       outFields: ["Name"],
       bbox: ctx.bbox,
       maxAllowableOffset: simplifyOffset(ctx.bbox),
+      ...(ctx.wide && { orderByFields: "Shape__Area DESC", resultRecordCount: ctx.wideStrategy?.limit ?? WIDE_LIMIT, withCount: true }),
       ttlSeconds: TTL_SECONDS,
     };
     const [current, historic] = await Promise.all([
@@ -115,10 +114,12 @@ const condorRange = defineLayer({
       ...(historic.ok ? normalizeRange(historic.fc, true) : []),
     ];
     const missing = !current.ok ? "current range" : !historic.ok ? "historic range" : undefined;
+    const total = current.ok && historic.ok && current.total !== undefined && historic.total !== undefined ? current.total + historic.total : undefined;
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features },
       citation,
+      ...(total !== undefined && { total }),
       ...(missing !== undefined ? { coverageNote: `The ${missing} could not be loaded, so only the other is shown` } : {}),
     };
   },

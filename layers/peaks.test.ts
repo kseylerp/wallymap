@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { SPARQL_ENDPOINT, normalizePeaks, peaksQuery } from "./peaks";
+import layer, { SPARQL_ENDPOINT, normalizePeaks, peaksQuery, widePeaksQuery } from "./peaks";
 import fixture from "./__fixtures__/peaks.tahoe.json";
 
 /** The fixture is a real Wikidata SPARQL answer for this box (recorded 2026-10-09 with the layer's own query). */
@@ -40,6 +40,17 @@ describe("peaksQuery", () => {
     expect(q).toContain("wdt:P1705");
     expect(q).toContain('wikibase:language "en,mul"');
     expect(q).toContain("LIMIT 1000");
+  });
+});
+
+describe("widePeaksQuery", () => {
+  it("starts from items with a prominence, filters to the box and ranks by prominence with a little slack for unnamed rows", () => {
+    const q = widePeaksQuery([-108.5, 37, -104.5, 41], 1000);
+    expect(q).toContain("p:P2660/psn:P2660/wikibase:quantityAmount ?promM");
+    expect(q).toContain("geof:longitude(?c) >= -108.5 && geof:longitude(?c) <= -104.5 && geof:latitude(?c) >= 37 && geof:latitude(?c) <= 41");
+    expect(q).not.toContain("wikibase:box");
+    expect(q).toContain("wdt:P31/wdt:P279* ?cls");
+    expect(q.trimEnd().endsWith("ORDER BY DESC(?prom)\nLIMIT 1050")).toBe(true);
   });
 });
 
@@ -105,6 +116,8 @@ describe("peaks layer", () => {
     expect(layer.license).toBe("CC0 (Wikidata)");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(40_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "prominence", rank: "most prominent", limit: 1000 });
     expect(layer.input.parse({})).toEqual({});
     expect(layer.style).toMatchObject({ geometry: "point", extrude: "v", unit: "m" });
   });
@@ -166,8 +179,40 @@ describe("peaks layer", () => {
     expect(await layer.query(ctx(slow), {})).toMatchObject({ error: expect.stringContaining("timed out"), hint: "upstream" });
   });
 
-  it("rejects a view over the area cap through runLayer", async () => {
+  it("rejects a view over the hard cap (4 x 40,000 km²) through runLayer", async () => {
     const r = await runLayer("peaks", { bbox: [-110, 35, -105, 40] });
     expect(r.status).toBe(422);
+    expect(r.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 160000 km²$/) });
+  });
+
+  it("answers a Colorado box of about 155,000 km² wide: the most prominent, ranked by prominence, with a note", async () => {
+    const stub = vi.fn(async () => json(fixture));
+    vi.stubGlobal("fetch", stub);
+    try {
+      const r = await runLayer("peaks", { bbox: [-108.5, 37, -104.5, 41], zoom: 6 });
+      expect(r.status).toBe(200);
+      const init = stub.mock.calls[0] as unknown as [string, RequestInit];
+      const query = new URLSearchParams(String(init[1].body)).get("query") ?? "";
+      expect(query).toContain("ORDER BY DESC(?prom)\nLIMIT 1050");
+      expect(r.body).toMatchObject({
+        coverageNote: `Showing all ${uniqueItems} in this wide view (ranked by prominence); only peaks with a recorded prominence are listed at this scale`,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps at most the wide limit and leaves the truncation note to run.ts", async () => {
+    const item = (i: number) => ({
+      item: { value: `http://www.wikidata.org/entity/Q${i}` },
+      itemLabel: { value: `Peak ${i}` },
+      coord: { value: "Point(-106 39)" },
+      prom: { value: String(3000 - i) },
+    });
+    const stub = vi.fn(async () => json({ results: { bindings: Array.from({ length: 1050 }, (_, i) => item(i)) } }));
+    const r = geojson(await layer.query({ ...ctx(stub), wide: true, wideStrategy: layer.wide }, {}));
+    expect(r.data.features).toHaveLength(1000);
+    expect(r.data.features[0].properties).toMatchObject({ name: "Peak 0", prominence: 3000 });
+    expect(r.coverageNote).toBe("only peaks with a recorded prominence are listed at this scale");
   });
 });

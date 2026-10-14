@@ -38,6 +38,8 @@ describe("grazing-allotments layer", () => {
     expect(layer.license).toBe("Public domain (Bureau of Land Management)");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(150_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "acres", limit: 1000 });
     expect(layer.input.parse({})).toEqual({ show: "both" });
     expect(layer.input.safeParse({ show: "cows" }).success).toBe(false);
     expect(layer.style).toMatchObject({ geometry: "polygon", fillOpacity: 0.18 });
@@ -170,6 +172,46 @@ describe("grazing-allotments layer", () => {
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toEqual([]);
     expect(r.coverageNote).toMatch(/outside the United States/i);
+  });
+
+  it("answers a wide box largest first, sharing the limit between the services, with a summed count", async () => {
+    const stub = vi.fn(async (url: string) => {
+      if (new URL(url).searchParams.get("returnCountOnly") === "true") {
+        return json({ count: url.includes("Grazing_Allotment") ? 1500 : 60 });
+      }
+      if (url.includes("BLM_Natl_Grazing_Allotment/MapServer/12/")) return json({ ...allotments, exceededTransferLimit: true });
+      return json(url.includes("BLM_Natl_WHB/MapServer/0/") ? hma : ha);
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("grazing-allotments", { bbox: [-119, 37, -114, 42], zoom: 6 });
+      expect(res.status).toBe(200);
+      const data = stub.mock.calls.map((c) => new URL(String(c[0]))).filter((u) => !u.searchParams.has("returnCountOnly"));
+      expect(data).toHaveLength(3);
+      for (const u of data) {
+        expect(u.searchParams.get("resultRecordCount")).toBe("333");
+        expect(u.searchParams.get("maxAllowableOffset")).toBe(String(simplifyOffset([-119, 37, -114, 42], true)));
+      }
+      expect(data.find((u) => u.pathname.includes("Grazing_Allotment"))?.searchParams.get("orderByFields")).toBe("GIS_ACRES DESC");
+      const shown = allotments.features.length + hma.features.length + ha.features.length;
+      expect(res.body).toMatchObject({
+        total: 1620,
+        truncated: true,
+        coverageNote: `Showing the ${shown} largest of 1,620 (ranked by acres); zoom in under 150,000 km² for all`,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("gives one group the whole wide limit and simplifies a wide box more coarsely", async () => {
+    const stub = vi.fn(async (url: string) => (new URL(url).searchParams.get("returnCountOnly") === "true" ? json({ count: 9 }) : json(allotments)));
+    const r = await layer.query({ ...ctx(stub), bbox: [-119, 37, -114, 42], wide: true, wideStrategy: layer.wide }, { show: "allotments" });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.total).toBe(9);
+    expect(new URL(String(stub.mock.calls[0][0])).searchParams.get("resultRecordCount")).toBe("1000");
+    expect(simplifyOffset([-125, 30, -100, 49], true)).toBe(0.04);
+    expect(simplifyOffset([-125, 30, -100, 49])).toBe(0.02);
   });
 
   it("is registered and rejects a huge area or bad input through runLayer", async () => {

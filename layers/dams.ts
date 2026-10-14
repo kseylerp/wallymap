@@ -15,13 +15,15 @@
  *   710 ft, 29,875,000 acre-feet, High hazard) in 0.5 s; an Arizona-Utah box (-114,34,-110,38) returned 216 dams in 0.4 s; the Bay Area
  *   (-122.5,37.2,-121.5,38) returned 96 dams in 4 s, Los Vaqueros (160,000 acre-feet) first. One call timed out at 25 s once, so the
  *   upstream is occasionally slow.
+ * Smoke wide 2026-10-14 (live, through runLayer): the Colorado River basin (-117,31,-105,43.5, about 1.4 million km²) returned
+ *   1,568 dams of 4,023 in 2.2 s (642 KB), Hoover Dam first; the service stopped short of the 2,000 asked for, and the note says so.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
-import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
+import { OUTSIDE_US_NOTE, WHOLE_US_KM2, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
 
 const SERVICE_URL =
@@ -44,6 +46,8 @@ const FIELDS = [
 
 /** The inventory is updated a few times a year. */
 const TTL_SECONDS = 86_400;
+
+const MAX_DAMS = 2000;
 
 const TRUNCATED_NOTE = "Showing the 2,000 dams with the most storage; zoom in for the rest";
 
@@ -112,11 +116,14 @@ const dams = defineLayer({
   id: "dams",
   title: "Dams",
   description:
-    "US dams from the National Inventory of Dams (Army Corps of Engineers): every high- and significant-hazard dam plus the larger low-hazard ones. Each point has name, v and storageAf (capacity in acre-feet), heightFt, yearCompleted and t (January 1 of that year, so the time scrubber plays dams by decade), purpose and kind (Hydroelectric, Flood Risk Reduction, Irrigation, Water Supply, Recreation and so on), hazard (High, Significant or Low: the damage if it failed, not the chance of failure or a safety rating), river, state, owner, damType and condition. About 3% of dams have no storage figure and are left out; year completed is missing for some old dams. At most 2,000 dams, biggest storage first. Zoom in to under 250,000 km\u00b2.",
+    "US dams from the National Inventory of Dams (Army Corps of Engineers): every high- and significant-hazard dam plus the larger low-hazard ones. Each point has name, v and storageAf (capacity in acre-feet), heightFt, yearCompleted and t (January 1 of that year, so the time scrubber plays dams by decade), purpose and kind (Hydroelectric, Flood Risk Reduction, Irrigation, Water Supply, Recreation and so on), hazard (High, Significant or Low: the damage if it failed, not the chance of failure or a safety rating), river, state, owner, damType and condition. About 3% of dams have no storage figure and are left out; year completed is missing for some old dams. At most 2,000 dams, biggest storage first; any US box answers, and over 250,000 km\u00b2 the note gives the total.",
   coverage: "us",
   license: "Public domain (US Army Corps of Engineers, National Inventory of Dams)",
   requiredEnv: [],
   maxAreaKm2: 250_000,
+  // Ranking the whole country costs one count and one ordered page, so the hard cap is the US itself.
+  hardMaxAreaKm2: WHOLE_US_KM2,
+  wide: { orderBy: "storage in acre-feet", limit: MAX_DAMS },
   input: z.object({}),
   style: { geometry: "point", color: layerColor("dams"), unit: "acre-feet", extrude: "v", cluster: true },
 
@@ -131,20 +138,16 @@ const dams = defineLayer({
       return { kind: "geojson", data: EMPTY, citation, coverageNote: OUTSIDE_US_NOTE };
     }
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > dams.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${dams.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
+    // Wide (over 250,000 km²): the same storage-ordered fetch, capped at the strategy's limit, plus a count for the note.
+    const wideLimit = ctx.wide ? ctx.wideStrategy?.limit : undefined;
     const res = await arcgisQuery(ctx, SERVICE_URL, {
       outFields: FIELDS,
       bbox: ctx.bbox,
       // About 3% of dams have no storage figure; ArcGIS sorts those first in a descending order, so they would fill the cap.
       where: "NID_STORAGE > 0",
       orderByFields: "NID_STORAGE DESC",
+      resultRecordCount: Math.min(MAX_DAMS, wideLimit ?? MAX_DAMS),
+      withCount: ctx.wide === true,
       ttlSeconds: TTL_SECONDS,
       cacheSuffix: "dams",
     });
@@ -152,12 +155,13 @@ const dams = defineLayer({
 
     const data = normalizeDams(res.fc);
     const notes: string[] = [];
-    if (res.truncated) notes.push(TRUNCATED_NOTE);
+    if (res.truncated && !ctx.wide) notes.push(TRUNCATED_NOTE);
     if (data.features.length === 0) notes.push("No dams in the National Inventory of Dams for this area");
     return {
       kind: "geojson",
       data,
       citation,
+      ...(res.total !== undefined && { total: res.total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },

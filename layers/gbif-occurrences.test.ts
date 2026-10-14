@@ -38,7 +38,9 @@ describe("gbif-occurrences layer", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toMatch(/GBIF/);
     expect(layer.requiredEnv).toEqual([]);
-    expect(layer.maxAreaKm2).toBe(Number.POSITIVE_INFINITY);
+    expect(layer.maxAreaKm2).toBe(50_000);
+    expect(layer.hardMaxAreaKm2).toBe(Number.POSITIVE_INFINITY);
+    expect(layer.wide).toEqual({ mode: "tiles", limit: 0 });
     expect(layer.input.parse({})).toEqual(DEFAULTS);
     expect(layer.style).toMatchObject({ geometry: "point", heat: true, cluster: true });
   });
@@ -159,14 +161,17 @@ describe("gbif-occurrences layer", () => {
     expect(await layer.query(ctx(down), DEFAULTS)).toMatchObject({ hint: "upstream" });
   });
 
-  it("refuses points for a large area but still serves density tiles there", async () => {
+  it("answers points over 50,000 km² (wide) with the density tiles for the same name and years, and serves density there", async () => {
     const big: [number, number, number, number] = [-125, 30, -100, 50];
-    const stub = vi.fn();
-    expect(await layer.query(ctx(stub, big), DEFAULTS)).toMatchObject({ hint: "zoom_in", error: expect.stringContaining("density") });
-    expect(stub).not.toHaveBeenCalled();
-    const r = await layer.query(ctx(stub, big), { density: true });
-    expect(r).toMatchObject({ kind: "tiles" });
-    expect(stub).not.toHaveBeenCalled();
+    const stub = vi.fn(async () => json(match));
+    const wide = await layer.query({ ...ctx(stub, big), wide: true, wideStrategy: layer.wide }, { ...DEFAULTS, scientificName: "Puma concolor", yearFrom: 2010 });
+    if (!("kind" in wide) || wide.kind !== "tiles") throw new Error("expected tiles");
+    expect(wide.data.url).toMatch(/taxonKey=2435099&year=2010,\d{4}$/);
+    // Only the name lookup, never the occurrence search.
+    expect((stub.mock.calls as unknown as [string][]).every((c) => c[0].includes("/species/match"))).toBe(true);
+    const plain = vi.fn();
+    expect(await layer.query(ctx(plain, big), { density: true })).toMatchObject({ kind: "tiles" });
+    expect(plain).not.toHaveBeenCalled();
   });
 
   it("builds density tile URLs with the taxon and the year window", () => {
@@ -222,7 +227,11 @@ describe("gbif-occurrences layer", () => {
     expect((await runLayer("gbif-occurrences", { bbox: TAHOE, input: { yearFrom: 1000 } })).status).toBe(400);
     const tiles = await runLayer("gbif-occurrences", { bbox: [-170, -60, 170, 70], input: { density: true } });
     expect(tiles.status).toBe(200);
-    expect(await runLayer("gbif-occurrences", { bbox: [-170, -60, 170, 70] })).toMatchObject({ status: 422 });
+    // Points for the whole world come back as the density map with a note, not a zoom_in error.
+    expect(await runLayer("gbif-occurrences", { bbox: [-170, -60, 170, 70] })).toMatchObject({
+      status: 200,
+      body: { kind: "tiles", truncated: true, coverageNote: expect.stringMatching(/^Showing a density map at this scale/) },
+    });
   });
 
   it("describes the layer in the words people use and warns about sampling bias", () => {

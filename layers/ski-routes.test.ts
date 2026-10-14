@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { hardMaxAreaKm2 } from "./types";
 import layer, { buildSkiQuery, difficultyRank, normalizeSki } from "./ski-routes";
 import fixture from "./__fixtures__/ski-routes.chamonix.json";
 
@@ -146,6 +147,8 @@ describe("ski-routes layer", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toContain("ODbL");
     expect(layer.maxAreaKm2).toBe(2500);
+    expect(layer.wide).toEqual({ mode: "named", orderBy: "length in km", limit: 1000 });
+    expect(hardMaxAreaKm2(layer)).toBe(10_000);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toContain("OVERPASS_URL");
     expect(layer.style.geometry).toBe("line");
@@ -184,11 +187,74 @@ describe("ski-routes layer", () => {
     expect(stub).toHaveBeenCalledTimes(2);
   });
 
-  it("returns 422 zoom_in from runLayer over 2,500 km2 and 400 for a bad kind", async () => {
+  it("returns 422 zoom_in from runLayer over the 10,000 km2 hard cap and 400 for a bad kind", async () => {
     const big = await runLayer("ski-routes", { bbox: [6, 45, 8, 46.5] });
     expect(big.status).toBe(422);
     expect(big.body).toMatchObject({ hint: "zoom_in" });
     const bad = await runLayer("ski-routes", { bbox: CHAMONIX, input: { kind: "snowboard" } });
     expect(bad.status).toBe(400);
+  });
+});
+
+// Valais and Aosta, about 8,700 km²: over the 2,500 km² soft cap, under the 10,000 km² hard cap.
+const ALPS: [number, number, number, number] = [6.5, 45.5, 7.5, 46.3];
+
+describe("ski-routes wide mode", () => {
+  const count = (total: number) => ({ type: "count", id: 0, tags: { total: String(total) } });
+  const bounds = (size: number) => ({ minlat: 45.9, minlon: 7, maxlat: 45.9 + size, maxlon: 7 + size });
+  const scan = {
+    elements: [count(7657), count(2), { type: "way", id: 1, bounds: bounds(0.01) }, { type: "relation", id: 2, bounds: bounds(0.3) }],
+  };
+  const line = (to: number) => [
+    { lat: 45.9, lon: 7 },
+    { lat: to, lon: 7 },
+  ];
+  const geometry = {
+    elements: [
+      { type: "way", id: 1, tags: { "piste:type": "nordic", "piste:name": "Piste des Lacs", "piste:difficulty": "easy" }, geometry: line(45.91) },
+      { type: "relation", id: 2, tags: { route: "ski", name: "Haute Route", "piste:type": "skitour" }, members: [{ type: "way", ref: 9 }] },
+      { type: "way", id: 9, geometry: line(46.2) },
+    ],
+  };
+
+  it("scans named pistes and routes of the chosen kind, then returns the longest with every piste as total", async () => {
+    const stub = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) =>
+      new Response(JSON.stringify(decodeURIComponent(String(init?.body)).includes("out ids bb") ? scan : geometry), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("ski-routes", { bbox: ALPS, zoom: 8, input: { kind: "nordic" } });
+      expect(res.status).toBe(200);
+      const first = decodeURIComponent(String((stub.mock.calls[0][1] as RequestInit).body));
+      expect(first).toContain('way["piste:type"="nordic"]["area"!="yes"](45.5,6.5,46.3,7.5);');
+      expect(first).toContain('rel["route"~"^(ski|piste)$"][!"piste:type"](45.5,6.5,46.3,7.5);');
+      expect(first).toContain('way.all["piste:name"];');
+      expect(first).toContain(".named out ids bb 5000;");
+      if (!("kind" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
+      // The skitour relation is dropped by the nordic filter, as on the normal path.
+      expect(res.body.data.features.map((f) => f.properties?.name)).toEqual(["Piste des Lacs"]);
+      expect(res.body).toMatchObject({
+        total: 7657,
+        truncated: true,
+        coverageNote: "Showing the 1 named of 7,657 (ranked by length in km); zoom in under 2,500 km² for all",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("puts the longest first and writes no note of its own", async () => {
+    const stub = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) =>
+      new Response(JSON.stringify(decodeURIComponent(String(init?.body)).includes("out ids bb") ? scan : geometry), { status: 200 }),
+    );
+    const r = await layer.query(
+      { bbox: ALPS, zoom: 8, env: {}, fetch: stub as unknown as CachedFetch, wide: true, wideStrategy: layer.wide },
+      DEFAULTS,
+    );
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features.map((f) => f.properties?.name)).toEqual(["Haute Route", "Piste des Lacs"]);
+    expect(r.data.features[0].properties).toMatchObject({ kind: "skitour", route: true });
+    expect(r.total).toBe(7657);
+    expect(r.coverageNote).toBeUndefined();
   });
 });

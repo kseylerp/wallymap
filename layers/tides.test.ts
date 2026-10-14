@@ -3,6 +3,8 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import layer, {
   MAX_STATIONS,
+  WIDE_LIMIT,
+  wideStations,
   observedLevel,
   parseStations,
   pickStations,
@@ -13,6 +15,7 @@ import stationsFixture from "./__fixtures__/coops-stations.sf.json";
 import waterlevelsFixture from "./__fixtures__/coops-waterlevels.sf.json";
 import hiloFixture from "./__fixtures__/coops-hilo.9414290.json";
 import wlFixture from "./__fixtures__/coops-wl.9414290.json";
+import { hardMaxAreaKm2 } from "./types";
 
 /** Recorded 2026-10-10 ~02:20 UTC. Station lists trimmed to the SF box plus The Battery (NY) to test the filter. */
 const SF: [number, number, number, number] = [-122.7, 37.6, -122.2, 38.0];
@@ -180,7 +183,54 @@ describe("tides layer", () => {
     expect(layer.coverage).toBe("us");
   });
 
-  it("rejects an oversized bbox through runLayer", async () => {
-    expect((await runLayer("tides", { bbox: [-125, 32, -117, 42] })).status).toBe(422);
+  it("rejects only a box bigger than the whole US through runLayer", async () => {
+    const res = await runLayer("tides", { bbox: [-180, -60, 180, 80] });
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/under 50000000 km²$/) });
+  });
+});
+
+describe("tides wide mode (over 50,000 km²)", () => {
+  /** The SF fixture's 38 stations sit inside this box (and The Battery outside it). */
+  const BAY_AREA: [number, number, number, number] = [-124, 36.5, -121, 39];
+
+  it("declares every station up to 1,000, ranked by next tide height, up to the whole US", () => {
+    expect(layer.wide).toEqual({ orderBy: "next tide height in feet", limit: 1000 });
+    expect(WIDE_LIMIT).toBe(1000);
+    expect(layer.hardMaxAreaKm2).toBe(50_000_000);
+    expect(hardMaxAreaKm2(layer)).toBe(50_000_000);
+    expect(layer.description).toMatch(/over 50,000 km² the rest \(up to 1,000\) are kind 'station' without times/);
+    expect(layer.description).not.toMatch(/zoom in to under/);
+  });
+
+  it("queries 8 stations and lists the rest without times, no own zoom-in note", async () => {
+    const stub = routedStub();
+    const r = await layer.query({ ...ctx(stub, BAY_AREA), wide: true, wideStrategy: layer.wide }, {});
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(calls(stub).filter((x) => x[0].includes("product=predictions"))).toHaveLength(MAX_STATIONS);
+    expect(r.data.features).toHaveLength(38);
+    const timed = r.data.features.filter((f) => typeof f.properties?.v === "number");
+    expect(timed).toHaveLength(MAX_STATIONS);
+    expect(r.data.features.slice(0, MAX_STATIONS)).toEqual(timed);
+    const rest = r.data.features.slice(MAX_STATIONS);
+    expect(rest.every((f) => f.properties?.kind === "station" && f.properties.t === undefined)).toBe(true);
+    expect(r.total).toBeUndefined();
+    expect(r.coverageNote).toMatch(/^Tide times for the 8 stations nearest the centre/);
+    expect(r.coverageNote).not.toMatch(/zoom in/);
+  });
+
+  it("cuts at the limit, queried stations first by height, and counts every station", () => {
+    const station = (id: string) => ({ id, name: id, lat: 37, lng: -122, state: "CA", type: "S" });
+    const timed = [1.2, 5.3].map((v, i) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [-122, 37] },
+      properties: { name: `q${i}`, v },
+    }));
+    const out = wideStations(timed, [station("a"), station("b"), station("c")], new Set(["b"]), 3);
+    expect(out.total).toBe(5);
+    expect(out.features.map((f) => f.properties?.name)).toEqual(["q1", "q0", "a"]);
+    const all = wideStations(timed, [station("a"), station("b")], new Set(["b"]), 10);
+    expect(all.total).toBeUndefined();
+    expect(all.features[3].properties).toMatchObject({ kind: "station", liveGauge: "yes", stationId: "b" });
   });
 });

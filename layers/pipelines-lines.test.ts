@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { normalizeLines, perServiceCap, sourcesFor, whereFor } from "./pipelines-lines";
+import layer, { normalizeLines, perServiceCap, sourcesFor, whereFor, wideOffset } from "./pipelines-lines";
 import gas from "./__fixtures__/pipelines-lines.gas.json";
 import crude from "./__fixtures__/pipelines-lines.crude.json";
 import hgl from "./__fixtures__/pipelines-lines.hgl.json";
@@ -44,6 +44,8 @@ describe("pipelines-lines layer", () => {
     expect(layer.coverage).toBe("us");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(150_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "length, power lines by voltage", limit: 3000 });
     expect(layer.style).toEqual({ geometry: "line", color: "#3A3A3C" });
     expect(layer.input.parse({})).toEqual({ network: "all", minKv: 100 });
     expect(layer.input.parse({ network: "gas", minKv: 345 })).toEqual({ network: "gas", minKv: 345 });
@@ -181,8 +183,51 @@ describe("pipelines-lines layer", () => {
     expect(r.coverageNote).toBe("No data outside the United States");
   });
 
-  it("rejects an oversized bbox through runLayer", async () => {
-    expect((await runLayer("pipelines-lines", { bbox: [-110, 30, -95, 40], zoom: 5 })).status).toBe(422);
+  it("rejects through runLayer only a box over four times the soft cap", async () => {
+    const res = await runLayer("pipelines-lines", { bbox: [-110, 30, -95, 40], zoom: 5 });
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 600000 km²$/) });
+  });
+
+  it("simplifies a wide box more coarsely, never finer than the plain view", () => {
+    expect(wideOffset([-104, 29, -96, 35])).toBe(0.008);
+    expect(wideOffset([-97, 29, -96.5, 29.5])).toBe(0.003);
+  });
+
+  it("answers a wide box ranked per service, sharing the limit, with a summed count and no trim note of its own", async () => {
+    const stub = vi.fn(async (url: string) => {
+      if (new URL(url).searchParams.get("returnCountOnly") === "true") return json({ count: 1000 });
+      const name = Object.keys(fixtures).find((n) => url.includes(`/${n}/`)) ?? "";
+      return json({ ...fixtures[name], exceededTransferLimit: true });
+    });
+    const r = await layer.query(
+      { ...ctx(stub, "pl:k"), bbox: [-104, 29, -96, 35], wide: true, wideStrategy: layer.wide },
+      { network: "all", minKv: 100 },
+    );
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.total).toBe(5000);
+    expect(r.coverageNote).toBeUndefined();
+    const data = (stub.mock.calls as unknown as Call[]).map((c) => new URL(c[0])).filter((u) => !u.searchParams.has("returnCountOnly"));
+    expect(data).toHaveLength(5);
+    for (const u of data) {
+      expect(u.searchParams.get("resultRecordCount")).toBe("600");
+      expect(u.searchParams.get("maxAllowableOffset")).toBe("0.008");
+    }
+    expect(data.find((u) => u.pathname.includes("Natural_Gas"))?.searchParams.get("orderByFields")).toBe("Shape__Length DESC");
+    expect(data.find((u) => u.pathname.includes("Transmission"))?.searchParams.get("orderByFields")).toBe("VOLTAGE DESC");
+  });
+
+  it("leaves the total out of a wide result when one service could not count", async () => {
+    const stub = vi.fn(async (url: string) => {
+      if (new URL(url).searchParams.get("returnCountOnly") === "true") {
+        return url.includes("Crude_Oil") ? new Response("no", { status: 500 }) : json({ count: 10 });
+      }
+      const name = Object.keys(fixtures).find((n) => url.includes(`/${n}/`)) ?? "";
+      return json(fixtures[name]);
+    });
+    const r = await layer.query({ ...ctx(stub), bbox: [-104, 29, -96, 35], wide: true, wideStrategy: layer.wide }, { network: "pipelines", minKv: 100 });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.total).toBeUndefined();
   });
 
   it("warns that the data is a frozen copy and not for digging", () => {

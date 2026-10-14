@@ -57,6 +57,7 @@ describe("names, areas and offsets", () => {
     expect(offsetFor(UTAH)).toBe(0.007);
     expect(offsetFor([-100, 40, -99.99, 40.01])).toBe(0.0005);
     expect(offsetFor([-125, 24, -66, 50])).toBe(0.02);
+    expect(offsetFor([-170, 18, -60, 72], true)).toBe(0.05);
   });
 });
 
@@ -113,6 +114,9 @@ describe("monuments layer", () => {
     expect(layer.coverage).toBe("us");
     expect(layer.license).toContain("Public domain");
     expect(layer.requiredEnv).toEqual([]);
+    expect(layer.maxAreaKm2).toBe(20_000_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "area", limit: 1000 });
     expect(layer.input.parse({})).toEqual({ version: "both" });
     expect(layer.input.safeParse({ version: "2021" }).success).toBe(true);
     expect(layer.input.safeParse({ version: "2019" }).success).toBe(false);
@@ -171,6 +175,29 @@ describe("monuments layer", () => {
     expect(geojson(await layer.query(ctx(empty, [-90, 44, -89, 45]), { version: "both" })).coverageNote).toBe(
       "No BLM national monuments or conservation areas in this area",
     );
+  });
+
+  it("answers a box wider than 20 million km² largest first, counting both services", async () => {
+    const stub = vi.fn(async (url: string) => {
+      if (new URL(url).searchParams.get("returnCountOnly") === "true") return json({ count: url.startsWith(CURRENT_URL) ? 57 : 3 });
+      return url.startsWith(CURRENT_URL) ? json(current) : json(historic);
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("monuments", { bbox: [-170, 18, -60, 72], zoom: 2 });
+      expect(res.status).toBe(200);
+      const data = stub.mock.calls.map((c) => String(c[0])).filter((u) => !u.includes("returnCountOnly"));
+      const cur = new URL(data.find((u) => u.startsWith(CURRENT_URL)) ?? "");
+      const old = new URL(data.find((u) => u.startsWith(HISTORIC_URL)) ?? "");
+      expect(cur.searchParams.get("orderByFields")).toBe("Shape.STArea() DESC");
+      expect(old.searchParams.get("orderByFields")).toBe("Shape__Area DESC");
+      expect(cur.searchParams.get("resultRecordCount")).toBe("1000");
+      expect(cur.searchParams.get("maxAllowableOffset")).toBe("0.05");
+      expect(res.body).toMatchObject({ total: 60, truncated: true });
+      expect((res.body as { coverageNote?: string }).coverageNote).toMatch(/^Showing the 8 largest of 60 \(ranked by area\)/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("is registered, validates version and rejects an oversized area through runLayer", async () => {

@@ -4,13 +4,17 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import layer, {
   BLM_FACILITIES_URL,
+  BLM_SHOWN_FACILITIES,
   BLM_SITES_URL,
   USFS_URL,
   dedupe,
+  interleave,
   kindFromName,
   normalizeBlmFacilities,
   normalizeBlmSites,
   normalizeUsfs,
+  usfsAreaRows,
+  usfsAreasUrl,
 } from "./recreation-sites";
 import usfsRaw from "./__fixtures__/recreation-sites.usfs.tahoe.json";
 import facilitiesRaw from "./__fixtures__/recreation-sites.blm-facilities.moab.json";
@@ -158,6 +162,8 @@ describe("recreation-sites layer", () => {
     expect(layer.license).toContain("Public domain");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(10_000);
+    expect(layer.hardMaxAreaKm2).toBe(1_500_000);
+    expect(layer.wide).toEqual({ mode: "named", limit: 2000 });
     expect(layer.input.parse({})).toEqual({});
     expect(layer.style).toMatchObject({ geometry: "point", cluster: true });
   });
@@ -212,8 +218,81 @@ describe("recreation-sites layer", () => {
     expect(r.coverageNote).toBe("No Forest Service or BLM recreation sites in this area");
   });
 
-  it("rejects a view over the area cap through runLayer", async () => {
-    const r = await runLayer("recreation-sites", { bbox: [-122, 36, -118, 40] });
+  it("rejects a view over the 1,500,000 km² hard cap through runLayer", async () => {
+    const r = await runLayer("recreation-sites", { bbox: [-125, 30, -100, 49] });
     expect(r.status).toBe(422);
+  });
+
+  it("asks the Forest Service view for one distinct row per area in wide views, and counts areas the same way", () => {
+    const rows = new URL(usfsAreasUrl([-114, 36, -105, 42], 2000));
+    expect(rows.origin + rows.pathname).toBe(`${USFS_URL}/query`);
+    expect(rows.searchParams.get("returnDistinctValues")).toBe("true");
+    expect(rows.searchParams.get("outFields")).not.toContain("activityname");
+    expect(rows.searchParams.get("outFields")).toContain("longitude");
+    expect(rows.searchParams.get("resultRecordCount")).toBe("2000");
+    expect(rows.searchParams.get("f")).toBe("json");
+    const count = new URL(usfsAreasUrl([-114, 36, -105, 42], 2000, true));
+    expect(count.searchParams.get("returnCountOnly")).toBe("true");
+    expect(count.searchParams.get("outFields")).toBe("recareaid");
+  });
+
+  it("reads distinct area rows as points from their longitude and latitude columns", () => {
+    const fc = usfsAreaRows({
+      features: [
+        { attributes: { recareaid: 5573, recareaname: "Baker's Hole Campground", markeractivitygroup: "Camping & Cabins", openstatus: "closed", longitude: "-111.100810", latitude: "44.706290" } },
+        { attributes: { recareaid: 1, recareaname: "Nowhere", longitude: "", latitude: "" } },
+        { nope: true },
+      ],
+    });
+    expect(fc.features).toHaveLength(1);
+    expect(normalizeUsfs(fc)[0]).toMatchObject({
+      geometry: { coordinates: [-111.10081, 44.70629] },
+      properties: { name: "Baker's Hole Campground", kind: "campground", agency: "USFS", status: "closed" },
+    });
+    expect(usfsAreaRows({ error: { code: 400 } }).features).toEqual([]);
+  });
+
+  it("takes from the two agencies in turn up to the limit", () => {
+    expect(interleave<number | string>([1, 2, 3], ["a"], 10)).toEqual([1, "a", 2, 3]);
+    expect(interleave<number | string>([1, 2, 3], ["a", "b", "c"], 4)).toEqual([1, "a", 2, "b"]);
+    expect(interleave<string>([], ["a", "b"], 1)).toEqual(["a"]);
+  });
+
+  it("answers a wide box (about 520,000 km²) with one row per area, named BLM sites, and a count of everything", async () => {
+    const areaRows = {
+      features: usfsFc.features.map((f) => ({
+        attributes: {
+          ...f.properties,
+          longitude: String((f.geometry as { coordinates: number[] }).coordinates[0]),
+          latitude: String((f.geometry as { coordinates: number[] }).coordinates[1]),
+        },
+      })),
+      exceededTransferLimit: true,
+    };
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      const counting = url.searchParams.get("returnCountOnly") === "true";
+      if (String(input).startsWith(USFS_URL)) return counting ? json({ count: 2652 }) : json(areaRows);
+      if (String(input).startsWith(BLM_FACILITIES_URL)) return counting ? json({ count: 678 }) : json(facilitiesFc);
+      return counting ? json({ count: 584 }) : json(sitesFc);
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("recreation-sites", { bbox: [-114, 36, -105, 42], zoom: 6 });
+      expect(res.status).toBe(200);
+      const urls = stub.mock.calls.map((c) => new URL(String(c[0])));
+      const facilities = urls.filter((u) => u.href.startsWith(BLM_FACILITIES_URL));
+      expect(facilities.find((u) => !u.searchParams.has("returnCountOnly"))?.searchParams.get("where")).toBe(`${BLM_SHOWN_FACILITIES} AND FacilityName > ' '`);
+      expect(facilities.find((u) => u.searchParams.has("returnCountOnly"))?.searchParams.get("where")).toBe(BLM_SHOWN_FACILITIES);
+      expect(urls.find((u) => u.href.startsWith(BLM_SITES_URL) && !u.searchParams.has("returnCountOnly"))?.searchParams.get("where")).toBe("RecAreaName > ' '");
+      expect(urls.find((u) => u.href.startsWith(USFS_URL) && !u.searchParams.has("returnCountOnly"))?.searchParams.get("returnDistinctValues")).toBe("true");
+      if (!("data" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
+      const shown = res.body.data.features.length;
+      expect(res.body.data.features.filter((f) => f.properties?.agency === "USFS")).toHaveLength(12);
+      expect(res.body.data.features.some((f) => f.properties?.agency === "BLM")).toBe(true);
+      expect(res.body).toMatchObject({ total: 3914, truncated: true, coverageNote: `Showing the ${shown} named of 3,914; zoom in under 10,000 km² for all` });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

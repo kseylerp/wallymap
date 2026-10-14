@@ -83,6 +83,8 @@ describe("river-basins layer", () => {
     expect(layer.license).toContain("Public domain");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(20_000_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "area in km²", limit: 1000 });
     expect(layer.input.parse({})).toEqual({});
     expect(layer.input.safeParse({ level: "huc8" }).success).toBe(true);
     expect(layer.input.safeParse({ level: "huc3" }).success).toBe(false);
@@ -141,6 +143,29 @@ describe("river-basins layer", () => {
       error: "ArcGIS service returned 502",
       hint: "upstream",
     });
+  });
+
+  it("answers a box over 20 million km² with regions, more simplified, largest first and counted, whatever the level asked", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      return url.searchParams.get("returnCountOnly") === "true" ? json({ count: 21 }) : json(huc2);
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("river-basins", { bbox: [-170, 18, -60, 72], zoom: 9, input: { level: "huc10" } });
+      expect(res.status).toBe(200);
+      const data = stub.mock.calls.map((c) => new URL(String(c[0]))).find((u) => !u.searchParams.has("returnCountOnly"));
+      expect(data?.pathname).toMatch(/\/wbd\/MapServer\/1\/query$/);
+      expect(data?.searchParams.get("orderByFields")).toBe("areasqkm DESC");
+      expect(data?.searchParams.get("resultRecordCount")).toBe("1000");
+      expect(data?.searchParams.get("maxAllowableOffset")).toBe("0.08");
+      expect(res.body).toMatchObject({ total: 21, truncated: true });
+      expect((res.body as { coverageNote?: string }).coverageNote).toMatch(
+        /^Showing the 2 largest of 21 \(ranked by area in km²\); zoom in under 20,000,000 km² for all; Showing regions \(huc2\) because huc10/,
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("is registered, validates level and rejects an oversized area through runLayer", async () => {

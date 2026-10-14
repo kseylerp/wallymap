@@ -24,13 +24,15 @@
  * Live smoke 2026-10-10 ~02:20 UTC: Tahoe box, 17 stations, 0-1 in (no snow yet; Blue Lakes "no snow", 13.6 °C);
  * Alaska Range box [-146.5,62.8,-145,63.6], 2.3 s: Look Eyrie (5,040 ft) 40 in deep, SWE 9.6 in, density 240
  * kg/m3 "settled", -3.3 °C; Fielding Lake 4 in, SWE 1.3 in, 325 kg/m3 "wet/dense", +1 in in 24 h.
+ * Wide smoke through runLayer (2026-10-14), whole West [-125,31,-102,49] (3.9 million km²), 11.2 s cold: all 831
+ * stations (804 with a depth reading; early-season depths 0-6 in), 9 data calls of up to 100 stations.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
-import { OUTSIDE_US_NOTE, bboxesDisjoint, outsideUs } from "./_shared/coverage";
+import { OUTSIDE_US_NOTE, WHOLE_US_KM2, bboxesDisjoint, outsideUs } from "./_shared/coverage";
 import { jsonArrayBody } from "@/lib/fetch/validate";
 import { layerColor } from "@/lib/render/palette";
 
@@ -47,6 +49,8 @@ const MAX_AGE_HOURS = 48;
 const STATIONS_TTL_SECONDS = 86_400;
 /** Stations report hourly; 15 minutes keeps the map current. */
 const DATA_TTL_SECONDS = 900;
+/** Most stations a wide (over 400,000 km²) result carries; the whole active network is about 890. */
+export const WIDE_LIMIT = 1000;
 const MIN_DEPTH_FOR_DENSITY_IN = 2;
 const MAX_PLAUSIBLE_DENSITY = 650;
 
@@ -188,6 +192,19 @@ export function joinSnotel(stations: SnotelStation[], data: SnotelData[], bbox: 
   return { type: "FeatureCollection", features };
 }
 
+/**
+ * A wide result's cut: the `limit` stations with the deepest snow (stations without a reading last), and the
+ * count before the cut when there was one.
+ */
+export function keepDeepest(fc: FeatureCollection, limit: number): { data: FeatureCollection; total?: number } {
+  if (fc.features.length <= limit) return { data: fc };
+  const vOf = (f: Feature) => (typeof f.properties?.v === "number" ? f.properties.v : -Infinity);
+  return {
+    data: { type: "FeatureCollection", features: [...fc.features].sort((a, b) => vOf(b) - vOf(a)).slice(0, limit) },
+    total: fc.features.length,
+  };
+}
+
 /** The shared station list is cached for a day, so only a non-empty list of station rows is stored. */
 export const STATION_LIST_BODY = jsonArrayBody({
   item: (row) => typeof row === "object" && row !== null && "stationTriplet" in row,
@@ -235,16 +252,19 @@ const snowpack = defineLayer({
     "swe is snow water equivalent in inches (the water you would get by melting the snow, the standard measure of how much water the snowpack holds). " +
     "density is SWE / depth in kg/m³ and type classes it: 'powder' (under 150, light dry snow), 'settled' (150 to 300), 'wet/dense' (over 300, spring or rain-soaked snow), or 'no snow' when the depth is 0. " +
     "new24h is how many inches the depth rose over the last 24 hours (0 when it settled or melted); tempC is air temperature in °C. " +
-    "Example questions: 'How much snow is on the ground at Mount Rose?', 'Did it snow overnight in the Wasatch?', 'Is the snow powder or wet right now?'. " +
+    "Example questions: 'How much snow is on the ground at Mount Rose?', 'Did it snow overnight in the Wasatch?'. " +
     "Caveats: a station is one flat, sheltered clearing, so ridges and wind-loaded slopes can hold much more or less; hourly depth jitters by an inch or two, so a 1 to 2 inch new24h may be noise; " +
     "density is a whole-column average, so fresh powder on top of old snow still reads 'settled'; it is left out under 2 inches of depth or when the sensors disagree; " +
     "in summer and early fall most stations read 0, which is real (no snow). This is not an avalanche forecast. " +
     "Western United States (roughly California to Colorado and Montana to Arizona) and Alaska only; elsewhere it returns nothing. " +
-    "Needs a region under 400,000 km² (about the size of California).",
+    "Over 400,000 km² it returns up to 1,000 stations, deepest snow first.",
   coverage: "us",
   license: "Public domain (USDA NRCS)",
   requiredEnv: [],
   maxAreaKm2: 400_000,
+  // The whole active network is about 890 stations (9 data calls of 100), so even the whole West stays bounded.
+  hardMaxAreaKm2: WHOLE_US_KM2,
+  wide: { orderBy: "snow depth in inches", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("snowpack"), unit: "in", timeField: "t" },
 
@@ -304,7 +324,9 @@ const snowpack = defineLayer({
       rows.push(...parseRows(DataSchema, result.rows));
     }
 
-    return { kind: "geojson", data: joinSnotel(inside, rows, ctx.bbox, now), citation };
+    const joined = joinSnotel(inside, rows, ctx.bbox, now);
+    const { data, total } = ctx.wide ? keepDeepest(joined, ctx.wideStrategy?.limit ?? WIDE_LIMIT) : { data: joined, total: undefined };
+    return { kind: "geojson", data, citation, ...(total !== undefined && { total }) };
   },
 });
 

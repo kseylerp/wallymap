@@ -6,6 +6,10 @@
  * confidence ("l"/"n"/"h" for VIIRS, 0-100 for MODIS) and daynight ("D"/"N"). FIRMS data has
  * no quoted fields. A bad key or bad parameters returns a plain-text body such as
  * "Invalid MAP_KEY." (HTTP 400 observed).
+ * Wide mode (over 2,000,000 km², up to the default hard cap of 8,000,000 km²): FIRMS has no order or limit parameter, so the
+ * whole CSV for the box and days is read (bounded by the 5-day maximum) and the 5,000 newest detections are kept, with the
+ * row count as the total. Smoke wide 2026-10-14 (through runLayer): central Africa 10,-15,40,5 (about 7,400,000 km²), 5 days, VIIRS SNPP,
+ * returned the 5,000 newest of 29,154 in 1.5 s (823 KB); the western US -125,25,-95,50, 3 days, all 452 in 3.0 s.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
@@ -23,6 +27,8 @@ const inputSchema = z.object({
 
 /** Most points returned; keeps the strongest so a 5-day, country-sized request stays drawable. */
 const MAX_POINTS = 5_000;
+/** Most points a wide result (over 2,000,000 km²) carries, the newest. */
+const WIDE_LIMIT = 5_000;
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
@@ -96,6 +102,12 @@ function frpOf(feature: Feature): number {
   return typeof v === "number" ? v : -Infinity;
 }
 
+/** Detection time in ms (`t` is always set by parseFirmsCsv). */
+function timeOf(feature: Feature): number {
+  const t: unknown = feature.properties?.t;
+  return typeof t === "string" ? Date.parse(t) : -Infinity;
+}
+
 const fireDetections = defineLayer({
   id: "fire-detections",
   title: "Active fire detections",
@@ -107,11 +119,13 @@ const fireDetections = defineLayer({
     "Caveats: detections are heat points, not fire outlines (use fire-perimeters for the burned area); one fire often produces many points; " +
     "VIIRS sources are about 375 m resolution and MODIS about 1 km; data arrives roughly 3 hours after the pass; " +
     "industrial flares, gas wells and volcanoes also show up. " +
-    "Pick VIIRS_SNPP_NRT (default), VIIRS_NOAA20_NRT or MODIS_NRT with source. Needs a region under 2,000,000 km² (about the size of Mexico); 5 days over an area that large can be tens of thousands of points, so at most the 5,000 strongest (by v) are returned and the result says so when it trims.",
+    "Pick VIIRS_SNPP_NRT (default), VIIRS_NOAA20_NRT or MODIS_NRT with source. At most the 5,000 strongest (by v) are returned. " +
+    "Over 2,000,000 km² (about the size of Mexico) it returns the 5,000 newest.",
   coverage: "global",
   license: "NASA FIRMS (public, attribution requested)",
   requiredEnv: ["FIRMS_MAP_KEY"],
   maxAreaKm2: 2_000_000,
+  wide: { orderBy: "detection time", rank: "newest", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("fire-detections"), unit: "MW" },
 
@@ -166,6 +180,25 @@ const fireDetections = defineLayer({
     }
 
     const parsed = body.trim() === "" ? EMPTY : parseFirmsCsv(body);
+
+    // Wide: the newest detections up to the strategy's limit, with the full count; run.ts writes the note.
+    if (ctx.wide) {
+      const limit = Math.min(WIDE_LIMIT, ctx.wideStrategy?.limit ?? WIDE_LIMIT);
+      const cut = parsed.features.length > limit;
+      return {
+        kind: "geojson",
+        data: cut
+          ? { type: "FeatureCollection", features: [...parsed.features].sort((a, b) => timeOf(b) - timeOf(a)).slice(0, limit) }
+          : parsed,
+        ...(cut && { total: parsed.features.length }),
+        citation: {
+          source: `NASA FIRMS ${input.source} (public, attribution requested)`,
+          url: "https://firms.modaps.eosdis.nasa.gov/",
+          retrieved: new Date().toISOString(),
+        },
+      };
+    }
+
     const capped = parsed.features.length > MAX_POINTS;
     const data: FeatureCollection = capped
       ? {

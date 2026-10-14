@@ -82,6 +82,8 @@ describe("fire-detections layer", () => {
     expect(layer.requiredEnv).toContain("FIRMS_MAP_KEY");
     expect(layer.coverage).toBe("global");
     expect(layer.maxAreaKm2).toBe(2_000_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "detection time", rank: "newest", limit: 5000 });
   });
 
   it("requests the FIRMS area CSV endpoint with a timeout and a cache key", async () => {
@@ -189,11 +191,48 @@ describe("fire-detections layer", () => {
     expect(res.body).toMatchObject({ hint: "unavailable" });
   });
 
-  it("returns 422 zoom_in from runLayer for a bbox over 2,000,000 km2", async () => {
+  it("returns 422 zoom_in from runLayer only over the hard cap (4 x 2,000,000 km²)", async () => {
     vi.stubEnv("FIRMS_MAP_KEY", KEY);
     const res = await runLayer("fire-detections", { bbox: [-130, 20, -90, 60] });
     expect(res.status).toBe(422);
-    expect(res.body).toMatchObject({ hint: "zoom_in" });
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 8000000 km²$/) });
+  });
+
+  it("answers a central Africa box (about 7,400,000 km²) wide: the 5,000 newest, the row count as total, and run.ts's note", async () => {
+    vi.stubEnv("FIRMS_MAP_KEY", KEY);
+    const rows = ["latitude,longitude,acq_date,acq_time,frp,confidence,daynight"];
+    // 6,000 rows, one minute apart from 00:00 on 2026-10-05, strongest first so newest is not the same as strongest.
+    for (let i = 0; i < 6000; i++) {
+      const day = 5 + Math.floor(i / 1440);
+      const minute = i % 1440;
+      const hhmm = String(Math.floor(minute / 60) * 100 + (minute % 60));
+      rows.push(`-5,20,2026-10-0${day},${hhmm},${6000 - i},n,D`);
+    }
+    const stub = vi.fn(async () => new Response(rows.join("\n"), { status: 200 }));
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("fire-detections", { bbox: [10, -15, 40, 5], input: { days: 5 } });
+      expect(res.status).toBe(200);
+      const body = res.body as unknown as { data: { features: { properties: { t: string; v: number } }[] }; total?: number; coverageNote?: string };
+      expect(body.data.features).toHaveLength(5000);
+      expect(body.total).toBe(6000);
+      const times = body.data.features.map((f) => Date.parse(f.properties.t));
+      expect(Math.max(...times)).toBe(Date.parse("2026-10-09T03:59:00Z"));
+      // The oldest 1,000 (the strongest by v) are the ones left out.
+      expect(Math.max(...body.data.features.map((f) => f.properties.v))).toBe(5000);
+      expect(body.coverageNote).toBe("Showing the 5,000 newest of 6,000 (ranked by detection time); zoom in under 2,000,000 km² for all");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("in wide mode returns every detection with no total when under the limit", async () => {
+    const stub = vi.fn(async () => new Response(CSV, { status: 200 }));
+    const r = await layer.query({ ...ctx(stub), wide: true, wideStrategy: layer.wide }, INPUT);
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features).toHaveLength(100);
+    expect(r.total).toBeUndefined();
+    expect(r.coverageNote).toBeUndefined();
   });
 
   it("rejects an unknown source or out-of-range days through runLayer", async () => {

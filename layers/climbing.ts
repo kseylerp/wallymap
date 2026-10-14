@@ -9,11 +9,15 @@
  * v = the larger route count, OpenBeta link added); the rest stay separate.
  * Fixtures: layers/__fixtures__/climbing.rrg.osm.json and climbing.rrg.openbeta.json (Red River Gorge, Kentucky,
  * recorded 2026-10-09; OpenBeta trimmed to 12 crags and OSM to 14 elements).
+ * Wide (over 10,000 km², up to the default hard cap of 40,000 km²): the same two requests, both bounded (Overpass at
+ * 3,000 elements with its count; OpenBeta has no limit parameter, so the hard cap bounds its box), then the merged
+ * places ranked by route count and the first 1,000 kept. total is every merged place, set only when Overpass sent all
+ * its matches.
  * Live smoke check: Red River Gorge, KY (37.75,-83.7 to 37.85,-83.55), 2026-10-09: 58 places (39 OSM, 43 OpenBeta, 24 in both); Lake Tahoe west (38.8,-120.3 to 39.4,-119.8): 311 places (21 OSM, 307 OpenBeta, 17 in both). No truncation.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { overpassQuery, type OverpassResult } from "./_shared/overpass";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
@@ -357,6 +361,8 @@ export function climbingNote(args: {
   both: number;
   osmError?: string;
   openbetaError?: string;
+  /** A wide box: the run writes the ranked-of-total note, so only say when a source was cut before ranking. */
+  wide?: boolean;
 }): string {
   const fmt = (n: number) => n.toLocaleString("en-US");
   const parts = [`Returned ${fmt(args.shown)} climbing places`];
@@ -368,7 +374,9 @@ export function climbingNote(args: {
   const cuts: string[] = [];
   if (args.osmCut) cuts.push(`OpenStreetMap stopped at ${fmt(MAX_PER_SOURCE)} (lowest ids kept)`);
   if (args.openbetaCut) cuts.push(`OpenBeta kept the ${fmt(MAX_PER_SOURCE)} with the most routes`);
-  let note = `${parts.join(" ")}; ${cuts.length > 0 ? `the box was truncated (${cuts.join("; ")}), zoom in for the rest` : "the box was not truncated"}`;
+  let note = args.wide
+    ? `${parts.join(" ")}${cuts.length > 0 ? `; ranked from part of the box (${cuts.join("; ")})` : ""}`
+    : `${parts.join(" ")}; ${cuts.length > 0 ? `the box was truncated (${cuts.join("; ")}), zoom in for the rest` : "the box was not truncated"}`;
   if (args.osmError) note += `. OpenStreetMap did not answer (${args.osmError}), so OpenBeta crags only`;
   if (args.openbetaError) note += `. OpenBeta did not answer (${args.openbetaError}), so OpenStreetMap crags only`;
   return note;
@@ -382,30 +390,23 @@ const climbing = defineLayer({
     "Each point is one place with kind ('crag', 'boulder', 'area', or 'gym' for indoor gyms when includeGyms is true), name, and v = the number of climbing routes or problems there (the bigger, the taller its column), " +
     "plus where known: grades (the grade range, for example '5.6 to 5.13b; V0 to V4'), sport, trad, boulder and toprope route counts, orientation, region, and url, a link to the OpenBeta page with the route list and topos. " +
     "source says which database it came from ('osm', 'openbeta' or 'osm+openbeta'). " +
-    "Use it for questions like: where can I go climbing or bouldering near here, which crag has the most routes, where is sport climbing or trad climbing, is there easy top-rope climbing nearby, or show the best-developed climbing areas in this region. " +
+    "Use it for questions like: where can I go climbing or bouldering near here, which crag has the most routes, where is sport climbing or trad climbing, is there easy top-rope climbing nearby. " +
     "Caveats: OpenBeta is strong in the United States and thinner elsewhere; OpenStreetMap crags are volunteer-mapped and often have no route count (no v); " +
     "route counts and grades are crowd-sourced, so treat them as a guide; access, seasonal closures and bolting rules are not included, so check the land manager (public-lands) before going; " +
     "individual routes and their line geometry are not returned. " +
-    "Zoom in to a region under 10,000 km² first. Each source returns at most 3,000 places (OpenStreetMap the lowest ids, OpenBeta the most routes) and the coverage note says if the box was cut or a source did not answer.",
+    "Over 10,000 km² it returns the 1,000 places with the most routes and how many there are in all. Each source returns at most 3,000 places (OpenStreetMap the lowest ids, OpenBeta the most routes) and the coverage note says if the box was cut or a source did not answer.",
   coverage: "global",
   license:
     "ODbL (OpenStreetMap contributors); OpenBeta (open data; licence not stated by the project, verify before commercial use)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 10_000,
+  wide: { orderBy: "route count", limit: 1000 },
   input: inputSchema,
   // M4 hint: extrude v, heat (Task 0's StyleHints fields).
   style: { geometry: "point", color: layerColor("climbing"), extrude: "v", heat: true },
 
   async query(ctx, input: ClimbingInput): Promise<LayerResult | LayerError> {
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > climbing.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${climbing.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
     const [osmResult, openbeta]: [OverpassResult, Awaited<ReturnType<typeof fetchOpenbeta>>] = await Promise.all([
       overpassQuery(ctx, buildClimbingQuery(ctx.bbox), { cacheSuffix: "climbing" }),
       fetchOpenbeta(ctx),
@@ -421,7 +422,10 @@ const climbing = defineLayer({
     const osm = osmAll.sort(byRoutes).slice(0, MAX_PER_SOURCE);
     const ob = obAll.sort(byRoutes).slice(0, MAX_PER_SOURCE);
 
-    const { crags, both } = mergeCrags(osm, ob);
+    const { crags: merged, both } = mergeCrags(osm, ob);
+    // Wide: rank every merged place by route count and keep the strategy's limit.
+    const wideLimit = ctx.wide ? ctx.wideStrategy?.limit : undefined;
+    const crags = wideLimit === undefined ? merged : [...merged].sort(byRoutes).slice(0, wideLimit);
     const features: Feature<Point>[] = crags.map((c) => ({
       type: "Feature",
       geometry: { type: "Point", coordinates: c.position },
@@ -436,6 +440,7 @@ const climbing = defineLayer({
     return {
       kind: "geojson",
       data,
+      ...(wideLimit !== undefined && !osmCut && { total: merged.length }),
       coverageNote: climbingNote({
         shown: features.length,
         osmShown: osmResult.ok ? osm.length : null,
@@ -445,6 +450,7 @@ const climbing = defineLayer({
         both,
         ...(osmResult.ok ? {} : { osmError: osmResult.error }),
         ...(openbeta.ok ? {} : { openbetaError: openbeta.error }),
+        ...(wideLimit !== undefined && { wide: true }),
       }),
       citation: {
         ...osmCitation(),

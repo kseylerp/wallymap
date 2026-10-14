@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Polygon } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { glimsUrl, normalizeGlaciers, thinGeometry } from "./glaciers";
+import layer, { glimsCountUrl, glimsUrl, normalizeGlaciers, thinGeometry } from "./glaciers";
 import raw from "./__fixtures__/glaciers.alps.json";
 import lyell from "./__fixtures__/glaciers.lyell.json";
 
@@ -23,6 +23,8 @@ describe("glaciers layer", () => {
     expect(layer.license).toMatch(/GLIMS/);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(8_000);
+    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.wide).toEqual({ orderBy: "area in km²", limit: 1500 });
     expect(layer.input.parse({})).toEqual({});
     expect(layer.style).toMatchObject({ geometry: "polygon", extrude: "v" });
   });
@@ -233,16 +235,53 @@ describe("glaciers layer", () => {
     expect(await layer.query(ctx(down), {})).toMatchObject({ hint: "upstream" });
   });
 
-  it("refuses an area over the cap without calling upstream", async () => {
-    const stub = vi.fn();
-    const r = await layer.query({ bbox: [6, 44, 9, 47], zoom: 8, env: {}, fetch: stub as unknown as CachedFetch }, {});
-    expect(r).toMatchObject({ hint: "zoom_in" });
-    expect(stub).not.toHaveBeenCalled();
+  it("builds a hits-only count request with the same filter", () => {
+    const url = new URL(glimsCountUrl(MONTE_ROSA));
+    expect(url.searchParams.get("version")).toBe("1.1.0");
+    expect(url.searchParams.get("resultType")).toBe("hits");
+    expect(url.searchParams.get("cql_filter")).toBe("BBOX(entity_geom,7.8,45.8,8,46,'EPSG:4326') AND line_type='glac_bound'");
   });
 
-  it("is registered and rejects a large area through runLayer", async () => {
-    const r = await runLayer("glaciers", { bbox: [6, 44, 9, 47], zoom: 8 });
-    expect(r.status).toBe(422);
+  it("in wide mode asks for the 1,500 largest outlines, keeps every glacier among them and quotes the count when the limit cut", async () => {
+    const poly = { type: "Polygon", coordinates: [[[0, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]]] };
+    const features = Array.from({ length: 1500 }, (_, i) => ({
+      type: "Feature",
+      geometry: poly,
+      properties: { line_type: "glac_bound", glac_id: `g${i}`, glac_name: `Glacier ${i}`, db_area: 2000 - i, src_date: "2010-01-01T00:00:00Z" },
+    }));
+    const stub = vi.fn(async (url: string) =>
+      url.includes("resultType=hits")
+        ? new Response('<wfs:FeatureCollection numberOfFeatures="6621" timeStamp="x"/>', { status: 200 })
+        : json({ type: "FeatureCollection", features }),
+    );
+    const r = await layer.query({ ...ctx(stub, "glaciers:w"), bbox: [-149, 60.6, -145, 61.8], wide: true, wideStrategy: layer.wide }, {});
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const urls = (stub.mock.calls as unknown as [string][]).map((c) => new URL(c[0]));
+    const data = urls.find((u) => u.searchParams.get("resultType") === null);
+    expect(data?.searchParams.get("maxFeatures")).toBe("1500");
+    expect(data?.searchParams.get("sortBy")).toBe("db_area D");
+    expect(r.data.features).toHaveLength(1500);
+    expect(r.total).toBe(6621);
+    expect(r.coverageNote).not.toMatch(/largest|zoom in/);
+  });
+
+  it("is registered, answers a 13,000 km² Alps box wide through runLayer, and rejects one over the hard cap", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes("resultType=hits") ? new Response('<x numberOfFeatures="9"/>', { status: 200 }) : json(raw),
+    );
+    vi.stubGlobal("fetch", stub);
+    try {
+      const r = await runLayer("glaciers", { bbox: [7, 45.5, 8.5, 46.5], zoom: 8 });
+      expect(r.status).toBe(200);
+      // Fewer rows than the limit came back, so every outline is there and the count is not quoted.
+      expect(r.body).toMatchObject({ coverageNote: expect.stringMatching(/^Showing all 6 in this wide view \(ranked by area in km²\)/) });
+      expect(r.body).not.toHaveProperty("total");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    const far = await runLayer("glaciers", { bbox: [6, 44, 9, 47], zoom: 8 });
+    expect(far.status).toBe(422);
+    expect(far.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 32000 km²$/) });
   });
 
   it("describes glaciers in the words people use and warns the outlines are dated", () => {

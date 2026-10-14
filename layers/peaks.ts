@@ -12,17 +12,26 @@
  * Smoke check 2026-10-10 (live, keyless, through runLayer): Lake Tahoe box (-120.2,38.8,-119.8,39.2) returned 40 named peaks in 1.6 s,
  *   first Freel Peak (v = elevation 3,318 m, prominence 959 m). On 2026-10-09 a 1.8 degree Colorado box (about 33,000 km2) returned 821 peaks
  *   in 8.8 s, and Wikimedia answered 429 to queries made 10 s apart.
+ * Wide mode (over 40,000 km², up to the default hard cap of 160,000 km²) runs widePeaksQuery: the 1,000 most prominent peaks,
+ * ranked by prominence, with no count (a second WDQS query would risk the 429s above).
+ * Smoke wide 2026-10-14 (through runLayer): Colorado -108.5,37,-104.5,41 (about 155,000 km²) returned all 176 peaks with a prominence in
+ *   2.8 s, Mount Elbert first; an Alps box 6,44.5,12,47 returned 1,050 rows from WDQS in 7.6 s. The box query on that Alps box ran over 60 s.
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
-import { wikimediaFetch } from "./_shared/wikimedia";
+import { rankedSparql, wikimediaFetch } from "./_shared/wikimedia";
 import { layerColor } from "@/lib/render/palette";
 
 export const SPARQL_ENDPOINT = "https://query.wikidata.org/sparql";
 const LIMIT = 1_000;
+/**
+ * Extra rows a wide query asks for past its limit, so items dropped for having no name do not leave the result short of the
+ * limit (which run.ts would read as "all of them").
+ */
+const WIDE_SLACK = 50;
 /** Peaks do not move; Wikidata edits are slow-moving too. */
 const TTL_SECONDS = 7 * 86_400;
 
@@ -64,6 +73,39 @@ const responseSchema = z.object({
 });
 
 type Binding = z.infer<typeof responseSchema>["results"]["bindings"][number];
+
+/**
+ * The wide-mode query (over 40,000 km²): the most prominent peaks in the box. The box query above times out cold past about
+ * 100,000 km² in dense ranges (a 128,000 km² Alps box ran over 60 s), so this one starts from the items that have a
+ * prominence, keeps those whose coordinate falls in the box and that are peaks, ranks them and only then reads elevations and
+ * labels for the kept rows. Peaks with no prominence recorded are left out, which the result says.
+ */
+export function widePeaksQuery(bbox: BBox, limit: number): string {
+  const [west, south, east, north] = bbox;
+  const n = limit + WIDE_SLACK;
+  return rankedSparql(
+    `SELECT ?item ?itemLabel ?coord ?prom (MAX(?elevM) AS ?elev) (SAMPLE(?nativeName) AS ?native) WHERE {
+  {
+    SELECT ?item (SAMPLE(?c) AS ?coord) (MAX(?promM) AS ?prom) WHERE {
+      ?item p:P2660/psn:P2660/wikibase:quantityAmount ?promM .
+      ?item wdt:P625 ?c .
+      FILTER(geof:longitude(?c) >= ${west} && geof:longitude(?c) <= ${east} && geof:latitude(?c) >= ${south} && geof:latitude(?c) <= ${north})
+      VALUES ?cls { wd:Q8502 wd:Q207326 wd:Q8072 }
+      ?item wdt:P31/wdt:P279* ?cls .
+    }
+    GROUP BY ?item
+    ORDER BY DESC(?prom)
+    LIMIT ${n}
+  }
+  OPTIONAL { ?item p:P2044/psn:P2044/wikibase:quantityAmount ?elevM . }
+  OPTIONAL { ?item wdt:P1705 ?nativeName . }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul". }
+}
+GROUP BY ?item ?itemLabel ?coord ?prom`,
+    n,
+    "prom",
+  );
+}
 
 /** "Point(-119.9 38.8575)" -> [-119.9, 38.8575]. */
 function parseWkt(wkt: string): [number, number] | null {
@@ -116,23 +158,20 @@ const peaks = defineLayer({
     "Use it for 'tallest peaks here', 'highest mountains in this range', 'peaks with the most prominence' (read the prominence property and sort on it yourself), 'what is that mountain called', or 'peak bagging' lists; with 3D on, columns rise with elevation. " +
     "Caveats: Wikidata is a volunteer-edited catalogue, so well-known peaks are present with good numbers, but many minor summits are missing and many listed peaks have an elevation but no prominence, " +
     "and a few peaks appear twice under slightly different coordinates. Elevations are as entered by editors, not survey-checked; for exact figures use USGS or the summit register. " +
-    "Names are English when Wikidata has one, otherwise the peak's own-language name; items with no name are left out. At most 1,000 peaks are returned, highest first, and the result says when that cap is hit. " +
-    "Works worldwide. Zoom in to a region under 40,000 km² (about a 200 km square) first.",
+    "Names are English when Wikidata has one, otherwise the peak's own-language name; items with no name are left out. At most 1,000 peaks, highest first. " +
+    "Works worldwide. Over 40,000 km² (about a 200 km square) it returns only peaks with a recorded prominence, the 1,000 most prominent.",
   coverage: "global",
   license: "CC0 (Wikidata)",
   requiredEnv: [],
   maxAreaKm2: 40_000,
+  wide: { orderBy: "prominence", rank: "most prominent", limit: LIMIT },
   input: z.object({}),
   style: { geometry: "point", color: layerColor("peaks"), unit: "m", extrude: "v" },
 
   async query(ctx): Promise<LayerResult | LayerError> {
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > peaks.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${peaks.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
+    // Wide (over 40,000 km², up to the hard cap): the most prominent peaks, capped at the strategy's limit.
+    const wideLimit = ctx.wide ? Math.min(LIMIT, ctx.wideStrategy?.limit ?? LIMIT) : undefined;
+    const query = wideLimit === undefined ? peaksQuery(ctx.bbox) : widePeaksQuery(ctx.bbox, wideLimit);
 
     let res: Response;
     try {
@@ -142,7 +181,7 @@ const peaks = defineLayer({
           accept: "application/sparql-results+json",
           "content-type": "application/x-www-form-urlencoded",
         },
-        body: new URLSearchParams({ query: peaksQuery(ctx.bbox) }).toString(),
+        body: new URLSearchParams({ query }).toString(),
         cacheKey: ctx.cacheKey,
         ttlSeconds: TTL_SECONDS,
       });
@@ -167,11 +206,14 @@ const peaks = defineLayer({
     const parsed = responseSchema.safeParse(json);
     if (!parsed.success) return { error: "Wikidata returned an unexpected response", hint: "upstream" };
 
-    const features = normalizePeaks(parsed.data.results.bindings);
+    const all = normalizePeaks(parsed.data.results.bindings);
+    const features = wideLimit === undefined ? all : all.slice(0, wideLimit);
     const notes: string[] = [];
-    if (parsed.data.results.bindings.length >= LIMIT) {
+    // In wide mode run.ts writes the "showing the N most prominent" note.
+    if (wideLimit === undefined && parsed.data.results.bindings.length >= LIMIT) {
       notes.push(`Showing the ${LIMIT.toLocaleString("en-US")} highest peaks; zoom in for the rest`);
     }
+    if (wideLimit !== undefined) notes.push("only peaks with a recorded prominence are listed at this scale");
     if (features.length === 0) notes.push("No named peaks in Wikidata for this area");
 
     return {

@@ -3,7 +3,16 @@ import { z } from "zod";
 import type { Tool } from "ai";
 import "@/layers";
 import { clearRegistry, defineLayer, listLayers, registerLayer } from "@/layers";
-import { TOOL_DESCRIPTION_INPUT_CEILING, TOOL_DESCRIPTION_MAX_CHARS, buildTools, compactDescription } from "@/lib/agent/tools";
+import { NoSuchToolError } from "ai";
+import {
+  TOOL_DESCRIPTION_INPUT_CEILING,
+  TOOL_DESCRIPTION_MAX_CHARS,
+  buildTools,
+  compactDescription,
+  repairToolCall,
+  repairToolName,
+  wideSentence,
+} from "@/lib/agent/tools";
 
 const callOptions = { toolCallId: "test-call", messages: [], context: {} };
 
@@ -193,6 +202,23 @@ describe("buildTools", () => {
     expect(description).toContain("fire-perimeters 2016-2020 vs 2021-today");
   });
 
+  it("compare takes two scenario amounts instead of windows, and refuses a call with neither", async () => {
+    const tools = buildTools();
+    const schema = schemaOf(tools.compare);
+    const scenario = schema.safeParse({ layerId: "sea-level-rise", scenario: [1, 6] });
+    expect(scenario.success).toBe(true);
+    expect(await run(tools.compare, scenario.data)).toMatchObject({ layerId: "sea-level-rise", scenario: [1, 6] });
+    const neither = schema.safeParse({ layerId: "forest-loss", a: ["2015-01-01", "2015-12-31"] });
+    expect(neither.success).toBe(true);
+    expect(await run(tools.compare, neither.data)).toEqual({ error: "compare needs both windows a and b, or scenario with two amounts" });
+  });
+
+  it("render takes a scenario amount for scenario layers", () => {
+    const schema = schemaOf(buildTools().render);
+    expect(schema.safeParse({ layerId: "sea-level-rise", scenario: 3 }).success).toBe(true);
+    expect(schema.safeParse({ layerId: "sea-level-rise", scenario: "3 ft" }).success).toBe(false);
+  });
+
   it("list_layers rows are one line each: id, title, coverage and a gist, no synonyms", async () => {
     const result = (await run(buildTools().list_layers, {})) as string[];
     expect(result).toHaveLength(listLayers().length);
@@ -326,5 +352,52 @@ describe("compactDescription", () => {
   it("does not split after e.g.", () => {
     const text = `First. Event names, e.g. 'Red Flag Warning', filter it. ${"y".repeat(900)}.`;
     expect(compactDescription(text, { max: 100 })).toBe("First. Event names, e.g. 'Red Flag Warning', filter it.");
+  });
+});
+
+describe("repairToolName", () => {
+  const names = ["query_power-plants", "query_peaks", "query_pipelines-lines", "note", "render"];
+
+  it("maps the owner's garbled name back to the one tool it starts with", () => {
+    expect(repairToolName("query_power-plants<|channel|>commentary", names)).toBe("query_power-plants");
+    expect(repairToolName("note<|constrain|>json", names)).toBe("note");
+    expect(repairToolName("render<|call|>", names)).toBe("render");
+  });
+
+  it("leaves real names alone, and refuses an ambiguous or unknown prefix", () => {
+    expect(repairToolName("query_peaks", names)).toBe("query_peaks");
+    expect(repairToolName("query_p<|channel|>", names)).toBeNull();
+    expect(repairToolName("query_lakes<|channel|>commentary", names)).toBeNull();
+    expect(repairToolName("bogus", names)).toBeNull();
+  });
+
+  it("repairs a NoSuchToolError call in place and logs each name once", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const tools = { "query_power-plants": {}, "query_peaks": {}, note: {} } as unknown as ReturnType<typeof buildTools>;
+    const toolCall = { type: "tool-call" as const, toolCallId: "1", toolName: "query_power-plants<|channel|>commentary", input: "{}" };
+    const error = new NoSuchToolError({ toolName: toolCall.toolName, availableTools: Object.keys(tools) });
+    const options = { toolCall, tools, error, messages: [], instructions: undefined, system: undefined, inputSchema: async () => ({}) };
+    const first = await repairToolCall(options);
+    await repairToolCall(options);
+    expect(first).toEqual({ ...toolCall, toolName: "query_power-plants" });
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+});
+
+describe("wideSentence", () => {
+  it("tells the model a wide box still answers, ranked, and never to shrink it", () => {
+    const text = wideSentence({ maxAreaKm2: 250_000, hardMaxAreaKm2: 50_000_000, wide: { orderBy: "capacity in MW", limit: 2_000 } });
+    expect(text).toBe(
+      " Over 250,000 km² (to 50,000,000 km²) it returns the 2,000 largest by capacity in MW; never shrink the box.",
+    );
+    expect(wideSentence({ maxAreaKm2: 250_000 })).toBe("");
+  });
+
+  it("is in the power-plants query tool's description", async () => {
+    const { default: powerPlants } = await import("@/layers/power-plants");
+    registerLayer(powerPlants);
+    const description = buildTools()["query_power-plants"].description ?? "";
+    expect(description).toMatch(/it returns the 2,000 largest by capacity in MW; never shrink the box/);
   });
 });

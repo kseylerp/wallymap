@@ -98,7 +98,31 @@ describe("methane-plumes", () => {
     expect(layer.license).toContain("Data by Carbon Mapper");
   });
 
-  it("rejects an oversized bbox through runLayer", async () => {
-    expect((await runLayer("methane-plumes", { bbox: [-110, 28, -98, 36] })).status).toBe(422);
+  it("declares a wide strategy ranked by emission rate, and rejects a box over the 2,000,000 km² hard cap through runLayer", async () => {
+    expect(layer.maxAreaKm2).toBe(500_000);
+    expect(layer.wide).toEqual({ orderBy: "emission rate in kg/h", limit: 1000 });
+    expect((await runLayer("methane-plumes", { bbox: [-125, 25, -65, 50] })).status).toBe(422);
+  });
+
+  it("answers a wide box (about 1,000,000 km²) with the 500 largest plumes and sources and the combined total", async () => {
+    const stub = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes("/plumes/annotated") ? json({ ...plumesFixture, bbox_count: 1646 }) : json(sourcesFixture),
+    );
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("methane-plumes", { bbox: [-110, 28, -98, 36], zoom: 5 });
+      expect(res.status).toBe(200);
+      const plumes = stub.mock.calls.map((c) => new URL(String(c[0]))).find((u) => u.pathname.endsWith("/plumes/annotated"));
+      expect(plumes?.searchParams.get("sort")).toBe("emissions_desc");
+      expect(plumes?.searchParams.get("limit")).toBe("500");
+      expect(res.body).toMatchObject({
+        total: 1646 + 5,
+        truncated: true,
+        coverageNote: expect.stringMatching(/^Showing the 11 largest of 1,651 \(ranked by emission rate in kg\/h\); zoom in under 500,000 km² for all; kind 'plume'/),
+      });
+      expect((res.body as { coverageNote: string }).coverageNote).not.toMatch(/largest of 1646 plumes/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

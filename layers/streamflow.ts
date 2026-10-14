@@ -34,6 +34,9 @@
  * Live smoke 2026-10-09 ~02:05 UTC: Tahoe box, 18 discharge gauges; W FK Carson at Woodfords 19.4 cfs,
  * 84% of the 23 cfs Oct 9 median; Upper Truckee at South Lake Tahoe 5.42 cfs, 49% of median, 14.9 C.
  * Lyon box [4.7,45.6,6.3,46.3] (outside US): 8 rivers; Le Rhone 328.6 m3/s = 11,605 cfs modelled.
+ * Wide smoke through runLayer (2026-10-14): Colorado [-109,37,-102,41] (268,000 km², under the soft cap) 321 gauges
+ * in 7.2 s; [-112,36,-102,42] (574,000 km², 3 strips) all 535 gauges in 10.9 s; [-90,35,-75,44] (1.28 million km²,
+ * 6 strips) kept the 1,000 highest flows of total 2,316 in 8.3 s (Mississippi at New Madrid 378,000 cfs first).
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
@@ -42,7 +45,7 @@ import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { outsideUs } from "./_shared/coverage";
 import { overpassQuery } from "./_shared/overpass";
-import { fetchIv, parseIv, type IvSite } from "./_shared/usgs";
+import { fetchIv, ivStrips, parseIv, type IvSite } from "./_shared/usgs";
 import { layerColor } from "@/lib/render/palette";
 
 const BASE = "https://api.waterdata.usgs.gov/ogcapi/v0/collections";
@@ -54,6 +57,13 @@ const LATEST_LIMIT = 10_000;
 const NAME_BATCH_SIZE = 100;
 /** Gauges report every 15 minutes, so ten minutes of cache keeps the map current. */
 const LATEST_TTL_SECONDS = 600;
+/** Most gauges a wide (over 400,000 km²) result carries. */
+export const WIDE_LIMIT = 1000;
+/**
+ * Most IV strips (one request each, at most 25 square degrees) a query may make. The 1.6 million km² hard cap is
+ * about 7 strips in the lower 48; a far-north box of the same area needs more, so it is refused here.
+ */
+export const MAX_IV_STRIPS = 10;
 
 const inputSchema = z.object({
   parameter: z.enum(["00060", "00065"]).default("00060"),
@@ -186,6 +196,17 @@ async function fetchJson(
 function hasNextPage(body: unknown): boolean {
   if (typeof body !== "object" || body === null || !("links" in body) || !Array.isArray(body.links)) return false;
   return body.links.some((l: unknown) => typeof l === "object" && l !== null && "rel" in l && l.rel === "next");
+}
+
+/**
+ * A wide result's cut: the `limit` features with the largest v (features without v last), and the count before
+ * the cut when there was one.
+ */
+export function keepLargest(fc: FeatureCollection, limit: number): { data: FeatureCollection; total?: number } {
+  if (fc.features.length <= limit) return { data: fc };
+  const vOf = (f: Feature) => (typeof f.properties?.v === "number" ? f.properties.v : -Infinity);
+  const features = [...fc.features].sort((a, b) => vOf(b) - vOf(a)).slice(0, limit);
+  return { data: { type: "FeatureCollection", features }, total: fc.features.length };
 }
 
 // ---- Live IV path (primary) ----
@@ -499,8 +520,16 @@ async function queryOutsideUs(ctx: QueryContext, now: Date): Promise<LayerResult
   }
   const notes = ["Outside the United States: modelled daily river discharge (GloFAS, 5 km grid), not gauge readings; one point per major river"];
   const riverCount = namedRiverCount(rivers.json);
-  if (riverCount > points.length) notes.push(`Showing the ${points.length} longest of ${riverCount} named rivers in view; zoom in for the rest`);
-  return { kind: "geojson", data: floodFeatures(points, body, now), citation, coverageNote: notes.join("; ") };
+  const more = riverCount > points.length;
+  // In wide mode run.ts writes the "showing N of M" note from `total`.
+  if (more && !ctx.wide) notes.push(`Showing the ${points.length} longest of ${riverCount} named rivers in view; zoom in for the rest`);
+  return {
+    kind: "geojson",
+    data: floodFeatures(points, body, now),
+    citation,
+    coverageNote: notes.join("; "),
+    ...(more && ctx.wide ? { total: riverCount } : {}),
+  };
 }
 
 // ---- Water Data API fallback ----
@@ -553,10 +582,12 @@ async function queryWaterDataApi(
   }
 
   const notes = ["Live USGS service unavailable; latest values from the USGS Water Data API without percent of median or water temperature"];
-  if (hasNextPage(latest.body)) {
+  if (hasNextPage(latest.body) && !ctx.wide) {
     notes.push(`Showing only the first ${LATEST_LIMIT.toLocaleString("en-US")} gauges, not all of them; zoom in for the rest`);
   }
-  return { kind: "geojson", data: toFeatures(readings, namesFrom(bodies)), citation, coverageNote: notes.join("; ") };
+  const all = toFeatures(readings, namesFrom(bodies));
+  const { data, total } = ctx.wide ? keepLargest(all, ctx.wideStrategy?.limit ?? WIDE_LIMIT) : { data: all, total: undefined };
+  return { kind: "geojson", data, citation, coverageNote: notes.join("; "), ...(total !== undefined && { total }) };
 }
 
 const streamflow = defineLayer({
@@ -569,15 +600,17 @@ const streamflow = defineLayer({
     "pctOfMedian is today's flow as a percent of the median flow for this calendar day over the gauge's record (medianCfs, in cfs), and vsNormal labels it: low (under 50%), normal (50 to 150%) or high (over 150%); use it to say a river is running high or low. It is given for the 30 largest-flow gauges in view only. " +
     "tempC is water temperature in °C where the gauge measures it (useful for fishing: trout get stressed above about 20 °C). " +
     "Outside the United States, points are modelled, not measured: kind 'model', one per major river, v is the GloFAS model's daily discharge converted to cfs (dischargeM3s is the original in m³/s), t is the day; treat it as a rough estimate, and a small river right beside a big one can show the big one's flow. " +
-    "Example questions: 'What is the Truckee running at?', 'Which rivers near here are running high?', 'Is the water too warm to fish?'. " +
+    "Example questions: 'What is the Truckee running at?', 'Which rivers near here are running high?'. " +
     "Caveats: US readings are provisional and can be revised; ice, debris or a dry channel can give 0 or odd values; gauges silent for 7 days are left out; " +
     "the percent of median compares one instantaneous reading to a daily median, so it swings with dam releases and daily snowmelt cycles. " +
-    "Needs a region under 400,000 km² (about the size of California).",
+    "Over 400,000 km² it returns up to 1,000 gauges, highest flow first.",
   coverage: "global",
   license: "Public domain (USGS); outside the US GloFAS via Open-Meteo, CC BY 4.0, free for non-commercial use only",
   requiredEnv: [],
   optionalEnv: ["USGS_API_KEY", "OVERPASS_URL"],
   maxAreaKm2: 400_000,
+  // Default hard cap (1.6 million km²): about 7 IV strips in the lower 48, fetched in parallel.
+  wide: { orderBy: "current flow or gage height", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("streamflow"), unit: "cfs" },
 
@@ -590,6 +623,13 @@ const streamflow = defineLayer({
       url: "https://waterservices.usgs.gov/",
       retrieved: now.toISOString(),
     };
+    const strips = ivStrips(ctx.bbox).length;
+    if (strips > MAX_IV_STRIPS) {
+      return {
+        error: `This box needs ${strips} USGS requests (at most ${MAX_IV_STRIPS}); zoom in`,
+        hint: "zoom_in",
+      };
+    }
     const iv = await fetchIv(ctx, [input.parameter, "00010"], "usgs-iv", LATEST_TTL_SECONDS);
     if (!iv.ok) {
       return queryWaterDataApi(ctx, input.parameter, now, {
@@ -606,7 +646,8 @@ const streamflow = defineLayer({
     const statFor = input.parameter === "00060" ? statSites(sites) : [];
     const stats =
       statFor.length > 0 ? await fetchMedians(ctx, statFor) : { medians: new Map<string, Map<string, number>>(), failedBatches: 0 };
-    const data = ivFeatures(sites, input.parameter, stats.medians);
+    const all = ivFeatures(sites, input.parameter, stats.medians);
+    const { data, total } = ctx.wide ? keepLargest(all, ctx.wideStrategy?.limit ?? WIDE_LIMIT) : { data: all, total: undefined };
     const withFlow = sites.filter((s) => s.readings[input.parameter] !== undefined).length;
     const notes: string[] = [];
     if (stats.failedBatches > 0) {
@@ -619,7 +660,13 @@ const streamflow = defineLayer({
     if (input.parameter === "00060" && withFlow > STAT_SITE_CAP) {
       notes.push(`Percent of median is given for the ${STAT_SITE_CAP} largest-flow gauges of ${withFlow}; zoom in for the rest`);
     }
-    return { kind: "geojson", data, citation: liveCitation, ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}) };
+    return {
+      kind: "geojson",
+      data,
+      citation: liveCitation,
+      ...(total !== undefined && { total }),
+      ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
+    };
   },
 });
 

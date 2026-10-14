@@ -464,8 +464,8 @@ textarea:focus-visible {
 
 /*
  * The layer panel legend (components/LayerStack.tsx): flat rows on hairlines, no cards. The selected layer's row
- * takes a 2px ink rule at its left; a hidden layer's key fades. Row controls show on hover or focus (always on
- * touch screens).
+ * takes a 2px ink rule at its left; a hidden layer's key fades. Every control is visible and inside the panel: no
+ * hover reveal, no tooltips, readouts inline.
  */
 .legend-row + .legend-row {
   border-top: 1px solid var(--line);
@@ -485,23 +485,6 @@ textarea:focus-visible {
 .legend-row[data-hidden] .legend-key {
   opacity: 0.35;
 }
-.legend-controls {
-  display: grid;
-  grid-template-rows: 1fr;
-  transition:
-    grid-template-rows 150ms var(--ease-out),
-    opacity 150ms var(--ease-out);
-}
-.legend-controls > * {
-  min-height: 0;
-  overflow: hidden;
-}
-@media (hover: hover) and (pointer: fine) {
-  .legend-row:not(:hover, :focus-within, [data-selected], [data-filters-open]) .legend-controls {
-    grid-template-rows: 0fr;
-    opacity: 0;
-  }
-}
 /* A small control that still takes a 28px tap: an invisible box centered on it, at least 28px each way. */
 .hit-target {
   position: relative;
@@ -515,33 +498,86 @@ textarea:focus-visible {
   height: max(100%, 28px);
   transform: translate(-50%, -50%);
 }
-/* Visibility: an 11px square, ink when the layer shows (a 28px tap, like .hit-target). */
-.legend-check {
-  position: relative;
-  width: 11px;
-  height: 11px;
-  flex-shrink: 0;
-  border: 1px solid var(--ink);
-  border-radius: 2px;
-  background: transparent;
-  cursor: pointer;
-  transition: background-color 150ms var(--ease-out);
+/* Hide / Show and the row's text links: quiet text, ink on hover. */
+.row-toggle {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--ink-muted);
+  transition: color 150ms var(--ease-out);
 }
-.legend-check::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 28px;
-  height: 28px;
-  transform: translate(-50%, -50%);
+.row-toggle:hover {
+  color: var(--ink);
 }
-.legend-check[aria-pressed="true"] {
-  background: var(--ink);
-}
-.legend-check:disabled {
+.row-toggle:disabled {
   opacity: 0.35;
-  cursor: default;
+}
+.row-link {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-muted);
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color 150ms var(--ease-out);
+}
+.row-link:hover,
+.row-link[aria-expanded="true"] {
+  color: var(--ink);
+}
+/* A row section (Show as): a hairline above its small-caps heading. */
+.row-section {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+/* Show as: four equal segments in one hairline box, the pressed one in ink. Always fits the row. */
+.mode-segments {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.mode-segment {
+  min-width: 0;
+  height: 24px;
+  padding: 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  transition:
+    background-color 150ms var(--ease-out),
+    color 150ms var(--ease-out);
+}
+.mode-segment + .mode-segment {
+  border-left: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+}
+.mode-segment:hover {
+  color: var(--ink);
+}
+.mode-segment[aria-pressed="true"] {
+  background: var(--button-primary);
+  color: var(--button-primary-text);
+}
+.mode-segment:focus-visible {
+  outline: 2px solid var(--slate);
+  outline-offset: -2px;
+}
+/* Under 280px of panel the segments give way to a native select (the panel is the `panel` container). */
+.mode-select-wrap {
+  display: none;
+}
+@container panel (width < 280px) {
+  .mode-segments {
+    display: none;
+  }
+  .mode-select-wrap {
+    display: block;
+  }
 }
 /* Render mode: a plain select on a hairline. */
 .legend-select {
@@ -557,6 +593,10 @@ textarea:focus-visible {
 }
 .legend-select:focus-visible {
   border-color: var(--ink);
+}
+.legend-select.mode-select {
+  width: 100%;
+  max-width: none;
 }
 
 /* Layer panel opacity slider: a 2px ink track filled up to the value (--fill, set inline), a small ringed thumb. */
@@ -620,24 +660,9 @@ textarea:focus-visible {
 }
 
 /*
- * Layer filters (components/LayerFilters.tsx): the "Filters" disclosure is a quiet text toggle; category chips are
- * hairline-bordered text that fill with ink when picked; a range is two native sliders sharing one 2px track, the
- * part between the thumbs in ink.
+ * Layer filters (components/LayerFilters.tsx): category chips are hairline-bordered text that fill with ink when
+ * picked; a range is two native sliders sharing one 2px track, the part between the thumbs in ink.
  */
-.legend-disclosure {
-  font-size: 12px;
-  color: var(--ink-muted);
-  transition: color 150ms var(--ease-out);
-}
-.legend-disclosure:hover,
-.legend-disclosure[aria-expanded="true"] {
-  color: var(--ink);
-}
-.legend-disclosure[aria-expanded="true"] {
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 4px;
-}
 .filter-chip {
   display: inline-flex;
   align-items: baseline;
@@ -945,6 +970,9 @@ textarea:focus-visible {
     height: 28px;
     max-width: 128px;
   }
+  .legend-select.mode-select {
+    max-width: none;
+  }
   .compare-date {
     flex: 1 1 0;
     width: auto;
@@ -1003,20 +1031,4 @@ textarea:focus-visible {
   letter-spacing: 0;
   white-space: normal;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
-}
-/* The row's small opacity control: 24px of hairline track and a 8px thumb. */
-.layer-opacity-small::-webkit-slider-runnable-track {
-  height: 1px;
-}
-.layer-opacity-small::-moz-range-track {
-  height: 1px;
-}
-.layer-opacity-small::-webkit-slider-thumb {
-  margin-top: -3.5px;
-  width: 8px;
-  height: 8px;
-}
-.layer-opacity-small::-moz-range-thumb {
-  width: 8px;
-  height: 8px;
 }

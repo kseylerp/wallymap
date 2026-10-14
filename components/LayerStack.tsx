@@ -6,6 +6,8 @@ import { TimeScrubber } from "@/components/TimeScrubber";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { applyFilters, deriveFilterFields, filterSummary, type FilterField, type MeasureRange } from "@/lib/render/filters";
 import { FacetControls } from "@/components/FacetControls";
+import { InfoMark } from "@/components/FieldHelp";
+import type { FieldHelp } from "@/layers/types";
 import { facetFilterSummary, facetsOf } from "@/lib/render/facets";
 import { viewCaption } from "@/lib/render/views";
 import type { Feature } from "geojson";
@@ -16,7 +18,7 @@ import { currentScenarioValue, scenarioOf, scenarioValueText } from "@/lib/rende
 import { compareBId, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
 import { hexbinThreshold } from "@/lib/render/deck";
 import { COMPARE_COLORS, DELTA_COLORS, DELTA_LINE_COLORS, isRouteProperties, LINE, WHITE } from "@/lib/render/palette";
-import { POINT_MODES, type LoadedLayer, type MapAction, type MapState, type RenderMode, type RenderOp, type Selection, type TimeState } from "@/lib/render/state";
+import { type LoadedLayer, type MapAction, type MapState, type RenderMode, type RenderOp, type Selection, type TimeState } from "@/lib/render/state";
 import { hasMissingImage, missingTilesStore } from "@/lib/render/tileErrors";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
 import { hexTileLegend, legendSymbol, type LegendMode, type LegendSymbol } from "@/lib/render/wally/legend";
@@ -45,14 +47,13 @@ type LayerStackProps = {
   compare?: MapState["compare"];
 };
 
-/** Modes the select offers line and area layers; areas with an `extrude` hint (or already extruded) can stand as 3D columns. */
-const MODES: { value: RenderMode; label: string }[] = [
+/** The four ways a point layer draws, in short labels that fit the narrowest panel. */
+const SHOW_AS: { value: RenderMode; label: string }[] = [
   { value: "points", label: "Points" },
-  { value: "lines", label: "Lines" },
-  { value: "polygons", label: "Polygons" },
+  { value: "clusters", label: "Clusters" },
   { value: "heat", label: "Heat" },
+  { value: "columns", label: "3D" },
 ];
-const EXTRUDE_MODE = { value: "columns" as RenderMode, label: "Columns (3D)" };
 
 /** The segment a point layer's mode lights up: hex tiles (`hexbin`) read as columns, their 2D form. */
 function pointSegment(mode: RenderMode): RenderMode {
@@ -60,31 +61,33 @@ function pointSegment(mode: RenderMode): RenderMode {
 }
 
 /**
- * A point layer's render mode as a small text segmented control (Symbols · Clusters · Heat · Columns): research look, no
- * icons; the pressed segment is ink, the rest muted.
+ * A point layer's render mode (Points · Clusters · Heat · 3D): four equal-width text segments on a hairline, the
+ * pressed one in ink, so the control always fits the row. In a panel under 280px the segments give way to a native
+ * select (a container query on the panel), so nothing is ever clipped.
  */
 function PointModeControl({ layer, mode, dispatch }: { layer: LoadedLayer; mode: RenderMode; dispatch: (action: MapAction) => void }) {
   const current = pointSegment(mode);
+  const pick = (next: RenderMode) => current !== next && dispatch({ type: "set_style", layerId: layer.id, mode: next });
   return (
-    <div role="group" aria-label={`Draw ${layer.title} as`} data-testid="mode-control" className="flex items-baseline text-[11.5px] leading-4">
-      {POINT_MODES.map((m, i) => (
-        <span key={m.value} className="flex items-baseline">
-          {i > 0 && (
-            <span aria-hidden className="px-1 text-ink-muted">
-              ·
-            </span>
-          )}
-          <button
-            type="button"
-            aria-pressed={current === m.value}
-            onClick={() => current !== m.value && dispatch({ type: "set_style", layerId: layer.id, mode: m.value })}
-            className={`hit-target transition-colors duration-150 ${current === m.value ? "text-ink underline decoration-1 underline-offset-[3px]" : "text-ink-muted hover:text-ink"}`}
-          >
+    <>
+      <div role="group" aria-label={`Show ${layer.title} as`} data-testid="mode-control" className="mode-segments">
+        {SHOW_AS.map((m) => (
+          <button key={m.value} type="button" aria-pressed={current === m.value} onClick={() => pick(m.value)} className="mode-segment">
             {m.label}
           </button>
-        </span>
-      ))}
-    </div>
+        ))}
+      </div>
+      <label data-testid="mode-select" className="mode-select-wrap">
+        <span className="sr-only">Show {layer.title} as</span>
+        <select value={current} onChange={(e) => pick(e.target.value as RenderMode)} className="legend-select mode-select">
+          {SHOW_AS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </>
   );
 }
 
@@ -216,9 +219,26 @@ export function measureLabel(value: number, range: MeasureRange, unit?: string, 
   return unit && unit !== "score" ? `≥ ${text} ${unit}` : `≥ ${text}`;
 }
 
+/** A labelled slider row: the small-caps label, a slim slider filling the row, the value inline at its end (no tooltip). */
+function SliderRow({ label, srLabel, readout, children }: { label: string; srLabel: string; readout: string; children: (id: string) => ReactNode }) {
+  const id = `slider-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <label htmlFor={id} className="small-caps w-[62px] shrink-0">
+        {label}{" "}
+        <span className="sr-only">{srLabel}</span>
+      </label>
+      {children(id)}
+      <span aria-hidden className="w-10 shrink-0 text-right text-[12px] leading-4 text-ink tabular-nums">
+        {readout}
+      </span>
+    </div>
+  );
+}
+
 /**
- * A scenario layer's row slider (sea level rise), in place of opacity: the amounts on the scenario scrubber, with the
- * one shown ("3 ft"). Opacity stays available to the agent (render, set_opacity).
+ * A scenario layer's amount (sea level rise) as a labelled slider row over the scrubber's amounts, with the one shown
+ * ("3 ft") inline.
  */
 function ScenarioRowSlider({ layer, value, dispatch }: { layer: LoadedLayer; value: number; dispatch: (action: MapAction) => void }) {
   const scenario = scenarioOf(layer);
@@ -227,33 +247,41 @@ function ScenarioRowSlider({ layer, value, dispatch }: { layer: LoadedLayer; val
   const at = Math.max(0, values.indexOf(value));
   const fill = values.length > 1 ? (at / (values.length - 1)) * 100 : 100;
   return (
-    <label className="flex items-center gap-1.5">
-      <span className="sr-only">
-        {label} for {layer.title}
-      </span>
-      <input
-        type="range"
-        min={0}
-        max={values.length - 1}
-        step={1}
-        value={at}
-        aria-valuetext={scenarioValueText(value, unit)}
-        onChange={(e) => dispatch({ type: "set_scenario", layerId: layer.id, value: values[Number(e.target.value)] })}
-        data-testid="scenario-row-slider"
-        className="layer-opacity w-[60px]"
-        style={{ ["--fill" as string]: `${Math.round(fill)}%` }}
-      />
-      <span aria-hidden className="w-9 text-right text-[11px] text-ink-muted tabular-nums">
-        {scenarioValueText(value, unit)}
-      </span>
-    </label>
+    <SliderRow label={label} srLabel={`for ${layer.title}`} readout={scenarioValueText(value, unit)}>
+      {(id) => (
+        <input
+          id={id}
+          type="range"
+          min={0}
+          max={values.length - 1}
+          step={1}
+          value={at}
+          aria-valuetext={scenarioValueText(value, unit)}
+          onChange={(e) => dispatch({ type: "set_scenario", layerId: layer.id, value: values[Number(e.target.value)] })}
+          data-testid="scenario-row-slider"
+          className="layer-opacity min-w-0 flex-1"
+          style={{ ["--fill" as string]: `${Math.round(fill)}%` }}
+        />
+      )}
+    </SliderRow>
+  );
+}
+
+/** One of the row's sections (Show as): a hairline above, then its small-caps heading. */
+function RowSection({ heading, children }: { heading: string; children: ReactNode }) {
+  return (
+    <div className="row-section">
+      <h3 className="small-caps mb-1.5 text-ink!">{heading}</h3>
+      {children}
+    </div>
   );
 }
 
 /**
- * One legend row: the key (also the drag handle), the title over a muted line of coverage, license and source, the
- * feature count in tabular figures and an always-visible ×, and (on hover or focus) visibility, the measure threshold
- * (or opacity, for layers without a numeric `v`), mode and filters.
+ * One legend row, every part inside the panel's width, top to bottom: the header (the key, which is also the drag
+ * handle; the title on up to two lines; the count, "6 of 280" when filtered; a Hide/Show text toggle; ×); one line of
+ * source and coverage, its full text and licence behind the "i"; the facets (components/FacetControls.tsx) and "More
+ * filters" for the free-form panel; Show as (point layers); and opacity as a labelled slider with its value inline.
  */
 function LegendRow({
   layer,
@@ -299,12 +327,18 @@ function LegendRow({
   const filtersId = `filters-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const { citation, coverageNote } = layer.result;
   const host = hostOf(citation.url);
+  const sourceHelp: FieldHelp = {
+    text: coverageNote ?? `${layer.title}, from ${citation.source}.`,
+    source: [citation.source, license && `Licence: ${license}`, citation.retrieved && `Retrieved ${citation.retrieved.slice(0, 10)}`].filter(Boolean).join(" · "),
+    url: citation.url,
+  };
   const symbol = layerLegend(layer, op);
   // A raster layer's key shows the tiles' raw color through the same filter the map applies (lib/render/rasterCalm.ts).
   const isRaster = layer.result.kind === "tiles" && layer.result.data.format === "raster" && symbol.kind === "tiles";
   const swatch = isRaster ? layer.style.raster?.swatch : undefined;
   const keySymbol: LegendSymbol = symbol.kind === "tiles" && swatch ? { ...symbol, color: swatch } : symbol;
   const keyFilter = isRaster ? rasterKeyFilter(layer.style.raster) : "";
+  const pointModes = op && layer.result.kind === "geojson" && layer.style.geometry === "point";
 
   const gripRef = useRef<HTMLButtonElement>(null);
   const onHandleKey = (e: KeyboardEvent) => {
@@ -315,6 +349,15 @@ function LegendRow({
     requestAnimationFrame(() => gripRef.current?.focus());
   };
 
+  const moreFilters = op && fields.length > 0 && (
+    <div className="pl-9">
+      <button type="button" onClick={() => setFiltersOpen((o) => !o)} aria-expanded={filtersOpen} aria-controls={filtersId} className="row-link mt-2">
+        {facets.length > 0 ? "More filters" : "Filters"}
+        {activeCount > 0 && <span className="tabular-nums"> · {activeCount}</span>}
+      </button>
+    </div>
+  );
+
   return (
     <li
       data-testid="layer-card"
@@ -324,14 +367,13 @@ function LegendRow({
       data-drop-target={dropTarget || undefined}
       data-filters-open={(filtersOpen && fields.length > 0) || undefined}
       {...dragProps}
-      className={`legend-row relative py-2.5 transition-opacity duration-150 ${dragging ? "opacity-40" : ""}`}
+      className={`legend-row relative min-w-0 py-3 transition-opacity duration-150 ${dragging ? "opacity-40" : ""}`}
     >
-      <div className="grid grid-cols-[24px_minmax(0,1fr)_auto_auto] items-start gap-x-3">
+      <div className="grid grid-cols-[24px_minmax(0,1fr)_auto_auto_auto] items-start gap-x-2">
         <button
           type="button"
           ref={gripRef}
           aria-label={`Reorder ${layer.title} (arrow keys)`}
-          title="Drag to reorder"
           disabled={!op}
           onPointerDown={() => armDrag(true)}
           onPointerUp={() => armDrag(false)}
@@ -342,76 +384,67 @@ function LegendRow({
             <LegendKey symbol={keySymbol} />
           </span>
         </button>
-        <div className="min-w-0">
-          <p className={`truncate text-[13px] leading-[18px] ${visible ? "text-ink" : "text-ink-muted"}`} title={layer.title}>
-            {layer.title}
-          </p>
-          <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-4 text-ink-muted">
-            {coverageNote && (
-              <>
-                <span title={coverageNote}>{coverageNote}</span>
-                {" · "}
-              </>
-            )}
-            {license && <span title={license}>{license} · </span>}
-            <a href={citation.url} target="_blank" rel="noreferrer" title={citation.source} className="dashed-link whitespace-nowrap">
-              {host ?? citation.source}
-            </a>
-          </p>
-          {caption && (
-            <p data-testid="view-caption" className="mt-0.5 text-[11.5px] leading-4 text-ink-muted">
-              {caption}
-            </p>
-          )}
-          {summary && (
-            <p className="mt-0.5 flex items-baseline gap-1.5 text-[11.5px] leading-4 text-ink-muted">
-              <span data-testid="filter-summary" className="min-w-0 truncate" title={summary}>
-                Filtered: {summary}
-              </span>
-              <button
-                type="button"
-                onClick={() => dispatch({ type: "set_filters", layerId: layer.id, filters: {} })}
-                aria-label={`Remove filters on ${layer.title}`}
-                title="Clear filters"
-                className={REMOVE_BUTTON}
-              >
-                ×
-              </button>
-            </p>
-          )}
-        </div>
+        <p data-testid="layer-title" className={`line-clamp-2 text-[13px] leading-[18px] [overflow-wrap:anywhere] ${visible ? "text-ink" : "text-ink-muted"}`}>
+          {layer.title}
+        </p>
         {count !== null ? (
-          shownCount !== null && shownCount !== count ? (
-            <span
-              data-testid="layer-count"
-              className="text-right text-[12px] leading-[18px] text-ink-muted tabular-nums"
-              title={`${shownCount.toLocaleString()} of ${count.toLocaleString()} features shown`}
-            >
-              <span className="text-ink">{shownCount.toLocaleString()}</span> / {count.toLocaleString()}
-            </span>
-          ) : (
-            <span
-              data-testid="layer-count"
-              className="text-right text-[12px] leading-[18px] text-ink tabular-nums"
-              title={`${count.toLocaleString()} ${count === 1 ? "feature" : "features"}`}
-            >
-              {count.toLocaleString()}
-            </span>
-          )
+          <span data-testid="layer-count" className="text-right text-[12px] leading-[18px] whitespace-nowrap text-ink-muted tabular-nums">
+            {shownCount !== null && shownCount !== count ? (
+              <>
+                <span className="text-ink">{shownCount.toLocaleString()}</span> of {count.toLocaleString()}
+              </>
+            ) : (
+              <span className="text-ink">{count.toLocaleString()}</span>
+            )}
+          </span>
         ) : (
           <span className="small-caps text-right leading-[18px]">tiles</span>
         )}
-        {/* Always visible (owner: "close out measures ... when I don't want them anymore"), not only on hover. */}
         <button
           type="button"
-          onClick={() => dispatch({ type: "remove_layer", layerId: layer.id })}
-          aria-label={`Remove ${layer.title}`}
-          title="Remove layer"
-          className={`${REMOVE_BUTTON} -mr-1 leading-[18px]`}
+          onClick={() => dispatch({ type: "toggle_layer", layerId: layer.id })}
+          disabled={!op}
+          aria-label={`${visible ? "Hide" : "Show"} ${layer.title}`}
+          data-testid="visibility-toggle"
+          className="row-toggle hit-target"
         >
+          {visible ? "Hide" : "Show"}
+        </button>
+        {/* Always visible (owner: "close out measures ... when I don't want them anymore"). */}
+        <button type="button" onClick={() => dispatch({ type: "remove_layer", layerId: layer.id })} aria-label={`Remove ${layer.title}`} className={`${REMOVE_BUTTON} leading-[18px]`}>
           ×
         </button>
       </div>
+
+      <p data-testid="layer-source" className="mt-1 flex min-w-0 items-center gap-1.5 text-[11.5px] leading-4 text-ink-muted">
+        <span className="min-w-0 truncate">
+          <a href={citation.url} target="_blank" rel="noreferrer" className="dashed-link">
+            {host ?? citation.source}
+          </a>
+          {coverageNote && <> · {coverageNote}</>}
+        </span>
+        <InfoMark help={sourceHelp} label={`the source of ${layer.title}`} />
+      </p>
+      {caption && (
+        <p data-testid="view-caption" className="mt-1 text-[11.5px] leading-4 text-ink-muted">
+          {caption}
+        </p>
+      )}
+      {summary && (
+        <p className="mt-1 flex min-w-0 items-baseline gap-1.5 text-[11.5px] leading-4 text-ink-muted">
+          <span data-testid="filter-summary" className="min-w-0 truncate">
+            Filtered: {summary}
+          </span>
+          <button
+            type="button"
+            onClick={() => dispatch({ type: "set_filters", layerId: layer.id, filters: {} })}
+            aria-label={`Remove filters on ${layer.title}`}
+            className={REMOVE_BUTTON}
+          >
+            ×
+          </button>
+        </p>
+      )}
 
       {/* Facets (spec §12a) are always visible, never behind a disclosure or hover. */}
       {op && data && facets.length > 0 && (
@@ -426,76 +459,37 @@ function LegendRow({
           dispatch={dispatch}
         />
       )}
-      {/* The grid row collapses to 0 while hidden; the padding lives inside it so a collapsed row stays tight. */}
-      <div className="legend-controls">
-        <div>
-          <div className="flex items-center gap-2.5 pt-2 pl-9">
-            <button
-              type="button"
-              onClick={() => dispatch({ type: "toggle_layer", layerId: layer.id })}
-              disabled={!op}
-              aria-pressed={visible}
-              aria-label={`Show ${layer.title}`}
-              title={visible ? "Hide layer" : "Show layer"}
-              className="legend-check"
-            />
-            {op && scenarioValue !== undefined && <ScenarioRowSlider layer={layer} value={scenarioValue} dispatch={dispatch} />}
-            {op && layer.result.kind === "geojson" && layer.style.geometry !== "point" && (
-              <label>
-                <span className="sr-only">Draw {layer.title} as</span>
-                <select
-                  value={op.mode}
-                  onChange={(e) => dispatch({ type: "set_style", layerId: layer.id, mode: e.target.value as RenderMode })}
-                  className="legend-select"
-                >
-                  {[...MODES, ...(layer.style.geometry === "polygon" && (layer.style.extrude || op.mode === "columns") ? [EXTRUDE_MODE] : [])].map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            {op && fields.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setFiltersOpen((o) => !o)}
-                aria-expanded={filtersOpen}
-                aria-controls={filtersId}
-                className="legend-disclosure whitespace-nowrap"
-              >
-                Filters{activeCount > 0 && <span className="tabular-nums"> · {activeCount}</span>}
-              </button>
-            )}
-            {/* Opacity: a small hairline slider at the row's end (owner: transparency stays). */}
-            {op && (
-              <label className="ml-auto flex items-center" title={`Opacity ${Math.round(opacity * 100)}%`}>
-                <span className="sr-only">Opacity for {layer.title}</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={opacity}
-                  aria-valuetext={`${Math.round(opacity * 100)}%`}
-                  onChange={(e) => dispatch({ type: "set_opacity", layerId: layer.id, opacity: Number(e.target.value) })}
-                  data-testid="opacity-slider"
-                  className="layer-opacity layer-opacity-small w-6"
-                  style={{ ["--fill" as string]: `${Math.round(opacity * 100)}%` }}
-                />
-              </label>
-            )}
-          </div>
-          {op && layer.result.kind === "geojson" && layer.style.geometry === "point" && (
-            <div className="pt-1.5 pl-9">
-              <PointModeControl layer={layer} mode={op.mode} dispatch={dispatch} />
-            </div>
-          )}
-        </div>
-      </div>
-      {/* Open filters stay open off hover, so a slider can be dragged and read without the row folding away. */}
+      {moreFilters}
+      {/* Open filters stay open, so a slider can be dragged and read without the row folding away. */}
       {op && filtersOpen && fields.length > 0 && (
         <LayerFilters id={filtersId} layerId={layer.id} title={layer.title} fields={fields} filters={filters} dispatch={dispatch} />
+      )}
+      {pointModes && (
+        <RowSection heading="Show as">
+          <PointModeControl layer={layer} mode={op.mode} dispatch={dispatch} />
+        </RowSection>
+      )}
+      {op && (
+        <div className="mt-3 space-y-2">
+          {scenarioValue !== undefined && <ScenarioRowSlider layer={layer} value={scenarioValue} dispatch={dispatch} />}
+          <SliderRow label="Opacity" srLabel={`for ${layer.title}`} readout={`${Math.round(opacity * 100)}%`}>
+            {(id) => (
+              <input
+                id={id}
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={opacity}
+                aria-valuetext={`${Math.round(opacity * 100)}%`}
+                onChange={(e) => dispatch({ type: "set_opacity", layerId: layer.id, opacity: Number(e.target.value) })}
+                data-testid="opacity-slider"
+                className="layer-opacity min-w-0 flex-1"
+                style={{ ["--fill" as string]: `${Math.round(opacity * 100)}%` }}
+              />
+            )}
+          </SliderRow>
+        </div>
       )}
     </li>
   );
@@ -512,9 +506,9 @@ const REMOVE_BUTTON =
 const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 hover:text-ink";
 
 /**
- * The layer panel, a research legend: one row per loaded layer, top first, with its monochrome key, title, source
- * and count; visibility, opacity, render mode and removal on hover or focus; drag (or arrow keys on the key) to
- * reorder. The top slot holds the time scrubber when one is mounted. Closed, it renders nothing: the layers map pill
+ * The layer panel, a research legend: one row per loaded layer, top first, with its monochrome key, title, count,
+ * Hide/Show and ×, its source, its facets, how it draws and its opacity, all visible and all inside the panel; drag
+ * (or arrow keys on the key) to reorder. The top slot holds the time scrubber when one is mounted. Closed, it renders nothing: the layers map pill
  * reopens it.
  */
 export function LayerStack({
@@ -557,7 +551,7 @@ export function LayerStack({
       // from the pills), clear of the map buttons on the right, ending above the chat sheet, and one scrolling column
       // (the scrubber, the compare and the layers scroll together) so a short screen never squeezes the list to nothing.
       data-scroll="console"
-      className="glass-strong rise-in pointer-events-auto flex max-h-[calc(100dvh-24px-var(--safe-top)-var(--safe-bottom))] max-w-[calc(100vw-24px-var(--safe-left)-var(--safe-right))] flex-col overflow-hidden rounded-panel max-md:max-h-[calc(54dvh-var(--console-top,60px)-12px)] max-md:max-w-[calc(100vw-68px-var(--safe-left)-var(--safe-right))] max-md:overflow-y-auto max-md:overscroll-contain md:max-h-[calc(100dvh-260px-var(--safe-top)-var(--safe-bottom))]"
+      className="glass-strong rise-in @container/panel pointer-events-auto flex max-h-[calc(100dvh-24px-var(--safe-top)-var(--safe-bottom))] max-w-[calc(100vw-24px-var(--safe-left)-var(--safe-right))] flex-col overflow-hidden rounded-panel max-md:max-h-[calc(54dvh-var(--console-top,60px)-12px)] max-md:max-w-[calc(100vw-68px-var(--safe-left)-var(--safe-right))] max-md:overflow-y-auto max-md:overscroll-contain md:max-h-[calc(100dvh-260px-var(--safe-top)-var(--safe-bottom))]"
       style={{ width: LAYER_PANEL_WIDTH }}
     >
       {/* The time scrubber docks here while any layer has dated features; empty, the slot takes no space. */}
@@ -587,11 +581,10 @@ export function LayerStack({
           type="button"
           onClick={() => onOpenChange(false)}
           aria-expanded
-          aria-label="Collapse layers"
-          title="Collapse"
+          aria-label="Close layers"
           className={TEXT_BUTTON}
         >
-          Hide
+          Close
         </button>
       </header>
       <div aria-hidden className="hairline mx-5 shrink-0" />

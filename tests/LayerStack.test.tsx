@@ -60,38 +60,55 @@ function Harness({ spy }: { spy: (a: MapAction) => void }) {
 }
 
 describe("LayerStack", () => {
-  it("lists layers top first with count or tiles, coverage note, license and source", () => {
+  it("lists layers top first with count or tiles, and one line of source and coverage with the licence behind the i", () => {
     render(<Harness spy={vi.fn()} />);
     const cards = screen.getAllByTestId("layer-card");
     expect(cards.map((c) => c.getAttribute("data-layer-id"))).toEqual(["osm-trails", "public-lands"]);
-    expect(within(cards[0]).getByText("0")).toBeTruthy();
-    expect(within(cards[0]).getByText("Zoom in for more")).toBeTruthy();
-    expect(within(cards[0]).getByText(/ODbL/)).toBeTruthy();
-    expect(within(cards[0]).getByRole("link", { name: "openstreetmap.org" }).getAttribute("href")).toBe(citation.url);
+    expect(within(cards[0]).getByTestId("layer-count").textContent).toBe("0");
+    const source = within(cards[0]).getByTestId("layer-source");
+    expect(source.textContent).toContain("Zoom in for more");
+    expect(source.querySelector(".truncate")).toBeTruthy();
+    expect(within(source).getByRole("link", { name: "openstreetmap.org" }).getAttribute("href")).toBe(citation.url);
+    // The licence is not on the line; it is one press away, with the full note and the source.
+    expect(source.textContent).not.toContain("ODbL");
+    fireEvent.click(within(source).getByRole("button", { name: "About the source of OSM trails" }));
+    const popover = screen.getByTestId("info-popover");
+    expect(popover.textContent).toContain("Zoom in for more");
+    expect(popover.textContent).toContain("Licence: ODbL");
+    expect(popover.textContent).toContain("OpenStreetMap");
     expect(within(cards[1]).getByText("tiles")).toBeTruthy();
-    // Mode select only for geojson layers.
-    expect(within(cards[0]).queryByRole("combobox")).toBeTruthy();
-    expect(within(cards[1]).queryByRole("combobox")).toBeNull();
+    // No mode control for lines, areas or tiles: Show as is for point layers only.
+    for (const card of cards) {
+      expect(within(card).queryByRole("combobox")).toBeNull();
+      expect(within(card).queryByTestId("mode-control")).toBeNull();
+    }
   });
 
   it("toggles visibility through dispatch", () => {
     const spy = vi.fn();
     render(<Harness spy={spy} />);
-    const eye = screen.getByRole("button", { name: "Show OSM trails" });
-    expect(eye.getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(eye);
+    const toggle = screen.getByRole("button", { name: "Hide OSM trails" });
+    expect(toggle.textContent).toBe("Hide");
+    fireEvent.click(toggle);
     expect(spy).toHaveBeenCalledWith({ type: "toggle_layer", layerId: "osm-trails" });
-    expect(screen.getByRole("button", { name: "Show OSM trails" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Show OSM trails" }).textContent).toBe("Show");
+    // No unlabeled box: the old square visibility toggle is gone.
+    expect(document.querySelector(".legend-check")).toBeNull();
   });
 
   it("changes opacity through dispatch", () => {
     const spy = vi.fn();
     render(<Harness spy={spy} />);
-    const slider = within(screen.getAllByTestId("layer-card")[0]).getByRole("slider") as HTMLInputElement;
+    const card = screen.getAllByTestId("layer-card")[0];
+    const slider = within(card).getByRole("slider", { name: "Opacity for OSM trails" }) as HTMLInputElement;
+    // A labelled row with the value inline, never a tooltip.
+    expect(slider.closest("[title]")).toBeNull();
+    expect(slider.parentElement?.textContent).toBe("Opacity for OSM trails100%");
     fireEvent.change(slider, { target: { value: "0.35" } });
     expect(spy).toHaveBeenCalledWith({ type: "set_opacity", layerId: "osm-trails", opacity: 0.35 });
     expect(slider.value).toBe("0.35");
     expect(slider.getAttribute("aria-valuetext")).toBe("35%");
+    expect(slider.parentElement?.textContent).toContain("35%");
   });
 
   it("gives the opacity slider a visible keyboard focus ring on its thumb", () => {
@@ -105,18 +122,7 @@ describe("LayerStack", () => {
     }
   });
 
-  it("changes a line layer's mode with the select, which offers no point-only modes", () => {
-    const spy = vi.fn();
-    render(<Harness spy={spy} />);
-    const card = screen.getAllByTestId("layer-card")[0];
-    const select = within(card).getByRole("combobox") as HTMLSelectElement;
-    expect(within(select).queryByRole("option", { name: /Columns|Hexbin|Clusters/ })).toBeNull();
-    expect(within(card).queryByTestId("mode-control")).toBeNull();
-    fireEvent.change(select, { target: { value: "heat" } });
-    expect(spy).toHaveBeenCalledWith({ type: "set_style", layerId: "osm-trails", mode: "heat" });
-  });
-
-  it("gives point layers a text segmented control (Symbols · Clusters · Heat · Columns) instead of the select", () => {
+  it("gives point layers a Show as section: four equal segments (Points · Clusters · Heat · 3D), a select for narrow panels", () => {
     const species: LoadedLayer = {
       ...trails,
       id: "species",
@@ -147,20 +153,27 @@ describe("LayerStack", () => {
     }
     render(<Points />);
     const card = screen.getAllByTestId("layer-card")[0];
-    expect(within(card).queryByRole("combobox")).toBeNull();
+    expect(card.textContent).toContain("Show as");
     const control = within(card).getByTestId("mode-control");
+    expect(control.className).toBe("mode-segments");
     const buttons = within(control).getAllByRole("button");
-    expect(buttons.map((b) => b.textContent)).toEqual(["Symbols", "Clusters", "Heat", "Columns"]);
+    expect(buttons.map((b) => b.textContent)).toEqual(["Points", "Clusters", "Heat", "3D"]);
     expect(control.querySelector("svg, img")).toBeNull();
-    expect(within(control).getByRole("button", { name: "Symbols" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(control).getByRole("button", { name: "Points" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(within(control).getByRole("button", { name: "Clusters" }));
     expect(spy).toHaveBeenCalledWith({ type: "set_style", layerId: "species", mode: "clusters" });
     expect(within(control).getByRole("button", { name: "Clusters" }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(within(control).getByRole("button", { name: "Columns" }));
+    fireEvent.click(within(control).getByRole("button", { name: "3D" }));
     expect(spy).toHaveBeenLastCalledWith({ type: "set_style", layerId: "species", mode: "columns" });
     // Pressing the pressed segment dispatches nothing.
-    fireEvent.click(within(control).getByRole("button", { name: "Columns" }));
+    fireEvent.click(within(control).getByRole("button", { name: "3D" }));
     expect(spy).toHaveBeenCalledTimes(2);
+    // The same four as a native select (shown by the panel's container query under 280px).
+    const select = within(within(card).getByTestId("mode-select")).getByRole("combobox") as HTMLSelectElement;
+    expect([...select.options].map((o) => o.textContent)).toEqual(["Points", "Clusters", "Heat", "3D"]);
+    expect(select.value).toBe("columns");
+    fireEvent.change(select, { target: { value: "heat" } });
+    expect(spy).toHaveBeenLastCalledWith({ type: "set_style", layerId: "species", mode: "heat" });
   });
 
   it("renders a legend row: key, title, count, and no color picker", () => {
@@ -185,10 +198,9 @@ describe("LayerStack", () => {
     expect(landsKey.querySelector("rect")?.getAttribute("fill")).toBe("#9FB693");
     expect(landsKey.querySelector("rect")?.getAttribute("fill-opacity")).toBe("0.12");
     expect(landsKey.querySelector("pattern line")?.getAttribute("stroke")).toBe("#9FB693");
-    // The row controls keep their padding inside the collapsing track, so a collapsed row has no dead space.
-    const track = trailsRow.querySelector(".legend-controls")!;
-    expect(track.firstElementChild?.className).toBe("");
-    expect(track.querySelector(".pt-2")).toBeTruthy();
+    // Every control shows: no hover-collapsing track, and no tooltips on the row's own controls.
+    expect(trailsRow.querySelector(".legend-controls")).toBeNull();
+    expect(trailsRow.querySelector("[title]:not(.info-mark)")).toBeNull();
 
     // No color popover and no inline colors; keys draw in palette colors only.
     expect(screen.queryByRole("button", { name: /Color for/ })).toBeNull();
@@ -230,9 +242,9 @@ describe("LayerStack", () => {
     expect(campRow.querySelector("image")?.getAttribute("href")).toBe(
       pinIconFor("campsites", { type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: {} }).url,
     );
-    // Hidden layers say so on the row (the key fades) and in the visibility box.
+    // Hidden layers say so on the row (the key fades) and in the text toggle.
     expect(campRow.getAttribute("data-hidden")).toBe("true");
-    expect(within(campRow).getByRole("button", { name: "Show Campsites" }).getAttribute("aria-pressed")).toBe("false");
+    expect(within(campRow).getByRole("button", { name: "Show Campsites" }).textContent).toBe("Show");
     expect(roadRow.querySelector("line[stroke-dasharray]")?.getAttribute("stroke-dasharray")).toBe("10 7.5");
     expect(lightsRow.querySelector("svg.legend-key")?.getAttribute("data-kind")).toBe("tiles");
     expect(lightsRow.querySelector("pattern")).toBeTruthy();
@@ -362,11 +374,11 @@ describe("LayerStack data console", () => {
     expect(slot?.nextElementSibling?.nextElementSibling?.textContent).toContain("Layers");
   });
 
-  it("shows shown / total once the window narrows a layer", () => {
+  it("shows \"1 of 12\" once the window narrows a layer", () => {
     render(<Console />);
     expect(screen.getByTestId("layer-count").textContent).toBe("12");
     fireEvent.keyDown(screen.getByRole("slider", { name: "Window start" }), { key: "End" });
-    expect(screen.getByTestId("layer-count").textContent).toBe("1 / 12");
+    expect(screen.getByTestId("layer-count").textContent).toBe("1 of 12");
   });
 });
 
@@ -410,7 +422,7 @@ describe("LayerStack filters", () => {
     );
   }
 
-  it("opens a Filters disclosure with category chips (with counts) and a range per numeric field", () => {
+  it("opens a Filters link (no facets on this layer) with category chips (with counts) and a range per numeric field", () => {
     render(<Filtered spy={() => {}} />);
     const toggle = screen.getByRole("button", { name: "Filters" });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
@@ -421,7 +433,7 @@ describe("LayerStack filters", () => {
     expect(within(panel).getByRole("slider", { name: "Length km from" })).toBeTruthy();
   });
 
-  it("a chip dispatches set_filters, the count becomes shown / total and the summary shows; Reset clears", () => {
+  it("a chip dispatches set_filters, the count reads \"2 of 8\" and the summary shows; Reset clears", () => {
     const spy = vi.fn();
     render(<Filtered spy={spy} />);
     fireEvent.click(screen.getByRole("button", { name: "Filters" }));
@@ -431,7 +443,7 @@ describe("LayerStack filters", () => {
       layerId: "osm-trails",
       filters: { sac_scale: { include: ["alpine_hiking"] } },
     });
-    expect(screen.getByTestId("layer-count").textContent).toBe("2 / 8");
+    expect(screen.getByTestId("layer-count").textContent).toBe("2 of 8");
     expect(screen.getByTestId("filter-summary").textContent).toBe("Filtered: Difficulty (sac_scale): alpine_hiking");
     expect(screen.getByRole("button", { name: /^Filters/ }).textContent).toBe("Filters · 1");
 
@@ -447,11 +459,11 @@ describe("LayerStack filters", () => {
     fireEvent.click(screen.getByRole("button", { name: "Filters" }));
     fireEvent.change(screen.getByRole("slider", { name: "Length km from" }), { target: { value: "6" } });
     expect(spy).toHaveBeenLastCalledWith({ type: "set_filters", layerId: "osm-trails", filters: { length_km: { range: [6, 8] } } });
-    expect(screen.getByTestId("layer-count").textContent).toBe("3 / 8");
+    expect(screen.getByTestId("layer-count").textContent).toBe("3 of 8");
     fireEvent.click(screen.getByRole("button", { name: /^hiking/ }));
-    expect(screen.getByTestId("layer-count").textContent).toBe("1 / 8");
+    expect(screen.getByTestId("layer-count").textContent).toBe("1 of 8");
     fireEvent.click(screen.getByRole("button", { name: "all" }));
-    expect(screen.getByTestId("layer-count").textContent).toBe("3 / 8");
+    expect(screen.getByTestId("layer-count").textContent).toBe("3 of 8");
   });
 });
 
@@ -594,13 +606,12 @@ describe("LayerStack: closing layers and the measure threshold (owner feedback)"
     );
   }
 
-  it("shows a remove × on every row outside the hover-only controls", () => {
+  it("shows a remove × on every row", () => {
     const spy = vi.fn();
     render(<Panel spy={spy} layers={[fires, trails]} />);
     for (const title of ["Wildfire perimeters", "OSM trails"]) {
       const remove = screen.getByRole("button", { name: `Remove ${title}` });
       expect(remove.textContent).toBe("×");
-      expect(remove.closest(".legend-controls")).toBeNull();
       // A 28px+ hit area from an invisible ::after 8px past the glyph, without growing the ×.
       expect(remove.className).toContain("after:-inset-2");
       expect(remove.className).toContain("text-[15px]");
@@ -610,26 +621,24 @@ describe("LayerStack: closing layers and the measure threshold (owner feedback)"
     expect(screen.getAllByTestId("layer-card")).toHaveLength(1);
   });
 
-  it("has no generic Value slider: a facet slider in the layer's unit filters, and a small opacity stays (owner, Moab)", () => {
+  it("has no generic Value slider: a facet slider in the layer's unit filters, and a labelled opacity row stays (owner, Moab)", () => {
     const spy = vi.fn();
     const facetFires: LoadedLayer = { ...fires, style: { ...fires.style, facets: [{ key: "acres", label: "Burned area", kind: "range", unit: "acres", encode: "size" }] } };
     render(<Panel spy={spy} layers={[facetFires, trails]} />);
     const card = screen.getAllByTestId("layer-card").find((c) => c.getAttribute("data-layer-id") === "fire-perimeters")!;
     expect(within(card).queryByTestId("measure-slider")).toBeNull();
     expect(card.textContent).not.toMatch(/Value ≥/);
-    // The facet is always visible, outside the hover-only controls, labelled in the layer's words.
+    // The facet is always visible, labelled in the layer's words.
     const facets = within(card).getByTestId("facet-controls");
-    expect(facets.closest(".legend-controls")).toBeNull();
     expect(facets.textContent).toContain("Burned area");
     fireEvent.change(within(facets).getByRole("slider", { name: "Burned area from" }), { target: { value: "1000" } });
     const last = spy.mock.calls.at(-1)?.[0] as MapAction & { type: "set_filters" };
     expect(last).toMatchObject({ type: "set_filters", layerId: "fire-perimeters" });
     expect(last.filters.acres?.range?.[0]).toBe(1000);
     expect(last.filters.acres?.range?.[1]).toBe(380_000);
-    expect(within(card).getByTestId("layer-count").textContent).toBe("4 / 7");
-    // Opacity: a 24px hairline slider at the row's end, on every layer.
+    expect(within(card).getByTestId("layer-count").textContent).toBe("4 of 7");
+    // Opacity: a labelled row on every layer.
     const opacity = within(card).getByRole("slider", { name: "Opacity for Wildfire perimeters" });
-    expect(opacity.className).toContain("w-6");
     fireEvent.change(opacity, { target: { value: "0.5" } });
     expect(spy).toHaveBeenLastCalledWith({ type: "set_opacity", layerId: "fire-perimeters", opacity: 0.5 });
   });

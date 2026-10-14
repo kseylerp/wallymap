@@ -266,7 +266,7 @@ Why the three failures failed:
 - **Which sequoia groves burned in the 2020 and 2021 fires?** Queried with a box it made up and never geocoded, so the place was never located even though it rendered. A prompt sentence now says to geocode the place the features live in (the Sierra Nevada) and never make up a box.
 - **wind farms in West Texas @view** Geocoded "West Texas" (twice) and queried power-plants with that region's box, which the rule read as shrinking the view. The rule now measures the box against the region the user named when the model geocodes it, and still requires a single power-plants query with no shrink and no zoom_in error.
 
-The three standard-view questions (spec §12), run live after commit f08f5fd with the same model (Bears Ears and uranium passed on their first run; the Moab question passed on its third, after two fixes to its own rule: the eval read the layer registry through a second module copy, and a hand-written range from 3 up now counts like the chips' include list):
+The three standard-view questions (spec §12), run live on the code of commits 58c255c and 651bc3d with the same model (Bears Ears and uranium passed on their first run; the Moab question passed on its third, after two fixes to its own rule: the eval read the layer registry through a second module copy, and a hand-written range from 3 up now counts like the chips' include list):
 
 | Question | ok | Tools (query_ prefix dropped) | Layer errors | Seconds |
 | --- | --- | --- | --- | --- |

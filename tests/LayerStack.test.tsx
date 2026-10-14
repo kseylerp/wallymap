@@ -174,11 +174,11 @@ describe("LayerStack", () => {
     expect(slot?.childElementCount).toBe(0);
 
     const [trailsRow, landsRow] = screen.getAllByTestId("layer-card");
-    // Trails draw as TRAIL_LINE: a white casing and a solid sage core (owner, 2026-10-14: no dark grey line cores).
+    // Trails draw as TRAIL_LINE (T1): a white casing, a sage core and dark grey 8px dashes.
     const trailsKey = trailsRow.querySelector("svg.legend-key")!;
     expect(trailsKey.getAttribute("data-kind")).toBe("line");
-    expect([...trailsKey.querySelectorAll("line")].map((l) => l.getAttribute("stroke"))).toEqual(["#FFFFFF", "#9FB693"]);
-    expect(trailsKey.querySelector("line[stroke-dasharray]")).toBeNull();
+    expect([...trailsKey.querySelectorAll("line")].map((l) => l.getAttribute("stroke"))).toEqual(["#FFFFFF", "#9FB693", "#3A3A3C"]);
+    expect(trailsKey.querySelector("line[stroke-dasharray]")?.getAttribute("stroke-dasharray")).toBe("8 8");
     // Public lands are vector tile areas, which Mapbox draws as protected land: a sage tint under a sage hatch.
     const landsKey = landsRow.querySelector("svg.legend-key")!;
     expect(landsKey.getAttribute("data-kind")).toBe("area");

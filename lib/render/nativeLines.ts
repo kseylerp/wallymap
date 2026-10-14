@@ -30,6 +30,7 @@ import { chainParts, gradientExpression } from "@/lib/render/wally/routeLine";
  *
  *   `lines-<id>:casing`    white, the core's width + 2, at 0.9 (spec §11a: white for casings only)
  *   `lines-<id>:core`      the line class (sage, dashed or dotted), the score ramp, a compare color or the delta class
+ *   `lines-<id>:dash`      T1 trails: dark grey 8px butt-capped dashes over the sage core, so the two alternate
  *   `lines-<id>:route`     named routes: Wally's purple → pink `line-gradient`, 3px
  *   `lines-<id>:selected`  the selected feature, purple 3.5px
  *
@@ -40,10 +41,10 @@ import { chainParts, gradientExpression } from "@/lib/render/wally/routeLine";
 export const LINES_PREFIX = "lines-";
 export const lineSourceId = (id: string) => `${LINES_PREFIX}${id}`;
 
-export const LINE_PARTS = ["casing", "core", "route", "selected"] as const;
+export const LINE_PARTS = ["casing", "core", "dash", "route", "selected"] as const;
 export type LinePart = (typeof LINE_PARTS)[number];
 /** The parts a click can land on: the casing is not inspectable. */
-export const PICKABLE_PARTS: readonly LinePart[] = ["core", "route", "selected"];
+export const PICKABLE_PARTS: readonly LinePart[] = ["core", "dash", "route", "selected"];
 
 export const lineLayerId = (id: string, part: LinePart) => `${lineSourceId(id)}:${part}`;
 
@@ -215,6 +216,17 @@ export function rampLineColor(layerId: string): ExpressionSpecification {
 
 /** Classes drawn in the core layer (not routes), with their colors and dashes. */
 const CORE_CLASSES = (Object.keys(LINE_CLASSES) as LineClass[]).filter((c) => !("gradient" in LINE_CLASSES[c]));
+/** Classes whose core is a solid `under` color with dashes of `color` drawn over it (T1 trails). */
+const TWO_TONE = CORE_CLASSES.filter((c) => "under" in LINE_CLASSES[c]);
+const coreOf = (c: LineClass): string => {
+  const cls: { color: string; under?: string } = LINE_CLASSES[c];
+  return cls.under ?? cls.color;
+};
+
+/** A two-tone dash in pixels as `line-dasharray` with butt caps: exact widths, so dark grey and sage alternate evenly. */
+export function buttDashInWidths([on, off]: readonly [number, number], width: number = LINE.width): [number, number] {
+  return [on / width, off / width];
+}
 
 function coreColor(entry: Pick<LineEntry, "look" | "layerId">): string | ExpressionSpecification {
   switch (entry.look.kind) {
@@ -225,12 +237,12 @@ function coreColor(entry: Pick<LineEntry, "look" | "layerId">): string | Express
     case "delta":
       return ["match", ["get", "delta"], "a-only", DELTA_LINE_COLORS["a-only"], "b-only", DELTA_LINE_COLORS["b-only"], DELTA_LINE_COLORS.both];
     case "classes":
-      return ["match", ["get", "cls"], ...CORE_CLASSES.flatMap((c) => [c, LINE_CLASSES[c].color]), SAGE] as ExpressionSpecification;
+      return ["match", ["get", "cls"], ...CORE_CLASSES.flatMap((c) => [c, coreOf(c)]), SAGE] as ExpressionSpecification;
   }
 }
 
 function coreDash(): ExpressionSpecification {
-  const dashed = CORE_CLASSES.filter((c) => LINE_CLASSES[c].dash[0] > 0);
+  const dashed = CORE_CLASSES.filter((c) => LINE_CLASSES[c].dash[0] > 0 && !TWO_TONE.includes(c));
   return ["match", ["get", "cls"], ...dashed.flatMap((c) => [c, ["literal", dashInWidths(LINE_CLASSES[c].dash)]]), ["literal", [1, 0]]] as ExpressionSpecification;
 }
 
@@ -267,6 +279,21 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
     },
     ...(classes && { filter: notRoute }),
   };
+  // T1: the over color's dashes on the solid core (nothing to draw unless the layer keeps its classes).
+  const [twoTone] = TWO_TONE;
+  const dash: LineLayerSpecification = {
+    id: lineLayerId(entry.id, "dash"),
+    type: "line",
+    source,
+    filter: classes && twoTone ? ["==", ["get", "cls"], twoTone] : ["==", ["get", "cls"], "none"],
+    layout: { ...layout, "line-cap": "butt" },
+    paint: {
+      "line-color": twoTone ? LINE_CLASSES[twoTone].color : SAGE,
+      "line-width": LINE.width,
+      "line-opacity": faded(entry, 1, 0),
+      ...(twoTone && { "line-dasharray": buttDashInWidths(LINE_CLASSES[twoTone].dash) }),
+    },
+  };
   return [
     {
       id: lineLayerId(entry.id, "casing"),
@@ -276,6 +303,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
       paint: { "line-color": WHITE, "line-width": casingWidth, "line-opacity": faded(entry, LINE.casingOpacity, 1) },
     },
     core,
+    dash,
     {
       id: lineLayerId(entry.id, "route"),
       type: "line",

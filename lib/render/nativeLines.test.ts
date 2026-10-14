@@ -63,12 +63,12 @@ function colorsIn(value: unknown): string[] {
 }
 
 describe("native line layers: one source and four layers per drawn layer", () => {
-  it("names the source and its casing, core, route and selected layers after the layer, bottom first", () => {
+  it("names the source and its casing, core, dash, route and selected layers after the layer, bottom first", () => {
     const all = specs(stateOf("osm-trails", [a, b]));
-    expect(all.map((s) => s.id)).toEqual(["lines-osm-trails:casing", "lines-osm-trails:core", "lines-osm-trails:route", "lines-osm-trails:selected"]);
+    expect(all.map((s) => s.id)).toEqual(["lines-osm-trails:casing", "lines-osm-trails:core", "lines-osm-trails:dash", "lines-osm-trails:route", "lines-osm-trails:selected"]);
     for (const s of all) {
       expect(s).toMatchObject({ type: "line", source: "lines-osm-trails" });
-      expect(s.layout).toMatchObject({ "line-cap": "round", "line-join": "round", visibility: "visible" });
+      expect(s.layout).toMatchObject({ "line-cap": s.id.endsWith(":dash") ? "butt" : "round", "line-join": "round", visibility: "visible" });
     }
     expect(parseLineLayerId("lines-osm-trails:core")).toEqual({ id: "osm-trails", part: "core" });
     expect(parseLineLayerId("lines-fire-perimeters~b:selected")).toEqual({ id: "fire-perimeters~b", part: "selected" });
@@ -94,7 +94,19 @@ describe("native line layers: one source and four layers per drawn layer", () =>
     }
   });
 
-  it("never draws a dark grey line core: classes sage, forest roads sage dashes, use trails sage dots", () => {
+  it("draws maintained trails T1: 8px dark grey dashes over the sage core, alternating evenly", () => {
+    const all = specs(stateOf("osm-trails", [a]));
+    const dash = byPart(all, "dash");
+    expect(dash.filter).toEqual(["==", ["get", "cls"], "trail"]);
+    expect(dash.paint).toMatchObject({ "line-color": DARK_GREY, "line-width": 2.5, "line-dasharray": [3.2, 3.2] });
+    expect(paint(byPart(all, "core"))["line-color"]).toEqual(expect.arrayContaining(["trail", SAGE]));
+    // Selected, the trail draws purple in the highlight layer: its dashes fade out with the core.
+    expect(paint(byPart(specs(select(stateOf("osm-trails", [a, b]), a)), "dash"))["line-opacity"]).toEqual(["case", ["==", ["get", "i"], 0], 0, SIBLING_FADE]);
+    // A compare color, a score ramp or a delta has no dashes.
+    expect(byPart(specs(stateOf("osm-trails", [a], { color: PINK })), "dash").filter).toEqual(["==", ["get", "cls"], "none"]);
+  });
+
+  it("keeps every other line core sage: forest roads sage dashes, use trails sage dots, nothing else dark", () => {
     const core = byPart(specs(stateOf("osm-trails", [a])), "core");
     expect(new Set(colorsIn(paint(core)["line-color"]))).toEqual(new Set([SAGE]));
     expect(core.filter).toEqual(["!=", ["get", "cls"], "route"]);
@@ -106,7 +118,8 @@ describe("native line layers: one source and four layers per drawn layer", () =>
     for (const color of [DARK_GREY, INK]) expect(paint(byPart(specs(stateOf("streams", [a], { color })), "core"))["line-color"]).toBe(SAGE);
     expect(paint(byPart(specs(stateOf("streams", [a], { color: PINK })), "core"))["line-color"]).toBe(PINK);
     for (const state of [stateOf("streams", [a]), stateOf("popularity", [a], {}, { unit: "score" }), stateOf("forest-roads", [a])]) {
-      const colors = specs(state).filter((s) => !s.id.endsWith(":casing")).flatMap((s) => colorsIn(s.paint));
+      // The dash layer draws only T1 trails (its filter matches nothing else).
+      const colors = specs(state).filter((s) => !s.id.endsWith(":casing") && !s.id.endsWith(":dash")).flatMap((s) => colorsIn(s.paint));
       expect(colors).not.toContain(DARK_GREY);
       expect(colors).not.toContain(INK);
     }
@@ -280,7 +293,7 @@ describe("picking a native line", () => {
   const known = { "mtb-trails": {} };
 
   it("maps a hit on the core, route or highlight back to the layer, the compare side and the original feature", () => {
-    for (const part of ["core", "route", "selected"]) {
+    for (const part of ["core", "dash", "route", "selected"]) {
       const sel = linePickToSelection({ layer: { id: `lines-mtb-trails~b:${part}` }, properties: { i: 1, cls: "solid" } }, entries, known, [-119, 38], { x: 5, y: 6 });
       expect(sel).toEqual({ layerId: "mtb-trails", feature: b, lngLat: [-119, 38], screen: { x: 5, y: 6 }, side: "b" });
       // The very object in the data, so the highlight and the card match by reference.
@@ -367,7 +380,7 @@ describe("syncLineLayers", () => {
     const { map, layers, sources } = fakeMap();
     syncLineLayers(map, visibleState(stateOf("osm-trails", [a, b])));
     expect(sources["lines-osm-trails"]).toMatchObject({ type: "geojson", lineMetrics: true });
-    expect(layers.map((l) => l.id)).toEqual(["land", "road", "lines-osm-trails:casing", "lines-osm-trails:core", "lines-osm-trails:route", "lines-osm-trails:selected", "road-label"]);
+    expect(layers.map((l) => l.id)).toEqual(["land", "road", "lines-osm-trails:casing", "lines-osm-trails:core", "lines-osm-trails:dash", "lines-osm-trails:route", "lines-osm-trails:selected", "road-label"]);
     expect(drawnLineEntries(map).get("osm-trails")?.layerId).toBe("osm-trails");
   });
 

@@ -15,12 +15,12 @@ describe("legendSymbol", () => {
     },
   );
 
-  // Owner, 2026-10-14: no dark grey line cores; trails are solid sage on the white casing.
-  it("keys trails with the TRAIL_LINE recipe: solid sage on a white casing", () => {
+  it("keys trails with the TRAIL_LINE recipe (T1): dark grey dashes over sage on a white casing", () => {
     expect(legendSymbol("osm-trails", "lines")).toEqual({
       kind: "line",
-      color: TRAIL_LINE.color,
-      dash: [0, 0],
+      color: TRAIL_LINE.over.color,
+      under: TRAIL_LINE.under,
+      dash: [8, 8],
       casing: WHITE,
       width: 2.5,
       casingWidth: 4.5,

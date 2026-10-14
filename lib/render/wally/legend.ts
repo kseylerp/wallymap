@@ -113,7 +113,7 @@ export function legendSymbol(layerId: string, mode: LegendMode, { unit, color, f
       if (scoreColor) return { ...base, color: scoreColor, dash: [0, 0] };
       if (isScore(layerId, unit)) return { kind: "ramp", colors: rampSamples(lineRampFor(layerId)) };
       if ("gradient" in cls) return { kind: "gradient", colors: gradientColors(), casing: WHITE, width: cls.width, casingWidth: cls.casing };
-      return { ...base, color: cls.color };
+      return "under" in cls ? { ...base, color: cls.color, under: cls.under } : { ...base, color: cls.color };
     }
     case "heat":
       return { kind: "ramp", colors: rampSamples("density") };

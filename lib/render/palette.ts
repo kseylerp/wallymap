@@ -160,7 +160,9 @@ export function layerColor(layerId: string): string {
 export const TRAIL_LINE = {
   casing: { color: WHITE, width: 4.5, opacity: 0.9 },
   width: 2.5,
-  color: SAGE,
+  /** Maintained trails, board T1 (owner pick; ruled 2026-10-14): 8px dark grey dashes alternating with the sage core. */
+  under: SAGE,
+  over: { color: DARK_GREY, dash: [8, 8] as [number, number] },
   selected: { color: PURPLE, width: 3.5 },
 } as const;
 
@@ -171,6 +173,8 @@ export const TRAIL_LINE = {
  */
 export type LineRecipe = {
   color: string;
+  /** A solid core under `color`'s dashes (T1 trails): the two alternate along the line. */
+  under?: string;
   dash: [number, number];
   gradient?: readonly [start: string, end: string];
   width?: number;
@@ -178,14 +182,14 @@ export type LineRecipe = {
 };
 
 /**
- * Line classes: sage cores on a white casing, told apart by dash. Trails and other data lines (streams, mtb, pistes)
- * solid sage, forest roads sage dashes, use (informal, unmaintained) trails sage dots (round caps make a dash as long as
+ * Line classes on a white casing, told apart by dash. Maintained trails T1 (dark grey 8px dashes alternating with sage;
+ * the only dark grey on a line), other data lines (streams, mtb, pistes) solid sage, forest roads sage dashes, use (informal, unmaintained) trails sage dots (round caps make a dash as long as
  * the line is wide a dot). Selected lines purple. Named routes (see `isRouteProperties`) take Wally's route gradient,
  * purple at the start to pink at the end, 3px over a white casing with no dash, as the route tool draws a route
  * (lib/render/wally/routeLine.ts). Score lines (popularity) take the sage → pink → purple ramp (`lineRampFor`).
  */
 export const LINE_CLASSES = {
-  trail: { color: TRAIL_LINE.color, dash: [0, 0] },
+  trail: { color: TRAIL_LINE.over.color, under: TRAIL_LINE.under, dash: TRAIL_LINE.over.dash },
   road: { color: SAGE, dash: [10, 7.5] },
   useTrail: { color: SAGE, dash: [2.5, 6] },
   solid: { color: SAGE, dash: [0, 0] },

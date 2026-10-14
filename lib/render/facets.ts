@@ -87,10 +87,20 @@ export function facetGroups(facet: Facet, data: FeatureCollection, filters?: Lay
   return groups;
 }
 
-/** True when every value of `group` is in the facet's include list (the chip reads pressed). */
+/** The values a category facet's filter keeps: its include list, or, for a range written by hand (Singletrack 3 to 6), the numeric values inside it. */
+function pickedValues(filters: LayerFilters | undefined, facet: Facet, all: Pick<FacetGroup, "values">[] = []): string[] {
+  const entry = filters?.[facet.key];
+  if (entry?.include?.length) return entry.include;
+  const range = entry?.range;
+  if (!range) return [];
+  const known = [...new Set([...(facet.values ?? []).map((v) => String(v.value)), ...all.flatMap((g) => g.values)])];
+  return known.filter((v) => Number.isFinite(Number(v)) && Number(v) >= range[0] && Number(v) <= range[1]);
+}
+
+/** True when every value of `group` is kept by the facet's filter (the chip reads pressed). */
 export function isGroupPicked(filters: LayerFilters | undefined, facet: Facet, group: Pick<FacetGroup, "values">): boolean {
-  const include = filters?.[facet.key]?.include ?? [];
-  return include.length > 0 && group.values.every((v) => include.includes(v));
+  const picked = pickedValues(filters, facet);
+  return picked.length > 0 && group.values.every((v) => picked.includes(v));
 }
 
 /**
@@ -99,20 +109,22 @@ export function isGroupPicked(filters: LayerFilters | undefined, facet: Facet, g
  * same key is kept.
  */
 export function toggleGroup(filters: LayerFilters, facet: Facet, group: Pick<FacetGroup, "values">, all: Pick<FacetGroup, "values">[]): LayerFilters {
-  const current = filters[facet.key]?.include ?? [];
+  const current = pickedValues(filters, facet, all);
   const picked = isGroupPicked(filters, facet, group);
   const next = picked ? current.filter((v) => !group.values.includes(v)) : [...new Set([...current, ...group.values])];
   const everything = all.length > 0 && all.every((g) => g.values.every((v) => next.includes(v)));
   const { [facet.key]: entry, ...rest } = filters;
-  const range = entry?.range ? { range: entry.range } : {};
+  // A hand-written range on a class facet becomes the chips' include list once a chip is pressed.
+  const range = entry?.range && entry.include?.length ? { range: entry.range } : {};
   if (next.length === 0 || everything) return entry?.range ? { ...rest, [facet.key]: range } : rest;
   return { ...rest, [facet.key]: { ...range, include: next } };
 }
 
-/** The filters with a facet's include list cleared ("all"). */
+/** The filters with a facet cleared ("all"): no restriction on its property, by chips or by a range written by hand. */
 export function clearFacet(filters: LayerFilters, facet: Facet): LayerFilters {
-  const { [facet.key]: entry, ...rest } = filters;
-  return entry?.range && facet.kind === "category" ? { ...rest, [facet.key]: { range: entry.range } } : rest;
+  const { [facet.key]: _cleared, ...rest } = filters;
+  void _cleared;
+  return rest;
 }
 
 /**
@@ -203,4 +215,29 @@ export function versionSides(facet: Facet, data: FeatureCollection): { a: FacetG
   const present = facetGroups(facet, data).filter((g) => g.count > 0 && declaredGroups(facet).some((d) => d.label === g.label));
   if (present.length < 2) return null;
   return { a: present[0], b: present[present.length - 1] };
+}
+
+/**
+ * The facets' part of the row's "Filtered:" line, in the facets' words: "Difficulty: Hard, Expert · Burned area
+ * 1,000–380,000 acres". Keys that are not facets are left to the free-form summary.
+ */
+export function facetFilterSummary(facets: Facet[], filters: LayerFilters): string {
+  const parts: string[] = [];
+  for (const facet of facets) {
+    const entry = filters[facet.key];
+    if (!entry) continue;
+    if (entry.include?.length) {
+      const labels = declaredGroups(facet)
+        .filter((g) => g.values.some((v) => entry.include?.includes(v)))
+        .map((g) => g.label);
+      const unnamed = entry.include.filter((v) => !(facet.values ?? []).some((d) => String(d.value) === v));
+      parts.push(`${facet.label}: ${[...labels, ...unnamed].join(", ")}`);
+    }
+    if (entry.range) {
+      const unit = facet.unit ? ` ${facet.unit}` : "";
+      const n = (x: number) => x.toLocaleString("en-US", { maximumFractionDigits: 2 });
+      parts.push(`${facet.label} ${n(entry.range[0])}–${n(entry.range[1])}${unit}`);
+    }
+  }
+  return parts.join(" · ");
 }

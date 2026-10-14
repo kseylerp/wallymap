@@ -69,12 +69,12 @@ describe("facet chips write the filters engine (spec §12a)", () => {
     expect(toggleGroup(hard, mtb, groups[2], groups)).toEqual({});
   });
 
-  it("keeps other facets and a range on the same key, and 'all' clears only the include", () => {
-    const filters = { v: { range: [1, 4] as [number, number] }, kind: { include: ["mtb"] } };
+  it("keeps other facets, and 'all' clears the facet", () => {
+    const filters = { v: { include: ["2"] }, kind: { include: ["mtb"] } };
     const groups = facetGroups(mtb, trails);
     const next = toggleGroup(filters, mtb, groups[2], groups);
-    expect(next).toEqual({ kind: { include: ["mtb"] }, v: { range: [1, 4], include: ["3"] } });
-    expect(clearFacet(next, mtb)).toEqual({ kind: { include: ["mtb"] }, v: { range: [1, 4] } });
+    expect(next).toEqual({ kind: { include: ["mtb"] }, v: { include: ["2", "3"] } });
+    expect(clearFacet(next, mtb)).toEqual({ kind: { include: ["mtb"] } });
   });
 
   it("colors the classes easy to hard on the sage → pink → purple ramp, the same for values that share a label", () => {
@@ -111,5 +111,23 @@ describe("facet chips write the filters engine (spec §12a)", () => {
     expect(sides?.a.label).toBe("2021 boundary");
     expect(sides?.b.values).toEqual(["current"]);
     expect(versionSides(kind, fc([line({ kind: "current" })]))).toBeNull();
+  });
+});
+
+describe("facetFilterSummary", () => {
+  it("says the filter in the facet's words, never 'Value 3–3'", async () => {
+    const { facetFilterSummary } = await import("@/lib/render/facets");
+    expect(facetFilterSummary([mtb], { v: { include: ["3", "4", "5", "6"] } })).toBe("Difficulty: Hard, Expert");
+    const acres: Facet = { key: "acres", label: "Burned area", kind: "range", unit: "acres" };
+    expect(facetFilterSummary([acres], { acres: { range: [1000, 380000] } })).toBe("Burned area 1,000–380,000 acres");
+  });
+});
+
+describe("a hand-written range on a class facet (the model's v 3–6)", () => {
+  it("presses the chips it covers and turns into an include list when a chip is pressed", () => {
+    const groups = facetGroups(mtb, trails);
+    const filters = { v: { range: [3, 6] as [number, number] } };
+    expect(groups.map((g) => isGroupPicked(filters, mtb, g))).toEqual([false, false, true, true]);
+    expect(toggleGroup(filters, mtb, groups[3], groups)).toEqual({ v: { include: ["3"] } });
   });
 });

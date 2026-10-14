@@ -107,7 +107,7 @@ function CategoryChips({
   helpText?: string;
   onChange: (next: LayerFilters) => void;
 }) {
-  const none = !(filters[facet.key]?.include?.length);
+  const none = !filters[facet.key]?.include?.length && !filters[facet.key]?.range;
   return (
     <div role="group" aria-label={facet.label} className="flex flex-wrap gap-1">
       <button type="button" aria-pressed={none} onClick={() => onChange(clearFacet(filters, facet))} className="filter-chip">

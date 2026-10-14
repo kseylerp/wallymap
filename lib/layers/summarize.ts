@@ -387,9 +387,8 @@ function facetSummaries(style: SummaryStyle, features: { properties: GeoJsonProp
       const key = facetValueKey(f.properties?.[facet.key]);
       if (key !== undefined) counts.set(key, (counts.get(key) ?? 0) + 1);
     }
-    const values = declaredGroups(facet)
-      .map((g) => ({ label: g.label, include: g.values, count: g.values.reduce((n, v) => n + (counts.get(v) ?? 0), 0) }))
-      .filter((g) => g.count > 0);
+    // Every declared label, even one with no features here: the model must know Hard is 3 when only easy trails came back.
+    const values = declaredGroups(facet).map((g) => ({ label: g.label, include: g.values, count: g.values.reduce((n, v) => n + (counts.get(v) ?? 0), 0) }));
     return { ...base, values };
   });
 }

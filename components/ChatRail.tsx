@@ -442,7 +442,7 @@ export function ChatRail({
           actions.push({ type: "turn_start" });
         }
         // A geocode moves the camera itself unless the model frames the place with set_view in the same step.
-        const context = { setViewFollows: setViewFollowsInStep(message.parts, index) };
+        const context = { setViewFollows: setViewFollowsInStep(message.parts, index), view: viewReader.read()?.bbox ?? null };
         const next = toolResultToActions(getToolName(part), part.input, part.output, canvas, catalog, ops, context);
         for (const action of next) {
           if (action.type === "render") ops = [...ops.filter((op) => op.layerId !== action.op.layerId), action.op];
@@ -451,7 +451,7 @@ export function ChatRail({
       }
     }
     if (actions.length > 0) onActions(actions);
-  }, [messages, catalog, renderOps, getCanvasSize, onActions, open, layerPanelOpen]);
+  }, [messages, catalog, renderOps, getCanvasSize, onActions, open, layerPanelOpen, viewReader]);
 
   useEffect(() => {
     timingStore.observe(messages, Date.now());

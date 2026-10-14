@@ -316,7 +316,19 @@ export function setViewFollowsInStep(parts: UIMessage["parts"], index: number): 
 export type ToolResultContext = {
   /** A set_view call follows this one in the same step (see setViewFollowsInStep). */
   setViewFollows?: boolean;
+  /**
+   * The box the user is looking at (null on the globe); unset when unknown. A query whose box lies off it is about a
+   * place the user named even when the model skipped the geocode, so the camera fits what it returns (spec §12).
+   */
+  view?: BBox | null;
 };
+
+/** True when `inner` lies inside `outer`, give or take 2% of its size (the server's isWithinView). */
+export function withinView(inner: BBox, outer: BBox): boolean {
+  const dx = (outer[2] - outer[0]) * 0.02;
+  const dy = (outer[3] - outer[1]) * 0.02;
+  return inner[0] >= outer[0] - dx && inner[1] >= outer[1] - dy && inner[2] <= outer[2] + dx && inner[3] <= outer[3] + dy;
+}
 
 /**
  * Pure mapping from one finished tool call to the map actions it implies.
@@ -333,13 +345,15 @@ export function toolResultToActions(
   existingOps: RenderOp[] = [],
   context: ToolResultContext = {},
 ): MapAction[] {
-  // `input` is accepted for symmetry with the tool part; every mapped tool echoes what it needs in `output`.
-  void input;
   if (!isObject(output)) return [];
   const name = canonicalToolName(toolName, catalog);
   if (name.startsWith(QUERY_PREFIX)) {
     const layerId = cleanLayerId(name.slice(QUERY_PREFIX.length));
-    return layerId === "" ? [] : queryActions(layerId, output, catalog, existingOps);
+    if (layerId === "") return [];
+    const box = isObject(input) && isBBox(input.bbox) ? input.bbox : undefined;
+    const elsewhere = box !== undefined && context.view !== undefined && (context.view === null || !withinView(box, context.view));
+    const place: MapAction[] = elsewhere ? [{ type: "place_named", bbox: box, implicit: true }] : [];
+    return [...place, ...queryActions(layerId, output, catalog, existingOps)];
   }
   switch (name) {
     case "geocode":

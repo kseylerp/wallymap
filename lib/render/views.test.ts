@@ -156,3 +156,12 @@ describe("the ranked and detail views", () => {
     expect(heat.renderOps[0].mode).toBe("heat");
   });
 });
+
+describe("an implicit place (a query off the view without a geocode)", () => {
+  it("fits the camera like a named place, but never replaces the place the turn named", () => {
+    const named = run(initialMapState, { type: "place_named", bbox: [-111, 38, -109, 39] }, { type: "place_named", bbox: [0, 0, 1, 1], implicit: true });
+    expect(named.place?.bbox).toEqual([-111, 38, -109, 39]);
+    const implicit = run(initialMapState, { type: "turn_start" }, { type: "place_named", bbox: [0, 0, 1, 1], implicit: true });
+    expect(implicit.place?.bbox).toEqual([0, 0, 1, 1]);
+  });
+});

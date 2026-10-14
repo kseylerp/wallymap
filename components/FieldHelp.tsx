@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { FieldHelp } from "@/layers/types";
 
 /** The help as one line for a `title` (hover on chips and legend keys): the sentence, the scale, the source. */
@@ -18,12 +19,16 @@ export function helpTitle(help: FieldHelp | undefined): string | undefined {
  */
 export function InfoMark({ help, label }: { help: FieldHelp; label: string }) {
   const [open, setOpen] = useState(false);
+  // Fixed to the window, under the mark, so a scrolling card or panel never clips it.
+  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
   const id = `help-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (ref.current && e.target instanceof Node && !ref.current.contains(e.target)) setOpen(false);
+      // The popover lives in a portal: a press inside it (its link) is not outside.
+      const inside = e.target instanceof Node && (ref.current?.contains(e.target) || document.getElementById(id)?.contains(e.target));
+      if (!inside) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -37,7 +42,7 @@ export function InfoMark({ help, label }: { help: FieldHelp; label: string }) {
       window.removeEventListener("pointerdown", onDown);
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [open]);
+  }, [open, id]);
   return (
     <span ref={ref} className="relative inline-flex align-baseline">
       <button
@@ -48,6 +53,9 @@ export function InfoMark({ help, label }: { help: FieldHelp; label: string }) {
         title={helpTitle(help)}
         onClick={(e) => {
           e.stopPropagation();
+          const r = e.currentTarget.getBoundingClientRect();
+          const width = Math.min(POPOVER_WIDTH, window.innerWidth - 2 * POPOVER_EDGE);
+          setAt({ left: Math.min(Math.max(POPOVER_EDGE, r.left - 10), window.innerWidth - width - POPOVER_EDGE), top: r.bottom + 6 });
           setOpen((o) => !o);
         }}
         data-testid="info-mark"
@@ -55,8 +63,9 @@ export function InfoMark({ help, label }: { help: FieldHelp; label: string }) {
       >
         i
       </button>
-      {open && (
-        <span id={id} role="note" data-testid="info-popover" className="info-popover">
+      {open &&
+        createPortal(
+        <span id={id} role="note" data-testid="info-popover" className="info-popover" style={at ?? undefined}>
           <span className="block text-ink">{help.text}</span>
           {(help.unit || help.scale) && (
             <span className="mt-1 block text-ink-muted tabular-nums">
@@ -78,11 +87,15 @@ export function InfoMark({ help, label }: { help: FieldHelp; label: string }) {
               )}
             </span>
           )}
-        </span>
-      )}
+        </span>,
+          document.body,
+        )}
     </span>
   );
 }
+
+const POPOVER_WIDTH = 260;
+const POPOVER_EDGE = 12;
 
 function hostOf(url: string): string {
   try {

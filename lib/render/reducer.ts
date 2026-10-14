@@ -702,6 +702,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
     case "clear_scenario":
       return state.scenario ? { ...state, scenario: undefined } : state;
     case "place_named":
+      if (action.implicit && state.place) return state;
       return { ...state, place: { bbox: action.bbox, layers: [], moved: false } };
     case "place_framed":
     case "turn_start":

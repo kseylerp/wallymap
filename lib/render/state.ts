@@ -247,8 +247,12 @@ export type MapAction =
   | { type: "scenario_tick" }
   /** Back to the queried amount. */
   | { type: "clear_scenario" }
-  /** The user named a place (a geocode result): the camera fits this turn's returned features, else this bbox. */
-  | { type: "place_named"; bbox: BBox }
+  /**
+   * The user named a place (a geocode result): the camera fits this turn's returned features, else this bbox.
+   * `implicit`: a query whose box lies off the user's view (the model skipped the geocode); it never replaces a place
+   * the turn already named.
+   */
+  | { type: "place_named"; bbox: BBox; implicit?: boolean }
   /** The agent framed the view itself (set_view): this turn's results no longer move the camera. */
   | { type: "place_framed" }
   /** The answer is written (the note): a named place that nothing was fitted to yet gets the camera now. */

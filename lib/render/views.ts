@@ -129,6 +129,8 @@ export function changeCompare(layer: LoadedLayer, today: Date = new Date()): Com
 export function rankedFilters(layer: LoadedLayer, filters: LayerFilters | undefined, n: number = RANKED_TOP_N): LayerFilters | undefined {
   if (layer.result.kind !== "geojson") return filters;
   const key = measureKeyOf(layer.style);
+  // A class (Singletrack Scale) is not a magnitude: a ranked view of it keeps every feature.
+  if (facetsOf(layer.style).some((f) => f.key === key && f.kind === "category")) return filters;
   const data = filters ? applyFilters(layer.result.data, { ...filters, [key]: { ...filters[key], range: undefined } }) : layer.result.data;
   const top = topFeatures(data, key, n);
   const extent = extentOf(data, key);
@@ -151,6 +153,7 @@ export function viewCaption(view: ViewKind | undefined, layer: LoadedLayer, comp
       return `Pink hatch: only ${a.toLowerCase()} · purple: ${b.toLowerCase()} · grey: both`;
     }
     case "ranked":
+      if (measure?.kind === "category") return undefined;
       return layer.style.geometry === "point" ? `Symbol size: ${measureWord}; the top ${RANKED_TOP_N} named` : `Top ${RANKED_TOP_N} by ${measureWord}`;
     case "density":
       return "Clusters count the features near each other; zoom in to split them";

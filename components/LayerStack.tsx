@@ -6,7 +6,7 @@ import { TimeScrubber } from "@/components/TimeScrubber";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { applyFilters, deriveFilterFields, filterSummary, type FilterField, type MeasureRange } from "@/lib/render/filters";
 import { FacetControls } from "@/components/FacetControls";
-import { facetsOf } from "@/lib/render/facets";
+import { facetFilterSummary, facetsOf } from "@/lib/render/facets";
 import { viewCaption } from "@/lib/render/views";
 import type { Feature } from "geojson";
 import { LegendKey } from "@/components/LegendKey";
@@ -285,7 +285,15 @@ function LegendRow({
   );
   const filters = op?.filters ?? {};
   const activeCount = Object.keys(filters).length;
-  const summary = activeCount > 0 ? filterSummary(fields, filters) : "";
+  const summary =
+    activeCount > 0
+      ? [
+          facetFilterSummary(facets, filters),
+          filterSummary(fields, Object.fromEntries(Object.entries(filters).filter(([k]) => !facets.some((f) => f.key === k)))),
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : "";
   const caption = op?.visible ? viewCaption(op.view, layer, compare) : undefined;
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filtersId = `filters-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;

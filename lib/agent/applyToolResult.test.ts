@@ -324,3 +324,15 @@ describe("tool names and views at the tool-call level", () => {
     expect(odd.type === "render" && odd.op.view).toBeUndefined();
   });
 });
+
+describe("a query off the user's view names a place (the model skipped the geocode)", () => {
+  const box = [-109.8, 38.4, -109.3, 38.8];
+  it("asks the camera to fit what returns there, but not for a 'here' query inside the view", () => {
+    const off = toolResultToActions("query_osm-trails", { bbox: box }, result, canvas, catalog, [], { view: [-120.3, 38.9, -119.9, 39.3] });
+    expect(off[0]).toEqual({ type: "place_named", bbox: box, implicit: true });
+    const here = toolResultToActions("query_osm-trails", { bbox: box }, result, canvas, catalog, [], { view: [-110, 38, -109, 39] });
+    expect(here.some((a) => a.type === "place_named")).toBe(false);
+    const unknown = toolResultToActions("query_osm-trails", { bbox: box }, result, canvas, catalog, []);
+    expect(unknown.some((a) => a.type === "place_named")).toBe(false);
+  });
+});

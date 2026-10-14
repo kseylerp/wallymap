@@ -987,11 +987,9 @@ textarea:focus-visible {
   color: var(--ink);
 }
 .info-popover {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: -6px;
-  z-index: 40;
-  width: min(240px, 70vw);
+  position: fixed;
+  z-index: 60;
+  width: min(260px, calc(100vw - 24px));
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;

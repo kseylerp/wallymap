@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { BBox } from "@/layers/types";
 import { featureBBoxes, findRegion, loadNaturalEarthRegions, regionDisplayName } from "./naturalEarth";
+import { lookupRegion, type RegionMatch, type RegionSource } from "./regionNames";
 
 const ENDPOINT = "https://api.mapbox.com/search/geocode/v6/forward";
 const FALLBACK_HALF_SPAN_DEG = 0.1;
@@ -11,8 +12,12 @@ export type GeocodeResult = {
   bbox: BBox;
   center: [number, number];
   name: string;
-  /** "natural-earth" when the place is a physical region (range, desert, ...) and Mapbox only found a point or town. */
-  source: "mapbox" | "natural-earth";
+  /**
+   * Where the answer came from. Anything but "mapbox" is one of the app's own region sources, used because the name
+   * describes a region (a basin, desert, range, national forest) or Mapbox only found a point or town of that name;
+   * the bbox is then the region's own extent (see lib/agent/regionNames.ts), not a buffer around a point.
+   */
+  source: "mapbox" | RegionSource;
 };
 export type GeocodeError = { error: string };
 
@@ -36,7 +41,7 @@ function isSmall(bbox: BBox): boolean {
 }
 
 /** The Natural Earth region named `place`, as a geocode result, or null when there is none or the download fails. */
-async function regionResult(place: string): Promise<GeocodeResult | null> {
+async function regionResult(place: string): Promise<RegionMatch | null> {
   if (failedAt !== undefined && Date.now() - failedAt < REGIONS_RETRY_AFTER_MS) return null;
   try {
     const fc = await loadNaturalEarthRegions();
@@ -115,9 +120,21 @@ export function scrubToken(text: string, token: string): string {
   return text.split(token).join("[token]").split(encodeURIComponent(token)).join("[token]");
 }
 
+/** The first Natural Earth region among `names`, for lookupRegion. */
+async function firstRegion(names: string[]): Promise<RegionMatch | null> {
+  for (const name of names) {
+    const found = await regionResult(name);
+    if (found) return found;
+  }
+  return null;
+}
+
 /**
  * Forward-geocodes a place name with Mapbox Geocoding v6. Never throws. `proximity` ([lng, lat]) biases the
  * match toward that point, so "Emerald Bay" next to Tahoe City is not Laguna Beach's Emerald Bay.
+ * A name that describes a region ("Colorado River basin", "Mojave Desert", "Bears Ears National Monument") is looked up
+ * in the app's own region sources before Mapbox (lookupRegion), because Mapbox answers it with a town that shares a
+ * word, such as the town of Basin, Colorado. The result's `source` says which one answered.
  * When Mapbox finds only a point or a town, a named physical region (Natural Earth) wins, and for a range-like name
  * (isRangeLike) so does a Search Box landform of that exact name, boxed to about 76 km; range-like names also never
  * resolve to streets.
@@ -130,6 +147,9 @@ export async function geocode(
   if (!token) {
     return { error: "MAPBOX_TOKEN is not set" };
   }
+
+  const named = await lookupRegion(place, opts.proximity, { naturalEarth: firstRegion });
+  if (named) return named;
 
   const url = new URL(ENDPOINT);
   url.searchParams.set("q", place);

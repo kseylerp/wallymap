@@ -1,0 +1,60 @@
+{
+ "entities": {
+  "Q1722116": {
+   "type": "item",
+   "id": "Q1722116",
+   "claims": {
+    "P625": [
+     {
+      "rank": "normal",
+      "mainsnak": {
+       "property": "P625",
+       "datavalue": {
+        "value": {
+         "latitude": 43.1844,
+         "longitude": -109.653,
+         "altitude": null,
+         "precision": 0.0001,
+         "globe": "http://www.wikidata.org/entity/Q2"
+        },
+        "type": "globecoordinate"
+       }
+      }
+     }
+    ],
+    "P2046": [
+     {
+      "rank": "normal",
+      "mainsnak": {
+       "property": "P2046",
+       "datavalue": {
+        "value": {
+         "amount": "+2800",
+         "unit": "http://www.wikidata.org/entity/Q232291"
+        },
+        "type": "quantity"
+       }
+      }
+     }
+    ],
+    "P31": [
+     {
+      "rank": "normal",
+      "mainsnak": {
+       "property": "P31",
+       "datavalue": {
+        "value": {
+         "entity-type": "item",
+         "numeric-id": 46831,
+         "id": "Q46831"
+        },
+        "type": "wikibase-entityid"
+       }
+      }
+     }
+    ]
+   }
+  }
+ },
+ "success": 1
+}

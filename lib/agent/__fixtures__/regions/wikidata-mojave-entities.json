@@ -1,0 +1,90 @@
+{
+ "entities": {
+  "Q184355": {
+   "type": "item",
+   "id": "Q184355",
+   "claims": {
+    "P625": [
+     {
+      "rank": "normal",
+      "mainsnak": {
+       "property": "P625",
+       "datavalue": {
+        "value": {
+         "latitude": 35.008333333333,
+         "longitude": -115.475,
+         "altitude": null,
+         "precision": 0.00027777777777778,
+         "globe": "http://www.wikidata.org/entity/Q2"
+        },
+        "type": "globecoordinate"
+       }
+      }
+     },
+     {
+      "rank": "deprecated",
+      "mainsnak": {
+       "property": "P625",
+       "datavalue": {
+        "value": {
+         "latitude": 35.41665,
+         "longitude": -115.58416,
+         "altitude": null,
+         "precision": 0.011022822215838,
+         "globe": "http://www.wikidata.org/entity/Q2"
+        },
+        "type": "globecoordinate"
+       }
+      }
+     }
+    ],
+    "P2046": [
+     {
+      "rank": "normal",
+      "mainsnak": {
+       "property": "P2046",
+       "datavalue": {
+        "value": {
+         "amount": "+124000",
+         "unit": "http://www.wikidata.org/entity/Q712226"
+        },
+        "type": "quantity"
+       }
+      }
+     }
+    ],
+    "P31": [
+     {
+      "rank": "normal",
+      "mainsnak": {
+       "property": "P31",
+       "datavalue": {
+        "value": {
+         "entity-type": "item",
+         "numeric-id": 8514,
+         "id": "Q8514"
+        },
+        "type": "wikibase-entityid"
+       }
+      }
+     },
+     {
+      "rank": "normal",
+      "mainsnak": {
+       "property": "P31",
+       "datavalue": {
+        "value": {
+         "entity-type": "item",
+         "numeric-id": 6617741,
+         "id": "Q6617741"
+        },
+        "type": "wikibase-entityid"
+       }
+      }
+     }
+    ]
+   }
+  }
+ },
+ "success": 1
+}

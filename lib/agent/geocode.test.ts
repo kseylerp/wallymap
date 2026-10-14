@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import sample from "@/layers/__fixtures__/ne-regions.sample.json";
+import wbdTruckee from "./__fixtures__/regions/wbd-truckee-subbasin.json";
+import wdpaBearsEars from "./__fixtures__/regions/wdpa-bears-ears.json";
+import wikidataMojaveEntities from "./__fixtures__/regions/wikidata-mojave-entities.json";
+import wikidataMojaveSearch from "./__fixtures__/regions/wikidata-mojave-search.json";
+import wikidataWindRiverEntities from "./__fixtures__/regions/wikidata-wind-river-entities.json";
+import wikidataWindRiverSearch from "./__fixtures__/regions/wikidata-wind-river-search.json";
+import mapboxMoab from "./__fixtures__/regions/mapbox-moab.json";
 
 const realFetch = globalThis.fetch;
 const regions = sample as unknown as FeatureCollection;
@@ -347,6 +354,163 @@ describe("geocode", () => {
       await geocode("Truckee");
       expect(urls.some((u) => u.pathname.includes("searchbox"))).toBe(false);
       expect(urls[0].searchParams.has("types")).toBe(false);
+    });
+  });
+  describe("region names", () => {
+    // Recorded 2026-10-14. Live, v6 answered "Colorado River basin" with the town of Basin, Colorado.
+    const EMPTY = { type: "FeatureCollection", features: [] };
+
+    /** Answers each service from its recorded response; a service not listed in `down` answers, the rest throw. */
+    function routed(down: string[] = []) {
+      const urls: URL[] = [];
+      globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(String(input));
+        urls.push(url);
+        const q = url.searchParams;
+        if (down.includes(url.host)) throw new Error(`${url.host} down`);
+        switch (url.host) {
+          case NE_HOST:
+            return jsonResponse(regions);
+          case "hydro.nationalmap.gov":
+            return jsonResponse(url.pathname.includes("/MapServer/4/") && /'TRUCKEE'/.test(q.get("where") ?? "") ? wbdTruckee : EMPTY);
+          case "data-gis.unep-wcmc.org":
+            return jsonResponse(/BEARS EARS/.test(q.get("where") ?? "") ? wdpaBearsEars : EMPTY);
+          case "www.wikidata.org": {
+            if (q.get("action") === "wbsearchentities") {
+              if (q.get("search") === "Wind River Range") return jsonResponse(wikidataWindRiverSearch);
+              if (q.get("search") === "Mojave Desert") return jsonResponse(wikidataMojaveSearch);
+              return jsonResponse({ search: [] });
+            }
+            return jsonResponse(q.get("ids")?.includes("Q1722116") ? wikidataWindRiverEntities : wikidataMojaveEntities);
+          }
+          default: {
+            const search = q.get("q");
+            if (url.pathname.includes("searchbox")) return jsonResponse({ features: [] });
+            if (search === "Moab") return jsonResponse(mapboxMoab);
+            return jsonResponse({ features: [] });
+          }
+        }
+      }) as typeof fetch;
+      return urls;
+    }
+    const asked = (urls: URL[], host: string) => urls.some((u) => u.host === host);
+
+    it("tells region names from place names", async () => {
+      const { parseRegionName } = await import("@/lib/agent/regionNames");
+      const kinds = (names: string[]) => names.map((n) => parseRegionName(n)?.kind);
+      expect(kinds(["Colorado River basin", "Great Basin", "Missouri watershed", "Napa Valley", "Colorado Plateau", "Mojave Desert", "Wind River Range", "Bighorn Mountains"])).toEqual([
+        "basin", "basin", "watershed", "valley", "plateau", "desert", "range", "range",
+      ]);
+      expect(kinds(["Bears Ears National Monument", "Yosemite National Park", "Tahoe National Forest", "Desolation Wilderness, California"])).toEqual([
+        "monument", "park", "forest", "wilderness",
+      ]);
+      expect(kinds(["Moab", "Lake Tahoe", "Basin", "Valley Forge", "Mountain View"])).toEqual([undefined, undefined, undefined, undefined, undefined]);
+      expect(parseRegionName("Colorado River basin")).toMatchObject({ base: "Colorado", riverish: true });
+    });
+
+    it("Colorado River basin is the Upper and Lower Colorado Region, not the town of Basin", async () => {
+      const urls = routed();
+      const result = await geocode("Colorado River basin", { proximity: [-105, 40] });
+      if ("error" in result) throw new Error("expected a match");
+      expect(result.source).toBe("river-basins");
+      expect(result.name).toContain("Upper Colorado Region");
+      expect(result.name).toContain("Lower Colorado Region");
+      // One box over both regions, not a point buffer: the USGS extent of the pair is -115.71,29.84,-105.63,43.45.
+      expect(result.bbox[0]).toBeCloseTo(-115.7, 0);
+      expect(result.bbox[1]).toBeCloseTo(29.9, 0);
+      expect(result.bbox[2]).toBeCloseTo(-105.6, 0);
+      expect(result.bbox[3]).toBeCloseTo(43.5, 0);
+      expect(result.center).toEqual([(result.bbox[0] + result.bbox[2]) / 2, (result.bbox[1] + result.bbox[3]) / 2]);
+      // The regions are built in, so neither the USGS nor Mapbox is asked.
+      expect(asked(urls, "api.mapbox.com")).toBe(false);
+      expect(asked(urls, "hydro.nationalmap.gov")).toBe(false);
+    });
+
+    it("a smaller river's basin is its USGS subbasin, asked by name", async () => {
+      const urls = routed();
+      const result = await geocode("Truckee River basin");
+      expect(result).toMatchObject({ source: "river-basins", name: "Truckee River basin (USGS Truckee)" });
+      expect(urls.find((u) => u.pathname.includes("/MapServer/4/"))?.searchParams.get("where")).toContain("'TRUCKEE'");
+      expect(asked(urls, "api.mapbox.com")).toBe(false);
+    });
+
+    it("falls back to Mapbox when the river-basin service is down and Wikidata knows no such region", async () => {
+      const urls = routed(["hydro.nationalmap.gov"]);
+      expect(await geocode("Snake River basin")).toEqual({ error: "No match for Snake River basin" });
+      expect(asked(urls, "api.mapbox.com")).toBe(true);
+    });
+
+    it("Great Basin comes from Natural Earth, without asking the USGS", async () => {
+      const urls = routed();
+      const result = await geocode("Great Basin");
+      expect(result).toMatchObject({ source: "natural-earth", name: "Great Basin" });
+      expect(asked(urls, "hydro.nationalmap.gov")).toBe(false);
+      expect(asked(urls, "api.mapbox.com")).toBe(false);
+    });
+
+    it("Wind River Range is a Wikidata region boxed to its 2,800 square miles", async () => {
+      const urls = routed();
+      const result = await geocode("Wind River Range", { proximity: [-110, 43] });
+      if ("error" in result) throw new Error("expected a match");
+      expect(result.source).toBe("wikidata");
+      expect(result.name).toBe("Wind River Range");
+      const { bboxAreaKm2 } = await import("@/layers/types");
+      expect(bboxAreaKm2(result.bbox)).toBeGreaterThan(7_000);
+      expect(bboxAreaKm2(result.bbox)).toBeLessThan(7_500);
+      expect(result.center[0]).toBeCloseTo(-109.653, 2);
+      expect(result.center[1]).toBeCloseTo(43.1844, 2);
+      expect(asked(urls, "api.mapbox.com")).toBe(false);
+    });
+
+    it("Bears Ears National Monument is the union of its protected-area units", async () => {
+      const urls = routed();
+      const result = await geocode("Bears Ears National Monument");
+      if ("error" in result) throw new Error("expected a match");
+      expect(result).toMatchObject({ source: "protected-areas-world", name: "Bears Ears National Monument" });
+      const lngs = wdpaBearsEars.features.flatMap((f) => (f.geometry.coordinates as unknown[]).flat(Infinity as 1) as number[]).filter((_, i) => i % 2 === 0);
+      expect(result.bbox[0]).toBeCloseTo(Math.min(...lngs), 3);
+      expect(result.bbox[2]).toBeCloseTo(Math.max(...lngs), 3);
+      expect(urls.find((u) => u.host === "data-gis.unep-wcmc.org")?.searchParams.get("where")).toContain("National Monument");
+      expect(asked(urls, "api.mapbox.com")).toBe(false);
+    });
+
+    it("Mojave Desert, which Natural Earth lacks, is a Wikidata region boxed to its 124,000 km²", async () => {
+      routed();
+      const result = await geocode("Mojave Desert");
+      if ("error" in result) throw new Error("expected a match");
+      expect(result.source).toBe("wikidata");
+      const { bboxAreaKm2 } = await import("@/layers/types");
+      expect(bboxAreaKm2(result.bbox)).toBeGreaterThan(115_000);
+      expect(bboxAreaKm2(result.bbox)).toBeLessThan(135_000);
+    });
+
+    it("a plain town goes to Mapbox alone", async () => {
+      const urls = routed();
+      const result = await geocode("Moab");
+      expect(result).toMatchObject({ source: "mapbox" });
+      expect(urls.every((u) => u.host === "api.mapbox.com")).toBe(true);
+    });
+
+    it("ignores a Wikidata item of the right name that is a town, not a region", async () => {
+      routed();
+      const base = globalThis.fetch;
+      globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(String(input));
+        if (url.host === "api.mapbox.com") {
+          const town = { name: "Sun Valley", coordinates: { longitude: -114.35, latitude: 43.7 }, bbox: [-114.4, 43.6, -114.3, 43.75] };
+          return jsonResponse({ features: [{ properties: town }] });
+        }
+        if (url.host !== "www.wikidata.org") return base(input);
+        if (url.searchParams.get("action") === "wbsearchentities") {
+          return jsonResponse({ search: [{ id: "Q1", label: "Sun Valley", description: "city in Blaine County, Idaho" }] });
+        }
+        const claims = {
+          P625: [{ mainsnak: { datavalue: { value: { longitude: -114.3, latitude: 43.7 } } } }],
+          P2046: [{ mainsnak: { datavalue: { value: { amount: "+9", unit: "http://www.wikidata.org/entity/Q712226" } } } }],
+        };
+        return jsonResponse({ entities: { Q1: { claims } } });
+      }) as typeof fetch;
+      expect(await geocode("Sun Valley")).toMatchObject({ source: "mapbox", name: "Sun Valley" });
     });
   });
 });

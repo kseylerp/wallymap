@@ -4,7 +4,9 @@ import { NO_INSETS, safeAreaInsets, type Insets } from "@/lib/render/safeArea";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronRight, Copy, MessageCircle, Route, X } from "lucide-react";
 import { LegendKey } from "@/components/LegendKey";
-import { formatDate, isLineFeature, summarizeFeature, type Row } from "@/lib/render/inspect";
+import { formatDate, isLineFeature, summarizeFeature } from "@/lib/render/inspect";
+import { cardContent, type CardRow } from "@/lib/render/card";
+import { InfoMark } from "@/components/FieldHelp";
 import type { LoadedLayer, Selection } from "@/lib/render/state";
 import type { LegendSymbol } from "@/lib/render/wally/legend";
 import { previewFeature } from "@/lib/render/wally/playback";
@@ -73,13 +75,17 @@ export function place(
   return { left, top, below, pointerX, pointer, offscreen };
 }
 
-function RowList({ rows }: { rows: Row[] }) {
+/** Fact rows on hairlines: the label (with the serif "i" when the layer explains the field), the value right-aligned. */
+function RowList({ rows }: { rows: CardRow[] }) {
   return (
     <dl className="text-[13px] leading-5">
       {rows.map((r) => (
-        <div key={r.key} className="flex items-baseline justify-between gap-3 border-t border-line py-1.5">
-          <dt className="min-w-0 max-w-[48%] shrink-0 truncate text-ink-muted" title={r.label}>
-            {r.label}
+        <div key={r.key} className="flex items-baseline justify-between gap-3 border-t border-line py-1.5" data-field={r.key}>
+          <dt className="flex min-w-0 max-w-[52%] shrink-0 items-center gap-1 text-ink-muted">
+            <span className="truncate" title={r.label}>
+              {r.label}
+            </span>
+            {r.help && <InfoMark help={r.help} label={r.label} />}
           </dt>
           <dd className="min-w-0 text-right break-words text-ink tabular-nums">{r.value}</dd>
         </div>
@@ -133,6 +139,10 @@ export function InspectCard({
 
   const unit = layer.style.unit;
   const summary = useMemo(() => summarizeFeature(selection.feature, unit), [selection.feature, unit]);
+  const content = useMemo(
+    () => cardContent(selection.feature, { unit, card: layer.card, fieldHelp: layer.fieldHelp }),
+    [selection.feature, unit, layer.card, layer.fieldHelp],
+  );
   const { citation, coverageNote } = layer.result;
   const line = isLineFeature(selection.feature);
   const sideB = selection.side === "b";
@@ -308,38 +318,52 @@ export function InspectCard({
           </div>
         )}
 
-        {summary.value && (
-          <div className="mt-3 flex items-baseline justify-between gap-3">
-            <span className="text-[11px] font-semibold tracking-[0.08em] text-ink-muted uppercase">{summary.value.label}</span>
-            <span className="text-[1.35rem] leading-none font-semibold text-ink tabular-nums">{summary.value.value}</span>
+        {/* The measure under its own name ("Routes 5"), with its "i" when the layer explains it; never "VALUE 5". */}
+        {content.measure && (
+          <div className="mt-3 flex items-baseline justify-between gap-3" data-testid="inspect-measure">
+            <span className="flex items-center gap-1 text-[13px] text-ink-muted">
+              {content.measure.label}
+              {content.measure.help && <InfoMark help={content.measure.help} label={content.measure.label} />}
+            </span>
+            <span className="text-[1.35rem] leading-none font-semibold text-ink tabular-nums">{content.measure.value}</span>
           </div>
         )}
 
-        {summary.rows.length > 0 && (
+        {content.facts.length > 0 && (
           <div className="mt-2.5">
-            <RowList rows={summary.rows} />
+            <RowList rows={content.facts} />
           </div>
         )}
 
-        {summary.signals.length > 0 && (
+        {content.links.length > 0 && (
+          <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[12.5px]" data-testid="inspect-links">
+            {content.links.map((link) => (
+              <a key={link.key} href={link.url} target="_blank" rel="noreferrer" className="dashed-link text-ink">
+                {link.label}
+              </a>
+            ))}
+          </p>
+        )}
+
+        {content.signals.length > 0 && (
           <>
             <SectionLabel>Signals</SectionLabel>
-            <RowList rows={summary.signals} />
+            <RowList rows={content.signals} />
           </>
         )}
 
-        {summary.details.length > 0 && (
+        {content.details.length > 0 && (
           <details className="group mt-2">
             <summary className="cursor-pointer list-none text-[12px] font-medium text-ink-muted select-none hover:text-ink">
               <span className="inline-block transition-transform group-open:rotate-90">›</span> Details
             </summary>
             <div className="mt-1">
-              <RowList rows={summary.details} />
+              <RowList rows={content.details} />
             </div>
           </details>
         )}
 
-        {summary.rows.length === 0 && summary.signals.length === 0 && !summary.value && (
+        {content.facts.length === 0 && content.signals.length === 0 && !content.measure && content.details.length === 0 && (
           <p className="mt-2 text-[13px] text-ink-muted">This feature has no properties beyond its shape.</p>
         )}
 

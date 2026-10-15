@@ -112,6 +112,9 @@ async function landformResult(place: string, proximity: [number, number] | undef
   }
 }
 
+/** Candidates asked of the place geocoder: Mapbox's first unless one further down carries exactly the asked name. */
+const CANDIDATES = 5;
+
 /** How long one Mapbox lookup may take before it is abandoned, so a hung call cannot hold a chat step. */
 const GEOCODE_TIMEOUT_MS = 15_000;
 
@@ -153,7 +156,9 @@ export async function geocode(
 
   const url = new URL(ENDPOINT);
   url.searchParams.set("q", place);
-  url.searchParams.set("limit", "1");
+  // A few candidates, so a place of exactly the asked name ("West Texas") beats a town that only starts with it
+  // ("West, Texas"), which Mapbox ranks first.
+  url.searchParams.set("limit", String(CANDIDATES));
   const rangeLike = isRangeLike(place);
   if (rangeLike) url.searchParams.set("types", RANGE_PLACE_TYPES);
   if (opts.proximity) url.searchParams.set("proximity", `${opts.proximity[0]},${opts.proximity[1]}`);
@@ -165,7 +170,9 @@ export async function geocode(
       return { error: `Geocoding failed with HTTP ${res.status}` };
     }
     const body = responseSchema.safeParse(await res.json());
-    const feature = body.success && body.data.features.length > 0 ? featureSchema.safeParse(body.data.features[0]) : undefined;
+    const candidates = body.success ? body.data.features.map((f) => featureSchema.safeParse(f)).filter((f) => f.success) : [];
+    const asked = normalize(place.split(",")[0]);
+    const feature = candidates.find((f) => f.data.properties.name !== undefined && normalize(f.data.properties.name) === asked) ?? candidates[0];
     if (!feature?.success) {
       const landform = rangeLike ? await landformResult(place, opts.proximity, token) : null;
       return landform ?? { error: `No match for ${place}` };

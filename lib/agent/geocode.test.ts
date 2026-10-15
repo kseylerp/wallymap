@@ -66,7 +66,7 @@ describe("geocode", () => {
     const url = new URL(String(fetchMock.mock.calls[0][0]));
     expect(url.origin + url.pathname).toBe("https://api.mapbox.com/search/geocode/v6/forward");
     expect(url.searchParams.get("q")).toBe("Lake Tahoe");
-    expect(url.searchParams.get("limit")).toBe("1");
+    expect(url.searchParams.get("limit")).toBe("5");
     expect(url.searchParams.get("access_token")).toBe("test-mapbox-token");
   });
 
@@ -512,5 +512,28 @@ describe("geocode", () => {
       }) as typeof fetch;
       expect(await geocode("Sun Valley")).toMatchObject({ source: "mapbox", name: "Sun Valley" });
     });
+  });
+});
+
+describe("an exact name beats a town that only starts with it", () => {
+  it("answers West Texas with the region, not the town of West, Texas, that Mapbox ranks first", async () => {
+    const feature = (name: string, full: string, bbox: number[]) => ({
+      properties: { name, full_address: full, bbox, coordinates: { longitude: (bbox[0] + bbox[2]) / 2, latitude: (bbox[1] + bbox[3]) / 2 } },
+    });
+    vi.stubEnv("MAPBOX_TOKEN", "pk.test");
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (!url.includes("api.mapbox.com")) return new Response("{}", { status: 404 });
+      return Response.json({
+        features: [
+          feature("West", "West, Texas, United States", [-97.22, 31.7, -96.98, 31.86]),
+          feature("West Texas", "West Texas, Texas, United States", [-106.59, 30.01, -98.41, 34.49]),
+        ],
+      });
+    });
+    const out = await geocode("West Texas");
+    expect(out).toMatchObject({ name: "West Texas, Texas, United States", bbox: [-106.59, 30.01, -98.41, 34.49] });
+    spy.mockRestore();
+    vi.unstubAllEnvs();
   });
 });

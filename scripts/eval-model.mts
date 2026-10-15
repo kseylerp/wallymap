@@ -192,7 +192,10 @@ function largestByV(calls: ToolCall[], toolName: string): { name: string; v: num
 /** The map the browser would end on: every tool result through the client's mapping and the reducer, in order. */
 function mapAfter(calls: ToolCall[]): MapState {
   const catalog: LayerCatalog = Object.fromEntries(
-    listLayers().map((l) => [l.id, { title: l.title, style: l.style, license: l.license, ...(l.fieldHelp && { fieldHelp: l.fieldHelp }), ...(l.card && { card: l.card }) }]),
+    listLayers().map((l) => [
+      l.id,
+      { title: l.title, style: l.style, license: l.license, ...(l.fieldHelp && { fieldHelp: l.fieldHelp }), ...(l.card && { card: l.card }), ...(l.attributes && { attributes: l.attributes }) },
+    ]),
   );
   let state = reduce(initialMapState, { type: "turn_start" });
   for (const c of calls) {
@@ -251,7 +254,7 @@ function uraniumRankedRule(calls: ToolCall[], notes: string[]): RuleResult {
   const view = state.renderOps.find((o) => o.layerId === "uranium")?.view;
   const layer = getLayer("uranium");
   const query = calls.find((c) => c.toolName === "query_uranium" && c.output !== undefined && !isLayerError(c.output));
-  const summary = query && isFullLayerResult(query.output) ? summarizeLayerResult(query.output, "uranium", layer?.style, layer?.fieldHelp) : undefined;
+  const summary = query && isFullLayerResult(query.output) ? summarizeLayerResult(query.output, "uranium", { ...layer?.style, attributes: layer?.attributes }, layer?.fieldHelp) : undefined;
   const help = summary && "kind" in summary && summary.kind === "geojson" ? summary.help : undefined;
   const largest = largestByV(calls, "query_uranium");
   const namesLargest = largest !== undefined && comparable(notes.join("\n")).includes(comparable(largest.name));
@@ -294,6 +297,42 @@ function coloradoDamsRule(calls: ToolCall[], notes: string[]): RuleResult {
   return { ok, features: most, damQueries: dams.length, zoomIn, largest, namesLargest, boxes: dams.map((c) => bboxOf(c.input)) };
 }
 
+/**
+ * "Where are most of the wind farms by capacity in West Texas?" (spec §12d: "where is most of the capacity" colors hex
+ * cells by the sum of the measure): passes only when power-plants ends in the density view drawn as hex cells with the
+ * sum basis, its drawn features are wind (a kind filter, or the wind-turbines source), and the note names the place.
+ */
+function windCapacityHexRule(calls: ToolCall[], notes: string[]): RuleResult {
+  const state = mapAfter(calls);
+  const op = state.renderOps.find((o) => o.layerId === "power-plants");
+  const drawn = visibleState(state).layers["power-plants"];
+  const kinds = drawn?.result.kind === "geojson" ? [...new Set(drawn.result.data.features.map((f) => f.properties?.kind))] : [];
+  const wind = kinds.length > 0 && kinds.every((k) => k === "wind");
+  const hexes = op?.mode === "hexbin" || op?.mode === "columns";
+  const namesTexas = /texas/i.test(notes.join("\n"));
+  const ok = op?.view === "density" && op.hexBasis === "sum" && hexes && wind && namesTexas;
+  return { ok, view: op?.view, mode: op?.mode, hexBasis: op?.hexBasis, kinds, filters: op?.filters };
+}
+
+/**
+ * "Show only sport crags at Red River Gorge" (spec §12c: chat and the row's chips share one state): passes only when
+ * climbing is filtered through render.filters on its discipline attribute to sport alone, so the Sport chip is the
+ * one pressed and every drawn crag lists sport, and climbing was not re-queried to filter (an empty first answer, from a
+ * wrong box, may be asked again).
+ */
+function sportCragsRule(calls: ToolCall[]): RuleResult {
+  const state = mapAfter(calls);
+  const op = state.renderOps.find((o) => o.layerId === "climbing");
+  const include = op?.filters?.disciplines?.include;
+  const drawn = visibleState(state).layers.climbing;
+  const features = drawn?.result.kind === "geojson" ? drawn.result.data.features : [];
+  const allSport = features.length > 0 && features.every((f) => Array.isArray(f.properties?.disciplines) && f.properties.disciplines.includes("sport"));
+  // A query that came back empty (a wrong box) and was asked again is not a re-query to filter; two that drew crags are.
+  const queries = calls.filter((c) => c.toolName === "query_climbing" && !isLayerError(c.output) && (featureCount(c.output) ?? 0) > 0).length;
+  const ok = include !== undefined && include.length === 1 && include[0] === "sport" && allSport && queries <= 1;
+  return { ok, filters: op?.filters, drawn: features.length, allSport, queries };
+}
+
 /** Extra pass rules for particular questions, keyed by the question in lower case. */
 const QUESTION_RULES: Record<string, (calls: ToolCall[], notes: string[], view: MapView | null) => RuleResult> = {
   "good hiking in french guiana": goodHikingRule,
@@ -303,6 +342,8 @@ const QUESTION_RULES: Record<string, (calls: ToolCall[], notes: string[], view: 
   "how has bears ears changed since 2021?": bearsEarsChangeRule,
   "show only hard mountain bike trails near moab": moabHardRule,
   "which uranium mines near the navajo nation score highest?": uraniumRankedRule,
+  "where are most of the wind farms by capacity in west texas?": (calls, notes) => windCapacityHexRule(calls, notes),
+  "show only sport crags at red river gorge": (calls) => sportCragsRule(calls),
 };
 
 /** Every coverage note the queries returned, so a wide result's "Showing the N largest of M" line is in the output. */

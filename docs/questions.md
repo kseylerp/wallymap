@@ -202,6 +202,8 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set
 - How has Bears Ears changed since 2021?
 - Show only hard mountain bike trails near Moab
 - Which uranium mines near the Navajo Nation score highest?
+- Where are most of the wind farms by capacity in West Texas?
+- Show only sport crags at Red River Gorge
 <!-- eval:end -->
 
 ## Last run
@@ -275,3 +277,13 @@ The three standard-view questions (spec §12), run live on the code of commits 5
 | Which uranium mines near the Navajo Nation score highest? | yes | geocode, uranium, render |  | 11.7 |
 
 Each replays the tool results through the browser's mapping and reducer: Bears Ears must end in the change view (a compare by version on `kind`, 2021 lost and current gained, the camera on the union of both); the Moab question must filter mtb-trails on its difficulty facet so hard trails show and nothing easier, drawn on the facet ramp; the uranium question must end in the ranked view, with the hazard score's help text in the query summary and the highest-scoring site named in the note.
+
+The two attribute and hex questions (spec §12c, §12d), run live on 2026-10-15 with the same model. Both failed on their first run and passed on the second, after two fixes: the geocoder now takes Mapbox's candidate of exactly the asked name (it had answered "West Texas" with the town of West, Texas, and the model gave up), and the sport-crags rule no longer counts a first climbing query that came back empty from a wrong box as a re-query (the chips were already right):
+
+| Question | ok | Tools (query_ prefix dropped) | Layer errors | Seconds |
+| --- | --- | --- | --- | --- |
+| Where are most of the wind farms by capacity in West Texas? | yes | geocode, power-plants, render |  | 48 |
+| Show only sport crags at Red River Gorge | yes | geocode, geocode, climbing, climbing, render |  | 59.9 |
+
+The wind question must end with power-plants in the density view, drawn as hex cells colored by the sum of capacity (`render.hexBasis: sum`), every drawn plant wind, and Texas named in the note. The sport question must filter climbing through `render.filters` on its discipline attribute to sport alone (the Sport chip pressed, every drawn crag lists sport), with at most one climbing query that drew crags.
+

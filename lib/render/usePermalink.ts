@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type Dispatch } from "react";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
+import { fetchCatalog } from "@/lib/agent/catalog";
 import type { LayerError, LayerResult } from "@/layers/types";
 import { decodeState, encodeState, restoreFromPermalink, type FetchLayer } from "@/lib/render/permalink";
 import { initialMapState, type MapAction, type MapState } from "@/lib/render/state";
@@ -18,19 +19,6 @@ const fetchLayer: FetchLayer = async (id, bbox, zoom) => {
   });
   return (await res.json()) as LayerResult | LayerError;
 };
-
-async function fetchCatalog(): Promise<LayerCatalog> {
-  try {
-    const res = await fetch("/api/layers");
-    if (!res.ok) return {};
-    const entries = (await res.json()) as ({ id: string } & LayerCatalog[string])[];
-    return Object.fromEntries(
-      entries.map((e) => [e.id, { title: e.title, style: e.style, license: e.license, ...(e.fieldHelp && { fieldHelp: e.fieldHelp }), ...(e.card && { card: e.card }) }]),
-    );
-  } catch {
-    return {};
-  }
-}
 
 function isInitialView(state: MapState): boolean {
   const a = state.viewport;

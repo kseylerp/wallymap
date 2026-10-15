@@ -11,6 +11,7 @@ import { MapControls } from "@/components/MapControls";
 import { MapPills } from "@/components/MapPills";
 import { useSuggestionsCard } from "@/components/useSuggestionsCard";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
+import { fetchCatalog } from "@/lib/agent/catalog";
 import { prefillChat, sendChat } from "@/lib/agent/chatBus";
 import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import { askAboutText, featureBBox, featureCenter } from "@/lib/render/inspect";
@@ -45,32 +46,6 @@ function writeSessionFlag(key: string, value: boolean): void {
     else window.sessionStorage.removeItem(key);
   } catch {
     // Unavailable storage only costs the remembered choice.
-  }
-}
-
-type CatalogEntry = { id: string; title: string } & LayerCatalog[string];
-
-async function fetchCatalog(): Promise<LayerCatalog> {
-  try {
-    const res = await fetch("/api/layers");
-    if (!res.ok) return {};
-    const entries = (await res.json()) as CatalogEntry[];
-    return Object.fromEntries(
-      entries.map((e) => [
-        e.id,
-        {
-          title: e.title,
-          style: e.style,
-          license: e.license,
-          ...(e.fieldHelp && { fieldHelp: e.fieldHelp }),
-          ...(e.card && { card: e.card }),
-          ...(e.attributes && { attributes: e.attributes }),
-        },
-      ]),
-    );
-  } catch {
-    // Without a catalog, layers still draw with the fallback title and style.
-    return {};
   }
 }
 

@@ -131,6 +131,14 @@ function amount(value: number, unit?: string, key = "v"): string {
   return unit && unit !== "score" ? `${text} ${unit}` : text;
 }
 
+/** Features per km², or per 1,000 km² when a cell is big and sparse ("2.4 per 1,000 km²", never "0.00 per km²"). */
+function densityText(perKm2: number): string {
+  if (perKm2 >= 10) return `${Math.round(perKm2).toLocaleString("en-US")} per km²`;
+  if (perKm2 >= 0.1) return `${perKm2.toFixed(perKm2 >= 1 ? 1 : 2)} per km²`;
+  const per1000 = perKm2 * 1000;
+  return `${per1000 >= 10 ? Math.round(per1000).toLocaleString("en-US") : per1000.toFixed(1)} per 1,000 km²`;
+}
+
 /** The share bar's shades: the hex tile ramp from dark grey down, so the largest part reads darkest. */
 const SHARE_SHADES = rampSamples(HEX_TILE.ramp).reverse();
 
@@ -152,22 +160,22 @@ function HexCellBody({
   onZoomTo?: (bbox: BBox) => void;
   onAsk: () => void;
 }) {
-  const rows: CardRow[] = [
-    { key: "rank", label: "Rank", value: words },
-    { key: "area", label: "Cell area", value: `≈ ${roughly(cell.areaKm2)} km²` },
-    { key: "density", label: "Density", value: `${cell.densityPerKm2 >= 10 ? Math.round(cell.densityPerKm2).toLocaleString("en-US") : cell.densityPerKm2.toFixed(2)} per km²` },
-  ];
+  const rows: CardRow[] = [{ key: "density", label: "Density", value: densityText(cell.densityPerKm2) }];
   if (cell.measure) {
     rows.push({ key: "sum", label: `Total ${cell.measure.label.toLowerCase()}`, value: amount(cell.measure.sum, cell.measure.unit) });
     if (cell.measure.counted > 1) rows.push({ key: "median", label: `Median ${cell.measure.label.toLowerCase()}`, value: amount(cell.measure.median, cell.measure.unit) });
   }
   if (cell.span) {
-    rows.push({ key: "first", label: "First", value: formatDate(cell.span.first) });
-    if (cell.span.latest !== cell.span.first) rows.push({ key: "latest", label: "Latest", value: formatDate(cell.span.latest) });
+    const first = formatDate(cell.span.first);
+    const latest = formatDate(cell.span.latest);
+    rows.push({ key: "dates", label: "Dates", value: first === latest ? first : `${first} – ${latest}` });
   }
   return (
     <div data-testid="hex-card">
-      <div className="mt-2.5">
+      <p className="mt-1 text-[12.5px] text-ink-muted tabular-nums" data-testid="hex-rank">
+        {words} · ≈ {roughly(cell.areaKm2)} km²
+      </p>
+      <div className="mt-2">
         <RowList rows={rows} />
       </div>
       {cell.shares && (
@@ -488,7 +496,7 @@ export function InspectCard({
           <p className="mt-2 text-[13px] text-ink-muted">This feature has no properties beyond its shape.</p>
         )}
 
-        {coverageNote && <p className="mt-2.5 text-[12px] leading-snug text-ink-muted">{coverageNote}</p>}
+        {coverageNote && !cell && <p className="mt-2.5 text-[12px] leading-snug text-ink-muted">{coverageNote}</p>}
 
         <p className="mt-2.5 text-[12px] text-ink-muted">
           Source:{" "}

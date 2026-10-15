@@ -185,13 +185,11 @@ describe("the hex cell card (spec §12d)", () => {
     );
     const card = screen.getByTestId("hex-card");
     expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("3 power plants in this cell");
-    expect(card.textContent).toContain("1st by capacity, of 2 cells");
-    expect(card.textContent).toMatch(/Cell area≈ \d/);
-    expect(card.textContent).toContain("per km²");
+    expect(screen.getByTestId("hex-rank").textContent).toMatch(/^1st by capacity, of 2 cells · ≈ [\d,]+ km²$/);
+    expect(card.textContent).toContain("per 1,000 km²");
     expect(card.textContent).toContain("Total capacity1,130 MW");
     expect(card.textContent).toContain("Median capacity300 MW");
-    expect(card.textContent).toContain("FirstJan 1, 2006");
-    expect(card.textContent).toContain("LatestJan 1, 2021");
+    expect(card.textContent).toContain("DatesJan 1, 2006 – Jan 1, 2021");
     expect(screen.getByTestId("hex-shares").textContent).toContain("Wind 67%");
     expect(screen.queryByText("Copy GeoJSON")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Horse Hollow" }));

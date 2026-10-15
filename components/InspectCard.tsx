@@ -2,13 +2,17 @@
 
 import { NO_INSETS, safeAreaInsets, type Insets } from "@/lib/render/safeArea";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, Copy, MessageCircle, Route, X } from "lucide-react";
+import { Check, ChevronRight, Copy, MessageCircle, Route, X, ZoomIn } from "lucide-react";
 import { LegendKey } from "@/components/LegendKey";
 import { formatDate, isLineFeature, summarizeFeature } from "@/lib/render/inspect";
 import { cardContent, type CardRow } from "@/lib/render/card";
 import { InfoMark } from "@/components/FieldHelp";
+import type { BBox } from "@/layers/types";
 import type { LoadedLayer, Selection } from "@/lib/render/state";
-import type { LegendSymbol } from "@/lib/render/wally/legend";
+import { rampSamples, type LegendSymbol } from "@/lib/render/wally/legend";
+import { askAboutCellText, cellOf, rankWords, roughly, summarizeCell, type HexCellSummary } from "@/lib/render/hexCells";
+import { HEX_TILE } from "@/lib/render/palette";
+import { formatValue as formatNumber } from "@/lib/format";
 import { previewFeature } from "@/lib/render/wally/playback";
 
 type Point = { x: number; y: number };
@@ -26,6 +30,12 @@ type InspectCardProps = {
   /** Sends the "Ask about this" message; false when the chat is busy. */
   onAsk: () => boolean;
   onPreviewRoute: () => void;
+  /** A hex cell's named feature pressed: open that feature's own card. */
+  onOpenFeature?: (feature: GeoJSON.Feature) => void;
+  /** "Zoom to this cell": fit the camera to the cell. */
+  onZoomTo?: (bbox: BBox) => void;
+  /** "Ask about this cell": put the cell's words in the composer for the user to finish. */
+  onAskCell?: (text: string) => void;
 };
 
 const MAX_WIDTH = 340;
@@ -115,6 +125,101 @@ function SectionLabel({ children }: { children: string }) {
   return <p className="mt-3 mb-0.5 text-[10.5px] font-semibold tracking-[0.08em] text-ink-muted uppercase">{children}</p>;
 }
 
+/** "1,234 MW", "36 km²": a number in its unit, separators kept, a score without one. */
+function amount(value: number, unit?: string, key = "v"): string {
+  const text = formatNumber(key, value, unit, Math.abs(value) >= 100 ? 0 : 1);
+  return unit && unit !== "score" ? `${text} ${unit}` : text;
+}
+
+/** The share bar's shades: the hex tile ramp from dark grey down, so the largest part reads darkest. */
+const SHARE_SHADES = rampSamples(HEX_TILE.ramp).reverse();
+
+/**
+ * A hex cell's card (spec §12d): its area and density, its count and rank among the visible cells, the main category's
+ * shares as one bar, the measure's total and median, the time span, the top named features (each opens its own card),
+ * then "Ask about this cell" (prefills the chat with the cell's bbox and layer) and "Zoom to this cell".
+ */
+function HexCellBody({
+  cell,
+  words,
+  onOpenFeature,
+  onZoomTo,
+  onAsk,
+}: {
+  cell: HexCellSummary;
+  words: string;
+  onOpenFeature?: (feature: GeoJSON.Feature) => void;
+  onZoomTo?: (bbox: BBox) => void;
+  onAsk: () => void;
+}) {
+  const rows: CardRow[] = [
+    { key: "rank", label: "Rank", value: words },
+    { key: "area", label: "Cell area", value: `≈ ${roughly(cell.areaKm2)} km²` },
+    { key: "density", label: "Density", value: `${cell.densityPerKm2 >= 10 ? Math.round(cell.densityPerKm2).toLocaleString("en-US") : cell.densityPerKm2.toFixed(2)} per km²` },
+  ];
+  if (cell.measure) {
+    rows.push({ key: "sum", label: `Total ${cell.measure.label.toLowerCase()}`, value: amount(cell.measure.sum, cell.measure.unit) });
+    if (cell.measure.counted > 1) rows.push({ key: "median", label: `Median ${cell.measure.label.toLowerCase()}`, value: amount(cell.measure.median, cell.measure.unit) });
+  }
+  if (cell.span) {
+    rows.push({ key: "first", label: "First", value: formatDate(cell.span.first) });
+    if (cell.span.latest !== cell.span.first) rows.push({ key: "latest", label: "Latest", value: formatDate(cell.span.latest) });
+  }
+  return (
+    <div data-testid="hex-card">
+      <div className="mt-2.5">
+        <RowList rows={rows} />
+      </div>
+      {cell.shares && (
+        <div className="mt-2" data-testid="hex-shares">
+          <p className="mb-1 text-[12px] text-ink-muted">{cell.shares.label}</p>
+          <div aria-hidden className="flex h-2.5 w-full overflow-hidden rounded-[2px] border border-line">
+            {cell.shares.parts.map((p, i) => (
+              <span key={p.label} style={{ width: `${Math.max(1, p.share * 100)}%`, background: SHARE_SHADES[Math.min(i, SHARE_SHADES.length - 1)] }} />
+            ))}
+          </div>
+          <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px] text-ink">
+            {cell.shares.parts.map((p, i) => (
+              <li key={p.label} className="flex items-center gap-1 tabular-nums">
+                <span aria-hidden className="inline-block size-2 rounded-[1px] border border-line" style={{ background: SHARE_SHADES[Math.min(i, SHARE_SHADES.length - 1)] }} />
+                {p.label} {Math.round(p.share * 100)}%
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {cell.named.length > 0 && (
+        <>
+          <SectionLabel>In this cell</SectionLabel>
+          <ul className="text-[13px] leading-5" data-testid="hex-named">
+            {cell.named.map((n, i) => (
+              <li key={`${n.name}-${i}`} className="flex items-baseline justify-between gap-3 border-t border-line py-1">
+                <button type="button" onClick={() => onOpenFeature?.(n.feature)} className="dashed-link min-w-0 truncate text-left text-ink">
+                  {n.name}
+                </button>
+                {n.value && <span className="shrink-0 text-ink-muted tabular-nums">{n.value}</span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <button
+        type="button"
+        onClick={onAsk}
+        className="press mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-primary text-[14px] font-medium text-on-primary transition duration-150 ease-out hover:opacity-85"
+      >
+        <MessageCircle aria-hidden size={16} strokeWidth={2} />
+        Ask about this cell
+      </button>
+      <div className="mt-3 -mb-1.5 divide-y divide-line border-t border-line">
+        <ActionRow onClick={() => onZoomTo?.(cell.bbox)} icon={ZoomIn}>
+          Zoom to this cell
+        </ActionRow>
+      </div>
+    </div>
+  );
+}
+
 /** A white card floating at the clicked feature: what it is, its key facts, where the data came from. */
 export function InspectCard({
   selection,
@@ -125,6 +230,9 @@ export function InspectCard({
   onClose,
   onAsk,
   onPreviewRoute,
+  onOpenFeature,
+  onZoomTo,
+  onAskCell,
 }: InspectCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [anchor, setAnchor] = useState<Point | null>(() => project(selection.lngLat) ?? selection.screen ?? null);
@@ -146,6 +254,9 @@ export function InspectCard({
   const { citation, coverageNote } = layer.result;
   const line = isLineFeature(selection.feature);
   const sideB = selection.side === "b";
+  // A hex tile or column: the cell's summary instead of the feature's properties (spec §12d).
+  const origin = useMemo(() => cellOf(selection.feature), [selection.feature]);
+  const cell = useMemo(() => (origin ? summarizeCell(origin.cell, origin.cells, origin.basis, origin.ctx) : null), [origin]);
 
   // Follow the clicked point as the camera moves (including the ease onto the feature).
   useEffect(() => {
@@ -248,7 +359,7 @@ export function InspectCard({
     <div
       ref={cardRef}
       role="dialog"
-      aria-label={`${layer.title}${sideB ? " (compare side B)" : ""}: ${summary.name ?? "Feature"}`}
+      aria-label={`${layer.title}${sideB ? " (compare side B)" : ""}: ${cell ? "Hex cell" : (summary.name ?? "Feature")}`}
       tabIndex={-1}
       data-testid="inspect-card"
       data-side={sideB ? "b" : undefined}
@@ -291,7 +402,7 @@ export function InspectCard({
               )}
             </p>
             <h3 className="mt-0.5 font-serif text-[1.15rem] leading-snug font-semibold break-words text-ink">
-              {summary.name ?? "Feature"}
+              {cell && origin ? `${cell.count.toLocaleString("en-US")} ${cell.count === 1 ? "feature" : origin.ctx.noun} in this cell` : (summary.name ?? "Feature")}
             </h3>
           </div>
           <button
@@ -305,7 +416,17 @@ export function InspectCard({
           </button>
         </header>
 
-        {(summary.date || summary.estimate) && (
+        {cell && origin && (
+          <HexCellBody
+            cell={cell}
+            words={rankWords(cell, origin.ctx)}
+            onOpenFeature={onOpenFeature}
+            onZoomTo={onZoomTo}
+            onAsk={() => onAskCell?.(askAboutCellText(layer.title, layer.id, cell))}
+          />
+        )}
+
+        {!cell && (summary.date || summary.estimate) && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {summary.date && (
               <span className="rounded-pill bg-sage-tint px-2 py-0.5 text-[11.5px] font-medium text-ink tabular-nums">
@@ -319,7 +440,7 @@ export function InspectCard({
         )}
 
         {/* The measure under its own name ("Routes 5"), with its "i" when the layer explains it; never "VALUE 5". */}
-        {content.measure && (
+        {!cell && content.measure && (
           <div className="mt-3 flex items-baseline justify-between gap-3" data-testid="inspect-measure">
             <span className="flex items-center gap-1 text-[13px] text-ink-muted">
               {content.measure.label}
@@ -329,13 +450,13 @@ export function InspectCard({
           </div>
         )}
 
-        {content.facts.length > 0 && (
+        {!cell && content.facts.length > 0 && (
           <div className="mt-2.5">
             <RowList rows={content.facts} />
           </div>
         )}
 
-        {content.links.length > 0 && (
+        {!cell && content.links.length > 0 && (
           <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[12.5px]" data-testid="inspect-links">
             {content.links.map((link) => (
               <a key={link.key} href={link.url} target="_blank" rel="noreferrer" className="dashed-link text-ink">
@@ -345,14 +466,14 @@ export function InspectCard({
           </p>
         )}
 
-        {content.signals.length > 0 && (
+        {!cell && content.signals.length > 0 && (
           <>
             <SectionLabel>Signals</SectionLabel>
             <RowList rows={content.signals} />
           </>
         )}
 
-        {content.details.length > 0 && (
+        {!cell && content.details.length > 0 && (
           <details className="group mt-2">
             <summary className="cursor-pointer list-none text-[12px] font-medium text-ink-muted select-none hover:text-ink">
               <span className="inline-block transition-transform group-open:rotate-90">›</span> Details
@@ -363,7 +484,7 @@ export function InspectCard({
           </details>
         )}
 
-        {content.facts.length === 0 && content.signals.length === 0 && !content.measure && content.details.length === 0 && (
+        {!cell && content.facts.length === 0 && content.signals.length === 0 && !content.measure && content.details.length === 0 && (
           <p className="mt-2 text-[13px] text-ink-muted">This feature has no properties beyond its shape.</p>
         )}
 
@@ -383,6 +504,8 @@ export function InspectCard({
         </p>
 
         {/* Wally rows: the primary action as a 44px black button, then 44px rows split by hairlines. */}
+        {!cell && (
+        <>
         <button
           type="button"
           onClick={ask}
@@ -401,6 +524,8 @@ export function InspectCard({
             </ActionRow>
           )}
         </div>
+        </>
+        )}
       </div>
     </div>
   );

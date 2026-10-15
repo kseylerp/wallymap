@@ -11,9 +11,9 @@ import { MapControls } from "@/components/MapControls";
 import { MapPills } from "@/components/MapPills";
 import { useSuggestionsCard } from "@/components/useSuggestionsCard";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
-import { sendChat } from "@/lib/agent/chatBus";
+import { prefillChat, sendChat } from "@/lib/agent/chatBus";
 import { bboxToViewport, type Padding } from "@/lib/render/deck";
-import { askAboutText, featureBBox } from "@/lib/render/inspect";
+import { askAboutText, featureBBox, featureCenter } from "@/lib/render/inspect";
 import { usePermalink } from "@/lib/render/usePermalink";
 import { isComparable } from "@/lib/render/compareView";
 import { useTimePlay } from "@/lib/render/useTimePlay";
@@ -55,7 +55,19 @@ async function fetchCatalog(): Promise<LayerCatalog> {
     const res = await fetch("/api/layers");
     if (!res.ok) return {};
     const entries = (await res.json()) as CatalogEntry[];
-    return Object.fromEntries(entries.map((e) => [e.id, { title: e.title, style: e.style, license: e.license, ...(e.fieldHelp && { fieldHelp: e.fieldHelp }), ...(e.card && { card: e.card }) }]));
+    return Object.fromEntries(
+      entries.map((e) => [
+        e.id,
+        {
+          title: e.title,
+          style: e.style,
+          license: e.license,
+          ...(e.fieldHelp && { fieldHelp: e.fieldHelp }),
+          ...(e.card && { card: e.card }),
+          ...(e.attributes && { attributes: e.attributes }),
+        },
+      ]),
+    );
   } catch {
     // Without a catalog, layers still draw with the fallback title and style.
     return {};
@@ -200,6 +212,21 @@ export function App() {
     return sent;
   }, [selected, selectedLayer]);
 
+  // The hex card (spec §12d): a named feature opens its own card; "Zoom to this cell" fits the cell; "Ask about this
+  // cell" puts the cell's bbox and layer in the composer for the user to finish.
+  const openFeature = useCallback(
+    (feature: GeoJSON.Feature) => {
+      const at = featureCenter(feature);
+      if (!selected || !at) return;
+      dispatch({ type: "select", selection: { layerId: selected.layerId, feature, lngLat: at } });
+    },
+    [selected],
+  );
+  const zoomToCell = useCallback((bbox: [number, number, number, number]) => dispatch({ type: "fly_to", bbox }), []);
+  const askCell = useCallback((text: string) => {
+    if (prefillChat(text)) setCollapsed(false);
+  }, []);
+
   // The fallback for "Preview route" when no preview control is mounted to run one (components/InspectCard.tsx):
   // frame the whole line in the part of the map left visible.
   const previewRoute = useCallback(() => {
@@ -278,6 +305,8 @@ export function App() {
           scenarioSlot={<ScenarioScrubbers state={state} dispatch={dispatch} />}
           scenario={state.scenario}
           compare={state.compare}
+          zoom={state.viewport.zoom}
+          threeD={threeD}
         />
       </div>
 
@@ -293,6 +322,9 @@ export function App() {
           onClose={deselect}
           onAsk={askAbout}
           onPreviewRoute={previewRoute}
+          onOpenFeature={openFeature}
+          onZoomTo={zoomToCell}
+          onAskCell={askCell}
         />
       )}
 

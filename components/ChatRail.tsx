@@ -30,7 +30,7 @@ import {
 } from "@/lib/trace-timing";
 import { TopoHeartbeat } from "@/components/TopoHeartbeat";
 import { setViewFollowsInStep, toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
-import { onChatSend } from "@/lib/agent/chatBus";
+import { onChatPrefill, onChatSend } from "@/lib/agent/chatBus";
 import { answerAfterNote, noteForDisplay, notesBeforeText, stripCitationMarkers } from "@/lib/agent/dedupe";
 import { extractFollowUps } from "@/lib/agent/followups";
 import { buildChatBody, type MapView } from "@/lib/agent/view";
@@ -493,6 +493,22 @@ export function ChatRail({
         return true;
       }),
     [busy, sendMessage],
+  );
+
+  // "Ask about this cell" (the hex card): the cell's words go into the composer for the user to finish, focused.
+  useEffect(
+    () =>
+      onChatPrefill((text) => {
+        setDraft(text);
+        requestAnimationFrame(() => {
+          const input = inputRef.current;
+          if (!input) return;
+          input.focus({ preventScroll: true });
+          input.setSelectionRange(text.length, text.length);
+        });
+        return true;
+      }),
+    [],
   );
 
   // Unlike `send`, a follow-up leaves whatever the user is typing in the input. Stable while idle so the

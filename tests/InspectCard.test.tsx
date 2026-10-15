@@ -128,3 +128,77 @@ describe("InspectCard Escape", () => {
     expect(screen.queryByTestId("inspect-side")).toBeNull();
   });
 });
+
+describe("the hex cell card (spec §12d)", () => {
+  const plant = (lng: number, kind: string, v: number, name: string, t: string): GeoJSON.Feature => ({
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [lng, 32.47] },
+    properties: { name, kind, v, t },
+  });
+  const features = [
+    plant(-100.4, "wind", 300, "Roscoe Wind", "2009-01-01"),
+    plant(-100.401, "wind", 780, "Horse Hollow", "2006-01-01"),
+    plant(-100.399, "solar", 50, "Sweetwater Solar", "2021-01-01"),
+    plant(-102.5, "gas", 900, "Permian Gas", "2001-01-01"),
+  ];
+  const layer: LoadedLayer = {
+    id: "power-plants",
+    title: "Power plants",
+    style: { geometry: "point", color: "#3A3A3C", unit: "MW" },
+    attributes: [
+      { key: "kind", label: "Fuel", type: "category", levels: [{ value: "wind", label: "Wind" }, { value: "solar", label: "Solar" }, { value: "gas", label: "Natural gas" }] },
+      { key: "v", label: "Capacity", type: "measure", unit: "MW", encode: "size" },
+    ],
+    result: { kind: "geojson", data: { type: "FeatureCollection", features }, citation: { source: "EIA", url: "https://www.eia.gov", retrieved: "2026-10-15" } },
+    receivedAt: "",
+  };
+
+  it("summarises the cell, opens a named feature's own card, zooms to the cell and prefills the chat", async () => {
+    const { buildDeckLayers } = await import("@/lib/render/deck");
+    const { initialMapState } = await import("@/lib/render/state");
+    const { H3HexagonLayer } = await import("@deck.gl/geo-layers");
+    const layers = buildDeckLayers({
+      ...initialMapState,
+      viewport: { ...initialMapState.viewport, zoom: 7 },
+      layers: { "power-plants": layer },
+      renderOps: [{ layerId: "power-plants", mode: "hexbin", visible: true, hexBasis: "sum" }],
+    });
+    const tiles = layers.find((l) => l instanceof H3HexagonLayer)!;
+    const busy = (tiles.props as { data: GeoJSON.Feature[] }).data.find((h) => h.properties?.count === 3)!;
+    const onOpenFeature = vi.fn();
+    const onZoomTo = vi.fn();
+    const onAskCell = vi.fn();
+    render(
+      <InspectCard
+        selection={{ layerId: "power-plants", feature: busy, lngLat: [-100.4, 32.47], screen: { x: 500, y: 400 } }}
+        layer={layer}
+        swatch={SWATCH}
+        project={() => ({ x: 500, y: 400 })}
+        onCameraChange={() => () => {}}
+        onClose={() => {}}
+        onAsk={() => true}
+        onPreviewRoute={() => {}}
+        onOpenFeature={onOpenFeature}
+        onZoomTo={onZoomTo}
+        onAskCell={onAskCell}
+      />,
+    );
+    const card = screen.getByTestId("hex-card");
+    expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("3 power plants in this cell");
+    expect(card.textContent).toContain("1st by capacity, of 2 cells");
+    expect(card.textContent).toMatch(/Cell area≈ \d/);
+    expect(card.textContent).toContain("per km²");
+    expect(card.textContent).toContain("Total capacity1,130 MW");
+    expect(card.textContent).toContain("Median capacity300 MW");
+    expect(card.textContent).toContain("FirstJan 1, 2006");
+    expect(card.textContent).toContain("LatestJan 1, 2021");
+    expect(screen.getByTestId("hex-shares").textContent).toContain("Wind 67%");
+    expect(screen.queryByText("Copy GeoJSON")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Horse Hollow" }));
+    expect(onOpenFeature).toHaveBeenCalledWith(features[1]);
+    fireEvent.click(screen.getByRole("button", { name: /Zoom to this cell/ }));
+    expect(onZoomTo.mock.calls[0][0]).toHaveLength(4);
+    fireEvent.click(screen.getByRole("button", { name: /Ask about this cell/ }));
+    expect(onAskCell.mock.calls[0][0]).toMatch(/^In Power plants \(power-plants\) inside the hex cell bbox/);
+  });
+});

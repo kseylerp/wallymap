@@ -22,3 +22,22 @@ export function sendChat(text: string): boolean {
   for (const sender of senders) sent = sender(trimmed) || sent;
   return sent;
 }
+
+/** Puts text in the composer for the user to finish (the hex card's "Ask about this cell"); returns the unsubscribe. */
+type Filler = (text: string) => boolean;
+
+const fillers = new Set<Filler>();
+
+export function onChatPrefill(filler: Filler): () => void {
+  fillers.add(filler);
+  return () => {
+    fillers.delete(filler);
+  };
+}
+
+/** Prefills the composer with `text` and focuses it, without sending. False when no chat is mounted. */
+export function prefillChat(text: string): boolean {
+  let done = false;
+  for (const filler of fillers) done = filler(text) || done;
+  return done;
+}

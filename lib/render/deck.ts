@@ -398,7 +398,7 @@ function sizeMeasureKey(ctx: Pick<OpContext, "layer">): string | undefined {
 
 /** The measure a point layer is ranked by: "Rank by" in its row, else in a ranked view its primary measure (else `v`). */
 function rankKeyOf(op: RenderOp, ctx: Pick<OpContext, "layer">): string | undefined {
-  if (op.rankBy) return op.rankBy;
+  if (op.rankBy !== undefined) return op.rankBy === "" ? undefined : op.rankBy;
   return op.view === "ranked" ? (primaryMeasure(ctx.layer)?.key ?? "v") : undefined;
 }
 
@@ -725,12 +725,48 @@ function rankedLabelLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer
  * 1px edges, a dark grey count on a white halo on grouped tiles. A picked tile is a `HexFeature`, so the inspect card
  * shows its count.
  */
+/** Label sizes a tile tries, largest first, in CSS pixels; a label that fits none is dropped. */
+const HEX_LABEL_SIZES = [HEX_TILE.labelSize, 9] as const;
+/** About how wide one character of the tile font is, as a share of its size. */
+const HEX_LABEL_CHAR_EM = 0.62;
+
+/** The size a tile label fits at inside a cell `cellPx` across (its inner width), or 0 when it fits none. */
+export function hexLabelSize(text: string, cellPx: number): number {
+  for (const size of HEX_LABEL_SIZES) if (text.length * size * HEX_LABEL_CHAR_EM + 4 <= cellPx) return size;
+  return 0;
+}
+
+/** The labels that fit, per label list and cell width in whole pixels, so an unchanged map reuses the same list. */
+const fittedLabels = new WeakMap<HexFeature[], Map<number, { data: HexFeature[]; size: Map<HexFeature, number> }>>();
+
+function fitLabels(labelled: HexFeature[], label: (f: HexFeature) => string, cellPx: number) {
+  let byWidth = fittedLabels.get(labelled);
+  if (!byWidth) {
+    byWidth = new Map();
+    fittedLabels.set(labelled, byWidth);
+  }
+  const key = Math.round(cellPx);
+  const hit = byWidth.get(key);
+  if (hit) return hit;
+  const size = new Map<HexFeature, number>();
+  for (const f of labelled) {
+    const s = hexLabelSize(label(f), key);
+    if (s > 0) size.set(f, s);
+  }
+  const entry = { data: labelled.filter((f) => size.has(f)), size };
+  byWidth.set(key, entry);
+  return entry;
+}
+
 function hexTileLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const { data, selected: picked, zoom, terrain, deckId } = ctx;
   // Its own id (not `:points`, the symbols' IconLayer): deck must never update one layer class in place of another.
   const id = `${deckLayerKey(deckId ?? op.layerId, terrain)}:hexbin`;
   const resolution = hexResolution(zoom);
-  const { hexes, labelled, max, lo, basis, label } = binned(data, resolution, op.hexBasis, cellCtx(ctx));
+  const { hexes, labelled: all, max, lo, basis, label } = binned(data, resolution, op.hexBasis, cellCtx(ctx));
+  // A label stays inside its cell at every zoom: smaller type in a small cell, none where even that does not fit.
+  const cellPx = (1.4 * getHexagonEdgeLengthAvg(resolution, UNITS.m)) / metersPerPixel(zoom, ctx.latitude);
+  const { data: labelled, size: labelSize } = fitLabels(all, label, cellPx);
   // A tile picked at another resolution is not among these tiles: ignore it rather than fade every tile.
   const selected = picked && hexes.includes(picked as HexFeature) ? picked : undefined;
   const trigger = [selectionKey(selected), opacity, resolution, basis];
@@ -766,7 +802,7 @@ function hexTileLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       pickable: false,
       getPosition: (f) => f.geometry.coordinates as [number, number],
       getText: label,
-      getSize: HEX_TILE.labelSize,
+      getSize: (f) => labelSize.get(f) ?? HEX_TILE.labelSize,
       sizeUnits: "pixels",
       getColor: (f) => fade(f, onDark(f) ? HEX_LABEL_LIGHT : HEX_LABEL),
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",

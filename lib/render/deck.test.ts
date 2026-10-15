@@ -8,6 +8,7 @@ import {
   UnpremultiplyExtension,
   bboxToViewport,
   buildDeckLayers,
+  hexLabelSize,
   hexResolution,
   hexTileColor,
   hexToRgba,
@@ -371,11 +372,20 @@ describe("H3 tiles for dense points", () => {
     expect((p.getColor as Accessor)(dark)).toEqual(hexToRgba(OFF_WHITE));
     expect(p.outlineColor).toEqual([255, 255, 255, 230]);
     expect(p.fontSettings).toMatchObject({ sdf: true });
-    expect(p.getSize).toBe(11);
+    expect((p.getSize as (f: unknown) => number)(light)).toBe(11);
     expect(p.pickable).toBe(false);
     expect(props(buildDeckLayers(stateOf("species", dense(2001), {}, { zoom: 10 }))[1]).data).not.toBe(labelled);
     const state = stateOf("species", dense(2001), {}, { zoom: 10 });
     expect(props(buildDeckLayers(state)[1]).data).toBe(props(buildDeckLayers(state)[1]).data);
+  });
+
+  it("keeps a label inside its cell: 11px, then 9px, else none", () => {
+    expect(hexLabelSize("12", 60)).toBe(11);
+    expect(hexLabelSize("1.5k", 30)).toBe(9);
+    expect(hexLabelSize("1.5k", 20)).toBe(0);
+    // Zoomed far out, the res-3 cells at z0 are a few pixels wide: no label fits.
+    const far = buildDeckLayers(stateOf("species", dense(2001), {}, { zoom: 0 }));
+    expect((props(far[1]).data as unknown[]).length).toBe(0);
   });
 
   it("caches the binning per result and resolution", () => {

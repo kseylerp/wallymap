@@ -1,5 +1,5 @@
 import type { Feature, LineString } from "geojson";
-import type { BBox, CardSpec, FieldHelp, LayerResult, StyleHints } from "@/layers/types";
+import type { Attribute, BBox, CardSpec, FieldHelp, LayerResult, StyleHints } from "@/layers/types";
 import type { CompareSpec } from "@/lib/render/compare";
 import type { LayerFilters } from "@/lib/render/filters";
 import type { TimeIndex, TimeWindow } from "@/lib/time";
@@ -52,7 +52,26 @@ export type RenderOp = {
   filters?: LayerFilters;
   /** The standard view the layer is drawn in (spec §12): its encoding, legend wording and console controls. */
   view?: ViewKind;
+  /**
+   * The measure the layer is ranked by (spec §12c "Rank by"): a measure attribute's key. The row lists the top 10 by it
+   * and point symbols are sized by it; unset ranks nothing (a ranked view ranks by the layer's primary measure).
+   */
+  rankBy?: string;
+  /** What a hex cell's color means (spec §12d) when the layer draws as hexes or columns; unset is the count. */
+  hexBasis?: HexBasis;
 };
+
+/**
+ * A hex cell's color basis (spec §12d): `count` features in it (the default), `sum` of the layer's measure (power
+ * capacity per cell), `share:<value>` the share of one value of the layer's main category (share of sport crags), or
+ * `recency` the newest date in it.
+ */
+export type HexBasis = "count" | "sum" | "recency" | `share:${string}`;
+
+/** True for a well-formed hex basis. */
+export function isHexBasis(value: unknown): value is HexBasis {
+  return value === "count" || value === "sum" || value === "recency" || (typeof value === "string" && /^share:.+/.test(value));
+}
 
 /** The feature the user clicked: what the inspect card shows and the map highlights. */
 export type Selection = {
@@ -76,6 +95,8 @@ export type LoadedLayer = {
   fieldHelp?: Record<string, FieldHelp>;
   /** How the inspect card lays out this layer's features (layers/types.ts CardSpec), from the catalog. */
   card?: CardSpec;
+  /** The fields a person can slice the layer by (spec §12c), from the catalog: the row's controls. */
+  attributes?: Attribute[];
 };
 
 /** A route drawn Wally-style (gradient line, darts, mile markers, waypoint pins): a `route` result, a GPX, a trail. */
@@ -130,6 +151,8 @@ export type MapState = {
   place?: PlaceState;
   /** The latest camera fit the reducer asked for; the app turns it into a viewport with the panels' padding. */
   camera?: CameraRequest;
+  /** A feature the pointer is over in a layer row's top 10: the map rings it (spec §12c, synced with the map). */
+  hover?: { layerId: string; feature: Feature };
 };
 
 /** The named place of this turn: its bbox, the layers loaded for it since, and whether the camera has fitted yet. */
@@ -260,4 +283,12 @@ export type MapAction =
   /** A new answer starts: the last turn's place is forgotten, so a "here" question never moves the camera. */
   | { type: "turn_start" }
   /** Applies a standard view's preset to a drawn layer (spec §12): encoding, console, selection and camera. */
-  | { type: "set_view_kind"; layerId: string; view: ViewKind };
+  | { type: "set_view_kind"; layerId: string; view: ViewKind }
+  /** "Rank by" in the layer row: a measure's key, or undefined to rank nothing. */
+  | { type: "set_rank_by"; layerId: string; key?: string }
+  /** What a hex cell's color means for this layer. */
+  | { type: "set_hex_basis"; layerId: string; basis: HexBasis }
+  /** A feature the pointer is over in the row's top 10 (the map rings it); undefined when it leaves. */
+  | { type: "set_hover"; hover?: { layerId: string; feature: Feature } }
+  /** Fits the camera to a box (the row's top 10, a hex card's "Zoom to this cell"); `select` also opens a card. */
+  | { type: "fly_to"; bbox: BBox; select?: Selection };

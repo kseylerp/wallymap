@@ -141,34 +141,53 @@ export type StyleHints = {
    * `swatch` is the tiles' raw color, so the layer panel's key can show it through the same filter.
    */
   raster?: RasterHint | null;
-  /**
-   * The one or two attributes people filter this layer by (spec §12a), in the layer's own words: shown inline in the
-   * layer row as chips (categories) or a two-handle slider (ranges), applied through the filters engine. The first
-   * facet with an `encode` drives the map (difficulty on the sage → pink → purple line ramp). Checked at registry load
-   * (layers/facets.ts).
-   */
-  facets?: Facet[];
 };
 
 /**
- * One facet (spec §12a). `key` is the feature property it reads. A category facet lists its `values` in order (easy
- * to hard: the order is the ramp's); several values may share a label, and then one chip stands for all of them
- * (Singletrack Scale 0 and 1 are both "Easy"). A range facet reads a number in `unit`. `encode` is how the map shows it:
- * `color` (lines on the ordinal ramp, points and areas by class), `dash`, `width`, or `size` (point symbols, column
- * height, hatch density). `versions` marks a category whose values are versions of the same features (monument
- * boundaries 2021 and current): the change view compares the first value present against the last.
+ * What kind of field an attribute is (spec §12c); the type picks the control. `category`: chips with counts (a legend
+ * key toggles the same chip). `ordinal`: ordered chips on one shared band set (difficulty, grade, class, severity),
+ * drawn on the sage → pink → purple ramp. `measure`: ranked, not filtered ("Rank by", the top 10, symbol size or 3D
+ * height); presets from the source's own classes and a clickable mini histogram under More. `time`: the scrubber with
+ * presets (a numeric year gets the one two-handle slider, under More). `flag`: a toggle chip. `name`: search within the
+ * layer. `place`: "within", usually from chat.
  */
-export type Facet = {
+export type AttributeType = "category" | "ordinal" | "measure" | "time" | "flag" | "name" | "place";
+
+/**
+ * One field a person can slice the layer by (spec §12c), in the layer's own words. `key` is the feature property it
+ * reads. Category and ordinal attributes list their `levels` in order (ordinal: easy to hard, the ramp's order);
+ * several values may share a label, and then one chip stands for all of them (Singletrack Scale 0 and 1 are both
+ * "Easy"). A category without levels takes its chips from the data (species, the most common first). `multi` marks a
+ * property holding a list (a crag's disciplines): a feature matches a chip when any of its items does. `encode` is how
+ * the map shows it: `color` (lines on the ordinal ramp), `dash`, `width`, or `size` (a measure: symbol size, column
+ * height, hatch density). `versions` marks a category whose values are versions of the same features (monument
+ * boundaries 2021 and current): the change view compares the first value present against the last. `primary` picks the
+ * one chip set the row shows by default (else the first category or ordinal). Checked at registry load
+ * (layers/attributes.ts).
+ */
+export type Attribute = {
   key: string;
+  type: AttributeType;
   label: string;
-  kind: "category" | "range";
-  values?: FacetValue[];
   unit?: string;
+  /** Plain help for the field (spec §12b); defaults to the layer's fieldHelp for `key`. */
+  help?: FieldHelp;
+  levels?: AttributeLevel[];
+  /** Ordinal: the source scale the levels normalise from ("sac_scale", "YDS, UIAA, French and V-scale"). */
+  scale?: string;
+  /** Measure: presets from the source's own classes ("Class G: 5,000 acres and up"). */
+  presets?: MeasurePreset[];
+  multi?: boolean;
   encode?: "color" | "dash" | "width" | "size";
   versions?: boolean;
+  primary?: boolean;
 };
 
-export type FacetValue = { value: string | number; label: string };
+/** One chip of a category or ordinal attribute: the raw value the data holds and its plain label (and what it means). */
+export type AttributeLevel = { value: string | number; label: string; help?: string };
+
+/** A measure preset: its label in the source's words and the bounds it keeps (either may be open). */
+export type MeasurePreset = { label: string; min?: number; max?: number };
 
 /**
  * Plain help for one property the inspect card shows (spec §12b): one sentence on what it means, its unit and scale,
@@ -246,6 +265,8 @@ export type Layer<I extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawSha
   fieldHelp?: Record<string, FieldHelp>;
   /** How the inspect card lays out a feature (measure, facts, links); without it the card lists every property. */
   card?: CardSpec;
+  /** The fields a person can slice the layer by (spec §12c): each one's type picks its control in the layer row. */
+  attributes?: Attribute[];
 };
 
 /** How many times maxAreaKm2 a layer with a `wide` strategy answers by default before the hard zoom_in error. */

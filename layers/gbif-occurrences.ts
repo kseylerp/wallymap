@@ -29,7 +29,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { jsonObjectBody } from "@/lib/fetch/validate";
@@ -213,13 +213,13 @@ function isTimeout(err: unknown): boolean {
 
 const BASIS_URL = "https://docs.gbif.org/course-data-use/en/basis-of-record.html";
 
-const FACETS: Facet[] = [
-  { key: "year", label: "Year", kind: "range" },
+const ATTRIBUTES: Attribute[] = [
   {
     key: "basisOfRecord",
+    type: "category",
     label: "Record type",
-    kind: "category",
-    values: [
+    primary: true,
+    levels: [
       "human observation",
       "machine observation",
       "preserved specimen",
@@ -231,6 +231,8 @@ const FACETS: Facet[] = [
       "occurrence",
     ].map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })),
   },
+  { key: "species", type: "category", label: "Species" },
+  { key: "year", type: "time", label: "Year" },
 ];
 
 const YEAR: FieldHelp = { text: "The year the organism was seen or collected, as the record gives it." };
@@ -288,10 +290,10 @@ const gbifOccurrences = defineLayer({
     color: layerColor("gbif-occurrences"),
     heat: true,
     cluster: true,
-    facets: FACETS,
   },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

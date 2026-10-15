@@ -6,7 +6,7 @@ import { createStore } from "@/lib/render/wally/playback";
 import { currentScenarioValue, scenarioOf, scenarioTileUrl, scenarioValueText } from "@/lib/render/scenario";
 import type { TileTime } from "@/layers/types";
 import { tileUrlForTime, type TimeWindow } from "@/lib/time";
-import { versionSides, versionsFacet } from "@/lib/render/facets";
+import { versionSides, versionsAttribute } from "@/lib/render/attributes";
 
 /**
  * Compare over time, the view half (spec §7): what the map draws for the compared layer. The pure engine is
@@ -45,12 +45,12 @@ export function hasPreset(layerId: string): layerId is PresetLayer {
 }
 
 /**
- * The compare by version of a layer with a `versions` facet (monument boundaries 2021 against current), or null: the
- * earliest version present as A, the newest as B, labelled in the facet's words, delta (spec §12 change view).
+ * The compare by version of a layer with a `versions` attribute (monument boundaries 2021 against current), or null: the
+ * earliest version present as A, the newest as B, labelled in the attribute's words, delta (spec §12 change view).
  */
 export function versionCompare(layer: LoadedLayer): CompareState | null {
   if (layer.result.kind !== "geojson") return null;
-  const facet = versionsFacet(layer.style);
+  const facet = versionsAttribute(layer);
   const sides = facet ? versionSides(facet, layer.result.data) : null;
   if (!facet || !sides) return null;
   return {
@@ -65,7 +65,7 @@ export function versionCompare(layer: LoadedLayer): CompareState | null {
 }
 
 /**
- * True when a layer can be compared: GeoJSON with dated features (`t`) or two versions (a `versions` facet), or a tile
+ * True when a layer can be compared: GeoJSON with dated features (`t`) or two versions (a `versions` attribute), or a tile
  * layer that publishes `data.time` or `data.scenario`.
  */
 export function isComparable(layer: LoadedLayer): boolean {

@@ -28,7 +28,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, bboxesDisjoint, outsideUs } from "./_shared/coverage";
@@ -206,9 +206,9 @@ export function normalizeCdfw(fc: FeatureCollection): Feature<Geometry>[] {
 
 const IDS_PAGE = "https://www.fs.usda.gov/science-technology/data-tools-products/fhp-mapping-reporting/detection-surveys";
 
-const FACETS: Facet[] = [
-  { key: "treesKilled", label: "Trees killed", kind: "range", unit: "trees", encode: "size" },
-  { key: "year", label: "Year", kind: "range" },
+const ATTRIBUTES: Attribute[] = [
+  { key: "treesKilled", type: "measure", label: "Trees killed", unit: "trees", encode: "size" },
+  { key: "year", type: "time", label: "Year" },
 ];
 
 const TREES: FieldHelp = {
@@ -271,9 +271,10 @@ const treeMortality = defineLayer({
   maxAreaKm2: 20_000,
   wide: { orderBy: "trees killed, or percent dead from 2021", limit: WIDE_LIMIT, rank: "worst" },
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("tree-mortality"), fillOpacity: 0.4, facets: FACETS },
+  style: { geometry: "polygon", color: layerColor("tree-mortality"), fillOpacity: 0.4 },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

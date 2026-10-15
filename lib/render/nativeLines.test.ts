@@ -29,20 +29,27 @@ const line = (x: number, properties: Record<string, unknown> = {}): Feature => (
 const a = line(-120, { v: 0, name: "A" });
 const b = line(-119, { v: 100, name: "B" });
 
-function layerOf(id: string, features: Feature[], style: Partial<LoadedLayer["style"]> = {}): LoadedLayer {
+function layerOf(id: string, features: Feature[], style: Partial<LoadedLayer["style"]> = {}, attributes?: LoadedLayer["attributes"]): LoadedLayer {
   return {
     id,
     title: id,
+    ...(attributes && { attributes }),
     style: { geometry: "line", color: "#3A3A3C", ...style },
     result: { kind: "geojson", data: { type: "FeatureCollection", features }, citation },
     receivedAt: "2026-10-14T00:00:00Z",
   };
 }
 
-function stateOf(id: string, features: Feature[], op: Partial<RenderOp> = {}, style: Partial<LoadedLayer["style"]> = {}): MapState {
+function stateOf(
+  id: string,
+  features: Feature[],
+  op: Partial<RenderOp> = {},
+  style: Partial<LoadedLayer["style"]> = {},
+  attributes?: LoadedLayer["attributes"],
+): MapState {
   return {
     ...initialMapState,
-    layers: { [id]: layerOf(id, features, style) },
+    layers: { [id]: layerOf(id, features, style, attributes) },
     renderOps: [{ layerId: id, mode: "lines", visible: true, ...op }],
   };
 }
@@ -435,27 +442,26 @@ describe("syncLineLayers", () => {
   });
 });
 
-describe("the primary facet drives the line color (spec §12a: difficulty on the sage → pink → purple ramp)", () => {
-  const difficulty = {
-    facets: [
+describe("the encoded ordinal drives the line color (spec §12c: difficulty on the sage → pink → purple ramp)", () => {
+  const difficulty: LoadedLayer["attributes"] = [
       {
         key: "v",
         label: "Difficulty",
-        kind: "category" as const,
-        encode: "color" as const,
-        values: [
+        type: "ordinal",
+        scale: "mtb:scale",
+        encode: "color",
+        levels: [
           { value: 0, label: "Easy" },
           { value: 2, label: "Moderate" },
           { value: 3, label: "Hard" },
           { value: 5, label: "Expert" },
         ],
       },
-    ],
-  };
+  ];
   const trails = [line(-120, { v: 0 }), line(-119, { v: 3 }), line(-118, { v: 5 })];
 
-  it("matches each class to its ramp color on the facet value, and an unnamed value draws sage", () => {
-    const [entry] = lineEntries(visibleState(stateOf("mtb-trails", trails, {}, difficulty)));
+  it("matches each class to its ramp color on the ordinal value, and an unnamed value draws sage", () => {
+    const [entry] = lineEntries(visibleState(stateOf("mtb-trails", trails, {}, {}, difficulty)));
     expect(entry.look.kind).toBe("facet");
     expect(lineSourceData(entry).features.map((f) => f.properties?.fv)).toEqual(["0", "3", "5"]);
     const color = paint(byPart(lineLayerSpecs(entry), "core"))["line-color"] as unknown[];
@@ -465,10 +471,10 @@ describe("the primary facet drives the line color (spec §12a: difficulty on the
     expect(color.at(-1)).toBe(SAGE);
   });
 
-  it("follows the facet filter (only hard trails) and a color asked for still wins", () => {
-    const hard = lineEntries(visibleState(stateOf("mtb-trails", trails, { filters: { v: { include: ["3"] } } }, difficulty)));
+  it("follows the chip filter (only hard trails) and a color asked for still wins", () => {
+    const hard = lineEntries(visibleState(stateOf("mtb-trails", trails, { filters: { v: { include: ["3"] } } }, {}, difficulty)));
     expect(hard[0].data.features).toHaveLength(1);
-    const asked = lineEntries(visibleState(stateOf("mtb-trails", trails, { color: PINK }, difficulty)));
+    const asked = lineEntries(visibleState(stateOf("mtb-trails", trails, { color: PINK }, {}, difficulty)));
     expect(asked[0].look).toEqual({ kind: "solid", color: PINK });
   });
 });

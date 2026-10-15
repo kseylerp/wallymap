@@ -26,7 +26,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { PLANT_CAPACITY, nameAttribute, timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
@@ -248,14 +249,16 @@ function isTimeout(err: unknown): boolean {
   return typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
 }
 
-const FACETS: Facet[] = [
+const ATTRIBUTES: Attribute[] = [
   {
     key: "kind",
+    type: "category",
     label: "Fuel",
-    kind: "category",
-    values: FUELS.map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })),
+    levels: FUELS.map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })),
   },
-  { key: "mw", label: "Capacity", kind: "range", unit: "MW", encode: "size" },
+  { key: "v", type: "measure", label: "Capacity", unit: "MW", encode: "size", presets: PLANT_CAPACITY },
+  timeAttribute("Online"),
+  nameAttribute(),
 ];
 
 const CAPACITY: FieldHelp = {
@@ -314,9 +317,10 @@ const powerPlants = defineLayer({
   hardMaxAreaKm2: WHOLE_US_KM2,
   wide: { orderBy: "capacity in MW", limit: MAX_PLANTS },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("power-plants"), unit: "MW", extrude: "v", cluster: true, facets: FACETS },
+  style: { geometry: "point", color: layerColor("power-plants"), unit: "MW", extrude: "v", cluster: true },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const retrieved = new Date().toISOString();

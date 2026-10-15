@@ -13,7 +13,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
@@ -108,18 +109,29 @@ function timeOf(feature: Feature): number {
   return typeof t === "string" ? Date.parse(t) : -Infinity;
 }
 
-const FACETS: Facet[] = [
+const ATTRIBUTES: Attribute[] = [
   {
     key: "confidence",
+    type: "ordinal",
     label: "Confidence",
-    kind: "category",
-    values: [
+    scale: "VIIRS detection confidence (low, nominal, high); MODIS gives 0 to 100",
+    levels: [
       { value: "l", label: "Low" },
       { value: "n", label: "Nominal" },
       { value: "h", label: "High" },
     ],
   },
-  { key: "v", label: "Fire power", kind: "range", unit: "MW" },
+  { key: "v", type: "measure", label: "Fire power", unit: "MW", encode: "size" },
+  {
+    key: "daynight",
+    type: "category",
+    label: "Pass",
+    levels: [
+      { value: "D", label: "Day" },
+      { value: "N", label: "Night" },
+    ],
+  },
+  timeAttribute("Seen"),
 ];
 
 const HELP: Record<string, FieldHelp> = {
@@ -172,9 +184,10 @@ const fireDetections = defineLayer({
   maxAreaKm2: 2_000_000,
   wide: { orderBy: "detection time", rank: "newest", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("fire-detections"), unit: "MW", facets: FACETS },
+  style: { geometry: "point", color: layerColor("fire-detections"), unit: "MW" },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const key = ctx.env.FIRMS_MAP_KEY;

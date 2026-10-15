@@ -4,7 +4,7 @@ import { useRef, type KeyboardEvent, type PointerEvent } from "react";
 import { formatValue } from "@/lib/format";
 import { bucketAt } from "@/lib/render/reducer";
 import type { MapAction, TimeMode, TimeState } from "@/lib/render/state";
-import { stepLabel, stepWindow, windowLabel, type Bucket, type TimeIndex, type TimeWindow } from "@/lib/time";
+import { stepLabel, stepWindow, timePresets, windowLabel, type Bucket, type TimeIndex, type TimeWindow } from "@/lib/time";
 
 type TimeScrubberProps = {
   time: TimeState;
@@ -139,6 +139,9 @@ export function TimeScrubber({ time, dispatch, missingImage = false }: TimeScrub
   const width = ((j - i + 1) / n) * 100;
   // Tile layers alone have no features to count: every step is one image, drawn as an even bar.
   const imagesOnly = index.cadence !== undefined;
+  // Quick windows beside the scrubber (spec §12c): the last week, this year, since a decade; pressed when the window is it.
+  const presets = timePresets(index);
+  const isPreset = (w: TimeWindow) => bucketAt(index, w[0]) === i && bucketAt(index, w[1]) === j;
 
   return (
     <div role="group" aria-label="Time" data-testid="time-scrubber" onKeyDown={onKeyDown} className="px-5 pt-4 pb-3">
@@ -233,6 +236,26 @@ export function TimeScrubber({ time, dispatch, missingImage = false }: TimeScrub
         )}
         <span>{bucketName(index.buckets[n - 1].start, index.bucket)}</span>
       </div>
+
+      {presets.length > 0 && (
+        <div role="group" aria-label="Time presets" data-testid="time-presets" className="mt-2 flex flex-wrap gap-1">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              aria-pressed={isPreset(p.window)}
+              onClick={() => {
+                pause();
+                if (mode === "cumulative") setMode("slide");
+                dispatch({ type: "set_time_window", window: p.window });
+              }}
+              className="filter-chip"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="mt-2.5 flex items-center gap-2">
         <button

@@ -4,7 +4,7 @@ import type { StyleHints } from "@/layers/types";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
 import { visibleState } from "@/lib/render/view";
-import { boundsOf, changeMeasures, defaultView, rankedFilters, viewCaption, viewTarget } from "@/lib/render/views";
+import { boundsOf, changeMeasures, defaultView, rankedMeasure, viewCaption, viewTarget } from "@/lib/render/views";
 import { buildDeckLayers, lostAreas } from "@/lib/render/deck";
 import { changeText } from "@/components/CompareControl";
 
@@ -19,27 +19,25 @@ const point = (lng: number, lat: number, props: Record<string, unknown>): Featur
   properties: props,
 });
 const citation = { source: "s", url: "https://example.com", retrieved: "2026-10-14" };
-const layer = (id: string, style: StyleHints, features: Feature[]): LoadedLayer => ({
+const layer = (id: string, style: StyleHints, features: Feature[], attributes?: LoadedLayer["attributes"]): LoadedLayer => ({
   id,
   title: id,
   style,
+  ...(attributes && { attributes }),
   result: { kind: "geojson", data: { type: "FeatureCollection", features }, citation },
   receivedAt: "2026-10-14T00:00:00Z",
 });
 
-const monumentStyle: StyleHints = {
-  geometry: "polygon",
-  color: "#3A3A3C",
-  facets: [
-    { key: "kind", label: "Boundary", kind: "category", versions: true, values: [{ value: "2021", label: "2021 boundary" }, { value: "current", label: "Current boundary" }] },
-  ],
-};
+const monumentStyle: StyleHints = { geometry: "polygon", color: "#3A3A3C" };
+const monumentAttributes: LoadedLayer["attributes"] = [
+  { key: "kind", label: "Boundary", type: "category", versions: true, levels: [{ value: "2021", label: "2021 boundary" }, { value: "current", label: "Current boundary" }] },
+];
 /** Bears Ears as the monuments layer returns it: the 2021 outline (two parts) and the much smaller current one inside it. */
 const bearsEars = layer("monuments", monumentStyle, [
   area({ name: "Bears Ears", kind: "2021", areaKm2: 5678, v: 5678 }, square(-110.6, 37.0, 1.0)),
   area({ name: "Bears Ears", kind: "2021", areaKm2: 266, v: 266 }, square(-109.4, 37.6, 0.2)),
   area({ name: "Bears Ears", kind: "current", areaKm2: 487, v: 487 }, square(-110.0, 37.4, 0.3)),
-]);
+], monumentAttributes);
 
 function run(state: MapState, ...actions: MapAction[]): MapState {
   return actions.reduce(reduce, state);
@@ -119,18 +117,24 @@ describe("a named place's answer fits the returned features (spec §12)", () => 
 });
 
 describe("the ranked and detail views", () => {
-  const style: StyleHints = { geometry: "point", color: "#000", unit: "score", facets: [{ key: "hazardScore", label: "Hazard score", kind: "range", encode: "size" }] };
-  const mines = layer("uranium", style, Array.from({ length: 30 }, (_, i) => point(-109 + i / 100, 36, { name: `Mine ${i}`, hazardScore: (i + 1) * 10, v: (i + 1) * 10 })));
+  const style: StyleHints = { geometry: "point", color: "#000", unit: "score" };
+  const mines = layer(
+    "uranium",
+    style,
+    Array.from({ length: 30 }, (_, i) => point(-109 + i / 100, 36, { name: `Mine ${i}`, hazardScore: (i + 1) * 10, v: (i + 1) * 10 })),
+    [{ key: "hazardScore", label: "Hazard score", type: "measure", encode: "size" }],
+  );
 
-  it("puts the facet slider at the top ten and fits the camera to them", () => {
-    expect(rankedFilters(mines, undefined)).toEqual({ hazardScore: { range: [210, 300] } });
+  it("ranks by the measure without filtering (spec §12c) and fits the camera to the top ten", () => {
+    expect(rankedMeasure(mines)).toBe("hazardScore");
     const s = run(
       initialMapState,
       { type: "place_named", bbox: [-112, 35, -106, 38] },
       { type: "layer_loaded", layer: mines },
       { type: "render", op: { layerId: "uranium", mode: "points", visible: true, view: "ranked" } },
     );
-    expect(s.renderOps[0]).toMatchObject({ view: "ranked", filters: { hazardScore: { range: [210, 300] } } });
+    expect(s.renderOps[0]).toMatchObject({ view: "ranked", rankBy: "hazardScore" });
+    expect(s.renderOps[0].filters).toBeUndefined();
     expect(viewTarget("ranked", mines)?.[0]).toBeCloseTo(-109 + 20 / 100);
     expect(viewCaption("ranked", mines)).toBe("Symbol size: hazard score; the top 10 named");
   });
@@ -154,6 +158,18 @@ describe("the ranked and detail views", () => {
     expect(s.renderOps[0].mode).toBe("clusters");
     const heat = run(s, { type: "render", op: { layerId: "gbif", mode: "heat", visible: true, view: "density" } });
     expect(heat.renderOps[0].mode).toBe("heat");
+  });
+
+  it("draws a density view with a color basis as hex cells (spec §12d), and keeps the basis on a restyle", () => {
+    const many = layer("power-plants", { geometry: "point", color: "#000" }, Array.from({ length: 600 }, (_, i) => point(i / 1000, 0, { v: i })));
+    const s = run(
+      initialMapState,
+      { type: "layer_loaded", layer: many },
+      { type: "render", op: { layerId: "power-plants", mode: "points", visible: true, view: "density", hexBasis: "sum" } },
+    );
+    expect(s.renderOps[0]).toMatchObject({ mode: "hexbin", hexBasis: "sum" });
+    const restyled = run(s, { type: "render", op: { layerId: "power-plants", mode: "hexbin", visible: true } });
+    expect(restyled.renderOps[0].hexBasis).toBe("sum");
   });
 });
 

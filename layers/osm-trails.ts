@@ -17,9 +17,10 @@ import {
   type LayerResult,
   type QueryContext,
   type CardSpec,
-  type Facet,
+  type Attribute,
   type FieldHelp,
 } from "./types";
+import { SAC_LEVELS, SAC_SCALE, nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { overpassQuery } from "./_shared/overpass";
 import { haversineKm } from "./_shared/geo";
@@ -518,15 +519,10 @@ const SAC_LABELS: Record<(typeof SAC_SCALES)[number], string> = {
 
 const HIGHWAY_LABELS: Record<string, string> = { path: "Path", footway: "Footway", track: "Track" };
 
-const FACETS: Facet[] = [
-  {
-    key: "sac_scale",
-    label: "Difficulty",
-    kind: "category",
-    encode: "color",
-    values: SAC_SCALES.map((value) => ({ value, label: SAC_LABELS[value] })),
-  },
-  { key: "highway", label: "Kind", kind: "category", values: Object.entries(HIGHWAY_LABELS).map(([value, label]) => ({ value, label })) },
+const ATTRIBUTES: Attribute[] = [
+  { key: "sac_scale", type: "ordinal", label: "Difficulty", encode: "color", levels: SAC_LEVELS, scale: SAC_SCALE },
+  { key: "highway", type: "category", label: "Kind", levels: Object.entries(HIGHWAY_LABELS).map(([value, label]) => ({ value, label })) },
+  nameAttribute(),
 ];
 
 const ROUTE_KM: FieldHelp = {
@@ -607,9 +603,10 @@ const osmTrails = defineLayer({
   hardMaxAreaKm2: ROUTE_MAX_AREA_KM2,
   wide: { mode: "named", orderBy: "length in km", limit: MAX_ROUTES },
   input: inputSchema,
-  style: { geometry: "line", color: layerColor("osm-trails"), facets: FACETS },
+  style: { geometry: "line", color: layerColor("osm-trails") },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     // run.ts enforces the hard cap; popularity calls this query directly, so it is checked here too.

@@ -23,12 +23,13 @@ import {
   defineLayer,
   type BBox,
   type CardSpec,
-  type Facet,
+  type Attribute,
   type FieldHelp,
   type LayerError,
   type LayerResult,
   type QueryContext,
 } from "./types";
+import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { mapServerExportTileUrl } from "./_shared/arcgis-tiles";
 import { arcgisQuery } from "./_shared/arcgis";
@@ -155,9 +156,10 @@ const IUCN_NAMES: Record<string, string> = {
   VI: "VI Protected area with sustainable use of natural resources",
 };
 
-const FACETS: Facet[] = [
-  { key: "iucn", label: "IUCN category", kind: "category", values: Object.entries(IUCN_NAMES).map(([value, label]) => ({ value, label })) },
-  { key: "areaKm2", label: "Area", kind: "range", unit: "km²" },
+const ATTRIBUTES: Attribute[] = [
+  { key: "iucn", type: "category", label: "IUCN category", levels: Object.entries(IUCN_NAMES).map(([value, label]) => ({ value, label })) },
+  { key: "areaKm2", type: "measure", label: "Area", unit: "km²" },
+  nameAttribute(),
 ];
 
 const AREA: FieldHelp = {
@@ -211,9 +213,10 @@ const protectedAreasWorld = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
-  style: { geometry: "polygon", color: layerColor("protected-areas-world"), facets: FACETS },
+  style: { geometry: "polygon", color: layerColor("protected-areas-world") },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     if (bboxAreaKm2(ctx.bbox) <= FEATURES_MAX_AREA_KM2) return queryFeatures(ctx);

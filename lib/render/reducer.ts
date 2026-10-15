@@ -12,8 +12,8 @@ import {
   type Viewport,
 } from "@/lib/render/state";
 import type { BBox } from "@/layers/types";
-import { boundsOf, changeCompare, defaultView, padBBox, rankedFilters, unionBBox, viewTarget } from "@/lib/render/views";
-import { applyFilters, type LayerFilters } from "@/lib/render/filters";
+import { boundsOf, changeCompare, defaultView, padBBox, rankedMeasure, unionBBox, viewTarget } from "@/lib/render/views";
+import { applyFilters, isActiveEntry, type LayerFilters } from "@/lib/render/filters";
 import { stepWindow, timeIndex, type TimeIndex, type TimeWindow } from "@/lib/time";
 import { arrivalPitch, fitZoomOffset } from "@/lib/render/wally/terrain";
 import { WebMercatorViewport } from "@math.gl/web-mercator";
@@ -139,7 +139,7 @@ function setView(state: MapState, requested: Partial<Viewport>, fit: boolean): M
 /** The filters that restrict something (a non-empty include, or a range); undefined when none do. */
 export function activeFilters(filters: LayerFilters | undefined): LayerFilters | undefined {
   if (!filters) return undefined;
-  const kept = Object.entries(filters).filter(([, f]) => (f.include !== undefined && f.include.length > 0) || f.range !== undefined);
+  const kept = Object.entries(filters).filter(([, f]) => isActiveEntry(f));
   return kept.length > 0 ? Object.fromEntries(kept) : undefined;
 }
 
@@ -398,11 +398,16 @@ export function applyView(state: MapState, layerId: string, view: ViewKind): Map
   let op: RenderOp = { ...state.renderOps[index], view };
   let next: MapState = state;
   if (view === "ranked") {
-    const filters = rankedFilters(layer, op.filters);
-    op = filters ? { ...op, filters } : op;
+    // A measure is ranked, not filtered (spec §12c): every feature stays, sized by the measure, the top 10 listed.
+    const rankBy = op.rankBy ?? rankedMeasure(layer);
+    if (rankBy) op = { ...op, rankBy };
     if (layer.style.geometry === "point" && op.mode !== "points") op = { ...op, mode: "points" };
   }
-  if (view === "density" && layer.style.geometry === "point" && op.mode !== "heat" && op.mode !== "clusters") op = { ...op, mode: "clusters" };
+  if (view === "density" && layer.style.geometry === "point") {
+    // A colour basis asked for (spec §12d: "where is most of the capacity") draws hex cells; else clusters, or heat.
+    if (op.hexBasis && op.mode !== "hexbin" && op.mode !== "columns") op = { ...op, mode: "hexbin" };
+    else if (!op.hexBasis && op.mode !== "heat" && op.mode !== "clusters" && op.mode !== "hexbin") op = { ...op, mode: "clusters" };
+  }
   next = { ...next, renderOps: next.renderOps.map((o, i) => (i === index ? op : o)) };
   if (view === "change" && next.compare?.layerId !== layerId) {
     const compare = changeCompare(layer);
@@ -488,6 +493,8 @@ function reduceAction(state: MapState, action: MapAction): MapState {
                     ...op,
                     opacity: op.opacity ?? old.opacity,
                     filters: op.filters !== undefined ? activeFilters(op.filters) : old.filters,
+                    ...((op.rankBy ?? old.rankBy) && { rankBy: op.rankBy ?? old.rankBy }),
+                    ...((op.hexBasis ?? old.hexBasis) && { hexBasis: op.hexBasis ?? old.hexBasis }),
                   }
                 : old,
             );
@@ -524,6 +531,22 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       }));
       return next !== state && action.mode === "heat" ? { ...next, selected: dropSelectionOf(next, action.layerId) } : next;
     }
+    case "set_rank_by":
+      return updateOp(state, action.layerId, (op) => {
+        const { rankBy: _old, ...rest } = op;
+        void _old;
+        return action.key ? { ...rest, rankBy: action.key } : rest;
+      });
+    case "set_hex_basis":
+      return updateOp(state, action.layerId, (op) => ({ ...op, hexBasis: action.basis }));
+    case "set_hover":
+      if (state.hover?.feature === action.hover?.feature && state.hover?.layerId === action.hover?.layerId) return state;
+      return action.hover ? { ...state, hover: action.hover } : { ...state, hover: undefined };
+    case "fly_to": {
+      // An explicit click (the row's top 10, "Zoom to this cell"): the one camera move a click makes besides arrival.
+      const camera = { bbox: padBBox(action.bbox), seq: (state.camera?.seq ?? 0) + 1 };
+      return { ...state, camera, ...(action.select && { selected: action.select }) };
+    }
     case "set_filters":
       return updateOp(state, action.layerId, (op) => {
         const { filters: _old, ...rest } = op;
@@ -552,6 +575,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
           renderOps: state.renderOps.filter((op) => op.layerId !== action.layerId),
           errors: state.errors.filter((e) => e.layerId !== action.layerId),
           selected: dropSelectionOf(state, action.layerId),
+          hover: state.hover?.layerId === action.layerId ? undefined : state.hover,
           compare: dropCompareOf(state, action.layerId),
           scenario: dropScenarioOf(state, action.layerId),
           // The last layer gone ends the conversation's map: a time window still waiting for a dated layer is dropped
@@ -569,6 +593,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
         renderOps: [],
         errors: [],
         selected: undefined,
+        hover: undefined,
         playback: undefined,
         time: undefined,
         pendingTime: undefined,

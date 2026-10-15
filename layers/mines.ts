@@ -24,7 +24,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -201,19 +202,22 @@ export function normalizeUsmin(fc: FeatureCollection): Feature<Point>[] {
   return out;
 }
 
-const FACETS: Facet[] = [
+const ATTRIBUTES: Attribute[] = [
   {
     key: "kind",
+    type: "category",
     label: "Commodity",
-    kind: "category",
-    values: Object.keys(COMMODITY_CODES).map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })),
+    levels: Object.keys(COMMODITY_CODES).map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })),
   },
   {
     key: "status",
+    type: "ordinal",
     label: "Status",
-    kind: "category",
-    values: ["Occurrence", "Prospect", "Past Producer", "Producer", "Plant", "Unknown"].map((value) => ({ value, label: value })),
+    scale: "USGS MRDS development status (occurrence to producer)",
+    levels: ["Occurrence", "Prospect", "Past Producer", "Producer", "Plant", "Unknown"].map((value) => ({ value, label: value })),
   },
+  { key: "source", type: "category", label: "Record" },
+  nameAttribute(),
 ];
 
 const MRDS_URL_PAGE = "https://mrdata.usgs.gov/mrds/";
@@ -275,9 +279,10 @@ const mines = defineLayer({
       .default("both")
       .describe("Which record: 'mrds' (deposits with commodities), 'usmin' (mine symbols from topographic maps) or 'both' (default)."),
   }),
-  style: { geometry: "point", color: layerColor("mines"), cluster: true, facets: FACETS },
+  style: { geometry: "point", color: layerColor("mines"), cluster: true },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

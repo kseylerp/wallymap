@@ -14,7 +14,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { PISTE_LEVELS, PISTE_SCALE, nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { overpassCounts, overpassQuery } from "./_shared/overpass";
 import { buildNamedGeometryQuery, buildNamedScanQuery, longestNamedFirst, pickNamedByLength } from "./osm-trails";
@@ -190,7 +191,6 @@ async function queryWide(ctx: QueryContext, input: SkiInput): Promise<LayerResul
   };
 }
 
-const RANK_LABELS: Record<number, string> = { 1: "Easy", 2: "Easy", 3: "Moderate", 4: "Hard", 5: "Expert", 6: "Expert" };
 const KIND_LABELS: Record<string, string> = { downhill: "Downhill", nordic: "Nordic", skitour: "Ski touring", sled: "Sled", route: "Route" };
 const DIFFICULTY_LABELS: Record<string, string> = {
   novice: "Novice",
@@ -202,15 +202,11 @@ const DIFFICULTY_LABELS: Record<string, string> = {
   extreme: "Extreme",
 };
 
-const FACETS: Facet[] = [
-  {
-    key: "v",
-    label: "Difficulty",
-    kind: "category",
-    encode: "color",
-    values: [1, 2, 3, 4, 5, 6].map((value) => ({ value, label: RANK_LABELS[value] })),
-  },
-  { key: "kind", label: "Kind", kind: "category", values: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+const ATTRIBUTES: Attribute[] = [
+  { key: "v", type: "ordinal", label: "Difficulty", encode: "color", levels: PISTE_LEVELS, scale: PISTE_SCALE },
+  { key: "kind", type: "category", label: "Kind", levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+  { key: "lit", type: "flag", label: "Lit at night" },
+  nameAttribute(),
 ];
 
 const HELP: Record<string, FieldHelp> = {
@@ -279,9 +275,10 @@ const skiRoutes = defineLayer({
   maxAreaKm2: 2500,
   wide: { mode: "named", orderBy: "length in km", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "line", color: layerColor("ski-routes"), facets: FACETS },
+  style: { geometry: "line", color: layerColor("ski-routes") },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     if (ctx.wide === true) return queryWide(ctx, input);

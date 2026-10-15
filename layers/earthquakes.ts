@@ -16,7 +16,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { QUAKE_MAGNITUDE, nameAttribute, timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
@@ -114,9 +115,12 @@ export function normalizeEarthquakes(raw: unknown[]): FeatureCollection<Point> {
   return { type: "FeatureCollection", features };
 }
 
-const FACETS: Facet[] = [
-  { key: "v", label: "Magnitude", kind: "range", unit: "M", encode: "size" },
-  { key: "depthKm", label: "Depth", kind: "range", unit: "km" },
+const ATTRIBUTES: Attribute[] = [
+  { key: "v", type: "measure", label: "Magnitude", unit: "M", encode: "size", presets: QUAKE_MAGNITUDE },
+  { key: "depthKm", type: "measure", label: "Depth", unit: "km" },
+  { key: "kind", type: "category", label: "Kind" },
+  timeAttribute("When"),
+  nameAttribute("Place", "place"),
 ];
 
 const HELP: Record<string, FieldHelp> = {
@@ -172,9 +176,10 @@ const earthquakes = defineLayer({
   maxAreaKm2: 5_000_000,
   wide: { orderBy: "magnitude", rank: "strongest", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("earthquakes"), unit: "M", extrude: "v", heat: true, facets: FACETS },
+  style: { geometry: "point", color: layerColor("earthquakes"), unit: "M", extrude: "v", heat: true },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     // Wide (over 5,000,000 km², up to the hard cap): the strongest events, capped at the strategy's limit, plus a count.

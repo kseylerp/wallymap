@@ -1,6 +1,6 @@
 import type { Geometry, GeoJsonProperties, Position } from "geojson";
-import type { BBox, Citation, FieldHelp, LayerError, LayerResult, StyleHints, TileTime } from "@/layers/types";
-import { declaredGroups, facetValueKey } from "@/lib/render/facets";
+import type { Attribute, BBox, Citation, FieldHelp, LayerError, LayerResult, StyleHints, TileTime } from "@/layers/types";
+import { attributeGroups, declaredGroups, isChipAttribute } from "@/lib/render/attributes";
 import { formatValue } from "@/lib/format";
 
 /** The key the few sample features go under, so the model reads them as examples and never quotes them as the range. */
@@ -62,19 +62,26 @@ export type GeojsonSummary = {
   truncated?: true;
   /** With truncated: what was ranked out and how the kept features were chosen; the note says so in one clause. */
   rankedOut?: string;
-  /** The layer's facets (spec §12a): the property render.filters takes, and each label's values with its count here. */
-  facets?: FacetSummary[];
+  /**
+   * The layer's attributes (spec §12c): the property render.filters takes, its type, and for chips each label's raw
+   * values with its count here, so "only sport crags" becomes { disciplines: { include: ["sport"] } }.
+   */
+  attributes?: AttributeSummary[];
   /** What the layer's numbers and codes mean (spec §12b), by property: the note explains a score in these words. */
   help?: Record<string, string>;
 };
 
-/** A facet as the model sees it: `values` maps each chip label to the raw values render.filters includes. */
-export type FacetSummary = {
+/** An attribute as the model sees it: `values` maps each chip label to the raw values render.filters includes. */
+export type AttributeSummary = {
   key: string;
   label: string;
-  kind: "category" | "range";
+  type: Attribute["type"];
   values?: { label: string; include: string[]; count: number }[];
   unit?: string;
+  /** Ordinal: the source scale the chips normalise from. */
+  scale?: string;
+  /** Measure: the presets as render.filters ranges. */
+  presets?: { label: string; range: [number | null, number | null] }[];
 };
 
 export type TilesSummary = {
@@ -372,34 +379,38 @@ export function drawnYearsOf(url: string): string | undefined {
   return start === end ? start : `${start}-${end}`;
 }
 
-/** What the summary reads from a layer's style: v's unit, the date field and the geometry. */
-export type SummaryStyle = Partial<Pick<StyleHints, "unit" | "timeField" | "geometry" | "facets">>;
+/** What the summary reads from a layer's style (v's unit, the date field, the geometry) and its attributes. */
+export type SummaryStyle = Partial<Pick<StyleHints, "unit" | "timeField" | "geometry">> & { attributes?: Attribute[] };
 
-/** The facets of a result: category labels with the raw values they stand for and their counts (zero counts left out). */
-function facetSummaries(style: SummaryStyle, features: { properties: GeoJsonProperties }[]): FacetSummary[] | undefined {
-  const facets = style.facets ?? [];
-  if (facets.length === 0) return undefined;
-  return facets.map((facet): FacetSummary => {
-    const base = { key: facet.key, label: facet.label, kind: facet.kind, ...(facet.unit && { unit: facet.unit }) };
-    if (facet.kind !== "category") return base;
-    const counts = new Map<string, number>();
-    for (const f of features) {
-      const key = facetValueKey(f.properties?.[facet.key]);
-      if (key !== undefined) counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    // Every declared label, even one with no features here: the model must know Hard is 3 when only easy trails came back.
-    const values = declaredGroups(facet).map((g) => ({ label: g.label, include: g.values, count: g.values.reduce((n, v) => n + (counts.get(v) ?? 0), 0) }));
+/**
+ * The attributes of a result: chip labels with the raw values they stand for and their counts (every declared label,
+ * even one with no features here: the model must know Hard is 3 when only easy trails came back), measures with their
+ * presets, and the other types by key and label.
+ */
+function attributeSummaries(style: SummaryStyle, features: { properties: GeoJsonProperties }[]): AttributeSummary[] | undefined {
+  const attributes = style.attributes ?? [];
+  if (attributes.length === 0) return undefined;
+  const data = { type: "FeatureCollection" as const, features: features as GeoJSON.Feature[] };
+  return attributes.map((a): AttributeSummary => {
+    const base: AttributeSummary = { key: a.key, label: a.label, type: a.type, ...(a.unit && { unit: a.unit }), ...(a.scale && { scale: a.scale }) };
+    if (a.type === "measure" && a.presets?.length) return { ...base, presets: a.presets.map((p) => ({ label: p.label, range: [p.min ?? null, p.max ?? null] })) };
+    if (a.type === "flag") return { ...base, values: [{ label: a.label, include: ["true"], count: features.filter((f) => f.properties?.[a.key] === true).length }] };
+    if (!isChipAttribute(a)) return base;
+    const counted = attributeGroups(a, data);
+    const declared = declaredGroups(a);
+    const values = declared.length
+      ? declared.map((g) => ({ label: g.label, include: g.values, count: counted.find((c) => c.label === g.label)?.count ?? 0 }))
+      : counted.map((g) => ({ label: g.label, include: g.values, count: g.count }));
     return { ...base, values };
   });
 }
 
-/** Help for `v` and the facet keys, as one line each: the sentence, then its scale and source. */
+/** Help for `v` and the attribute keys, as one line each: the sentence, then its scale and source. */
 function helpLines(help: Record<string, FieldHelp> | undefined, style: SummaryStyle): Record<string, string> | undefined {
-  if (!help) return undefined;
-  const keys = new Set(["v", ...(style.facets ?? []).map((f) => f.key)]);
+  const keys = new Set(["v", ...(style.attributes ?? []).map((a) => a.key)]);
   const out: Record<string, string> = {};
   for (const key of keys) {
-    const h = help[key];
+    const h = style.attributes?.find((a) => a.key === key)?.help ?? help?.[key];
     if (!h) continue;
     out[key] = [h.text, h.scale && `Scale: ${h.scale}.`, h.source && `Source: ${h.source}.`].filter(Boolean).join(" ");
   }
@@ -465,7 +476,7 @@ export function summarizeLayerResult(
   const polygons = (geometryTypes.Polygon ?? 0) + (geometryTypes.MultiPolygon ?? 0);
   const totalLengthKm = lines > 0 ? round(features.reduce((km, f) => km + lineLengthKm(f.geometry), 0)) : undefined;
   const areaUnit = style.unit !== undefined && AREA_UNITS.has(style.unit) ? style.unit : undefined;
-  const facets = facetSummaries(style, features);
+  const attributes = attributeSummaries(style, features);
   const help = helpLines(fieldHelp, style);
   return {
     kind: "geojson",
@@ -481,7 +492,7 @@ export function summarizeLayerResult(
     citation: body.citation,
     ...(body.coverageNote !== undefined && { coverageNote: body.coverageNote }),
     ...truncationOf(body),
-    ...(facets !== undefined && { facets }),
+    ...(attributes !== undefined && { attributes }),
     ...(help !== undefined && { help }),
   };
 }

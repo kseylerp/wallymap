@@ -1,7 +1,7 @@
 import type { Feature, FeatureCollection } from "geojson";
 import type { BBox } from "@/layers/types";
 import { defaultCompare, versionCompare } from "@/lib/render/compareView";
-import { extentOf, facetsOf, measureKeyOf, topFeatures, versionSides, versionsFacet } from "@/lib/render/facets";
+import { attributeFor, measureKeyOf, primaryMeasure, topFeatures, versionSides, versionsAttribute } from "@/lib/render/attributes";
 import { applyFilters, type LayerFilters } from "@/lib/render/filters";
 import { featureBBox } from "@/lib/render/inspect";
 import { scenarioOf } from "@/lib/render/scenario";
@@ -15,7 +15,7 @@ import type { CompareState, LoadedLayer, ViewKind } from "@/lib/render/state";
 
 /** More points than this read as a density question (clusters by default). */
 export const DENSITY_MIN_POINTS = 500;
-/** A ranked view keeps the top N on the facet slider and labels them. */
+/** A ranked view lists the top N in the layer row and labels them on the map. */
 export const RANKED_TOP_N = 10;
 /** How many of the ranked top features get a name label on the map. */
 export const RANKED_LABELS = 6;
@@ -42,7 +42,7 @@ function twoSets(data: FeatureCollection): boolean {
 
 /**
  * The view a layer's data asks for when the agent named none: one feature is a detail; a scenario tile layer a
- * scenario; two versions of the same features (a `versions` facet, monument boundaries) or exactly two dates of several features each a change;
+ * scenario; two versions of the same features (a `versions` attribute, monument boundaries) or exactly two dates of several features each a change;
  * other dated features a timeline; more than 500 points a density. Undefined when nothing stands out (the layer then
  * draws as it always has). Ranked needs the user's superlative words, so only the agent names it.
  */
@@ -52,7 +52,7 @@ export function defaultView(layer: LoadedLayer, filters?: LayerFilters): ViewKin
   const n = data.features.length;
   if (n === 0) return undefined;
   if (n === 1) return "detail";
-  const versions = versionsFacet(layer.style);
+  const versions = versionsAttribute(layer);
   if (versions && versionSides(versions, data)) return "change";
   if (twoSets(data)) return "change";
   if (dates(data).size >= 2) return "timeline";
@@ -101,15 +101,15 @@ export function viewTarget(view: ViewKind | undefined, layer: LoadedLayer, filte
   if (layer.result.kind !== "geojson") return null;
   const data = filters ? applyFilters(layer.result.data, filters) : layer.result.data;
   if (view === "ranked") {
-    const top = topFeatures(data, measureKeyOf(layer.style), RANKED_TOP_N);
+    const top = topFeatures(data, measureKeyOf(layer), RANKED_TOP_N);
     if (top.length > 0) return boundsOf(top);
   }
   return boundsOf(data.features);
 }
 
 /**
- * The compare a change view opens: for a `versions` facet, the earliest version present against the newest, by version
- * (`by`), labelled in the facet's words; for dated features, the layer's own default compare (its preset, or the span
+ * The compare a change view opens: for a `versions` attribute, the earliest version present against the newest, by
+ * version (`by`), labelled in the attribute's words; for dated features, the layer's own default compare (its preset, or the span
  * cut in two halves). Delta, so lost and gained show on one map. Null when the layer has neither.
  */
 export function changeCompare(layer: LoadedLayer, today: Date = new Date()): CompareState | null {
@@ -125,25 +125,21 @@ export function changeCompare(layer: LoadedLayer, today: Date = new Date()): Com
   return layer.result.kind === "tiles" ? compare : { ...compare, mode: "delta" };
 }
 
-/** The filters for a ranked view: the layer's measure from its N-th largest value up (none when N or fewer features). */
-export function rankedFilters(layer: LoadedLayer, filters: LayerFilters | undefined, n: number = RANKED_TOP_N): LayerFilters | undefined {
-  if (layer.result.kind !== "geojson") return filters;
-  const key = measureKeyOf(layer.style);
-  // A class (Singletrack Scale) is not a magnitude: a ranked view of it keeps every feature.
-  if (facetsOf(layer.style).some((f) => f.key === key && f.kind === "category")) return filters;
-  const data = filters ? applyFilters(layer.result.data, { ...filters, [key]: { ...filters[key], range: undefined } }) : layer.result.data;
-  const top = topFeatures(data, key, n);
-  const extent = extentOf(data, key);
-  if (top.length < n || !extent || data.features.length <= n) return filters;
-  const threshold = Number(top[top.length - 1].properties?.[key]);
-  if (!Number.isFinite(threshold) || threshold <= extent[0]) return filters;
-  const { include } = filters?.[key] ?? {};
-  return { ...filters, [key]: { ...(include && { include }), range: [threshold, extent[1]] } };
+/**
+ * The measure a ranked view ranks by (spec §12c: ranked, not filtered): the layer's primary measure, else `v` when the
+ * features carry one; undefined for a layer with nothing to rank (a class is not a magnitude).
+ */
+export function rankedMeasure(layer: LoadedLayer): string | undefined {
+  const measure = primaryMeasure(layer);
+  if (measure) return measure.key;
+  if (attributeFor(layer, "v")) return undefined;
+  if (layer.result.kind !== "geojson") return undefined;
+  return layer.result.data.features.some((f) => typeof f.properties?.v === "number") ? "v" : undefined;
 }
 
 /** The legend's sentence for a view: what the encoding means, in words (spec §12: "what pink means in this view"). */
-export function viewCaption(view: ViewKind | undefined, layer: LoadedLayer, compare?: CompareState): string | undefined {
-  const measure = facetsOf(layer.style).find((f) => f.key === measureKeyOf(layer.style));
+export function viewCaption(view: ViewKind | undefined, layer: LoadedLayer, compare?: CompareState, hexes?: string): string | undefined {
+  const measure = attributeFor(layer, measureKeyOf(layer));
   const measureWord = (measure?.label ?? "value").toLowerCase();
   switch (view) {
     case "change": {
@@ -153,10 +149,11 @@ export function viewCaption(view: ViewKind | undefined, layer: LoadedLayer, comp
       return `Pink hatch: only ${a.toLowerCase()} · purple: ${b.toLowerCase()} · grey: both`;
     }
     case "ranked":
-      if (measure?.kind === "category") return undefined;
+      if (measure && measure.type !== "measure") return undefined;
       return layer.style.geometry === "point" ? `Symbol size: ${measureWord}; the top ${RANKED_TOP_N} named` : `Top ${RANKED_TOP_N} by ${measureWord}`;
     case "density":
-      return "Clusters count the features near each other; zoom in to split them";
+      // Hex cells say what their color means and how big they are (spec §12d).
+      return hexes ?? "Clusters count the features near each other; zoom in to split them";
     case "timeline":
       return "Features show inside the time window above";
     case "detail":
@@ -172,17 +169,17 @@ export type ChangeMeasures = { a: ChangeSide; b: ChangeSide; key?: string; label
 
 /**
  * Both sides' numbers for the change view's legend (spec §12: "states both values and the difference"): the area in
- * km² when features carry `areaKm2`, else the layer's measure (its range facet, else `v` in the layer's unit), else the
- * counts alone.
+ * km² when features carry `areaKm2`, else the layer's measure (its primary measure, else `v` in the layer's unit), else
+ * the counts alone.
  */
 export function changeMeasures(layer: LoadedLayer, a: FeatureCollection, b: FeatureCollection): ChangeMeasures {
   const all = [...a.features, ...b.features];
   const has = (key: string) => all.some((f) => typeof f.properties?.[key] === "number");
-  const facet = facetsOf(layer.style).find((f) => f.kind === "range");
+  const measure = primaryMeasure(layer);
   const pick = has("areaKm2")
     ? { key: "areaKm2", label: "Area", unit: "km²" }
-    : facet && has(facet.key)
-      ? { key: facet.key, label: facet.label, unit: facet.unit }
+    : measure && has(measure.key)
+      ? { key: measure.key, label: measure.label, unit: measure.unit }
       : has("v")
         ? { key: "v", label: "Value", unit: layer.style.unit }
         : undefined;

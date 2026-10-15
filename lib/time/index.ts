@@ -348,3 +348,35 @@ export function windowLabel(window: TimeWindow, bucket: Bucket): string {
   };
   return `${fmt(window[0])} – ${fmt(window[1])}`;
 }
+
+/** A quick window beside the scrubber (spec §12c time presets): its words and the window it sets. */
+export type TimePreset = { label: string; window: TimeWindow };
+
+const MAX_PRESETS = 4;
+
+/**
+ * The presets that narrow this index's span and still hold data, finest first, ending at the span's end: the last 24
+ * hours, 7 and 30 days for a short span; this year for a few years; since a decade for a long one. `now` anchors the
+ * relative ones (tests pass a clock).
+ */
+export function timePresets(index: TimeIndex, now: number = Date.now()): TimePreset[] {
+  if (index.buckets.length < 2) return [];
+  const lo = Date.parse(index.buckets[0].start);
+  const end = index.buckets[index.buckets.length - 1].end;
+  const hi = Date.parse(end);
+  const out: TimePreset[] = [];
+  const add = (label: string, start: number) => {
+    if (start > lo && start < hi && out.length < MAX_PRESETS) out.push({ label, window: [new Date(start).toISOString(), end] });
+  };
+  const span = hi - lo;
+  if (span <= 120 * DAY_MS) {
+    add("Last 24 hours", now - DAY_MS);
+    add("Last 7 days", now - 7 * DAY_MS);
+    add("Last 30 days", now - 30 * DAY_MS);
+  }
+  const year = new Date(now).getUTCFullYear();
+  add("This year", Date.UTC(year, 0, 1));
+  if (span > 3 * 365 * DAY_MS) add(`Since ${year - 5}`, Date.UTC(year - 5, 0, 1));
+  for (const decade of [2020, 2010, 2000, 1990, 1980]) if (decade < year - 5) add(`Since ${decade}`, Date.UTC(decade, 0, 1));
+  return out;
+}

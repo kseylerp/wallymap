@@ -170,7 +170,7 @@ export function isLineFeature(feature: Feature): boolean {
 /* ---------- Friendly property display ---------- */
 
 /** Keys the card shows elsewhere (title, chip, value, signals) rather than as plain rows. */
-const SPECIAL_KEYS = new Set(["name", "t", "v", "signals", "popularityNote", "tallest", "aggregate"]);
+const SPECIAL_KEYS = new Set(["name", "t", "v", "signals", "popularityNote", "tallest", "aggregate", "stack"]);
 /** Identifiers and links: real but rarely what a reader wants first, so they go under "Details". */
 const DETAIL_KEY = /^(id|fid|gid|ref|h3|wikidata|wikipedia|osm_?id|osm_?type|objectid|globalid|irwinid|uuid)$|(_id|Id|ID)$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:[T ][\d:.]+Z?)?$/;

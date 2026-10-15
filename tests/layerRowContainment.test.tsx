@@ -26,6 +26,7 @@ function loaded(id: string, title: string, features: GeoJSON.Feature[], coverage
     title,
     style: layer.style,
     fieldHelp: layer.fieldHelp,
+    attributes: layer.attributes,
     result: { kind: "geojson", data: { type: "FeatureCollection", features }, citation, ...(coverageNote && { coverageNote }) },
     receivedAt: "2026-10-14T00:00:00Z",
   } as LoadedLayer;
@@ -42,11 +43,29 @@ const line = (i: number, properties: Record<string, unknown>): GeoJSON.Feature =
   properties: { name: `Trail ${i}`, ...properties },
 });
 const kinds = ["crag", "boulder", "area"];
+const disciplines = [["sport"], ["trad"], ["sport", "trad"], ["boulder"], ["toprope", "sport"]];
+const bands = [["beginner", "intermediate"], ["intermediate", "advanced"], ["advanced", "elite"], ["beginner"]];
 const climbing = loaded(
   "climbing",
   "Climbing areas and crags of the Red River Gorge Geological Area, Daniel Boone National Forest",
-  Array.from({ length: 280 }, (_, i) => point(i, { v: 2 + Math.round((108 * i * i) / (279 * 279)), kind: kinds[i % 3] })),
+  Array.from({ length: 280 }, (_, i) =>
+    point(i, {
+      name: i % 7 === 0 ? `The Motherlode and the Bob Marley Crag at Muir Valley Nature Preserve ${i}` : `Feature ${i}`,
+      v: 2 + Math.round((108 * i * i) / (279 * 279)),
+      kind: kinds[i % 3],
+      disciplines: disciplines[i % 5],
+      gradeBands: bands[i % 4],
+      ...(i % 9 === 0 && { fee: true }),
+    }),
+  ),
   "OpenBeta areas merged with OpenStreetMap climbing nodes inside the view; counts are crowd-sourced",
+);
+const plants = loaded(
+  "power-plants",
+  "Power plants",
+  Array.from({ length: 2500 }, (_, i) =>
+    point(i, { v: 1 + ((i * 37) % 900), kind: ["wind", "solar", "natural gas", "nuclear"][i % 4], t: `${2000 + (i % 25)}-01-01` }),
+  ).map((f, i) => ({ ...f, geometry: { type: "Point" as const, coordinates: [-102 + (i % 50) * 0.08, 31 + Math.floor(i / 50) * 0.06] } })),
 );
 const mtb = loaded(
   "mtb-trails",
@@ -63,11 +82,19 @@ const fires = loaded(
 );
 const state: MapState = {
   ...initialMapState,
-  layers: { climbing, "mtb-trails": mtb, "fire-perimeters": fires },
+  layers: { climbing, "mtb-trails": mtb, "fire-perimeters": fires, "power-plants": plants },
   renderOps: [
+    { layerId: "power-plants", mode: "hexbin", visible: true, hexBasis: "share:wind", filters: { kind: { include: ["wind"] } } },
     { layerId: "fire-perimeters", mode: "polygons", visible: true, filters: { year: { range: [2016, 2024] } } },
     { layerId: "mtb-trails", mode: "lines", visible: false, filters: { v: { include: ["4", "5"] } } },
-    { layerId: "climbing", mode: "points", visible: true, opacity: 0.8, filters: { v: { range: [10, 110] } } },
+    {
+      layerId: "climbing",
+      mode: "points",
+      visible: true,
+      opacity: 0.8,
+      rankBy: "v",
+      filters: { v: { range: [10, 110] }, disciplines: { include: ["sport"] }, name: { match: "Muir" } },
+    },
   ],
 };
 
@@ -81,6 +108,8 @@ const markup = renderToStaticMarkup(
     onOpenChange={() => {}}
     shownLayers={visibleState(state).layers}
     selectedLayerId="climbing"
+    zoom={9}
+    expandAttributes
   />,
 );
 
@@ -136,7 +165,7 @@ function audit(): { panelWidth: number; problems: Problem[]; titles: string[]; s
   return {
     panelWidth: Math.round(p.width),
     problems,
-    titles: [...panel.querySelectorAll("[title]")].filter((el) => !el.classList.contains("info-mark") && !el.closest('[data-testid="facet-controls"]')).map(name),
+    titles: [...panel.querySelectorAll("[title]")].filter((el) => !el.classList.contains("info-mark") && !el.closest('[data-testid="attribute-controls"]')).map(name),
     segments: shown('[data-testid="mode-control"]'),
     select: shown('[data-testid="mode-select"]'),
   };
@@ -174,7 +203,15 @@ describe("the layer row stays inside the panel (real layout, headless Chromium)"
 
   it("renders the row's parts in order with the counts and readouts in words", () => {
     const text = markup.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-    expect(text).toContain("206 of 280");
+    // Every control of spec §12c is on screen: the chip set, Rank by and its top 10, the grade bands, the measure's
+    // histogram, the flag, the name search, a year's range, the hex basis and its sentence; no other two-handle slider.
+    for (const part of ["Discipline", "Rank by", "Grade", "Beginner", "Fee charged", "Search name", "Darker cells", "Share wind", "Each cell ≈"]) {
+      expect(text, part).toContain(part);
+    }
+    expect(markup).toContain('data-testid="top-list"');
+    expect(markup).toContain('data-testid="measure-histogram"');
+    expect(markup.match(/aria-label="[^"]* from"/g)).toEqual(['aria-label="Year from"']);
+    expect(text).toMatch(/\d+ of 280/);
     expect(text).toContain("Opacity for Climbing");
     expect(text).toContain("80%");
     expect(text.indexOf("Routes")).toBeLessThan(text.indexOf("Show as"));

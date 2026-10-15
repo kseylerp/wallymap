@@ -22,7 +22,7 @@ export type CardContent = {
 };
 
 /** Keys the card never lists as a row: the title, the date chip, internals. */
-const HIDDEN = new Set(["name", "t", "signals", "popularityNote", "aggregate", "tallest"]);
+const HIDDEN = new Set(["name", "t", "signals", "popularityNote", "aggregate", "tallest", "stack"]);
 
 /** Unit suffixes in property keys: `maxLengthM` reads "Max length … m", `areaKm2` "Area … km²". */
 const KEY_UNITS: [RegExp, string][] = [
@@ -74,7 +74,8 @@ export function factValue(fact: CardFact, props: Record<string, unknown>): strin
       return typeof raw === "string" ? formatDate(raw) : String(raw);
     case "list": {
       const items = Array.isArray(raw) ? raw.map(String) : String(raw).split(/\s*[,;]\s*/);
-      return items.filter(Boolean).map((x) => x.replace(/_/g, " ")).join(" · ");
+      // Codes in a list read through the fact's values ("advanced" → "Advanced").
+      return items.filter(Boolean).map((x) => fact.values?.[x] ?? x.replace(/_/g, " ")).join(" · ");
     }
     case "link":
       return isUrl(raw) ? raw : String(raw);

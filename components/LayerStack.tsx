@@ -1,14 +1,14 @@
 "use client";
 
 import { useId, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
-import { LayerFilters } from "@/components/LayerFilters";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { applyFilters, deriveFilterFields, filterSummary, type FilterField, type MeasureRange } from "@/lib/render/filters";
-import { FacetControls } from "@/components/FacetControls";
+import { AttributeControls } from "@/components/AttributeControls";
 import { InfoMark } from "@/components/FieldHelp";
 import type { FieldHelp } from "@/layers/types";
-import { facetFilterSummary, facetsOf } from "@/lib/render/facets";
+import { attributeFilterSummary, attributesOf, chipAttribute } from "@/lib/render/attributes";
+import { cellContext, hexCells, hexLegendSentence, levelLabel, usableBasis } from "@/lib/render/hexCells";
 import { viewCaption } from "@/lib/render/views";
 import type { Feature } from "geojson";
 import { LegendKey } from "@/components/LegendKey";
@@ -16,9 +16,9 @@ import { formatValue } from "@/lib/format";
 import { rasterKeyFilter } from "@/lib/render/rasterCalm";
 import { currentScenarioValue, scenarioOf, scenarioValueText } from "@/lib/render/scenario";
 import { compareBId, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
-import { hexbinThreshold } from "@/lib/render/deck";
+import { columnResolution, hexbinThreshold, hexResolution } from "@/lib/render/deck";
 import { COMPARE_COLORS, DELTA_COLORS, DELTA_LINE_COLORS, isRouteProperties, LINE, WHITE } from "@/lib/render/palette";
-import { type LoadedLayer, type MapAction, type MapState, type RenderMode, type RenderOp, type Selection, type TimeState } from "@/lib/render/state";
+import { type HexBasis, type LoadedLayer, type MapAction, type MapState, type RenderMode, type RenderOp, type Selection, type TimeState } from "@/lib/render/state";
 import { hasMissingImage, missingTilesStore } from "@/lib/render/tileErrors";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
 import { hexTileLegend, legendSymbol, type LegendMode, type LegendSymbol } from "@/lib/render/wally/legend";
@@ -45,17 +45,22 @@ type LayerStackProps = {
   scenario?: MapState["scenario"];
   /** The compare on screen, for the change view's legend sentence. */
   compare?: MapState["compare"];
+  /** The map's zoom and whether it is in 3D: the hex legend's cell size follows them. */
+  zoom?: number;
+  threeD?: boolean;
+  /** Opens every row with More expanded (the layout test measures every control). */
+  expandAttributes?: boolean;
 };
 
-/** The four ways a point layer draws, in short labels that fit the narrowest panel. */
+/** The four ways a point layer draws, in short labels that fit the narrowest panel. Hex is flat cells, columns in 3D. */
 const SHOW_AS: { value: RenderMode; label: string }[] = [
   { value: "points", label: "Points" },
   { value: "clusters", label: "Clusters" },
   { value: "heat", label: "Heat" },
-  { value: "columns", label: "3D" },
+  { value: "columns", label: "Hex" },
 ];
 
-/** The segment a point layer's mode lights up: hex tiles (`hexbin`) read as columns, their 2D form. */
+/** The segment a point layer's mode lights up: hex tiles (`hexbin`) read as Hex (columns are hex cells stood up in 3D). */
 function pointSegment(mode: RenderMode): RenderMode {
   return mode === "hexbin" ? "columns" : mode;
 }
@@ -88,6 +93,62 @@ function PointModeControl({ layer, mode, dispatch }: { layer: LoadedLayer; mode:
         </select>
       </label>
     </>
+  );
+}
+
+/** True when a point layer draws as hex cells: hex tiles, columns, or symbols past the hex threshold. */
+export function drawsHexes(layer: LoadedLayer, op: RenderOp | undefined): boolean {
+  if (!op || layer.style.geometry !== "point" || layer.result.kind !== "geojson") return false;
+  if (op.mode === "hexbin" || op.mode === "columns") return true;
+  return op.mode === "points" && layer.result.data.features.length > hexbinThreshold && !op.rankBy && op.view !== "ranked";
+}
+
+/** The color bases a layer's cells can take (spec §12d), in the row's words. */
+export function hexBasisOptions(layer: LoadedLayer, data: GeoJSON.FeatureCollection): { value: HexBasis; label: string }[] {
+  const ctx = cellContext(layer);
+  const options: { value: HexBasis; label: string }[] = [{ value: "count", label: "Count" }];
+  if (ctx.measure && data.features.some((f) => typeof f.properties?.[ctx.measure!.key] === "number")) {
+    options.push({ value: "sum", label: `Total ${ctx.measure.label.toLowerCase()}` });
+  }
+  const chip = chipAttribute(layer);
+  if (chip) {
+    const seen = new Map<string, number>();
+    for (const f of data.features) {
+      const raw = f.properties?.[chip.key];
+      for (const v of Array.isArray(raw) ? raw : [raw]) if (typeof v === "string" || typeof v === "number") seen.set(String(v), (seen.get(String(v)) ?? 0) + 1);
+    }
+    for (const [value] of [...seen].sort((a, b) => b[1] - a[1]).slice(0, 5)) options.push({ value: `share:${value}`, label: `Share ${levelLabel(chip, value).toLowerCase()}` });
+  }
+  const timeKey = layer.style.timeField ?? "t";
+  if (data.features.some((f) => typeof f.properties?.[timeKey] === "string")) options.push({ value: "recency", label: "Newest" });
+  return options;
+}
+
+/** "Cells show" for a layer drawn as hex cells: what darker means (spec §12d). */
+function HexBasisControl({ layer, op, data, dispatch }: { layer: LoadedLayer; op: RenderOp; data: GeoJSON.FeatureCollection; dispatch: (action: MapAction) => void }) {
+  const id = `basis-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const options = useMemo(() => hexBasisOptions(layer, data), [layer, data]);
+  if (options.length < 2) return null;
+  const value = options.some((o) => o.value === op.hexBasis) ? op.hexBasis! : "count";
+  return (
+    <div className="mt-1.5 flex min-w-0 items-center gap-2">
+      <label htmlFor={id} className="text-[11px] leading-4 text-ink-muted">
+        Darker cells
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => dispatch({ type: "set_hex_basis", layerId: layer.id, basis: e.target.value as HexBasis })}
+        data-testid="hex-basis"
+        className="legend-select rank-select"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 
@@ -210,6 +271,9 @@ type RowProps = {
   dragging: boolean;
   selected: boolean;
   compare?: MapState["compare"];
+  zoom?: number;
+  threeD?: boolean;
+  expandAttributes?: boolean;
 };
 
 /** A threshold readout: "All" at the data minimum, else "≥ 1,204 acres" (scores without a unit). */
@@ -298,6 +362,9 @@ function LegendRow({
   dragging,
   selected,
   compare,
+  zoom = 10,
+  threeD = false,
+  expandAttributes = false,
 }: RowProps) {
   const visible = op?.visible ?? false;
   const opacity = op?.opacity ?? 1;
@@ -305,26 +372,34 @@ function LegendRow({
   const shownCount = drawnCount(shownLayer, shownLayerB) ?? count;
   const data = layer.result.kind === "geojson" ? layer.result.data : null;
   const unit = layer.style.unit;
-  const facets = facetsOf(layer.style);
-  // The free-form panel keeps every other field; the facets have their own controls in the row.
+  const attributes = attributesOf(layer);
+  // The other fields the data offers go under More; the attributes have their own controls in the row.
   const fields = useMemo<FilterField[]>(
-    () => (data ? deriveFilterFields(data, { unitForV: unit }).filter((f) => !facets.some((x) => x.key === f.key)) : []),
-    [data, unit, facets],
+    () => (data ? deriveFilterFields(data, { unitForV: unit }).filter((f) => !attributes.some((x) => x.key === f.key)) : []),
+    [data, unit, attributes],
   );
   const filters = op?.filters ?? {};
   const activeCount = Object.keys(filters).length;
   const summary =
     activeCount > 0
       ? [
-          facetFilterSummary(facets, filters),
-          filterSummary(fields, Object.fromEntries(Object.entries(filters).filter(([k]) => !facets.some((f) => f.key === k)))),
+          attributeFilterSummary(attributes, filters),
+          filterSummary(fields, Object.fromEntries(Object.entries(filters).filter(([k]) => !attributes.some((f) => f.key === k)))),
         ]
           .filter(Boolean)
           .join(" · ")
       : "";
-  const caption = op?.visible ? viewCaption(op.view, layer, compare) : undefined;
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const filtersId = `filters-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const shownData = shownLayer?.result.kind === "geojson" ? shownLayer.result.data : data;
+  const hexes = op?.visible && data ? drawsHexes(layer, op) : false;
+  // Hex cells say their size and what darker means (spec §12d), on the drawn cells.
+  const hexSentence = useMemo(() => {
+    if (!hexes || !op || !shownData) return undefined;
+    const resolution = op.mode === "columns" && threeD ? columnResolution(zoom) : hexResolution(zoom);
+    const ctx = cellContext(layer);
+    const basis = usableBasis(op.hexBasis, ctx, hexCells(shownData, resolution));
+    return hexLegendSentence(resolution, basis, ctx, op.filters);
+  }, [hexes, op, shownData, threeD, zoom, layer]);
+  const caption = op?.visible ? (viewCaption(op.view, layer, compare, hexSentence) ?? hexSentence) : undefined;
   const { citation, coverageNote } = layer.result;
   const host = hostOf(citation.url);
   const sourceHelp: FieldHelp = {
@@ -349,15 +424,6 @@ function LegendRow({
     requestAnimationFrame(() => gripRef.current?.focus());
   };
 
-  const moreFilters = op && fields.length > 0 && (
-    <div className="pl-9">
-      <button type="button" onClick={() => setFiltersOpen((o) => !o)} aria-expanded={filtersOpen} aria-controls={filtersId} className="row-link mt-2">
-        {facets.length > 0 ? "More filters" : "Filters"}
-        {activeCount > 0 && <span className="tabular-nums"> · {activeCount}</span>}
-      </button>
-    </div>
-  );
-
   return (
     <li
       data-testid="layer-card"
@@ -365,7 +431,6 @@ function LegendRow({
       data-selected={selected || undefined}
       data-hidden={!visible || undefined}
       data-drop-target={dropTarget || undefined}
-      data-filters-open={(filtersOpen && fields.length > 0) || undefined}
       {...dragProps}
       className={`legend-row relative min-w-0 py-3 transition-opacity duration-150 ${dragging ? "opacity-40" : ""}`}
     >
@@ -446,27 +511,12 @@ function LegendRow({
         </p>
       )}
 
-      {/* Facets (spec §12a) are always visible, never behind a disclosure or hover. */}
-      {op && data && facets.length > 0 && (
-        <FacetControls
-          layerId={layer.id}
-          title={layer.title}
-          facets={facets}
-          data={data}
-          filters={filters}
-          geometry={layer.style.geometry}
-          fieldHelp={layer.fieldHelp}
-          dispatch={dispatch}
-        />
-      )}
-      {moreFilters}
-      {/* Open filters stay open, so a slider can be dragged and read without the row folding away. */}
-      {op && filtersOpen && fields.length > 0 && (
-        <LayerFilters id={filtersId} layerId={layer.id} title={layer.title} fields={fields} filters={filters} dispatch={dispatch} />
-      )}
+      {/* Attributes (spec §12c): one chip set and Rank by always visible, never behind a hover; the rest under More. */}
+      {op && data && shownData && <AttributeControls layer={layer} op={op} data={data} shown={shownData} fields={fields} dispatch={dispatch} defaultMore={expandAttributes} />}
       {pointModes && (
         <RowSection heading="Show as">
           <PointModeControl layer={layer} mode={op.mode} dispatch={dispatch} />
+          {hexes && data && <HexBasisControl layer={layer} op={op} data={data} dispatch={dispatch} />}
         </RowSection>
       )}
       {op && (
@@ -525,6 +575,9 @@ export function LayerStack({
   scenarioSlot,
   scenario,
   compare,
+  zoom,
+  threeD,
+  expandAttributes,
 }: LayerStackProps) {
   const items = stackOrder(layers, renderOps);
   // A dated tile layer whose tiles all failed for the window's date (lib/render/tileErrors.ts).
@@ -609,6 +662,9 @@ export function LayerStack({
               dragging={dragId === layer.id}
               selected={selectedLayerId === layer.id}
               compare={compare}
+              zoom={zoom}
+              threeD={threeD}
+              expandAttributes={expandAttributes}
               dragProps={{
                 // Only the key starts a drag, so the slider and text stay usable.
                 draggable: armed === layer.id,

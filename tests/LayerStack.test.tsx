@@ -122,7 +122,7 @@ describe("LayerStack", () => {
     }
   });
 
-  it("gives point layers a Show as section: four equal segments (Points · Clusters · Heat · 3D), a select for narrow panels", () => {
+  it("gives point layers a Show as section: four equal segments (Points · Clusters · Heat · Hex), a select for narrow panels", () => {
     const species: LoadedLayer = {
       ...trails,
       id: "species",
@@ -157,20 +157,20 @@ describe("LayerStack", () => {
     const control = within(card).getByTestId("mode-control");
     expect(control.className).toBe("mode-segments");
     const buttons = within(control).getAllByRole("button");
-    expect(buttons.map((b) => b.textContent)).toEqual(["Points", "Clusters", "Heat", "3D"]);
+    expect(buttons.map((b) => b.textContent)).toEqual(["Points", "Clusters", "Heat", "Hex"]);
     expect(control.querySelector("svg, img")).toBeNull();
     expect(within(control).getByRole("button", { name: "Points" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(within(control).getByRole("button", { name: "Clusters" }));
     expect(spy).toHaveBeenCalledWith({ type: "set_style", layerId: "species", mode: "clusters" });
     expect(within(control).getByRole("button", { name: "Clusters" }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(within(control).getByRole("button", { name: "3D" }));
+    fireEvent.click(within(control).getByRole("button", { name: "Hex" }));
     expect(spy).toHaveBeenLastCalledWith({ type: "set_style", layerId: "species", mode: "columns" });
     // Pressing the pressed segment dispatches nothing.
-    fireEvent.click(within(control).getByRole("button", { name: "3D" }));
+    fireEvent.click(within(control).getByRole("button", { name: "Hex" }));
     expect(spy).toHaveBeenCalledTimes(2);
     // The same four as a native select (shown by the panel's container query under 280px).
     const select = within(within(card).getByTestId("mode-select")).getByRole("combobox") as HTMLSelectElement;
-    expect([...select.options].map((o) => o.textContent)).toEqual(["Points", "Clusters", "Heat", "3D"]);
+    expect([...select.options].map((o) => o.textContent)).toEqual(["Points", "Clusters", "Heat", "Hex"]);
     expect(select.value).toBe("columns");
     fireEvent.change(select, { target: { value: "heat" } });
     expect(spy).toHaveBeenLastCalledWith({ type: "set_style", layerId: "species", mode: "heat" });
@@ -422,21 +422,22 @@ describe("LayerStack filters", () => {
     );
   }
 
-  it("opens a Filters link (no facets on this layer) with category chips (with counts) and a range per numeric field", () => {
+  it("opens More (no attributes on this layer) with category chips (with counts) and a mini histogram per number, no sliders", () => {
     render(<Filtered spy={() => {}} />);
-    const toggle = screen.getByRole("button", { name: "Filters" });
+    const toggle = screen.getByRole("button", { name: "More" });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(toggle);
     const panel = screen.getByTestId("layer-filters");
     const chips = within(within(panel).getByRole("group", { name: "Difficulty (sac_scale)" })).getAllByRole("button");
     expect(chips.map((c) => c.textContent)).toEqual(["all", "hiking 4", "alpine hiking 2", "mountain hiking 2"]);
-    expect(within(panel).getByRole("slider", { name: "Length km from" })).toBeTruthy();
+    expect(within(panel).getByTestId("measure-histogram").getAttribute("data-key")).toBe("length_km");
+    expect(within(panel).queryByRole("slider")).toBeNull();
   });
 
   it("a chip dispatches set_filters, the count reads \"2 of 8\" and the summary shows; Reset clears", () => {
     const spy = vi.fn();
     render(<Filtered spy={spy} />);
-    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
     fireEvent.click(screen.getByRole("button", { name: /^alpine hiking/ }));
     expect(spy).toHaveBeenCalledWith({
       type: "set_filters",
@@ -445,7 +446,7 @@ describe("LayerStack filters", () => {
     });
     expect(screen.getByTestId("layer-count").textContent).toBe("2 of 8");
     expect(screen.getByTestId("filter-summary").textContent).toBe("Filtered: Difficulty (sac_scale): alpine_hiking");
-    expect(screen.getByRole("button", { name: /^Filters/ }).textContent).toBe("Filters · 1");
+    expect(screen.getByRole("button", { name: /^Less/ }).textContent).toBe("Less · 1");
 
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
     expect(spy).toHaveBeenLastCalledWith({ type: "set_filters", layerId: "osm-trails", filters: {} });
@@ -453,17 +454,25 @@ describe("LayerStack filters", () => {
     expect(screen.queryByTestId("filter-summary")).toBeNull();
   });
 
-  it("the range's lower thumb narrows by number, and all clears the chips", () => {
+  it("a histogram bar narrows by number (its band), and all clears the chips", () => {
     const spy = vi.fn();
     render(<Filtered spy={spy} />);
-    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
-    fireEvent.change(screen.getByRole("slider", { name: "Length km from" }), { target: { value: "6" } });
-    expect(spy).toHaveBeenLastCalledWith({ type: "set_filters", layerId: "osm-trails", filters: { length_km: { range: [6, 8] } } });
-    expect(screen.getByTestId("layer-count").textContent).toBe("3 of 8");
-    fireEvent.click(screen.getByRole("button", { name: /^hiking/ }));
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    const bars = within(screen.getByRole("group", { name: "Length km: pick a band" })).getAllByRole("button");
+    expect(bars).toHaveLength(12);
+    fireEvent.click(bars[11]);
+    const range = (spy.mock.lastCall?.[0] as Extract<MapAction, { type: "set_filters" }>).filters.length_km?.range;
+    expect(range?.[1]).toBe(8);
+    expect(range?.[0]).toBeGreaterThan(7);
+    expect(bars[11].getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByTestId("layer-count").textContent).toBe("1 of 8");
+    // A bar further down grows the band to reach it.
+    fireEvent.click(bars[6]);
+    expect(screen.getByTestId("layer-count").textContent).toBe("4 of 8");
+    fireEvent.click(screen.getByRole("button", { name: /^hiking/ }));
+    expect(screen.getByTestId("layer-count").textContent).toBe("2 of 8");
     fireEvent.click(screen.getByRole("button", { name: "all" }));
-    expect(screen.getByTestId("layer-count").textContent).toBe("3 of 8");
+    expect(screen.getByTestId("layer-count").textContent).toBe("4 of 8");
   });
 });
 
@@ -621,22 +630,34 @@ describe("LayerStack: closing layers and the measure threshold (owner feedback)"
     expect(screen.getAllByTestId("layer-card")).toHaveLength(1);
   });
 
-  it("has no generic Value slider: a facet slider in the layer's unit filters, and a labelled opacity row stays (owner, Moab)", () => {
+  it("has no generic Value slider: a measure ranks (Rank by, top 10) and its presets filter under More; opacity stays (owner, Moab)", () => {
     const spy = vi.fn();
-    const facetFires: LoadedLayer = { ...fires, style: { ...fires.style, facets: [{ key: "acres", label: "Burned area", kind: "range", unit: "acres", encode: "size" }] } };
-    render(<Panel spy={spy} layers={[facetFires, trails]} />);
+    const sized: LoadedLayer = {
+      ...fires,
+      attributes: [{ key: "acres", label: "Burned area", type: "measure", unit: "acres", encode: "size", presets: [{ label: "Class G: 5,000 acres and up", min: 5_000 }] }],
+    };
+    render(<Panel spy={spy} layers={[sized, trails]} />);
     const card = screen.getAllByTestId("layer-card").find((c) => c.getAttribute("data-layer-id") === "fire-perimeters")!;
     expect(within(card).queryByTestId("measure-slider")).toBeNull();
     expect(card.textContent).not.toMatch(/Value ≥/);
-    // The facet is always visible, labelled in the layer's words.
-    const facets = within(card).getByTestId("facet-controls");
-    expect(facets.textContent).toContain("Burned area");
-    fireEvent.change(within(facets).getByRole("slider", { name: "Burned area from" }), { target: { value: "1000" } });
+    const controls = within(card).getByTestId("attribute-controls");
+    // Rank by is visible; picking the measure lists the top features by it, largest first.
+    fireEvent.change(within(controls).getByLabelText("Rank by"), { target: { value: "acres" } });
+    expect(spy).toHaveBeenLastCalledWith({ type: "set_rank_by", layerId: "fire-perimeters", key: "acres" });
+    const top = within(controls).getByTestId("top-list");
+    expect(within(top).getAllByRole("button")[0].textContent).toBe("1Fire 6380,000 acres");
+    fireEvent.mouseEnter(within(top).getAllByRole("button")[0]);
+    expect(spy.mock.lastCall?.[0]).toMatchObject({ type: "set_hover", hover: { layerId: "fire-perimeters" } });
+    fireEvent.click(within(top).getAllByRole("button")[1]);
+    expect(spy.mock.lastCall?.[0]).toMatchObject({ type: "fly_to", select: { layerId: "fire-perimeters" } });
+    // The preset is under More, in the source's words; no two-handle slider.
+    fireEvent.click(within(controls).getByRole("button", { name: "More" }));
+    expect(within(controls).queryByRole("slider")).toBeNull();
+    fireEvent.click(within(controls).getByRole("button", { name: /^Class G/ }));
     const last = spy.mock.calls.at(-1)?.[0] as MapAction & { type: "set_filters" };
-    expect(last).toMatchObject({ type: "set_filters", layerId: "fire-perimeters" });
-    expect(last.filters.acres?.range?.[0]).toBe(1000);
-    expect(last.filters.acres?.range?.[1]).toBe(380_000);
-    expect(within(card).getByTestId("layer-count").textContent).toBe("4 of 7");
+    expect(last).toMatchObject({ type: "set_filters", layerId: "fire-perimeters", filters: { acres: { range: [5_000, 380_000] } } });
+    expect(within(card).getByTestId("layer-count").textContent).toBe("3 of 7");
+    expect(within(card).getByTestId("filter-summary").textContent).toBe("Filtered: Class G: 5,000 acres and up");
     // Opacity: a labelled row on every layer.
     const opacity = within(card).getByRole("slider", { name: "Opacity for Wildfire perimeters" });
     fireEvent.change(opacity, { target: { value: "0.5" } });

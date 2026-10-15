@@ -20,7 +20,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { jsonObjectBody } from "@/lib/fetch/validate";
@@ -97,17 +98,18 @@ export function trendFeatures(trends: Trend[], [w, s, e, n]: BBox): Feature<Poin
     });
 }
 
-const FACETS: Facet[] = [
-  { key: "v", label: "Trend", kind: "range", unit: "mm/yr" },
+const ATTRIBUTES: Attribute[] = [
   {
     key: "kind",
+    type: "category",
     label: "Direction",
-    kind: "category",
-    values: [
+    levels: [
       { value: "falling", label: "Falling" },
       { value: "rising", label: "Rising" },
     ],
   },
+  { key: "v", type: "measure", label: "Trend", unit: "mm/yr" },
+  nameAttribute(),
 ];
 
 const HELP: Record<string, FieldHelp> = {
@@ -156,9 +158,10 @@ const seaLevelTrends = defineLayer({
   maxAreaKm2: 30_000_000,
   wide: { orderBy: "trend in mm/yr", rank: "fastest-rising", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("sea-level-trends"), unit: "mm/yr", facets: FACETS },
+  style: { geometry: "point", color: layerColor("sea-level-trends"), unit: "mm/yr" },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

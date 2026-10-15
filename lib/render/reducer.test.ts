@@ -310,3 +310,37 @@ describe("routes", () => {
     expect(reduce(initialMapState, { type: "routes_cleared" })).toBe(initialMapState);
   });
 });
+
+describe("Rank by, the hex basis, hover and fly_to (spec §12c, §12d)", () => {
+  const layer = {
+    id: "dams",
+    title: "Dams",
+    style: { geometry: "point" as const, color: "#3A3A3C" },
+    result: {
+      kind: "geojson" as const,
+      data: { type: "FeatureCollection" as const, features: [{ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [-111, 36] }, properties: { name: "Glen Canyon", v: 27 } }] },
+      citation: { source: "NID", url: "https://nid.sec.usace.army.mil", retrieved: "2026-10-15" },
+    },
+    receivedAt: "",
+  };
+  const drawn = reduce(reduce(initialMapState, { type: "layer_loaded", layer }), { type: "render", op: { layerId: "dams", mode: "points", visible: true } });
+  const feature = layer.result.data.features[0];
+
+  it("sets and clears Rank by and the hex basis on the op", () => {
+    const ranked = reduce(drawn, { type: "set_rank_by", layerId: "dams", key: "v" });
+    expect(ranked.renderOps[0].rankBy).toBe("v");
+    expect(reduce(ranked, { type: "set_rank_by", layerId: "dams" }).renderOps[0]).not.toHaveProperty("rankBy");
+    expect(reduce(drawn, { type: "set_hex_basis", layerId: "dams", basis: "sum" }).renderOps[0].hexBasis).toBe("sum");
+  });
+
+  it("rings a hovered feature until the pointer leaves or the layer goes, and flies to a picked one with its card", () => {
+    const hovered = reduce(drawn, { type: "set_hover", hover: { layerId: "dams", feature } });
+    expect(hovered.hover?.feature).toBe(feature);
+    expect(reduce(hovered, { type: "set_hover" }).hover).toBeUndefined();
+    expect(reduce(hovered, { type: "remove_layer", layerId: "dams" }).hover).toBeUndefined();
+    const flown = reduce(drawn, { type: "fly_to", bbox: [-111, 36, -111, 36], select: { layerId: "dams", feature, lngLat: [-111, 36] } });
+    expect(flown.camera!.bbox[2] - flown.camera!.bbox[0]).toBeGreaterThan(0);
+    expect(flown.camera?.seq).toBe((drawn.camera?.seq ?? 0) + 1);
+    expect(flown.selected?.feature).toBe(feature);
+  });
+});

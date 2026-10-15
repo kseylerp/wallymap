@@ -5,7 +5,21 @@ export type FilterField =
   | { key: string; label: string; kind: "category"; values: { value: string; count: number }[]; more?: number }
   | { key: string; label: string; kind: "range"; min: number; max: number; unit?: string; integer: boolean };
 
-export type LayerFilters = Record<string, { include?: string[]; range?: [number, number] }>;
+/**
+ * Per property: `include` keeps features whose value (or, for a list, any item) is one of these; `range` keeps numbers
+ * inside [min, max]; `match` keeps text containing these words (a name search, case and accents ignored).
+ */
+export type LayerFilters = Record<string, { include?: string[]; range?: [number, number]; match?: string }>;
+
+/** True when a filter entry restricts something: a non-empty include, a range, or search text. */
+export function isActiveEntry(f: LayerFilters[string] | undefined): boolean {
+  return !!f && ((f.include !== undefined && f.include.length > 0) || f.range !== undefined || (f.match !== undefined && f.match.trim() !== ""));
+}
+
+/** Text as a search compares it: lower case, accents dropped. */
+export function searchable(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
 
 const DEFAULT_MAX_CATEGORIES = 12;
 const MAX_FIELDS = 8;
@@ -176,20 +190,19 @@ function valueLabel(unitForV: string | undefined): string {
   return unitForV === "score" ? "Score (0–100)" : "Value";
 }
 
-/** A property as a category: strings and booleans as text, and numbers by their decimal text (a facet's Singletrack 3). */
-function categoryOf(value: unknown): string | undefined {
-  if (typeof value === "string") return value;
-  if (typeof value === "boolean") return String(value);
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  return undefined;
+/** A property as categories: strings and booleans as text, numbers by their decimal text, and each item of a list. */
+function categoriesOf(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(categoriesOf);
+  if (typeof value === "string") return [value];
+  if (typeof value === "boolean") return [String(value)];
+  if (typeof value === "number" && Number.isFinite(value)) return [String(value)];
+  return [];
 }
 
 export function applyFilters(fc: GeoJSON.FeatureCollection, filters: LayerFilters | undefined): GeoJSON.FeatureCollection {
   if (!filters) return fc;
   // An empty include list means "no restriction", so it is as good as no filter.
-  const active = Object.entries(filters).filter(
-    ([, f]) => (f.include !== undefined && f.include.length > 0) || f.range !== undefined,
-  );
+  const active = Object.entries(filters).filter(([, f]) => isActiveEntry(f));
   if (active.length === 0) return fc;
 
   const features = fc.features.filter((feature) => {
@@ -197,12 +210,16 @@ export function applyFilters(fc: GeoJSON.FeatureCollection, filters: LayerFilter
     for (const [key, f] of active) {
       const value: unknown = props[key];
       if (f.include !== undefined && f.include.length > 0) {
-        const c = categoryOf(value);
-        if (c === undefined || !f.include.includes(c)) return false;
+        if (!categoriesOf(value).some((c) => f.include!.includes(c))) return false;
       }
       if (f.range !== undefined) {
         if (typeof value !== "number" || !Number.isFinite(value)) return false;
         if (value < f.range[0] || value > f.range[1]) return false;
+      }
+      if (f.match !== undefined && f.match.trim() !== "") {
+        if (typeof value !== "string" && typeof value !== "number") return false;
+        const text = searchable(String(value));
+        if (!searchable(f.match).split(/\s+/).filter(Boolean).every((word) => text.includes(word))) return false;
       }
     }
     return true;
@@ -228,6 +245,7 @@ export function filterSummary(fields: FilterField[], filters: LayerFilters): str
     if (f.include !== undefined && f.include.length > 0) {
       parts.push(`${label}: ${f.include.join(", ")}`);
     }
+    if (f.match !== undefined && f.match.trim() !== "") parts.push(`${label} has "${f.match.trim()}"`);
     if (f.range !== undefined) {
       const [lo, hi] = f.range;
       const field = fields.find((x) => x.key === key && x.kind === "range");

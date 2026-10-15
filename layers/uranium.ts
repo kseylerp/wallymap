@@ -20,7 +20,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -123,9 +124,10 @@ const KIND_LABELS: Record<string, string> = {
   "leasing program": "Leasing program",
 };
 
-const FACETS: Facet[] = [
-  { key: "hazardScore", label: "Hazard score", kind: "range", unit: "score", encode: "size" },
-  { key: "kind", label: "Kind", kind: "category", values: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+const ATTRIBUTES: Attribute[] = [
+  { key: "kind", type: "category", label: "Kind", levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+  { key: "hazardScore", type: "measure", label: "Hazard score", unit: "score", encode: "size" },
+  nameAttribute(),
 ];
 
 const EPA = {
@@ -203,9 +205,10 @@ const uranium = defineLayer({
   maxAreaKm2: 20_000_000,
   wide: { mode: "named", limit: MAX_RECORDS },
   input: z.object({}),
-  style: { geometry: "point", color: layerColor("uranium"), unit: "score", facets: FACETS },
+  style: { geometry: "point", color: layerColor("uranium"), unit: "score" },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

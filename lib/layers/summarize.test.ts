@@ -320,31 +320,42 @@ describe("summarizeLayerResult truncation", () => {
   });
 });
 
-describe("summarizeLayerResult: facets and help for the model (spec §12a, §12b)", () => {
-  it("lists each facet label with the raw values render.filters takes and their counts, and the help for v", () => {
+describe("summarizeLayerResult: attributes and help for the model (spec §12b, §12c)", () => {
+  it("lists each chip label with the raw values render.filters takes and their counts, and the help for v", () => {
     const features = [0, 3, 3, 5].map((v) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [0, 0] }, properties: { v } }));
     const out = summarizeLayerResult(
       { kind: "geojson", data: { type: "FeatureCollection", features }, citation: { source: "s", url: "u", retrieved: "r" } },
       "mtb-trails",
       {
-        facets: [
-          { key: "v", label: "Difficulty", kind: "category", values: [{ value: 0, label: "Easy" }, { value: 3, label: "Hard" }, { value: 4, label: "Expert" }, { value: 5, label: "Expert" }] },
+        attributes: [
+          {
+            key: "v",
+            label: "Difficulty",
+            type: "ordinal",
+            scale: "mtb:scale",
+            levels: [{ value: 0, label: "Easy" }, { value: 3, label: "Hard" }, { value: 4, label: "Expert" }, { value: 5, label: "Expert" }],
+          },
+          { key: "mw", label: "Capacity", type: "measure", unit: "MW", presets: [{ label: "Large: 100 MW and up", min: 100 }] },
+          { key: "lit", label: "Lit at night", type: "flag" },
         ],
       },
       { v: { text: "Singletrack Scale.", scale: "0 (easiest) to 6 (hardest)", source: "OSM wiki" } },
     );
     if ("error" in out || out.kind !== "geojson") throw new Error("expected a geojson summary");
-    expect(out.facets).toEqual([
+    expect(out.attributes).toEqual([
       {
         key: "v",
         label: "Difficulty",
-        kind: "category",
+        type: "ordinal",
+        scale: "mtb:scale",
         values: [
           { label: "Easy", include: ["0"], count: 1 },
           { label: "Hard", include: ["3"], count: 2 },
           { label: "Expert", include: ["4", "5"], count: 1 },
         ],
       },
+      { key: "mw", label: "Capacity", type: "measure", unit: "MW", presets: [{ label: "Large: 100 MW and up", range: [100, null] }] },
+      { key: "lit", label: "Lit at night", type: "flag", values: [{ label: "Lit at night", include: ["true"], count: 0 }] },
     ]);
     expect(out.help?.v).toBe("Singletrack Scale. Scale: 0 (easiest) to 6 (hardest). Source: OSM wiki.");
   });

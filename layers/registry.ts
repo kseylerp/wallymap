@@ -1,4 +1,4 @@
-import { facetProblems } from "./facets";
+import { attributeProblems } from "./attributes";
 import type { Layer } from "./types";
 
 const layers = new Map<string, Layer>();
@@ -7,9 +7,9 @@ export function registerLayer(layer: Layer): void {
   if (layers.has(layer.id)) {
     throw new Error(`Duplicate layer id: ${layer.id}`);
   }
-  // A bad facet or help declaration fails at load (and in the tests), never on the map.
-  const problems = facetProblems(layer);
-  if (problems.length > 0) throw new Error(`Bad facets on ${layer.id}: ${problems.join("; ")}`);
+  // A bad attribute, help or card declaration fails at load (and in the tests), never on the map.
+  const problems = attributeProblems(layer);
+  if (problems.length > 0) throw new Error(`Bad attributes on ${layer.id}: ${problems.join("; ")}`);
   layers.set(layer.id, layer);
 }
 

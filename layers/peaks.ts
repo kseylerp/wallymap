@@ -19,7 +19,8 @@
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { rankedSparql, wikimediaFetch } from "./_shared/wikimedia";
@@ -149,9 +150,10 @@ export function normalizePeaks(bindings: Binding[]): Feature<Point>[] {
   return features;
 }
 
-const FACETS: Facet[] = [
-  { key: "elevation", label: "Elevation", kind: "range", unit: "m", encode: "size" },
-  { key: "prominence", label: "Prominence", kind: "range", unit: "m" },
+const ATTRIBUTES: Attribute[] = [
+  { key: "elevation", type: "measure", label: "Elevation", unit: "m", encode: "size" },
+  { key: "prominence", type: "measure", label: "Prominence", unit: "m" },
+  nameAttribute(),
 ];
 
 const ELEVATION: FieldHelp = {
@@ -197,9 +199,10 @@ const peaks = defineLayer({
   maxAreaKm2: 40_000,
   wide: { orderBy: "prominence", rank: "most prominent", limit: LIMIT },
   input: z.object({}),
-  style: { geometry: "point", color: layerColor("peaks"), unit: "m", extrude: "v", facets: FACETS },
+  style: { geometry: "point", color: layerColor("peaks"), unit: "m", extrude: "v" },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     // Wide (over 40,000 km², up to the hard cap): the most prominent peaks, capped at the strategy's limit.

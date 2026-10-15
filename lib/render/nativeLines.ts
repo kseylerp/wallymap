@@ -18,7 +18,7 @@ import {
   type LineClass,
 } from "@/lib/render/palette";
 import { rampColor, rgbToHex } from "@/lib/render/ramp";
-import { facetColorStops, facetValueKey, primaryFacet } from "@/lib/render/facets";
+import { colorStops, encodedAttribute, valueKey } from "@/lib/render/attributes";
 import type { MapState, RenderOp, Selection } from "@/lib/render/state";
 import { chainParts, gradientExpression } from "@/lib/render/wally/routeLine";
 
@@ -63,8 +63,8 @@ export type LineLook =
   /** A compare delta (the change view): A only pink, B only purple, unchanged sage. */
   | { kind: "delta" }
   /**
-   * The primary facet (spec §12a): each class of `key` on the sage → pink → purple ramp, easy to hard, in the facet's
-   * declared order (`stops`: raw value to color); a value the facet does not name draws sage.
+   * The encoded ordinal (spec §12c, an attribute with `encode: "color"`): each class of `key` on the sage → pink →
+   * purple ramp, easy to hard, in the declared order (`stops`: raw value to color); a value it does not name draws sage.
    */
   | { kind: "facet"; key: string; stops: [string, string][] };
 
@@ -158,11 +158,11 @@ export function lineEntries(view: MapState): LineEntry[] {
       continue;
     }
     const requested = isPaletteColor(op.color) ? lineColorFor(op.color) : undefined;
-    const facet = primaryFacet(loaded.style);
+    const encoded = encodedAttribute(loaded);
     const look: LineLook = requested
       ? { kind: "solid", color: requested }
-      : facet?.encode === "color" && facet.kind === "category"
-        ? { kind: "facet", key: facet.key, stops: facetColorStops(facet) }
+      : encoded
+        ? { kind: "facet", key: encoded.key, stops: colorStops(encoded) }
         : loaded.style.unit === "score"
           ? { kind: "ramp" }
           : { kind: "classes" };
@@ -201,7 +201,7 @@ export function lineSourceData(entry: Pick<LineEntry, "data" | "layerId" | "look
     const n = Number(f.properties?.v);
     const properties: LineProps = { i, cls, v: Number.isFinite(n) ? n : null };
     if (kind === "delta") properties.delta = String(f.properties?.delta ?? "both");
-    if (entry.look.kind === "facet") properties.fv = facetValueKey(f.properties?.[entry.look.key]) ?? "";
+    if (entry.look.kind === "facet") properties.fv = valueKey(f.properties?.[entry.look.key]) ?? "";
     const geometry = cls === "route" && (g.type === "LineString" || g.type === "MultiLineString") ? chainParts(g) : g;
     features.push({ type: "Feature", geometry, properties });
   });

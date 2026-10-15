@@ -12,6 +12,7 @@ export async function GET(): Promise<Response> {
       style: l.style,
       ...(l.fieldHelp && { fieldHelp: l.fieldHelp }),
       ...(l.card && { card: l.card }),
+      ...(l.attributes && { attributes: l.attributes }),
     })),
   );
 }

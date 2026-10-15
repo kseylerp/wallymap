@@ -99,7 +99,9 @@ describe("osmCrags", () => {
       source: "osm",
       v: 57,
       grades: "4 to 10+ (uiaa)",
-      disciplines: "sport, trad, boulder",
+      // UIAA 4 is Beginner and 10+ Elite, so the wall spans every band; the original grades stay on the card.
+      gradeBands: ["beginner", "intermediate", "advanced", "elite"],
+      disciplines: ["sport", "trad", "boulder"],
       maxLengthM: 42.67,
     });
   });

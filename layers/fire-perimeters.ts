@@ -22,7 +22,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { NWCG_FIRE_SIZE, nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { LOWER_48_KM2, OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -170,9 +171,11 @@ export function offsetFor(bbox: BBox, wide = false): number {
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
-const FACETS: Facet[] = [
-  { key: "acres", label: "Acres burned", kind: "range", unit: "acres", encode: "size" },
-  { key: "year", label: "Year", kind: "range" },
+const ATTRIBUTES: Attribute[] = [
+  { key: "acres", type: "measure", label: "Acres burned", unit: "acres", encode: "size", presets: NWCG_FIRE_SIZE },
+  { key: "year", type: "time", label: "Year" },
+  { key: "agency", type: "category", label: "Agency" },
+  nameAttribute(),
 ];
 
 const ACRES: FieldHelp = {
@@ -220,9 +223,10 @@ const firePerimeters = defineLayer({
   hardMaxAreaKm2: LOWER_48_KM2,
   wide: { orderBy: "acres burned", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("fire-perimeters"), fillOpacity: 0.35, facets: FACETS },
+  style: { geometry: "polygon", color: layerColor("fire-perimeters"), fillOpacity: 0.35 },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const retrieved = new Date();

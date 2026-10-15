@@ -34,7 +34,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { nameAttribute, timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { WHOLE_US_KM2 } from "./_shared/coverage";
@@ -778,9 +779,22 @@ async function querySeason(ctx: QueryContext, month: number, now: Date): Promise
   };
 }
 
-const FACETS: Facet[] = [
-  { key: "v", label: "Wave height", kind: "range", unit: "m", encode: "size" },
-  { key: "periodS", label: "Period", kind: "range", unit: "s" },
+const ATTRIBUTES: Attribute[] = [
+  {
+    key: "kind",
+    type: "category",
+    label: "Kind",
+    levels: [
+      { value: "buoy", label: "Buoy" },
+      { value: "forecast", label: "Forecast" },
+      { value: "climatology", label: "Typical month" },
+      { value: "station", label: "Buoy, no summary" },
+    ],
+  },
+  { key: "v", type: "measure", label: "Wave height", unit: "m", encode: "size" },
+  { key: "periodS", type: "measure", label: "Period", unit: "s" },
+  timeAttribute("Reading"),
+  nameAttribute(),
 ];
 
 const NDBC_URL = "https://www.ndbc.noaa.gov/";
@@ -844,9 +858,10 @@ const surf = defineLayer({
   hardMaxAreaKm2: WHOLE_US_KM2,
   wide: { orderBy: "wave height in metres", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("surf"), unit: "m", timeField: "t", facets: FACETS },
+  style: { geometry: "point", color: layerColor("surf"), unit: "m", timeField: "t" },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

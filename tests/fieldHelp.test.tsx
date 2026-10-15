@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InspectCard } from "@/components/InspectCard";
-import { FacetControls } from "@/components/FacetControls";
+import { AttributeControls } from "@/components/AttributeControls";
 import { getLayer } from "@/layers";
 import { cardContent, humanKey } from "@/lib/render/card";
 import type { LoadedLayer, Selection } from "@/lib/render/state";
@@ -92,7 +92,7 @@ describe("field help on the inspect card (spec §12b)", () => {
     expect(screen.queryByText(/^value$/i)).toBeNull();
     const text = screen.getByTestId("inspect-card").textContent ?? "";
     expect(text).toMatch(/Longest routei?46 m/);
-    expect(text).toContain("trad · sport");
+    expect(text).toContain("Trad · Sport");
     expect(text).toContain("trad 1 · sport 4");
     expect(text).toContain("OpenStreetMap + OpenBeta");
     expect(screen.getByRole("link", { name: "Open on OpenBeta" }).getAttribute("href")).toBe("https://openbeta.io/areas/abc");
@@ -116,28 +116,27 @@ describe("field help on the inspect card (spec §12b)", () => {
   });
 });
 
-describe("facet chips and the legend carry the same help on hover", () => {
-  it("renders chips with labels, counts and aria-pressed, and writes the filters", () => {
+describe("attribute chips and the legend carry the same help on hover", () => {
+  it("renders chips with labels, counts, line keys and aria-pressed, and writes the filters", () => {
     const mtb = getLayer("mtb-trails")!;
     const lines = [0, 1, 3, 3, 5].map((v, i): GeoJSON.Feature => ({
       type: "Feature",
       geometry: { type: "LineString", coordinates: [[0, i], [1, i]] },
       properties: { name: `t${i}`, v, kind: "mtb" },
     }));
+    const data: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: lines };
     const dispatch = vi.fn();
-    render(
-      <FacetControls
-        layerId="mtb-trails"
-        title="Mountain bike trails"
-        facets={mtb.style.facets!}
-        data={{ type: "FeatureCollection", features: lines }}
-        filters={{}}
-        geometry="line"
-        fieldHelp={mtb.fieldHelp}
-        dispatch={dispatch}
-      />,
-    );
-    const hard = screen.getAllByTestId("facet-chip").find((c) => c.textContent?.startsWith("Hard"))!;
+    const layer: LoadedLayer = {
+      id: "mtb-trails",
+      title: "Mountain bike trails",
+      style: mtb.style,
+      fieldHelp: mtb.fieldHelp,
+      attributes: mtb.attributes,
+      result: { kind: "geojson", data, citation },
+      receivedAt: "2026-10-14",
+    };
+    render(<AttributeControls layer={layer} op={{ layerId: "mtb-trails", mode: "lines", visible: true }} data={data} shown={data} fields={[]} dispatch={dispatch} />);
+    const hard = screen.getAllByTestId("attribute-chip").find((c) => c.textContent?.startsWith("Hard"))!;
     expect(hard.getAttribute("aria-pressed")).toBe("false");
     expect(hard.textContent).toContain("2");
     expect(hard.getAttribute("title")).toMatch(/Hard: 2 · .+/);

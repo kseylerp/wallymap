@@ -13,12 +13,13 @@ import {
   defineLayer,
   type BBox,
   type CardSpec,
-  type Facet,
+  type Attribute,
   type FieldHelp,
   type Layer,
   type LayerError,
   type LayerResult,
 } from "./types";
+import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { MAPILLARY_CELL_DEG, MAPILLARY_MAX_CELLS, tileBBox } from "./photos";
 import { GridIndex, lineMidpoint } from "./_shared/geo";
@@ -226,7 +227,7 @@ const SCORE: FieldHelp = {
   source: "This app, from OpenStreetMap, Wikimedia Commons and Mapillary",
 };
 
-const FACETS: Facet[] = [{ key: "v", label: "Popularity", kind: "range", unit: "score" }];
+const ATTRIBUTES: Attribute[] = [{ key: "v", type: "measure", label: "Popularity", unit: "score" }, nameAttribute()];
 
 const HELP: Record<string, FieldHelp> = {
   v: SCORE,
@@ -264,10 +265,10 @@ function popularityLayer(target: PopularityTarget): Layer {
       geometry: target === "trails" ? "line" : "point",
       color: layerColor(target === "trails" ? "popularity" : "popularity-campsites"),
       unit: "score",
-      facets: FACETS,
     },
     fieldHelp: HELP,
     card: CARD,
+    attributes: ATTRIBUTES,
 
     async query(ctx): Promise<LayerResult | LayerError> {
       const area = bboxAreaKm2(ctx.bbox);

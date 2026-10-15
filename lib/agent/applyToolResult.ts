@@ -1,13 +1,30 @@
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
-import type { BBox, CardSpec, FieldHelp, LayerResult, StyleHints } from "@/layers/types";
+import type { Attribute, BBox, CardSpec, FieldHelp, LayerResult, StyleHints } from "@/layers/types";
 import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import type { LayerFilters } from "@/lib/render/filters";
 import { ROUTE_ERROR_ID } from "@/lib/render/reducer";
 import { repairToolName } from "@/lib/agent/toolNames";
-import { RENDER_MODES, VIEW_KINDS, type ViewKind, type Basemap, type CompareState, type MapAction, type RenderMode, type RenderOp, type RouteState, type TimeMode, type Viewport } from "@/lib/render/state";
+import {
+  isHexBasis,
+  RENDER_MODES,
+  VIEW_KINDS,
+  type ViewKind,
+  type Basemap,
+  type CompareState,
+  type HexBasis,
+  type MapAction,
+  type RenderMode,
+  type RenderOp,
+  type RouteState,
+  type TimeMode,
+  type Viewport,
+} from "@/lib/render/state";
 
 /** Layer titles and styles by id, fetched by the browser from `GET /api/layers`. */
-export type LayerCatalog = Record<string, { title: string; style: StyleHints; license?: string; fieldHelp?: Record<string, FieldHelp>; card?: CardSpec }>;
+export type LayerCatalog = Record<
+  string,
+  { title: string; style: StyleHints; license?: string; fieldHelp?: Record<string, FieldHelp>; card?: CardSpec; attributes?: Attribute[] }
+>;
 
 /** The map canvas size, and the screen area a fitted bbox must stay clear of (floating panels). */
 type Canvas = { width: number; height: number; padding?: Padding };
@@ -82,9 +99,16 @@ function parseFilters(value: unknown): LayerFilters | null {
       const [a, b] = entry.range as [number, number];
       out.range = a <= b ? [a, b] : [b, a];
     }
-    if (out.include || out.range) filters[key] = out;
+    if (typeof entry.match === "string" && entry.match.trim() !== "") out.match = entry.match.trim();
+    if (out.include || out.range || out.match) filters[key] = out;
   }
   return filters;
+}
+
+/** The render tool's hexBasis (and hexShare) as the map's basis; share without a value, or anything unknown, is null. */
+export function hexBasisOf(basis: unknown, share: unknown): HexBasis | null {
+  if (basis === "share") return typeof share === "string" && share.trim() !== "" ? `share:${share.trim()}` : null;
+  return isHexBasis(basis) ? basis : null;
 }
 
 /** The render tool's `mode` as a RenderMode: `symbols` is the map's `points`; anything unknown is null. */
@@ -107,6 +131,10 @@ function renderActions(output: Obj, catalog: LayerCatalog): MapAction[] {
   if (filters) op.filters = filters;
   // The standard view the agent named (spec §12); without one the reducer picks it from the data on a new layer.
   if (VIEW_KINDS.includes(output.view as ViewKind)) op.view = output.view as ViewKind;
+  // Rank by and the hex cells' color basis (spec §12c, §12d), the same state the layer row's controls write.
+  if (typeof output.rankBy === "string" && output.rankBy.trim() !== "") op.rankBy = output.rankBy.trim();
+  const basis = hexBasisOf(output.hexBasis, output.hexShare);
+  if (basis) op.hexBasis = basis;
   const actions: MapAction[] = [asked ? { type: "render", op } : { type: "render", op, defaultMode: true }];
   // `scenario` moves a scenario layer's scrubber (sea level rise feet); the reducer snaps it and ignores other layers.
   if (isNumber(output.scenario)) actions.push({ type: "set_scenario", layerId, value: output.scenario });
@@ -131,6 +159,7 @@ function queryActions(layerId: string, output: Obj, catalog: LayerCatalog, exist
         receivedAt: new Date().toISOString(),
         ...(entry?.fieldHelp && { fieldHelp: entry.fieldHelp }),
         ...(entry?.card && { card: entry.card }),
+        ...(entry?.attributes && { attributes: entry.attributes }),
       },
     },
   ];

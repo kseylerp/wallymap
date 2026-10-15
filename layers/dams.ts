@@ -20,7 +20,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, WHOLE_US_KM2, outsideUs } from "./_shared/coverage";
@@ -114,19 +115,23 @@ export function normalizeDams(fc: FeatureCollection): FeatureCollection {
 
 const NID_URL = "https://nid.sec.usace.army.mil";
 
-const FACETS: Facet[] = [
-  { key: "storageAf", label: "Storage", kind: "range", unit: "acre-feet", encode: "size" },
+const ATTRIBUTES: Attribute[] = [
   {
     key: "hazard",
+    type: "category",
     label: "Hazard potential",
-    kind: "category",
-    values: [
+    levels: [
       { value: "Low", label: "Low" },
       { value: "Significant", label: "Significant" },
       { value: "High", label: "High" },
       { value: "Undetermined", label: "Undetermined" },
     ],
   },
+  { key: "storageAf", type: "measure", label: "Storage", unit: "acre-feet", encode: "size" },
+  { key: "heightFt", type: "measure", label: "Height", unit: "ft" },
+  { key: "kind", type: "category", label: "Purpose" },
+  { key: "yearCompleted", type: "time", label: "Year completed" },
+  nameAttribute(),
 ];
 
 const STORAGE: FieldHelp = {
@@ -188,9 +193,10 @@ const dams = defineLayer({
   hardMaxAreaKm2: WHOLE_US_KM2,
   wide: { orderBy: "storage in acre-feet", limit: MAX_DAMS },
   input: z.object({}),
-  style: { geometry: "point", color: layerColor("dams"), unit: "acre-feet", extrude: "v", cluster: true, facets: FACETS },
+  style: { geometry: "point", color: layerColor("dams"), unit: "acre-feet", extrude: "v", cluster: true },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

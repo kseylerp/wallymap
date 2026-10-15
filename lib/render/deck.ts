@@ -4,7 +4,7 @@ import { H3HexagonLayer, TerrainLayer } from "@deck.gl/geo-layers";
 import { GeoJsonLayer, IconLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import { WebMercatorViewport } from "@math.gl/web-mercator";
 import type { Feature } from "geojson";
-import { cellToBoundary, cellToLatLng, getHexagonEdgeLengthAvg, latLngToCell, UNITS } from "h3-js";
+import { cellToBoundary, cellToLatLng, getHexagonEdgeLengthAvg, UNITS } from "h3-js";
 import Supercluster from "supercluster";
 import type { BBox, StyleHints } from "@/layers/types";
 import {
@@ -36,8 +36,9 @@ import { DECK_TERRAIN_ID, DECK_TERRAIN_TAG, demDecoder, demTileUrl } from "@/lib
 import { featureBBox, featureCenter, HEX_DELTA_TAG } from "@/lib/render/inspect";
 import { pinIconFor } from "@/lib/render/wally/pins";
 import { drawsNativeLines, isLineGeometry, SELECTED_LINE } from "@/lib/render/nativeLines";
-import type { MapState, RenderMode, RenderOp, Viewport } from "@/lib/render/state";
-import { extentOf, hatchStepOf, primaryFacet, sizeScale, topFeatures } from "@/lib/render/facets";
+import type { HexBasis, LoadedLayer, MapState, RenderMode, RenderOp, Viewport } from "@/lib/render/state";
+import { extentOf, hatchStepOf, primaryMeasure, sizeScale, topFeatures } from "@/lib/render/attributes";
+import { basisLabel, basisScale, basisT, cellContext, hexCells, registerCell, usableBasis, type CellContext, type HexCell } from "@/lib/render/hexCells";
 import { RANKED_LABELS } from "@/lib/render/views";
 
 type Rgba = [number, number, number, number];
@@ -239,54 +240,69 @@ function markerPosition(f: Feature): [number, number] {
 }
 
 /**
- * One tile: a Point feature at the hex center whose properties carry the cell and how many features fell in it, so
- * a pick reads as a feature the inspect card can show ("N features").
+ * One tile: a Point feature at the hex center whose properties carry the cell, how many features fell in it and its
+ * value on the layer's color basis (spec §12d); the renderer registers the cell behind it (lib/render/hexCells.ts) so
+ * a pick opens the cell's card.
  */
-export type HexFeature = Feature<GeoJSON.Point, { count: number; h3: string; aggregate: true }>;
+export type HexFeature = Feature<GeoJSON.Point, { count: number; h3: string; aggregate: true; value?: number }>;
 
-/** One result binned at one resolution: the tiles, the labelled subset, and the busiest tile's count. */
-type Binned = { hexes: HexFeature[]; labelled: HexFeature[]; max: number };
+/** One result binned at one resolution on one basis: the tiles, the labelled subset, and the ramp's scale. */
+type Binned = { hexes: HexFeature[]; labelled: HexFeature[]; max: number; lo: number; basis: HexBasis; label: (f: HexFeature) => string };
 
-/** Binned tiles per result and resolution, so panning and selection reuse the same tile objects. */
-const hexCache = new WeakMap<GeoJSON.FeatureCollection, Map<number, Binned>>();
+/** Binned tiles per result, resolution and basis, so panning and selection reuse the same tile objects. */
+const hexCache = new WeakMap<GeoJSON.FeatureCollection, Map<string, Binned>>();
 
 /** True for a usable lng/lat: finite, longitude within ±180 and latitude within ±90 (H3 throws otherwise). */
 function validLngLat([lng, lat]: [number, number]): boolean {
   return Number.isFinite(lng) && Number.isFinite(lat) && Math.abs(lng) <= 180 && Math.abs(lat) <= 90;
 }
 
-function binned(data: GeoJSON.FeatureCollection, resolution: number): Binned {
-  let byResolution = hexCache.get(data);
-  if (!byResolution) {
-    byResolution = new Map();
-    hexCache.set(data, byResolution);
+const COUNT_CONTEXT: CellContext = { timeKey: "t", noun: "features" };
+
+function binned(data: GeoJSON.FeatureCollection, resolution: number, asked: HexBasis = "count", ctx: CellContext = COUNT_CONTEXT): Binned {
+  let byKey = hexCache.get(data);
+  if (!byKey) {
+    byKey = new Map();
+    hexCache.set(data, byKey);
   }
-  const cached = byResolution.get(resolution);
+  const cells = hexCells(data, resolution);
+  const basis = usableBasis(asked, ctx, cells);
+  const key = `${resolution}|${basis}|${ctx.measure?.key ?? ""}|${ctx.category?.key ?? ""}|${ctx.timeKey}`;
+  const cached = byKey.get(key);
   if (cached) return cached;
-  const counts = new Map<string, number>();
-  for (const f of data.features) {
-    const position = markerPosition(f);
-    // One bad coordinate must not throw, or the overlay drops every layer on the map.
-    if (!validLngLat(position)) continue;
-    const cell = latLngToCell(position[1], position[0], resolution);
-    counts.set(cell, (counts.get(cell) ?? 0) + 1);
-  }
-  const hexes: HexFeature[] = [...counts].map(([h3, count]) => {
-    const [lat, lng] = cellToLatLng(h3);
-    return { type: "Feature", geometry: { type: "Point", coordinates: [lng, lat] }, properties: { count, h3, aggregate: true } };
+  const scale = basisScale(cells, basis, ctx);
+  const hexes: HexFeature[] = cells.map((cell) => {
+    const value = scale.values.get(cell);
+    const feature: HexFeature = {
+      type: "Feature",
+      geometry: { type: "Point", coordinates: cell.position },
+      properties: { count: cell.members.length, h3: cell.h3, aggregate: true, ...(value !== undefined && basis !== "count" && { value }) },
+    };
+    registerCell(feature, { cell, cells, basis, ctx });
+    return feature;
   });
-  const entry = {
+  const label = (f: HexFeature) => (basis === "count" ? countLabel(f.properties.count) : basisLabel(f.properties.value, basis));
+  const entry: Binned = {
     hexes,
-    labelled: hexes.filter((h) => h.properties.count >= HEX_TILE.labelMin),
-    max: hexes.reduce((m, h) => Math.max(m, h.properties.count), 1),
+    // Counts label cells holding two or more; other bases label every cell that has a value.
+    labelled: hexes.filter((h) => (basis === "count" ? h.properties.count >= HEX_TILE.labelMin : label(h) !== "")),
+    max: basis === "count" ? hexes.reduce((m, h) => Math.max(m, h.properties.count), 1) : scale.hi,
+    lo: scale.lo,
+    basis,
+    label,
   };
-  byResolution.set(resolution, entry);
+  byKey.set(key, entry);
   return entry;
 }
 
 /** Bins a result's features into H3 cells at `resolution`, skipping invalid coordinates (cached per result). */
 export function hexbin(data: GeoJSON.FeatureCollection, resolution: number): HexFeature[] {
   return binned(data, resolution).hexes;
+}
+
+/** The layer's cell context (measure, main category, date field), or the plain count context without a layer. */
+function cellCtx(ctx: Pick<OpContext, "layer">): CellContext {
+  return ctx.layer ? cellContext(ctx.layer) : COUNT_CONTEXT;
 }
 
 /**
@@ -297,6 +313,13 @@ export function hexTileColor(count: number, max: number): Rgba {
   const t = max > 1 ? Math.min(1, Math.max(0, Math.log(count) / Math.log(max))) : 1;
   const [a0, a1] = HEX_TILE.alpha;
   return rampRgba(HEX_TILE.ramp, t, Math.round(255 * (a0 + (a1 - a0) * t)));
+}
+
+/** A tile's fill on its basis: the same gray ramp, at `t` from basisT (log counts and sums, shares, recency). */
+export function hexTileColorAt(t: number): Rgba {
+  const [a0, a1] = HEX_TILE.alpha;
+  const u = Math.min(1, Math.max(0, t));
+  return rampRgba(HEX_TILE.ramp, u, Math.round(255 * (a0 + (a1 - a0) * u)));
 }
 
 const HEX_EDGE = hexToRgba(HEX_TILE.edge, Math.round(255 * HEX_TILE.edgeAlpha));
@@ -323,6 +346,8 @@ export function deckLayerKey(layerId: string, terrain: boolean): string {
 type OpContext = {
   data: GeoJSON.FeatureCollection;
   style: StyleHints;
+  /** The layer's title and attributes (spec §12c, §12d): what ranks, sizes and colors its cells. */
+  layer?: Pick<LoadedLayer, "title" | "attributes" | "style">;
   selected: Feature | undefined;
   zoom: number;
   /** The map's center latitude, to turn a pixel width into meters while a layer drapes on terrain. */
@@ -352,10 +377,16 @@ function memoExtent(data: GeoJSON.FeatureCollection, key: string): [number, numb
   return byKey.get(key) ?? null;
 }
 
-/** The range facet that sizes features (`encode: "size"`, spec §12a): symbol size, hatch density. */
-function sizeFacetKey(style: StyleHints): string | undefined {
-  const facet = primaryFacet(style);
-  return facet?.kind === "range" && facet.encode === "size" ? facet.key : undefined;
+/** The measure that sizes features (`encode: "size"`, spec §12c): symbol size, hatch density. */
+function sizeMeasureKey(ctx: Pick<OpContext, "layer">): string | undefined {
+  const measure = primaryMeasure(ctx.layer);
+  return measure?.encode === "size" ? measure.key : undefined;
+}
+
+/** The measure a point layer is ranked by: "Rank by" in its row, else in a ranked view its primary measure (else `v`). */
+function rankKeyOf(op: RenderOp, ctx: Pick<OpContext, "layer">): string | undefined {
+  if (op.rankBy) return op.rankBy;
+  return op.view === "ranked" ? (primaryMeasure(ctx.layer)?.key ?? "v") : undefined;
 }
 
 /**
@@ -385,8 +416,8 @@ function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
   const mode: RenderMode = op.mode;
   switch (mode) {
     case "points":
-      // A ranked view keeps its symbols (sized, named) however many there are: the slider holds the top N.
-      if (ctx.data.features.length > hexbinThreshold && op.view !== "ranked") return hexTileLayers(op, ctx, opacity);
+      // A ranked layer keeps its symbols (sized, named) however many there are: the row lists the top N.
+      if (ctx.data.features.length > hexbinThreshold && !rankKeyOf(op, ctx)) return hexTileLayers(op, ctx, opacity);
       return [...symbolLayers(op, ctx, opacity), ...rankedLabelLayers(op, ctx, opacity)];
     case "hexbin":
       return hexTileLayers(op, ctx, opacity);
@@ -510,7 +541,7 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const tint = perFeature((f) => hexToRgba(colorOf(f), Math.round(255 * recipe.tint)), opacity, selected);
   const hatch = perFeature((f) => hexToRgba(colorOf(f), Math.round(255 * recipe.hatchAlpha)), opacity, selected);
   const casingWidth = recipe.outlineWidth + 2 * recipe.casing;
-  const sizeKey = sizeFacetKey(ctx.style);
+  const sizeKey = sizeMeasureKey(ctx);
   const sized = sizeKey ? { key: sizeKey, extent: memoExtent(data, sizeKey) } : undefined;
   return [
     new GeoJsonLayer({
@@ -585,10 +616,12 @@ function scoreAreaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[]
  * Point symbols (pins.ts): a shape per layer family, centered on the point; the selected one fills purple. The
  * sprite's alpha carries the op opacity and the selection fade.
  */
-function symbolLayers(op: RenderOp, { data, selected, zoom, terrain, deckId, style }: OpContext, opacity: number): Layer[] {
+function symbolLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
+  const { data, selected, zoom, terrain, deckId } = ctx;
   const size = symbolSizePx(zoom);
-  // A ranked view sizes the symbols by the layer's measure and names its top few (spec §12).
-  const ranked = op.view === "ranked" ? rankedSizing(data, style) : undefined;
+  // Ranked (a ranked view, or "Rank by" in the row) sizes the symbols by the measure and names its top few (spec §12c).
+  const rankKey = rankKeyOf(op, ctx);
+  const ranked = rankKey ? rankedSizing(data, rankKey) : undefined;
   return [
     new IconLayer<Feature>({
       id: `${deckLayerKey(deckId ?? op.layerId, terrain)}:points`,
@@ -613,16 +646,17 @@ function symbolLayers(op: RenderOp, { data, selected, zoom, terrain, deckId, sty
   ];
 }
 
-/** A ranked point layer's sizing: the measure key (the size facet, else `v`), its extent, and the top features to name. */
-function rankedSizing(data: GeoJSON.FeatureCollection, style: StyleHints): { key: string; extent: [number, number] | null; top: Feature[] } {
-  const key = sizeFacetKey(style) ?? "v";
+/** A ranked point layer's sizing: the measure key, its extent, and the top features to name. */
+function rankedSizing(data: GeoJSON.FeatureCollection, key: string): { key: string; extent: [number, number] | null; top: Feature[] } {
   return { key, extent: memoExtent(data, key), top: topFeatures(data, key, RANKED_LABELS) };
 }
 
 /** Name labels for a ranked view's top features: dark grey on a white halo, above the symbol. */
-function rankedLabelLayers(op: RenderOp, { data, terrain, deckId, style }: OpContext, opacity: number): Layer[] {
-  if (op.view !== "ranked" || style.geometry !== "point") return [];
-  const { top, key, extent } = rankedSizing(data, style);
+function rankedLabelLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
+  const { data, terrain, deckId, style } = ctx;
+  const rankKey = rankKeyOf(op, ctx);
+  if (!rankKey || style.geometry !== "point") return [];
+  const { top, key, extent } = rankedSizing(data, rankKey);
   const labelled = top.filter((f) => typeof f.properties?.name === "string" && f.properties.name !== "");
   if (labelled.length === 0) return [];
   return [
@@ -654,14 +688,17 @@ function rankedLabelLayers(op: RenderOp, { data, terrain, deckId, style }: OpCon
  * 1px edges, a dark grey count on a white halo on grouped tiles. A picked tile is a `HexFeature`, so the inspect card
  * shows its count.
  */
-function hexTileLayers(op: RenderOp, { data, selected: picked, zoom, terrain, deckId }: OpContext, opacity: number): Layer[] {
+function hexTileLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
+  const { data, selected: picked, zoom, terrain, deckId } = ctx;
   // Its own id (not `:points`, the symbols' IconLayer): deck must never update one layer class in place of another.
   const id = `${deckLayerKey(deckId ?? op.layerId, terrain)}:hexbin`;
   const resolution = hexResolution(zoom);
-  const { hexes, labelled, max } = binned(data, resolution);
+  const { hexes, labelled, max, lo, basis, label } = binned(data, resolution, op.hexBasis, cellCtx(ctx));
   // A tile picked at another resolution is not among these tiles: ignore it rather than fade every tile.
   const selected = picked && hexes.includes(picked as HexFeature) ? picked : undefined;
-  const trigger = [selectionKey(selected), opacity, resolution];
+  const trigger = [selectionKey(selected), opacity, resolution, basis];
+  const fill = (f: HexFeature): Rgba =>
+    basis === "count" ? hexTileColor(f.properties.count, max) : hexTileColorAt(basisT(f.properties.value, { lo, hi: max, basis }));
   const fade = (f: HexFeature, c: Rgba) => {
     const base = withOpacity(c, opacity);
     return selected && f !== selected ? withOpacity(base, SIBLING_FADE) : base;
@@ -676,7 +713,7 @@ function hexTileLayers(op: RenderOp, { data, selected: picked, zoom, terrain, de
       // Polygons, not instanced columns: exact cell outlines in the globe view and at any latitude.
       highPrecision: true,
       coverage: HEX_TILE.coverage,
-      getFillColor: (f) => fade(f, hexTileColor(f.properties.count, max)),
+      getFillColor: (f) => fade(f, fill(f)),
       stroked: true,
       getLineColor: (f) => (f === selected ? withOpacity(SELECT, opacity) : fade(f, HEX_EDGE)),
       getLineWidth: (f) => (f === selected ? SELECTED_LINE_PX : 1),
@@ -689,19 +726,19 @@ function hexTileLayers(op: RenderOp, { data, selected: picked, zoom, terrain, de
       data: labelled,
       pickable: false,
       getPosition: (f) => f.geometry.coordinates as [number, number],
-      getText: (f) => countLabel(f.properties.count),
+      getText: label,
       getSize: HEX_TILE.labelSize,
       sizeUnits: "pixels",
       getColor: (f) => fade(f, HEX_LABEL),
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
       fontWeight: 500,
-      characterSet: "0123456789.k",
+      characterSet: "0123456789.k%",
       fontSettings: { sdf: true },
       outlineWidth: 0.35,
       outlineColor: HEX_LABEL_HALO,
       billboard: true,
       parameters: { cullMode: "none" },
-      updateTriggers: { getColor: trigger },
+      updateTriggers: { getColor: trigger, getText: trigger },
       ...terrainProps(terrain, "offset"),
     }),
   ];
@@ -891,7 +928,7 @@ export function columnResolution(zoom: number): number {
 /** How many named features a column's inspect card lists. */
 const COLUMN_TOP = 3;
 
-type ColumnProps = { name: string; count: number; h3: string; top?: string; v?: number; tallest: boolean; aggregate: true };
+type ColumnProps = { name: string; count: number; h3: string; top?: string; v?: number; tallest: boolean; aggregate: true; stack: number };
 /** One extruded H3 cell: its outline, how many features (and how much `v`) fell in it, and the most common names. */
 export type ColumnFeature = Feature<GeoJSON.Polygon, ColumnProps>;
 
@@ -916,76 +953,81 @@ function nameOf(f: Feature): string | null {
   return null;
 }
 
-/** A cell's value: its feature count, or the sum of positive numeric `v` when columns stand by value. */
-function columnValue(cell: { count: number; sum: number }, by: "v" | "count"): number {
-  return by === "v" ? cell.sum : cell.count;
-}
-
 /** A ring lifted to height `z` (meters), a hair above the column top so the cap never z-fights with it. */
 function liftRing(ring: GeoJSON.Position[], z: number): GeoJSON.Position[] {
   return ring.map(([lng, lat]) => [lng, lat, z * 1.002 + 2]);
 }
 
+/** Columns stand by `count`, by `v` (the sum of positive `v`, the layer's own measure before attributes) or on a basis. */
+export type ColumnBy = "v" | HexBasis;
+
 /**
- * Bins a result's features into H3 cells at `resolution` and stacks them (cached per result, resolution and `by`):
- * height is the count (or the sum of `v`) over the tallest cell's, times COLUMN_HEIGHT_EDGES edge lengths.
+ * Bins a result's features into H3 cells at `resolution` (lib/render/hexCells.ts, the same cells the flat tiles and the
+ * cell card read) and stacks them (cached per result, resolution and basis): height is the cell's value on the basis
+ * (count, sum of the measure, share, recency) over the tallest cell's, times COLUMN_HEIGHT_EDGES edge lengths. Each
+ * column is registered with its cell, so a pick opens the cell's card.
  */
-export function hexColumns(data: GeoJSON.FeatureCollection, resolution: number, by: "v" | "count"): Columned {
+export function hexColumns(data: GeoJSON.FeatureCollection, resolution: number, by: ColumnBy, ctx: CellContext = COUNT_CONTEXT): Columned {
   let byKey = columnCache.get(data);
   if (!byKey) {
     byKey = new Map();
     columnCache.set(data, byKey);
   }
-  const key = `${resolution}:${by}`;
+  // "v" is the sum of v: the measure the layer had before it declared attributes.
+  const cellsCtx: CellContext = by === "v" ? { ...ctx, measure: { key: "v", label: "Value" } } : ctx;
+  const cells = hexCells(data, resolution);
+  const basis = usableBasis(by === "v" ? "sum" : by, cellsCtx, cells);
+  const key = `${resolution}:${by}:${basis}:${cellsCtx.measure?.key ?? ""}:${cellsCtx.category?.key ?? ""}`;
   const cached = byKey.get(key);
   if (cached) return cached;
-  const cells = new Map<string, { count: number; sum: number; names: Map<string, number> }>();
-  for (const f of data.features) {
-    const p = anchorOf(f);
-    if (!p) continue;
-    const h3 = latLngToCell(p[1], p[0], resolution);
-    let cell = cells.get(h3);
-    if (!cell) {
-      cell = { count: 0, sum: 0, names: new Map() };
-      cells.set(h3, cell);
-    }
-    cell.count++;
-    const v = Number(f.properties?.v);
-    if (Number.isFinite(v) && v > 0) cell.sum += v;
-    const name = nameOf(f);
-    if (name) cell.names.set(name, (cell.names.get(name) ?? 0) + 1);
-  }
+  const scale = basisScale(cells, basis, cellsCtx);
+  // Recency stands from the oldest cell's newest date; the others from zero.
+  const valueOf = (cell: HexCell) => {
+    const v = scale.values.get(cell) ?? 0;
+    return basis === "recency" ? v - scale.lo : v;
+  };
   let max = 0;
-  for (const cell of cells.values()) max = Math.max(max, columnValue(cell, by));
+  for (const cell of cells) max = Math.max(max, valueOf(cell));
   const heightM = getHexagonEdgeLengthAvg(resolution, UNITS.m) * COLUMN_HEIGHT_EDGES;
   const features: ColumnFeature[] = [];
   const caps: Feature[] = [];
   const label: Columned["label"] = [];
-  for (const [h3, cell] of cells) {
-    const value = columnValue(cell, by);
-    const ring = cellToBoundary(h3, true);
-    const top = [...cell.names]
+  for (const cell of cells) {
+    const value = valueOf(cell);
+    const ring = cellToBoundary(cell.h3, true);
+    const names = new Map<string, number>();
+    for (const f of cell.members) {
+      const name = nameOf(f);
+      if (name) names.set(name, (names.get(name) ?? 0) + 1);
+    }
+    const top = [...names]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .slice(0, COLUMN_TOP)
       .map(([n, c]) => (c > 1 ? `${n} ×${c}` : n))
       .join(", ");
     // Every cell tied for the top takes purple (and its value), not just the first one found.
     const isTallest = max > 0 && value === max;
+    const count = cell.members.length;
+    const sum = basis === "sum" ? scale.values.get(cell) : undefined;
     const properties: ColumnProps = {
-      name: `${cell.count.toLocaleString("en-US")} ${cell.count === 1 ? "feature" : "features"} in this cell`,
-      count: cell.count,
-      h3,
+      name: `${count.toLocaleString("en-US")} ${count === 1 ? "feature" : "features"} in this cell`,
+      count,
+      h3: cell.h3,
       tallest: isTallest,
       aggregate: true,
+      stack: value,
       ...(top && { top }),
-      ...(by === "v" && { v: Math.round(cell.sum * 100) / 100 }),
+      ...(sum !== undefined && { v: Math.round(sum * 100) / 100 }),
     };
-    features.push({ type: "Feature", geometry: { type: "Polygon", coordinates: [ring] }, properties });
+    const feature: ColumnFeature = { type: "Feature", geometry: { type: "Polygon", coordinates: [ring] }, properties };
+    registerCell(feature, { cell, cells, basis, ctx: cellsCtx });
+    features.push(feature);
     const z = (value / (max || 1)) * heightM;
     caps.push({ type: "Feature", geometry: { type: "Polygon", coordinates: [liftRing(ring, z)] }, properties: { tallest: isTallest } });
     if (isTallest) {
-      const [lat, lng] = cellToLatLng(h3);
-      label.push({ position: [lng, lat, z + heightM * 0.04 + 40], text: countLabel(Math.round(value)) });
+      const [lat, lng] = cellToLatLng(cell.h3);
+      const text = basis === "count" ? countLabel(count) : basisLabel(scale.values.get(cell), basis);
+      if (text) label.push({ position: [lng, lat, z + heightM * 0.04 + 40], text });
     }
   }
   const entry: Columned = {
@@ -1088,9 +1130,11 @@ function columnSet(
  * inspect card shows its count and most common names.
  */
 function columnLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
-  const by = ctx.style.extrude === "v" ? "v" : "count";
-  const { cells, caps, max, heightM, label } = hexColumns(ctx.data, columnResolution(ctx.zoom), by);
-  const valueOf = (f: Feature) => (by === "v" ? Number(f.properties?.v) || 0 : Number(f.properties?.count) || 0);
+  const cellsCtx = cellCtx(ctx);
+  // The op's basis; else a layer that extrudes by value stands by its measure's sum (or v's, without one).
+  const by: ColumnBy = op.hexBasis ?? (ctx.style.extrude === "v" ? (cellsCtx.measure ? "sum" : "v") : "count");
+  const { cells, caps, max, heightM, label } = hexColumns(ctx.data, columnResolution(ctx.zoom), by, cellsCtx);
+  const valueOf = (f: Feature) => Number(f.properties?.stack) || 0;
   const selected = ctx.selected && cells.features.includes(ctx.selected as ColumnFeature) ? ctx.selected : undefined;
   return columnSet(
     `${deckLayerKey(ctx.deckId ?? op.layerId, ctx.terrain)}:columns`,
@@ -1471,6 +1515,7 @@ export function buildDeckLayerSets(
     const ctx: OpContext = {
       data: loaded.result.data,
       style: loaded.style,
+      layer: loaded,
       selected,
       zoom: state.viewport.zoom,
       latitude: state.viewport.latitude,
@@ -1515,9 +1560,38 @@ export function buildDeckLayerSets(
     main.push(...sideA.map((l) => (shownA ? l : l.clone({ visible: false }))));
     main.push(...sideB.map((l) => (shownB ? l : l.clone({ visible: false }))));
   }
+  main.push(...hoverLayers(state, terrain));
   if (terrain && a.length > 0) a.unshift(terrainSourceLayer(mapboxToken));
   if (terrain && b.length > 0) b.unshift(terrainSourceLayer(mapboxToken));
   return { main, a, b };
+}
+
+/** The ring around a feature the pointer is over in a layer row's top 10 (spec §12c: the list is synced with the map). */
+export const HOVER_RING = { radiusPx: 15, widthPx: 2.5 } as const;
+
+function hoverLayers(state: MapState, terrain: boolean): Layer[] {
+  const hover = state.hover;
+  if (!hover) return [];
+  const op = state.renderOps.find((o) => o.layerId === hover.layerId);
+  const at = featureCenter(hover.feature);
+  if (!op?.visible || !at) return [];
+  return [
+    new ScatterplotLayer<{ position: [number, number] }>({
+      id: `${hover.layerId}:hover`,
+      data: [{ position: at }],
+      pickable: false,
+      stroked: true,
+      filled: false,
+      getPosition: (d) => d.position,
+      getRadius: HOVER_RING.radiusPx,
+      radiusUnits: "pixels",
+      getLineColor: SELECT,
+      getLineWidth: HOVER_RING.widthPx,
+      lineWidthUnits: "pixels",
+      parameters: { cullMode: "none", depthCompare: "always" },
+      ...terrainProps(terrain, "offset"),
+    }),
+  ];
 }
 
 /**

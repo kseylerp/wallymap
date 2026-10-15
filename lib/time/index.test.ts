@@ -17,6 +17,7 @@ import {
   tileSteps,
   tileUrlForTime,
   timeIndex,
+  timePresets,
   windowLabel,
   type TimeWindow,
 } from "@/lib/time";
@@ -374,5 +375,36 @@ describe("a dated tile layer in the map state", () => {
     expect(url(s)).toBe("https://g/snow/2026-09-10/{z}/{x}/{y}.png");
     s = reduce(s, { type: "time_tick" });
     expect(url(s)).toBe("https://g/snow/2026-09-11/{z}/{x}/{y}.png");
+  });
+});
+
+describe("timePresets (spec §12c: presets beside the scrubber)", () => {
+  const now = Date.parse("2026-10-15T12:00:00Z");
+  const dated = (dates: string[]): Record<string, LoadedLayer> => ({
+    x: {
+      id: "x",
+      title: "x",
+      style: { geometry: "point", color: "#000" },
+      result: {
+        kind: "geojson",
+        data: { type: "FeatureCollection", features: dates.map((t) => ({ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: { t } })) },
+        citation: { source: "s", url: "https://example.com", retrieved: "r" },
+      },
+      receivedAt: "",
+    },
+  });
+
+  it("offers the last day, week and month for a short span, each ending at the data's end", () => {
+    const index = timeIndex(dated(["2026-09-01T00:00:00Z", "2026-10-15T06:00:00Z"]), { now })!;
+    const presets = timePresets(index, now);
+    expect(presets.map((p) => p.label)).toEqual(["Last 24 hours", "Last 7 days", "Last 30 days"]);
+    expect(presets[1].window[0]).toBe("2026-10-08T12:00:00.000Z");
+    expect(presets[1].window[1]).toBe(index.buckets.at(-1)!.end);
+  });
+
+  it("offers this year and since a named year for a long span, and nothing that would not narrow it", () => {
+    const index = timeIndex(dated(["1995-06-01", "2026-03-01"]), { now })!;
+    expect(timePresets(index, now).map((p) => p.label)).toEqual(["This year", "Since 2021", "Since 2020", "Since 2010"]);
+    expect(timePresets(timeIndex(dated(["2026-10-15T01:00:00Z", "2026-10-15T02:00:00Z"]), { now })!, now)).toEqual([]);
   });
 });

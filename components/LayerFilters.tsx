@@ -1,5 +1,7 @@
 "use client";
 
+import type { FeatureCollection } from "geojson";
+import { MeasureHistogram } from "@/components/MeasureHistogram";
 import { formatValue } from "@/lib/format";
 import { formatFilterNumber, type FilterField, type LayerFilters as Filters } from "@/lib/render/filters";
 import type { MapAction } from "@/lib/render/state";
@@ -10,8 +12,15 @@ type LayerFiltersProps = {
   title: string;
   fields: FilterField[];
   filters: Filters;
+  /** Every feature the layer loaded, for the numeric fields' mini histograms. */
+  data: FeatureCollection;
   dispatch: (action: MapAction) => void;
 };
+
+/** A year-like number (year, yearCompleted): the one field that keeps a two-handle range (spec §12c). */
+export function isYearKey(key: string): boolean {
+  return /(^|[a-z])year/i.test(key) && !/years?Back/i.test(key);
+}
 
 type Range = Extract<FilterField, { kind: "range" }>;
 type Category = Extract<FilterField, { kind: "category" }>;
@@ -137,11 +146,12 @@ export function RangeFilter({
 }
 
 /**
- * A layer's attribute filters, under its legend row: one block per field the data offers (lib/render/filters.ts):
- * category chips with counts ("all" clears the field), or a two-handle range with its bounds in tabular figures.
- * Every change applies at once to the map, the counts and the export; "Reset" clears them all.
+ * A layer's other fields, under More in its row: one block per field the data offers that the layer does not declare
+ * as an attribute (lib/render/filters.ts): category chips with counts ("all" clears the field), a mini histogram for a
+ * number (no handles), or, for a year, a two-handle range with its bounds in tabular figures. Every change applies at
+ * once to the map, the counts and the export; "Reset" clears them all.
  */
-export function LayerFilters({ id, layerId, title, fields, filters, dispatch }: LayerFiltersProps) {
+export function LayerFilters({ id, layerId, title, fields, filters, data, dispatch }: LayerFiltersProps) {
   const update = (key: string, entry: Filters[string] | undefined) => {
     const next: Filters = { ...filters };
     if (entry && ((entry.include && entry.include.length > 0) || entry.range)) next[key] = entry;
@@ -151,7 +161,7 @@ export function LayerFilters({ id, layerId, title, fields, filters, dispatch }: 
   const active = Object.keys(filters).length > 0;
 
   return (
-    <div id={id} role="region" aria-label={`Filters for ${title}`} data-testid="layer-filters" className="space-y-2.5 pt-2.5 pl-9">
+    <div id={id} role="region" aria-label={`Filters for ${title}`} data-testid="layer-filters" className="space-y-2.5">
       {fields.map((field) => (
         <div key={field.key}>
           <p className="mb-1 text-[11.5px] leading-4 text-ink-muted" title={field.key}>
@@ -163,12 +173,14 @@ export function LayerFilters({ id, layerId, title, fields, filters, dispatch }: 
               include={filters[field.key]?.include ?? []}
               onChange={(include) => update(field.key, { ...filters[field.key], include })}
             />
-          ) : (
+          ) : isYearKey(field.key) ? (
             <RangeFilter
               field={field}
               range={filters[field.key]?.range}
               onChange={(range) => update(field.key, { ...filters[field.key], range })}
             />
+          ) : (
+            <MeasureHistogram field={field} data={data} filters={filters} onChange={(next) => dispatch({ type: "set_filters", layerId, filters: next })} />
           )}
         </div>
       ))}

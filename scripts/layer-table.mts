@@ -118,13 +118,18 @@ function keyText(l: Layer): string {
 
 const cell = (s: string) => s.replace(/\|/g, "\\|");
 
-/** The layer's facets (spec §12a) as the layer row labels them, the one that drives the map first; "" without any. */
-function facetText(l: Layer): string {
-  return (l.style.facets ?? [])
-    .map((f) => {
-      if (f.kind === "range") return `${f.label}${f.unit ? ` (${f.unit})` : ""}`;
-      const labels = [...new Set((f.values ?? []).map((v) => v.label))];
-      return labels.length <= 6 ? `${f.label}: ${labels.join(", ")}` : `${f.label} (${labels.length} classes)`;
+/**
+ * The layer's attributes (spec §12c) as the layer row offers them, by type: chips list their labels (an ordinal names
+ * its source scale), measures their unit, "" without any.
+ */
+function attributeCell(l: Layer): string {
+  return (l.attributes ?? [])
+    .map((a) => {
+      const labels = [...new Set((a.levels ?? []).map((v) => v.label))];
+      if (a.type === "measure") return `${a.label} (measure${a.unit ? `, ${a.unit}` : ""}${a.presets?.length ? `, ${a.presets.length} presets` : ""})`;
+      if (a.type === "ordinal") return `${a.label} (ordinal, ${a.scale}): ${labels.join(", ")}`;
+      if (a.type === "category") return labels.length === 0 ? `${a.label} (category, from the data)` : labels.length <= 6 ? `${a.label} (category): ${labels.join(", ")}` : `${a.label} (category, ${labels.length} values)`;
+      return `${a.label} (${a.type})`;
     })
     .join("; ");
 }
@@ -147,10 +152,10 @@ export function layerTable(): string {
   const rows = listLayers().map((l) => {
     const m = META[l.id];
     if (!m) throw new Error(`scripts/layer-table.mts has no entry for layer "${l.id}"`);
-    return `| \`${l.id}\` | ${cell(l.title)} | ${cell(m.shows)} | ${cell(m.source)} | ${coverageText(l)} | ${cell(areaText(l))} | ${keyText(l)} | ${cell(m.freshness)} | ${cell(facetText(l))} |`;
+    return `| \`${l.id}\` | ${cell(l.title)} | ${cell(m.shows)} | ${cell(m.source)} | ${coverageText(l)} | ${cell(areaText(l))} | ${keyText(l)} | ${cell(m.freshness)} | ${cell(attributeCell(l))} |`;
   });
   return [
-    "| Id | Title | What it shows | Source | Coverage | Area (km²) | Key needed | Freshness | Facets |",
+    "| Id | Title | What it shows | Source | Coverage | Area (km²) | Key needed | Freshness | Attributes |",
     "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ...rows,
   ].join("\n");

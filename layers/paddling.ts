@@ -17,7 +17,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { WHITEWATER_LEVELS, WHITEWATER_SCALE, nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { overpassCounts, overpassQuery } from "./_shared/overpass";
 import {
@@ -237,23 +238,6 @@ export function normalizePaddling(json: unknown): FeatureCollection<Geometry> {
   return { type: "FeatureCollection", features };
 }
 
-/** Class numbers gradeNumber can emit, each under its class (a + or - half step stays in the class it is written with). */
-const CLASS_VALUES: [number, string][] = [
-  [0.5, "Class I"],
-  [1, "Class I"],
-  [1.5, "Class I"],
-  [2, "Class II"],
-  [2.5, "Class II"],
-  [3, "Class III"],
-  [3.5, "Class III"],
-  [4, "Class IV"],
-  [4.5, "Class IV"],
-  [5, "Class V"],
-  [5.5, "Class V"],
-  [6, "Class VI"],
-  [6.5, "Class VI"],
-];
-
 const KIND_LABELS: Record<PaddlingKind, string> = {
   rapid: "Rapid",
   section: "Section",
@@ -264,9 +248,10 @@ const KIND_LABELS: Record<PaddlingKind, string> = {
   feature: "Other feature",
 };
 
-const FACETS: Facet[] = [
-  { key: "v", label: "Class", kind: "category", encode: "color", values: CLASS_VALUES.map(([value, label]) => ({ value, label })) },
-  { key: "kind", label: "Kind", kind: "category", values: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+const ATTRIBUTES: Attribute[] = [
+  { key: "v", type: "ordinal", label: "Class", encode: "color", levels: WHITEWATER_LEVELS, scale: WHITEWATER_SCALE },
+  { key: "kind", type: "category", label: "Kind", levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+  nameAttribute(),
 ];
 
 const SCALE_URL = "https://americanwhitewater.org/content/Wiki/safety:internation_scale_of_river_difficulty";
@@ -336,9 +321,10 @@ const paddling = defineLayer({
   // Rapids and access points have no length, so the wide answer keeps the named ones in OpenStreetMap id order.
   wide: { mode: "named", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "line", color: layerColor("paddling"), facets: FACETS },
+  style: { geometry: "line", color: layerColor("paddling") },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     if (ctx.wide === true) return queryWide(ctx, input);

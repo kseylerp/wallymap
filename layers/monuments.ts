@@ -23,7 +23,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { layerColor } from "@/lib/render/palette";
@@ -143,23 +144,24 @@ export function offsetFor(bbox: BBox, wide = false): number {
 /** Most polygons in a wide result; the whole dataset is under 70, so this only bounds the request. */
 const WIDE_LIMIT = 1000;
 
-const FACETS: Facet[] = [
+const ATTRIBUTES: Attribute[] = [
   {
     key: "kind",
+    type: "category",
     label: "Boundary",
-    kind: "category",
     versions: true,
-    values: [
+    levels: [
       { value: "2021", label: "2021 boundary" },
       { value: "current", label: "Current boundary" },
     ],
   },
   {
     key: "designation",
+    type: "category",
     label: "Designation",
-    kind: "category",
-    values: [...new Set(Object.values(DESIGNATIONS))].map((value) => ({ value, label: value })),
+    levels: [...new Set(Object.values(DESIGNATIONS))].map((value) => ({ value, label: value })),
   },
+  nameAttribute(),
 ];
 
 const AREA: FieldHelp = {
@@ -205,9 +207,10 @@ const monuments = defineLayer({
       .default("both")
       .describe("Which boundaries: 'current' (as BLM draws them now), '2021' (the Utah monuments before the changes) or 'both' (default)."),
   }),
-  style: { geometry: "polygon", color: layerColor("monuments"), fillOpacity: 0.2, facets: FACETS },
+  style: { geometry: "polygon", color: layerColor("monuments"), fillOpacity: 0.2 },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

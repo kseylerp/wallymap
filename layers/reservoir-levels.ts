@@ -38,7 +38,8 @@
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { nameAttribute, timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { bboxesDisjoint } from "./_shared/coverage";
@@ -298,9 +299,11 @@ function inBbox([lon, lat]: [number, number], [w, s, e, n]: BBox): boolean {
   return lon >= w && lon <= e && lat >= s && lat <= n;
 }
 
-const FACETS: Facet[] = [
-  { key: "pctFull", label: "Percent full", kind: "range", unit: "%", encode: "size" },
-  { key: "storageAf", label: "Storage", kind: "range", unit: "acre-feet" },
+const ATTRIBUTES: Attribute[] = [
+  { key: "pctFull", type: "measure", label: "Percent full", unit: "%", encode: "size" },
+  { key: "storageAf", type: "measure", label: "Storage", unit: "acre-feet" },
+  timeAttribute("Reading"),
+  nameAttribute(),
 ];
 
 const STORAGE: FieldHelp = {
@@ -365,9 +368,10 @@ const reservoirLevels = defineLayer({
       .optional()
       .describe("Only reservoirs whose name contains this text, case-insensitive (for example 'powell')."),
   }),
-  style: { geometry: "point", color: layerColor("reservoir-levels"), unit: "acre-feet", extrude: "v", facets: FACETS },
+  style: { geometry: "point", color: layerColor("reservoir-levels"), unit: "acre-feet", extrude: "v" },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

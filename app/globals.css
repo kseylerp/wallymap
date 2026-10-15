@@ -691,6 +691,85 @@ textarea:focus-visible {
   font-size: 10.5px;
   opacity: 0.6;
 }
+/*
+ * The mini histogram (components/MeasureHistogram.tsx, spec §12c): the only free range control. Bars on a baseline,
+ * each a button; picked bars in ink, the rest a quiet grey. No handles.
+ */
+.measure-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 28px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 25%, transparent);
+}
+.measure-bar {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  cursor: pointer;
+}
+.measure-bar:disabled {
+  cursor: default;
+}
+.measure-bar-fill {
+  display: block;
+  width: 100%;
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
+  border-radius: 1px 1px 0 0;
+  transition: background-color 150ms var(--ease-out);
+}
+.measure-bar:hover .measure-bar-fill {
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
+}
+.measure-bar[aria-pressed="true"] .measure-bar-fill {
+  background: var(--ink);
+}
+.measure-bar:focus-visible {
+  outline: 2px solid var(--slate);
+  outline-offset: 1px;
+}
+/* Rank by's top 10: one line per feature, rank, name (truncated), value; hover rings it on the map. */
+.top-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 1px 2px;
+  border-radius: 3px;
+  font-size: 11.5px;
+  line-height: 17px;
+  text-align: left;
+  color: var(--ink);
+  transition: background-color 150ms var(--ease-out);
+}
+.top-row:hover,
+.top-row:focus-visible {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: none;
+}
+.legend-select.rank-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 180px;
+}
+/* The name search under More: a hairline field the width of the row. */
+.name-search {
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  border-radius: 4px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--ink);
+  outline: none;
+}
+.name-search:focus-visible {
+  border-color: var(--ink);
+}
 .filter-range {
   position: relative;
   height: 14px;

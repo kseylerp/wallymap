@@ -30,7 +30,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { nameAttribute, timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
@@ -298,7 +299,7 @@ function isTimeout(err: unknown): boolean {
   return typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
 }
 
-const FACETS: Facet[] = [{ key: "areaKm2", label: "Area", kind: "range", unit: "km²", encode: "size" }];
+const ATTRIBUTES: Attribute[] = [{ key: "areaKm2", type: "measure", label: "Area", unit: "km²", encode: "size" }, timeAttribute("Mapped"), nameAttribute()];
 
 const AREA: FieldHelp = {
   text: "The glacier's area in this outline as GLIMS records it (db_area), for the date of the image it was mapped from.",
@@ -348,10 +349,10 @@ const glaciers = defineLayer({
     unit: "km²",
     fillOpacity: 0.3,
     extrude: "v",
-    facets: FACETS,
   },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     // Wide (over 8,000 km², up to the hard cap): the largest outlines by area, server-sorted and capped at the strategy's

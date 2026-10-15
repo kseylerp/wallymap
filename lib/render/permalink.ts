@@ -2,12 +2,12 @@ import type { BBox, LayerError, LayerResult, StyleHints } from "@/layers/types";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import type { LayerFilters } from "@/lib/render/filters";
 import { DARK_GREY } from "@/lib/render/palette";
-import { RENDER_MODES, type Basemap, type MapAction, type MapState, type RenderMode, type TimeState, type Viewport } from "@/lib/render/state";
+import { isHexBasis, RENDER_MODES, type Basemap, type HexBasis, type MapAction, type MapState, type RenderMode, type TimeState, type Viewport } from "@/lib/render/state";
 
 /** A time window as ISO dates (the scrubber's window, `t=`). */
 export type PermalinkTime = { start: string; end: string };
 
-export type PermalinkLayer = { id: string; mode?: RenderMode; visible: boolean; filters?: LayerFilters };
+export type PermalinkLayer = { id: string; mode?: RenderMode; visible: boolean; filters?: LayerFilters; rankBy?: string; hexBasis?: HexBasis };
 
 /** A scenario layer's amount on the scenario scrubber (`s=<layer>:<value>`). */
 export type PermalinkScenario = { layerId: string; value: number };
@@ -63,6 +63,7 @@ export function encodeFilters(ops: { layerId: string; filters?: LayerFilters }[]
       const head = `${encodeURIComponent(op.layerId)}:${encodeURIComponent(key)}`;
       if (f.range && f.range.every(Number.isFinite)) entries.push(`${head}:${num(f.range[0])}~${num(f.range[1])}`);
       if (f.include && f.include.length > 0) entries.push(`${head}=${f.include.map(encodeURIComponent).join("+")}`);
+      if (f.match && f.match.trim() !== "") entries.push(`${head}*=${encodeURIComponent(f.match.trim())}`);
     }
   }
   const kept: string[] = [];
@@ -86,7 +87,14 @@ export function decodeFilters(value: string): Record<string, LayerFilters> {
     if (!layerId) continue;
     const eq = rest.indexOf("=");
     const colon = rest.indexOf(":");
-    if (eq > 0 && (colon === -1 || eq < colon)) {
+    if (eq > 1 && rest[eq - 1] === "*" && (colon === -1 || eq < colon)) {
+      // A name search: `<layer>:<key>*=<text>`.
+      const key = safeDecode(rest.slice(0, eq - 1));
+      const match = safeDecode(rest.slice(eq + 1));
+      if (!key || !match) continue;
+      const filters = (out[layerId] ??= {});
+      filters[key] = { ...filters[key], match };
+    } else if (eq > 0 && (colon === -1 || eq < colon)) {
       const key = safeDecode(rest.slice(0, eq));
       const include = rest
         .slice(eq + 1)
@@ -125,7 +133,11 @@ export function encodeState(state: PermalinkSource, servable?: Record<string, un
   ];
   const layers = state.renderOps
     .filter((op) => state.layers[op.layerId] && (!servable || op.layerId in servable))
-    .map((op) => `${encodeURIComponent(op.layerId)}:${op.mode}:${op.visible ? 1 : 0}`);
+    .map((op) => {
+      // Rank by and the hex basis ride after the visibility, URI-encoded (a share basis holds a colon).
+      const extra = op.rankBy || op.hexBasis ? `:${encodeURIComponent(op.rankBy ?? "")}${op.hexBasis ? `:${encodeURIComponent(op.hexBasis)}` : ""}` : "";
+      return `${encodeURIComponent(op.layerId)}:${op.mode}:${op.visible ? 1 : 0}${extra}`;
+    });
   if (layers.length > 0) parts.push(`l=${layers.join(",")}`);
   const shared = state.renderOps.filter((op) => state.layers[op.layerId] && (!servable || op.layerId in servable));
   const { value: filters, dropped } = encodeFilters(shared);
@@ -160,13 +172,17 @@ function safeDecode(value: string): string | null {
 function parseLayers(value: string): PermalinkLayer[] {
   const layers: PermalinkLayer[] = [];
   for (const entry of value.split(",")) {
-    const [rawId, mode, visible] = entry.split(":");
+    const [rawId, mode, visible, rawRank, rawBasis] = entry.split(":");
     const id = rawId ? safeDecode(rawId) : null;
     if (!id) continue;
+    const rankBy = rawRank ? safeDecode(rawRank) : null;
+    const hexBasis = rawBasis ? safeDecode(rawBasis) : null;
     layers.push({
       id,
       mode: RENDER_MODES.includes(mode as RenderMode) ? (mode as RenderMode) : undefined,
       visible: visible !== "0",
+      ...(rankBy && { rankBy }),
+      ...(isHexBasis(hexBasis) && { hexBasis }),
     });
   }
   return layers;
@@ -328,6 +344,7 @@ export async function restoreFromPermalink(
         receivedAt: new Date().toISOString(),
         ...(entry?.fieldHelp && { fieldHelp: entry.fieldHelp }),
         ...(entry?.card && { card: entry.card }),
+        ...(entry?.attributes && { attributes: entry.attributes }),
       },
     });
     // A link without a mode takes the layer's default from its hints, as a fresh query would.
@@ -338,6 +355,8 @@ export async function restoreFromPermalink(
         mode: layer.mode ?? DEFAULT_MODE[style.geometry],
         visible: layer.visible,
         ...(layer.filters && { filters: layer.filters }),
+        ...(layer.rankBy && { rankBy: layer.rankBy }),
+        ...(layer.hexBasis && { hexBasis: layer.hexBasis }),
       },
       ...(layer.mode === undefined && { defaultMode: true }),
     });

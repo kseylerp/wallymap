@@ -22,7 +22,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
+import { defineLayer, type Attribute, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
+import { timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
@@ -201,6 +202,8 @@ const CARD: CardSpec = {
   links: [{ key: "url", label: "Observation on iNaturalist" }],
 };
 
+const ATTRIBUTES: Attribute[] = [{ key: "species", type: "category", label: "Species" }, timeAttribute("Seen")];
+
 const species = defineLayer({
   id: "species",
   title: "Species sightings",
@@ -223,6 +226,7 @@ const species = defineLayer({
   style: { geometry: "point", color: layerColor("species") },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

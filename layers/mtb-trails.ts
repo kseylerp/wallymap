@@ -14,7 +14,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { MTB_LEVELS, MTB_SCALE, nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { overpassCounts, overpassQuery } from "./_shared/overpass";
 import { buildNamedGeometryQuery, buildNamedScanQuery, longestNamedFirst, pickNamedByLength } from "./osm-trails";
@@ -183,18 +184,12 @@ async function queryWide(ctx: QueryContext, input: MtbInput): Promise<LayerResul
   };
 }
 
-const SCALE_LABELS: Record<number, string> = { 0: "Easy", 1: "Easy", 2: "Moderate", 3: "Hard", 4: "Expert", 5: "Expert", 6: "Expert" };
 const KIND_LABELS: Record<string, string> = { mtb: "Rated trail", imba: "IMBA rated", route: "Route" };
 
-const FACETS: Facet[] = [
-  {
-    key: "v",
-    label: "Difficulty",
-    kind: "category",
-    encode: "color",
-    values: [0, 1, 2, 3, 4, 5, 6].map((value) => ({ value, label: SCALE_LABELS[value] })),
-  },
-  { key: "kind", label: "Kind", kind: "category", values: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+const ATTRIBUTES: Attribute[] = [
+  { key: "v", type: "ordinal", label: "Difficulty", encode: "color", levels: MTB_LEVELS, scale: MTB_SCALE },
+  { key: "kind", type: "category", label: "Kind", levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+  nameAttribute(),
 ];
 
 const SINGLETRACK: FieldHelp = {
@@ -271,9 +266,10 @@ const mtbTrails = defineLayer({
   maxAreaKm2: 2500,
   wide: { mode: "named", orderBy: "length in km", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "line", color: layerColor("mtb-trails"), facets: FACETS },
+  style: { geometry: "line", color: layerColor("mtb-trails") },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     if (ctx.wide === true) return queryWide(ctx, input);

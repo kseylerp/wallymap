@@ -26,7 +26,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { DROUGHT_LEVELS, DROUGHT_SCALE } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
@@ -212,20 +213,7 @@ function isTimeout(err: unknown): boolean {
 
 const DROUGHT_URL = "https://droughtmonitor.unl.edu/About/AbouttheData/DroughtClassification.aspx";
 
-const FACETS: Facet[] = [
-  {
-    key: "kind",
-    label: "Category",
-    kind: "category",
-    values: [
-      { value: "D0", label: "D0 Abnormally Dry" },
-      { value: "D1", label: "D1 Moderate Drought" },
-      { value: "D2", label: "D2 Severe Drought" },
-      { value: "D3", label: "D3 Extreme Drought" },
-      { value: "D4", label: "D4 Exceptional Drought" },
-    ],
-  },
-];
+const ATTRIBUTES: Attribute[] = [{ key: "kind", type: "ordinal", label: "Category", levels: DROUGHT_LEVELS, scale: DROUGHT_SCALE }];
 
 const CATEGORY: FieldHelp = {
   text:
@@ -268,9 +256,10 @@ const drought = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 16_000_000,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("drought"), fillOpacity: 0.5, facets: FACETS },
+  style: { geometry: "polygon", color: layerColor("drought"), fillOpacity: 0.5 },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

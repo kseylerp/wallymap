@@ -29,7 +29,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type Attribute, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { nameAttribute, timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { rankedSparql, wikimediaFetch } from "./_shared/wikimedia";
@@ -360,6 +361,20 @@ function thin<T>(items: T[], keep: number): T[] {
 
 const NO_TOKEN_NOTE = "Mapillary was skipped because no MAPILLARY_TOKEN is configured, so only Wikimedia Commons photos are shown";
 
+const ATTRIBUTES: Attribute[] = [
+  {
+    key: "source",
+    type: "category",
+    label: "Source",
+    levels: [
+      { value: "commons", label: "Wikimedia Commons" },
+      { value: "mapillary", label: "Mapillary" },
+    ],
+  },
+  timeAttribute("Taken"),
+  nameAttribute("Title", "title"),
+];
+
 const photos = defineLayer({
   id: "photos",
   title: "Photo density",
@@ -382,6 +397,7 @@ const photos = defineLayer({
   wide: { mode: "named", orderBy: "number of Wikipedia languages", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("photos") },
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const wanted = new Set<Source>(input.sources);

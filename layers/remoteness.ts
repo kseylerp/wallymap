@@ -9,7 +9,7 @@
 import { z } from "zod";
 import { cellToBoundary, cellToLatLng, getHexagonAreaAvg, latLngToCell, polygonToCells } from "h3-js";
 import type { Feature, FeatureCollection, Geometry, Polygon, Position } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
 import { getLayer, registerLayer } from "./registry";
 import { overpassQuery } from "./_shared/overpass";
 import { outsideUs } from "./_shared/coverage";
@@ -242,7 +242,7 @@ function tooManyCells(count: number, resolution: number): LayerError {
 
 const pct = (weight: number) => `${Math.round(weight * 100)}%`;
 
-const FACETS: Facet[] = [{ key: "v", label: "Remoteness", kind: "range", unit: "score" }];
+const ATTRIBUTES: Attribute[] = [{ key: "v", type: "measure", label: "Remoteness", unit: "score" }];
 
 const HELP: Record<string, FieldHelp> = {
   v: {
@@ -281,9 +281,10 @@ const remoteness = defineLayer({
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 60_000,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("remoteness"), unit: "score", facets: FACETS },
+  style: { geometry: "polygon", color: layerColor("remoteness"), unit: "score" },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const area = bboxAreaKm2(ctx.bbox);

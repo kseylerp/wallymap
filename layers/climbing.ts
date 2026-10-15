@@ -17,7 +17,17 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import {
+  bandsBetween,
+  CLIMBING_GRADE_HELP,
+  CLIMBING_GRADE_SCALE,
+  CLIMBING_LEVELS,
+  climbingBand,
+  nameAttribute,
+  orderedBands,
+  type ClimbingBand,
+} from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { overpassQuery, type OverpassResult } from "./_shared/overpass";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
@@ -106,7 +116,7 @@ const openbetaSchema = z.object({
   }),
 });
 
-type Props = Record<string, string | number | boolean>;
+type Props = Record<string, string | number | boolean | string[]>;
 type Crag = { position: [number, number]; props: Props };
 
 // ---- grade summaries ----
@@ -158,6 +168,38 @@ export function osmGradeSummary(tags: Record<string, string>): string | undefine
   if (lo && hi) return lo === hi ? `${lo} (${system})` : `${lo} to ${hi} (${system})`;
   const one = lo ?? hi;
   return one ? `${one} (${system})` : undefined;
+}
+
+/**
+ * The difficulty bands OpenBeta's grade counts cover (spec §12c: YDS, UIAA, French and V-scale map to Beginner,
+ * Intermediate, Advanced, Elite), in band order; grades in other systems are skipped.
+ */
+export function gradeBandsOf(byGrade: { label: string; count: number }[] | null | undefined): ClimbingBand[] {
+  return orderedBands((byGrade ?? []).flatMap((g) => (g.count > 0 ? [climbingBand(g.label)] : [])).filter((b): b is ClimbingBand => b !== undefined));
+}
+
+/** The bands an OpenStreetMap crag's climbing:grade:<system>:min/max (or :mean) tags span, in band order. */
+export function osmGradeBands(tags: Record<string, string>): ClimbingBand[] {
+  const out: ClimbingBand[] = [];
+  for (const key of Object.keys(tags)) {
+    const m = /^climbing:grade:([a-z_]+):min$/.exec(key);
+    if (!m) continue;
+    const lo = climbingBand(tags[key], m[1]);
+    const hi = climbingBand(tags[`climbing:grade:${m[1]}:max`] ?? tags[key], m[1]);
+    if (lo && hi) out.push(...bandsBetween(lo, hi));
+    else if (lo ?? hi) out.push((lo ?? hi)!);
+  }
+  for (const key of Object.keys(tags)) {
+    const m = /^climbing:grade:([a-z_]+)(?::mean)?$/.exec(key);
+    const band = m ? climbingBand(tags[key], m[1]) : undefined;
+    if (band) out.push(band);
+  }
+  return orderedBands(out);
+}
+
+/** A list property as strings (a list, or one value). */
+function listOf(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String) : typeof value === "string" ? [value] : [];
 }
 
 // ---- OpenStreetMap ----
@@ -227,8 +269,10 @@ export function osmCrags(json: unknown, includeGyms: boolean): Crag[] {
     if (v !== undefined) props.v = v;
     const grades = osmGradeSummary(tags);
     if (grades !== undefined) props.grades = grades;
+    const bands = osmGradeBands(tags);
+    if (bands.length > 0) props.gradeBands = bands;
     const disciplines = DISCIPLINES.filter((d) => tags[`climbing:${d}`] !== undefined && tags[`climbing:${d}`] !== "no");
-    if (disciplines.length > 0) props.disciplines = disciplines.join(", ");
+    if (disciplines.length > 0) props.disciplines = disciplines;
     if (tags["climbing:orientation"]) props.orientation = tags["climbing:orientation"];
     const maxLength = Number(tags["climbing:length:max"]);
     if (Number.isFinite(maxLength) && maxLength > 0) props.maxLengthM = maxLength;
@@ -261,11 +305,15 @@ export function openbetaCrags(json: unknown): Crag[] | null {
     if (path.length > 0) props.region = path.join(" > ");
     const grades = gradeSummary(a.aggregate?.byGrade);
     if (grades !== undefined) props.grades = grades;
+    const bands = gradeBandsOf(a.aggregate?.byGrade);
+    if (bands.length > 0) props.gradeBands = bands;
     const d = a.aggregate?.byDiscipline;
     if (d?.sport?.total) props.sport = d.sport.total;
     if (d?.trad?.total) props.trad = d.trad.total;
     if (d?.bouldering?.total) props.boulder = d.bouldering.total;
     if (d?.tr?.total) props.toprope = d.tr.total;
+    const disciplines = (["sport", "trad", "boulder", "toprope"] as const).filter((k) => typeof props[k] === "number");
+    if (disciplines.length > 0) props.disciplines = [...disciplines];
     return { position: [a.metadata.lng, a.metadata.lat], props };
   });
 }
@@ -320,6 +368,11 @@ export function mergeCrags(osm: Crag[], openbeta: Crag[]): { crags: Crag[]; both
     for (const key of ["grades", "region", "sport", "trad", "boulder", "toprope"] as const) {
       if (p[key] !== undefined && (key !== "grades" || target.grades === undefined)) target[key] = p[key];
     }
+    // Disciplines and grade bands are lists: the merged place has every one either source names.
+    const disciplines = [...new Set([...listOf(target.disciplines), ...listOf(p.disciplines)])];
+    if (disciplines.length > 0) target.disciplines = DISCIPLINES.filter((d) => disciplines.includes(d));
+    const bands = orderedBands([...listOf(target.gradeBands), ...listOf(p.gradeBands)] as ClimbingBand[]);
+    if (bands.length > 0) target.gradeBands = bands;
     if (target.name === undefined) target.name = p.name;
   }
   return { crags: [...merged, ...extra], both };
@@ -389,9 +442,31 @@ const SOURCE_LABELS: Record<string, string> = {
   "osm+openbeta": "OpenStreetMap + OpenBeta",
 };
 
-const FACETS: Facet[] = [
-  { key: "v", label: "Routes", kind: "range", unit: "routes", encode: "size" },
-  { key: "kind", label: "Kind", kind: "category", values: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+const DISCIPLINE_LABELS: Record<string, string> = {
+  sport: "Sport",
+  trad: "Trad",
+  boulder: "Boulder",
+  toprope: "Top rope",
+  ice: "Ice",
+  mixed: "Mixed",
+  via_ferrata: "Via ferrata",
+  deepwater: "Deep water solo",
+};
+
+const ATTRIBUTES: Attribute[] = [
+  {
+    key: "disciplines",
+    type: "category",
+    label: "Discipline",
+    multi: true,
+    primary: true,
+    levels: Object.entries(DISCIPLINE_LABELS).map(([value, label]) => ({ value, label })),
+  },
+  { key: "gradeBands", type: "ordinal", label: "Grade", multi: true, levels: CLIMBING_LEVELS, scale: CLIMBING_GRADE_SCALE, help: CLIMBING_GRADE_HELP },
+  { key: "v", type: "measure", label: "Routes", unit: "routes", encode: "size" },
+  { key: "kind", type: "category", label: "Kind", levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
+  { key: "fee", type: "flag", label: "Fee charged" },
+  nameAttribute(),
 ];
 
 const BY_DISCIPLINE: FieldHelp = {
@@ -423,6 +498,8 @@ const HELP: Record<string, FieldHelp> = {
   boulder: BY_DISCIPLINE,
   toprope: BY_DISCIPLINE,
   routesByDiscipline: BY_DISCIPLINE,
+  gradeBands: CLIMBING_GRADE_HELP,
+  fee: { text: "Whether a fee is charged to climb here, from the OpenStreetMap fee tag." },
   disciplines: {
     text:
       "Climbing styles OpenStreetMap lists for the place (climbing:sport, climbing:trad, climbing:boulder, climbing:toprope, ice, mixed and so " +
@@ -434,7 +511,6 @@ const HELP: Record<string, FieldHelp> = {
   maxLengthM: { text: "Length of the longest route, from the OpenStreetMap climbing:length:max tag.", unit: "m" },
   source: { text: "Which database the place came from; 'osm+openbeta' means both list it and the two were merged into one point." },
   region: { text: "The OpenBeta areas the crag sits in, broadest first." },
-  fee: { text: "Whether a fee is charged, from the OpenStreetMap fee tag." },
   t: { text: "The date a mapper last checked the place on the ground (check_date), when tagged." },
 };
 
@@ -452,7 +528,8 @@ const CARD: CardSpec = {
         { key: "toprope", label: "top rope" },
       ],
     },
-    { key: "disciplines", label: "Disciplines", format: "list" },
+    { key: "gradeBands", label: "Grade bands", format: "list", values: Object.fromEntries(CLIMBING_LEVELS.map((l) => [String(l.value), l.label])) },
+    { key: "disciplines", label: "Disciplines", format: "list", values: DISCIPLINE_LABELS },
     { key: "maxLengthM", label: "Longest route", unit: "m", format: "m" },
     { key: "orientation", label: "Faces" },
     { key: "region", label: "Region" },
@@ -470,7 +547,7 @@ const climbing = defineLayer({
   description:
     "Rock climbing places worldwide: crags and cliffs, bouldering areas (boulders) and climbing areas, merged from OpenStreetMap and OpenBeta, the open climbing route database. " +
     "Each point is one place with kind ('crag', 'boulder', 'area', or 'gym' for indoor gyms when includeGyms is true), name, and v = the number of climbing routes or problems there (the bigger, the taller its column), " +
-    "plus where known: grades (the grade range, for example '5.6 to 5.13b; V0 to V4'), sport, trad, boulder and toprope route counts, orientation, region, and url, a link to the OpenBeta page with the route list and topos. " +
+    "plus where known: grades (the grade range, for example '5.6 to 5.13b; V0 to V4'), gradeBands (the bands those grades span: beginner, intermediate, advanced, elite), disciplines (a list: sport, trad, boulder, toprope, ice...), sport, trad, boulder and toprope route counts, orientation, region, and url, a link to the OpenBeta page with the route list and topos. " +
     "source says which database it came from ('osm', 'openbeta' or 'osm+openbeta'). " +
     "Use it for questions like: where can I go climbing or bouldering near here, which crag has the most routes, where is sport climbing or trad climbing, is there easy top-rope climbing nearby. " +
     "Caveats: OpenBeta is strong in the United States and thinner elsewhere; OpenStreetMap crags are volunteer-mapped and often have no route count (no v); " +
@@ -486,9 +563,10 @@ const climbing = defineLayer({
   wide: { orderBy: "route count", limit: 1000 },
   input: inputSchema,
   // M4 hint: extrude v, heat (Task 0's StyleHints fields).
-  style: { geometry: "point", color: layerColor("climbing"), extrude: "v", heat: true, facets: FACETS },
+  style: { geometry: "point", color: layerColor("climbing"), extrude: "v", heat: true },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input: ClimbingInput): Promise<LayerResult | LayerError> {
     const [osmResult, openbeta]: [OverpassResult, Awaited<ReturnType<typeof fetchOpenbeta>>] = await Promise.all([

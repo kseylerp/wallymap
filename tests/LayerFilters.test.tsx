@@ -2,14 +2,14 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LayerFilters } from "@/components/LayerFilters";
+import { LayerFilters, RangeFilter } from "@/components/LayerFilters";
 import { applyFilters, filterSummary, type FilterField, type LayerFilters as Filters } from "@/lib/render/filters";
 import type { MapAction } from "@/lib/render/state";
 
 afterEach(cleanup);
 
 /** Fire sizes in acres, decimals included: the smallest 4164.94, the largest 221,400.5 (step 1000). */
-const acres: FilterField = { key: "acres", label: "Acres", kind: "range", min: 4164.94, max: 221400.5, integer: false };
+const acres: Extract<FilterField, { kind: "range" }> = { key: "acres", label: "Acres", kind: "range", min: 4164.94, max: 221400.5, integer: false };
 const fires: GeoJSON.FeatureCollection = {
   type: "FeatureCollection",
   features: [4164.94, 12000.25, 50000, 221400.5].map((a) => ({
@@ -19,18 +19,20 @@ const fires: GeoJSON.FeatureCollection = {
   })),
 };
 
+/**
+ * The two-handle range on its own (spec §12c keeps it only for years under More, where LayerFilters and the attribute
+ * row use it); written through the same set_filters a row would dispatch.
+ */
 function Harness({ spy }: { spy: (a: MapAction) => void }) {
   const [filters, setFilters] = useState<Filters>({});
   return (
-    <LayerFilters
-      id="f"
-      layerId="fire-perimeters"
-      title="Fires"
-      fields={[acres]}
-      filters={filters}
-      dispatch={(a) => {
-        spy(a);
-        if (a.type === "set_filters") setFilters(a.filters);
+    <RangeFilter
+      field={acres}
+      range={filters.acres?.range}
+      onChange={(range) => {
+        const next: Filters = range ? { acres: { range } } : {};
+        spy({ type: "set_filters", layerId: "fire-perimeters", filters: next });
+        setFilters(next);
       }}
     />
   );
@@ -43,7 +45,21 @@ const lastRange = (spy: ReturnType<typeof vi.fn>) => {
   return action.filters.acres?.range;
 };
 
-describe("LayerFilters range", () => {
+describe("LayerFilters: a number is a mini histogram, a year a range", () => {
+  it("draws bars for acres (no slider) and a two-handle range for a year", () => {
+    const year: FilterField = { key: "year", label: "Year", kind: "range", min: 2001, max: 2024, integer: true };
+    const data: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: fires.features.map((f, i) => ({ ...f, properties: { ...f.properties, year: 2001 + i * 7 } })),
+    };
+    render(<LayerFilters id="f" layerId="fire-perimeters" title="Fires" fields={[acres, year]} filters={{}} data={data} dispatch={() => {}} />);
+    expect(screen.getByTestId("measure-histogram").getAttribute("data-key")).toBe("acres");
+    expect(screen.queryByRole("slider", { name: "Acres from" })).toBeNull();
+    expect(screen.getByRole("slider", { name: "Year from" })).toBeTruthy();
+  });
+});
+
+describe("RangeFilter (years)", () => {
   it("rounds only the thumb that moved; the untouched end keeps the real max, so the largest feature stays", () => {
     const spy = vi.fn();
     render(<Harness spy={spy} />);

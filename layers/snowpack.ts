@@ -29,7 +29,8 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { nameAttribute, timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, WHOLE_US_KM2, bboxesDisjoint, outsideUs } from "./_shared/coverage";
@@ -243,19 +244,21 @@ function stamp(ms: number): string {
   return new Date(ms).toISOString().slice(0, 16).replace("T", " ");
 }
 
-const FACETS: Facet[] = [
-  { key: "v", label: "Snow depth", kind: "range", unit: "in", encode: "size" },
+const ATTRIBUTES: Attribute[] = [
   {
     key: "type",
+    type: "category",
     label: "Snow type",
-    kind: "category",
-    values: [
+    levels: [
       { value: "no snow", label: "No snow" },
       { value: "powder", label: "Powder" },
       { value: "settled", label: "Settled" },
       { value: "wet/dense", label: "Wet or dense" },
     ],
   },
+  { key: "v", type: "measure", label: "Snow depth", unit: "in", encode: "size" },
+  timeAttribute("Reading"),
+  nameAttribute(),
 ];
 
 const SNOTEL_URL = "https://wcc.sc.egov.usda.gov/";
@@ -321,9 +324,10 @@ const snowpack = defineLayer({
   hardMaxAreaKm2: WHOLE_US_KM2,
   wide: { orderBy: "snow depth in inches", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("snowpack"), unit: "in", timeField: "t", facets: FACETS },
+  style: { geometry: "point", color: layerColor("snowpack"), unit: "in", timeField: "t" },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const now = new Date();

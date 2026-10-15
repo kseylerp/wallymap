@@ -21,7 +21,8 @@
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Facet, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { rankedSparql, wikimediaFetch } from "./_shared/wikimedia";
@@ -151,17 +152,18 @@ export function normalizeLakes(bindings: Binding[]): Feature<Point>[] {
   return features;
 }
 
-const FACETS: Facet[] = [
-  { key: "depthM", label: "Depth", kind: "range", unit: "m", encode: "size" },
+const ATTRIBUTES: Attribute[] = [
   {
     key: "kind",
+    type: "category",
     label: "Kind",
-    kind: "category",
-    values: [
+    levels: [
       { value: "lake", label: "Lake" },
       { value: "reservoir", label: "Reservoir" },
     ],
   },
+  { key: "depthM", type: "measure", label: "Depth", unit: "m", encode: "size" },
+  nameAttribute(),
 ];
 
 const DEPTH: FieldHelp = {
@@ -224,9 +226,10 @@ const lakes = defineLayer({
       .optional()
       .describe("Only lakes whose English name contains this text, case-insensitive (for example 'tahoe')."),
   }),
-  style: { geometry: "point", color: layerColor("lakes"), unit: "m", cluster: true, facets: FACETS },
+  style: { geometry: "point", color: layerColor("lakes"), unit: "m", cluster: true },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     // Wide (over 20,000 km², up to the hard cap): the largest lakes by area, capped at the strategy's limit.

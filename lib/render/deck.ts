@@ -805,7 +805,7 @@ function hexTileLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       getSize: (f) => labelSize.get(f) ?? HEX_TILE.labelSize,
       sizeUnits: "pixels",
       getColor: (f) => fade(f, onDark(f) ? HEX_LABEL_LIGHT : HEX_LABEL),
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      fontFamily: COUNT_FONT_FAMILY,
       fontWeight: 600,
       characterSet: "0123456789.k%",
       fontSettings: { sdf: true, buffer: 4 },
@@ -901,8 +901,14 @@ export function clusterColor(count: number, max: number): Rgba {
   return rampRgba(CLUSTER_BLOB.ramp, t * CLUSTER_BLOB.rampMax, Math.round(255 * CLUSTER_BLOB.alpha));
 }
 
+/**
+ * The system sans for counts and cell values: deck lays glyphs out by their own widths, and a monospace "." took a full
+ * digit's width, so "1.5k" read "1. 5k". The system UI faces have tabular digits, so counts still line up.
+ */
+const COUNT_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
+
 const COUNT_FONT = {
-  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  fontFamily: COUNT_FONT_FAMILY,
   characterSet: "0123456789.k",
   fontSettings: { sdf: true },
   outlineWidth: 0.35,
@@ -1431,7 +1437,7 @@ function deltaLayers(op: RenderOp, { data: all, selected, terrain }: OpContext):
         getSize: HEX_TILE.labelSize + 1,
         sizeUnits: "pixels",
         getColor: hexToRgba(c.label),
-        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+        fontFamily: COUNT_FONT_FAMILY,
         fontWeight: 600,
         characterSet: "0123456789.k",
         fontSettings: { sdf: true },

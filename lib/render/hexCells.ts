@@ -211,7 +211,9 @@ export function hexLegendSentence(resolution: number, basis: HexBasis, ctx: Cell
   else if (share !== undefined) darker = `a larger share of ${levelLabel(ctx.category, share).toLowerCase()}`;
   else if (basis === "recency") darker = `newer ${picked ? `${picked} ` : ""}${ctx.noun}`;
   else darker = `more ${picked ? `${picked} ` : ""}${ctx.noun}`;
-  return `${size}; darker = ${darker}`;
+  // A sum's tile labels are in the measure's unit; say which.
+  const unit = basis === "sum" && ctx.measure?.unit && ctx.measure.unit !== "score" ? ` (labels in ${ctx.measure.unit})` : "";
+  return `${size}; darker = ${darker}${unit}`;
 }
 
 // ---- The cell card ----

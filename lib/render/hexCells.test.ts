@@ -123,7 +123,7 @@ describe("hex cells carry information (spec §12d)", () => {
   });
 
   it("says in words what darker means, with the cell size", () => {
-    expect(hexLegendSentence(6, "sum", ctx, { kind: { include: ["wind"] } })).toBe("Each cell ≈ 36 km²; darker = more wind capacity");
+    expect(hexLegendSentence(6, "sum", ctx, { kind: { include: ["wind"] } })).toBe("Each cell ≈ 36 km²; darker = more wind capacity (labels in MW)");
     expect(hexLegendSentence(5, "count", ctx)).toBe("Each cell ≈ 250 km²; darker = more power plants");
     expect(hexLegendSentence(4, "share:wind", ctx)).toBe("Each cell ≈ 1,800 km²; darker = a larger share of wind");
     expect(hexLegendSentence(7, "recency", ctx)).toBe("Each cell ≈ 5.2 km²; darker = newer power plants");

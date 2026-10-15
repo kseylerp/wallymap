@@ -5,6 +5,7 @@ import layer, {
   buildClimbingQuery,
   gradeSummary,
   mergeCrags,
+  dedupeSameName,
   openbetaBody,
   openbetaCrags,
   osmCrags,
@@ -341,5 +342,20 @@ describe("climbing layer", () => {
     expect(r.total).toBeUndefined();
     expect(r.coverageNote).toContain("ranked from part of the box (OpenStreetMap stopped at 3,000 (lowest ids kept))");
     expect(r.coverageNote).not.toContain("zoom in");
+  });
+});
+
+describe("one place per wall", () => {
+  const crag = (lng: number, props: Record<string, string | number | boolean | string[]>) => ({ position: [lng, 37.815] as [number, number], props });
+  it("joins a wall mapped as a node and as a cliff line (same name within 500 m), keeping the larger route count", () => {
+    const node = crag(-83.6698, { kind: "crag", source: "osm", osmId: "node/7314110512", name: "Military Wall", v: 110, disciplines: ["sport"] });
+    const way = crag(-83.6708, { kind: "crag", source: "osm", osmId: "way/364439327", name: "Military Wall", disciplines: ["trad"], gradeBands: ["elite"] });
+    const far = crag(-83.5, { kind: "crag", source: "osm", osmId: "node/9", name: "Military Wall", v: 3 });
+    const out = dedupeSameName([way, node, far]);
+    expect(out).toHaveLength(2);
+    expect(out[0].props).toMatchObject({ osmId: "node/7314110512", v: 110, disciplines: ["sport", "trad"], gradeBands: ["elite"], osmIds: ["node/7314110512", "way/364439327"] });
+    const { crags } = mergeCrags(out, [crag(-83.6707, { kind: "crag", source: "openbeta", name: "Military Wall", v: 42, openbetaId: "e2" })]);
+    expect(crags).toHaveLength(2);
+    expect(crags[0].props).toMatchObject({ v: 110, routesOsm: 110, routesOpenbeta: 42, source: "osm+openbeta" });
   });
 });

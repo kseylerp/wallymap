@@ -331,8 +331,45 @@ function namesMatch(a: unknown, b: unknown): boolean {
 }
 
 /**
+ * One OpenStreetMap crag per wall: mappers often add the same wall twice, as a crag node and as its cliff line (Military
+ * Wall in the Red River Gorge is node/7314110512 with 110 routes and way/364439327 130 m away), so places of the same
+ * name within 500 m become one. The one with more routes keeps its position and id; the route count is the larger (two
+ * mappings of one wall, never a sum), the lists are joined and the other id is kept in `osmIds`.
+ */
+export function dedupeSameName(crags: Crag[]): Crag[] {
+  const kept: Crag[] = [];
+  const refLat = crags[0]?.position[1] ?? 0;
+  const index = new GridIndex<number>(MERGE_NAMED_KM, refLat);
+  for (const crag of [...crags].sort(byRoutes)) {
+    const key = nameKey(crag.props.name);
+    let twin: number | undefined;
+    if (key.length >= 4) {
+      index.forEachWithin(crag.position, MERGE_NAMED_KM, (i) => {
+        if (twin === undefined && nameKey(kept[i].props.name) === key) twin = i;
+      });
+    }
+    if (twin === undefined) {
+      index.add(crag.position, kept.length);
+      kept.push({ ...crag, props: { ...crag.props } });
+      continue;
+    }
+    const target = kept[twin].props;
+    const p = crag.props;
+    if (typeof p.v === "number" && (typeof target.v !== "number" || p.v > target.v)) target.v = p.v;
+    for (const key of ["grades", "orientation", "website", "maxLengthM", "t"] as const) if (target[key] === undefined && p[key] !== undefined) target[key] = p[key];
+    const disciplines = [...new Set([...listOf(target.disciplines), ...listOf(p.disciplines)])];
+    if (disciplines.length > 0) target.disciplines = DISCIPLINES.filter((d) => disciplines.includes(d));
+    const bands = orderedBands([...listOf(target.gradeBands), ...listOf(p.gradeBands)] as ClimbingBand[]);
+    if (bands.length > 0) target.gradeBands = bands;
+    target.osmIds = [...listOf(target.osmIds ?? target.osmId), String(p.osmId)];
+  }
+  return kept;
+}
+
+/**
  * Merges OpenBeta crags into OSM crags: a match keeps the OSM position and name, takes the larger route count and the
- * OpenBeta link, grades and discipline totals. Each OSM crag absorbs at most one OpenBeta crag.
+ * OpenBeta link, grades and discipline totals. Each OSM crag absorbs at most one OpenBeta crag. When the two counts
+ * differ, both stay (`routesOsm`, `routesOpenbeta`) so the card can say which one `v` is.
  */
 export function mergeCrags(osm: Crag[], openbeta: Crag[]): { crags: Crag[]; both: number } {
   const merged = osm.map((c) => ({ ...c, props: { ...c.props } }));
@@ -364,6 +401,10 @@ export function mergeCrags(osm: Crag[], openbeta: Crag[]): { crags: Crag[]; both
     target.source = "osm+openbeta";
     target.openbetaId = p.openbetaId;
     target.url = p.url;
+    if (typeof p.v === "number" && typeof target.v === "number" && p.v !== target.v) {
+      target.routesOsm = target.v;
+      target.routesOpenbeta = p.v;
+    }
     if (typeof p.v === "number" && (typeof target.v !== "number" || p.v > target.v)) target.v = p.v;
     for (const key of ["grades", "region", "sport", "trad", "boulder", "toprope"] as const) {
       if (p[key] !== undefined && (key !== "grades" || target.grades === undefined)) target[key] = p[key];
@@ -500,6 +541,10 @@ const HELP: Record<string, FieldHelp> = {
   toprope: BY_DISCIPLINE,
   routesByDiscipline: BY_DISCIPLINE,
   gradeBands: CLIMBING_GRADE_HELP,
+  routeCounts: {
+    text: "The two sources count this place's routes differently; Routes shows the larger of the two, never their sum (both list the same routes).",
+    source: "OpenStreetMap contributors and OpenBeta",
+  },
   fee: { text: "Whether a fee is charged to climb here, from the OpenStreetMap fee tag." },
   disciplines: {
     text:
@@ -527,6 +572,14 @@ const CARD: CardSpec = {
         { key: "sport", label: "sport" },
         { key: "boulder", label: "boulder" },
         { key: "toprope", label: "top rope" },
+      ],
+    },
+    {
+      key: "routeCounts",
+      label: "Routes by source",
+      parts: [
+        { key: "routesOsm", label: "OpenStreetMap" },
+        { key: "routesOpenbeta", label: "OpenBeta" },
       ],
     },
     { key: "gradeBands", label: "Grade bands", format: "list", values: Object.fromEntries(CLIMBING_LEVELS.map((l) => [String(l.value), l.label])) },
@@ -576,7 +629,8 @@ const climbing = defineLayer({
     ]);
     if (!osmResult.ok && !openbeta.ok) return { error: `${osmResult.error}; ${openbeta.error}`, hint: "upstream" };
 
-    const osmAll = osmResult.ok ? osmCrags(osmResult.json, input.includeGyms) : [];
+    // One place per wall: the same wall mapped as a node and as a cliff line is one crag.
+    const osmAll = osmResult.ok ? dedupeSameName(osmCrags(osmResult.json, input.includeGyms)) : [];
     // Overpass stops at MAX_PER_SOURCE elements; its `out count` says how many the box really holds, so the box was
     // cut when that exceeds the elements in the body (gyms and other skipped elements are in both numbers).
     const osmSent = osmResult.ok ? overpassBodySchema.parse(osmResult.json).elements.filter((e) => (e as { type?: unknown }).type !== "count").length : 0;

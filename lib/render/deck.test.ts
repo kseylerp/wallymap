@@ -312,7 +312,7 @@ describe("H3 tiles for dense points", () => {
   });
 
   it("maps zoom to resolution: z≤6 → 3, 7–8 → 4, 9–10 → 5, 11–12 → 6, ≥13 → 7", () => {
-    expect([0, 6, 6.9, 7, 8.5, 9, 10.9, 11, 12.9, 13, 18].map(hexResolution)).toEqual([3, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]);
+    expect([0, 5, 5.9, 6, 7.5, 8, 9.9, 10, 11.9, 12, 18].map(hexResolution)).toEqual([3, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]);
   });
 
   it("draws flat tiles on the gray ramp with white edges at 0.8", () => {
@@ -358,13 +358,17 @@ describe("H3 tiles for dense points", () => {
     }
   });
 
-  it("labels grouped tiles with an 11px dark grey count on a white halo, reusing the label list", () => {
+  it("labels grouped tiles with an 11px count on a white halo, dark grey on light tiles and off-white on dark ones, reusing the label list", () => {
     const [hex, labels] = buildDeckLayers(stateOf("species", dense(2001), {}, { zoom: 10 }));
     const all = props(hex).data as { properties: { count: number } }[];
     const p = props(labels);
     const labelled = p.data as { properties: { count: number } }[];
     expect(labelled.length).toBe(all.filter((h) => h.properties.count >= 2).length);
-    expect((p.getColor as Accessor)(labelled[0])).toEqual(GREY);
+    const max = Math.max(...all.map((h) => h.properties.count));
+    const light = labelled.find((h) => Math.log(h.properties.count) / Math.log(max) <= 0.6)!;
+    const dark = labelled.find((h) => h.properties.count === max)!;
+    expect((p.getColor as Accessor)(light)).toEqual(GREY);
+    expect((p.getColor as Accessor)(dark)).toEqual(hexToRgba(OFF_WHITE));
     expect(p.outlineColor).toEqual([255, 255, 255, 230]);
     expect(p.fontSettings).toMatchObject({ sdf: true });
     expect(p.getSize).toBe(11);

@@ -147,15 +147,18 @@ export function basisScale(cells: HexCell[], basis: HexBasis, ctx: CellContext):
 }
 
 /**
- * A value's place on the tile ramp, 0 (lightest) to 1 (darkest): counts and sums on a log scale against the largest
- * (a few huge cells do not wash out the rest), a share as itself, recency from the oldest newest-date to the newest.
+ * A value's place on the tile ramp, 0 (lightest) to 1 (darkest): counts on a log scale and sums on a square root
+ * against the largest, a share as itself, recency from the oldest newest-date to the newest.
  */
 export function basisT(value: number | undefined, scale: Pick<BasisScale, "lo" | "hi" | "basis">): number {
   if (value === undefined || !Number.isFinite(value)) return 0;
   if (shareValue(scale.basis) !== undefined) return Math.min(1, Math.max(0, value));
   if (scale.basis === "recency") return scale.hi > scale.lo ? (value - scale.lo) / (scale.hi - scale.lo) : 1;
   if (scale.hi <= 0) return 0;
-  return Math.min(1, Math.max(0, Math.log1p(value) / Math.log1p(scale.hi)));
+  // Counts already run on a log ramp (lib/render/deck.ts); a sum (megawatts, acres) on its square root, so a few huge
+  // cells stand out without every other cell washing to the dark end.
+  if (scale.basis === "count") return Math.min(1, Math.max(0, Math.log1p(value) / Math.log1p(scale.hi)));
+  return Math.min(1, Math.max(0, Math.sqrt(Math.max(0, value) / scale.hi)));
 }
 
 /** A compact number for a tile label: 1,234 reads 1.2k, 12,345 reads 12k. */

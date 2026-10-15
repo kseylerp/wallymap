@@ -18,6 +18,7 @@ import {
   isPaletteColor,
   LINE,
   lineColorFor,
+  OFF_WHITE,
   PINK,
   PURPLE,
   scoreRampFor,
@@ -223,13 +224,16 @@ function atlasIcon(icon: AtlasIcon): AtlasIcon {
 /** A point layer with more features than this draws H3 tiles instead of symbols. */
 export const hexbinThreshold = 2000;
 
-/** The H3 resolution for tiles at a zoom: 3 up to z6, then one finer every two zooms, 7 from z13. */
+/**
+ * The H3 resolution for tiles at a zoom: 3 (about 12,000 km² a cell) up to z5, then one finer every two zooms, 7
+ * (about 5 km²) from z12. A region (West Texas at z6) reads in cells of about 1,800 km², a valley (z11) in 36 km².
+ */
 export function hexResolution(zoom: number): number {
   const z = Math.floor(zoom);
-  if (z <= 6) return 3;
-  if (z <= 8) return 4;
-  if (z <= 10) return 5;
-  if (z <= 12) return 6;
+  if (z <= 5) return 3;
+  if (z <= 7) return 4;
+  if (z <= 9) return 5;
+  if (z <= 11) return 6;
   return 7;
 }
 
@@ -310,7 +314,7 @@ function cellCtx(ctx: Pick<OpContext, "layer">): CellContext {
  * (the busiest tile), log scaled, at 0.55 to 0.80 opacity.
  */
 export function hexTileColor(count: number, max: number): Rgba {
-  const t = max > 1 ? Math.min(1, Math.max(0, Math.log(count) / Math.log(max))) : 1;
+  const t = countT(count, max);
   const [a0, a1] = HEX_TILE.alpha;
   return rampRgba(HEX_TILE.ramp, t, Math.round(255 * (a0 + (a1 - a0) * t)));
 }
@@ -321,6 +325,15 @@ export function hexTileColorAt(t: number): Rgba {
   const u = Math.min(1, Math.max(0, t));
   return rampRgba(HEX_TILE.ramp, u, Math.round(255 * (a0 + (a1 - a0) * u)));
 }
+
+/** A count's place on the tile ramp: log scaled against the busiest tile. */
+function countT(count: number, max: number): number {
+  return max > 1 ? Math.min(1, Math.max(0, Math.log(count) / Math.log(max))) : 1;
+}
+
+/** Past this share of the ramp a tile is dark enough that its label turns off-white. */
+const HEX_LABEL_FLIP = 0.6;
+const HEX_LABEL_LIGHT = hexToRgba(OFF_WHITE);
 
 const HEX_EDGE = hexToRgba(HEX_TILE.edge, Math.round(255 * HEX_TILE.edgeAlpha));
 const HEX_LABEL = hexToRgba(HEX_TILE.label);
@@ -721,8 +734,10 @@ function hexTileLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   // A tile picked at another resolution is not among these tiles: ignore it rather than fade every tile.
   const selected = picked && hexes.includes(picked as HexFeature) ? picked : undefined;
   const trigger = [selectionKey(selected), opacity, resolution, basis];
-  const fill = (f: HexFeature): Rgba =>
-    basis === "count" ? hexTileColor(f.properties.count, max) : hexTileColorAt(basisT(f.properties.value, { lo, hi: max, basis }));
+  const tOf = (f: HexFeature) => (basis === "count" ? countT(f.properties.count, max) : basisT(f.properties.value, { lo, hi: max, basis }));
+  const fill = (f: HexFeature): Rgba => (basis === "count" ? hexTileColor(f.properties.count, max) : hexTileColorAt(tOf(f)));
+  // A label reads on its tile: dark grey on the light end of the ramp, off-white on the dark end, each with the other's halo.
+  const onDark = (f: HexFeature) => tOf(f) > HEX_LABEL_FLIP;
   const fade = (f: HexFeature, c: Rgba) => {
     const base = withOpacity(c, opacity);
     return selected && f !== selected ? withOpacity(base, SIBLING_FADE) : base;
@@ -753,11 +768,11 @@ function hexTileLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       getText: label,
       getSize: HEX_TILE.labelSize,
       sizeUnits: "pixels",
-      getColor: (f) => fade(f, HEX_LABEL),
+      getColor: (f) => fade(f, onDark(f) ? HEX_LABEL_LIGHT : HEX_LABEL),
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-      fontWeight: 500,
+      fontWeight: 600,
       characterSet: "0123456789.k%",
-      fontSettings: { sdf: true },
+      fontSettings: { sdf: true, buffer: 4 },
       outlineWidth: 0.35,
       outlineColor: HEX_LABEL_HALO,
       billboard: true,

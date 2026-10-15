@@ -264,7 +264,18 @@ export function InspectCard({
   const sideB = selection.side === "b";
   // A hex tile or column: the cell's summary instead of the feature's properties (spec §12d).
   const origin = useMemo(() => cellOf(selection.feature), [selection.feature]);
-  const cell = useMemo(() => (origin ? summarizeCell(origin.cell, origin.cells, origin.basis, origin.ctx) : null), [origin]);
+  // Ranked among the cells on screen (spec §12d "3rd busiest of 120"), so it follows the camera like the anchor does.
+  const cell = useMemo(() => {
+    if (!origin) return null;
+    const onScreen = origin.cells.filter((c) => {
+      if (c === origin.cell) return true;
+      const p = project(c.position);
+      return p !== null && p.x >= 0 && p.y >= 0 && p.x <= view.width && p.y <= view.height;
+    });
+    return summarizeCell(origin.cell, onScreen, origin.basis, origin.ctx);
+    // The anchor moves with every camera frame, so the cells on screen are re-read with it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [origin, project, view, anchor]);
 
   // Follow the clicked point as the camera moves (including the ease onto the feature).
   useEffect(() => {

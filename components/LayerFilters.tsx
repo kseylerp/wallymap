@@ -55,7 +55,7 @@ function CategoryFilter({ field, include, onChange }: { field: Category; include
   return (
     <div role="group" aria-label={field.label} className="flex flex-wrap gap-1">
       <button type="button" aria-pressed={all} onClick={() => onChange([])} className="filter-chip">
-        all
+        All
       </button>
       {field.values.map(({ value, count }) => (
         <button

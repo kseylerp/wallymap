@@ -68,7 +68,7 @@ describe("the agent's render.filters are the row's chips", () => {
     const card = screen.getByTestId("layer-card");
     const chips = within(within(card).getByRole("group", { name: "Discipline" })).getAllByRole("button");
     expect(chips.map((c) => [c.textContent, c.getAttribute("aria-pressed")])).toEqual([
-      ["all", "false"],
+      ["All", "false"],
       ["Sport 2", "true"],
       ["Trad 2", "false"],
       ["Boulder 1", "false"],
@@ -113,5 +113,10 @@ describe("the agent's render.filters are the row's chips", () => {
       hexBasis: "share:sport",
       filters: { name: { match: "Muir Valley" }, disciplines: { include: ["sport"] } },
     });
+    // Rank by None survives the link as "-", not as "rank by default".
+    const none = reduce(state, { type: "set_rank_by", layerId: "climbing", key: "" });
+    const link = encodeState({ ...none, time: undefined });
+    expect(link).toContain("climbing:hexbin:1:-:share%3Asport");
+    expect(decodeState(link)?.layers[0].rankBy).toBe("");
   });
 });

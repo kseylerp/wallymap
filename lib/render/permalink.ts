@@ -135,7 +135,9 @@ export function encodeState(state: PermalinkSource, servable?: Record<string, un
     .filter((op) => state.layers[op.layerId] && (!servable || op.layerId in servable))
     .map((op) => {
       // Rank by and the hex basis ride after the visibility, URI-encoded (a share basis holds a colon).
-      const extra = op.rankBy || op.hexBasis ? `:${encodeURIComponent(op.rankBy ?? "")}${op.hexBasis ? `:${encodeURIComponent(op.hexBasis)}` : ""}` : "";
+      // Rank by None ("") is written "-", so it is not read back as "rank by default".
+      const rank = op.rankBy === "" ? "-" : encodeURIComponent(op.rankBy ?? "");
+      const extra = op.rankBy !== undefined || op.hexBasis ? `:${rank}${op.hexBasis ? `:${encodeURIComponent(op.hexBasis)}` : ""}` : "";
       return `${encodeURIComponent(op.layerId)}:${op.mode}:${op.visible ? 1 : 0}${extra}`;
     });
   if (layers.length > 0) parts.push(`l=${layers.join(",")}`);
@@ -175,13 +177,13 @@ function parseLayers(value: string): PermalinkLayer[] {
     const [rawId, mode, visible, rawRank, rawBasis] = entry.split(":");
     const id = rawId ? safeDecode(rawId) : null;
     if (!id) continue;
-    const rankBy = rawRank ? safeDecode(rawRank) : null;
+    const rankBy = rawRank === "-" ? "" : rawRank ? safeDecode(rawRank) : null;
     const hexBasis = rawBasis ? safeDecode(rawBasis) : null;
     layers.push({
       id,
       mode: RENDER_MODES.includes(mode as RenderMode) ? (mode as RenderMode) : undefined,
       visible: visible !== "0",
-      ...(rankBy && { rankBy }),
+      ...(rankBy !== null && { rankBy }),
       ...(isHexBasis(hexBasis) && { hexBasis }),
     });
   }
@@ -355,7 +357,7 @@ export async function restoreFromPermalink(
         mode: layer.mode ?? DEFAULT_MODE[style.geometry],
         visible: layer.visible,
         ...(layer.filters && { filters: layer.filters }),
-        ...(layer.rankBy && { rankBy: layer.rankBy }),
+        ...(layer.rankBy !== undefined && { rankBy: layer.rankBy }),
         ...(layer.hexBasis && { hexBasis: layer.hexBasis }),
       },
       ...(layer.mode === undefined && { defaultMode: true }),

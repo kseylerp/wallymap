@@ -20,6 +20,7 @@ import {
   isPresetPicked,
   measuresOf,
   nameQuery,
+  primaryMeasure,
   presetCount,
   toggleFlag,
   toggleGroup,
@@ -92,7 +93,7 @@ function Chips({
   return (
     <div role="group" aria-label={attr.label} className="flex flex-wrap gap-1">
       <button type="button" aria-pressed={none} onClick={() => onChange(clearAttribute(filters, attr))} className="filter-chip">
-        all
+        All
       </button>
       {groups.map((group) => (
         <button
@@ -135,7 +136,8 @@ function nameOf(f: Feature): string {
  */
 function RankBy({ layer, op, measures, shown, dispatch }: { layer: LoadedLayer; op: RenderOp; measures: Attribute[]; shown: FeatureCollection; dispatch: (a: MapAction) => void }) {
   const id = `rank-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
-  const rankBy = op.rankBy;
+  // Unset ranks by the layer's primary measure; "" is None, picked in the row.
+  const rankBy = effectiveRankBy(op, layer, measures);
   const attr = measures.find((m) => m.key === rankBy);
   const top = useMemo(() => (rankBy ? topFeatures(shown, rankBy, RANKED_TOP_N) : []), [shown, rankBy]);
   const open = (f: Feature) => {
@@ -154,10 +156,10 @@ function RankBy({ layer, op, measures, shown, dispatch }: { layer: LoadedLayer; 
         <select
           id={id}
           value={rankBy ?? ""}
-          onChange={(e) => dispatch({ type: "set_rank_by", layerId: layer.id, key: e.target.value || undefined })}
+          onChange={(e) => dispatch({ type: "set_rank_by", layerId: layer.id, key: e.target.value })}
           className="legend-select rank-select"
         >
-          <option value="">Nothing</option>
+          <option value="">None</option>
           {measures.map((m) => (
             <option key={m.key} value={m.key}>
               {m.label}
@@ -188,6 +190,13 @@ function RankBy({ layer, op, measures, shown, dispatch }: { layer: LoadedLayer; 
       )}
     </div>
   );
+}
+
+/** What the row ranks by: the op's pick ("" is None), else the layer's primary measure when the data holds it. */
+export function effectiveRankBy(op: Pick<RenderOp, "rankBy">, layer: LoadedLayer, measures: Attribute[]): string | undefined {
+  if (op.rankBy !== undefined) return op.rankBy === "" ? undefined : op.rankBy;
+  const primary = primaryMeasure(layer);
+  return measures.find((m) => m.key === primary?.key)?.key ?? measures[0]?.key;
 }
 
 /** A measure under More: presets from the source's classes as chips, then the mini histogram. */
@@ -330,8 +339,8 @@ export function AttributeControls({ layer, op, data, shown, fields, dispatch, de
       {measures.length > 0 && <RankBy layer={layer} op={op} measures={measures} shown={shown} dispatch={dispatch} />}
       {hasMore && (
         <button type="button" onClick={() => setMore((o) => !o)} aria-expanded={more} aria-controls={moreId} className="row-link">
-          {more ? "Less" : "More"}
-          {hiddenActive > 0 && <span className="tabular-nums"> · {hiddenActive}</span>}
+          {more ? "Fewer filters" : "More filters"}
+          {hiddenActive > 0 && <span className="tabular-nums"> ({hiddenActive} active)</span>}
         </button>
       )}
       {/* Open stays open, so a bar or a chip can be pressed again without the row folding away. */}

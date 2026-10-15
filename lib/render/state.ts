@@ -53,8 +53,9 @@ export type RenderOp = {
   /** The standard view the layer is drawn in (spec §12): its encoding, legend wording and console controls. */
   view?: ViewKind;
   /**
-   * The measure the layer is ranked by (spec §12c "Rank by"): a measure attribute's key. The row lists the top 10 by it
-   * and point symbols are sized by it; unset ranks nothing (a ranked view ranks by the layer's primary measure).
+   * The measure the layer is ranked by (spec §12c "Rank by"): a measure attribute's key, picked in the row or by the
+   * agent; point symbols are then sized by it and its top names labelled. Unset, the row still lists the top 10 by the
+   * layer's primary measure (a ranked view sizes by it too); "" is None.
    */
   rankBy?: string;
   /** What a hex cell's color means (spec §12d) when the layer draws as hexes or columns; unset is the count. */

@@ -342,7 +342,7 @@ export function rankWords(summary: Pick<HexCellSummary, "rank" | "of" | "basis">
         : summary.basis === "recency"
           ? "most recent"
           : "busiest";
-  const of = `of ${summary.of.toLocaleString("en-US")} ${summary.of === 1 ? "cell" : "cells"}`;
+  const of = `of ${summary.of.toLocaleString("en-US")} ${summary.of === 1 ? "cell" : "cells"} on screen`;
   if (summary.rank === 1 && by === "busiest") return `The busiest ${of}`;
   return by === "busiest" || by === "most recent" ? `${ordinal(summary.rank)} ${by} ${of}` : `${ordinal(summary.rank)} ${by}, ${of}`;
 }

@@ -116,8 +116,8 @@ describe("hex cells carry information (spec §12d)", () => {
     expect(summary.span).toEqual({ first: "2006-01-01", latest: "2021-01-01" });
     expect(summary.named.map((n) => n.name)).toEqual(["Horse Hollow", "Roscoe Wind", "Sweetwater 4", "Sweetwater Solar"]);
     expect(summary.named[0].value).toBe("780 MW");
-    expect(rankWords(summary, ctx)).toBe("1st by capacity, of 2 cells");
-    expect(rankWords(summarizeCell(busy, cells, "count", ctx), ctx)).toBe("The busiest of 2 cells");
+    expect(rankWords(summary, ctx)).toBe("1st by capacity, of 2 cells on screen");
+    expect(rankWords(summarizeCell(busy, cells, "count", ctx), ctx)).toBe("The busiest of 2 cells on screen");
     expect(askAboutCellText("Power plants", "power-plants", summary)).toMatch(/^In Power plants \(power-plants\) inside the hex cell bbox \[-?\d/);
     expect(askAboutCellText("Power plants", "power-plants", summary)).toContain("4 features; Wind 75%, Solar 25%");
   });

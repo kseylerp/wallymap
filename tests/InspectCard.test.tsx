@@ -185,7 +185,7 @@ describe("the hex cell card (spec §12d)", () => {
     );
     const card = screen.getByTestId("hex-card");
     expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("3 power plants in this cell");
-    expect(screen.getByTestId("hex-rank").textContent).toMatch(/^1st by capacity, of 2 cells · ≈ [\d,]+ km²$/);
+    expect(screen.getByTestId("hex-rank").textContent).toMatch(/^1st by capacity, of 2 cells on screen · ≈ [\d,]+ km²$/);
     expect(card.textContent).toContain("per 1,000 km²");
     expect(card.textContent).toContain("Total capacity1,130 MW");
     expect(card.textContent).toContain("Median capacity300 MW");

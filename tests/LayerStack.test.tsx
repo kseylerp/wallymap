@@ -422,14 +422,14 @@ describe("LayerStack filters", () => {
     );
   }
 
-  it("opens More (no attributes on this layer) with category chips (with counts) and a mini histogram per number, no sliders", () => {
+  it("opens More filters (no attributes on this layer) with category chips (with counts) and a mini histogram per number, no sliders", () => {
     render(<Filtered spy={() => {}} />);
-    const toggle = screen.getByRole("button", { name: "More" });
+    const toggle = screen.getByRole("button", { name: "More filters" });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(toggle);
     const panel = screen.getByTestId("layer-filters");
     const chips = within(within(panel).getByRole("group", { name: "Difficulty (sac_scale)" })).getAllByRole("button");
-    expect(chips.map((c) => c.textContent)).toEqual(["all", "hiking 4", "alpine hiking 2", "mountain hiking 2"]);
+    expect(chips.map((c) => c.textContent)).toEqual(["All", "hiking 4", "alpine hiking 2", "mountain hiking 2"]);
     expect(within(panel).getByTestId("measure-histogram").getAttribute("data-key")).toBe("length_km");
     expect(within(panel).queryByRole("slider")).toBeNull();
   });
@@ -437,7 +437,7 @@ describe("LayerStack filters", () => {
   it("a chip dispatches set_filters, the count reads \"2 of 8\" and the summary shows; Reset clears", () => {
     const spy = vi.fn();
     render(<Filtered spy={spy} />);
-    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    fireEvent.click(screen.getByRole("button", { name: "More filters" }));
     fireEvent.click(screen.getByRole("button", { name: /^alpine hiking/ }));
     expect(spy).toHaveBeenCalledWith({
       type: "set_filters",
@@ -446,7 +446,7 @@ describe("LayerStack filters", () => {
     });
     expect(screen.getByTestId("layer-count").textContent).toBe("2 of 8");
     expect(screen.getByTestId("filter-summary").textContent).toBe("Filtered: Difficulty (sac_scale): alpine_hiking");
-    expect(screen.getByRole("button", { name: /^Less/ }).textContent).toBe("Less · 1");
+    expect(screen.getByRole("button", { name: /^Fewer filters/ }).textContent).toBe("Fewer filters (1 active)");
 
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
     expect(spy).toHaveBeenLastCalledWith({ type: "set_filters", layerId: "osm-trails", filters: {} });
@@ -454,10 +454,10 @@ describe("LayerStack filters", () => {
     expect(screen.queryByTestId("filter-summary")).toBeNull();
   });
 
-  it("a histogram bar narrows by number (its band), and all clears the chips", () => {
+  it("a histogram bar narrows by number (its band), and All clears the chips", () => {
     const spy = vi.fn();
     render(<Filtered spy={spy} />);
-    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    fireEvent.click(screen.getByRole("button", { name: "More filters" }));
     const bars = within(screen.getByRole("group", { name: "Length km: pick a band" })).getAllByRole("button");
     expect(bars).toHaveLength(12);
     fireEvent.click(bars[11]);
@@ -471,7 +471,7 @@ describe("LayerStack filters", () => {
     expect(screen.getByTestId("layer-count").textContent).toBe("4 of 8");
     fireEvent.click(screen.getByRole("button", { name: /^hiking/ }));
     expect(screen.getByTestId("layer-count").textContent).toBe("2 of 8");
-    fireEvent.click(screen.getByRole("button", { name: "all" }));
+    fireEvent.click(screen.getByRole("button", { name: "All" }));
     expect(screen.getByTestId("layer-count").textContent).toBe("4 of 8");
   });
 });
@@ -641,8 +641,14 @@ describe("LayerStack: closing layers and the measure threshold (owner feedback)"
     expect(within(card).queryByTestId("measure-slider")).toBeNull();
     expect(card.textContent).not.toMatch(/Value ≥/);
     const controls = within(card).getByTestId("attribute-controls");
-    // Rank by is visible; picking the measure lists the top features by it, largest first.
-    fireEvent.change(within(controls).getByLabelText("Rank by"), { target: { value: "acres" } });
+    // Rank by is visible and defaults to the layer's measure, listing the top features by it, largest first; None clears it.
+    const rankBy = within(controls).getByLabelText("Rank by") as HTMLSelectElement;
+    expect(rankBy.value).toBe("acres");
+    expect([...rankBy.options].map((o) => o.textContent)).toEqual(["None", "Burned area"]);
+    fireEvent.change(rankBy, { target: { value: "" } });
+    expect(spy).toHaveBeenLastCalledWith({ type: "set_rank_by", layerId: "fire-perimeters", key: "" });
+    expect(within(controls).queryByTestId("top-list")).toBeNull();
+    fireEvent.change(rankBy, { target: { value: "acres" } });
     expect(spy).toHaveBeenLastCalledWith({ type: "set_rank_by", layerId: "fire-perimeters", key: "acres" });
     const top = within(controls).getByTestId("top-list");
     expect(within(top).getAllByRole("button")[0].textContent).toBe("1Fire 6380,000 acres");
@@ -651,7 +657,7 @@ describe("LayerStack: closing layers and the measure threshold (owner feedback)"
     fireEvent.click(within(top).getAllByRole("button")[1]);
     expect(spy.mock.lastCall?.[0]).toMatchObject({ type: "fly_to", select: { layerId: "fire-perimeters" } });
     // The preset is under More, in the source's words; no two-handle slider.
-    fireEvent.click(within(controls).getByRole("button", { name: "More" }));
+    fireEvent.click(within(controls).getByRole("button", { name: "More filters" }));
     expect(within(controls).queryByRole("slider")).toBeNull();
     fireEvent.click(within(controls).getByRole("button", { name: /^Class G/ }));
     const last = spy.mock.calls.at(-1)?.[0] as MapAction & { type: "set_filters" };

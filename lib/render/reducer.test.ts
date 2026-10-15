@@ -330,6 +330,8 @@ describe("Rank by, the hex basis, hover and fly_to (spec §12c, §12d)", () => {
     const ranked = reduce(drawn, { type: "set_rank_by", layerId: "dams", key: "v" });
     expect(ranked.renderOps[0].rankBy).toBe("v");
     expect(reduce(ranked, { type: "set_rank_by", layerId: "dams" }).renderOps[0]).not.toHaveProperty("rankBy");
+    // None, picked in the row, is kept as "" so the default (the primary measure) does not come back.
+    expect(reduce(ranked, { type: "set_rank_by", layerId: "dams", key: "" }).renderOps[0].rankBy).toBe("");
     expect(reduce(drawn, { type: "set_hex_basis", layerId: "dams", basis: "sum" }).renderOps[0].hexBasis).toBe("sum");
   });
 

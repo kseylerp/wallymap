@@ -493,7 +493,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
                     ...op,
                     opacity: op.opacity ?? old.opacity,
                     filters: op.filters !== undefined ? activeFilters(op.filters) : old.filters,
-                    ...((op.rankBy ?? old.rankBy) && { rankBy: op.rankBy ?? old.rankBy }),
+                    ...((op.rankBy ?? old.rankBy) !== undefined && { rankBy: op.rankBy ?? old.rankBy }),
                     ...((op.hexBasis ?? old.hexBasis) && { hexBasis: op.hexBasis ?? old.hexBasis }),
                   }
                 : old,
@@ -535,7 +535,8 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       return updateOp(state, action.layerId, (op) => {
         const { rankBy: _old, ...rest } = op;
         void _old;
-        return action.key ? { ...rest, rankBy: action.key } : rest;
+        // undefined goes back to the default (the primary measure); "" is None, picked in the row.
+        return action.key !== undefined ? { ...rest, rankBy: action.key } : rest;
       });
     case "set_hex_basis":
       return updateOp(state, action.layerId, (op) => ({ ...op, hexBasis: action.basis }));

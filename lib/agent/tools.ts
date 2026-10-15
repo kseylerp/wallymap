@@ -31,10 +31,17 @@ export const TOOL_RENDER_MODES = [
 export const LayerFiltersSchema = z.record(
   z.string(),
   z.object({
-    include: z.array(z.string()).optional().describe("Keep features whose value is one of these"),
-    range: z.tuple([z.number(), z.number()]).optional().describe("Keep features whose number is in [min, max]"),
+    include: z
+      .array(z.string())
+      .optional()
+      .describe("Keep features whose value (or any item of a list) is one of these: a chip's include values from the query summary's attributes"),
+    range: z.tuple([z.number(), z.number()]).optional().describe("Keep features whose number is in [min, max]: a measure preset's range"),
+    match: z.string().optional().describe("Keep features whose text (a name) contains these words"),
   }),
 );
+
+/** `render.hexBasis` as the model sees it: what a hex cell's color means (spec §12d); share takes `hexShare`. */
+export const HEX_BASES = ["count", "sum", "share", "recency"] as const;
 
 const TIME_MODES = ["slide", "cumulative"] as const satisfies readonly TimeMode[];
 
@@ -321,7 +328,10 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined) {
       return body;
     },
     // The UI part keeps the full body for the map; the model gets a summary with v's statistics in the layer's unit.
-    toModelOutput: ({ output }) => ({ type: "json", value: layerResultForModel(output, layer.id, layer.style, layer.fieldHelp) }),
+    toModelOutput: ({ output }) => ({
+      type: "json",
+      value: layerResultForModel(output, layer.id, { ...layer.style, ...(layer.attributes && { attributes: layer.attributes }) }, layer.fieldHelp),
+    }),
   });
 }
 
@@ -435,7 +445,9 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
         "extrude areas by their value v in 3D (fire perimeters by acres, glaciers). Omit mode to keep the layer's " +
         "current style (new layers start as symbols, or clusters when dense). filters narrows it by its own properties " +
         "(the query summary's sample properties name them), e.g. { sac_scale: { include: [\"alpine_hiking\"] } } or " +
-        "{ acres: { range: [1000, 1000000] } }; they replace the layer's filters, and {} clears them. view names the " +
+        "{ acres: { range: [1000, 1000000] } }, written from the query summary's attributes so the layer row's chips show " +
+        "the same choice; they replace the layer's filters, and {} clears them. rankBy ranks by a measure (the row lists the " +
+        "top 10, symbols sized by it). hexBasis colors hex cells: count, sum of the measure, share of hexShare, or recency. view names the " +
         "standard view the answer is drawn in: change (two versions or two dates of one layer: then vs now, what changed), " +
         "timeline (dated features: over time, year by year, since), ranked (largest, most, deepest, highest, how full), " +
         "density (where are the most, hotspots, many points), detail (one thing: tell me about, how deep is), scenario (a " +
@@ -447,6 +459,9 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
         filters: LayerFiltersSchema.optional().describe("Show only features matching every entry; omit to keep the current filters"),
         scenario: z.number().optional().describe("Scenario layers: amount to show, e.g. sea level rise feet"),
         view: z.enum(VIEW_KINDS).optional().describe("The standard view: change, timeline, ranked, density, detail, scenario or route"),
+        rankBy: z.string().optional().describe("Rank by this measure's key (from the summary's attributes of type measure)"),
+        hexBasis: z.enum(HEX_BASES).optional().describe("Hex cells' color: count (default), sum of the measure, share (with hexShare), recency"),
+        hexShare: z.string().optional().describe("With hexBasis share: the chip value whose share colors the cells, e.g. wind"),
       }),
       execute: async (input) => input,
     }),

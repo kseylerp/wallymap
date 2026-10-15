@@ -812,7 +812,8 @@ function hexTileLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       outlineWidth: 0.35,
       outlineColor: HEX_LABEL_HALO,
       billboard: true,
-      parameters: { cullMode: "none" },
+      // Never tested against depth: on 3D terrain a hill in front of the billboard cut the label mid-number (232 read as "23").
+      parameters: { cullMode: "none", depthCompare: "always" },
       updateTriggers: { getColor: trigger, getText: trigger },
       ...terrainProps(terrain, "offset"),
     }),

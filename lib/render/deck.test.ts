@@ -374,6 +374,8 @@ describe("H3 tiles for dense points", () => {
     expect(p.fontSettings).toMatchObject({ sdf: true });
     expect((p.getSize as (f: unknown) => number)(light)).toBe(11);
     expect(p.pickable).toBe(false);
+    // Drawn over terrain, never cut by a hill in front of it.
+    expect(p.parameters).toMatchObject({ depthCompare: "always" });
     expect(props(buildDeckLayers(stateOf("species", dense(2001), {}, { zoom: 10 }))[1]).data).not.toBe(labelled);
     const state = stateOf("species", dense(2001), {}, { zoom: 10 });
     expect(props(buildDeckLayers(state)[1]).data).toBe(props(buildDeckLayers(state)[1]).data);

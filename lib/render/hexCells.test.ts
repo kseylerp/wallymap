@@ -4,7 +4,7 @@ import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import { latLngToCell } from "h3-js";
 import { describe, expect, it } from "vitest";
 import type { Attribute } from "@/layers/types";
-import { buildDeckLayers, hexColumns, hexTileColor, hexTileColorAt, type HexFeature } from "@/lib/render/deck";
+import { buildDeckLayers, declutterLabels, hexColumns, hexTileColor, hexTileColorAt, type HexFeature } from "@/lib/render/deck";
 import {
   askAboutCellText,
   basisLabel,
@@ -174,5 +174,13 @@ describe("the renderer draws the basis and registers each cell for its card", ()
     expect(ring).toBeInstanceOf(ScatterplotLayer);
     expect((ring!.props as { data: { position: number[] }[] }).data[0].position).toEqual([-100.401, 32.471]);
     expect(buildDeckLayers(stateWith({ mode: "points", visible: false }, { hover: { layerId: "power-plants", feature: hovered } })).some((l) => l.id.endsWith(":hover"))).toBe(false);
+  });
+});
+
+describe("ranked labels do not pile up", () => {
+  it("keeps a lower-ranked name only where it does not overlap a higher one at this zoom", () => {
+    const named = [plant(-83.68, 37.8, "x", 110, "Military Wall"), plant(-83.679, 37.8001, "x", 46, "Left Flank"), plant(-83.6, 37.75, "x", 57, "Long Wall")];
+    expect(declutterLabels(named, 11, 37.8).map((f) => f.properties?.name)).toEqual(["Military Wall", "Long Wall"]);
+    expect(declutterLabels(named, 17, 37.8)).toHaveLength(3);
   });
 });

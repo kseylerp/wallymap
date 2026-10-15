@@ -652,12 +652,36 @@ function rankedSizing(data: GeoJSON.FeatureCollection, key: string): { key: stri
 }
 
 /** Name labels for a ranked view's top features: dark grey on a white halo, above the symbol. */
+/** A ranked label's box on screen, for declutter: about this wide per character and this tall, in CSS pixels. */
+const LABEL_BOX = { charPx: 6.5, heightPx: 16 } as const;
+
+/**
+ * The top features' names that fit without overlapping a higher-ranked one at this zoom (an equirectangular guess at
+ * screen distance, enough for a handful of labels): two crags 300 m apart at zoom 11 keep only the bigger one's name.
+ */
+export function declutterLabels(features: Feature[], zoom: number, latitude: number): Feature[] {
+  const mpp = metersPerPixel(zoom, latitude);
+  const kept: { x: number; y: number; w: number }[] = [];
+  const out: Feature[] = [];
+  for (const f of features) {
+    const [lng, lat] = markerPosition(f);
+    const x = (lng * 111_320 * Math.cos((latitude * Math.PI) / 180)) / mpp;
+    const y = (lat * 110_574) / mpp;
+    const w = String(f.properties?.name ?? "").length * LABEL_BOX.charPx;
+    if (kept.some((k) => Math.abs(k.x - x) < (k.w + w) / 2 + 4 && Math.abs(k.y - y) < LABEL_BOX.heightPx)) continue;
+    kept.push({ x, y, w });
+    out.push(f);
+  }
+  return out;
+}
+
 function rankedLabelLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const { data, terrain, deckId, style } = ctx;
   const rankKey = rankKeyOf(op, ctx);
   if (!rankKey || style.geometry !== "point") return [];
   const { top, key, extent } = rankedSizing(data, rankKey);
-  const labelled = top.filter((f) => typeof f.properties?.name === "string" && f.properties.name !== "");
+  const named = top.filter((f) => typeof f.properties?.name === "string" && f.properties.name !== "");
+  const labelled = declutterLabels(named, ctx.zoom, ctx.latitude);
   if (labelled.length === 0) return [];
   return [
     new TextLayer<Feature>({

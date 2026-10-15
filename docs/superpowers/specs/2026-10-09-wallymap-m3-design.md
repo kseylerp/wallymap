@@ -127,3 +127,24 @@ Each layer declares its facets (`style.facets`): one or two attributes people ac
 ### 12b. Explain every number on the card (owner, 2026-10-14: "like uranium mines; if you list a score on the detail card it needs an i-icon to explain anything that's not clear")
 
 Each layer declares `fieldHelp`: for every property it shows (and always for `v`, scores, indices, classes, codes), a one-sentence plain explanation, the unit and scale, how it was computed and by whom, and the source link. The inspect card shows the same small serif "i" ring used in the top nav next to any field that has help; tapping it opens a hairline popover with the text and the link. Facet chips and legend keys reuse the same text on hover. Nothing with help text is shown as a bare label: "Score 42" becomes "Hazard score 42 ⓘ" with the explanation one tap away. Layers whose source documents the field (EPA/Navajo AUM priority scores, popularity, remoteness, IUCN categories, NID hazard potential, sac_scale, mtb:scale, piste difficulty, GBIF basis of record, drought categories) get the official wording.
+
+### 12c. Typed attributes pick the control (owner, 2026-10-15: "go"; replaces the slider-per-number facets of §12a)
+
+Every layer declares `attributes`: one entry per field a person can slice by, with `type` (category | ordinal | measure | time | flag | name | place), label, unit, help (§12b) and, for ordinal, the ordered levels with plain labels and the source scale they normalise from. The row builds itself from the list; no numeric field becomes a slider by default.
+
+- **Category:** chips with counts; clicking a legend key toggles the same chip. Map: colour or shape.
+- **Ordinal (difficulty, grade, class, severity):** ordered chips, one shared band set per activity (climbing grades from YDS, UIAA, French and V-scale map to Beginner, Intermediate, Advanced, Elite, keeping the original grade on the card). Map: the sage → pink → purple ramp.
+- **Measure (size, capacity, count, length, area):** ranked, not filtered. "Rank by" picks the measure; the row lists the top 10 synced with the map (hover highlights, click flies and opens the card); symbol size or 3D height encodes it. Size presets ("Large fires: over 10,000 acres") come from the source's own classes where they exist; a clickable mini histogram is the only free range control, under More.
+- **Time:** the scrubber with presets (last 7 days, this year, since a named year). The only place a scrubber appears.
+- **Flag:** toggle chips ("Open now", "Research grade").
+- **Name:** search within the layer.
+- **Place:** "within" (my route, a protected area, a radius of a point), usually from chat.
+
+Each row shows by default one category or ordinal chip set and one "Rank by"; everything else sits under More. Chat and controls share one state: "only sport crags" sets the chips.
+
+### 12d. Hex cells carry information (owner, 2026-10-15: "the hexes need better information and use cases")
+
+A hex cell is a summary of the features inside it, never a bare count:
+- **Card:** the cell's area (km²) and density per km²; count and its rank among visible cells ("3rd busiest of 120"); the breakdown by the layer's primary category (bar of shares); the layer's measure summed or summarised (total MW, total acres burned, median routes); the time span of features (first and latest date); the top 5 named features in the cell, each opening its own card; "Zoom to this cell" and "Ask about this cell".
+- **What the colour means:** chosen per layer from its attributes: count (default), sum of the measure (power capacity per cell), share of one category (share of sport routes), or recency (newest detection). The legend says it in words with the cell size ("Each cell ≈ 36 km²; darker = more wind capacity").
+- **When hexes are the right view:** many points where density is the question: fire detections, wildlife sightings, crags in a region, earthquakes, mines, photos. The agent's density view picks the colour basis from the question ("where are the most…" → count; "where is most of the capacity…" → sum; "where is it newest…" → recency).

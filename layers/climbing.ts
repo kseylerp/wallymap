@@ -466,6 +466,7 @@ const ATTRIBUTES: Attribute[] = [
   { key: "v", type: "measure", label: "Routes", unit: "routes", encode: "size" },
   { key: "kind", type: "category", label: "Kind", levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
   { key: "fee", type: "flag", label: "Fee charged" },
+  { key: "source", type: "category", label: "Listed by", levels: Object.entries(SOURCE_LABELS).map(([value, label]) => ({ value, label })) },
   nameAttribute(),
 ];
 

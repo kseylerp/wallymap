@@ -399,7 +399,9 @@ function LegendRow({
     const basis = usableBasis(op.hexBasis, ctx, hexCells(shownData, resolution));
     return hexLegendSentence(resolution, basis, ctx, op.filters);
   }, [hexes, op, shownData, threeD, zoom, layer]);
-  const caption = op?.visible ? (viewCaption(op.view, layer, compare, hexSentence) ?? hexSentence) : undefined;
+  // A view's own sentence, and hex cells' size and meaning on a line of their own (both can apply: a timeline in hexes).
+  const viewWords = op?.visible ? viewCaption(op.view, layer, compare, hexSentence) : undefined;
+  const caption = viewWords === hexSentence ? undefined : viewWords;
   const { citation, coverageNote } = layer.result;
   const host = hostOf(citation.url);
   const sourceHelp: FieldHelp = {
@@ -493,6 +495,11 @@ function LegendRow({
       {caption && (
         <p data-testid="view-caption" className="mt-1 text-[11.5px] leading-4 text-ink-muted">
           {caption}
+        </p>
+      )}
+      {hexSentence && (
+        <p data-testid="hex-legend" className="mt-1 text-[11.5px] leading-4 text-ink">
+          {hexSentence}
         </p>
       )}
       {summary && (

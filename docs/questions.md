@@ -145,8 +145,11 @@ Beyond the six starters, these tools shape follow-up questions. They appear in t
 
 `scripts/eval-model.mts --set` reads the questions below (the lines starting with `- ` between the markers), runs each one through the real agent with the model in `MODEL_NAME`, and prints one JSON line per question and a final `ok N/M`. It spends model credits and calls live data servers. The set covers trails, both fire layers, forest loss, snow, stream flow, campsites and roads, species, photos with popularity, public lands with wilderness, night lights with population, remoteness (which also looks up a named physical region), a walking route, fire year by year, a compare over time, a sources check, popular campsites, a physical-region outline, two "here" questions that carry a map view (`@view=[w,s,e,n]`, the bbox the browser would send) and pass without a geocode, one question on a view far wider than the trails layer allows (the whole Baltic, no place named), which passes only when the agent answers at that scale (at least one query succeeds and is drawn) without calling set_view or retrying a layer more than once, and twelve M4 questions, one per theme: mountain biking, ski touring, climbing, lake depth, surf today, river level, weather warnings, earthquakes, rock type at a point, glaciers, greenness compared over a year, and species records drawn as a heatmap, and ten Batch F questions: reservoir level, dams by decade, a monument then and now, uranium mines, a sea level trend, a sea level rise scenario, methane plumes, a county temperature anomaly, sequoia fire deaths, and a glacier's retreat, and the owner's two Tierra del Fuego questions on a wide view with no place named (great hikes, which must draw wider-scale layers instead of refusing; deforestation or water rise), and the owner's "good hiking in French Guiana", which passes only when a query that holds hiking candidates succeeds (trails with named routes, peaks, outdoor features or protected areas), population and night lights are not queried, and the note, within 150 words, names at least three places from the returned features, and the owner's "wind farms in West Texas" on a 392,000 km² view, which passes only when power-plants answers with at least 100 features, no power-plants query uses a box under 90% of the view (no shrinking) or errors, and the note names the largest site by MW, and "dams in the Colorado River basin", which passes when a dams query over the basin answers with features and no zoom_in error. Every question also fails when a note runs over 150 words or a heading appears twice across the notes and the closing text.
 
+Every question also runs the map checks (`lib/checks/mapChecks.ts`) on the map its tool results end on, replayed through the browser's reducer: features on land, at sea or at the coast as their layer says (a 1:50m land mask, 2 km tolerance, a quarter of the layer out of place), no point layer on a regular grid, no place drawn twice within 1 km or listed twice in Rank by's top 10, inspect card rows in words (no raw keys, "Value", bare URLs, mostly "n/a", or scores without help), only registered layer ids, and for a question about a place, 80% of each layer's features in or near it. The JSON line lists them under `checks`, each failure as a sentence; a question passes only when its rules and every check pass. With `--screens`, thirteen of the questions (`SCREEN_QUESTIONS` in the script) also open by permalink in Chromium at 1440×900 and 375×812 from a worktree copy of HEAD, and the page is checked: panels and their contents inside the panel and the screen, no text cut without an ellipsis, the chat placeholder whole and uncovered, hex and symbol labels not clipped, and each line layer visible on Topo and Topo + Satellite. Screenshots and a contact sheet go to `.superpowers/m3/checks/`.
+
 ```bash
-node --env-file=.env.local --import tsx scripts/eval-model.mts --set
+node --env-file=.env.local --import tsx scripts/eval-model.mts --set --screens --save /tmp/runs
+node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /tmp/runs   # checks again, no model calls
 ```
 
 <!-- eval:start -->
@@ -208,82 +211,95 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set
 
 ## Last run
 
-Full set run on 2026-10-14 at commit 0039aa2 (native data lines, T1 trails, region geocoding, soft caps; 49 questions) with model `openai/gpt-oss-120b` and a 12-step cap: **ok 46/49**. A question passes when the agent located the place (geocode, a physical-regions query, or an `@view` map view), the camera reached it (a successful geocode or `set_view`; `@view` questions are exempt), it queried a layer, drew whatever came back (render or compare), and wrote a note of at most 150 words. Some questions add their own rule (French Guiana, Wind River glaciers, West Texas wind farms, Colorado basin dams, and the three standard-view questions below).
+Full set run on 2026-10-16 with model `openai/gpt-oss-120b`, a 12-step cap and the map checks: **ok 38/54** at commit ff5345d, after the product fixes below. The same checks on the runs made before those fixes (2026-10-16, at a21721b's product code) gave **ok 30/54**; the pass rules alone passed 48 of them, so the checks caught 18 questions the old eval called good. Five questions were run again after the last fixes (b24a902): the weather warnings and the West Texas wind farms then passed, so **40/54** stand on the current code.
 
-| Question | ok | Tools (query_ prefix dropped) | Layer errors | Seconds |
-| --- | --- | --- | --- | --- |
-| Show hiking trails around Lake Tahoe | yes | geocode, osm-trails, render |  | 46.5 |
-| Which wildfires burned near Yosemite in the last 10 years? | yes | geocode, fire-perimeters, render |  | 27.5 |
-| Are there any active fires burning near Missoula right now? | yes | geocode, fire-detections, fire-perimeters, render, render |  | 26.2 |
-| Where has the Amazon lost the most forest since 2015? | yes | geocode, geocode, forest-loss, render |  | 43.9 |
-| How much snow is on the ground around Mount Hood? | yes | geocode, snowpack, snow-cover, render, note |  | 65.1 |
-| Which rivers near Jackson Hole are running high right now? | yes | geocode, geocode, streamflow, render |  | 58.7 |
-| Find campsites and forest roads open to vehicles near Moab | yes | geocode, campsites, forest-roads, render, render |  | 58.4 |
-| What wildlife has been spotted around Banff this year? | yes | geocode, species, render |  | 67.1 |
-| Which trails and viewpoints around Zion National Park look the most popular? | yes | geocode, osm-trails, popularity, outdoor-features, outdoor-features, wikipedia-nearby, photos, render, render, render |  | 113.4 |
-| Who owns the land around Bryce Canyon, and is any of it designated wilderness? | yes | geocode, public-lands, wilderness, render, render |  | 14.4 |
-| Where is the night sky darkest around Great Basin National Park, and how many people live nearby? | yes | geocode, night-lights, population, render, render |  | 12.1 |
-| How remote is the Wind River Range? | yes | geocode, remoteness, render |  | 28.2 |
-| Show me a walking route from Tahoe City to Emerald Bay | yes | geocode, geocode, geocode, route, render, note |  | 42.4 |
-| Show wildfires near Yosemite year by year since 2016 | yes | geocode, fire-perimeters, render, set_time |  | 34.3 |
-| Show only alpine-grade trails near Chamonix | yes | geocode, osm-trails, render |  | 16.6 |
-| Compare forest loss in Rondônia between 2015 and 2025 | yes | geocode, forest-loss, render |  | 29.9 |
-| Which sources did you use for snow near Mount Hood? | no | geocode, snowpack, snow-cover |  | 22.5 |
-| Which campsites around Moab look the most popular? | yes | geocode, popularity-campsites, popularity-campsites, campsites, render | Area is 13446 km²; zoom in to under 2500 km²; Area is 3373 km²; zoom in to under | 51 |
-| Outline the Sierra Nevada | yes | geocode, physical-regions, render |  | 37.7 |
-| What fires are here? @view | yes | fire-perimeters, fire-detections, render |  | 21.2 |
-| Any surf here? @view | yes | surf, render |  | 29.4 |
-| best hiking trails for elevation @view | yes | osm-trails, outdoor-features, protected-areas-world, render, render | Area is 402226 km²; zoom in to under 400000 km² | 59.1 |
-| Mountain bike trails near Moab | yes | geocode, mtb-trails, mtb-trails, render | Area is 13446 km²; zoom in to under 10000 km² | 41.5 |
-| Ski touring routes around Chamonix | yes | geocode, ski-routes, render |  | 29.5 |
-| Climbing crags near Red River Gorge | yes | geocode, geocode, climbing, climbing, render |  | 47.5 |
-| How deep is Lake Tahoe? | yes | geocode, lakes, render |  | 43.1 |
-| Surf at Half Moon Bay today | yes | geocode, surf, surf, render |  | 50.7 |
-| Is the Carson River running high? | yes | geocode, geocode, streamflow, render |  | 43.5 |
-| Any weather warnings around Lake Tahoe? | yes | geocode, weather-alerts, render |  | 39.8 |
-| Recent earthquakes near Mammoth Lakes | yes | geocode, earthquakes, earthquakes, render |  | 62.1 |
-| What rock is Half Dome made of? | yes | geocode, geocode, geocode, geocode, peaks, outdoor_features, outdoor-features, outdoor-features, wikipedia-nearby, wikipedia-nearby, render | Area is 8547 km²; zoom in to under 4000 km² | 108.3 |
-| Glaciers in the Wind River Range | yes | geocode, glaciers, render |  | 34.3 |
-| How green was the Sierra Nevada this month compared to last year? | yes | geocode, greenness, compare, render |  | 34.3 |
-| Where are the most iNaturalist or GBIF records of mountain lions in Colorado? | yes | geocode, species, gbif-occurrences, render | Area is 269282 km²; zoom in to under 200000 km² | 63.5 |
-| How full is Lake Powell right now? | yes | geocode, geocode, reservoir-levels, reservoir-levels, render |  | 35.6 |
-| Show dams on the Colorado River by the decade they were built | yes | geocode, geocode, geocode, geocode, dams, render |  | 33.3 |
-| How has Bears Ears National Monument changed since 2021? | yes | monuments, geocode, monuments, render | Area is 797600676 km²; zoom in to under 80000000 km² | 22.3 |
-| Where are abandoned uranium mines near the Navajo Nation? | yes | geocode, uranium, uranium, render |  | 14.2 |
-| How fast is sea level rising at San Francisco? | yes | geocode, sea-level-trends, render |  | 12.3 |
-| Show Miami with 3 feet of sea level rise | yes | geocode, sea-level-rise, render, note |  | 11 |
-| Where are methane plumes in the Permian Basin? | yes | geocode, methane-plumes, render |  | 41.3 |
-| How much warmer than normal was Fresno County last month? | yes | geocode, temperature-anomaly, temperature-anomaly, render |  | 15.8 |
-| Which sequoia groves burned in the 2020 and 2021 fires? | no | sequoia-mortality, sequoia-groves, burn-severity, burn-severity, render, render, render |  | 25.6 |
-| Show the Lyell Glacier's retreat | yes | geocode, glaciers, render, set_time |  | 15.1 |
-| great hikes around here @view | yes | osm-trails, peaks, outdoor-features, render, render | Area is 298265 km²; zoom in to under 160000 km² | 24.8 |
-| deforestation or water rise in this area @view | yes | forest-loss, surface-water, render, render |  | 15.9 |
-| good hiking in French Guiana | yes | geocode, osm-trails, peaks, outdoor-features, outdoor-features, protected-areas-world, render, render, render, render |  | 35.6 |
-| wind farms in West Texas @view | no | geocode, geocode, power-plants, render |  | 14.6 |
-| dams in the Colorado River basin | yes | geocode, dams, render |  | 10.4 |
+What the checks caught on the first run, and what was fixed:
 
-Why the three failures failed:
+- **Duplicates** (12 questions). Rank by's top 10 listed one place again and again: Rubicon Trail 7 times around Tahoe (trail segments), Gannett Glacier twice (older outlines), La Trapette twice, Ranchland Wind Project 4 times (its turbines). The list now shows one row per place (9a73dd3, b24a902). One fire filed by two agencies drew twice (Empire and EMPIRE, Ferguson; ed48751). One waterfall mapped twice in OpenStreetMap drew twice (Chutes Voltaire; e286a22). EU sites under two designations drew as two areas (52 around the Baltic; fc33d38, af6df10, a265146). Two uranium mine portals shared one name (Taylor Reid No. 1; now (A) and (B), ff5345d). Climbing walls left twice after joining OpenStreetMap and OpenBeta (North 40, Courtesy Wall; 6d3e939).
+- **Card text** (7 questions). Wikipedia, weather alerts and the geologic unit printed raw URLs; surf read "Swell period s", gauges "Temp c", weather "Snowfall cm", sequoias "Diameter cm"; methane plumes read "Uncertainty 177.6" and "Persistence 0.22"; county anomalies read "Fips 06019" and an unexplained "Warmest rank 60". All fixed (d8ceb7c, f123850, 474c27d).
+- **Inside the place** (2 questions). "Navajo Nation" geocoded to Navajo Nation Drive in Flagstaff, 150 km from the mines; it now resolves to the reservation (a2f03ad).
+- **On land or at sea, lattice, layer ids.** No failures on this set. Their fixtures hold the owner's past cases: the 4×4 surf forecast grid off Monterey and the phantom layer "climbing<|channel|>commentary".
 
-- **Which sources did you use for snow near Mount Hood?** Queried `snowpack` (no stations) and the `snow-cover` tiles but never rendered them, so nothing was on the map. A prompt sentence now says to render every successful query, tile layers included.
-- **Which sequoia groves burned in the 2020 and 2021 fires?** Queried with a box it made up and never geocoded, so the place was never located even though it rendered. A prompt sentence now says to geocode the place the features live in (the Sierra Nevada) and never make up a box.
-- **wind farms in West Texas @view** Geocoded "West Texas" (twice) and queried power-plants with that region's box, which the rule read as shrinking the view. The rule now measures the box against the region the user named when the model geocodes it, and still requires a single power-plants query with no shrink and no zoom_in error.
+The 16 questions that failed the full run:
 
-The three standard-view questions (spec §12), run live on the code of commits 58c255c and 651bc3d with the same model (Bears Ears and uranium passed on their first run; the Moab question passed on its third, after two fixes to its own rule: the eval read the layer registry through a second module copy, and a hand-written range from 3 up now counts like the chips' include list):
+- **What fires are here? (@view)** The model queried fire perimeters and detections and never drew them.
+- **Mountain bike trails near Moab** Both queries hit the 10,000 km² limit and the model gave up instead of drawing a smaller area.
+- **How deep is Lake Tahoe?** The model queried without geocoding the lake, so the place was never located.
+- **How full is Lake Powell right now?** The model queried without geocoding, so the place was never located.
+- **How much warmer than normal was Fresno County last month?** The model queried the anomaly and never drew it.
+- **Which sequoia groves burned in the 2020 and 2021 fires?** The model never geocoded, and its note ran 162 words.
+- **wind farms in West Texas @view** The model queried power plants twice, the second time on a smaller box (its rule forbids both).
+- **Show only hard mountain bike trails near Moab** The model filtered on the chip labels ("Hard", "Expert") instead of their values, so nothing was drawn.
+- **Which uranium mines near the Navajo Nation score highest?** The note did not name the highest-scoring site (NA-0420).
+- **Where are most of the wind farms by capacity in West Texas?** The model drew ranked points instead of hex cells by summed capacity.
+- **Show only sport crags at Red River Gorge** The climbing sources returned nothing that minute, so no crag could be drawn.
+- **Climbing crags near Red River Gorge** The same wall appeared twice (North 40, Courtesy Wall); fixed in 6d3e939, and on the re-run only Board Wall, two walls of one name 680 m apart, remained.
+- **best hiking trails for elevation @view** Two OpenStreetMap viewpoints share a name a few hundred metres apart (Urbo kalnas, Türisalu pank); these look like real separate viewpoints, so the check is strict here.
+- **good hiking in French Guiana** Two waterfalls of one name 680 m apart (Saut Grand Continent), likely upper and lower falls; same judgement as above.
+- **Any weather warnings around Lake Tahoe?** "Precipitation mm" on the current-conditions card; fixed in 474c27d and passed on the re-run.
+- **Recent earthquakes near Mammoth Lakes** 21 of 27 quakes (78%) fell within the town's box grown by 25%; the model searched a wider area than "near".
 
-| Question | ok | Tools (query_ prefix dropped) | Layer errors | Seconds |
-| --- | --- | --- | --- | --- |
-| How has Bears Ears changed since 2021? | yes | geocode, monuments, render |  | 11.5 |
-| Show only hard mountain bike trails near Moab | yes | geocode, mtb-trails, mtb-trails, render | Area is 13446 km²; zoom in to under 10000 km² | 96.9 |
-| Which uranium mines near the Navajo Nation score highest? | yes | geocode, uranium, render |  | 11.7 |
+| Question | ok | Rules | Failed checks | Tools (query_ prefix dropped) | Seconds |
+| --- | --- | --- | --- | --- | --- |
+| Show hiking trails around Lake Tahoe | yes | yes |  | geocode, osm-trails, render | 55.2 |
+| Which wildfires burned near Yosemite in the last 10 years? | yes | yes |  | geocode, geocode, fire-perimeters, render | 39.2 |
+| Are there any active fires burning near Missoula right now? | yes | yes |  | geocode, fire-detections, fire-perimeters, render, render | 45.2 |
+| Where has the Amazon lost the most forest since 2015? | yes | yes |  | geocode, geocode, forest-loss, render | 41.2 |
+| How much snow is on the ground around Mount Hood? | yes | yes |  | geocode, snowpack, snow-cover, render | 55.6 |
+| Which rivers near Jackson Hole are running high right now? | yes | yes |  | geocode, streamflow, render | 34.4 |
+| Find campsites and forest roads open to vehicles near Moab | yes | yes |  | geocode, campsites, forest-roads, render, render | 23.7 |
+| What wildlife has been spotted around Banff this year? | yes | yes |  | species, geocode, species, render | 42.9 |
+| Which trails and viewpoints around Zion National Park look the most popular? | yes | yes |  | geocode, osm-trails, outdoor-features, popularity, render, render, render | 83.1 |
+| Who owns the land around Bryce Canyon, and is any of it designated wilderness? | yes | yes |  | geocode, public-lands, wilderness, render, render | 34.5 |
+| Where is the night sky darkest around Great Basin National Park, and how many people live nearby? | yes | yes |  | geocode, night-lights, population, render, render | 34.6 |
+| How remote is the Wind River Range? | yes | yes |  | geocode, remoteness, render | 24.8 |
+| Show me a walking route from Tahoe City to Emerald Bay | yes | yes |  | route, render | 26.7 |
+| Show wildfires near Yosemite year by year since 2016 | yes | yes |  | geocode, geocode, fire-perimeters, render | 26.3 |
+| Show only alpine-grade trails near Chamonix | yes | yes |  | geocode, geocode, osm-trails, render | 33.2 |
+| Compare forest loss in Rondônia between 2015 and 2025 | yes | yes |  | geocode, forest-loss, compare, render | 51.1 |
+| Which sources did you use for snow near Mount Hood? | yes | yes |  | geocode, snowpack, snow-cover, render, render | 25.4 |
+| Which campsites around Moab look the most popular? | yes | yes |  | geocode, popularity-campsites, popularity-campsites, campsites, render | 52.7 |
+| Outline the Sierra Nevada | yes | yes |  | geocode, physical-regions, render | 37.4 |
+| What fires are here? @view | no | no |  | fire-perimeters, fire-detections | 22.6 |
+| Any surf here? @view | yes | yes |  | surf, surf | 50.3 |
+| best hiking trails for elevation @view | no | yes | duplicates | osm-trails, peaks, outdoor-features, protected-areas-world, render, render | 59.7 |
+| Mountain bike trails near Moab | no | no |  | geocode, mtb-trails, mtb-trails | 44.1 |
+| Ski touring routes around Chamonix | yes | yes |  | geocode, geocode, ski-routes, render | 27.2 |
+| Climbing crags near Red River Gorge | no | yes | duplicates | geocode, geocode, climbing, climbing, render | 29.1 |
+| How deep is Lake Tahoe? | no | no |  | lakes, lakes, render | 46.2 |
+| Surf at Half Moon Bay today | yes | yes |  | geocode, surf, surf, render, note | 62.6 |
+| Is the Carson River running high? | yes | yes |  | geocode, geocode, geocode, streamflow, render | 36.8 |
+| Any weather warnings around Lake Tahoe? | no | yes | card | geocode, weather-alerts, render | 38.1 |
+| Recent earthquakes near Mammoth Lakes | no | yes | place | geocode, earthquakes, earthquakes, render | 56.4 |
+| What rock is Half Dome made of? | yes | yes |  | geocode, geocode, geocode, geocode, geologic-unit, geologic-unit, render | 44.8 |
+| Glaciers in the Wind River Range | yes | yes |  | geocode, glaciers, render | 36.1 |
+| How green was the Sierra Nevada this month compared to last year? | yes | yes |  | geocode, geocode, greenness, compare, render, render | 89.1 |
+| Where are the most iNaturalist or GBIF records of mountain lions in Colorado? | yes | yes |  | geocode, species, species, gbif-occurrences, render, render | 54.2 |
+| How full is Lake Powell right now? | no | no |  | reservoir-levels, reservoir-levels, render, note | 31.8 |
+| Show dams on the Colorado River by the decade they were built | yes | yes |  | geocode, geocode, geocode, dams, render, dams, render | 73.5 |
+| How has Bears Ears National Monument changed since 2021? | yes | yes |  | geocode, monuments, render | 25.2 |
+| Where are abandoned uranium mines near the Navajo Nation? | yes | yes |  | geocode, uranium, render | 26.4 |
+| How fast is sea level rising at San Francisco? | yes | yes |  | geocode, sea-level-trends, render | 29.9 |
+| Show Miami with 3 feet of sea level rise | yes | yes |  | geocode, sea-level-rise, render | 25.5 |
+| Where are methane plumes in the Permian Basin? | yes | yes |  | geocode, methane-plumes, render | 47.9 |
+| How much warmer than normal was Fresno County last month? | no | no |  | geocode, temperature-anomaly | 20.8 |
+| Which sequoia groves burned in the 2020 and 2021 fires? | no | no |  | sequoia-groves, sequoia-mortality, render, render, render | 95.8 |
+| Show the Lyell Glacier's retreat | yes | yes |  | geocode, geocode, geocode, glaciers, glaciers, render, set_time | 88.6 |
+| great hikes around here @view | yes | yes |  | osm-trails, render | 29.1 |
+| deforestation or water rise in this area @view | yes | yes |  | forest-loss, sea-level-rise, render, render | 63.8 |
+| good hiking in French Guiana | no | yes | duplicates | geocode, osm-trails, peaks, outdoor-features, protected-areas-world, render, render, render, render | 72 |
+| wind farms in West Texas @view | no | no | duplicates | power-plants, render, power-plants, render | 80.5 |
+| dams in the Colorado River basin | yes | yes |  | geocode, dams, render | 25.2 |
+| How has Bears Ears changed since 2021? | yes | yes |  | geocode, geocode, monuments, render | 21.9 |
+| Show only hard mountain bike trails near Moab | no | no |  | geocode, mtb-trails, mtb-trails, render, note | 36.3 |
+| Which uranium mines near the Navajo Nation score highest? | no | no |  | geocode, uranium, render | 29.3 |
+| Where are most of the wind farms by capacity in West Texas? | no | no |  | geocode, power-plants, render | 23.8 |
+| Show only sport crags at Red River Gorge | no | no |  | geocode, geocode, climbing | 31.1 |
 
-Each replays the tool results through the browser's mapping and reducer: Bears Ears must end in the change view (a compare by version on `kind`, 2021 lost and current gained, the camera on the union of both); the Moab question must filter mtb-trails on its difficulty facet so hard trails show and nothing easier, drawn on the facet ramp; the uranium question must end in the ranked view, with the hazard score's help text in the query summary and the highest-scoring site named in the note.
+Screen checks (`--screens`, 13 questions at 1440×900 and 375×812, replayed at 4bbefa8): **10/13**. The contact sheet is `.superpowers/m3/checks/index.html`.
 
-The two attribute and hex questions (spec §12c, §12d), run live on 2026-10-15 with the same model. Both failed on their first run and passed on the second, after two fixes: the geocoder now takes Mapbox's candidate of exactly the asked name (it had answered "West Texas" with the town of West, Texas, and the model gave up), and the sport-crags rule no longer counts a first climbing query that came back empty from a wrong box as a re-query (the chips were already right):
+- **Find campsites and forest roads open to vehicles near Moab** Forest roads (sage dashes) read 28 of 255 along their lines on Topo, under the 32 the check needs; on Topo + Satellite they read 88.
+- **Which uranium mines near the Navajo Nation score highest? (phone)** One ranked label ("Section 16 deposit") is cut by the edge of the map.
+- **Where are most of the wind farms by capacity in West Texas? (phone)** One ranked label ("Graham") is cut by the edge of the map.
 
-| Question | ok | Tools (query_ prefix dropped) | Layer errors | Seconds |
-| --- | --- | --- | --- | --- |
-| Where are most of the wind farms by capacity in West Texas? | yes | geocode, power-plants, render |  | 48 |
-| Show only sport crags at Red River Gorge | yes | geocode, geocode, climbing, climbing, render |  | 59.9 |
-
-The wind question must end with power-plants in the density view, drawn as hex cells colored by the sum of capacity (`render.hexBasis: sum`), every drawn plant wind, and Texas named in the note. The sport question must filter climbing through `render.filters` on its discipline attribute to sport alone (the Sport chip pressed, every drawn crag lists sport), with at most one climbing query that drew crags.
-
+The screen checks found and verified two line fixes: easy and ungraded trails under the difficulty chips had gone back to plain sage (Tahoe read 27 on Topo; 68 with the T1 dashes, 6dc8017), and named hiking routes drew sage instead of the route gradient (14, then 57; 4bbefa8). Calibrated at commit 331355b, the checks also catch the owner's earlier cases: the dev tools badge over the chat placeholder and a layer row 24 px past its panel. A permalink reloads each layer with its default input, so a question that needed a non-default input (surf with `forecast: true`) reopens differently; surf reopened with no buoys in view and no card to open.

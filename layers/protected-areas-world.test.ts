@@ -142,5 +142,7 @@ describe("one place under two designations", () => {
     // A spelling with and without its accent (Irbes saurums, Irbes šaurums) is one place too.
     const accent = { ...area(0.02, "Baltic Sea Protected Area (HELCOM)", 1724), properties: { name: "Väinaméré", designation: "Baltic Sea Protected Area (HELCOM)", v: 1724 } };
     expect(mergeDesignations([area(0, "Special Protection Area (Birds Directive)", 2732), accent])).toHaveLength(1);
+    const dashed = (name: string, designation: string) => ({ ...area(0, designation, 367), properties: { name, designation, v: 367 } });
+    expect(mergeDesignations([dashed("Nida-Perkone", "Baltic Sea Protected Area (HELCOM)"), dashed("Nida - Pērkone", "Special Protection Area (Birds Directive)")])).toHaveLength(1);
   });
 });

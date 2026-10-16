@@ -126,9 +126,12 @@ function extent(f: Feature): BBox | null {
   return Number.isFinite(box[0]) ? box : null;
 }
 
-/** A name as two designations of one place compare it: case and accents ignored ("Irbes saurums", "Irbes šaurums"). */
+/**
+ * A name as two designations of one place compare it: case, accents, spaces and punctuation ignored ("Irbes saurums" and
+ * "Irbes šaurums", "Nida-Perkone" and "Nida - Pērkone", "Ile Du Grand-Connétable" and "Île du Grand Connétable").
+ */
 function nameKey(name: unknown): string {
-  return String(name ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  return String(name ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
 /**

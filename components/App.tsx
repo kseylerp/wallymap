@@ -240,7 +240,7 @@ export function App() {
         <MapCanvas ref={mapRef} state={state} onViewportChange={onViewportChange} onPick={onPick} />
       </main>
 
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 pt-[calc(var(--safe-top)+0.75rem)] pr-[calc(var(--safe-right)+0.75rem)] pb-3 pl-[calc(var(--safe-left)+0.75rem)] md:pt-[calc(var(--safe-top)+1rem)] md:pr-[calc(var(--safe-right)+1rem)] md:pb-4 md:pl-[calc(var(--safe-left)+1rem)]">
+      <header data-testid="top-bar" className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 pt-[calc(var(--safe-top)+0.75rem)] pr-[calc(var(--safe-right)+0.75rem)] pb-3 pl-[calc(var(--safe-left)+0.75rem)] md:pt-[calc(var(--safe-top)+1rem)] md:pr-[calc(var(--safe-right)+1rem)] md:pb-4 md:pl-[calc(var(--safe-left)+1rem)]">
         <div ref={pillsRef} className="pointer-events-auto">
           <MapPills
             basemap={state.basemap}

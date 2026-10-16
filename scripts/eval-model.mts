@@ -39,6 +39,8 @@
  *   --save <dir>     also writes each question's run (tool calls and closing text) to <dir> as gzipped JSON
  *   --replay <dir>   reads the runs from <dir> instead of calling the model (checks and rules only, no credits)
  *   --only <text>    runs only the set's questions containing <text> (case ignored)
+ *   --screens        after the set, the screen checks (scripts/evalScreens.ts) on SCREEN_QUESTIONS: each one's final
+ *                    map opened by permalink in a browser at desktop and phone size; see that file for the server.
  */
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { gunzipSync, gzipSync } from "node:zlib";
@@ -575,6 +577,27 @@ function evaluate(run: Run): Evaluated {
   };
 }
 
+/**
+ * The questions the screen checks open (scripts/evalScreens.ts), about a dozen covering lines (trails, mountain bike
+ * facets, ski routes), points (crags, surf, dams, wildlife), hexes (wind capacity), areas (fire perimeters, glaciers, a
+ * monument), ranked cards (uranium) and two layers at once (campsites and roads); each at desktop and phone size.
+ */
+export const SCREEN_QUESTIONS = [
+  "Show hiking trails around Lake Tahoe",
+  "Mountain bike trails near Moab",
+  "Ski touring routes around Chamonix",
+  "Find campsites and forest roads open to vehicles near Moab",
+  "Climbing crags near Red River Gorge",
+  "Surf at Half Moon Bay today",
+  "What wildlife has been spotted around Banff this year?",
+  "Show dams on the Colorado River by the decade they were built",
+  "Where are most of the wind farms by capacity in West Texas?",
+  "Which wildfires burned near Yosemite in the last 10 years?",
+  "Glaciers in the Wind River Range",
+  "How has Bears Ears changed since 2021?",
+  "Which uranium mines near the Navajo Nation score highest?",
+];
+
 function argValue(args: string[], flag: string): string | undefined {
   const i = args.indexOf(flag);
   return i >= 0 ? args[i + 1] : undefined;
@@ -612,15 +635,26 @@ const args = process.argv.slice(2);
 const save = argValue(args, "--save");
 const replay = argValue(args, "--replay");
 const only = argValue(args, "--only")?.toLowerCase();
+const screens = args.includes("--screens");
 if (args.includes("--set")) {
   const questions = readEvalSet().filter((q) => !only || q.toLowerCase().includes(only));
   let passed = 0;
+  const forScreens: { raw: string; slug: string; state: MapState; failures: string[] }[] = [];
   for (const q of questions) {
     const outcome = await question(q, { save, replay });
     if (outcome.ok) passed += 1;
     console.log(JSON.stringify(outcome.line));
+    if (screens && "state" in outcome && SCREEN_QUESTIONS.includes(q)) {
+      forScreens.push({ raw: q, slug: slugOf(q), state: outcome.state, failures: outcome.checks.flatMap((c) => c.failures) });
+    }
   }
   console.log(`ok ${passed}/${questions.length}`);
+  if (screens) {
+    const { runScreens } = await import("@/scripts/evalScreens");
+    const screenResult = await runScreens(forScreens);
+    console.log(`screens ok ${screenResult.passed}/${screenResult.total} (contact sheet ${screenResult.sheet})`);
+    if (screenResult.passed < screenResult.total) process.exitCode = 1;
+  }
   if (passed < questions.length) process.exitCode = 1;
 } else {
   const raw = args.filter((a, i) => !a.startsWith("--") && !["--save", "--replay", "--only"].includes(args[i - 1])).join(" ") || "Show hiking trails around Lake Tahoe";

@@ -29,8 +29,19 @@
  * Every question also fails when a note (or, with no note, the closing text) runs over NOTE_MAX_WORDS words or a heading appears twice across the notes
  * and the closing text (the note is the answer; the text after it is only follow-ups).
  * Some questions carry their own extra rule (QUESTION_RULES), matched on the question in lower case.
+ *
+ * Map checks (lib/checks/mapChecks.ts): every question's tool results are replayed through the browser's mapping and
+ * reducer to the final map, and six checks run on it: features on land or at sea as the layer says (surface), no point
+ * layer on a regular grid (lattice), no place drawn or ranked twice (duplicates), card rows in words (card), only
+ * registered layers (layerIds), and for a question about a place, the features in or near it (place). The JSON line
+ * carries `checks` (each with its failures as sentences); a question passes only if the rules above and every check pass.
+ *
+ *   --save <dir>     also writes each question's run (tool calls and closing text) to <dir> as gzipped JSON
+ *   --replay <dir>   reads the runs from <dir> instead of calling the model (checks and rules only, no credits)
+ *   --only <text>    runs only the set's questions containing <text> (case ignored)
  */
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { gunzipSync, gzipSync } from "node:zlib";
 import { generateText, stepCountIs } from "ai";
 import { getLayer, listLayers } from "@/layers";
 import { getModel } from "@/lib/agent/provider";
@@ -45,6 +56,8 @@ import { initialMapState, type MapState } from "@/lib/render/state";
 import { visibleState } from "@/lib/render/view";
 import { lineEntries } from "@/lib/render/nativeLines";
 import { boundsOf } from "@/lib/render/views";
+import { runMapChecks, type CheckResult, type LayerInfo, type PlaceRef } from "@/lib/checks/mapChecks";
+import type { BBox } from "@/layers/types";
 
 
 const model = process.env.MODEL_NAME ?? "(unset)";
@@ -187,6 +200,36 @@ function largestByV(calls: ToolCall[], toolName: string): { name: string; v: num
     }
   }
   return best;
+}
+
+/** The registry entry the map checks read, by layer id. */
+const lookupLayer = (id: string): LayerInfo | undefined => getLayer(id);
+
+/** A geocode's place name, when its output carries one. */
+function placeName(output: unknown): string | undefined {
+  const name = output && typeof output === "object" ? (output as { name?: unknown }).name : undefined;
+  return typeof name === "string" && name.trim() ? name.trim() : undefined;
+}
+
+/**
+ * The place a question is about, for the place check: every place it geocoded (their boxes joined), else the map view
+ * a "here" question carries; null when it named none (a route question's stops are places too).
+ */
+function questionPlace(calls: ToolCall[], view: MapView | null): PlaceRef | null {
+  const found = calls.filter(geocodeMoved).flatMap((c) => {
+    const bbox = bboxOf(c.output);
+    return bbox ? [{ bbox, name: placeName(c.output) ?? "the place" }] : [];
+  });
+  if (found.length > 0) {
+    const bbox: BBox = [
+      Math.min(...found.map((f) => f.bbox[0])),
+      Math.min(...found.map((f) => f.bbox[1])),
+      Math.max(...found.map((f) => f.bbox[2])),
+      Math.max(...found.map((f) => f.bbox[3])),
+    ];
+    return { bbox, name: [...new Set(found.map((f) => f.name))].join(" and ") };
+  }
+  return view?.bbox ? { bbox: view.bbox as BBox, name: "the map view" } : null;
 }
 
 /** The map the browser would end on: every tool result through the client's mapping and the reducer, in order. */
@@ -388,126 +431,200 @@ function splitView(raw: string): { question: string; view: MapView | null } {
   return { question: m[1], view };
 }
 
-async function runQuestion(raw: string): Promise<Outcome> {
+/** One question's run: what the model did, as the checks and rules read it (saved with --save, read with --replay). */
+type Run = {
+  raw: string;
+  calls: ToolCall[];
+  text: string;
+  usage: { in?: number; out?: number };
+  seconds: number;
+  finish: string;
+};
+
+/** Runs one question through the real agent and collects every tool call (with its output, when it returned). */
+async function runModel(raw: string): Promise<Run> {
   const started = Date.now();
-  const seconds = () => Math.round((Date.now() - started) / 100) / 10;
   const { question, view } = splitView(raw);
-  try {
-    const result = await generateText({
-      model: getModel(),
-      system: systemForTurn(SYSTEM_PROMPT, view),
-      tools: buildTools({ view }),
-      prompt: question,
-      stopWhen: stepCountIs(12),
-      repairToolCall,
-    });
-
-    const calls: ToolCall[] = [];
-    for (const step of result.steps) {
-      for (const r of step.toolResults) calls.push({ toolName: r.toolName, input: r.input, output: r.output });
-      for (const c of step.toolCalls) {
-        if (!step.toolResults.some((r) => r.toolCallId === c.toolCallId)) calls.push({ toolName: c.toolName, input: c.input });
-      }
+  const result = await generateText({
+    model: getModel(),
+    system: systemForTurn(SYSTEM_PROMPT, view),
+    tools: buildTools({ view }),
+    prompt: question,
+    stopWhen: stepCountIs(12),
+    repairToolCall,
+  });
+  const calls: ToolCall[] = [];
+  for (const step of result.steps) {
+    for (const r of step.toolResults) calls.push({ toolName: r.toolName, input: r.input, output: r.output });
+    for (const c of step.toolCalls) {
+      if (!step.toolResults.some((r) => r.toolCallId === c.toolCallId)) calls.push({ toolName: c.toolName, input: c.input });
     }
-    const seq = calls.map((c) => c.toolName);
-    const features = calls.map((c) => featureCount(c.output)).filter((n): n is number => n !== null);
-    const queryCalls = calls.filter((c) => c.toolName.startsWith("query_"));
-    const layerErrors = queryCalls
-      .filter((c) => isLayerError(c.output))
-      .map((c) => String((c.output as { error: string }).error).slice(0, 80));
-    // A query that answered (not an error, not a call that never returned) with zero features.
-    const answeredEmpty = queryCalls.some((c) => c.output !== undefined && !isLayerError(c.output) && featureCount(c.output) === 0);
-    const tiles = queryCalls.filter((c) => isTiles(c.output)).length;
-    const queried = seq.some((t) => t.startsWith("query_"));
-    const rendered = seq.includes("render") || seq.includes("compare");
-    const noted = seq.includes("note") || result.text.trim().length > 40;
-    const routed = seq.includes("route");
-    const drew = features.some((n) => n > 0) || tiles > 0;
-    // Locating the place: geocode, or a physical-regions query (the model may outline a
-    // named region such as the Amazon directly). Drawing: render, or compare (which draws both sides).
-    // With a map view (and a bbox) the place is already on screen, so no geocode is needed.
-    const located = !!view?.bbox || seq.includes("geocode") || seq.includes("query_physical-regions");
-    // A route question is answered by the route tool alone (it geocodes its own stops).
-    // A query that drew something must have been rendered. When nothing was drawn, the note passes
-    // only if some layer answered with zero features; layer errors and a note alone are a failure.
-    // A question that names a place (no @view, so the model had to geocode it) must also move the
-    // camera there; otherwise the data loads off-screen. A successful geocode moves it by itself, as does
-    // set_view. @view questions are exempt.
-    const moved = cameraMoved(calls);
-    const movedToPlace = view !== null || !seq.includes("geocode") || moved;
-    // A view too wide for a layer: ask the user to zoom in once, rather than shrink the box, retry and move the camera.
-    const zoomInLayers = queryCalls.filter((c) => isZoomInError(c.output)).map((c) => c.toolName);
-    const zoomInPerLayer = Math.max(0, ...zoomInLayers.map((t) => zoomInLayers.filter((u) => u === t).length));
-    const reply = [...calls.filter((c) => c.toolName === "note").map((c) => noteText(c.output)), result.text].join(" ");
-    const askedToZoomIn = /zoom(?:ing)? in|zoom closer|closer view|smaller area/i.test(reply);
-    // Also a model that read the layer's km² limit and asked without querying at all.
-    const wideView = view !== null && (zoomInLayers.length > 0 || (!queried && askedToZoomIn));
-    // Answering at this scale: some query came back without an error, and what it drew was rendered.
-    const succeeded = queryCalls.filter((c) => c.output !== undefined && !isLayerError(c.output)).length;
-    const wideViewOk = !moved && zoomInPerLayer <= 1 && succeeded >= 1 && drew && rendered;
-    // Brevity: the note is the answer, and nothing is said twice.
-    const notes = calls.filter((c) => c.toolName === "note").map((c) => noteText(c.output));
-    // With no note, the closing text is the answer and is held to the same length.
-    const noteWords = (notes.length > 0 ? notes : [result.text]).map(wordCount);
-    const dupHeadings = duplicatedHeadings([...notes, result.text]);
-    const brief = noteWords.every((n) => n <= NOTE_MAX_WORDS) && dupHeadings.length === 0;
-    // With no note, the closing text is the answer, as for noteWords.
-    const answer = notes.length > 0 ? notes : [result.text];
-    const rule = QUESTION_RULES[question.trim().toLowerCase()]?.(calls, answer, view);
-    const ok =
-      brief &&
-      (rule?.ok ?? true) &&
-      (wideView
-        ? wideViewOk
-        : routed && !queried
-          ? noted
-          : located && movedToPlace && queried && (drew ? rendered : answeredEmpty) && noted);
+  }
+  return {
+    raw,
+    calls,
+    text: result.text,
+    usage: { in: result.totalUsage.inputTokens, out: result.totalUsage.outputTokens },
+    seconds: Math.round((Date.now() - started) / 100) / 10,
+    finish: result.finishReason,
+  };
+}
 
-    return {
+/** The file a question's run is saved under: the question as a slug. */
+export function slugOf(raw: string): string {
+  return raw
+    .replace(/@view=.*/, "here")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
+}
+
+/** What the screen checks need from a question: the final map and the camera fit it asked for. */
+type Evaluated = Outcome & { state: MapState; checks: CheckResult[] };
+
+/** The pass rule and the map checks on one run. */
+function evaluate(run: Run): Evaluated {
+  const { calls, text } = run;
+  const { question, view } = splitView(run.raw);
+  const seq = calls.map((c) => c.toolName);
+  const features = calls.map((c) => featureCount(c.output)).filter((n): n is number => n !== null);
+  const queryCalls = calls.filter((c) => c.toolName.startsWith("query_"));
+  const layerErrors = queryCalls
+    .filter((c) => isLayerError(c.output))
+    .map((c) => String((c.output as { error: string }).error).slice(0, 80));
+  // A query that answered (not an error, not a call that never returned) with zero features.
+  const answeredEmpty = queryCalls.some((c) => c.output !== undefined && !isLayerError(c.output) && featureCount(c.output) === 0);
+  const tiles = queryCalls.filter((c) => isTiles(c.output)).length;
+  const queried = seq.some((t) => t.startsWith("query_"));
+  const rendered = seq.includes("render") || seq.includes("compare");
+  const noted = seq.includes("note") || text.trim().length > 40;
+  const routed = seq.includes("route");
+  const drew = features.some((n) => n > 0) || tiles > 0;
+  // Locating the place: geocode, or a physical-regions query (the model may outline a
+  // named region such as the Amazon directly). Drawing: render, or compare (which draws both sides).
+  // With a map view (and a bbox) the place is already on screen, so no geocode is needed.
+  const located = !!view?.bbox || seq.includes("geocode") || seq.includes("query_physical-regions");
+  // A route question is answered by the route tool alone (it geocodes its own stops).
+  // A query that drew something must have been rendered. When nothing was drawn, the note passes
+  // only if some layer answered with zero features; layer errors and a note alone are a failure.
+  // A question that names a place (no @view, so the model had to geocode it) must also move the
+  // camera there; otherwise the data loads off-screen. A successful geocode moves it by itself, as does
+  // set_view. @view questions are exempt.
+  const moved = cameraMoved(calls);
+  const movedToPlace = view !== null || !seq.includes("geocode") || moved;
+  // A view too wide for a layer: ask the user to zoom in once, rather than shrink the box, retry and move the camera.
+  const zoomInLayers = queryCalls.filter((c) => isZoomInError(c.output)).map((c) => c.toolName);
+  const zoomInPerLayer = Math.max(0, ...zoomInLayers.map((t) => zoomInLayers.filter((u) => u === t).length));
+  const reply = [...calls.filter((c) => c.toolName === "note").map((c) => noteText(c.output)), text].join(" ");
+  const askedToZoomIn = /zoom(?:ing)? in|zoom closer|closer view|smaller area/i.test(reply);
+  // Also a model that read the layer's km² limit and asked without querying at all.
+  const wideView = view !== null && (zoomInLayers.length > 0 || (!queried && askedToZoomIn));
+  // Answering at this scale: some query came back without an error, and what it drew was rendered.
+  const succeeded = queryCalls.filter((c) => c.output !== undefined && !isLayerError(c.output)).length;
+  const wideViewOk = !moved && zoomInPerLayer <= 1 && succeeded >= 1 && drew && rendered;
+  // Brevity: the note is the answer, and nothing is said twice.
+  const notes = calls.filter((c) => c.toolName === "note").map((c) => noteText(c.output));
+  // With no note, the closing text is the answer and is held to the same length.
+  const noteWords = (notes.length > 0 ? notes : [text]).map(wordCount);
+  const dupHeadings = duplicatedHeadings([...notes, text]);
+  const brief = noteWords.every((n) => n <= NOTE_MAX_WORDS) && dupHeadings.length === 0;
+  // With no note, the closing text is the answer, as for noteWords.
+  const answer = notes.length > 0 ? notes : [text];
+  const rule = QUESTION_RULES[question.trim().toLowerCase()]?.(calls, answer, view);
+  const rulesOk =
+    brief &&
+    (rule?.ok ?? true) &&
+    (wideView
+      ? wideViewOk
+      : routed && !queried
+        ? noted
+        : located && movedToPlace && queried && (drew ? rendered : answeredEmpty) && noted);
+  // The map checks read the map the browser would end on.
+  const state = mapAfter(calls);
+  const checks = runMapChecks(state, { lookup: lookupLayer, place: questionPlace(calls, view) });
+  const checksOk = checks.every((c) => c.ok);
+  const ok = rulesOk && checksOk;
+
+  return {
+    ok,
+    state,
+    checks,
+    line: {
+      question,
+      ...(view ? { view: view.bbox, geocoded: seq.includes("geocode"), movedCamera: moved } : {}),
+      ...(wideView ? { zoomInErrors: zoomInLayers.length, zoomInPerLayer, askedToZoomIn, succeeded } : {}),
+      noteWords,
+      ...(dupHeadings.length > 0 ? { dupHeadings } : {}),
+      ...(rule ? { rule, answer: answer.join("\n") } : {}),
+      model,
       ok,
-      line: {
-        question,
-        ...(view ? { view: view.bbox, geocoded: seq.includes("geocode"), movedCamera: moved } : {}),
-        ...(wideView ? { zoomInErrors: zoomInLayers.length, zoomInPerLayer, askedToZoomIn, succeeded } : {}),
-        noteWords,
-        ...(dupHeadings.length > 0 ? { dupHeadings } : {}),
-        ...(rule ? { rule, answer: answer.join("\n") } : {}),
-        model,
-        ok,
-        seq,
-        features,
-        tiles,
-        layerErrors,
-        coverageNotes: coverageNotes(calls),
-        tokens: { in: result.totalUsage.inputTokens, out: result.totalUsage.outputTokens },
-        seconds: seconds(),
-        finish: result.finishReason,
-        textWords: wordCount(result.text),
-        textStart: result.text.replace(/\s+/g, " ").slice(0, 120),
-      },
-    };
+      rulesOk,
+      checks: checks.map((c) => (c.ok ? { check: c.check, ok: true } : c)),
+      seq,
+      features,
+      tiles,
+      layerErrors,
+      coverageNotes: coverageNotes(calls),
+      tokens: run.usage,
+      seconds: run.seconds,
+      finish: run.finish,
+      textWords: wordCount(text),
+      textStart: text.replace(/\s+/g, " ").slice(0, 120),
+    },
+  };
+}
+
+function argValue(args: string[], flag: string): string | undefined {
+  const i = args.indexOf(flag);
+  return i >= 0 ? args[i + 1] : undefined;
+}
+
+function saveRun(dir: string, run: Run): void {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(`${dir}/${slugOf(run.raw)}.json.gz`, gzipSync(JSON.stringify(run)));
+}
+
+function loadRun(dir: string, raw: string): Run | undefined {
+  const file = `${slugOf(raw)}.json.gz`;
+  if (!readdirSync(dir).includes(file)) return undefined;
+  return JSON.parse(gunzipSync(readFileSync(`${dir}/${file}`)).toString("utf8")) as Run;
+}
+
+/** Runs (or replays) one question and evaluates it; a thrown run is a failure line. */
+async function question(raw: string, opts: { save?: string; replay?: string }): Promise<Evaluated | Outcome> {
+  const started = Date.now();
+  try {
+    const saved = opts.replay ? loadRun(opts.replay, raw) : undefined;
+    if (opts.replay && !saved) throw new Error(`no saved run for this question in ${opts.replay}`);
+    const run = saved ?? (await runModel(raw));
+    if (opts.save && !saved) saveRun(opts.save, run);
+    return evaluate(run);
   } catch (err) {
     return {
       ok: false,
-      line: { question: raw, model, ok: false, error: err instanceof Error ? err.message.slice(0, 200) : String(err), seconds: seconds() },
+      line: { question: raw, model, ok: false, error: err instanceof Error ? err.message.slice(0, 200) : String(err), seconds: Math.round((Date.now() - started) / 100) / 10 },
     };
   }
 }
 
 const args = process.argv.slice(2);
+const save = argValue(args, "--save");
+const replay = argValue(args, "--replay");
+const only = argValue(args, "--only")?.toLowerCase();
 if (args.includes("--set")) {
-  const questions = readEvalSet();
+  const questions = readEvalSet().filter((q) => !only || q.toLowerCase().includes(only));
   let passed = 0;
   for (const q of questions) {
-    const { ok, line } = await runQuestion(q);
-    if (ok) passed += 1;
-    console.log(JSON.stringify(line));
+    const outcome = await question(q, { save, replay });
+    if (outcome.ok) passed += 1;
+    console.log(JSON.stringify(outcome.line));
   }
   console.log(`ok ${passed}/${questions.length}`);
   if (passed < questions.length) process.exitCode = 1;
 } else {
-  const question = args.join(" ") || "Show hiking trails around Lake Tahoe";
-  const { ok, line } = await runQuestion(question);
-  console.log(JSON.stringify(line));
-  if (!ok && "error" in line) process.exitCode = 1;
+  const raw = args.filter((a, i) => !a.startsWith("--") && !["--save", "--replay", "--only"].includes(args[i - 1])).join(" ") || "Show hiking trails around Lake Tahoe";
+  const outcome = await question(raw, { save, replay });
+  console.log(JSON.stringify(outcome.line));
+  if (!outcome.ok && "error" in outcome.line) process.exitCode = 1;
 }

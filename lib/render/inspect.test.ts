@@ -11,6 +11,7 @@ import {
   pickToSelection,
   summarizeFeature,
 } from "@/lib/render/inspect";
+import { pickPasses as pickPassesOf, skipHoverPicking } from "@/lib/render/inspect";
 
 const trail: Feature = {
   type: "Feature",
@@ -163,5 +164,29 @@ describe("text helpers", () => {
     expect(text).toBe(
       'Tell me about OSM trails "Rubicon Trail" (Difficulty (SAC): mountain hiking; Surface: dirt; at 39.1000, -120.1000).',
     );
+  });
+});
+
+describe("pickPasses", () => {
+  it("picks symbols without the terrain mesh, and draped areas through it only when there are some", () => {
+    const layer = (id: string, props: Record<string, unknown>) => ({ id, props });
+    const layers = [
+      layer("wally-terrain", { pickable: true }),
+      layer("campsites@3d:points", { pickable: true, terrainDrawMode: "offset" }),
+      layer("fire-perimeters@3d:polygons:casing", { pickable: false, terrainDrawMode: "drape" }),
+      layer("fire-perimeters@3d:polygons", { pickable: true, terrainDrawMode: "drape" }),
+    ];
+    expect(pickPassesOf(layers)).toEqual({ direct: ["campsites@3d:points"], draped: true });
+    expect(pickPassesOf(layers.slice(0, 2))).toEqual({ direct: ["campsites@3d:points"], draped: false });
+    expect(pickPassesOf([layer("trails:points", { pickable: true })])).toEqual({ direct: ["trails:points"], draped: false });
+  });
+});
+
+describe("skipHoverPicking", () => {
+  it("draws nothing in deck's hover pick, and everything elsewhere (the app picks on hover itself)", () => {
+    expect(skipHoverPicking({ renderPass: "picking:hover" })).toBe(false);
+    expect(skipHoverPicking({ renderPass: "picking:hover:z" })).toBe(false);
+    expect(skipHoverPicking({ renderPass: "picking:query" })).toBe(true);
+    expect(skipHoverPicking({ renderPass: "screen" })).toBe(true);
   });
 });

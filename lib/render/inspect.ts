@@ -2,7 +2,7 @@ import type { Feature, Geometry, Position } from "geojson";
 import type { BBox } from "@/layers/types";
 import { formatValue as formatNumber } from "@/lib/format";
 import { RENDER_MODES, type RenderMode, type Selection } from "@/lib/render/state";
-import { DECK_TERRAIN_TAG } from "@/lib/render/wally/deckTerrain";
+import { DECK_TERRAIN_ID, DECK_TERRAIN_TAG } from "@/lib/render/wally/deckTerrain";
 
 /** Side B of a compare draws under `<layerId>~b` (lib/render/compareView.ts `compareBId`). */
 const COMPARE_B_SUFFIX = "~b";
@@ -165,6 +165,30 @@ export function featureCenter(feature: Feature): [number, number] | null {
 /** True for features a route preview can follow. */
 export function isLineFeature(feature: Feature): boolean {
   return feature.geometry?.type === "LineString" || feature.geometry?.type === "MultiLineString";
+}
+
+/**
+ * The two picking passes for a click or hover over the deck layers (top-level `layers` as MapCanvas hands them to the
+ * overlay): `direct`, every pickable layer that is not draped on 3D terrain (symbols, columns, flat layers), picked
+ * without the terrain mesh; and `draped`, true when some pickable layer is draped (areas, hex cells on terrain), which
+ * only the terrain mesh can pick. Picking everything at once with the terrain in the pass logged deck's "Picked
+ * non-existent layer" for every point over terrain and missed half the symbols (the eval's console check caught it).
+ */
+export function pickPasses(layers: readonly { id: string; props: { pickable?: unknown; terrainDrawMode?: unknown } }[]): { direct: string[]; draped: boolean } {
+  const pickable = layers.filter((l) => l.props.pickable && l.id !== DECK_TERRAIN_ID);
+  return {
+    direct: pickable.filter((l) => l.props.terrainDrawMode !== "drape").map((l) => l.id),
+    draped: pickable.some((l) => l.props.terrainDrawMode === "drape"),
+  };
+}
+
+/**
+ * Deck's `layerFilter` for the overlays: nothing is drawn in deck's own hover-picking pass. The app picks on pointer
+ * moves itself (MapCanvas pickAt, with pickPasses); deck's automatic hover pick ran over the terrain mesh on every move
+ * and logged "Picked non-existent layer" each time, the errors behind the development badge.
+ */
+export function skipHoverPicking({ renderPass }: { renderPass: string }): boolean {
+  return !renderPass.startsWith("picking:hover");
 }
 
 /* ---------- Friendly property display ---------- */

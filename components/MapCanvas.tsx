@@ -10,7 +10,7 @@ import { ensureRouteImages, setRouteProgress, syncRouteLayers } from "@/componen
 import { basemapStyleUrl } from "@/lib/render/basemaps";
 import { swipeStore } from "@/lib/render/compareView";
 import { buildDeckLayerSets, isClusterFeature, type Padding } from "@/lib/render/deck";
-import { pickToSelection, pickUnderHeat, type DeckPick } from "@/lib/render/inspect";
+import { pickPasses, pickToSelection, pickUnderHeat, skipHoverPicking, type DeckPick } from "@/lib/render/inspect";
 import { lineLayerId, linePickToSelection, PICKABLE_PARTS } from "@/lib/render/nativeLines";
 import { viewFromCamera, type MapView } from "@/lib/agent/view";
 import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
@@ -216,8 +216,8 @@ function syncSideOverlays(map: mapboxgl.Map, current: SideOverlays | null, sets:
     // Deck creates its canvas asynchronously, so the first clip waits for each overlay's `onLoad`.
     const clipWhenLoaded = () => clipSides(sides, swipeStore.get());
     sides = {
-      a: new MapboxOverlay({ interleaved: false, layers: sets.a, onLoad: clipWhenLoaded }),
-      b: new MapboxOverlay({ interleaved: false, layers: sets.b, onLoad: clipWhenLoaded }),
+      a: new MapboxOverlay({ interleaved: false, layers: sets.a, onLoad: clipWhenLoaded, layerFilter: skipHoverPicking }),
+      b: new MapboxOverlay({ interleaved: false, layers: sets.b, onLoad: clipWhenLoaded, layerFilter: skipHoverPicking }),
     };
     map.addControl(sides.a);
     map.addControl(sides.b);
@@ -317,10 +317,13 @@ function pickLine(map: mapboxgl.Map, state: MapState, point: mapboxgl.Point): Se
  * What a click at a screen point selects: a deck symbol, hex tile or cluster (drawn on top), else a native data line,
  * else a deck area, else the nearest feature under a heatmap, else the top vector tile feature.
  */
-function pickAt(map: mapboxgl.Map, overlay: MapboxOverlay, state: MapState, point: mapboxgl.Point): Selection | null {
+function pickAt(map: mapboxgl.Map, overlay: MapboxOverlay, state: MapState, point: mapboxgl.Point, deckLayers: readonly Layer[]): Selection | null {
   let info: DeckPick | null = null;
   try {
-    info = overlay.pickObject({ x: point.x, y: point.y, radius: PICK_RADIUS_PX }) as DeckPick | null;
+    // Symbols and flat layers without the terrain mesh, then draped areas through it (lib/render/inspect.ts pickPasses).
+    const { direct, draped } = pickPasses(deckLayers as unknown as Parameters<typeof pickPasses>[0]);
+    if (direct.length > 0) info = overlay.pickObject({ x: point.x, y: point.y, radius: PICK_RADIUS_PX, layerIds: direct }) as DeckPick | null;
+    if (!info && draped) info = overlay.pickObject({ x: point.x, y: point.y, radius: PICK_RADIUS_PX }) as DeckPick | null;
   } catch {
     // Deck is not initialized yet (no WebGL context); fall through to the tiles.
   }
@@ -358,6 +361,8 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
+  /** The deck layers last handed to the overlay, for the picking passes. */
+  const deckLayersRef = useRef<readonly Layer[]>([]);
   const stateRef = useRef(state);
   const onViewportChangeRef = useRef(onViewportChange);
   const onPickRef = useRef(onPick);
@@ -424,7 +429,9 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       pitch: initial.viewport.pitch,
       bearing: initial.viewport.bearing,
     });
-    const overlay = new MapboxOverlay({ interleaved: false, layers: safeDeckLayers(initial).main });
+    const initialSets = safeDeckLayers(initial).main;
+    deckLayersRef.current = initialSets;
+    const overlay = new MapboxOverlay({ interleaved: false, layers: initialSets, layerFilter: skipHoverPicking });
     map.addControl(overlay);
 
     map.on("moveend", () => {
@@ -465,7 +472,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
 
     // Click to inspect: deck features first (they draw on top), then vector tiles; empty map deselects.
     map.on("click", (e) => {
-      const hit = pickAt(map, overlay, stateRef.current, e.point);
+      const hit = pickAt(map, overlay, stateRef.current, e.point, deckLayersRef.current);
       // A cluster blob is a group, not a feature: zoom one level in toward it so it splits (the one camera move a
       // click makes, because the user clicked a group; clicking a feature never moves the camera).
       if (hit && isClusterFeature(hit.feature)) {
@@ -486,7 +493,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       if (hoverFrame) return;
       hoverFrame = requestAnimationFrame(() => {
         hoverFrame = 0;
-        const hit = pickAt(map, overlay, stateRef.current, e.point) !== null;
+        const hit = pickAt(map, overlay, stateRef.current, e.point, deckLayersRef.current) !== null;
         map.getCanvas().style.cursor = hit ? "pointer" : "";
       });
     });
@@ -517,6 +524,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     const view = visibleState(state);
     const sets = safeDeckLayers(state);
     overlayRef.current?.setProps({ layers: sets.main });
+    deckLayersRef.current = sets.main;
     const map = mapRef.current;
     if (!map) return;
     sidesRef.current = syncSideOverlays(map, sidesRef.current, sets);

@@ -358,4 +358,13 @@ describe("one place per wall", () => {
     expect(crags).toHaveLength(2);
     expect(crags[0].props).toMatchObject({ v: 110, routesOsm: 110, routesOpenbeta: 42, source: "osm+openbeta" });
   });
+
+  it("joins one name left twice after the merge: two OpenBeta areas of Courtesy Wall 70 m apart", () => {
+    const merged = crag(-83.7121, { kind: "crag", source: "osm+openbeta", osmId: "way/652151049", name: "Courtesy Wall", v: 11, openbetaId: "a", url: "https://openbeta.io/areas/a" });
+    const second = crag(-83.7114, { kind: "crag", source: "openbeta", name: "Courtesy Wall", v: 6, openbetaId: "b", url: "https://openbeta.io/areas/b" });
+    const out = dedupeSameName([second, merged]);
+    expect(out).toHaveLength(1);
+    expect(out[0].props).toMatchObject({ v: 11, openbetaId: "a", osmId: "way/652151049" });
+    expect(out[0].props.osmIds).toBeUndefined();
+  });
 });

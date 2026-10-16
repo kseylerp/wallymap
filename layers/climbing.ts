@@ -361,7 +361,11 @@ export function dedupeSameName(crags: Crag[]): Crag[] {
     if (disciplines.length > 0) target.disciplines = DISCIPLINES.filter((d) => disciplines.includes(d));
     const bands = orderedBands([...listOf(target.gradeBands), ...listOf(p.gradeBands)] as ClimbingBand[]);
     if (bands.length > 0) target.gradeBands = bands;
-    target.osmIds = [...listOf(target.osmIds ?? target.osmId), String(p.osmId)];
+    if (p.osmId !== undefined) target.osmIds = [...listOf(target.osmIds ?? target.osmId), String(p.osmId)];
+    if (target.openbetaId === undefined && p.openbetaId !== undefined) {
+      target.openbetaId = p.openbetaId;
+      target.url = p.url;
+    }
   }
   return kept;
 }
@@ -640,7 +644,10 @@ const climbing = defineLayer({
     const osm = osmAll.sort(byRoutes).slice(0, MAX_PER_SOURCE);
     const ob = obAll.sort(byRoutes).slice(0, MAX_PER_SOURCE);
 
-    const { crags: merged, both } = mergeCrags(osm, ob);
+    const { crags: joined, both } = mergeCrags(osm, ob);
+    // Once more after the merge: an unnamed cliff that took an OpenBeta name, or two OpenBeta areas of one wall, can
+    // leave one name twice a few hundred metres apart ("North 40", "Courtesy Wall" at Red River Gorge).
+    const merged = dedupeSameName(joined);
     // Wide: rank every merged place by route count and keep the strategy's limit.
     const wideLimit = ctx.wide ? ctx.wideStrategy?.limit : undefined;
     const crags = wideLimit === undefined ? merged : [...merged].sort(byRoutes).slice(0, wideLimit);

@@ -299,3 +299,16 @@ describe("the campsite card", () => {
     expect(card.links).toEqual([{ key: "website", label: "Website", url: "https://www.blm.gov/visit/dewey-bridge" }]);
   });
 });
+
+describe("the parking card", () => {
+  it("names a lot's v as its spaces, not \"V 3\"", async () => {
+    const { cardContent } = await import("@/lib/render/card");
+    const { getLayer } = await import("./registry");
+    const layer = getLayer("campsites")!;
+    const lot = { type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [-109.5, 38.6] }, properties: { kind: "parking", capacity: 3, v: 3, osmId: "way/2" } };
+    const card = cardContent(lot, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.measure).toMatchObject({ label: "Parking spaces", value: "3" });
+    // Capacity is the same number as the measure, so it is not repeated.
+    expect(card.facts.map((r) => r.label)).toEqual(["Type"]);
+  });
+});

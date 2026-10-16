@@ -120,6 +120,8 @@ export function cardContent(feature: Feature, opts: { unit?: string; card?: Card
 
   const used = new Set<string>(HIDDEN);
   let measure: CardRow | null = null;
+  // Properties the measure already shows (its twin copies of v): not repeated as facts.
+  const shown = new Set<string>();
   if (card.measure && props[card.measure.key] !== undefined && props[card.measure.key] !== null) {
     const m = card.measure;
     const raw = props[m.key];
@@ -129,10 +131,14 @@ export function cardContent(feature: Feature, opts: { unit?: string; card?: Card
     const help = helpFor(m.key, m.help, fieldHelp) ?? twins.map((k) => fieldHelp?.[k]).find(Boolean);
     measure = { key: m.key, label: m.label, value, ...withHelp(help) };
     used.add(m.key);
-    for (const k of twins) used.add(k);
+    for (const k of twins) {
+      used.add(k);
+      shown.add(k);
+    }
   }
   const facts: CardRow[] = [];
   for (const fact of card.facts ?? []) {
+    if (shown.has(fact.key)) continue;
     const value = factValue(fact, props);
     used.add(fact.key);
     for (const p of fact.parts ?? []) used.add(p.key);

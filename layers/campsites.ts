@@ -212,6 +212,8 @@ const YES_NO = { true: "Yes", false: "No" };
 
 /** The inspect card (coordinator, 2026-10-16: "Kind: camp site" read as a code): kinds in words, then what OSM knows. */
 const CARD: CardSpec = {
+  // Parking only: its v is the number of spaces.
+  measure: { key: "v", label: "Parking spaces" },
   facts: [
     { key: "kind", label: "Type", values: { camp_site: "Campsite", parking: "Parking" } },
     { key: "capacity", label: "Capacity", format: "int" },

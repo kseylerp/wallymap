@@ -18,14 +18,15 @@ import {
   isFlagOn,
   isGroupPicked,
   isPresetPicked,
-  measuresOf,
+  rankableMeasures,
   nameQuery,
-  primaryMeasure,
   presetCount,
   toggleFlag,
   toggleGroup,
   togglePreset,
-  topFeatures,
+  holdsNumbers,
+  rankedTop,
+  rowName,
   withNameQuery,
   type AttributeGroup,
 } from "@/lib/render/attributes";
@@ -120,26 +121,16 @@ function measureText(value: unknown, attr: Attribute | undefined): string {
   return attr?.unit && attr.unit !== "score" ? `${text} ${attr.unit}` : text;
 }
 
-function nameOf(f: Feature): string {
-  const p = f.properties ?? {};
-  for (const key of ["name", "title", "species", "place", "project"]) {
-    const v = p[key];
-    if (typeof v === "string" && v.trim()) return v.trim();
-  }
-  return "Unnamed";
-}
-
 /**
  * "Rank by" (spec §12c: a measure is ranked, not filtered): a select over the layer's measures, and, once one is picked,
  * the top 10 of the drawn features by it. Hovering a row rings its feature on the map; clicking flies there and opens
  * its card.
  */
-function RankBy({ layer, op, measures, shown, dispatch }: { layer: LoadedLayer; op: RenderOp; measures: Attribute[]; shown: FeatureCollection; dispatch: (a: MapAction) => void }) {
+function RankBy({ layer, op, data, shown, dispatch }: { layer: LoadedLayer; op: RenderOp; data: FeatureCollection; shown: FeatureCollection; dispatch: (a: MapAction) => void }) {
   const id = `rank-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
-  // Unset ranks by the layer's primary measure; "" is None, picked in the row.
-  const rankBy = effectiveRankBy(op, layer, measures);
+  // Unset ranks by the layer's primary measure; "" is None, picked in the row (the eval's map checks read the same list).
+  const { key: rankBy, measures, top } = useMemo(() => rankedTop(layer, op, data, shown, RANKED_TOP_N), [layer, op, data, shown]);
   const attr = measures.find((m) => m.key === rankBy);
-  const top = useMemo(() => (rankBy ? topFeatures(shown, rankBy, RANKED_TOP_N) : []), [shown, rankBy]);
   const open = (f: Feature) => {
     const bbox = featureBBox(f);
     const at = featureCenter(f);
@@ -181,7 +172,7 @@ function RankBy({ layer, op, measures, shown, dispatch }: { layer: LoadedLayer; 
                 className="top-row"
               >
                 <span className="w-4 shrink-0 text-right text-ink-muted tabular-nums">{i + 1}</span>
-                <span className="min-w-0 flex-1 truncate">{nameOf(f)}</span>
+                <span className="min-w-0 flex-1 truncate">{rowName(f)}</span>
                 <span className="shrink-0 text-ink-muted tabular-nums">{measureText(f.properties?.[rankBy], attr)}</span>
               </button>
             </li>
@@ -190,13 +181,6 @@ function RankBy({ layer, op, measures, shown, dispatch }: { layer: LoadedLayer; 
       )}
     </div>
   );
-}
-
-/** What the row ranks by: the op's pick ("" is None), else the layer's primary measure when the data holds it. */
-export function effectiveRankBy(op: Pick<RenderOp, "rankBy">, layer: LoadedLayer, measures: Attribute[]): string | undefined {
-  if (op.rankBy !== undefined) return op.rankBy === "" ? undefined : op.rankBy;
-  const primary = primaryMeasure(layer);
-  return measures.find((m) => m.key === primary?.key)?.key ?? measures[0]?.key;
 }
 
 /** A measure under More: presets from the source's classes as chips, then the mini histogram. */
@@ -247,11 +231,6 @@ function YearBlock({ attr, data, filters, help, onChange }: { attr: Attribute; d
   );
 }
 
-/** True when an attribute's property holds numbers in this data (a year as a number, not an ISO date). */
-function holdsNumbers(data: FeatureCollection, key: string): boolean {
-  return data.features.some((f) => typeof f.properties?.[key] === "number");
-}
-
 /**
  * A layer's attributes inline in its row (spec §12c): by default one chip set (its main category or ordinal) and
  * "Rank by" with its top 10; "More" opens everything else, each attribute with its type's control: chips, a measure's
@@ -267,7 +246,7 @@ export function AttributeControls({ layer, op, data, shown, fields, dispatch, de
   const attributes = attributesOf(layer);
   const chip = chipAttribute(layer);
   const encoded = encodedAttribute(layer);
-  const measures = measuresOf(layer).filter((m) => holdsNumbers(data, m.key));
+  const measures = rankableMeasures(layer, data);
   const helpFor = (a: Attribute) => a.help ?? layer.fieldHelp?.[a.key];
   const chipGroups = useMemo(() => (chip ? attributeGroups(chip, data, filters) : []), [chip, data, filters]);
   // Everything but the default chip set, in declared order; a date's time lives on the scrubber, a place in chat.
@@ -336,7 +315,7 @@ export function AttributeControls({ layer, op, data, shown, fields, dispatch, de
           />
         </div>
       )}
-      {measures.length > 0 && <RankBy layer={layer} op={op} measures={measures} shown={shown} dispatch={dispatch} />}
+      {measures.length > 0 && <RankBy layer={layer} op={op} data={data} shown={shown} dispatch={dispatch} />}
       {hasMore && (
         <button type="button" onClick={() => setMore((o) => !o)} aria-expanded={more} aria-controls={moreId} className="row-link">
           {more ? "Fewer filters" : "More filters"}

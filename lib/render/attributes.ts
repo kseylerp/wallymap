@@ -236,6 +236,49 @@ export function topFeatures(data: FeatureCollection, key: string, n: number): Fe
     .map((x) => x.f);
 }
 
+/** True when an attribute's property holds numbers in this data (a year as a number, not an ISO date). */
+export function holdsNumbers(data: FeatureCollection, key: string): boolean {
+  return data.features.some((f) => typeof f.properties?.[key] === "number");
+}
+
+/** The measures a layer row offers under "Rank by": the declared measures that hold numbers in the loaded data. */
+export function rankableMeasures(layer: WithAttributes, data: FeatureCollection): Attribute[] {
+  return measuresOf(layer).filter((m) => holdsNumbers(data, m.key));
+}
+
+/** What the row ranks by: the op's pick ("" is None), else the layer's primary measure when the data holds it. */
+export function effectiveRankBy(op: { rankBy?: string }, layer: WithAttributes, measures: Attribute[]): string | undefined {
+  if (op.rankBy !== undefined) return op.rankBy === "" ? undefined : op.rankBy;
+  const primary = primaryMeasure(layer);
+  return measures.find((m) => m.key === primary?.key)?.key ?? measures[0]?.key;
+}
+
+/** The name a top-10 row shows for a feature: its name, title, species, place or project, else "Unnamed". */
+export function rowName(f: Feature): string {
+  const p = f.properties ?? {};
+  for (const key of ["name", "title", "species", "place", "project"]) {
+    const v = p[key];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return "Unnamed";
+}
+
+/**
+ * The layer row's "Rank by" list (spec §12c): the measure it ranks by (unset: the primary measure; "" None) and the
+ * `n` drawn features largest by it. `data` is every loaded feature (which measures are offered), `shown` the drawn ones.
+ */
+export function rankedTop(
+  layer: WithAttributes,
+  op: { rankBy?: string },
+  data: FeatureCollection,
+  shown: FeatureCollection,
+  n: number,
+): { key: string | undefined; measures: Attribute[]; top: Feature[] } {
+  const measures = rankableMeasures(layer, data);
+  const key = effectiveRankBy(op, layer, measures);
+  return { key, measures, top: key ? topFeatures(shown, key, n) : [] };
+}
+
 /** The smallest and largest number under `key` across the features; null without two different numbers. */
 export function extentOf(data: FeatureCollection, key: string): [number, number] | null {
   let lo = Infinity;

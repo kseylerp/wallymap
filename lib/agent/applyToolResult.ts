@@ -23,7 +23,7 @@ import {
 /** Layer titles and styles by id, fetched by the browser from `GET /api/layers`. */
 export type LayerCatalog = Record<
   string,
-  { title: string; style: StyleHints; license?: string; fieldHelp?: Record<string, FieldHelp>; card?: CardSpec; attributes?: Attribute[] }
+  { title: string; style: StyleHints; license?: string; fieldHelp?: Record<string, FieldHelp>; card?: CardSpec; attributes?: Attribute[]; maxAreaKm2?: number }
 >;
 
 /** The map canvas size, and the screen area a fitted bbox must stay clear of (floating panels). */

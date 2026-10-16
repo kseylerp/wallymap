@@ -20,6 +20,7 @@ export async function fetchCatalog(): Promise<LayerCatalog> {
           ...(e.fieldHelp && { fieldHelp: e.fieldHelp }),
           ...(e.card && { card: e.card }),
           ...(e.attributes && { attributes: e.attributes }),
+          ...(typeof e.maxAreaKm2 === "number" && { maxAreaKm2: e.maxAreaKm2 }),
         },
       ]),
     );

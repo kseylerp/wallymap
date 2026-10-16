@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { LayerError, LayerResult } from "@/layers/types";
-import { decodeState, encodeState, restoreFromPermalink, viewportBBox, type PermalinkSource } from "@/lib/render/permalink";
+import { capBox, decodeState, encodeState, restoreFromPermalink, viewportBBox, type PermalinkSource } from "@/lib/render/permalink";
+import { bboxAreaKm2 } from "@/layers/types";
 import type { LoadedLayer, MapAction } from "@/lib/render/state";
 
 const result: LayerResult = {
@@ -151,5 +152,17 @@ describe("restoreFromPermalink", () => {
     const dispatch = vi.fn();
     expect(await restoreFromPermalink("#nonsense", dispatch, vi.fn(), { catalog, canvas })).toBeNull();
     expect(dispatch).not.toHaveBeenCalled();
+  });
+});
+
+describe("capBox", () => {
+  it("shrinks a restored box about its center to the layer's largest area, so the request is not refused", () => {
+    const wide: [number, number, number, number] = [-110.5, 38, -108.5, 39.4];
+    const capped = capBox(wide, 10_000);
+    expect(bboxAreaKm2(capped)).toBeLessThan(10_000);
+    expect(bboxAreaKm2(capped)).toBeGreaterThan(9_000);
+    expect((capped[0] + capped[2]) / 2).toBeCloseTo(-109.5, 6);
+    expect(capBox(wide, undefined)).toBe(wide);
+    expect(capBox(wide, 1e9)).toBe(wide);
   });
 });

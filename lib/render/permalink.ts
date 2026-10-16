@@ -1,4 +1,4 @@
-import type { BBox, LayerError, LayerResult, StyleHints } from "@/layers/types";
+import { bboxAreaKm2, type BBox, type LayerError, type LayerResult, type StyleHints } from "@/layers/types";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import type { LayerFilters } from "@/lib/render/filters";
 import { DARK_GREY } from "@/lib/render/palette";
@@ -292,6 +292,22 @@ function centralQuarter([w, s, e, n]: BBox): BBox {
   return [w + dx, s + dy, e - dx, n - dy];
 }
 
+/**
+ * The box shrunk about its center to `maxKm2` (a little under, for rounding) when it is larger, so a link opened on a
+ * wider screen than it was shared from asks a layer for an area it answers instead of being refused (HTTP 422, an
+ * error in the console) and retried on a quarter.
+ */
+export function capBox(bbox: BBox, maxKm2: number | undefined): BBox {
+  if (maxKm2 === undefined) return bbox;
+  const area = bboxAreaKm2(bbox);
+  if (area <= maxKm2) return bbox;
+  const k = Math.sqrt((maxKm2 * 0.97) / area);
+  const [w, s, e, n] = bbox;
+  const cx = (w + e) / 2;
+  const cy = (s + n) / 2;
+  return [cx - ((e - w) / 2) * k, cy - ((n - s) / 2) * k, cx + ((e - w) / 2) * k, cy + ((n - s) / 2) * k];
+}
+
 async function fetchWithRetry(fetchLayer: FetchLayer, id: string, bbox: BBox, zoom: number) {
   const first = await fetchLayer(id, bbox, zoom);
   if (isError(first) && first.hint === "zoom_in") return fetchLayer(id, centralQuarter(bbox), zoom + 1);
@@ -320,7 +336,7 @@ export async function restoreFromPermalink(
   const bbox = viewportBBox(view, options.canvas.width, options.canvas.height);
   const results = await Promise.all(
     decoded.layers.map((layer) =>
-      fetchWithRetry(fetchLayer, layer.id, bbox, view.zoom).catch(
+      fetchWithRetry(fetchLayer, layer.id, capBox(bbox, options.catalog[layer.id]?.maxAreaKm2), view.zoom).catch(
         (err): LayerError => ({ error: String(err), hint: "upstream" }),
       ),
     ),

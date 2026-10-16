@@ -87,7 +87,33 @@ export function normalizeNavajo(fc: FeatureCollection): Feature<Point>[] {
     }
     out.push({ type: "Feature", geometry: f.geometry, properties });
   }
-  return out;
+  return tellApart(out);
+}
+
+/** The letter an alias gives one portal of a mine: "Taylor Reid Mine - A", "Mitten #1 'B'". */
+function siteLetter(aliases: unknown): string | undefined {
+  if (typeof aliases !== "string") return undefined;
+  for (const alias of aliases.split(";")) {
+    const m = /(?:-\s*|['"])([A-Z])['"]?\s*$/.exec(alias.trim());
+    if (m) return m[1];
+  }
+  return undefined;
+}
+
+/**
+ * Mines that share a name (two portals of Taylor Reid No. 1, 200 m apart) are told apart by the letter their aliases
+ * give them ("Taylor Reid No. 1 (A)"), else by their mine id, so the map, the card and the top 10 never show one name
+ * twice for two places.
+ */
+export function tellApart(features: Feature<Point>[]): Feature<Point>[] {
+  const count = new Map<string, number>();
+  for (const f of features) count.set(String(f.properties?.name), (count.get(String(f.properties?.name)) ?? 0) + 1);
+  return features.map((f) => {
+    const p = f.properties ?? {};
+    if ((count.get(String(p.name)) ?? 0) < 2) return f;
+    const tag = siteLetter(p.aliases) ?? (p.mineId !== undefined ? `mine ${p.mineId}` : undefined);
+    return tag ? { ...f, properties: { ...p, name: `${p.name} (${tag})` } } : f;
+  });
 }
 
 /** DOE Legacy Management uranium sites as points; a transfer year in the future is reported as expectedTransferYear. */

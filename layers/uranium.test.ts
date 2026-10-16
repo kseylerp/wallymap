@@ -3,7 +3,7 @@ import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { bboxAreaKm2, hardMaxAreaKm2 } from "./types";
-import layer, { DOE_NAMED, DOE_URL, DOE_WHERE, NAVAJO_NAMED, NAVAJO_URL, normalizeDoe, normalizeNavajo } from "./uranium";
+import layer, { DOE_NAMED, DOE_URL, DOE_WHERE, NAVAJO_NAMED, NAVAJO_URL, normalizeDoe, normalizeNavajo, tellApart } from "./uranium";
 import doeRaw from "./__fixtures__/uranium.doe.json";
 import navajoRaw from "./__fixtures__/uranium.navajo.json";
 
@@ -180,5 +180,19 @@ describe("uranium layer", () => {
     expect(layer.description).toMatch(/not a measured exposure/);
     expect(layer.description).toMatch(/mines with commodity uranium/);
     expect(layer.description).toMatch(/Navajo/);
+  });
+});
+
+describe("mines that share a name", () => {
+  it("tells the two portals of Taylor Reid No. 1 apart by their aliases' letters, else by mine id", () => {
+    const mine = (x: number, props: Record<string, unknown>) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [x, 37.05] }, properties: props });
+    const out = tellApart([
+      mine(-110.3468, { name: "Taylor Reid No. 1", aliases: "Taylor Reid 1; Taylor Reid Mine - A", mineId: 708 }),
+      mine(-110.3486, { name: "Taylor Reid No. 1", aliases: "Taylor Reid 1; Taylor Reid Mine - B; Taylor Reid #", mineId: 261 }),
+      mine(-110.2429, { name: "Mitten No. 1", aliases: "Mitten #1 'A'", mineId: 709 }),
+      mine(-110.2439, { name: "Mitten No. 1", mineId: 255 }),
+      mine(-110.1, { name: "Tract 15", mineId: 1 }),
+    ]);
+    expect(out.map((f) => f.properties?.name)).toEqual(["Taylor Reid No. 1 (A)", "Taylor Reid No. 1 (B)", "Mitten No. 1 (A)", "Mitten No. 1 (mine 255)", "Tract 15"]);
   });
 });

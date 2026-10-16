@@ -183,12 +183,17 @@ export function pickPasses(layers: readonly { id: string; props: { pickable?: un
 }
 
 /**
- * Deck's `layerFilter` for the overlays: nothing is drawn in deck's own hover-picking pass. The app picks on pointer
- * moves itself (MapCanvas pickAt, with pickPasses); deck's automatic hover pick ran over the terrain mesh on every move
+ * Deck's `layerFilter` for the overlays. Nothing draws in deck's own hover-picking pass (the app picks on pointer moves
+ * itself, MapCanvas pickAt with pickPasses), and no picking pass draws the terrain mesh unless some layer is draped on
+ * it (`draped()`, read at pick time): deck's automatic pick on every pointer move and press ran over the terrain mesh
  * and logged "Picked non-existent layer" each time, the errors behind the development badge.
  */
-export function skipHoverPicking({ renderPass }: { renderPass: string }): boolean {
-  return !renderPass.startsWith("picking:hover");
+export function deckLayerFilter(draped: () => boolean): (ctx: { layer: { id: string }; renderPass: string }) => boolean {
+  return ({ layer, renderPass }) => {
+    if (renderPass.startsWith("picking:hover")) return false;
+    if (renderPass.startsWith("picking") && layer.id.startsWith(DECK_TERRAIN_ID)) return draped();
+    return true;
+  };
 }
 
 /* ---------- Friendly property display ---------- */

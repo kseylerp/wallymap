@@ -10,7 +10,7 @@ import { ensureRouteImages, setRouteProgress, syncRouteLayers } from "@/componen
 import { basemapStyleUrl } from "@/lib/render/basemaps";
 import { swipeStore } from "@/lib/render/compareView";
 import { buildDeckLayerSets, isClusterFeature, type Padding } from "@/lib/render/deck";
-import { pickPasses, pickToSelection, pickUnderHeat, skipHoverPicking, type DeckPick } from "@/lib/render/inspect";
+import { deckLayerFilter, pickPasses, pickToSelection, pickUnderHeat, type DeckPick } from "@/lib/render/inspect";
 import { lineLayerId, linePickToSelection, PICKABLE_PARTS } from "@/lib/render/nativeLines";
 import { viewFromCamera, type MapView } from "@/lib/agent/view";
 import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
@@ -216,8 +216,8 @@ function syncSideOverlays(map: mapboxgl.Map, current: SideOverlays | null, sets:
     // Deck creates its canvas asynchronously, so the first clip waits for each overlay's `onLoad`.
     const clipWhenLoaded = () => clipSides(sides, swipeStore.get());
     sides = {
-      a: new MapboxOverlay({ interleaved: false, layers: sets.a, onLoad: clipWhenLoaded, layerFilter: skipHoverPicking }),
-      b: new MapboxOverlay({ interleaved: false, layers: sets.b, onLoad: clipWhenLoaded, layerFilter: skipHoverPicking }),
+      a: new MapboxOverlay({ interleaved: false, layers: sets.a, onLoad: clipWhenLoaded, layerFilter: deckLayerFilter(() => true) }),
+      b: new MapboxOverlay({ interleaved: false, layers: sets.b, onLoad: clipWhenLoaded, layerFilter: deckLayerFilter(() => true) }),
     };
     map.addControl(sides.a);
     map.addControl(sides.b);
@@ -431,7 +431,11 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     });
     const initialSets = safeDeckLayers(initial).main;
     deckLayersRef.current = initialSets;
-    const overlay = new MapboxOverlay({ interleaved: false, layers: initialSets, layerFilter: skipHoverPicking });
+    const overlay = new MapboxOverlay({
+      interleaved: false,
+      layers: initialSets,
+      layerFilter: deckLayerFilter(() => pickPasses(deckLayersRef.current as unknown as Parameters<typeof pickPasses>[0]).draped),
+    });
     map.addControl(overlay);
 
     map.on("moveend", () => {

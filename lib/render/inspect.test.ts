@@ -11,7 +11,7 @@ import {
   pickToSelection,
   summarizeFeature,
 } from "@/lib/render/inspect";
-import { pickPasses as pickPassesOf, skipHoverPicking } from "@/lib/render/inspect";
+import { deckLayerFilter, pickPasses as pickPassesOf } from "@/lib/render/inspect";
 
 const trail: Feature = {
   type: "Feature",
@@ -182,11 +182,17 @@ describe("pickPasses", () => {
   });
 });
 
-describe("skipHoverPicking", () => {
-  it("draws nothing in deck's hover pick, and everything elsewhere (the app picks on hover itself)", () => {
-    expect(skipHoverPicking({ renderPass: "picking:hover" })).toBe(false);
-    expect(skipHoverPicking({ renderPass: "picking:hover:z" })).toBe(false);
-    expect(skipHoverPicking({ renderPass: "picking:query" })).toBe(true);
-    expect(skipHoverPicking({ renderPass: "screen" })).toBe(true);
+describe("deckLayerFilter", () => {
+  it("draws nothing in deck's hover pick, and the terrain mesh in a pick only when a layer is draped on it", () => {
+    let draped = false;
+    const filter = deckLayerFilter(() => draped);
+    const terrain = { id: "wally-terrain-tiles-43-98-8" };
+    const symbols = { id: "campsites@3d:points" };
+    expect(filter({ layer: symbols, renderPass: "picking:hover" })).toBe(false);
+    expect(filter({ layer: symbols, renderPass: "picking:query" })).toBe(true);
+    expect(filter({ layer: terrain, renderPass: "picking:query" })).toBe(false);
+    expect(filter({ layer: terrain, renderPass: "screen" })).toBe(true);
+    draped = true;
+    expect(filter({ layer: terrain, renderPass: "picking:query" })).toBe(true);
   });
 });

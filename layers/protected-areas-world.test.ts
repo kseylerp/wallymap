@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
-import layer, { MAX_AREAS, WDPA_POLYGONS, WDPA_TILE_URL, normalizeProtectedAreas, simplifyOffset } from "./protected-areas-world";
+import layer, { MAX_AREAS, WDPA_POLYGONS, WDPA_TILE_URL, mergeDesignations, normalizeProtectedAreas, simplifyOffset } from "./protected-areas-world";
 import guiana from "./__fixtures__/protected-areas-world.guiana.json";
 import type { FeatureCollection } from "geojson";
 
@@ -121,5 +121,23 @@ describe("protected-areas-world named polygons for a region", () => {
     const summary = summarizeLayerResult(await layer.query(ctxAt(stub), {}), "protected-areas-world");
     expect(summary).toHaveProperty("top");
     expect((summary as { top: string[] }).top[0]).toBe("Guyane (Parc Amazonien), National Park - Core Area, 20,218 km² (GUF)");
+  });
+});
+
+describe("one place under two designations", () => {
+  it("draws Väinamere once, listing both EU designations, and keeps a different place of the same name", () => {
+    const area = (dx: number, designation: string, v: number): GeoJSON.Feature => ({
+      type: "Feature",
+      geometry: { type: "Polygon", coordinates: [[[22.5 + dx, 58.6], [23.5 + dx, 58.6], [23.5 + dx, 59], [22.5 + dx, 58.6]]] },
+      properties: { name: "Väinamere", designation, v },
+    });
+    const out = mergeDesignations([
+      area(0, "Special Protection Area (Birds Directive)", 2732),
+      area(0.05, "Special Areas of Conservation (Habitats Directive)", 2539),
+      area(5, "Nature Reserve", 12),
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out[0].properties?.designation).toBe("Special Protection Area (Birds Directive) · Special Areas of Conservation (Habitats Directive)");
+    expect(out[1].properties?.designation).toBe("Nature Reserve");
   });
 });

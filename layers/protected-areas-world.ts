@@ -106,7 +106,54 @@ export function normalizeProtectedAreas(fc: FeatureCollection): FeatureCollectio
     features.push({ type: "Feature", geometry: f.geometry, properties });
   }
   features.sort((a, b) => Number(b.properties?.v ?? 0) - Number(a.properties?.v ?? 0));
-  return { type: "FeatureCollection", features };
+  return { type: "FeatureCollection", features: mergeDesignations(features) };
+}
+
+function extent(f: Feature): BBox | null {
+  const box: BBox = [Infinity, Infinity, -Infinity, -Infinity];
+  const visit = (c: unknown): void => {
+    if (!Array.isArray(c)) return;
+    if (typeof c[0] === "number" && typeof c[1] === "number") {
+      box[0] = Math.min(box[0], c[0]);
+      box[1] = Math.min(box[1], c[1]);
+      box[2] = Math.max(box[2], c[0]);
+      box[3] = Math.max(box[3], c[1]);
+      return;
+    }
+    for (const x of c) visit(x);
+  };
+  if (f.geometry && "coordinates" in f.geometry) visit(f.geometry.coordinates);
+  return Number.isFinite(box[0]) ? box : null;
+}
+
+/**
+ * One place under two legal designations (Väinamere as an EU Birds Directive area and a Habitats Directive area, nearly
+ * the same outline) draws once: the larger polygon stays and lists both designations. Same name, boxes overlapping by
+ * 60% or more of their union. `features` is largest first.
+ */
+export function mergeDesignations(features: Feature[]): Feature[] {
+  const kept: { f: Feature; box: BBox | null }[] = [];
+  for (const f of features) {
+    const box = extent(f);
+    const same = kept.find((k) => {
+      if (k.f.properties?.name !== f.properties?.name || !k.box || !box) return false;
+      const w = Math.min(k.box[2], box[2]) - Math.max(k.box[0], box[0]);
+      const h = Math.min(k.box[3], box[3]) - Math.max(k.box[1], box[1]);
+      if (w <= 0 || h <= 0) return false;
+      const area = (r: BBox) => (r[2] - r[0]) * (r[3] - r[1]);
+      return (w * h) / (area(k.box) + area(box) - w * h) >= 0.6;
+    });
+    if (!same) {
+      kept.push({ f, box });
+      continue;
+    }
+    const a = same.f.properties ?? {};
+    const b = f.properties?.designation;
+    if (typeof b === "string" && !String(a.designation ?? "").split(" · ").includes(b)) {
+      same.f = { ...same.f, properties: { ...a, designation: a.designation ? `${a.designation} · ${b}` : b } };
+    }
+  }
+  return kept.map((k) => k.f);
 }
 
 function tilesResult(note?: string): LayerResult {

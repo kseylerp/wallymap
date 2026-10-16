@@ -210,7 +210,7 @@ export type CardSpec = {
 
 /**
  * One fact row. `format`: int (whole number), 1dp (one decimal), km and m (distance in that unit), date (a calendar
- * date), list (comma or array items joined with " · "), link (a URL as a named link). `values` spells out codes
+ * date), list (comma or array items joined with " · "), link (a URL as a named link), pct (a 0 to 1 share as "22%"). `values` spells out codes
  * ("osm+openbeta" → "OpenStreetMap + OpenBeta"). `parts` folds several numeric properties into one line ("trad 1 ·
  * sport 4"), each under its own word; the row shows when any part has a value. Help defaults to the layer's fieldHelp.
  */
@@ -218,7 +218,7 @@ export type CardFact = {
   key: string;
   label: string;
   unit?: string;
-  format?: "int" | "1dp" | "km" | "m" | "date" | "list" | "link";
+  format?: "int" | "1dp" | "km" | "m" | "date" | "list" | "link" | "pct";
   help?: FieldHelp;
   values?: Record<string, string>;
   parts?: { key: string; label: string }[];

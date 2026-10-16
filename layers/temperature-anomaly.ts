@@ -23,7 +23,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -139,6 +139,40 @@ async function fetchTable(ctx: QueryContext, period: string, months: number): Pr
   }
 }
 
+const CAG_URL = "https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/county/mapping";
+
+/** What each number on a county card means (spec §12b), in NOAA's terms. */
+const FIELD_HELP: Record<string, FieldHelp> = {
+  v: {
+    text: "How much warmer (+) or cooler (−) the county was than its 1901-2000 average for the same months.",
+    unit: "degrees Fahrenheit (°F)",
+    source: "NOAA NCEI Climate at a Glance",
+    url: CAG_URL,
+  },
+  warmestRank: {
+    text: "Where this period ranks among the same months of every year since 1895: 1 is the warmest on record, the number of years on record the coolest.",
+    source: "NOAA NCEI Climate at a Glance",
+    url: CAG_URL,
+  },
+  fips: { text: "The county's five-digit federal code (state and county).", source: "US Census Bureau" },
+};
+
+/** The inspect card (spec §12b): the anomaly under its own name, then the temperatures and the rank in words. */
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Anomaly", unit: "°F" },
+  facts: [
+    { key: "period", label: "Period" },
+    { key: "averageF", label: "Average", unit: "°F", format: "1dp" },
+    { key: "normalF", label: "1901–2000 normal", unit: "°F", format: "1dp" },
+    { key: "warmestRank", label: "Warmest rank", format: "int" },
+    { key: "years", label: "Years on record", format: "int" },
+    { key: "months", label: "Months averaged", format: "int" },
+    { key: "kind", label: "Compared with normal", values: { warmer: "Warmer", cooler: "Cooler", normal: "Normal" } },
+    { key: "state", label: "State" },
+    { key: "fips", label: "County FIPS code" },
+  ],
+};
+
 const temperatureAnomaly = defineLayer({
   id: "temperature-anomaly",
   title: "Temperature anomaly by county (NOAA)",
@@ -157,6 +191,8 @@ const temperatureAnomaly = defineLayer({
   maxAreaKm2: 16_000_000,
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("temperature-anomaly"), unit: "°F", fillOpacity: 0.6 },
+  fieldHelp: FIELD_HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = Date.now();

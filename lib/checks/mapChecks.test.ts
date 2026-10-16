@@ -168,7 +168,8 @@ describe("duplicates", () => {
     const result = checkDuplicates(drawn(mapWith({ id: "climbing", features: CRAG_TWICE })));
     expect(result.ok).toBe(false);
     expect(result.failures[0]).toMatch(/1 place is drawn twice within 1 km, e\.g\. "Bob Marley Crag" twice/);
-    expect(result.failures[1]).toMatch(/the Rank by top 3 \(by routes\) lists the same place twice: "Bob Marley Crag" \(rows 2 and 3\)/);
+    // Rank by lists one row per place since 9a73dd3; rankedTopCheck.test.ts holds the check against the old list.
+    expect(result.failures).toHaveLength(1);
   });
 
   it("passes one name at two far-apart places, two trail segments, and repeated sightings", () => {
@@ -193,7 +194,7 @@ describe("duplicates", () => {
     const result = checkDuplicates(drawn(mapWith({ id: "fire-perimeters", features: [fire("Empire", 0, 8581), fire("EMPIRE", 0.0001, 8577)], mode: "polygons" })));
     expect(result.ok).toBe(false);
     expect(result.failures[0]).toMatch(/"Empire" twice as two nearly identical areas/);
-    expect(result.failures[1]).toMatch(/Rank by top 2 \(by acres burned\) lists the same place twice: "Empire" \(rows 1 and 2\)/);
+    expect(result.failures).toHaveLength(1);
   });
 
   it("passes sites that share a name a few hundred metres apart (Potato Bottom A, B, C) and generic names", () => {
@@ -277,13 +278,24 @@ describe("card text", () => {
     expect(result).toEqual({ check: "card", ok: true, failures: [] });
   });
 
-  it("fails a card whose measure is missing (v shown under its raw key) and a website shown as a bare URL", () => {
+  it("passes today's methane and county cards (they read \"Uncertainty 177.6\", \"Persistence 0.22\", \"Fips 06019\" before)", () => {
+    const source = point(-103.5, 31.9, { kind: "source", sector: "Oil & gas", v: 1273, uncertainty: 177.6, persistence: 0.22, plumeCount: 14, firstSeen: "2024-05-01", t: "2026-09-01T00:00:00.000Z", sourceName: "P1" });
+    expect(checkCards(drawn(mapWith({ id: "methane-plumes", features: [source] }))).ok).toBe(true);
+    const county: Feature = {
+      type: "Feature",
+      geometry: { type: "Polygon", coordinates: [[[-120, 36], [-119, 36], [-119, 37], [-120, 36]]] },
+      properties: { name: "Fresno County", state: "CA", fips: "06019", v: 2.4, kind: "warmer", t: "2026-09-30", period: "September 2026", months: 1, averageF: 75.1, normalF: 72.7, warmestRank: 60, years: 132 },
+    };
+    expect(checkCards(drawn(mapWith({ id: "temperature-anomaly", features: [county], mode: "polygons" })))).toEqual({ check: "card", ok: true, failures: [] });
+  });
+
+  it("fails a card whose measure is missing (v shown under its raw key)", () => {
     const info: LayerInfo = { id: "fake", title: "Fake", surface: "any", style: { geometry: "point", color: "#000" }, card: { measure: { key: "routes", label: "Routes" } } };
-    // The measure key is missing, so v lands in Details as "V 5", and the undeclared website as its URL.
+    // The measure key is missing, so v lands in Details as "V 5" (the website is a named link since d8ceb7c).
     const features = [point(0, 0, { name: "A", v: 5, website: "https://example.org" })];
     const result = checkCards(drawnLayers(mapWith({ id: "fake", features, info }), (id) => (id === "fake" ? info : undefined)));
     expect(result.ok).toBe(false);
-    expect(result.failures[0]).toMatch(/^Fake \(fake\) card: "V 5" is a bare number under its raw key \("A"\); "Website" shows a bare URL as text/);
+    expect(result.failures).toEqual(['Fake (fake) card: "V 5" is a bare number under its raw key ("A").']);
   });
 });
 

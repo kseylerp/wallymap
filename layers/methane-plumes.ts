@@ -29,7 +29,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { jsonObjectBody } from "@/lib/fetch/validate";
@@ -173,6 +173,42 @@ async function getJson(ctx: QueryContext, url: string, suffix: string, listKey: 
   }
 }
 
+const SOURCE_URL = "https://data.carbonmapper.org";
+
+/** What each number on a plume or source card means (spec §12b), in Carbon Mapper's terms. */
+const FIELD_HELP: Record<string, FieldHelp> = {
+  v: {
+    text: "Methane emission rate estimated from the plume: for one plume, the rate during that overpass; for a source, the average of its plumes.",
+    unit: "kilograms of methane per hour (kg/h)",
+    source: "Carbon Mapper",
+    url: SOURCE_URL,
+  },
+  uncertainty: { text: "Plus or minus this much on the emission rate (one standard deviation, Carbon Mapper's estimate).", unit: "kg/h", source: "Carbon Mapper", url: SOURCE_URL },
+  persistence: {
+    text: "The share of overflights of this source that saw a plume: near 100% means it leaks almost every time it is checked.",
+    scale: "0% to 100%",
+    source: "Carbon Mapper",
+    url: SOURCE_URL,
+  },
+  windMs: { text: "Wind speed at the plume used to estimate its rate.", unit: "metres per second", source: "Carbon Mapper", url: SOURCE_URL },
+};
+
+/** The inspect card (spec §12b): the rate under its own name, then what was seen and how sure. */
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Emission rate", unit: "kg/h" },
+  facts: [
+    { key: "kind", label: "Kind", values: { plume: "One plume", source: "Recurring source" } },
+    { key: "uncertainty", label: "Uncertainty (±)", unit: "kg/h", format: "int" },
+    { key: "persistence", label: "Seen leaking", format: "pct" },
+    { key: "plumeCount", label: "Plumes seen", format: "int" },
+    { key: "firstSeen", label: "First seen", format: "date" },
+    { key: "sector", label: "Sector" },
+    { key: "basin", label: "Basin" },
+    { key: "platform", label: "Seen by" },
+    { key: "windMs", label: "Wind", unit: "m/s", format: "1dp" },
+  ],
+};
+
 const methanePlumes = defineLayer({
   id: "methane-plumes",
   title: "Methane plumes (Carbon Mapper)",
@@ -193,6 +229,8 @@ const methanePlumes = defineLayer({
   wide: { orderBy: "emission rate in kg/h", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("methane-plumes"), unit: "kg/h", heat: true },
+  fieldHelp: FIELD_HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = Date.now();

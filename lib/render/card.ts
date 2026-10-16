@@ -95,6 +95,8 @@ export function factValue(fact: CardFact, props: Record<string, unknown>): strin
     }
     case "link":
       return isUrl(raw) ? raw : String(raw);
+    case "pct":
+      return typeof raw === "number" ? `${Math.round(raw * 100)}%` : String(raw);
     default:
       return typeof raw === "number" ? `${formatNumber(fact.key, raw, fact.unit)}${unit}` : `${formatValue(raw, undefined, fact.key)}${unit}`;
   }

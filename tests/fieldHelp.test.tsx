@@ -106,6 +106,29 @@ describe("field help on the inspect card (spec §12b)", () => {
     expect(humanKey("maxLengthM")).toEqual({ label: "Max length", unit: "m" });
     expect(humanKey("areaKm2")).toEqual({ label: "Area", unit: "km²" });
     expect(humanKey("climbing_rock")).toEqual({ label: "Climbing rock" });
+    // The eval's card check caught these as raw keys ("Swell period s", "Temp c", "Snowfall cm").
+    expect(humanKey("swellPeriodS")).toEqual({ label: "Swell period", unit: "s" });
+    expect(humanKey("tempC")).toEqual({ label: "Temp", unit: "°C" });
+    expect(humanKey("snowfallCm")).toEqual({ label: "Snowfall", unit: "cm" });
+    expect(humanKey("precipitationMm")).toEqual({ label: "Precipitation", unit: "mm" });
+    expect(humanKey("diameterCm")).toEqual({ label: "Diameter", unit: "cm" });
+  });
+
+  it("shows URL properties as named links, never as text (Wikipedia nearby's url and thumbnail)", () => {
+    const page: GeoJSON.Feature = {
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [-83.7, 37.8] },
+      properties: { name: "Lee City, Kentucky", url: "https://en.wikipedia.org/wiki/Lee_City", thumbnail: "https://upload.wikimedia.org/x.jpg", distanceM: 900 },
+    };
+    const plain = cardContent(page, {});
+    expect(plain.links).toEqual([
+      { key: "url", label: "Link", url: "https://en.wikipedia.org/wiki/Lee_City" },
+      { key: "thumbnail", label: "Image", url: "https://upload.wikimedia.org/x.jpg" },
+    ]);
+    expect([...plain.facts, ...plain.details].some((r) => r.value.includes("https://"))).toBe(false);
+    const schema = cardContent(page, { card: { facts: [{ key: "distanceM", label: "Distance", format: "m" }] } });
+    expect(schema.links.map((l) => l.label)).toEqual(["Link", "Image"]);
+    expect(schema.details.some((r) => r.value.includes("https://"))).toBe(false);
   });
 
   it("never shows a bare score: without a schema the score row takes its property's name and its help", () => {

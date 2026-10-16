@@ -24,15 +24,31 @@ export type CardContent = {
 /** Keys the card never lists as a row: the title, the date chip, internals. */
 const HIDDEN = new Set(["name", "t", "signals", "popularityNote", "aggregate", "tallest", "stack"]);
 
-/** Unit suffixes in property keys: `maxLengthM` reads "Max length … m", `areaKm2` "Area … km²". */
+/**
+ * Unit suffixes in property keys: `maxLengthM` reads "Max length … m", `areaKm2` "Area … km²", `swellPeriodS` "Swell
+ * period … s", `tempC` "Temp … °C", `precipitationMm` "Precipitation … mm".
+ */
 const KEY_UNITS: [RegExp, string][] = [
   [/Km2$/, "km²"],
   [/Km$/, "km"],
   [/Ft$/, "ft"],
   [/Pct$/, "%"],
   [/Mw$|MW$/, "MW"],
+  [/Mm$/, "mm"],
+  [/Cm$/, "cm"],
   [/(?<=[a-z])M$/, "m"],
+  [/(?<=[a-z])S$/, "s"],
+  [/(?<=[a-z])C$/, "°C"],
+  [/(?<=[a-z])F$/, "°F"],
 ];
+
+/** Link names for URL properties the schema does not name: a page is "Link", a picture "Image". */
+const LINK_LABELS: Record<string, string> = { url: "Link", link: "Link", href: "Link", website: "Website", thumbnail: "Image", image: "Image", photo: "Photo" };
+
+/** A URL property as a named link ("Website"), never its address as text. */
+function urlLink(key: string, url: string): CardLink {
+  return { key, label: LINK_LABELS[key.toLowerCase()] ?? humanKey(key).label, url };
+}
 
 /** A property key as a reader's label and the unit its name implies: `maxLengthM` → ["Max length", "m"]. */
 export function humanKey(key: string): { label: string; unit?: string } {
@@ -131,6 +147,11 @@ export function cardContent(feature: Feature, opts: { unit?: string; card?: Card
   for (const [key, raw] of Object.entries(props)) {
     if (used.has(key) || raw === null || raw === undefined || raw === "") continue;
     if (typeof raw === "object") continue;
+    // An address the schema does not name is still a link by name, not text.
+    if (isUrl(raw)) {
+      links.push(urlLink(key, raw));
+      continue;
+    }
     const { label, unit: keyUnit } = humanKey(key);
     const value = typeof raw === "number" ? `${formatNumber(key, raw)}${keyUnit ? ` ${keyUnit}` : ""}` : formatValue(raw, undefined, key);
     details.push({ key, label, value, ...withHelp(fieldHelp?.[key]) });
@@ -162,6 +183,15 @@ function plainContent(
     }
     measure = { ...measure, ...withHelp(help) };
   }
+  // Addresses are links by name, never text rows.
+  const links: CardLink[] = [];
+  const keep = (rows: Row[]): Row[] =>
+    rows.filter((r) => {
+      const raw = props[r.key];
+      if (!isUrl(raw)) return true;
+      links.push(urlLink(r.key, raw));
+      return false;
+    });
   const attach = (rows: Row[]): CardRow[] => rows.map((r) => ({ ...r, ...withHelp(fieldHelp?.[r.key]) }));
-  return { measure, facts: attach(summary.rows), links: [], details: attach(summary.details), signals: attach(summary.signals) };
+  return { measure, facts: attach(keep(summary.rows)), links, details: attach(keep(summary.details)), signals: attach(summary.signals) };
 }

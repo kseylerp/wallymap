@@ -194,6 +194,13 @@ function plainContent(
       links.push(urlLink(r.key, raw));
       return false;
     });
-  const attach = (rows: Row[]): CardRow[] => rows.map((r) => ({ ...r, ...withHelp(fieldHelp?.[r.key]) }));
+  // A unit in the key ("precipitationMm") reads as a unit on the value, as with a schema.
+  const attach = (rows: Row[]): CardRow[] =>
+    rows.map((r) => {
+      const { label, unit: keyUnit } = humanKey(r.key);
+      const raw = props[r.key];
+      const unitRow = keyUnit && typeof raw === "number" ? { label, value: `${r.value} ${keyUnit}` } : {};
+      return { ...r, ...unitRow, ...withHelp(fieldHelp?.[r.key]) };
+    });
   return { measure, facts: attach(keep(summary.rows)), links, details: attach(keep(summary.details)), signals: attach(summary.signals) };
 }

@@ -114,6 +114,12 @@ describe("field help on the inspect card (spec §12b)", () => {
     expect(humanKey("diameterCm")).toEqual({ label: "Diameter", unit: "cm" });
   });
 
+  it("reads a unit in the key on a card without a schema (weather's precipitationMm and snowfallCm)", () => {
+    const now: GeoJSON.Feature = { type: "Feature", geometry: { type: "Point", coordinates: [-120, 39] }, properties: { name: "Current conditions (model)", precipitationMm: 0.4, snowfallCm: 2 } };
+    const rows = cardContent(now, {}).facts.map((r) => `${r.label} ${r.value}`);
+    expect(rows).toEqual(["Precipitation 0.4 mm", "Snowfall 2 cm"]);
+  });
+
   it("shows URL properties as named links, never as text (Wikipedia nearby's url and thumbnail)", () => {
     const page: GeoJSON.Feature = {
       type: "Feature",

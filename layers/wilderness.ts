@@ -86,6 +86,7 @@ const wilderness = defineLayer({
     "At most 2,000 areas are returned, largest first, and the result says when that cap is hit. " +
     "Zoom in to a region under 400,000 km² (about a 630 km square) first.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (Wilderness.net / USGS)",
   requiredEnv: [],
   maxAreaKm2: 400_000,

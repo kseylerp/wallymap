@@ -120,6 +120,7 @@ const grazingAllotments = defineLayer({
     "At most 2,000 polygons per group are returned, largest first, and the result says when that cap is hit. " +
     "Over 150,000 km² (about a 390 km square) it keeps the 1,000 largest and gives the total.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (Bureau of Land Management)",
   requiredEnv: [],
   maxAreaKm2: 150_000,

@@ -127,6 +127,7 @@ const imageryByDate = defineLayer({
     "Caveats: clouds are not removed, so a cloudy day looks white; edges of a satellite's strip can cut through the view, leaving part of it blank; the search only checks the centre of the view. " +
     "Returns map tiles, not features you can count or list; describe what you see in general terms. Zoom in to under 1,000,000 km² first.",
   coverage: "global",
+  surface: "any",
   license: "Public domain (NASA HLS via GIBS; contains modified Copernicus Sentinel data)",
   requiredEnv: [],
   maxAreaKm2: 1_000_000,

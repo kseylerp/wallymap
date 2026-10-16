@@ -118,6 +118,7 @@ const ports = defineLayer({
     "The year is 2023; there is no history in this layer, and ports below the principal-port cutoff are absent. " +
     "United States only; elsewhere it returns nothing. Works at any size of region, up to the whole country.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (US Army Corps of Engineers, BTS)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

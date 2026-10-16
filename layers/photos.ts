@@ -390,6 +390,7 @@ const photos = defineLayer({
     "At most 5,000 points are returned (evenly thinned). For Mapillary, zoom in to a few square kilometres in a city. " +
     "Over 2,500 km² (about a 50 km square) it returns photos of the 500 best-known places, Commons only.",
   coverage: "global",
+  surface: "any",
   license: "Wikimedia Commons (various free licenses); Mapillary (CC BY-SA 4.0)",
   requiredEnv: [],
   optionalEnv: ["MAPILLARY_TOKEN"],

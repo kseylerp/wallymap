@@ -21,6 +21,7 @@ const fake = defineLayer({
   title: "Fake",
   description: "d",
   coverage: "global",
+  surface: "any",
   license: "CC0",
   requiredEnv: [],
   maxAreaKm2: 100000,

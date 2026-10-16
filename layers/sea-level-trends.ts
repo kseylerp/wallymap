@@ -153,6 +153,7 @@ const seaLevelTrends = defineLayer({
     "Caveats: it is a straight-line fit to the past, not a forecast, and it does not show the recent speed-up; a short record (under 30 years) or a wide trendError is uncertain. " +
     "For a map of what a given rise would flood, use sea-level-rise. Shows up to 300 stations, fastest rise first (1,000 over 30,000,000 km²).",
   coverage: "global",
+  surface: "coast",
   license: "Public domain (NOAA CO-OPS)",
   requiredEnv: [],
   maxAreaKm2: 30_000_000,

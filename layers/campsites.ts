@@ -207,6 +207,7 @@ const campsites = defineLayer({
     "free dispersed camping spots are mostly not mapped here (see forest-roads for the drivable Forest Service roads). " +
     "Over 25,000 km² (about a 160 km square) it returns up to 2,000 named camp sites (no parking) and how many there are in all. At most 5,000 points are returned (all camp sites first, then the largest parking lots) and the result says so when it trims.",
   coverage: "global",
+  surface: "land",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],

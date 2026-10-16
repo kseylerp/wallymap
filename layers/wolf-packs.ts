@@ -97,6 +97,7 @@ const wolfPacks = defineLayer({
     "Ranges are the agency's estimates from collar and survey locations, drawn to be general, and they are counts of known packs, not all wolves. " +
     "Do not use them to find individual animals. Over 300,000 km² (more than the whole state) it keeps the 1,000 newest pack-years.",
   coverage: { bbox: WASHINGTON },
+  surface: "land",
   license: "Public data, terms not stated (Washington Department of Fish and Wildlife, 2019 service)",
   requiredEnv: [],
   maxAreaKm2: 300_000,

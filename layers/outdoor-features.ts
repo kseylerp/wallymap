@@ -302,6 +302,7 @@ const outdoorFeatures = defineLayer({
     "hut bookings, prices and winter status are not included; peaks and saddles need a name to be listed and elevations come from mapper data (peaks has Wikidata elevation and prominence for notable summits). " +
     "Over 10,000 km² it lists up to 2,000 named features (unnamed ones left out) and how many there are in all. Within a kind the query keeps the lowest OpenStreetMap ids, not the tallest or nearest (peaks that have an elevation are fetched first, up to 2,000, then up to 1,000 without one): each kind is cut at 1,000 and the whole result at 5,000, and if the 5,000 cap bites, huts, shelters and springs are kept first and the tallest of the fetched peaks. The coverage note gives the count and says if it was cut.",
   coverage: "global",
+  surface: "land",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],

@@ -197,6 +197,7 @@ const monuments = defineLayer({
   description:
     "BLM national monuments and national conservation areas, as drawn now and, for the Utah monuments, in 2021. Each polygon has name, designation, state, kind ('current' or '2021'), v and areaKm2, and source. The current layer reflects the July 2026 boundary changes: Bears Ears is about 490 km² now against 5,700 in 2021, and Grand Staircase-Escalante about 730 against 7,600. version (both, current or 2021) picks what to return; compare the two kinds for then versus now. BLM-managed lands only, 2021 outlines exist only for Utah's monuments, and outlines are simplified, not for legal use.",
   coverage: "us",
+  surface: "any",
   license: "Public domain (BLM National Conservation Lands; Utah AGRC copy of 2021 boundaries)",
   requiredEnv: [],
   maxAreaKm2: 20_000_000,

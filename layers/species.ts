@@ -218,6 +218,7 @@ const species = defineLayer({
     "At most 600 of the most recent sightings are returned (3 pages of 200). " +
     "Over 50,000 km² (about a 220 km square) it returns the 2,000 most recent with a taxon, or a density map without one.",
   coverage: "global",
+  surface: "any",
   license: "CC BY-NC / CC0 per observation (iNaturalist)",
   requiredEnv: [],
   maxAreaKm2: 50_000,

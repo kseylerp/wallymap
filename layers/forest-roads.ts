@@ -120,6 +120,7 @@ const forestRoads = defineLayer({
     "United States National Forests only (nothing on other land or outside the US); dates the roads are open are not included beyond the seasonal flag. " +
     "Zoom in to a region under 25,000 km² (about a 160 km square) first; at most 2,000 road segments are returned and the result says so when it trims.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (USDA Forest Service)",
   requiredEnv: [],
   maxAreaKm2: 25_000,

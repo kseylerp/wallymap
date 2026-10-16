@@ -310,6 +310,7 @@ const powerPlants = defineLayer({
     "Plants are capped at 2,000 per view (largest first), turbines at 3,000 and solar projects at 2,000, and the result says when it trims. Points cluster at low zoom. " +
     "United States only; elsewhere it returns nothing. Any box up to the whole US answers: over 250,000 km² (about a 500 km square) it returns the 2,000 largest by MW (turbines and solar projects likewise) and its note says how many there are in all, so pass the whole region asked about (West Texas, the Great Plains) rather than a slice of it.",
   coverage: "us",
+  surface: "any",
   license: "Public domain (US EIA via Esri Federal User Community; USGS US Wind Turbine and Large-Scale Solar PV databases)",
   requiredEnv: [],
   maxAreaKm2: 250_000,

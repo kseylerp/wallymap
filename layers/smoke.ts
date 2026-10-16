@@ -152,6 +152,7 @@ const smoke = defineLayer({
     "Compare two dates works (pick two dates or years in compare). " +
     "Empty results carry a coverageNote saying why (no smoke mapped, a day with no map, or outside the Americas).",
   coverage: { bbox: SMOKE_EXTENT },
+  surface: "any",
   license: "NOAA / NESDIS OSPO Hazard Mapping System (public)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

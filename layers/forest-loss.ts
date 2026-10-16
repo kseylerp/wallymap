@@ -49,6 +49,7 @@ const forestLoss = defineLayer({
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms. " +
     "Works at any size of region, from the whole world down to a few kilometres.",
   coverage: "global",
+  surface: "land",
   license: "CC BY 4.0 (Hansen/UMD/Google/USGS/NASA via GFW)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

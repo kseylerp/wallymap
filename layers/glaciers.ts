@@ -338,6 +338,7 @@ const glaciers = defineLayer({
     "At most the 300 largest glaciers in view are returned (each with all its dated outlines). Outlines are simplified for display (details under about 40 m are dropped). " +
     "Works worldwide. Over 8,000 km² (about a 90 km square) it returns the 1,500 largest outlines, drawn coarser (about 400 m).",
   coverage: "global",
+  surface: "land",
   license: "Free to use, cite GLIMS (NSIDC / University of Arizona)",
   requiredEnv: [],
   maxAreaKm2: 8_000,

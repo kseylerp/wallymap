@@ -235,11 +235,24 @@ export type RasterHint = {
   swatch?: string;
 };
 
+/**
+ * Where a layer's features belong (the eval's map checks, lib/checks/mapChecks.ts): `land` (a crag, a trail), `water`
+ * (open sea: a buoy, sea ice), `coast` (at the shoreline: a surf break, a tide gauge), or `any` (whales, offshore wind,
+ * marine protected areas). The checks read it against a 1:50m land mask with a 2 km coast tolerance, so a land layer
+ * drawn out at sea, or a sea layer drawn inland, fails.
+ */
+export type Surface = "land" | "water" | "coast" | "any";
+
+/** A surface per feature, read from one property (surf: buoys are at sea, forecast spots at the coast). */
+export type SurfaceByKey = { key: string; by: Record<string, Surface>; default: Surface };
+
 export type Layer<I extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawShape>> = {
   id: string;
   title: string;
   description: string;
   coverage: Coverage;
+  /** Where the features belong on the globe (land, open water, the coast, or anywhere); see Surface. */
+  surface: Surface | SurfaceByKey;
   license: string;
   requiredEnv: string[];
   /** Env vars the layer reads when set but works without; only these and requiredEnv reach ctx.env. */

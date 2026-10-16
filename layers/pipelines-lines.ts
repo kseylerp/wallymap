@@ -181,6 +181,7 @@ const pipelinesLines = defineLayer({
     "Each kind is capped at 1,500 lines per view (longest gas segments and highest voltage first), and a view of several kinds at about 3,000 in all (600 per kind for all, 750 for pipelines), and the result says when it trims; pick one network to see more of it. " +
     "United States only; elsewhere it returns nothing. Over 150,000 km² (a 390 km square) it keeps the 3,000 longest (power lines: highest kV) and the total.",
   coverage: "us",
+  surface: "any",
   license: "Public domain (EIA / DHS HIFLD, Esri Federal User Community mirror)",
   requiredEnv: [],
   maxAreaKm2: 150_000,

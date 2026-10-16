@@ -62,6 +62,7 @@ const snowCover = defineLayer({
     "The result's coverageNote states which product and day are shown. " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",
+  surface: "any",
   license: "NASA GIBS / MODIS (public); NOAA NOHRSC (public)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

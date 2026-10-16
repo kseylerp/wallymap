@@ -250,6 +250,7 @@ const tides = defineLayer({
     "subordinate stations are offsets from a nearby reference station and less exact; a station's tide can differ a lot from a bay or river mouth a few miles away. " +
     "US coasts and territories only.",
   coverage: "us",
+  surface: "coast",
   license: "Public domain (NOAA CO-OPS)",
   requiredEnv: [],
   maxAreaKm2: 50_000,

@@ -186,6 +186,7 @@ const methanePlumes = defineLayer({
     "Caveats: a missing plume means none was seen on the days observed, not that a site is clean; coverage is patchy and favours known oil and gas basins; rates are snapshots during an overpass and some are withheld. " +
     "At most 200 plumes (largest first) and 300 sources; over 500,000 km², the 500 largest of each and the total.",
   coverage: "global",
+  surface: "any",
   license: "Carbon Mapper terms: non-commercial, attribution 'Data by Carbon Mapper'",
   requiredEnv: [],
   maxAreaKm2: 500_000,

@@ -45,6 +45,7 @@ const publicLands = defineLayer({
     "United States only. Returns map tiles drawn on the globe, not features you can count or list. You cannot see the rendered map: say the layer is shown and what each color means, but do not claim which land lies where. " +
     "Works at any size of region, from a whole state down to a single valley.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (USGS PAD-US 4.1)",
   requiredEnv: [],
   // A deployment's own copy of the tiles; the default is the maintainer's bucket.

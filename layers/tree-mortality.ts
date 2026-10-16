@@ -266,6 +266,7 @@ const treeMortality = defineLayer({
     "Polygons are not every dead tree, and fire-killed trees are mostly not included (see fire-perimeters and burn-severity). Each survey year is fetched separately, at most 300 polygons per year (the biggest first), so a busy year does not crowd out the others; a range longer than ten years is fetched at once, at most 1,000 polygons per source. The result says when it trims. " +
     "Over 20,000 km² (a 140 km square) it keeps the 2,000 worst by v.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (US Forest Service; California Department of Fish and Wildlife copy)",
   requiredEnv: [],
   maxAreaKm2: 20_000,

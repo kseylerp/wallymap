@@ -85,6 +85,7 @@ const permafrost = defineLayer({
     "Caveats: a broad 1:10,000,000 map compiled in the 1990s, so it shows zones, not whether a given lot is frozen, and it predates recent thaw; the polygons are a third-party copy whose licence is not stated. " +
     "Northern Hemisphere only (south of about 25°N returns nothing). Zoom in to under 5,000,000 km² first.",
   coverage: { bbox: [-180, 25, 180, 90] },
+  surface: "land",
   license: "Unstated: a third-party ArcGIS copy of the IPA Circum-Arctic map (Brown et al., NSIDC, who ask for citation); Canada tiles Open Government Licence - Canada (NRCan)",
   requiredEnv: [],
   maxAreaKm2: 5_000_000,

@@ -348,6 +348,7 @@ const reservoirLevels = defineLayer({
   description:
     "Water level and storage of about 35 major western reservoirs (Lake Powell, Lake Mead, Flaming Gorge, Shasta, Oroville, Hetch Hetchy and more) from the Bureau of Reclamation and California's CDEC; provisional data. Each point has v and storageAf (live storage in acre-feet), elevationFt (the level quoted for Powell and Mead; Reclamation sites only), pctFull (percent of official live capacity, where known), lastDate and t (usually 1 to 2 days old), and series ({t, v} points: monthly means for up to 10 years, yearly beyond; feet when seriesUnit is 'ft'). years (1 to 60, default 5) sets the series span; name picks one reservoir. Small lakes are missing and at most 6 Reclamation sites return per view, even over 3,000,000 km².",
   coverage: { bbox: [-123.5, 32, -104, 43.5] },
+  surface: "land",
   license: "Public domain (US Bureau of Reclamation, California DWR); provisional data",
   requiredEnv: [],
   maxAreaKm2: 3_000_000,

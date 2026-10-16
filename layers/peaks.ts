@@ -194,6 +194,7 @@ const peaks = defineLayer({
     "Names are English when Wikidata has one, otherwise the peak's own-language name; items with no name are left out. At most 1,000 peaks, highest first. " +
     "Works worldwide. Over 40,000 km² (about a 200 km square) it returns only peaks with a recorded prominence, the 1,000 most prominent.",
   coverage: "global",
+  surface: "land",
   license: "CC0 (Wikidata)",
   requiredEnv: [],
   maxAreaKm2: 40_000,

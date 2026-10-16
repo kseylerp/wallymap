@@ -9,9 +9,31 @@ import { LAYER_ROLES, layerColor, PALETTE, RASTER_TILE_LAYERS, ROLE_COLORS } fro
 const registered = listLayers();
 
 const fake = defineLayer({
-  id: "fake", title: "Fake", description: "d", coverage: "global", license: "CC0",
+  id: "fake", title: "Fake", description: "d", coverage: "global", surface: "any", license: "CC0",
   requiredEnv: [], maxAreaKm2: 100, input: z.object({ n: z.number().optional() }),
   query: async () => ({ error: "nope" }), style: { geometry: "point", color: "#000" },
+});
+
+describe("surface", () => {
+  const SURFACES = ["land", "water", "coast", "any"];
+  it("every layer says where its features belong", () => {
+    expect(registered.length).toBeGreaterThanOrEqual(81);
+    for (const l of registered) {
+      const s = l.surface;
+      if (typeof s === "string") expect(SURFACES, l.id).toContain(s);
+      else {
+        expect(SURFACES, l.id).toContain(s.default);
+        for (const v of Object.values(s.by)) expect(SURFACES, l.id).toContain(v);
+      }
+    }
+  });
+  it("puts crags on land, buoys at sea, surf breaks and tide gauges at the coast", () => {
+    const of = (id: string) => registered.find((l) => l.id === id)?.surface;
+    expect(of("climbing")).toBe("land");
+    expect(of("sea-ice")).toBe("water");
+    expect(of("sea-level-trends")).toBe("coast");
+    expect(of("surf")).toEqual({ key: "kind", by: { buoy: "water", station: "water", climatology: "water" }, default: "coast" });
+  });
 });
 
 describe("BBoxSchema", () => {

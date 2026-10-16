@@ -179,6 +179,7 @@ const fireDetections = defineLayer({
     "Pick VIIRS_SNPP_NRT (default), VIIRS_NOAA20_NRT or MODIS_NRT with source. At most the 5,000 strongest (by v) are returned. " +
     "Over 2,000,000 km² (about the size of Mexico) it returns the 5,000 newest.",
   coverage: "global",
+  surface: "land",
   license: "NASA FIRMS (public, attribution requested)",
   requiredEnv: ["FIRMS_MAP_KEY"],
   maxAreaKm2: 2_000_000,

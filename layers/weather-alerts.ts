@@ -366,6 +366,7 @@ const weatherAlerts = defineLayer({
     "zones in view are found by sampling 9 points across it, so a small zone between them can be missed; avalanche warnings come from NWS only when an avalanche centre asks for one, so check the local avalanche centre; " +
     "the 'now' point is a model value, not a station reading, free for non-commercial use only. Over 400,000 km² it samples 25 points and keeps the 1,000 most severe alerts.",
   coverage: "global",
+  surface: "any",
   license: "Public domain (NOAA NWS); current conditions from Open-Meteo, CC BY 4.0, free for non-commercial use only",
   requiredEnv: [],
   maxAreaKm2: 400_000,

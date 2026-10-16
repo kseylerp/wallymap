@@ -269,6 +269,7 @@ const skiRoutes = defineLayer({
     "difficulty colors differ by country, lifts and open or closed status are not included, and trails may be closed or ungroomed. " +
     "At most 2,000 piste ways and 50 routes are returned (a route is drawn only where it crosses the box) and the note gives the count; over 2,500 km² only the 1,000 longest named ones.",
   coverage: "global",
+  surface: "land",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],

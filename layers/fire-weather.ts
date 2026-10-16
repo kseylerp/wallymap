@@ -66,6 +66,7 @@ const fireWeather = defineLayer({
     "The result's coverageNote states the day shown (and when a date was moved into the available range). " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",
+  surface: "land",
   license: "EC JRC GWIS / EFFIS (Copernicus; free and open, credit required)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

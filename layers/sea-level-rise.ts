@@ -69,6 +69,7 @@ const seaLevelRise = defineLayer({
     "Covers the coastal contiguous US, Hawaii, Puerto Rico and the US Virgin Islands; Alaska has no tiles, so it draws nothing there. " +
     "Returns map tiles drawn on the map, not features you can count or list; describe what you see in general terms. Drawn at zoom 16 or less; any size of view.",
   coverage: "us",
+  surface: "coast",
   license: "Public domain (NOAA Office for Coastal Management)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

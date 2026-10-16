@@ -851,6 +851,7 @@ const surf = defineLayer({
     "buoys that have not reported for 12 hours and stations without a wave sensor are left out; seasonal averages describe the buoy's exposure, so a north-facing and a south-facing buoy on the same island show which shore gets the swell in each season; the forecast is a coarse 9 km model, worst near shore and in bays, and shows open-water waves, not what breaks on the reef or sandbar, and is free for non-commercial use only. " +
     "Global (NDBC plus partner buoys, mostly US waters); over 500,000 km² up to 1,000 buoys, biggest waves first.",
   coverage: "global",
+  surface: { key: "kind", by: { buoy: "water", station: "water", climatology: "water" }, default: "coast" },
   license: "Public domain (NOAA NDBC); forecast from Open-Meteo Marine, CC BY 4.0, free for non-commercial use only",
   requiredEnv: [],
   maxAreaKm2: 500_000,

@@ -47,6 +47,7 @@ const surfaceWater = defineLayer({
     "The result's coverageNote says what the colors in that product mean. " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",
+  surface: "any",
   license: "Copernicus / EC JRC Global Surface Water (free and open; cite Pekel et al. 2016, Nature)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

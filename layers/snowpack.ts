@@ -317,6 +317,7 @@ const snowpack = defineLayer({
     "Western United States (roughly California to Colorado and Montana to Arizona) and Alaska only; elsewhere it returns nothing. " +
     "Over 400,000 km² it returns up to 1,000 stations, deepest snow first.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (USDA NRCS)",
   requiredEnv: [],
   maxAreaKm2: 400_000,

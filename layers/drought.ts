@@ -252,6 +252,7 @@ const drought = defineLayer({
     "United States only (including Alaska, Hawaii and Puerto Rico); elsewhere it returns nothing. Polygons are clipped to the view and simplified for display. " +
     "The map view must be under 16 million km², which is a box about 5,000 km wide and 3,000 km tall, roughly the lower 48 states plus the ocean around them (that is the size of the box on screen, not the area of land); zoom in first, and with many weeks a smaller view is faster.",
   coverage: "us",
+  surface: "land",
   license: "NDMC data via an Esri-hosted copy; NDMC asks for credit; the Esri service terms are for organisational use, verify before commercial use",
   requiredEnv: [],
   maxAreaKm2: 16_000_000,

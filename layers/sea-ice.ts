@@ -59,6 +59,7 @@ const seaIce = defineLayer({
     "The result's coverageNote states the product day shown (and when a date was moved to the newest available). " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",
+  surface: "water",
   license: "NASA GIBS / GHRSST MUR and MODIS (public)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

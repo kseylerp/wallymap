@@ -61,6 +61,7 @@ const floodExtent = defineLayer({
     "The result's coverageNote states the day shown (and when a date was moved to the newest available). " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",
+  surface: "any",
   license: "NASA GIBS / OPERA and MODIS (public)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

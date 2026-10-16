@@ -123,6 +123,7 @@ const groundwater = defineLayer({
   description:
     "How deep the water table is, from the newest manual measurement at each USGS monitoring well. Each point has v and depthFt (feet below land surface; negative means water above ground, as in a flowing well), t and date, site and siteNo (the USGS well id), kind ('static' undisturbed, 'other' pumped or disturbed), approval and url. sinceYear (default five years back) hides older wells. One reading per well, so it cannot show a trend: never say a level is rising or falling. Values can be months old; wells have numbers, not names. At most 1,000 wells in no order (2,000 over 40,000 km², with the total).",
   coverage: "us",
+  surface: "land",
   license: "Public domain (USGS)",
   requiredEnv: [],
   optionalEnv: ["USGS_API_KEY"],

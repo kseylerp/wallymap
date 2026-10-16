@@ -255,6 +255,7 @@ function popularityLayer(target: PopularityTarget): Layer {
         : "An estimate of how popular each camp site in view is, as a score from 0 (quietest) to 100 (busiest-looking in this view); for trails use popularity. ") +
       SHARED_DESCRIPTION,
     coverage: "global",
+    surface: "land",
     license: "Derived (see signals)",
     requiredEnv: [],
     // Composed layers read these from the same ctx.env, so they must be declared here.

@@ -151,6 +151,7 @@ const temperatureAnomaly = defineLayer({
     "Caveats: the baseline is 1901-2000, so most recent periods read warm against it; county values are area averages from a gridded dataset, not one station; the newest month can be revised slightly. " +
     "Connecticut is missing (NOAA still uses its old counties). The map view must be under 16,000,000 km² (the lower 48 fit).",
   coverage: "us",
+  surface: "land",
   license: "Public domain (NOAA NCEI); county outlines Esri / US Census Bureau",
   requiredEnv: [],
   maxAreaKm2: 16_000_000,

@@ -49,6 +49,7 @@ const forestAlerts = defineLayer({
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms. " +
     "Works at any size of region; it is most useful zoomed in to a forest area.",
   coverage: { bbox: [-180, -30, 180, 30] },
+  surface: "land",
   license: "CC BY 4.0 (GFW integrated alerts: UMD GLAD, WUR RADD)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

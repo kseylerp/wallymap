@@ -90,6 +90,7 @@ const miningClaims = defineLayer({
   description:
     "BLM mining claims on US public land (mostly the West): staked claims for minerals that can limit other land use. Each polygon has name, caseNumber, claimType (lode, placer, mill site, tunnel site), disposition, kind ('active' or 'closed'), v and acres, and locationQuality. status picks active (default), closed (lapsed, far more) or both. Claims are drawn from legal descriptions on the survey grid, so a claim shows as the section or quarter-section named, not its corners, and many share one square; do not use it to decide where to stake or camp. No mineral is named. At most 2,000 per status; over 2,500 km², 2,000 named claims and the total.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (US Bureau of Land Management, MLRS)",
   requiredEnv: [],
   maxAreaKm2: 2_500,

@@ -32,6 +32,7 @@ const population = defineLayer({
     "It is a single fixed year, so it cannot show change over time. " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",
+  surface: "land",
   license: "NASA GIBS (public)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

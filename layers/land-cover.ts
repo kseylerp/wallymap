@@ -61,6 +61,7 @@ const landCover = defineLayer({
     "The result's coverageNote states which product and year are shown. " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",
+  surface: "land",
   license: "CC BY 4.0 (ESA WorldCover); NLCD public domain (USGS / MRLC)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

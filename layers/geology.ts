@@ -30,6 +30,7 @@ const geology = defineLayer({
     "surface deposits like glacial till or alluvium can hide the bedrock below. " +
     "You cannot see the rendered map: say it is shown, do not claim which rock lies where. Works at any size of region.",
   coverage: "global",
+  surface: "land",
   license: "CC BY 4.0 (Macrostrat; source maps by USGS and geological surveys)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

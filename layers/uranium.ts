@@ -199,6 +199,7 @@ const uranium = defineLayer({
   description:
     "Legacy uranium sites in the western US: 602 abandoned mines on the Navajo Nation and about 60 Department of Energy mill-tailings sites. Each point has name, kind ('abandoned mine', 'mill tailings site' or 'leasing program') and source. Navajo mines have v and hazardScore (a 2007 screening score, 10 to about 17,600; higher is a higher estimated hazard, not a measured exposure; later cleanup not reflected), chapter and region. DOE sites have program (Title I or II), state, url and transferYear. Not every uranium mine: for historic mines elsewhere use mines with commodity uranium. Old workings and tailings can be dangerous. The lower 48 fits; over 20,000,000 km², named sites and the total.",
   coverage: "us",
+  surface: "land",
   license:
     "Navajo mines: published by the New Mexico Community Data Collaborative from Navajo Nation EPA and US EPA screening (no licence stated); DOE sites: US Department of Energy (public domain)",
   requiredEnv: [],

@@ -34,6 +34,7 @@ const floodZones = defineLayer({
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms and do not give a zone for an exact address; point the user to FEMA's Flood Map Service Center for that. " +
     "Covers the 50 states, DC and Puerto Rico; outside them the result is empty.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (FEMA)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

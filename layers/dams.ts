@@ -186,6 +186,7 @@ const dams = defineLayer({
   description:
     "US dams from the National Inventory of Dams (Army Corps of Engineers): every high- and significant-hazard dam plus the larger low-hazard ones. Each point has name, v and storageAf (capacity in acre-feet), heightFt, yearCompleted and t (January 1 of that year, so the time scrubber plays dams by decade), purpose and kind (Hydroelectric, Flood Risk Reduction, Irrigation, Water Supply, Recreation and so on), hazard (High, Significant or Low: the damage if it failed, not the chance of failure or a safety rating), river, state, owner, damType and condition. About 3% of dams have no storage figure and are left out; year completed is missing for some old dams. At most 2,000 dams, biggest storage first; any US box answers, and over 250,000 km\u00b2 the note gives the total.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (US Army Corps of Engineers, National Inventory of Dams)",
   requiredEnv: [],
   maxAreaKm2: 250_000,

@@ -55,6 +55,7 @@ function fakeLayer(id: string, outcome: () => Outcome) {
     title: id,
     description: id,
     coverage: "global",
+    surface: "any",
     license: "test",
     requiredEnv: [],
     maxAreaKm2: 1e9,

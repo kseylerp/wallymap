@@ -314,6 +314,7 @@ const paddling = defineLayer({
     "Each of the two element sets is cut at 1,500 and canoe routes at 50 (a route is drawn only where it crosses the box) and the note gives the count; over 2,500 km² only the first 1,000 named features. " +
     "Features are a mix of points and lines; switch the display mode to points to see them all as symbols.",
   coverage: "global",
+  surface: "land",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],

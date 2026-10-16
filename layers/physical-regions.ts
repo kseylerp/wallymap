@@ -96,6 +96,7 @@ const physicalRegions = defineLayer({
     "Each call returns at most 150 regions, the most prominent first, and says so when it cuts the list. " +
     "Zoom in to a region under 30,000,000 km² (about a continent) first. Features have no dates.",
   coverage: "global",
+  surface: "any",
   license: "Public domain (Natural Earth)",
   requiredEnv: [],
   maxAreaKm2: 30_000_000,

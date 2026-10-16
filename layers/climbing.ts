@@ -609,6 +609,7 @@ const climbing = defineLayer({
     "individual routes and their line geometry are not returned. " +
     "Over 10,000 km² it returns the 1,000 places with the most routes and how many there are in all. Each source returns at most 3,000 places (OpenStreetMap the lowest ids, OpenBeta the most routes) and the coverage note says if the box was cut or a source did not answer.",
   coverage: "global",
+  surface: "land",
   license:
     "ODbL (OpenStreetMap contributors); OpenBeta (open data; licence not stated by the project, verify before commercial use)",
   requiredEnv: [],

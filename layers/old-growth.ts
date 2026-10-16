@@ -105,6 +105,7 @@ const oldGrowth = defineLayer({
     "Only federal land is counted, so private, state and tribal forest are not. At most 200 firesheds are returned, those with the most old growth first, and the result says when it trims. " +
     "United States only. Over 300,000 km² (a 550 km square) it keeps the 1,000 with the most old growth.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (US Forest Service)",
   requiredEnv: [],
   maxAreaKm2: 300_000,

@@ -212,6 +212,7 @@ const sequoiaMortality = defineLayer({
     "Trees the crews could not find on a later visit (77) are left out. Southern Sierra Nevada only; over 400,000 km² it still returns every tree. " +
     "Pair it with sequoia-groves for the grove outlines.",
   coverage: { bbox: RANGE },
+  surface: "land",
   license: "Public domain (USGS)",
   requiredEnv: [],
   maxAreaKm2: 400_000,

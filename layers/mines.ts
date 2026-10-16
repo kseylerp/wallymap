@@ -265,6 +265,7 @@ const mines = defineLayer({
   description:
     "Mines, prospects, quarries and mineral deposits in the US from two USGS records: MRDS (deposits and commodities) and USMIN (mine, shaft and tunnel symbols from old topographic maps). Each point has name, kind (MRDS: main commodity such as gold or uranium; USMIN: feature type such as Mine, Adit, Quarry) and source; MRDS adds status (Producer, Past Producer, Prospect, Occurrence), commodities and url, USMIN topoName and topoYear. commodity filters MRDS; source picks one record. MRDS stopped updating around 2011, so most sites are closed and new mines missing, and a point does not mean a mine is open or safe. At most 2,000 per record; over 15,000 km², 2,000 named sites and the total.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (USGS MRDS and USMIN)",
   requiredEnv: [],
   maxAreaKm2: 15_000,

@@ -209,6 +209,7 @@ const protectedAreasWorld = defineLayer({
     "Licence: free for non-commercial use only; commercial use needs permission from UNEP-WCMC, so say so when the user plans to use it commercially. " +
     "Tiles appear from about zoom level 3 (a continent view) and are slow to draw when zoomed far out. Works at any size of region.",
   coverage: "global",
+  surface: "any",
   license: "Non-commercial use only (UNEP-WCMC and IUCN, Protected Planet terms); commercial use needs a licence",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

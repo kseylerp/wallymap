@@ -58,6 +58,7 @@ const phenology = defineLayer({
     "The result's coverageNote states the stage and day or year shown. " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "us",
+  surface: "land",
   license: "USA-NPN Spring Indices (public domain, USGS / USA National Phenology Network)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

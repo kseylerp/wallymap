@@ -334,6 +334,7 @@ const recreationSites = defineLayer({
     "United States only. Each service returns at most 2,000 records per request and the Forest Service data is one record per activity, so very busy views can be partial and the result says when that happens. " +
     "Over 10,000 km² (about a 100 km square), up to 2,000 named sites, one per area, and the total.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (USDA Forest Service; Bureau of Land Management)",
   requiredEnv: [],
   maxAreaKm2: 10_000,

@@ -171,6 +171,7 @@ const earthquakes = defineLayer({
     "At most 5,000 events, biggest first. " +
     "Over 5,000,000 km² (about a 2,200 km square) it returns the 2,000 strongest.",
   coverage: "global",
+  surface: "any",
   license: "Public domain (USGS)",
   requiredEnv: [],
   maxAreaKm2: 5_000_000,

@@ -53,6 +53,7 @@ const carbonFlux = defineLayer({
     "Caveats: it covers forests only, not cities, farms or the ocean; it is modelled from tree cover loss and growth rates, so a single pixel is uncertain; burned forest that regrows still shows the emission. " +
     "Returns map tiles drawn on the map, not features you can count or list; describe the pattern in general terms. Works at any size of region.",
   coverage: "global",
+  surface: "land",
   license: "CC BY 4.0 (Harris et al. 2021, Gibbs et al. 2025, via Global Forest Watch)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

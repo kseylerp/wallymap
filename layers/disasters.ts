@@ -300,6 +300,7 @@ const disasters = defineLayer({
     "Caveats: GDACS points are an event's centre, not its extent, and small wildfires (green alerts) are left out (use fire-perimeters or fire-detections); a FEMA declaration means federal aid was approved, not how bad the damage was; tribal and statewide declarations are not drawn. " +
     "FEMA counties are added only when the view is under 3,000,000 km²; GDACS works at any size, up to 500 events per kind.",
   coverage: "global",
+  surface: "any",
   license: "GDACS (European Commission JRC and UN OCHA): free use with credit, no formal licence; FEMA data public domain; county outlines Esri / US Census Bureau",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

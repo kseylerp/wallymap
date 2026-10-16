@@ -213,6 +213,7 @@ const lakes = defineLayer({
     "Many small lakes have no Wikidata entry, and unnamed items are left out. At most 500 lakes are returned, largest by area first. " +
     "Works worldwide. Over 20,000 km² (about a 140 km square) it returns the 1,000 largest by area.",
   coverage: "global",
+  surface: "any",
   license: "CC0 (Wikidata)",
   requiredEnv: [],
   maxAreaKm2: 20_000,

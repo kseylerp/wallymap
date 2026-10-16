@@ -111,6 +111,7 @@ const riverBasins = defineLayer({
   description:
     "US drainage basins from the USGS Watershed Boundary Dataset: the land that drains to one river or outlet. Each polygon has name, huc (hydrologic unit code; longer codes nest inside shorter ones), kind and hucLevel (huc2 regions to huc10 watersheds), v and areaSqKm, and states. The level follows the zoom, or set level; a level too fine for the view steps up to a coarser one and the result says so. Outlines are simplified and a basin is not a legal boundary. At most 2,000 units, largest first. Limits: huc4 3,500,000 km², huc6 1,000,000, huc8 250,000, huc10 40,000; over 20,000,000 it gives regions and a total.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (USGS Watershed Boundary Dataset)",
   requiredEnv: [],
   maxAreaKm2: 20_000_000,

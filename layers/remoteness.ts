@@ -275,6 +275,7 @@ const remoteness = defineLayer({
     "Caveats: OpenStreetMap misses some roads and tracks, so remote-looking cells can have unmapped access; raster signals (human footprint, night lights, population) arrive in Milestone 3. " +
     "The view can be up to 60,000 km² (about a 245 km square); if it needs more than 4,000 hexagons the resolution is lowered automatically and the coverageNote says which was used.",
   coverage: "global",
+  surface: "land",
   license: "Derived (see signals)",
   requiredEnv: [],
   // The campsites layer reads OVERPASS_URL from the same ctx.env, so it must be declared here.

@@ -115,6 +115,7 @@ const aquifers = defineLayer({
   description:
     "Principal aquifers of the United States (the rock or sand layers that hold pumped groundwater), including the High Plains (Ogallala) aquifer. Each polygon has name, kind (the rock: sand and gravel, sandstone, carbonate rock, igneous and metamorphic), rockType, aquiferCode, and alias 'Ogallala' on the High Plains. It shows the shallowest principal aquifer at 1:2.5 million scale (2003), so it is regional, the glacial aquifers of the northern states are missing, and it is not a well map; use groundwater for water levels. Read from third-party copies of USGS data. Over 6,000,000 km² it keeps the 1,000 largest.",
   coverage: "us",
+  surface: "land",
   license:
     "USGS Principal Aquifers (public domain, 2003), served from third-party copies: Nevada Division of Water Resources (western US) and Esri Living Atlas USA Aquifers (rest of the US, Esri terms of use)",
   requiredEnv: [],

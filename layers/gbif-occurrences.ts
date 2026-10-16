@@ -278,6 +278,7 @@ const gbifOccurrences = defineLayer({
     "Points come back roughly newest first (GBIF's own order), at most 600 per request, and the result says when it trims, so narrow the years or name, zoom in, or switch to density for the full picture. Dense places can have tens of thousands of records. " +
     "Over 50,000 km² (about a 220 km square) points come back as the density map instead.",
   coverage: "global",
+  surface: "any",
   license: "CC0 / CC BY / CC BY-NC per record (GBIF)",
   requiredEnv: [],
   maxAreaKm2: 50_000,

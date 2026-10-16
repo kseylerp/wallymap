@@ -117,6 +117,7 @@ const criticalHabitat = defineLayer({
     "Boundaries are simplified for display and some units are drawn coarsely; do not use them for legal or permit decisions. " +
     "United States only; elsewhere it returns nothing. Over 300,000 km² (about a 550 km square) it keeps the 1,000 largest units and gives the total.",
   coverage: "us",
+  surface: "any",
   license: "Public domain (US Fish and Wildlife Service)",
   requiredEnv: [],
   maxAreaKm2: 300_000,

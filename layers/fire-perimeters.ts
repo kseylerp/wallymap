@@ -216,6 +216,7 @@ const firePerimeters = defineLayer({
     "Prescribed burns are excluded. Fires smaller than minAcres, and rare older fires never mapped, will not appear. " +
     "Over 60,000 km² (a 250 km square), up to the lower 48, it keeps the 500 largest fires.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (NIFC WFIGS)",
   requiredEnv: [],
   maxAreaKm2: 60_000,

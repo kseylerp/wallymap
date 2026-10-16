@@ -231,6 +231,7 @@ const fishing = defineLayer({
     "At most 2,000 OpenStreetMap places and the 200 most recent sightings are returned, and the result says when a cap is hit. " +
     "Global for OSM and iNaturalist; USFS sites and water temperature are US only. Over 50,000 km² it keeps only named OSM places and says what it left out.",
   coverage: "global",
+  surface: "any",
   license: "OpenStreetMap ODbL; USFS and USGS public domain; iNaturalist CC BY-NC / CC0 per observation",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],

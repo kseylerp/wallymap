@@ -285,6 +285,7 @@ const wikipediaNearby = defineLayer({
 "Wikipedia limits request size and rate, so the view is cut into cells of about 18 km and only the 100 articles nearest the centre get an extract. " +
     "Works worldwide. Over 1,000 km² (about a 30 km square) it returns the 500 best-known articles.",
   coverage: "global",
+  surface: "any",
   license: "CC BY-SA 4.0 (Wikipedia contributors)",
   requiredEnv: [],
   maxAreaKm2: 1_000,

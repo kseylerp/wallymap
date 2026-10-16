@@ -124,6 +124,7 @@ const geologicUnit = defineLayer({
     "Caveats: geologic maps are drawn at the scale of their source, so edges are generalised and small outcrops are missed; units can be loose ('undivided granitic rocks') and the age is the unit's range, not a date for any one rock; " +
     "surface deposits like glacial till or alluvium can hide the bedrock below. One point per call: ask once per place.",
   coverage: "global",
+  surface: "land",
   license: "CC BY 4.0 (Macrostrat; source maps by USGS and geological surveys)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

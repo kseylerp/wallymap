@@ -35,6 +35,7 @@ const fireHazard = defineLayer({
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms. " +
     "Covers the 50 US states; outside them the result is empty. Works at any size of region inside the US.",
   coverage: "us",
+  surface: "land",
   license: "Public domain (USDA Forest Service)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

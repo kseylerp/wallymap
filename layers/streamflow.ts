@@ -605,6 +605,7 @@ const streamflow = defineLayer({
     "the percent of median compares one instantaneous reading to a daily median, so it swings with dam releases and daily snowmelt cycles. " +
     "Over 400,000 km² it returns up to 1,000 gauges, highest flow first.",
   coverage: "global",
+  surface: "land",
   license: "Public domain (USGS); outside the US GloFAS via Open-Meteo, CC BY 4.0, free for non-commercial use only",
   requiredEnv: [],
   optionalEnv: ["USGS_API_KEY", "OVERPASS_URL"],

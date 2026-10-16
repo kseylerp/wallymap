@@ -43,6 +43,7 @@ const hardinessZones = defineLayer({
     "Lower 48 states only: Alaska, Hawaii and Puerto Rico are missing from this copy. The tiles are a community copy of the USDA map, so credit both USDA and Oregon State. " +
     "Works at any size of region.",
   coverage: "us",
+  surface: "land",
   license: "USDA-ARS / Oregon State University PRISM; community copy; show both credits",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

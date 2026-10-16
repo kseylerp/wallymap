@@ -55,6 +55,7 @@ const nightLights = defineLayer({
     "The result's coverageNote states the date shown. " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",
+  surface: "land",
   license: "NASA GIBS (public)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,

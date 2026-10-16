@@ -256,6 +256,12 @@ describe("card text", () => {
     );
   });
 
+  it("fails the owner's Tahoe trail card: a part in view longer than the full length", () => {
+    const rows = [row("lengthKm", "Length in view", "50.1 km", "measure"), row("distanceKm", "Full length", "48.1 km")];
+    expect(cardRowProblems(rows, {})).toEqual(['"Length in view 50.1 km" is more than "Full length 48.1 km"']);
+    expect(cardRowProblems([row("lengthKm", "Length in view", "12.4 km", "measure"), row("distanceKm", "Full length", "48.1 km")], {})).toEqual([]);
+  });
+
   it("passes a score with help, years and plain labels", () => {
     expect(cardRowProblems([row("v", "Hazard score", "1,200", "measure", { text: "Navajo AUM score" }), row("year", "Year", "2021"), row("kind", "Kind", "crag")], {})).toEqual([]);
   });

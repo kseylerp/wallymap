@@ -443,13 +443,18 @@ export type SectionRow = { section: CardSection; row: CardRow };
 /** A label that is a property key, not words: snake_case, camelCase, or a unit glued on ("Max length m"). */
 const UNIT_TAIL = /[A-Za-z]\s(m|km|km2|ft|mi|pct|mw|kw|kg|cm|mm|s|h)$/i;
 
+/** Labels of a part of something (in view, inside the box) and of the whole it belongs to. */
+const PART_LABEL = /\b(in view|inside|in the box|part)\b/i;
+const WHOLE_LABEL = /\b(full|whole|total|overall)\b/i;
+
 /** Self-explanatory one-word keys a bare number may sit under. */
 const PLAIN_NUMBER_KEYS = new Set(["year", "count", "elevation", "population", "capacity", "acres", "depth", "area", "length", "height", "width"]);
 
 /**
  * What is wrong with one card's rows, as short phrases: a raw property key as a label, "Value" where the layer names its
  * measure, a bare URL as text, a raw code ("osm+openbeta"), mostly "n/a", a number labelled score, index or rank with no
- * help, a bare number under its own one-word key with no unit or help ("Trad 1").
+ * help, a bare number under its own one-word key with no unit or help ("Trad 1"), a part larger than its whole ("Length
+ * in view 50.1 km" over "Full length 48.1 km").
  */
 export function cardRowProblems(rows: SectionRow[], layer: Pick<LayerInfo, "card">): string[] {
   const problems: string[] = [];
@@ -468,6 +473,20 @@ export function cardRowProblems(rows: SectionRow[], layer: Pick<LayerInfo, "card
       !row.help
     ) {
       problems.push(`"${label} ${row.value}" is a bare number under its raw key`);
+    }
+  }
+  // A part larger than its whole ("Length in view 50.1 km" over "Full length 48.1 km").
+  const amount = (value: string) => {
+    const m = /^(-?[\d,]*\.?\d+)\s*(.*)$/.exec(value.trim());
+    return m ? { n: Number(m[1].replace(/,/g, "")), unit: m[2].trim() } : null;
+  };
+  const parts = rows.filter(({ row }) => PART_LABEL.test(row.label));
+  const wholes = rows.filter(({ row }) => WHOLE_LABEL.test(row.label));
+  for (const { row: part } of parts) {
+    for (const { row: whole } of wholes) {
+      const a = amount(part.value);
+      const b = amount(whole.value);
+      if (a && b && a.unit === b.unit && a.n > b.n) problems.push(`"${part.label} ${part.value}" is more than "${whole.label} ${whole.value}"`);
     }
   }
   const na = rows.filter(({ row }) => row.value.trim().toLowerCase() === "n/a").length;

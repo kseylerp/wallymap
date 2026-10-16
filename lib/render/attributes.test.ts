@@ -14,7 +14,9 @@ import {
   isPresetPicked,
   pickedBins,
   presetCount,
+  rankedTop,
   sizeScale,
+  topPlaces,
   toggleBin,
   toggleFlag,
   toggleGroup,
@@ -216,5 +218,34 @@ describe("flags, names and versions", () => {
     expect(attributeFilterSummary([mtb], { v: { include: ["3", "4", "5", "6"] } })).toBe("Difficulty: Hard, Expert");
     const area: Attribute = { key: "acres", label: "Burned area", type: "measure", unit: "acres" };
     expect(attributeFilterSummary([area], { acres: { range: [1000, 380000] } })).toBe("Burned area 1,000–380,000 acres");
+  });
+});
+
+describe("Rank by lists one row per named place", () => {
+  const seg = (name: string, x: number, v: number): Feature => ({
+    type: "Feature",
+    geometry: { type: "LineString", coordinates: [[x, 39], [x + 0.005, 39.005]] },
+    properties: { name, v },
+  });
+  const pt = (name: string, x: number, v: number): Feature => ({ type: "Feature", geometry: { type: "Point", coordinates: [x, 39] }, properties: { name, v } });
+  const fc = (features: Feature[]): FeatureCollection => ({ type: "FeatureCollection", features });
+
+  it("folds the touching segments of one trail into its best row (the owner's Rubicon Trail listed 7 times)", () => {
+    const data = fc([seg("Rubicon Trail", -120.1, 78), seg("Rubicon Trail", -120.095, 76), seg("Vikingsholm Trail", -120.2, 70), seg("Rubicon Trail", -120.09, 72)]);
+    expect(topPlaces(data, "v", 10).map((f) => [f.properties?.name, f.properties?.v])).toEqual([
+      ["Rubicon Trail", 78],
+      ["Vikingsholm Trail", 70],
+    ]);
+  });
+
+  it("keeps one name at two far places, and every unnamed feature", () => {
+    const data = fc([pt("The Gallery", -83.6, 9), pt("The Gallery", -84.5, 5), pt("", -83.6, 4), pt("", -83.6, 3)]);
+    expect(topPlaces(data, "v", 10)).toHaveLength(4);
+  });
+
+  it("is what the row's ranked list shows", () => {
+    const layer = { attributes: [{ key: "v", type: "measure", label: "Popularity" } as Attribute] };
+    const data = fc([seg("Rubicon Trail", -120.1, 78), seg("Rubicon Trail", -120.095, 76)]);
+    expect(rankedTop(layer, {}, data, data, 10)).toMatchObject({ key: "v", top: [{ properties: { v: 78 } }] });
   });
 });

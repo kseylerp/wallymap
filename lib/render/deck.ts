@@ -38,7 +38,7 @@ import { featureBBox, featureCenter, HEX_DELTA_TAG } from "@/lib/render/inspect"
 import { pinIconFor } from "@/lib/render/wally/pins";
 import { drawsNativeLines, isLineGeometry, SELECTED_LINE } from "@/lib/render/nativeLines";
 import type { HexBasis, LoadedLayer, MapState, RenderMode, RenderOp, Viewport } from "@/lib/render/state";
-import { extentOf, hatchStepOf, primaryMeasure, sizeScale, topFeatures } from "@/lib/render/attributes";
+import { extentOf, hatchStepOf, primaryMeasure, sizeScale, topPlaces } from "@/lib/render/attributes";
 import { basisLabel, basisScale, basisT, cellContext, hexCells, registerCell, usableBasis, type CellContext, type HexCell } from "@/lib/render/hexCells";
 import { RANKED_LABELS } from "@/lib/render/views";
 
@@ -661,7 +661,7 @@ function symbolLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
 
 /** A ranked point layer's sizing: the measure key, its extent, and the top features to name. */
 function rankedSizing(data: GeoJSON.FeatureCollection, key: string): { key: string; extent: [number, number] | null; top: Feature[] } {
-  return { key, extent: memoExtent(data, key), top: topFeatures(data, key, RANKED_LABELS) };
+  return { key, extent: memoExtent(data, key), top: topPlaces(data, key, RANKED_LABELS) };
 }
 
 /** Name labels for a ranked view's top features: dark grey on a white halo, above the symbol. */

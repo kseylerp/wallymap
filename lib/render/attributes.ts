@@ -236,6 +236,61 @@ export function topFeatures(data: FeatureCollection, key: string, n: number): Fe
     .map((x) => x.f);
 }
 
+/** A name as two rows compare it: lower case, accents and punctuation dropped; empty for none. */
+function placeName(f: Feature): string {
+  const n = f.properties?.name;
+  return typeof n === "string" ? n.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim() : "";
+}
+
+/** The feature's bounding box, or null without coordinates. */
+function boxOf(f: Feature): [number, number, number, number] | null {
+  const box: [number, number, number, number] = [Infinity, Infinity, -Infinity, -Infinity];
+  const visit = (c: unknown): void => {
+    if (!Array.isArray(c)) return;
+    if (typeof c[0] === "number" && typeof c[1] === "number") {
+      box[0] = Math.min(box[0], c[0]);
+      box[1] = Math.min(box[1], c[1]);
+      box[2] = Math.max(box[2], c[0]);
+      box[3] = Math.max(box[3], c[1]);
+      return;
+    }
+    for (const x of c) visit(x);
+  };
+  const g = f.geometry;
+  if (g && "coordinates" in g) visit(g.coordinates);
+  return Number.isFinite(box[0]) ? box : null;
+}
+
+/** Two places closer than this (the gap between their boxes) under one name are one place. */
+const SAME_PLACE_KM = 1;
+
+/** True when two features' boxes touch or lie within SAME_PLACE_KM of each other. */
+function nearby(a: Feature, b: Feature): boolean {
+  const ba = boxOf(a);
+  const bb = boxOf(b);
+  if (!ba || !bb) return false;
+  const lat = ((ba[1] + ba[3]) / 2) * (Math.PI / 180);
+  const dx = Math.max(0, ba[0] - bb[2], bb[0] - ba[2]) * 111.32 * Math.cos(lat);
+  const dy = Math.max(0, ba[1] - bb[3], bb[1] - ba[3]) * 110.57;
+  return Math.hypot(dx, dy) <= SAME_PLACE_KM;
+}
+
+/**
+ * The `n` largest places under `key`, largest first, one row per named place: a feature that shares its name with a
+ * larger one at the same spot (the segments of one trail, an OSM node and a cliff line of one crag, a glacier's earlier
+ * outline, one fire from two agencies) is the same place and is left out. Unnamed features are each their own.
+ */
+export function topPlaces(data: FeatureCollection, key: string, n: number): Feature[] {
+  const kept: Feature[] = [];
+  for (const f of topFeatures(data, key, data.features.length)) {
+    const name = placeName(f);
+    if (name !== "" && kept.some((k) => placeName(k) === name && nearby(k, f))) continue;
+    kept.push(f);
+    if (kept.length >= n) break;
+  }
+  return kept;
+}
+
 /** True when an attribute's property holds numbers in this data (a year as a number, not an ISO date). */
 export function holdsNumbers(data: FeatureCollection, key: string): boolean {
   return data.features.some((f) => typeof f.properties?.[key] === "number");
@@ -265,7 +320,8 @@ export function rowName(f: Feature): string {
 
 /**
  * The layer row's "Rank by" list (spec §12c): the measure it ranks by (unset: the primary measure; "" None) and the
- * `n` drawn features largest by it. `data` is every loaded feature (which measures are offered), `shown` the drawn ones.
+ * `n` largest drawn places by it, one row per named place (topPlaces). `data` is every loaded feature (which measures
+ * are offered), `shown` the drawn ones.
  */
 export function rankedTop(
   layer: WithAttributes,
@@ -276,7 +332,7 @@ export function rankedTop(
 ): { key: string | undefined; measures: Attribute[]; top: Feature[] } {
   const measures = rankableMeasures(layer, data);
   const key = effectiveRankBy(op, layer, measures);
-  return { key, measures, top: key ? topFeatures(shown, key, n) : [] };
+  return { key, measures, top: key ? topPlaces(shown, key, n) : [] };
 }
 
 /** The smallest and largest number under `key` across the features; null without two different numbers. */

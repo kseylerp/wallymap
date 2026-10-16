@@ -367,7 +367,8 @@ function samePlace(a: Feature, b: Feature, shared: number): number | null {
   return d <= limit ? d : null;
 }
 
-const PLACE_KEYS = ["place", "region", "area", "county", "state", "park"];
+/** Properties that name the one place a feature belongs to (a state or a region holds many places). */
+const PLACE_KEYS = ["place", "park", "project"];
 
 /** True when two features name the same place: a shared place-like property, or within 1 km of each other. */
 function sameNamedPlace(a: Feature, b: Feature): boolean {

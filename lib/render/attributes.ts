@@ -275,16 +275,23 @@ function nearby(a: Feature, b: Feature): boolean {
   return Math.hypot(dx, dy) <= SAME_PLACE_KM;
 }
 
+/** True when two features belong to one named project (the turbines of one wind farm, kilometres apart). */
+function sameProject(a: Feature, b: Feature): boolean {
+  const pa = a.properties?.project;
+  return typeof pa === "string" && pa !== "" && pa === b.properties?.project;
+}
+
 /**
  * The `n` largest places under `key`, largest first, one row per named place: a feature that shares its name with a
  * larger one at the same spot (the segments of one trail, an OSM node and a cliff line of one crag, a glacier's earlier
- * outline, one fire from two agencies) is the same place and is left out. Unnamed features are each their own.
+ * outline, one fire from two agencies, the turbines of one wind project) is the same place and is left out. Unnamed
+ * features are each their own.
  */
 export function topPlaces(data: FeatureCollection, key: string, n: number): Feature[] {
   const kept: Feature[] = [];
   for (const f of topFeatures(data, key, data.features.length)) {
     const name = placeName(f);
-    if (name !== "" && kept.some((k) => placeName(k) === name && nearby(k, f))) continue;
+    if (name !== "" && kept.some((k) => placeName(k) === name && (nearby(k, f) || sameProject(k, f)))) continue;
     kept.push(f);
     if (kept.length >= n) break;
   }

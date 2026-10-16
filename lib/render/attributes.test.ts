@@ -238,6 +238,11 @@ describe("Rank by lists one row per named place", () => {
     ]);
   });
 
+  it("lists a wind project once, not each of its turbines (Ranchland Wind Project, kilometres apart)", () => {
+    const turbine = (x: number): Feature => ({ type: "Feature", geometry: { type: "Point", coordinates: [x, 32.23] }, properties: { name: "Ranchland Wind Project", project: "Ranchland Wind Project", v: 6 } });
+    expect(topPlaces(fc([turbine(-99.17), turbine(-99.21), turbine(-99.13), pt("Horse Hollow", -100, 4)]), "v", 10)).toHaveLength(2);
+  });
+
   it("keeps one name at two far places, and every unnamed feature", () => {
     const data = fc([pt("The Gallery", -83.6, 9), pt("The Gallery", -84.5, 5), pt("", -83.6, 4), pt("", -83.6, 3)]);
     expect(topPlaces(data, "v", 10)).toHaveLength(4);

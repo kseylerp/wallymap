@@ -38,7 +38,7 @@
  *
  *   --save <dir>     also writes each question's run (tool calls and closing text) to <dir> as gzipped JSON
  *   --replay <dir>   reads the runs from <dir> instead of calling the model (checks and rules only, no credits)
- *   --only <text>    runs only the set's questions containing <text> (case ignored)
+ *   --only <text>    runs only the set's questions containing <text> (case ignored; a|b for either)
  *   --screens        after the set, the screen checks (scripts/evalScreens.ts) on SCREEN_QUESTIONS: each one's final
  *                    map opened by permalink in a browser at desktop and phone size; see that file for the server.
  */
@@ -634,10 +634,10 @@ async function question(raw: string, opts: { save?: string; replay?: string }): 
 const args = process.argv.slice(2);
 const save = argValue(args, "--save");
 const replay = argValue(args, "--replay");
-const only = argValue(args, "--only")?.toLowerCase();
+const only = argValue(args, "--only")?.toLowerCase().split("|");
 const screens = args.includes("--screens");
 if (args.includes("--set")) {
-  const questions = readEvalSet().filter((q) => !only || q.toLowerCase().includes(only));
+  const questions = readEvalSet().filter((q) => !only || only.some((o) => q.toLowerCase().includes(o)));
   let passed = 0;
   const forScreens: { raw: string; slug: string; state: MapState; failures: string[] }[] = [];
   for (const q of questions) {

@@ -158,8 +158,12 @@ export function labelProblems(labels: MeasuredLabel[], canvas: Rect): string[] {
   return problems;
 }
 
-/** The smallest mean pixel change (0 to 255) along a line layer's lines between shown and hidden for it to count as visible. */
-export const LINE_VISIBLE_DIFF = 24;
+/**
+ * The smallest mean pixel change (0 to 255) along a line layer's lines between shown and hidden for it to count as
+ * visible. Calibrated on the owner's case (commit 331355b: plain sage trails on green Topo around Tahoe read 27 to 31)
+ * against lines he reads easily (mountain bike facets 40, ski routes 56, T1 trails at Chamonix 57).
+ */
+export const LINE_VISIBLE_DIFF = 32;
 
 /**
  * A line layer's visibility on one basemap: the mean color change at sampled points along its rendered lines between
@@ -192,7 +196,8 @@ export function collectLayout(panels: [string, string][]): LayoutMeasure {
     const tag = el.tagName.toLowerCase();
     const id = el.getAttribute("data-testid") ?? el.getAttribute("aria-label") ?? "";
     const text = (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 40);
-    return `${tag}${id ? ` "${id}"` : ""}${text ? ` ("${text}")` : ""}`;
+    const cls = id || text ? "" : (el.getAttribute("class") ?? "").split(/\s+/).slice(0, 4).join(".");
+    return `${tag}${id ? ` "${id}"` : ""}${text ? ` ("${text}")` : ""}${cls ? `.${cls}` : ""}`;
   };
   const out: MeasuredPanel[] = [];
   for (const [name, selector] of panels) {
@@ -209,6 +214,8 @@ export function collectLayout(panels: [string, string][]): LayoutMeasure {
         // Inside a closed <details>, a popover, an svg's insides or a screen-reader-only text: not laid out for the eye.
         if (el.closest("svg") && el.tagName.toLowerCase() !== "svg") continue;
         if (el.closest('[role="tooltip"], [data-testid="info-popover"], .sr-only')) continue;
+        // Decoration (the card's pointer, a line key): hidden from readers and holding no text.
+        if (el.closest('[aria-hidden="true"]') && !(el.textContent ?? "").trim()) continue;
         if (style.position === "fixed") continue;
         // The nearest ancestor below the panel that scrolls or clips.
         let scroller: Element | null = null;
@@ -409,4 +416,50 @@ export async function pixelDiffs({ a, b, points }: { a: string; b: string; point
     const i = (y * ia.width + x) * 4;
     return (Math.abs(ia.data[i] - ib.data[i]) + Math.abs(ia.data[i + 1] - ib.data[i + 1]) + Math.abs(ia.data[i + 2] - ib.data[i + 2])) / 3;
   });
+}
+
+/**
+ * Runs in the page (development build): a screen point that picks a feature of one of `layerIds` the way a click
+ * does (deck first, then the native lines), on the open map and nearest its center, or null when none does yet.
+ */
+export function findPickPoint(layerIds: string[]): { x: number; y: number; layerId: string } | null {
+  type MapLike = {
+    getCanvas: () => HTMLCanvasElement;
+    getStyle: () => { layers: { id: string }[] };
+    queryRenderedFeatures: (p: [number, number], o: { layers: string[] }) => unknown[];
+  };
+  const hook = (window as unknown as { __wallyMap?: { map: MapLike; overlay: { pickObject: (o: { x: number; y: number; radius: number }) => { layer?: { id: string } | null; object?: unknown } | null } } }).__wallyMap;
+  if (!hook) return null;
+  const { map, overlay } = hook;
+  const canvas = map.getCanvas();
+  const r = canvas.getBoundingClientRect();
+  const lineLayers = map
+    .getStyle()
+    .layers.map((l) => l.id)
+    .filter((id) => /:(core|route)$/.test(id) && layerIds.some((l) => id.startsWith(`lines-${l}:`)));
+  const cx = r.width / 2;
+  const cy = r.height / 2;
+  const points: [number, number][] = [];
+  for (let y = 12; y < r.height - 12; y += 18) for (let x = 12; x < r.width - 12; x += 18) points.push([x, y]);
+  points.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cy) - Math.hypot(b[0] - cx, b[1] - cy));
+  // Nothing drawn in the rows' counts (layer-count "0"): no point probing deck at every pixel.
+  const counts = Array.from(document.querySelectorAll('[data-testid="layer-count"]')).map((el) => (el.textContent ?? "").replace(/[^0-9]/g, ""));
+  if (counts.length > 0 && counts.every((c) => c === "0")) return null;
+  for (const [x, y] of points) {
+    if (document.elementFromPoint(x + r.x, y + r.y) !== canvas) continue;
+    let hit: { layer?: { id: string } | null; object?: unknown } | null = null;
+    try {
+      hit = overlay.pickObject({ x, y, radius: 2 });
+    } catch {
+      hit = null;
+    }
+    const deckId = hit?.object && hit.layer ? hit.layer.id : "";
+    const layerId = layerIds.find((l) => deckId.startsWith(`${l}:`) || deckId.startsWith(`${l}@`));
+    if (layerId && !deckId.includes(":casing") && !deckId.includes(":labels")) return { x: x + r.x, y: y + r.y, layerId };
+    if (lineLayers.length > 0 && map.queryRenderedFeatures([x, y], { layers: lineLayers }).length > 0) {
+      const id = layerIds.find((l) => lineLayers.some((ll) => ll.startsWith(`lines-${l}:`))) ?? layerIds[0];
+      return { x: x + r.x, y: y + r.y, layerId: id };
+    }
+  }
+  return null;
 }

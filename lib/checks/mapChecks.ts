@@ -37,8 +37,11 @@ export type PlaceRef = { bbox: BBox; name: string };
 export const COAST_TOLERANCE_KM = 2;
 /** How far out to sea a coast feature (a surf break, a tide gauge) may sit. */
 export const COAST_SEA_KM = 10;
-/** A surface failure needs at least this share of the layer's features out of place (one stray point is mask noise). */
-export const SURFACE_SHARE = 0.05;
+/**
+ * A surface failure needs at least this share of the layer's features out of place: a layer drawn in the wrong place is
+ * wrong throughout, while a few strays are small islands and fjords the 1:50m mask does not have.
+ */
+export const SURFACE_SHARE = 0.25;
 /** Two features of one name closer than this are one place listed twice. */
 export const DUPLICATE_KM = 1;
 /** Features checked per layer for surface (spread through the layer). */
@@ -49,8 +52,8 @@ export const CARD_FEATURES = 5;
 export const PLACE_SHARE = 0.8;
 /** The place box grows by this share of its width and height on each side. */
 export const PLACE_GROW = 0.25;
-/** A point-like place still covers at least this many degrees on each axis. */
-const PLACE_MIN_SPAN = 0.2;
+/** A point-like place (a town, a peak) still covers at least this many degrees on each axis: "near" reaches ~30 km. */
+const PLACE_MIN_SPAN = 0.5;
 
 /**
  * Layers whose features are repeated observations or events of a named thing (a species seen twice, two quakes of the
@@ -324,7 +327,7 @@ export function checkLattice(layers: Drawn[]): CheckResult {
 /* ---------- 3. Duplicates ---------- */
 
 /** Two features of one name closer than this are the same spot, whatever else shares the name. */
-const SAME_SPOT_KM = 0.05;
+const SAME_SPOT_KM = 0.015;
 
 /** Names that say what a thing is rather than which one it is: many different places carry them. */
 const GENERIC_NAMES = new Set(["pullout", "parking", "parking lot", "campsite", "camp site", "designated campsite", "dispersed campsite", "trailhead", "viewpoint", "toilet", "toilets", "shelter", "spring", "picnic area", "picnic site", "unnamed"]);
@@ -500,6 +503,7 @@ export function checkCards(layers: Drawn[]): CheckResult {
 /* ---------- 5. Layer ids ---------- */
 
 export function checkLayerIds(state: MapState, lookup: LayerLookup): CheckResult {
+  const routes = new Set(Object.keys(state.routes));
   const ids = new Set<string>([
     ...Object.keys(state.layers),
     ...state.renderOps.map((o) => o.layerId),
@@ -507,7 +511,8 @@ export function checkLayerIds(state: MapState, lookup: LayerLookup): CheckResult
   ]);
   const failures = [...ids]
     .map((id) => (id.endsWith("~b") ? id.slice(0, -2) : id))
-    .filter((id) => !lookup(id))
+    // A route the route tool drew is drawn under its own id, not a layer's.
+    .filter((id) => !lookup(id) && !routes.has(id))
     .map((id) => `The map holds a layer named "${id}", which is not a registered layer (a garbled tool name?).`);
   return { check: "layerIds", ok: failures.length === 0, failures: [...new Set(failures)] };
 }

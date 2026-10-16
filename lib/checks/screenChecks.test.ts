@@ -99,9 +99,11 @@ describe("map labels", () => {
 describe("line visibility", () => {
   it("fails the owner's sage trails on green Topo, passes dark trails", () => {
     expect(lineVisibilityProblem("OpenStreetMap trails", "Topo", [6, 9, 12, 10, 8])).toBe(
-      "OpenStreetMap trails lines barely show on Topo: hiding them changes the pixels along them by 9.0 of 255 on average (needs 24).",
+      "OpenStreetMap trails lines barely show on Topo: hiding them changes the pixels along them by 9.0 of 255 on average (needs 32).",
     );
     expect(lineVisibilityProblem("OpenStreetMap trails", "Topo", [110, 95, 120])).toBeNull();
+    // The Tahoe reading at 331355b: most samples on sage over green forest, a few in clearings.
+    expect(lineVisibilityProblem("OpenStreetMap trails", "Topo", [15, 22, 23, 26, 32, 43, 52, 26, 22, 15])).not.toBeNull();
     expect(lineVisibilityProblem("OpenStreetMap trails", "Topo", [])).toBeNull();
   });
 });

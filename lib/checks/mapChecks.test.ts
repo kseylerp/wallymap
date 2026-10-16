@@ -121,7 +121,7 @@ describe("surface (on land / at sea)", () => {
     expect(result.failures[0]).toMatch(/inland, more than 2 km from the sea/);
   });
 
-  it("forgives one stray point among many (mask noise under 5%)", () => {
+  it("forgives a few strays among many (small islands the mask lacks)", () => {
     const features = [...Array.from({ length: 30 }, (_, i) => point(-83.6 + i * 0.001, 37.8, { name: `Crag ${i}` })), point(-125, 36, { name: "Stray" })];
     expect(checkSurface(drawn(mapWith({ id: "climbing", features }))).ok).toBe(true);
   });
@@ -296,15 +296,32 @@ describe("layer ids", () => {
     expect(result.failures).toEqual(['The map holds a layer named "climbing<|channel|>commentary", which is not a registered layer (a garbled tool name?).']);
     expect(checkLayerIds(state, lookup).ok).toBe(true);
   });
+
+  it("passes a route the route tool drew under its own id", () => {
+    const route = reduce(initialMapState, {
+      type: "route_loaded",
+      route: { id: "walking-tahoe-city-to-emerald-bay", line: { type: "LineString", coordinates: [[-120.14, 39.17], [-120.1, 38.95]] }, source: "tool", distanceKm: 25, waypoints: [] },
+    });
+    const drawnRoute = reduce(route, { type: "render", op: { layerId: "walking-tahoe-city-to-emerald-bay", mode: "lines", visible: true } });
+    expect(checkLayerIds(drawnRoute, lookup).ok).toBe(true);
+  });
 });
 
 describe("inside the place", () => {
   const tahoe = { name: "Lake Tahoe", bbox: [-120.25, 38.9, -119.9, 39.3] as [number, number, number, number] };
 
-  it("grows the place box by 25% on each side, and a point-like place to 0.2°", () => {
+  it("grows the place box by 25% on each side, and a point-like place to 0.5°", () => {
     expect(grownPlace([0, 0, 1, 1])).toEqual([-0.25, -0.25, 1.25, 1.25]);
     const p = grownPlace([10, 10, 10, 10]);
-    expect(p[2] - p[0]).toBeCloseTo(0.3);
+    expect(p[2] - p[0]).toBeCloseTo(0.75);
+  });
+
+  it("fails the owner's uranium mines placed against a street the geocoder found (Navajo Nation Drive, Flagstaff)", () => {
+    const street = { name: "Navajo Nation Drive, Flagstaff, Arizona 86004, United States", bbox: [-111.62, 35.2, -111.61, 35.21] as [number, number, number, number] };
+    const mines = Array.from({ length: 20 }, (_, i) => point(-110.4 + i * 0.05, 36.9, { name: `Tract ${i}`, v: 10 }));
+    const result = checkPlace(drawn(mapWith({ id: "uranium", features: mines })), street);
+    expect(result.ok).toBe(false);
+    expect(result.failures[0]).toMatch(/only 0 of 20 features are in or near Navajo Nation Drive/);
   });
 
   it("fails trails loaded around another place, passes trails at Tahoe", () => {

@@ -15,7 +15,6 @@ import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import type { Feature } from "geojson";
 import { chromium, type Browser, type Page } from "@playwright/test";
 import { listLayers } from "@/layers";
 import type { BBox } from "@/layers/types";
@@ -24,6 +23,7 @@ import {
   collectLayout,
   collectLineSamples,
   collectPlaceholder,
+  findPickPoint,
   H3_EDGE_M,
   labelProblems,
   layoutProblems,
@@ -59,7 +59,7 @@ const BASEMAPS: { value: Basemap; label: string; button: string }[] = [
 
 /** Presses a basemap button in the top bar. */
 async function pickBasemap(page: Page, button: string): Promise<void> {
-  await page.locator(`[role="group"][aria-label="Basemap"] button[aria-label="${button}"]`).first().click();
+  await page.locator(`[role="group"][aria-label="Basemap"] button[aria-label="${button}"]`).first().click({ force: true });
 }
 
 /* ---------- The server: a worktree copy of HEAD ---------- */
@@ -138,68 +138,25 @@ async function settle(page: Page, ms = 1200): Promise<void> {
   await page.waitForTimeout(ms);
 }
 
-/** A point inside the feature for a click: the point itself, a middle vertex of a line, an inside point of an area. */
-function clickPoint(f: Feature): [number, number] | null {
-  const g = f.geometry;
-  if (!g) return null;
-  if (g.type === "Point") return g.coordinates as [number, number];
-  if (g.type === "LineString") return g.coordinates[Math.floor(g.coordinates.length / 2)] as [number, number];
-  if (g.type === "MultiLineString") {
-    const line = g.coordinates[0];
-    return line[Math.floor(line.length / 2)] as [number, number];
-  }
-  const ring = g.type === "Polygon" ? g.coordinates[0] : g.type === "MultiPolygon" ? g.coordinates[0][0] : null;
-  if (!ring) return null;
-  const xs = ring.map((p) => p[0]);
-  const ys = ring.map((p) => p[1]);
-  const [w, e, s, n] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-  const insideRing = (x: number, y: number) => {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const [xi, yi] = ring[i];
-      const [xj, yj] = ring[j];
-      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
-    }
-    return inside;
-  };
-  for (let i = 2; i <= 6; i++) for (let j = 2; j <= 6; j++) {
-    const x = w + ((e - w) * i) / 8;
-    const y = s + ((n - s) * j) / 8;
-    if (insideRing(x, y)) return [x, y];
-  }
-  return null;
-}
-
-/** Opens a card: clicks drawn features (the first few that land on the open map) until one opens, else the top-10's first row. */
+/**
+ * Opens a card: finds a screen point that picks a drawn feature the way a click does (polling while deck and the
+ * terrain finish loading), clicks it, and falls back to the top 10's first row.
+ */
 async function openCard(page: Page, state: MapState): Promise<string | null> {
-  const visible = visibleState(state);
-  const ops = state.renderOps.filter((o) => o.visible);
-  for (const op of [...ops].reverse()) {
-    const layer = visible.layers[op.layerId];
-    if (layer?.result.kind !== "geojson") continue;
-    for (const f of layer.result.data.features.slice(0, 40)) {
-      const lngLat = clickPoint(f);
-      if (!lngLat) continue;
-      const at = await page.evaluate((p) => {
-        const hook = (window as unknown as { __wallyMap?: { map: { project: (p: [number, number]) => { x: number; y: number }; getCanvas: () => HTMLCanvasElement } } }).__wallyMap;
-        if (!hook) return null;
-        const canvas = hook.map.getCanvas();
-        const r = canvas.getBoundingClientRect();
-        const q = hook.map.project(p);
-        const x = q.x + r.x;
-        const y = q.y + r.y;
-        return document.elementFromPoint(x, y) === canvas ? { x, y } : null;
-      }, lngLat);
-      if (!at) continue;
+  const layerIds = state.renderOps.filter((o) => o.visible).map((o) => o.layerId);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const at = await page.evaluate(findPickPoint, layerIds);
+    if (at) {
       await page.mouse.click(at.x, at.y);
-      const opened = await page.waitForSelector('[data-testid="inspect-card"]', { timeout: 2500 }).catch(() => null);
-      if (opened) return op.layerId;
+      const opened = await page.waitForSelector('[data-testid="inspect-card"]', { state: "attached", timeout: 6000 }).catch(() => null);
+      if (opened) return at.layerId;
     }
+    await page.waitForTimeout(2000);
   }
   const top = await page.$('[data-testid="top-list"] button');
   if (top) {
-    await top.click();
-    const opened = await page.waitForSelector('[data-testid="inspect-card"]', { timeout: 5000 }).catch(() => null);
+    await top.click({ timeout: 5000 }).catch(() => undefined);
+    const opened = await page.waitForSelector('[data-testid="inspect-card"]', { state: "attached", timeout: 5000 }).catch(() => null);
     if (opened) return "top-list";
   }
   return null;
@@ -213,6 +170,13 @@ async function lineChecks(page: Page, state: MapState, slug: string): Promise<{ 
   const lines = state.renderOps.filter((o) => o.visible && o.mode === "lines" && state.layers[o.layerId]?.result.kind === "geojson");
   if (lines.length === 0) return { problems, readings, shots };
   const start = state.basemap;
+  // Flat for the measurement: on 3D terrain the drape shifts the lines away from where map.project puts them.
+  const threeD = page.locator('button[aria-label="3D terrain"]').first();
+  const wasOn = (await threeD.count()) > 0 && (await threeD.getAttribute("aria-pressed")) === "true";
+  if (wasOn) {
+    await threeD.click({ force: true });
+    await settle(page, 1500);
+  }
   for (const basemap of BASEMAPS) {
     await pickBasemap(page, basemap.button);
     await settle(page, 1500);
@@ -228,11 +192,14 @@ async function lineChecks(page: Page, state: MapState, slug: string): Promise<{ 
         continue;
       }
       const shown = (await page.screenshot()).toString("base64");
-      const toggle = page.locator(`[data-layer-id="${op.layerId}"] [data-testid="visibility-toggle"]`).first();
-      await toggle.click();
+      // The row's Hide (older rows named it "Show <title>" with a pressed state).
+      const toggle = page
+        .locator(`[data-layer-id="${op.layerId}"] [data-testid="visibility-toggle"], button[aria-label="Hide ${title}"], button[aria-label="Show ${title}"]`)
+        .first();
+      await toggle.click({ force: true });
       await settle(page, 800);
       const hidden = (await page.screenshot()).toString("base64");
-      await toggle.click();
+      await toggle.click({ force: true });
       await settle(page, 500);
       const diffs = await page.evaluate(pixelDiffs, { a: `data:image/png;base64,${shown}`, b: `data:image/png;base64,${hidden}`, points });
       const mean = diffs.reduce((s, d) => s + d, 0) / diffs.length;
@@ -241,9 +208,11 @@ async function lineChecks(page: Page, state: MapState, slug: string): Promise<{ 
       if (problem) problems.push(problem);
     }
   }
-  // Back to the basemap the question ended on.
+  // Back to the basemap and the 3D the question ended on.
   const back = BASEMAPS.find((b) => b.value === start);
   if (back) await pickBasemap(page, back.button);
+  if (wasOn) await threeD.click({ force: true });
+  await settle(page, 1000);
   return { problems, readings, shots };
 }
 
@@ -253,10 +222,18 @@ async function checkOne(browser: Browser, item: ScreenItem, size: Size): Promise
   const phone = size.name === "phone";
   const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1, isMobile: phone, hasTouch: phone });
   // tsx names inner functions with __name(); the page has no such helper.
-  await context.addInitScript({ content: "window.__name = (f) => f;" });
+  // The suggestions card opens by itself on a first visit; a person who asked a question has seen it.
+  await context.addInitScript({ content: "window.__name = (f) => f; try { localStorage.setItem('wallymap.suggestionsSeen', '1'); } catch {}" });
   const page = await context.newPage();
   const problems: string[] = [];
   const notes: string[] = [];
+  // Uncaught errors are failures; console errors are notes (a tile server's 404 is not the app's fault).
+  const pageErrors = new Set<string>();
+  const consoleErrors = new Set<string>();
+  page.on("pageerror", (e) => pageErrors.add(e.message.split("\n")[0].slice(0, 200)));
+  page.on("console", (m) => {
+    if (m.type() === "error") consoleErrors.add(m.text().split("\n")[0].slice(0, 200));
+  });
   const shot = `${item.slug}-${size.name}.png`;
   const lineShots: string[] = [];
   try {
@@ -267,6 +244,14 @@ async function checkOne(browser: Browser, item: ScreenItem, size: Size): Promise
     if (failed > 0) notes.push("Some layers could not be restored from the link.");
     // The placeholder before any card opens (on a phone the card sheet may cover the chat).
     problems.push(...placeholderProblems(await page.evaluate(collectPlaceholder)));
+    // The development error badge (Next.js) over the chat input: an error reached the overlay while the link loaded
+    // (read before these checks click or pick anything).
+    const badge = await page.evaluate(() => {
+      const text = document.querySelector("nextjs-portal")?.shadowRoot?.textContent ?? "";
+      const m = /(\d+)\s*Issues?/.exec(text);
+      return m ? Number(m[1]) : 0;
+    });
+    if (badge > 0) problems.push(`The page shows the development error badge (${badge} ${badge === 1 ? "issue" : "issues"}) over the chat input once the link has loaded: ${[...consoleErrors, ...pageErrors][0] ?? "see the console"}.`);
     if (!phone) {
       const lines = await lineChecks(page, item.state, item.slug);
       problems.push(...lines.problems);
@@ -288,6 +273,8 @@ async function checkOne(browser: Browser, item: ScreenItem, size: Size): Promise
     const after = layoutProblems(await page.evaluate(collectLayout, PANELS));
     problems.push(...new Set([...before, ...after]));
     await page.screenshot({ path: join(OUT_DIR, shot) });
+    for (const e of pageErrors) problems.push(`The page threw an error: ${e}`);
+    for (const e of [...consoleErrors].slice(0, 3)) notes.push(`Console error: ${e}`);
   } catch (err) {
     notes.push(`The page could not be checked: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`);
     await page.screenshot({ path: join(OUT_DIR, shot) }).catch(() => undefined);
@@ -340,7 +327,8 @@ ${sections.join("\n")}</body></html>`;
 export async function runScreens(items: ScreenItem[]): Promise<{ passed: number; total: number; sheet: string; results: ScreenResult[] }> {
   mkdirSync(OUT_DIR, { recursive: true });
   const stop = await startServer();
-  const browser = await chromium.launch();
+  // The GPU (Metal on a Mac): SwiftShader renders 3D terrain so slowly that the page stops answering.
+  const browser = await chromium.launch({ args: process.platform === "darwin" ? ["--use-angle=metal", "--ignore-gpu-blocklist", "--enable-gpu"] : [] });
   const results: ScreenResult[] = [];
   try {
     for (const item of items) {

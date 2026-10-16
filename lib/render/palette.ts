@@ -183,14 +183,16 @@ export type LineRecipe = {
 
 /**
  * Line classes on a white casing, told apart by dash. Maintained trails T1 (dark grey 8px dashes alternating with sage;
- * the only dark grey on a line), other data lines (streams, mtb, pistes) solid sage, forest roads sage dashes, use (informal, unmaintained) trails sage dots (round caps make a dash as long as
+ * with forest roads the only dark grey on a line), other data lines (streams, mtb, pistes) solid sage, forest roads thin dark grey short dashes
+ * (sage dashes vanished on green Topo and read as white noodles on satellite), use (informal, unmaintained) trails sage dots (round caps make a dash as long as
  * the line is wide a dot). Selected lines purple. Named routes (see `isRouteProperties`) take Wally's route gradient,
  * purple at the start to pink at the end, 3px over a white casing with no dash, as the route tool draws a route
  * (lib/render/wally/routeLine.ts). Score lines (popularity) take the sage → pink → purple ramp (`lineRampFor`).
  */
 export const LINE_CLASSES = {
   trail: { color: TRAIL_LINE.over.color, under: TRAIL_LINE.under, dash: TRAIL_LINE.over.dash },
-  road: { color: SAGE, dash: [10, 7.5] },
+  /** Forest roads (coordinator, 2026-10-16): thin dark grey short dashes on the casing, T1's grammar without the sage. */
+  road: { color: DARK_GREY, dash: [4, 4], width: 1.75 },
   useTrail: { color: SAGE, dash: [2.5, 6] },
   solid: { color: SAGE, dash: [0, 0] },
   /** Named routes: the Wally gradient (the route tool's ROUTE.start to ROUTE.end), solid, a pixel wider than a path. */

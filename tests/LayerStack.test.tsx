@@ -245,7 +245,7 @@ describe("LayerStack", () => {
     // Hidden layers say so on the row (the key fades) and in the text toggle.
     expect(campRow.getAttribute("data-hidden")).toBe("true");
     expect(within(campRow).getByRole("button", { name: "Show Campsites" }).textContent).toBe("Show");
-    expect(roadRow.querySelector("line[stroke-dasharray]")?.getAttribute("stroke-dasharray")).toBe("10 7.5");
+    expect(roadRow.querySelector("line[stroke-dasharray]")?.getAttribute("stroke-dasharray")).toBe("4 4");
     expect(lightsRow.querySelector("svg.legend-key")?.getAttribute("data-kind")).toBe("tiles");
     expect(lightsRow.querySelector("pattern")).toBeTruthy();
     expect(within(lightsRow).getByText("tiles")).toBeTruthy();

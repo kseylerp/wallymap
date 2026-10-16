@@ -27,8 +27,8 @@ describe("legendSymbol", () => {
     });
   });
 
-  it("keys forest roads sage dashes, use trails sage dots, other lines solid sage", () => {
-    expect(legendSymbol("forest-roads", "lines")).toMatchObject({ color: SAGE, dash: [10, 7.5] });
+  it("keys forest roads thin dark grey dashes, use trails sage dots, other lines solid sage", () => {
+    expect(legendSymbol("forest-roads", "lines")).toMatchObject({ color: DARK_GREY, dash: [4, 4], width: 1.75 });
     expect(legendSymbol("osm-trails", "lines", { feature: { ...blank, properties: { informal: true } } })).toMatchObject({
       color: SAGE,
       dash: [2.5, 6],
@@ -116,6 +116,6 @@ describe("legendSymbol", () => {
     const a = legendSymbol("forest-roads", "lines");
     if (a.kind !== "line") throw new Error("expected a line key");
     a.dash[0] = 99;
-    expect(legendSymbol("forest-roads", "lines")).toMatchObject({ dash: [10, 7.5] });
+    expect(legendSymbol("forest-roads", "lines")).toMatchObject({ dash: [4, 4] });
   });
 });

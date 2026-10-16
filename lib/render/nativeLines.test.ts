@@ -94,7 +94,9 @@ describe("native line layers: one source and four layers per drawn layer", () =>
   it("states every width in pixels, the same at every zoom (no zoom expression anywhere)", () => {
     for (const state of [stateOf("mtb-trails", [a, b]), select(stateOf("mtb-trails", [a, b]), a), stateOf("popularity", [a], {}, { unit: "score" })]) {
       const all = specs(state);
-      expect(paint(byPart(all, "core"))["line-width"]).toBe(2.5);
+      const core = paint(byPart(all, "core"))["line-width"];
+      // Pixels in every case: one number, or one per class (thin forest roads).
+      expect(core === 2.5 || JSON.stringify(core) === JSON.stringify(["match", ["get", "cls"], "road", 1.75, 2.5])).toBe(true);
       expect(paint(byPart(all, "route"))["line-width"]).toBe(3);
       expect(paint(byPart(all, "selected"))["line-width"]).toBe(3.5);
       expect(JSON.stringify(all)).not.toContain('"zoom"');
@@ -113,18 +115,20 @@ describe("native line layers: one source and four layers per drawn layer", () =>
     expect(byPart(specs(stateOf("osm-trails", [a], { color: PINK })), "dash").filter).toEqual(["==", ["get", "cls"], "none"]);
   });
 
-  it("keeps every other line core sage: forest roads sage dashes, use trails sage dots, nothing else dark", () => {
+  it("keeps every other line core sage: forest roads thin dark grey short dashes, use trails sage dots, nothing else dark", () => {
     const core = byPart(specs(stateOf("osm-trails", [a])), "core");
-    expect(new Set(colorsIn(paint(core)["line-color"]))).toEqual(new Set([SAGE]));
+    expect(new Set(colorsIn(paint(core)["line-color"]))).toEqual(new Set([SAGE, DARK_GREY]));
     expect(core.filter).toEqual(["!=", ["get", "cls"], "route"]);
-    expect(paint(core)["line-dasharray"]).toEqual(["match", ["get", "cls"], "road", ["literal", [3, 4]], "useTrail", ["literal", [0, 3.4]], ["literal", [1, 0]]]);
+    // Roads: 4px dashes and gaps on a 1.75px core, in line widths net of the round caps.
+    expect(paint(core)["line-dasharray"]).toEqual(["match", ["get", "cls"], "road", ["literal", [(4 - 1.75) / 1.75, (4 + 1.75) / 1.75]], "useTrail", ["literal", [0, 3.4]], ["literal", [1, 0]]]);
+    expect(paint(core)["line-width"]).toEqual(["match", ["get", "cls"], "road", 1.75, 2.5]);
     const data = lineSourceData({ data: { type: "FeatureCollection", features: [a, line(0, { informal: true })] }, layerId: "osm-trails", look: { kind: "classes" } });
     expect(data.features.map((f) => f.properties?.cls)).toEqual(["trail", "useTrail"]);
     expect(lineSourceData({ data: { type: "FeatureCollection", features: [a] }, layerId: "forest-roads", look: { kind: "classes" } }).features[0].properties?.cls).toBe("road");
     // A dark grey (or ink) asked for in the layer panel draws sage; other palette colors stand.
     for (const color of [DARK_GREY, INK]) expect(paint(byPart(specs(stateOf("streams", [a], { color })), "core"))["line-color"]).toBe(SAGE);
     expect(paint(byPart(specs(stateOf("streams", [a], { color: PINK })), "core"))["line-color"]).toBe(PINK);
-    for (const state of [stateOf("streams", [a]), stateOf("popularity", [a], {}, { unit: "score" }), stateOf("forest-roads", [a])]) {
+    for (const state of [stateOf("streams", [a]), stateOf("popularity", [a], {}, { unit: "score" })]) {
       // The dash layer draws only T1 trails (its filter matches nothing else).
       const colors = specs(state).filter((s) => !s.id.endsWith(":casing") && !s.id.endsWith(":dash")).flatMap((s) => colorsIn(s.paint));
       expect(colors).not.toContain(DARK_GREY);

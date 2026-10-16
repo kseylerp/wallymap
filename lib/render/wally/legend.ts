@@ -105,7 +105,8 @@ export function legendSymbol(layerId: string, mode: LegendMode, { unit, color, f
       const base = {
         kind: "line" as const,
         casing: WHITE,
-        width: LINE.width,
+        // A class with its own width (thin forest roads) keys at that width.
+        width: "width" in cls && !("gradient" in cls) ? cls.width : LINE.width,
         casingWidth: LINE.casing,
         dash: [...cls.dash] as [number, number],
       };

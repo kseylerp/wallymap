@@ -16,6 +16,7 @@ import {
   TRAIL_LINE,
   WHITE,
   type LineClass,
+  type LineRecipe,
 } from "@/lib/render/palette";
 import { rampColor, rgbToHex } from "@/lib/render/ramp";
 import { colorStops, encodedAttribute, valueKey } from "@/lib/render/attributes";
@@ -264,9 +265,21 @@ function coreColor(entry: Pick<LineEntry, "look" | "layerId">): string | Express
   }
 }
 
+function classWidth(c: LineClass): number {
+  const cls: LineRecipe = LINE_CLASSES[c];
+  return cls.width ?? LINE.width;
+}
+
 function coreDash(): ExpressionSpecification {
   const dashed = CORE_CLASSES.filter((c) => LINE_CLASSES[c].dash[0] > 0 && !TWO_TONE.includes(c));
-  return ["match", ["get", "cls"], ...dashed.flatMap((c) => [c, ["literal", dashInWidths(LINE_CLASSES[c].dash)]]), ["literal", [1, 0]]] as ExpressionSpecification;
+  return ["match", ["get", "cls"], ...dashed.flatMap((c) => [c, ["literal", dashInWidths(LINE_CLASSES[c].dash, classWidth(c))]]), ["literal", [1, 0]]] as ExpressionSpecification;
+}
+
+/** The core's width per class: a class's own width (forest roads 1.75px), else the data line width. */
+function coreWidth(): number | ExpressionSpecification {
+  const own = CORE_CLASSES.filter((c) => classWidth(c) !== LINE.width);
+  if (own.length === 0) return LINE.width;
+  return ["match", ["get", "cls"], ...own.flatMap((c) => [c, classWidth(c)]), LINE.width] as ExpressionSpecification;
 }
 
 /** `opacity`, with the siblings of a selected feature faded and the selected one at `selectedOpacity`. */
@@ -297,7 +310,8 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
     layout,
     paint: {
       "line-color": coreColor(entry),
-      "line-width": LINE.width,
+      // Classes with their own width (thin forest roads); the rest at the data line width.
+      "line-width": classes ? coreWidth() : LINE.width,
       // The selected feature draws in the highlight layer above.
       "line-opacity": faded(entry, 1, 0),
       ...(classes && { "line-dasharray": coreDash() }),

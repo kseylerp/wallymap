@@ -169,11 +169,12 @@ export const LINE_VISIBLE_DIFF = 32;
  * A line layer's visibility on one basemap: the mean color change at sampled points along its rendered lines between
  * the map with the layer and without it (each a mean of the three channels, 0 to 255).
  */
-export function lineVisibilityProblem(layerId: string, basemap: string, diffs: number[]): string | null {
+export function lineVisibilityProblem(layerId: string, basemap: string, diffs: number[], what: "lines" | "symbols" = "lines"): string | null {
   if (diffs.length === 0) return null;
   const mean = diffs.reduce((a, b) => a + b, 0) / diffs.length;
   if (mean >= LINE_VISIBLE_DIFF) return null;
-  return `${layerId} lines barely show on ${basemap}: hiding them changes the pixels along them by ${mean.toFixed(1)} of 255 on average (needs ${LINE_VISIBLE_DIFF}).`;
+  const where = what === "lines" ? "along them" : "under them";
+  return `${layerId} ${what} barely show on ${basemap}: hiding them changes the pixels ${where} by ${mean.toFixed(1)} of 255 on average (needs ${LINE_VISIBLE_DIFF}).`;
 }
 
 /* ---------- Browser half (each function runs inside the page: no imports, no outer variables) ---------- */
@@ -470,4 +471,37 @@ export function findPickPoint(layerIds: string[]): { x: number; y: number; layer
     }
   }
   return null;
+}
+
+/**
+ * Runs in the page (development build): screen points at the drawn symbols of a point layer (deck's `<layer>…:points`
+ * IconLayer, the map flat), each nudged off the centre onto the glyph's ring, not under a panel.
+ */
+export function collectPointSamples({ layerId, max }: { layerId: string; max: number }): { x: number; y: number }[] {
+  type MapLike = { project: (p: [number, number]) => { x: number; y: number }; getCanvas: () => HTMLCanvasElement };
+  type Deckish = { id: string; props: Record<string, unknown> };
+  const hook = (window as unknown as { __wallyMap?: { map: MapLike; overlay: { _deck?: { layerManager?: { getLayers: () => Deckish[] } } } } }).__wallyMap;
+  if (!hook) return [];
+  const { map, overlay } = hook;
+  const canvas = map.getCanvas();
+  const cr = canvas.getBoundingClientRect();
+  const layer = (overlay._deck?.layerManager?.getLayers() ?? []).find((l) => (l.id.startsWith(`${layerId}:`) || l.id.startsWith(`${layerId}@`)) && l.id.endsWith(":points"));
+  if (!layer) return [];
+  const get = layer.props.getPosition;
+  const points: { x: number; y: number }[] = [];
+  for (const d of Array.from((layer.props.data as Iterable<unknown>) ?? [])) {
+    const pos = (typeof get === "function" ? get(d) : (d as { geometry?: { coordinates?: number[] } }).geometry?.coordinates) as number[] | undefined;
+    if (!pos) continue;
+    const q = map.project([pos[0], pos[1]]);
+    // The centre and four points 3px out: the glyph and the disc, not one pixel of either.
+    for (const [dx, dy] of [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3]]) {
+      const x = Math.round(q.x + cr.x + dx);
+      const y = Math.round(q.y + cr.y + dy);
+      if (x < cr.x + 2 || y < cr.y + 2 || x > cr.x + cr.width - 3 || y > cr.y + cr.height - 3) continue;
+      if (document.elementFromPoint(x, y) !== canvas) continue;
+      points.push({ x, y });
+    }
+  }
+  if (points.length <= max) return points;
+  return Array.from({ length: max }, (_, i) => points[Math.floor((i * points.length) / max)]);
 }

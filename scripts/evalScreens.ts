@@ -22,6 +22,7 @@ import {
   collectLabels,
   collectLayout,
   collectLineSamples,
+  collectPointSamples,
   collectPlaceholder,
   findPickPoint,
   H3_EDGE_M,
@@ -167,7 +168,8 @@ async function lineChecks(page: Page, state: MapState, slug: string): Promise<{ 
   const problems: string[] = [];
   const readings: string[] = [];
   const shots: string[] = [];
-  const lines = state.renderOps.filter((o) => o.visible && o.mode === "lines" && state.layers[o.layerId]?.result.kind === "geojson");
+  // Lines and symbols (points drawn as symbols), each measured the same way.
+  const lines = state.renderOps.filter((o) => o.visible && (o.mode === "lines" || o.mode === "points") && state.layers[o.layerId]?.result.kind === "geojson");
   if (lines.length === 0) return { problems, readings, shots };
   const start = state.basemap;
   // Flat for the measurement: on 3D terrain the drape shifts the lines away from where map.project puts them.
@@ -186,9 +188,10 @@ async function lineChecks(page: Page, state: MapState, slug: string): Promise<{ 
     shots.push(lineShot);
     for (const op of lines) {
       const title = state.layers[op.layerId].title;
-      const points = await page.evaluate(collectLineSamples, { layerId: op.layerId, max: 400 });
+      const what = op.mode === "points" ? "symbols" : "lines";
+      const points = what === "lines" ? await page.evaluate(collectLineSamples, { layerId: op.layerId, max: 400 }) : await page.evaluate(collectPointSamples, { layerId: op.layerId, max: 400 });
       if (points.length < 5) {
-        readings.push(`${title} on ${basemap.label}: too few line points on screen to measure (${points.length})`);
+        readings.push(`${title} on ${basemap.label}: too few ${what === "lines" ? "line points" : "symbols"} on screen to measure (${points.length})`);
         continue;
       }
       const shown = (await page.screenshot()).toString("base64");
@@ -204,7 +207,7 @@ async function lineChecks(page: Page, state: MapState, slug: string): Promise<{ 
       const diffs = await page.evaluate(pixelDiffs, { a: `data:image/png;base64,${shown}`, b: `data:image/png;base64,${hidden}`, points });
       const mean = diffs.reduce((s, d) => s + d, 0) / diffs.length;
       readings.push(`${title} on ${basemap.label}: ${mean.toFixed(1)} mean pixel change over ${diffs.length} points`);
-      const problem = lineVisibilityProblem(title, basemap.label, diffs);
+      const problem = lineVisibilityProblem(title, basemap.label, diffs, what);
       if (problem) problems.push(problem);
     }
   }

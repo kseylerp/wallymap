@@ -139,5 +139,8 @@ describe("one place under two designations", () => {
     expect(out).toHaveLength(2);
     expect(out[0].properties?.designation).toBe("Special Protection Area (Birds Directive) · Special Areas of Conservation (Habitats Directive)");
     expect(out[1].properties?.designation).toBe("Nature Reserve");
+    // A spelling with and without its accent (Irbes saurums, Irbes šaurums) is one place too.
+    const accent = { ...area(0.02, "Baltic Sea Protected Area (HELCOM)", 1724), properties: { name: "Väinaméré", designation: "Baltic Sea Protected Area (HELCOM)", v: 1724 } };
+    expect(mergeDesignations([area(0, "Special Protection Area (Birds Directive)", 2732), accent])).toHaveLength(1);
   });
 });

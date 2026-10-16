@@ -126,6 +126,11 @@ function extent(f: Feature): BBox | null {
   return Number.isFinite(box[0]) ? box : null;
 }
 
+/** A name as two designations of one place compare it: case and accents ignored ("Irbes saurums", "Irbes šaurums"). */
+function nameKey(name: unknown): string {
+  return String(name ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
 /**
  * One place under two legal designations (Väinamere as an EU Birds Directive area and a Habitats Directive area, nearly
  * the same outline) draws once: the larger polygon stays and lists both designations. Same name, boxes overlapping by
@@ -136,7 +141,7 @@ export function mergeDesignations(features: Feature[]): Feature[] {
   for (const f of features) {
     const box = extent(f);
     const same = kept.find((k) => {
-      if (k.f.properties?.name !== f.properties?.name || !k.box || !box) return false;
+      if (nameKey(k.f.properties?.name) !== nameKey(f.properties?.name) || !k.box || !box) return false;
       const w = Math.min(k.box[2], box[2]) - Math.max(k.box[0], box[0]);
       const h = Math.min(k.box[3], box[3]) - Math.max(k.box[1], box[1]);
       if (w <= 0 || h <= 0) return false;

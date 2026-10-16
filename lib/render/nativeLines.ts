@@ -197,7 +197,8 @@ export function lineSourceData(entry: Pick<LineEntry, "data" | "layerId" | "look
   entry.data.features.forEach((f, i) => {
     const g = f.geometry;
     if (kind === "delta" ? !isLineGeometry(g) : !isStrokable(g)) return;
-    const cls: LineProps["cls"] = kind === "classes" ? lineClassFor(entry.layerId, f.properties) : kind === "delta" ? "delta" : "solid";
+    // A facet keeps the line's class too, so its sage lines (the easy level, no value) can keep the T1 dashes.
+    const cls: LineProps["cls"] = kind === "classes" || kind === "facet" ? lineClassFor(entry.layerId, f.properties) : kind === "delta" ? "delta" : "solid";
     const n = Number(f.properties?.v);
     const properties: LineProps = { i, cls, v: Number.isFinite(n) ? n : null };
     if (kind === "delta") properties.delta = String(f.properties?.delta ?? "both");
@@ -301,13 +302,21 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
     },
     ...(classes && { filter: notRoute }),
   };
-  // T1: the over color's dashes on the solid core (nothing to draw unless the layer keeps its classes).
+  // T1: the over color's dashes on the solid core (nothing to draw unless the layer keeps its classes). Under a facet the
+  // lines it draws sage (the easy level, or no value) keep them too: plain sage vanishes on green Topo (owner, 2026-10-14).
   const [twoTone] = TWO_TONE;
+  const colored = entry.look.kind === "facet" ? entry.look.stops.filter(([, color]) => color.toUpperCase() !== SAGE.toUpperCase()).map(([v]) => v) : [];
+  const dashFilter: FilterSpecification =
+    classes && twoTone
+      ? ["==", ["get", "cls"], twoTone]
+      : entry.look.kind === "facet" && twoTone
+        ? ["all", ["==", ["get", "cls"], twoTone], ["!", ["in", ["get", "fv"], ["literal", colored]]]]
+        : ["==", ["get", "cls"], "none"];
   const dash: LineLayerSpecification = {
     id: lineLayerId(entry.id, "dash"),
     type: "line",
     source,
-    filter: classes && twoTone ? ["==", ["get", "cls"], twoTone] : ["==", ["get", "cls"], "none"],
+    filter: dashFilter,
     layout: { ...layout, "line-cap": "butt" },
     paint: {
       "line-color": twoTone ? LINE_CLASSES[twoTone].color : SAGE,

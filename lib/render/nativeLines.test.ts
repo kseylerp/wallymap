@@ -471,6 +471,31 @@ describe("the encoded ordinal drives the line color (spec §12c: difficulty on t
     expect(color.at(-1)).toBe(SAGE);
   });
 
+  it("keeps the T1 dashes on the trails a facet draws sage (easy and no grade), so they show on green Topo", () => {
+    const sac: LoadedLayer["attributes"] = [
+      {
+        key: "sac_scale",
+        type: "ordinal",
+        label: "Difficulty",
+        encode: "color",
+        levels: [
+          { value: "hiking", label: "Hiking (T1)" },
+          { value: "mountain_hiking", label: "Mountain hiking (T2)" },
+          { value: "alpine_hiking", label: "Alpine hiking (T4)" },
+        ],
+      },
+    ];
+    const paths = [line(-120, { sac_scale: "hiking" }), line(-119, {}), line(-118, { sac_scale: "alpine_hiking" })];
+    const [entry] = lineEntries(visibleState(stateOf("osm-trails", paths, {}, {}, sac)));
+    expect(entry.look.kind).toBe("facet");
+    expect(lineSourceData(entry).features.map((f) => f.properties?.cls)).toEqual(["trail", "trail", "trail"]);
+    const filter = byPart(lineLayerSpecs(entry), "dash").filter as unknown[];
+    expect(filter[0]).toBe("all");
+    // Dashes on every trail except the levels the ramp colors (T2 and up).
+    expect(JSON.stringify(filter)).toContain('["literal",["mountain_hiking","alpine_hiking"]]');
+    expect(paint(byPart(lineLayerSpecs(entry), "dash"))["line-color"]).toBe(DARK_GREY);
+  });
+
   it("follows the chip filter (only hard trails) and a color asked for still wins", () => {
     const hard = lineEntries(visibleState(stateOf("mtb-trails", trails, { filters: { v: { include: ["3"] } } }, {}, difficulty)));
     expect(hard[0].data.features).toHaveLength(1);

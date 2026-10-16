@@ -66,6 +66,21 @@ describe("fire-perimeters layer", () => {
     expect(littleValley).toHaveLength(1);
   });
 
+  it("keeps one fire filed by two agencies under different ids once (Empire by NPS and EMPIRE by USFS, 2017)", () => {
+    const row = (name: string, agency: string, acres: number, irwin: string, dx: number) => ({
+      type: "Feature" as const,
+      geometry: { type: "Polygon" as const, coordinates: [[[-119.6 + dx, 37.6], [-119.5 + dx, 37.6], [-119.5 + dx, 37.7], [-119.6 + dx, 37.6]]] },
+      properties: { INCIDENT: name, FIRE_YEAR_INT: 2017, GIS_ACRES: acres, AGENCY: agency, IRWINID: irwin },
+    });
+    const history = { type: "FeatureCollection" as const, features: [row("Empire", "NPS", 8581.8, "{A}", 0), row("EMPIRE", "USFS", 8577.6, "{B}", 0.0002)] };
+    const fc = normalizeFirePerimeters(history, { type: "FeatureCollection", features: [] });
+    expect(fc.features).toHaveLength(1);
+    expect(fc.features[0].properties).toMatchObject({ name: "Empire", acres: 8581.8 });
+    // Two fires of one name in one year, far apart, stay two.
+    const apart = { type: "FeatureCollection" as const, features: [row("Lake", "USFS", 500, "{C}", 0), row("Lake", "BLM", 480, "{D}", 3)] };
+    expect(normalizeFirePerimeters(apart, { type: "FeatureCollection", features: [] }).features).toHaveLength(2);
+  });
+
   it("keeps the most recent perimeter for a fire that has daily and final polygons", () => {
     const feature = (category: string, acres: number, current: number) => ({
       type: "Feature" as const,

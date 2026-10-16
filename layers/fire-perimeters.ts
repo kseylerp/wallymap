@@ -138,10 +138,52 @@ function fromWfigs(fc: FeatureCollection): Candidate[] {
   return out;
 }
 
+/** The feature's bounding box (every position of its geometry). */
+function extentOf(feature: Feature<Geometry>): BBox | null {
+  const box: BBox = [Infinity, Infinity, -Infinity, -Infinity];
+  const visit = (c: unknown): void => {
+    if (!Array.isArray(c)) return;
+    if (typeof c[0] === "number" && typeof c[1] === "number") {
+      box[0] = Math.min(box[0], c[0]);
+      box[1] = Math.min(box[1], c[1]);
+      box[2] = Math.max(box[2], c[0]);
+      box[3] = Math.max(box[3], c[1]);
+      return;
+    }
+    for (const x of c) visit(x);
+  };
+  if ("coordinates" in feature.geometry) visit(feature.geometry.coordinates);
+  return Number.isFinite(box[0]) ? box : null;
+}
+
+/** How much two boxes overlap: their intersection over their union, 0 to 1. */
+function overlap(a: BBox, b: BBox): number {
+  const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
+  const h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+  if (w <= 0 || h <= 0) return 0;
+  const area = (r: BBox) => (r[2] - r[0]) * (r[3] - r[1]);
+  return (w * h) / (area(a) + area(b) - w * h);
+}
+
+/**
+ * True for two perimeters of one fire filed by two agencies (Empire by NPS and EMPIRE by USFS, 2017): the same name in
+ * any case, the same year, acres within 10% and nearly the same extent.
+ */
+function sameFire(a: Candidate, b: Candidate): boolean {
+  const pa = a.feature.properties ?? {};
+  const pb = b.feature.properties ?? {};
+  if (String(pa.name).toLowerCase() !== String(pb.name).toLowerCase() || pa.year !== pb.year) return false;
+  const [x, y] = [Number(pa.acres), Number(pb.acres)];
+  if (!(Math.abs(x - y) <= 0.1 * Math.max(x, y))) return false;
+  const ea = extentOf(a.feature);
+  const eb = extentOf(b.feature);
+  return ea !== null && eb !== null && overlap(ea, eb) >= 0.6;
+}
+
 /**
  * Merges both services into one polygon collection. WFIGS holds several perimeters per fire
  * (daily progression plus final) and the history view repeats some rows, so only the newest
- * perimeter per fire is kept.
+ * perimeter per fire is kept; one fire filed by two agencies under different ids is kept once (the larger).
  */
 export function normalizeFirePerimeters(
   history: FeatureCollection,
@@ -152,7 +194,11 @@ export function normalizeFirePerimeters(
     const current = best.get(c.key);
     if (!current || c.recency > current.recency) best.set(c.key, c);
   }
-  return { type: "FeatureCollection", features: [...best.values()].map((c) => c.feature) };
+  const kept: Candidate[] = [];
+  for (const c of [...best.values()].sort((a, b) => Number(b.feature.properties?.acres) - Number(a.feature.properties?.acres))) {
+    if (!kept.some((k) => sameFire(k, c))) kept.push(c);
+  }
+  return { type: "FeatureCollection", features: kept.map((c) => c.feature) };
 }
 
 const TRUNCATED_NOTE = "Showing the 2,000 largest fires; zoom in for all";

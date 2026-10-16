@@ -1,0 +1,176 @@
+{
+ "entities": {
+  "Q1783171": {
+   "claims": {
+    "P625": [
+     {
+      "mainsnak": {
+       "snaktype": "value",
+       "property": "P625",
+       "hash": "3164201eb05b87d63c7608e6880759b277029b61",
+       "datavalue": {
+        "value": {
+         "latitude": 36.186944444444,
+         "longitude": -109.57361111111,
+         "altitude": null,
+         "precision": null,
+         "globe": "http://www.wikidata.org/entity/Q2"
+        },
+        "type": "globecoordinate"
+       },
+       "datatype": "globe-coordinate"
+      },
+      "type": "statement",
+      "id": "q1783171$2EE75B9B-E04A-486F-B464-9A1843288EB8",
+      "rank": "normal"
+     }
+    ],
+    "P2046": [
+     {
+      "mainsnak": {
+       "snaktype": "value",
+       "property": "P2046",
+       "hash": "3b749012c9fd056f9cc5201ba79e84425deedd23",
+       "datavalue": {
+        "value": {
+         "amount": "+62362",
+         "unit": "http://www.wikidata.org/entity/Q712226"
+        },
+        "type": "quantity"
+       },
+       "datatype": "quantity"
+      },
+      "type": "statement",
+      "id": "Q1783171$FBA7DFC2-174D-45A8-8F27-507F88E8FF43",
+      "rank": "normal",
+      "references": [
+       {
+        "hash": "d5847b9b6032aa8b13dae3c2dfd9ed5d114d21b3",
+        "snaks": {
+         "P143": [
+          {
+           "snaktype": "value",
+           "property": "P143",
+           "hash": "5a343e7e758a4282a01316d3e959b6e653b767fc",
+           "datavalue": {
+            "value": {
+             "entity-type": "item",
+             "numeric-id": 11920,
+             "id": "Q11920"
+            },
+            "type": "wikibase-entityid"
+           },
+           "datatype": "wikibase-item"
+          }
+         ]
+        },
+        "snaks-order": [
+         "P143"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "Q107434788": {
+   "claims": {
+    "P625": [
+     {
+      "mainsnak": {
+       "snaktype": "value",
+       "property": "P625",
+       "hash": "efc2c0860d3812f94eaf85ddd0f5cb81c856b6ed",
+       "datavalue": {
+        "value": {
+         "latitude": 35.62472,
+         "longitude": -111.25098,
+         "altitude": null,
+         "precision": 1e-05,
+         "globe": "http://www.wikidata.org/entity/Q2"
+        },
+        "type": "globecoordinate"
+       },
+       "datatype": "globe-coordinate"
+      },
+      "type": "statement",
+      "id": "Q107434788$ebacc8d0-4f82-19da-c52a-d783b467d762",
+      "rank": "normal",
+      "references": [
+       {
+        "hash": "cd08ab2e05336536c5c8ad53195ebdd33eee4097",
+        "snaks": {
+         "P248": [
+          {
+           "snaktype": "value",
+           "property": "P248",
+           "hash": "1b3ef912a2bd61e18dd43abd184337eb010b2e96",
+           "datavalue": {
+            "value": {
+             "entity-type": "item",
+             "numeric-id": 830106,
+             "id": "Q830106"
+            },
+            "type": "wikibase-entityid"
+           },
+           "datatype": "wikibase-item"
+          }
+         ],
+         "P1566": [
+          {
+           "snaktype": "value",
+           "property": "P1566",
+           "hash": "058287ebebc1563cf61f2597fae97050fc29b895",
+           "datavalue": {
+            "value": "5306240",
+            "type": "string"
+           },
+           "datatype": "external-id"
+          }
+         ],
+         "P1810": [
+          {
+           "snaktype": "value",
+           "property": "P1810",
+           "hash": "c95ea562f5d052d89480f8544fdba2ce7ab75a7d",
+           "datavalue": {
+            "value": "Navajo Nation Reservation",
+            "type": "string"
+           },
+           "datatype": "string"
+          }
+         ],
+         "P813": [
+          {
+           "snaktype": "value",
+           "property": "P813",
+           "hash": "532bc9f60e0338eb502809ef700da0ea1af744c0",
+           "datavalue": {
+            "value": {
+             "time": "+2021-07-06T00:00:00Z",
+             "timezone": 0,
+             "before": 0,
+             "after": 0,
+             "precision": 11,
+             "calendarmodel": "http://www.wikidata.org/entity/Q1985727"
+            },
+            "type": "time"
+           },
+           "datatype": "time"
+          }
+         ]
+        },
+        "snaks-order": [
+         "P248",
+         "P1566",
+         "P1810",
+         "P813"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
+ }
+}

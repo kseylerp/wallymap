@@ -5,6 +5,8 @@ import wbdTruckee from "./__fixtures__/regions/wbd-truckee-subbasin.json";
 import wdpaBearsEars from "./__fixtures__/regions/wdpa-bears-ears.json";
 import wikidataMojaveEntities from "./__fixtures__/regions/wikidata-mojave-entities.json";
 import wikidataMojaveSearch from "./__fixtures__/regions/wikidata-mojave-search.json";
+import wikidataNavajoEntities from "./__fixtures__/regions/wikidata-navajo-entities.json";
+import wikidataNavajoSearch from "./__fixtures__/regions/wikidata-navajo-search.json";
 import wikidataWindRiverEntities from "./__fixtures__/regions/wikidata-wind-river-entities.json";
 import wikidataWindRiverSearch from "./__fixtures__/regions/wikidata-wind-river-search.json";
 import mapboxMoab from "./__fixtures__/regions/mapbox-moab.json";
@@ -379,8 +381,10 @@ describe("geocode", () => {
             if (q.get("action") === "wbsearchentities") {
               if (q.get("search") === "Wind River Range") return jsonResponse(wikidataWindRiverSearch);
               if (q.get("search") === "Mojave Desert") return jsonResponse(wikidataMojaveSearch);
+              if (q.get("search") === "Navajo Nation") return jsonResponse(wikidataNavajoSearch);
               return jsonResponse({ search: [] });
             }
+            if (q.get("ids")?.includes("Q1783171")) return jsonResponse(wikidataNavajoEntities);
             return jsonResponse(q.get("ids")?.includes("Q1722116") ? wikidataWindRiverEntities : wikidataMojaveEntities);
           }
           default: {
@@ -405,6 +409,7 @@ describe("geocode", () => {
         "monument", "park", "forest", "wilderness",
       ]);
       expect(kinds(["Moab", "Lake Tahoe", "Basin", "Valley Forge", "Mountain View"])).toEqual([undefined, undefined, undefined, undefined, undefined]);
+      expect(kinds(["Navajo Nation", "Wind River Indian Reservation", "Nation"])).toEqual(["reservation", "reservation", undefined]);
       expect(parseRegionName("Colorado River basin")).toMatchObject({ base: "Colorado", riverish: true });
     });
 
@@ -471,6 +476,18 @@ describe("geocode", () => {
       expect(result.bbox[0]).toBeCloseTo(Math.min(...lngs), 3);
       expect(result.bbox[2]).toBeCloseTo(Math.max(...lngs), 3);
       expect(urls.find((u) => u.host === "data-gis.unep-wcmc.org")?.searchParams.get("where")).toContain("National Monument");
+      expect(asked(urls, "api.mapbox.com")).toBe(false);
+    });
+
+    it("Navajo Nation is the Wikidata item boxed to its 62,000 km², not Navajo Nation Drive in Flagstaff", async () => {
+      // The eval's place check caught it: Mapbox v6 knows only streets of that name, and the uranium mines sat 150 km away.
+      const urls = routed();
+      const result = await geocode("Navajo Nation");
+      if ("error" in result) throw new Error("expected a match");
+      expect(result).toMatchObject({ source: "wikidata", name: "Navajo Nation" });
+      const { bboxAreaKm2 } = await import("@/layers/types");
+      expect(bboxAreaKm2(result.bbox)).toBeGreaterThan(55_000);
+      expect(result.center[0]).toBeCloseTo(-109.57, 1);
       expect(asked(urls, "api.mapbox.com")).toBe(false);
     });
 

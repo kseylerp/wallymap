@@ -7,6 +7,7 @@
  *   national park, monument, recreation area, preserve   World Database on Protected Areas (the protected-areas-world layer)
  *   national forest    USFS administrative forest boundaries
  *   wilderness         designated wilderness (the wilderness layer), then the Protected Areas database
+ *   nation, reservation   Wikidata alone ("Navajo Nation": Mapbox knows only Navajo Nation Drive in Flagstaff)
  *   anything above that found nothing   Wikidata: an item of that exact name that is a region, with a coordinate and an area
  * Services verified live 2026-10-14 (keyless): hydro.nationalmap.gov WBD layers 1 to 4 (Upper and Lower Colorado Region are
  * two units), data-gis.unep-wcmc.org WDPA layer 1 (Bears Ears is stored as several units), apps.fs.usda.gov EDW forest
@@ -38,7 +39,8 @@ export type RegionKind =
   | "recreation"
   | "preserve"
   | "forest"
-  | "wilderness";
+  | "wilderness"
+  | "reservation";
 
 export type RegionName = {
   kind: RegionKind;
@@ -63,6 +65,7 @@ const PATTERNS: [RegExp, RegionKind][] = [
   [/^(.+?)\s+national\s+(?:preserve|grassland)$/i, "preserve"],
   [/^(.+?)\s+national\s+forest$/i, "forest"],
   [/^(.+?)\s+wilderness(?:\s+area)?$/i, "wilderness"],
+  [/^(.+?)\s+(?:nation|indian\s+reservation|reservation)$/i, "reservation"],
 ];
 
 /** The kind of region a name describes, or null for a name of an ordinary place (a town, a lake, a street). */
@@ -329,7 +332,7 @@ const WIKIDATA = "https://www.wikidata.org/w/api.php";
 const WIKIDATA_HEADERS = { "user-agent": "WallyMap/1.0 (place lookup; https://wallymap.vercel.app)" };
 /** What a Wikidata description of a region says; towns, people, paintings and documents of the same name are left out. */
 const REGION_DESCRIPTION =
-  /\b(desert|mountain range|mountain|mountains|range|plateau|valley|basin|drainage|watershed|highlands?|national (?:park|forest|monument|recreation area|preserve|grassland)|wilderness|region)\b/i;
+  /\b(desert|mountain range|mountain|mountains|range|plateau|valley|basin|drainage|watershed|highlands?|national (?:park|forest|monument|recreation area|preserve|grassland)|wilderness|region|reservation|indian tribe)\b/i;
 
 /** Area units Wikidata uses for P2046, to km². */
 const AREA_UNITS: Record<string, number> = {

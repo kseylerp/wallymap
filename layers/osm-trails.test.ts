@@ -16,6 +16,7 @@ import layer, {
   longestNamedFirst,
   normalizeOverpass,
   normalizeRoutes,
+  routeDisplayName,
   overpassFailure,
   pickNamedByLength,
   pickRoutes,
@@ -245,7 +246,7 @@ describe("osm-trails named routes over a wide box", () => {
     expect(buildRouteScanQuery(GUIANA)).toBe(
       '[out:json][timeout:25];relation["route"~"^(hiking|foot)$"]["name"](2.1,-54.6,5.8,-51.6)->.r;.r out count;.r out tags bb 5000;',
     );
-    expect(buildRouteGeometryQuery(GUIANA, [1, 2])).toBe("[out:json][timeout:25];relation(id:1,2);out geom(2.1,-54.6,5.8,-51.6);");
+    expect(buildRouteGeometryQuery(GUIANA, [1, 2])).toBe("[out:json][timeout:25];relation(id:1,2)->.r;.r out geom(2.1,-54.6,5.8,-51.6);rel(br.r);out body;");
   });
 
   it("reads distance tags in km, miles or metres, and distrusts one that does not fit the route's extent", () => {
@@ -305,6 +306,28 @@ describe("osm-trails named routes over a wide box", () => {
         [[-53, 3.3], [-53, 3.4]],
       ],
     });
+  });
+
+  it("never shows a part longer than the whole: ADT California Seg 1 is tagged 48.1 km and maps 50.1 km in view", () => {
+    const p = (lat: number, lon: number) => ({ lat, lon });
+    // 0.45° of latitude, about 50 km, wholly inside the box; its distance tag says 29.89 mi (48.1 km).
+    const way = { type: "way", ref: 7, geometry: [p(39.0, -120), p(39.45, -120)] };
+    const seg = { type: "relation", id: 9154927, tags: { name: "ADT - California - T - Seg 1", distance: "29.89 mi", network: "nwn", ref: "ADT T1", operator: "American Discovery Trail Society" }, members: [way, way] };
+    const parent = { type: "relation", id: 1, tags: { name: "American Discovery Trail", type: "superroute" }, members: [{ type: "relation", ref: 9154927 }] };
+    const [f] = normalizeRoutes({ elements: [seg, parent] }).features;
+    expect(f.properties).toMatchObject({ name: "American Discovery Trail (California segment 1)", osmName: "ADT - California - T - Seg 1", ref: "ADT T1" });
+    // The way listed twice counts once, and the full length is what is drawn.
+    expect(f.properties?.lengthKm).toBeCloseTo(50, 0);
+    expect(Number(f.properties?.distanceKm)).toBeGreaterThanOrEqual(Number(f.properties?.lengthKm));
+    // Clipped by the box: a tag shorter than the part in view is dropped.
+    const clipped = { ...seg, members: [{ type: "way", ref: 8, geometry: [p(39.0, -120), p(39.45, -120), null] }] };
+    expect(normalizeRoutes({ elements: [clipped] }).features[0].properties?.distanceKm).toBeUndefined();
+  });
+
+  it("names a coded section after its operator's trail when no parent route is mapped, and leaves real names alone", () => {
+    expect(routeDisplayName({ name: "ADT - California - T - Seg 1", operator: "American Discovery Trail Society" })).toBe("American Discovery Trail (California segment 1)");
+    expect(routeDisplayName({ name: "Tahoe Rim Trail" })).toBe("Tahoe Rim Trail");
+    expect(routeDisplayName({ name: "TRT", official_name: "Tahoe Rim Trail" })).toBe("Tahoe Rim Trail");
   });
 
   it("simplifies a line but keeps its ends", () => {
@@ -380,7 +403,7 @@ describe("osm-trails named routes over a wide box", () => {
     expect(r.total).toBe(17);
     expect(r.coverageNote).toBeUndefined();
     const second = decodeURIComponent(String((stub.mock.calls[1][1] as RequestInit).body));
-    expect(second).toMatch(/relation\(id:\d+,\d+\);/);
+    expect(second).toMatch(/relation\(id:\d+,\d+\)->\.r;/);
   });
 });
 

@@ -172,10 +172,15 @@ export function buildRouteScanQuery(bbox: BBox): string {
   return `[out:json][timeout:25];${ROUTE_SELECTOR}(${south},${west},${north},${east})->.r;.r out count;.r out tags bb ${ROUTE_SCAN_MAX};`;
 }
 
-/** Step 2: the chosen relations with member geometry clipped to the box (nodes outside it come back as null). */
+/**
+ * Step 2: the chosen relations with member geometry clipped to the box (nodes outside it come back as null), and the
+ * relations that hold them (members only, no geometry).
+ */
 export function buildRouteGeometryQuery(bbox: BBox, ids: number[]): string {
   const [west, south, east, north] = bbox;
-  return `[out:json][timeout:25];relation(id:${ids.join(",")});out geom(${south},${west},${north},${east});`;
+  // Then the routes they belong to (a superroute such as the American Discovery Trail), members as ids only, to name a
+  // section whose own name is a code ("ADT - California - T - Seg 1").
+  return `[out:json][timeout:25];relation(id:${ids.join(",")})->.r;.r out geom(${south},${west},${north},${east});rel(br.r);out body;`;
 }
 
 /** A `distance` tag in km ("12", "12.5 km", "12,5", "8 mi"), or undefined when it does not read as one. */
@@ -296,25 +301,65 @@ const routeElementSchema = z.object({
   id: z.number(),
   tags: z.record(z.string(), z.string()).optional(),
   members: z
-    .array(z.object({ type: z.string(), geometry: z.array(pointSchema).optional() }))
+    .array(z.object({ type: z.string(), ref: z.number().optional(), geometry: z.array(pointSchema).optional() }))
     .optional(),
 });
 
-/** Member ways as runs of points inside the box: a null (a node outside the box) ends a run. */
-function memberRuns(members: z.infer<typeof routeElementSchema>["members"]): Position[][] {
+/**
+ * Member ways as runs of points inside the box: a null (a node outside the box) ends a run. A way listed twice (both
+ * directions of a loop) counts once. `clipped` is true when any node lay outside the box.
+ */
+function memberRuns(members: z.infer<typeof routeElementSchema>["members"]): { runs: Position[][]; clipped: boolean } {
   const runs: Position[][] = [];
+  const seen = new Set<number>();
+  let clipped = false;
   for (const member of members ?? []) {
     if (member.type !== "way") continue;
+    if (member.ref !== undefined) {
+      if (seen.has(member.ref)) continue;
+      seen.add(member.ref);
+    }
     let run: Position[] = [];
     for (const p of member.geometry ?? []) {
       if (p === null) {
+        clipped = true;
         if (run.length >= 2) runs.push(run);
         run = [];
       } else run.push([p.lon, p.lat]);
     }
     if (run.length >= 2) runs.push(run);
   }
-  return runs;
+  return { runs, clipped };
+}
+
+/** Parts of a coded route name that say where it is: "California" in "ADT - California - T - Seg 1". */
+function sectionOf(name: string): string | undefined {
+  const parts = name.split(/\s+-\s+/).map((p) => p.trim());
+  const place = parts.find((p) => /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ .']{3,}$/.test(p) && p !== p.toUpperCase() && !/^seg(?:ment)?\b/i.test(p));
+  const seg = /\bseg(?:ment)?\s*(\d+)\b/i.exec(name)?.[1];
+  const words = [place, seg && `segment ${seg}`].filter(Boolean);
+  return words.length > 0 ? words.join(" ") : undefined;
+}
+
+/** True for a route name that is a code rather than a name: "ADT - California - T - Seg 1", "E1 - 23", its own ref. */
+export function isCodedName(name: string, ref?: string): boolean {
+  return /\bseg(?:ment)?\s*\d+\b/i.test(name) || (name.match(/\s-\s/g) ?? []).length >= 2 || (ref !== undefined && name.trim() === ref.trim());
+}
+
+/**
+ * The name a person reads for a route (owner, 2026-10-16: not "ADT - California - T - Seg 1"): its official_name, else
+ * for a coded name the route it belongs to with the section ("American Discovery Trail (California segment 1)"), else
+ * its name as mapped.
+ */
+export function routeDisplayName(tags: Record<string, string>, parent?: string): string {
+  const name = tags.name ?? "";
+  if (tags.official_name && tags.official_name !== name) return tags.official_name;
+  if (!isCodedName(name, tags.ref)) return name;
+  // The route it belongs to, else its operator's trail ("American Discovery Trail Society" runs the American Discovery Trail).
+  const whole = parent ?? /^(.*\bTrail)\b.*$/i.exec(tags.operator ?? "")?.[1];
+  if (!whole || isCodedName(whole)) return name;
+  const section = sectionOf(name);
+  return section ? `${whole} (${section})` : whole;
 }
 
 /** Joins runs that continue one another (one's last point is the next one's first), in member order. */
@@ -347,25 +392,43 @@ export function normalizeRoutes(json: unknown, tolerance = 0): FeatureCollection
   const parsed = responseSchema.safeParse(json);
   if (!parsed.success) return { type: "FeatureCollection", features };
 
+  // The relations that hold others (from `rel(br)`): a child's id to its parent's name.
+  const parentOf = new Map<number, string>();
+  for (const raw of parsed.data.elements) {
+    const el = routeElementSchema.safeParse(raw);
+    const name = el.success ? el.data.tags?.name : undefined;
+    if (!el.success || name === undefined) continue;
+    for (const m of el.data.members ?? []) if (m.type === "relation" && m.ref !== undefined && !parentOf.has(m.ref)) parentOf.set(m.ref, name);
+  }
+
   for (const raw of parsed.data.elements) {
     const el = routeElementSchema.safeParse(raw);
     if (!el.success) continue;
     const tags = el.data.tags ?? {};
-    const lines = joinRuns(memberRuns(el.data.members));
+    const { runs, clipped } = memberRuns(el.data.members);
+    const lines = joinRuns(runs);
     if (lines.length === 0 || tags.name === undefined) continue;
     const km = lines.reduce((sum, line) => sum + lineKm(line), 0);
     const drawn = lines.map((line) => simplifyLine(line, tolerance));
+    const inView = Math.round(km * 10) / 10;
 
+    const name = routeDisplayName(tags, parentOf.get(el.data.id));
     const properties: Record<string, string | number> = {
       kind: "route",
-      name: tags.name,
+      name,
       osmId: `relation/${el.data.id}`,
       route: tags.route ?? "hiking",
-      v: Math.round(km * 10) / 10,
-      lengthKm: Math.round(km * 10) / 10,
+      v: inView,
+      lengthKm: inView,
     };
-    const distance = distanceTagKm(tags.distance);
-    if (distance !== undefined) properties.distanceKm = Math.round(distance * 10) / 10;
+    if (name !== tags.name) properties.osmName = tags.name;
+    if (tags.ref !== undefined) properties.ref = tags.ref;
+    // The whole route never reads shorter than the part in view: a route wholly in the box is as long as it is drawn
+    // (ADT California Seg 1 is tagged 29.89 mi, 48.1 km, and maps 50.1 km); a clipped one keeps its tag only when the
+    // tag is longer than what is drawn.
+    const tagged = distanceTagKm(tags.distance);
+    const full = clipped ? (tagged !== undefined && tagged >= km ? tagged : undefined) : Math.max(km, tagged ?? 0);
+    if (full !== undefined) properties.distanceKm = Math.max(Math.round(full * 10) / 10, inView);
     if (tags.network !== undefined) properties.network = NETWORKS[tags.network] ?? tags.network;
     if (tags.sac_scale !== undefined) properties.sac_scale = tags.sac_scale;
     if (tags["osmc:symbol"] !== undefined) properties.osmcSymbol = tags["osmc:symbol"];
@@ -561,11 +624,11 @@ const HELP: Record<string, FieldHelp> = {
   v: ROUTE_KM,
   lengthKm: ROUTE_KM,
   distanceKm: {
-    text: "The whole route's length from its OpenStreetMap distance tag, kept only when it is believable against the route's extent.",
+    text: "The whole route's length: as drawn when it lies wholly in view, else its OpenStreetMap distance tag (never shorter than the part in view).",
     unit: "km",
   },
   network: {
-    text: "The route network from the OpenStreetMap network tag: international (iwn), national (nwn), regional (rwn) or local (lwn).",
+    text: "Which network the route belongs to, from OpenStreetMap's network tag: an international, national, regional or local trail (iwn, nwn, rwn, lwn), as its waymarks are signed.",
     source: "OpenStreetMap wiki, Key:network",
     url: "https://wiki.openstreetmap.org/wiki/Key:network",
   },
@@ -584,7 +647,9 @@ const CARD: CardSpec = {
     { key: "trail_visibility", label: "Visibility" },
     { key: "surface", label: "Surface" },
     { key: "distanceKm", label: "Full length", format: "km" },
-    { key: "network", label: "Network" },
+    { key: "network", label: "Network", values: { international: "International trail", national: "National trail", regional: "Regional trail", local: "Local trail" } },
+    { key: "ref", label: "Route number" },
+    { key: "osmName", label: "Name in OpenStreetMap" },
   ],
   links: [{ key: "website", label: "Website" }],
 };

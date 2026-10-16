@@ -168,7 +168,7 @@ describe("duplicates", () => {
     const result = checkDuplicates(drawn(mapWith({ id: "climbing", features: CRAG_TWICE })));
     expect(result.ok).toBe(false);
     expect(result.failures[0]).toMatch(/1 place is drawn twice within 1 km, e\.g\. "Bob Marley Crag" twice/);
-    expect(result.failures[1]).toMatch(/the Rank by top 3 \(by v\) lists the same place twice: "Bob Marley Crag" \(rows 2 and 3\)/);
+    expect(result.failures[1]).toMatch(/the Rank by top 3 \(by routes\) lists the same place twice: "Bob Marley Crag" \(rows 2 and 3\)/);
   });
 
   it("passes one name at two far-apart places, two trail segments, and repeated sightings", () => {
@@ -181,6 +181,27 @@ describe("duplicates", () => {
     expect(checkDuplicates(drawn(mapWith({ id: "osm-trails", features: segments, mode: "lines" }))).ok).toBe(true);
     const sightings = [point(-115.57, 51.18, { name: "Elk", t: "2026-06-01" }), point(-115.571, 51.18, { name: "Elk", t: "2026-06-01" })];
     expect(checkDuplicates(drawn(mapWith({ id: "species", features: sightings }))).ok).toBe(true);
+  });
+
+  it("fails one fire drawn twice by two agencies (Empire and EMPIRE, same year, same outline)", () => {
+    const ring = (dx: number): GeoJSON.Position[][] => [[[-119.6 + dx, 37.6], [-119.5 + dx, 37.6], [-119.5 + dx, 37.7], [-119.6 + dx, 37.6]]];
+    const fire = (name: string, dx: number, acres: number): Feature => ({
+      type: "Feature",
+      geometry: { type: "Polygon", coordinates: ring(dx) },
+      properties: { name, year: 2017, t: "2017-01-01T00:00:00.000Z", acres, v: acres },
+    });
+    const result = checkDuplicates(drawn(mapWith({ id: "fire-perimeters", features: [fire("Empire", 0, 8581), fire("EMPIRE", 0.0001, 8577)], mode: "polygons" })));
+    expect(result.ok).toBe(false);
+    expect(result.failures[0]).toMatch(/"Empire" twice as two nearly identical areas/);
+    expect(result.failures[1]).toMatch(/Rank by top 2 \(by acres burned\) lists the same place twice: "Empire" \(rows 1 and 2\)/);
+  });
+
+  it("passes sites that share a name a few hundred metres apart (Potato Bottom A, B, C) and generic names", () => {
+    const potato = [point(-110.004, 38.4215, { name: "Potato Bottom" }), point(-110.0095, 38.4297, { name: "Potato Bottom" }), point(-110.0109, 38.4314, { name: "Potato Bottom" })];
+    const generic = [point(-109.99, 38.52, { name: "Designated Campsite" }), point(-109.994, 38.523, { name: "Designated Campsite" })];
+    expect(checkDuplicates(drawn(mapWith({ id: "campsites", features: [...potato, ...generic] }))).ok).toBe(true);
+    const sameSpot = [...potato, point(-110.004, 38.4215, { name: "Potato Bottom" })];
+    expect(checkDuplicates(drawn(mapWith({ id: "campsites", features: sameSpot }))).ok).toBe(false);
   });
 
   it("passes two dated events of one name (dams rebuilt, not listed twice)", () => {

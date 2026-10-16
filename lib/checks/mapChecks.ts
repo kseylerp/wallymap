@@ -323,18 +323,45 @@ export function checkLattice(layers: Drawn[]): CheckResult {
 
 /* ---------- 3. Duplicates ---------- */
 
-/** A pair of features of one normalised name that is one place listed twice: within 1 km, a point involved, same date. */
-function samePlace(a: Feature, b: Feature): number | null {
-  const ap = a.geometry?.type === "Point";
-  const bp = b.geometry?.type === "Point";
-  // Two lines (or areas) of one name are the segments of one trail or the parts of one park, drawn as one.
-  if (!ap && !bp) return null;
+/** Two features of one name closer than this are the same spot, whatever else shares the name. */
+const SAME_SPOT_KM = 0.05;
+
+/** Names that say what a thing is rather than which one it is: many different places carry them. */
+const GENERIC_NAMES = new Set(["pullout", "parking", "parking lot", "campsite", "camp site", "designated campsite", "dispersed campsite", "trailhead", "viewpoint", "toilet", "toilets", "shelter", "spring", "picnic area", "picnic site", "unnamed"]);
+
+function overlapShare(a: BBox, b: BBox): number {
+  const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
+  const h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+  if (w < 0 || h < 0) return 0;
+  const area = (r: BBox) => Math.max((r[2] - r[0]) * (r[3] - r[1]), 1e-12);
+  const inter = Math.max(w * h, 1e-12);
+  return inter / (area(a) + area(b) - inter);
+}
+
+/**
+ * The distance (km) between two features of one name when they are one place listed twice, else null: a point within
+ * 1 km of the other feature (an OSM node and a cliff line of one crag), or two areas with nearly the same extent (one
+ * fire from two agencies). Two lines of one name are the segments of one trail, drawn as one; two dated features with
+ * different dates are two events. `shared` is how many features in the layer carry the name: a name on three or more
+ * (Potato Bottom A, B and C) counts only at the same spot.
+ */
+function samePlace(a: Feature, b: Feature, shared: number): number | null {
   const ta = a.properties?.t;
   const tb = b.properties?.t;
   if (ta !== undefined && tb !== undefined && ta !== tb) return null;
+  const ap = a.geometry?.type === "Point";
+  const bp = b.geometry?.type === "Point";
+  const area = (f: Feature) => f.geometry?.type === "Polygon" || f.geometry?.type === "MultiPolygon";
+  if (!ap && !bp) {
+    if (!area(a) || !area(b)) return null;
+    const ba = bboxOf(a);
+    const bb = bboxOf(b);
+    return ba && bb && overlapShare(ba, bb) >= 0.8 ? 0 : null;
+  }
   const point = (ap ? a : b).geometry as GeoJSON.Point;
   const d = distanceKm(point.coordinates, ap ? b : a);
-  return d <= DUPLICATE_KM ? d : null;
+  const limit = shared >= 3 ? SAME_SPOT_KM : DUPLICATE_KM;
+  return d <= limit ? d : null;
 }
 
 const PLACE_KEYS = ["place", "region", "area", "county", "state", "park"];
@@ -359,7 +386,7 @@ export function checkDuplicates(layers: Drawn[]): CheckResult {
       for (const f of layer.data.features) {
         const name = nameOf(f);
         const norm = name ? normalName(name) : "";
-        if (isUnnamed(norm)) continue;
+        if (isUnnamed(norm) || GENERIC_NAMES.has(norm)) continue;
         byName.set(norm, [...(byName.get(norm) ?? []), f]);
       }
       const pairs: string[] = [];
@@ -370,11 +397,13 @@ export function checkDuplicates(layers: Drawn[]): CheckResult {
         let found = false;
         for (let i = 0; i < items.length && !found; i++) {
           for (let j = i + 1; j < items.length && !found; j++) {
-            const d = samePlace(items[i], items[j]);
+            const d = samePlace(items[i], items[j], group.length);
             if (d === null) continue;
             found = true;
             count += 1;
-            if (pairs.length < 3) pairs.push(`"${nameOf(items[i])}" twice ${d < 0.05 ? "at the same spot" : `${(d * 1000).toFixed(0)} m apart`} (${at(items[i])})`);
+            const areas = items[i].geometry?.type !== "Point" && items[j].geometry?.type !== "Point";
+            const how = areas ? "as two nearly identical areas" : d < SAME_SPOT_KM ? "at the same spot" : `${(d * 1000).toFixed(0)} m apart`;
+            if (pairs.length < 3) pairs.push(`"${nameOf(items[i])}" twice ${how} (${at(items[i])})`);
           }
         }
       }
@@ -382,7 +411,8 @@ export function checkDuplicates(layers: Drawn[]): CheckResult {
     }
     // The Rank by list (the row's own function): no name and place twice.
     if (layer.info) {
-      const { key, top } = rankedTop(layer.info, layer.op, layer.loaded, layer.data, RANKED_TOP_N);
+      const { key, measures, top } = rankedTop(layer.info, layer.op, layer.loaded, layer.data, RANKED_TOP_N);
+      const by = measures.find((m) => m.key === key)?.label.toLowerCase() ?? key;
       const repeated: string[] = [];
       for (let i = 0; i < top.length; i++) {
         const ni = nameOf(top[i]);
@@ -395,7 +425,7 @@ export function checkDuplicates(layers: Drawn[]): CheckResult {
           }
         }
       }
-      if (repeated.length > 0) failures.push(`${layer.label}: the Rank by top ${top.length} (by ${key}) lists the same place twice: ${repeated.slice(0, 3).join(", ")}.`);
+      if (repeated.length > 0) failures.push(`${layer.label}: the Rank by top ${top.length} (by ${by}) lists the same place twice: ${repeated.slice(0, 3).join(", ")}.`);
     }
   }
   return { check: "duplicates", ok: failures.length === 0, failures };
@@ -407,7 +437,7 @@ export type CardSection = "measure" | "fact" | "detail" | "signal";
 export type SectionRow = { section: CardSection; row: CardRow };
 
 /** A label that is a property key, not words: snake_case, camelCase, or a unit glued on ("Max length m"). */
-const UNIT_TAIL = /\s(m|km|km2|ft|mi|pct|mw|kw|kg|cm|mm|in|s|h|c|f)$/i;
+const UNIT_TAIL = /[A-Za-z]\s(m|km|km2|ft|mi|pct|mw|kw|kg|cm|mm|s|h)$/i;
 
 /** Self-explanatory one-word keys a bare number may sit under. */
 const PLAIN_NUMBER_KEYS = new Set(["year", "count", "elevation", "population", "capacity", "acres", "depth", "area", "length", "height", "width"]);

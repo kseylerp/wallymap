@@ -128,6 +128,18 @@ describe("normalizeFeatures", () => {
     expect(out.features[2].properties).toMatchObject({ kind: "spring", potable: false, seasonal: "yes" });
   });
 
+  it("draws one waterfall mapped twice once (Chutes Voltaire, two nodes 36 m apart), the one linked to Wikidata", () => {
+    const out = normalizeFeatures({
+      elements: [
+        { type: "node", id: 3161700653, lat: 5.0318886, lon: -54.0868591, tags: { waterway: "waterfall", name: "Chutes Voltaire" } },
+        { type: "node", id: 442713351, lat: 5.0320496, lon: -54.0871634, tags: { waterway: "waterfall", name: "Chutes Voltaire", wikidata: "Q30738959" } },
+        // Same name 680 m away: the upper falls, kept.
+        { type: "node", id: 9, lat: 5.0381, lon: -54.0868, tags: { waterway: "waterfall", name: "Chutes Voltaire" } },
+      ],
+    });
+    expect(out.features.map((f) => f.properties?.osmId)).toEqual(["node/442713351", "node/9"]);
+  });
+
   it("returns nothing for a malformed body", () => {
     expect(normalizeFeatures(null).features).toHaveLength(0);
     expect(normalizeFeatures({ elements: "x" }).features).toHaveLength(0);

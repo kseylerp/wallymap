@@ -250,7 +250,33 @@ export function normalizeFeatures(json: unknown, allowed: readonly Kind[] = KIND
 
     features.push({ type: "Feature", geometry: { type: "Point", coordinates: center }, properties });
   }
-  return { type: "FeatureCollection", features };
+  return { type: "FeatureCollection", features: dropMappedTwice(features) };
+}
+
+/** Two elements of one kind and name closer than this are one place mapped twice in OSM. */
+const SAME_PLACE_M = 150;
+
+/**
+ * One place mapped twice (two waterfall nodes "Chutes Voltaire" 36 m apart, a peak as a node and a summit cross) is drawn
+ * once: of features with the same kind and name within SAME_PLACE_M, the one with a Wikidata link (else the first) stays.
+ */
+export function dropMappedTwice(features: Feature<Point>[]): Feature<Point>[] {
+  const kept: Feature<Point>[] = [];
+  const metres = (a: Feature<Point>, b: Feature<Point>) => {
+    const [x1, y1] = a.geometry.coordinates;
+    const [x2, y2] = b.geometry.coordinates;
+    return Math.hypot((x2 - x1) * 111_320 * Math.cos((y1 * Math.PI) / 180), (y2 - y1) * 110_570);
+  };
+  const ordered = [...features].sort((a, b) => Number(Boolean(b.properties?.wikidata)) - Number(Boolean(a.properties?.wikidata)));
+  for (const f of ordered) {
+    const name = f.properties?.name;
+    const twin =
+      typeof name === "string" &&
+      kept.some((k) => k.properties?.name === name && k.properties?.kind === f.properties?.kind && metres(k, f) <= SAME_PLACE_M);
+    if (!twin) kept.push(f);
+  }
+  // Back in the order Overpass sent them.
+  return features.filter((f) => kept.includes(f));
 }
 
 function priority(f: Feature): number {

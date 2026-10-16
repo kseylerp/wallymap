@@ -227,12 +227,16 @@ async function checkOne(browser: Browser, item: ScreenItem, size: Size): Promise
   const page = await context.newPage();
   const problems: string[] = [];
   const notes: string[] = [];
-  // Uncaught errors are failures; console errors are notes (a tile server's 404 is not the app's fault).
+  // Uncaught errors and console errors are failures (a failed request is logged with its URL, see below).
   const pageErrors = new Set<string>();
   const consoleErrors = new Set<string>();
   page.on("pageerror", (e) => pageErrors.add(e.message.split("\n")[0].slice(0, 200)));
   page.on("console", (m) => {
     if (m.type() === "error") consoleErrors.add(m.text().split("\n")[0].slice(0, 200));
+  });
+  // A failed request's console line has no URL; this names it.
+  page.on("response", (r) => {
+    if (r.status() >= 400) consoleErrors.add(`HTTP ${r.status()} from ${r.url().replace(/access_token=[^&]+/, "access_token=…").slice(0, 120)}`);
   });
   const shot = `${item.slug}-${size.name}.png`;
   const lineShots: string[] = [];
@@ -273,8 +277,16 @@ async function checkOne(browser: Browser, item: ScreenItem, size: Size): Promise
     const after = layoutProblems(await page.evaluate(collectLayout, PANELS));
     problems.push(...new Set([...before, ...after]));
     await page.screenshot({ path: join(OUT_DIR, shot) });
+    // Zero errors per question (coordinator, 2026-10-16): every uncaught error, every console error, and the dev badge
+    // once the checks are done.
     for (const e of pageErrors) problems.push(`The page threw an error: ${e}`);
-    for (const e of [...consoleErrors].slice(0, 3)) notes.push(`Console error: ${e}`);
+    if (consoleErrors.size > 0) problems.push(`The console logged ${consoleErrors.size} distinct ${consoleErrors.size === 1 ? "error" : "errors"}: ${[...consoleErrors].slice(0, 3).join("; ")}.`);
+    const issues = await page.evaluate(() => {
+      const text = document.querySelector("nextjs-portal")?.shadowRoot?.textContent ?? "";
+      const m = /(\d+)\s*Issues?/.exec(text);
+      return m ? Number(m[1]) : 0;
+    });
+    if (issues > 0) problems.push(`The development error badge shows ${issues} ${issues === 1 ? "issue" : "issues"} after the checks.`);
   } catch (err) {
     notes.push(`The page could not be checked: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`);
     await page.screenshot({ path: join(OUT_DIR, shot) }).catch(() => undefined);

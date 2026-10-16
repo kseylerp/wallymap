@@ -428,9 +428,15 @@ export function findPickPoint(layerIds: string[]): { x: number; y: number; layer
     getStyle: () => { layers: { id: string }[] };
     queryRenderedFeatures: (p: [number, number], o: { layers: string[] }) => unknown[];
   };
-  const hook = (window as unknown as { __wallyMap?: { map: MapLike; overlay: { pickObject: (o: { x: number; y: number; radius: number }) => { layer?: { id: string } | null; object?: unknown } | null } } }).__wallyMap;
+  type Picker = {
+    pickObject: (o: { x: number; y: number; radius: number; layerIds?: string[] }) => { layer?: { id: string } | null; object?: unknown } | null;
+    _deck?: { props: { layers: { id: string; props: { pickable?: unknown; terrainDrawMode?: unknown } }[] } };
+  };
+  const hook = (window as unknown as { __wallyMap?: { map: MapLike; overlay: Picker } }).__wallyMap;
   if (!hook) return null;
   const { map, overlay } = hook;
+  const top = (overlay._deck?.props.layers ?? []).flat(Infinity as 1).filter((l) => l && l.props.pickable && l.id !== "wally-terrain");
+  const passes = { direct: top.filter((l) => l.props.terrainDrawMode !== "drape").map((l) => l.id), draped: top.some((l) => l.props.terrainDrawMode === "drape") };
   const canvas = map.getCanvas();
   const r = canvas.getBoundingClientRect();
   const lineLayers = map
@@ -449,7 +455,9 @@ export function findPickPoint(layerIds: string[]): { x: number; y: number; layer
     if (document.elementFromPoint(x + r.x, y + r.y) !== canvas) continue;
     let hit: { layer?: { id: string } | null; object?: unknown } | null = null;
     try {
-      hit = overlay.pickObject({ x, y, radius: 2 });
+      // As the app picks (lib/render/inspect.ts pickPasses): symbols without the terrain mesh, then draped areas.
+      hit = passes.direct.length > 0 ? overlay.pickObject({ x, y, radius: 2, layerIds: passes.direct }) : null;
+      if (!hit?.object && passes.draped) hit = overlay.pickObject({ x, y, radius: 2 });
     } catch {
       hit = null;
     }

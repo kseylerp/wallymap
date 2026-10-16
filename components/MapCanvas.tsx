@@ -493,6 +493,8 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
 
     mapRef.current = map;
     overlayRef.current = overlay;
+    // Development only: the eval's screen checks (scripts/evalScreens.ts) project features and read the deck labels.
+    if (process.env.NODE_ENV === "development") (window as unknown as { __wallyMap?: unknown }).__wallyMap = { map, overlay };
     appliedBasemapRef.current = initial.basemap;
     lastCameraRef.current = initial.viewport;
 

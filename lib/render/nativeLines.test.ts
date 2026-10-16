@@ -496,6 +496,16 @@ describe("the encoded ordinal drives the line color (spec §12c: difficulty on t
     expect(paint(byPart(lineLayerSpecs(entry), "dash"))["line-color"]).toBe(DARK_GREY);
   });
 
+  it("draws named routes on the route gradient under a facet too (wide-scale hiking routes drew plain sage)", () => {
+    const sac: LoadedLayer["attributes"] = [{ key: "sac_scale", type: "ordinal", label: "Difficulty", encode: "color", levels: [{ value: "mountain_hiking", label: "T2" }] }];
+    const [entry] = lineEntries(visibleState(stateOf("osm-trails", [line(-120, { kind: "route", name: "Tahoe Rim Trail" }), line(-119, {})], {}, {}, sac)));
+    expect(entry.look.kind).toBe("facet");
+    expect(lineSourceData(entry).features.map((f) => f.properties?.cls)).toEqual(["route", "trail"]);
+    const all = lineLayerSpecs(entry);
+    expect(byPart(all, "route").filter).toEqual(["==", ["get", "cls"], "route"]);
+    expect(byPart(all, "core").filter).toEqual(["!=", ["get", "cls"], "route"]);
+  });
+
   it("follows the chip filter (only hard trails) and a color asked for still wins", () => {
     const hard = lineEntries(visibleState(stateOf("mtb-trails", trails, { filters: { v: { include: ["3"] } } }, {}, difficulty)));
     expect(hard[0].data.features).toHaveLength(1);

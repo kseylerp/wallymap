@@ -283,10 +283,12 @@ const notRoute: FilterSpecification = ["!=", ["get", "cls"], "route"];
 export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
   const source = lineSourceId(entry.id);
   const classes = entry.look.kind === "classes";
+  // A facet colors segments by their value; named routes keep the Wally gradient (and its casing) under it too.
+  const routed = classes || entry.look.kind === "facet";
   const layout = { "line-cap": "round", "line-join": "round", visibility: entry.shown ? "visible" : "none" } as const;
   const sel: ExpressionSpecification = ["==", ["get", "i"], entry.selected];
   const routeCasing = LINE_CLASSES.route.casing;
-  const baseCasing: number | ExpressionSpecification = classes ? ["match", ["get", "cls"], "route", routeCasing, LINE.casing] : LINE.casing;
+  const baseCasing: number | ExpressionSpecification = routed ? ["match", ["get", "cls"], "route", routeCasing, LINE.casing] : LINE.casing;
   const casingWidth: number | ExpressionSpecification = entry.selected < 0 ? baseCasing : ["case", sel, SELECTED_LINE.casing, baseCasing];
   const core: LineLayerSpecification = {
     id: lineLayerId(entry.id, "core"),
@@ -300,7 +302,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
       "line-opacity": faded(entry, 1, 0),
       ...(classes && { "line-dasharray": coreDash() }),
     },
-    ...(classes && { filter: notRoute }),
+    ...(routed && { filter: notRoute }),
   };
   // T1: the over color's dashes on the solid core (nothing to draw unless the layer keeps its classes). Under a facet the
   // lines it draws sage (the easy level, or no value) keep them too: plain sage vanishes on green Topo (owner, 2026-10-14).
@@ -340,7 +342,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
       type: "line",
       source,
       // A requested color, a score ramp or a delta replaces the class look, routes included: nothing to draw here.
-      filter: classes ? isRoute : ["==", ["get", "cls"], "none"],
+      filter: routed ? isRoute : ["==", ["get", "cls"], "none"],
       layout,
       paint: { "line-gradient": gradientExpression(), "line-width": LINE_CLASSES.route.width, "line-opacity": faded(entry, 1, 0) },
     },

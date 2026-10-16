@@ -283,3 +283,19 @@ describe("campsites layer", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("the campsite card", () => {
+  it("says the kind in words and shows the facts OpenStreetMap has, the website as a named link", async () => {
+    const { cardContent } = await import("@/lib/render/card");
+    const { getLayer } = await import("./registry");
+    const layer = getLayer("campsites")!;
+    const feature = {
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [-109.3, 38.8] },
+      properties: { kind: "camp_site", name: "Dewey Bridge Campground", capacity: 17, fee: true, tents: true, website: "https://www.blm.gov/visit/dewey-bridge", osmId: "way/1" },
+    };
+    const card = cardContent(feature, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.facts.map((r) => `${r.label}: ${r.value}`)).toEqual(["Type: Campsite", "Capacity: 17", "Fee: Yes, costs money", "Tents allowed: Yes"]);
+    expect(card.links).toEqual([{ key: "website", label: "Website", url: "https://www.blm.gov/visit/dewey-bridge" }]);
+  });
+});

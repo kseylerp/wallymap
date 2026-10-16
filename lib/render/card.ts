@@ -74,7 +74,7 @@ export function factValue(fact: CardFact, props: Record<string, unknown>): strin
   const raw = props[fact.key];
   if (raw === null || raw === undefined || raw === "") return null;
   const unit = fact.unit ? ` ${fact.unit}` : "";
-  if (fact.values && (typeof raw === "string" || typeof raw === "number") && fact.values[String(raw)] !== undefined) {
+  if (fact.values && (typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean") && fact.values[String(raw)] !== undefined) {
     return fact.values[String(raw)];
   }
   switch (fact.format) {

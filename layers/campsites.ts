@@ -10,7 +10,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { namedOverpassQuery, overpassCounts, overpassQuery } from "./_shared/overpass";
 import { layerColor } from "@/lib/render/palette";
@@ -182,6 +182,13 @@ export function normalizeCampsites(json: unknown): FeatureCollection<Point> {
     if (capacity !== undefined && capacity > 0) properties.capacity = capacity;
     if (tags.wikidata) properties.wikidata = tags.wikidata;
     if (tags.wikipedia) properties.wikipedia = tags.wikipedia;
+    const website = tags.website ?? tags["contact:website"] ?? tags.url;
+    if (website && /^https?:\/\//.test(website)) properties.website = website;
+    if (tags.operator) properties.operator = tags.operator;
+    const reservation = tags.reservation;
+    if (reservation) properties.reservation = reservation;
+    if (tags.toilets) properties.toilets = yesNo(tags.toilets) ?? tags.toilets;
+    if (tags.drinking_water) properties.drinkingWater = yesNo(tags.drinking_water) ?? tags.drinking_water;
     if (!isCamp && capacity !== undefined) properties.v = capacity;
 
     features.push({ type: "Feature", geometry: { type: "Point", coordinates: center }, properties });
@@ -193,6 +200,32 @@ function capacityOf(feature: Feature): number {
   const v: unknown = feature.properties?.v;
   return typeof v === "number" ? v : 0;
 }
+
+/** What the card's facts mean (spec §12b), in OpenStreetMap's terms. */
+const FIELD_HELP: Record<string, FieldHelp> = {
+  capacity: { text: "How many pitches (camp sites) or spaces (parking) the mapper counted, from OpenStreetMap's capacity tag.", source: "OpenStreetMap wiki, Key:capacity", url: "https://wiki.openstreetmap.org/wiki/Key:capacity" },
+  backcountry: { text: "A walk-in or wilderness site with no road to it, from OpenStreetMap's backcountry tag.", source: "OpenStreetMap wiki, Key:backcountry", url: "https://wiki.openstreetmap.org/wiki/Key:backcountry" },
+  reservation: { text: "Whether pitches can or must be booked ahead, from OpenStreetMap's reservation tag.", source: "OpenStreetMap wiki, Key:reservation", url: "https://wiki.openstreetmap.org/wiki/Key:reservation" },
+};
+
+const YES_NO = { true: "Yes", false: "No" };
+
+/** The inspect card (coordinator, 2026-10-16: "Kind: camp site" read as a code): kinds in words, then what OSM knows. */
+const CARD: CardSpec = {
+  facts: [
+    { key: "kind", label: "Type", values: { camp_site: "Campsite", parking: "Parking" } },
+    { key: "capacity", label: "Capacity", format: "int" },
+    { key: "fee", label: "Fee", values: { true: "Yes, costs money", false: "Free" } },
+    { key: "tents", label: "Tents allowed", values: YES_NO },
+    { key: "caravans", label: "RVs allowed", values: YES_NO },
+    { key: "backcountry", label: "Backcountry (walk-in)", values: YES_NO },
+    { key: "reservation", label: "Booking", values: { yes: "Possible", required: "Required", recommended: "Recommended", no: "Not taken" } },
+    { key: "toilets", label: "Toilets", values: YES_NO },
+    { key: "drinkingWater", label: "Drinking water", values: YES_NO },
+    { key: "operator", label: "Run by" },
+  ],
+  links: [{ key: "website", label: "Website" }],
+};
 
 const campsites = defineLayer({
   id: "campsites",
@@ -217,6 +250,8 @@ const campsites = defineLayer({
   wide: { mode: "named", limit: 2000 },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("campsites") },
+  fieldHelp: FIELD_HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { normalizeDams } from "./dams";
+import layer, { normalizeDams, structureStem, structuresText } from "./dams";
 import raw from "./__fixtures__/dams.bayarea.json";
 
 /** The fixture is the live National Inventory of Dams answer for this box, 12 largest by storage, recorded 2026-10-10. */
@@ -161,5 +161,46 @@ describe("dams layer", () => {
     expect(layer.description).toMatch(/safety rating/);
     expect(layer.description).toMatch(/About 3% of dams have no storage figure and are left out/);
     expect(layer.description).toMatch(/decade/);
+  });
+
+  it("folds a reservoir's dikes into its main dam, so Granby is one entry with \"4 dikes\"", () => {
+    const row = (NAME: string, x: number, extra: Record<string, unknown> = {}) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [x, 40.14] },
+      properties: { NAME, NIDID: "CO01656", NID_STORAGE: 539760, NID_HEIGHT: 70, YEAR_COMPLETED: 1950, ...extra },
+    });
+    const fc = normalizeDams({
+      type: "FeatureCollection",
+      features: [
+        row("Granby Dike 1", -105.884, { OTHER_STRUCTURE_ID: "S001", IS_ASSOCIATED_STRUCTURE: "Yes" }),
+        row("Granby Dike 2", -105.879, { OTHER_STRUCTURE_ID: "S002", IS_ASSOCIATED_STRUCTURE: "Yes" }),
+        row("Granby Dam", -105.867, { NID_HEIGHT: 298, IS_ASSOCIATED_STRUCTURE: "No" }),
+        row("Granby Dike 3", -105.856, { OTHER_STRUCTURE_ID: "S003", IS_ASSOCIATED_STRUCTURE: "Yes" }),
+        row("Granby Dike 4", -105.888, { OTHER_STRUCTURE_ID: "S004", IS_ASSOCIATED_STRUCTURE: "Yes" }),
+        // Another reservoir of the same size elsewhere is its own dam.
+        { ...row("Other Dam", -110), properties: { NAME: "Other Dam", NIDID: "UT00001", NID_STORAGE: 539760 } },
+      ],
+    });
+    expect(fc.features.map((f) => f.properties?.name)).toEqual(["Granby Dam", "Other Dam"]);
+    expect(fc.features[0].properties).toMatchObject({ heightFt: 298, structures: "4 dikes", storageAf: 539760 });
+    expect(fc.features[0].properties).not.toHaveProperty("__associated");
+  });
+
+  it("folds a dike under its own id into the dam of the same storage and name nearby", () => {
+    const at = (NAME: string, NIDID: string, x: number) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [x, 35] },
+      properties: { NAME, NIDID, NID_STORAGE: 1000 },
+    });
+    const fc = normalizeDams({
+      type: "FeatureCollection",
+      features: [at("Twin Lakes Saddle", "XX2", -100.01), at("Twin Lakes Dam", "XX1", -100), at("Twin Lakes Dam", "XX3", -90)],
+    });
+    expect(fc.features.map((f) => [f.properties?.name, f.properties?.structures])).toEqual([
+      ["Twin Lakes Dam", "1 saddle dam"],
+      ["Twin Lakes Dam", undefined],
+    ]);
+    expect(structureStem("Granby Dike 4")).toBe("granby");
+    expect(structuresText(["A Dike 1", "A Dike 2", "A Saddle"])).toBe("2 dikes and 1 saddle dam");
   });
 });

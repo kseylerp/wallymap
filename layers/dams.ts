@@ -43,6 +43,8 @@ const FIELDS = [
   "PRIMARY_OWNER_TYPE",
   "PRIMARY_DAM_TYPE",
   "CONDITION_ASSESSMENT",
+  "OTHER_STRUCTURE_ID",
+  "IS_ASSOCIATED_STRUCTURE",
 ];
 
 /** The inventory is updated a few times a year. */
@@ -108,9 +110,103 @@ export function normalizeDams(fc: FeatureCollection): FeatureCollection {
     if (damType !== undefined) properties.damType = damType;
     const condition = str(p.CONDITION_ASSESSMENT);
     if (condition !== undefined) properties.condition = condition;
-    features.push({ type: "Feature", geometry: f.geometry, properties });
+    const structure = str(p.OTHER_STRUCTURE_ID);
+    const associated = structure !== undefined || str(p.IS_ASSOCIATED_STRUCTURE)?.toLowerCase() === "yes";
+    features.push({ type: "Feature", geometry: f.geometry, properties: associated ? { ...properties, [ASSOCIATED]: 1 } : properties });
   }
-  return { type: "FeatureCollection", features };
+  return { type: "FeatureCollection", features: groupStructures(features) };
+}
+
+/** Marks a row the inventory files as another structure of a dam (a dike, a saddle dam); dropped once grouped. */
+const ASSOCIATED = "__associated";
+
+/** Words that say which structure of a reservoir a row is, not which reservoir: "Granby Dike 4" is Granby's. */
+const STRUCTURE_WORDS = /\b(dam|dike|dyke|saddle|levee|spillway|embankment|main|auxiliary|aux|no|north|south|east|west|left|right|upper|lower)\b|#?\d+|\b[ivx]+\b/gi;
+
+/** The reservoir a structure's name points at: "granby" for "Granby Dike 4" and "Granby Dam". */
+export function structureStem(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(STRUCTURE_WORDS, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+/** "dike" for "Granby Dike 4", "saddle dam" for "North Saddle", else "structure". */
+function structureKind(name: string): "dike" | "saddle dam" | "structure" {
+  if (/\b(dike|dyke|levee)\b/i.test(name)) return "dike";
+  if (/\bsaddle\b/i.test(name)) return "saddle dam";
+  return "structure";
+}
+
+/** "4 dikes", "2 dikes and 1 saddle dam". */
+export function structuresText(names: string[]): string {
+  const counts = new Map<string, number>();
+  for (const n of names) counts.set(structureKind(n), (counts.get(structureKind(n)) ?? 0) + 1);
+  const parts = (["dike", "saddle dam", "structure"] as const)
+    .filter((k) => counts.has(k))
+    .map((k) => {
+      const n = counts.get(k) as number;
+      return `${n} ${k === "structure" ? (n === 1 ? "other structure" : "other structures") : n === 1 ? k : `${k}s`}`;
+    });
+  return parts.length <= 1 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+/** Two structures closer than this (km) with one storage figure and one name stem are one reservoir's. */
+const SAME_RESERVOIR_KM = 5;
+
+function kmApart(a: Feature<Geometry>, b: Feature<Geometry>): number {
+  if (a.geometry.type !== "Point" || b.geometry.type !== "Point") return Infinity;
+  const [x1, y1] = a.geometry.coordinates;
+  const [x2, y2] = b.geometry.coordinates;
+  const kx = 111.32 * Math.cos((((y1 + y2) / 2) * Math.PI) / 180);
+  return Math.hypot((x1 - x2) * kx, (y1 - y2) * 110.57);
+}
+
+/**
+ * One point per reservoir. The inventory lists every structure of a reservoir (the dam, its dikes, its saddle dams) as a
+ * row of its own, each with the whole reservoir's storage, so Granby Dam and Granby Dikes 1 to 4 were five entries of
+ * 539,760 acre-feet in the top 10. Rows that share the inventory id (the dam's NIDID; its other structures carry an
+ * OTHER_STRUCTURE_ID), or share the storage figure and the name stem within 5 km when a dike or saddle is named, are one
+ * reservoir: the main dam (not filed as another structure, else the tallest) stays, with `structures` ("4 dikes").
+ */
+export function groupStructures(features: Feature<Geometry>[]): Feature<Geometry>[] {
+  const groups: Feature<Geometry>[][] = [];
+  const byId = new Map<string, Feature<Geometry>[]>();
+  for (const f of features) {
+    const p = f.properties as Record<string, string | number>;
+    const id = typeof p.nidId === "string" ? p.nidId : undefined;
+    let group = id !== undefined ? byId.get(id) : undefined;
+    if (group === undefined && typeof p.storageAf === "number" && p.storageAf > 0) {
+      const name = String(p.name);
+      const stem = structureStem(name);
+      group = groups.find((g) =>
+        g.some((o) => {
+          const q = o.properties as Record<string, string | number>;
+          if (q.storageAf !== p.storageAf || stem === "" || structureStem(String(q.name)) !== stem) return false;
+          // A dike or saddle in either name: otherwise two dams of one name and size are two dams.
+          const structural = structureKind(name) !== "structure" || structureKind(String(q.name)) !== "structure";
+          return structural && kmApart(o, f) <= SAME_RESERVOIR_KM;
+        }),
+      );
+    }
+    if (group === undefined) {
+      group = [];
+      groups.push(group);
+    }
+    group.push(f);
+    if (id !== undefined && !byId.has(id)) byId.set(id, group);
+  }
+  return groups.map((group) => {
+    const height = (f: Feature<Geometry>) => Number(f.properties?.heightFt ?? 0);
+    const isMain = (f: Feature<Geometry>) => !f.properties?.[ASSOCIATED] && structureKind(String(f.properties?.name)) === "structure";
+    const main = group.find(isMain) ?? group.find((f) => !f.properties?.[ASSOCIATED]) ?? [...group].sort((a, b) => height(b) - height(a))[0];
+    const properties = { ...(main.properties as Record<string, string | number>) };
+    delete properties[ASSOCIATED];
+    const others = group.filter((f) => f !== main).map((f) => String(f.properties?.name));
+    if (others.length > 0) properties.structures = structuresText(others);
+    return { ...main, properties };
+  });
 }
 
 const NID_URL = "https://nid.sec.usace.army.mil";
@@ -165,6 +261,13 @@ const HELP: Record<string, FieldHelp> = {
   heightFt: { text: "The dam's height in feet as the inventory reports it.", unit: "ft" },
   nidId: { text: "The dam's identifier in the National Inventory of Dams." },
   kind: { text: "The dam's primary purpose as the inventory gives it." },
+  structures: {
+    text:
+      "The reservoir's other structures (dikes and saddle dams that close gaps in its rim). The inventory lists each as a dam of its own " +
+      "with the whole reservoir's storage, so they are counted here, on the main dam, instead of as separate dams.",
+    source: "US Army Corps of Engineers, National Inventory of Dams",
+    url: NID_URL,
+  },
 };
 
 const CARD: CardSpec = {
@@ -177,6 +280,7 @@ const CARD: CardSpec = {
     { key: "river", label: "River" },
     { key: "owner", label: "Owner" },
     { key: "condition", label: "Condition" },
+    { key: "structures", label: "Other structures" },
   ],
 };
 
@@ -184,7 +288,7 @@ const dams = defineLayer({
   id: "dams",
   title: "Dams",
   description:
-    "US dams from the National Inventory of Dams (Army Corps of Engineers): every high- and significant-hazard dam plus the larger low-hazard ones. Each point has name, v and storageAf (capacity in acre-feet), heightFt, yearCompleted and t (January 1 of that year, so the time scrubber plays dams by decade), purpose and kind (Hydroelectric, Flood Risk Reduction, Irrigation, Water Supply, Recreation and so on), hazard (High, Significant or Low: the damage if it failed, not the chance of failure or a safety rating), river, state, owner, damType and condition. About 3% of dams have no storage figure and are left out; year completed is missing for some old dams. At most 2,000 dams, biggest storage first; any US box answers, and over 250,000 km\u00b2 the note gives the total.",
+    "US dams from the National Inventory of Dams (Army Corps of Engineers): every high- and significant-hazard dam plus the larger low-hazard ones. Each point has name, v and storageAf (capacity in acre-feet), heightFt, yearCompleted and t (January 1 of that year, so the time scrubber plays dams by decade), purpose and kind (Hydroelectric, Flood Risk Reduction, Irrigation, Water Supply, Recreation and so on), hazard (High, Significant or Low: the damage if it failed, not the chance of failure or a safety rating), river, state, owner, damType and condition. A reservoir's dikes and saddle dams are folded into its main dam (structures, e.g. \"4 dikes\"), since the inventory gives each the whole reservoir's storage. About 3% of dams have no storage figure and are left out; year completed is missing for some old dams. At most 2,000 dams, biggest storage first; any US box answers, and over 250,000 km\u00b2 the note gives the total.",
   coverage: "us",
   surface: "land",
   license: "Public domain (US Army Corps of Engineers, National Inventory of Dams)",

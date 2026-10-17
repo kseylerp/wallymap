@@ -17,7 +17,8 @@ import { shoreOffsetKm } from "@/lib/checks/landMask";
  *
  * - surface: features where the layer says they belong (Layer.surface): crags on land, buoys at sea, surf at the coast.
  * - lattice: no point layer drawn as a regular grid (a model grid read as places).
- * - duplicates: no place listed twice (an OSM node and a cliff line of the same crag), on the map or in Rank by's top 10.
+ * - duplicates: no place listed twice (an OSM node and a cliff line of the same crag), on the map or in Rank by's top 10,
+ *   and no two top-10 entries with one measure under one name stem (Granby Dam and Granby Dikes 1 to 4, one reservoir).
  * - card: the inspect card's rows read as words (no raw keys, "Value", bare URLs, unexplained scores).
  * - layerIds: every layer on the map is a registered layer (no garbled tool names).
  * - place: for a question about a place, the features are in or near it.
@@ -187,6 +188,17 @@ export function normalName(name: string): string {
   return searchable(name)
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
+}
+
+/** Words that say which part of a place a name is, not which place: "Granby Dike 4" and "Granby Dam" are Granby's. */
+const PART_WORDS = new Set(["dam", "dike", "dyke", "saddle", "levee", "spillway", "embankment", "main", "auxiliary", "no", "unit", "north", "south", "east", "west", "upper", "lower"]);
+
+/** The place a name points at, without its part words, numbers and roman numerals: "granby" for "Granby Dike 4". */
+export function nameStem(name: string): string {
+  return normalName(name)
+    .split(" ")
+    .filter((w) => w !== "" && !PART_WORDS.has(w) && !/^\d+$/.test(w) && !/^[ivx]+$/.test(w))
+    .join(" ");
 }
 
 function isUnnamed(norm: string): boolean {
@@ -476,6 +488,22 @@ export function checkDuplicates(layers: Drawn[]): CheckResult {
         }
       }
       if (repeated.length > 0) failures.push(`${layer.label}: the Rank by top ${top.length} (by ${by}) lists the same place twice: ${repeated.slice(0, 3).join(", ")}.`);
+      // One reservoir's dam and dikes, each filed with the reservoir's storage: one measure under one name stem.
+      const echoes: string[] = [];
+      for (let i = 0; i < top.length && key; i++) {
+        const vi = top[i].properties?.[key];
+        const si = nameStem(nameOf(top[i]) ?? "");
+        if (typeof vi !== "number" || vi === 0 || si === "") continue;
+        for (let j = i + 1; j < top.length; j++) {
+          if (top[j].properties?.[key] === vi && nameStem(nameOf(top[j]) ?? "") === si) {
+            echoes.push(`"${nameOf(top[i])}" and "${nameOf(top[j])}" (rows ${i + 1} and ${j + 1})`);
+            break;
+          }
+        }
+      }
+      if (echoes.length > 0) {
+        failures.push(`${layer.label}: the Rank by top ${top.length} (by ${by}) repeats one ${by} under one name, parts of one place listed as separate entries: ${echoes.slice(0, 3).join(", ")}.`);
+      }
     }
   }
   return { check: "duplicates", ok: failures.length === 0, failures };

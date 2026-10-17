@@ -15,6 +15,7 @@ import {
   findLattice,
   fitsSurface,
   grownPlace,
+  nameStem,
   normalName,
   runMapChecks,
   type LayerInfo,
@@ -232,6 +233,19 @@ describe("duplicates", () => {
     // An OSM node and an OSM way of one crag 200 m apart.
     const way = line([[-83.6777, 37.78], [-83.6767, 37.7805]], { name: "Board Wall", kind: "crag", source: "osm", osmId: "way/6" });
     expect(fails([point(-83.68, 37.78, { name: "Board Wall", kind: "crag", source: "osm", osmId: "node/5" }), way])).toBe(false);
+  });
+
+  it("fails a reservoir's dam and dikes ranked as separate entries with one storage (Granby Dam, Granby Dike 1 to 4)", () => {
+    const granby = ["Granby Dam", "Granby Dike 1", "Granby Dike 2"].map((name, i) =>
+      point(-105.867 + i * 0.01, 40.14, { name, storageAf: 539760, v: 539760 }),
+    );
+    const others = [point(-114.7, 36.0, { name: "Hoover Dam", storageAf: 30237000, v: 30237000 })];
+    const result = checkDuplicates(drawn(mapWith({ id: "dams", features: [...others, ...granby] })));
+    expect(result.ok).toBe(false);
+    expect(result.failures.join(" ")).toMatch(/repeats one storage under one name.*"Granby Dam" and "Granby Dike 1"/);
+    const folded = [...others, point(-105.867, 40.14, { name: "Granby Dam", storageAf: 539760, v: 539760, structures: "4 dikes" })];
+    expect(checkDuplicates(drawn(mapWith({ id: "dams", features: folded }))).ok).toBe(true);
+    expect(nameStem("Granby Dike 4")).toBe("granby");
   });
 
   it("normalises names: case, accents and punctuation", () => {

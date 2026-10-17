@@ -80,6 +80,11 @@ function withDefaults(layerId: string, input: Record<string, unknown>): Record<s
   return parsed?.success ? (parsed.data as Record<string, unknown>) : rest;
 }
 
+/** Popularity layers and the layer whose features each one scores (and already contains). */
+const POPULARITY_OF: Record<string, string> = { popularity: "osm-trails", "popularity-campsites": "campsites" };
+/** A question about how popular or busy places are; "best" and "most visited" count. */
+const ASKS_POPULAR = /\b(?:popular\w*|busiest|busy|crowd\w*|congest\w*|foot traffic|quiet\w*|best|most visited|least visited)\b/i;
+
 /** Query calls that would locate the place themselves: physical-regions outlines a named region. */
 const LOCATING_QUERIES = new Set(["query_physical-regions"]);
 
@@ -169,6 +174,27 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
     return false;
   });
 
+  // 2b. One line per way: popularity is a colouring of the trails (or campsites) it scores, so it is only added when
+  // the question asks how popular, and once it has answered, the plain layer is not queried on top of it.
+  const asksPopular = ASKS_POPULAR.test(turn.question);
+  calls = calls.filter((c) => {
+    if (!isQuery(c.toolName)) return true;
+    const layerId = layerOf(c.toolName);
+    let reason: string | null = null;
+    if (POPULARITY_OF[layerId] && !asksPopular) {
+      reason =
+        `Not queried: the question does not ask how popular or busy, and ${layerId} would draw a second line over every ${POPULARITY_OF[layerId]} feature. ` +
+        `Answer from ${POPULARITY_OF[layerId]}.`;
+    }
+    const scoredBy = Object.keys(POPULARITY_OF).find((p) => POPULARITY_OF[p] === layerId && turn.queries.some((q) => q.layerId === p && q.ok && q.drawable));
+    if (scoredBy) reason = `Not queried: ${scoredBy} already holds every ${layerId} feature it scores; render ${scoredBy} instead of drawing ${layerId} over it.`;
+    if (!reason) return true;
+    rejected.push({ call: c, reason });
+    turn.note(`${layerId}: dropped so trails or campsites are not drawn twice (${scoredBy ? `${scoredBy} already answered` : "popularity not asked"})`);
+    changed = true;
+    return false;
+  });
+
   // 3. Queries with no place looked up: look it up, add the geocode, and run the queries on its box.
   const queries = calls.filter((c) => isQuery(c.toolName));
   const located = turn.place !== null || turn.regionQueried || calls.some((c) => LOCATING_QUERIES.has(c.toolName));
@@ -190,7 +216,8 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
 
   // 4. Ending the turn with queries never drawn: render them first, in the layer's default view.
   const hasNote = calls.some((c) => c.toolName === "note");
-  const ending = hasNote || calls.length === 0;
+  // A step whose calls were all dropped is asked again, not ended.
+  const ending = hasNote || (calls.length === 0 && rejected.length === 0);
   let dropText = false;
   if (ending) {
     const drawnHere = new Set(calls.flatMap((c) => (c.toolName === "render" || c.toolName === "compare") && typeof c.input.layerId === "string" ? [c.input.layerId] : []));

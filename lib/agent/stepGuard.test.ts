@@ -274,3 +274,27 @@ describe("near <town>: only the place the query is about", () => {
     expect((box[0] + box[2]) / 2).toBeCloseTo(-83.65, 1);
   });
 });
+
+describe("step guard: one line per way (popularity colours the trails)", () => {
+  it("drops popularity when the question does not ask how popular", async () => {
+    const { calls, turn } = await run("Show hiking trails around Lake Tahoe", [
+      { calls: [{ name: "geocode", input: { place: "Lake Tahoe" } }] },
+      { calls: [{ name: "query_osm-trails", input: { bbox: TAHOE } }, { name: "query_popularity", input: { bbox: TAHOE } }] },
+      { calls: [{ name: "render", input: { layerId: "osm-trails" } }, { name: "note", input: { markdown: "Trails." } }] },
+      { text: "- More?" },
+    ]);
+    expect(calls.map((c) => c.name)).toEqual(["geocode", "query_osm-trails", "render", "note"]);
+    expect(turn.log.join("\n")).toMatch(/popularity: dropped/);
+  });
+
+  it("keeps popularity when asked, and does not draw osm-trails over it afterwards", async () => {
+    const { calls } = await run("Which trails around Lake Tahoe are the most popular?", [
+      { calls: [{ name: "geocode", input: { place: "Lake Tahoe" } }] },
+      { calls: [{ name: "query_popularity", input: { bbox: TAHOE } }] },
+      { calls: [{ name: "query_osm-trails", input: { bbox: TAHOE } }] },
+      { calls: [{ name: "render", input: { layerId: "popularity" } }, { name: "note", input: { markdown: "Rubicon Trail is top." } }] },
+      { text: "- More?" },
+    ]);
+    expect(calls.map((c) => c.name)).toEqual(["geocode", "query_popularity", "render", "note"]);
+  });
+});

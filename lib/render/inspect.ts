@@ -311,7 +311,9 @@ function asObject(value: unknown): Record<string, unknown> | null {
 /** Splits a feature's properties into what the inspect card shows: name, date chip, value, rows, signals. */
 export function summarizeFeature(feature: Feature, unit?: string, maxRows = 8): FeatureSummary {
   const props = feature.properties ?? {};
-  const name = typeof props.name === "string" && props.name.trim() ? props.name.trim() : null;
+  // A sighting has no name of its own: its species is what it is called ("Feature" was the card's title for every sighting).
+  const named = typeof props.name === "string" && props.name.trim() ? props.name : typeof props.species === "string" ? props.species : "";
+  const name = named.trim() ? named.trim() : null;
   const date = typeof props.t === "string" ? formatDate(props.t) : typeof props.t === "number" ? String(props.t) : null;
   let value: Row | null = null;
   // Layers often copy a named property into `v` (fire perimeters: v = acres); the stat then takes that name.

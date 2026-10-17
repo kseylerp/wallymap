@@ -259,8 +259,8 @@ const HELP: Record<string, FieldHelp> = {
 
 const CARD: CardSpec = {
   facts: [
-    // A record has no name, so the species leads the card; scientificName is the same Latin name, so it is not repeated.
-    { key: "species", label: "Species" },
+    // A record has no name: its species is the card's title (lib/render/inspect.ts), so neither it nor scientificName,
+    // the same Latin name, is repeated as a row.
     { key: "t", label: "Date", format: "date" },
     { key: "basisOfRecord", label: "Record type", values: Object.fromEntries(BASIS_VALUES.map((v) => [v, sentenceCase(v)])) },
     { key: "dataset", label: "Dataset" },
@@ -268,7 +268,7 @@ const CARD: CardSpec = {
     { key: "license", label: "Licence" },
   ],
   /** ScientificName is the same Latin name as species. */
-  hidden: ["scientificName"],
+  hidden: ["scientificName", "species"],
   links: [{ key: "url", label: "Source record" }],
 };
 

@@ -207,13 +207,13 @@ const HELP: Record<string, FieldHelp> = {
 
 const CARD: CardSpec = {
   facts: [
-    // A sighting has no name, so the species leads the card.
-    { key: "species", label: "Species" },
     { key: "scientificName", label: "Scientific name" },
     { key: "observedOn", label: "Seen on", format: "date" },
     { key: "license", label: "Licence", values: LICENSE_LABELS },
   ],
   links: [{ key: "url", label: "Observation on iNaturalist" }],
+  // The species is the card's title (lib/render/inspect.ts).
+  hidden: ["species"],
 };
 
 const ATTRIBUTES: Attribute[] = [{ key: "species", type: "category", label: "Species" }, timeAttribute("Seen")];

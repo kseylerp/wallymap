@@ -196,3 +196,11 @@ describe("deckLayerFilter", () => {
     expect(filter({ layer: terrain, renderPass: "picking:query" })).toBe(true);
   });
 });
+
+describe("a sighting's title", () => {
+  it("is its species when it has no name (it read \"Feature\")", () => {
+    const sighting = { type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [-115.57, 51.18] }, properties: { species: "American Red Squirrel", scientificName: "Tamiasciurus hudsonicus" } };
+    expect(summarizeFeature(sighting).name).toBe("American Red Squirrel");
+    expect(summarizeFeature({ ...sighting, properties: { ...sighting.properties, name: "Bow River sighting" } }).name).toBe("Bow River sighting");
+  });
+});

@@ -1,16 +1,13 @@
-import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from "ai";
+import { convertToModelMessages, streamText, type UIMessage } from "ai";
 import "@/layers";
-import { SYSTEM_PROMPT } from "@/lib/agent/prompt";
-import { getModel } from "@/lib/agent/provider";
-import { buildTools, repairToolCall } from "@/lib/agent/tools";
+import { agentTurn } from "@/lib/agent/agent";
+import { lastUserText } from "@/lib/agent/turn";
 import type { MapView } from "@/lib/agent/view";
-import { parseMapView, systemForTurn } from "@/lib/agent/viewContext";
+import { parseMapView } from "@/lib/agent/viewContext";
 import { chatRules, limitRequest } from "@/lib/fetch/rateLimit";
 
 // Room for several tool steps, each of which may wait on a slow upstream.
 export const maxDuration = 120;
-
-const MAX_STEPS = 12;
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -76,16 +73,15 @@ export async function POST(req: Request): Promise<Response> {
 
   try {
     // Setup errors name the missing env var (never its value), so they are safe to return.
-    const model = getModel();
-    const tools = buildTools({ view });
+    // The view goes into this turn's system prompt only, never the history, so old views are not resent. The model
+    // runs inside the step guard, which keeps tool names canonical in this stream (lib/agent/stepGuard.ts).
+    const { model, system, tools, stopWhen, repairToolCall } = agentTurn({ question: lastUserText(messages), view });
     const result = streamText({
       model,
-      // The view goes into this turn's system prompt only, never the history, so old views are not resent.
-      system: systemForTurn(SYSTEM_PROMPT, view),
+      system,
       tools,
       messages: await convertToModelMessages(messages, { tools }),
-      stopWhen: stepCountIs(MAX_STEPS),
-      // Some models glue template tokens onto a tool name (query_power-plants<|channel|>commentary); map it back.
+      stopWhen,
       repairToolCall,
     });
     return result.toUIMessageStreamResponse({ onError: errorMessage });

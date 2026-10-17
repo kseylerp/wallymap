@@ -5,8 +5,8 @@ import { BBoxSchema, bboxAreaKm2, hardMaxAreaKm2, type BBox, type Coverage, type
 import { runLayer } from "@/lib/layers/run";
 import { isFullLayerResult, summarizeLayerResult, type SummaryStyle } from "@/lib/layers/summarize";
 import { VIEW_KINDS, type Basemap, type RenderMode, type TimeMode } from "@/lib/render/state";
-import { geocode } from "./geocode";
 import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
+import { createTurn, inputKeyOf, isWideQuery, placeKey, type Turn } from "./turn";
 import { repairToolName } from "./toolNames";
 import { gistFor } from "./vocabulary";
 import type { MapView } from "./view";
@@ -306,7 +306,14 @@ export function isWithinView(bbox: BBox, view: BBox): boolean {
 /** The view a query answers from, or undefined when it does not (no view bbox, a place was geocoded, or the box is elsewhere). */
 type ViewSource = (bbox: BBox) => { bbox: BBox; zoom: number } | undefined;
 
-function queryTool(layer: Layer, fromView: ViewSource = () => undefined) {
+/** True when a layer result has something to draw: features, or map tiles. */
+function drawable(body: unknown): boolean {
+  if (!body || typeof body !== "object" || "error" in body) return false;
+  const b = body as { kind?: string; data?: { features?: unknown[] } };
+  return b.kind === "tiles" || (b.kind === "geojson" && (b.data?.features?.length ?? 0) > 0);
+}
+
+function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: Turn = createTurn()) {
   // The registry erases each layer's input shape, so zod cannot infer bbox and
   // zoom through extend(); the cast restores the two fields this tool adds.
   const inputSchema = layer.input.extend({
@@ -320,6 +327,9 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined) {
     execute: async ({ bbox, zoom, ...input }) => {
       const view = fromView(bbox);
       const body = (await runLayer(layer.id, { bbox, zoom, input, fromView: view })).body;
+      const ok = !("error" in body);
+      turn.queries.push({ layerId: layer.id, bbox, inputKey: inputKeyOf(input), ok, drawable: drawable(body), wide: ok && isWideQuery(layer, bbox) });
+      if (ok && layer.id === "physical-regions") turn.regionQueried = true;
       // The user is looking at a view too wide for this layer: name the layers that can still answer at this scale.
       if (view && "error" in body && body.hint === "zoom_in") {
         const widerScale = widerScaleFor(layer.id, view.bbox);
@@ -358,12 +368,16 @@ export function geocodeKey(place: string): string {
   return place.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
-/** Builds the agent's tool set from the current layer registry. `view` is the map the user is looking at; the route tool biases its place lookups to it. */
-export function buildTools({ view = null }: { view?: MapView | null } = {}): ToolSet {
+/**
+ * Builds the agent's tool set from the current layer registry. `view` is the map the user is looking at; the route tool
+ * biases its place lookups to it. `turn` is this turn's shared record (lib/agent/turn.ts): the tools write what they
+ * did into it, and the step guard reads it.
+ */
+export function buildTools({ view = null, turn = createTurn({ view }) }: { view?: MapView | null; turn?: Turn } = {}): ToolSet {
   // Tools are built per request, so this is per turn: once a place is geocoded, queries are about that place.
   let geocoded = false;
-  // This turn's geocode lookups by text, so a repeat returns the first answer instead of calling Mapbox again.
-  const geocodes = new Map<string, ReturnType<typeof geocode>>();
+  // The geocode texts already answered this turn, so a repeat is marked as one.
+  const answered = new Set<string>();
   const fromView: ViewSource = (bbox) =>
     view?.bbox && !geocoded && isWithinView(bbox, view.bbox) ? { bbox: view.bbox, zoom: view.zoom } : undefined;
   const tools: ToolSet = {
@@ -407,13 +421,13 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
       execute: async ({ place }) => {
         geocoded = true;
         // Retrying the same text gets the same answer: hand back the first one, marked, so the model stops looping.
-        const key = geocodeKey(place);
-        const earlier = geocodes.get(key);
-        if (earlier !== undefined) return { ...(await earlier), repeated: true };
-        // Bias toward what the user is looking at, when they are looking at somewhere (not the whole globe).
-        const lookup = geocode(place, view?.bbox ? { proximity: view.center } : {});
-        geocodes.set(key, lookup);
-        return lookup;
+        const key = placeKey(place);
+        const repeated = answered.has(key);
+        answered.add(key);
+        // The lookup is shared with the step guard, which may have looked this text up already.
+        const found = await turn.lookup(place);
+        if (!("error" in found)) turn.place ??= found;
+        return repeated ? { ...found, repeated: true } : found;
       },
     }),
     set_view: tool({
@@ -463,7 +477,13 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
         hexBasis: z.enum(HEX_BASES).optional().describe("Hex cells' color: count (default), sum of the measure, share (with hexShare), recency"),
         hexShare: z.string().optional().describe("With hexBasis share: the chip value whose share colors the cells, e.g. wind"),
       }),
-      execute: async (input) => input,
+      // Recorded as drawn for the step guard, under the layer id without template junk.
+      execute: async (input) => {
+        const layerId = input.layerId.replace(/<\|[\s\S]*$/, "").trim();
+        const out = { ...input, layerId };
+        turn.drawn.add(layerId);
+        return out;
+      },
     }),
     set_time: tool({
       description:
@@ -501,10 +521,13 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
         bLabel: z.string().optional().describe("Short name for window B, e.g. \"2025\""),
       }),
       // A compare needs either the two time windows or the two scenario amounts.
-      execute: async (input) =>
-        input.scenario !== undefined || (input.a !== undefined && input.b !== undefined)
-          ? input
-          : { error: "compare needs both windows a and b, or scenario with two amounts" },
+      execute: async (input) => {
+        if (input.scenario === undefined && (input.a === undefined || input.b === undefined)) {
+          return { error: "compare needs both windows a and b, or scenario with two amounts" };
+        }
+        turn.drawn.add(input.layerId);
+        return input;
+      },
     }),
     route: tool({
       description:
@@ -539,7 +562,7 @@ export function buildTools({ view = null }: { view?: MapView | null } = {}): Too
   };
 
   for (const layer of listLayers()) {
-    tools[`query_${layer.id}`] = queryTool(layer, fromView);
+    tools[`query_${layer.id}`] = queryTool(layer, fromView, turn);
   }
   return tools;
 }

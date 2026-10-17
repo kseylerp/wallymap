@@ -44,14 +44,12 @@
  */
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { gunzipSync, gzipSync } from "node:zlib";
-import { generateText, stepCountIs } from "ai";
+import { generateText } from "ai";
 import { getLayer, listLayers } from "@/layers";
-import { getModel } from "@/lib/agent/provider";
+import { agentTurn } from "@/lib/agent/agent";
 import { isFullLayerResult, summarizeLayerResult, type GeojsonSummary } from "@/lib/layers/summarize";
-import { buildTools, repairToolCall } from "@/lib/agent/tools";
-import { SYSTEM_PROMPT } from "@/lib/agent/prompt";
 import type { MapView } from "@/lib/agent/view";
-import { parseMapView, systemForTurn } from "@/lib/agent/viewContext";
+import { parseMapView } from "@/lib/agent/viewContext";
 import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type MapState } from "@/lib/render/state";
@@ -441,20 +439,17 @@ type Run = {
   usage: { in?: number; out?: number };
   seconds: number;
   finish: string;
+  /** What the server's step guard did for the model (lib/agent/stepGuard.ts). */
+  guard?: string[];
 };
 
 /** Runs one question through the real agent and collects every tool call (with its output, when it returned). */
 async function runModel(raw: string): Promise<Run> {
   const started = Date.now();
   const { question, view } = splitView(raw);
-  const result = await generateText({
-    model: getModel(),
-    system: systemForTurn(SYSTEM_PROMPT, view),
-    tools: buildTools({ view }),
-    prompt: question,
-    stopWhen: stepCountIs(12),
-    repairToolCall,
-  });
+  // The same turn setup as app/api/chat/route.ts: tools, system prompt with the view, and the step-guarded model.
+  const { turn, ...agent } = agentTurn({ question, view });
+  const result = await generateText({ ...agent, prompt: question });
   const calls: ToolCall[] = [];
   for (const step of result.steps) {
     for (const r of step.toolResults) calls.push({ toolName: r.toolName, input: r.input, output: r.output });
@@ -469,6 +464,7 @@ async function runModel(raw: string): Promise<Run> {
     usage: { in: result.totalUsage.inputTokens, out: result.totalUsage.outputTokens },
     seconds: Math.round((Date.now() - started) / 100) / 10,
     finish: result.finishReason,
+    ...(turn.log.length > 0 && { guard: turn.log }),
   };
 }
 
@@ -571,6 +567,7 @@ function evaluate(run: Run): Evaluated {
       tokens: run.usage,
       seconds: run.seconds,
       finish: run.finish,
+      ...(run.guard ? { guard: run.guard } : {}),
       textWords: wordCount(text),
       textStart: text.replace(/\s+/g, " ").slice(0, 120),
     },

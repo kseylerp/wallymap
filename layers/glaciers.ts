@@ -57,7 +57,8 @@ const WIDE_VERTEX_STEP_DEG = 0.004;
 
 const inputSchema = z.object({});
 
-const GENERIC_NAMES = new Set(["", "none", "null", "unnamed", "unknown"]);
+/** Placeholders, not names: "S/N" and "sin nombre" are Spanish for "no name" (most of Patagonia's unnamed ice, 2026-10-17). */
+const GENERIC_NAMES = new Set(["", "none", "null", "unnamed", "unknown", "s/n", "sn", "s.n.", "sin nombre", "no name", "noname", "n/a"]);
 
 function str(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;

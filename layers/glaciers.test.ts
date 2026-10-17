@@ -133,8 +133,8 @@ describe("glaciers layer", () => {
       geometry: poly,
       properties: { line_type: "glac_bound", glac_id: id, glac_name: name, db_area: 1.5, src_date: "1984-09-09T00:00:00Z" },
     });
-    const { data } = normalizeGlaciers({ type: "FeatureCollection", features: [row("CA", "a"), row(null, "b"), row("None", "c"), row("Rainier", "d")] });
-    expect(data.features.map((f) => f.properties?.name).sort()).toEqual(["Rainier", "Unnamed glacier", "Unnamed glacier", "Unnamed glacier"]);
+    const { data } = normalizeGlaciers({ type: "FeatureCollection", features: [row("CA", "a"), row(null, "b"), row("None", "c"), row("Rainier", "d"), row("S/N", "e"), row("Sin nombre", "f")] });
+    expect(data.features.map((f) => f.properties?.name).sort()).toEqual(["Rainier", ...Array(5).fill("Unnamed glacier")]);
   });
 
   it("thins dense vertices but keeps closed rings, and drops rings that collapse", () => {

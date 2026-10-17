@@ -17,7 +17,7 @@
  * line pictures are JPEG at quality 80, and the run stops cleanly when free disk drops under 2 GB (scripts/diskGuard.ts).
  */
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "@playwright/test";
@@ -87,8 +87,17 @@ async function answers(url: string): Promise<boolean> {
 
 /** True when `dir` is a registered worktree of this repository. */
 function isWorktree(dir: string): boolean {
+  if (!existsSync(dir)) return false;
+  // Compared by real path: the temp folder is a symlink on a Mac (/var is /private/var).
+  const real = realpathSync(dir);
   const list = execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: ROOT, encoding: "utf8" });
-  return list.split("\n").some((line) => line === `worktree ${resolve(dir)}` || line === `worktree ${dir}`);
+  return list
+    .split("\n")
+    .filter((line) => line.startsWith("worktree "))
+    .some((line) => {
+      const path = line.slice("worktree ".length);
+      return existsSync(path) && realpathSync(path) === real;
+    });
 }
 
 /** The worktree at HEAD: the existing one checked out and cleaned (node_modules and .env.local kept), else a new one. */

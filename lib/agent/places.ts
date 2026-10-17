@@ -161,11 +161,18 @@ export const NEAR_RADIUS_KM: Record<string, number> = {
   peaks: 30,
 };
 
-/** A place this small on both axes (degrees) is a town or a point, so "near" it is a radius rather than its own box. */
-const POINT_LIKE_DEG = 0.5;
+/**
+ * A town's box from Mapbox is under this on both axes (degrees): Moab, Utah comes back 1.1° by 1.3° (its whole
+ * census area), Mammoth Lakes far smaller; a county or a state is wider.
+ */
+const TOWN_MAX_DEG = 1.5;
 
-export function isPointLike([w, s, e, n]: BBox): boolean {
-  return e - w < POINT_LIKE_DEG && n - s < POINT_LIKE_DEG;
+/**
+ * True for a town or a point, where "near" means a radius around it: a Mapbox answer under TOWN_MAX_DEG. A region
+ * from the app's own sources (the Navajo Nation, a national park, a range) is what "near" it means by itself.
+ */
+export function isPointLike([w, s, e, n]: BBox, source?: string): boolean {
+  return (source === undefined || source === "mapbox") && e - w < TOWN_MAX_DEG && n - s < TOWN_MAX_DEG;
 }
 
 const KM_PER_DEGREE = 111.32;
@@ -183,8 +190,8 @@ export function boxAround([lng, lat]: [number, number], radiusKm: number): BBox 
  * place's center; null when the layer has no default, or the place is a region rather than a town (then its own box
  * is what "near" means).
  */
-export function nearBox(question: string, layerId: string, place: { bbox: BBox; center: [number, number] }): BBox | null {
+export function nearBox(question: string, layerId: string, place: { bbox: BBox; center: [number, number]; source?: string }): BBox | null {
   const radius = statedRadiusKm(question) ?? NEAR_RADIUS_KM[layerId];
-  if (radius === undefined || !isPointLike(place.bbox)) return null;
+  if (radius === undefined || !isPointLike(place.bbox, place.source)) return null;
   return boxAround(place.center, radius);
 }

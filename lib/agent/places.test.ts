@@ -57,11 +57,16 @@ describe("near", () => {
     expect((box[3] - box[1]) * 111.32).toBeCloseTo(40, 0);
     expect(nearBox("dams near Mammoth Lakes", "dams", mammoth)).toBeNull();
     expect(nearBox("mines near the Navajo Nation", "earthquakes", { bbox: [-112, 35, -107.5, 37.5], center: [-109.8, 36.2] })).toBeNull();
+    const moab = nearBox("Mountain bike trails near Moab", "mtb-trails", { bbox: [-110.146, 38.188, -109.051, 39.468], center: [-109.551, 38.573], source: "mapbox" })!;
+    expect((moab[3] - moab[1]) * 111.32).toBeCloseTo(50, 0);
   });
 
   it("tells a town from a region", () => {
     expect(isPointLike(mammoth.bbox)).toBe(true);
+    // Mapbox's Moab, Utah is its whole census area, 1.1° by 1.3°: still a town.
+    expect(isPointLike([-110.146, 38.188, -109.051, 39.468], "mapbox")).toBe(true);
     expect(isPointLike([-112, 35, -107.5, 37.5])).toBe(false);
+    expect(isPointLike([-109.2, 36.0, -108.8, 36.3], "wikidata")).toBe(false);
     expect(boxAround([0, 0], 111.32)).toEqual([-1, -1, 1, 1]);
   });
 });

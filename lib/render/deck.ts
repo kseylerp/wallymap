@@ -24,6 +24,7 @@ import {
   scoreRampFor,
   SELECTED_AREA,
   SIBLING_FADE,
+  AREA_OUTLINE_SIBLING_FADE,
   symbolSizePx,
   WHITE as WHITE_HEX,
   type AreaRecipe,
@@ -104,11 +105,11 @@ function selectionKey(feature: Feature | undefined): number {
  * feature at full strength (in `selectedColor` when given) and fades its siblings. `selected` is matched by
  * reference: deck hands accessors the same feature objects the pick returned.
  */
-function colorFor(color: Rgba, opacity: number, selected: Feature | undefined, selectedColor?: Rgba): ColorAccessor {
+function colorFor(color: Rgba, opacity: number, selected: Feature | undefined, selectedColor?: Rgba, fade: number = SIBLING_FADE): ColorAccessor {
   const base = withOpacity(color, opacity);
   if (!selected) return base;
   const strong = selectedColor ? withOpacity(selectedColor, opacity) : base;
-  const faded = withOpacity(base, SIBLING_FADE);
+  const faded = withOpacity(base, fade);
   return (f: Feature) => (f === selected ? strong : faded);
 }
 
@@ -447,7 +448,7 @@ function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
       // into H3 columns. In 2D both draw flat.
       if (ctx.style.geometry === "line") return [];
       if (ctx.style.geometry === "polygon") {
-        return ctx.threeD ? extrudedAreaLayers(op, ctx, opacity) : polygonLayers({ ...op, mode: "polygons" }, ctx, opacity);
+        return ctx.threeD ? [...extrudedAreaLayers(op, ctx, opacity), ...rankedLabelLayers(op, ctx, opacity)] : polygonLayers({ ...op, mode: "polygons" }, ctx, opacity);
       }
       return ctx.threeD ? columnLayers(op, ctx, opacity) : hexTileLayers(op, ctx, opacity);
     case "lines":
@@ -467,7 +468,9 @@ function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
 }
 
 function polygonLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
-  return ctx.style.unit === "score" ? scoreAreaLayers(op, ctx, opacity) : areaLayers(op, ctx, opacity);
+  const areas = ctx.style.unit === "score" ? scoreAreaLayers(op, ctx, opacity) : areaLayers(op, ctx, opacity);
+  // A ranked view labels its top areas on the map, as it labels its top symbols (lib/render/views.ts).
+  return [...areas, ...rankedLabelLayers(op, ctx, opacity)];
 }
 
 /**
@@ -568,7 +571,7 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       data,
       pickable: false,
       filled: false,
-      getLineColor: colorFor(WHITE, opacity, selected),
+      getLineColor: colorFor(WHITE, opacity, selected, undefined, AREA_OUTLINE_SIBLING_FADE),
       getLineWidth: widthFor(casingWidth, SELECTED_AREA.outlineWidth + 2 * SELECTED_AREA.casing, selected),
       lineWidthUnits: widths.units,
       lineWidthScale: widths.scale,
@@ -584,7 +587,7 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       // which deck draws as the pattern's background. Mask mode (not the atlas's own colors): a canvas uploads its
       // transparent pixels as black, and the mipmaps the drape onto 3D terrain samples then darken the hatch to maroon.
       getFillColor: canvas ? hatch : tint,
-      getLineColor: colorFor(hexToRgba(recipe.outline), opacity, selected, SELECT),
+      getLineColor: colorFor(hexToRgba(recipe.outline), opacity, selected, SELECT, AREA_OUTLINE_SIBLING_FADE),
       getLineWidth: widthFor(recipe.outlineWidth, SELECTED_AREA.outlineWidth, selected),
       lineWidthUnits: widths.units,
       lineWidthScale: widths.scale,
@@ -697,22 +700,26 @@ export function declutterLabels(features: Feature[], zoom: number, latitude: num
 function rankedLabelLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const { data, terrain, deckId, style } = ctx;
   const rankKey = rankKeyOf(op, ctx);
-  if (!rankKey || style.geometry !== "point") return [];
+  if (!rankKey || (style.geometry !== "point" && style.geometry !== "polygon")) return [];
+  const area = style.geometry === "polygon";
   const { top, key, extent } = rankedSizing(data, rankKey);
-  const named = top.filter((f) => typeof f.properties?.name === "string" && f.properties.name !== "");
+  // Placeholder names ("Unnamed glacier") say nothing on the map; the row still lists them.
+  const named = top.filter((f) => typeof f.properties?.name === "string" && f.properties.name !== "" && !/^unnamed\b/i.test(f.properties.name));
   const labelled = declutterLabels(named, ctx.zoom, ctx.latitude);
   if (labelled.length === 0) return [];
   const labelKey = deckLayerKey(deckId ?? op.layerId, terrain);
+  const kind = area ? "polygons" : "points";
   return [
     // Placed again as the camera moves, so a label near the edge of the clear map moves inward (labelPlacement.ts).
+    // A ranked area is labelled at its center, a ranked symbol beside it.
     new PlacedLabelLayer<Feature>({
-      id: `${labelKey}:points:placed`,
-      textId: `${labelKey}:points:labels`,
+      id: `${labelKey}:${kind}:placed`,
+      textId: `${labelKey}:${kind}:labels`,
       data: labelled,
       getPosition: markerPosition,
       getText: (f) => String(f.properties?.name),
       size: 11,
-      getGap: (f) => Math.round((SYMBOL_SIZE_PX * sizeScale(f.properties?.[key], extent)) / 2) + 8,
+      getGap: (f) => (area ? 4 : Math.round((SYMBOL_SIZE_PX * sizeScale(f.properties?.[key], extent)) / 2) + 8),
       getInsets: ctx.labelInsets,
       textProps: {
         pickable: false,
@@ -1395,10 +1402,12 @@ function withoutLines(data: GeoJSON.FeatureCollection): GeoJSON.FeatureCollectio
 function deltaLayers(op: RenderOp, { data: all, selected, terrain }: OpContext): Layer[] {
   const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
   const id = `${deckLayerKey(op.layerId, terrain)}:${op.mode}`;
-  const fade = (f: Feature, c: Rgba): Rgba => {
+  const fade = (f: Feature, c: Rgba, siblingFade: number = SIBLING_FADE): Rgba => {
     const base = withOpacity(c, opacity);
-    return selected && f !== selected ? withOpacity(base, SIBLING_FADE) : base;
+    return selected && f !== selected ? withOpacity(base, siblingFade) : base;
   };
+  // An area's outline and casing stay readable beside a selected one (AREA_OUTLINE_SIBLING_FADE); its fill fades.
+  const strokeFade = (f: Feature) => (isArea(f) ? AREA_OUTLINE_SIBLING_FADE : SIBLING_FADE);
   const trigger = [selectionKey(selected), opacity];
   if (isHexCollection(all)) {
     const data = all;
@@ -1498,7 +1507,7 @@ function deltaLayers(op: RenderOp, { data: all, selected, terrain }: OpContext):
       pickable: false,
       filled: false,
       pointType: "circle",
-      getLineColor: (f: Feature) => fade(f, WHITE),
+      getLineColor: (f: Feature) => fade(f, WHITE, strokeFade(f)),
       getLineWidth: (f: Feature) => strokeWidth(f) + 2 * DELTA_STROKE.casing,
       lineWidthUnits: "pixels",
       getPointRadius: DELTA_STROKE.pointRadius + DELTA_STROKE.casing,
@@ -1512,7 +1521,7 @@ function deltaLayers(op: RenderOp, { data: all, selected, terrain }: OpContext):
       pickable: true,
       pointType: "circle",
       getFillColor: (f: Feature) => fade(f, isArea(f) ? withOpacity(deltaColor(f), DELTA_FILL_ALPHA) : deltaColor(f)),
-      getLineColor: (f: Feature) => fade(f, deltaColor(f)),
+      getLineColor: (f: Feature) => fade(f, deltaColor(f), strokeFade(f)),
       getLineWidth: (f: Feature) => (f === selected ? strokeWidth(f) + 1 : strokeWidth(f)),
       lineWidthUnits: "pixels",
       getPointRadius: DELTA_STROKE.pointRadius,

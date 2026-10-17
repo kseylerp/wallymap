@@ -203,6 +203,13 @@ export const LINE_CLASSES = {
 export const SIBLING_FADE = 0.35;
 
 /**
+ * While an area is selected, the outlines (and their white casings) of the rest of its layer keep this share of their
+ * alpha: their fill fades with SIBLING_FADE, but at 0.35 a glacier's dark 1px outline vanished on satellite ice and the
+ * map seemed to hold one glacier (owner, 2026-10-16).
+ */
+export const AREA_OUTLINE_SIBLING_FADE = 0.8;
+
+/**
  * The change view's delta (spec §12): what only A had (lost) wally pink with a pink hatch, what only B has (gained)
  * purple, unchanged dark grey; lines draw unchanged sage (never a dark grey line).
  */

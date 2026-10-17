@@ -107,6 +107,39 @@ function prepareWorktree(dir: string): void {
   execFileSync("git", ["worktree", "add", "--detach", dir, "HEAD"], { cwd: ROOT, stdio: "ignore" });
 }
 
+/** True while any process of the group led by `pid` runs. */
+function groupAlive(pid: number): boolean {
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Stops the dev server's process group and waits (up to 10 s, then SIGKILL) until it is gone, so it cannot write its
+ * cache again after the cache is deleted. Synchronous, so a signal handler can call it.
+ */
+function stopGroup(pid: number): void {
+  try {
+    process.kill(-pid, "SIGTERM");
+  } catch {
+    return;
+  }
+  const pause = new Int32Array(new SharedArrayBuffer(4));
+  const deadline = Date.now() + 10_000;
+  while (groupAlive(pid) && Date.now() < deadline) Atomics.wait(pause, 0, 0, 100);
+  if (groupAlive(pid)) {
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      // gone
+    }
+    Atomics.wait(pause, 0, 0, 500);
+  }
+}
+
 /** Deletes what a run leaves in the worktree: the dev server's `.next` cache and any Playwright output. */
 function cleanWorktree(dir: string): void {
   for (const sub of [".next", "test-results", "playwright-report", "blob-report"]) rmSync(join(dir, sub), { recursive: true, force: true });
@@ -132,11 +165,7 @@ async function startServer(): Promise<() => void> {
     stopped = true;
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);
-    try {
-      if (child.pid) process.kill(-child.pid, "SIGTERM");
-    } catch {
-      // already gone
-    }
+    if (child.pid) stopGroup(child.pid);
     try {
       cleanWorktree(dir);
     } catch {

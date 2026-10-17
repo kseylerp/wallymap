@@ -122,6 +122,35 @@ function comparable(text: string): string {
 
 type RuleResult = { ok: boolean; [detail: string]: unknown };
 
+/** A name as a note may write it: comparable, "Mt."/"Mount", "St."/"Saint" and "&"/"and" alike. */
+function spoken(text: string): string {
+  return comparable(text)
+    .replace(/\bmt\.?(?=\s)/g, "mount")
+    .replace(/\bst\.?(?=\s)/g, "saint")
+    .replace(/\s&\s/g, " and ");
+}
+
+/**
+ * True when the note names `name`: as written, without a trailing tag ("Taylor Reid No. 1 (A)"), or with the usual
+ * abbreviations either way ("Mt. Hood" for "Mount Hood"). Pass rules that check a note's wording accept any clear way of
+ * saying the same thing, never one exact phrase.
+ */
+export function noteNames(note: string, name: string): boolean {
+  const n = spoken(note);
+  const full = spoken(name);
+  const bare = full.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  return n.includes(full) || (bare.length >= 3 && n.includes(bare));
+}
+
+/** Words that make an area in km² a sum over many features: "total", "together", "combined", "in all", "between them". */
+const AGGREGATE = String.raw`(?:total(?:ling|ing)?|together|combined|altogether|in all|all told|overall|collectively|between them|sum|cumulative)`;
+const KM2 = String.raw`\d[\d,.]*\s*(?:km(?:²|2)|square kilomet(?:er|re)s|sq\.? ?km)`;
+
+/** True when the note gives a summed area in km², in any clear wording ("together covering 21 km²", "a combined 21 km²"). */
+export function statesTotalArea(note: string): boolean {
+  return new RegExp(String.raw`\b${AGGREGATE}[^.\n]*?${KM2}|${KM2}[^.\n]*?\b${AGGREGATE}\b`, "i").test(note);
+}
+
 /**
  * "good hiking in French Guiana" (the owner's transcript, where a too-wide trails query fell back to protected-area
  * tiles, a region outline and population density): passes only when at least one query that holds hiking candidates
@@ -138,9 +167,9 @@ function goodHikingRule(calls: ToolCall[], notes: string[]): RuleResult {
     return features.some((f) => f.properties?.kind === "route");
   });
   const contextQueried = calls.some((c) => c.toolName === "query_population" || c.toolName === "query_night-lights");
-  const note = comparable(notes.join("\n"));
+  const note = notes.join("\n");
   const names = [...new Set(answered.flatMap((c) => featureNames(c.output)).map(comparable))].filter((n) => n.length >= 4);
-  const named = names.filter((n) => note.includes(n));
+  const named = names.filter((n) => noteNames(note, n));
   const words = wordCount(notes.join("\n"));
   const ok = answered.length > 0 && !contextQueried && words <= NOTE_MAX_WORDS && named.length >= 3;
   return { ok, candidateQueries: answered.map((c) => c.toolName), contextQueried, placesNamed: named.length, named: named.slice(0, 8) };
@@ -160,7 +189,8 @@ function cameraMoved(calls: ToolCall[]): boolean {
  * "Glaciers in the Wind River Range" (the owner's transcript: four geocodes, a 53,570 km² box over the glacier cap, a
  * shrunk retry, no camera move, and a note that read 0.18-0.29 km² off three sample features while Gannett Glacier is
  * ~3 km²): passes only with at most 2 geocode calls, a camera move, and a note that names the largest named glacier in
- * the returned stats (stats.top, over every outline), gives a total area in km², and never says "sample".
+ * the returned stats (stats.top, over every outline), gives a summed area in km² in any clear wording ("total", "together
+ * covering", "combined"), and never says "sample".
  */
 function windRiverGlaciersRule(calls: ToolCall[], notes: string[]): RuleResult {
   const geocodes = calls.filter((c) => c.toolName === "geocode").length;
@@ -171,8 +201,8 @@ function windRiverGlaciersRule(calls: ToolCall[], notes: string[]): RuleResult {
   const top = summaries.flatMap((s) => s.stats?.top ?? []).sort((a, b) => b.v - a.v);
   const largest = top.find((t) => !/^unnamed/i.test(t.name))?.name;
   const note = notes.join("\n");
-  const namesLargest = largest !== undefined && comparable(note).includes(comparable(largest));
-  const statesTotal = /total[^.\n]*?\d[\d,.]*\s*km(?:²|2)|\d[\d,.]*\s*km(?:²|2)[^.\n]*?\btotal\b/i.test(note);
+  const namesLargest = largest !== undefined && noteNames(note, largest);
+  const statesTotal = statesTotalArea(note);
   const saysSample = /\bsampl/i.test(note);
   const moved = cameraMoved(calls);
   const ok = geocodes <= 2 && moved && namesLargest && statesTotal && !saysSample;
@@ -303,7 +333,7 @@ function uraniumRankedRule(calls: ToolCall[], notes: string[]): RuleResult {
   const summary = query && isFullLayerResult(query.output) ? summarizeLayerResult(query.output, "uranium", { ...layer?.style, attributes: layer?.attributes }, layer?.fieldHelp) : undefined;
   const help = summary && "kind" in summary && summary.kind === "geojson" ? summary.help : undefined;
   const largest = largestByV(calls, "query_uranium");
-  const namesLargest = largest !== undefined && comparable(notes.join("\n")).includes(comparable(largest.name));
+  const namesLargest = largest !== undefined && noteNames(notes.join("\n"), largest.name);
   const ok = view === "ranked" && help !== undefined && Object.values(help).some((t) => /Navajo/.test(t)) && namesLargest;
   return { ok, view, help: help ? Object.keys(help) : [], largest, namesLargest };
 }
@@ -327,7 +357,7 @@ function westTexasWindRule(calls: ToolCall[], notes: string[], view: MapView | n
   const shrank = viewArea !== undefined && boxes.some((b) => areaKm2(b) < viewArea * 0.9);
   const zoomIn = plants.some((c) => isZoomInError(c.output));
   const largest = largestByV(calls, "query_power-plants");
-  const namesLargest = largest !== undefined && comparable(notes.join("\n")).includes(comparable(largest.name));
+  const namesLargest = largest !== undefined && noteNames(notes.join("\n"), largest.name);
   const ok = most >= 100 && plants.length === 1 && !shrank && !zoomIn && namesLargest;
   return { ok, features: most, queries: plants.length, region, shrank, zoomIn, largest, namesLargest, boxes };
 }
@@ -338,7 +368,7 @@ function coloradoDamsRule(calls: ToolCall[], notes: string[]): RuleResult {
   const most = Math.max(0, ...dams.filter((c) => !isLayerError(c.output)).map((c) => featureCount(c.output) ?? 0));
   const zoomIn = dams.filter((c) => isZoomInError(c.output)).length;
   const largest = largestByV(calls, "query_dams");
-  const namesLargest = largest !== undefined && comparable(notes.join("\n")).includes(comparable(largest.name));
+  const namesLargest = largest !== undefined && noteNames(notes.join("\n"), largest.name);
   const ok = most > 0 && zoomIn === 0 && dams.length <= 2;
   return { ok, features: most, damQueries: dams.length, zoomIn, largest, namesLargest, boxes: dams.map((c) => bboxOf(c.input)) };
 }

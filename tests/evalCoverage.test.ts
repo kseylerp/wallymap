@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { listLayers } from "@/layers";
 import { VIEW_KINDS } from "@/lib/render/state";
-import { COVERAGE_QUESTIONS, LAYERS_IN_OLDER_QUESTIONS, coverageFor, coverageRule, outageSkip, readEvalSet } from "@/scripts/eval-model.mjs";
+import { COVERAGE_QUESTIONS, LAYERS_IN_OLDER_QUESTIONS, coverageFor, coverageRule, noteNames, outageSkip, readEvalSet, statesTotalArea } from "@/scripts/eval-model.mjs";
 
 /** The coverage questions (scripts/eval-model.mts, docs/questions.md "Coverage questions"). */
 describe("eval coverage questions", () => {
@@ -66,5 +66,21 @@ describe("documented outages", () => {
     const answered = [{ toolName: "query_mining-claims", input: {}, output: { kind: "geojson", data: { type: "FeatureCollection", features: [] } } }];
     expect(outageSkip(expect_!, answered)).toBeUndefined();
     expect(outageSkip(coverageFor("Where is the Ogallala aquifer?")!, [])).toBeUndefined();
+  });
+});
+
+describe("note wording rules accept clear synonyms", () => {
+  it("reads a summed glacier area however it is said", () => {
+    for (const note of ["The 44 glaciers have a total of 21.3 km².", "Together covering 21 km², the ice is thinning.", "A combined 21 km2 of ice.", "They cover 21.3 square kilometres in all."]) {
+      expect(statesTotalArea(note)).toBe(true);
+    }
+    expect(statesTotalArea("Gannett Glacier covers 3.3 km².")).toBe(false);
+  });
+
+  it("finds a name with or without its tag and with the usual abbreviations", () => {
+    expect(noteNames("Taylor Reid No. 1 scores highest.", "Taylor Reid No. 1 (A)")).toBe(true);
+    expect(noteNames("Mt. Hood has the deepest snow.", "Mount Hood")).toBe(true);
+    expect(noteNames("NA‑0420 scores 17,600.", "NA-0420")).toBe(true);
+    expect(noteNames("Horse Hollow is largest.", "Roscoe Wind Farm")).toBe(false);
   });
 });

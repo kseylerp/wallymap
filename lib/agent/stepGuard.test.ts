@@ -504,3 +504,15 @@ describe("step guard: a compare of a layer never queried", () => {
     expect(names.indexOf("compare")).toBeLessThan(names.indexOf("note"));
   });
 });
+
+describe("a query past a named region", () => {
+  it("runs within the region's own box (dams in the Colorado River basin, not South Dakota)", async () => {
+    const BASIN: BBox = [-115.7, 29.9, -105.6, 43.5];
+    const turn = createTurn({ question: "dams in the Colorado River basin", geocoder: async () => ({ bbox: BASIN, center: [-110.65, 36.7], name: "Colorado River basin", source: "river-basins" }) });
+    const tools = buildTools({ turn });
+    await (tools.geocode.execute as (i: unknown, o: unknown) => Promise<unknown>)({ place: "Colorado River basin" }, { toolCallId: "g", messages: [] });
+    await (tools["query_dams"].execute as (i: unknown, o: unknown) => Promise<unknown>)({ bbox: [-115.7, 27.9, -95, 43.5], zoom: 7 }, { toolCallId: "d", messages: [] });
+    expect(runLayer.mock.calls.at(-1)?.[1].bbox).toEqual(BASIN);
+    expect(turn.log.join("\n")).toMatch(/dams: queried within Colorado River basin/);
+  });
+});

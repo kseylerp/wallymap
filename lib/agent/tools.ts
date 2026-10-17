@@ -317,6 +317,11 @@ export function isWithinView(bbox: BBox, view: BBox): boolean {
 /** The view a query answers from, or undefined when it does not (no view bbox, a place was geocoded, or the box is elsewhere). */
 type ViewSource = (bbox: BBox) => { bbox: BBox; zoom: number } | undefined;
 
+/** True when `outer` holds all of `inner`. */
+function containsBox(outer: BBox, inner: BBox): boolean {
+  return outer[0] <= inner[0] && outer[1] <= inner[1] && outer[2] >= inner[2] && outer[3] >= inner[3];
+}
+
 /** True when a point lies in a box. */
 function pointIn([lng, lat]: [number, number], [w, s, e, n]: BBox): boolean {
   return lng >= w && lng <= e && lat >= s && lat <= n;
@@ -328,6 +333,13 @@ function pointIn([lng, lat]: [number, number], [w, s, e, n]: BBox): boolean {
  * first lookup that found a same-named place elsewhere is never used); otherwise the box the model passed.
  */
 function queryBox(turn: Turn, layerId: string, bbox: BBox): BBox {
+  // A named region (a basin, a park, a range) the model searched well past: its own box ("dams in the Colorado River
+  // basin" asked a box to 95°W and drew Fort Randall Dam in South Dakota).
+  const region = turn.places.findLast((p) => p.source !== "mapbox" && containsBox(bbox, p.bbox) && bboxAreaKm2(bbox) > 1.5 * bboxAreaKm2(p.bbox));
+  if (region && !nearPlace(turn.question)) {
+    turn.note(`${layerId}: queried within ${region.name}, [${region.bbox.join(", ")}] instead of the wider [${bbox.join(", ")}]`);
+    return region.bbox;
+  }
   const near = nearPlace(turn.question);
   const place = near ? turn.places.findLast((p) => pointIn(p.center, bbox)) : undefined;
   if (!place || !near) return bbox;

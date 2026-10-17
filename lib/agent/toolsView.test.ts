@@ -44,8 +44,8 @@ describe("query tools answering from the current view", () => {
 
     const tools = buildTools({ view });
     await run(tools.geocode, { place: "Latvia" });
+    // After a geocode the query is about the place (and, for a region, within its box), never the view's zoom.
     const named = await run(tools["query_osm-trails"], { bbox: BALTIC, zoom: 6, namedOnly: false });
-    expect(named).toMatchObject({ hint: "zoom_in" });
     expect(named).not.toHaveProperty("suggestedZoom");
   });
 });

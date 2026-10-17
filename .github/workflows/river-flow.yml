@@ -1,0 +1,52 @@
+# Builds the river-pulse layer's daily file (scripts/build-river-flow.mts) and publishes it to the `data` branch as one
+# force-pushed commit, so the branch never grows. The app reads it from
+# https://raw.githubusercontent.com/kseylerp/wallymap/data/river-flow.json (CORS *, cached 5 minutes).
+# Open-Meteo's free tier needs no key; the build spends at most 4,800 of its 10,000 daily calls.
+name: River flow
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: river-flow
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: The last published file
+        run: |
+          git fetch --depth=1 origin data && git show origin/data:river-flow.json > "$RUNNER_TEMP/prev.json" || echo "no data branch yet"
+      - name: Build
+        run: |
+          prev="$RUNNER_TEMP/prev.json"
+          [ -s "$prev" ] || prev=none
+          node --import tsx scripts/build-river-flow.mts --prev "$prev" --out "$RUNNER_TEMP/out/river-flow.json"
+      - name: Publish to the data branch
+        working-directory: ${{ runner.temp }}/out
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Vercel builds every pushed branch; this branch is data only.
+          echo '{ "git": { "deploymentEnabled": false } }' > vercel.json
+          printf 'Built daily by .github/workflows/river-flow.yml on main. Discharge: GloFAS v4 via Open-Meteo (CC BY 4.0); rivers: Natural Earth (public domain).\n' > README.md
+          git init -q -b data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add river-flow.json vercel.json README.md
+          git commit -q -m "River flow built $(date -u +%Y-%m-%d)"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data

@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Position } from "geojson";
-import riverPulse, { clipLine, cutLine, interpolateFlow, joinRuns, MAX_SAMPLES, outletEnds, planPoints, reachesOf, reachFeatures, runsIn, type Run } from "./river-pulse";
+import riverPulse, { _resetRiverFlowFile, clipLine, cutLine, fileDays, interpolateFlow, isRiverFlowFile, joinRuns, onDays, outletEnds, planPoints, reachesOf, reachFeatures, RIVER_FLOW_URL, runsIn, type RiverFlowFile, type Run } from "./river-pulse";
+import type { CachedFetch } from "@/lib/fetch";
 import { attributeProblems } from "./attributes";
 import { biggestSwing, ratioWords, repeatLag, seriesStory } from "@/lib/layers/story";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
@@ -41,14 +42,13 @@ describe("river pulse geometry", () => {
     expect(runs[0].name).toBe("Main");
     // A point snapped ahead of time on Main is used as it is; Creek gets a new one.
     const known = [{ name: "Main", at: [5, 40.02], cell: [5.05, 40] }];
-    const { runs: kept, samples } = planPoints(runs, known);
+    const { runs: kept, samples } = planPoints(runs, known, { maxNew: 40 });
     expect(kept.map((r) => r.name)).toEqual(["Main", "Creek"]);
     expect(samples[0]).toMatchObject({ run: 0, cell: [5.05, 40] });
     expect(samples.filter((x) => !x.cell)).toHaveLength(1);
-    // No budget left for new points: Creek is not drawn.
-    expect(planPoints(runs, known, { maxNew: 0 }).runs.map((r) => r.name)).toEqual(["Main"]);
+    // A map load plans no new points: Creek, which the file does not cover, is not drawn.
+    expect(planPoints(runs, known).runs.map((r) => r.name)).toEqual(["Main"]);
     expect(reachesOf(kept).length).toBeGreaterThan(5);
-    expect(MAX_SAMPLES).toBeLessThanOrEqual(200);
   });
 
   it("finds where rivers leave the view: a tributary flows into its river, the river's mouth is an outlet", () => {
@@ -135,5 +135,82 @@ describe("the series story for the note", () => {
     // The caption ends with what width and color mean.
     expect("story" in summary && summary.story?.caption).toMatch(/Line width is Flow \(m³\/s\); color is Flow vs\. the period's median/);
     expect(JSON.stringify(summary)).not.toContain('"series":');
+  });
+});
+
+describe("the daily file", () => {
+  afterEach(() => _resetRiverFlowFile());
+
+  /** A file built on `built` with one river, Main, read at two points, the second one's flow missing. */
+  function file(built: string): RiverFlowFile {
+    const start = new Date(Date.parse(`${built}T00:00:00Z`) - 3 * 86_400_000).toISOString().slice(0, 10);
+    return {
+      version: 1,
+      built: `${built}T06:30:00Z`,
+      source: "s",
+      license: "CC BY 4.0",
+      url: "https://open-meteo.com/en/docs/flood-api",
+      start,
+      days: 3,
+      forecastDays: 3,
+      calls: 14,
+      rivers: [{ name: "Main", rank: 1, line: line(0, 4) }],
+      points: [
+        { name: "Main", at: [1, 40], cell: [1.05, 40], q: [100, 200, 400, 300, 250, 200] },
+        { name: "Main", at: [3, 40], cell: [3.05, 40], q: null },
+      ],
+    };
+  }
+
+  const ctx = (stub: ReturnType<typeof vi.fn>) => ({ bbox: [-1, 39, 5, 41] as [number, number, number, number], zoom: 6, env: {}, fetch: stub as unknown as CachedFetch });
+  const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+
+  it("checks the file's shape and lays its days out from start", () => {
+    expect(isRiverFlowFile(file("2026-10-17"))).toBe(true);
+    expect(isRiverFlowFile({ version: 2 })).toBe(false);
+    expect(fileDays(file("2026-10-17"))).toEqual(["2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18", "2026-10-19"]);
+    expect(onDays({ time: ["2026-10-16", "2026-10-17"], q: [5, 6] }, ["2026-10-15", "2026-10-16", "2026-10-17"])).toEqual([null, 5, 6]);
+  });
+
+  it("draws the file's rivers, reads live only the point the file lacks, and says which day the file was built", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-17T12:00:00Z"));
+    const live = { daily: { time: ["2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18", "2026-10-19"], river_discharge: [10, 20, 40, 30, 25, 20] } };
+    const stub = vi.fn(async (url: string, _init?: RequestInit) => (url === RIVER_FLOW_URL ? json(file("2026-10-17")) : json([live])));
+    try {
+      const r = await riverPulse.query(ctx(stub), { days: 3, forecastDays: 3 });
+      if ("error" in r || r.kind !== "geojson") throw new Error("expected features");
+      expect(r.data.features.length).toBeGreaterThan(0);
+      expect(r.coverageNote).toContain("from the daily file built 2026-10-17 (1 points it lacked read live)");
+      expect(r.coverageNote).not.toContain("days old");
+      expect(r.series?.now).toBe(3);
+      // One file fetch and one live POST for the missing point, with no Natural Earth or snapping calls.
+      expect(stub.mock.calls.map((c) => c[0])).toEqual([RIVER_FLOW_URL, "https://flood-api.open-meteo.com/v1/flood"]);
+      const body = String(stub.mock.calls[1][1]?.body);
+      expect(body).toContain("latitude=40.000&longitude=3.050");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says when the file is more than two days old", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-20T12:00:00Z"));
+    const f = file("2026-10-17");
+    f.points = [f.points[0]];
+    const stub = vi.fn(async () => json(f));
+    try {
+      const r = await riverPulse.query(ctx(stub), { days: 3, forecastDays: 3 });
+      if ("error" in r || r.kind !== "geojson") throw new Error("expected features");
+      expect(r.coverageNote).toMatch(/^The daily file is 3 days old \(built 2026-10-17\)/);
+      expect(stub).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("answers an upstream error when the file cannot be loaded", async () => {
+    const r = await riverPulse.query(ctx(vi.fn(async () => new Response("x", { status: 404 }))), { days: 92, forecastDays: 7 });
+    expect(r).toMatchObject({ hint: "upstream" });
   });
 });

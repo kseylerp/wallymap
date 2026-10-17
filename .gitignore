@@ -49,3 +49,6 @@ next-env.d.ts
 
 # Agent worktrees made by Claude Code
 .claude/worktrees/
+
+# the river-pulse daily file built locally (scripts/build-river-flow.mts)
+/.river-flow/

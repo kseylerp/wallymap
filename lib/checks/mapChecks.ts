@@ -489,6 +489,9 @@ export type SectionRow = { section: CardSection; row: CardRow };
 /** A label that is a property key, not words: snake_case, camelCase, or a unit glued on ("Max length m"). */
 const UNIT_TAIL = /[A-Za-z]\s(m|km|km2|sq km|sq mi|ft|mi|pct|percent|mw|kw|kv|kg|cm|mm|s|h|c|f|kmh|mph|deg|ma|cfs|no)$/i;
 
+/** One- and two-letter labels that are words, not keys ("To" on a route from one place to another). */
+const SHORT_WORDS = new Set(["to", "at", "on", "in", "by", "up"]);
+
 /** A label whose last word is one letter ("Then t", "Then v"): a key's suffix, not words. */
 const LETTER_TAIL = /[a-z]\s[a-z]$/i;
 
@@ -521,7 +524,7 @@ export function cardRowProblems(rows: SectionRow[], layer: Pick<LayerInfo, "card
       problems.push(layer.card?.measure ? `"Value" stands where the layer names its measure ("${layer.card.measure.label}")` : `"Value ${row.value}" does not say what is measured`);
     }
     const bareNumber = /^-?[\d,.]+$/.test(row.value) && label.toLowerCase() === row.key.toLowerCase();
-    if (/^[a-z]{1,2}\d?$/i.test(label) && !row.help && !bareNumber) problems.push(`label "${label}" is a raw property key`);
+    if (/^[a-z]{1,2}\d?$/i.test(label) && !SHORT_WORDS.has(label.toLowerCase()) && !row.help && !bareNumber) problems.push(`label "${label}" is a raw property key`);
     if (LETTER_TAIL.test(label)) problems.push(`label "${label}" is a raw property key`);
     if (IDENTIFIER_LABEL.test(label) && /^\d{1,3}(,\d{3})+$/.test(row.value.trim())) problems.push(`"${label} ${row.value}" prints an identifier or year with a thousands comma`);
     if (CODE_LABEL.test(label) && /^-?\d+$/.test(row.value.trim()) && !row.help) problems.push(`"${label} ${row.value}" is a numeric code with no meaning given`);

@@ -485,6 +485,8 @@ export function fallbackEnding(turn: Turn, rejected: Decision["rejected"]): Draf
   const renders = undrawn(turn).map((layerId): DraftCall => ({ toolCallId: guardId(), toolName: "render", input: normalizeRenderInput({ layerId }, getLayer(layerId), turn.question) }));
   const lines: string[] = [];
   for (const layerId of [...new Set(rejected.map((r) => layerOf(r.call.toolName)).filter(Boolean))]) {
+    // A layer that answered is on the map; only what could not be drawn is listed.
+    if (turn.queries.some((q) => q.layerId === layerId && q.ok)) continue;
     const layer = getLayer(layerId);
     const title = layer?.title ?? layerId;
     const wide = turn.queries.find((q) => q.layerId === layerId && q.zoomIn);
@@ -498,6 +500,12 @@ export function fallbackEnding(turn: Turn, rejected: Decision["rejected"]): Draf
   const markdown = [drawn ? "What answered is on the map." : "Nothing could be drawn for this question at this scale.", ...lines].join("\n");
   turn.note("the model only asked again for dropped queries: the server wrote the note");
   return [...renders, { toolCallId: guardId(), toolName: "note", input: { markdown } }];
+}
+
+/** The call with only render, compare and note on offer, one of them required: the last try before the server writes the note. */
+function answerOnlyParams(params: CallOptions): CallOptions {
+  const tools = (params.tools ?? []).filter((t) => "name" in t && ["render", "compare", "note"].includes(t.name));
+  return tools.length > 0 ? { ...params, tools, toolChoice: { type: "required" } } : params;
 }
 
 /** Most times one step is asked again after all its calls were dropped. */
@@ -519,6 +527,11 @@ export function stepGuard(turn: Turn, toolNames: readonly string[]): Middleware 
       const decision = await decideStep({ calls, hasText: text.trim() !== "", text }, turn, toolNames);
       if (decision.rejected.length > 0 && decision.calls.length === 0 && attempt < MAX_REASKS) {
         result = await model.doGenerate(reaskParams(params, decision.rejected));
+        continue;
+      }
+      if (decision.rejected.length > 0 && decision.calls.length === 0 && !turn.noted && attempt === MAX_REASKS) {
+        // Told why once and still only asking again: one more try with only drawing and the note on offer.
+        result = await model.doGenerate(answerOnlyParams(reaskParams(params, decision.rejected)));
         continue;
       }
       if (decision.rejected.length > 0 && decision.calls.length === 0 && !turn.noted) decision.calls = fallbackEnding(turn, decision.rejected);
@@ -577,6 +590,11 @@ export function stepGuard(turn: Turn, toolNames: readonly string[]): Middleware 
       const decision = await decideStep({ calls, hasText: text.trim() !== "", text }, turn, toolNames);
       if (decision.rejected.length > 0 && decision.calls.length === 0 && attempt < MAX_REASKS) {
         result = await model.doStream(reaskParams(params, decision.rejected));
+        parts = await collect(result.stream);
+        continue;
+      }
+      if (decision.rejected.length > 0 && decision.calls.length === 0 && !turn.noted && attempt === MAX_REASKS) {
+        result = await model.doStream(answerOnlyParams(reaskParams(params, decision.rejected)));
         parts = await collect(result.stream);
         continue;
       }

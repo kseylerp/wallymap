@@ -340,12 +340,14 @@ describe("step guard: no asking again (shrinking, repeats, failures, the step bu
     expect(turn.log.join("\n")).toMatch(/query_gbif-occurrences answers the whole box instead/);
   });
 
-  it("writes the note itself when the model only asks again for dropped queries", async () => {
+  it("offers only drawing and the note once more, then writes the note itself when the model only asks again for dropped queries", async () => {
     runLayer.mockImplementation(tooWide);
     const { calls, prompts } = await run("Where are the most groundwater wells in Nevada?", [
       { calls: [{ name: "query_groundwater", input: { bbox: NEVADA } }] },
       { calls: [{ name: "query_groundwater", input: { bbox: RENO } }] },
       { calls: [{ name: "query_groundwater", input: { bbox: [-118, 39, -117, 40] } }] },
+      // Even with only drawing and the note on offer, it asks again.
+      { calls: [{ name: "query_groundwater", input: { bbox: [-118.5, 39, -117.5, 40] } }] },
       { text: "- Zoom in?" },
     ], { bbox: NEVADA, zoom: 6, center: [-117, 38.5] });
     expect(calls.filter((c) => c.name === "query_groundwater")).toHaveLength(1);

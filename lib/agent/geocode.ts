@@ -200,7 +200,8 @@ export async function geocode(
     // A name with no house number that lands on a street or an address is looked up as a point of interest of exactly
     // that name first (a natural one, or one with no category), boxed to about 10 km.
     if ((feature_type === "street" || feature_type === "address") && !/\d/.test(place)) {
-      const span = rangeLike ? LANDFORM_HALF_SPAN_KM : FEATURE_HALF_SPAN_KM;
+      // A river or a canyon runs far from the one point a search knows: boxed like a range, about 76 km across.
+      const span = rangeLike || /\b(?:river|creek|stream|canyon|fork)\b/i.test(place) ? LANDFORM_HALF_SPAN_KM : FEATURE_HALF_SPAN_KM;
       const poi = (await landformResult(place, opts.proximity, token, span)) ?? (await wikidataFeature(place, span));
       if (poi) return poi;
     }

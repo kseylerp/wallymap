@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 /**
- * Land or sea at a point, and how far the coastline is: Natural Earth 1:50m land, simplified (data/land-50m.json,
+ * Land or sea at a point, and how far the coastline is: Natural Earth 1:10m land (small islands included), simplified (data/land-10m.json,
  * built by scripts/land-mask.mts). Server and eval only (it reads the file from disk). Lakes the mask leaves as land
  * (most of them) read as land; the Caspian reads as sea.
  */
@@ -22,7 +22,7 @@ function cellKey(ix: number, iy: number): number {
 
 function load(): Mask {
   if (mask) return mask;
-  const raw = JSON.parse(readFileSync(new URL("../../data/land-50m.json", import.meta.url), "utf8")) as { polygons: number[][][] };
+  const raw = JSON.parse(readFileSync(new URL("../../data/land-10m.json", import.meta.url), "utf8")) as { polygons: number[][][] };
   const polys: Poly[] = [];
   const cells = new Map<number, Segment[]>();
   for (const p of raw.polygons) {

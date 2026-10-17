@@ -33,13 +33,13 @@ export type LayerLookup = (id: string) => LayerInfo | undefined;
 /** The place a question is about: the geocoded place (or the map view a "here" question carries) and its name. */
 export type PlaceRef = { bbox: BBox; name: string };
 
-/** How far past the 1:50m coastline a land feature may sit (and a sea feature inland) before it fails. */
+/** How far past the 1:10m coastline a land feature may sit (and a sea feature inland) before it fails. */
 export const COAST_TOLERANCE_KM = 2;
 /** How far out to sea a coast feature (a surf break, a tide gauge) may sit. */
 export const COAST_SEA_KM = 10;
 /**
  * A surface failure needs at least this share of the layer's features out of place: a layer drawn in the wrong place is
- * wrong throughout, while a few strays are small islands and fjords the 1:50m mask does not have.
+ * wrong throughout, while a few strays are small islands and fjords the 1:10m mask does not have.
  */
 export const SURFACE_SHARE = 0.25;
 /** Two features of one name closer than this are one place listed twice, unless they are two separate objects (see `separateObjects`). */

@@ -71,6 +71,9 @@ describe("land mask", () => {
     expect(shoreOffsetKm(-104.99, 39.74)).toBe(60);
     expect(shoreOffsetKm(-122.9, 36.3)).toBeLessThan(-30); // well off Monterey
     expect(Math.abs(shoreOffsetKm(-122.497, 37.495))).toBeLessThan(3); // Mavericks, at the shore
+    // A tide station on Swans Island, Maine: the 1:50m mask had no such island and put it 10 km out to sea.
+    expect(Math.abs(shoreOffsetKm(-68.43, 44.17))).toBeLessThan(2);
+    expect(fitsSurface("coast", shoreOffsetKm(-68.43, 44.17))).toBe(true);
   });
 
   it("fits each surface with a 2 km coast tolerance", () => {

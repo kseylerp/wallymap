@@ -1,10 +1,11 @@
 /**
- * Builds data/land-50m.json, the land mask the eval's map checks use (lib/checks/landMask.ts), from Natural Earth's
- * 1:50m land polygons (public domain):
+ * Builds data/land-10m.json, the land mask the eval's map checks use (lib/checks/landMask.ts), from Natural Earth's
+ * 1:10m land polygons (public domain). The 1:50m land left out small islands, so tide stations on Swans Island, Maine
+ * read 10 km out to sea (2026-10-17):
  *
- *   curl -sSLo /tmp/ne/ne_50m_land.geojson \
- *     https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson
- *   pnpm exec tsx scripts/land-mask.mts /tmp/ne/ne_50m_land.geojson
+ *   curl -sSLo /tmp/ne/ne_10m_land.geojson \
+ *     https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_land.geojson
+ *   pnpm exec tsx scripts/land-mask.mts /tmp/ne/ne_10m_land.geojson
  *
  * Each ring is simplified (Douglas-Peucker, 0.005°, about 500 m, well inside the checks' 2 km coast tolerance) and its
  * coordinates rounded to 3 decimals, then stored flat: `{ polygons: [[ring, hole, ...], ...] }` with each ring as
@@ -63,5 +64,5 @@ for (const f of fc.features) {
   }
 }
 const out = JSON.stringify({ source: "Natural Earth 1:50m land (public domain), simplified 0.005°", polygons });
-writeFileSync(new URL("../data/land-50m.json", import.meta.url), out);
+writeFileSync(new URL("../data/land-10m.json", import.meta.url), out);
 console.log(`${polygons.length} polygons, ${polygons.flat().reduce((n, r) => n + r.length / 2, 0)} points, ${(out.length / 1024).toFixed(0)} KB`);

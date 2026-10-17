@@ -157,6 +157,23 @@ describe("step guard: a named place the model never looked up", () => {
   });
 });
 
+describe("step guard: a smaller box after a wide answer", () => {
+  const TEXAS: BBox = [-104, 29, -96, 35];
+  it("drops the second query and asks the model again with the reason", async () => {
+    const { calls, prompts, turn } = await run("wind farms in West Texas", [
+      { calls: [{ name: "query_power-plants", input: { bbox: TEXAS } }] },
+      { calls: [{ name: "render", input: { layerId: "power-plants" } }] },
+      { calls: [{ name: "query_power-plants", input: { bbox: [-102, 31, -100, 33] } }] },
+      { calls: [{ name: "note", input: { markdown: "Wind farms." } }] },
+      { text: "- More?" },
+    ], { bbox: TEXAS, zoom: 5, center: [-100, 32] });
+    expect(calls.filter((c) => c.name === "query_power-plants")).toHaveLength(1);
+    expect(calls.map((c) => c.name)).toEqual(["query_power-plants", "render", "note"]);
+    expect(JSON.stringify(prompts[3])).toMatch(/already answered the whole area/);
+    expect(turn.log.join("\n")).toMatch(/smaller box inside its wide answer was dropped/);
+  });
+});
+
 describe("step guard: canonical tool names in the stream", () => {
   it("renames a garbled tool name before the stream leaves the server", async () => {
     const question = "Which uranium mines near the Navajo Nation score highest?";

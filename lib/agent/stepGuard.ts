@@ -1,10 +1,11 @@
 import type { LanguageModelMiddleware } from "ai";
 import { getLayer } from "@/layers/registry";
 import type { BBox } from "@/layers/types";
+import { bboxAreaKm2 } from "@/layers/types";
 import type { GeocodeResult } from "./geocode";
 import { placeCandidates } from "./places";
 import { repairToolName } from "./toolNames";
-import { undrawn, type Turn } from "./turn";
+import { inputKeyOf, undrawn, type Turn } from "./turn";
 
 /**
  * The step guard: a language-model middleware that reads each step the model proposes before the SDK runs its tools,
@@ -13,6 +14,8 @@ import { undrawn, type Turn } from "./turn";
  *  - a query about a place the user named, with no geocode yet, gets the place looked up first: a geocode call is
  *    added to the step and the queries run on its box (a question that names no place and has no map view is about
  *    the queried layer's own region, Layer.place: sequoia groves are in the Sierra Nevada);
+ *  - a second query of a layer on a smaller box inside one its wide strategy already answered is dropped, and the
+ *    model is told to use the first result;
  *  - a step that would end the turn (a note, or text with no tool calls) while successful queries were never drawn
  *    gets a render call for each first, in the layer's default view.
  * Every change is logged on the turn (and the server console). Steps that none of the rules could touch stream
@@ -54,8 +57,26 @@ const QUERY = "query_";
 const isQuery = (name: string) => name.startsWith(QUERY);
 const layerOf = (name: string) => name.slice(QUERY.length);
 
+function isBBox(value: unknown): value is BBox {
+  return Array.isArray(value) && value.length === 4 && value.every((n) => typeof n === "number" && Number.isFinite(n));
+}
+
+/** True when `inner` lies inside `outer` (a small rounding margin allowed). */
+function inside(inner: BBox, outer: BBox): boolean {
+  const dx = (outer[2] - outer[0]) * 0.02;
+  const dy = (outer[3] - outer[1]) * 0.02;
+  return inner[0] >= outer[0] - dx && inner[1] >= outer[1] - dy && inner[2] <= outer[2] + dx && inner[3] <= outer[3] + dy;
+}
+
 function pointIn([lng, lat]: [number, number], [w, s, e, n]: BBox): boolean {
   return lng >= w && lng <= e && lat >= s && lat <= n;
+}
+
+/** A query's inputs with the layer's defaults filled in, as its tool will run them (so a left-out default compares equal). */
+function withDefaults(layerId: string, input: Record<string, unknown>): Record<string, unknown> {
+  const rest = Object.fromEntries(Object.entries(input).filter(([k]) => k !== "bbox" && k !== "zoom"));
+  const parsed = getLayer(layerId)?.input.safeParse(rest);
+  return parsed?.success ? (parsed.data as Record<string, unknown>) : rest;
 }
 
 /** Query calls that would locate the place themselves: physical-regions outlines a named region. */
@@ -99,7 +120,23 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean }
     return { ...c, toolName: name };
   });
 
+  // 2. A smaller box inside one a wide strategy already answered for the same layer and inputs: drop it.
   const rejected: Decision["rejected"] = [];
+  calls = calls.filter((c) => {
+    if (!isQuery(c.toolName) || !isBBox(c.input.bbox)) return true;
+    const layerId = layerOf(c.toolName);
+    const box = c.input.bbox;
+    const key = inputKeyOf(withDefaults(layerId, c.input));
+    const earlier = turn.queries.find((q) => q.layerId === layerId && q.ok && q.wide && q.inputKey === key && inside(box, q.bbox));
+    if (!earlier || bboxAreaKm2(box) >= bboxAreaKm2(earlier.bbox) * 0.9) return true;
+    const reason =
+      `Not queried: ${layerId} already answered the whole area [${earlier.bbox.join(", ")}] with its wide strategy (the largest or named features over all of it). ` +
+      "Use that first result: render it if you have not, then write the note; do not query a smaller box inside it.";
+    rejected.push({ call: c, reason });
+    turn.note(`${layerId}: a second query on a smaller box inside its wide answer was dropped`);
+    changed = true;
+    return false;
+  });
 
   // 3. Queries with no place looked up: look it up, add the geocode, and run the queries on its box.
   const queries = calls.filter((c) => isQuery(c.toolName));
@@ -143,9 +180,9 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean }
   return { calls, dropText, rejected, changed };
 }
 
-/** True when a step could need the guard: no place yet, or layers queried but not drawn. */
+/** True when a step could need the guard: no place yet, layers queried but not drawn, or a wide answer to protect. */
 export function mayGuard(turn: Turn): boolean {
-  return (turn.place === null && !turn.regionQueried) || undrawn(turn).length > 0;
+  return (turn.place === null && !turn.regionQueried) || undrawn(turn).length > 0 || turn.queries.some((q) => q.wide && q.ok);
 }
 
 function parseInput(input: unknown): Record<string, unknown> | null {

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { BBox } from "@/layers/types";
 import { featureBBoxes, findRegion, loadNaturalEarthRegions, regionDisplayName } from "./naturalEarth";
-import { lookupRegion, worldRegion, type RegionMatch, type RegionSource } from "./regionNames";
+import { lookupRegion, wikidataFeature, worldRegion, type RegionMatch, type RegionSource } from "./regionNames";
 
 const ENDPOINT = "https://api.mapbox.com/search/geocode/v6/forward";
 const FALLBACK_HALF_SPAN_DEG = 0.1;
@@ -108,6 +108,11 @@ async function landformResult(place: string, proximity: [number, number] | undef
     const ranked = found
       // Exactly the name, plurals included: "Bighorn Mountain" in Colorado is not the Bighorn Mountains.
       .filter((c) => c.type === "poi" && normalize(c.name) === normalize(name))
+      // "Table Mountain, Cape Town" is not the Table Mountain in California: words after the comma must be in its address.
+      .filter((c) => {
+        const qualifier = place.split(",").slice(1).join(" ").trim();
+        return qualifier === "" || normalize(c.label).includes(normalize(qualifier));
+      })
       .map((c) => ({ c, rank: isNaturalFeature(c) ? 0 : c.categories.length === 0 ? 1 : 2 }))
       .filter(({ rank }) => rank < 2)
       .sort((a, b) => a.rank - b.rank || a.c.order - b.c.order);
@@ -195,7 +200,8 @@ export async function geocode(
     // A name with no house number that lands on a street or an address is looked up as a point of interest of exactly
     // that name first (a natural one, or one with no category), boxed to about 10 km.
     if ((feature_type === "street" || feature_type === "address") && !/\d/.test(place)) {
-      const poi = await landformResult(place, opts.proximity, token, rangeLike ? LANDFORM_HALF_SPAN_KM : FEATURE_HALF_SPAN_KM);
+      const span = rangeLike ? LANDFORM_HALF_SPAN_KM : FEATURE_HALF_SPAN_KM;
+      const poi = (await landformResult(place, opts.proximity, token, span)) ?? (await wikidataFeature(place, span));
       if (poi) return poi;
     }
 

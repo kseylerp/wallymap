@@ -513,3 +513,58 @@ export async function lookupRegion(
   }
   return null;
 }
+
+/** What a Wikidata description of one natural feature says (a mountain, a rock, a lake), so towns and streets are left out. */
+const FEATURE_DESCRIPTION =
+  /\b(mountain|peak|summit|hill|rock|monolith|dome|butte|mesa|volcano|cliff|canyon|gorge|lake|waterfall|glacier|island|cape|headland|bay|beach|cave|arch|spring|geyser|crater)\b/i;
+
+/**
+ * One natural feature by name from Wikidata ("Table Mountain, Cape Town"): items labelled exactly the name before the
+ * comma whose description says what kind of feature it is, the one whose description names the words after the comma
+ * first (else Wikidata's own order), boxed `halfSpanKm` around its coordinate. For names the place geocoder knows only
+ * as streets and Search Box only in another country (Table Mountain Street in Cape Town; Table Mountain in California).
+ */
+export async function wikidataFeature(place: string, halfSpanKm: number): Promise<RegionMatch | null> {
+  const [name, ...rest] = place.split(/,|\(|\)/).map((p) => p.trim()).filter(Boolean);
+  if (!name) return null;
+  const qualifier = rest.join(" ").toLowerCase();
+  try {
+    const search = new URL(WIKIDATA);
+    search.searchParams.set("action", "wbsearchentities");
+    search.searchParams.set("search", name);
+    search.searchParams.set("language", "en");
+    search.searchParams.set("type", "item");
+    search.searchParams.set("limit", "10");
+    search.searchParams.set("format", "json");
+    const found = await getJson(search, WIKIDATA_HEADERS);
+    if (!isRecord(found) || !Array.isArray(found.search)) return null;
+    const items = found.search
+      .flatMap((raw, order): { id: string; label: string; description: string; order: number }[] => {
+        if (!isRecord(raw) || typeof raw.id !== "string" || typeof raw.label !== "string") return [];
+        const description = typeof raw.description === "string" ? raw.description : "";
+        return normalize(raw.label) === normalize(name) && FEATURE_DESCRIPTION.test(description) ? [{ id: raw.id, label: raw.label, description, order }] : [];
+      })
+      .sort((a, b) => {
+        const named = (d: string) => (qualifier && qualifier.split(/\s+/).every((w) => d.toLowerCase().includes(w)) ? 0 : 1);
+        return named(a.description) - named(b.description) || a.order - b.order;
+      });
+    if (items.length === 0) return null;
+    // With a qualifier, only an item whose description names it: Table Mountain in California is not the one in Cape Town.
+    const best = qualifier ? items.find((i) => qualifier.split(/\s+/).every((w) => i.description.toLowerCase().includes(w))) : items[0];
+    if (!best) return null;
+    const entities = new URL(WIKIDATA);
+    entities.searchParams.set("action", "wbgetentities");
+    entities.searchParams.set("ids", best.id);
+    entities.searchParams.set("props", "claims");
+    entities.searchParams.set("format", "json");
+    const got = await getJson(entities, WIKIDATA_HEADERS);
+    const entity = isRecord(got) && isRecord(got.entities) ? got.entities[best.id] : undefined;
+    const at = isRecord(entity) ? itemCenter(entity.claims) : undefined;
+    if (!at) return null;
+    const dLat = halfSpanKm / 110.57;
+    const dLng = halfSpanKm / (111.32 * Math.max(0.1, Math.cos((at[1] * Math.PI) / 180)));
+    return { bbox: [at[0] - dLng, at[1] - dLat, at[0] + dLng, at[1] + dLat], center: at, name: `${best.label} (${best.description})`, source: "wikidata" };
+  } catch {
+    return null;
+  }
+}

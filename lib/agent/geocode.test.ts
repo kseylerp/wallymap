@@ -373,6 +373,21 @@ describe("geocode", () => {
       expect(bboxAreaKm2(result.bbox)).toBeLessThan(150);
     });
 
+    it("finds a natural feature on Wikidata when Search Box knows only a namesake abroad (Table Mountain, Cape Town)", async () => {
+      globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(String(input));
+        if (url.host === NE_HOST) return jsonResponse(regions);
+        if (url.pathname.includes("searchbox")) return jsonResponse({ features: [poi("Table Mountain", ["mountain"], -121.5, 39.6, "California 95965, United States")] });
+        if (url.host === "www.wikidata.org" && url.searchParams.get("action") === "wbsearchentities") {
+          return jsonResponse({ search: [{ id: "Q1", label: "Table Mountain", description: "mountain in California" }, { id: "Q213360", label: "Table Mountain", description: "mountain in Cape Town, South Africa" }] });
+        }
+        if (url.host === "www.wikidata.org") return jsonResponse({ entities: { Q213360: { claims: { P625: [{ mainsnak: { datavalue: { value: { longitude: 18.41352, latitude: -33.96216 } } } }] } } } });
+        return jsonResponse({ features: [{ properties: { name: "Table Mountain Street", feature_type: "street", coordinates: { longitude: 18.55, latitude: -33.96 } } }] });
+      }) as typeof fetch;
+      const result = await geocode("Table Mountain, Cape Town");
+      expect(result).toMatchObject({ center: [18.41352, -33.96216], source: "wikidata" });
+    });
+
     it("keeps a street when the asked text is an address (it has a house number)", async () => {
       const urls = routed([{ name: "123 Main Street", feature_type: "address", coordinates: { longitude: -120, latitude: 39 } }], []);
       expect(await geocode("123 Main Street")).toMatchObject({ name: "123 Main Street" });

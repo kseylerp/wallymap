@@ -326,6 +326,27 @@ describe("LayerStack", () => {
     expect(bottom.getAttribute("data-selected")).toBe("true");
     expect(bottom.className).not.toMatch(/sage/);
   });
+
+  it("scrolls the selected feature's row to its header when it is cut off at the top (the dams row at its opacity slider)", () => {
+    const panel = (selectedLayerId?: string) => (
+      <LayerStack layers={start.layers} renderOps={start.renderOps} catalog={null} dispatch={() => {}} open onOpenChange={() => {}} selectedLayerId={selectedLayerId} />
+    );
+    const { container, rerender } = render(panel());
+    const list = container.querySelector("ul.legend-table") as HTMLElement;
+    const row = container.querySelector('[data-layer-id="public-lands"]') as HTMLElement;
+    let scrollTop = 400;
+    Object.defineProperty(list, "scrollTop", { get: () => scrollTop, set: (v: number) => (scrollTop = v), configurable: true });
+    Object.defineProperty(list, "scrollHeight", { value: 1200, configurable: true });
+    Object.defineProperty(list, "clientHeight", { value: 330, configurable: true });
+    list.getBoundingClientRect = () => ({ top: 310, bottom: 640 }) as DOMRect;
+    // The row starts 180px above the list's top: its header and Rank by are cut off.
+    row.getBoundingClientRect = () => ({ top: 130, bottom: 640 }) as DOMRect;
+    const real = window.getComputedStyle.bind(window);
+    const style = vi.spyOn(window, "getComputedStyle").mockImplementation((el: Element) => (el === list ? ({ overflowY: "auto" } as CSSStyleDeclaration) : real(el)));
+    rerender(panel("public-lands"));
+    expect(scrollTop).toBe(220);
+    style.mockRestore();
+  });
 });
 
 describe("LayerStack data console", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { applyFilters, deriveFilterFields, filterSummary, type FilterField, type MeasureRange } from "@/lib/render/filters";
@@ -20,6 +20,7 @@ import { columnResolution, hexbinThreshold, hexResolution } from "@/lib/render/d
 import { COMPARE_COLORS, DELTA_COLORS, DELTA_LINE_COLORS, isRouteProperties, LINE, WHITE } from "@/lib/render/palette";
 import { type HexBasis, type LoadedLayer, type MapAction, type MapState, type RenderMode, type RenderOp, type Selection, type TimeState } from "@/lib/render/state";
 import { hasMissingImage, missingTilesStore } from "@/lib/render/tileErrors";
+import { rowScrollTop } from "@/lib/render/consoleScroll";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
 import { hexTileLegend, legendSymbol, type LegendMode, type LegendSymbol } from "@/lib/render/wally/legend";
 
@@ -568,6 +569,16 @@ const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 h
  * (or arrow keys on the key) to reorder. The top slot holds the time scrubber when one is mounted. Closed, it renders nothing: the layers map pill
  * reopens it.
  */
+/** The element that scrolls a console row: the list on a desktop, the whole console on a phone. */
+function scrollerOf(row: HTMLElement, section: HTMLElement): HTMLElement | null {
+  for (let el = row.parentElement; el; el = el.parentElement) {
+    const { overflowY } = getComputedStyle(el);
+    if ((overflowY === "auto" || overflowY === "scroll") && el.scrollHeight > el.clientHeight) return el;
+    if (el === section) break;
+  }
+  return null;
+}
+
 export function LayerStack({
   layers,
   renderOps,
@@ -593,6 +604,30 @@ export function LayerStack({
   const [armed, setArmed] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const shownIds = useRef<string[]>([]);
+  const shownSelection = useRef<string | undefined>(undefined);
+  const idsKey = items.map(({ layer }) => layer.id).join("\n");
+
+  // A row that opens (a new layer, or the layer of a newly selected feature) shows from its header: the console scrolls
+  // it to the top when its header is out of view, never leaving it mid-row (the dams row once sat at its opacity slider,
+  // its Rank by header cut off).
+  useLayoutEffect(() => {
+    const ids = idsKey === "" ? [] : idsKey.split("\n");
+    const added = ids.find((id) => !shownIds.current.includes(id));
+    const target = selectedLayerId !== undefined && selectedLayerId !== shownSelection.current ? selectedLayerId : added;
+    shownIds.current = ids;
+    shownSelection.current = selectedLayerId;
+    const section = sectionRef.current;
+    if (!open || target === undefined || !section) return;
+    const row = section.querySelector<HTMLElement>(`[data-layer-id="${CSS.escape(target)}"]`);
+    const scroller = row ? scrollerOf(row, section) : null;
+    if (!row || !scroller) return;
+    const s = scroller.getBoundingClientRect();
+    const r = row.getBoundingClientRect();
+    const next = rowScrollTop({ top: s.top, bottom: s.bottom }, scroller.scrollTop, { top: r.top, bottom: r.bottom });
+    if (next !== null) scroller.scrollTop = next;
+  }, [open, idsKey, selectedLayerId]);
 
   if (items.length === 0) return null;
 
@@ -605,13 +640,14 @@ export function LayerStack({
 
   return (
     <section
+      ref={sectionRef}
       aria-label="Layers"
       data-testid="layer-stack"
       // Phones: below the map pills instead of over them (the app positions the column at `--console-top`, measured
       // from the pills), clear of the map buttons on the right, ending above the chat sheet, and one scrolling column
       // (the scrubber, the compare and the layers scroll together) so a short screen never squeezes the list to nothing.
       data-scroll="console"
-      className="glass-strong rise-in @container/panel pointer-events-auto flex max-h-[calc(100dvh-24px-var(--safe-top)-var(--safe-bottom))] max-w-[calc(100vw-24px-var(--safe-left)-var(--safe-right))] flex-col overflow-hidden rounded-panel max-md:max-h-[calc(54dvh-var(--console-top,60px)-12px)] max-md:max-w-[calc(100vw-68px-var(--safe-left)-var(--safe-right))] max-md:overflow-y-auto max-md:overscroll-contain md:max-h-[calc(100dvh-260px-var(--safe-top)-var(--safe-bottom))]"
+      className="glass-strong rise-in @container/panel pointer-events-auto flex max-h-[calc(100dvh-24px-var(--safe-top)-var(--safe-bottom))] max-w-[calc(100vw-24px-var(--safe-left)-var(--safe-right))] flex-col overflow-hidden rounded-panel max-md:max-h-[calc(54dvh-var(--console-top,60px)-12px)] max-md:max-w-[calc(100vw-68px-var(--safe-left)-var(--safe-right))] max-md:overflow-y-auto max-md:overscroll-contain max-md:[overflow-anchor:none] md:max-h-[calc(100dvh-260px-var(--safe-top)-var(--safe-bottom))]"
       style={{ width: LAYER_PANEL_WIDTH }}
     >
       {/* The time scrubber docks here while any layer has dated features; empty, the slot takes no space. */}
@@ -648,7 +684,7 @@ export function LayerStack({
         </button>
       </header>
       <div aria-hidden className="hairline mx-5 shrink-0" />
-      <ul className="legend-table min-h-0 overflow-y-auto overscroll-contain px-5 pb-2 max-md:shrink-0 max-md:overflow-visible">
+      <ul className="legend-table min-h-0 overflow-y-auto overscroll-contain px-5 pb-2 [overflow-anchor:none] max-md:shrink-0 max-md:overflow-visible">
         {items.map(({ layer, op }) => {
           const index = renderOps.findIndex((o) => o.layerId === layer.id);
           return (

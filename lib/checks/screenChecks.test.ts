@@ -118,3 +118,15 @@ describe("isOceanDemTile404", () => {
     expect(isOceanDemTile404("http://localhost:5600/api/layer/climbing", 404)).toBe(false);
   });
 });
+
+describe("console rows", () => {
+  const panel = (rows: { id: string; top: number; bottom: number }[]) => ({
+    viewport: { width: 1440, height: 900 },
+    panels: [{ name: "console", rect: { x: 1104, y: 16, width: 320, height: 640 }, elements: [], rows: { scroller: { top: 316, bottom: 640 }, rows } }],
+  });
+
+  it("fails a row scrolled mid-row (the dams row at its opacity slider, Rank by cut off), and passes one shown from its header", () => {
+    expect(layoutProblems(panel([{ id: "dams", top: 136, bottom: 640 }]))).toEqual(["In the console, the dams row is scrolled mid-row: its header is 180px above the top of the list."]);
+    expect(layoutProblems(panel([{ id: "dams", top: 316, bottom: 820 }]))).toEqual([]);
+  });
+});

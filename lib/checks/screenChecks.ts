@@ -8,7 +8,10 @@
  * - placeholder: the chat input's placeholder fits its box and nothing covers it;
  * - labels: hex counts fit inside their cell, ranked symbol labels are not cut by the map's edge;
  * - lines: a line layer shows against the basemap (the pixels along its lines change when it is hidden).
+ * - rows: the console shows each layer row from its header, never scrolled mid-row.
  */
+
+import { rowsCutAtTop, type Span } from "@/lib/render/consoleScroll";
 
 export type Rect = { x: number; y: number; width: number; height: number };
 
@@ -28,7 +31,13 @@ export type MeasuredElement = {
   scroll?: { scrollWidth: number; clientWidth: number; overflowX: string };
 };
 
-export type MeasuredPanel = { name: string; rect: Rect; elements: MeasuredElement[] };
+export type MeasuredPanel = {
+  name: string;
+  rect: Rect;
+  elements: MeasuredElement[];
+  /** The console's layer rows (by layer id) and the box that scrolls them, as screen spans. */
+  rows?: { scroller: Span; rows: (Span & { id: string })[] };
+};
 
 export type LayoutMeasure = { viewport: { width: number; height: number }; panels: MeasuredPanel[] };
 
@@ -94,6 +103,10 @@ export function layoutProblems(m: LayoutMeasure): string[] {
     if (outScreen.length > 0) problems.push(`In the ${name}, ${outScreen.length === 1 ? "an element runs" : `${outScreen.length} elements run`} off the screen: ${list(outScreen)}.`);
     if (sideways.length > 0) problems.push(`In the ${name}, content is wider than its box and scrolls sideways: ${list(sideways)}.`);
     if (cut.length > 0) problems.push(`In the ${name}, text does not fit: ${list(cut)}.`);
+    // A row shows from its header: the dams row sat scrolled to its opacity slider, Rank by cut off at the top.
+    for (const row of panel.rows ? rowsCutAtTop(panel.rows.scroller, panel.rows.rows) : []) {
+      problems.push(`In the ${name}, the ${row.id} row is scrolled mid-row: its header is ${px((panel.rows?.scroller.top ?? 0) - row.top)} above the top of the list.`);
+    }
   }
   return problems;
 }
@@ -278,7 +291,28 @@ export function collectLayout(panels: [string, string][]): LayoutMeasure {
         }
         elements.push(item);
       }
-      out.push({ name, rect: rootRect, elements });
+      // The layer rows and the box that scrolls them (the list on a desktop, the whole console on a phone).
+      const rowEls = Array.from(root.querySelectorAll("li[data-layer-id]"));
+      let rowScroller: Element | null = null;
+      for (let a = rowEls[0]?.parentElement ?? null; a && a !== root.parentElement; a = a.parentElement) {
+        const s = getComputedStyle(a);
+        if ((s.overflowY === "auto" || s.overflowY === "scroll") && a.scrollHeight > a.clientHeight) {
+          rowScroller = a;
+          break;
+        }
+      }
+      const panel: MeasuredPanel = { name, rect: rootRect, elements };
+      if (rowScroller) {
+        const sr = rowScroller.getBoundingClientRect();
+        panel.rows = {
+          scroller: { top: sr.top, bottom: sr.bottom },
+          rows: rowEls.map((el) => {
+            const r = el.getBoundingClientRect();
+            return { id: el.getAttribute("data-layer-id") ?? "layer", top: r.top, bottom: r.bottom };
+          }),
+        };
+      }
+      out.push(panel);
     }
   }
   return { viewport: { width: window.innerWidth, height: window.innerHeight }, panels: out };

@@ -117,7 +117,7 @@ function measureNamed(attributes: Attribute[], words: string): Attribute | undef
 /** View cues in a question's words, strongest first: only clear ones, so anything else is left to the model and the map. */
 const VIEW_CUES: [Exclude<ViewKind, "change" | "scenario" | "route">, RegExp][] = [
   ["density", /\b(?:heat ?map|hot ?spots?|where (?:are|is|do) (?:the )?most|where (?:are|is) most of)\b/],
-  ["timeline", /\b(?:year by year|over (?:the )?(?:last|past) (?:\d+|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|few|several) (?:years|decades)|over time|each year|by (?:the )?(?:year|decade)s?)\b/],
+  ["timeline", /\b(?:year by year|over (?:the )?(?:last|past) (?:\d+|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|few|several) (?:years|decades)|over time|each year|by (?:the )?(?:year|decade)s?|since (?:19|20)\d\d)\b/],
   ["ranked", /\b(?:busiest|biggest|largest|highest|deepest|tallest|longest|top \d+|which\b[^?]*\b(?:the )?most)\b/],
   ["detail", /^(?:tell me about|how deep is|how tall is|how high is|what rock is)\b/],
 ];
@@ -138,9 +138,10 @@ export function viewAsked(question: string): ViewKind | null {
 }
 
 /** True when a layer can be drawn in `view`: a timeline needs dates, density points, ranked a measure. */
-function viewFits(view: ViewKind, layer: Pick<Layer, "attributes" | "style">): boolean {
+function viewFits(view: ViewKind, layer: Pick<Layer, "attributes" | "style"> & { description?: string }): boolean {
   const attributes = layer.attributes ?? [];
-  if (view === "timeline") return layer.style.timeField !== undefined || attributes.some((a) => a.type === "time");
+  // Dated features: a time attribute, a time field, or a description that says each feature carries its year or date.
+  if (view === "timeline") return layer.style.timeField !== undefined || attributes.some((a) => a.type === "time") || /\b(?:year|date|dated)\b/i.test(layer.description ?? "");
   if (view === "density") return layer.style.geometry === "point";
   if (view === "ranked") return attributes.some((a) => a.type === "measure") || layer.style.unit !== undefined || layer.style.extrude === "v";
   return true;
@@ -150,17 +151,19 @@ function viewFits(view: ViewKind, layer: Pick<Layer, "attributes" | "style">): b
  * The render input as the map should get it: filters on attribute values, and for "most … by <measure>" or "where is
  * most of the <measure>" on a point layer with that measure, the density view with hex cells colored by its sum.
  */
-export function normalizeRenderInput(input: Obj, layer: Pick<Layer, "attributes" | "style"> | undefined, question: string): Obj {
+export function normalizeRenderInput(input: Obj, layer: (Pick<Layer, "attributes" | "style"> & { description?: string }) | undefined, question: string): Obj {
   if (!layer) return input;
   const attributes = layer.attributes ?? [];
   const out: Obj = { ...input };
   if (typeof out.filters === "object" && out.filters !== null && !Array.isArray(out.filters)) {
     out.filters = normalizeFilters(out.filters as Obj, attributes);
   }
-  // The view the question asks for: filled in when the model left it out, and put in place of ranked when the words
-  // ask where most are (density) or how things went over the years (timeline), on a layer that can draw it.
+  // The view the question asks for, on a layer that can draw it: filled in when the model left it out, and put in
+  // place of a ranked or detail choice the words contradict ("wolf packs since 2014" drawn as one detail).
   const asked = viewAsked(question);
-  if (asked && viewFits(asked, layer) && (out.view === undefined || (out.view === "ranked" && (asked === "density" || asked === "timeline")))) {
+  // A ranked or detail choice gives way to what the words ask; change, scenario, route, timeline and density stay.
+  const loose = out.view === undefined || out.view === "ranked" || out.view === "detail";
+  if (asked && viewFits(asked, layer) && loose && out.view !== asked) {
     out.view = asked;
   }
   const words = measureAsked(question);

@@ -12,7 +12,8 @@
  * Smoke check 2026-10-10 (live, keyless, through runLayer): Lake Tahoe box (-120.2,38.8,-119.8,39.2) returned 40 named peaks in 1.6 s,
  *   first Freel Peak (v = elevation 3,318 m, prominence 959 m). On 2026-10-09 a 1.8 degree Colorado box (about 33,000 km2) returned 821 peaks
  *   in 8.8 s, and Wikimedia answered 429 to queries made 10 s apart.
- * Wide mode (over 40,000 km², up to the default hard cap of 160,000 km²) runs widePeaksQuery: the 1,000 most prominent peaks,
+ * Wide mode (over 40,000 km², up to 600,000 km²: Southern Alps of New Zealand 56 peaks in 2.4 s, Colorado and Wyoming -111,37,-103,44
+ * 323 in 6.8 s, 2026-10-17) runs widePeaksQuery: the 1,000 most prominent peaks,
  * ranked by prominence, with no count (a second WDQS query would risk the 429s above).
  * Smoke wide 2026-10-14 (through runLayer): Colorado -108.5,37,-104.5,41 (about 155,000 km²) returned all 176 peaks with a prominence in
  *   2.8 s, Mount Elbert first; an Alps box 6,44.5,12,47 returned 1,050 rows from WDQS in 7.6 s. The box query on that Alps box ran over 60 s.
@@ -205,6 +206,8 @@ const peaks = defineLayer({
   license: "CC0 (Wikidata)",
   requiredEnv: [],
   maxAreaKm2: 40_000,
+  // A whole range ("the Southern Alps of New Zealand", 268,000 km²) answers with its most prominent peaks.
+  hardMaxAreaKm2: 600_000,
   wide: { orderBy: "prominence", rank: "most prominent", limit: LIMIT },
   input: z.object({}),
   style: { geometry: "point", color: layerColor("peaks"), unit: "m", extrude: "v" },

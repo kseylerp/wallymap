@@ -126,7 +126,7 @@ describe("peaks layer", () => {
     expect(layer.license).toBe("CC0 (Wikidata)");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(40_000);
-    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.hardMaxAreaKm2).toBe(600_000);
     expect(layer.wide).toEqual({ orderBy: "prominence", rank: "most prominent", limit: 1000 });
     expect(layer.input.parse({})).toEqual({});
     expect(layer.style).toMatchObject({ geometry: "point", extrude: "v", unit: "m" });
@@ -189,10 +189,10 @@ describe("peaks layer", () => {
     expect(await layer.query(ctx(slow), {})).toMatchObject({ error: expect.stringContaining("timed out"), hint: "upstream" });
   });
 
-  it("rejects a view over the hard cap (4 x 40,000 km²) through runLayer", async () => {
-    const r = await runLayer("peaks", { bbox: [-110, 35, -105, 40] });
+  it("rejects a view over the hard cap (600,000 km², a whole range) through runLayer", async () => {
+    const r = await runLayer("peaks", { bbox: [-115, 33, -103, 45] });
     expect(r.status).toBe(422);
-    expect(r.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 160000 km²$/) });
+    expect(r.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 600000 km²$/) });
   });
 
   it("answers a Colorado box of about 155,000 km² wide: the most prominent, ranked by prominence, with a note", async () => {

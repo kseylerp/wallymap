@@ -473,11 +473,15 @@ async function checkOne(browser: Browser, item: ScreenItem, size: Size): Promise
     await page.screenshot({ path: join(OUT_DIR, shot) });
     // With a card open the other areas and lines of its layer fade, but they must still show (the owner's glaciers on
     // Topo + Satellite: siblings of a selected glacier vanished on the ice; the coordinator's river network vanished
-    // behind one selected reach). Measured on the basemap the page opened on, as the screenshot shows it.
+    // behind one selected reach). Measured on the basemap the page opened on, as the screenshot shows it; lines only on a
+    // flat map (draped on 3D terrain they lie away from where map.project puts the sample points).
     if (!phone && opened) {
+      const threeD = page.locator('button[aria-label="3D terrain"]').first();
+      const flat = !((await threeD.count()) > 0 && (await threeD.getAttribute("aria-pressed")) === "true");
       const fadingOps = item.state.renderOps.filter(
-        (o) => o.visible && (((o.mode === "polygons" || o.mode === "columns") && item.state.layers[o.layerId]?.style.geometry === "polygon") || o.mode === "lines"),
+        (o) => o.visible && (((o.mode === "polygons" || o.mode === "columns") && item.state.layers[o.layerId]?.style.geometry === "polygon") || (flat && o.mode === "lines")),
       );
+      if (!flat && item.state.renderOps.some((o) => o.visible && o.mode === "lines")) notes.push("Lines with a card open: not measured on 3D terrain (measured flat above).");
       await measureOps(page, item.state, fadingOps, `${BASEMAPS.find((b) => b.value === item.state.basemap)?.label ?? item.state.basemap} with a card open`, { readings: notes, problems }, { fill: false });
     }
     // Zero errors per question (coordinator, 2026-10-16): every uncaught error, every console error, and the dev badge

@@ -13,7 +13,7 @@ import {
   rampLineColor,
   type LineEntry,
 } from "@/lib/render/nativeLines";
-import { AREA_OUTLINE_SIBLING_FADE, DARK_GREY, INK, LINE_SIBLING_FADE, PINK, PURPLE, SAGE, SIBLING_FADE, WHITE } from "@/lib/render/palette";
+import { DARK_GREY, INK, PINK, PURPLE, SAGE, SIBLING_FADE, WHITE } from "@/lib/render/palette";
 import { hexToRgb, rampColor, rgbToHex } from "@/lib/render/ramp";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type LoadedLayer, type MapState, type RenderOp } from "@/lib/render/state";
@@ -110,7 +110,7 @@ describe("native line layers: one source and four layers per drawn layer", () =>
     expect(dash.paint).toMatchObject({ "line-color": DARK_GREY, "line-width": 2.5, "line-dasharray": [3.2, 3.2] });
     expect(paint(byPart(all, "core"))["line-color"]).toEqual(expect.arrayContaining(["trail", SAGE]));
     // Selected, the trail draws purple in the highlight layer: its dashes fade out with the core.
-    expect(paint(byPart(specs(select(stateOf("osm-trails", [a, b]), a)), "dash"))["line-opacity"]).toEqual(["case", ["==", ["get", "i"], 0], 0, LINE_SIBLING_FADE]);
+    expect(paint(byPart(specs(select(stateOf("osm-trails", [a, b]), a)), "dash"))["line-opacity"]).toEqual(["case", ["==", ["get", "i"], 0], 0, SIBLING_FADE]);
     // A compare color, a score ramp or a delta has no dashes.
     expect(byPart(specs(stateOf("osm-trails", [a], { color: PINK })), "dash").filter).toEqual(["==", ["get", "cls"], "none"]);
   });
@@ -209,10 +209,9 @@ describe("native line layers: one source and four layers per drawn layer", () =>
     const sel = byPart(all, "selected");
     expect(sel.filter).toEqual(["==", ["get", "i"], 1]);
     expect(sel.paint).toMatchObject({ "line-color": PURPLE, "line-width": 3.5, "line-opacity": 1 });
-    // Siblings fade, but less than points and areas do (LINE_SIBLING_FADE), and their casing keeps a white trace.
-    expect(paint(byPart(all, "core"))["line-opacity"]).toEqual(["case", ["==", ["get", "i"], 1], 0, LINE_SIBLING_FADE]);
+    expect(paint(byPart(all, "core"))["line-opacity"]).toEqual(["case", ["==", ["get", "i"], 1], 0, SIBLING_FADE]);
     expect(paint(byPart(all, "casing"))["line-width"]).toEqual(["case", ["==", ["get", "i"], 1], 5.5, ["match", ["get", "cls"], "route", 5, 4.5]]);
-    expect(paint(byPart(all, "casing"))["line-opacity"]).toEqual(["case", ["==", ["get", "i"], 1], 1, 0.9 * AREA_OUTLINE_SIBLING_FADE]);
+    expect(paint(byPart(all, "casing"))["line-opacity"]).toEqual(["case", ["==", ["get", "i"], 1], 1, 0.9 * SIBLING_FADE]);
     // Nothing selected: the highlight matches no feature.
     expect(byPart(specs(stateOf("osm-trails", [a, b])), "selected").filter).toEqual(["==", ["get", "i"], -1]);
     // A selection on another layer leaves this one alone.

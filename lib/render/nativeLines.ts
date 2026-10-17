@@ -8,8 +8,6 @@ import {
   isPaletteColor,
   LINE,
   LINE_CLASSES,
-  LINE_SIBLING_FADE,
-  AREA_OUTLINE_SIBLING_FADE,
   lineClassFor,
   lineColorFor,
   lineRampFor,
@@ -362,7 +360,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
   const routeCasing = LINE_CLASSES.route.casing;
   const encoded = entry.look.kind === "encoded" && entry.look.size !== undefined;
   const imagery = entry.imagery === true;
-  const fade = encoded ? ENCODED_SIBLING_FADE : LINE_SIBLING_FADE;
+  const fade = encoded ? ENCODED_SIBLING_FADE : SIBLING_FADE;
   const baseCasing: number | ExpressionSpecification = encoded
     ? encodedLineWidth(0, true, imagery)
     : routed
@@ -414,7 +412,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
       type: "line",
       source,
       layout,
-      paint: { "line-color": WHITE, "line-width": casingWidth, "line-opacity": faded(entry, LINE.casingOpacity, 1, Math.max(fade, AREA_OUTLINE_SIBLING_FADE)) },
+      paint: { "line-color": WHITE, "line-width": casingWidth, "line-opacity": faded(entry, LINE.casingOpacity, 1, fade) },
     },
     core,
     dash,

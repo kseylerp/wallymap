@@ -126,7 +126,7 @@ describe("mtb-trails layer", () => {
     expect(layer.license).toContain("ODbL");
     expect(layer.maxAreaKm2).toBe(2500);
     expect(layer.wide).toEqual({ mode: "named", orderBy: "length in km", limit: 1000 });
-    expect(hardMaxAreaKm2(layer)).toBe(10_000);
+    expect(hardMaxAreaKm2(layer)).toBe(100_000);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toContain("OVERPASS_URL");
     expect(layer.style.geometry).toBe("line");
@@ -187,8 +187,9 @@ describe("mtb-trails layer", () => {
     expect(stub).toHaveBeenCalledTimes(2);
   });
 
-  it("returns 422 zoom_in from runLayer for a bbox over the 10,000 km2 hard cap and 400 for a bad input", async () => {
-    const big = await runLayer("mtb-trails", { bbox: [-122, 39, -120, 40] });
+  it("returns 422 zoom_in from runLayer for a bbox over the 100,000 km2 hard cap and 400 for a bad input", async () => {
+    // Utah and Colorado, about 290,000 km².
+    const big = await runLayer("mtb-trails", { bbox: [-112, 36, -106, 41] });
     expect(big.status).toBe(422);
     expect(big.body).toMatchObject({ hint: "zoom_in" });
     const bad = await runLayer("mtb-trails", { bbox: TRUCKEE, input: { maxScale: 9 } });
@@ -196,7 +197,7 @@ describe("mtb-trails layer", () => {
   });
 });
 
-// Central Utah, about 9,700 km²: over the 2,500 km² soft cap, under the 10,000 km² hard cap.
+// Central Utah, about 9,700 km²: over the 2,500 km² soft cap, under the 100,000 km² hard cap.
 const UTAH: [number, number, number, number] = [-112.5, 38, -111.5, 39];
 
 describe("mtb-trails wide mode", () => {
@@ -245,6 +246,20 @@ describe("mtb-trails wide mode", () => {
         truncated: true,
         coverageNote: "Showing the 3 named of 72 (ranked by length in km); zoom in under 2,500 km² for all",
       });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("answers a regional box (south-east Utah, about 72,500 km²) instead of asking to zoom in", async () => {
+    respond.mockClear();
+    vi.stubGlobal("fetch", respond);
+    try {
+      const res = await runLayer("mtb-trails", { bbox: [-112, 37, -109, 39.5], zoom: 7 });
+      expect(res.status).toBe(200);
+      if (!("kind" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
+      expect(res.body.data.features.map((f) => f.properties?.name)).toEqual(["Big Loop", "Long", "Short"]);
+      expect(res.body.coverageNote).toMatch(/^Showing the 3 named of 72 \(ranked by length in km\)/);
     } finally {
       vi.unstubAllGlobals();
     }

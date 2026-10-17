@@ -561,6 +561,19 @@ export function longestNamedFirst<T extends Feature>(features: T[], limit: numbe
     .map(({ f }) => f);
 }
 
+/**
+ * A line or multi-line feature redrawn with simplifyLine at `tolerance` (anything else unchanged): a wide answer over a
+ * region keeps detail only to what its view can show (routeTolerance), which cuts its size several times over.
+ */
+export function simplifiedFeature<T extends Feature>(feature: T, tolerance: number): T {
+  const g = feature.geometry;
+  if (g?.type === "LineString") return { ...feature, geometry: { ...g, coordinates: simplifyLine(g.coordinates, tolerance) } };
+  if (g?.type === "MultiLineString") {
+    return { ...feature, geometry: { ...g, coordinates: g.coordinates.map((line) => simplifyLine(line, tolerance)) } };
+  }
+  return feature;
+}
+
 /** True when a sac_scale value is absent, or at or below `max` in difficulty order. */
 function scaleWithin(scale: string | undefined, max: (typeof SAC_SCALES)[number]): boolean {
   if (scale === undefined) return true;

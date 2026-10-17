@@ -23,6 +23,7 @@ import layer, {
   routeLengthKm,
   routesNote,
   simplifyLine,
+  simplifiedFeature,
 } from "./osm-trails";
 import fixture from "./__fixtures__/osm-trails.tahoe.json";
 import routeScan from "./__fixtures__/osm-trails.routes-scan.guiana.json";
@@ -430,6 +431,16 @@ describe("named-line helpers for the other OSM layers' wide mode", () => {
       "[out:json][timeout:25];way(id:2,1);out tags geom;rel(id:3)->.r;way(r.r)(38,-112.5,39,-111.5)->.rw;.r out body;.rw out skel geom 3000;",
     );
     expect(buildNamedGeometryQuery(BOX, { ways: [], relations: [3] }, 10)).not.toContain("way(id:");
+  });
+
+  it("simplifies a wide answer's lines and multi-lines to the view's tolerance, keeping their ends and properties", () => {
+    const zigzag = [[0, 0], [1, 0.001], [2, 0], [3, 0.001], [4, 0]];
+    const line = { type: "Feature" as const, geometry: { type: "LineString" as const, coordinates: zigzag }, properties: { name: "a" } };
+    expect(simplifiedFeature(line, 0.01)).toEqual({ ...line, geometry: { type: "LineString", coordinates: [[0, 0], [4, 0]] } });
+    const multi = { ...line, geometry: { type: "MultiLineString" as const, coordinates: [zigzag, [[5, 5], [6, 6]]] } };
+    expect(simplifiedFeature(multi, 0.01).geometry.coordinates).toEqual([[[0, 0], [4, 0]], [[5, 5], [6, 6]]]);
+    const point = { type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [1, 2] }, properties: {} };
+    expect(simplifiedFeature(point, 0.01)).toBe(point);
   });
 
   it("keeps the named features, longest first, up to the limit", () => {

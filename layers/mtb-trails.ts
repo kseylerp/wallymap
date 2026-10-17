@@ -7,10 +7,17 @@
  * Tags read: mtb:scale (Singletrack Scale 0 to 6), mtb:scale:imba (IMBA 0 to 4), mtb:scale:uphill, name, ref,
  * highway, surface, bicycle, operator, check_date (becomes `t`).
  * Live smoke check: Truckee / Donner Lake, CA (39.28,-120.25 to 39.38,-120.1), 2026-10-09: 154 features (72 mtb, 81 imba-only, 1 route), no truncation.
- * Wide mode (over 2,500 km², up to 10,000): a scan of the named rated ways and routes (ids and bounds), then the
- * geometry of the 1,000 longest inside the box (see buildNamedScanQuery in osm-trails), with `total` every rated way and route.
+ * Wide mode (over 2,500 km², up to WIDE_MAX_AREA_KM2, 100,000): a scan of the named rated ways and routes (ids and
+ * bounds), then the geometry of the 1,000 longest inside the box (see buildNamedScanQuery in osm-trails), simplified to
+ * what the view can show, with `total` every rated way and route.
  * Live smoke check (wide), 2026-10-14: central Utah (-112.5,38 to -111.5,39, about 9,700 km²): 63 named of 72, 2.1 s;
  * Moab (-110,38.3 to -109.2,38.9): 373 named of 444 (27 routes, Kokopelli's Trail first), 3.0 s.
+ * Live smoke check (wide), 2026-10-16, for the 100,000 km² cap: around Moab (-110.5,38 to -108.9,39.2, about 18,500 km²):
+ * 420 named of 536 (27 routes, Kokopelli's Trail first), 2.9 s; south-east Utah (-112,37 to -109,39.5, about 72,500 km²):
+ * 528 of 996, 3.5 to 9.2 s, 0.2 MB once simplified (2.4 MB before); Colorado Front Range (-107.5,38.5 to -104.5,40.8, about 65,000 km²): 1,000 of 4,779 (70 routes,
+ * the Great Divide Mountain Bike Route first), 9.5 s, 0.5 MB (6.6 before); Utah and Colorado (-112,36 to -106,41, about 290,000 km²): 1,000 of
+ * 6,891, 9.7 s. The cost is the box's rated ways, not its area: Switzerland (6,45.8 to 10.5,47.8, about 76,000 km²) holds
+ * 65,000 and its scan took 14 s once and timed out at 25 s twice, so the densest Alpine regions still need a smaller box.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
@@ -18,7 +25,14 @@ import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryCo
 import { MTB_LEVELS, MTB_SCALE, nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { overpassCounts, overpassQuery } from "./_shared/overpass";
-import { buildNamedGeometryQuery, buildNamedScanQuery, longestNamedFirst, pickNamedByLength } from "./osm-trails";
+import {
+  buildNamedGeometryQuery,
+  buildNamedScanQuery,
+  longestNamedFirst,
+  pickNamedByLength,
+  routeTolerance,
+  simplifiedFeature,
+} from "./osm-trails";
 import {
   bboxClause,
   returnedNote,
@@ -43,6 +57,11 @@ export const MAX_ROUTES = 100;
 export const MAX_ROUTE_WAYS = 3_000;
 /** Most named trails and routes in a wide answer (the wide strategy's limit). */
 export const WIDE_LIMIT = 1_000;
+/**
+ * Largest box the layer answers (its hardMaxAreaKm2), with the named trails longest first: a region such as south-east
+ * Utah (about 72,500 km²) instead of a "zoom in". Measured in the header: 3 to 10 s in the US.
+ */
+export const WIDE_MAX_AREA_KM2 = 100_000;
 
 const inputSchema = z.object({
   /** Hardest Singletrack Scale rating to keep (0 easiest, 6 hardest). Unrated imba-only ways and routes always stay. */
@@ -170,7 +189,8 @@ async function queryWide(ctx: QueryContext, input: MtbInput): Promise<LayerResul
   if (picked.ways.length + picked.relations.length > 0) {
     const body = await overpassQuery(ctx, buildNamedGeometryQuery(ctx.bbox, picked, MAX_ROUTE_WAYS));
     if (!body.ok) return { error: body.error, hint: "upstream" };
-    features = longestNamedFirst(normalizeMtb(body.json).features, limit);
+    const tolerance = routeTolerance(ctx.bbox);
+    features = longestNamedFirst(normalizeMtb(body.json).features, limit).map((f) => simplifiedFeature(f, tolerance));
   }
   const kept = withinScale(features, input.maxScale);
   const hidden = features.length - kept.length;
@@ -258,13 +278,14 @@ const mtbTrails = defineLayer({
     "Use it for questions like: where can I go mountain biking near here, show beginner singletrack (set maxScale to 2), which trails are the hardest, or is there a flow trail or bike park nearby. " +
     "Caveats: ratings exist only where a mapper added them, so many good trails are missing or unrated (osm-trails shows every path, including ones with no mountain bike rating); " +
     "bikes may be banned on a rated trail, so check the land manager (public-lands, forest-roads); the rating describes the trail, not its current condition or closures. " +
-    "At most 2,000 rated ways and 100 routes are returned (a route is drawn only where it crosses the box) and the note gives the count; over 2,500 km² only the 1,000 longest named ones.",
+    "At most 2,000 rated ways and 100 routes are returned (a route is drawn only where it crosses the box) and the note gives the count; over 2,500 km² (up to 100,000 km², a whole region) the 1,000 longest named ones.",
   coverage: "global",
   surface: "land",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 2500,
+  hardMaxAreaKm2: WIDE_MAX_AREA_KM2,
   wide: { mode: "named", orderBy: "length in km", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "line", color: layerColor("mtb-trails") },

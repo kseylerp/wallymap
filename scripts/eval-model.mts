@@ -39,7 +39,8 @@
  *   --save <dir>     also writes each question's run (tool calls and closing text) to <dir> as gzipped JSON
  *   --replay <dir>   reads the runs from <dir> instead of calling the model (checks and rules only, no credits)
  *   --only <text>    runs only the set's questions containing <text> (case ignored; a|b for either)
- *   --tag coverage   runs only the coverage questions (COVERAGE_QUESTIONS), each also held to its expected layers and view
+ *   --tag coverage   runs only the coverage questions (COVERAGE_QUESTIONS), each also held to its expected layers and view;
+ *                    one whose layer is under a documented outage (Layer.outage) and did not answer is skipped, not passed
  *   --screens        after the set, the screen checks (scripts/evalScreens.ts) on SCREEN_QUESTIONS: each one's final
  *                    map opened by permalink in a browser at desktop and phone size; see that file for the server.
  */
@@ -103,7 +104,7 @@ export function readEvalSet(): string[] {
     .filter(Boolean);
 }
 
-type Outcome = { ok: boolean; line: Record<string, unknown> };
+type Outcome = { ok: boolean; line: Record<string, unknown>; skipped?: string };
 
 const isLayerError = (output: unknown) => !!output && typeof output === "object" && "error" in output;
 
@@ -516,6 +517,22 @@ export function coverageRule(expect: CoverageExpect, calls: ToolCall[]): RuleRes
   return { ok, layers, ...(expect.view ? { view: expect.view, views, viewOk } : {}), ...(expect.mode ? { mode: expect.mode, modes, modeOk } : {}), ...(expect.view === "route" ? { routes } : {}) };
 }
 
+/**
+ * A coverage question that needs a layer under a documented outage (Layer.outage) and got no answer from it is skipped,
+ * not passed and not failed: the reason, or undefined when the question counts. A layer that answered despite its
+ * outage counts as usual (and the outage should be removed).
+ */
+export function outageSkip(expect: CoverageExpect, calls: ToolCall[]): string | undefined {
+  for (const alts of expect.layers) {
+    const ids = alts.split("|");
+    const down = ids.map((id) => getLayer(id)).filter((l) => l?.outage !== undefined);
+    if (down.length !== ids.length) continue;
+    const answered = calls.some((c) => ids.some((id) => c.toolName === `query_${id}`) && c.output !== undefined && !isLayerError(c.output));
+    if (!answered) return `documented outage: ${down.map((l) => `${l?.id} since ${l?.outage?.since}`).join(", ")}`;
+  }
+  return undefined;
+}
+
 /** Every coverage note the queries returned, so a wide result's "Showing the N largest of M" line is in the output. */
 function coverageNotes(calls: ToolCall[]): string[] {
   return calls.flatMap((c) => {
@@ -673,13 +690,16 @@ function evaluate(run: Run): Evaluated {
   const checks = runMapChecks(state, { lookup: lookupLayer, place: questionPlace(calls, view) });
   const checksOk = checks.every((c) => c.ok);
   const ok = rulesOk && checksOk;
+  const skipped = expect ? outageSkip(expect, calls) : undefined;
 
   return {
     ok,
     state,
     checks,
+    ...(skipped && { skipped }),
     line: {
       question,
+      ...(skipped && { skipped }),
       ...(view ? { view: view.bbox, geocoded: seq.includes("geocode"), movedCamera: moved } : {}),
       ...(wideView ? { zoomInErrors: zoomInLayers.length, zoomInPerLayer, askedToZoomIn, succeeded } : {}),
       noteWords,
@@ -774,23 +794,26 @@ if (isMain) {
       .filter((q) => !only || only.some((o) => q.toLowerCase().includes(o)))
       .filter((q) => tag !== "coverage" || coverageFor(q) !== undefined);
     let passed = 0;
+    let skipped = 0;
     const forScreens: { raw: string; slug: string; state: MapState; failures: string[] }[] = [];
     for (const q of questions) {
       const outcome = await question(q, { save, replay });
       if (outcome.ok) passed += 1;
+      else if (outcome.skipped) skipped += 1;
       console.log(JSON.stringify(outcome.line));
       if (screens && "state" in outcome && SCREEN_QUESTIONS.includes(q)) {
         forScreens.push({ raw: q, slug: slugOf(q), state: outcome.state, failures: outcome.checks.flatMap((c) => c.failures) });
       }
     }
-    console.log(`ok ${passed}/${questions.length}`);
+    // A question skipped for a documented outage counts neither way.
+    console.log(`ok ${passed}/${questions.length - skipped}${skipped > 0 ? ` (${skipped} skipped: documented outage)` : ""}`);
     if (screens) {
       const { runScreens } = await import("@/scripts/evalScreens");
       const screenResult = await runScreens(forScreens);
       console.log(`screens ok ${screenResult.passed}/${screenResult.total} (contact sheet ${screenResult.sheet})`);
       if (screenResult.passed < screenResult.total) process.exitCode = 1;
     }
-    if (passed < questions.length) process.exitCode = 1;
+    if (passed < questions.length - skipped) process.exitCode = 1;
   } else {
     const raw = args.filter((a, i) => !a.startsWith("--") && !["--save", "--replay", "--only", "--tag"].includes(args[i - 1])).join(" ") || "Show hiking trails around Lake Tahoe";
     const outcome = await question(raw, { save, replay });

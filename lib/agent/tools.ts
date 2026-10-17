@@ -78,7 +78,12 @@ export type LayerDetail = {
 };
 
 function isAvailable(layer: Layer): boolean {
-  return layer.requiredEnv.every((name) => Boolean(process.env[name]));
+  return layer.outage === undefined && layer.requiredEnv.every((name) => Boolean(process.env[name]));
+}
+
+/** The sentence a layer under a documented outage leads its tool description with. */
+function outageSentence(layer: Layer): string {
+  return layer.outage ? `Unavailable since ${layer.outage.since}: ${layer.outage.reason}; say so plainly if asked. ` : "";
 }
 
 function describeCoverage(coverage: Coverage): string {
@@ -345,7 +350,7 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: T
   }) as unknown as z.ZodType<QueryArgs>;
   return tool({
     // The licence and the trimmed sentences are in list_layers' detail (ids); the citation comes with each result.
-    description: `${compactDescription(layer.description, { inputs: inputNames(layer), wide: layer.wide !== undefined })} Covers ${describeCoverage(layer.coverage)}.${wideSentence(layer)}${widerScaleSentence(layer.id)} bbox is [west, south, east, north].`,
+    description: `${outageSentence(layer)}${compactDescription(layer.description, { inputs: inputNames(layer), wide: layer.wide !== undefined })} Covers ${describeCoverage(layer.coverage)}.${wideSentence(layer)}${widerScaleSentence(layer.id)} bbox is [west, south, east, north].`,
     inputSchema,
     execute: async ({ bbox: asked, zoom, ...input }) => {
       const bbox = queryBox(turn, layer.id, asked);

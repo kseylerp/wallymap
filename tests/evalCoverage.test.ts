@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { listLayers } from "@/layers";
 import { VIEW_KINDS } from "@/lib/render/state";
-import { COVERAGE_QUESTIONS, LAYERS_IN_OLDER_QUESTIONS, coverageFor, coverageRule, readEvalSet } from "@/scripts/eval-model.mjs";
+import { COVERAGE_QUESTIONS, LAYERS_IN_OLDER_QUESTIONS, coverageFor, coverageRule, outageSkip, readEvalSet } from "@/scripts/eval-model.mjs";
 
 /** The coverage questions (scripts/eval-model.mts, docs/questions.md "Coverage questions"). */
 describe("eval coverage questions", () => {
@@ -54,5 +54,17 @@ describe("eval coverage questions", () => {
     const errored = { toolName: "query_tides", input: {}, output: { error: "upstream down" } };
     expect(coverageRule({ layers: ["tides"] }, [empty]).ok).toBe(true);
     expect(coverageRule({ layers: ["tides"] }, [errored]).ok).toBe(false);
+  });
+});
+
+describe("documented outages", () => {
+  it("skips a coverage question whose layer is down by a documented outage, and counts one that answered", () => {
+    const expect_ = coverageFor("Active mining claims near Moab");
+    expect(expect_).toBeDefined();
+    const down = [{ toolName: "query_mining-claims", input: {}, output: { error: "Mining claims are unavailable since 2026-10-14", hint: "unavailable" } }];
+    expect(outageSkip(expect_!, down)).toMatch(/documented outage: mining-claims since 2026-10-14/);
+    const answered = [{ toolName: "query_mining-claims", input: {}, output: { kind: "geojson", data: { type: "FeatureCollection", features: [] } } }];
+    expect(outageSkip(expect_!, answered)).toBeUndefined();
+    expect(outageSkip(coverageFor("Where is the Ogallala aquifer?")!, [])).toBeUndefined();
   });
 });

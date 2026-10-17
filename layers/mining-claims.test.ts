@@ -152,6 +152,13 @@ describe("mining-claims layer", () => {
     expect(geojson(await layer.query(ctx(empty), { status: "both" })).coverageNote).toBe("No mining claims in this area");
   });
 
+  it("says plainly that claims are unavailable when the service is gone (404), the documented outage", async () => {
+    const gone = upstream({ active: () => new Response("Service not found", { status: 404 }), closed: () => new Response("Service not found", { status: 404 }) });
+    const result = await layer.query(ctx(gone), { status: "both" });
+    expect(result).toEqual({ error: expect.stringMatching(/^Mining claims are unavailable since 2026-10-14: the Bureau of Land Management/), hint: "unavailable" });
+    expect(layer.outage?.since).toBe("2026-10-14");
+  });
+
   it("returns nothing outside the US without calling out, and rejects an oversized area through runLayer", async () => {
     const stub = vi.fn();
     expect(geojson(await layer.query(ctx(stub, [5, 45, 5.2, 45.2]), { status: "active" })).coverageNote).toBe("No data outside the United States");

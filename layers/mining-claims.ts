@@ -19,6 +19,11 @@
  * Smoke check 2026-10-10 (live, through runLayer): Moab box -109.8,38.4,-109.4,38.7 returned 1,346 active claims in 0.9 s (WES-1, a 20.66 acre
  *   lode claim, case UT105832859); with status both it hit the 2,000 closed-claim cap (3,346 claims in 0.5 s); a Los Angeles forest box
  *   -118.5,34,-118,34.4 returned 1 active claim (AN 30). One cold call to the service took 17 s once, so expect the occasional slow answer.
+ * Outage (2026-10-14 onward): BLM took the claim services off its public server. gis.blm.gov/nlsdb/rest/services/Mining_Claims now lists no
+ *   services, and the MLRS "Not Closed" and "Closed (Past Year)" services that BLM's own Hub and data.gov point to
+ *   (gis.blm.gov/nlsdb/rest/services/HUB/BLM_Natl_MLRS_Mining_Claims_Not_Closed/FeatureServer, ..._Closed) answer 404 "Service not found"
+ *   (checked 2026-10-17). The only live copies found are per-state re-hosts by a private reseller on ArcGIS Online, with no stated source date
+ *   or licence, so they are not used. `outage` says so; the layer still asks the old address so it works again when BLM restores it.
  * Wide (over 2,500 km², up to 10,000): named claims only (CSE_NAME > ' '), 2,000 split between the statuses asked, plus a count of every
  *   claim in the box. Smoke 2026-10-14 could not run: the whole gis.blm.gov/nlsdb server answered 404 (the BLM recreation services had
  *   moved to gis.blm.gov/natl the same day), so the wide path is checked by tests only.
@@ -102,6 +107,10 @@ const miningClaims = defineLayer({
       .describe("Which claims: 'active' (default), 'closed' (lapsed or relinquished) or 'both'."),
   }),
   style: { geometry: "polygon", color: layerColor("mining-claims"), fillOpacity: 0.25 },
+  outage: {
+    since: "2026-10-14",
+    reason: "the Bureau of Land Management took its mining claim map service offline (gis.blm.gov answers \"Service not found\"), and there is no official copy",
+  },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {
@@ -157,6 +166,11 @@ const miningClaims = defineLayer({
       if (res.truncated && !wide) notes.push(`Showing an arbitrary 2,000 ${status} claims, not the newest; zoom in for the rest`);
     });
     if (failed.length === statuses.length) {
+      // Every status answered 404: the documented outage, said plainly.
+      const gone = results.every((res) => !res.ok && res.status === 404);
+      if (gone && miningClaims.outage) {
+        return { error: `Mining claims are unavailable since ${miningClaims.outage.since}: ${miningClaims.outage.reason}.`, hint: "unavailable" };
+      }
       return { error: `Mining claims unavailable: ${failed.join("; ")}`, hint: "upstream" };
     }
     if (failed.length > 0) notes.push(`Missing the ${failed.join(" and the ")}`);

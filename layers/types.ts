@@ -285,6 +285,12 @@ export type Layer<I extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawSha
   card?: CardSpec;
   /** The fields a person can slice the layer by (spec §12c): each one's type picks its control in the layer row. */
   attributes?: Attribute[];
+  /**
+   * A documented outage of the layer's only source: since when and why, in plain words. The layer still asks the
+   * source (so it works again the day the source returns), its tool and list_layers row say it is unavailable, its
+   * error says why, and the eval counts a question that needs it as skipped, not passed. Remove it once the source is back.
+   */
+  outage?: { since: string; reason: string };
 };
 
 /** How many times maxAreaKm2 a layer with a `wide` strategy answers by default before the hard zoom_in error. */

@@ -487,3 +487,20 @@ describe("step guard: a render of the query tool's name", () => {
     expect(calls.filter((c) => c.name === "render").map((c) => c.input.layerId)).toEqual(["peaks"]);
   });
 });
+
+describe("step guard: a compare of a layer never queried", () => {
+  it("queries both dates on the place first, then compares (greenness this month against last year)", async () => {
+    runLayer.mockImplementation(async () => ({ status: 200, body: { kind: "tiles", tiles: ["https://t/{z}/{x}/{y}.png"], citation: { source: "t", url: "https://e.x", retrieved: "2026" } } }));
+    const { calls } = await run("How green was the Sierra Nevada this month compared to last year?", [
+      { calls: [{ name: "geocode", input: { place: "Sierra Nevada" } }] },
+      { calls: [{ name: "compare", input: { layerId: "greenness", a: ["2025-10-01", "2025-10-16"], b: ["2026-10-01", "2026-10-16"], mode: "swipe" } }] },
+      { calls: [{ name: "note", input: { markdown: "Greener than last year." } }] },
+      { text: "- More?" },
+    ]);
+    const names = calls.map((c) => c.name);
+    expect(names.slice(0, 3)).toEqual(["geocode", "query_greenness", "query_greenness"]);
+    expect(calls.filter((c) => c.name === "query_greenness").map((c) => c.input.date)).toEqual(["2025-10-01", "2026-10-01"]);
+    expect(names).toContain("compare");
+    expect(names.indexOf("compare")).toBeLessThan(names.indexOf("note"));
+  });
+});

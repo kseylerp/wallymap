@@ -344,6 +344,32 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
     return false;
   });
 
+  // 2d. A compare of a layer never queried (the greenness turn compared without asking for either month): its two
+  // dates are queried first, on the place's box, then the compare runs.
+  const placeBox = turn.place?.bbox ?? turn.view?.bbox ?? null;
+  if (placeBox) {
+    const queriedHere = new Set(calls.filter((c) => isQuery(c.toolName)).map((c) => layerOf(c.toolName)));
+    const added: DraftCall[] = [];
+    for (const c of calls) {
+      if (c.toolName !== "compare" || typeof c.input.layerId !== "string") continue;
+      const layerId = c.input.layerId;
+      const layer = getLayer(layerId);
+      if (!layer || turn.queries.some((q) => q.layerId === layerId && q.ok) || queriedHere.has(layerId)) continue;
+      const dated = "date" in ((layer.input as { shape?: Record<string, unknown> }).shape ?? {});
+      const windows = [c.input.a, c.input.b].filter((w): w is [string, string] => Array.isArray(w) && typeof w[0] === "string");
+      const inputs = dated && windows.length === 2 ? windows.map((w) => ({ date: w[0].slice(0, 10) })) : [{}];
+      for (const input of inputs) added.push({ toolCallId: guardId(), toolName: `${QUERY}${layerId}`, input: { ...input, bbox: placeBox } });
+      queriedHere.add(layerId);
+    }
+    if (added.length > 0) {
+      // The compare waits for the next step, once the queries have answered.
+      calls = [...added, ...calls.filter((c) => c.toolName !== "compare" && c.toolName !== "note")];
+      turn.note(`queried ${added.map((c) => c.toolName).join(", ")} before comparing: the layer was never queried`);
+      changed = true;
+      return { calls, dropText: true, rejected, changed };
+    }
+  }
+
   // 3. Queries with no place looked up: look it up, add the geocode, and run the queries on its box.
   const queries = calls.filter((c) => isQuery(c.toolName));
   const located = turn.place !== null || turn.regionQueried || calls.some((c) => LOCATING_QUERIES.has(c.toolName));

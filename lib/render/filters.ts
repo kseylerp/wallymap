@@ -9,11 +9,48 @@ export type FilterField =
  * Per property: `include` keeps features whose value (or, for a list, any item) is one of these; `range` keeps numbers
  * inside [min, max]; `match` keeps text containing these words (a name search, case and accents ignored).
  */
-export type LayerFilters = Record<string, { include?: string[]; range?: [number, number]; match?: string }>;
+export type LayerFilters = Record<string, { include?: string[]; range?: [number, number]; match?: string; within?: FilterWithin }>;
 
-/** True when a filter entry restricts something: a non-empty include, a range, or search text. */
+/**
+ * The place a filter is held to: a river name keeps only the features inside the river's own basin ("Colorado River"
+ * is also a river of Texas, whose dams ranked among the Colorado River basin's largest).
+ */
+export type FilterWithin = { bbox: [number, number, number, number]; name: string };
+
+/** True when a filter entry restricts something: a non-empty include, a range, search text, or a place. */
 export function isActiveEntry(f: LayerFilters[string] | undefined): boolean {
-  return !!f && ((f.include !== undefined && f.include.length > 0) || f.range !== undefined || (f.match !== undefined && f.match.trim() !== ""));
+  return (
+    !!f &&
+    ((f.include !== undefined && f.include.length > 0) || f.range !== undefined || (f.match !== undefined && f.match.trim() !== "") || f.within !== undefined)
+  );
+}
+
+/** The middle of a feature's extent, or null without coordinates. */
+function middleOf(geometry: GeoJSON.Geometry | null | undefined): [number, number] | null {
+  let w = Infinity;
+  let s = Infinity;
+  let e = -Infinity;
+  let n = -Infinity;
+  const visit = (c: unknown): void => {
+    if (!Array.isArray(c)) return;
+    if (typeof c[0] === "number" && typeof c[1] === "number") {
+      w = Math.min(w, c[0]);
+      e = Math.max(e, c[0]);
+      s = Math.min(s, c[1]);
+      n = Math.max(n, c[1]);
+    } else c.forEach(visit);
+  };
+  if (!geometry) return null;
+  if (geometry.type === "GeometryCollection") geometry.geometries.forEach((g) => visit((g as { coordinates?: unknown }).coordinates));
+  else visit(geometry.coordinates);
+  return w <= e ? [(w + e) / 2, (s + n) / 2] : null;
+}
+
+/** True when a feature's middle lies inside the place's box. */
+export function insideWithin(feature: GeoJSON.Feature, within: FilterWithin): boolean {
+  const m = middleOf(feature.geometry);
+  const [w, s, e, n] = within.bbox;
+  return m !== null && m[0] >= w && m[0] <= e && m[1] >= s && m[1] <= n;
 }
 
 /** Text as a search compares it: lower case, accents dropped. */
@@ -221,6 +258,7 @@ export function applyFilters(fc: GeoJSON.FeatureCollection, filters: LayerFilter
         const text = searchable(String(value));
         if (!searchable(f.match).split(/\s+/).filter(Boolean).every((word) => text.includes(word))) return false;
       }
+      if (f.within !== undefined && !insideWithin(feature, f.within)) return false;
     }
     return true;
   });
@@ -246,6 +284,7 @@ export function filterSummary(fields: FilterField[], filters: LayerFilters): str
       parts.push(`${label}: ${f.include.join(", ")}`);
     }
     if (f.match !== undefined && f.match.trim() !== "") parts.push(`${label} has "${f.match.trim()}"`);
+    if (f.within !== undefined) parts.push(`within ${f.within.name}`);
     if (f.range !== undefined) {
       const [lo, hi] = f.range;
       const field = fields.find((x) => x.key === key && x.kind === "range");

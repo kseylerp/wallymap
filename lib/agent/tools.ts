@@ -12,6 +12,7 @@ import { checkNote } from "./noteCheck";
 import { createTurn, inputKeyOf, isWideQuery, MAX_STEPS, placeKey, type Turn } from "./turn";
 import { canonicalLayerId, repairToolName } from "./toolNames";
 import { gistFor } from "./vocabulary";
+import type { GeocodeResult } from "./geocode";
 import type { MapView } from "./view";
 
 const BASEMAPS = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"] as const satisfies readonly Basemap[];
@@ -317,9 +318,15 @@ export function isWithinView(bbox: BBox, view: BBox): boolean {
 /** The view a query answers from, or undefined when it does not (no view bbox, a place was geocoded, or the box is elsewhere). */
 type ViewSource = (bbox: BBox) => { bbox: BBox; zoom: number } | undefined;
 
-/** True when `outer` holds all of `inner`. */
-function containsBox(outer: BBox, inner: BBox): boolean {
-  return outer[0] <= inner[0] && outer[1] <= inner[1] && outer[2] >= inner[2] && outer[3] >= inner[3];
+/** The part two boxes share, or null when they do not overlap. */
+function intersectBox(a: BBox, b: BBox): BBox | null {
+  const box: BBox = [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])];
+  return box[0] < box[2] && box[1] < box[3] ? box : null;
+}
+
+/** The smallest box holding every box. */
+function unionBox(boxes: BBox[]): BBox {
+  return boxes.reduce((u, b) => [Math.min(u[0], b[0]), Math.min(u[1], b[1]), Math.max(u[2], b[2]), Math.max(u[3], b[3])]);
 }
 
 /** True when a point lies in a box. */
@@ -333,12 +340,22 @@ function pointIn([lng, lat]: [number, number], [w, s, e, n]: BBox): boolean {
  * first lookup that found a same-named place elsewhere is never used); otherwise the box the model passed.
  */
 function queryBox(turn: Turn, layerId: string, bbox: BBox): BBox {
-  // A named region (a basin, a park, a range) the model searched well past: its own box ("dams in the Colorado River
-  // basin" asked a box to 95°W and drew Fort Randall Dam in South Dakota).
-  const region = turn.places.findLast((p) => p.source !== "mapbox" && containsBox(bbox, p.bbox) && bboxAreaKm2(bbox) > 1.5 * bboxAreaKm2(p.bbox));
-  if (region && !nearPlace(turn.question)) {
-    turn.note(`${layerId}: queried within ${region.name}, [${region.bbox.join(", ")}] instead of the wider [${bbox.join(", ")}]`);
-    return region.bbox;
+  // A named region (a basin, a park, a range) the model searched well past: the part of the box inside the region ("dams
+  // in the Colorado River basin" asked a box to 95°W and drew Fort Randall Dam in South Dakota; a box over the basin and
+  // west Texas drew the Colorado River of Texas). Every region of the turn the box covers most of counts, so a box over
+  // two named places keeps both.
+  if (!nearPlace(turn.question)) {
+    const parts = turn.places
+      .filter((p) => p.source !== "mapbox")
+      .map((p) => ({ p, inter: intersectBox(bbox, p.bbox) }))
+      .filter((x): x is { p: GeocodeResult; inter: BBox } => x.inter !== null && bboxAreaKm2(x.inter) >= 0.5 * bboxAreaKm2(x.p.bbox));
+    if (parts.length > 0) {
+      const held = unionBox(parts.map((x) => x.inter));
+      if (bboxAreaKm2(bbox) > 1.5 * bboxAreaKm2(held)) {
+        turn.note(`${layerId}: queried within ${parts.map((x) => x.p.name).join(" and ")}, [${held.join(", ")}] instead of the wider [${bbox.join(", ")}]`);
+        return held;
+      }
+    }
   }
   const near = nearPlace(turn.question);
   const place = near ? turn.places.findLast((p) => pointIn(p.center, bbox)) : undefined;
@@ -347,6 +364,35 @@ function queryBox(turn: Turn, layerId: string, bbox: BBox): BBox {
   if (!box || (box[0] === bbox[0] && box[1] === bbox[1] && box[2] === bbox[2] && box[3] === bbox[3])) return bbox;
   turn.note(`${layerId}: "near ${near}" queried within the layer's radius around it, [${box.join(", ")}] instead of [${bbox.join(", ")}]`);
   return box;
+}
+
+/** A filter on a river's name: the key names a river or stream, or a value says River, Creek or Fork. */
+function isRiverFilter(key: string, entry: Record<string, unknown>): boolean {
+  if (/river|stream|waterway/i.test(key)) return true;
+  const values = [...(Array.isArray(entry.include) ? entry.include : []), entry.match].filter((v): v is string => typeof v === "string");
+  return values.some((v) => /\b(river|creek|fork)\b/i.test(v));
+}
+
+/**
+ * A river's name held to the place the turn named: "dams on the Colorado River" filtered by river name also matched
+ * the Colorado River of Texas (Robert Lee Dam ranked fourth). Each river-name filter gets `within`, the latest named
+ * region of this turn (a basin, a park, a range: not a street or town), so only features inside it are kept, on the
+ * map and in a permalink alike.
+ */
+export function holdToPlace<T extends Record<string, unknown>>(out: T, turn: Pick<Turn, "places">): T {
+  const filters = out.filters;
+  if (typeof filters !== "object" || filters === null || Array.isArray(filters)) return out;
+  const region = turn.places.findLast((p) => p.source !== "mapbox");
+  if (!region) return out;
+  let changed = false;
+  const held: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(filters as Record<string, unknown>)) {
+    if (typeof entry === "object" && entry !== null && !Array.isArray(entry) && isRiverFilter(key, entry as Record<string, unknown>)) {
+      held[key] = { ...entry, within: { bbox: region.bbox, name: region.name.replace(/\s*\(.*\)\s*$/, "") } };
+      changed = true;
+    } else held[key] = entry;
+  }
+  return changed ? { ...out, filters: held } : out;
 }
 
 /** True when a layer result has something to draw: features, or map tiles. */
@@ -532,7 +578,7 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
       execute: async (input) => {
         // "query_peaks" (the tool's name) is the peaks layer; template junk is cut off.
         const layerId = canonicalLayerId(input.layerId, listLayers().map((l) => l.id));
-        const out = normalizeRenderInput({ ...input, layerId }, getLayer(layerId), turn.question);
+        const out = holdToPlace(normalizeRenderInput({ ...input, layerId }, getLayer(layerId), turn.question), turn);
         turn.drawn.add(layerId);
         if (typeof out.view === "string") turn.views.set(layerId, out.view);
         return out;

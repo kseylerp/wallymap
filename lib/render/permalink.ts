@@ -103,6 +103,7 @@ export function encodeFilters(ops: { layerId: string; filters?: LayerFilters }[]
       if (f.range && f.range.every(Number.isFinite)) entries.push(`${head}:${num(f.range[0])}~${num(f.range[1])}`);
       if (f.include && f.include.length > 0) entries.push(`${head}=${f.include.map(encodeURIComponent).join("+")}`);
       if (f.match && f.match.trim() !== "") entries.push(`${head}*=${encodeURIComponent(f.match.trim())}`);
+      if (f.within && f.within.bbox.every(Number.isFinite)) entries.push(`${head}@=${[...f.within.bbox.map(num), encodeURIComponent(f.within.name)].join("~")}`);
     }
   }
   const kept: string[] = [];
@@ -126,7 +127,16 @@ export function decodeFilters(value: string): Record<string, LayerFilters> {
     if (!layerId) continue;
     const eq = rest.indexOf("=");
     const colon = rest.indexOf(":");
-    if (eq > 1 && rest[eq - 1] === "*" && (colon === -1 || eq < colon)) {
+    if (eq > 1 && rest[eq - 1] === "@" && (colon === -1 || eq < colon)) {
+      // A place the filter is held to: `<layer>:<key>@=<w>~<s>~<e>~<n>~<name>`.
+      const key = safeDecode(rest.slice(0, eq - 1));
+      const parts = rest.slice(eq + 1).split("~");
+      const bbox = parts.slice(0, 4).map(Number);
+      const name = safeDecode(parts.slice(4).join("~"));
+      if (!key || bbox.length !== 4 || !bbox.every(Number.isFinite) || !name) continue;
+      const filters = (out[layerId] ??= {});
+      filters[key] = { ...filters[key], within: { bbox: bbox as [number, number, number, number], name } };
+    } else if (eq > 1 && rest[eq - 1] === "*" && (colon === -1 || eq < colon)) {
       // A name search: `<layer>:<key>*=<text>`.
       const key = safeDecode(rest.slice(0, eq - 1));
       const match = safeDecode(rest.slice(eq + 1));

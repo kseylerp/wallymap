@@ -21,7 +21,7 @@ import { shoreOffsetKm } from "@/lib/checks/landMask";
  *   and no two top-10 entries with one measure under one name stem (Granby Dam and Granby Dikes 1 to 4, one reservoir).
  * - card: the inspect card's rows read as words (no raw keys, "Value", bare URLs, unexplained scores).
  * - layerIds: every layer on the map is a registered layer (no garbled tool names).
- * - place: for a question about a place, the features are in or near it.
+ * - place: for a question about a place, the features are in or near it, and every entry of Rank by's top 10 is.
  */
 
 export type CheckName = "surface" | "lattice" | "duplicates" | "card" | "layerIds" | "place";
@@ -660,10 +660,30 @@ export function checkPlace(layers: Drawn[], place: PlaceRef | null): CheckResult
         return b !== null && !intersects(b, box);
       });
       const inside = features.length - outside.length;
-      if (inside / features.length >= PLACE_SHARE) continue;
-      failures.push(
-        `${layer.label}: only ${inside} of ${features.length} features are in or near ${place.name} (its box grown by ${PLACE_GROW * 100}%), e.g. ${example(outside[0])} is outside.`,
-      );
+      if (inside / features.length < PLACE_SHARE) {
+        failures.push(
+          `${layer.label}: only ${inside} of ${features.length} features are in or near ${place.name} (its box grown by ${PLACE_GROW * 100}%), e.g. ${example(outside[0])} is outside.`,
+        );
+        continue;
+      }
+      // The Rank by list names the place's largest, so every entry of it must be in the place, not most of them (Robert
+      // Lee Dam, on the Colorado River of Texas, ranked fourth among the Colorado River basin's dams).
+      if (!layer.info) continue;
+      const { top } = rankedTop(layer.info, layer.op, layer.loaded, layer.data, RANKED_TOP_N);
+      const away = top
+        .map((f, i) => ({ f, i }))
+        .filter(({ f }) => {
+          const b = bboxOf(f);
+          return b !== null && !intersects(b, box);
+        });
+      if (away.length > 0) {
+        failures.push(
+          `${layer.label}: the Rank by top ${top.length} lists ${away.length === 1 ? "a place" : `${away.length} places`} outside ${place.name}: ${away
+            .slice(0, 3)
+            .map(({ f, i }) => `${example(f)} (row ${i + 1})`)
+            .join("; ")}.`,
+        );
+      }
     }
   }
   return { check: "place", ok: failures.length === 0, failures };

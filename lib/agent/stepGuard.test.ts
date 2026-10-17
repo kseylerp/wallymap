@@ -515,4 +515,19 @@ describe("a query past a named region", () => {
     expect(runLayer.mock.calls.at(-1)?.[1].bbox).toEqual(BASIN);
     expect(turn.log.join("\n")).toMatch(/dams: queried within Colorado River basin/);
   });
+
+  it("runs on the part inside the region when the box reaches past one side (the basin and west Texas)", async () => {
+    const BASIN: BBox = [-115.7, 29.9, -105.6, 43.5];
+    const turn = createTurn({ question: "Show dams on the Colorado River by the decade they were built", geocoder: async () => ({ bbox: BASIN, center: [-110.65, 36.7], name: "Colorado River basin (USGS Lower Colorado Region and Upper Colorado Region)", source: "river-basins" }) });
+    const tools = buildTools({ turn });
+    await (tools.geocode.execute as (i: unknown, o: unknown) => Promise<unknown>)({ place: "Colorado River" }, { toolCallId: "g", messages: [] });
+    await (tools["query_dams"].execute as (i: unknown, o: unknown) => Promise<unknown>)({ bbox: [-115, 31, -98, 43], zoom: 6 }, { toolCallId: "d", messages: [] });
+    expect(runLayer.mock.calls.at(-1)?.[1].bbox).toEqual([-115, 31, -105.6, 43]);
+    // A river's name as a filter keeps only what lies in its basin (the Colorado River of Texas is another river).
+    const out = (await (tools.render.execute as (i: unknown, o: unknown) => Promise<unknown>)(
+      { layerId: "dams", filters: { river: { include: ["Colorado River"] } } },
+      { toolCallId: "r", messages: [] },
+    )) as { filters: Record<string, { within?: { bbox: BBox; name: string } }> };
+    expect(out.filters.river.within).toEqual({ bbox: BASIN, name: "Colorado River basin" });
+  });
 });

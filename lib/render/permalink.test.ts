@@ -181,7 +181,12 @@ describe("every setting a person can see survives the link", () => {
       visible: false,
       color: "#1A2B3C",
       opacity: 0.35,
-      filters: { v: { range: [2.5, 40] }, kind: { include: ["wind", "a:b,c"] }, name: { match: "Crag & co" } },
+      filters: {
+        v: { range: [2.5, 40] },
+        kind: { include: ["wind", "a:b,c"] },
+        name: { match: "Crag & co" },
+        river: { include: ["Colorado River"], within: { bbox: [-115.7, 29.9, -105.6, 43.5], name: "Colorado River basin ~ USGS" } },
+      },
       view: "density",
       rankBy: "capacity",
       hexBasis: "share:wind farm",

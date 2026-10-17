@@ -380,6 +380,16 @@ describe("inside the place", () => {
     expect(result.failures[0]).toMatch(/only 0 of 20 features are in or near Navajo Nation Drive/);
   });
 
+  it("fails a Rank by top 10 with a place outside, even when most features are inside (Robert Lee Dam in Texas)", () => {
+    const basin = { name: "Colorado River basin", bbox: [-115.7, 29.9, -105.6, 43.5] as [number, number, number, number] };
+    const inBasin = Array.from({ length: 20 }, (_, i) => point(-112 + i * 0.1, 37, { name: `Dam ${i}`, storageAf: 1000 + i, v: 1000 + i }));
+    const texas = point(-100.53, 31.9, { name: "Robert Lee Dam", storageAf: 1139200, v: 1139200 });
+    const result = checkPlace(drawn(mapWith({ id: "dams", features: [...inBasin, texas] })), basin);
+    expect(result.ok).toBe(false);
+    expect(result.failures[0]).toMatch(/Rank by top 10 lists a place outside Colorado River basin: "Robert Lee Dam" at 31\.90, -100\.53 \(row 1\)/);
+    expect(checkPlace(drawn(mapWith({ id: "dams", features: inBasin })), basin).ok).toBe(true);
+  });
+
   it("fails trails loaded around another place, passes trails at Tahoe", () => {
     const yosemite = Array.from({ length: 10 }, (_, i) => line([[-119.6 + i * 0.01, 37.7], [-119.59 + i * 0.01, 37.71]], { name: `Trail ${i}` }));
     const result = checkPlace(drawn(mapWith({ id: "osm-trails", features: yosemite, mode: "lines" })), tahoe);

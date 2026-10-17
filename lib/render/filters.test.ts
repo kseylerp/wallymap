@@ -155,6 +155,17 @@ describe("deriveFilterFields rules", () => {
   });
 });
 
+describe("applyFilters within a place", () => {
+  it("keeps a river name's features inside the place it was held to (the Colorado River of Texas is left out)", () => {
+    const dam = (name: string, x: number, y: number): Feature => ({ type: "Feature", geometry: { type: "Point", coordinates: [x, y] }, properties: { name, river: "Colorado River" } });
+    const data: FeatureCollection = { type: "FeatureCollection", features: [dam("Hoover Dam", -114.74, 36.02), dam("Robert Lee Dam", -100.53, 31.9)] };
+    const within = { bbox: [-115.7, 29.9, -105.6, 43.5] as [number, number, number, number], name: "Colorado River basin" };
+    const kept = applyFilters(data, { river: { include: ["Colorado River"], within } });
+    expect(kept.features.map((f) => f.properties?.name)).toEqual(["Hoover Dam"]);
+    expect(filterSummary([], { river: { include: ["Colorado River"], within } })).toBe("River: Colorado River · within Colorado River basin");
+  });
+});
+
 describe("applyFilters", () => {
   const data = fc([
     { k: "a", n: 1 },

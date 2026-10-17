@@ -100,6 +100,11 @@ function parseFilters(value: unknown): LayerFilters | null {
       out.range = a <= b ? [a, b] : [b, a];
     }
     if (typeof entry.match === "string" && entry.match.trim() !== "") out.match = entry.match.trim();
+    // The place the server held a river name to (lib/agent/tools.ts holdToPlace).
+    const within = entry.within;
+    if (isObject(within) && Array.isArray(within.bbox) && within.bbox.length === 4 && within.bbox.every(isNumber) && typeof within.name === "string") {
+      out.within = { bbox: within.bbox as [number, number, number, number], name: within.name };
+    }
     if (out.include || out.range || out.match) filters[key] = out;
   }
   return filters;

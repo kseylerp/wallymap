@@ -1,6 +1,6 @@
 import type { Feature } from "geojson";
 import { fieldAt, flowFrame, sampleField } from "@/lib/render/particles";
-import { aggregateMeasure, layerFrames, seriesOf } from "@/lib/render/series";
+import { aggregateMeasure, layerAggregate, layerFrames, seriesOf } from "@/lib/render/series";
 import type { LoadedLayer, MapState } from "@/lib/render/state";
 
 /**
@@ -104,7 +104,12 @@ export function linkedCurve(state: Pick<MapState, "time" | "layers" | "renderOps
       if (values.some((v) => v !== null)) return { title: `${measure.label} at the map's center`, unit: measure.unit ?? "", values };
       continue;
     }
-    // 4. The feature with the most of the measure (the reach with the most flow).
+    // 4. A measure totalled over some features (river flow to the sea, all outlets): the total itself.
+    if (measure.aggregate === "sum" && measure.aggregateOver && time) {
+      const agg = layerAggregate(layer, time, state.renderOps.find((o) => o.layerId === layer.id)?.filters);
+      if (agg && agg.values.some((v) => v !== null)) return { title: agg.label, unit: measure.unit ?? "", values: agg.values };
+    }
+    // 5. The feature with the most of the measure (the reach with the most flow).
     const lead = leadOf(layer, measure.key);
     if (!lead) continue;
     const name = typeof lead.properties?.name === "string" ? lead.properties.name : "the largest feature";

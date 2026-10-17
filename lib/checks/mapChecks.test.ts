@@ -8,6 +8,7 @@ import {
   cardRows,
   checkCards,
   noteProblems,
+  rankedValueProblems,
   checkDuplicates,
   checkLattice,
   checkLayerIds,
@@ -317,6 +318,19 @@ describe("card text", () => {
     const monument = { type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [-109.8, 37.5] }, properties: { name: "Bears Ears", kind: "2021" } };
     const bad = checkCards(drawn(mapWith({ id: "monuments", features: [monument], note: "kind '2021' is the earlier Utah monument boundaries" })));
     expect(bad.failures.join(" ")).toMatch(/note: the note quotes the code value '2021'/);
+  });
+
+  it("fails a Rank by row whose value is not its card's (PIO XI: the list gave the 2001 outline, the card the 2016 one)", () => {
+    const outline = (v: number, t: string): Feature => ({
+      type: "Feature",
+      geometry: { type: "Polygon", coordinates: [[[-73.6, -49.2], [-73.3, -49.2], [-73.3, -48.9], [-73.6, -48.9], [-73.6, -49.2]]] },
+      properties: { name: "Pio XI", glacierId: "G286467E49128S", areaKm2: v, v, t },
+    });
+    const old = outline(1377.51, "2001-02-01T00:00:00.000Z");
+    const latest = outline(1245.46, "2016-03-12T00:00:00.000Z");
+    expect(rankedValueProblems(old, latest, "areaKm2")).toEqual(["the Rank by list gives 1,377.51 but its card shows 1,245.46"]);
+    expect(rankedValueProblems(latest, latest, "areaKm2")).toEqual([]);
+    expect(checkCards(drawn(mapWith({ id: "glaciers", features: [old, latest] }))).failures.join(" ")).not.toMatch(/Rank by list gives/);
   });
 
   it("fails the owner's Tahoe trail card: a part in view longer than the full length", () => {

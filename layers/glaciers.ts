@@ -311,7 +311,36 @@ export function normalizeGlaciers(
   const kept = [...outlines.values()]
     .filter((r) => keep.has(r.id))
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0) || a.time - b.time);
+  addEarlierOutlines(kept);
   return { data: { type: "FeatureCollection", features: kept.map((r) => r.feature) }, truncated };
+}
+
+/** Most earlier outlines one card lists, newest first. */
+const EARLIER_SHOWN = 4;
+
+function areaText(km2: number): string {
+  const digits = km2 >= 100 ? 0 : km2 >= 1 ? 1 : 2;
+  return `${km2.toLocaleString("en-US", { maximumFractionDigits: digits })} km²`;
+}
+
+/**
+ * Gives each dated outline `earlier`: the glacier's outlines from before it, newest first ("2001 1,378 km² · 1986
+ * 1,402 km²"), so the card of the latest outline (the one the map draws on top and the Rank by list names) says how
+ * the glacier has changed.
+ */
+function addEarlierOutlines(rows: Row[]): void {
+  const byId = new Map<string, Row[]>();
+  for (const r of rows) if (r.time !== 0) byId.set(r.id, [...(byId.get(r.id) ?? []), r]);
+  for (const series of byId.values()) {
+    for (const r of series) {
+      const before = series.filter((o) => o.time < r.time).sort((a, b) => b.time - a.time);
+      if (before.length === 0 || !r.feature.properties) continue;
+      r.feature.properties.earlier = before
+        .slice(0, EARLIER_SHOWN)
+        .map((o) => `${new Date(o.time).getUTCFullYear()} ${areaText(o.area)}`)
+        .join(" · ");
+    }
+  }
 }
 
 function isTimeout(err: unknown): boolean {
@@ -333,12 +362,14 @@ const HELP: Record<string, FieldHelp> = {
   date: { text: "When the satellite or aerial image behind this outline was taken; the ice has usually changed since." },
   glacierId: { text: "The GLIMS glacier id; outlines of one glacier from different dates share it." },
   institution: { text: "The team that mapped this outline for GLIMS." },
+  earlier: { text: "This glacier's outlines from earlier images in GLIMS, newest first: the year of the image and the area then." },
 };
 
 const CARD: CardSpec = {
   measure: { key: "areaKm2", label: "Area", unit: "km²" },
   facts: [
     { key: "date", label: "Mapped from image of", format: "date" },
+    { key: "earlier", label: "Earlier outlines" },
     { key: "institution", label: "Mapped by" },
     { key: "glacierId", label: "GLIMS id" },
   ],
@@ -349,7 +380,7 @@ const glaciers = defineLayer({
   title: "Glaciers",
   description:
     "Outlines of the world's glaciers and ice caps from GLIMS (Global Land Ice Measurements from Space), drawn as polygons. " +
-    "Each polygon has name (many glaciers are unnamed), glacierId, v and areaKm2 (the glacier's area in square kilometres), t and date (when the satellite image behind that outline was taken) and institution (who mapped it). " +
+    "Each polygon has name (many glaciers are unnamed), glacierId, v and areaKm2 (the glacier's area in square kilometres), t and date (when the satellite image behind that outline was taken) and institution (who mapped it); a later outline has earlier (the glacier's earlier outlines, year and area, newest first). The map and the Rank by list give each glacier by its latest outline in view. " +
     "A glacier mapped more than once comes back once per image date with the same glacierId, so the time scrubber plays its retreat: Lyell and Maclure Glaciers in Yosemite shrink between 1984 and 2014 (Lyell from 0.37 to 0.25 km², Maclure from 0.26 to 0.14 km²). Compare v across dates of one glacierId to say how much ice it lost. " +
     "Use it to show where glaciers are, which are biggest, how much ice a range holds, and how glaciers have shrunk, for example 'where are the glaciers near Mount Rainier', 'the largest glaciers in this part of Alaska' or 'show how Lyell Glacier has retreated'. With 3D on, the map can raise glaciers by area. " +
     "Caveats: this is an inventory, not a current survey. The outlines date from about 1970 to the 2020s depending on the glacier, so the date matters and most glaciers have shrunk since; do not read the newest outline as today's ice edge. Many glaciers have only one date, and different teams and image dates make some outline changes partly mapping differences, not melt. " +

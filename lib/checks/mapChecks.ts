@@ -1,6 +1,6 @@
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import type { BBox, Layer, Surface } from "@/layers/types";
-import { rankedTop } from "@/lib/render/attributes";
+import { cardFeatureOf, rankedTop } from "@/lib/render/attributes";
 import { cardContent, isEmptyValue, type CardRow } from "@/lib/render/card";
 import { summarizeFeature } from "@/lib/render/inspect";
 import { searchable } from "@/lib/render/filters";
@@ -623,6 +623,17 @@ export function titleProblems(name: string | null): string[] {
   return [`the title "${name}" is in capitals`];
 }
 
+/**
+ * What is wrong between a Rank by row and the card a click on its place opens: a different value under the ranked key
+ * (the list gave PIO XI's 2001 outline, 1,377.51 km², while its card showed the 2016 one, 1,245.46 km²).
+ */
+export function rankedValueProblems(row: Feature, card: Feature, key: string): string[] {
+  const a = row.properties?.[key];
+  const b = card.properties?.[key];
+  if (typeof a !== "number" || typeof b !== "number" || a === b) return [];
+  return [`the Rank by list gives ${a.toLocaleString("en-US")} but its card shows ${b.toLocaleString("en-US")}`];
+}
+
 /** Lower-case-first names that are not code: brands the notes may name. */
 const CAMEL_WORDS = new Set(["iNaturalist", "eBird", "iOS", "iPhone", "iPad", "eDNA"]);
 
@@ -682,9 +693,10 @@ export function checkCards(layers: Drawn[]): CheckResult {
         if (!seen.has(p)) seen.set(p, f);
       }
     }
-    // The Rank by list's names are titles too (each opens its card).
-    const { top } = rankedTop(layer.info, layer.op, layer.loaded, layer.data, RANKED_TOP_N);
+    // The Rank by list's names are titles too (each opens its card), and each row's value is the one its card gives.
+    const { key, top } = rankedTop(layer.info, layer.op, layer.loaded, layer.data, RANKED_TOP_N);
     for (const f of top) for (const p of titleProblems(nameOf(f))) if (!seen.has(p)) seen.set(p, f);
+    if (key) for (const f of top) for (const p of rankedValueProblems(f, cardFeatureOf(f, layer.data), key)) if (!seen.has(p)) seen.set(p, f);
     const notes = [...new Set(layer.notes.flatMap((n) => noteProblems(n).map((p) => `${p} ("${n}")`)))];
     if (notes.length > 0) failures.push(`${layer.label} note: ${notes.slice(0, 3).join("; ")}.`);
     if (seen.size === 0) continue;

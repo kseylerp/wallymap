@@ -348,7 +348,8 @@ function statsOf(
 
 /**
  * The HIGHEST_SIZE named features highest by the primary measure (the measure attribute that sizes features, else the
- * first measure, else v), or undefined when no named feature carries a number for it.
+ * first measure, else v), one per name by its newest dated feature, or undefined when no named feature carries a number
+ * for it.
  */
 export function highestOf(features: { properties: GeoJsonProperties }[], style: SummaryStyle): Highest | undefined {
   const measures = (style.attributes ?? []).filter((a) => a.type === "measure");
@@ -359,13 +360,19 @@ export function highestOf(features: { properties: GeoJsonProperties }[], style: 
     const p = (f.properties ?? {}) as Props;
     const value = num(p[key]);
     const name = nameOf(p);
-    return value === undefined || name === undefined || /^unnamed\b/i.test(name) ? [] : [{ name, value }];
+    const t = typeof p.t === "string" ? Date.parse(p.t) : Number.NaN;
+    return value === undefined || name === undefined || /^unnamed\b/i.test(name) ? [] : [{ name, value, t: Number.isFinite(t) ? t : -Infinity }];
   });
   if (rows.length === 0) return undefined;
-  const seen = new Set<string>();
-  const top = rows
+  // One row per name, by its newest dated feature (a glacier's latest outline, as the Rank by list and the card give it),
+  // else its largest.
+  const byName = new Map<string, { name: string; value: number; t: number }>();
+  for (const r of rows) {
+    const had = byName.get(r.name);
+    if (!had || r.t > had.t || (r.t === had.t && r.value > had.value)) byName.set(r.name, r);
+  }
+  const top = [...byName.values()]
     .sort((a, b) => b.value - a.value)
-    .filter((r) => (seen.has(r.name) ? false : (seen.add(r.name), true)))
     .slice(0, HIGHEST_SIZE)
     .map((r) => ({ name: r.name.length > TOP_NAME_MAX_CHARS ? `${r.name.slice(0, TOP_NAME_MAX_CHARS - 1)}…` : r.name, value: round(r.value) }));
   return { by: measure?.label ?? "value", ...(unit !== undefined && { unit }), top };

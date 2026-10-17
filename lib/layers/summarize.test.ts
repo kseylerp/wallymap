@@ -375,4 +375,18 @@ describe("summarizeLayerResult highest", () => {
     );
     expect(summary).toMatchObject({ highest: { by: "Capacity", unit: "MW", top: [{ name: "Roscoe", value: 782 }, { name: "Horse Hollow", value: 736 }, { name: "Mid", value: 300 }] } });
   });
+
+  it("gives a glacier by its latest outline, as the Rank by list and the card do (PIO XI 1,245.46 in 2016, not 1,377.51 in 2001)", () => {
+    const outline = (name: string, km2: number, t: string) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [0, 0] }, properties: { name, areaKm2: km2, v: km2, t } });
+    const summary = summarizeLayerResult(
+      {
+        kind: "geojson",
+        data: { type: "FeatureCollection", features: [outline("Pio XI", 1377.51, "2001-02-01T00:00:00Z"), outline("Pio XI", 1245.46, "2016-03-12T00:00:00Z"), outline("Viedma", 960, "2016-03-12T00:00:00Z")] },
+        citation: { source: "t", url: "https://example.com", retrieved: "2026-10-16" },
+      },
+      "glaciers",
+      { attributes: [{ key: "areaKm2", type: "measure", label: "Area", unit: "km²", encode: "size" }] },
+    );
+    expect(summary).toMatchObject({ highest: { top: [{ name: "Pio XI", value: 1245 }, { name: "Viedma", value: 960 }] } });
+  });
 });

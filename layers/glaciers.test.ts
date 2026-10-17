@@ -84,6 +84,8 @@ describe("glaciers layer", () => {
     expect(maclure[1].properties?.v as number).toBeLessThan(maclure[0].properties?.v as number);
     const patch = data.features.filter((f) => f.properties?.glacierId === "G240775E37720N");
     expect(patch.map((f) => f.properties?.date)).toEqual(["1975-09-09", "2014-09-09"]);
+    // The latest outline's card names the earlier one: "Earlier outlines: 1984 0.37 km²".
+    expect(lyellOutlines.map((f) => f.properties?.earlier)).toEqual([undefined, "1984 0.37 km²"]);
   });
 
   it("does not merge same-named glaciers far apart, or unnamed ones near each other", () => {

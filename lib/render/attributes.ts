@@ -281,21 +281,73 @@ function sameProject(a: Feature, b: Feature): boolean {
   return typeof pa === "string" && pa !== "" && pa === b.properties?.project;
 }
 
+/** A feature's date (`t`) in milliseconds, or undefined when it has none. */
+function timeOf(f: Feature): number | undefined {
+  const t = f.properties?.t;
+  const ms = typeof t === "string" ? Date.parse(t) : Number.NaN;
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
 /**
- * The `n` largest places under `key`, largest first, one row per named place: a feature that shares its name with a
- * larger one at the same spot (the segments of one trail, an OSM node and a cliff line of one crag, a glacier's earlier
- * outline, one fire from two agencies, the turbines of one wind project) is the same place and is left out. Unnamed
- * features are each their own.
+ * The feature a place's card shows among the features of that one place: the newest dated one at the head's spot (the map
+ * draws it on top, so a click opens it: a glacier's latest outline, a fire's latest perimeter), else the head. The
+ * turbines of one project keep the head: they are parts of the place, not its states over time.
  */
-export function topPlaces(data: FeatureCollection, key: string, n: number): Feature[] {
-  const kept: Feature[] = [];
+function newestOf(head: Feature, place: Feature[]): Feature {
+  if (typeof head.properties?.project === "string" && head.properties.project !== "") return head;
+  let best = head;
+  let bestT = timeOf(head);
+  for (const f of place) {
+    const t = timeOf(f);
+    if (t === undefined || (bestT !== undefined && t <= bestT) || (f !== head && !nearby(head, f))) continue;
+    best = f;
+    bestT = t;
+  }
+  return best;
+}
+
+/** The features of `data` that are one place: named alike, and at the same spot or of one project. */
+function placesOf(data: FeatureCollection, key: string): Feature[][] {
+  const groups: Feature[][] = [];
+  const byName = new Map<string, Feature[][]>();
   for (const f of topFeatures(data, key, data.features.length)) {
     const name = placeName(f);
-    if (name !== "" && kept.some((k) => placeName(k) === name && (nearby(k, f) || sameProject(k, f)))) continue;
-    kept.push(f);
-    if (kept.length >= n) break;
+    const same = name === "" ? undefined : byName.get(name)?.find((g) => nearby(g[0], f) || sameProject(g[0], f));
+    if (same) {
+      same.push(f);
+      continue;
+    }
+    const group = [f];
+    groups.push(group);
+    if (name !== "") byName.set(name, [...(byName.get(name) ?? []), group]);
   }
-  return kept;
+  return groups;
+}
+
+/**
+ * The `n` largest places under `key`, largest first, one row per named place: features that share a name at the same
+ * spot (the segments of one trail, an OSM node and a cliff line of one crag, a glacier's outlines of several years, one
+ * fire from two agencies, the turbines of one wind project) are one place. Each place is listed by the feature its card
+ * shows: the newest dated one (a glacier's latest outline, so the row and the card give one area), else the largest.
+ * Unnamed features are each their own.
+ */
+export function topPlaces(data: FeatureCollection, key: string, n: number): Feature[] {
+  return placesOf(data, key)
+    .map((g, i) => ({ f: newestOf(g[0], g), i }))
+    .map((x) => ({ ...x, v: numberOf(x.f, key) ?? -Infinity }))
+    .sort((a, b) => b.v - a.v || a.i - b.i)
+    .slice(0, n)
+    .map((x) => x.f);
+}
+
+/**
+ * The feature whose card opens for a ranked row's place: the newest dated feature named alike at the same spot in
+ * `data` (what the map draws on top there), else the row's own feature.
+ */
+export function cardFeatureOf(row: Feature, data: FeatureCollection): Feature {
+  const name = placeName(row);
+  if (name === "") return row;
+  return newestOf(row, data.features.filter((f) => f !== row && placeName(f) === name));
 }
 
 /** True when an attribute's property holds numbers in this data (a year as a number, not an ISO date). */

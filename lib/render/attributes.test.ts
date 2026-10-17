@@ -17,6 +17,7 @@ import {
   rankedTop,
   sizeScale,
   topPlaces,
+  cardFeatureOf,
   toggleBin,
   toggleFlag,
   toggleGroup,
@@ -241,6 +242,21 @@ describe("Rank by lists one row per named place", () => {
   it("lists a wind project once, not each of its turbines (Ranchland Wind Project, kilometres apart)", () => {
     const turbine = (x: number): Feature => ({ type: "Feature", geometry: { type: "Point", coordinates: [x, 32.23] }, properties: { name: "Ranchland Wind Project", project: "Ranchland Wind Project", v: 6 } });
     expect(topPlaces(fc([turbine(-99.17), turbine(-99.21), turbine(-99.13), pt("Horse Hollow", -100, 4)]), "v", 10)).toHaveLength(2);
+  });
+
+  it("lists a glacier by its latest outline, so the row gives the area its card shows (PIO XI: 1,377.51 km² in 2001, 1,245.46 in 2016)", () => {
+    const outline = (v: number, t: string, dx = 0): Feature => ({
+      type: "Feature",
+      geometry: { type: "Polygon", coordinates: [[[-73.6 + dx, -49.2], [-73.3 + dx, -49.2], [-73.3 + dx, -48.9], [-73.6 + dx, -48.9], [-73.6 + dx, -49.2]]] },
+      properties: { name: "Pio XI", glacierId: "G286467E49128S", v, t },
+    });
+    const viedma: Feature = { ...outline(1000, "2016-03-12T00:00:00.000Z", 0.6), properties: { name: "Viedma Glacier", v: 1000, t: "2016-03-12T00:00:00.000Z" } };
+    const data = fc([outline(1377.51, "2001-02-01T00:00:00.000Z"), outline(1245.46, "2016-03-12T00:00:00.000Z"), viedma]);
+    expect(topPlaces(data, "v", 10).map((f) => [f.properties?.name, f.properties?.v])).toEqual([
+      ["Pio XI", 1245.46],
+      ["Viedma Glacier", 1000],
+    ]);
+    expect(cardFeatureOf(data.features[0], data).properties?.v).toBe(1245.46);
   });
 
   it("keeps one name at two far places, and every unnamed feature", () => {

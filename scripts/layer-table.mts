@@ -26,7 +26,7 @@ const META: Record<string, { shows: string; source: string; freshness: string; c
   "forest-roads": { shows: "Forest Service roads open to motor vehicles", source: "USDA Forest Service MVUM", freshness: "Yearly" },
   campsites: { shows: "Campsites and parking lots", source: "OpenStreetMap", freshness: "Live (cached up to a day)" },
   streamflow: { shows: "River flow, gauge height and flow against the usual for the day at stream gauges", source: "USGS Water Data", freshness: "Live (15 minutes), provisional" },
-  "river-pulse": { shows: "Named rivers' daily flow, past three months and the forecast, played day by day (width flow, color against the median); the total is the flow to the sea", source: "GloFAS via Open-Meteo; Natural Earth rivers", freshness: "Daily model (cached per day)" },
+  "river-pulse": { shows: "Named rivers' daily flow, past three months and the forecast, played day by day (width flow, color against the median); the total is the flow to the sea", source: "GloFAS via Open-Meteo; Natural Earth rivers", freshness: "Daily model, built once a day into one file" },
   "ocean-currents": { shows: "Surface and tidal currents hour by hour as moving particles, with the tide at the nearest station", source: "Open-Meteo Marine (Météo-France SMOC); NOAA CO-OPS", freshness: "Hourly forecast (cached 3 hours)" },
   "wind-flow": { shows: "Wind 10 m above the ground hour by hour as moving particles, colored by temperature", source: "Open-Meteo forecast", freshness: "Hourly forecast (cached 1 hour)" },
   species: { shows: "Wildlife and plant sightings", source: "iNaturalist", freshness: "Daily" },

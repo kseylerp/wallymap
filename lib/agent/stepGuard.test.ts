@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import "@/layers";
 import type { BBox } from "@/layers/types";
 import { prepareStepFor } from "./agent";
+import { NOTE_MAX_WORDS, noteWords } from "./noteCheck";
 import { leakedCalls, repeatReason, stepGuard } from "./stepGuard";
 import { buildTools } from "./tools";
 import { createTurn, MAX_STEPS, type Geocoder } from "./turn";
@@ -389,5 +390,28 @@ describe("step guard: no asking again (shrinking, repeats, failures, the step bu
     turn.step = MAX_STEPS - 2;
     const reason = repeatReason({ toolCallId: "x", toolName: "query_mines", input: { bbox: RENO } }, turn, [], true);
     expect(reason?.why).toBe("two steps left and no note yet");
+  });
+});
+
+describe("step guard: a closing answer with no note", () => {
+  it("cuts a text-only answer to the note's word limit (good hiking in French Guiana ran 151 words)", async () => {
+    const long = Array.from({ length: 30 }, (_, i) => `- Trail ${i} climbs ${i} hundred metres through the forest.`).join("\n");
+    const { result, turn } = await run("good hiking in French Guiana", [
+      { calls: [{ name: "query_osm-trails", input: { bbox: TAHOE } }, { name: "render", input: { layerId: "osm-trails" } }] },
+      { text: long },
+    ], { bbox: TAHOE, zoom: 9, center: [-120.04, 39.1] });
+    expect(noteWords(result.text)).toBeLessThanOrEqual(NOTE_MAX_WORDS);
+    expect(result.text.startsWith("- Trail 0 climbs")).toBe(true);
+    expect(turn.log.join("\n")).toMatch(/closing text with no note cut from \d+ to \d+ words/);
+  });
+
+  it("leaves the text after a note alone (follow-ups)", async () => {
+    const long = Array.from({ length: 30 }, (_, i) => `- Follow-up ${i}: would you like trails near town ${i}?`).join("\n");
+    const { result } = await run("good hiking in French Guiana", [
+      { calls: [{ name: "query_osm-trails", input: { bbox: TAHOE } }, { name: "render", input: { layerId: "osm-trails" } }] },
+      { calls: [{ name: "note", input: { markdown: "Trails." } }] },
+      { text: long },
+    ], { bbox: TAHOE, zoom: 9, center: [-120.04, 39.1] });
+    expect(result.text).toBe(long);
   });
 });

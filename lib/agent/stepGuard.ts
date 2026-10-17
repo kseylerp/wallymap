@@ -4,6 +4,7 @@ import type { BBox } from "@/layers/types";
 import { bboxAreaKm2, hardMaxAreaKm2 } from "@/layers/types";
 import type { GeocodeResult } from "./geocode";
 import { placeCandidates } from "./places";
+import { NOTE_MAX_WORDS, noteWords, trimNote } from "./noteCheck";
 import { normalizeRenderInput } from "./renderInput";
 import { repairToolName } from "./toolNames";
 import { widerScaleFor, widerScaleHints } from "./tools";
@@ -45,6 +46,8 @@ export type Decision = {
   dropText: boolean;
   /** Calls dropped, with the reason the model is told when nothing else is left to run. */
   rejected: { call: DraftCall; reason: string }[];
+  /** The step's text in place of the model's: a closing answer with no note, cut to the note's word limit. */
+  text?: string;
   /** True when anything differs from what the model proposed. */
   changed: boolean;
 };
@@ -334,7 +337,14 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
       changed = true;
     }
   }
-  return { calls, dropText: dropText || leakedText, rejected, changed };
+  // 5. A text-only answer (no note this turn) is the answer, held to the note's word limit like a note.
+  let text: string | undefined;
+  if (!hasNote && calls.length === 0 && rejected.length === 0 && !dropText && !leakedText && !turn.noted && draft.text && noteWords(draft.text) > NOTE_MAX_WORDS) {
+    text = trimNote(draft.text);
+    turn.note(`closing text with no note cut from ${noteWords(draft.text)} to ${noteWords(text)} words`);
+    changed = true;
+  }
+  return { calls, dropText: dropText || leakedText, rejected, changed, ...(text !== undefined && { text }) };
 }
 
 function parseInput(input: unknown): Record<string, unknown> | null {
@@ -430,10 +440,11 @@ export function stepGuard(turn: Turn, toolNames: readonly string[]): Middleware 
       }
       if (decision.rejected.length > 0 && decision.calls.length === 0 && !turn.noted) decision.calls = fallbackEnding(turn, decision.rejected);
       if (!decision.changed) return result;
-      const kept = result.content.filter((c) => c.type !== "tool-call" && !(decision.dropText && c.type === "text"));
+      const kept = result.content.filter((c) => c.type !== "tool-call" && !(decision.dropText && c.type === "text") && !(decision.text !== undefined && c.type === "text"));
+      const replacedText = decision.text !== undefined ? [{ type: "text", text: decision.text } as Content] : [];
       return {
         ...result,
-        content: [...kept, ...decision.calls.map((c) => toPart(c) as Content)],
+        content: [...replacedText, ...kept, ...decision.calls.map((c) => toPart(c) as Content)],
         finishReason: finishFor(decision.calls, result.finishReason) as GenerateResult["finishReason"],
       };
     }
@@ -490,9 +501,14 @@ export function stepGuard(turn: Turn, toolNames: readonly string[]): Middleware 
       if (!decision.changed) return { ...result, stream: streamOf(parts) };
       const isText = (p: StreamPart) => p.type === "text-start" || p.type === "text-delta" || p.type === "text-end";
       const isToolInput = (p: StreamPart) => p.type === "tool-input-start" || p.type === "tool-input-delta" || p.type === "tool-input-end" || p.type === "tool-call";
-      const kept = parts.filter((p) => p.type !== "finish" && !isToolInput(p) && !(decision.dropText && isText(p)));
+      const kept = parts.filter((p) => p.type !== "finish" && !isToolInput(p) && !((decision.dropText || decision.text !== undefined) && isText(p)));
       const finish = parts.find((p): p is Extract<StreamPart, { type: "finish" }> => p.type === "finish");
-      const out: StreamPart[] = [...kept, ...decision.calls.map((c) => toPart(c) as StreamPart)];
+      const id = "guard-text";
+      const replacedText: StreamPart[] =
+        decision.text !== undefined
+          ? ([{ type: "text-start", id }, { type: "text-delta", id, delta: decision.text }, { type: "text-end", id }] as StreamPart[])
+          : [];
+      const out: StreamPart[] = [...replacedText, ...kept, ...decision.calls.map((c) => toPart(c) as StreamPart)];
       if (finish) out.push({ ...finish, finishReason: finishFor(decision.calls, finish.finishReason) } as StreamPart);
       return { ...result, stream: streamOf(out) };
     }

@@ -119,3 +119,20 @@ describe("the clear map between floating panels", () => {
     expect(clearInsets({ width: 375, height: 812 }, [sheet, away])).toEqual({ top: 0, right: 0, bottom: 374, left: 0 });
   });
 });
+
+describe("labels on a tilted map", () => {
+  it("keep the wider margin they are given (drawn lifted onto terrain, they shift near the edges)", () => {
+    const placed = placeAll([{ p: [0, 0] as [number, number], text: "Left Flank" }], {
+      canvas: { width: 1440, height: 900 },
+      project: () => [16, 500],
+      getPosition: (d) => d.p,
+      getText: (d) => d.text,
+      getGap: () => 10,
+      size: 11,
+      measure: () => 54,
+      margin: 24,
+    });
+    const [dx] = placed.offsets.values().next().value as [number, number];
+    expect(16 + dx - 27).toBeGreaterThanOrEqual(24);
+  });
+});

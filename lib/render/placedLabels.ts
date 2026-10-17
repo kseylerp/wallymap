@@ -46,7 +46,16 @@ export type PlaceOptions<D> = {
   insets?: (canvas: { width: number; height: number }) => Insets;
   /** The text's width in CSS pixels. */
   measure: (text: string) => number;
+  /** Room kept between a label and the edge of the clear map; more on a tilted map (see PITCHED_EDGE_MARGIN_PX). */
+  margin?: number;
 };
+
+/**
+ * Room kept from the edge on a tilted map: labels are placed from the flat projection but drawn lifted onto the
+ * terrain, which shifts them sideways near the edges (Red River Gorge at pitch 45: "Left Flank" drew 11 px past the
+ * left edge it had been slid inside).
+ */
+export const PITCHED_EDGE_MARGIN_PX = 24;
 
 /** Each label's offset from its point on this screen, leaving out those whose point is outside the clear map. */
 export function placeAll<D>(data: readonly D[], o: PlaceOptions<D>): PlacedLabels<D> {
@@ -57,7 +66,7 @@ export function placeAll<D>(data: readonly D[], o: PlaceOptions<D>): PlacedLabel
   const parts: string[] = [];
   for (const d of data) {
     const [x, y] = o.project(o.getPosition(d));
-    const offset = placeLabel({ x, y, width: o.measure(o.getText(d)), height: o.size, gap: o.getGap(d) }, bounds);
+    const offset = placeLabel({ x, y, width: o.measure(o.getText(d)), height: o.size, gap: o.getGap(d) }, bounds, o.margin);
     if (!offset) continue;
     const rounded: [number, number] = [Math.round(offset[0]), Math.round(offset[1])];
     placed.push(d);
@@ -93,6 +102,7 @@ export class PlacedLabelLayer<D = unknown> extends CompositeLayer<PlacedLabelLay
       size,
       insets: getInsets,
       measure: (text) => textWidth(text, size, weight, family),
+      ...((viewport as { pitch?: number }).pitch ? { margin: PITCHED_EDGE_MARGIN_PX } : {}),
     });
     // Same labels in the same places: keep the arrays, so the TextLayer has nothing to update.
     const prev = this.state;

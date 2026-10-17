@@ -1,7 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
-import type { CachedFetch } from "@/lib/fetch";
+import { afterEach, beforeAll, afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { createLayerFetch, type CachedFetch, type Cache } from "@/lib/fetch";
+import { createMemoryCache } from "@/lib/fetch/cache";
 import { runLayer } from "@/lib/layers/run";
 import layer, {
+  CLIMBING_TIMING,
+  climbingTiles,
   buildClimbingQuery,
   gradeSummary,
   mergeCrags,
@@ -17,6 +20,16 @@ import openbetaFixture from "./__fixtures__/climbing.rrg.openbeta.json";
 
 const RRG: [number, number, number, number] = [-83.7, 37.75, -83.55, 37.85];
 const DEFAULTS = { includeGyms: false };
+
+// Retries wait 1 s then 3 s in production; tests do not wait.
+const realSleep = CLIMBING_TIMING.sleep;
+const noSleep = async () => {};
+beforeAll(() => {
+  CLIMBING_TIMING.sleep = noSleep;
+});
+afterAll(() => {
+  CLIMBING_TIMING.sleep = realSleep;
+});
 
 function reply(osm: unknown, openbeta: unknown, status = { osm: 200, openbeta: 200 }) {
   return vi.fn(async (url: string) =>
@@ -220,17 +233,21 @@ describe("climbing layer", () => {
     for (const word of ["bouldering", "crag", "OpenBeta"]) expect(layer.description).toContain(word);
   });
 
-  it("queries both sources once, merges them and reports counts and no truncation", async () => {
+  it("queries both sources once for the one 0.5° tile holding the box, cached a day by tile, and reports counts and no truncation", async () => {
     // The recorded Overpass body is a 14-element excerpt of a 39-element box; drop its count so this is a complete answer.
     const stub = reply({ elements: osmFixture.elements.filter((e) => e.type !== "count") }, openbetaFixture);
     const r = geojson(await layer.query(ctx(stub, "climbing:k"), DEFAULTS));
     expect(stub).toHaveBeenCalledTimes(2);
-    const calls = stub.mock.calls as unknown as [string, RequestInit & { cacheKey?: string }][];
+    const calls = stub.mock.calls as unknown as [string, RequestInit & { cacheKey?: string; ttlSeconds?: number; body: string }][];
     const ob = calls.find(([u]) => u === "https://api.openbeta.io/");
     const op = calls.find(([u]) => u === "https://overpass-api.de/api/interpreter");
     expect(ob?.[1].method).toBe("POST");
-    expect(ob?.[1].cacheKey).toBe("climbing:k:openbeta");
-    expect(op?.[1].cacheKey).toBe("climbing:k:climbing");
+    // The tile, not the box: -84 to -83.5 east, 37.5 to 38 north.
+    expect(ob?.[1].cacheKey).toBe("climbing:tile:v1:0.5:-168:75:openbeta");
+    expect(op?.[1].cacheKey).toBe("climbing:tile:v1:0.5:-168:75:osm");
+    expect(ob?.[1].ttlSeconds).toBe(86_400);
+    expect(JSON.parse(ob![1].body).variables).toEqual({ f: { bbox: [-84, 37.5, -83.5, 38], zoom: 12 } });
+    expect(decodeURIComponent(op![1].body)).toContain("(37.5,-84,38,-83.5)");
     expect(r.data.features.length).toBeGreaterThan(14);
     expect(r.data.features.every((f) => f.geometry.type === "Point")).toBe(true);
     expect(r.coverageNote).toMatch(/^Returned \d+ climbing places \(14 from OpenStreetMap, 12 from OpenBeta, \d+ in both\); the box was not truncated$/);
@@ -283,19 +300,24 @@ describe("climbing layer", () => {
   it("falls back to OpenStreetMap alone when OpenBeta fails, and says so", async () => {
     const r = geojson(await layer.query(ctx(reply(osmFixture, { errors: [{ message: "boom" }] })), DEFAULTS));
     expect(r.data.features).toHaveLength(14);
-    expect(r.coverageNote).toContain("OpenBeta did not answer (OpenBeta returned an unexpected response), so OpenStreetMap crags only");
+    expect(r.coverageNote).toContain(
+      "OpenBeta did not answer (OpenBeta returned an unexpected response, 3 tries), so only OpenStreetMap crags are shown",
+    );
     expect(r.citation.source).toBe("OpenStreetMap contributors (ODbL, openstreetmap.org/copyright)");
   });
 
   it("falls back to OpenBeta alone when Overpass fails, and says so", async () => {
     const r = geojson(await layer.query(ctx(reply("slow down", openbetaFixture, { osm: 429, openbeta: 200 })), DEFAULTS));
     expect(r.data.features).toHaveLength(12);
-    expect(r.coverageNote).toContain("OpenStreetMap did not answer (Overpass returned 429), so OpenBeta crags only");
+    expect(r.coverageNote).toContain("OpenStreetMap did not answer (Overpass returned 429, 3 tries), so only OpenBeta crags are shown");
   });
 
-  it("returns an upstream error when both sources fail", async () => {
+  it("returns an upstream error naming both sources when both fail", async () => {
     const r = await layer.query(ctx(reply("x", "y", { osm: 500, openbeta: 503 })), DEFAULTS);
-    expect(r).toEqual({ error: "Overpass returned 500; OpenBeta returned 503", hint: "upstream" });
+    expect(r).toEqual({
+      error: "Neither climbing source answered: OpenStreetMap (Overpass returned 500, 3 tries) and OpenBeta (OpenBeta returned 503, 3 tries)",
+      hint: "upstream",
+    });
   });
 
   it("returns 422 zoom_in from runLayer only over the default hard cap of 40,000 km2", async () => {
@@ -309,16 +331,17 @@ describe("climbing layer", () => {
       uuid: `u${i}`,
       area_name: `Crag ${i}`,
       totalClimbs: i,
-      metadata: { lat: 37 + i * 0.001, lng: -84 + i * 0.001, leaf: true, isBoulder: false },
+      metadata: { lat: 36.3 + i * 0.001, lng: -84.9 + i * 0.001, leaf: true, isBoulder: false },
     }));
     const osm = { elements: [{ type: "count", id: 0, tags: { total: "1" } }, { type: "node", id: 1, lat: 36.5, lon: -84.5, tags: { sport: "climbing", climbing: "crag", name: "Wall", "climbing:routes": "2000" } }] };
+    // Every tile gets the same answer; the places repeated across tiles count once.
     const stub = reply(osm, { data: { cragsWithin: many } });
     vi.stubGlobal("fetch", stub);
     try {
-      // About 35,000 km² around the Red River Gorge and the Obed.
+      // About 35,000 km² around the Red River Gorge and the Obed: two 2° tiles (16 at 0.5° would be too many requests).
       const res = await runLayer("climbing", { bbox: [-85, 36.2, -83, 38], zoom: 7 });
       expect(res.status).toBe(200);
-      expect(stub).toHaveBeenCalledTimes(2);
+      expect(stub).toHaveBeenCalledTimes(4);
       if (!("kind" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
       const v = res.body.data.features.map((f) => f.properties?.v as number);
       expect(v).toHaveLength(1000);
@@ -342,6 +365,136 @@ describe("climbing layer", () => {
     expect(r.total).toBeUndefined();
     expect(r.coverageNote).toContain("ranked from part of the box (OpenStreetMap stopped at 3,000 (lowest ids kept))");
     expect(r.coverageNote).not.toContain("zoom in");
+  });
+});
+
+describe("tiles", () => {
+  it("covers Red River Gorge with one 0.5° tile and a box over six fine tiles with 2° tiles", () => {
+    expect(climbingTiles([-83.75, 37.73, -83.55, 37.88])).toEqual([
+      { key: "climbing:tile:v1:0.5:-168:75", bbox: [-84, 37.5, -83.5, 38] },
+    ]);
+    expect(climbingTiles([-83.6, 37.8, -83.4, 37.9]).map((t) => t.bbox)).toEqual([
+      [-84, 37.5, -83.5, 38],
+      [-83.5, 37.5, -83, 38],
+    ]);
+    expect(climbingTiles([-85, 36.2, -83, 38]).map((t) => t.key)).toEqual(["climbing:tile:v1:2:-43:18", "climbing:tile:v1:2:-42:18"]);
+  });
+});
+
+describe("retries and the tile cache", () => {
+  const OSM_OK = { elements: osmFixture.elements.filter((e) => e.type !== "count") };
+  const OSM_GAVE_UP = { remark: 'runtime error: Query run out of memory using about 2048 MB of RAM.', elements: [] };
+
+  /** A fetch answering each source from a queue of [status, body], repeating the last. */
+  function sequence(osm: [number, unknown][], openbeta: [number, unknown][]) {
+    const queues = { osm: [...osm], openbeta: [...openbeta] };
+    return vi.fn(async (url: string) => {
+      const q = url.includes("openbeta") ? queues.openbeta : queues.osm;
+      const [status, body] = q.length > 1 ? q.shift()! : q[0];
+      return new Response(JSON.stringify(body), { status });
+    });
+  }
+  const callsTo = (stub: ReturnType<typeof vi.fn>, host: string) =>
+    (stub.mock.calls as unknown as [string][]).filter(([u]) => u.includes(host)).length;
+
+  let sleeps: number[] = [];
+  beforeEach(() => {
+    sleeps = [];
+    CLIMBING_TIMING.sleep = async (ms) => {
+      sleeps.push(ms);
+    };
+  });
+  afterEach(() => {
+    CLIMBING_TIMING.sleep = noSleep;
+    vi.unstubAllGlobals();
+  });
+
+  it("retries a 503 from OpenBeta and an Overpass 'runtime error' with no elements, then shows both", async () => {
+    const stub = sequence(
+      [[200, OSM_GAVE_UP], [200, OSM_OK]],
+      [[503, "busy"], [200, openbetaFixture]],
+    );
+    const r = geojson(await layer.query(ctx(stub), DEFAULTS));
+    expect(callsTo(stub, "overpass")).toBe(2);
+    expect(callsTo(stub, "openbeta")).toBe(2);
+    expect(sleeps).toEqual([1000, 1000]);
+    expect(r.coverageNote).toMatch(/^Returned \d+ climbing places \(14 from OpenStreetMap, 12 from OpenBeta, \d+ in both\); the box was not truncated$/);
+  });
+
+  it("gives up on a source after three tries, waiting 1 s then 3 s, and the note names the source that failed", async () => {
+    const stub = sequence([[200, OSM_OK]], [[502, "bad gateway"]]);
+    const r = geojson(await layer.query(ctx(stub), DEFAULTS));
+    expect(callsTo(stub, "openbeta")).toBe(3);
+    expect(sleeps).toEqual([1000, 3000]);
+    expect(r.data.features).toHaveLength(14);
+    expect(r.coverageNote).toContain("OpenBeta did not answer (OpenBeta returned 502, 3 tries), so only OpenStreetMap crags are shown");
+  });
+
+  it("does not retry a request the server refuses as bad (400)", async () => {
+    const stub = sequence([[400, "bad query"]], [[200, openbetaFixture]]);
+    const r = geojson(await layer.query(ctx(stub), DEFAULTS));
+    expect(callsTo(stub, "overpass")).toBe(1);
+    expect(r.coverageNote).toContain("OpenStreetMap did not answer (Overpass returned 400, 1 try)");
+  });
+
+  it("stops retrying when the time budget is nearly spent", async () => {
+    const budget = CLIMBING_TIMING.budgetMs;
+    CLIMBING_TIMING.budgetMs = 2_000;
+    try {
+      const r = await layer.query(ctx(sequence([[500, "x"]], [[503, "y"]])), DEFAULTS);
+      expect(sleeps).toEqual([]);
+      expect(r).toMatchObject({ hint: "upstream", error: expect.stringContaining("Overpass returned 500, 1 try") });
+    } finally {
+      CLIMBING_TIMING.budgetMs = budget;
+    }
+  });
+
+  it("names the source and the part of the area when only some tiles of it failed", async () => {
+    // Two tiles; OpenBeta answers the western one and keeps failing on the eastern one.
+    const stub = vi.fn(async (url: string, init?: RequestInit) => {
+      if (!url.includes("openbeta")) return new Response(JSON.stringify(OSM_OK), { status: 200 });
+      const west = (JSON.parse(String(init?.body)) as { variables: { f: { bbox: number[] } } }).variables.f.bbox[0];
+      return west === -84 ? new Response(JSON.stringify(openbetaFixture), { status: 200 }) : new Response("busy", { status: 503 });
+    });
+    const r = geojson(await layer.query({ ...ctx(stub), bbox: [-83.7, 37.75, -83.4, 37.85] }, DEFAULTS));
+    expect(r.data.features.length).toBeGreaterThan(14);
+    expect(r.coverageNote).toContain("OpenBeta did not answer for part of the area (OpenBeta returned 503, 3 tries), so its crags there are missing");
+  });
+
+  function cachedCtx(bbox: [number, number, number, number], id: string, cache: Cache) {
+    return { bbox, zoom: 12, env: {}, fetch: createLayerFetch(id, { cache, capacity: 100, refillPerSecond: 100 }) };
+  }
+
+  it("reuses cached tiles for a second, overlapping box and fetches only the tile it adds", async () => {
+    const cache = createMemoryCache();
+    const stub = sequence([[200, OSM_OK]], [[200, openbetaFixture]]);
+    vi.stubGlobal("fetch", stub);
+    geojson(await layer.query(cachedCtx(RRG, "climbing-cache-a", cache), DEFAULTS));
+    expect(stub).toHaveBeenCalledTimes(2);
+    // Overlaps the first box and stays in its tile: nothing is asked again.
+    const again = geojson(await layer.query(cachedCtx([-83.75, 37.73, -83.6, 37.88], "climbing-cache-a", cache), DEFAULTS));
+    expect(stub).toHaveBeenCalledTimes(2);
+    expect(again.data.features.length).toBeGreaterThan(0);
+    // Reaches into the next tile east: only that tile is fetched.
+    geojson(await layer.query(cachedCtx([-83.6, 37.8, -83.4, 37.9], "climbing-cache-a", cache), DEFAULTS));
+    expect(stub).toHaveBeenCalledTimes(4);
+  });
+
+  it("never caches a failed answer: the next query asks the failed source again and gets its crags", async () => {
+    const cache = createMemoryCache();
+    const failing = sequence([[200, OSM_OK]], [[503, "busy"]]);
+    vi.stubGlobal("fetch", failing);
+    const first = geojson(await layer.query(cachedCtx(RRG, "climbing-cache-b", cache), DEFAULTS));
+    expect(first.coverageNote).toContain("OpenBeta did not answer");
+    expect(callsTo(failing, "openbeta")).toBe(3);
+
+    const healthy = sequence([[200, OSM_OK]], [[200, openbetaFixture]]);
+    vi.stubGlobal("fetch", healthy);
+    const second = geojson(await layer.query(cachedCtx(RRG, "climbing-cache-b", cache), DEFAULTS));
+    expect(callsTo(healthy, "openbeta")).toBe(1);
+    expect(callsTo(healthy, "overpass")).toBe(0);
+    expect(second.coverageNote).not.toContain("did not answer");
+    expect(second.coverageNote).toContain("12 from OpenBeta");
   });
 });
 

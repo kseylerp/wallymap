@@ -12,8 +12,18 @@
  * Wide (over 10,000 km², up to the default hard cap of 40,000 km²): the same two requests, both bounded (Overpass at
  * 3,000 elements with its count; OpenBeta has no limit parameter, so the hard cap bounds its box), then the merged
  * places ranked by route count and the first 1,000 kept. total is every merged place, set only when Overpass sent all
- * its matches.
+ * its matches and every tile of both sources answered.
+ * Tiles, retries, cache: both requests are made per fixed grid tile (0.5°, or 2° when the box spans more than six fine
+ * tiles), and the places outside the box are dropped. Each tile's answer is cached for 24 h under the tile's key, so a
+ * nearby or overlapping box reuses it; failures and empty answers are never cached. Each tile request tries three times
+ * (waits of 1 s then 3 s) on network errors, timeouts, 429, 5xx and Overpass failure remarks, inside a 50 s budget per
+ * query. One source failing leaves the other's crags with a note naming the failed source; both failing is an upstream
+ * error naming both.
  * Live smoke check: Red River Gorge, KY (37.75,-83.7 to 37.85,-83.55), 2026-10-09: 58 places (39 OSM, 43 OpenBeta, 24 in both); Lake Tahoe west (38.8,-120.3 to 39.4,-119.8): 311 places (21 OSM, 307 OpenBeta, 17 in both). No truncation.
+ * Tiled smoke check: Red River Gorge, KY (37.73,-83.75 to 37.88,-83.55), 2026-10-16: one 0.5° tile per source, 98 places
+ * (67 OSM, 82 OpenBeta, 50 in both), 44 listing sport, 0.8 s; an overlapping box then answered from the cached tile in
+ * 6 ms. The public Overpass server answered 406 that day (OVERPASS_URL was used); the layer still drew OpenBeta's 82
+ * places and said OpenStreetMap had not answered.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
@@ -29,8 +39,9 @@ import {
   type ClimbingBand,
 } from "./_shared/bands";
 import { registerLayer } from "./registry";
-import { overpassQuery, type OverpassResult } from "./_shared/overpass";
+import { OVERPASS_USER_AGENT, PUBLIC_OVERPASS_ENDPOINT, overpassBodyCacheable, overpassFailure } from "./_shared/overpass";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
+import { isRetryableStatus, mapLimit, withRetry, type RetryPolicy, type RetryResult } from "@/lib/fetch/retry";
 import { GridIndex } from "./_shared/geo";
 import {
   bboxClause,
@@ -429,23 +440,166 @@ function byRoutes(a: Crag, b: Crag): number {
   return bv - av;
 }
 
-async function fetchOpenbeta(ctx: QueryContext): Promise<{ ok: true; crags: Crag[] } | { ok: false; error: string }> {
-  try {
-    const res = await ctx.fetch(OPENBETA_ENDPOINT, {
-      cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:openbeta`,
-      shouldCache: (body) => !body.includes('"errors"') && body.includes('"cragsWithin"'),
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: openbetaBody(ctx.bbox),
-    });
-    if (!res.ok) return { ok: false, error: `OpenBeta returned ${res.status}` };
-    const crags = openbetaCrags(await res.json());
-    return crags === null ? { ok: false, error: "OpenBeta returned an unexpected response" } : { ok: true, crags };
-  } catch {
-    return { ok: false, error: "OpenBeta returned no response" };
+// ---- fetching: fixed grid tiles, retried, cached for a day ----
+
+/** Grid sizes in degrees, fine first. A 0.5° tile holds one climbing area (Red River Gorge fits in one) and stays small. */
+export const TILE_DEG = [0.5, 2] as const;
+/** A box spanning more fine tiles than this (most wide boxes) uses the 2° grid, so it costs a handful of requests. */
+const MAX_FINE_TILES = 6;
+/** How long a tile's answer is kept. */
+export const TILE_TTL_SECONDS = 86_400;
+/** Bump when either request changes, so stale tiles are not read back. */
+const TILE_KEY_VERSION = "v1";
+/** Requests in flight at once per source (the public Overpass server allows only a couple per caller). */
+const OVERPASS_CONCURRENCY = 2;
+const OPENBETA_CONCURRENCY = 3;
+
+/**
+ * Retry and time budget for both sources: three attempts, waiting about 1 s then 3 s, each capped at 25 s, all inside a
+ * 50 s budget per query so a query that retries still leaves the 120 s chat turn time to answer. Tests replace `sleep`.
+ */
+export const CLIMBING_TIMING: { retry: RetryPolicy; budgetMs: number; sleep: (ms: number) => Promise<void> } = {
+  retry: { delaysMs: [1_000, 3_000], attemptTimeoutMs: UPSTREAM_TIMEOUT_MS, minAttemptMs: 5_000 },
+  budgetMs: 50_000,
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+};
+
+export type Tile = { key: string; bbox: BBox };
+
+/**
+ * The fixed grid tiles covering a box: 0.5° tiles, or 2° tiles when it would take more than MAX_FINE_TILES. Each is
+ * fetched and cached on its own, keyed by the tile and not the box, so a nearby or overlapping box reuses them.
+ */
+export function climbingTiles(bbox: BBox): Tile[] {
+  const [west, south, east, north] = bbox;
+  const span = (size: number) => {
+    const x0 = Math.floor(west / size);
+    const y0 = Math.floor(south / size);
+    const x1 = Math.max(x0, Math.ceil(east / size) - 1);
+    const y1 = Math.max(y0, Math.ceil(north / size) - 1);
+    return { size, x0, x1, y0, y1, count: (x1 - x0 + 1) * (y1 - y0 + 1) };
+  };
+  const fine = span(TILE_DEG[0]);
+  const g = fine.count > MAX_FINE_TILES ? span(TILE_DEG[1]) : fine;
+  const tiles: Tile[] = [];
+  for (let x = g.x0; x <= g.x1; x++) {
+    for (let y = g.y0; y <= g.y1; y++) {
+      tiles.push({
+        key: `climbing:tile:${TILE_KEY_VERSION}:${g.size}:${x}:${y}`,
+        bbox: [x * g.size, Math.max(-90, y * g.size), (x + 1) * g.size, Math.min(90, (y + 1) * g.size)],
+      });
+    }
   }
+  return tiles;
 }
+
+function inBox([lon, lat]: [number, number], [west, south, east, north]: BBox): boolean {
+  return lon >= west && lon <= east && lat >= south && lat <= north;
+}
+
+function failureReason(err: unknown, source: string, timeoutMs: number): string {
+  // DOMException is not an Error subclass in every runtime, so match on name.
+  return typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError"
+    ? `${source} timed out after ${Math.round(timeoutMs / 1000)} seconds`
+    : `${source} returned no response`;
+}
+
+/** An Overpass body that names at least one place (not only its `out count`). */
+const OSM_PLACE = /"type"\s*:\s*"(node|way|relation)"/;
+/** An OpenBeta body with no crags. */
+const OPENBETA_EMPTY = /"cragsWithin"\s*:\s*\[\s*\]/;
+
+type OverpassBody = { remark?: unknown; elements: unknown[] };
+
+/**
+ * One Overpass tile, retried on network errors, timeouts, 429 and 5xx, and on a 200 that carries a failure remark or a
+ * remark with no places (Overpass's way of saying it gave up). Attempts go to OVERPASS_URL when set, the last to the
+ * public server. An empty answer is passed back but not cached, so a bad minute is not kept for a day.
+ */
+async function fetchOverpassTile(ctx: QueryContext, tile: Tile, deadline: number): Promise<RetryResult<OverpassBody>> {
+  const primary = ctx.env.OVERPASS_URL || PUBLIC_OVERPASS_ENDPOINT;
+  const lastAttempt = CLIMBING_TIMING.retry.delaysMs.length + 1;
+  const body = `data=${encodeURIComponent(buildClimbingQuery(tile.bbox))}`;
+  return withRetry<OverpassBody>(
+    CLIMBING_TIMING.retry,
+    deadline,
+    async (n, timeoutMs) => {
+      try {
+        // The configured server gets every attempt but the last, which tries the public one in case it is down.
+        const res = await ctx.fetch(n === lastAttempt ? PUBLIC_OVERPASS_ENDPOINT : primary, {
+          cacheKey: `${tile.key}:osm`,
+          ttlSeconds: TILE_TTL_SECONDS,
+          shouldCache: (text) => overpassBodyCacheable(text) && OSM_PLACE.test(text),
+          timeoutMs,
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": OVERPASS_USER_AGENT },
+          body,
+        });
+        if (!res.ok) return { ok: false, error: `Overpass returned ${res.status}`, retry: isRetryableStatus(res.status) };
+        const json: unknown = await res.json();
+        const failure = overpassFailure(json);
+        if (failure !== null) return { ok: false, error: `Overpass failed: ${failure}`, retry: true };
+        const parsed = json as OverpassBody;
+        const places = parsed.elements.some((e) => (e as { type?: unknown }).type !== "count");
+        if (!places && typeof parsed.remark === "string") {
+          return { ok: false, error: `Overpass sent nothing: ${parsed.remark}`, retry: true };
+        }
+        return { ok: true, value: parsed };
+      } catch (err) {
+        return { ok: false, error: failureReason(err, "Overpass", timeoutMs), retry: true };
+      }
+    },
+    CLIMBING_TIMING.sleep,
+  );
+}
+
+type OpenbetaArea = { uuid: string };
+
+/** One OpenBeta tile, retried on network errors, timeouts, 429 and 5xx, and on GraphQL errors or an unexpected body. */
+async function fetchOpenbetaTile(ctx: QueryContext, tile: Tile, deadline: number): Promise<RetryResult<OpenbetaArea[]>> {
+  return withRetry<OpenbetaArea[]>(
+    CLIMBING_TIMING.retry,
+    deadline,
+    async (_n, timeoutMs) => {
+      try {
+        const res = await ctx.fetch(OPENBETA_ENDPOINT, {
+          cacheKey: `${tile.key}:openbeta`,
+          ttlSeconds: TILE_TTL_SECONDS,
+          shouldCache: (text) => !text.includes('"errors"') && text.includes('"cragsWithin"') && !OPENBETA_EMPTY.test(text),
+          timeoutMs,
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: openbetaBody(tile.bbox),
+        });
+        if (!res.ok) return { ok: false, error: `OpenBeta returned ${res.status}`, retry: isRetryableStatus(res.status) };
+        const json: unknown = await res.json();
+        if (openbetaCrags(json) === null) return { ok: false, error: "OpenBeta returned an unexpected response", retry: true };
+        return { ok: true, value: (json as { data: { cragsWithin: OpenbetaArea[] } }).data.cragsWithin };
+      } catch (err) {
+        return { ok: false, error: failureReason(err, "OpenBeta", timeoutMs), retry: true };
+      }
+    },
+    CLIMBING_TIMING.sleep,
+  );
+}
+
+/** How a source's tiles went: what came back, and the last reason when some or all of them failed. */
+type SourceOutcome<T> = { values: T[]; failed: number; total: number; error?: string };
+
+function outcomeOf<T>(results: RetryResult<T>[]): SourceOutcome<T> {
+  const out: SourceOutcome<T> = { values: [], failed: 0, total: results.length };
+  for (const r of results) {
+    if (r.ok) out.values.push(r.value);
+    else {
+      out.failed++;
+      out.error = `${r.error}, ${r.attempts === 1 ? "1 try" : `${r.attempts} tries`}`;
+    }
+  }
+  return out;
+}
+
+/** True when every tile of a source failed. */
+const allFailed = (o: SourceOutcome<unknown>) => o.total > 0 && o.failed === o.total;
 
 /** The coverage note: how many places came back, from where, and whether either source was cut or missing. */
 export function climbingNote(args: {
@@ -457,8 +611,12 @@ export function climbingNote(args: {
   /** True when OpenBeta sent more than 3,000 crags and only the 3,000 with the most routes were kept. */
   openbetaCut: boolean;
   both: number;
+  /** Set when OpenStreetMap failed everywhere after its retries. */
   osmError?: string;
+  /** Set when OpenStreetMap failed for some tiles of the box but not all. */
+  osmPartError?: string;
   openbetaError?: string;
+  openbetaPartError?: string;
   /** A wide box: the run writes the ranked-of-total note, so only say when a source was cut before ranking. */
   wide?: boolean;
 }): string {
@@ -475,8 +633,14 @@ export function climbingNote(args: {
   let note = args.wide
     ? `${parts.join(" ")}${cuts.length > 0 ? `; ranked from part of the box (${cuts.join("; ")})` : ""}`
     : `${parts.join(" ")}; ${cuts.length > 0 ? `the box was truncated (${cuts.join("; ")}), zoom in for the rest` : "the box was not truncated"}`;
-  if (args.osmError) note += `. OpenStreetMap did not answer (${args.osmError}), so OpenBeta crags only`;
-  if (args.openbetaError) note += `. OpenBeta did not answer (${args.openbetaError}), so OpenStreetMap crags only`;
+  if (args.osmError) note += `. OpenStreetMap did not answer (${args.osmError}), so only OpenBeta crags are shown`;
+  else if (args.osmPartError) {
+    note += `. OpenStreetMap did not answer for part of the area (${args.osmPartError}), so its crags there are missing`;
+  }
+  if (args.openbetaError) note += `. OpenBeta did not answer (${args.openbetaError}), so only OpenStreetMap crags are shown`;
+  else if (args.openbetaPartError) {
+    note += `. OpenBeta did not answer for part of the area (${args.openbetaPartError}), so its crags there are missing`;
+  }
   return note;
 }
 
@@ -628,19 +792,38 @@ const climbing = defineLayer({
   attributes: ATTRIBUTES,
 
   async query(ctx, input: ClimbingInput): Promise<LayerResult | LayerError> {
-    const [osmResult, openbeta]: [OverpassResult, Awaited<ReturnType<typeof fetchOpenbeta>>] = await Promise.all([
-      overpassQuery(ctx, buildClimbingQuery(ctx.bbox), { cacheSuffix: "climbing" }),
-      fetchOpenbeta(ctx),
+    // Both sources, tile by tile, in parallel; one deadline for every attempt keeps the query inside its time budget.
+    const deadline = Date.now() + CLIMBING_TIMING.budgetMs;
+    const tiles = climbingTiles(ctx.bbox);
+    const [osmTiles, obTiles] = await Promise.all([
+      mapLimit(tiles, OVERPASS_CONCURRENCY, (t) => fetchOverpassTile(ctx, t, deadline)).then(outcomeOf),
+      mapLimit(tiles, OPENBETA_CONCURRENCY, (t) => fetchOpenbetaTile(ctx, t, deadline)).then(outcomeOf),
     ]);
-    if (!osmResult.ok && !openbeta.ok) return { error: `${osmResult.error}; ${openbeta.error}`, hint: "upstream" };
+    const osmOk = !allFailed(osmTiles);
+    const obOk = !allFailed(obTiles);
+    if (!osmOk && !obOk) {
+      return {
+        error: `Neither climbing source answered: OpenStreetMap (${osmTiles.error}) and OpenBeta (${obTiles.error})`,
+        hint: "upstream",
+      };
+    }
 
-    // One place per wall: the same wall mapped as a node and as a cliff line is one crag.
-    const osmAll = osmResult.ok ? dedupeSameName(osmCrags(osmResult.json, input.includeGyms)) : [];
-    // Overpass stops at MAX_PER_SOURCE elements; its `out count` says how many the box really holds, so the box was
-    // cut when that exceeds the elements in the body (gyms and other skipped elements are in both numbers).
-    const osmSent = osmResult.ok ? overpassBodySchema.parse(osmResult.json).elements.filter((e) => (e as { type?: unknown }).type !== "count").length : 0;
-    const osmCut = osmResult.ok && (countedTotal(osmResult.json) ?? 0) > osmSent;
-    const obAll = openbeta.ok ? openbeta.crags : [];
+    // Overpass stops at MAX_PER_SOURCE elements per tile; its `out count` says how many the tile really holds, so a
+    // tile was cut when that exceeds the elements in its body (gyms and other skipped elements are in both numbers).
+    const osmElements = new Map<string, unknown>();
+    let osmCut = false;
+    for (const body of osmTiles.values) {
+      const elements = overpassBodySchema.parse(body).elements.filter((e) => (e as { type?: unknown }).type !== "count");
+      if ((countedTotal(body) ?? 0) > elements.length) osmCut = true;
+      // A way or relation crossing a tile edge comes back in both tiles.
+      for (const e of elements) osmElements.set(`${(e as { type?: unknown }).type}/${(e as { id?: unknown }).id}`, e);
+    }
+    // One place per wall: the same wall mapped as a node and as a cliff line is one crag. Tiles reach past the box, so
+    // keep only what is in it.
+    const osmAll = dedupeSameName(osmCrags({ elements: [...osmElements.values()] }, input.includeGyms).filter((c) => inBox(c.position, ctx.bbox)));
+    const obAreas = new Map<string, OpenbetaArea>();
+    for (const areas of obTiles.values) for (const a of areas) obAreas.set(a.uuid, a);
+    const obAll = (openbetaCrags({ data: { cragsWithin: [...obAreas.values()] } }) ?? []).filter((c) => inBox(c.position, ctx.bbox));
     const osm = osmAll.sort(byRoutes).slice(0, MAX_PER_SOURCE);
     const ob = obAll.sort(byRoutes).slice(0, MAX_PER_SOURCE);
 
@@ -659,28 +842,32 @@ const climbing = defineLayer({
     const data: FeatureCollection<Point> = { type: "FeatureCollection", features };
 
     const citationSources = [
-      osmResult.ok ? "OpenStreetMap contributors (ODbL, openstreetmap.org/copyright)" : null,
-      openbeta.ok ? "OpenBeta (openbeta.io)" : null,
+      osmOk ? "OpenStreetMap contributors (ODbL, openstreetmap.org/copyright)" : null,
+      obOk ? "OpenBeta (openbeta.io)" : null,
     ];
+    // A total is only honest when every tile of both sources answered and Overpass sent all its matches.
+    const complete = !osmCut && osmTiles.failed === 0 && obTiles.failed === 0;
     return {
       kind: "geojson",
       data,
-      ...(wideLimit !== undefined && !osmCut && { total: merged.length }),
+      ...(wideLimit !== undefined && complete && { total: merged.length }),
       coverageNote: climbingNote({
         shown: features.length,
-        osmShown: osmResult.ok ? osm.length : null,
-        openbetaShown: openbeta.ok ? ob.length : null,
+        osmShown: osmOk ? osm.length : null,
+        openbetaShown: obOk ? ob.length : null,
         osmCut,
         openbetaCut: obAll.length > MAX_PER_SOURCE,
         both,
-        ...(osmResult.ok ? {} : { osmError: osmResult.error }),
-        ...(openbeta.ok ? {} : { openbetaError: openbeta.error }),
+        ...(!osmOk && { osmError: osmTiles.error }),
+        ...(osmOk && osmTiles.failed > 0 && { osmPartError: osmTiles.error }),
+        ...(!obOk && { openbetaError: obTiles.error }),
+        ...(obOk && obTiles.failed > 0 && { openbetaPartError: obTiles.error }),
         ...(wideLimit !== undefined && { wide: true }),
       }),
       citation: {
         ...osmCitation(),
         source: citationSources.filter((s): s is string => s !== null).join(" and "),
-        url: osmResult.ok ? osmCitation().url : "https://openbeta.io",
+        url: osmOk ? osmCitation().url : "https://openbeta.io",
       },
     };
   },

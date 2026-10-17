@@ -10,7 +10,7 @@ import { normalizeRenderInput } from "./renderInput";
 import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
 import { checkNote } from "./noteCheck";
 import { createTurn, inputKeyOf, isWideQuery, MAX_STEPS, placeKey, type Turn } from "./turn";
-import { repairToolName } from "./toolNames";
+import { canonicalLayerId, repairToolName } from "./toolNames";
 import { gistFor } from "./vocabulary";
 import type { MapView } from "./view";
 
@@ -518,7 +518,8 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
       }),
       // Labels become values and "most … by <measure>" becomes hex cells by its sum, before the map or the trace sees it.
       execute: async (input) => {
-        const layerId = input.layerId.replace(/<\|[\s\S]*$/, "").trim();
+        // "query_peaks" (the tool's name) is the peaks layer; template junk is cut off.
+        const layerId = canonicalLayerId(input.layerId, listLayers().map((l) => l.id));
         const out = normalizeRenderInput({ ...input, layerId }, getLayer(layerId), turn.question);
         turn.drawn.add(layerId);
         if (typeof out.view === "string") turn.views.set(layerId, out.view);
@@ -565,9 +566,10 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
         if (input.scenario === undefined && (input.a === undefined || input.b === undefined)) {
           return { error: "compare needs both windows a and b, or scenario with two amounts" };
         }
-        turn.drawn.add(input.layerId);
-        turn.compared.add(input.layerId);
-        return input;
+        const layerId = canonicalLayerId(input.layerId, listLayers().map((l) => l.id));
+        turn.drawn.add(layerId);
+        turn.compared.add(layerId);
+        return { ...input, layerId };
       },
     }),
     route: tool({

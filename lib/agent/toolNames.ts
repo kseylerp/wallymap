@@ -23,3 +23,14 @@ export function repairToolName(name: string, toolNames: readonly string[]): stri
   return matches.length === 1 ? matches[0] : null;
 }
 
+
+/**
+ * The layer id a render or compare call means: junk cut off (`climbing<|channel|>commentary`), and the query tool's
+ * name read as its layer (`query_peaks` is peaks) when that is a registered layer.
+ */
+export function canonicalLayerId(id: string, layerIds: readonly string[]): string {
+  const bare = id.replace(TOOL_NAME_JUNK, "").trim() || id;
+  if (layerIds.includes(bare)) return bare;
+  const unprefixed = bare.replace(/^query_/, "");
+  return layerIds.includes(unprefixed) ? unprefixed : bare;
+}

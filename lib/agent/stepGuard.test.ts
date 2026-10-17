@@ -474,3 +474,14 @@ describe("step guard: place lookups", () => {
     expect(JSON.stringify(prompts)).toMatch(/4 place lookups were made this turn/);
   });
 });
+
+describe("step guard: a render of the query tool's name", () => {
+  it("draws peaks when the model renders \"query_peaks\", and does not draw it twice", async () => {
+    const { calls } = await run("best hiking trails for elevation", [
+      { calls: [{ name: "query_peaks", input: { bbox: TAHOE } }] },
+      { calls: [{ name: "render", input: { layerId: "query_peaks" } }, { name: "note", input: { markdown: "Peaks." } }] },
+      { text: "- More?" },
+    ], { bbox: TAHOE, zoom: 9, center: [-120.04, 39.1] });
+    expect(calls.filter((c) => c.name === "render").map((c) => c.input.layerId)).toEqual(["peaks"]);
+  });
+});

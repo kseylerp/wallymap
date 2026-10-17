@@ -6,7 +6,7 @@ import type { GeocodeResult } from "./geocode";
 import { placeCandidates } from "./places";
 import { NOTE_MAX_WORDS, noteWords, trimNote } from "./noteCheck";
 import { asksChange, normalizeRenderInput } from "./renderInput";
-import { repairToolName } from "./toolNames";
+import { canonicalLayerId, repairToolName } from "./toolNames";
 import { widerScaleFor, widerScaleHints } from "./tools";
 import { inputKeyOf, MAX_STEPS, undrawn, type Turn } from "./turn";
 
@@ -238,13 +238,25 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
     changed = true;
     turn.note(`tool call${leaked.length > 1 ? "s" : ""} written as text turned into ${leaked.map((c) => c.toolName).join(", ")}`);
   }
-  // 1. Canonical tool names.
+  // 1. Canonical tool names, and canonical layer ids in render and compare ("query_peaks" is peaks).
+  const layerIds = toolNames.filter(isQuery).map(layerOf);
   let calls = draft.calls.map((c) => {
     const name = repairToolName(c.toolName, toolNames) ?? c.toolName;
-    if (name === c.toolName) return c;
-    changed = true;
-    turn.note(`tool name ${JSON.stringify(c.toolName)} sent as ${name}`);
-    return { ...c, toolName: name };
+    let call = c;
+    if (name !== c.toolName) {
+      changed = true;
+      turn.note(`tool name ${JSON.stringify(c.toolName)} sent as ${name}`);
+      call = { ...call, toolName: name };
+    }
+    if ((name === "render" || name === "compare") && typeof call.input.layerId === "string") {
+      const layerId = canonicalLayerId(call.input.layerId, layerIds);
+      if (layerId !== call.input.layerId) {
+        changed = true;
+        turn.note(`${name} layerId ${JSON.stringify(call.input.layerId)} sent as ${layerId}`);
+        call = { ...call, input: { ...call.input, layerId } };
+      }
+    }
+    return call;
   });
 
   // 2. A smaller box inside one a wide strategy already answered for the same layer and inputs: drop it.

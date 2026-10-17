@@ -38,6 +38,22 @@ describe("runLayer", () => {
     registerLayer(fake);
   });
 
+  it("names every feature the way people say it (\"Oasis, The\" → \"The Oasis\")", async () => {
+    query.mockImplementation(async () => ({
+      ...passthroughResult,
+      data: {
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", geometry: { type: "Point", coordinates: [-119.5, 38.5] }, properties: { name: "Oasis, The", kind: "crag" } },
+          { type: "Feature", geometry: { type: "Point", coordinates: [-119.4, 38.4] }, properties: { name: "Lake Tahoe, CA" } },
+        ],
+      },
+    }));
+    const res = await runLayer("fake", { bbox: BBOX });
+    const names = res.body && "data" in res.body && res.body.kind === "geojson" ? res.body.data.features.map((f) => f.properties?.name) : [];
+    expect(names).toEqual(["The Oasis", "Lake Tahoe, CA"]);
+  });
+
   it("returns 404 for an unknown layer id", async () => {
     const res = await runLayer("nope", { bbox: BBOX });
     expect(res).toEqual({ status: 404, body: { error: "Unknown layer nope" } });

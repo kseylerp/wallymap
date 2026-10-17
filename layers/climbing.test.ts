@@ -166,6 +166,11 @@ describe("openbetaCrags", () => {
     expect(gv?.props.grades).toMatch(/^5\.\d/);
   });
 
+  it("names an area the way people say it: OpenBeta's \"Oasis, The\" is The Oasis", () => {
+    const body = { data: { cragsWithin: [{ uuid: "o", area_name: "Oasis, The", totalClimbs: 12, metadata: { lat: 37.8, lng: -83.6, leaf: true, isBoulder: false } }] } };
+    expect(openbetaCrags(body)?.[0].props.name).toBe("The Oasis");
+  });
+
   it("marks boulders and non-leaf areas, and rejects a GraphQL error body", () => {
     const body = {
       data: {

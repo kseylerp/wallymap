@@ -11,6 +11,7 @@ import {
   type WideStrategy,
 } from "@/layers/types";
 import { cacheKeyFor, createLayerFetch } from "@/lib/fetch";
+import { withNaturalName } from "@/layers/_shared/names";
 
 export type RunLayerParams = {
   bbox: unknown;
@@ -99,6 +100,23 @@ export function wideOutcome(
 }
 
 /**
+ * Every layer's feature names as people say them ("Oasis, The" → "The Oasis"; layers/_shared/names.ts): OpenBeta,
+ * OpenStreetMap and catalogue sources file some names with the article last. Layers that merge sources by name
+ * (climbing) already read their names this way before merging.
+ */
+function naturalNames<R extends LayerResult | LayerError>(result: R): R {
+  if ("error" in result || result.kind !== "geojson") return result;
+  let changed = false;
+  const features = result.data.features.map((f) => {
+    const properties = withNaturalName(f.properties);
+    if (properties === f.properties) return f;
+    changed = true;
+    return { ...f, properties };
+  });
+  return changed ? { ...result, data: { ...result.data, features } } : result;
+}
+
+/**
  * Validates a request and runs one registered layer. Shared by the HTTP route
  * and the agent tools, so both return the same statuses. Never throws.
  */
@@ -158,12 +176,13 @@ export async function runLayer(id: string, params: RunLayerParams): Promise<RunL
 
     if ("error" in result) {
       const status = result.hint === "zoom_in" ? 422 : 503;
-      return { status, body: result };
+      return { status, body: naturalNames(result) };
     }
-    if (!wide) return { status: 200, body: result };
-    const outcome = wideOutcome(layer, wide, result);
+    const named = naturalNames(result);
+    if (!wide) return { status: 200, body: named };
+    const outcome = wideOutcome(layer, wide, named);
     const body: LayerResult = {
-      ...result,
+      ...named,
       coverageNote: [outcome.note, result.coverageNote].filter(Boolean).join("; "),
       ...(outcome.truncated && outcome.rankedOut !== undefined && { truncated: true as const, rankedOut: outcome.rankedOut }),
     };

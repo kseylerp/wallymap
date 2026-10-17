@@ -40,6 +40,7 @@ import {
   type ClimbingBand,
 } from "./_shared/bands";
 import { registerLayer } from "./registry";
+import { naturalName } from "./_shared/names";
 import { OVERPASS_USER_AGENT, PUBLIC_OVERPASS_ENDPOINT, overpassBodyCacheable, overpassFailure } from "./_shared/overpass";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { isRetryableStatus, mapLimit, withRetry, type RetryPolicy, type RetryResult } from "@/lib/fetch/retry";
@@ -282,7 +283,7 @@ export function osmCrags(json: unknown, includeGyms: boolean): Crag[] {
     if (kind === null || (kind === "gym" && !includeGyms)) continue;
 
     const props: Props = { kind, osmId, source: "osm" };
-    if (tags.name) props.name = tags.name;
+    if (tags.name) props.name = naturalName(tags.name);
     const v = osmRouteCount(tags);
     if (v !== undefined) props.v = v;
     const grades = osmGradeSummary(tags);
@@ -313,7 +314,8 @@ export function openbetaCrags(json: unknown): Crag[] | null {
   return parsed.data.data.cragsWithin.map((a): Crag => {
     const props: Props = {
       kind: a.metadata.isBoulder ? "boulder" : a.metadata.leaf === false ? "area" : "crag",
-      name: a.area_name,
+      // OpenBeta files some areas as "Oasis, The"; OpenStreetMap says "The Oasis", and the two merge by name.
+      name: naturalName(a.area_name),
       source: "openbeta",
       openbetaId: a.uuid,
       url: `${OPENBETA_AREA_URL}${a.uuid}`,

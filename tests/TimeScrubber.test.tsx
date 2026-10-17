@@ -88,17 +88,17 @@ describe("TimeScrubber", () => {
     fireEvent.click(screen.getByTestId("time-play"));
     expect(screen.getByTestId("time-play").textContent).toBe("Pause");
     // Playing the whole span starts over at the first year.
-    expect(label()).toBe("2016 – 2016");
+    expect(label()).toBe("2016");
     act(() => {
       vi.advanceTimersByTime(PLAY_STEP_MS);
     });
-    expect(label()).toBe("2017 – 2017");
+    expect(label()).toBe("2017");
     fireEvent.click(screen.getByTestId("time-play"));
     expect(screen.getByTestId("time-play").textContent).toBe("Play");
     act(() => {
       vi.advanceTimersByTime(PLAY_STEP_MS * 3);
     });
-    expect(label()).toBe("2017 – 2017");
+    expect(label()).toBe("2017");
   });
 
   it("play keeps stepping while the layer panel (and the scrubber in it) is closed", () => {

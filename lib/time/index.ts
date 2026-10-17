@@ -8,7 +8,7 @@ import type { FeatureCollection } from "geojson";
 import type { LoadedLayer } from "@/lib/render/state";
 import type { TileTime } from "@/layers/types";
 
-export type Bucket = "day" | "month" | "year";
+export type Bucket = "hour" | "day" | "month" | "year";
 /** ISO inclusive start, inclusive end. */
 export type TimeWindow = [string, string];
 export type TimeIndex = {
@@ -22,6 +22,12 @@ export type TimeIndex = {
    * counts), and this is the cadence the scrubber names ("per 16 days").
    */
   cadence?: TileTime["cadence"];
+  /**
+   * Set when a shown layer carries a value per frame (layers/types.ts SeriesAxis): the buckets are its frames, one per
+   * day or hour, and the scrubber opens on `now` (the newest reading) one frame wide; frames from `forecastFrom` on
+   * are forecast.
+   */
+  series?: { step: "day" | "hour"; now: number; forecastFrom?: number };
 };
 
 export type TimeIndexOptions = {
@@ -33,8 +39,12 @@ export type TimeIndexOptions = {
 };
 
 const DAY_MS = 86_400_000;
-const UNIT_MS: Record<Bucket, number> = { day: DAY_MS, month: 30.4375 * DAY_MS, year: 365.25 * DAY_MS };
+const HOUR_MS = 3_600_000;
+const UNIT_MS: Record<Bucket, number> = { hour: HOUR_MS, day: DAY_MS, month: 30.4375 * DAY_MS, year: 365.25 * DAY_MS };
+/** The buckets dated features are counted in; hours are only ever a series' own frames. */
 const ORDER: Bucket[] = ["day", "month", "year"];
+/** Most frames a series puts on the scrubber (the newest ones): six months of days, or about five weeks of hours. */
+export const MAX_SERIES_FRAMES = 840;
 
 /** Day if the span is at most 90 days, month if at most 10 years, else year; then coarsened until it fits `maxBuckets`. */
 export function chooseBucket(spanMs: number, maxBuckets = 60): Bucket {
@@ -45,6 +55,7 @@ export function chooseBucket(spanMs: number, maxBuckets = 60): Bucket {
 }
 
 function floorTo(ms: number, bucket: Bucket): number {
+  if (bucket === "hour") return Math.floor(ms / HOUR_MS) * HOUR_MS;
   const d = new Date(ms);
   if (bucket === "year") return Date.UTC(d.getUTCFullYear(), 0, 1);
   if (bucket === "month") return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
@@ -52,6 +63,7 @@ function floorTo(ms: number, bucket: Bucket): number {
 }
 
 function nextStart(ms: number, bucket: Bucket): number {
+  if (bucket === "hour") return ms + HOUR_MS;
   const d = new Date(ms);
   if (bucket === "year") return Date.UTC(d.getUTCFullYear() + 1, 0, 1);
   if (bucket === "month") return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
@@ -76,6 +88,7 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: TimeIndexO
   const stamps: number[] = [];
   const layerIds: string[] = [];
   const tileSets: { cadence: TileTime["cadence"]; starts: number[] }[] = [];
+  const seriesSets: { step: "day" | "hour"; starts: number[]; now: number; forecastFrom?: number }[] = [];
   const now = opts?.now ?? Date.now();
   // Every date is January 1 at midnight: dates known only to the year (dams by year completed), stepped by year.
   let yearsOnly = true;
@@ -89,6 +102,15 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: TimeIndexO
       }
       continue;
     }
+    const series = layer.result.series;
+    if (series && series.times.length > 0) {
+      const starts = series.times.map((t) => Date.parse(t)).filter((ms) => Number.isFinite(ms));
+      if (starts.length > 0) {
+        const at = (k: number | undefined) => (k === undefined ? undefined : Date.parse(series.times[Math.min(series.times.length - 1, Math.max(0, k))]));
+        seriesSets.push({ step: series.step, starts, now: at(series.now) ?? starts[starts.length - 1], forecastFrom: at(series.forecastFrom) });
+        layerIds.push(layer.id);
+      }
+    }
     let any = false;
     for (const f of layer.result.data.features) {
       const t = (f.properties as Record<string, unknown> | null)?.t;
@@ -100,6 +122,8 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: TimeIndexO
     }
     if (any) layerIds.push(layer.id);
   }
+  // A series sets the frames: dated features of other layers still filter by the frame's window.
+  if (seriesSets.length > 0) return seriesIndex(seriesSets, layerIds);
   if (stamps.length === 0 && tileSets.length === 0) return null;
   if (stamps.length === 0) return tileIndex(tileSets, layerIds);
 
@@ -150,6 +174,33 @@ function tileIndex(sets: { cadence: TileTime["cadence"]; starts: number[] }[], l
     buckets,
     layerIds,
     cadence,
+  };
+}
+
+/**
+ * The index of series layers: one bucket per frame of the finest step (hours over days), the union of those layers'
+ * frames, the newest MAX_SERIES_FRAMES of them. `now` is the newest frame at or before any layer's query time.
+ */
+function seriesIndex(sets: { step: "day" | "hour"; starts: number[]; now: number; forecastFrom?: number }[], layerIds: string[]): TimeIndex {
+  const step = sets.some((t) => t.step === "hour") ? "hour" : "day";
+  const fine = sets.filter((t) => t.step === step);
+  const union = [...new Set(fine.flatMap((t) => t.starts.map((ms) => floorTo(ms, step))))].sort((a, b) => a - b).slice(-MAX_SERIES_FRAMES);
+  const buckets = union.map((s, i) => ({
+    start: new Date(s).toISOString(),
+    end: new Date((i + 1 < union.length ? union[i + 1] : nextStart(s, step)) - 1).toISOString(),
+    count: 0,
+  }));
+  const nowMs = Math.max(...fine.map((t) => t.now));
+  const now = Math.max(0, bucketIndex(union, nowMs));
+  const forecasts = fine.map((t) => t.forecastFrom).filter((ms): ms is number => ms !== undefined);
+  const forecastFrom = forecasts.length > 0 ? bucketIndex(union, Math.min(...forecasts)) : undefined;
+  return {
+    min: buckets[0].start,
+    max: buckets[buckets.length - 1].start,
+    bucket: step,
+    buckets,
+    layerIds,
+    series: { step, now, ...(forecastFrom !== undefined && { forecastFrom }) },
   };
 }
 
@@ -296,6 +347,7 @@ const CADENCE_WORDS: Record<TileTime["cadence"], string> = {
 /** What one scrubber step is: "features per month", or for tile layers alone "one image per 16 days". */
 export function stepLabel(index: TimeIndex): string {
   if (index.cadence) return `one image ${CADENCE_WORDS[index.cadence]}`;
+  if (index.series) return `one frame per ${index.series.step}`;
   return `features per ${index.bucket}`;
 }
 
@@ -351,8 +403,11 @@ export function windowLabel(window: TimeWindow, bucket: Bucket): string {
     if (Number.isNaN(d.getTime())) return iso;
     if (bucket === "year") return String(d.getUTCFullYear());
     if (bucket === "month") return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+    if (bucket === "hour") return `${d.toISOString().slice(0, 10)} ${d.toISOString().slice(11, 13)}:00`;
     return d.toISOString().slice(0, 10);
   };
+  // One frame of a series (or one day) reads as itself, not as a range from a time to the same time.
+  if (fmt(window[0]) === fmt(window[1])) return fmt(window[0]);
   return `${fmt(window[0])} – ${fmt(window[1])}`;
 }
 
@@ -367,7 +422,8 @@ const MAX_PRESETS = 4;
  * relative ones (tests pass a clock).
  */
 export function timePresets(index: TimeIndex, now: number = Date.now()): TimePreset[] {
-  if (index.buckets.length < 2) return [];
+  // A series plays frame by frame; its presets would only widen the window over many frames.
+  if (index.buckets.length < 2 || index.series) return [];
   const lo = Date.parse(index.buckets[0].start);
   const end = index.buckets[index.buckets.length - 1].end;
   const hi = Date.parse(end);

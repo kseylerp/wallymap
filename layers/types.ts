@@ -44,12 +44,47 @@ export type Truncation = {
   rankedOut: string;
 };
 
+/**
+ * The frames of a result whose features carry one value per time step (spec §13, "the whole network, every day";
+ * §13a, "hourly frames over days"): each feature holds its values under `properties.series[key]`, one per entry of
+ * `times`, and its plain `properties[key]` is the value at `now` (what the card, the ranking and the model read).
+ * The time scrubber steps these frames one at a time and the map draws each feature at the frame shown.
+ */
+export type SeriesAxis = {
+  /** ISO timestamps of the frames, oldest first, one step apart. */
+  times: string[];
+  step: "day" | "hour";
+  /** The frame at the time of the query (the newest reading); later frames are forecast. */
+  now: number;
+  /** The frame from which values are forecast rather than observed or modelled for the past, when the source says. */
+  forecastFrom?: number;
+};
+
+/**
+ * A small time series to plot under the scrubber, synced with the playhead (spec §13a "a linked curve"): the tide at
+ * the nearest station for currents. `times` and `values` line up; `place` names where it was read.
+ */
+export type LinkedSeries = { label: string; unit: string; place: string; times: string[]; values: (number | null)[]; source?: Citation };
+
+/**
+ * A vector field drawn as moving particles (spec §13a): the features are the nodes of a regular grid (row by row from
+ * the south-west corner, `nx` across and `ny` up, `bbox` their outer nodes), each holding `u` (east) and `v` (north)
+ * in m/s and an optional `color` measure, all as series. `speedUnit` and `colorUnit` name the legend's units.
+ */
+export type FlowField = { nx: number; ny: number; bbox: BBox; u: string; v: string; color?: string; landNull?: boolean };
+
 export type LayerResult =
   | ({
       kind: "geojson";
       data: FeatureCollection;
       citation: Citation;
       coverageNote?: string;
+      /** Present when every feature carries a value per frame: the scrubber steps the frames (see SeriesAxis). */
+      series?: SeriesAxis;
+      /** A curve to plot under the scrubber, synced with the playhead (the tide for currents). */
+      linked?: LinkedSeries;
+      /** Present when the features are the nodes of a vector field drawn as particles (ocean currents, wind). */
+      flow?: FlowField;
       /**
        * Wide results only: how many features the source holds in the box (a count pre-check), when the result keeps
        * fewer. lib/layers/run.ts states it in the coverage note ("the 2,000 largest of 4,512").

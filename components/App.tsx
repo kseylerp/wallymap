@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { ChatRail } from "@/components/ChatRail";
 import { CompareControl, CompareSwipe, openCompareAction, useCompareTicker } from "@/components/CompareControl";
 import { ExportControl } from "@/components/ExportControl";
@@ -19,6 +19,7 @@ import { askAboutText, featureBBox, featureCenter } from "@/lib/render/inspect";
 import { usePermalink } from "@/lib/render/usePermalink";
 import { isComparable } from "@/lib/render/compareView";
 import { useTimePlay } from "@/lib/render/useTimePlay";
+import { playStepMs, stepOverrideStore, usePlayhead } from "@/lib/render/playhead";
 import { isMapReset, reduce } from "@/lib/render/reducer";
 import { initialMapState, type Basemap, type MapAction, type Selection, type Viewport } from "@/lib/render/state";
 import { isSelectionVisible, visibleState } from "@/lib/render/view";
@@ -53,8 +54,12 @@ function writeSessionFlag(key: string, value: boolean): void {
 export function App() {
   const [state, dispatch] = useReducer(reduce, initialMapState);
   const permalink = usePermalink(state, dispatch);
-  // The scrubber's play steps here, so it keeps going while the layer panel is closed.
-  useTimePlay(state.time?.playing ?? false, dispatch);
+  // The scrubber's play steps here, so it keeps going while the layer panel is closed; a series steps faster, and the
+  // playhead glides between its frames (lib/render/playhead.ts). A recording sets its own pace.
+  const stepOverride = useSyncExternalStore(stepOverrideStore.subscribe, stepOverrideStore.get, stepOverrideStore.get);
+  const stepMs = stepOverride ?? playStepMs(state.time?.index);
+  useTimePlay(state.time?.playing ?? false, dispatch, stepMs);
+  usePlayhead(state.time, stepMs);
   // The scenario scrubber's play (sea level rise amounts), here for the same reason.
   useScenarioPlay(state.scenario?.playing ?? false, dispatch);
   // Compare's 1 Hz toggle flip and its space key, here so they keep going while the data console is closed.

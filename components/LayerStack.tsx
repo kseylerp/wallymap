@@ -2,6 +2,7 @@
 
 import { useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { TimeScrubber } from "@/components/TimeScrubber";
+import { frameAggregate } from "@/lib/render/series";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { applyFilters, deriveFilterFields, filterSummary, type FilterField, type MeasureRange } from "@/lib/render/filters";
 import { AttributeControls } from "@/components/AttributeControls";
@@ -660,7 +661,7 @@ export function LayerStack({
       <div data-slot="time-scrubber" className="shrink-0 empty:hidden">
         {time && (
           <>
-            <TimeScrubber time={time} dispatch={dispatch} missingImage={missingImage} />
+            <TimeScrubber time={time} dispatch={dispatch} missingImage={missingImage} aggregate={frameAggregate({ time, layers, renderOps })} />
             <div aria-hidden className="hairline mx-5" />
           </>
         )}

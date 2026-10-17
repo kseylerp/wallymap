@@ -1,7 +1,9 @@
 "use client";
 
 import { useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { FrameAggregate } from "@/components/FrameAggregate";
 import { formatValue } from "@/lib/format";
+import type { FrameAggregate as Aggregate } from "@/lib/render/series";
 import { bucketAt } from "@/lib/render/reducer";
 import type { MapAction, TimeMode, TimeState } from "@/lib/render/state";
 import { stepLabel, stepWindow, timePresets, windowLabel, type Bucket, type TimeIndex, type TimeWindow } from "@/lib/time";
@@ -11,6 +13,8 @@ type TimeScrubberProps = {
   dispatch: (action: MapAction) => void;
   /** True when a dated tile layer has no image for the window's date (its tiles all failed). */
   missingImage?: boolean;
+  /** The live aggregate (spec §13): the frame's date and total against the period's low and high. */
+  aggregate?: Aggregate | null;
 };
 
 /** One bucket's start as the scrubber's axis shows it: "2019", "Mar 2024" or "2024-06-01". */
@@ -36,12 +40,14 @@ const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 h
  * the window's dates, and × to clear. Text only; the window and its handles are purple (palette §11). It only shows and changes state: the play timer runs in
  * the app (lib/render/useTimePlay.ts), so play goes on while the panel is closed.
  */
-export function TimeScrubber({ time, dispatch, missingImage = false }: TimeScrubberProps) {
+export function TimeScrubber({ time, dispatch, missingImage = false, aggregate = null }: TimeScrubberProps) {
   const { index, window, playing, mode } = time;
   const n = index.buckets.length;
   const i = bucketAt(index, window[0]);
   const j = bucketAt(index, window[1]);
-  const counts = index.buckets.map((b) => b.count);
+  // A series has no features to count per frame: its bars are the aggregate's total per frame.
+  const fromAggregate = index.series !== undefined && aggregate !== null;
+  const counts = fromAggregate ? aggregate.values.map((v) => Math.max(0, v ?? 0)) : index.buckets.map((b) => b.count);
   const max = Math.max(1, ...counts);
   const total = counts.reduce((a, b) => a + b, 0);
   const shown = counts.slice(i, j + 1).reduce((a, b) => a + b, 0);
@@ -161,6 +167,8 @@ export function TimeScrubber({ time, dispatch, missingImage = false }: TimeScrub
         </button>
       </div>
 
+      {aggregate && <FrameAggregate time={time} aggregate={aggregate} />}
+
       <div
         ref={trackRef}
         data-testid="time-track"
@@ -174,10 +182,17 @@ export function TimeScrubber({ time, dispatch, missingImage = false }: TimeScrub
           {index.buckets.map((b, k) => (
             <div
               key={b.start}
-              title={imagesOnly ? bucketName(b.start, index.bucket) : `${bucketName(b.start, index.bucket)}: ${formatValue("count", b.count)}`}
+              title={
+                imagesOnly
+                  ? bucketName(b.start, index.bucket)
+                  : fromAggregate
+                    ? `${bucketName(b.start, index.bucket)}: ${aggregate.values[k] === null ? "no value" : formatValue("v", aggregate.values[k] ?? 0, aggregate.unit)}`
+                    : `${bucketName(b.start, index.bucket)}: ${formatValue("count", b.count)}`
+              }
+              data-forecast={(index.series?.forecastFrom !== undefined && k >= index.series.forecastFrom) || undefined}
               data-in-window={(k >= i && k <= j) || undefined}
               className="time-bar flex-1"
-              style={{ height: imagesOnly ? "30%" : b.count > 0 ? `${Math.max(4, (b.count / max) * 100)}%` : "1px" }}
+              style={{ height: imagesOnly ? "30%" : counts[k] > 0 ? `${Math.max(4, (counts[k] / max) * 100)}%` : "1px" }}
             />
           ))}
         </div>
@@ -287,8 +302,8 @@ export function TimeScrubber({ time, dispatch, missingImage = false }: TimeScrub
             </button>
           ))}
         </div>
-        {imagesOnly ? (
-          <span className="ml-auto text-[11.5px] text-ink-muted tabular-nums" title="The image shown, of the images on the scrubber">
+        {imagesOnly || index.series ? (
+          <span className="ml-auto text-[11.5px] text-ink-muted tabular-nums" title={index.series ? "The frame shown, of the frames on the scrubber" : "The image shown, of the images on the scrubber"}>
             <span className="text-ink">{formatValue("count", j + 1)}</span> / {formatValue("count", n)}
           </span>
         ) : (

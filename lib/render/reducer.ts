@@ -226,14 +226,25 @@ function rewindow(time: TimeState, index: TimeIndex): TimeWindow {
 function withTimeIndex(state: MapState, allowCreate: boolean): MapState {
   const index = shownTimeIndex(state);
   if (!index) return state.time ? { ...state, time: undefined } : state;
-  if (state.time) return { ...state, time: { ...state.time, index, window: rewindow(state.time, index) } };
+  if (state.time) {
+    // A series arriving on a scrubber of dated features turns it into frames, on the newest one.
+    if (index.series && !state.time.index.series) return { ...state, time: { ...state.time, index, mode: "slide", window: seriesFrame(index) } };
+    return { ...state, time: { ...state.time, index, window: rewindow(state.time, index) } };
+  }
   if (!allowCreate) return state;
   const pending = state.pendingTime;
   const mode = pending?.mode ?? "slide";
-  const window = pending?.window ? clampWindow(index, pending.window) : fullWindow(index);
+  // A series opens one frame wide on its newest reading (spec §13: the date is the frame shown).
+  const window = pending?.window ? clampWindow(index, pending.window) : index.series ? seriesFrame(index) : fullWindow(index);
   let time: TimeState = { index, mode, playing: false, window: mode === "cumulative" ? [index.min, window[1]] : window };
   if (pending?.playing) time = startPlaying(time);
   return { ...state, time, pendingTime: undefined };
+}
+
+/** One frame of a series index: the bucket at `at` (default its newest reading). */
+export function seriesFrame(index: TimeIndex, at: number = index.series?.now ?? index.buckets.length - 1): TimeWindow {
+  const bucket = index.buckets[Math.min(index.buckets.length - 1, Math.max(0, at))];
+  return [bucket.start, bucket.end];
 }
 
 /** Rebuilds the time index when `layerId` (a dated layer) was hidden or shown; showing it may open the scrubber. */

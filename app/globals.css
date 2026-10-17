@@ -892,6 +892,13 @@ textarea:focus-visible {
   background: var(--accent);
   opacity: 0.75;
 }
+/* Forecast frames of a series read lighter than the observed ones. */
+.time-bar[data-forecast] {
+  opacity: 0.08;
+}
+.time-bar[data-forecast][data-in-window] {
+  opacity: 0.45;
+}
 .time-track {
   border-bottom: 1px solid color-mix(in srgb, var(--ink) 35%, transparent);
 }
@@ -931,6 +938,42 @@ textarea:focus-visible {
 }
 .time-handle:focus-visible {
   outline: none;
+}
+/*
+ * The live aggregate (components/FrameAggregate.tsx, spec §13): a hairline track from the period's low to its high,
+ * filled purple (the time window's color) up to the frame, the frame marked by a pink tick (the playhead, palette
+ * §11); the year dial's span purple and its hand pink.
+ */
+.frame-range {
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+}
+.frame-range-fill {
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.frame-range-mark {
+  background: var(--coral);
+  box-shadow: 0 0 0 1.5px var(--paper);
+}
+.year-dial-span {
+  stroke: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.year-dial-hand {
+  stroke: var(--coral);
+}
+.year-dial-pin {
+  fill: var(--coral);
+}
+.frame-chart-line {
+  stroke: var(--slate);
+}
+.frame-chart-area {
+  fill: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.frame-chart-head {
+  stroke: var(--coral);
+}
+.frame-chart-dot {
+  fill: var(--coral);
 }
 .time-handle:focus-visible::after {
   box-shadow: 0 0 0 2px var(--slate);

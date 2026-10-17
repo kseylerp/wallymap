@@ -565,6 +565,7 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
           return { error: "compare needs both windows a and b, or scenario with two amounts" };
         }
         turn.drawn.add(input.layerId);
+        turn.compared.add(input.layerId);
         return input;
       },
     }),

@@ -125,6 +125,11 @@ const VIEW_CUES: [Exclude<ViewKind, "change" | "scenario" | "route">, RegExp][] 
 /** A question about change ("since 2021", "before and after", "than in 2012"): its view is the model's compare. */
 const CHANGE_CUE = /\b(?:before and after|changed?|shrunk|shrink|shrank|grown|grew|smaller|bigger|less|more|compared?)\b[^?]*\b(?:since|than in|than|to|with)\b|\bbefore and after\b/;
 
+/** True when a question asks what changed between two times ("less sea ice than in 2012", "before and after"). */
+export function asksChange(question: string): boolean {
+  return CHANGE_CUE.test(question.replace(/@view=\S+/g, " ").toLowerCase());
+}
+
 /** The standard view a question's words call for, or null when they name none clearly (or ask about change). */
 export function viewAsked(question: string): ViewKind | null {
   const q = question.replace(/@view=\S+/g, " ").toLowerCase().trim();

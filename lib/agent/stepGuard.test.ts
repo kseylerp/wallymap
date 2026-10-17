@@ -415,3 +415,28 @@ describe("step guard: a closing answer with no note", () => {
     expect(result.text).toBe(long);
   });
 });
+
+describe("step guard: a question about change", () => {
+  it("compares a layer queried for two dates before the turn ends (sea ice this September against 2012)", async () => {
+    runLayer.mockImplementation(async () => ({ status: 200, body: { kind: "tiles", tiles: ["https://t/{z}/{x}/{y}.png"], citation: { source: "t", url: "https://e.x", retrieved: "2026" } } }));
+    const ARCTIC: BBox = [-180, 66.5, 180, 90];
+    const { calls, turn } = await run("How much less sea ice is in the Arctic this September than in 2012?", [
+      { calls: [{ name: "query_sea-ice", input: { bbox: ARCTIC, date: "2026-09-15" } }, { name: "query_sea-ice", input: { bbox: ARCTIC, date: "2012-09-15" } }] },
+      { calls: [{ name: "render", input: { layerId: "sea-ice", view: "detail" } }, { name: "note", input: { markdown: "Less ice." } }] },
+      { text: "- More?" },
+    ], { bbox: ARCTIC, zoom: 2, center: [0, 80] });
+    expect(calls.find((c) => c.name === "compare")?.input).toMatchObject({ layerId: "sea-ice", a: ["2012-09-15", "2012-09-15"], b: ["2026-09-15", "2026-09-15"] });
+    expect(calls.map((c) => c.name).indexOf("compare")).toBeLessThan(calls.map((c) => c.name).indexOf("note"));
+    expect(turn.log.join("\n")).toMatch(/compared sea-ice between its two dates/);
+  });
+
+  it("leaves a question that does not ask about change alone", async () => {
+    runLayer.mockImplementation(async () => ({ status: 200, body: { kind: "tiles", tiles: ["https://t/{z}/{x}/{y}.png"], citation: { source: "t", url: "https://e.x", retrieved: "2026" } } }));
+    const { calls } = await run("Show sea ice in the Arctic", [
+      { calls: [{ name: "query_sea-ice", input: { bbox: TAHOE, date: "2026-09-15" } }, { name: "query_sea-ice", input: { bbox: TAHOE, date: "2012-09-15" } }] },
+      { calls: [{ name: "render", input: { layerId: "sea-ice" } }, { name: "note", input: { markdown: "Ice." } }] },
+      { text: "- More?" },
+    ], { bbox: TAHOE, zoom: 9, center: [-120.04, 39.1] });
+    expect(calls.some((c) => c.name === "compare")).toBe(false);
+  });
+});

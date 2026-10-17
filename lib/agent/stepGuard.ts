@@ -5,7 +5,7 @@ import { bboxAreaKm2, hardMaxAreaKm2 } from "@/layers/types";
 import type { GeocodeResult } from "./geocode";
 import { placeCandidates } from "./places";
 import { NOTE_MAX_WORDS, noteWords, trimNote } from "./noteCheck";
-import { normalizeRenderInput } from "./renderInput";
+import { asksChange, normalizeRenderInput } from "./renderInput";
 import { repairToolName } from "./toolNames";
 import { widerScaleFor, widerScaleHints } from "./tools";
 import { inputKeyOf, MAX_STEPS, undrawn, type Turn } from "./turn";
@@ -88,6 +88,21 @@ function withDefaults(layerId: string, input: Record<string, unknown>): Record<s
 const POPULARITY_OF: Record<string, string> = { popularity: "osm-trails", "popularity-campsites": "campsites" };
 /** A question about how popular or busy places are; "best" and "most visited" count. */
 const ASKS_POPULAR = /\b(?:popular\w*|busiest|busy|crowd\w*|congest\w*|foot traffic|quiet\w*|best|most visited|least visited)\b/i;
+
+/** The date a query asked for (`date`, or `year` as its January 1), as YYYY-MM-DD, from its input key; null without one. */
+export function dateOfInput(inputKey: string): string | null {
+  try {
+    const entries = JSON.parse(inputKey) as [string, unknown][];
+    const get = (k: string) => entries.find(([key]) => key === k)?.[1];
+    const date = get("date");
+    if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}/.test(date)) return date.slice(0, 10);
+    const year = get("year");
+    if (typeof year === "number" && Number.isInteger(year)) return `${year}-01-01`;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 /** Most queries of one layer in one turn: a third look is enough to answer or to say the layer cannot. */
 export const MAX_QUERIES_PER_LAYER = 3;
@@ -311,6 +326,28 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
       // The place is known for this step's queries even before the geocode tool records it.
       turn.place ??= place.found;
       if (!turn.places.includes(place.found)) turn.places.push(place.found);
+      changed = true;
+    }
+  }
+
+  // 4a. A question about change ("less sea ice than in 2012", "before and after") whose layer answered for two dates
+  // and was never compared: the compare goes in before the turn ends, older date as A, newer as B.
+  const endingNow = calls.some((c) => c.toolName === "note") || (calls.length === 0 && rejected.length === 0);
+  if (endingNow && asksChange(turn.question)) {
+    const comparing = new Set(calls.flatMap((c) => (c.toolName === "compare" && typeof c.input.layerId === "string" ? [c.input.layerId] : [])));
+    const compares: DraftCall[] = [];
+    for (const layerId of [...new Set(turn.queries.filter((q) => q.ok && q.drawable).map((q) => q.layerId))]) {
+      if (turn.compared.has(layerId) || comparing.has(layerId)) continue;
+      const dates = [...new Set(turn.queries.filter((q) => q.layerId === layerId && q.ok && q.drawable).map((q) => dateOfInput(q.inputKey)).filter((d): d is string => d !== null))].sort();
+      if (dates.length < 2) continue;
+      const [a, b] = [dates[0], dates[dates.length - 1]];
+      compares.push({ toolCallId: guardId(), toolName: "compare", input: { layerId, a: [a, a], b: [b, b], mode: "swipe", aLabel: a.slice(0, 7), bLabel: b.slice(0, 7) } });
+      turn.drawn.add(layerId);
+    }
+    if (compares.length > 0) {
+      const at = calls.findIndex((c) => c.toolName === "note");
+      calls = at === -1 ? compares : [...calls.slice(0, at), ...compares, ...calls.slice(at)];
+      turn.note(`compared ${compares.map((c) => c.input.layerId).join(", ")} between its two dates: the question asks what changed`);
       changed = true;
     }
   }

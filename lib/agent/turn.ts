@@ -38,6 +38,8 @@ export type Turn = {
   queries: QueryRecord[];
   /** Layers rendered or compared this turn. */
   drawn: Set<string>;
+  /** Layers compared this turn (two dates or two amounts side by side). */
+  compared: Set<string>;
   /** The standard view each layer was last rendered in this turn. */
   views: Map<string, string>;
   /** The place this turn's queries are about, once a geocode found it (the first one found). */
@@ -72,6 +74,7 @@ export function createTurn({ question = "", view = null, geocoder = mapboxGeocod
     view,
     queries: [],
     drawn: new Set(),
+    compared: new Set(),
     views: new Map(),
     place: null,
     places: [],

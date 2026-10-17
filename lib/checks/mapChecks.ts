@@ -42,8 +42,10 @@ export const COAST_SEA_KM = 10;
  * wrong throughout, while a few strays are small islands and fjords the 1:50m mask does not have.
  */
 export const SURFACE_SHARE = 0.25;
-/** Two features of one name closer than this are one place listed twice. */
+/** Two features of one name closer than this are one place listed twice, unless they are two separate objects (see `separateObjects`). */
 export const DUPLICATE_KM = 1;
+/** Two distinct OpenStreetMap objects of one name and kind farther apart than this are two places (upper and lower falls). */
+export const DISTINCT_OSM_KM = 0.3;
 /** Features checked per layer for surface (spread through the layer). */
 const SURFACE_SAMPLE = 1500;
 /** Cards built per layer. */
@@ -341,12 +343,50 @@ function overlapShare(a: BBox, b: BBox): number {
   return inter / (area(a) + area(b) - inter);
 }
 
+/** Where a feature's record comes from: its `source` ("osm", "openbeta", "osm+openbeta"), else "osm" for an OSM id and "openbeta" for an OpenBeta id. */
+function sourceOf(feature: Feature): string | null {
+  const p = feature.properties ?? {};
+  if (typeof p.source === "string" && p.source !== "") return p.source;
+  if (osmIdsOf(feature).length > 0) return "osm";
+  if (typeof p.openbetaId === "string" && p.openbetaId !== "") return "openbeta";
+  return null;
+}
+
+/** The OpenStreetMap objects a feature stands for ("node/7314110512"): its `osmId` and any merged `osmIds`. */
+function osmIdsOf(feature: Feature): string[] {
+  const p = feature.properties ?? {};
+  const ids = [p.osmId, ...(Array.isArray(p.osmIds) ? p.osmIds : [])].filter((id): id is string | number => (typeof id === "string" && id !== "") || typeof id === "number");
+  return ids.map(String);
+}
+
+/**
+ * True when two features of one name `km` apart are two separate places, not one listed twice. Two sources (an OSM
+ * node and an OpenBeta area, or two different `source` values) are one place listed twice. From one source, two
+ * different kinds are two places, and so are two distinct OSM objects (no OSM id in common) of one kind more than
+ * 300 m apart (Saut Grand Continent's upper and lower falls, 680 m). Anything else is one place: one kind without OSM
+ * ids, or an OSM node and way of one crag 200 m apart.
+ */
+function separateObjects(a: Feature, b: Feature, km: number): boolean {
+  const sa = sourceOf(a);
+  const sb = sourceOf(b);
+  if (sa !== null && sb !== null && sa !== sb) return false;
+  const ka = a.properties?.kind;
+  const kb = b.properties?.kind;
+  if (typeof ka === "string" && typeof kb === "string" && ka !== kb) return true;
+  const ia = osmIdsOf(a);
+  const ib = osmIdsOf(b);
+  const distinctOsm = ia.length > 0 && ib.length > 0 && !ia.some((id) => ib.includes(id));
+  return distinctOsm && km > DISTINCT_OSM_KM;
+}
+
 /**
  * The distance (km) between two features of one name when they are one place listed twice, else null: a point within
  * 1 km of the other feature (an OSM node and a cliff line of one crag), or two areas with nearly the same extent (one
- * fire from two agencies). Two lines of one name are the segments of one trail, drawn as one; two dated features with
- * different dates are two events. `shared` is how many features in the layer carry the name: a name on three or more
- * (Potato Bottom A, B and C) counts only at the same spot.
+ * fire from two agencies). Within 15 m they are always one place; farther apart, two separate objects (see
+ * `separateObjects`: one source, and different kinds or distinct OSM objects over 300 m apart) are two places. Two
+ * lines of one name are the segments of one trail, drawn as one; two dated features with different dates are two
+ * events. `shared` is how many features in the layer carry the name: a name on three or more (Potato Bottom A, B and
+ * C) counts only at the same spot.
  */
 function samePlace(a: Feature, b: Feature, shared: number): number | null {
   const ta = a.properties?.t;
@@ -364,22 +404,28 @@ function samePlace(a: Feature, b: Feature, shared: number): number | null {
   const point = (ap ? a : b).geometry as GeoJSON.Point;
   const d = distanceKm(point.coordinates, ap ? b : a);
   const limit = shared >= 3 ? SAME_SPOT_KM : DUPLICATE_KM;
-  return d <= limit ? d : null;
+  if (d > limit) return null;
+  return d <= SAME_SPOT_KM || !separateObjects(a, b, d) ? d : null;
 }
 
 /** Properties that name the one place a feature belongs to (a state or a region holds many places). */
 const PLACE_KEYS = ["place", "park", "project"];
 
-/** True when two features name the same place: a shared place-like property, or within 1 km of each other. */
+/**
+ * True when two features of one name are one place: a shared place-like property or within 1 km of each other, and
+ * not two separate objects (the same rule as the drawn check: one source, and different kinds or distinct OSM objects
+ * over 300 m apart). Within 15 m they are always one place.
+ */
 function sameNamedPlace(a: Feature, b: Feature): boolean {
-  for (const k of PLACE_KEYS) {
-    const va = a.properties?.[k];
-    const vb = b.properties?.[k];
-    if (typeof va === "string" && va !== "" && va === vb) return true;
-  }
   const ca = centerOf(a);
   const cb = centerOf(b);
-  return ca !== null && cb !== null && Math.min(distanceKm(ca, b), distanceKm(cb, a)) <= DUPLICATE_KM;
+  const d = ca !== null && cb !== null ? Math.min(distanceKm(ca, b), distanceKm(cb, a)) : Infinity;
+  const samePlaceKey = PLACE_KEYS.some((k) => {
+    const va = a.properties?.[k];
+    return typeof va === "string" && va !== "" && va === b.properties?.[k];
+  });
+  if (!samePlaceKey && d > DUPLICATE_KM) return false;
+  return d <= SAME_SPOT_KM || !separateObjects(a, b, d);
 }
 
 export function checkDuplicates(layers: Drawn[]): CheckResult {

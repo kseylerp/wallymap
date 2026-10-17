@@ -210,6 +210,27 @@ describe("duplicates", () => {
     expect(checkDuplicates(drawn(mapWith({ id: "dams", features: dated }))).ok).toBe(true);
   });
 
+  it("passes two distinct OSM objects of one name and kind over 300 m apart (Urbo kalnas, Saut Grand Continent, Board Wall)", () => {
+    // Two OSM viewpoints about 400 m apart and the upper and lower falls 680 m apart.
+    const urbo = [point(25.1, 55.3, { name: "Urbo kalnas", kind: "viewpoint", osmId: "node/1" }), point(25.1063, 55.3, { name: "Urbo kalnas", kind: "viewpoint", osmId: "node/2" })];
+    const falls = [point(-53.2, 4.0, { name: "Saut Grand Continent", kind: "waterfall", osmId: "node/3" }), point(-53.2, 4.00615, { name: "Saut Grand Continent", kind: "waterfall", osmId: "way/4" })];
+    expect(checkDuplicates(drawn(mapWith({ id: "outdoor-features", features: [...urbo, ...falls] })))).toMatchObject({ ok: true, failures: [] });
+    // Two OSM walls 680 m apart at Red River Gorge, both with route counts so Rank by lists them.
+    const walls = [point(-83.68, 37.78, { name: "Board Wall", kind: "crag", source: "osm", osmId: "node/5", v: 40 }), point(-83.6723, 37.78, { name: "Board Wall", kind: "crag", source: "osm", osmId: "way/6", v: 30 })];
+    expect(checkDuplicates(drawn(mapWith({ id: "climbing", features: walls })))).toMatchObject({ ok: true, failures: [] });
+  });
+
+  it("fails one name within 1 km from two sources, from one source without OSM ids, or as two OSM objects under 300 m apart", () => {
+    const fails = (features: Feature[]) => checkDuplicates(drawn(mapWith({ id: "climbing", features }))).ok;
+    // An OSM node and an OpenBeta area of one name 680 m apart.
+    expect(fails([point(-83.68, 37.78, { name: "Board Wall", kind: "crag", source: "osm", osmId: "node/5" }), point(-83.6723, 37.78, { name: "Board Wall", kind: "crag", source: "openbeta", openbetaId: "ob1" })])).toBe(false);
+    // One source, one kind, no OSM ids, 500 m apart.
+    expect(fails([point(-83.68, 37.78, { name: "Board Wall", kind: "crag", source: "openbeta", openbetaId: "ob1" }), point(-83.6743, 37.78, { name: "Board Wall", kind: "crag", source: "openbeta", openbetaId: "ob2" })])).toBe(false);
+    // An OSM node and an OSM way of one crag 200 m apart.
+    const way = line([[-83.6777, 37.78], [-83.6767, 37.7805]], { name: "Board Wall", kind: "crag", source: "osm", osmId: "way/6" });
+    expect(fails([point(-83.68, 37.78, { name: "Board Wall", kind: "crag", source: "osm", osmId: "node/5" }), way])).toBe(false);
+  });
+
   it("normalises names: case, accents and punctuation", () => {
     expect(normalName("Café  du Lac!")).toBe(normalName("cafe du lac"));
   });

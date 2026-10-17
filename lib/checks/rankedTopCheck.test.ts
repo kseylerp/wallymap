@@ -61,4 +61,10 @@ describe("Rank by duplicates (the list before 9a73dd3)", () => {
     const result = checkDuplicates(drawnLayers(state, (id) => getLayer(id)));
     expect(result.failures.some((f) => /Rank by top 2 \(by routes\) lists the same place twice: "Bob Marley Crag" \(rows 1 and 2\)/.test(f))).toBe(true);
   });
+  it("passes two distinct OSM walls of one name 680 m apart (Board Wall) and fails the same pair from OSM and OpenBeta", () => {
+    const wall = (lon: number, props: Record<string, unknown>): Feature => ({ type: "Feature", geometry: { type: "Point", coordinates: [lon, 37.78] }, properties: { name: "Board Wall", kind: "crag", ...props } });
+    const rank = (features: Feature[]) => checkDuplicates(drawnLayers(stateWith("climbing", features, "points"), (id) => getLayer(id))).failures.filter((f) => /Rank by/.test(f));
+    expect(rank([wall(-83.68, { source: "osm", osmId: "node/5", v: 40 }), wall(-83.6723, { source: "osm", osmId: "way/6", v: 30 })])).toEqual([]);
+    expect(rank([wall(-83.68, { source: "osm", osmId: "node/5", v: 40 }), wall(-83.6723, { source: "openbeta", openbetaId: "ob1", v: 30 })])).toHaveLength(1);
+  });
 });

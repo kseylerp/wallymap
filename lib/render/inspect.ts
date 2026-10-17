@@ -199,7 +199,7 @@ export function deckLayerFilter(draped: () => boolean): (ctx: { layer: { id: str
 /* ---------- Friendly property display ---------- */
 
 /** Keys the card shows elsewhere (title, chip, value, signals) rather than as plain rows. */
-const SPECIAL_KEYS = new Set(["name", "t", "v", "signals", "popularityNote", "tallest", "aggregate", "stack"]);
+const SPECIAL_KEYS = new Set(["name", "heading", "t", "v", "signals", "popularityNote", "tallest", "aggregate", "stack"]);
 /** Identifiers and links: real but rarely what a reader wants first, so they go under "Details". */
 const DETAIL_KEY = /^(id|fid|gid|ref|h3|wikidata|wikipedia|osm_?id|osm_?type|objectid|globalid|irwinid|uuid)$|(_id|Id|ID)$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:[T ][\d:.]+Z?)?$/;
@@ -335,7 +335,16 @@ function asObject(value: unknown): Record<string, unknown> | null {
 export function summarizeFeature(feature: Feature, unit?: string, maxRows = 8): FeatureSummary {
   const props = feature.properties ?? {};
   // A sighting has no name of its own: its species is what it is called ("Feature" was the card's title for every sighting).
-  const named = typeof props.name === "string" && props.name.trim() ? props.name : typeof props.species === "string" ? props.species : "";
+  // `heading`, when a layer sets one, titles the card more precisely than the name it ranks by (a river's reach: "Mississippi
+  // near Baton Rouge", the river "Mississippi").
+  const named =
+    typeof props.heading === "string" && props.heading.trim()
+      ? props.heading
+      : typeof props.name === "string" && props.name.trim()
+        ? props.name
+        : typeof props.species === "string"
+          ? props.species
+          : "";
   const name = named.trim() ? named.trim() : null;
   const date = typeof props.t === "string" ? formatTime(props.t, props) : typeof props.t === "number" ? String(props.t) : null;
   let value: Row | null = null;

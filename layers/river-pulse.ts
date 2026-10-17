@@ -24,6 +24,7 @@ import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { haversineKm } from "./_shared/geo";
 import { layerColor } from "@/lib/render/palette";
 import { createCache } from "@/lib/fetch";
+import RIVER_PLACES from "@/data/river-places.json";
 
 export const NE_RIVERS_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_lake_centerlines.geojson";
 /** Natural Earth's North America supplement: 4,897 more river lines (tributaries the world file leaves out). */
@@ -432,6 +433,36 @@ export function interpolateFlow(atKm: number, samples: { atKm: number; q: (numbe
   });
 }
 
+/** A reach is named after the nearest town within this distance ("Mississippi near Baton Rouge"), else by its river alone. */
+export const NEAR_KM = 80;
+type Town = [string, number, number];
+const TOWNS = (RIVER_PLACES as unknown as { places: Town[] }).places;
+let townGrid: Map<string, Town[]> | null = null;
+
+/** The nearest town of at least 20,000 people (data/river-places.json) within NEAR_KM of `p`, or null. */
+export function nearestTown(p: Position, towns: readonly Town[] = TOWNS): string | null {
+  let grid = towns === TOWNS ? townGrid : null;
+  if (!grid) {
+    grid = new Map();
+    for (const t of towns) {
+      const k = `${Math.floor(t[1])},${Math.floor(t[2])}`;
+      grid.set(k, [...(grid.get(k) ?? []), t]);
+    }
+    if (towns === TOWNS) townGrid = grid;
+  }
+  let best: { name: string; km: number } | null = null;
+  const [x, y] = [Math.floor(p[0]), Math.floor(p[1])];
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (const t of grid.get(`${x + dx},${y + dy}`) ?? []) {
+        const km = haversineKm(p, [t[1], t[2]]);
+        if (km <= NEAR_KM && (!best || km < best.km)) best = { name: t[0], km };
+      }
+    }
+  }
+  return best?.name ?? null;
+}
+
 /**
  * The reach features with their series (`series.q` flow in m³/s and `series.pct` the flow as a percent of the reach's
  * median over the past days), the plain `q` and `pct` at today's frame, and the period's low and peak with dates. A
@@ -473,6 +504,10 @@ export function reachFeatures(
       if (best) outletReach.add(best);
     });
   }
+  const headingOf = (reach: Reach) => {
+    const town = nearestTown(pointAlong(reach.line, reach.lengthKm / 2));
+    return town ? `${reach.name} near ${town}` : reach.name;
+  };
   const features: Feature[] = [];
   for (const reach of reaches) {
     const runSamples = byRun.get(reach.run);
@@ -496,6 +531,8 @@ export function reachFeatures(
       geometry: { type: "LineString", coordinates: reach.line },
       properties: {
         name: reach.name,
+        // The card's title: the river and the town this reach passes.
+        heading: headingOf(reach),
         // One river is one place: the Rank by list and the summary name it once, by its largest reach.
         project: reach.name,
         reachId: reach.id,
@@ -512,6 +549,21 @@ export function reachFeatures(
     });
   }
   if (features.length === 0) return null;
+  // Each river's flow at its mouth (its outlet reach, the largest when it has several; a river that only flows into
+  // another takes its largest reach, where it joins), so a reach's card reads beside the river's number in Rank by.
+  const atOutlet = new Map<string, number>();
+  const largest = new Map<string, number>();
+  const raise = (m: Map<string, number>, k: string, q: number) => m.set(k, Math.max(q, m.get(k) ?? -Infinity));
+  for (const f of features) {
+    const { name, q, outlet } = f.properties!;
+    if (typeof q !== "number") continue;
+    raise(largest, name, q);
+    if (outlet === true) raise(atOutlet, name, q);
+  }
+  for (const f of features) {
+    const q = atOutlet.get(f.properties!.name) ?? largest.get(f.properties!.name);
+    if (q !== undefined) f.properties!.mouthQ = q;
+  }
   return {
     data: { type: "FeatureCollection", features },
     series: { times: times.map((t) => new Date(`${t}T00:00:00Z`).toISOString()), step: "day", now, ...(now < times.length - 1 && { forecastFrom: now + 1 }) },
@@ -613,30 +665,38 @@ const HELP: Record<string, FieldHelp> = {
   },
   pct: {
     text:
-      "That day's flow as a percent of this reach's median flow over the past days shown: 100% is the reach's typical flow in the period, " +
-      "200% double it. It compares the reach with itself over these months, not with its long-term normal.",
+      "Vs. normal, in full: that day's flow as a percent of this reach's median flow over the past days shown. 100% is the reach's typical " +
+      "flow in the period, 200% double it. It compares the reach with itself over these months, not with its long-term normal.",
     unit: "%",
     source: "Computed from GloFAS discharge",
     url: GLOFAS_URL,
   },
-  medianQ: { text: "The reach's median daily flow over the past days shown.", unit: "m³/s" },
-  peakQ: { text: "The highest daily flow of the past days shown, on peakDate.", unit: "m³/s" },
-  lowQ: { text: "The lowest daily flow of the past days shown, on lowDate.", unit: "m³/s" },
+  mouthQ: {
+    text:
+      "At the mouth, in full: the flow of this whole river where it leaves the view (its mouth, a lake, or the edge of the map; where it only " +
+      "joins another river, its largest reach), the number Rank by lists for the river. Flow above is this one reach.",
+    unit: "m³/s",
+  },
+  medianQ: { text: "Normal flow, in full: the reach's median daily flow over the past days shown (not its long-term normal).", unit: "m³/s" },
+  peakQ: { text: "Peak, in full: the highest daily flow of the past days shown, on the date in Peak on.", unit: "m³/s" },
+  lowQ: { text: "Low, in full: the lowest daily flow of the past days shown, on the date in Low on.", unit: "m³/s" },
   lengthKm: { text: "Length of the reach as drawn: the network is cut into reaches of equal length.", unit: "km" },
 };
 
+/** Short labels, so every row fits the card; the help popover gives each in full. */
 const CARD: CardSpec = {
   measure: { key: "q", label: "Flow", unit: "m³/s" },
   facts: [
-    { key: "pct", label: "Flow vs. the period's median", unit: "%", format: "int" },
-    { key: "medianQ", label: "Median flow over the period", unit: "m³/s", format: "int" },
-    { key: "peakQ", label: "Peak flow", unit: "m³/s", format: "int" },
+    { key: "mouthQ", label: "At the mouth", unit: "m³/s", format: "int" },
+    { key: "pct", label: "Vs. normal", unit: "%", format: "int" },
+    { key: "medianQ", label: "Normal flow", unit: "m³/s", format: "int" },
+    { key: "peakQ", label: "Peak", unit: "m³/s", format: "int" },
     { key: "peakDate", label: "Peak on", format: "date" },
-    { key: "lowQ", label: "Lowest flow", unit: "m³/s", format: "int" },
-    { key: "lowDate", label: "Lowest on", format: "date" },
+    { key: "lowQ", label: "Low", unit: "m³/s", format: "int" },
+    { key: "lowDate", label: "Low on", format: "date" },
     { key: "lengthKm", label: "Reach length", unit: "km", format: "int" },
   ],
-  hidden: ["reachId", "series", "project", "readAt", "outlet"],
+  hidden: ["reachId", "series", "project", "readAt", "outlet", "heading"],
 };
 
 const ATTRIBUTES: Attribute[] = [

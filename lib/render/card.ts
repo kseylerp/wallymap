@@ -22,7 +22,7 @@ export type CardContent = {
 };
 
 /** Keys the card never lists as a row: the title, the date chip, internals. */
-const HIDDEN = new Set(["name", "t", "tPrecision", "signals", "popularityNote", "aggregate", "tallest", "stack"]);
+const HIDDEN = new Set(["name", "heading", "t", "tPrecision", "signals", "popularityNote", "aggregate", "tallest", "stack"]);
 
 /**
  * Unit suffixes in property keys: `maxLengthM` reads "Max length … m", `areaKm2` "Area … km²", `swellPeriodS` "Swell

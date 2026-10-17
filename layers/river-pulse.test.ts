@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Position } from "geojson";
-import riverPulse, { _resetRiverFlowFile, clipLine, cutLine, fileDays, interpolateFlow, isRiverFlowFile, joinRuns, onDays, outletEnds, planPoints, reachesOf, reachFeatures, RIVER_FLOW_URL, runsIn, type RiverFlowFile, type Run } from "./river-pulse";
+import riverPulse, { _resetRiverFlowFile, nearestTown, clipLine, cutLine, fileDays, interpolateFlow, isRiverFlowFile, joinRuns, onDays, outletEnds, planPoints, reachesOf, reachFeatures, RIVER_FLOW_URL, runsIn, type RiverFlowFile, type Run } from "./river-pulse";
 import type { CachedFetch } from "@/lib/fetch";
 import { attributeProblems } from "./attributes";
 import { biggestSwing, ratioWords, repeatLag, seriesStory } from "@/lib/layers/story";
@@ -73,9 +73,19 @@ describe("river pulse geometry", () => {
     const built = reachFeatures(reaches, samples, [t(100), t(400), t(50)], "2026-10-15T10:00:00Z", [main, trib])!;
     const outlets = built.data.features.filter((f) => f.properties?.outlet === true);
     expect(outlets.map((f) => f.properties?.name)).toEqual(["Main"]);
+    // Every reach carries its river's flow at the mouth: Main's outlet, and the tributary (no outlet) its largest reach.
+    const mouthOf = (name: string) => new Set(built.data.features.filter((f) => f.properties?.name === name).map((f) => f.properties?.mouthQ));
+    expect([...mouthOf("Main")]).toEqual([outlets[0].properties?.q]);
+    expect([...mouthOf("Trib")]).toEqual([50]);
     const story = seriesStory(built.data.features, built.series, riverPulse.attributes)!;
     expect(story.measure).toMatch(/^Total flow to the sea, all outlets combined/);
     expect(story.peak.value).toBe(Math.round(outlets[0].properties?.q as number));
+  });
+
+  it("names a reach after the nearest town within reach, else by its river alone", () => {
+    const towns: [string, number, number][] = [["Baton Rouge", -91.15, 30.45], ["Memphis", -90.05, 35.15]];
+    expect(nearestTown([-91.2, 30.3], towns)).toBe("Baton Rouge");
+    expect(nearestTown([-80, 30.3], towns)).toBeNull();
   });
 
   it("interpolates a reach's flow between its river's sample points by distance", () => {

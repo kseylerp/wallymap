@@ -103,6 +103,13 @@ describe("feature geometry helpers", () => {
 });
 
 describe("summarizeFeature", () => {
+  it("titles the card by a layer's heading over the name it ranks by, and lists neither as a row", () => {
+    const reach: Feature = { type: "Feature", geometry: { type: "LineString", coordinates: [[0, 0], [1, 0]] }, properties: { name: "Mississippi", heading: "Mississippi near Baton Rouge", q: 5 } };
+    const s = summarizeFeature(reach);
+    expect(s.name).toBe("Mississippi near Baton Rouge");
+    expect(s.rows.map((r) => r.key)).toEqual(["q"]);
+  });
+
   it("names the feature, friendly-labels rows and moves ids into details", () => {
     const s = summarizeFeature(trail);
     expect(s.name).toBe("Rubicon Trail");

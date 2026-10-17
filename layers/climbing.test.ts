@@ -185,7 +185,7 @@ describe("mergeCrags", () => {
   const osm = osmCrags(osmFixture, false);
   const ob = openbetaCrags(openbetaFixture) ?? [];
 
-  it("merges an OpenBeta crag into the OSM crag of the same name within 500 m and keeps the larger route count", () => {
+  it("merges an OpenBeta crag into the OSM crag of the same name within 1 km and keeps the larger route count", () => {
     const { crags, both } = mergeCrags(osm, ob);
     const long = crags.find((c) => c.props.name === "Long Wall");
     expect(long?.props).toMatchObject({
@@ -510,6 +510,18 @@ describe("one place per wall", () => {
     const { crags } = mergeCrags(out, [crag(-83.6707, { kind: "crag", source: "openbeta", name: "Military Wall", v: 42, openbetaId: "e2" })]);
     expect(crags).toHaveLength(2);
     expect(crags[0].props).toMatchObject({ v: 110, routesOsm: 110, routesOpenbeta: 42, source: "osm+openbeta" });
+  });
+
+  it("joins one wall the two databases list 682 m apart (Board Wall: an OSM node and an OpenBeta crag), but not two OSM walls of one name that far apart", () => {
+    const osmNode = { position: [-83.635155, 37.9000732] as [number, number], props: { kind: "crag", source: "osm", osmId: "node/13227917724", name: "Board Wall" } };
+    const openbeta = { position: [-83.6329, 37.89417] as [number, number], props: { kind: "crag", source: "openbeta", openbetaId: "1ae5", name: "Board Wall", v: 7, disciplines: ["trad"] } };
+    const { crags } = mergeCrags([osmNode], [openbeta]);
+    expect(crags).toHaveLength(1);
+    expect(crags[0].props).toMatchObject({ source: "osm+openbeta", v: 7, osmId: "node/13227917724" });
+    // The second pass joins the pair too, when they reach it apart.
+    expect(dedupeSameName([osmNode, openbeta])).toHaveLength(1);
+    const otherOsm = { position: [-83.6329, 37.89417] as [number, number], props: { kind: "crag", source: "osm", osmId: "node/1", name: "Board Wall" } };
+    expect(dedupeSameName([osmNode, otherOsm])).toHaveLength(2);
   });
 
   it("joins one name left twice after the merge: two OpenBeta areas of Courtesy Wall 70 m apart", () => {

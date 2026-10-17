@@ -5,8 +5,9 @@
  *   OpenBeta GraphQL (POST https://api.openbeta.io/): cragsWithin(filter: { bbox: [w,s,e,n], zoom: 12 }) returns the
  *     leaf crags in the box with totalClimbs, grade counts and sport/trad/bouldering totals. Zoom 11 or higher gives
  *     crags; lower zooms return coarse parent areas.
- * An OpenBeta crag within 100 m of an OSM crag, or within 500 m with a matching name, is merged into it (OSM position,
- * v = the larger route count, OpenBeta link added); the rest stay separate.
+ * An OpenBeta crag within 100 m of an OSM crag, or within 1 km with a matching name, is merged into it (OSM position,
+ * v = the larger route count, OpenBeta link added); the rest stay separate. Two places of one name from one source
+ * merge within 500 m.
  * Fixtures: layers/__fixtures__/climbing.rrg.osm.json and climbing.rrg.openbeta.json (Red River Gorge, Kentucky,
  * recorded 2026-10-09; OpenBeta trimmed to 12 crags and OSM to 14 elements).
  * Wide (over 10,000 km², up to the default hard cap of 40,000 km²): the same two requests, both bounded (Overpass at
@@ -65,8 +66,14 @@ export const MAX_PER_SOURCE = 3_000;
 
 /** Merge radius in km: any OpenBeta crag this close to an OSM crag is the same place. */
 const MERGE_KM = 0.1;
-/** Merge radius in km when the names also match. */
+/** Merge radius in km when the names also match, for two places from one source. */
 const MERGE_NAMED_KM = 0.5;
+/**
+ * Merge radius in km for an OpenStreetMap place and an OpenBeta place of one name: two databases listing one wall
+ * (Board Wall in the Red River Gorge, OSM and OpenBeta 682 m apart). The eval's duplicates rule uses the same 1 km
+ * (lib/checks/mapChecks.ts DUPLICATE_KM).
+ */
+const MERGE_CROSS_SOURCE_KM = 1;
 
 const inputSchema = z.object({
   /** Also return indoor climbing gyms (kind 'gym'). */
@@ -350,13 +357,15 @@ function namesMatch(a: unknown, b: unknown): boolean {
 export function dedupeSameName(crags: Crag[]): Crag[] {
   const kept: Crag[] = [];
   const refLat = crags[0]?.position[1] ?? 0;
-  const index = new GridIndex<number>(MERGE_NAMED_KM, refLat);
+  const index = new GridIndex<number>(MERGE_CROSS_SOURCE_KM, refLat);
   for (const crag of [...crags].sort(byRoutes)) {
     const key = nameKey(crag.props.name);
     let twin: number | undefined;
     if (key.length >= 4) {
-      index.forEachWithin(crag.position, MERGE_NAMED_KM, (i) => {
-        if (twin === undefined && nameKey(kept[i].props.name) === key) twin = i;
+      index.forEachWithin(crag.position, MERGE_CROSS_SOURCE_KM, (i, km) => {
+        if (twin !== undefined || nameKey(kept[i].props.name) !== key) return;
+        // One source: within 500 m. Two sources listing one wall: within 1 km.
+        if (km <= MERGE_NAMED_KM || kept[i].props.source !== crag.props.source) twin = i;
       });
     }
     if (twin === undefined) {
@@ -389,7 +398,7 @@ export function dedupeSameName(crags: Crag[]): Crag[] {
 export function mergeCrags(osm: Crag[], openbeta: Crag[]): { crags: Crag[]; both: number } {
   const merged = osm.map((c) => ({ ...c, props: { ...c.props } }));
   const refLat = merged[0]?.position[1] ?? openbeta[0]?.position[1] ?? 0;
-  const index = new GridIndex<number>(MERGE_NAMED_KM, refLat);
+  const index = new GridIndex<number>(MERGE_CROSS_SOURCE_KM, refLat);
   merged.forEach((c, i) => index.add(c.position, i));
 
   const taken = new Set<number>();
@@ -397,7 +406,7 @@ export function mergeCrags(osm: Crag[], openbeta: Crag[]): { crags: Crag[]; both
   let both = 0;
   for (const ob of openbeta) {
     const found: { i?: number; km: number } = { km: Infinity };
-    index.forEachWithin(ob.position, MERGE_NAMED_KM, (i, km) => {
+    index.forEachWithin(ob.position, MERGE_CROSS_SOURCE_KM, (i, km) => {
       if (taken.has(i) || km >= found.km) return;
       if (km <= MERGE_KM || namesMatch(merged[i].props.name, ob.props.name)) {
         found.i = i;

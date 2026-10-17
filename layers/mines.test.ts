@@ -244,7 +244,9 @@ describe("mines layer", () => {
     const pages = (stub.mock.calls as unknown as [string][]).map((c) => new URL(c[0])).filter((u) => !u.searchParams.has("returnCountOnly"));
     expect(pages.map((u) => u.searchParams.get("resultOffset") ?? "0")).toEqual(["0", "2000", "4000"]);
     expect(pages.every((u) => u.href.startsWith(MRDS_URL) && u.searchParams.get("orderByFields") === "objectid_1")).toBe(true);
-    expect(r.total).toBe(4500);
+    // Three pages of the same ten rows stand in for 4,500: 30 records, 20 repeats merged, 10 sites drawn.
+    expect(r.total).toBe(4480);
+    expect(r.coverageNote).toMatch(/every MRDS deposit is drawn, the first 30 of 4,500 \(20 records repeating one site within 1 km merged\)/);
     expect(r.coverageNote).toMatch(/every MRDS deposit is drawn/);
     expect(r.coverageNote).toMatch(/USMIN's 153,150 mine symbols from old topographic maps are left out/);
     // The same ten fixture rows on every page are one site each.

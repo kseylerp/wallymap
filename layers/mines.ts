@@ -392,10 +392,18 @@ const mines = defineLayer({
         source === "both" ? arcgisCount(ctx, USMIN_URL, { bbox: ctx.bbox, ttlSeconds: TTL_SECONDS, cacheSuffix: "mines:usmin" }) : Promise.resolve(null),
       ]);
       if (!result.ok) return { error: `Mine records unavailable: MRDS (${result.error})`, hint: "upstream" };
-      const features = dedupeMines(normalizeMrds(result.fc));
+      const records = normalizeMrds(result.fc);
+      // Lighter points for tens of thousands of sites: coordinates to about 10 m, and no record link (the id stays).
+      const features = dedupeMines(records).map((f) => {
+        const { url: _url, ...properties } = f.properties ?? {};
+        const [lon, lat] = f.geometry.coordinates;
+        return { ...f, geometry: { type: "Point" as const, coordinates: [Math.round(lon * 1e4) / 1e4, Math.round(lat * 1e4) / 1e4] }, properties };
+      });
       const fmt = (n: number) => n.toLocaleString("en-US");
+      const merged = records.length - features.length;
       const stateNotes = [
-        `At this scale every MRDS deposit is drawn${result.truncated && count !== null ? ` up to ${fmt(features.length)} of ${fmt(count)}` : ""}`,
+        `At this scale every MRDS deposit is drawn${result.truncated && count !== null ? `, the first ${fmt(records.length)} of ${fmt(count)}` : ""}` +
+          (merged > 0 ? ` (${fmt(merged)} records repeating one site within 1 km merged)` : ""),
         ...(usminCount !== null && usminCount > 0 ? [`USMIN's ${fmt(usminCount)} mine symbols from old topographic maps are left out; zoom in under 60,000 km² to add them`] : []),
         ...notes,
         "MRDS is a historic record (about 2011): most sites are closed or only prospects",
@@ -404,7 +412,8 @@ const mines = defineLayer({
         kind: "geojson",
         data: { type: "FeatureCollection", features },
         citation,
-        ...(count !== null && { total: Math.max(count, features.length) }),
+        // Every deposit the box holds is drawn (repeats merged), so the total is what is shown, unless the limit cut it.
+        total: result.truncated && count !== null ? count - merged : features.length,
         coverageNote: stateNotes.join("; "),
       };
     }

@@ -321,10 +321,24 @@ export function summarizeCell(cell: HexCell, cells: HexCell[], basis: HexBasis, 
     times.sort((a, b) => Date.parse(a) - Date.parse(b));
     summary.span = { first: times[0], latest: times[times.length - 1] };
   }
-  const named = cell.members.map((f) => ({ f, name: nameOf(f), v: ctx.measure ? numberAt(f, ctx.measure.key) : undefined })).filter((x) => x.name !== null);
-  named.sort((a, b) => (b.v ?? -Infinity) - (a.v ?? -Infinity) || a.name!.localeCompare(b.name!));
+  // Members of one name are one row with their count and summed measure: a wind farm's 58 turbines are "Mesquite Star
+  // (58)", not "Mesquite Star" five times.
+  const groups = new Map<string, { f: Feature; name: string; v: number | undefined; n: number }>();
+  for (const f of cell.members) {
+    const name = nameOf(f);
+    if (name === null) continue;
+    const v = ctx.measure ? numberAt(f, ctx.measure.key) : undefined;
+    const g = groups.get(name);
+    if (!g) groups.set(name, { f, name, v, n: 1 });
+    else {
+      g.n += 1;
+      if (v !== undefined) g.v = (g.v ?? 0) + v;
+    }
+  }
+  const named = [...groups.values()];
+  named.sort((a, b) => (b.v ?? -Infinity) - (a.v ?? -Infinity) || a.name.localeCompare(b.name));
   summary.named = named.slice(0, CELL_NAMED).map((x) => ({
-    name: x.name!,
+    name: x.n > 1 ? `${x.name} (${x.n})` : x.name,
     feature: x.f,
     ...(x.v !== undefined && ctx.measure && { value: `${x.v.toLocaleString("en-US", { maximumFractionDigits: 1 })}${ctx.measure.unit && ctx.measure.unit !== "score" ? ` ${ctx.measure.unit}` : ""}` }),
   }));

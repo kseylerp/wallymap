@@ -1,10 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
 import { WallyMark } from "@/components/Brand";
-import type { LayerCatalog } from "@/lib/agent/applyToolResult";
-import { buildExportBundle, downloadBundle, formatBytes, MAX_LOOSE_FILES, type ExportBundle } from "@/lib/export/exportView";
-import type { Basemap, MapState } from "@/lib/render/state";
+import type { Basemap } from "@/lib/render/state";
 
 /** Text-only basemap segments; phones (under 768px) get the short labels. The ids stay the Mapbox style names. */
 const BASEMAPS: { value: Basemap; label: string; short: string }[] = [
@@ -20,10 +17,7 @@ type MapPillsProps = {
   layerCount?: number;
   layersOpen?: boolean;
   onLayersOpenChange?: (open: boolean) => void;
-  /** The map state and layer catalog the Export pill packs; without the state, Export stays off. */
-  mapState?: MapState;
-  catalog?: LayerCatalog | null;
-  /** Muted status next to Export while a shared link's layers are coming back, e.g. "Restoring 3 layers…". */
+  /** Muted status after the pills while a shared link's layers are coming back, e.g. "Restoring 3 layers…". */
   restoreStatus?: string | null;
   /**
    * Compare over time while the data console is closed: the pill shows when this is set (a layer can be compared) and
@@ -48,8 +42,9 @@ const IDLE = "text-ink hover:bg-mist/70";
 const ACTIVE = "control-on";
 
 /**
- * The map pills in the top-left corner: the Wally logo (a button that resets the map), the basemap switch, the
- * layers toggle and Export (which asks to confirm before downloading). (Zoom, globe and 3D live in MapControls, bottom right.) Labels
+ * The map pills in the top-left corner: the Wally logo (a button that resets the map), the basemap switch and the
+ * layers toggle. (Zoom, globe and 3D live in MapControls, bottom right; Export is at the foot of the Layers console,
+ * components/ExportControl.tsx.) Labels
  * shorten on phones. `natural-earth-2` (agent-only) has no button, so while it shows nothing is pressed.
  */
 export function MapPills({
@@ -58,8 +53,6 @@ export function MapPills({
   layerCount = 0,
   layersOpen = false,
   onLayersOpenChange,
-  mapState,
-  catalog = null,
   restoreStatus = null,
   onCompare,
   comparing = false,
@@ -67,28 +60,6 @@ export function MapPills({
   suggestionsOpen = false,
   onToggleSuggestions,
 }: MapPillsProps) {
-  // Export is two steps: the pill opens a confirm that lists the files and their size; only its Export button downloads.
-  const [pending, setPending] = useState<ExportBundle | null>(null);
-  const [exporting, setExporting] = useState(false);
-  const canExport = layerCount > 0 && mapState !== undefined && !exporting;
-  const askExport = useCallback(() => {
-    if (mapState) setPending(buildExportBundle(mapState, catalog));
-  }, [mapState, catalog]);
-  const cancelExport = useCallback(() => setPending(null), []);
-  const confirmExport = useCallback(async () => {
-    if (!pending) return;
-    setExporting(true);
-    try {
-      await downloadBundle(pending);
-    } finally {
-      setExporting(false);
-      setPending(null);
-    }
-  }, [pending]);
-  // Without layers there is nothing to export: a confirm left open is dropped, so it cannot reappear with the next layer.
-  if (layerCount === 0 && pending !== null) setPending(null);
-  const exportOpen = pending !== null && layerCount > 0;
-
   return (
     <div data-testid="map-pills" className="flex flex-wrap items-center gap-1.5">
       <h1 className="sr-only">WallyMap</h1>
@@ -142,25 +113,6 @@ export function MapPills({
         </div>
       )}
 
-      <div className={`${PILL} rise-in p-1`} style={{ animationDelay: "180ms" }}>
-        {/* aria-disabled rather than disabled, so the tooltip still shows on hover while no layer is loaded. */}
-        <button
-          type="button"
-          aria-disabled={!canExport}
-          aria-label="Export view"
-          title={layerCount > 0 ? "Export view: GeoJSON and citations" : "Load a layer to export the view"}
-          aria-expanded={exportOpen}
-          onClick={() => {
-            if (!canExport) return;
-            if (exportOpen) cancelExport();
-            else askExport();
-          }}
-          className={`${SEG} px-2.5 ${canExport ? IDLE : "cursor-not-allowed text-ink-muted/50"}`}
-        >
-          Export
-        </button>
-      </div>
-
       {onToggleSuggestions && (
         // A single serif "i" (text, not an icon font), the size of the logo pill; it opens or closes the suggestions card.
         <button
@@ -170,7 +122,7 @@ export function MapPills({
           aria-pressed={suggestionsOpen}
           onClick={onToggleSuggestions}
           className={`${PILL} rise-in size-9 justify-center font-serif text-[18px] leading-none transition-colors duration-150 ease-out hover:bg-mist/70`}
-          style={{ animationDelay: "240ms" }}
+          style={{ animationDelay: "180ms" }}
         >
           i
         </button>
@@ -197,44 +149,6 @@ export function MapPills({
         </div>
       )}
 
-      {exportOpen && pending && (
-        <div className="basis-full">
-          <div
-            role="dialog"
-            aria-label="Confirm export"
-            onKeyDown={(e) => e.key === "Escape" && cancelExport()}
-            className="map-pill rise-in w-fit max-w-full rounded-card px-4 py-3 text-[13px] text-ink"
-          >
-            <p className="font-medium">
-              {`Export ${pending.files.length} ${pending.files.length === 1 ? "file" : "files"} (${formatBytes(
-                pending.files.reduce((sum, f) => sum + f.blob.size, 0),
-              )})?`}
-            </p>
-            <ul className="mt-1 text-ink-muted">
-              {pending.files.map((f) => (
-                <li key={f.name}>
-                  {f.name} <span className="stat">{formatBytes(f.blob.size)}</span>
-                </li>
-              ))}
-            </ul>
-            {pending.files.length > MAX_LOOSE_FILES && <p className="mt-1 text-ink-muted">Saved as one zip.</p>}
-            <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                autoFocus
-                disabled={exporting}
-                onClick={() => void confirmExport()}
-                className="press rounded-[12px] bg-primary px-3 py-1 font-semibold text-on-primary transition-colors duration-150 hover:bg-primary-hover"
-              >
-                Export
-              </button>
-              <button type="button" onClick={cancelExport} className={`${SEG} px-3 ${IDLE}`}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -11,7 +11,7 @@
  * added once, .env.local copied in and `pnpm dev -p 5600` started. When the run ends (also on a failure or Ctrl-C) the
  * server stops and the worktree's `.next` cache and Playwright output are deleted; the worktree itself stays for the
  * next run (`removeScreensWorktree` deletes it). The development build exposes the map to these checks (MapCanvas.tsx
- * `__wallyMap`). Export is never clicked.
+ * `__wallyMap`). Export ("Export map…" at the foot of the Layers console) is checked for, never clicked.
  *
  * Disk: the checks folder keeps only the latest run (cleared at the start; each question's shots keep fixed names), the
  * line pictures are JPEG at quality 80, and the run stops cleanly when free disk drops under 2 GB (scripts/diskGuard.ts).
@@ -416,6 +416,11 @@ async function checkOne(browser: Browser, item: ScreenItem, size: Size): Promise
     if (phone && (await layers.count()) && (await layers.getAttribute("aria-pressed")) !== "true") {
       await layers.click();
       await page.waitForTimeout(700);
+    }
+    // Export lives at the foot of the Layers console, never on the top bar (the owner moved it off the top rail).
+    if ((await page.locator('[data-testid="top-bar"] button', { hasText: /Export/ }).count()) > 0) problems.push("The top bar shows an Export button; Export belongs at the foot of the Layers console.");
+    if ((await page.locator('[data-testid="layer-stack"]').count()) > 0 && (await page.locator('[data-testid="layer-stack"] [aria-label="Export map"]').count()) === 0) {
+      problems.push('The Layers console has no "Export map…" while a layer is on.');
     }
     const before = layoutProblems(await page.evaluate(collectLayout, PANELS));
     const opened = await openCard(page, item.state);

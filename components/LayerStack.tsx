@@ -42,6 +42,8 @@ type LayerStackProps = {
   compareSlot?: ReactNode;
   /** The scenario scrubbers (components/ScenarioScrubber.tsx), docked under the time scrubber; they bring their own hairlines. */
   scenarioSlot?: ReactNode;
+  /** "Export map…" at the foot of the console (components/ExportControl.tsx); empty, it takes no space. */
+  exportSlot?: ReactNode;
   /** The scenario scrubber's state: a scenario layer's row slider shows the amount it holds. */
   scenario?: MapState["scenario"];
   /** The compare on screen, for the change view's legend sentence. */
@@ -591,6 +593,7 @@ export function LayerStack({
   shownLayers,
   compareSlot,
   scenarioSlot,
+  exportSlot,
   scenario,
   compare,
   zoom,
@@ -739,6 +742,10 @@ export function LayerStack({
           );
         })}
       </ul>
+      {/* Export map…, under the rows; empty (no layer on), the slot takes no space. */}
+      <div data-slot="export" className="shrink-0 px-5 pt-1 pb-3 empty:hidden">
+        {exportSlot}
+      </div>
     </section>
   );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ChatRail } from "@/components/ChatRail";
 import { CompareControl, CompareSwipe, openCompareAction, useCompareTicker } from "@/components/CompareControl";
+import { ExportControl } from "@/components/ExportControl";
 import { InspectCard } from "@/components/InspectCard";
 import { LayerStack, selectionSwatch } from "@/components/LayerStack";
 import { ScenarioScrubbers, useScenarioPlay } from "@/components/ScenarioScrubber";
@@ -248,8 +249,6 @@ export function App() {
             layerCount={Object.keys(state.layers).length}
             layersOpen={layersOpen}
             onLayersOpenChange={setLayersOpen}
-            mapState={state}
-            catalog={catalog}
             restoreStatus={permalink.status}
             onCompare={!layerPanelOpen && (canCompare || state.compare) ? openCompare : undefined}
             comparing={state.compare !== undefined}
@@ -278,6 +277,7 @@ export function App() {
           shownLayers={view.layers}
           compareSlot={<CompareControl state={state} dispatch={dispatch} />}
           scenarioSlot={<ScenarioScrubbers state={state} dispatch={dispatch} />}
+          exportSlot={<ExportControl mapState={state} catalog={catalog} />}
           scenario={state.scenario}
           compare={state.compare}
           zoom={state.viewport.zoom}

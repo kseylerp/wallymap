@@ -571,11 +571,15 @@ describe("layerLegend (what the map draws, for the panel and the inspect card)",
         open
         onOpenChange={() => {}}
         compareSlot={<p data-testid="compare-slot-content">compare</p>}
+        exportSlot={<button type="button">Export map…</button>}
       />,
     );
     const panel = screen.getByTestId("layer-stack");
     const slots = Array.from(panel.querySelectorAll("[data-slot]")).map((el) => el.getAttribute("data-slot"));
-    expect(slots).toEqual(["time-scrubber", "compare"]);
+    // Export map… sits at the foot, under the layer rows.
+    expect(slots).toEqual(["time-scrubber", "compare", "export"]);
+    const list = panel.querySelector("ul.legend-table") as Element;
+    expect(list.compareDocumentPosition(panel.querySelector('[data-slot="export"]') as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const content = screen.getByTestId("compare-slot-content");
     const header = within(panel).getByRole("heading", { name: /Layers/ });
     expect(content.compareDocumentPosition(header) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

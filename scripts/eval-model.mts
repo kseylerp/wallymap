@@ -426,6 +426,25 @@ function sportCragsRule(calls: ToolCall[]): RuleResult {
   return { ok, filters: op?.filters, drawn: features.length, allSport, queries };
 }
 
+/**
+ * A data story's caption (spec §13, lib/agent/prompt.ts "A timeline note follows the data's shape"): the note gives a low
+ * and a peak (or strongest) with numbers, says what size, width or brightness and color mean, and (`ratio`) puts the two
+ * in proportion; the basemap stepped back to Data only.
+ */
+function captionShapeRule(layerId: string, opts: { ratio?: boolean } = {}) {
+  return (calls: ToolCall[], notes: string[]): RuleResult => {
+    const text = notes.join(" ").toLowerCase();
+    const numbers = (text.match(/\d[\d,.]*/g) ?? []).length;
+    const low = /\b(low|lowest|minimum|bottom|weakest|slack|calm)/.test(text);
+    const peak = /\b(peak|high|highest|maximum|max|strongest|fastest|top)/.test(text);
+    const meaning = /\b(colou?r|width|wide|wider|thick|bright|brightness)/.test(text);
+    const ratio = !opts.ratio || /(\d+(\.\d+)?\s*(times|×|x)\b|doubl|tripl|quadrupl|half|halv|percent|%)/.test(text);
+    const dataOnly = calls.some((c) => c.toolName === "set_basemap" && (c.input as { style?: unknown } | undefined)?.style === "data-only");
+    const drawn = calls.some((c) => c.toolName === "render" && (c.input as { layerId?: unknown } | undefined)?.layerId === layerId);
+    return { ok: numbers >= 2 && low && peak && meaning && ratio && drawn, numbers, low, peak, meaning, ratio, dataOnly, drawn };
+  };
+}
+
 /** Extra pass rules for particular questions, keyed by the question in lower case. */
 const QUESTION_RULES: Record<string, (calls: ToolCall[], notes: string[], view: MapView | null) => RuleResult> = {
   "good hiking in french guiana": goodHikingRule,
@@ -437,6 +456,9 @@ const QUESTION_RULES: Record<string, (calls: ToolCall[], notes: string[], view: 
   "which uranium mines near the navajo nation score highest?": uraniumRankedRule,
   "where are most of the wind farms by capacity in west texas?": (calls, notes) => windCapacityHexRule(calls, notes),
   "show only sport crags at red river gorge": (calls) => sportCragsRule(calls),
+  "how has the mississippi's flow changed over the last three months?": captionShapeRule("river-pulse", { ratio: true }),
+  "show the currents in cook inlet this week": captionShapeRule("ocean-currents"),
+  "where is the wind strongest over the sierra tomorrow?": captionShapeRule("wind-flow"),
 };
 
 /**

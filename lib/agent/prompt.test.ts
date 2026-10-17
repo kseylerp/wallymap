@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { SYSTEM_PROMPT } from "@/lib/agent/prompt";
 
 const REQUIRED = [
+  "A timeline note follows the data's shape, in this order: the low and the peak with their numbers, units and dates (from the summary's story, else stats and dates); the ratio between them in words (story.ratio 2.7 is 'nearly triples'); whether it repeats (story.repeats, story.linked.repeats); the named features that drive it (story.drivers, or story.forecastTop for where it peaks ahead); a named event that explains an anomaly only when you know one for those dates, never an invented one; then one sentence on what size, width or brightness and color mean, from the summary's encoding.",
+  "Data stories: for how a river's flow changed, query river-pulse; for currents or tides moving, ocean-currents; for where or which way the wind blows, wind-flow. Call set_basemap with style data-only first so the data draws the land, render the layer with view timeline, and do not call set_time unless the user names a date.",
   "You answer by drawing on a map.",
   "Prefer tools over prose.",
   "Every claim cites a layer.",

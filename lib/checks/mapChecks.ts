@@ -1,7 +1,7 @@
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import type { BBox, Layer, Surface } from "@/layers/types";
 import { rankedTop } from "@/lib/render/attributes";
-import { cardContent, type CardRow } from "@/lib/render/card";
+import { cardContent, isEmptyValue, type CardRow } from "@/lib/render/card";
 import { summarizeFeature } from "@/lib/render/inspect";
 import { searchable } from "@/lib/render/filters";
 import { ROUTE_ERROR_ID } from "@/lib/render/reducer";
@@ -542,7 +542,8 @@ const PLAIN_NUMBER_KEYS = new Set(["year", "count", "elevation", "population", "
 
 /**
  * What is wrong with one card's rows, as short phrases: a raw property key as a label, "Value" where the layer names its
- * measure, a bare URL as text, a raw code ("osm+openbeta"), mostly "n/a", a number labelled score, index or rank with no
+ * measure, a bare URL as text, a raw code ("osm+openbeta"), mostly empty values ("n/a", "Not Available", "Unknown",
+ * "None") or any empty fact, a number labelled score, index or rank with no
  * help, a bare number under its own one-word key with no unit or help ("Trad 1"), a part larger than its whole ("Length
  * in view 50.1 km" over "Full length 48.1 km").
  */
@@ -587,8 +588,10 @@ export function cardRowProblems(rows: SectionRow[], layer: Pick<LayerInfo, "card
       if (a && b && a.unit === b.unit && a.n > b.n) problems.push(`"${part.label} ${part.value}" is more than "${whole.label} ${whole.value}"`);
     }
   }
-  const na = rows.filter(({ row }) => row.value.trim().toLowerCase() === "n/a").length;
-  if (rows.length >= 2 && na > rows.length / 2) problems.push(`${na} of ${rows.length} rows say "n/a"`);
+  // Rows that say nothing ("n/a", "Not Available", "Unknown", "None"): never a fact on the card, and never most rows.
+  const empty = rows.filter(({ row }) => isEmptyValue(row.value));
+  if (rows.length >= 2 && empty.length > rows.length / 2) problems.push(`${empty.length} of ${rows.length} rows say nothing ("${empty[0].row.value}")`);
+  for (const { section, row } of empty) if (section === "fact" || section === "measure") problems.push(`"${row.label}: ${row.value}" is a row that says nothing`);
   return problems;
 }
 

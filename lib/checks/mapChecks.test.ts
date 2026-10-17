@@ -5,6 +5,7 @@ import type { Layer } from "@/layers/types";
 import { isLand, shoreOffsetKm } from "@/lib/checks/landMask";
 import {
   cardRowProblems,
+  cardRows,
   checkCards,
   checkDuplicates,
   checkLattice,
@@ -289,9 +290,19 @@ describe("card text", () => {
         'label "sac_scale" is a raw property key',
         'label "hazardScore" is a raw property key',
         '"Hazard score 1,200" has no help explaining the number',
-        '3 of 5 rows say "n/a"',
+        '3 of 5 rows say nothing ("n/a")',
       ]),
     );
+  });
+
+  it("fails rows that say nothing on a card (Condition: Not Available, Unknown, None), and the dam card leaves them out", () => {
+    expect(cardRowProblems([row("condition", "Condition", "Not Available"), row("owner", "Owner", "Federal")], {})).toEqual(['"Condition: Not Available" is a row that says nothing']);
+    expect(cardRowProblems([row("a", "Owner", "Unknown", "detail"), row("b", "Kind", "None", "detail"), row("c", "Agency", "BLM", "detail")], {})).toEqual(['2 of 3 rows say nothing ("Unknown")']);
+    const dam = point(-111.48, 36.94, { name: "Glen Canyon Dam", storageAf: 29875000, v: 29875000, condition: "Not Available", owner: "Federal", damType: "n/a" });
+    const rows = cardRows(dam, lookup("dams") as LayerInfo);
+    expect(rows.map((r) => r.row.label)).not.toContain("Condition");
+    expect(rows.map((r) => r.row.value)).not.toContain("n/a");
+    expect(checkCards(drawn(mapWith({ id: "dams", features: [dam] }))).ok).toBe(true);
   });
 
   it("fails the owner's Tahoe trail card: a part in view longer than the full length", () => {

@@ -58,6 +58,25 @@ export function humanKey(key: string): { label: string; unit?: string } {
   return { label: friendlyKey(key) };
 }
 
+/** Values that say the source has nothing: "n/a", "Not Available", "Unknown", "None". */
+const EMPTY_VALUES = new Set(["n/a", "na", "n.a.", "not available", "not applicable", "unknown", "none", "null", "-", "—", "–", "?"]);
+
+/** True when a card value says nothing ("Condition: Not Available"); such rows are left off the card. */
+export function isEmptyValue(value: string): boolean {
+  return EMPTY_VALUES.has(value.trim().toLowerCase());
+}
+
+/**
+ * The rows worth showing: rows that say nothing ("n/a", "Not Available", "Unknown", "None") are left out. When every row
+ * of the card says nothing, they are kept under Details, so the card still says what the source holds.
+ */
+function dropEmpty(facts: CardRow[], details: CardRow[], hasMeasure: boolean): { facts: CardRow[]; details: CardRow[] } {
+  const keptFacts = facts.filter((r) => !isEmptyValue(r.value));
+  const keptDetails = details.filter((r) => !isEmptyValue(r.value));
+  if (keptFacts.length > 0 || keptDetails.length > 0 || hasMeasure) return { facts: keptFacts, details: keptDetails };
+  return { facts: [], details: [...facts, ...details] };
+}
+
 function isUrl(value: unknown): value is string {
   return typeof value === "string" && /^https?:\/\/\S+$/.test(value);
 }
@@ -179,7 +198,7 @@ export function cardContent(feature: Feature, opts: { unit?: string; card?: Card
     details.push({ key, label, value, ...withHelp(fieldHelp?.[key]) });
   }
   if (feature.id !== undefined && !("id" in props)) details.unshift({ key: "id", label: "Id", value: String(feature.id) });
-  return { measure, facts, links, details, signals: summary.signals };
+  return { measure, ...dropEmpty(facts, details, measure !== null), links, signals: summary.signals };
 }
 
 const NAME_IN_SOURCE_HELP: FieldHelp = {
@@ -226,5 +245,6 @@ function plainContent(
       const unitRow = keyUnit && typeof raw === "number" ? { label, value: `${r.value} ${keyUnit}` } : {};
       return { ...r, ...unitRow, ...withHelp(fieldHelp?.[r.key]) };
     });
-  return { measure, facts: attach(keep(summary.rows)), links, details: attach(keep(summary.details)), signals: attach(summary.signals) };
+  const rows = dropEmpty(attach(keep(summary.rows)), attach(keep(summary.details)), measure !== null);
+  return { measure, facts: rows.facts, links, details: rows.details, signals: attach(summary.signals) };
 }

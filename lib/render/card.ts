@@ -83,7 +83,7 @@ export function factValue(fact: CardFact, props: Record<string, unknown>): strin
     case "1dp":
       return typeof raw === "number" ? `${formatNumber(fact.key, raw, undefined, 1)}${unit}` : `${String(raw)}${unit}`;
     case "km":
-      return typeof raw === "number" ? `${formatNumber(fact.key, raw, undefined, raw >= 100 ? 0 : 1)} km` : String(raw);
+      return typeof raw === "number" ? `${formatNumber(fact.key, raw, undefined, 1)} km` : String(raw);
     case "m":
       return typeof raw === "number" ? `${formatNumber(fact.key, Math.round(raw), undefined, 0)} m` : String(raw);
     case "date":

@@ -2,12 +2,44 @@ import { bboxAreaKm2, type BBox, type LayerError, type LayerResult, type StyleHi
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import type { LayerFilters } from "@/lib/render/filters";
 import { DARK_GREY } from "@/lib/render/palette";
-import { isHexBasis, RENDER_MODES, type Basemap, type HexBasis, type MapAction, type MapState, type RenderMode, type TimeState, type Viewport } from "@/lib/render/state";
+import type { CompareMode } from "@/lib/render/compare";
+import {
+  isHexBasis,
+  RENDER_MODES,
+  VIEW_KINDS,
+  type Basemap,
+  type CompareState,
+  type HexBasis,
+  type MapAction,
+  type MapState,
+  type RenderMode,
+  type RenderOp,
+  type TimeMode,
+  type TimeState,
+  type ViewKind,
+  type Viewport,
+} from "@/lib/render/state";
 
-/** A time window as ISO dates (the scrubber's window, `t=`). */
-export type PermalinkTime = { start: string; end: string };
+/** A time window as ISO dates (the scrubber's window, `t=`), and its mode when it is cumulative (`t=<start>,<end>,c`). */
+export type PermalinkTime = { start: string; end: string; mode?: TimeMode };
 
-export type PermalinkLayer = { id: string; mode?: RenderMode; visible: boolean; filters?: LayerFilters; rankBy?: string; hexBasis?: HexBasis };
+/**
+ * One layer of a link. `view` is the standard view the sender's op had, null for none; it is missing only in a link
+ * from before views were recorded, which then lets the restore pick the view as a fresh query would. `input` is the
+ * layer's own query input (surf `forecast: true`).
+ */
+export type PermalinkLayer = {
+  id: string;
+  mode?: RenderMode;
+  visible: boolean;
+  filters?: LayerFilters;
+  rankBy?: string;
+  hexBasis?: HexBasis;
+  view?: ViewKind | null;
+  opacity?: number;
+  color?: string;
+  input?: Record<string, unknown>;
+};
 
 /** A scenario layer's amount on the scenario scrubber (`s=<layer>:<value>`). */
 export type PermalinkScenario = { layerId: string; value: number };
@@ -21,22 +53,29 @@ export type PermalinkState = {
   /** How many filter entries the link that wrote this hash had to leave out to stay short (`fx=`). */
   filtersDropped?: number;
   scenario?: PermalinkScenario;
+  /** The compare that was on (`c=`); its side and pause only when the flip was paused. */
+  compare?: CompareState;
+  /** 3D pressed off (`3d=0`): pitch 0 and no terrain. */
+  flattened?: boolean;
+  /** Terrain relief turned off by the agent (`relief=0`). */
+  terrain?: boolean;
 };
 
 /**
- * The slice of map state a permalink records: the camera, the basemap, which layers are loaded, and the time window.
- * A compare (`MapState.compare`) is not recorded: a shared link opens the plain map.
+ * The slice of map state a permalink records: the camera, the basemap, which layers are loaded with every setting of
+ * their render ops and their query input, the time window and mode, the scenario amount, the compare and the 3D choice.
  */
-export type PermalinkSource = Pick<MapState, "viewport" | "basemap" | "layers" | "renderOps"> & {
-  /** The scrubber's state (its window is written) or a window as start and end. */
-  time?: PermalinkTime | Pick<TimeState, "window">;
-  /** The scenario scrubber's amount (`MapState.scenario`); written only for a layer the link loads. */
-  scenario?: PermalinkScenario;
-};
+export type PermalinkSource = Pick<MapState, "viewport" | "basemap" | "layers" | "renderOps"> &
+  Partial<Pick<MapState, "compare" | "terrain" | "flattened">> & {
+    /** The scrubber's state (its window and mode are written) or a window as start and end. */
+    time?: PermalinkTime | (Pick<TimeState, "window"> & { mode?: TimeMode });
+    /** The scenario scrubber's amount (`MapState.scenario`); written only for a layer the link loads. */
+    scenario?: PermalinkScenario;
+  };
 
 function timeOf(time: PermalinkSource["time"]): PermalinkTime | undefined {
   if (!time) return undefined;
-  return "window" in time ? { start: time.window[0], end: time.window[1] } : time;
+  return "window" in time ? { start: time.window[0], end: time.window[1], ...(time.mode && { mode: time.mode }) } : time;
 }
 
 const BASEMAPS: readonly Basemap[] = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"];
@@ -115,15 +154,130 @@ export function decodeFilters(value: string): Record<string, LayerFilters> {
   return out;
 }
 
+/** An input value as text: a string as it is when it does not read as JSON, anything else (and "true", "10") as JSON. */
+function inputText(value: unknown): string {
+  if (typeof value === "string") {
+    try {
+      JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+  return JSON.stringify(value);
+}
+
+function inputValue(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+/**
+ * Each layer's query input as `i=` entries, comma separated: `<layer>:<key>:<value>`, all URI-encoded; the value is
+ * plain text for a string and JSON otherwise (`surf:forecast:true`, `fire-weather:date:2026-10-15`).
+ */
+export function encodeInputs(layers: { id: string; input?: Record<string, unknown> }[]): string {
+  const entries: string[] = [];
+  for (const layer of layers) {
+    for (const [key, value] of Object.entries(layer.input ?? {})) {
+      if (value === undefined) continue;
+      entries.push([layer.id, key, inputText(value)].map(encodeURIComponent).join(":"));
+    }
+  }
+  return entries.join(",");
+}
+
+/** Reads `i=` back into an input per layer id; malformed entries are skipped. */
+export function decodeInputs(value: string): Record<string, Record<string, unknown>> {
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const entry of value.split(",")) {
+    const parts = entry.split(":");
+    if (parts.length !== 3) continue;
+    const [layerId, key, text] = parts.map(safeDecode);
+    if (!layerId || !key || text === null) continue;
+    (out[layerId] ??= {})[key] = inputValue(text);
+  }
+  return out;
+}
+
+const COMPARE_MODES: readonly CompareMode[] = ["swipe", "toggle", "delta"];
+
+/** The compare as `c=`: short-keyed JSON, URI-encoded. The side on screen is written only while the flip is paused. */
+export function encodeCompare(compare: CompareState): string {
+  const short = {
+    l: compare.layerId,
+    m: compare.mode,
+    a: compare.a,
+    b: compare.b,
+    ...(compare.by && { by: compare.by }),
+    ...(compare.aLabel !== undefined && { al: compare.aLabel }),
+    ...(compare.bLabel !== undefined && { bl: compare.bLabel }),
+    ...(compare.scenario && { s: [compare.scenario.a, compare.scenario.b] }),
+    ...(compare.paused && { p: compare.side ?? "a" }),
+  };
+  return encodeURIComponent(JSON.stringify(short));
+}
+
+const isText = (v: unknown): v is string => typeof v === "string";
+const isPair = (v: unknown): v is [string, string] => Array.isArray(v) && v.length === 2 && v.every(isText);
+const isTexts = (v: unknown): v is string[] => Array.isArray(v) && v.every(isText);
+
+/** Reads `c=` back; null when it is not a well-formed compare. */
+export function decodeCompare(value: string): CompareState | null {
+  const text = safeDecode(value);
+  if (!text) return null;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof raw !== "object" || raw === null) return null;
+  const { l, m, a, b, by, al, bl, s, p } = raw as Record<string, unknown>;
+  if (!isText(l) || l === "" || !COMPARE_MODES.includes(m as CompareMode) || !isPair(a) || !isPair(b)) return null;
+  const compare: CompareState = { layerId: l, mode: m as CompareMode, a, b };
+  if (typeof by === "object" && by !== null) {
+    const { key, a: byA, b: byB } = by as Record<string, unknown>;
+    if (isText(key) && isTexts(byA) && isTexts(byB)) compare.by = { key, a: byA, b: byB };
+  }
+  if (isText(al)) compare.aLabel = al;
+  if (isText(bl)) compare.bLabel = bl;
+  if (Array.isArray(s) && s.length === 2 && s.every((n) => typeof n === "number" && Number.isFinite(n))) {
+    compare.scenario = { a: s[0], b: s[1] };
+  }
+  if (p === "a" || p === "b") Object.assign(compare, { side: p, paused: true });
+  return compare;
+}
+
 function round(value: number, digits: number): string {
   return String(Number(value.toFixed(digits)));
 }
 
 /**
+ * One `l=` entry: `<id>:<mode>:<visible>:<rank>:<basis>:<view>:<opacity>:<color>`, the last four URI-encoded where
+ * needed and trailing empty fields left off. Rank by None ("") is "-", so it is not read back as "rank by default"; no
+ * view is "-" too, so the restore does not pick one the sender did not have.
+ */
+function layerEntry(op: RenderOp): string {
+  const rank = op.rankBy === "" ? "-" : encodeURIComponent(op.rankBy ?? "");
+  const basis = op.hexBasis ? encodeURIComponent(op.hexBasis) : "";
+  const view = op.view ?? "-";
+  const opacity = op.opacity !== undefined && Number.isFinite(op.opacity) && op.opacity !== 1 ? round(op.opacity, 3) : "";
+  const color = op.color ? encodeURIComponent(op.color) : "";
+  const fields = [encodeURIComponent(op.layerId), op.mode, op.visible ? "1" : "0", rank, basis, view, opacity, color];
+  while (fields[fields.length - 1] === "") fields.pop();
+  return fields.join(":");
+}
+
+/**
  * Servable layers only (ids in `servable`, when given; route results and drawn layers are not replayable).
- * `#v=<lng>,<lat>,<zoom>,<pitch>,<bearing>&b=<basemap>&l=<id:mode:visible,...>&f=<filters>&t=<start>,<end>` (layers by
- * id; filters as `encodeFilters`, with `fx=<n>` when n entries did not fit), and `s=<layer>:<value>` for the scenario
- * scrubber's amount (sea level rise feet). Links without `f=` or `s=` still read.
+ * `#v=<lng>,<lat>,<zoom>,<pitch>,<bearing>&b=<basemap>&l=<entries>&f=<filters>&i=<inputs>&t=<start>,<end>[,c]`: layers
+ * by id with their whole render op (`layerEntry`), filters as `encodeFilters` (with `fx=<n>` when n entries did not
+ * fit), each layer's query input as `encodeInputs`, the time window (`,c` when cumulative), `s=<layer>:<value>` for the
+ * scenario scrubber's amount (sea level rise feet), `c=` the compare (`encodeCompare`), and `3d=0` / `relief=0` when 3D
+ * or the terrain is off. Links written before any of these still read.
  */
 export function encodeState(state: PermalinkSource, servable?: Record<string, unknown>): string {
   const { longitude, latitude, zoom, pitch, bearing } = state.viewport;
@@ -131,26 +285,23 @@ export function encodeState(state: PermalinkSource, servable?: Record<string, un
     `v=${round(longitude, 5)},${round(latitude, 5)},${round(zoom, 2)},${round(pitch, 1)},${round(bearing, 1)}`,
     `b=${state.basemap}`,
   ];
-  const layers = state.renderOps
-    .filter((op) => state.layers[op.layerId] && (!servable || op.layerId in servable))
-    .map((op) => {
-      // Rank by and the hex basis ride after the visibility, URI-encoded (a share basis holds a colon).
-      // Rank by None ("") is written "-", so it is not read back as "rank by default".
-      const rank = op.rankBy === "" ? "-" : encodeURIComponent(op.rankBy ?? "");
-      const extra = op.rankBy !== undefined || op.hexBasis ? `:${rank}${op.hexBasis ? `:${encodeURIComponent(op.hexBasis)}` : ""}` : "";
-      return `${encodeURIComponent(op.layerId)}:${op.mode}:${op.visible ? 1 : 0}${extra}`;
-    });
-  if (layers.length > 0) parts.push(`l=${layers.join(",")}`);
   const shared = state.renderOps.filter((op) => state.layers[op.layerId] && (!servable || op.layerId in servable));
+  if (shared.length > 0) parts.push(`l=${shared.map(layerEntry).join(",")}`);
   const { value: filters, dropped } = encodeFilters(shared);
   if (filters) parts.push(`f=${filters}`);
   if (dropped > 0) parts.push(`fx=${dropped}`);
+  const inputs = encodeInputs(shared.map((op) => state.layers[op.layerId]));
+  if (inputs) parts.push(`i=${inputs}`);
   const time = timeOf(state.time);
-  if (time) parts.push(`t=${encodeURIComponent(time.start)},${encodeURIComponent(time.end)}`);
+  if (time) parts.push(`t=${encodeURIComponent(time.start)},${encodeURIComponent(time.end)}${time.mode === "cumulative" ? ",c" : ""}`);
   const scenario = state.scenario;
   if (scenario && Number.isFinite(scenario.value) && shared.some((op) => op.layerId === scenario.layerId)) {
     parts.push(`s=${encodeURIComponent(scenario.layerId)}:${num(scenario.value)}`);
   }
+  const compare = state.compare;
+  if (compare && shared.some((op) => op.layerId === compare.layerId)) parts.push(`c=${encodeCompare(compare)}`);
+  if (state.flattened) parts.push("3d=0");
+  if (state.terrain === false) parts.push("relief=0");
   return `#${parts.join("&")}`;
 }
 
@@ -174,17 +325,25 @@ function safeDecode(value: string): string | null {
 function parseLayers(value: string): PermalinkLayer[] {
   const layers: PermalinkLayer[] = [];
   for (const entry of value.split(",")) {
-    const [rawId, mode, visible, rawRank, rawBasis] = entry.split(":");
+    const [rawId, mode, visible, rawRank, rawBasis, rawView, rawOpacity, rawColor] = entry.split(":");
     const id = rawId ? safeDecode(rawId) : null;
     if (!id) continue;
     const rankBy = rawRank === "-" ? "" : rawRank ? safeDecode(rawRank) : null;
     const hexBasis = rawBasis ? safeDecode(rawBasis) : null;
+    // A view field names the sender's view, "-" (or one this build does not know) none; a link from before views has
+    // no field, and the view stays undefined so the restore picks one as a fresh query would.
+    const view = rawView === undefined ? undefined : VIEW_KINDS.includes(rawView as ViewKind) ? (rawView as ViewKind) : null;
+    const opacity = rawOpacity ? Number(rawOpacity) : NaN;
+    const color = rawColor ? safeDecode(rawColor) : null;
     layers.push({
       id,
       mode: RENDER_MODES.includes(mode as RenderMode) ? (mode as RenderMode) : undefined,
       visible: visible !== "0",
       ...(rankBy !== null && { rankBy }),
       ...(isHexBasis(hexBasis) && { hexBasis }),
+      ...(view !== undefined && { view }),
+      ...(Number.isFinite(opacity) && { opacity: Math.min(1, Math.max(0, opacity)) }),
+      ...(color && color.length <= 64 && { color }),
     });
   }
   return layers;
@@ -200,10 +359,10 @@ function parseScenario(value: string): PermalinkScenario | null {
 }
 
 function parseTime(value: string): PermalinkTime | null {
-  const [rawStart, rawEnd] = value.split(",");
+  const [rawStart, rawEnd, rawMode] = value.split(",");
   const start = rawStart ? safeDecode(rawStart) : null;
   const end = rawEnd ? safeDecode(rawEnd) : null;
-  return start && end ? { start, end } : null;
+  return start && end ? { start, end, ...(rawMode === "c" && { mode: "cumulative" as const }) } : null;
 }
 
 /**
@@ -216,6 +375,7 @@ export function decodeState(hash: string): PermalinkState | null {
   const out: PermalinkState = { layers: [] };
   let found = false;
   let filtersByLayer: Record<string, LayerFilters> = {};
+  let inputsByLayer: Record<string, Record<string, unknown>> = {};
   for (const pair of body.split("&")) {
     const eq = pair.indexOf("=");
     if (eq <= 0) continue;
@@ -237,9 +397,18 @@ export function decodeState(hash: string): PermalinkState | null {
     } else if (key === "fx") {
       const n = Number(value);
       if (Number.isInteger(n) && n > 0) out.filtersDropped = n;
+    } else if (key === "i") {
+      inputsByLayer = decodeInputs(value);
     } else if (key === "s") {
       const scenario = parseScenario(value);
       if (scenario) out.scenario = scenario;
+    } else if (key === "c") {
+      const compare = decodeCompare(value);
+      if (compare) out.compare = compare;
+    } else if (key === "3d" && value === "0") {
+      out.flattened = true;
+    } else if (key === "relief" && value === "0") {
+      out.terrain = false;
     } else if (key === "t") {
       const time = parseTime(value);
       if (time) {
@@ -248,8 +417,13 @@ export function decodeState(hash: string): PermalinkState | null {
       }
     }
   }
-  // Filters ride on the layers they belong to; filters for a layer the link does not load are ignored.
-  out.layers = out.layers.map((layer) => (filtersByLayer[layer.id] ? { ...layer, filters: filtersByLayer[layer.id] } : layer));
+  // Filters and inputs ride on the layers they belong to; those for a layer the link does not load are ignored.
+  out.layers = out.layers.map((layer) => ({
+    ...layer,
+    ...(filtersByLayer[layer.id] && { filters: filtersByLayer[layer.id] }),
+    ...(inputsByLayer[layer.id] && { input: inputsByLayer[layer.id] }),
+  }));
+  if (out.compare && !out.layers.some((layer) => layer.id === out.compare?.layerId)) delete out.compare;
   return found ? out : null;
 }
 
@@ -269,7 +443,8 @@ export function viewportBBox(viewport: Viewport, width: number, height: number):
   ];
 }
 
-export type FetchLayer = (id: string, bbox: BBox, zoom: number) => Promise<LayerResult | LayerError>;
+/** Fetches a layer over a box; `input` is the layer's own query input from the link (unset: the default input). */
+export type FetchLayer = (id: string, bbox: BBox, zoom: number, input?: Record<string, unknown>) => Promise<LayerResult | LayerError>;
 
 export type RestoreOptions = {
   catalog: LayerCatalog;
@@ -308,16 +483,18 @@ export function capBox(bbox: BBox, maxKm2: number | undefined): BBox {
   return [cx - ((e - w) / 2) * k, cy - ((n - s) / 2) * k, cx + ((e - w) / 2) * k, cy + ((n - s) / 2) * k];
 }
 
-async function fetchWithRetry(fetchLayer: FetchLayer, id: string, bbox: BBox, zoom: number) {
-  const first = await fetchLayer(id, bbox, zoom);
-  if (isError(first) && first.hint === "zoom_in") return fetchLayer(id, centralQuarter(bbox), zoom + 1);
+async function fetchWithRetry(fetchLayer: FetchLayer, id: string, bbox: BBox, zoom: number, input?: Record<string, unknown>) {
+  const first = await fetchLayer(id, bbox, zoom, input);
+  if (isError(first) && first.hint === "zoom_in") return fetchLayer(id, centralQuarter(bbox), zoom + 1, input);
   return first;
 }
 
 /**
- * Replays a hash into the map: camera and basemap first, then each layer fetched with its default input for the
- * viewport's box and dispatched (`layer_loaded`, then `render`) in the hash's order. Returns null for a hash that
- * does not decode. A layer that fails is reported as a layer error and listed in `failed`.
+ * Replays a hash into the map: 3D, basemap and camera first, then each layer fetched with the link's query input (the
+ * default input when it has none) for the viewport's box and dispatched (`layer_loaded`, then `render` with the
+ * sender's whole op) in the hash's order, then the time, scenario and compare. Every setting lands after its layer's
+ * data, so nothing the data brings (a default op or view) overwrites it. Returns null for a hash that does not decode.
+ * A layer that fails is reported as a layer error and listed in `failed`.
  */
 export async function restoreFromPermalink(
   hash: string,
@@ -327,6 +504,8 @@ export async function restoreFromPermalink(
 ): Promise<RestoreOutcome | null> {
   const decoded = decodeState(hash);
   if (!decoded) return null;
+  if (decoded.flattened) dispatch({ type: "set_flattened", flattened: true });
+  if (decoded.terrain === false) dispatch({ type: "set_terrain", terrain: false });
   if (decoded.basemap) dispatch({ type: "set_basemap", basemap: decoded.basemap });
   if (decoded.viewport) dispatch({ type: "set_view", viewport: decoded.viewport });
   options.onStart?.(decoded.layers.length);
@@ -336,7 +515,7 @@ export async function restoreFromPermalink(
   const bbox = viewportBBox(view, options.canvas.width, options.canvas.height);
   const results = await Promise.all(
     decoded.layers.map((layer) =>
-      fetchWithRetry(fetchLayer, layer.id, capBox(bbox, options.catalog[layer.id]?.maxAreaKm2), view.zoom).catch(
+      fetchWithRetry(fetchLayer, layer.id, capBox(bbox, options.catalog[layer.id]?.maxAreaKm2), view.zoom, layer.input).catch(
         (err): LayerError => ({ error: String(err), hint: "upstream" }),
       ),
     ),
@@ -363,9 +542,11 @@ export async function restoreFromPermalink(
         ...(entry?.fieldHelp && { fieldHelp: entry.fieldHelp }),
         ...(entry?.card && { card: entry.card }),
         ...(entry?.attributes && { attributes: entry.attributes }),
+        ...(layer.input && { input: layer.input }),
       },
     });
-    // A link without a mode takes the layer's default from its hints, as a fresh query would.
+    // A link without a mode takes the layer's default from its hints, as a fresh query would. A link that records the
+    // view (or none) sets the op exactly; an older one lets the reducer pick the view from the data.
     dispatch({
       type: "render",
       op: {
@@ -375,14 +556,27 @@ export async function restoreFromPermalink(
         ...(layer.filters && { filters: layer.filters }),
         ...(layer.rankBy !== undefined && { rankBy: layer.rankBy }),
         ...(layer.hexBasis && { hexBasis: layer.hexBasis }),
+        ...(layer.view && { view: layer.view }),
+        ...(layer.opacity !== undefined && { opacity: layer.opacity }),
+        ...(layer.color && { color: layer.color }),
       },
       ...(layer.mode === undefined && { defaultMode: true }),
+      ...(layer.view !== undefined && { exact: true }),
     });
     outcome.restored.push(layer.id);
   });
-  // After the layers, so the window lands on the time index they build (or waits for one).
+  // After the layers, so the mode and window land on the time index they build (or wait for one).
+  if (decoded.time?.mode) dispatch({ type: "set_time_mode", mode: decoded.time.mode });
   if (decoded.time) dispatch({ type: "set_time_window", window: [decoded.time.start, decoded.time.end] });
   // After the layers too: the reducer snaps the amount to the layer's scenario and ignores it for a layer that failed.
   if (decoded.scenario) dispatch({ type: "set_scenario", layerId: decoded.scenario.layerId, value: decoded.scenario.value });
+  // The compare last, on a layer that came back: it starts on side A and running, so a paused side is set after it.
+  const compare = decoded.compare;
+  if (compare && outcome.restored.includes(compare.layerId)) {
+    const { side, paused, ...spec } = compare;
+    dispatch({ type: "set_compare", compare: spec });
+    if (paused) dispatch({ type: "set_compare_paused", paused: true });
+    if (paused && side === "b") dispatch({ type: "compare_flip" });
+  }
   return outcome;
 }

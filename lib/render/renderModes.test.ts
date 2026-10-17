@@ -386,7 +386,7 @@ describe("permalink", () => {
   it("round-trips every point mode", () => {
     for (const mode of ["clusters", "heat", "columns", "points"] as const) {
       const hash = encodeState({ ...stateWith(species, { mode }), basemap: "outdoors" });
-      expect(decodeState(hash)?.layers).toEqual([{ id: "species", mode, visible: true }]);
+      expect(decodeState(hash)?.layers).toEqual([{ id: "species", mode, visible: true, view: null }]);
     }
   });
 });
@@ -415,7 +415,7 @@ describe("review fixes", () => {
     };
     const hash = encodeState({ ...stateWith(species, op), basemap: "outdoors" });
     expect(hash).toMatch(/&f=species:v:2\.5~40,species:name=Elk\+Bighorn%20sheep\+a%3Ab%2Cc%3Dd%2Be/);
-    expect(decodeState(hash)?.layers).toEqual([{ id: "species", mode: "clusters", visible: true, filters: op.filters }]);
+    expect(decodeState(hash)?.layers).toEqual([{ id: "species", mode: "clusters", visible: true, view: null, filters: op.filters }]);
     // A link from before filters still reads, with no filters.
     expect(decodeState("#v=-115.6,51.2,10,45,0&l=species:points:1")?.layers).toEqual([{ id: "species", mode: "points", visible: true }]);
     // The restored op carries the filters.
@@ -424,7 +424,7 @@ describe("review fixes", () => {
       catalog: { species: { title: "Species", style: species.style } },
       canvas: { width: 1000, height: 800 },
     });
-    expect(actions).toContainEqual({ type: "render", op: { layerId: "species", mode: "clusters", visible: true, filters: op.filters } });
+    expect(actions).toContainEqual({ type: "render", op: { layerId: "species", mode: "clusters", visible: true, filters: op.filters }, exact: true });
     expect(outcome?.filtersDropped).toBeUndefined();
     // Hundreds of category values do not fit: the link keeps what fits and says how many entries it left out.
     const many: RenderOp[] = Array.from({ length: 60 }, (_, i) => ({

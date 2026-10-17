@@ -113,7 +113,8 @@ function permalinkFor(state: MapState, size: Size): string {
   const padding = visibleMapPadding({ width: size.width, height: size.height, panelOpen: false, isMobile, layerPanelOpen: !isMobile });
   const viewport = bboxToViewport(bbox, size.width, size.height, padding);
   const servable = Object.fromEntries(listLayers().map((l) => [l.id, true]));
-  return encodeState({ viewport, basemap: state.basemap, layers: state.layers, renderOps: state.renderOps, ...(state.time && { time: state.time }) }, servable);
+  // The whole final state but the camera: every op setting, query inputs, time, scenario, compare and 3D round-trip.
+  return encodeState({ ...state, viewport }, servable);
 }
 
 /* ---------- Page helpers ---------- */

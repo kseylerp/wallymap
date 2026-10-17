@@ -141,13 +141,25 @@ function renderActions(output: Obj, catalog: LayerCatalog): MapAction[] {
   return actions;
 }
 
-function queryActions(layerId: string, output: Obj, catalog: LayerCatalog, existingOps: RenderOp[]): MapAction[] {
+/** A query's own input (surf `forecast: true`) without the area fields every query has; undefined when nothing is left. */
+export function layerInputOf(input: unknown): Record<string, unknown> | undefined {
+  if (!isObject(input)) return undefined;
+  const { bbox: _bbox, zoom: _zoom, ...rest } = input;
+  void _bbox;
+  void _zoom;
+  const kept = Object.entries(rest).filter(([, v]) => v !== undefined);
+  return kept.length > 0 ? Object.fromEntries(kept) : undefined;
+}
+
+function queryActions(layerId: string, input: unknown, output: Obj, catalog: LayerCatalog, existingOps: RenderOp[]): MapAction[] {
   if (typeof output.error === "string") {
     return [{ type: "layer_error", layerId, message: output.error }];
   }
   if (!isLayerResult(output)) return [];
   const entry = catalog[layerId];
   const style = entry?.style ?? FALLBACK_STYLE;
+  // Kept on the layer so a share link asks for the same data (the forecast on, the same date).
+  const layerInput = layerInputOf(input);
   const actions: MapAction[] = [
     {
       type: "layer_loaded",
@@ -160,6 +172,7 @@ function queryActions(layerId: string, output: Obj, catalog: LayerCatalog, exist
         ...(entry?.fieldHelp && { fieldHelp: entry.fieldHelp }),
         ...(entry?.card && { card: entry.card }),
         ...(entry?.attributes && { attributes: entry.attributes }),
+        ...(layerInput && { input: layerInput }),
       },
     },
   ];
@@ -382,7 +395,7 @@ export function toolResultToActions(
     const box = isObject(input) && isBBox(input.bbox) ? input.bbox : undefined;
     const elsewhere = box !== undefined && context.view !== undefined && (context.view === null || !withinView(box, context.view));
     const place: MapAction[] = elsewhere ? [{ type: "place_named", bbox: box, implicit: true }] : [];
-    return [...place, ...queryActions(layerId, output, catalog, existingOps)];
+    return [...place, ...queryActions(layerId, input, output, catalog, existingOps)];
   }
   switch (name) {
     case "geocode":

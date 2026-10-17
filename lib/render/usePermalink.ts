@@ -10,12 +10,15 @@ import { initialMapState, type MapAction, type MapState } from "@/lib/render/sta
 const WRITE_DELAY_MS = 500;
 const FAILURE_NOTICE_MS = 6000;
 
-/** Asks `/api/layer/<id>` for the layer's default input over the box; a failed request comes back as a layer error. */
-const fetchLayer: FetchLayer = async (id, bbox, zoom) => {
+/**
+ * Asks `/api/layer/<id>` for the layer over the box, with the link's query input (surf's forecast) or the default
+ * input; a failed request comes back as a layer error.
+ */
+const fetchLayer: FetchLayer = async (id, bbox, zoom, input) => {
   const res = await fetch(`/api/layer/${encodeURIComponent(id)}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ bbox, zoom }),
+    body: JSON.stringify({ bbox, zoom, ...(input && { input }) }),
   });
   return (await res.json()) as LayerResult | LayerError;
 };
@@ -37,7 +40,8 @@ function isInitialView(state: MapState): boolean {
 /**
  * Keeps the URL hash and the map in step. On mount, and whenever a new link is pasted into the same tab, a hash that
  * names a view or layers is replayed into the map (layers are fetched again, so a link carries ids, not data). After
- * that, the camera, basemap, layer ids and time window are written back to the hash 500 ms after they stop changing. `status` is a short line to show while layers
+ * that, the camera, basemap, layers (each with its whole render op and query input), time window and mode, scenario
+ * amount, compare and 3D choice are written back to the hash 500 ms after they stop changing. `status` is a short line to show while layers
  * are coming back ("Restoring 3 layers…") or when some could not be; null otherwise.
  */
 export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { status: string | null } {
@@ -113,7 +117,8 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
   // (debounced below), while an index rebuild or a play/pause that leaves the window where it was does not.
   const start = state.time?.window[0];
   const end = state.time?.window[1];
-  const { viewport, basemap, layers, renderOps } = state;
+  const timeMode = state.time?.mode;
+  const { viewport, basemap, layers, renderOps, compare, terrain, flattened } = state;
   // The scenario scrubber's layer and amount only, so a play/pause alone does not rewrite the hash.
   const scenarioLayer = state.scenario?.layerId;
   const scenarioValue = state.scenario?.value;
@@ -126,9 +131,11 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
       try {
         // A fresh page with nothing to share keeps a clean URL.
         if (untouched && window.location.hash === "") return;
-        const time = start !== undefined && end !== undefined ? { start, end } : undefined;
+        const time = start !== undefined && end !== undefined ? { start, end, mode: timeMode } : undefined;
         const scenario = scenarioLayer !== undefined && scenarioValue !== undefined ? { layerId: scenarioLayer, value: scenarioValue } : undefined;
-        const hash = untouched ? "" : encodeState({ viewport, basemap, layers, renderOps, time, scenario }, servable);
+        const hash = untouched
+          ? ""
+          : encodeState({ viewport, basemap, layers, renderOps, time, scenario, compare, terrain, flattened }, servable);
         const url = window.location.pathname + window.location.search + hash;
         window.history.replaceState(window.history.state, "", url);
       } catch {
@@ -136,7 +143,7 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
       }
     }, WRITE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [ready, catalog, untouched, viewport, basemap, layers, renderOps, start, end, scenarioLayer, scenarioValue]);
+  }, [ready, catalog, untouched, viewport, basemap, layers, renderOps, start, end, timeMode, scenarioLayer, scenarioValue, compare, terrain, flattened]);
 
   return { status };
 }

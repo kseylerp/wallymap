@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { LayerError, LayerResult } from "@/layers/types";
 import { capBox, decodeState, encodeState, restoreFromPermalink, viewportBBox, type PermalinkSource } from "@/lib/render/permalink";
 import { bboxAreaKm2 } from "@/layers/types";
-import type { LoadedLayer, MapAction } from "@/lib/render/state";
+import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
+import { reduce } from "@/lib/render/reducer";
+import { initialMapState, type CompareState, type LoadedLayer, type MapAction, type MapState, type RenderOp } from "@/lib/render/state";
 
 const result: LayerResult = {
   kind: "geojson",
@@ -32,14 +34,27 @@ describe("permalink encode and decode", () => {
   it("round-trips the camera, basemap, layers and time", () => {
     const hash = encodeState(source);
     expect(hash).toBe(
-      "#v=-120.04321,39.1,11.5,45,-20&b=outdoors&l=osm-trails:lines:1,campsites:points:0&t=2016-01-01,2026-01-01",
+      "#v=-120.04321,39.1,11.5,45,-20&b=outdoors&l=osm-trails:lines:1:::-,campsites:points:0:::-&t=2016-01-01,2026-01-01",
     );
     expect(decodeState(hash)).toEqual({
       viewport: source.viewport,
       basemap: "outdoors",
       layers: [
+        { id: "osm-trails", mode: "lines", visible: true, view: null },
+        { id: "campsites", mode: "points", visible: false, view: null },
+      ],
+      time: { start: "2016-01-01", end: "2026-01-01" },
+    });
+  });
+
+  it("still reads a link written before views, opacity, color, inputs and compare were recorded", () => {
+    const old = "#v=-120.04321,39.1,11.5,45,-20&b=outdoors&l=osm-trails:lines:1,climbing:hexbin:1:-:share%3Asport&f=climbing:name*=Muir&t=2016-01-01,2026-01-01";
+    expect(decodeState(old)).toEqual({
+      viewport: source.viewport,
+      basemap: "outdoors",
+      layers: [
         { id: "osm-trails", mode: "lines", visible: true },
-        { id: "campsites", mode: "points", visible: false },
+        { id: "climbing", mode: "hexbin", visible: true, rankBy: "", hexBasis: "share:sport", filters: { name: { match: "Muir" } } },
       ],
       time: { start: "2016-01-01", end: "2026-01-01" },
     });
@@ -152,6 +167,161 @@ describe("restoreFromPermalink", () => {
     const dispatch = vi.fn();
     expect(await restoreFromPermalink("#nonsense", dispatch, vi.fn(), { catalog, canvas })).toBeNull();
     expect(dispatch).not.toHaveBeenCalled();
+  });
+});
+
+describe("every setting a person can see survives the link", () => {
+  const one = (op: RenderOp, extra: Partial<PermalinkSource> = {}) =>
+    decodeState(encodeState({ ...source, layers: { [op.layerId]: loaded(op.layerId) }, renderOps: [op], ...extra }));
+
+  it("round-trips each render op setting", () => {
+    const op: RenderOp = {
+      layerId: "power-plants",
+      mode: "hexbin",
+      visible: false,
+      color: "#1A2B3C",
+      opacity: 0.35,
+      filters: { v: { range: [2.5, 40] }, kind: { include: ["wind", "a:b,c"] }, name: { match: "Crag & co" } },
+      view: "density",
+      rankBy: "capacity",
+      hexBasis: "share:wind farm",
+    };
+    expect(one(op)?.layers).toEqual([
+      { id: "power-plants", mode: "hexbin", visible: false, color: "#1A2B3C", opacity: 0.35, filters: op.filters, view: "density", rankBy: "capacity", hexBasis: "share:wind farm" },
+    ]);
+    for (const view of ["change", "timeline", "ranked", "density", "detail", "scenario", "route"] as const) {
+      expect(one({ layerId: "x", mode: "points", visible: true, view })?.layers[0].view).toBe(view);
+    }
+    for (const hexBasis of ["count", "sum", "recency", "share:sport"] as const) {
+      expect(one({ layerId: "x", mode: "columns", visible: true, hexBasis })?.layers[0].hexBasis).toBe(hexBasis);
+    }
+    expect(one({ layerId: "x", mode: "points", visible: true, rankBy: "" })?.layers[0].rankBy).toBe("");
+    expect(one({ layerId: "x", mode: "points", visible: true, opacity: 0 })?.layers[0].opacity).toBe(0);
+    // Full opacity is the default and is not written.
+    expect(one({ layerId: "x", mode: "points", visible: true, opacity: 1 })?.layers[0]).not.toHaveProperty("opacity");
+  });
+
+  it("round-trips each layer's query input: the surf forecast, a date, numbers, lists and strings that look like JSON", () => {
+    const input = { forecast: true, season: false, month: 10, date: "2026-10-15", region: "europe", text: "10", tags: ["a", "b,c"] };
+    const decoded = one({ layerId: "surf", mode: "points", visible: true }, { layers: { surf: { ...loaded("surf"), input } } });
+    expect(decoded?.layers[0].input).toEqual(input);
+    const hash = encodeState({ ...source, layers: { surf: { ...loaded("surf"), input: { forecast: true } } }, renderOps: [{ layerId: "surf", mode: "points", visible: true }] });
+    expect(hash).toContain("&i=surf:forecast:true");
+    // A layer without input writes no i=.
+    expect(encodeState(source)).not.toContain("&i=");
+  });
+
+  it("round-trips the time mode, the compare and the 3D choice", () => {
+    const cumulative = one({ layerId: "x", mode: "points", visible: true }, { time: { window: ["2019-01-01", "2020-01-01"], mode: "cumulative" } });
+    expect(cumulative?.time).toEqual({ start: "2019-01-01", end: "2020-01-01", mode: "cumulative" });
+    expect(one({ layerId: "x", mode: "points", visible: true }, { time: { window: ["2019-01-01", "2020-01-01"], mode: "slide" } })?.time).toEqual({ start: "2019-01-01", end: "2020-01-01" });
+
+    const compare: CompareState = {
+      layerId: "x",
+      mode: "swipe",
+      a: ["2021-01-01", "2021-12-31"],
+      b: ["2024-01-01", "2024-12-31"],
+      by: { key: "kind", a: ["2021"], b: ["current"] },
+      aLabel: "Before",
+      bLabel: "After, now",
+    };
+    expect(one({ layerId: "x", mode: "polygons", visible: true }, { compare })?.compare).toEqual(compare);
+    const paused: CompareState = { layerId: "x", mode: "toggle", a: ["", ""], b: ["", ""], scenario: { a: 1, b: 5 }, side: "b", paused: true };
+    expect(one({ layerId: "x", mode: "polygons", visible: true }, { compare: paused })?.compare).toEqual(paused);
+    // A running toggle's side flips every second: it is not written.
+    expect(one({ layerId: "x", mode: "polygons", visible: true }, { compare: { ...paused, paused: false } })?.compare).toEqual({ layerId: "x", mode: "toggle", a: ["", ""], b: ["", ""], scenario: { a: 1, b: 5 } });
+    // A compare on a layer the link does not load is left out.
+    expect(encodeState({ ...source, compare: { ...compare, layerId: "gone" } })).not.toContain("&c=");
+    expect(decodeState("#v=0,0,2&c=%7Bgarbage")?.compare).toBeUndefined();
+
+    expect(one({ layerId: "x", mode: "points", visible: true }, { flattened: true, terrain: false })).toMatchObject({ flattened: true, terrain: false });
+    expect(encodeState(source)).not.toMatch(/3d=|relief=/);
+  });
+});
+
+describe("a restored link draws the sender's map, settings applied after the data arrives", () => {
+  const surfFeatures = Array.from({ length: 8 }, (_, i) => ({
+    type: "Feature" as const,
+    geometry: { type: "Point" as const, coordinates: [-122.5 + i * 0.01, 37.6] },
+    properties: { name: `Spot ${i}`, kind: i % 2 ? "forecast" : "buoy", v: i * 0.5 },
+  }));
+  const surfResult: LayerResult = { ...result, data: { type: "FeatureCollection", features: surfFeatures } };
+  const catalog: LayerCatalog = { surf: { title: "Surf", style: { geometry: "point", color: "#000" } } };
+  const run = (state: MapState, actions: MapAction[]) => actions.reduce(reduce, state);
+  const agent = (state: MapState, name: string, input: unknown, output: unknown) =>
+    run(state, toolResultToActions(name, input, output, { width: 1200, height: 800 }, catalog, state.renderOps));
+
+  function senderMap(): MapState {
+    let state = agent(initialMapState, "query_surf", { bbox: [-122.6, 37.5, -122.3, 37.7], zoom: 11, forecast: true }, surfResult);
+    state = agent(state, "render", {}, {
+      layerId: "surf",
+      mode: "hexbin",
+      view: "density",
+      hexBasis: "share",
+      hexShare: "forecast",
+      rankBy: "v",
+      filters: { kind: { include: ["forecast"] }, v: { range: [1, 3] } },
+    });
+    // The person then draws it as symbols, fades it and recolors it in the layer row.
+    return run(state, [
+      { type: "set_style", layerId: "surf", mode: "points", color: "#123456" },
+      { type: "set_opacity", layerId: "surf", opacity: 0.4 },
+      { type: "set_view", viewport: { longitude: -122.45, latitude: 37.6, zoom: 11, pitch: 0, bearing: 0 } },
+    ]);
+  }
+
+  async function restore(hash: string, from: MapState) {
+    let state = from;
+    const fetchLayer = vi.fn(async (): Promise<LayerResult> => {
+      await new Promise((r) => setTimeout(r, 5));
+      return surfResult;
+    });
+    await restoreFromPermalink(hash, (a) => (state = reduce(state, a)), fetchLayer, { catalog, canvas: { width: 1200, height: 800 } });
+    return { state, fetchLayer };
+  }
+
+  it("asks for the forecast again and restores filters, view, hex basis, rank, mode, color and opacity", async () => {
+    const sender = senderMap();
+    expect(sender.layers.surf.input).toEqual({ forecast: true });
+    expect(sender.renderOps[0]).toMatchObject({ mode: "points", view: "density", hexBasis: "share:forecast", rankBy: "v", opacity: 0.4, color: "#123456" });
+
+    const { state, fetchLayer } = await restore(encodeState(sender), initialMapState);
+    expect(fetchLayer).toHaveBeenCalledWith("surf", expect.any(Array), 11, { forecast: true });
+    expect(state.renderOps).toEqual(sender.renderOps);
+    expect(state.layers.surf.input).toEqual({ forecast: true });
+    // Shared again, the restored map writes the same link.
+    expect(encodeState(state)).toBe(encodeState(sender));
+  });
+
+  it("replaces a map that already had the layer with other settings (a link pasted into the same tab)", async () => {
+    let other = agent(initialMapState, "query_surf", { bbox: [-122.6, 37.5, -122.3, 37.7] }, surfResult);
+    other = run(other, [{ type: "set_style", layerId: "surf", mode: "heat" }, { type: "clear_layers" }]);
+    const sender = senderMap();
+    const { state } = await restore(encodeState(sender), other);
+    expect(state.renderOps).toEqual(sender.renderOps);
+  });
+
+  it("an old link without a view still lets the data pick one, as before", async () => {
+    const { state } = await restore("#v=-122.45,37.6,11,0,0&l=surf:hexbin:1::share%3Aforecast", initialMapState);
+    expect(state.renderOps[0]).toMatchObject({ layerId: "surf", mode: "hexbin", hexBasis: "share:forecast" });
+    expect(state.layers.surf.input).toBeUndefined();
+  });
+
+  it("restores a paused compare on side B and a cumulative time window", async () => {
+    const dated = surfFeatures.map((f, i) => ({ ...f, properties: { ...f.properties, t: `20${18 + i}-06-01` } }));
+    const datedResult: LayerResult = { ...result, data: { type: "FeatureCollection", features: dated } };
+    let sender = agent(initialMapState, "query_surf", { bbox: [-122.6, 37.5, -122.3, 37.7] }, datedResult);
+    sender = run(sender, [
+      { type: "set_time_mode", mode: "cumulative" },
+      { type: "set_compare", compare: { layerId: "surf", mode: "toggle", a: ["2018-01-01", "2019-12-31"], b: ["2022-01-01", "2025-12-31"] } },
+      { type: "compare_flip" },
+      { type: "set_compare_paused", paused: true },
+    ]);
+    let state = initialMapState;
+    await restoreFromPermalink(encodeState(sender), (a) => (state = reduce(state, a)), async () => datedResult, { catalog, canvas: { width: 1200, height: 800 } });
+    expect(state.compare).toEqual(sender.compare);
+    expect(state.time?.mode).toBe("cumulative");
+    expect(state.time?.window).toEqual(sender.time?.window);
   });
 });
 

@@ -486,7 +486,9 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       const renderOps =
         index === -1
           ? [...state.renderOps, op]
-          : state.renderOps.map((old, i) =>
+          : action.exact
+            ? state.renderOps.map((old, i) => (i === index ? op : old))
+            : state.renderOps.map((old, i) =>
               // The agent restyling a layer keeps the opacity and filters the user picked in the layer panel.
               i === index
                 ? {
@@ -501,6 +503,9 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       // Heat draws no features of its own, so a selection on a layer that turns into heat would point at nothing drawn.
       const selected = op.mode === "heat" ? dropSelectionOf(state, op.layerId) : state.selected;
       const next = withShownChange(state, { ...state, renderOps, selected }, action.op.layerId);
+      // A share link's op is the sender's as drawn: its view (or none) stays, and the view's preset is not run again,
+      // so it cannot move the mode, rank or compare the link carries.
+      if (action.exact) return next;
       // The view: the one the agent named, else (on the layer's first op) the one its data asks for; a restyle without
       // a view keeps the layer's.
       const view = action.op.view ?? (index === -1 && loaded ? defaultView(loaded, op.filters) : undefined);

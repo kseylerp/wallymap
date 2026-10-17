@@ -98,6 +98,11 @@ export type LoadedLayer = {
   card?: CardSpec;
   /** The fields a person can slice the layer by (spec §12c), from the catalog: the row's controls. */
   attributes?: Attribute[];
+  /**
+   * The layer's own query input the agent asked for (surf `forecast: true`, a fire-weather `date`), without the bbox and
+   * zoom; unset for the default input. A share link carries it, so opening the link asks for the same data.
+   */
+  input?: Record<string, unknown>;
 };
 
 /** A route drawn Wally-style (gradient line, darts, mile markers, waypoint pins): a `route` result, a GPX, a trail. */
@@ -167,7 +172,7 @@ export type ScenarioState = { layerId: string; value: number; playing: boolean }
 
 /**
  * A compare: the spec, optional labels for the two sides, and (toggle mode) the side on screen, A by default, and
- * whether the 1 Hz flip is paused. The permalink does not record it (lib/render/permalink.ts).
+ * whether the 1 Hz flip is paused. The permalink records it as `c=` (lib/render/permalink.ts).
  */
 export type CompareState = CompareSpec & {
   aLabel?: string;
@@ -214,9 +219,10 @@ export type MapAction =
   | { type: "layer_error"; layerId: string; message: string }
   /**
    * Draw a layer. `defaultMode`: the op's mode was not asked for, so the layer keeps the mode it has, or a new op takes
-   * the default from the layer's hints (`defaultRenderMode` in lib/render/reducer.ts).
+   * the default from the layer's hints (`defaultRenderMode` in lib/render/reducer.ts). `exact`: a share link's op, set
+   * as the sender had it; its view (or none) is kept and the view's preset is not run again.
    */
-  | { type: "render"; op: RenderOp; defaultMode?: boolean }
+  | { type: "render"; op: RenderOp; defaultMode?: boolean; exact?: boolean }
   | { type: "toggle_layer"; layerId: string }
   | { type: "select"; selection: Selection }
   | { type: "deselect" }

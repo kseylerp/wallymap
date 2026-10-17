@@ -160,6 +160,7 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --tag cover
 - **Scenario**: Charleston at 6 feet and Honolulu at 2 feet of sea level rise (`sea-level-rise`).
 - **Route**: Banff to Lake Louise by bike, Zermatt to the Hörnli Hut on foot, Happy Isles to Half Dome (the `route` tool alone).
 - **One question per layer no older question asks about**: aquifers, burn-severity, carbon-flux, condor-range, critical-habitat, disasters (Mozambique), disturbance, drought, fire-hazard, fire-weather, fishing, flood-extent, flood-zones, forest-alerts, geology, grazing-allotments, hardiness-zones, land-cover, mining-claims, old-growth, paddling (twice), permafrost, phenology, photos, pipelines-lines, recreation-sites, river-basins, smoke, tides, wikipedia-nearby.
+- **Data stories** (spec §13, §13a): the Mississippi's flow over three months (`river-pulse`, timeline), Cook Inlet's currents this week (`ocean-currents`, timeline, the tide plotted under the scrubber), the Sierra's strongest wind tomorrow (`wind-flow`). Each also holds its answer to the data's shape: a low and a peak with numbers, a ratio for the river, and what size or brightness and color mean.
 - **Safe or open now, here, compare**: weather at Paradise (`weather-alerts`), forest roads near Flagstaff (`forest-roads`), huts around Zermatt on a map view (`outdoor-features`), fishing on the Kenai on a map view (`fishing`), the Gila against the Bob Marshall (`remoteness`), snow at Mount Baker against Mount Hood (`snowpack`).
 
 ## Eval set

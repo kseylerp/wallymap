@@ -18,7 +18,23 @@
 import type { BBox } from "@/layers/types";
 import { featureBBox } from "./naturalEarth";
 
-export type RegionSource = "natural-earth" | "river-basins" | "protected-areas-world" | "wilderness" | "national-forests" | "wikidata";
+export type RegionSource = "natural-earth" | "river-basins" | "protected-areas-world" | "wilderness" | "national-forests" | "wikidata" | "world";
+
+/**
+ * The polar regions, which no geocoder answers well: Mapbox gave "Arctic" as Arctic, Rhode Island and "Arctic Circle"
+ * as a street in Santa Claus, Indiana (2026-10-17). Their boxes are the polar circles (sea ice, permafrost, the poles).
+ */
+const WORLD_REGIONS: { names: string[]; name: string; bbox: BBox; center: [number, number] }[] = [
+  { names: ["arctic", "the arctic", "arctic ocean", "the arctic ocean", "arctic circle", "the arctic circle", "north pole", "the north pole", "high arctic"], name: "the Arctic (north of the Arctic Circle)", bbox: [-180, 66.5, 180, 90], center: [0, 80] },
+  { names: ["antarctica", "antarctic", "the antarctic", "southern ocean", "the southern ocean", "south pole", "the south pole"], name: "Antarctica and the Southern Ocean", bbox: [-180, -90, 180, -60], center: [0, -80] },
+];
+
+/** A polar region by name ("the Arctic", "Antarctica"), or null. */
+export function worldRegion(place: string): RegionMatch | null {
+  const key = place.toLowerCase().replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
+  const found = WORLD_REGIONS.find((r) => r.names.includes(key));
+  return found ? { bbox: found.bbox, center: found.center, name: found.name, source: "world" } : null;
+}
 
 export type RegionMatch = {
   bbox: BBox;

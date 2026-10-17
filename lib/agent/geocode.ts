@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { BBox } from "@/layers/types";
 import { featureBBoxes, findRegion, loadNaturalEarthRegions, regionDisplayName } from "./naturalEarth";
-import { lookupRegion, type RegionMatch, type RegionSource } from "./regionNames";
+import { lookupRegion, worldRegion, type RegionMatch, type RegionSource } from "./regionNames";
 
 const ENDPOINT = "https://api.mapbox.com/search/geocode/v6/forward";
 const FALLBACK_HALF_SPAN_DEG = 0.1;
@@ -159,6 +159,8 @@ export async function geocode(
     return { error: "MAPBOX_TOKEN is not set" };
   }
 
+  const polar = worldRegion(place.split(",")[0]);
+  if (polar) return polar;
   const named = await lookupRegion(place, opts.proximity, { naturalEarth: firstRegion });
   if (named) return named;
 

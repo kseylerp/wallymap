@@ -122,6 +122,15 @@ describe("geocode", () => {
     expect(n).toBeCloseTo(39.43);
   });
 
+  it("answers the Arctic and Antarctica with the polar circles, not Arctic, Rhode Island", async () => {
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    expect(await geocode("Arctic")).toMatchObject({ bbox: [-180, 66.5, 180, 90], source: "world" });
+    expect(await geocode("the Arctic Circle")).toMatchObject({ bbox: [-180, 66.5, 180, 90] });
+    expect(await geocode("Antarctica")).toMatchObject({ bbox: [-180, -90, 180, -60] });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("returns an error when there are no features", async () => {
     globalThis.fetch = vi.fn(async () => jsonResponse({ features: [] })) as typeof fetch;
     expect(await geocode("Nowhere")).toEqual({ error: "No match for Nowhere" });

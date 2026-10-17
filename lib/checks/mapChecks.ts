@@ -332,7 +332,7 @@ export function checkLattice(layers: Drawn[]): CheckResult {
 const SAME_SPOT_KM = 0.015;
 
 /** Names that say what a thing is rather than which one it is: many different places carry them. */
-const GENERIC_NAMES = new Set(["pullout", "parking", "parking lot", "campsite", "camp site", "designated campsite", "dispersed campsite", "trailhead", "viewpoint", "toilet", "toilets", "shelter", "spring", "picnic area", "picnic site", "unnamed"]);
+const GENERIC_NAMES = new Set(["pullout", "parking", "parking lot", "campsite", "camp site", "designated campsite", "dispersed campsite", "trailhead", "viewpoint", "toilet", "toilets", "shelter", "spring", "picnic area", "picnic site", "unnamed", "tunnel", "adit", "shaft", "mine shaft", "prospect", "prospect pit", "mine", "quarry", "gravel pit", "borrow pit"]);
 
 function overlapShare(a: BBox, b: BBox): number {
   const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
@@ -487,7 +487,16 @@ export type CardSection = "measure" | "fact" | "detail" | "signal";
 export type SectionRow = { section: CardSection; row: CardRow };
 
 /** A label that is a property key, not words: snake_case, camelCase, or a unit glued on ("Max length m"). */
-const UNIT_TAIL = /[A-Za-z]\s(m|km|km2|ft|mi|pct|mw|kw|kg|cm|mm|s|h)$/i;
+const UNIT_TAIL = /[A-Za-z]\s(m|km|km2|sq km|sq mi|ft|mi|pct|percent|mw|kw|kv|kg|cm|mm|s|h|c|f|kmh|mph|deg|ma|cfs|no)$/i;
+
+/** A label whose last word is one letter ("Then t", "Then v"): a key's suffix, not words. */
+const LETTER_TAIL = /[a-z]\s[a-z]$/i;
+
+/** A label naming a code, id or year: its value is an identifier, never a quantity with a thousands comma. */
+const IDENTIFIER_LABEL = /\b(code|id|fips|huc|no|number|year|designated|established|completed|built)\b/i;
+
+/** A label naming a code or type: a bare number under it is a code nobody can read without help. */
+const CODE_LABEL = /\b(code|type|class)\b/i;
 
 /** Labels of a part of something (in view, inside the box) and of the whole it belongs to. */
 const PART_LABEL = /\b(in view|inside|in the box|part)\b/i;
@@ -506,8 +515,16 @@ export function cardRowProblems(rows: SectionRow[], layer: Pick<LayerInfo, "card
   const problems: string[] = [];
   for (const { row } of rows) {
     const label = row.label.trim();
-    if (/_/.test(label) || /[a-z][A-Z]/.test(label) || UNIT_TAIL.test(label)) problems.push(`label "${label}" is a raw property key`);
-    if (/^value$/i.test(label) && layer.card?.measure) problems.push(`"Value" stands where the layer names its measure ("${layer.card.measure.label}")`);
+    // camelCase in a one-word label is a key; inside words it is a name ("OpenStreetMap element").
+    if (/_/.test(label) || (/[a-z][A-Z]/.test(label) && !/\s/.test(label)) || UNIT_TAIL.test(label)) problems.push(`label "${label}" is a raw property key`);
+    if (/^value$/i.test(label)) {
+      problems.push(layer.card?.measure ? `"Value" stands where the layer names its measure ("${layer.card.measure.label}")` : `"Value ${row.value}" does not say what is measured`);
+    }
+    const bareNumber = /^-?[\d,.]+$/.test(row.value) && label.toLowerCase() === row.key.toLowerCase();
+    if (/^[a-z]{1,2}\d?$/i.test(label) && !row.help && !bareNumber) problems.push(`label "${label}" is a raw property key`);
+    if (LETTER_TAIL.test(label)) problems.push(`label "${label}" is a raw property key`);
+    if (IDENTIFIER_LABEL.test(label) && /^\d{1,3}(,\d{3})+$/.test(row.value.trim())) problems.push(`"${label} ${row.value}" prints an identifier or year with a thousands comma`);
+    if (CODE_LABEL.test(label) && /^-?\d+$/.test(row.value.trim()) && !row.help) problems.push(`"${label} ${row.value}" is a numeric code with no meaning given`);
     if (/https?:\/\/\S+/.test(row.value)) problems.push(`"${label}" shows a bare URL as text`);
     if (/\b(score|index|rank)\b/i.test(label) && /\d/.test(row.value) && !row.help) problems.push(`"${label} ${row.value}" has no help explaining the number`);
     if (/^[a-z][a-z0-9]*(?:[+|][a-z0-9]+)+$/.test(row.value.trim())) problems.push(`"${label}" shows a raw code ("${row.value}")`);

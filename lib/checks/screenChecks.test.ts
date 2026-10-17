@@ -52,6 +52,13 @@ describe("layout", () => {
     expect(layoutProblems(measure([ellipsis]))).toEqual([]);
   });
 
+  it("fails a card label cut even with an ellipsis (the coordinator's \"Flow vs. the period's …\")", () => {
+    const rect = { x: 540, y: 430, width: 140, height: 20 };
+    const label: MeasuredElement = { desc: 'span ("Flow vs. the period\'s median")', rect, text: { left: 540, right: 720, boxLeft: 540, boxRight: 680, overflowX: "hidden", textOverflow: "ellipsis" } };
+    const card: LayoutMeasure = { viewport, panels: [{ name: "card", rect: { x: 526, y: 326, width: 340, height: 560 }, elements: [label] }] };
+    expect(layoutProblems(card)).toEqual(['In the card, text does not fit: span ("Flow vs. the period\'s median") is cut off with an ellipsis (40px hidden).']);
+  });
+
   it("fails a panel off the screen and an element off the screen", () => {
     const off = { x: 1300, y: 76, width: 320, height: 500 };
     expect(layoutProblems(measure([], off))).toEqual(["The console runs off the screen (180px past the right edge)."]);
@@ -106,6 +113,15 @@ describe("line visibility", () => {
     // The Tahoe reading at 331355b: most samples on sage over green forest, a few in clearings.
     expect(lineVisibilityProblem("OpenStreetMap trails", "Topo", [15, 22, 23, 26, 32, 43, 52, 26, 22, 15])).not.toBeNull();
     expect(lineVisibilityProblem("OpenStreetMap trails", "Topo", [])).toBeNull();
+  });
+
+  it("fails a network whose widest lines carry the average while most of its lines do not show", () => {
+    // Three big rivers change a lot; the thin ones on satellite change nothing.
+    const diffs = [180, 170, 160, 150, 140, 3, 4, 2, 5, 3, 6, 2];
+    expect(lineVisibilityProblem("River flow", "Topo + Satellite", diffs)).toBe(
+      "River flow lines mostly do not show on Topo + Satellite: hiding them changes only 42% of the points along them by 32 or more (needs 60%); the widest lines carry the average.",
+    );
+    expect(lineVisibilityProblem("River flow", "Topo + Satellite", [60, 48, 45, 40, 36, 20, 5])).toBeNull();
   });
 });
 

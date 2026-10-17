@@ -4,10 +4,11 @@
  * half here turns them into failures as plain sentences, so every rule is unit-tested without a browser:
  *
  * - layout: no element of the console, card, legend, chat or top bar outside its panel or the viewport, no panel
- *   scrolling sideways, no text overflowing its box without an ellipsis;
+ *   scrolling sideways, no text overflowing its box without an ellipsis, and in a card none cut even with one;
  * - placeholder: the chat input's placeholder fits its box and nothing covers it;
  * - labels: hex counts fit inside their cell, ranked symbol labels are not cut by the map's edge;
- * - lines: a line layer shows against the basemap (the pixels along its lines change when it is hidden).
+ * - lines: a line layer shows against the basemap (the pixels along its lines change when it is hidden, on average and
+ *   at most of the points along them), also with a card open (its siblings fade).
  * - rows: the console shows each layer row from its header, never scrolled mid-row.
  */
 
@@ -96,6 +97,8 @@ export function layoutProblems(m: LayoutMeasure): string[] {
       if (t && spill > SLACK) {
         if (t.overflowX === "visible") cut.push(`${el.desc} spills ${px(spill)} out of its box`);
         else if (t.textOverflow !== "ellipsis") cut.push(`${el.desc} is cut off without an ellipsis`);
+        // A card's labels and values are what it says: shortened with "…" they say nothing ("Flow vs. the period's …").
+        else if (name === "card") cut.push(`${el.desc} is cut off with an ellipsis (${px(spill)} hidden)`);
       }
     }
     const list = (items: string[]) => `${items.slice(0, 3).join("; ")}${items.length > 3 ? `; and ${items.length - 3} more` : ""}`;
@@ -179,15 +182,42 @@ export function labelProblems(labels: MeasuredLabel[], canvas: Rect): string[] {
 export const LINE_VISIBLE_DIFF = 32;
 
 /**
+ * A sampled point along a line counts as showing when hiding the layer changes it by at least this much (0 to 255), the
+ * same bar as the mean. Calibrated on 2026-10-17 readings (quartiles of the per-point change): rivers on Topo 20 / 33 / 50
+ * and with a card open on satellite 20 / 34 / 52, both of which the coordinator could not see; T1 trails at Tahoe 52 / 56
+ * / 63 and mountain bike facets at Moab 34 / 55 / 72, which read easily.
+ */
+export const LINE_POINT_VISIBLE_DIFF = 32;
+
+/**
+ * The least share of sampled points along a line layer that must show. The mean alone passed a river network on
+ * satellite whose three big rivers changed the pixels a lot and whose hundred thin ones showed nothing (coordinator,
+ * 2026-10-17): every line of the layer must read, not its widest.
+ */
+export const LINE_VISIBLE_SHARE = 0.6;
+
+/** The share of `diffs` at or above LINE_POINT_VISIBLE_DIFF. */
+export function visibleShare(diffs: number[]): number {
+  return diffs.length === 0 ? 1 : diffs.filter((d) => d >= LINE_POINT_VISIBLE_DIFF).length / diffs.length;
+}
+
+/**
  * A line layer's visibility on one basemap: the mean color change at sampled points along its rendered lines between
- * the map with the layer and without it (each a mean of the three channels, 0 to 255).
+ * the map with the layer and without it (each a mean of the three channels, 0 to 255), and for lines the share of those
+ * points that change visibly.
  */
 export function lineVisibilityProblem(layerId: string, basemap: string, diffs: number[], what: "lines" | "symbols" | "outlines" = "lines"): string | null {
   if (diffs.length === 0) return null;
   const mean = diffs.reduce((a, b) => a + b, 0) / diffs.length;
-  if (mean >= LINE_VISIBLE_DIFF) return null;
   const where = what === "symbols" ? "under them" : "along them";
-  return `${layerId} ${what} barely show on ${basemap}: hiding them changes the pixels ${where} by ${mean.toFixed(1)} of 255 on average (needs ${LINE_VISIBLE_DIFF}).`;
+  if (mean < LINE_VISIBLE_DIFF) {
+    return `${layerId} ${what} barely show on ${basemap}: hiding them changes the pixels ${where} by ${mean.toFixed(1)} of 255 on average (needs ${LINE_VISIBLE_DIFF}).`;
+  }
+  const share = visibleShare(diffs);
+  if (what === "lines" && share < LINE_VISIBLE_SHARE) {
+    return `${layerId} lines mostly do not show on ${basemap}: hiding them changes only ${Math.round(share * 100)}% of the points along them by ${LINE_POINT_VISIBLE_DIFF} or more (needs ${Math.round(LINE_VISIBLE_SHARE * 100)}%); the widest lines carry the average.`;
+  }
+  return null;
 }
 
 /**

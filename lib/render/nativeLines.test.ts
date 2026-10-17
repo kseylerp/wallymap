@@ -517,3 +517,41 @@ describe("the encoded ordinal drives the line color (spec §12c: difficulty on t
     expect(asked[0].look).toEqual({ kind: "solid", color: PINK });
   });
 });
+
+describe("an encoded network on satellite imagery (river pulse)", () => {
+  const encodedEntry = (imagery: boolean, selected = -1): LineEntry => ({
+    id: "river-pulse",
+    layerId: "river-pulse",
+    data: { type: "FeatureCollection", features: [a, b] },
+    look: { kind: "encoded", size: { key: "q", extent: [0, 100] }, color: { key: "pct", extent: [0, 200] } },
+    opacity: 1,
+    shown: true,
+    selected,
+    ...(imagery && { imagery }),
+  });
+  /** The width at the thin end (share 0) of an encoded width expression. */
+  const thinEnd = (w: unknown) => (w as unknown[])[4];
+
+  it("draws the thinnest reach wider and with the trails' casing on imagery, and as before on Topo", () => {
+    const topo = lineLayerSpecs(encodedEntry(false));
+    const sat = lineLayerSpecs(encodedEntry(true));
+    expect(thinEnd(paint(byPart(topo, "core"))["line-width"])).toBe(0.6);
+    expect(thinEnd(paint(byPart(topo, "casing"))["line-width"])).toBe(1.6);
+    expect(thinEnd(paint(byPart(sat, "core"))["line-width"])).toBe(1.75);
+    expect(thinEnd(paint(byPart(sat, "casing"))["line-width"])).toBe(3.75);
+    expect(paint(byPart(sat, "casing"))["line-color"]).toBe(WHITE);
+  });
+
+  it("keeps the network readable while one reach is selected", () => {
+    const opacity = paint(byPart(lineLayerSpecs(encodedEntry(true, 0)), "core"))["line-opacity"] as unknown[];
+    expect(opacity[3]).toBe(0.75);
+    expect(opacity[3]).toBeGreaterThan(SIBLING_FADE);
+  });
+
+  it("knows imagery from the basemap", () => {
+    const loaded = layerOf("river-pulse", [a, b], { encode: { size: "v" } } as never);
+    const state = { ...initialMapState, basemap: "outdoors-satellite", layers: { "river-pulse": loaded }, renderOps: [{ layerId: "river-pulse", mode: "lines", visible: true } as RenderOp] } as MapState;
+    expect(lineEntries(state)[0]?.imagery).toBe(true);
+    expect(lineEntries({ ...state, basemap: "outdoors" })[0]?.imagery).toBeUndefined();
+  });
+});

@@ -91,6 +91,8 @@ export type LineEntry = {
   shown: boolean;
   /** Index in `data.features` of the selected feature, or -1. */
   selected: number;
+  /** True on a basemap with satellite imagery: encoded lines take a wider minimum and the trails' casing there. */
+  imagery?: boolean;
 };
 
 /** True when an op on a layer with these hints draws as lines (lines mode; line layers have no column form). */
@@ -124,6 +126,7 @@ export function lineEntries(view: MapState): LineEntry[] {
   const entries: LineEntry[] = [];
   const compare = view.compare;
   const mode = effectiveMode(view);
+  const imagery = view.basemap === "satellite" || view.basemap === "outdoors-satellite";
   for (const op of view.renderOps) {
     if (!op.visible) continue;
     const loaded = view.layers[op.layerId];
@@ -177,7 +180,7 @@ export function lineEntries(view: MapState): LineEntry[] {
           : loaded.style.unit === "score"
             ? { kind: "ramp" }
             : { kind: "classes" };
-    entries.push({ id: op.layerId, layerId: op.layerId, data, look, opacity, shown: true, selected: indexOf(data, picked?.feature) });
+    entries.push({ id: op.layerId, layerId: op.layerId, data, look, opacity, shown: true, selected: indexOf(data, picked?.feature), ...(imagery && { imagery }) });
   }
   return entries;
 }
@@ -296,11 +299,14 @@ function shareOf(prop: "sz" | "ct"): ExpressionSpecification {
 
 /**
  * The `line-width` of an encoded line: the size share (the square root of the flow's share of the largest) from 0.6 px
- * to 12 px; its casing a pixel wider at the thin end and two at the wide end, so a creek is not all white halo.
+ * to 12 px; its casing a pixel wider at the thin end and two at the wide end, so a creek is not all white halo. On
+ * imagery the thinnest is 1.75 px and the casing two pixels wider throughout, as the trails' (a thin river read as
+ * nothing on the photo).
  */
-export function encodedLineWidth(extra = 0, casing = false): ExpressionSpecification {
-  const lo = ENCODED_LINE.minPx + extra + (casing ? ENCODED_LINE.casingMinPx : 0);
-  const hi = ENCODED_LINE.maxPx + extra + (casing ? ENCODED_LINE.casingMaxPx : 0);
+export function encodedLineWidth(extra = 0, casing = false, imagery = false): ExpressionSpecification {
+  const min = imagery ? ENCODED_LINE.imageryMinPx : ENCODED_LINE.minPx;
+  const lo = min + extra + (casing ? (imagery ? ENCODED_LINE.imageryCasingPx : ENCODED_LINE.casingMinPx) : 0);
+  const hi = ENCODED_LINE.maxPx + extra + (casing ? (imagery ? ENCODED_LINE.imageryCasingPx : ENCODED_LINE.casingMaxPx) : 0);
   return ["interpolate", ["linear"], ["max", 0, shareOf("sz")], 0, lo, 1, hi];
 }
 
@@ -327,11 +333,17 @@ function coreWidth(): number | ExpressionSpecification {
   return ["match", ["get", "cls"], ...own.flatMap((c) => [c, classWidth(c)]), LINE.width] as ExpressionSpecification;
 }
 
-/** `opacity`, with the siblings of a selected feature faded and the selected one at `selectedOpacity`. */
-function faded(entry: Pick<LineEntry, "opacity" | "selected">, base: number, selectedOpacity: number): number | ExpressionSpecification {
+/**
+ * While a feature of an encoded network (river pulse) is selected, the rest of its layer fades only to this share: the
+ * network is the picture, and at SIBLING_FADE it vanished on satellite behind one selected reach (coordinator, 2026-10-17).
+ */
+export const ENCODED_SIBLING_FADE = 0.75;
+
+/** `opacity`, with the siblings of a selected feature faded (by `fade`) and the selected one at `selectedOpacity`. */
+function faded(entry: Pick<LineEntry, "opacity" | "selected">, base: number, selectedOpacity: number, fade = SIBLING_FADE): number | ExpressionSpecification {
   const value = entry.opacity * base;
   if (entry.selected < 0) return value;
-  return ["case", ["==", ["get", "i"], entry.selected], entry.opacity * selectedOpacity, value * SIBLING_FADE];
+  return ["case", ["==", ["get", "i"], entry.selected], entry.opacity * selectedOpacity, value * fade];
 }
 
 const isRoute: FilterSpecification = ["==", ["get", "cls"], "route"];
@@ -347,8 +359,10 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
   const sel: ExpressionSpecification = ["==", ["get", "i"], entry.selected];
   const routeCasing = LINE_CLASSES.route.casing;
   const encoded = entry.look.kind === "encoded" && entry.look.size !== undefined;
+  const imagery = entry.imagery === true;
+  const fade = encoded ? ENCODED_SIBLING_FADE : SIBLING_FADE;
   const baseCasing: number | ExpressionSpecification = encoded
-    ? encodedLineWidth(0, true)
+    ? encodedLineWidth(0, true, imagery)
     : routed
       ? ["match", ["get", "cls"], "route", routeCasing, LINE.casing]
       : LINE.casing;
@@ -362,9 +376,9 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
     paint: {
       "line-color": coreColor(entry),
       // Classes with their own width (thin forest roads); an encoded size its share; the rest at the data line width.
-      "line-width": classes ? coreWidth() : encoded ? encodedLineWidth() : LINE.width,
+      "line-width": classes ? coreWidth() : encoded ? encodedLineWidth(0, false, imagery) : LINE.width,
       // The selected feature draws in the highlight layer above.
-      "line-opacity": faded(entry, 1, 0),
+      "line-opacity": faded(entry, 1, 0, fade),
       ...(classes && { "line-dasharray": coreDash() }),
     },
     ...(routed && { filter: notRoute }),
@@ -398,7 +412,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
       type: "line",
       source,
       layout,
-      paint: { "line-color": WHITE, "line-width": casingWidth, "line-opacity": faded(entry, LINE.casingOpacity, 1) },
+      paint: { "line-color": WHITE, "line-width": casingWidth, "line-opacity": faded(entry, LINE.casingOpacity, 1, fade) },
     },
     core,
     dash,
@@ -417,7 +431,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
       source,
       filter: sel,
       layout,
-      paint: { "line-color": SELECTED_LINE.color, "line-width": encoded ? encodedLineWidth(1) : SELECTED_LINE.width, "line-opacity": entry.opacity },
+      paint: { "line-color": SELECTED_LINE.color, "line-width": encoded ? encodedLineWidth(1, false, imagery) : SELECTED_LINE.width, "line-opacity": entry.opacity },
     },
   ];
 }

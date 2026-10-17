@@ -37,6 +37,7 @@ import {
   labelProblems,
   layoutProblems,
   lineVisibilityProblem,
+  visibleShare,
   PANELS,
   pixelDiffs,
   placeholderProblems,
@@ -327,7 +328,10 @@ async function measureOps(page: Page, state: MapState, ops: RenderOps, on: strin
     await settle(page, 500);
     const diffs = await page.evaluate(pixelDiffs, { a: `data:image/png;base64,${shown}`, b: `data:image/png;base64,${hidden}`, points });
     const mean = diffs.reduce((s, d) => s + d, 0) / diffs.length;
-    readings.push(`${title} ${what} on ${on}: ${mean.toFixed(1)} mean pixel change over ${diffs.length} points`);
+    const sorted = [...diffs].sort((x, y) => x - y);
+    const q = (f: number) => sorted[Math.min(sorted.length - 1, Math.floor(f * sorted.length))].toFixed(0);
+    const share = what === "lines" ? `, ${Math.round(visibleShare(diffs) * 100)}% of them showing (quartiles ${q(0.25)} / ${q(0.5)} / ${q(0.75)})` : "";
+    readings.push(`${title} ${what} on ${on}: ${mean.toFixed(1)} mean pixel change over ${diffs.length} points${share}`);
     const problem = lineVisibilityProblem(title, on, diffs, what);
     if (problem) problems.push(problem);
     if (withFill && areas && areas.inside.length >= 5) {
@@ -467,11 +471,14 @@ async function checkOne(browser: Browser, item: ScreenItem, size: Size): Promise
     const after = layoutProblems(await page.evaluate(collectLayout, PANELS));
     problems.push(...new Set([...before, ...after]));
     await page.screenshot({ path: join(OUT_DIR, shot) });
-    // With a card open the other areas of its layer fade, but their outlines must still show (the owner's glaciers on
-    // Topo + Satellite: siblings of a selected glacier vanished on the ice).
+    // With a card open the other areas and lines of its layer fade, but they must still show (the owner's glaciers on
+    // Topo + Satellite: siblings of a selected glacier vanished on the ice; the coordinator's river network vanished
+    // behind one selected reach). Measured on the basemap the page opened on, as the screenshot shows it.
     if (!phone && opened) {
-      const areaOps = item.state.renderOps.filter((o) => o.visible && (o.mode === "polygons" || o.mode === "columns") && item.state.layers[o.layerId]?.style.geometry === "polygon");
-      await measureOps(page, item.state, areaOps, "the map with a card open", { readings: notes, problems }, { fill: false });
+      const fadingOps = item.state.renderOps.filter(
+        (o) => o.visible && (((o.mode === "polygons" || o.mode === "columns") && item.state.layers[o.layerId]?.style.geometry === "polygon") || o.mode === "lines"),
+      );
+      await measureOps(page, item.state, fadingOps, `${BASEMAPS.find((b) => b.value === item.state.basemap)?.label ?? item.state.basemap} with a card open`, { readings: notes, problems }, { fill: false });
     }
     // Zero errors per question (coordinator, 2026-10-16): every uncaught error, every console error, and the dev badge
     // once the checks are done.

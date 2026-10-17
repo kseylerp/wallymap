@@ -11,7 +11,7 @@ import {
   type WideStrategy,
 } from "@/layers/types";
 import { cacheKeyFor, createLayerFetch } from "@/lib/fetch";
-import { withNaturalName } from "@/layers/_shared/names";
+import { withDisplayName } from "@/layers/_shared/names";
 
 export type RunLayerParams = {
   bbox: unknown;
@@ -100,15 +100,16 @@ export function wideOutcome(
 }
 
 /**
- * Every layer's feature names as people say them ("Oasis, The" → "The Oasis"; layers/_shared/names.ts): OpenBeta,
- * OpenStreetMap and catalogue sources file some names with the article last. Layers that merge sources by name
- * (climbing) already read their names this way before merging.
+ * Every layer's feature names as people say them (layers/_shared/names.ts): "Oasis, The" → "The Oasis", "PIO XI" → "Pio
+ * XI", "Gl. Upsala" → "Upsala Glacier", "Lake Jb Thomas Dam" → "Lake J.B. Thomas Dam", with the source's spelling kept
+ * as `nameInSource` when it changed. One place, so the map labels, the Rank by list, the card and the model read the
+ * same name. Layers that merge sources by name (climbing) already read their names this way before merging.
  */
-function naturalNames<R extends LayerResult | LayerError>(result: R): R {
+function naturalNames<R extends LayerResult | LayerError>(result: R, layerId: string): R {
   if ("error" in result || result.kind !== "geojson") return result;
   let changed = false;
   const features = result.data.features.map((f) => {
-    const properties = withNaturalName(f.properties);
+    const properties = withDisplayName(f.properties, layerId);
     if (properties === f.properties) return f;
     changed = true;
     return { ...f, properties };
@@ -176,9 +177,9 @@ export async function runLayer(id: string, params: RunLayerParams): Promise<RunL
 
     if ("error" in result) {
       const status = result.hint === "zoom_in" ? 422 : 503;
-      return { status, body: naturalNames(result) };
+      return { status, body: naturalNames(result, id) };
     }
-    const named = naturalNames(result);
+    const named = naturalNames(result, id);
     if (!wide) return { status: 200, body: named };
     const outcome = wideOutcome(layer, wide, named);
     const body: LayerResult = {

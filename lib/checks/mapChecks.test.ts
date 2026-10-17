@@ -300,6 +300,20 @@ describe("card text", () => {
     expect(cardRowProblems([row("lengthKm", "Length in view", "12.4 km", "measure"), row("distanceKm", "Full length", "48.1 km")], {})).toEqual([]);
   });
 
+  it("fails card and Rank by titles in capitals (PIO XI, JORGE MONTT), passes acronyms and names as people write them", () => {
+    const outline = (name: string, dx: number, area: number): Feature => ({
+      type: "Feature",
+      geometry: { type: "Polygon", coordinates: [[[-73 + dx, -49], [-72.9 + dx, -49], [-72.9 + dx, -48.9], [-73 + dx, -49]]] },
+      properties: { name, areaKm2: area, v: area },
+    });
+    const caps = [outline("BERNARDO", 0, 1393), outline("PIO XI", 1, 1245), outline("Upsala Glacier", 2, 1100)];
+    const result = checkCards(drawn(mapWith({ id: "glaciers", features: caps, mode: "polygons" })));
+    expect(result.ok).toBe(false);
+    expect(result.failures[0]).toMatch(/the title "BERNARDO" is in capitals.*the title "PIO XI" is in capitals/);
+    const fixed = [outline("Bernardo", 0, 1393), outline("Pio XI", 1, 1245), outline("BLM NWR", 2, 1100)];
+    expect(checkCards(drawn(mapWith({ id: "glaciers", features: fixed, mode: "polygons" }))).ok).toBe(true);
+  });
+
   it("passes a score with help, years and plain labels", () => {
     expect(cardRowProblems([row("v", "Hazard score", "1,200", "measure", { text: "Navajo AUM score" }), row("year", "Year", "2021"), row("kind", "Kind", "crag")], {})).toEqual([]);
   });

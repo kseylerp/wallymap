@@ -67,7 +67,7 @@ const MIN_VALUES_FOR_UNIQUENESS = 8;
 
 /** Properties that are identifiers, names, links, licences or internals rather than something to filter on. */
 const SKIPPED_KEYS = new Set([
-  "osmId", "id", "name", "title", "url", "t", "signals", "popularityNote", "h3", "wikidata", "wikipedia",
+  "osmId", "id", "name", "nameInSource", "title", "url", "t", "signals", "popularityNote", "h3", "wikidata", "wikipedia",
   "license", "licence", "attribution",
 ]);
 

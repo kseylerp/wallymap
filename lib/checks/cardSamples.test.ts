@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { listLayers } from "@/layers";
-import { cardRowProblems, cardRows } from "./mapChecks";
+import { cardRowProblems, cardRows, titleProblems } from "./mapChecks";
+import { withDisplayName } from "@/layers/_shared/names";
 import { readSamples } from "@/scripts/card-samples.mjs";
 
 /**
@@ -23,6 +24,11 @@ describe("card text on every layer's recorded sample", () => {
       const problems = new Set<string>();
       for (const f of sample.features) for (const p of cardRowProblems(cardRows(f, layer), layer)) problems.add(p);
       expect([...problems]).toEqual([]);
+    });
+    it(`${layer.id}: no card title is in capitals once named as people write it`, () => {
+      // The recorded sample is the source's spelling; runLayer reads every name through displayName.
+      const titles = sample.features.map((f) => withDisplayName(f.properties, layer.id)?.name).filter((n): n is string => typeof n === "string");
+      expect(titles.flatMap((t) => titleProblems(t))).toEqual([]);
     });
   }
 

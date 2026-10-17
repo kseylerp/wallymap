@@ -218,6 +218,7 @@ const LABELS: Record<string, string> = {
   kind: "Kind",
   year: "Year",
   informal: "Informal trail",
+  nameInSource: "Name in source",
   // Columns render mode (lib/render/deck.ts `hexColumns`): one H3 cell's stack.
   count: "Features",
   top: "Most common",

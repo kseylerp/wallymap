@@ -8,6 +8,7 @@ import type { MapState } from "@/lib/render/state";
 import { visibleState } from "@/lib/render/view";
 import { RANKED_TOP_N } from "@/lib/render/views";
 import { shoreOffsetKm } from "@/lib/checks/landMask";
+import { isAcronymName, isAllCaps } from "@/layers/_shared/names";
 
 /**
  * Map checks (the eval's Tier 1): what the map ends up showing after a question, checked without a browser. Each check
@@ -19,7 +20,8 @@ import { shoreOffsetKm } from "@/lib/checks/landMask";
  * - lattice: no point layer drawn as a regular grid (a model grid read as places).
  * - duplicates: no place listed twice (an OSM node and a cliff line of the same crag), on the map or in Rank by's top 10,
  *   and no two top-10 entries with one measure under one name stem (Granby Dam and Granby Dikes 1 to 4, one reservoir).
- * - card: the inspect card's rows read as words (no raw keys, "Value", bare URLs, unexplained scores).
+ * - card: the inspect card's rows read as words (no raw keys, "Value", bare URLs, unexplained scores), and no card or
+ *   Rank by title is in capitals unless it is an acronym ("PIO XI" is Pio XI).
  * - layerIds: every layer on the map is a registered layer (no garbled tool names).
  * - place: for a question about a place, the features are in or near it, and every entry of Rank by's top 10 is.
  */
@@ -599,14 +601,23 @@ export function cardRows(feature: Feature, layer: LayerInfo): SectionRow[] {
   ];
 }
 
+/** What is wrong with a card or Rank by title: written in capitals ("PIO XI", "JORGE MONTT") when it is not an acronym. */
+export function titleProblems(name: string | null): string[] {
+  if (name === null || !isAllCaps(name) || isAcronymName(name)) return [];
+  return [`the title "${name}" is in capitals`];
+}
+
 export function checkCards(layers: Drawn[]): CheckResult {
   const failures: string[] = [];
   for (const layer of layers) {
     if (!layer.info) continue;
     const seen = new Map<string, Feature>();
     for (const f of layer.data.features.slice(0, CARD_FEATURES)) {
-      for (const p of cardRowProblems(cardRows(f, layer.info), layer.info)) if (!seen.has(p)) seen.set(p, f);
+      for (const p of [...titleProblems(nameOf(f)), ...cardRowProblems(cardRows(f, layer.info), layer.info)]) if (!seen.has(p)) seen.set(p, f);
     }
+    // The Rank by list's names are titles too (each opens its card).
+    const { top } = rankedTop(layer.info, layer.op, layer.loaded, layer.data, RANKED_TOP_N);
+    for (const f of top) for (const p of titleProblems(nameOf(f))) if (!seen.has(p)) seen.set(p, f);
     if (seen.size === 0) continue;
     const list = [...seen.entries()];
     failures.push(`${layer.label} card: ${list.slice(0, 4).map(([p, f]) => `${p} (${nameOf(f) ? `"${nameOf(f)}"` : "a feature"})`).join("; ")}${list.length > 4 ? `; and ${list.length - 4} more` : ""}.`);

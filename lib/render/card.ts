@@ -146,6 +146,11 @@ export function cardContent(feature: Feature, opts: { unit?: string; card?: Card
     if (value === null) continue;
     facts.push({ key: fact.key, label: fact.label, value, ...withHelp(helpFor(fact.key, fact.help, fieldHelp)) });
   }
+  // The source's own spelling when the shown name was put in ordinary capitals or spelled out (layers/_shared/names.ts).
+  if (typeof props.nameInSource === "string" && props.nameInSource !== "" && !used.has("nameInSource")) {
+    facts.push({ key: "nameInSource", label: "Name in source", value: props.nameInSource, help: NAME_IN_SOURCE_HELP });
+    used.add("nameInSource");
+  }
   const links: CardLink[] = [];
   for (const link of card.links ?? []) {
     used.add(link.key);
@@ -170,6 +175,10 @@ export function cardContent(feature: Feature, opts: { unit?: string; card?: Card
   if (feature.id !== undefined && !("id" in props)) details.unshift({ key: "id", label: "Id", value: String(feature.id) });
   return { measure, facts, links, details, signals: summary.signals };
 }
+
+const NAME_IN_SOURCE_HELP: FieldHelp = {
+  text: "The name as the source writes it. The title shows it in ordinary capitals, with the source's abbreviations spelled out.",
+};
 
 function withHelp(help: FieldHelp | undefined): { help?: FieldHelp } {
   return help ? { help } : {};

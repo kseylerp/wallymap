@@ -3,7 +3,7 @@ import { convertArrayToReadableStream, MockLanguageModelV4 } from "ai/test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import "@/layers";
 import type { BBox } from "@/layers/types";
-import { stepGuard } from "./stepGuard";
+import { leakedCalls, stepGuard } from "./stepGuard";
 import { buildTools } from "./tools";
 import { createTurn, type Geocoder } from "./turn";
 import type { MapView } from "./view";
@@ -231,5 +231,46 @@ describe("near <town>: the layer kind's radius", () => {
     const box = runLayer.mock.calls[0][1].bbox as BBox;
     expect(((box[3] - box[1]) * 111.32) / 2).toBeCloseTo(50, 0);
     expect(turn.log.join("\n")).toMatch(/near Mammoth Lakes/);
+  });
+});
+
+describe("step guard: a tool call written as text", () => {
+  it("parses a chat-template call the provider passed on as text", () => {
+    expect(leakedCalls('<|start|>assistant<|channel|>commentary to=functions.geocode <|constrain|>={"place":"Navajo Nation"}<|call|>')).toEqual([
+      { toolName: "geocode", input: { place: "Navajo Nation" } },
+    ]);
+    expect(leakedCalls('to=functions.query_uranium <|constrain|>json<|message|>{"bbox":[-112,35,-107,38]}<|call|>')).toEqual([
+      { toolName: "query_uranium", input: { bbox: [-112, 35, -107, 38] } },
+    ]);
+    expect(leakedCalls("Lake Tahoe is 501 m deep.")).toEqual([]);
+  });
+
+  it("runs it as the call, and the turn goes on", async () => {
+    const { calls, result } = await run("How deep is Lake Tahoe?", [
+      { text: '<|start|>assistant<|channel|>commentary to=functions.geocode <|constrain|>={"place":"Lake Tahoe"}<|call|>' },
+      { calls: [{ name: "query_lakes", input: { bbox: TAHOE, name: "Lake Tahoe" } }] },
+      { calls: [{ name: "render", input: { layerId: "lakes" } }, { name: "note", input: { markdown: "Deep." } }] },
+      { text: "- More?" },
+    ]);
+    expect(calls.map((c) => c.name)).toEqual(["geocode", "query_lakes", "render", "note"]);
+    expect(result.text).toBe("- More?");
+  });
+});
+
+describe("near <town>: only the place the query is about", () => {
+  it("ignores an earlier lookup that found a same-named place elsewhere", async () => {
+    const lookups: Record<string, { bbox: BBox; center: [number, number] }> = {
+      "red river gorge": { bbox: [-120.0, 47.1, -119.9, 47.2], center: [-119.95, 47.15] },
+      "red river gorge kentucky": { bbox: [-83.7, 37.75, -83.6, 37.85], center: [-83.65, 37.8] },
+    };
+    const g: Geocoder = async (place) => ({ ...lookups[place.toLowerCase().replace(/,/g, "")], name: place, source: "mapbox" });
+    const turn = createTurn({ question: "Climbing crags near Red River Gorge", view: null, geocoder: g });
+    const tools = buildTools({ view: null, turn });
+    const options = { toolCallId: "t", messages: [], context: {} };
+    await tools.geocode.execute!({ place: "Red River Gorge" } as never, options as never);
+    await tools.geocode.execute!({ place: "Red River Gorge, Kentucky" } as never, options as never);
+    await tools["query_climbing"].execute!({ bbox: [-83.8, 37.7, -83.5, 37.9], zoom: 10 } as never, options as never);
+    const box = runLayer.mock.calls[0][1].bbox as BBox;
+    expect((box[0] + box[2]) / 2).toBeCloseTo(-83.65, 1);
   });
 });

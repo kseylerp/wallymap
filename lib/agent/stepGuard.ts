@@ -19,8 +19,8 @@ import { inputKeyOf, undrawn, type Turn } from "./turn";
  *    model is told to use the first result;
  *  - a step that would end the turn (a note, or text with no tool calls) while successful queries were never drawn
  *    gets a render call for each first, in the layer's default view.
- * Every change is logged on the turn (and the server console). Steps that none of the rules could touch stream
- * through unbuffered.
+ * A tool call the model wrote out as chat-template text becomes that call. Every change is logged on the turn (and
+ * the server console).
  */
 
 type Middleware = LanguageModelMiddleware;
@@ -109,9 +109,39 @@ async function placeForStep(calls: DraftCall[], turn: Turn): Promise<{ text: str
   return null;
 }
 
+/**
+ * Tool calls the model wrote as text in its chat template instead of calling them, which the provider then passed on
+ * as the answer ("<|start|>assistant<|channel|>commentary to=functions.geocode <|constrain|>={"place":"Navajo
+ * Nation"}<|call|>"), parsed back into calls; empty when the text holds none.
+ */
+export function leakedCalls(text: string): { toolName: string; input: Record<string, unknown> }[] {
+  if (!text.includes("to=functions.")) return [];
+  const out: { toolName: string; input: Record<string, unknown> }[] = [];
+  for (const segment of text.split("<|call|>")) {
+    const m = /to=functions\.([\w-]+)[\s\S]*?(\{[\s\S]*\})\s*$/.exec(segment.replace(/<\|(?:end|return)\|>\s*$/, "").trim());
+    if (!m) continue;
+    try {
+      const input: unknown = JSON.parse(m[2]);
+      if (typeof input === "object" && input !== null && !Array.isArray(input)) out.push({ toolName: m[1], input: input as Record<string, unknown> });
+    } catch {
+      // Not a whole JSON object: leave the text as it is.
+    }
+  }
+  return out;
+}
+
 /** The guard's rules on one proposed step. Pure apart from place lookups (shared with the geocode tool through `turn`). */
-export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean }, turn: Turn, toolNames: readonly string[]): Promise<Decision> {
+export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; text?: string }, turn: Turn, toolNames: readonly string[]): Promise<Decision> {
   let changed = false;
+  // 0. Tool calls written out as chat-template text become the calls they are.
+  const leaked = draft.calls.length === 0 && draft.text ? leakedCalls(draft.text) : [];
+  let leakedText = false;
+  if (leaked.length > 0) {
+    draft = { ...draft, calls: leaked.map((c) => ({ toolCallId: guardId(), ...c })), hasText: false };
+    leakedText = true;
+    changed = true;
+    turn.note(`tool call${leaked.length > 1 ? "s" : ""} written as text turned into ${leaked.map((c) => c.toolName).join(", ")}`);
+  }
   // 1. Canonical tool names.
   let calls = draft.calls.map((c) => {
     const name = repairToolName(c.toolName, toolNames) ?? c.toolName;
@@ -153,6 +183,7 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean }
       calls = calls.map((c) => (isQuery(c.toolName) && !LOCATING_QUERIES.has(c.toolName) ? { ...c, input: { ...c.input, bbox } } : c));
       // The place is known for this step's queries even before the geocode tool records it.
       turn.place ??= place.found;
+      if (!turn.places.includes(place.found)) turn.places.push(place.found);
       changed = true;
     }
   }
@@ -178,12 +209,7 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean }
       changed = true;
     }
   }
-  return { calls, dropText, rejected, changed };
-}
-
-/** True when a step could need the guard: no place yet, layers queried but not drawn, or a wide answer to protect. */
-export function mayGuard(turn: Turn): boolean {
-  return (turn.place === null && !turn.regionQueried) || undrawn(turn).length > 0 || turn.queries.some((q) => q.wide && q.ok);
+  return { calls, dropText: dropText || leakedText, rejected, changed };
 }
 
 function parseInput(input: unknown): Record<string, unknown> | null {
@@ -245,8 +271,8 @@ export function stepGuard(turn: Turn, toolNames: readonly string[]): Middleware 
     for (let attempt = 0; ; attempt++) {
       const calls = draftCalls(result.content);
       if (!calls) return result;
-      const hasText = result.content.some((c) => c.type === "text" && c.text.trim() !== "");
-      const decision = await decideStep({ calls, hasText }, turn, toolNames);
+      const text = result.content.map((c) => (c.type === "text" ? c.text : "")).join("");
+      const decision = await decideStep({ calls, hasText: text.trim() !== "", text }, turn, toolNames);
       if (decision.rejected.length > 0 && decision.calls.length === 0 && attempt < MAX_REASKS) {
         result = await model.doGenerate(reaskParams(params, decision.rejected));
         continue;
@@ -301,8 +327,8 @@ export function stepGuard(turn: Turn, toolNames: readonly string[]): Middleware 
       if (parts.some((p) => p.type === "error")) return { ...result, stream: streamOf(parts).pipeThrough(renaming()) };
       const calls = draftCalls(parts);
       if (!calls) return { ...result, stream: streamOf(parts).pipeThrough(renaming()) };
-      const hasText = parts.some((p) => p.type === "text-delta" && p.delta.trim() !== "");
-      const decision = await decideStep({ calls, hasText }, turn, toolNames);
+      const text = parts.map((p) => (p.type === "text-delta" ? p.delta : "")).join("");
+      const decision = await decideStep({ calls, hasText: text.trim() !== "", text }, turn, toolNames);
       if (decision.rejected.length > 0 && decision.calls.length === 0 && attempt < MAX_REASKS) {
         result = await model.doStream(reaskParams(params, decision.rejected));
         parts = await collect(result.stream);
@@ -322,10 +348,8 @@ export function stepGuard(turn: Turn, toolNames: readonly string[]): Middleware 
   return {
     specificationVersion: "v4",
     wrapGenerate: async ({ doGenerate, params, model }) => guardGenerate(model, params, await doGenerate()),
-    wrapStream: async ({ doStream, params, model }) => {
-      const result = await doStream();
-      if (!mayGuard(turn)) return { ...result, stream: result.stream.pipeThrough(renaming()) };
-      return guardStream(model, params, result);
-    },
+    // Every step is read whole before it streams on: a step that looks harmless can still be a tool call written
+    // as text, and the answer itself arrives whole in the note.
+    wrapStream: async ({ doStream, params, model }) => guardStream(model, params, await doStream()),
   };
 }

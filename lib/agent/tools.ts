@@ -309,13 +309,19 @@ export function isWithinView(bbox: BBox, view: BBox): boolean {
 /** The view a query answers from, or undefined when it does not (no view bbox, a place was geocoded, or the box is elsewhere). */
 type ViewSource = (bbox: BBox) => { bbox: BBox; zoom: number } | undefined;
 
+/** True when a point lies in a box. */
+function pointIn([lng, lat]: [number, number], [w, s, e, n]: BBox): boolean {
+  return lng >= w && lng <= e && lat >= s && lat <= n;
+}
+
 /**
- * The box a query runs on: for "near <town>" (the town geocoded this turn, a layer with a default radius), the
- * radius box around the town (lib/agent/places.ts); otherwise the box the model passed.
+ * The box a query runs on: for "near <town>" (a layer with a default radius), the radius box around the town the
+ * query is about, which is the latest place geocoded this turn whose center lies in the box the model passed (so a
+ * first lookup that found a same-named place elsewhere is never used); otherwise the box the model passed.
  */
 function queryBox(turn: Turn, layerId: string, bbox: BBox): BBox {
-  const place = turn.place;
   const near = nearPlace(turn.question);
+  const place = near ? turn.places.findLast((p) => pointIn(p.center, bbox)) : undefined;
   if (!place || !near) return bbox;
   const box = nearBox(turn.question, layerId, place);
   if (!box || (box[0] === bbox[0] && box[1] === bbox[1] && box[2] === bbox[2] && box[3] === bbox[3])) return bbox;
@@ -446,7 +452,10 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
         answered.add(key);
         // The lookup is shared with the step guard, which may have looked this text up already.
         const found = await turn.lookup(place);
-        if (!("error" in found)) turn.place ??= found;
+        if (!("error" in found)) {
+          turn.place ??= found;
+          if (!turn.places.includes(found)) turn.places.push(found);
+        }
         return repeated ? { ...found, repeated: true } : found;
       },
     }),

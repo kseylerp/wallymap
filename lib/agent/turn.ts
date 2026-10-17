@@ -35,8 +35,10 @@ export type Turn = {
   drawn: Set<string>;
   /** The standard view each layer was last rendered in this turn. */
   views: Map<string, string>;
-  /** The place this turn's queries are about, once a geocode found it. */
+  /** The place this turn's queries are about, once a geocode found it (the first one found). */
   place: GeocodeResult | null;
+  /** Every place a geocode found this turn, in order (the model may look a place up again with a fuller name). */
+  places: GeocodeResult[];
   /** True once a named region was outlined by physical-regions (the place is on the map without a geocode). */
   regionQueried: boolean;
   /** Notes the note tool sent back for a rewrite this turn, so it asks at most once per reason. */
@@ -63,6 +65,7 @@ export function createTurn({ question = "", view = null, geocoder = mapboxGeocod
     drawn: new Set(),
     views: new Map(),
     place: null,
+    places: [],
     regionQueried: false,
     noteRewrites: new Set(),
     log: [],

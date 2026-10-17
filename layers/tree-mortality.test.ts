@@ -45,7 +45,7 @@ describe("tree-mortality layer", () => {
     expect(layer.coverage).toBe("us");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(20_000);
-    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.hardMaxAreaKm2).toBe(700_000);
     expect(layer.wide).toEqual({ orderBy: "trees killed, or percent dead from 2021", limit: 2000, rank: "worst" });
     expect(layer.style).toMatchObject({ geometry: "polygon", color: "#F57272", fillOpacity: 0.4 });
     expect(layer.input.parse({})).toEqual({});
@@ -225,10 +225,10 @@ describe("tree-mortality layer", () => {
     expect(r.coverageNote).toBe("No data outside the United States");
   });
 
-  it("rejects through runLayer only a box over four times the soft cap", async () => {
-    const res = await runLayer("tree-mortality", { bbox: [-125, 36, -118, 42], zoom: 5 });
+  it("rejects through runLayer only a box over a state's size (700,000 km²)", async () => {
+    const res = await runLayer("tree-mortality", { bbox: [-125, 30, -100, 45], zoom: 4 });
     expect(res.status).toBe(422);
-    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 80000 km²$/) });
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 700000 km²$/) });
   });
 
   it("simplifies a wide box more coarsely, within bounds", () => {

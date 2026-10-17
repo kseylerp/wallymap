@@ -270,6 +270,8 @@ const treeMortality = defineLayer({
   license: "Public domain (US Forest Service; California Department of Fish and Wildlife copy)",
   requiredEnv: [],
   maxAreaKm2: 20_000,
+  // A state ("beetles in Colorado", 269,000 km²) answers with its worst 2,000 areas rather than a zoom_in error.
+  hardMaxAreaKm2: 700_000,
   wide: { orderBy: "trees killed, or percent dead from 2021", limit: WIDE_LIMIT, rank: "worst" },
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("tree-mortality"), fillOpacity: 0.4 },

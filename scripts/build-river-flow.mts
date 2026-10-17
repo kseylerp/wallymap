@@ -13,9 +13,9 @@
  * points: Natural Earth's rivers worldwide, most important first (scalerank, then length), one to three points each.
  * Coverage grows day by day until reading the points takes the whole budget (about 680 points). A point whose cells
  * carry under 1 m³/s is remembered in `skipped`, so its river is not tried again. Requests are paced at --rate calls a
- * minute (default 400); a 429 or 5xx waits a minute and tries again twice; a daily or hourly limit stops the reading,
- * and points left unread keep their place with no flow (the layer reads those live). --dry stops after planning,
- * before any Open-Meteo call.
+ * minute (default 400); a request that gets no answer tries again in 5 s, a 429 or 5xx after a minute, four tries in
+ * all; a daily or hourly limit stops the reading, and points left unread keep their place with no flow (the layer reads
+ * those live). --dry stops after planning, before any Open-Meteo call.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -87,16 +87,20 @@ async function flood(points: Position[], pastDays: number, forecastDays: number)
     forecast_days: String(forecastDays),
     timezone: "GMT",
   });
-  for (let attempt = 0; attempt < 3; attempt++) {
-    calls += weight;
+  for (let attempt = 0; attempt < 4; attempt++) {
     let res: Response;
     try {
       res = await fetch(FLOOD_API, { method: "POST", body, headers: { "Content-Type": "application/x-www-form-urlencoded" }, signal: AbortSignal.timeout(90_000) });
     } catch (err) {
-      console.log(`request failed (${err instanceof Error ? err.message : err}); waiting a minute`);
-      await sleep(60_000);
+      // On GitHub's runners about one request in three fails before an answer (a kept-alive socket the server closed
+      // during the pause); a new connection a few seconds later answers. Not counted: nothing came back.
+      const cause = err instanceof Error && err.cause instanceof Error ? `: ${err.cause.message}` : "";
+      console.log(`request failed (${err instanceof Error ? err.message : err}${cause}); trying again in 5 s`);
+      await sleep(5_000);
       continue;
     }
+    // Every answer counts, a refusal included (Open-Meteo may count it).
+    calls += weight;
     if (res.ok) {
       const json: unknown = await res.json();
       await sleep((weight / RATE) * 60_000);

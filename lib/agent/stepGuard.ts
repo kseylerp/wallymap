@@ -467,7 +467,9 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
       const markdown = typeof calls[at].input.markdown === "string" ? (calls[at].input.markdown as string) : "";
       const add = additions(markdown);
       if (add.length > 0) {
-        calls = calls.map((c, i) => (i === at ? { ...c, input: { ...c.input, markdown: `${markdown.trimEnd()}\n\n${add.join(" ")}` } } : c));
+        // The note keeps to its word limit: the model's part gives way to the story's lines.
+        const room = Math.max(20, NOTE_MAX_WORDS - noteWords(add.join(" ")));
+        calls = calls.map((c, i) => (i === at ? { ...c, input: { ...c.input, markdown: `${trimNote(markdown, room).trimEnd()}\n\n${add.join(" ")}` } } : c));
         turn.note("added the story's shape (low and peak, what size and color mean) to the note");
         changed = true;
       }
@@ -502,16 +504,22 @@ export function saysMeaning(text: string): boolean {
   return /\bcolou?r/.test(t) && /\b(width|wide|wider|thick|size|bright|brightness)/.test(t);
 }
 
-/** The answer with the meaning sentence after its findings and before its follow-up questions (a closing bullet list). */
-export function withMeaning(text: string, meaning: string): string {
+/**
+ * The answer with the meaning sentence after its findings and before its follow-up questions (a closing bullet list),
+ * within the note's word limit: the findings are cut to make room first, then the follow-ups go.
+ */
+export function withMeaning(text: string, meaning: string, max = NOTE_MAX_WORDS): string {
   const lines = text.trimEnd().split("\n");
   let cut = lines.length;
   while (cut > 0 && (/^\s*[-*•]\s/.test(lines[cut - 1]) || lines[cut - 1].trim() === "")) cut -= 1;
   // Only a trailing list of questions is the follow-ups; findings in bullets stay above the sentence.
   const tail = lines.slice(cut);
-  const follow = tail.some((l) => /\?\s*$/.test(l)) ? tail : [];
-  const body = follow.length > 0 ? lines.slice(0, cut) : lines;
-  return [...body, "", meaning, ...(follow.length > 0 ? ["", ...follow.filter((l) => l.trim() !== "")] : [])].join("\n");
+  const follow = (tail.some((l) => /\?\s*$/.test(l)) ? tail : []).filter((l) => l.trim() !== "");
+  const body = (follow.length > 0 ? lines.slice(0, cut) : lines).join("\n");
+  const followWords = noteWords(follow.join("\n"));
+  const keepFollow = noteWords(meaning) + followWords + 20 <= max;
+  const room = Math.max(20, max - noteWords(meaning) - (keepFollow ? followWords : 0));
+  return [trimNote(body, room).trimEnd(), "", meaning, ...(keepFollow && follow.length > 0 ? ["", ...follow] : [])].join("\n");
 }
 
 function parseInput(input: unknown): Record<string, unknown> | null {

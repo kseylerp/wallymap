@@ -571,4 +571,11 @@ describe("step guard: a data story says what size and color mean", () => {
     expect(decision.calls[0].input.markdown).toContain("lowest 7,210 m³/s on 2026-09-20, peak 19,587 m³/s on 2026-08-31 (it nearly triples); now 14,190 m³/s.");
     expect(decision.calls[0].input.markdown).toContain(meaning);
   });
+
+  it("keeps the answer within the note's word limit when it adds the story's lines", () => {
+    const long = `${Array.from({ length: 140 }, (_, i) => `word${i}`).join(" ")}\n\n- What next?\n- And then?`;
+    const out = withMeaning(long, meaning);
+    expect(noteWords(out)).toBeLessThanOrEqual(NOTE_MAX_WORDS);
+    expect(out).toContain(meaning);
+  });
 });

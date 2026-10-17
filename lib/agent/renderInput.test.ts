@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import "@/layers";
 import { getLayer } from "@/layers/registry";
-import { measureAsked, normalizeFilters, normalizeRenderInput, viewAsked } from "./renderInput";
+import { measureAsked, modeAsked, normalizeFilters, normalizeRenderInput, viewAsked } from "./renderInput";
 
 const attrs = (id: string) => getLayer(id)?.attributes ?? [];
 const include = (id: string, key: string, values: string[]) =>
@@ -119,5 +119,14 @@ describe("the view a question asks for", () => {
     // A specialised view the model chose stays.
     expect(normalizeRenderInput({ layerId: "ports", view: "density" }, ports, "Busiest ports on the Gulf Coast").view).toBe("density");
     expect(normalizeRenderInput({ layerId: "ports", view: "detail" }, ports, "Busiest ports on the Gulf Coast").view).toBe("ranked");
+  });
+});
+
+describe("the mode a question asks for", () => {
+  it("draws what the user named: a heatmap as heat, 3D columns as columns, only on layers that can", () => {
+    expect(normalizeRenderInput({ layerId: "gbif-occurrences", mode: "clusters" }, getLayer("gbif-occurrences"), "Heatmap of brown bear sightings in Alaska").mode).toBe("heat");
+    expect(normalizeRenderInput({ layerId: "power-plants", mode: "symbols" }, getLayer("power-plants"), "Show power plants in Arizona as 3D columns by megawatts").mode).toBe("columns");
+    expect(modeAsked("Heatmap of fires", "polygon")).toBeNull();
+    expect(modeAsked("Show hiking trails around Lake Tahoe", "line")).toBeNull();
   });
 });

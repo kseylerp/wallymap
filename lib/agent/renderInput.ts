@@ -122,6 +122,20 @@ const VIEW_CUES: [Exclude<ViewKind, "change" | "scenario" | "route">, RegExp][] 
   ["detail", /^(?:tell me about|how deep is|how tall is|how high is|what rock is)\b/],
 ];
 
+/** "Show as" words in a question, for the render tool's mode: what the user asked to see, whatever the model picked. */
+const MODE_CUES: [string, RegExp, Layer["style"]["geometry"][]][] = [
+  ["heat", /\bheat ?maps?\b/, ["point"]],
+  ["columns", /\b(?:3d|three-dimensional) columns?\b|\bas columns\b/, ["point", "polygon"]],
+  ["clusters", /\bas clusters\b|\bclustered\b/, ["point"]],
+  ["hexbin", /\bhex(?:agon)?(?:bins?| cells| tiles|agons)\b/, ["point"]],
+];
+
+/** The render mode a question's words ask for on a layer of this geometry ("heatmap of …": heat), or null. */
+export function modeAsked(question: string, geometry: Layer["style"]["geometry"]): string | null {
+  const q = question.replace(/@view=\S+/g, " ").toLowerCase();
+  return MODE_CUES.find(([, cue, fits]) => cue.test(q) && fits.includes(geometry))?.[0] ?? null;
+}
+
 /** A question about change ("since 2021", "before and after", "than in 2012"): its view is the model's compare. */
 const CHANGE_CUE = /\b(?:before and after|changed?|shrunk|shrink|shrank|grown|grew|smaller|bigger|less|more|compared?)\b[^?]*\b(?:since|than in|than|to|with)\b|\bbefore and after\b/;
 
@@ -166,6 +180,9 @@ export function normalizeRenderInput(input: Obj, layer: (Pick<Layer, "attributes
   if (asked && viewFits(asked, layer) && loose && out.view !== asked) {
     out.view = asked;
   }
+  // The mode the user named ("heatmap of brown bear sightings" was drawn as clusters).
+  const mode = modeAsked(question, layer.style.geometry);
+  if (mode) out.mode = mode;
   const words = measureAsked(question);
   const measure = words ? measureNamed(attributes, words) : undefined;
   if (measure && layer.style.geometry === "point") {

@@ -57,7 +57,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "earthquakes", synonyms: ["earthquake", "quake", "seismic", "tremor", "shaking"], notes: "USGS events, v = magnitude M; days input", gist: "recent earthquakes with magnitude, depth and time" },
   { layerId: "smoke", synonyms: ["smoke", "wildfire smoke", "haze"], notes: "daily NOAA plume outlines, v = density 1-3; date, days", gist: "daily wildfire smoke plume outlines by density" },
   { layerId: "fire-weather", synonyms: ["fire danger", "fire weather", "fire weather index"], notes: "forecast danger from weather, not fires; date up to about 9 days ahead", gist: "fire danger forecast from weather, up to 9 days" },
-  { layerId: "burn-severity", synonyms: ["burn scar", "fire history", "past fires", "MTBS"], notes: "US large-fire footprints, year input", gist: "burned areas of large US fires for one year" },
+  { layerId: "burn-severity", synonyms: ["burn severity", "how badly burned", "how bad the burn", "burn scar", "MTBS"], notes: "US large-fire severity map, year input; named fires are fire-perimeters", gist: "how badly large US fires burned, by year" },
   { layerId: "greenness", synonyms: ["greenness", "how green", "vegetation", "NDVI", "green-up"], notes: "16-day satellite composite, date input", gist: "how green the vegetation is, every 16 days" },
   { layerId: "phenology", synonyms: ["spring arrival", "leaf-out", "bloom", "early spring"], notes: "US days early or late vs normal; stage, date, year", gist: "whether spring leaf-out and bloom came early or late" },
   { layerId: "snow-cover", synonyms: ["snow cover", "snow line", "snow depth", "is there snow"], notes: "daily satellite snow, date input; depth true for US depth", gist: "daily satellite map of snow-covered ground" },

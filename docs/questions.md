@@ -66,7 +66,8 @@ The layers added in M4 answer questions like these. Each line gives the question
 - "Recent earthquakes near Mammoth Lakes": `query_earthquakes`; the scrubber plays them over time.
 - "Where is the wildfire smoke today?": `query_smoke`.
 - "What is the fire danger in Southern California this week?": `query_fire-weather` with a `date` up to 9 days ahead.
-- "Which large fires burned in Oregon in 2020?": `query_burn-severity` with `year: 2020`.
+- "Which large fires burned in Oregon in 2020?": `query_fire-perimeters` (named outlines with acres), filtered to 2020.
+- "How badly did the 2020 fires burn in Oregon?": `query_burn-severity` with `year: 2020` (the burn-severity map of every large fire that year).
 - "Is this house in a flood zone?" (zoomed in): `query_flood-zones`; `query_fire-hazard` for long-run fire risk; `query_drought` for this week's drought.
 
 **Earth, water and ice**
@@ -251,7 +252,7 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - Walking route from Zermatt to the Hörnli Hut
 - Plan a hike from Happy Isles to the top of Half Dome
 - Where is the Ogallala aquifer?
-- Which large fires burned in Oregon in 2020?
+- How badly did the 2020 fires burn in Oregon?
 - Is the Tongass a carbon sink?
 - Can I see condors near Big Sur?
 - Critical habitat for the desert tortoise near St. George

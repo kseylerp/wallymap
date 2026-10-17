@@ -467,7 +467,8 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   "plan a hike from happy isles to the top of half dome": { layers: [], view: "route" },
   // Layers no older question asks about, one question each.
   "where is the ogallala aquifer?": { layers: ["aquifers"] },
-  "which large fires burned in oregon in 2020?": { layers: ["burn-severity"] },
+  // "Which large fires burned …" asks for named fires, which fire-perimeters answers; burn severity is how badly.
+  "how badly did the 2020 fires burn in oregon?": { layers: ["burn-severity"] },
   "is the tongass a carbon sink?": { layers: ["carbon-flux"] },
   "can i see condors near big sur?": { layers: ["condor-range"] },
   "critical habitat for the desert tortoise near st. george": { layers: ["critical-habitat"] },

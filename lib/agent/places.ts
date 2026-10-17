@@ -1,6 +1,8 @@
+import type { BBox } from "@/layers/types";
+
 /**
  * The places a question names, read from its words alone (no lookup): the server's fallback when the model queries
- * a layer without geocoding the place the user asked about (lib/agent/stepGuard.ts).
+ * a layer without geocoding the place the user asked about (lib/agent/stepGuard.ts), and "near <town>" as a radius.
  */
 
 /** Small words that may sit inside a capitalised place name ("Gulf of Mexico", "Rio de Janeiro"). */
@@ -124,3 +126,65 @@ export function placeCandidates(question: string): string[] {
   return out;
 }
 
+/** The place after "near" in a question ("Recent earthquakes near Mammoth Lakes" → "Mammoth Lakes"), or null. */
+export function nearPlace(question: string): string | null {
+  const m = /\bnear\s+(?:the\s+)?(.+)$/i.exec(question.replace(/@view=\S+/g, "").trim());
+  if (!m) return null;
+  const rest = m[1];
+  const candidate = placeCandidates(question).find((p) => rest.toLowerCase().startsWith(p.toLowerCase()));
+  return candidate ?? null;
+}
+
+/** A radius the user gave ("within 80 km", "within 20 miles"), in km, or null. */
+export function statedRadiusKm(question: string): number | null {
+  const m = /\bwithin\s+(\d+(?:\.\d+)?)\s*(km|kilomet(?:er|re)s?|mi|miles?)\b/i.exec(question);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return /^mi/i.test(m[2]) ? n * 1.609 : n;
+}
+
+/**
+ * What "near <town>" means per layer kind, in km, when the user gives no distance: earthquakes 50 km, trails 25 km,
+ * crags 30 km. A layer missing here keeps the box the model asked for.
+ */
+export const NEAR_RADIUS_KM: Record<string, number> = {
+  earthquakes: 50,
+  "osm-trails": 25,
+  "mtb-trails": 25,
+  "ski-routes": 25,
+  "forest-roads": 25,
+  popularity: 25,
+  "popularity-campsites": 25,
+  campsites: 25,
+  "outdoor-features": 25,
+  climbing: 30,
+  peaks: 30,
+};
+
+/** A place this small on both axes (degrees) is a town or a point, so "near" it is a radius rather than its own box. */
+const POINT_LIKE_DEG = 0.5;
+
+export function isPointLike([w, s, e, n]: BBox): boolean {
+  return e - w < POINT_LIKE_DEG && n - s < POINT_LIKE_DEG;
+}
+
+const KM_PER_DEGREE = 111.32;
+
+/** The box `radiusKm` around a point, rounded to 4 decimals. */
+export function boxAround([lng, lat]: [number, number], radiusKm: number): BBox {
+  const dLat = radiusKm / KM_PER_DEGREE;
+  const dLng = radiusKm / (KM_PER_DEGREE * Math.max(0.05, Math.cos((lat * Math.PI) / 180)));
+  const r = (x: number) => Math.round(x * 1e4) / 1e4;
+  return [r(Math.max(-180, lng - dLng)), r(Math.max(-90, lat - dLat)), r(Math.min(180, lng + dLng)), r(Math.min(90, lat + dLat))];
+}
+
+/**
+ * The box a query of `layerId` uses for "near <place>": the stated radius, else the layer kind's default, around the
+ * place's center; null when the layer has no default, or the place is a region rather than a town (then its own box
+ * is what "near" means).
+ */
+export function nearBox(question: string, layerId: string, place: { bbox: BBox; center: [number, number] }): BBox | null {
+  const radius = statedRadiusKm(question) ?? NEAR_RADIUS_KM[layerId];
+  if (radius === undefined || !isPointLike(place.bbox)) return null;
+  return boxAround(place.center, radius);
+}

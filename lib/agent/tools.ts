@@ -5,6 +5,7 @@ import { BBoxSchema, bboxAreaKm2, hardMaxAreaKm2, type BBox, type Coverage, type
 import { runLayer } from "@/lib/layers/run";
 import { highestOf, isFullLayerResult, summarizeLayerResult, type SummaryStyle } from "@/lib/layers/summarize";
 import { VIEW_KINDS, type Basemap, type RenderMode, type TimeMode } from "@/lib/render/state";
+import { nearBox, nearPlace } from "./places";
 import { normalizeRenderInput } from "./renderInput";
 import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
 import { checkNote } from "./noteCheck";
@@ -308,6 +309,20 @@ export function isWithinView(bbox: BBox, view: BBox): boolean {
 /** The view a query answers from, or undefined when it does not (no view bbox, a place was geocoded, or the box is elsewhere). */
 type ViewSource = (bbox: BBox) => { bbox: BBox; zoom: number } | undefined;
 
+/**
+ * The box a query runs on: for "near <town>" (the town geocoded this turn, a layer with a default radius), the
+ * radius box around the town (lib/agent/places.ts); otherwise the box the model passed.
+ */
+function queryBox(turn: Turn, layerId: string, bbox: BBox): BBox {
+  const place = turn.place;
+  const near = nearPlace(turn.question);
+  if (!place || !near) return bbox;
+  const box = nearBox(turn.question, layerId, place);
+  if (!box || (box[0] === bbox[0] && box[1] === bbox[1] && box[2] === bbox[2] && box[3] === bbox[3])) return bbox;
+  turn.note(`${layerId}: "near ${near}" queried within the layer's radius around it, [${box.join(", ")}] instead of [${bbox.join(", ")}]`);
+  return box;
+}
+
 /** True when a layer result has something to draw: features, or map tiles. */
 function drawable(body: unknown): boolean {
   if (!body || typeof body !== "object" || "error" in body) return false;
@@ -326,7 +341,8 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: T
     // The licence and the trimmed sentences are in list_layers' detail (ids); the citation comes with each result.
     description: `${compactDescription(layer.description, { inputs: inputNames(layer), wide: layer.wide !== undefined })} Covers ${describeCoverage(layer.coverage)}.${wideSentence(layer)}${widerScaleSentence(layer.id)} bbox is [west, south, east, north].`,
     inputSchema,
-    execute: async ({ bbox, zoom, ...input }) => {
+    execute: async ({ bbox: asked, zoom, ...input }) => {
+      const bbox = queryBox(turn, layer.id, asked);
       const view = fromView(bbox);
       const body = (await runLayer(layer.id, { bbox, zoom, input, fromView: view })).body;
       const ok = !("error" in body);

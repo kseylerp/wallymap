@@ -218,3 +218,18 @@ describe("step guard: canonical tool names in the stream", () => {
     expect(names).toContain("query_uranium");
   });
 });
+
+describe("near <town>: the layer kind's radius", () => {
+  it("queries earthquakes within 50 km of the town the model geocoded, whatever box it passed", async () => {
+    const mammoth: Geocoder = async () => ({ bbox: [-119.03, 37.6, -118.93, 37.67], center: [-118.97, 37.65], name: "Mammoth Lakes", source: "mapbox" });
+    const question = "Recent earthquakes near Mammoth Lakes";
+    const turn = createTurn({ question, view: null, geocoder: mammoth });
+    const tools = buildTools({ view: null, turn });
+    const options = { toolCallId: "t", messages: [], context: {} };
+    await tools.geocode.execute!({ place: "Mammoth Lakes" } as never, options as never);
+    await tools["query_earthquakes"].execute!({ bbox: [-121, 36, -117, 39], zoom: 8 } as never, options as never);
+    const box = runLayer.mock.calls[0][1].bbox as BBox;
+    expect(((box[3] - box[1]) * 111.32) / 2).toBeCloseTo(50, 0);
+    expect(turn.log.join("\n")).toMatch(/near Mammoth Lakes/);
+  });
+});

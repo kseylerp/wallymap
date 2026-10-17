@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { placeCandidates } from "./places";
+import { boxAround, isPointLike, nearBox, nearPlace, placeCandidates, statedRadiusKm } from "./places";
 
 describe("placeCandidates", () => {
   it.each([
@@ -26,4 +26,42 @@ describe("placeCandidates", () => {
       expect(placeCandidates(question)).toEqual([]);
     },
   );
+});
+
+describe("near", () => {
+  it("reads the place after near", () => {
+    expect(nearPlace("Recent earthquakes near Mammoth Lakes")).toBe("Mammoth Lakes");
+    expect(nearPlace("Which uranium mines near the Navajo Nation score highest?")).toBe("Navajo Nation");
+    expect(nearPlace("Glaciers in the Wind River Range")).toBeNull();
+  });
+
+  it("reads a stated radius in km or miles", () => {
+    expect(statedRadiusKm("quakes within 80 km of Reno")).toBe(80);
+    expect(statedRadiusKm("trails within 10 miles of Moab")).toBeCloseTo(16.09, 1);
+    expect(statedRadiusKm("trails near Moab")).toBeNull();
+  });
+
+  const mammoth = { bbox: [-119.03, 37.6, -118.93, 37.67] as [number, number, number, number], center: [-118.97, 37.65] as [number, number] };
+
+  it("gives each layer kind its default radius around a town", () => {
+    const quakes = nearBox("Recent earthquakes near Mammoth Lakes", "earthquakes", mammoth)!;
+    expect((quakes[3] - quakes[1]) * 111.32).toBeCloseTo(100, 0);
+    const trails = nearBox("trails near Mammoth Lakes", "osm-trails", mammoth)!;
+    expect((trails[3] - trails[1]) * 111.32).toBeCloseTo(50, 0);
+    const crags = nearBox("crags near Mammoth Lakes", "climbing", mammoth)!;
+    expect((crags[3] - crags[1]) * 111.32).toBeCloseTo(60, 0);
+  });
+
+  it("uses the radius the user gave, and leaves a region or a layer without a default alone", () => {
+    const box = nearBox("earthquakes within 20 km of Mammoth Lakes", "earthquakes", mammoth)!;
+    expect((box[3] - box[1]) * 111.32).toBeCloseTo(40, 0);
+    expect(nearBox("dams near Mammoth Lakes", "dams", mammoth)).toBeNull();
+    expect(nearBox("mines near the Navajo Nation", "earthquakes", { bbox: [-112, 35, -107.5, 37.5], center: [-109.8, 36.2] })).toBeNull();
+  });
+
+  it("tells a town from a region", () => {
+    expect(isPointLike(mammoth.bbox)).toBe(true);
+    expect(isPointLike([-112, 35, -107.5, 37.5])).toBe(false);
+    expect(boxAround([0, 0], 111.32)).toEqual([-1, -1, 1, 1]);
+  });
 });

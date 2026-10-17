@@ -23,7 +23,7 @@ describe("glaciers layer", () => {
     expect(layer.license).toMatch(/GLIMS/);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(8_000);
-    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    expect(layer.hardMaxAreaKm2).toBe(3_000_000);
     expect(layer.wide).toEqual({ orderBy: "area in km²", limit: 1500 });
     expect(layer.input.parse({})).toEqual({});
     expect(layer.style).toMatchObject({ geometry: "polygon", extrude: "v" });
@@ -279,9 +279,9 @@ describe("glaciers layer", () => {
     } finally {
       vi.unstubAllGlobals();
     }
-    const far = await runLayer("glaciers", { bbox: [6, 44, 9, 47], zoom: 8 });
+    const far = await runLayer("glaciers", { bbox: [-170, 30, -100, 72], zoom: 3 });
     expect(far.status).toBe(422);
-    expect(far.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 32000 km²$/) });
+    expect(far.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 3000000 km²$/) });
   });
 
   it("describes glaciers in the words people use and warns the outlines are dated", () => {

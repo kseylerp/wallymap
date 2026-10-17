@@ -343,6 +343,8 @@ const glaciers = defineLayer({
   license: "Free to use, cite GLIMS (NSIDC / University of Arizona)",
   requiredEnv: [],
   maxAreaKm2: 8_000,
+  // A region such as Patagonia (2.8 million km²) answers with its largest outlines: 1,429 in 8.7 s (2026-10-17).
+  hardMaxAreaKm2: 3_000_000,
   wide: { orderBy: "area in km²", limit: WIDE_LIMIT },
   input: inputSchema,
   style: {

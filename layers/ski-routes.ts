@@ -291,7 +291,7 @@ const CARD: CardSpec = {
     { key: "t", label: "Last checked", format: "date" },
     { key: "ref", label: "Run number" },
     { key: "route", label: "Named ski route", values: { true: "Yes" } },
-    { key: "osmId", label: "OpenStreetMap element", help: OSM_ELEMENT },
+    { key: "osmId", label: "Map element", help: OSM_ELEMENT },
   ],
 };
 

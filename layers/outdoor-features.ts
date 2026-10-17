@@ -387,7 +387,7 @@ const CARD: CardSpec = {
     },
     { key: "wikipedia", label: "Wikipedia article" },
     { key: "wikidata", label: "Wikidata item" },
-    { key: "osmId", label: "OpenStreetMap element", help: OSM_ELEMENT },
+    { key: "osmId", label: "Map element", help: OSM_ELEMENT },
   ],
 };
 

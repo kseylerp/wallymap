@@ -831,7 +831,7 @@ const CARD: CardSpec = {
     { key: "waveFt", label: "In feet", unit: "ft" },
     { key: "periodS", label: "Period", unit: "s" },
     { key: "directionFrom", label: "From" },
-    { key: "directionDeg", label: "From (compass degrees)", format: "int" },
+    { key: "directionDeg", label: "Bearing", unit: "°", format: "int" },
     { key: "avgPeriodS", label: "Average period", unit: "s" },
     { key: "swellM", label: "Swell", unit: "m" },
     { key: "swellPeriodS", label: "Swell period", unit: "s" },

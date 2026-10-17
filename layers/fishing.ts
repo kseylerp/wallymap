@@ -265,7 +265,7 @@ const CARD: CardSpec = {
     { key: "operator", label: "Run by" },
     { key: "source", label: "Source", values: { OpenStreetMap: "OpenStreetMap", USFS: "US Forest Service", iNaturalist: "iNaturalist" } },
     { key: "license", label: "Licence", values: LICENSE_LABELS },
-    { key: "osmId", label: "OpenStreetMap element", help: OSM_ELEMENT },
+    { key: "osmId", label: "Map element", help: OSM_ELEMENT },
   ],
   links: [{ key: "url", label: "Source page" }],
 };

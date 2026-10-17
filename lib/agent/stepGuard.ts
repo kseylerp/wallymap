@@ -1,12 +1,12 @@
 import type { LanguageModelMiddleware } from "ai";
 import { getLayer } from "@/layers/registry";
 import type { BBox } from "@/layers/types";
-import { bboxAreaKm2 } from "@/layers/types";
+import { bboxAreaKm2, hardMaxAreaKm2 } from "@/layers/types";
 import type { GeocodeResult } from "./geocode";
 import { placeCandidates } from "./places";
 import { normalizeRenderInput } from "./renderInput";
 import { repairToolName } from "./toolNames";
-import { widerScaleFor } from "./tools";
+import { widerScaleFor, widerScaleHints } from "./tools";
 import { inputKeyOf, MAX_STEPS, undrawn, type Turn } from "./turn";
 
 /**
@@ -95,7 +95,7 @@ export const MAX_QUERIES_PER_LAYER = 3;
  * this one), a layer that failed twice or was asked MAX_QUERIES_PER_LAYER times, or any query in the last two steps
  * before a note.
  */
-export function repeatReason(c: DraftCall, turn: Turn, askedHere: DraftCall[], finalSteps: boolean): { why: string; text: string } | null {
+export function repeatReason(c: DraftCall, turn: Turn, askedHere: DraftCall[], finalSteps: boolean): { why: string; text: string; instead?: DraftCall } | null {
   const layerId = layerOf(c.toolName);
   if (finalSteps) {
     return {
@@ -108,7 +108,13 @@ export function repeatReason(c: DraftCall, turn: Turn, askedHere: DraftCall[], f
   const tooWide = box ? mine.find((q) => q.zoomIn && (inside(box, q.bbox) || overlapShare(box, q.bbox) > 0.5)) : undefined;
   if (tooWide) {
     const wider = widerScaleFor(layerId, tooWide.bbox);
+    // The first wider-scale layer not asked yet answers the whole place instead (species over Colorado: GBIF density).
+    const hint = widerScaleHints(layerId, tooWide.bbox).find(
+      (h) => !turn.queries.some((q) => q.layerId === h.layerId) && !askedHere.some((d) => d.toolName === `${QUERY}${h.layerId}`),
+    );
+    const instead: DraftCall | undefined = hint && { toolCallId: guardId(), toolName: `${QUERY}${hint.layerId}`, input: { ...(hint.input ?? {}), bbox: tooWide.bbox } };
     return {
+      ...(instead && { instead }),
       why: "a part of a box that was over its limit",
       text:
         `Not queried: ${layerId} already said [${tooWide.bbox.join(", ")}] is over its area limit, and a smaller box inside it would answer only part of the place asked about. ` +
@@ -243,6 +249,7 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
   // two steps left and no note, nothing is queried at all. The steps go to drawing and the note instead.
   const finalSteps = turn.step >= MAX_STEPS - 2 && !turn.noted;
   const askedHere: DraftCall[] = [];
+  const replaced: DraftCall[] = [];
   calls = calls.filter((c) => {
     if (!isQuery(c.toolName)) return true;
     const reason = repeatReason(c, turn, askedHere, finalSteps);
@@ -250,11 +257,20 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
       askedHere.push(c);
       return true;
     }
+    if (reason.instead) {
+      // Answer the whole place at this scale instead of a part of it.
+      replaced.push(reason.instead);
+      askedHere.push(reason.instead);
+      turn.note(`${layerOf(c.toolName)}: a part of a box over its limit was asked; ${reason.instead.toolName} answers the whole box instead`);
+      changed = true;
+      return false;
+    }
     rejected.push({ call: c, reason: reason.text });
     turn.note(`${layerOf(c.toolName)}: query dropped (${reason.why})`);
     changed = true;
     return false;
   });
+  calls = [...calls, ...replaced];
 
   // 2b. One line per way: popularity is a colouring of the trails (or campsites) it scores, so it is only added when
   // the question asks how popular, and once it has answered, the plain layer is not queried on top of it.
@@ -365,6 +381,32 @@ function reaskParams(params: CallOptions, rejected: Decision["rejected"]): CallO
   };
 }
 
+const fmtKm2 = (n: number) => `${Math.round(n).toLocaleString("en-US")} km²`;
+
+/**
+ * The turn's ending when the model asked again only for queries the guard drops, even after being told why: renders
+ * for anything queried and not drawn, then a plain note the server writes, saying what could not be drawn and why, so
+ * the turn never ends with no answer (species over Colorado shrank twice and stopped with nothing, 2026-10-17).
+ */
+export function fallbackEnding(turn: Turn, rejected: Decision["rejected"]): DraftCall[] {
+  const renders = undrawn(turn).map((layerId): DraftCall => ({ toolCallId: guardId(), toolName: "render", input: normalizeRenderInput({ layerId }, getLayer(layerId), turn.question) }));
+  const lines: string[] = [];
+  for (const layerId of [...new Set(rejected.map((r) => layerOf(r.call.toolName)).filter(Boolean))]) {
+    const layer = getLayer(layerId);
+    const title = layer?.title ?? layerId;
+    const wide = turn.queries.find((q) => q.layerId === layerId && q.zoomIn);
+    if (wide && layer) {
+      lines.push(`- **${title}** covers at most ${fmtKm2(hardMaxAreaKm2(layer))} at a time, and this area is ${fmtKm2(bboxAreaKm2(wide.bbox))}, so it is not drawn. Zoom in, or ask about a smaller area.`);
+    } else {
+      lines.push(`- **${title}** did not answer this question.`);
+    }
+  }
+  const drawn = renders.length > 0 || turn.drawn.size > 0;
+  const markdown = [drawn ? "What answered is on the map." : "Nothing could be drawn for this question at this scale.", ...lines].join("\n");
+  turn.note("the model only asked again for dropped queries: the server wrote the note");
+  return [...renders, { toolCallId: guardId(), toolName: "note", input: { markdown } }];
+}
+
 /** Most times one step is asked again after all its calls were dropped. */
 const MAX_REASKS = 1;
 
@@ -386,6 +428,7 @@ export function stepGuard(turn: Turn, toolNames: readonly string[]): Middleware 
         result = await model.doGenerate(reaskParams(params, decision.rejected));
         continue;
       }
+      if (decision.rejected.length > 0 && decision.calls.length === 0 && !turn.noted) decision.calls = fallbackEnding(turn, decision.rejected);
       if (!decision.changed) return result;
       const kept = result.content.filter((c) => c.type !== "tool-call" && !(decision.dropText && c.type === "text"));
       return {
@@ -443,6 +486,7 @@ export function stepGuard(turn: Turn, toolNames: readonly string[]): Middleware 
         parts = await collect(result.stream);
         continue;
       }
+      if (decision.rejected.length > 0 && decision.calls.length === 0 && !turn.noted) decision.calls = fallbackEnding(turn, decision.rejected);
       if (!decision.changed) return { ...result, stream: streamOf(parts) };
       const isText = (p: StreamPart) => p.type === "text-start" || p.type === "text-delta" || p.type === "text-end";
       const isToolInput = (p: StreamPart) => p.type === "tool-input-start" || p.type === "tool-input-delta" || p.type === "tool-input-end" || p.type === "tool-call";

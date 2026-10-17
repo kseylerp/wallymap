@@ -314,8 +314,43 @@ describe("step guard: no asking again (shrinking, repeats, failures, the step bu
       { text: "- Zoom to a district?" },
     ], { bbox: NEVADA, zoom: 6, center: [-117, 38.5] });
     expect(calls.filter((c) => c.name === "query_mines")).toHaveLength(1);
-    expect(JSON.stringify(prompts[2])).toMatch(/over its area limit, and a smaller box inside it/);
-    expect(turn.log.join("\n")).toMatch(/mines: query dropped \(a part of a box that was over its limit\)/);
+    // Mines' wider-scale layer (geology) answers the whole state instead of the part.
+    expect(calls.find((c) => c.name === "query_geology")?.input.bbox).toEqual(NEVADA);
+    expect(turn.log.join("\n")).toMatch(/mines: a part of a box over its limit was asked; query_geology answers the whole box instead/);
+    void prompts;
+  });
+
+  it("answers the whole place at this scale instead: species over Colorado becomes GBIF density, not a smaller box", async () => {
+    const COLORADO: BBox = [-109.06, 36.99, -102.04, 41.0];
+    runLayer.mockImplementation(async (id: string, { bbox }: { bbox: BBox }) =>
+      id === "species"
+        ? { status: 422, body: { error: "Area is 269282 km²; zoom in to under 200000 km²", hint: "zoom_in" } }
+        : { status: 200, body: { kind: "geojson", data: { type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "Point", coordinates: [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2] }, properties: { name: "Puma concolor" } }] }, citation: { source: "t", url: "https://e.x", retrieved: "2026" } } },
+    );
+    const { calls, turn } = await run("Where are the most iNaturalist or GBIF records of mountain lions in Colorado?", [
+      { calls: [{ name: "query_species", input: { bbox: COLORADO, taxon: "mountain lion" } }] },
+      { calls: [{ name: "query_species", input: { bbox: [-106, 38, -104, 40], taxon: "mountain lion" } }] },
+      { calls: [{ name: "note", input: { markdown: "Mountain lion records." } }] },
+      { text: "- More?" },
+    ], { bbox: COLORADO, zoom: 6, center: [-105.5, 39] });
+    const gbif = calls.find((c) => c.name === "query_gbif-occurrences");
+    expect(gbif?.input).toMatchObject({ density: true, bbox: COLORADO });
+    expect(calls.filter((c) => c.name === "query_species")).toHaveLength(1);
+    expect(turn.log.join("\n")).toMatch(/query_gbif-occurrences answers the whole box instead/);
+  });
+
+  it("writes the note itself when the model only asks again for dropped queries", async () => {
+    runLayer.mockImplementation(tooWide);
+    const { calls, prompts } = await run("Where are the most groundwater wells in Nevada?", [
+      { calls: [{ name: "query_groundwater", input: { bbox: NEVADA } }] },
+      { calls: [{ name: "query_groundwater", input: { bbox: RENO } }] },
+      { calls: [{ name: "query_groundwater", input: { bbox: [-118, 39, -117, 40] } }] },
+      { text: "- Zoom in?" },
+    ], { bbox: NEVADA, zoom: 6, center: [-117, 38.5] });
+    expect(calls.filter((c) => c.name === "query_groundwater")).toHaveLength(1);
+    expect(JSON.stringify(prompts)).toMatch(/over its area limit, and a smaller box inside it/);
+    const note = calls.find((c) => c.name === "note");
+    expect(String(note?.input.markdown)).toMatch(/Groundwater levels\*\* covers at most [\d,]+ km² at a time, and this area is/);
   });
 
   it("drops the same query on a box it already answered, in a later step or the same one", async () => {

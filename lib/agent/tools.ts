@@ -255,15 +255,18 @@ function coversBBox(coverage: Coverage, bbox: BBox): boolean {
   return intersects(coverage.bbox, bbox);
 }
 
+/** The wider-scale suggestions for `layerId` whose layers exist, are available, cover `bbox` and accept its area, best first. */
+export function widerScaleHints(layerId: string, bbox: BBox): WiderScaleHint[] {
+  const area = bboxAreaKm2(bbox);
+  return (WIDER_SCALE[layerId] ?? []).filter((hint) => {
+    const layer = getLayer(hint.layerId);
+    return layer !== undefined && isAvailable(layer) && area <= hardMaxAreaKm2(layer) && coversBBox(layer.coverage, bbox);
+  });
+}
+
 /** The wider-scale layers for `layerId` that exist, are available, cover `bbox` and accept its area. */
 export function widerScaleFor(layerId: string, bbox: BBox): string[] {
-  const area = bboxAreaKm2(bbox);
-  return (WIDER_SCALE[layerId] ?? [])
-    .filter((hint) => {
-      const layer = getLayer(hint.layerId);
-      return layer !== undefined && isAvailable(layer) && area <= hardMaxAreaKm2(layer) && coversBBox(layer.coverage, bbox);
-    })
-    .map((hint) => hintText(hint));
+  return widerScaleHints(layerId, bbox).map((hint) => hintText(hint));
 }
 
 /** The query tool's sentence naming its wider-scale layers, or "" when it has none. */

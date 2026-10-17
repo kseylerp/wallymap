@@ -516,7 +516,7 @@ export async function lookupRegion(
 
 /** What a Wikidata description of one natural feature says (a mountain, a rock, a lake), so towns and streets are left out. */
 const FEATURE_DESCRIPTION =
-  /\b(mountain|peak|summit|hill|rock|monolith|dome|butte|mesa|volcano|cliff|canyon|gorge|lake|waterfall|glacier|island|cape|headland|bay|beach|cave|arch|spring|geyser|crater)\b/i;
+  /\b(mountain|peak|summit|hill|rock|monolith|dome|butte|mesa|volcano|cliff|canyon|gorge|lake|waterfall|glacier|island|cape|headland|bay|beach|cave|arch|spring|geyser|crater|river|creek|stream|tributary)\b/i;
 
 /**
  * One natural feature by name from Wikidata ("Table Mountain, Cape Town"): items labelled exactly the name before the

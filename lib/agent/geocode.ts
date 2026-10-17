@@ -168,6 +168,14 @@ export async function geocode(
   if (polar) return polar;
   const named = await lookupRegion(place, opts.proximity, { naturalEarth: firstRegion });
   if (named) return named;
+  // A river is its basin: "Colorado River" was a point on the Colorado of Texas, "Carson River" a street in Wyoming.
+  const river = place.split(",")[0].trim();
+  if (/\b(?:river|creek|fork)\b/i.test(river)) {
+    // "Middle Fork Salmon" is the Middle Fork Salmon River.
+    const named = /\b(?:river|creek)$/i.test(river) ? river : `${river} River`;
+    const basin = await lookupRegion(`${named} basin`, opts.proximity, { naturalEarth: firstRegion });
+    if (basin) return basin;
+  }
 
   const url = new URL(ENDPOINT);
   url.searchParams.set("q", place);

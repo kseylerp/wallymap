@@ -122,6 +122,12 @@ describe("geocode", () => {
     expect(n).toBeCloseTo(39.43);
   });
 
+  it("answers a river with its basin (the Colorado River is not a point on the Colorado of Texas)", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ features: [] }), { status: 200 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    expect(await geocode("Colorado River")).toMatchObject({ source: "river-basins", bbox: [-115.7, 29.9, -105.6, 43.5] });
+  });
+
   it("answers the Arctic and Antarctica with the polar circles, not Arctic, Rhode Island", async () => {
     const fetchMock = vi.fn();
     globalThis.fetch = fetchMock as unknown as typeof fetch;

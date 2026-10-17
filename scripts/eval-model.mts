@@ -431,11 +431,11 @@ function sportCragsRule(calls: ToolCall[]): RuleResult {
  * and a peak (or strongest) with numbers, says what size, width or brightness and color mean, and (`ratio`) puts the two
  * in proportion; the basemap stepped back to Data only.
  */
-function captionShapeRule(layerId: string, opts: { ratio?: boolean } = {}) {
+function captionShapeRule(layerId: string, opts: { ratio?: boolean; low?: boolean } = {}) {
   return (calls: ToolCall[], notes: string[]): RuleResult => {
     const text = notes.join(" ").toLowerCase();
     const numbers = (text.match(/\d[\d,.]*/g) ?? []).length;
-    const low = /\b(low|lowest|minimum|bottom|weakest|slack|calm)/.test(text);
+    const low = opts.low === false || /\b(low|lowest|minimum|bottom|weakest|slack|calm)/.test(text);
     const peak = /\b(peak|high|highest|maximum|max|strongest|fastest|top)/.test(text);
     const meaning = /\b(colou?r|width|wide|wider|thick|bright|brightness)/.test(text);
     const ratio = !opts.ratio || /(\d+(\.\d+)?\s*(times|×|x)\b|doubl|tripl|quadrupl|half|halv|percent|%)/.test(text);
@@ -458,7 +458,8 @@ const QUESTION_RULES: Record<string, (calls: ToolCall[], notes: string[], view: 
   "show only sport crags at red river gorge": (calls) => sportCragsRule(calls),
   "how has the mississippi's flow changed over the last three months?": captionShapeRule("river-pulse", { ratio: true }),
   "show the currents in cook inlet this week": captionShapeRule("ocean-currents"),
-  "where is the wind strongest over the sierra tomorrow?": captionShapeRule("wind-flow"),
+  // "Where is it strongest" asks for the peak and where; a low is not the question.
+  "where is the wind strongest over the sierra tomorrow?": captionShapeRule("wind-flow", { low: false }),
 };
 
 /**
@@ -821,6 +822,10 @@ export const SCREEN_QUESTIONS = [
   "Biggest glaciers in Patagonia",
   "How has Bears Ears changed since 2021?",
   "Which uranium mines near the Navajo Nation score highest?",
+  // Data stories (spec §13, §13a): a whole river network day by day, currents and wind as moving particles.
+  "How has the Mississippi's flow changed over the last three months?",
+  "Show the currents in Cook Inlet this week",
+  "Where is the wind strongest over the Sierra tomorrow?",
 ];
 
 function argValue(args: string[], flag: string): string | undefined {

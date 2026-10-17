@@ -211,13 +211,27 @@ export function waterMask(bbox: BBox, isLand: (lon: number, lat: number) => bool
 }
 
 /** Reads a field over `bbox` with at most `maxNodes` nodes; the result's parts, or an error. */
+/**
+ * A box at least `minKm` across each way, widened around its center when smaller: a geocoder may answer a bay or a range
+ * with a box around one point (Cook Inlet came back 10 km across), and a flow needs room to be seen moving.
+ */
+export function atLeast(bbox: BBox, minKm: number): BBox {
+  const [w, s, e, n] = bbox;
+  const cy = (s + n) / 2;
+  const cx = (w + e) / 2;
+  const halfLat = Math.max((n - s) / 2, minKm / 2 / 110.57);
+  const halfLon = Math.max((e - w) / 2, minKm / 2 / (111.32 * Math.max(0.1, Math.cos((cy * Math.PI) / 180))));
+  return [Math.max(-180, cx - halfLon), Math.max(-85, cy - halfLat), Math.min(180, cx + halfLon), Math.min(85, cy + halfLat)];
+}
+
 export async function readField(
   ctx: QueryContext,
   req: FlowRequest,
   maxNodes: number,
   colorKey: string,
+  minKm = 0,
 ): Promise<{ data: FeatureCollection; series: SeriesAxis; flow: FlowField } | { error: string }> {
-  const grid = gridFor(ctx.bbox, maxNodes);
+  const grid = gridFor(atLeast(ctx.bbox, minKm), maxNodes);
   const points: [number, number][] = [];
   for (const lat of grid.lats) for (const lon of grid.lons) points.push([lon, lat]);
   const rows = await readNodes(ctx, req, points);

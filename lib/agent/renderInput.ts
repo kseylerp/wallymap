@@ -169,6 +169,14 @@ export function normalizeRenderInput(input: Obj, layer: (Pick<Layer, "attributes
   if (!layer) return input;
   const attributes = layer.attributes ?? [];
   const out: Obj = { ...input };
+  // A layer that answers frame by frame (river pulse, currents, wind) is always a timeline: its frames play, and a
+  // ranked or detail view would only mislabel it ("where is the wind strongest" drew it ranked by speed).
+  if (layer.style.series) {
+    out.view = "timeline";
+    delete out.rankBy;
+    delete out.mode;
+    return out;
+  }
   if (typeof out.filters === "object" && out.filters !== null && !Array.isArray(out.filters)) {
     out.filters = normalizeFilters(out.filters as Obj, attributes);
   }

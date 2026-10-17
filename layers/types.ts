@@ -196,6 +196,11 @@ export type StyleHints = {
    * legend names both with their units and range.
    */
   encode?: Encoding;
+  /**
+   * The layer answers with a value per frame (SeriesAxis): `day` or `hour` steps. Its answer is always the timeline
+   * view (lib/agent/renderInput.ts), played frame by frame.
+   */
+  series?: "day" | "hour";
 };
 
 /** Which attribute sizes a mark and which colors it (spec §13: "height is that day's flow, color is water temperature"). */

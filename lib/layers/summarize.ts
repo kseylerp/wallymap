@@ -551,7 +551,9 @@ export function summarizeLayerResult(
   const help = helpLines(fieldHelp, style);
   const highest = highestOf(features, style);
   const encoding = encodingSentence(style, body.flow !== undefined);
-  const story = body.series ? seriesStory(features, body.series, style.attributes, body.linked) : undefined;
+  const told = body.series ? seriesStory(features, body.series, style.attributes, body.linked) : undefined;
+  // The caption's last sentence says what size (or brightness) and color mean.
+  const story = told && encoding ? { ...told, caption: `${told.caption} ${encoding}` } : told;
   return {
     kind: "geojson",
     featureCount: features.length,

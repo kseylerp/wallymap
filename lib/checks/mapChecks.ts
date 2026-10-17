@@ -463,6 +463,8 @@ function sameNamedPlace(a: Feature, b: Feature): boolean {
 export function checkDuplicates(layers: Drawn[]): CheckResult {
   const failures: string[] = [];
   for (const layer of layers) {
+    // A flow field's nodes are a grid, named by position, never places.
+    if (layer.flow) continue;
     if (!OBSERVATION_LAYERS.has(layer.id)) {
       const byName = new Map<string, Feature[]>();
       for (const f of layer.data.features) {

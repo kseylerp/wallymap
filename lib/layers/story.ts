@@ -23,9 +23,28 @@ export type SeriesStory = {
   forecastTop?: { name: string; value: number; date: string }[];
   /** The named features that swelled most against their own median, largest first. */
   drivers?: { name: string; peakOverMedian: number; peakDate: string }[];
+  /**
+   * The note's skeleton in the data's shape (spec §13): the low and the peak with numbers and dates, the ratio in words,
+   * the repeat, the drivers, the linked curve's swing; the caller adds what size and color mean.
+   */
+  caption?: string;
   /** A linked curve's range and its biggest swing within half a day. */
   linked?: { label: string; place: string; unit: string; low: number; high: number; biggestSwing?: string; repeats?: string };
 };
+
+/** A ratio in words: 2.7 "nearly triples", 4.4 "more than quadruples", 1.3 "rises by about 30%". */
+export function ratioWords(r: number): string {
+  if (!Number.isFinite(r) || r < 1.15) return "barely changes";
+  if (r < 1.75) return `rises by about ${Math.round((r - 1) * 10) * 10}%`;
+  if (r < 2.25) return "about doubles";
+  if (r < 2.6) return "more than doubles";
+  if (r < 3) return "nearly triples";
+  if (r < 3.4) return "about triples";
+  if (r < 3.75) return "more than triples";
+  if (r < 4.25) return "about quadruples";
+  if (r < 5) return "more than quadruples";
+  return `rises about ${Math.round(r)}-fold`;
+}
 
 /** A driver's median must reach this (in the measure's unit): a creek's tenfold rise from almost nothing says little. */
 const MIN_DRIVER = 20;
@@ -191,7 +210,33 @@ export function seriesStory(
           };
         })()
       : undefined;
+  const u = measure.unit ? ` ${measure.unit}` : "";
+  const amount = (v: number) => `${round(v).toLocaleString("en-US")}${u}`;
+  const hourly = series.step === "hour";
+  const lowWord = hourly ? "weakest" : "lowest";
+  const peakWord = hourly ? "strongest" : "peak";
+  const ratio = low > 0 ? peak / low : null;
+  const forecastLine =
+    forecastTop.length > 0
+      ? `Ahead, it peaks at ${forecastTop.map((t) => `${amount(t.value)} at ${t.name} (${t.date})`).join(", ")}.`
+      : end > series.now && num(lead.s[end])
+        ? `The forecast ends at ${amount(lead.s[end] as number)} on ${day(end)}.`
+        : "";
+  const driverLine = top.length > 0 ? `Driven by ${top.map((d) => `the ${d.name} (${Math.round(d.ratio * 10) / 10}× its median, peaking ${day(d.k)})`).join(", ")}.` : "";
+  const linkedLine = linkedStory
+    ? `${linkedStory.label} at ${linkedStory.place} runs ${linkedStory.low} to ${linkedStory.high} ${linkedStory.unit}${linkedStory.repeats ? `, repeating ${linkedStory.repeats}` : ""}${linkedStory.biggestSwing ? `; it ${linkedStory.biggestSwing}` : ""}.`
+    : "";
+  const caption = [
+    `${measure.label} at ${name ?? "its highest point"}: ${lowWord} ${amount(low)} on ${day(lo)}, ${peakWord} ${amount(peak)} on ${day(hi)}${ratio !== null ? ` (it ${ratioWords(ratio)})` : ""}; now ${amount((lead.s[series.now] as number) ?? peak)}.`,
+    `${repeats}.`,
+    driverLine,
+    forecastLine,
+    linkedLine,
+  ]
+    .filter(Boolean)
+    .join(" ");
   return {
+    caption,
     measure: `${measure.label}${unit} where it is highest on average${name ? ` (${name})` : ""}`,
     frames: {
       from: t[0].slice(0, 10),

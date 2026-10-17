@@ -18,7 +18,7 @@
  * but serve NetCDF on curvilinear grids through THREDDS; reading them is a follow-up.
  */
 import { z } from "zod";
-import { defineLayer, type Attribute, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type LinkedSeries, type QueryContext } from "./types";
+import { defineLayer, type Attribute, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type LinkedSeries, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { readField, waterMask } from "./_shared/flowGrid";
 import { haversineKm } from "./_shared/geo";
@@ -31,6 +31,10 @@ const MDAPI = "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.
 const DATAGETTER = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter";
 /** Most grid nodes read: each is one Open-Meteo call (a week counts once), so a query stays far under the minute limit. */
 export const MAX_NODES = 360;
+/** A box narrower than this each way is widened around its center: a bay geocoded to a point still shows its tides. */
+export const MIN_SPAN_KM = 350;
+/** The tide station plotted is the one nearest the field's center within this distance. */
+const TIDE_STATION_KM = 200;
 
 const inputSchema = z.object({
   days: z.number().int().min(1).max(7).default(7).describe("Days of hourly currents from today, 1 to 7 (default 7, this week)"),
@@ -50,15 +54,15 @@ async function landTest(): Promise<((lon: number, lat: number) => boolean) | nul
 const PredSchema = z.object({ predictions: z.array(z.object({ t: z.string(), v: z.string() })) });
 
 /** The hourly tide at the NOAA prediction station nearest the box's center (inside the box), on the field's hours. */
-async function noaaTide(ctx: QueryContext, times: string[]): Promise<LinkedSeries | null> {
+async function noaaTide(ctx: QueryContext, bbox: BBox, times: string[]): Promise<LinkedSeries | null> {
   try {
     const list = await ctx.fetch(`${MDAPI}?type=tidepredictions`, { cacheKey: "tides:stations:predictions", ttlSeconds: 86_400, timeoutMs: UPSTREAM_TIMEOUT_MS });
     if (!list.ok) return null;
-    const [w, s, e, n] = ctx.bbox;
+    const [w, s, e, n] = bbox;
     const center: [number, number] = [(w + e) / 2, (s + n) / 2];
     const station = parseStations(await list.json())
-      .filter((st) => st.lng >= w && st.lng <= e && st.lat >= s && st.lat <= n)
       .map((st) => ({ st, d: haversineKm(center, [st.lng, st.lat]) }))
+      .filter((x) => x.d <= TIDE_STATION_KM)
       .sort((a, b) => a.d - b.d)[0]?.st;
     if (!station) return null;
     const first = times[0];
@@ -88,8 +92,8 @@ async function noaaTide(ctx: QueryContext, times: string[]): Promise<LinkedSerie
 }
 
 /** The model's sea level (with tides) at the box's center, when no NOAA station is in the box. */
-async function modelTide(ctx: QueryContext, times: string[], days: number, pastDays: number): Promise<LinkedSeries | null> {
-  const [w, s, e, n] = ctx.bbox;
+async function modelTide(ctx: QueryContext, bbox: BBox, times: string[], days: number, pastDays: number): Promise<LinkedSeries | null> {
+  const [w, s, e, n] = bbox;
   const url = `${MARINE_API}?latitude=${((s + n) / 2).toFixed(3)}&longitude=${((w + e) / 2).toFixed(3)}&hourly=sea_level_height_msl&forecast_days=${days}&past_days=${pastDays}&timezone=GMT`;
   try {
     const res = await ctx.fetch(url, { ttlSeconds: 3 * 3_600, timeoutMs: UPSTREAM_TIMEOUT_MS });
@@ -149,7 +153,7 @@ const oceanCurrents = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 4_000_000,
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("ocean-currents"), unit: "m/s", encode: { size: "speed", color: "sst" } },
+  style: { geometry: "point", color: layerColor("ocean-currents"), unit: "m/s", encode: { size: "speed", color: "sst" }, series: "hour" },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
@@ -171,12 +175,13 @@ const oceanCurrents = defineLayer({
       },
       MAX_NODES,
       "sst",
+      MIN_SPAN_KM,
     );
     if ("error" in field) return { error: field.error, hint: "upstream" };
     const times = field.series.times;
     // A finer water mask than the 8 km model grid, so particles stay off the land between its nodes.
     const water = await landTest().then((isLand) => (isLand ? waterMask(field.flow.bbox, isLand) : null)).catch(() => null);
-    const linked = (await noaaTide(ctx, times)) ?? (await modelTide(ctx, times, input.days, input.pastDays));
+    const linked = (await noaaTide(ctx, field.flow.bbox, times)) ?? (await modelTide(ctx, field.flow.bbox, times, input.days, input.pastDays));
     const wet = field.data.features.filter((f) => typeof f.properties?.speed === "number").length;
     const notes = [
       `${wet} of ${field.data.features.length} grid nodes at sea, hourly for ${times.length} hours (Météo-France SMOC, about 8 km)`,

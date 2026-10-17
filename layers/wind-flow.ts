@@ -17,6 +17,8 @@ import { layerColor } from "@/lib/render/palette";
 const FORECAST_API = "https://api.open-meteo.com/v1/forecast";
 /** Most grid nodes read: each is one Open-Meteo call (two weeks count once). */
 export const MAX_NODES = 360;
+/** A box narrower than this each way is widened around its center, so the wind has room to be seen moving. */
+export const MIN_SPAN_KM = 150;
 
 const inputSchema = z.object({
   days: z.number().int().min(1).max(7).default(2).describe("Days of hourly wind from today, 1 to 7 (default 2: today and tomorrow)"),
@@ -64,7 +66,7 @@ const windFlow = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 4_000_000,
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("wind-flow"), unit: "m/s", encode: { size: "speed", color: "tempC" } },
+  style: { geometry: "point", color: layerColor("wind-flow"), unit: "m/s", encode: { size: "speed", color: "tempC" }, series: "hour" },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
@@ -87,6 +89,7 @@ const windFlow = defineLayer({
       },
       MAX_NODES,
       "tempC",
+      MIN_SPAN_KM,
     );
     if ("error" in field) return { error: field.error, hint: "upstream" };
     return {

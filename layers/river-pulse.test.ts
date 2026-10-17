@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Position } from "geojson";
 import riverPulse, { clipLine, cutLine, interpolateFlow, joinRuns, MAX_SAMPLES, planSamples, reachesOf, reachFeatures, runsIn, type Run } from "./river-pulse";
 import { attributeProblems } from "./attributes";
-import { biggestSwing, repeatLag, seriesStory } from "@/lib/layers/story";
+import { biggestSwing, ratioWords, repeatLag, seriesStory } from "@/lib/layers/story";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
 
 /** A straight east-west line at `lat` from `w` to `e`, a vertex every 0.1°. */
@@ -97,8 +97,13 @@ describe("the series story for the note", () => {
     expect(story.ratio).toBe(4);
     expect(story.forecastEnd).toEqual({ value: 50, date: "2026-10-17" });
     expect(story.drivers?.[0].name).toBe("Big");
+    expect(story.caption).toContain("lowest 100 m³/s on 2026-10-12, peak 400 m³/s on 2026-10-14 (it about quadruples)");
+    expect(ratioWords(2.7)).toBe("nearly triples");
+    expect(ratioWords(4.6)).toBe("more than quadruples");
     const summary = summarizeLayerResult({ kind: "geojson", data: built.data, series: built.series, citation: { source: "s", url: "https://e.org", retrieved: "x" } }, "river-pulse", { ...riverPulse.style, attributes: riverPulse.attributes });
     expect("story" in summary && summary.story?.ratio).toBe(4);
+    // The caption ends with what width and color mean.
+    expect("story" in summary && summary.story?.caption).toMatch(/Line width is Flow \(m³\/s\); color is Flow vs\. the period's median/);
     expect(JSON.stringify(summary)).not.toContain('"series":');
   });
 });

@@ -485,7 +485,7 @@ const riverPulse = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 25_000_000,
   input: inputSchema,
-  style: { geometry: "line", color: layerColor("river-pulse"), unit: "m³/s", encode: { size: "q", color: "pct" } },
+  style: { geometry: "line", color: layerColor("river-pulse"), unit: "m³/s", encode: { size: "q", color: "pct" }, series: "day" },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,

@@ -63,6 +63,9 @@ describe("two measures on one mark", () => {
     expect(sizeT(100, [0, 400])).toBe(0.5);
     expect(sizeT(undefined, [0, 400])).toBe(0);
     expect(lineWidthAt(1)).toBeGreaterThan(lineWidthAt(0.5));
+    // Values far from zero (a magnitude) size by their place in the range.
+    expect(sizeT(2.5, [2.5, 5.7])).toBe(0);
+    expect(sizeT(5.7, [2.5, 5.7])).toBe(1);
   });
 
   it("reads every frame of a series for the range", () => {
@@ -76,6 +79,7 @@ describe("two measures on one mark", () => {
       features: [
         { type: "Feature", geometry: { type: "LineString", coordinates: [[0, 0], [1, 1]] }, properties: { q: 400, temp: 20 } },
         { type: "Feature", geometry: { type: "LineString", coordinates: [[0, 1], [1, 2]] }, properties: { q: 100, temp: 4 } },
+        { type: "Feature", geometry: { type: "LineString", coordinates: [[0, 2], [1, 3]] }, properties: { q: 10 } },
       ],
     };
     const l = layer("line", lines);

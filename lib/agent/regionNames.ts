@@ -527,7 +527,18 @@ const FEATURE_DESCRIPTION =
 export async function wikidataFeature(place: string, halfSpanKm: number): Promise<RegionMatch | null> {
   const [name, ...rest] = place.split(/,|\(|\)/).map((p) => p.trim()).filter(Boolean);
   if (!name) return null;
-  const qualifier = rest.join(" ").toLowerCase();
+  if (rest.length > 0) return wikidataFeatureNamed(name, rest.join(" ").toLowerCase(), halfSpanKm);
+  // "Crater Lake Oregon": the last one or two words may be where it is.
+  const words = name.split(/\s+/);
+  for (const cut of [0, 1, 2]) {
+    if (words.length - cut < 1) break;
+    const found = await wikidataFeatureNamed(words.slice(0, words.length - cut).join(" "), words.slice(words.length - cut).join(" ").toLowerCase(), halfSpanKm);
+    if (found) return found;
+  }
+  return null;
+}
+
+async function wikidataFeatureNamed(name: string, qualifier: string, halfSpanKm: number): Promise<RegionMatch | null> {
   try {
     const search = new URL(WIKIDATA);
     search.searchParams.set("action", "wbsearchentities");

@@ -30,6 +30,8 @@ export type QueryRecord = {
   zoomIn?: boolean;
   /** A data story (a series layer): its caption in the data's shape, which the note must follow (lib/agent/noteCheck.ts). */
   caption?: string;
+  /** A data story's encoding in words ("Line width is Flow (m³/s); color is ..."): the answer always says it. */
+  meaning?: string;
 };
 
 export type Geocoder = (place: string, opts?: { proximity?: [number, number] }) => Promise<GeocodeResult | GeocodeError>;

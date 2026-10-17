@@ -438,7 +438,7 @@ function captionShapeRule(layerId: string, opts: { ratio?: boolean; low?: boolea
     const low = opts.low === false || /\b(low|lowest|minimum|bottom|weakest|slack|calm)/.test(text);
     const peak = /\b(peak|high|highest|maximum|max|strongest|fastest|top)/.test(text);
     const meaning = /\b(colou?r|width|wide|wider|thick|bright|brightness)/.test(text);
-    const ratio = !opts.ratio || /(\d+(\.\d+)?\s*(times|×|x)\b|doubl|tripl|quadrupl|half|halv|percent|%)/.test(text);
+    const ratio = !opts.ratio || /(\d+(\.\d+)?\s*(times|×|x)\b|(twice|two|three|four|five|six|ten)[\s\-\u2010-\u2015]*(times|fold)|doubl|tripl|quadrupl|half|halv|percent|%)/.test(text);
     const dataOnly = calls.some((c) => c.toolName === "set_basemap" && (c.input as { style?: unknown } | undefined)?.style === "data-only");
     const drawn = calls.some((c) => c.toolName === "render" && (c.input as { layerId?: unknown } | undefined)?.layerId === layerId);
     return { ok: numbers >= 2 && low && peak && meaning && ratio && drawn, numbers, low, peak, meaning, ratio, dataOnly, drawn };

@@ -453,7 +453,46 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
     turn.note(`closing text with no note cut from ${noteWords(draft.text)} to ${noteWords(text)} words`);
     changed = true;
   }
+  // 6. A data story's answer says what size (or width, or brightness) and color mean (spec §13): the encoding sentence is
+  // added to the note, or to a closing text with no note (before its follow-up questions), when it leaves that out.
+  const meaning = turn.queries.findLast((q) => q.ok && q.meaning !== undefined)?.meaning;
+  if (meaning) {
+    const at = calls.findIndex((c) => c.toolName === "note");
+    if (at >= 0) {
+      const markdown = typeof calls[at].input.markdown === "string" ? (calls[at].input.markdown as string) : "";
+      if (!saysMeaning(markdown)) {
+        calls = calls.map((c, i) => (i === at ? { ...c, input: { ...c.input, markdown: `${markdown.trimEnd()}\n\n${meaning}` } } : c));
+        turn.note("added what size and color mean to the note");
+        changed = true;
+      }
+    } else if (!hasNote && calls.length === 0 && rejected.length === 0 && !dropText && !leakedText && !turn.noted) {
+      const base = text ?? draft.text;
+      if (base && !saysMeaning(base)) {
+        text = withMeaning(base, meaning);
+        turn.note("added what size and color mean to the closing text");
+        changed = true;
+      }
+    }
+  }
   return { calls, dropText: dropText || leakedText, rejected, changed, ...(text !== undefined && { text }) };
+}
+
+/** True when an answer says what the marks' size (or width, or brightness) and color mean. */
+export function saysMeaning(text: string): boolean {
+  const t = text.toLowerCase();
+  return /\bcolou?r/.test(t) && /\b(width|wide|wider|thick|size|bright|brightness)/.test(t);
+}
+
+/** The answer with the meaning sentence after its findings and before its follow-up questions (a closing bullet list). */
+export function withMeaning(text: string, meaning: string): string {
+  const lines = text.trimEnd().split("\n");
+  let cut = lines.length;
+  while (cut > 0 && (/^\s*[-*•]\s/.test(lines[cut - 1]) || lines[cut - 1].trim() === "")) cut -= 1;
+  // Only a trailing list of questions is the follow-ups; findings in bullets stay above the sentence.
+  const tail = lines.slice(cut);
+  const follow = tail.some((l) => /\?\s*$/.test(l)) ? tail : [];
+  const body = follow.length > 0 ? lines.slice(0, cut) : lines;
+  return [...body, "", meaning, ...(follow.length > 0 ? ["", ...follow.filter((l) => l.trim() !== "")] : [])].join("\n");
 }
 
 function parseInput(input: unknown): Record<string, unknown> | null {

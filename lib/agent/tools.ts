@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getLayer, listLayers } from "@/layers/registry";
 import { BBoxSchema, bboxAreaKm2, hardMaxAreaKm2, type BBox, type Coverage, type Layer, type LayerError, type LayerResult } from "@/layers/types";
 import { runLayer } from "@/lib/layers/run";
-import { highestOf, isFullLayerResult, summarizeLayerResult, type GeojsonSummary, type SummaryStyle } from "@/lib/layers/summarize";
+import { encodingSentence, highestOf, isFullLayerResult, summarizeLayerResult, type GeojsonSummary, type SummaryStyle } from "@/lib/layers/summarize";
 import { VIEW_KINDS, type Basemap, type RenderMode, type TimeMode } from "@/lib/render/state";
 import { nearBox, nearPlace } from "./places";
 import { normalizeRenderInput } from "./renderInput";
@@ -427,8 +427,21 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: T
       const highest = "kind" in body && body.kind === "geojson" ? highestOf(body.data.features, { ...layer.style, attributes: layer.attributes }) : undefined;
       const top = highest?.top[0] && { ...highest.top[0], by: highest.by, ...(highest.unit !== undefined && { unit: highest.unit }) };
       const zoomIn = "error" in body && body.hint === "zoom_in";
-      const caption = "kind" in body && body.kind === "geojson" && body.series ? storyCaption(body, layer) : undefined;
-      turn.queries.push({ layerId: layer.id, bbox, inputKey: inputKeyOf(input), ok, drawable: drawable(body), wide: ok && isWideQuery(layer, bbox), ...(top && { top }), ...(zoomIn && { zoomIn }), ...(caption && { caption }) });
+      const story = "kind" in body && body.kind === "geojson" && body.series ? body : undefined;
+      const caption = story ? storyCaption(story, layer) : undefined;
+      const meaning = story ? encodingSentence({ ...layer.style, ...(layer.attributes && { attributes: layer.attributes }) }, story.flow !== undefined) : undefined;
+      turn.queries.push({
+        layerId: layer.id,
+        bbox,
+        inputKey: inputKeyOf(input),
+        ok,
+        drawable: drawable(body),
+        wide: ok && isWideQuery(layer, bbox),
+        ...(top && { top }),
+        ...(zoomIn && { zoomIn }),
+        ...(caption && { caption }),
+        ...(meaning && { meaning }),
+      });
       if (ok && layer.id === "physical-regions") turn.regionQueried = true;
       // A view or a named place too wide for this layer: name the layers that can still answer at this scale.
       if ("error" in body && body.hint === "zoom_in") {

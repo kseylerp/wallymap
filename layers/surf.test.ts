@@ -570,7 +570,7 @@ describe("surf wide mode (over 500,000 km²)", () => {
     expect(r.data.features.filter((f) => f.properties?.kind === "climatology")).toHaveLength(SEASON_BUOY_CAP);
     expect(r.data.features.filter((f) => f.properties?.kind === "station")).toHaveLength(2);
     expect(r.total).toBeUndefined();
-    expect(r.coverageNote).toMatch(/the others are kind 'station' without values/);
+    expect(r.coverageNote).toMatch(/the others are shown as stations without values/);
     expect(r.coverageNote).not.toMatch(/zoom in/);
 
     const cut = await layer.query({ ...ctx(stub, box), wide: true, wideStrategy: { ...layer.wide!, limit: 7 } }, { forecast: false, season: true, month: 10 });

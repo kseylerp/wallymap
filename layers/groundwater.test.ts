@@ -124,7 +124,7 @@ describe("groundwater layer", () => {
     expect(capped.coverageNote).toContain(`Showing ${LIMIT} wells, in no particular order`);
     const none = geojson(await layer.query(ctx(vi.fn(async () => json({ type: "FeatureCollection", features: [] }))), {}));
     expect(none.data.features).toEqual([]);
-    expect(none.coverageNote).toBe("No wells measured since 2021 in this area; set sinceYear lower to include older measurements");
+    expect(none.coverageNote).toBe("No wells measured since 2021 in this area; ask for an earlier start year to include older measurements");
   });
 
   it("returns nothing outside the US without calling out", async () => {

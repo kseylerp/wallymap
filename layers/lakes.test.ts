@@ -137,7 +137,7 @@ describe("lakes layer", () => {
   it("says so when nothing is found, naming the filter", async () => {
     const stub = vi.fn(async () => json({ results: { bindings: [] } }));
     expect(geojson(await layer.query(ctx(stub), {})).coverageNote).toBe("No named lakes in Wikidata for this area");
-    expect(geojson(await layer.query(ctx(stub), { name: "zzz" })).coverageNote).toBe("No lake named like 'zzz' in Wikidata for this area");
+    expect(geojson(await layer.query(ctx(stub), { name: "zzz" })).coverageNote).toBe("No lake named like “zzz” in Wikidata for this area");
   });
 
   it("retries once after a 429 and uses the second answer", async () => {
@@ -187,7 +187,7 @@ describe("lakes layer", () => {
       expect(query).toContain('"tahoe"');
       expect(query).toContain("ORDER BY DESC(?area)\nLIMIT 1050");
       expect(r.body).toMatchObject({
-        coverageNote: `Showing all ${uniqueItems} in this wide view (ranked by area); 1 of 27 lakes have a recorded maximum depth; a null depth means not recorded`,
+        coverageNote: `Showing all ${uniqueItems} in this wide view (ranked by area); 1 of 27 lakes have a recorded maximum depth`,
       });
     } finally {
       vi.unstubAllGlobals();

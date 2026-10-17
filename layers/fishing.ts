@@ -357,7 +357,7 @@ const fishing = defineLayer({
       if (sightings.skipped > 0) notes.push(`${sightings.skipped} fish sightings with hidden locations were left out`);
       const total = totalResults(inat.json);
       if (total > INAT_LIMIT) {
-        notes.push(`Showing the ${INAT_LIMIT} most recent of ${total.toLocaleString("en-US")} fish sightings; zoom in or shorten days for the rest`);
+        notes.push(`Showing the ${INAT_LIMIT} most recent of ${total.toLocaleString("en-US")} fish sightings; zoom in or ask for fewer days for the rest`);
       }
     } else {
       failures.push(`iNaturalist (${inat.error})`);

@@ -7,6 +7,7 @@ import {
   cardRowProblems,
   cardRows,
   checkCards,
+  noteProblems,
   checkDuplicates,
   checkLattice,
   checkLayerIds,
@@ -41,9 +42,9 @@ const line = (coords: [number, number][], props: Record<string, unknown> = {}): 
 });
 
 /** The map after the browser loaded and drew these layers, as the eval replays it. */
-function mapWith(...layers: { id: string; features: Feature[]; mode?: RenderMode; info?: LayerInfo }[]): MapState {
+function mapWith(...layers: { id: string; features: Feature[]; mode?: RenderMode; info?: LayerInfo; note?: string }[]): MapState {
   let state = reduce(initialMapState, { type: "turn_start" });
-  for (const { id, features, mode, info } of layers) {
+  for (const { id, features, mode, info, note } of layers) {
     const meta = info ?? lookup(id);
     const data: FeatureCollection = { type: "FeatureCollection", features };
     state = reduce(state, {
@@ -52,7 +53,7 @@ function mapWith(...layers: { id: string; features: Feature[]; mode?: RenderMode
         id,
         title: meta?.title ?? id,
         style: meta?.style ?? { geometry: "point", color: "#000" },
-        result: { kind: "geojson", data, citation: { source: "test", url: "https://example.org", retrieved: "2026-10-16" } },
+        result: { kind: "geojson", data, citation: { source: "test", url: "https://example.org", retrieved: "2026-10-16" }, ...(note && { coverageNote: note }) },
         receivedAt: "2026-10-16T00:00:00Z",
         ...(meta?.card && { card: meta.card }),
         ...(meta?.fieldHelp && { fieldHelp: meta.fieldHelp }),
@@ -303,6 +304,19 @@ describe("card text", () => {
     expect(rows.map((r) => r.row.label)).not.toContain("Condition");
     expect(rows.map((r) => r.row.value)).not.toContain("n/a");
     expect(checkCards(drawn(mapWith({ id: "dams", features: [dam] }))).ok).toBe(true);
+  });
+
+  it("fails a note with code values (the Bears Ears note: kind '2021' … kind 'current'), and passes a plain one", () => {
+    expect(noteProblems("kind '2021' is the earlier Utah monument boundaries; kind 'current' is how BLM draws them now")).toEqual([
+      "the note quotes the code value '2021'",
+    ]);
+    expect(noteProblems("Provisional data; pctFull is percent of official capacity")).toEqual(['the note names the field "pctFull"']);
+    expect(noteProblems("Grouped by sac_scale; a null depth means not recorded")).toEqual(['the note names the field "sac_scale"', 'the note says "null"']);
+    expect(noteProblems("Two outlines: the 2021 boundary of the Utah monuments and the current BLM boundary")).toEqual([]);
+    expect(noteProblems("Showing 200 of 1,203 iNaturalist sightings; NOAA's buoys and today's MHHW")).toEqual([]);
+    const monument = { type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [-109.8, 37.5] }, properties: { name: "Bears Ears", kind: "2021" } };
+    const bad = checkCards(drawn(mapWith({ id: "monuments", features: [monument], note: "kind '2021' is the earlier Utah monument boundaries" })));
+    expect(bad.failures.join(" ")).toMatch(/note: the note quotes the code value '2021'/);
   });
 
   it("fails the owner's Tahoe trail card: a part in view longer than the full length", () => {

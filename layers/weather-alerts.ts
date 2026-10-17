@@ -493,7 +493,7 @@ const weatherAlerts = defineLayer({
         const limit = ctx.wide ? (ctx.wideStrategy?.limit ?? WIDE_LIMIT) : Infinity;
         if (placed.features.length > limit) alertTotal = placed.features.length;
         features.push(...placed.features.slice(0, limit));
-        if (placed.features.length === 0) notes.push(input.event ? `No active "${input.event}" alerts in view` : "No active NWS alerts in view");
+        if (placed.features.length === 0) notes.push(input.event ? `No active “${input.event}” alerts in view` : "No active NWS alerts in view");
         if (placed.unplaced > 0) {
           notes.push(
             `${placed.unplaced} alert${placed.unplaced === 1 ? "" : "s"} in view could not be drawn (zone shapes ${capped ? `capped at ${MAX_ZONE_FETCHES}` : "unavailable"})`,

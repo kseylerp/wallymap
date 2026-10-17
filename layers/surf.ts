@@ -762,7 +762,7 @@ async function querySeason(ctx: QueryContext, month: number, now: Date): Promise
     // Wide: the other wave buoys in view are listed without values (up to the limit), so the count is honest.
     const limit = ctx.wideStrategy?.limit ?? WIDE_LIMIT;
     features.push(...others.slice(0, Math.max(0, limit - features.length)).map(buoySiteFeature));
-    if (inView > chosen.length) notes.push(`Only the ${chosen.length} wave buoys nearest the centre are summarised; the others are kind 'station' without values`);
+    if (inView > chosen.length) notes.push(`Only the ${chosen.length} wave buoys nearest the centre are summarised; the others are shown as stations without values`);
   } else if (inView > chosen.length) {
     notes.push(`Only the ${chosen.length} wave buoys nearest the centre of ${inView} in view are summarised; zoom in for others`);
   }
@@ -931,7 +931,7 @@ const surf = defineLayer({
           notes.push(
             `${buoys.features.length} NOAA buoy${buoys.features.length === 1 ? "" : "s"} (measured) and ${forecast.features.length} surf spot${forecast.features.length === 1 ? "" : "s"} (modelled forecast)`,
           );
-          if (forecast.nudged > 0) notes.push(`${forecast.nudged} spot${forecast.nudged === 1 ? "" : "s"} read from the model up to 3 km out to sea (nudgedKm)`);
+          if (forecast.nudged > 0) notes.push(`${forecast.nudged} spot${forecast.nudged === 1 ? "" : "s"} read from the model up to 3 km out to sea`);
           if (forecast.dropped > 0) notes.push(`${forecast.dropped} spot${forecast.dropped === 1 ? "" : "s"} left out: the model has no waves within 3 km`);
           if (distinct > spots.length) notes.push(`Showing ${spots.length} of ${distinct} surf spots in view (nearest the centre first); zoom in for the rest`);
           if (lookup.failures.length > 0) notes.push(`Some spot sources failed${failedLookup}`);

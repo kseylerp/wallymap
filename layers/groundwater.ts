@@ -246,7 +246,7 @@ const groundwater = defineLayer({
     const total = await counting;
     const notes: string[] = [];
     if (wideLimit === undefined && body.features.length >= LIMIT) notes.push(`Showing ${LIMIT} wells, in no particular order; zoom in for the rest`);
-    if (features.length === 0) notes.push(`No wells measured since ${since} in this area; set sinceYear lower to include older measurements`);
+    if (features.length === 0) notes.push(`No wells measured since ${since} in this area; ask for an earlier start year to include older measurements`);
     else notes.push(`Latest manual measurement per well since ${since}; depth is feet below land surface`);
     return {
       kind: "geojson",

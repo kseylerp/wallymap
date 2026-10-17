@@ -268,7 +268,7 @@ const monuments = defineLayer({
     if (failures.length > 0) notes.push(`Missing the ${failures.join(" and the ")}`);
     if (features.length === 0) notes.push("No BLM national monuments or conservation areas in this area");
     else if (input.version === "both" && features.some((f) => f.properties?.kind === "2021")) {
-      notes.push("kind '2021' is the earlier Utah monument boundaries; kind 'current' is how BLM draws them now");
+      notes.push("Two outlines: the 2021 boundary of the Utah monuments and the current BLM boundary");
     }
 
     // Biggest first so small monuments draw on top; "2021" before "current" so the present outline is never hidden.

@@ -219,7 +219,7 @@ const earthquakes = defineLayer({
     const notes: string[] = [];
     // In wide mode run.ts writes the "showing the N strongest" note.
     if (!ctx.wide && parsed.data.features.length >= LIMIT) {
-      notes.push(`Showing the ${LIMIT.toLocaleString("en-US")} largest events; zoom in or raise minMagnitude for the rest`);
+      notes.push(`Showing the ${LIMIT.toLocaleString("en-US")} largest events; zoom in or raise the minimum magnitude for the rest`);
     }
     if (data.features.length === 0) {
       notes.push(`No earthquakes of magnitude ${input.minMagnitude} or more in the last ${input.days} days in this area`);

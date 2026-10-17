@@ -188,7 +188,7 @@ describe("reservoir-levels layer", () => {
     const usbrCalls = (stub.mock.calls as unknown as Call[]).filter((c) => c[0].includes("usbr.gov"));
     expect(usbrCalls.length).toBe(MAX_USBR_SITES * 2);
     expect(r.total).toBe(SITES.length);
-    expect(r.coverageNote).toContain("At most 6 Reclamation reservoirs (the largest) per request; set name for the others");
+    expect(r.coverageNote).toContain("At most 6 Reclamation reservoirs (the largest) per request; ask for a reservoir by name for the others");
     expect(r.coverageNote).not.toMatch(/zoom in/);
     const powell = geojson(await layer.query({ ...ctx(upstream(), POWELL_VIEW), wide: true, wideStrategy: layer.wide }, { years: 1 }));
     expect(powell.total).toBeUndefined();
@@ -212,7 +212,7 @@ describe("reservoir-levels layer", () => {
     expect(nothing.data.features).toEqual([]);
     expect(nothing.coverageNote).toMatch(/No major reservoir/);
     const named = geojson(await layer.query(ctx(quiet, WEST), { years: 1, name: "zzz" }));
-    expect(named.coverageNote).toContain("No reservoir named like 'zzz'");
+    expect(named.coverageNote).toContain("No reservoir named like “zzz”");
     expect(quiet).not.toHaveBeenCalled();
     const europe = geojson(await layer.query(ctx(quiet, [5, 45, 6, 46]), { years: 1 }));
     expect(europe.coverageNote).toMatch(/western United States only/);

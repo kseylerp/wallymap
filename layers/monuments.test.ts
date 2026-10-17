@@ -130,7 +130,7 @@ describe("monuments layer", () => {
     const kinds = r.data.features.map((f) => f.properties?.kind);
     expect(kinds).toEqual(["2021", "2021", "2021", "current", "current", "current", "current", "current"]);
     expect(r.data.features[0].properties).toMatchObject({ name: "Grand Staircase-Escalante", kind: "2021" });
-    expect(r.coverageNote).toBe("kind '2021' is the earlier Utah monument boundaries; kind 'current' is how BLM draws them now");
+    expect(r.coverageNote).toBe("Two outlines: the 2021 boundary of the Utah monuments and the current BLM boundary");
 
     const calls = stub.mock.calls as unknown as [string, { cacheKey?: string; ttlSeconds?: number }][];
     expect(calls).toHaveLength(2);

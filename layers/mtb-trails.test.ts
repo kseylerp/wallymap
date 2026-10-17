@@ -169,7 +169,7 @@ describe("mtb-trails layer", () => {
     expect(Math.max(...vs)).toBe(0);
     expect(r.data.features.some((f) => f.properties?.kind === "route")).toBe(true);
     // The note counts what is left after the filter and names it.
-    expect(r.coverageNote).toMatch(/^Showing \d+ of 152 rated trail ways and routes in this box \(lowest OpenStreetMap ids first after maxScale hid \d+\)/);
+    expect(r.coverageNote).toMatch(/^Showing \d+ of 152 rated trail ways and routes in this box \(lowest OpenStreetMap ids first after the difficulty limit hid \d+\)/);
   });
 
   it("counts the filtered result in the note when nothing was truncated", async () => {
@@ -177,7 +177,7 @@ describe("mtb-trails layer", () => {
     const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
     const r = await layer.query(ctx(stub), { includeRoutes: true, maxScale: 0 });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
-    expect(r.coverageNote).toBe(`Returned ${r.data.features.length} rated trail ways and routes after maxScale hid ${15 - r.data.features.length}; the box was not truncated`);
+    expect(r.coverageNote).toBe(`Returned ${r.data.features.length} rated trail ways and routes after the difficulty limit hid ${15 - r.data.features.length}; the box was not truncated`);
   });
 
   it("maps a failing Overpass to an upstream error after the fallback", async () => {
@@ -284,6 +284,6 @@ describe("mtb-trails wide mode", () => {
       { includeRoutes: false, maxScale: 2 },
     );
     if (!("kind" in scaled) || scaled.kind !== "geojson") throw new Error("expected geojson");
-    expect(scaled.coverageNote).toBe("maxScale hid 1 of the named trails");
+    expect(scaled.coverageNote).toBe("The difficulty limit hid 1 of the named trails");
   });
 });

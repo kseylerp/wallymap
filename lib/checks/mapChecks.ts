@@ -211,7 +211,16 @@ function isUnnamed(norm: string): boolean {
 
 /* ---------- Drawn layers ---------- */
 
-type Drawn = { id: string; info: LayerInfo | undefined; label: string; data: FeatureCollection; loaded: FeatureCollection; op: MapState["renderOps"][number] };
+type Drawn = {
+  id: string;
+  info: LayerInfo | undefined;
+  label: string;
+  data: FeatureCollection;
+  loaded: FeatureCollection;
+  op: MapState["renderOps"][number];
+  /** The coverage notes the layer panel and card show (one per compare side). */
+  notes: string[];
+};
 
 /** The GeoJSON layers the map draws (visible, filtered and windowed), one entry per layer id (compare side B folded in). */
 export function drawnLayers(state: MapState, lookup: LayerLookup): Drawn[] {
@@ -225,6 +234,7 @@ export function drawnLayers(state: MapState, lookup: LayerLookup): Drawn[] {
     const info = lookup(id);
     const prev = out.get(id);
     const features = [...(prev?.data.features ?? []), ...layer.result.data.features];
+    const notes = [...(prev?.notes ?? []), ...(layer.result.coverageNote ? [layer.result.coverageNote] : [])];
     out.set(id, {
       id,
       info,
@@ -232,6 +242,7 @@ export function drawnLayers(state: MapState, lookup: LayerLookup): Drawn[] {
       data: { type: "FeatureCollection", features },
       loaded: loaded?.kind === "geojson" ? loaded.data : layer.result.data,
       op,
+      notes,
     });
   }
   return [...out.values()];
@@ -612,6 +623,27 @@ export function titleProblems(name: string | null): string[] {
   return [`the title "${name}" is in capitals`];
 }
 
+/** Lower-case-first names that are not code: brands the notes may name. */
+const CAMEL_WORDS = new Set(["iNaturalist", "eBird", "iOS", "iPhone", "iPad", "eDNA"]);
+
+/**
+ * What is wrong with a coverage note the user reads (the layer panel and the card show it): a quoted code value ("kind
+ * '2021'"), a snake_case or camelCase identifier ("pctFull", "max_scale"), or null/undefined/NaN. Notes are plain
+ * sentences: "Two outlines: the 2021 boundary and the current BLM boundary".
+ */
+export function noteProblems(note: string): string[] {
+  const problems: string[] = [];
+  const quoted = /(^|[\s(=:])['"`]([a-z0-9][A-Za-z0-9_.\-]*)['"`](?=$|[\s),.;:])/.exec(note);
+  if (quoted) problems.push(`the note quotes the code value ${quoted[0].trim()}`);
+  const snake = /\b[a-z0-9]+_[a-z0-9_]+\b/.exec(note);
+  if (snake) problems.push(`the note names the field "${snake[0]}"`);
+  const camel = note.match(/\b[a-z]+[A-Z][A-Za-z0-9]*\b/g)?.find((w) => !CAMEL_WORDS.has(w));
+  if (camel) problems.push(`the note names the field "${camel}"`);
+  const empty = /\b(null|undefined|NaN)\b/.exec(note);
+  if (empty) problems.push(`the note says "${empty[0]}"`);
+  return problems;
+}
+
 /** January 1 written as a day ("Jan 1, 1963"). */
 const JAN_1_TEXT = /\bJan 1, (\d{4})\b/;
 
@@ -653,6 +685,8 @@ export function checkCards(layers: Drawn[]): CheckResult {
     // The Rank by list's names are titles too (each opens its card).
     const { top } = rankedTop(layer.info, layer.op, layer.loaded, layer.data, RANKED_TOP_N);
     for (const f of top) for (const p of titleProblems(nameOf(f))) if (!seen.has(p)) seen.set(p, f);
+    const notes = [...new Set(layer.notes.flatMap((n) => noteProblems(n).map((p) => `${p} ("${n}")`)))];
+    if (notes.length > 0) failures.push(`${layer.label} note: ${notes.slice(0, 3).join("; ")}.`);
     if (seen.size === 0) continue;
     const list = [...seen.entries()];
     failures.push(`${layer.label} card: ${list.slice(0, 4).map(([p, f]) => `${p} (${nameOf(f) ? `"${nameOf(f)}"` : "a feature"})`).join("; ")}${list.length > 4 ? `; and ${list.length - 4} more` : ""}.`);

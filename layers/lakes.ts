@@ -275,13 +275,13 @@ const lakes = defineLayer({
     const notes: string[] = [];
     // In wide mode run.ts writes the "showing the N largest" note.
     if (wideLimit === undefined && parsed.data.results.bindings.length >= LIMIT) {
-      notes.push(`Showing the ${LIMIT} largest lakes by area; zoom in or set name for the rest`);
+      notes.push(`Showing the ${LIMIT} largest lakes by area; zoom in or ask for a lake by name for the rest`);
     }
     if (features.length === 0) {
-      notes.push(input.name ? `No lake named like '${input.name}' in Wikidata for this area` : "No named lakes in Wikidata for this area");
+      notes.push(input.name ? `No lake named like “${input.name}” in Wikidata for this area` : "No named lakes in Wikidata for this area");
     } else {
       const withDepth = features.filter((f) => typeof f.properties?.depthM === "number").length;
-      notes.push(`${withDepth} of ${features.length} lakes have a recorded maximum depth; a null depth means not recorded`);
+      notes.push(`${withDepth} of ${features.length} lakes have a recorded maximum depth`);
     }
 
     return {

@@ -199,7 +199,7 @@ async function queryWide(ctx: QueryContext, input: MtbInput): Promise<LayerResul
     kind: "geojson",
     data: { type: "FeatureCollection", features: kept },
     ...(total !== undefined && { total }),
-    ...(hidden > 0 && { coverageNote: `maxScale hid ${hidden.toLocaleString("en-US")} of the named trails` }),
+    ...(hidden > 0 && { coverageNote: `The difficulty limit hid ${hidden.toLocaleString("en-US")} of the named trails` }),
     citation: osmCitation(),
   };
 }
@@ -309,7 +309,7 @@ const mtbTrails = defineLayer({
       data,
       coverageNote: returnedNote(data.features.length, total, "rated trail ways and routes", "lowest OpenStreetMap ids first", {
         fetched,
-        filter: "maxScale",
+        filter: "the difficulty limit",
       }),
       citation: osmCitation(),
     };

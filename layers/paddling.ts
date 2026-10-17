@@ -118,7 +118,7 @@ async function queryWide(ctx: QueryContext, input: PaddlingInput): Promise<Layer
     kind: "geojson",
     data: { type: "FeatureCollection", features: kept },
     ...(total !== undefined && { total }),
-    ...(hidden > 0 && { coverageNote: `minGrade hid ${hidden.toLocaleString("en-US")} of the named features` }),
+    ...(hidden > 0 && { coverageNote: `The minimum grade hid ${hidden.toLocaleString("en-US")} of the named features` }),
     citation: osmCitation(),
   };
 }
@@ -353,7 +353,7 @@ const paddling = defineLayer({
       data,
       coverageNote: returnedNote(data.features.length, total, "paddling features", "lowest OpenStreetMap ids first", {
         fetched,
-        filter: "minGrade",
+        filter: "the minimum grade",
       }),
       citation: osmCitation(),
     };

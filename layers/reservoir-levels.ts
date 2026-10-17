@@ -401,15 +401,15 @@ const reservoirLevels = defineLayer({
       // In a wide view run.ts states the count ("the 21 largest of 35"); this note then only says why and how to get the rest.
       notes.push(
         ctx.wide
-          ? `At most ${MAX_USBR_SITES} Reclamation reservoirs (the largest) per request; set name for the others`
-          : `Showing the ${MAX_USBR_SITES} largest of ${usbrAll.length} Reclamation reservoirs in view; zoom in or set name for the rest`,
+          ? `At most ${MAX_USBR_SITES} Reclamation reservoirs (the largest) per request; ask for a reservoir by name for the others`
+          : `Showing the ${MAX_USBR_SITES} largest of ${usbrAll.length} Reclamation reservoirs in view; zoom in or ask for a reservoir by name for the rest`,
       );
     }
     const total = ctx.wide && usbrAll.length > usbr.length ? inView.length : undefined;
     if (inView.length === 0) {
       notes.push(
         needle
-          ? `No reservoir named like '${input.name}' in view; only major western reservoirs are covered`
+          ? `No reservoir named like “${input.name}” in view; only major western reservoirs are covered`
           : "No major reservoir in this view; only about 35 major western reservoirs are covered",
       );
       return { kind: "geojson", data: { type: "FeatureCollection", features: [] }, citation, coverageNote: notes.join("; ") };
@@ -447,7 +447,7 @@ const reservoirLevels = defineLayer({
       return typeof date === "string" && now - Date.parse(date) > READING_STALE_DAYS * DAY_MS;
     });
     if (stale.length > 0) notes.push(`${stale.length} reservoir(s) have a newest reading older than ${READING_STALE_DAYS} days`);
-    notes.push("Provisional data; pctFull is percent of official capacity (live capacity for Reclamation)");
+    notes.push("Provisional data; percent full is of official capacity (live capacity for Reclamation)");
 
     features.sort((a, b) => Number(b.properties?.v ?? 0) - Number(a.properties?.v ?? 0));
     return {

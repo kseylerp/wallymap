@@ -186,7 +186,7 @@ describe("paddling layer", () => {
     expect(vs.every((v) => typeof v === "number" && v >= 3)).toBe(true);
     expect(r.data.features.length).toBeLessThan(20);
     // The note counts the filtered result and names the filter.
-    expect(r.coverageNote).toMatch(/^Showing \d+ of 51 paddling features in this box \(lowest OpenStreetMap ids first after minGrade hid \d+\)/);
+    expect(r.coverageNote).toMatch(/^Showing \d+ of 51 paddling features in this box \(lowest OpenStreetMap ids first after the minimum grade hid \d+\)/);
   });
 
   it("maps a failing Overpass to an upstream error after the fallback", async () => {
@@ -284,6 +284,6 @@ describe("paddling wide mode", () => {
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features.map((f) => f.properties?.name)).toEqual(["Aareschlucht"]);
     expect(r.total).toBe(59);
-    expect(r.coverageNote).toBe("minGrade hid 2 of the named features");
+    expect(r.coverageNote).toBe("The minimum grade hid 2 of the named features");
   });
 });

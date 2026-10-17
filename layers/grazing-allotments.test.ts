@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { normalizeGrazing, simplifyOffset } from "./grazing-allotments";
+import layer, { mergeTwins, normalizeGrazing, simplifyOffset } from "./grazing-allotments";
 import allotmentsRaw from "./__fixtures__/grazing-allotments.allotments.json";
 import hmaRaw from "./__fixtures__/grazing-allotments.hma.json";
 import haRaw from "./__fixtures__/grazing-allotments.ha.json";
@@ -118,9 +118,12 @@ describe("grazing-allotments layer", () => {
 
     const kinds = new Map<string, number>();
     for (const f of r.data.features) kinds.set(f.properties?.kind, (kinds.get(f.properties?.kind) ?? 0) + 1);
-    expect(kinds.get("allotment")).toBe(allotments.features.length);
+    // Every herd management area stays; herd areas and allotments that repeat one of them (name and outline) merge into it.
+    const merged = mergeTwins([...normalizeGrazing(allotments, "allotment"), ...normalizeGrazing(hma, "herd-management-area"), ...normalizeGrazing(ha, "herd-area")]);
     expect(kinds.get("herd-management-area")).toBe(hma.features.length);
-    expect(kinds.get("herd-area")).toBe(ha.features.length);
+    expect(r.data.features.length).toBe(merged.length);
+    expect(merged.length).toBeLessThan(allotments.features.length + hma.features.length + ha.features.length);
+    expect(r.data.features.some((f) => typeof f.properties?.alsoDesignated === "string")).toBe(true);
     expect(r.coverageNote).toBeUndefined();
     expect(r.citation.source).toContain("Bureau of Land Management");
   });
@@ -193,7 +196,7 @@ describe("grazing-allotments layer", () => {
         expect(u.searchParams.get("maxAllowableOffset")).toBe(String(simplifyOffset([-119, 37, -114, 42], true)));
       }
       expect(data.find((u) => u.pathname.includes("Grazing_Allotment"))?.searchParams.get("orderByFields")).toBe("GIS_ACRES DESC");
-      const shown = allotments.features.length + hma.features.length + ha.features.length;
+      const shown = (res.body as { data: FeatureCollection }).data.features.length;
       expect(res.body).toMatchObject({
         total: 1620,
         truncated: true,
@@ -221,5 +224,26 @@ describe("grazing-allotments layer", () => {
 
   it("describes grazing in the words people use", () => {
     for (const word of ["cattle", "wild horses", "burros", "grazing"]) expect(layer.description).toContain(word);
+  });
+});
+
+describe("one area drawn once", () => {
+  const square = (w: number, s: number, size: number) => ({ type: "Polygon" as const, coordinates: [[[w, s], [w + size, s], [w + size, s + size], [w, s + size], [w, s]]] });
+  it("keeps the herd management area of a same-named, same-outline herd area and names the other designation", () => {
+    const kept = mergeTwins([
+      { type: "Feature", geometry: square(-117.2, 41.6, 0.5), properties: { kind: "herd-area", name: "LITTLE OWYHEE" } },
+      { type: "Feature", geometry: square(-117.19, 41.61, 0.49), properties: { kind: "herd-management-area", name: "Little Owyhee" } },
+      { type: "Feature", geometry: square(-119.3, 42.2, 0.3), properties: { kind: "allotment", name: "Beaty Butte" } },
+      { type: "Feature", geometry: square(-119.3, 42.2, 0.3), properties: { kind: "herd-management-area", name: "Beaty Butte" } },
+      // Same name, elsewhere: two areas.
+      { type: "Feature", geometry: square(-115, 39, 0.2), properties: { kind: "allotment", name: "Twin Peaks" } },
+      { type: "Feature", geometry: square(-120, 40, 0.2), properties: { kind: "herd-area", name: "Twin Peaks" } },
+    ]);
+    expect(kept.map((f) => `${f.properties?.name} ${f.properties?.kind} ${f.properties?.alsoDesignated ?? ""}`.trim())).toEqual([
+      "Little Owyhee herd-management-area herd area",
+      "Beaty Butte herd-management-area grazing allotment",
+      "Twin Peaks allotment",
+      "Twin Peaks herd-area",
+    ]);
   });
 });

@@ -3160,7 +3160,8 @@
      "agency": "BLM",
      "acres": 1299285,
      "v": 1299285,
-     "state": "NV"
+     "state": "NV",
+     "alsoDesignated": "herd area"
     }
    },
    {
@@ -3232,24 +3233,6 @@
      "allotmentNumber": "00072",
      "acres": 432636,
      "v": 432636,
-     "state": "NV"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -116.388,
-      38.528
-     ]
-    },
-    "properties": {
-     "kind": "allotment",
-     "name": "STONE CABIN",
-     "allotmentNumber": "00082",
-     "acres": 396292,
-     "v": 396292,
      "state": "NV"
     }
    },
@@ -3340,6 +3323,24 @@
      "allotmentNumber": "01066",
      "acres": 238387,
      "v": 238387,
+     "state": "NV"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -116.011,
+      38.806
+     ]
+    },
+    "properties": {
+     "kind": "allotment",
+     "name": "SAND SPRINGS",
+     "allotmentNumber": "10086",
+     "acres": 197474,
+     "v": 197474,
      "state": "NV"
     }
    }

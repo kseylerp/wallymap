@@ -7,7 +7,8 @@
  *     fields used: HMA_NAME, HMA_ID, ADMIN_ST, ADMIN_AGCY ("BLM" | "USFS" | "UNK"), HERD_TYPE ("HORSE" | "BURRO" | "BOTH" | "UNK"), BLM_ACRES
  *   https://gis.blm.gov/arcgis/rest/services/range/BLM_Natl_WHB/MapServer/1  "Herd Area Polygons" (same fields; HA_NAME, HA_NO)
  * Herd areas are where horses and burros lived in 1971; herd management areas are the parts still managed for them.
- * Output `kind`: "allotment" | "herd-management-area" | "herd-area"; `v` is acres.
+ * Output `kind`: "allotment" | "herd-management-area" | "herd-area"; `v` is acres. A herd area and the herd management area of the same
+ *   name and outline are one area, drawn once (mergeTwins); the kept one names the other in `alsoDesignated`.
  * Smoke through runLayer (2026-10-09): central Nevada -117,39,-116,40 returned 26 allotments, 10 herd management
  * areas and 13 herd areas in 0.7 s (see the test for the recorded counts).
  * Smoke wide (2026-10-14): Nevada -119,37,-114,42 (about 240,000 km²) returned 535 polygons of 1,024 (333 per service) in 1.6 s
@@ -18,6 +19,7 @@ import type { Feature, FeatureCollection, Geometry } from "geojson";
 import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
+import { geometryBBox } from "./_shared/geo";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
 
@@ -105,6 +107,48 @@ export function normalizeGrazing(fc: FeatureCollection, kind: GrazingKind): Feat
     features.push({ type: "Feature", geometry: f.geometry, properties });
   }
   return features;
+}
+
+/** Which of two same-named areas with one outline is kept: the herd management area (managed today), then the herd area. */
+const KIND_RANK: Record<GrazingKind, number> = { "herd-management-area": 0, "herd-area": 1, allotment: 2 };
+const KIND_WORDS: Record<GrazingKind, string> = { "herd-management-area": "herd management area", "herd-area": "herd area", allotment: "grazing allotment" };
+
+/** Share of the two boxes' union that both cover (1 for one outline). */
+function boxOverlap(a: BBox, b: BBox): number {
+  const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
+  const h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+  if (w <= 0 || h <= 0) return 0;
+  const area = (r: BBox) => (r[2] - r[0]) * (r[3] - r[1]);
+  const inter = w * h;
+  return inter / (area(a) + area(b) - inter);
+}
+
+/**
+ * One area drawn once: a herd area and the herd management area carved from it, or an allotment of the same name, often
+ * share one name and one outline (Little Owyhee, Beaty Butte: 59 such pairs over Nevada). Of two same-named areas whose
+ * boxes overlap 80% or more, the herd management area is kept, then the herd area, then the allotment, and the kept one
+ * lists the others in `alsoDesignated` ("herd area").
+ */
+export function mergeTwins(features: Feature<Geometry>[]): Feature<Geometry>[] {
+  const ranked = [...features].sort((a, b) => KIND_RANK[a.properties?.kind as GrazingKind] - KIND_RANK[b.properties?.kind as GrazingKind]);
+  const kept: { feature: Feature<Geometry>; key: string; box: BBox | null }[] = [];
+  for (const f of ranked) {
+    const key = String(f.properties?.name ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    const box = geometryBBox(f.geometry);
+    const twin = key && !key.startsWith("unnamed") && box ? kept.find((k) => k.key === key && k.box && boxOverlap(k.box, box) >= 0.8) : undefined;
+    if (!twin) {
+      kept.push({ feature: f, key, box });
+      continue;
+    }
+    const props = (twin.feature.properties ??= {});
+    const word = KIND_WORDS[f.properties?.kind as GrazingKind];
+    if (word && word !== KIND_WORDS[props.kind as GrazingKind]) {
+      const also = typeof props.alsoDesignated === "string" ? props.alsoDesignated.split(", ") : [];
+      if (!also.includes(word)) props.alsoDesignated = [...also, word].join(", ");
+    }
+  }
+  // Back in the services' order.
+  return features.filter((f) => kept.some((k) => k.feature === f));
 }
 
 const grazingAllotments = defineLayer({
@@ -199,7 +243,7 @@ const grazingAllotments = defineLayer({
 
     return {
       kind: "geojson",
-      data: { type: "FeatureCollection", features },
+      data: { type: "FeatureCollection", features: mergeTwins(features) },
       citation,
       ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),

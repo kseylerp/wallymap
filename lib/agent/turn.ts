@@ -56,6 +56,8 @@ export type Turn = {
   step: number;
   /** True once a note was shown (not sent back to be rewritten). */
   noted: boolean;
+  /** Place lookups the model asked for this turn (the geocode tool's calls). */
+  geocodes: number;
   /** A place lookup, shared by the geocode tool and the step guard so one text is looked up once. */
   lookup(place: string): Promise<GeocodeResult | GeocodeError>;
   /** Records a server action in `log` and the console. */
@@ -83,6 +85,7 @@ export function createTurn({ question = "", view = null, geocoder = mapboxGeocod
     log: [],
     step: 0,
     noted: false,
+    geocodes: 0,
     lookup(place) {
       const key = placeKey(place);
       let found = lookups.get(key);

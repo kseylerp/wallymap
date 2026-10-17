@@ -104,6 +104,9 @@ export function dateOfInput(inputKey: string): string | null {
   }
 }
 
+/** Most place lookups (geocode calls) in one turn. */
+export const MAX_GEOCODES = 4;
+
 /** Most queries of one layer in one turn: a third look is enough to answer or to say the layer cannot. */
 export const MAX_QUERIES_PER_LAYER = 3;
 
@@ -289,6 +292,24 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
     return false;
   });
   calls = [...calls, ...replaced];
+
+  // 2c. Four place lookups are enough: Table Mountain was looked up seven times (streets, a country, a city) and the
+  // turn ran out of steps before the rock was asked.
+  let lookups = turn.geocodes;
+  calls = calls.filter((c) => {
+    if (c.toolName !== "geocode") return true;
+    if (lookups < MAX_GEOCODES) {
+      lookups += 1;
+      return true;
+    }
+    rejected.push({
+      call: c,
+      reason: `Not looked up: ${MAX_GEOCODES} place lookups were made this turn. Use the best one you have (or a feature's coordinates from a query result, such as a peak's point) and go on.`,
+    });
+    turn.note(`geocode "${String(c.input.place)}" dropped: ${MAX_GEOCODES} lookups already`);
+    changed = true;
+    return false;
+  });
 
   // 2b. One line per way: popularity is a colouring of the trails (or campsites) it scores, so it is only added when
   // the question asks how popular, and once it has answered, the plain layer is not queried on top of it.

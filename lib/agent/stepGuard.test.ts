@@ -462,3 +462,15 @@ describe("step guard: nothing drawn after a too-wide answer", () => {
     expect(turn.log.join("\n")).toMatch(/answers the whole box before the answer/);
   });
 });
+
+describe("step guard: place lookups", () => {
+  it("allows four place lookups a turn and tells the model to use what it has after that", async () => {
+    const { calls, prompts } = await run("What rock is Table Mountain made of?", [
+      ...Array.from({ length: 5 }, (_, i) => ({ calls: [{ name: "geocode", input: { place: `Lake Tahoe ${i}` } }] })),
+      { calls: [{ name: "note", input: { markdown: "Granite." } }] },
+      { text: "- More?" },
+    ]);
+    expect(calls.filter((c) => c.name === "geocode")).toHaveLength(4);
+    expect(JSON.stringify(prompts)).toMatch(/4 place lookups were made this turn/);
+  });
+});

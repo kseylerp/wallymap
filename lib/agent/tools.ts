@@ -455,6 +455,7 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
       inputSchema: z.object({ place: z.string().min(1) }),
       execute: async ({ place }) => {
         geocoded = true;
+        turn.geocodes += 1;
         // Retrying the same text gets the same answer: hand back the first one, marked, so the model stops looping.
         const key = placeKey(place);
         const repeated = answered.has(key);

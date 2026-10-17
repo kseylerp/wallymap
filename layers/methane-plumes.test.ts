@@ -89,7 +89,7 @@ describe("methane-plumes", () => {
     );
     const r = await layer.query(ctx(empty), layer.input.parse({ days: 90 }));
     expect(r).toMatchObject({ coverageNote: expect.stringContaining("No methane plumes seen here in the last 90 days (or not yet observed)") });
-    expect((r as { coverageNote: string }).coverageNote).toMatch(/^kind 'plume' is one sighting \(v = kg\/h then\)/);
+    expect((r as { coverageNote: string }).coverageNote).toMatch(/^Plumes are single sightings, at the emission rate then \(kg\/h\)/);
   });
 
   it("describes the unit, kinds, licence and words for the model", () => {
@@ -118,7 +118,7 @@ describe("methane-plumes", () => {
       expect(res.body).toMatchObject({
         total: 1646 + 5,
         truncated: true,
-        coverageNote: expect.stringMatching(/^Showing the 11 largest of 1,651 \(ranked by emission rate in kg\/h\); zoom in under 500,000 km² for all; kind 'plume'/),
+        coverageNote: expect.stringMatching(/^Showing the 11 largest of 1,651 \(ranked by emission rate in kg\/h\); zoom in under 500,000 km² for all; Plumes are single sightings/),
       });
       expect((res.body as { coverageNote: string }).coverageNote).not.toMatch(/largest of 1646 plumes/);
     } finally {

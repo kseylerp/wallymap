@@ -252,7 +252,7 @@ const methanePlumes = defineLayer({
     const features = [...keptSources, ...plumeFeatures(plumeItems)];
     const total = wideLimit !== undefined && plumes.ok && sources.ok ? plumeCount + allSources.length : undefined;
 
-    const notes: string[] = ["kind 'plume' is one sighting (v = kg/h then); kind 'source' is a recurring site (v = average kg/h, persistence = share of passes with a plume)"];
+    const notes: string[] = ["Plumes are single sightings, at the emission rate then (kg/h); sources are sites where plumes recur, at their average rate and with the share of passes that saw a plume"];
     if (wideLimit === undefined && plumeCount > plumeItems.length) notes.push(`Showing the ${plumeItems.length} largest of ${plumeCount} plumes`);
     if (wideLimit === undefined && allSources.length > keptSources.length) notes.push(`Showing the ${MAX_SOURCES} largest of ${allSources.length} sources`);
     if (!plumes.ok) notes.push("Plumes could not be loaded; showing sources only");

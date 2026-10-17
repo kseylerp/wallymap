@@ -31,7 +31,7 @@ type Canvas = { width: number; height: number; padding?: Padding };
 
 const QUERY_PREFIX = "query_";
 const FALLBACK_STYLE: StyleHints = { geometry: "line", color: "#2F3A44" };
-const BASEMAPS: readonly Basemap[] = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"];
+const BASEMAPS: readonly Basemap[] = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2", "data-only"];
 const DEFAULT_MODE: Record<StyleHints["geometry"], RenderMode> = {
   point: "points",
   line: "lines",

@@ -15,7 +15,7 @@ import { gistFor } from "./vocabulary";
 import type { GeocodeResult } from "./geocode";
 import type { MapView } from "./view";
 
-const BASEMAPS = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"] as const satisfies readonly Basemap[];
+const BASEMAPS = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2", "data-only"] as const satisfies readonly Basemap[];
 /**
  * `render.mode` as the model sees it. `symbols` is the map's `points` mode; `points` and `hexbin` (flat hex tiles) are
  * still accepted from older replies. lib/agent/applyToolResult.ts maps them onto RenderMode.
@@ -544,7 +544,8 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
     }),
     set_basemap: tool({
       description:
-        "Switch the basemap style: outdoors-satellite (default: trails, contours and labels over satellite imagery), outdoors, satellite, or natural-earth-2.",
+        "Switch the basemap style: outdoors-satellite (default: trails, contours and labels over satellite imagery), outdoors, satellite, natural-earth-2, " +
+        "or data-only (WallyMap's plain land and water with no roads, labels or relief, so a dense network such as river-pulse, ocean-currents or wind-flow draws the land by itself).",
       inputSchema: z.object({ style: z.enum(BASEMAPS) }),
       execute: async (input) => input,
     }),

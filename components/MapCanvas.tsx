@@ -7,7 +7,7 @@ import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { MapSetupNotice } from "@/components/MapSetupNotice";
 import { drawnLineEntries, syncHeatLayers, syncLineLayers, syncSatelliteHybrid, syncTileLayers } from "@/components/mapTiles";
 import { ensureRouteImages, setRouteProgress, syncRouteLayers } from "@/components/routeLayers";
-import { basemapStyleUrl } from "@/lib/render/basemaps";
+import { basemapStyle, basemapStyleUrl } from "@/lib/render/basemaps";
 import { swipeStore } from "@/lib/render/compareView";
 import { buildDeckLayerSets, isClusterFeature, type Padding } from "@/lib/render/deck";
 import { deckLayerFilter, pickPasses, pickToSelection, pickUnderHeat, type DeckPick } from "@/lib/render/inspect";
@@ -287,14 +287,16 @@ function wantsTerrain(state: MapState): boolean {
  * keeps them above the hybrid's satellite imagery.
  */
 function sync3D(map: mapboxgl.Map, terrain: boolean): void {
-  if (!map.getSource(TERRAIN_SOURCE_ID) || !map.getLayer(SKY_LAYER_ID) || !map.getLayer(BUILDINGS_LAYER_ID)) {
+  // The data-only basemap (lib/render/basemaps.ts) has no buildings: the data alone draws the land.
+  const buildings = !map.getLayer("data-only-land");
+  if (!map.getSource(TERRAIN_SOURCE_ID) || !map.getLayer(SKY_LAYER_ID) || (buildings && !map.getLayer(BUILDINGS_LAYER_ID))) {
     // Reading the style serializes it, so only do it when something is missing.
     const layers = styleLayers(map);
     if (!layers) return;
     if (!map.getSource(TERRAIN_SOURCE_ID)) map.addSource(TERRAIN_SOURCE_ID, terrainSource());
     if (!map.getLayer(SKY_LAYER_ID)) map.addLayer(skySpec());
     if (!map.getFog()) map.setFog(fogSpec());
-    if (!map.getLayer(BUILDINGS_LAYER_ID)) {
+    if (buildings && !map.getLayer(BUILDINGS_LAYER_ID)) {
       let source = "composite";
       if (!map.getSource(source)) {
         source = STREETS_SOURCE_ID;
@@ -451,7 +453,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     const map = new mapboxgl.Map({
       container,
       projection: "globe",
-      style: basemapStyleUrl(initial.basemap),
+      style: basemapStyle(initial.basemap),
       center: [initial.viewport.longitude, initial.viewport.latitude],
       zoom: initial.viewport.zoom,
       pitch: initial.viewport.pitch,
@@ -635,7 +637,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     }
     // The cast is a typing quirk: SetStyleOptions marks the font fields required, but mapbox fills them
     // from the map's own settings, and passing them explicitly as undefined would override those.
-    map.setStyle(basemapStyleUrl(state.basemap), { diff: false } as Parameters<mapboxgl.Map["setStyle"]>[1]);
+    map.setStyle(basemapStyle(state.basemap), { diff: false } as Parameters<mapboxgl.Map["setStyle"]>[1]);
   }, [state.basemap]);
 
   // Terrain follows the 3D button and the agent's `terrain`; a basemap change re-adds it once the new style loads.

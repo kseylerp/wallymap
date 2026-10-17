@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { basemapStyleUrl } from "@/lib/render/basemaps";
+import { basemapStyle, basemapStyleUrl, dataOnlyStyle, DATA_ONLY_STYLE } from "@/lib/render/basemaps";
+import { decodeState } from "@/lib/render/permalink";
+import { isDenseNetwork } from "@/lib/render/views";
+import type { LoadedLayer } from "@/lib/render/state";
 
 const OUTDOORS = "mapbox://styles/mapbox/outdoors-v12";
 
@@ -33,5 +36,35 @@ describe("basemapStyleUrl", () => {
   it("falls back to outdoors for natural-earth-2 when the env var is unset", () => {
     vi.stubEnv("NEXT_PUBLIC_NATURAL_EARTH_STYLE", undefined);
     expect(basemapStyleUrl("natural-earth-2")).toBe(OUTDOORS);
+  });
+});
+
+describe("the data-only basemap (spec §13)", () => {
+  it("is WallyMap's own style: land, water, a hairline coast and faint borders, no roads, labels or relief", () => {
+    const style = dataOnlyStyle();
+    expect(style.layers.map((l) => l.id)).toEqual(["data-only-land", "data-only-water", "data-only-coast", "data-only-countries"]);
+    expect(style.layers.some((l) => l.type === "symbol" || l.type === "hillshade")).toBe(false);
+    expect(basemapStyleUrl("data-only")).toBe(DATA_ONLY_STYLE);
+    expect(typeof basemapStyle("data-only")).toBe("object");
+    expect(basemapStyle("outdoors")).toBe(OUTDOORS);
+  });
+
+  it("travels in a share link", () => {
+    expect(decodeState("#b=data-only")?.basemap).toBe("data-only");
+  });
+
+  it("is offered for a dense network: a series, a flow field, or 150 lines and more", () => {
+    const line = { type: "Feature", geometry: { type: "LineString", coordinates: [[0, 0], [1, 1]] }, properties: {} } as const;
+    const layer = (n: number, extra = {}): LoadedLayer => ({
+      id: "l",
+      title: "L",
+      style: { geometry: "line", color: "#9FB693" },
+      result: { kind: "geojson", data: { type: "FeatureCollection", features: Array.from({ length: n }, () => line) }, citation: { source: "s", url: "https://e.org", retrieved: "x" }, ...extra },
+      receivedAt: "x",
+    });
+    expect(isDenseNetwork(layer(200), { visible: true, mode: "lines" })).toBe(true);
+    expect(isDenseNetwork(layer(20), { visible: true, mode: "lines" })).toBe(false);
+    expect(isDenseNetwork(layer(3, { series: { times: ["2026-10-01"], step: "day", now: 0 } }), { visible: true, mode: "lines" })).toBe(true);
+    expect(isDenseNetwork(layer(200), { visible: false, mode: "lines" })).toBe(false);
   });
 });

@@ -8,6 +8,7 @@ const BASEMAPS: { value: Basemap; label: string; short: string }[] = [
   { value: "outdoors-satellite", label: "Topographical + Satellite", short: "Topo + Sat" },
   { value: "outdoors", label: "Topographical", short: "Topo" },
   { value: "satellite", label: "Satellite", short: "Sat" },
+  { value: "data-only", label: "Data only", short: "Data" },
 ];
 
 type MapPillsProps = {

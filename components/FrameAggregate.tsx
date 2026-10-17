@@ -104,7 +104,7 @@ export function FrameAggregate({ time, aggregate }: { time: TimeState; aggregate
       {dial && <YearDial fromMs={Date.parse(index.buckets[0].start)} toMs={Date.parse(index.buckets[index.buckets.length - 1].end)} atMs={atMs} />}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-3">
-          <p data-testid="frame-date" className="truncate text-[17px] leading-6 font-medium text-ink tabular-nums">
+          <p data-testid="frame-date" className={`min-w-0 truncate font-medium text-ink tabular-nums ${framed ? "text-[17px] leading-6" : "text-[13px] leading-6"}`}>
             {date}
           </p>
           <p data-testid="frame-total" className="shrink-0 text-[17px] leading-6 font-medium text-ink tabular-nums">

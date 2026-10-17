@@ -137,6 +137,20 @@ export function rankedMeasure(layer: LoadedLayer): string | undefined {
   return layer.result.data.features.some((f) => typeof f.properties?.v === "number") ? "v" : undefined;
 }
 
+/** A line network with at least this many lines draws the land by itself (spec §13), so the console offers Data only. */
+export const DENSE_NETWORK_MIN_LINES = 150;
+
+/**
+ * True when a drawn layer is a dense network the basemap should step back for (spec §13, "the data draws the
+ * geography"): a series of the whole network (river pulse), a flow field (currents, wind), or a line layer drawing at
+ * least DENSE_NETWORK_MIN_LINES lines.
+ */
+export function isDenseNetwork(layer: LoadedLayer, op: { visible: boolean; mode: string } | undefined): boolean {
+  if (!op?.visible || layer.result.kind !== "geojson") return false;
+  if (layer.result.series || layer.result.flow) return true;
+  return layer.style.geometry === "line" && op.mode === "lines" && layer.result.data.features.length >= DENSE_NETWORK_MIN_LINES;
+}
+
 /** The legend's sentence for a view: what the encoding means, in words (spec §12: "what pink means in this view"). */
 export function viewCaption(view: ViewKind | undefined, layer: LoadedLayer, compare?: CompareState, hexes?: string): string | undefined {
   const measure = attributeFor(layer, measureKeyOf(layer));

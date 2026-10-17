@@ -13,7 +13,7 @@ export type Viewport = {
 };
 
 /** `outdoors-satellite` is the Outdoors style with satellite imagery laid beneath its vector detail. */
-export type Basemap = "outdoors-satellite" | "outdoors" | "satellite" | "natural-earth-2";
+export type Basemap = "outdoors-satellite" | "outdoors" | "satellite" | "natural-earth-2" | "data-only";
 
 /**
  * How a layer draws. Point layers: `points` (symbols; flat hex tiles past 2,000 features), `clusters` (supercluster

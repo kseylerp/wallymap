@@ -10,7 +10,7 @@ import { InfoMark } from "@/components/FieldHelp";
 import type { FieldHelp } from "@/layers/types";
 import { attributeFilterSummary, attributesOf, chipAttribute } from "@/lib/render/attributes";
 import { cellContext, hexCells, hexLegendSentence, levelLabel, usableBasis } from "@/lib/render/hexCells";
-import { viewCaption } from "@/lib/render/views";
+import { isDenseNetwork, viewCaption } from "@/lib/render/views";
 import type { Feature } from "geojson";
 import { LegendKey } from "@/components/LegendKey";
 import { EncodingLegend } from "@/components/EncodingLegend";
@@ -55,6 +55,8 @@ type LayerStackProps = {
   threeD?: boolean;
   /** Opens every row with More expanded (the layout test measures every control). */
   expandAttributes?: boolean;
+  /** The basemap on screen: a dense network's row offers Data only while it is another (spec §13). */
+  basemap?: MapState["basemap"];
 };
 
 /** The four ways a point layer draws, in short labels that fit the narrowest panel. Hex is flat cells, columns in 3D. */
@@ -279,6 +281,7 @@ type RowProps = {
   zoom?: number;
   threeD?: boolean;
   expandAttributes?: boolean;
+  basemap?: MapState["basemap"];
 };
 
 /** A threshold readout: "All" at the data minimum, else "≥ 1,204 acres" (scores without a unit). */
@@ -370,6 +373,7 @@ function LegendRow({
   zoom = 10,
   threeD = false,
   expandAttributes = false,
+  basemap,
 }: RowProps) {
   const visible = op?.visible ?? false;
   const opacity = op?.opacity ?? 1;
@@ -502,6 +506,15 @@ function LegendRow({
           {caption}
         </p>
       )}
+      {/* A dense network draws the land itself (spec §13): one click lets the basemap step back. */}
+      {basemap !== undefined && basemap !== "data-only" && isDenseNetwork(layer, op) && (
+        <p data-testid="data-only-offer" className="mt-1 flex min-w-0 items-baseline gap-1.5 text-[11.5px] leading-4 text-ink-muted">
+          <span className="min-w-0 truncate">The data can draw the land:</span>
+          <button type="button" onClick={() => dispatch({ type: "set_basemap", basemap: "data-only" })} className="dashed-link shrink-0 text-ink">
+            Data only basemap
+          </button>
+        </p>
+      )}
       {/* Two measures on one mark (spec §13): what width or size and what color mean, with units and range. */}
       {op?.visible && data && (!hexes || op.mode === "columns") && <EncodingLegend layer={layer} op={op} data={data} />}
       {hexSentence && (
@@ -603,6 +616,7 @@ export function LayerStack({
   zoom,
   threeD,
   expandAttributes,
+  basemap,
 }: LayerStackProps) {
   const items = stackOrder(layers, renderOps);
   // A dated tile layer whose tiles all failed for the window's date (lib/render/tileErrors.ts).
@@ -715,6 +729,7 @@ export function LayerStack({
               zoom={zoom}
               threeD={threeD}
               expandAttributes={expandAttributes}
+              basemap={basemap}
               dragProps={{
                 // Only the key starts a drag, so the slider and text stay usable.
                 draggable: armed === layer.id,

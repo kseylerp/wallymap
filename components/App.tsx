@@ -287,6 +287,7 @@ export function App() {
           compare={state.compare}
           zoom={state.viewport.zoom}
           threeD={threeD}
+          basemap={state.basemap}
         />
       </div>
 

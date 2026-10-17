@@ -80,7 +80,7 @@ function timeOf(time: PermalinkSource["time"]): PermalinkTime | undefined {
   return "window" in time ? { start: time.window[0], end: time.window[1], ...(time.mode && { mode: time.mode }) } : time;
 }
 
-const BASEMAPS: readonly Basemap[] = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2"];
+const BASEMAPS: readonly Basemap[] = ["outdoors-satellite", "outdoors", "satellite", "natural-earth-2", "data-only"];
 const FALLBACK_STYLE: StyleHints = { geometry: "line", color: DARK_GREY };
 const DEFAULT_MODE: Record<StyleHints["geometry"], RenderMode> = { point: "points", line: "lines", polygon: "polygons" };
 

@@ -433,6 +433,12 @@ export const ATMOSPHERE = {
   space: "#0B1020",
 } as const;
 
+/**
+ * The "Data only" basemap (spec §13): land off-white, water the off-white surface, a dark grey hairline coast and
+ * faint dashed country lines; no roads, labels or relief, so the data draws the land.
+ */
+export const DATA_ONLY_BASEMAP = { land: OFF_WHITE, water: SURFACE, coast: DARK_GREY, coastOpacity: 0.35, borderOpacity: 0.22 } as const;
+
 /** Buildings: off-white surface extrusions. */
 export const BUILDINGS = SURFACE;
 

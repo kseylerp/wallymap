@@ -69,7 +69,28 @@ export function noteProblem(markdown: string, turn: Turn): { reason: string; err
       };
     }
   }
+  // A data story (spec §13): the note follows the data's shape, ending with what size or brightness and color mean.
+  const story = turn.queries.findLast((q) => q.ok && q.caption !== undefined)?.caption;
+  if (story && !turn.noteRewrites.has("story") && !followsStory(markdown)) {
+    return {
+      reason: "story",
+      error:
+        "This answer is a data story: the note gives the low and the peak with numbers and dates, the ratio, whether it repeats, what drives it, " +
+        "and ends with one sentence on what width, size or brightness and color mean. Call note again built on this caption, in plain sentences " +
+        `and at most 120 words: ${story}`,
+    };
+  }
   return null;
+}
+
+/** True when a note has a story's shape: two numbers or more, a peak, and what size or brightness and color mean. */
+export function followsStory(markdown: string): boolean {
+  const text = markdown.toLowerCase();
+  const numbers = (text.match(/\d[\d,.]*/g) ?? []).length;
+  const peak = /\b(peak|high|highest|max|maximum|strongest|fastest|top)/.test(text);
+  const color = /\bcolou?r/.test(text);
+  const size = /\b(width|wide|wider|thick|size|bright|brightness)/.test(text);
+  return numbers >= 2 && peak && color && size;
 }
 
 /**

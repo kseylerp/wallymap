@@ -283,6 +283,8 @@ const WHERE: Record<Exclude<Surface, "any">, string> = {
 export function checkSurface(layers: Drawn[]): CheckResult {
   const failures: string[] = [];
   for (const layer of layers) {
+    // A flow field's nodes are model cells, not drawn: its particles are masked to water on the map.
+    if (layer.flow) continue;
     const features = spread(layer.data.features, SURFACE_SAMPLE);
     const off = new Map<Exclude<Surface, "any">, Feature[]>();
     for (const f of features) {
@@ -753,7 +755,8 @@ export function checkPlace(layers: Drawn[], place: PlaceRef | null): CheckResult
     const box = grownPlace(place.bbox);
     for (const layer of layers) {
       const features = layer.data.features;
-      if (features.length === 0) continue;
+      // A flow field is read over a box widened around the place (a bay geocoded to a point still needs room to flow).
+      if (features.length === 0 || layer.flow) continue;
       const outside = features.filter((f) => {
         const b = bboxOf(f);
         return b !== null && !intersects(b, box);

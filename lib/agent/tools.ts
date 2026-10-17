@@ -1,9 +1,9 @@
 import { NoSuchToolError, tool, type JSONValue, type ToolCallRepairFunction, type ToolSet } from "ai";
 import { z } from "zod";
 import { getLayer, listLayers } from "@/layers/registry";
-import { BBoxSchema, bboxAreaKm2, hardMaxAreaKm2, type BBox, type Coverage, type Layer, type LayerError } from "@/layers/types";
+import { BBoxSchema, bboxAreaKm2, hardMaxAreaKm2, type BBox, type Coverage, type Layer, type LayerError, type LayerResult } from "@/layers/types";
 import { runLayer } from "@/lib/layers/run";
-import { highestOf, isFullLayerResult, summarizeLayerResult, type SummaryStyle } from "@/lib/layers/summarize";
+import { highestOf, isFullLayerResult, summarizeLayerResult, type GeojsonSummary, type SummaryStyle } from "@/lib/layers/summarize";
 import { VIEW_KINDS, type Basemap, type RenderMode, type TimeMode } from "@/lib/render/state";
 import { nearBox, nearPlace } from "./places";
 import { normalizeRenderInput } from "./renderInput";
@@ -298,6 +298,12 @@ export function wideSentence(layer: Pick<Layer, "maxAreaKm2" | "hardMaxAreaKm2" 
 /** A zoom_in error for the user's view, with the layers that can answer at that scale. */
 export { repairToolName };
 
+/** A series result's caption in the data's shape (the summary's story.caption), for the note check. */
+function storyCaption(body: Extract<LayerResult, { kind: "geojson" }>, layer: Layer): string | undefined {
+  const summary = summarizeLayerResult(body, layer.id, { ...layer.style, ...(layer.attributes && { attributes: layer.attributes }) }, layer.fieldHelp);
+  return "story" in summary ? (summary as GeojsonSummary).story?.caption : undefined;
+}
+
 /** A zoom_in error for the user's view, with the layers that can answer at this scale. */
 export type ZoomInError = LayerError & { widerScale?: string[] };
 
@@ -421,7 +427,8 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: T
       const highest = "kind" in body && body.kind === "geojson" ? highestOf(body.data.features, { ...layer.style, attributes: layer.attributes }) : undefined;
       const top = highest?.top[0] && { ...highest.top[0], by: highest.by, ...(highest.unit !== undefined && { unit: highest.unit }) };
       const zoomIn = "error" in body && body.hint === "zoom_in";
-      turn.queries.push({ layerId: layer.id, bbox, inputKey: inputKeyOf(input), ok, drawable: drawable(body), wide: ok && isWideQuery(layer, bbox), ...(top && { top }), ...(zoomIn && { zoomIn }) });
+      const caption = "kind" in body && body.kind === "geojson" && body.series ? storyCaption(body, layer) : undefined;
+      turn.queries.push({ layerId: layer.id, bbox, inputKey: inputKeyOf(input), ok, drawable: drawable(body), wide: ok && isWideQuery(layer, bbox), ...(top && { top }), ...(zoomIn && { zoomIn }), ...(caption && { caption }) });
       if (ok && layer.id === "physical-regions") turn.regionQueried = true;
       // A view or a named place too wide for this layer: name the layers that can still answer at this scale.
       if ("error" in body && body.hint === "zoom_in") {

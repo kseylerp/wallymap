@@ -21,6 +21,11 @@ export type SeriesStory = {
   repeats: string;
   /** The forecast frames' highest values: the places (features) where the measure peaks, highest first. */
   forecastTop?: { name: string; value: number; date: string }[];
+  /**
+   * Hourly series: tomorrow by local solar time (UTC plus the longitude's hours), the three places where the measure
+   * peaks, highest first, with the local hour ("where is the wind strongest tomorrow").
+   */
+  tomorrowTop?: { name: string; value: number; localHour: string; date: string }[];
   /** The named features that swelled most against their own median, largest first. */
   drivers?: { name: string; peakOverMedian: number; peakDate: string }[];
   /**
@@ -193,6 +198,30 @@ export function seriesStory(
           .slice(0, 3)
           .map((x) => ({ name: x.name, value: round(x.value), date: day(x.k) }))
       : [];
+  // Tomorrow by local solar time (UTC + longitude / 15 hours), for an hourly forecast.
+  const lons = features.flatMap((f) => (f.geometry?.type === "Point" ? [f.geometry.coordinates[0]] : []));
+  const offsetH = lons.length > 0 ? Math.round(lons.reduce((a, b) => a + b, 0) / lons.length / 15) : 0;
+  const localDay = (k: number) => new Date(Date.parse(t[k]) + offsetH * 3_600_000).toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.parse(`${localDay(series.now)}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  const tomorrowFrames = series.step === "hour" ? t.map((_, k) => k).filter((k) => localDay(k) === tomorrow) : [];
+  const tomorrowTop =
+    tomorrowFrames.length >= 12
+      ? rows
+          .map(({ f, s }) => {
+            let k = -1;
+            for (const i of tomorrowFrames) if (num(s[i]) && (k < 0 || (s[i] as number) > (s[k] as number))) k = i;
+            return { name: String(f.properties?.name ?? ""), value: k >= 0 ? (s[k] as number) : -Infinity, k };
+          })
+          .filter((x) => x.k >= 0 && x.name)
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 3)
+          .map((x) => ({
+            name: x.name,
+            value: round(x.value),
+            localHour: `${String(new Date(Date.parse(t[x.k]) + offsetH * 3_600_000).getUTCHours()).padStart(2, "0")}:00 local solar time`,
+            date: tomorrow,
+          }))
+      : [];
   const linkedStory =
     linked && linked.values.some(num)
       ? (() => {
@@ -217,7 +246,9 @@ export function seriesStory(
   const peakWord = hourly ? "strongest" : "peak";
   const ratio = low > 0 ? peak / low : null;
   const forecastLine =
-    forecastTop.length > 0
+    tomorrowTop.length > 0
+      ? `Tomorrow (${tomorrow}) it is strongest at ${tomorrowTop.map((x) => `${x.name}, ${amount(x.value)} around ${x.localHour.replace(" local solar time", "")}`).join("; ")} (local solar time).`
+      : forecastTop.length > 0
       ? `Ahead, it peaks at ${forecastTop.map((t) => `${amount(t.value)} at ${t.name} (${t.date})`).join(", ")}.`
       : end > series.now && num(lead.s[end])
         ? `The forecast ends at ${amount(lead.s[end] as number)} on ${day(end)}.`
@@ -253,6 +284,7 @@ export function seriesStory(
     ...(end > series.now && num(lead.s[end]) && { forecastEnd: { value: round(lead.s[end] as number), date: day(end) } }),
     repeats,
     ...(forecastTop.length > 0 && { forecastTop }),
+    ...(tomorrowTop.length > 0 && { tomorrowTop }),
     ...(top.length > 0 && { drivers: top.map((d) => ({ name: d.name, peakOverMedian: Math.round(d.ratio * 10) / 10, peakDate: day(d.k) })) }),
     ...(linkedStory && { linked: linkedStory }),
   };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asksForTop, checkNote, NOTE_MAX_WORDS, noteWords, trimNote } from "./noteCheck";
+import { asksForTop, checkNote, followsStory, NOTE_MAX_WORDS, noteWords, trimNote } from "./noteCheck";
 import { createTurn } from "./turn";
 
 const uraniumTurn = () => {
@@ -66,5 +66,17 @@ describe("note check", () => {
 describe("note check: names written with typographic dashes", () => {
   it("reads NA‑0420 with a non-breaking hyphen as NA-0420", () => {
     expect(checkNote("The highest is **NA‑0420** at 6,000.", uraniumTurn())).toBeNull();
+  });
+
+  it("sends a data story's note back once when it leaves out the shape, with the caption to build on", () => {
+    const turn = createTurn({ question: "How has the Mississippi's flow changed over the last three months?" });
+    const caption = "Flow at Mississippi: lowest 7,210 m³/s on 2026-09-20, peak 19,587 m³/s on 2026-08-31 (it nearly triples). Line width is Flow (m³/s); color is Flow vs. the period's median (%), sage low to purple high.";
+    turn.queries.push({ layerId: "river-pulse", bbox: [-97, 29, -86, 48], inputKey: "[]", ok: true, drawable: true, wide: false, caption });
+    const back = checkNote("The Mississippi rose and fell this summer.", turn) as { error: string };
+    expect(back.error).toContain(caption);
+    // The rewrite is shown either way.
+    expect(checkNote("Still short.", turn)).toBeNull();
+    expect(followsStory("It peaked at 19,587 m³/s on 31 August, nearly triple the 7,210 low; width is the flow and color the share of the median.")).toBe(true);
+    expect(followsStory("It peaked at 19,587 m³/s on 31 August.")).toBe(false);
   });
 });

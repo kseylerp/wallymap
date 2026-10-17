@@ -28,6 +28,8 @@ export type QueryRecord = {
   top?: { name: string; value: number; by: string; unit?: string };
   /** The box was over the layer's hard area limit (a zoom_in error): no part of it is worth asking again. */
   zoomIn?: boolean;
+  /** A data story (a series layer): its caption in the data's shape, which the note must follow (lib/agent/noteCheck.ts). */
+  caption?: string;
 };
 
 export type Geocoder = (place: string, opts?: { proximity?: [number, number] }) => Promise<GeocodeResult | GeocodeError>;

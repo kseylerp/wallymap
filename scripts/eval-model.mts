@@ -61,6 +61,7 @@ import { lineEntries } from "@/lib/render/nativeLines";
 import { boundsOf } from "@/lib/render/views";
 import { runMapChecks, type CheckResult, type LayerInfo, type PlaceRef } from "@/lib/checks/mapChecks";
 import type { BBox } from "@/layers/types";
+import { nearBox, nearPlace } from "@/lib/agent/places";
 
 
 const model = process.env.MODEL_NAME ?? "(unset)";
@@ -245,20 +246,33 @@ function placeName(output: unknown): string | undefined {
 }
 
 /**
- * The place a question is about, for the place check: every place it geocoded (their boxes joined), else the map view
- * a "here" question carries; null when it named none (a route question's stops are places too).
+ * The place a question is about, for the place check: every place it geocoded (their boxes joined, and for "near
+ * <town>" the radius each queried layer searches around it), else the map view a "here" question carries; null when it
+ * named none (a route question's stops are places too).
  */
-function questionPlace(calls: ToolCall[], view: MapView | null): PlaceRef | null {
+function questionPlace(calls: ToolCall[], view: MapView | null, question?: string): PlaceRef | null {
   const found = calls.filter(geocodeMoved).flatMap((c) => {
     const bbox = bboxOf(c.output);
     return bbox ? [{ bbox, name: placeName(c.output) ?? "the place" }] : [];
   });
   if (found.length > 0) {
+    // "near <town>" means the layer's radius around the town (lib/agent/places.ts nearBox), as the server queries it.
+    const near = question !== undefined && nearPlace(question) !== null;
+    const radii = near
+      ? calls.filter(geocodeMoved).flatMap((g) => {
+          const geo = g.output as { bbox: BBox; center: [number, number]; source?: string };
+          return calls.filter((c) => c.toolName.startsWith("query_")).flatMap((c) => {
+            const box = nearBox(question!, c.toolName.slice(6), geo);
+            return box ? [box] : [];
+          });
+        })
+      : [];
+    const boxes = [...found.map((f) => f.bbox), ...radii];
     const bbox: BBox = [
-      Math.min(...found.map((f) => f.bbox[0])),
-      Math.min(...found.map((f) => f.bbox[1])),
-      Math.max(...found.map((f) => f.bbox[2])),
-      Math.max(...found.map((f) => f.bbox[3])),
+      Math.min(...boxes.map((b) => b[0])),
+      Math.min(...boxes.map((b) => b[1])),
+      Math.max(...boxes.map((b) => b[2])),
+      Math.max(...boxes.map((b) => b[3])),
     ];
     return { bbox, name: [...new Set(found.map((f) => f.name))].join(" and ") };
   }
@@ -718,7 +732,7 @@ function evaluate(run: Run): Evaluated {
         : located && movedToPlace && queried && (drew ? rendered : answeredEmpty) && noted);
   // The map checks read the map the browser would end on.
   const state = mapAfter(calls);
-  const checks = runMapChecks(state, { lookup: lookupLayer, place: questionPlace(calls, view) });
+  const checks = runMapChecks(state, { lookup: lookupLayer, place: questionPlace(calls, view, question) });
   const checksOk = checks.every((c) => c.ok);
   const ok = rulesOk && checksOk;
   const skipped = expect ? outageSkip(expect, calls) : undefined;

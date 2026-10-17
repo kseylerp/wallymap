@@ -148,3 +148,15 @@ A hex cell is a summary of the features inside it, never a bare count:
 - **Card:** the cell's area (km²) and density per km²; count and its rank among visible cells ("3rd busiest of 120"); the breakdown by the layer's primary category (bar of shares); the layer's measure summed or summarised (total MW, total acres burned, median routes); the time span of features (first and latest date); the top 5 named features in the cell, each opening its own card; "Zoom to this cell" and "Ask about this cell".
 - **What the colour means:** chosen per layer from its attributes: count (default), sum of the measure (power capacity per cell), share of one category (share of sport routes), or recency (newest detection). The legend says it in words with the cell size ("Each cell ≈ 36 km²; darker = more wind capacity").
 - **When hexes are the right view:** many points where density is the question: fire detections, wildlife sightings, crags in a region, earthquakes, mines, photos. The agent's density view picks the colour basis from the question ("where are the most…" → count; "where is most of the capacity…" → sum; "where is it newest…" → recency).
+
+### 13. Answers read like a finished data story (owner, 2026-10-17, example: mapped.earth "North America's River Pulse")
+
+The example: every river in North America drawn only by its own water, one frame per day for two years. What makes it work, and what every WallyMap answer should borrow:
+- **A title and a one-line rule.** "North America's River Pulse / every river, every day since September 2024". The answer's map carries a title made from the question and a subtitle saying what is drawn and over what span.
+- **Two encodings, each named in words.** "Color is water temperature… Height is that day's flow." Legends state both with units and range ("36°F to 85°F").
+- **A live total while time plays.** "Discharge to the sea 92,407 m³/s, every outlet combined", with a small bar against the extremes. Any timeline view shows the running aggregate of the layer's measure (count, sum) for the current frame, the date in large type, and a year dial for seasonal data.
+- **The data can be the map.** A "data only" basemap (paper background, no roads or labels) so dense networks draw the land themselves.
+- **The caption is concrete.** The low and the peak with numbers, the ratio ("more than quadruples"), named places, a named event ("swollen in April 2025 by the Ohio Valley flood"). The agent's note follows this pattern: extremes, the change, named features, the event that explains it, then what color and size mean.
+- **Sources in small type on the image.**
+- **Story export.** Any answer exports as a titled poster (PNG) and, for timeline views, a short video (MP4/WebM) with the title, legend, date, running total, dial and sources burned in, in the research look (paper background, serif title, small-caps mono labels).
+- **A river pulse layer.** River lines whose width is each day's discharge (Open-Meteo Flood API, GloFAS, daily, global) and color water temperature where a source exists, for a basin or region.

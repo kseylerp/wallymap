@@ -11,6 +11,7 @@ import layer, {
   USMIN_URL,
   commodityWhere,
   commoditiesOf,
+  dedupeMines,
   normalizeMrds,
   normalizeUsmin,
 } from "./mines";
@@ -110,7 +111,7 @@ describe("mines layer", () => {
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(15_000);
     expect(layer.wide).toEqual({ mode: "named", limit: 2000 });
-    expect(hardMaxAreaKm2(layer)).toBe(60_000);
+    expect(hardMaxAreaKm2(layer)).toBe(1_200_000);
     expect(layer.input.parse({})).toEqual({ source: "both" });
     expect(layer.input.safeParse({ commodity: "uranium", source: "mrds" }).success).toBe(true);
     expect(layer.input.safeParse({ commodity: "unobtainium" }).success).toBe(false);
@@ -179,7 +180,7 @@ describe("mines layer", () => {
     const stub = vi.fn();
     expect(geojson(await layer.query(ctx(stub, [5, 45, 5.2, 45.2]), { source: "both" })).coverageNote).toBe("No data outside the United States");
     expect(stub).not.toHaveBeenCalled();
-    expect((await runLayer("mines", { bbox: [-111, 36, -108, 40] })).status).toBe(422);
+    expect((await runLayer("mines", { bbox: [-125, 30, -100, 49] })).status).toBe(422);
     expect((await runLayer("mines", { bbox: MOAB, input: { commodity: "cheese" } })).status).toBe(400);
   });
 
@@ -231,6 +232,36 @@ describe("mines layer", () => {
     const r = geojson(await layer.query({ ...ctx(stub), wide: true, wideStrategy: layer.wide }, { source: "both" }));
     expect(r.total).toBeUndefined();
     expect(r.coverageNote).toContain("Missing USMIN");
+  });
+
+  it("answers a state (Nevada, 402,000 km²) with every MRDS deposit, paged, and only counts USMIN", async () => {
+    const stub = vi.fn(async (url: string) => {
+      const u = new URL(url);
+      if (u.searchParams.get("returnCountOnly") === "true") return json({ count: url.startsWith(MRDS_URL) ? 4500 : 153150 });
+      return json(mrds);
+    });
+    const r = geojson(await layer.query({ ...ctx(stub, [-120, 35, -114, 42], "mines:nv"), wide: true, wideStrategy: layer.wide }, { source: "both" }));
+    const pages = (stub.mock.calls as unknown as [string][]).map((c) => new URL(c[0])).filter((u) => !u.searchParams.has("returnCountOnly"));
+    expect(pages.map((u) => u.searchParams.get("resultOffset") ?? "0")).toEqual(["0", "2000", "4000"]);
+    expect(pages.every((u) => u.href.startsWith(MRDS_URL) && u.searchParams.get("orderByFields") === "objectid_1")).toBe(true);
+    expect(r.total).toBe(4500);
+    expect(r.coverageNote).toMatch(/every MRDS deposit is drawn/);
+    expect(r.coverageNote).toMatch(/USMIN's 153,150 mine symbols from old topographic maps are left out/);
+    // The same ten fixture rows on every page are one site each.
+    expect(r.data.features).toHaveLength(10);
+  });
+
+  it("lists a mine once when MRDS and USMIN both have it, and keeps separate generic workings", () => {
+    const pt = (lon: number, lat: number, props: Record<string, unknown>) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [lon, lat] }, properties: props });
+    const kept = dedupeMines([
+      pt(-117.32, 40.94, { name: "Silver King Mine", kind: "Mine", source: "USMIN" }),
+      pt(-117.3201, 40.9401, { name: "Silver King Mine", kind: "silver", source: "MRDS" }),
+      pt(-117.1, 40.6, { name: "Tunnel", kind: "Adit", source: "USMIN" }),
+      pt(-117.101, 40.601, { name: "Tunnel", kind: "Adit", source: "USMIN" }),
+      pt(-117.5, 40.5, { name: "Big Pay Mine", kind: "gold", source: "MRDS" }),
+      pt(-117.503, 40.501, { name: "Big Pay Mine", kind: "gold", source: "MRDS" }),
+    ]);
+    expect(kept.map((f) => `${f.properties?.name} ${f.properties?.source}`)).toEqual(["Silver King Mine MRDS", "Big Pay Mine MRDS", "Tunnel USMIN", "Tunnel USMIN"]);
   });
 
   it("tells the model the data are historic and old workings are unsafe", () => {

@@ -13,6 +13,8 @@ export type ArcgisParams = {
   orderByFields?: string;
   /** ArcGIS `resultRecordCount`; an alias of maxRecords that wins when both are set (wide fetches pass the strategy's limit). */
   resultRecordCount?: number;
+  /** ArcGIS `resultOffset`: skip this many matches, to page through more than one request returns (pair it with orderByFields). */
+  resultOffset?: number;
   /**
    * Also ask the service how many features match (`returnCountOnly`, in parallel), so a capped result can say "the 2,000
    * largest of 4,512". The count is `total` on the result; a failed count leaves it out rather than failing the query.
@@ -142,6 +144,9 @@ export async function arcgisQuery(
 
   if (params.orderByFields !== undefined) {
     search.set("orderByFields", params.orderByFields);
+  }
+  if (params.resultOffset !== undefined && params.resultOffset > 0) {
+    search.set("resultOffset", String(params.resultOffset));
   }
 
   const url = `${serviceUrl}/query?${search.toString()}`;

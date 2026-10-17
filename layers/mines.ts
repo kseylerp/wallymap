@@ -18,13 +18,19 @@
  * Smoke check 2026-10-10 (live, through runLayer): Moab box -109.8,38.4,-109.4,38.7 returned 296 points in 0.6 s (169 MRDS, 127 USMIN; first MRDS "Discovery",
  *   uranium, copper, vanadium, Past Producer); commodity uranium with source mrds returned 128 in 0.4 s; commodity gold over the San Gabriel Mountains
  *   -118.3,34,-118,34.3 returned 8 sites.
+ * Statewide (over 60,000 km², up to 1,200,000): every MRDS deposit in the box (up to 30,000, paged 2,000 at a time in object-id order),
+ *   for "where are most of the mines in Nevada"; USMIN's symbols (153,150 in Nevada against 24,474 MRDS records, 2026-10-17) are only
+ *   counted, and the note says they are left out. Nevada's 24,474 came back in 13 pages in about 2 s cold.
+ * Duplicates: USMIN often draws a mine MRDS also lists ("Silver King Mine" from both at one spot); in "both", a USMIN symbol within 1 km of
+ *   an MRDS site of the same name is dropped (MRDS has the commodities), and one record listing a site twice within 1 km keeps the first.
  * Wide (over 15,000 km², up to 60,000): named sites only (USMIN stores a blank name as one space, so most of its symbols drop out),
  *   2,000 split between the records asked, plus a count of every site in the box. Smoke 2026-10-14, box -111,36,-108.5,38.4 (59,000 km²):
  *   1,962 named (1,000 MRDS, all 962 named USMIN) of 9,942 in 1.0 s.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp, type QueryContext } from "./types";
+import { haversineKm } from "./_shared/geo";
 import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
@@ -37,6 +43,12 @@ export const USMIN_URL =
 /** The records are decades old and change rarely. */
 const TTL_SECONDS = 7 * 86_400;
 const TRUNCATED_NOTE = "Showing 2,000 records";
+/** Over this area the answer is every MRDS deposit (no USMIN symbols): the scale of a state. */
+export const STATEWIDE_KM2 = 60_000;
+/** Most MRDS deposits a statewide answer carries. */
+export const STATEWIDE_LIMIT = 30_000;
+/** One page of the MRDS service (its maxRecordCount). */
+const PAGE = 2000;
 /** Most points a view carries per record; also the wide limit. */
 const MAX_RECORDS = 2000;
 /**
@@ -202,6 +214,72 @@ export function normalizeUsmin(fc: FeatureCollection): Feature<Point>[] {
   return out;
 }
 
+/** A site name as duplicates compare it: case, punctuation and spacing ignored. */
+function nameKey(name: unknown): string {
+  return typeof name === "string" ? name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim() : "";
+}
+
+/** Names that say what a working is, not which one: many separate tunnels and shafts carry them. */
+export const GENERIC_MINE_NAMES = new Set(["tunnel", "adit", "shaft", "mine shaft", "prospect", "prospect pit", "mine", "quarry", "gravel pit", "borrow pit", "open pit mine"]);
+
+/** One site listed twice is within this distance of itself. */
+const SAME_SITE_KM = 1;
+
+/**
+ * One mine listed once: a USMIN symbol within 1 km of an MRDS site of the same name goes (MRDS carries the
+ * commodities), and a record that lists one name twice within 1 km, as one kind, keeps the first. Unnamed USMIN symbols
+ * (named by their type, "Adit") are left alone: many separate adits share that word.
+ */
+export function dedupeMines(features: Feature<Point>[]): Feature<Point>[] {
+  const byName = new Map<string, Feature<Point>[]>();
+  const out: Feature<Point>[] = [];
+  // MRDS first, so a USMIN twin meets the MRDS site it repeats.
+  const ordered = [...features].sort((a, b) => Number(a.properties?.source !== "MRDS") - Number(b.properties?.source !== "MRDS"));
+  for (const f of ordered) {
+    const p = f.properties ?? {};
+    const key = nameKey(p.name);
+    const generic = key === "" || key === "unnamed site" || GENERIC_MINE_NAMES.has(key) || (p.source === "USMIN" && key === nameKey(p.kind));
+    if (generic) {
+      out.push(f);
+      continue;
+    }
+    const kept = byName.get(key) ?? [];
+    const twin = kept.find((k) => {
+      if (haversineKm(k.geometry.coordinates, f.geometry.coordinates) > SAME_SITE_KM) return false;
+      return k.properties?.source !== p.source || k.properties?.kind === p.kind;
+    });
+    if (twin) continue;
+    kept.push(f);
+    byName.set(key, kept);
+    out.push(f);
+  }
+  return out;
+}
+
+/** Every MRDS deposit in a statewide box, paged in object-id order up to STATEWIDE_LIMIT: the records and how many match. */
+async function mrdsStatewide(ctx: QueryContext, where: string | undefined, suffix: string): Promise<{ result: ArcgisResult; count: number | null }> {
+  const count = await arcgisCount(ctx, MRDS_URL, { where, bbox: ctx.bbox, ttlSeconds: TTL_SECONDS, cacheSuffix: suffix });
+  const pages = Math.max(1, Math.ceil(Math.min(count ?? PAGE, STATEWIDE_LIMIT) / PAGE));
+  const results = await Promise.all(
+    Array.from({ length: pages }, (_, i) =>
+      arcgisQuery(ctx, MRDS_URL, {
+        outFields: ["dep_id", "site_name", "dev_stat", "code_list"],
+        where,
+        bbox: ctx.bbox,
+        orderByFields: "objectid_1",
+        resultOffset: i * PAGE,
+        resultRecordCount: PAGE,
+        ttlSeconds: TTL_SECONDS,
+        cacheSuffix: `${suffix}:statewide:${i}`,
+      }),
+    ),
+  );
+  const failed = results.find((r) => !r.ok);
+  if (failed) return { result: failed, count };
+  const features = results.flatMap((r) => (r.ok ? r.fc.features : []));
+  return { result: { ok: true, fc: { type: "FeatureCollection", features }, truncated: count !== null && count > features.length }, count };
+}
+
 const ATTRIBUTES: Attribute[] = [
   {
     key: "kind",
@@ -257,18 +335,21 @@ const CARD: CardSpec = {
     { key: "source", label: "Record" },
   ],
   links: [{ key: "url", label: "MRDS record" }],
+  // The deposit id is in the MRDS record link.
+  hidden: ["id"],
 };
 
 const mines = defineLayer({
   id: "mines",
   title: "Mines and mineral deposits",
   description:
-    "Mines, prospects, quarries and mineral deposits in the US from two USGS records: MRDS (deposits and commodities) and USMIN (mine, shaft and tunnel symbols from old topographic maps). Each point has name, kind (MRDS: main commodity such as gold or uranium; USMIN: feature type such as Mine, Adit, Quarry) and source; MRDS adds status (Producer, Past Producer, Prospect, Occurrence), commodities and url, USMIN topoName and topoYear. commodity filters MRDS; source picks one record. MRDS stopped updating around 2011, so most sites are closed and new mines missing, and a point does not mean a mine is open or safe. At most 2,000 per record; over 15,000 km², 2,000 named sites and the total.",
+    "Mines, prospects, quarries and mineral deposits in the US from two USGS records: MRDS (deposits and commodities) and USMIN (mine, shaft and tunnel symbols from old topographic maps). Each point has name, kind (MRDS: main commodity such as gold or uranium; USMIN: feature type such as Mine, Adit, Quarry) and source; MRDS adds status (Producer, Past Producer, Prospect, Occurrence), commodities and url, USMIN topoName and topoYear. commodity filters MRDS; source picks one record. MRDS stopped updating around 2011, so most sites are closed and new mines missing, and a point does not mean a mine is open or safe. At most 2,000 per record; over 15,000 km², 2,000 named sites and the total; over 60,000 km² (a state, to 1,200,000 km²), every MRDS deposit up to 30,000 and no USMIN symbols, for where most mines are.",
   coverage: "us",
   surface: "land",
   license: "Public domain (USGS MRDS and USMIN)",
   requiredEnv: [],
   maxAreaKm2: 15_000,
+  hardMaxAreaKm2: 1_200_000,
   wide: { mode: "named", limit: MAX_RECORDS },
   input: z.object({
     commodity: z
@@ -301,6 +382,31 @@ const mines = defineLayer({
     const source = input.commodity !== undefined ? "mrds" : input.source;
     if (input.commodity !== undefined && input.source === "usmin") {
       notes.push("USMIN symbols carry no commodity, so the commodity filter shows MRDS sites only");
+    }
+
+    // Statewide (over 60,000 km²): every MRDS deposit, USMIN only counted.
+    if (ctx.wide === true && bboxAreaKm2(ctx.bbox) > STATEWIDE_KM2 && source !== "usmin") {
+      const commodityClause = input.commodity === undefined ? undefined : commodityWhere(COMMODITY_CODES[input.commodity]);
+      const [{ result, count }, usminCount] = await Promise.all([
+        mrdsStatewide(ctx, commodityClause, `mines:mrds:${input.commodity ?? "all"}`),
+        source === "both" ? arcgisCount(ctx, USMIN_URL, { bbox: ctx.bbox, ttlSeconds: TTL_SECONDS, cacheSuffix: "mines:usmin" }) : Promise.resolve(null),
+      ]);
+      if (!result.ok) return { error: `Mine records unavailable: MRDS (${result.error})`, hint: "upstream" };
+      const features = dedupeMines(normalizeMrds(result.fc));
+      const fmt = (n: number) => n.toLocaleString("en-US");
+      const stateNotes = [
+        `At this scale every MRDS deposit is drawn${result.truncated && count !== null ? ` up to ${fmt(features.length)} of ${fmt(count)}` : ""}`,
+        ...(usminCount !== null && usminCount > 0 ? [`USMIN's ${fmt(usminCount)} mine symbols from old topographic maps are left out; zoom in under 60,000 km² to add them`] : []),
+        ...notes,
+        "MRDS is a historic record (about 2011): most sites are closed or only prospects",
+      ];
+      return {
+        kind: "geojson",
+        data: { type: "FeatureCollection", features },
+        citation,
+        ...(count !== null && { total: Math.max(count, features.length) }),
+        coverageNote: stateNotes.join("; "),
+      };
     }
 
     // Wide (over 15,000 km²): named sites only, the limit shared between the records asked, and a count of every site in
@@ -366,7 +472,7 @@ const mines = defineLayer({
 
     return {
       kind: "geojson",
-      data: { type: "FeatureCollection", features },
+      data: { type: "FeatureCollection", features: dedupeMines(features) },
       citation,
       ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),

@@ -1,4 +1,8 @@
 import type { LanguageModelMiddleware } from "ai";
+import { getLayer } from "@/layers/registry";
+import type { BBox } from "@/layers/types";
+import type { GeocodeResult } from "./geocode";
+import { placeCandidates } from "./places";
 import { repairToolName } from "./toolNames";
 import { undrawn, type Turn } from "./turn";
 
@@ -6,6 +10,9 @@ import { undrawn, type Turn } from "./turn";
  * The step guard: a language-model middleware that reads each step the model proposes before the SDK runs its tools,
  * and holds the turn to rules the prompt alone did not keep (the 16 failures of the 2026-10-16 eval):
  *  - tool names are canonical (`query_climbing<|channel|>commentary` → `query_climbing`) in the stream itself;
+ *  - a query about a place the user named, with no geocode yet, gets the place looked up first: a geocode call is
+ *    added to the step and the queries run on its box (a question that names no place and has no map view is about
+ *    the queried layer's own region, Layer.place: sequoia groves are in the Sierra Nevada);
  *  - a step that would end the turn (a note, or text with no tool calls) while successful queries were never drawn
  *    gets a render call for each first, in the layer's default view.
  * Every change is logged on the turn (and the server console). Steps that none of the rules could touch stream
@@ -43,7 +50,44 @@ function guardId(): string {
   return `call_guard_${Date.now().toString(36)}_${idCounter}`;
 }
 
-/** The guard's rules on one proposed step. */
+const QUERY = "query_";
+const isQuery = (name: string) => name.startsWith(QUERY);
+const layerOf = (name: string) => name.slice(QUERY.length);
+
+function pointIn([lng, lat]: [number, number], [w, s, e, n]: BBox): boolean {
+  return lng >= w && lng <= e && lat >= s && lat <= n;
+}
+
+/** Query calls that would locate the place themselves: physical-regions outlines a named region. */
+const LOCATING_QUERIES = new Set(["query_physical-regions"]);
+
+/**
+ * The place the step's queries are about when the model did not geocode it: the place the step's own geocode call
+ * names (its result was not back yet when the queries were written), else the place the question names (outside the
+ * map view, when there is one), else the queried layer's own region when the question names none and there is no
+ * view. Null when there is nothing to look up or the lookup finds nothing.
+ */
+async function placeForStep(calls: DraftCall[], turn: Turn): Promise<{ text: string; found: GeocodeResult; fromStep: boolean } | null> {
+  const asked = calls.find((c) => c.toolName === "geocode" && typeof c.input.place === "string");
+  if (asked) {
+    const found = await turn.lookup(asked.input.place as string);
+    return "error" in found ? null : { text: asked.input.place as string, found, fromStep: true };
+  }
+  const named = placeCandidates(turn.question);
+  const homes = turn.view
+    ? []
+    : calls.flatMap((c) => (isQuery(c.toolName) ? [getLayer(layerOf(c.toolName))?.place] : [])).filter((p): p is string => typeof p === "string");
+  for (const text of named.length > 0 ? named.slice(0, 2) : homes.slice(0, 1)) {
+    const found = await turn.lookup(text);
+    if ("error" in found) continue;
+    // With a map view, only a place off the screen is looked up for the model: the view is otherwise what "here" means.
+    if (turn.view?.bbox && pointIn(found.center, turn.view.bbox)) return null;
+    return { text, found, fromStep: false };
+  }
+  return null;
+}
+
+/** The guard's rules on one proposed step. Pure apart from place lookups (shared with the geocode tool through `turn`). */
 export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean }, turn: Turn, toolNames: readonly string[]): Promise<Decision> {
   let changed = false;
   // 1. Canonical tool names.
@@ -56,6 +100,24 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean }
   });
 
   const rejected: Decision["rejected"] = [];
+
+  // 3. Queries with no place looked up: look it up, add the geocode, and run the queries on its box.
+  const queries = calls.filter((c) => isQuery(c.toolName));
+  const located = turn.place !== null || turn.regionQueried || calls.some((c) => LOCATING_QUERIES.has(c.toolName));
+  if (queries.length > 0 && !located) {
+    const place = await placeForStep(calls, turn);
+    if (place) {
+      if (!place.fromStep) {
+        calls = [{ toolCallId: guardId(), toolName: "geocode", input: { place: place.text } }, ...calls];
+        turn.note(`looked up "${place.text}" before ${queries.map((q) => q.toolName).join(", ")}: the model queried without locating it`);
+      }
+      const bbox = place.found.bbox;
+      calls = calls.map((c) => (isQuery(c.toolName) && !LOCATING_QUERIES.has(c.toolName) ? { ...c, input: { ...c.input, bbox } } : c));
+      // The place is known for this step's queries even before the geocode tool records it.
+      turn.place ??= place.found;
+      changed = true;
+    }
+  }
 
   // 4. Ending the turn with queries never drawn: render them first, in the layer's default view.
   const hasNote = calls.some((c) => c.toolName === "note");
@@ -81,9 +143,9 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean }
   return { calls, dropText, rejected, changed };
 }
 
-/** True when a step could need the guard: layers queried but not drawn. */
+/** True when a step could need the guard: no place yet, or layers queried but not drawn. */
 export function mayGuard(turn: Turn): boolean {
-  return undrawn(turn).length > 0;
+  return (turn.place === null && !turn.regionQueried) || undrawn(turn).length > 0;
 }
 
 function parseInput(input: unknown): Record<string, unknown> | null {

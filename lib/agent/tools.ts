@@ -379,7 +379,7 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
   // The geocode texts already answered this turn, so a repeat is marked as one.
   const answered = new Set<string>();
   const fromView: ViewSource = (bbox) =>
-    view?.bbox && !geocoded && isWithinView(bbox, view.bbox) ? { bbox: view.bbox, zoom: view.zoom } : undefined;
+    view?.bbox && !geocoded && !turn.place && isWithinView(bbox, view.bbox) ? { bbox: view.bbox, zoom: view.zoom } : undefined;
   const tools: ToolSet = {
     list_layers: tool({
       description:

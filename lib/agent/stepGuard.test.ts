@@ -113,6 +113,50 @@ describe("step guard: queried but never drawn", () => {
   });
 });
 
+describe("step guard: a named place the model never looked up", () => {
+  it("looks the place up first and runs the query on its box", async () => {
+    const { calls } = await run("How deep is Lake Tahoe?", [
+      { calls: [{ name: "query_lakes", input: { bbox: [-121, 38, -119, 40], name: "Lake Tahoe" } }] },
+      { calls: [{ name: "render", input: { layerId: "lakes" } }, { name: "note", input: { markdown: "Lake Tahoe is 501 m deep." } }] },
+      { text: "- More?" },
+    ]);
+    expect(calls.map((c) => c.name)).toEqual(["geocode", "query_lakes", "render", "note"]);
+    expect(calls[0].input).toEqual({ place: "Lake Tahoe" });
+    expect(calls[1].input.bbox).toEqual(TAHOE);
+    expect(runLayer.mock.calls[0][1].bbox).toEqual(TAHOE);
+  });
+
+  it("uses the box of a geocode the model sent in the same step as its queries", async () => {
+    const { calls } = await run("How deep is Lake Tahoe?", [
+      { calls: [{ name: "geocode", input: { place: "Lake Tahoe, CA" } }, { name: "query_lakes", input: { bbox: [0, 0, 1, 1], name: "Lake Tahoe" } }] },
+      { calls: [{ name: "note", input: { markdown: "Deep." } }] },
+      { text: "- More?" },
+    ]);
+    expect(calls.filter((c) => c.name === "geocode")).toHaveLength(1);
+    expect(calls.find((c) => c.name === "query_lakes")?.input.bbox).toEqual(TAHOE);
+  });
+
+  it("leaves a place inside the map view alone: the view is what the user means", async () => {
+    const { calls } = await run("Any trails around Lake Tahoe?", [
+      { calls: [{ name: "query_osm-trails", input: { bbox: TAHOE } }] },
+      { calls: [{ name: "render", input: { layerId: "osm-trails" } }, { name: "note", input: { markdown: "Trails." } }] },
+      { text: "- More?" },
+    ], { bbox: [-120.5, 38.5, -119.5, 39.5], zoom: 8, center: [-120, 39] });
+    expect(calls.map((c) => c.name)).toEqual(["query_osm-trails", "render", "note"]);
+  });
+
+  it("a question naming no place, with no view, is about the queried layer's own region (sequoia groves: the Sierra Nevada)", async () => {
+    const { calls } = await run("Which sequoia groves burned in the 2020 and 2021 fires?", [
+      { calls: [{ name: "query_sequoia-groves", input: { bbox: [-119, 36, -118, 37] } }] },
+      { calls: [{ name: "render", input: { layerId: "sequoia-groves" } }, { name: "note", input: { markdown: "Groves." } }] },
+      { text: "- More?" },
+    ]);
+    expect(calls.slice(0, 2).map((c) => c.name)).toEqual(["geocode", "query_sequoia-groves"]);
+    expect(calls[0].input).toEqual({ place: "Sierra Nevada" });
+    expect(calls[1].input.bbox).toEqual(SIERRA);
+  });
+});
+
 describe("step guard: canonical tool names in the stream", () => {
   it("renames a garbled tool name before the stream leaves the server", async () => {
     const question = "Which uranium mines near the Navajo Nation score highest?";

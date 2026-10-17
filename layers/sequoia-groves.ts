@@ -77,6 +77,7 @@ const sequoiaGroves = defineLayer({
     "Caveats: sequoias grow naturally only in this strip of California, so anywhere else returns nothing; groves range from a few acres to a few thousand. " +
     "Outlines are simplified for display and mark the grove, not each tree. Over 120,000 km² (more than the whole range) it lists them largest first with a total.",
   coverage: { bbox: RANGE },
+  place: "Sierra Nevada",
   surface: "land",
   license: "Public data, terms not stated; credit the service's listed sources: USFS Southwest Region (Information Management Mapping and Remote Sensing Team), Sequoia and Kings Canyon National Parks (NPS), BLM, Save the Redwoods League and University of California",
   requiredEnv: [],

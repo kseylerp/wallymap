@@ -251,6 +251,11 @@ export type Layer<I extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawSha
   title: string;
   description: string;
   coverage: Coverage;
+  /**
+   * The one named region every feature lies in, as the geocoder resolves it ("Sierra Nevada" for sequoia groves): a
+   * question that names no place and has no map view is about this place (lib/agent/stepGuard.ts looks it up).
+   */
+  place?: string;
   /** Where the features belong on the globe (land, open water, the coast, or anywhere); see Surface. */
   surface: Surface | SurfaceByKey;
   license: string;

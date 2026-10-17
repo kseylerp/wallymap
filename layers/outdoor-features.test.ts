@@ -140,6 +140,16 @@ describe("normalizeFeatures", () => {
     expect(out.features.map((f) => f.properties?.osmId)).toEqual(["node/442713351", "node/9"]);
   });
 
+  it("draws one viewpoint mapped twice 226 m apart once (Urbo kalnas), keeping the one linked to Wikidata", () => {
+    const out = normalizeFeatures({
+      elements: [
+        { type: "node", id: 5834155488, lat: 55.3036951, lon: 20.9927316, tags: { tourism: "viewpoint", name: "Urbo kalnas" } },
+        { type: "node", id: 476290146, lat: 55.3052599, lon: 20.9950244, tags: { tourism: "viewpoint", name: "Urbo kalnas", wikidata: "Q4476861" } },
+      ],
+    });
+    expect(out.features.map((f) => f.properties?.osmId)).toEqual(["node/476290146"]);
+  });
+
   it("returns nothing for a malformed body", () => {
     expect(normalizeFeatures(null).features).toHaveLength(0);
     expect(normalizeFeatures({ elements: "x" }).features).toHaveLength(0);

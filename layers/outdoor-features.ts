@@ -253,8 +253,12 @@ export function normalizeFeatures(json: unknown, allowed: readonly Kind[] = KIND
   return { type: "FeatureCollection", features: dropMappedTwice(features) };
 }
 
-/** Two elements of one kind and name closer than this are one place mapped twice in OSM. */
-const SAME_PLACE_M = 150;
+/**
+ * Two elements of one kind and name closer than this are one place mapped twice in OSM (the eval's duplicates rule
+ * uses the same 300 m: lib/checks/mapChecks.ts DISTINCT_OSM_KM). Two viewpoints "Urbo kalnas" 226 m apart are one
+ * hill's viewpoint mapped twice; upper and lower falls 680 m apart are two places.
+ */
+export const SAME_PLACE_M = 300;
 
 /**
  * One place mapped twice (two waterfall nodes "Chutes Voltaire" 36 m apart, a peak as a node and a summit cross) is drawn

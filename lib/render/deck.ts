@@ -1770,6 +1770,8 @@ export function buildDeckLayerSets(
     const loaded = state.layers[op.layerId];
     if (!loaded) continue;
     if (loaded.result.kind === "tiles") continue;
+    // A flow field draws as moving particles (lib/render/particles.ts, animated by the map), not as its grid nodes.
+    if (loaded.result.flow) continue;
     const picked = state.selected?.layerId === op.layerId ? state.selected : undefined;
     // A feature picked on a compare's side B highlights there; side A (and every other mode) gets the rest.
     const selected = picked && picked.side !== "b" ? picked.feature : undefined;

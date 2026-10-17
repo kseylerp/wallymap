@@ -2,6 +2,8 @@
 
 import { useRef, type KeyboardEvent, type PointerEvent } from "react";
 import { FrameAggregate } from "@/components/FrameAggregate";
+import { LinkedChart } from "@/components/LinkedChart";
+import type { LinkedCurve } from "@/lib/render/linkedChart";
 import { formatValue } from "@/lib/format";
 import type { FrameAggregate as Aggregate } from "@/lib/render/series";
 import { bucketAt } from "@/lib/render/reducer";
@@ -15,6 +17,8 @@ type TimeScrubberProps = {
   missingImage?: boolean;
   /** The live aggregate (spec §13): the frame's date and total against the period's low and high. */
   aggregate?: Aggregate | null;
+  /** The linked curve (spec §13a): the tide, the flow at a reach, the wind at the center, synced with the playhead. */
+  curve?: LinkedCurve | null;
 };
 
 /** One bucket's start as the scrubber's axis shows it: "2019", "Mar 2024" or "2024-06-01". */
@@ -40,7 +44,7 @@ const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 h
  * the window's dates, and × to clear. Text only; the window and its handles are purple (palette §11). It only shows and changes state: the play timer runs in
  * the app (lib/render/useTimePlay.ts), so play goes on while the panel is closed.
  */
-export function TimeScrubber({ time, dispatch, missingImage = false, aggregate = null }: TimeScrubberProps) {
+export function TimeScrubber({ time, dispatch, missingImage = false, aggregate = null, curve = null }: TimeScrubberProps) {
   const { index, window, playing, mode } = time;
   const n = index.buckets.length;
   const i = bucketAt(index, window[0]);
@@ -312,6 +316,7 @@ export function TimeScrubber({ time, dispatch, missingImage = false, aggregate =
           </span>
         )}
       </div>
+      {curve && <LinkedChart curve={curve} time={time} dispatch={dispatch} />}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import { frameAggregate } from "@/lib/render/series";
+import { linkedCurve } from "@/lib/render/linkedChart";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { applyFilters, deriveFilterFields, filterSummary, type FilterField, type MeasureRange } from "@/lib/render/filters";
 import { AttributeControls } from "@/components/AttributeControls";
@@ -57,6 +58,9 @@ type LayerStackProps = {
   expandAttributes?: boolean;
   /** The basemap on screen: a dense network's row offers Data only while it is another (spec §13). */
   basemap?: MapState["basemap"];
+  /** The selected feature and the map's center, for the linked curve (the selected reach, the wind at the center). */
+  selected?: MapState["selected"];
+  center?: [number, number];
 };
 
 /** The four ways a point layer draws, in short labels that fit the narrowest panel. Hex is flat cells, columns in 3D. */
@@ -424,7 +428,9 @@ function LegendRow({
   const swatch = isRaster ? layer.style.raster?.swatch : undefined;
   const keySymbol: LegendSymbol = symbol.kind === "tiles" && swatch ? { ...symbol, color: swatch } : symbol;
   const keyFilter = isRaster ? rasterKeyFilter(layer.style.raster) : "";
-  const pointModes = op && layer.result.kind === "geojson" && layer.style.geometry === "point";
+  // A flow field draws as moving particles: its grid nodes have no other way to draw, no names to rank, nothing to filter.
+  const flowField = layer.result.kind === "geojson" && layer.result.flow !== undefined;
+  const pointModes = op && layer.result.kind === "geojson" && layer.style.geometry === "point" && !flowField;
 
   const gripRef = useRef<HTMLButtonElement>(null);
   const onHandleKey = (e: KeyboardEvent) => {
@@ -539,7 +545,7 @@ function LegendRow({
       )}
 
       {/* Attributes (spec §12c): one chip set and Rank by always visible, never behind a hover; the rest under More. */}
-      {op && data && shownData && <AttributeControls layer={layer} op={op} data={data} shown={shownData} fields={fields} dispatch={dispatch} defaultMore={expandAttributes} />}
+      {op && data && shownData && !flowField && <AttributeControls layer={layer} op={op} data={data} shown={shownData} fields={fields} dispatch={dispatch} defaultMore={expandAttributes} />}
       {pointModes && (
         <RowSection heading="Show as">
           <PointModeControl layer={layer} mode={op.mode} dispatch={dispatch} />
@@ -617,6 +623,8 @@ export function LayerStack({
   threeD,
   expandAttributes,
   basemap,
+  selected,
+  center,
 }: LayerStackProps) {
   const items = stackOrder(layers, renderOps);
   // A dated tile layer whose tiles all failed for the window's date (lib/render/tileErrors.ts).
@@ -675,7 +683,13 @@ export function LayerStack({
       <div data-slot="time-scrubber" className="shrink-0 empty:hidden">
         {time && (
           <>
-            <TimeScrubber time={time} dispatch={dispatch} missingImage={missingImage} aggregate={frameAggregate({ time, layers, renderOps })} />
+            <TimeScrubber
+              time={time}
+              dispatch={dispatch}
+              missingImage={missingImage}
+              aggregate={frameAggregate({ time, layers, renderOps })}
+              curve={linkedCurve({ time, layers, renderOps, selected }, center ?? null)}
+            />
             <div aria-hidden className="hairline mx-5" />
           </>
         )}

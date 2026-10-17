@@ -12,7 +12,9 @@ import type { LoadedLayer, RenderOp } from "@/lib/render/state";
 export function EncodingLegend({ layer, op, data }: { layer: LoadedLayer; op: RenderOp; data: GeoJSON.FeatureCollection }) {
   const encoding = resolveEncoding(layer, op, data);
   if (!encoding) return null;
-  const drawn = op.mode === "lines" || op.mode === "points" || op.mode === "columns";
+  // A flow field's particles: brighter is faster, the color the second variable.
+  const flow = layer.result.kind === "geojson" && layer.result.flow !== undefined;
+  const drawn = flow || op.mode === "lines" || op.mode === "points" || op.mode === "columns";
   if (!drawn) return null;
   const { size, color } = encoding;
   return (
@@ -23,7 +25,7 @@ export function EncodingLegend({ layer, op, data }: { layer: LoadedLayer; op: Re
             <path d="M1 5 L27 1.5 L27 8.5 Z" fill="currentColor" opacity="0.55" />
           </svg>
           <span className="min-w-0 truncate">
-            <span className="small-caps mr-1 text-ink!">{sizeWord(layer.style.geometry, op.mode)}</span>
+            <span className="small-caps mr-1 text-ink!">{flow ? "Brightness" : sizeWord(layer.style.geometry, op.mode)}</span>
             {channelText(size)}
           </span>
         </p>

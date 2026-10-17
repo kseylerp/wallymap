@@ -61,24 +61,29 @@ export function valuesOf(f: Feature, key: string): number[] {
 
 const extentMemo = new WeakMap<FeatureCollection, Map<string, [number, number] | null>>();
 
-/** The smallest and largest number under `key` over every feature and every frame; null without two different numbers. */
-export function channelExtent(data: FeatureCollection, key: string): [number, number] | null {
+/**
+ * The smallest and largest number under `key` over every feature and every frame; null without two different numbers.
+ * `robust` (the color channel) takes the 2nd and 98th percentiles instead, so one creek at 2,000% of its median does not
+ * leave every other line at the low end of the ramp; values past them take the ramp's ends.
+ */
+export function channelExtent(data: FeatureCollection, key: string, robust = false): [number, number] | null {
   let byKey = extentMemo.get(data);
   if (!byKey) {
     byKey = new Map();
     extentMemo.set(data, byKey);
   }
-  if (byKey.has(key)) return byKey.get(key) ?? null;
-  let lo = Infinity;
-  let hi = -Infinity;
-  for (const f of data.features) {
-    for (const v of valuesOf(f, key)) {
-      if (v < lo) lo = v;
-      if (v > hi) hi = v;
-    }
+  const memoKey = `${key}|${robust}`;
+  if (byKey.has(memoKey)) return byKey.get(memoKey) ?? null;
+  const all: number[] = [];
+  for (const f of data.features) for (const v of valuesOf(f, key)) all.push(v);
+  let extent: [number, number] | null = null;
+  if (all.length > 0) {
+    all.sort((a, b) => a - b);
+    const at = (q: number) => all[Math.min(all.length - 1, Math.max(0, Math.round(q * (all.length - 1))))];
+    const [lo, hi] = robust && all.length >= 50 ? [at(0.02), at(0.98)] : [all[0], all[all.length - 1]];
+    extent = hi > lo ? [lo, hi] : null;
   }
-  const extent: [number, number] | null = hi > lo ? [lo, hi] : null;
-  byKey.set(key, extent);
+  byKey.set(memoKey, extent);
   return extent;
 }
 
@@ -99,7 +104,7 @@ function channelOf(attr: Attribute | undefined, key: string, data: FeatureCollec
     const colors = groupColors(groups.length);
     return { key, label, extent: null, levels: groups.map((g, i) => ({ values: g.values, label: g.label, color: colors[i] })) };
   }
-  return { key, label, ...(attr?.unit && { unit: attr.unit }), extent: channelExtent(data, key) };
+  return { key, label, ...(attr?.unit && { unit: attr.unit }), extent: channelExtent(data, key, kind === "color") };
 }
 
 /**

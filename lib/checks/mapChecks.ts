@@ -220,6 +220,8 @@ type Drawn = {
   op: MapState["renderOps"][number];
   /** The coverage notes the layer panel and card show (one per compare side). */
   notes: string[];
+  /** A vector field drawn as moving particles (ocean currents, wind): its features are the grid's nodes, not places. */
+  flow?: boolean;
 };
 
 /** The GeoJSON layers the map draws (visible, filtered and windowed), one entry per layer id (compare side B folded in). */
@@ -243,6 +245,7 @@ export function drawnLayers(state: MapState, lookup: LayerLookup): Drawn[] {
       loaded: loaded?.kind === "geojson" ? loaded.data : layer.result.data,
       op,
       notes,
+      ...(loaded?.kind === "geojson" && loaded.flow !== undefined && { flow: true }),
     });
   }
   return [...out.values()];
@@ -343,6 +346,8 @@ export function findLattice(points: [number, number][]): { cols: number; rows: n
 export function checkLattice(layers: Drawn[]): CheckResult {
   const failures: string[] = [];
   for (const layer of layers) {
+    // A flow field's nodes are a grid by design, drawn as moving particles, never as places.
+    if (layer.flow) continue;
     const points = layer.data.features.filter((f) => f.geometry?.type === "Point");
     const grid = findLattice(points.map((f) => (f.geometry as GeoJSON.Point).coordinates.slice(0, 2) as [number, number]));
     if (!grid) continue;

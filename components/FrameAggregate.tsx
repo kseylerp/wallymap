@@ -91,47 +91,54 @@ export function FrameAggregate({ time, aggregate }: { time: TimeState; aggregate
   const dial = wantsYearDial(index);
   const isCount = aggregate.kind === "count";
   const shown = value === null ? "–" : isCount ? formatValue("count", Math.round(value)) : amount(value, aggregate.unit);
-  const lowText = aggregate.low ? (isCount ? formatValue("count", aggregate.low.value) : amount(aggregate.low.value, aggregate.unit)) : "";
-  const highText = aggregate.high ? (isCount ? formatValue("count", aggregate.high.value) : amount(aggregate.high.value, aggregate.unit)) : "";
-  // The low and high's dates without the weekday: "3 Aug 2026", "Mar 2026", "2019".
+  // The low and high as numbers alone (the total above carries the unit), each with its date, the year left off when the
+  // whole span lies in one year: "Low 7,595 · 18 Sep".
+  const sameYear = new Date(index.buckets[0].start).getUTCFullYear() === new Date(index.buckets[index.buckets.length - 1].start).getUTCFullYear();
+  const bare = (v: number) => (isCount ? formatValue("count", v) : amount(v, undefined));
   const whenOf = (k: number | undefined) => {
     if (k === undefined) return "";
-    const text = frameDate(Date.parse(index.buckets[k].start), index.bucket === "hour" ? "day" : index.bucket);
-    return index.bucket === "hour" || index.bucket === "day" ? text.replace(/^\w{3} /, "") : text;
+    const ms = Date.parse(index.buckets[k].start);
+    if (index.bucket === "year") return frameDate(ms, "year");
+    if (index.bucket === "month") return frameDate(ms, "month").replace(sameYear ? / \d{4}$/ : /$^/, "");
+    const text = frameDate(ms, "day").replace(/^\w{3} /, "");
+    const day = sameYear ? text.replace(/ \d{4}$/, "") : text;
+    return index.bucket === "hour" ? `${day} ${new Date(ms).toISOString().slice(11, 16)}` : day;
   };
   return (
-    <div data-testid="frame-aggregate" className="mt-2.5 flex items-start gap-3">
-      {dial && <YearDial fromMs={Date.parse(index.buckets[0].start)} toMs={Date.parse(index.buckets[index.buckets.length - 1].end)} atMs={atMs} />}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-3">
-          <p data-testid="frame-date" className={`min-w-0 truncate font-medium text-ink tabular-nums ${framed ? "text-[17px] leading-6" : "text-[13px] leading-6"}`}>
-            {date}
-          </p>
-          <p data-testid="frame-total" className="shrink-0 text-[17px] leading-6 font-medium text-ink tabular-nums">
-            {shown}
-          </p>
-        </div>
-        <div className="flex items-baseline justify-between gap-3 text-[11px] leading-4 text-ink-muted">
-          <span>{forecast ? "Forecast" : framed ? (mode === "cumulative" ? "Up to this frame" : "This frame") : "In the window"}</span>
-          <span className="truncate text-right">{aggregate.label}</span>
-        </div>
-        {framed && share !== null && aggregate.low && aggregate.high && (
-          <div className="mt-1.5" data-testid="frame-range">
-            <div className="frame-range relative h-[3px] rounded-full">
-              <div className="frame-range-fill absolute inset-y-0 left-0 rounded-full" style={{ width: `${(share * 100).toFixed(1)}%` }} />
-              <div className="frame-range-mark absolute top-1/2 h-[9px] w-[2px] -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${(share * 100).toFixed(1)}%` }} />
-            </div>
-            <div className="mt-1 flex justify-between text-[10.5px] leading-[14px] text-ink-muted tabular-nums">
-              <span title="The period's low">
-                Low {lowText} · {whenOf(aggregate.low.at)}
-              </span>
-              <span title="The period's high">
-                High {highText} · {whenOf(aggregate.high.at)}
-              </span>
-            </div>
-          </div>
-        )}
+    <div data-testid="frame-aggregate" className="mt-2">
+      <div className="flex min-w-0 items-baseline justify-between gap-3">
+        <p data-testid="frame-date" className={`min-w-0 truncate font-medium text-ink tabular-nums ${framed ? "text-[17px] leading-6" : "text-[13px] leading-6"}`}>
+          {date}
+        </p>
+        <p data-testid="frame-total" className="shrink-0 text-[17px] leading-6 font-medium text-ink tabular-nums">
+          {shown}
+        </p>
       </div>
+      <div className="flex items-baseline justify-between gap-3 text-[11px] leading-4 text-ink-muted">
+        <span className="shrink-0">{forecast ? "Forecast" : framed ? (mode === "cumulative" ? "Up to this frame" : "This frame") : "In the window"}</span>
+        <span className="min-w-0 truncate text-right">{aggregate.label}</span>
+      </div>
+      {(dial || (framed && share !== null && aggregate.low && aggregate.high)) && (
+        <div className="mt-1.5 flex items-center gap-3">
+          {dial && <YearDial fromMs={Date.parse(index.buckets[0].start)} toMs={Date.parse(index.buckets[index.buckets.length - 1].end)} atMs={atMs} />}
+          {framed && share !== null && aggregate.low && aggregate.high && (
+            <div className="min-w-0 flex-1" data-testid="frame-range">
+              <div className="frame-range relative h-[3px] rounded-full">
+                <div className="frame-range-fill absolute inset-y-0 left-0 rounded-full" style={{ width: `${(share * 100).toFixed(1)}%` }} />
+                <div className="frame-range-mark absolute top-1/2 h-[9px] w-[2px] -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${(share * 100).toFixed(1)}%` }} />
+              </div>
+              <div className="mt-1 flex justify-between gap-2 text-[10.5px] leading-[14px] whitespace-nowrap text-ink-muted tabular-nums">
+                <span title="The period's low" className="min-w-0 truncate">
+                  Low {bare(aggregate.low.value)} · {whenOf(aggregate.low.at)}
+                </span>
+                <span title="The period's high" className="min-w-0 truncate text-right">
+                  High {bare(aggregate.high.value)} · {whenOf(aggregate.high.at)}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

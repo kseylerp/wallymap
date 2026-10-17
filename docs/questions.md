@@ -288,6 +288,9 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - Where can I fish here @view=[-151.2,60.4,-150,60.6]
 - Which is more remote, the Gila or the Bob Marshall?
 - Compare snow depth at Mount Baker and Mount Hood
+- How has the Mississippi's flow changed over the last three months?
+- Show the currents in Cook Inlet this week
+- Where is the wind strongest over the Sierra tomorrow?
 <!-- eval:end -->
 
 ## Last run

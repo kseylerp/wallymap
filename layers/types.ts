@@ -67,11 +67,24 @@ export type SeriesAxis = {
 export type LinkedSeries = { label: string; unit: string; place: string; times: string[]; values: (number | null)[]; source?: Citation };
 
 /**
- * A vector field drawn as moving particles (spec §13a): the features are the nodes of a regular grid (row by row from
- * the south-west corner, `nx` across and `ny` up, `bbox` their outer nodes), each holding `u` (east) and `v` (north)
- * in m/s and an optional `color` measure, all as series. `speedUnit` and `colorUnit` name the legend's units.
+ * A vector field drawn as moving particles (spec §13a): the features are nodes of a regular grid (`nx` across and `ny`
+ * up, `bbox` their outer nodes), each with its index in the grid under `node` (row by row from the south-west corner;
+ * nodes without data, such as land for currents, may be left out) and `u` (east) and `v` (north) in m/s and an
+ * optional `color` measure, all as series.
  */
-export type FlowField = { nx: number; ny: number; bbox: BBox; u: string; v: string; color?: string; landNull?: boolean };
+export type FlowField = {
+  nx: number;
+  ny: number;
+  bbox: BBox;
+  u: string;
+  v: string;
+  color?: string;
+  /**
+   * Where water is, finer than the grid (currents only): `nx` by `ny` cells over `bbox`, row by row from the south-west,
+   * one bit per cell (1 water), base64. Particles die on land the coarse grid would let them drift over.
+   */
+  water?: { nx: number; ny: number; bits: string };
+};
 
 export type LayerResult =
   | ({

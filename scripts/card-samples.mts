@@ -37,6 +37,9 @@ export const SAMPLE_QUERIES: Record<string, { bbox: BBox; input?: Record<string,
   "condor-range": { bbox: [-121.93, 35.774, -121.244, 36.377] },
   "critical-habitat": { bbox: [-113.85, 37.0, -113.458, 37.341], input: { species: "desert tortoise", includeProposed: true } },
   dams: { bbox: [-112, 35.5, -110, 37.5] },
+  "river-pulse": { bbox: [-92, 36, -88, 40] },
+  "ocean-currents": { bbox: [-152.5, 59.5, -150, 61.3] },
+  "wind-flow": { bbox: [-120.5, 37, -118.5, 38.5] },
   disasters: { bbox: [-87.635, 24.43, -79.938, 31.001], input: { days: 90, years: 5 } },
   disturbance: { bbox: [-125, 49, -122, 51] },
   drought: { bbox: [-109.06, 36.992, -102.042, 41.003] },
@@ -148,7 +151,11 @@ export function pickSample(features: Feature[], size = SAMPLE_SIZE): Feature[] {
   }
   return picked.map((f) => {
     const p = firstPosition(f.geometry);
-    return { type: "Feature", ...(f.id !== undefined && { id: f.id }), geometry: p ? { type: "Point", coordinates: p.slice(0, 2) } : null, properties: f.properties } as Feature;
+    // A frame series (one value per day or hour under each key: river pulse, currents, wind) is never a card row and
+    // would make the file huge; a list of dated readings (a reservoir's history) stays.
+    const { series, ...rest } = f.properties ?? {};
+    const properties = series === undefined || Array.isArray(series) ? (f.properties ?? {}) : rest;
+    return { type: "Feature", ...(f.id !== undefined && { id: f.id }), geometry: p ? { type: "Point", coordinates: p.slice(0, 2) } : null, properties } as Feature;
   });
 }
 

@@ -18,6 +18,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "forest-loss", synonyms: ["deforestation", "logging", "clearcut", "tree loss"], notes: "yearly loss; also query forest-alerts", gist: "where tree cover was lost, year by year" },
   { layerId: "forest-alerts", synonyms: ["recent clearing", "new deforestation"], notes: "recent weekly alerts", gist: "weekly alerts of new forest clearing in the tropics" },
   { layerId: "snowpack", synonyms: ["snow", "snowpack", "SWE", "powder"], notes: "station snow depth v, SWE, density and type; not avalanche danger", gist: "live snow depth and new snow at mountain stations" },
+  { layerId: "river-pulse", synonyms: ["river pulse", "flow changed", "discharge over", "river network"], notes: "a whole network's daily modelled flow, past 3 months and the forecast; for live gauge readings use streamflow", gist: "daily flow of a whole river network, played" },
   { layerId: "streamflow", synonyms: ["river flow", "cfs", "runoff", "gauge", "flood", "high water"], notes: "stream gauges; a river name itself is a geocode", gist: "live river flow against the usual at gauges" },
   { layerId: "forest-roads", synonyms: ["dispersed", "boondocking", "free camping", "forest road", "off-road", "4x4"], notes: "roads open to motor vehicles; also query campsites; dispersed-camping rules come from the ranger district", gist: "Forest Service roads legally open to motor vehicles" },
   { layerId: "campsites", synonyms: ["campground", "campsite", "camping"], notes: "established sites", gist: "campsites and parking lots from OpenStreetMap" },
@@ -93,6 +94,8 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "imagery-by-date", synonyms: ["satellite image on a date", "before and after", "satellite photo"], notes: "30 m true colour for date, nearest pass; compare two days", gist: "true-colour 30 m satellite picture on a chosen day" },
   { layerId: "mines", synonyms: ["mine", "abandoned mine", "mineral deposit", "prospect", "quarry"], notes: "USGS historic mine records (about 2011) and old-map mine symbols; kind = commodity or feature type; commodity input", gist: "US mines, prospects and mineral deposits by commodity" },
   { layerId: "uranium", synonyms: ["uranium", "mill tailings", "radioactive"], notes: "Navajo Nation abandoned mines (v = 2007 hazard score) and DOE mill-tailings sites; other uranium mines are in mines", gist: "Navajo Nation abandoned uranium mines and mill-tailings sites" },
+  { layerId: "ocean-currents", synonyms: ["currents", "tidal current", "ocean current", "slack water"], notes: "hourly surface currents as moving particles, with the tide plotted", gist: "hourly ocean and tidal currents as moving particles" },
+  { layerId: "wind-flow", synonyms: ["wind", "windiest", "gusty", "wind direction"], notes: "hourly 10 m wind forecast as moving particles, today and the next days", gist: "hourly wind forecast drawn as moving particles" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

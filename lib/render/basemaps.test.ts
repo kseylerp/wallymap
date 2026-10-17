@@ -54,7 +54,7 @@ describe("the data-only basemap (spec §13)", () => {
   });
 
   it("is offered for a dense network: a series, a flow field, or 150 lines and more", () => {
-    const line = { type: "Feature", geometry: { type: "LineString", coordinates: [[0, 0], [1, 1]] }, properties: {} } as const;
+    const line: GeoJSON.Feature = { type: "Feature", geometry: { type: "LineString", coordinates: [[0, 0], [1, 1]] }, properties: {} };
     const layer = (n: number, extra = {}): LoadedLayer => ({
       id: "l",
       title: "L",

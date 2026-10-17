@@ -2,6 +2,7 @@ import type { Geometry, GeoJsonProperties, Position } from "geojson";
 import type { Attribute, BBox, Citation, FieldHelp, LayerError, LayerResult, StyleHints, TileTime } from "@/layers/types";
 import { attributeGroups, declaredGroups, isChipAttribute } from "@/lib/render/attributes";
 import { formatValue } from "@/lib/format";
+import { seriesStory, type SeriesStory } from "./story";
 
 /** The key the few sample features go under, so the model reads them as examples and never quotes them as the range. */
 export const SAMPLES_KEY = "samples (not representative)";
@@ -85,6 +86,11 @@ export type GeojsonSummary = {
    * by saying so.
    */
   encoding?: string;
+  /**
+   * A series result (one value per feature per day or hour): the low, the peak, their ratio and dates, whether it
+   * repeats, the drivers and the linked curve's swing, for the caption (spec §13).
+   */
+  story?: SeriesStory;
 };
 
 /** An attribute as the model sees it: `values` maps each chip label to the raw values render.filters includes. */
@@ -143,6 +149,8 @@ function sampleProperties(properties: GeoJsonProperties): GeoJsonProperties {
   if (properties === null) return null;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(properties).slice(0, SAMPLE_MAX_KEYS)) {
+    // A feature's series (one value per frame) is the story's to summarise, not a sample's.
+    if (key === "series") continue;
     const name = clip(key);
     if (typeof value === "string") out[name] = clip(value);
     else if (value === null || typeof value === "number" || typeof value === "boolean") out[name] = value;
@@ -431,7 +439,7 @@ export function drawnYearsOf(url: string): string | undefined {
 export type SummaryStyle = Partial<Pick<StyleHints, "unit" | "timeField" | "geometry" | "encode">> & { attributes?: Attribute[] };
 
 /** "Width is Flow (m³/s); color is Water temperature (°C), sage low to purple high": the layer's pair in words. */
-export function encodingSentence(style: SummaryStyle): string | undefined {
+export function encodingSentence(style: SummaryStyle, flow = false): string | undefined {
   const named = (key: string | undefined) => {
     const attr = key ? style.attributes?.find((a) => a.key === key) : undefined;
     return attr ? `${attr.label}${attr.unit ? ` (${attr.unit})` : ""}` : undefined;
@@ -439,9 +447,9 @@ export function encodingSentence(style: SummaryStyle): string | undefined {
   const size = named(style.encode?.size);
   const color = named(style.encode?.color);
   if (!size && !color) return undefined;
-  const word = style.geometry === "line" ? "Line width" : "Symbol size";
+  const word = flow ? "particle brightness (and streak length)" : style.geometry === "line" ? "line width" : "symbol size";
   const parts = [size && `${word} is ${size}`, color && `color is ${color}, sage low to purple high`].filter(Boolean);
-  const text = parts.join("; ");
+  const text = `${flow ? "Particles drift with the flow; " : ""}${parts.join("; ")}`;
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
 }
 
@@ -542,7 +550,8 @@ export function summarizeLayerResult(
   const attributes = attributeSummaries(style, features);
   const help = helpLines(fieldHelp, style);
   const highest = highestOf(features, style);
-  const encoding = encodingSentence(style);
+  const encoding = encodingSentence(style, body.flow !== undefined);
+  const story = body.series ? seriesStory(features, body.series, style.attributes, body.linked) : undefined;
   return {
     kind: "geojson",
     featureCount: features.length,
@@ -561,6 +570,7 @@ export function summarizeLayerResult(
     ...(attributes !== undefined && { attributes }),
     ...(help !== undefined && { help }),
     ...(encoding !== undefined && { encoding }),
+    ...(story !== undefined && { story }),
   };
 }
 

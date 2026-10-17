@@ -48,6 +48,8 @@ function twoSets(data: FeatureCollection): boolean {
  */
 export function defaultView(layer: LoadedLayer, filters?: LayerFilters): ViewKind | undefined {
   if (layer.result.kind === "tiles") return scenarioOf(layer) ? "scenario" : undefined;
+  // A value per frame (river pulse, currents, wind) is a timeline: the scrubber plays its days or hours.
+  if (layer.result.series) return "timeline";
   const data = filters ? applyFilters(layer.result.data, filters) : layer.result.data;
   const n = data.features.length;
   if (n === 0) return undefined;
@@ -169,6 +171,9 @@ export function viewCaption(view: ViewKind | undefined, layer: LoadedLayer, comp
       // Hex cells say what their color means and how big they are (spec §12d).
       return hexes ?? "Clusters count the features near each other; zoom in to split them";
     case "timeline":
+      if (layer.result.kind === "geojson" && layer.result.series) {
+        return `The map shows the ${layer.result.series.step} above; Play steps ${layer.result.series.step} by ${layer.result.series.step}`;
+      }
       return "Features show inside the time window above";
     case "detail":
       return "The selected feature is purple";

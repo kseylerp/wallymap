@@ -523,6 +523,10 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   "where can i fish here": { layers: ["fishing"] },
   "which is more remote, the gila or the bob marshall?": { layers: ["remoteness"] },
   "compare snow depth at mount baker and mount hood": { layers: ["snowpack"] },
+  // Data stories (spec §13, §13a): a whole river network day by day, currents and wind as moving particles, hourly.
+  "how has the mississippi's flow changed over the last three months?": { layers: ["river-pulse"], view: "timeline" },
+  "show the currents in cook inlet this week": { layers: ["ocean-currents"], view: "timeline" },
+  "where is the wind strongest over the sierra tomorrow?": { layers: ["wind-flow"] },
 };
 
 /** Layers the older eval questions (before the coverage questions) already ask about, per their Last run tool lists. */

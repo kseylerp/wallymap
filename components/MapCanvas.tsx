@@ -3,7 +3,7 @@
 import type { Layer } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import mapboxgl from "mapbox-gl";
-import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { MapSetupNotice } from "@/components/MapSetupNotice";
 import { drawnLineEntries, syncHeatLayers, syncLineLayers, syncSatelliteHybrid, syncTileLayers } from "@/components/mapTiles";
 import { ensureRouteImages, setRouteProgress, syncRouteLayers } from "@/components/routeLayers";
@@ -17,6 +17,10 @@ import { initialMapState, type Basemap, type MapState, type Selection, type View
 import { noteTile } from "@/lib/render/tileErrors";
 import { tileSwipeLayers } from "@/lib/render/tileSides";
 import { visibleState } from "@/lib/render/view";
+import { animateSeriesLines, resetSeriesLines } from "@/lib/render/seriesLines";
+import { fieldAt, flowFrame, flowLayersOf, ParticleSystem, type FieldSnapshot, type ParticleView } from "@/lib/render/particles";
+import { metersPerPixel } from "@/lib/render/deck";
+import { playheadStore } from "@/lib/render/playhead";
 import {
   bearingAt,
   bearingLookAheadM,
@@ -387,12 +391,30 @@ function pickAt(map: mapboxgl.Map, overlay: MapboxOverlay, state: MapState, poin
   );
 }
 
+/** The screen particles move in: the map's bounds, its metres per pixel at the center, and the canvas size. */
+function particleView(map: mapboxgl.Map): ParticleView | null {
+  const b = map.getBounds();
+  if (!b) return null;
+  const canvas = map.getCanvas();
+  return {
+    bounds: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
+    metersPerPixel: metersPerPixel(map.getZoom(), map.getCenter().lat),
+    widthPx: canvas.clientWidth,
+    heightPx: canvas.clientHeight,
+  };
+}
+
 function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
   /** The deck layers last handed to the overlay, for the picking passes. */
   const deckLayersRef = useRef<readonly Layer[]>([]);
+  /** The moving particles of flow layers (lib/render/particles.ts), drawn over the other deck layers. */
+  const particleLayersRef = useRef<Layer[]>([]);
+  const particlesRef = useRef(new Map<string, ParticleSystem>());
+  /** Hands the overlay the data layers and the particles together. */
+  const pushDeck = useCallback(() => overlayRef.current?.setProps({ layers: [...deckLayersRef.current, ...particleLayersRef.current] }), []);
   const stateRef = useRef(state);
   const onViewportChangeRef = useRef(onViewportChange);
   const onPickRef = useRef(onPick);
@@ -482,6 +504,9 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       syncTileLayers(map, visibleState(stateRef.current));
       syncHeatLayers(map, visibleState(stateRef.current));
       syncLineLayers(map, visibleState(stateRef.current));
+      // A style swap dropped the line sources and their feature state: a series sets its frame again.
+      resetSeriesLines(map);
+      animateSeriesLines(map, drawnLineEntries(map).values(), visibleState(stateRef.current), playheadStore.get());
       ensureRouteImages(map);
       syncRouteLayers(map, stateRef.current);
     });
@@ -557,8 +582,8 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
   useEffect(() => {
     const view = visibleState(state);
     const sets = safeDeckLayers(state);
-    overlayRef.current?.setProps({ layers: sets.main });
     deckLayersRef.current = sets.main;
+    pushDeck();
     const map = mapRef.current;
     if (!map) return;
     sidesRef.current = syncSideOverlays(map, sidesRef.current, sets);
@@ -577,8 +602,87 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     }
     syncHeatLayers(map, view);
     syncLineLayers(map, view);
+    animateSeriesLines(map, drawnLineEntries(map).values(), view, playheadStore.get());
     syncRouteLayers(map, state);
-  }, [state]);
+  }, [state, pushDeck]);
+
+  // Flow layers (ocean currents, wind) animate their particles every animation frame while one is shown, outside React;
+  // a hidden tab pauses them (requestAnimationFrame does not run there, and a hidden page skips the work).
+  const flowing = flowLayersOf(state).length > 0;
+  useEffect(() => {
+    if (!flowing) {
+      particlesRef.current.clear();
+      if (particleLayersRef.current.length > 0) {
+        particleLayersRef.current = [];
+        pushDeck();
+      }
+      return;
+    }
+    let raf = 0;
+    let fieldKey = "";
+    let fields = new Map<string, FieldSnapshot | null>();
+    const frames: number[] = [];
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      const map = mapRef.current;
+      if (!map || document.hidden) return;
+      const view = particleView(map);
+      if (!view) return;
+      const current = visibleState(stateRef.current);
+      const flows = flowLayersOf(current);
+      const at = playheadStore.get();
+      // The field changes only when the playhead or the data does: rebuild it then, not every frame.
+      const key = `${flows.map((f) => f.layer.id).join(",")}|${Math.round(at * 50) / 50}`;
+      if (key !== fieldKey) {
+        fieldKey = key;
+        const next = new Map<string, FieldSnapshot | null>();
+        for (const { layer } of flows) next.set(layer.id, fieldAt(layer, flowFrame(layer, current, at)));
+        fields = next;
+      }
+      const layers: Layer[] = [];
+      let stepMs = 0;
+      let count = 0;
+      for (const { layer, opacity } of flows) {
+        const field = fields.get(layer.id);
+        if (!field) continue;
+        let system = particlesRef.current.get(layer.id);
+        if (!system) {
+          system = new ParticleSystem();
+          particlesRef.current.set(layer.id, system);
+        }
+        count += system.step(field, view);
+        stepMs += system.lastStepMs;
+        layers.push(system.layer(`${layer.id}:particles`, opacity));
+      }
+      for (const id of particlesRef.current.keys()) if (!flows.some((f) => f.layer.id === id)) particlesRef.current.delete(id);
+      particleLayersRef.current = layers;
+      pushDeck();
+      frames.push(now);
+      while (frames.length > 0 && now - frames[0] > 2000) frames.shift();
+      // Development only: the story checks read the particle count, step time and frame rate.
+      if (process.env.NODE_ENV === "development") {
+        const first = particlesRef.current.values().next().value;
+        (window as unknown as { __wallyParticles?: unknown }).__wallyParticles = {
+          count,
+          stepMs: Math.round(stepMs * 100) / 100,
+          fps: Math.round(((frames.length - 1) * 1000) / Math.max(1, now - frames[0])),
+          sample: first ? Array.from(first.target.slice(0, 40)) : [],
+        };
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [flowing, pushDeck]);
+
+  // A series layer's lines glide with the playhead between frames (lib/render/seriesLines.ts), outside React.
+  useEffect(
+    () =>
+      playheadStore.subscribe(() => {
+        const map = mapRef.current;
+        if (map) animateSeriesLines(map, drawnLineEntries(map).values(), visibleState(stateRef.current), playheadStore.get());
+      }),
+    [],
+  );
   useEffect(
     () => () => {
       if (tileTimerRef.current !== null) window.clearTimeout(tileTimerRef.current);

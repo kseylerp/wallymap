@@ -288,6 +288,8 @@ export function App() {
           zoom={state.viewport.zoom}
           threeD={threeD}
           basemap={state.basemap}
+          selected={state.selected}
+          center={[state.viewport.longitude, state.viewport.latitude]}
         />
       </div>
 

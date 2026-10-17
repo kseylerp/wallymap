@@ -4627,6 +4627,234 @@
    39.064
   ]
  },
+ "ocean-currents": {
+  "kind": "geojson",
+  "recorded": "2026-10-17",
+  "bbox": [
+   -152.5,
+   59.5,
+   -150,
+   61.3
+  ],
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -152.5,
+      59.5
+     ]
+    },
+    "properties": {
+     "name": "59.50°N 152.50°W",
+     "node": 0,
+     "east": 0.35,
+     "north": 0.4,
+     "speed": 0.53,
+     "sst": 9.1
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -152.3438,
+      59.5
+     ]
+    },
+    "properties": {
+     "name": "59.50°N 152.34°W",
+     "node": 1,
+     "east": 0.3,
+     "north": 0.4,
+     "speed": 0.5,
+     "sst": 8.9
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -152.1875,
+      59.5
+     ]
+    },
+    "properties": {
+     "name": "59.50°N 152.19°W",
+     "node": 2,
+     "east": 0.34,
+     "north": 0.54,
+     "speed": 0.64,
+     "sst": 9.1
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -152.0313,
+      59.5
+     ]
+    },
+    "properties": {
+     "name": "59.50°N 152.03°W",
+     "node": 3,
+     "east": 0.36,
+     "north": 0.46,
+     "speed": 0.58,
+     "sst": 9.2
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -151.875,
+      59.5
+     ]
+    },
+    "properties": {
+     "name": "59.50°N 151.88°W",
+     "node": 4,
+     "east": 0.4,
+     "north": 0.25,
+     "speed": 0.47,
+     "sst": 9.3
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -151.7188,
+      59.5
+     ]
+    },
+    "properties": {
+     "name": "59.50°N 151.72°W",
+     "node": 5,
+     "east": 0.26,
+     "north": 0.1,
+     "speed": 0.28,
+     "sst": 9.1
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -151.5625,
+      59.5
+     ]
+    },
+    "properties": {
+     "name": "59.50°N 151.56°W",
+     "node": 6,
+     "east": 0.16,
+     "north": 0.05,
+     "speed": 0.17,
+     "sst": 8.7
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -151.4063,
+      59.5
+     ]
+    },
+    "properties": {
+     "name": "59.50°N 151.41°W",
+     "node": 7,
+     "east": 0,
+     "north": -0.06,
+     "speed": 0.06,
+     "sst": 8.6
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -151.25,
+      59.5
+     ]
+    },
+    "properties": {
+     "name": "59.50°N 151.25°W",
+     "node": 8,
+     "east": 0,
+     "north": 0,
+     "speed": 0,
+     "sst": 7.8
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -151.0938,
+      59.5
+     ]
+    },
+    "properties": {
+     "name": "59.50°N 151.09°W",
+     "node": 9,
+     "east": 0,
+     "north": 0.06,
+     "speed": 0.06,
+     "sst": 7
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -150.9375,
+      59.5
+     ]
+    },
+    "properties": {
+     "name": "59.50°N 150.94°W",
+     "node": 10,
+     "east": -0.05,
+     "north": -0.1,
+     "speed": 0.11,
+     "sst": 9.5
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -150.7813,
+      59.5
+     ]
+    },
+    "properties": {
+     "name": "59.50°N 150.78°W",
+     "node": 11,
+     "east": -0.14,
+     "north": -0.09,
+     "speed": 0.17,
+     "sst": 9.3
+    }
+   }
+  ]
+ },
  "old-growth": {
   "kind": "geojson",
   "recorded": "2026-10-17",
@@ -8962,6 +9190,306 @@
    }
   ]
  },
+ "river-pulse": {
+  "kind": "geojson",
+  "recorded": "2026-10-17",
+  "bbox": [
+   -92,
+   36,
+   -88,
+   40
+  ],
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -90.1322,
+      38.8187
+     ]
+    },
+    "properties": {
+     "name": "Mississippi",
+     "project": "Mississippi",
+     "reachId": "r0-0",
+     "lengthKm": 22,
+     "q": 5983.1,
+     "pct": 108,
+     "medianQ": 5532.5,
+     "peakQ": 11141.9,
+     "peakDate": "2026-10-07",
+     "lowQ": 3403.1,
+     "lowDate": "2026-09-11",
+     "readAt": "between"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -90.1966,
+      38.638
+     ]
+    },
+    "properties": {
+     "name": "Mississippi",
+     "project": "Mississippi",
+     "reachId": "r0-1",
+     "lengthKm": 25,
+     "q": 5983.1,
+     "pct": 108,
+     "medianQ": 5532.5,
+     "peakQ": 11141.9,
+     "peakDate": "2026-10-07",
+     "lowQ": 3403.1,
+     "lowDate": "2026-09-11",
+     "readAt": "between"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -90.3148,
+      38.4315
+     ]
+    },
+    "properties": {
+     "name": "Mississippi",
+     "project": "Mississippi",
+     "reachId": "r0-2",
+     "lengthKm": 21,
+     "q": 5983.1,
+     "pct": 108,
+     "medianQ": 5532.5,
+     "peakQ": 11141.9,
+     "peakDate": "2026-10-07",
+     "lowQ": 3403.1,
+     "lowDate": "2026-09-11",
+     "readAt": "between"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -90.3732,
+      38.2542
+     ]
+    },
+    "properties": {
+     "name": "Mississippi",
+     "project": "Mississippi",
+     "reachId": "r0-3",
+     "lengthKm": 22,
+     "q": 5983.1,
+     "pct": 108,
+     "medianQ": 5532.5,
+     "peakQ": 11141.9,
+     "peakDate": "2026-10-07",
+     "lowQ": 3403.1,
+     "lowDate": "2026-09-11",
+     "readAt": "between"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -90.2254,
+      38.1009
+     ]
+    },
+    "properties": {
+     "name": "Mississippi",
+     "project": "Mississippi",
+     "reachId": "r0-4",
+     "lengthKm": 23,
+     "q": 5983.1,
+     "pct": 108,
+     "medianQ": 5532.5,
+     "peakQ": 11141.9,
+     "peakDate": "2026-10-07",
+     "lowQ": 3403.1,
+     "lowDate": "2026-09-11",
+     "readAt": "between"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -90.0206,
+      37.9702
+     ]
+    },
+    "properties": {
+     "name": "Mississippi",
+     "project": "Mississippi",
+     "reachId": "r0-5",
+     "lengthKm": 20,
+     "q": 5983.1,
+     "pct": 108,
+     "medianQ": 5532.5,
+     "peakQ": 11141.9,
+     "peakDate": "2026-10-07",
+     "lowQ": 3403.1,
+     "lowDate": "2026-09-11",
+     "readAt": "between"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -89.8319,
+      37.8842
+     ]
+    },
+    "properties": {
+     "name": "Mississippi",
+     "project": "Mississippi",
+     "reachId": "r0-6",
+     "lengthKm": 21,
+     "q": 5983.1,
+     "pct": 108,
+     "medianQ": 5532.5,
+     "peakQ": 11141.9,
+     "peakDate": "2026-10-07",
+     "lowQ": 3403.1,
+     "lowDate": "2026-09-11",
+     "readAt": "between"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -89.6691,
+      37.7543
+     ]
+    },
+    "properties": {
+     "name": "Mississippi",
+     "project": "Mississippi",
+     "reachId": "r0-7",
+     "lengthKm": 21,
+     "q": 5983.1,
+     "pct": 108,
+     "medianQ": 5532.5,
+     "peakQ": 11141.9,
+     "peakDate": "2026-10-07",
+     "lowQ": 3403.1,
+     "lowDate": "2026-09-11",
+     "readAt": "between"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -89.5205,
+      37.6319
+     ]
+    },
+    "properties": {
+     "name": "Mississippi",
+     "project": "Mississippi",
+     "reachId": "r0-8",
+     "lengthKm": 23,
+     "q": 5983.1,
+     "pct": 108,
+     "medianQ": 5532.5,
+     "peakQ": 11141.9,
+     "peakDate": "2026-10-07",
+     "lowQ": 3403.1,
+     "lowDate": "2026-09-11",
+     "readAt": "between"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -89.4513,
+      37.4403
+     ]
+    },
+    "properties": {
+     "name": "Mississippi",
+     "project": "Mississippi",
+     "reachId": "r0-9",
+     "lengthKm": 22,
+     "q": 5983.1,
+     "pct": 108,
+     "medianQ": 5532.5,
+     "peakQ": 11141.9,
+     "peakDate": "2026-10-07",
+     "lowQ": 3403.1,
+     "lowDate": "2026-09-11",
+     "readAt": "between"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -89.5234,
+      37.2679
+     ]
+    },
+    "properties": {
+     "name": "Mississippi",
+     "project": "Mississippi",
+     "reachId": "r0-10",
+     "lengthKm": 21,
+     "q": 5983.1,
+     "pct": 108,
+     "medianQ": 5532.5,
+     "peakQ": 11141.9,
+     "peakDate": "2026-10-07",
+     "lowQ": 3403.1,
+     "lowDate": "2026-09-11",
+     "readAt": "between"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -89.4016,
+      37.12
+     ]
+    },
+    "properties": {
+     "name": "Mississippi",
+     "project": "Mississippi",
+     "reachId": "r0-11",
+     "lengthKm": 21,
+     "q": 5983.1,
+     "pct": 108,
+     "medianQ": 5532.5,
+     "peakQ": 11141.9,
+     "peakDate": "2026-10-07",
+     "lowQ": 3403.1,
+     "lowDate": "2026-09-11",
+     "readAt": "model"
+    }
+   }
+  ]
+ },
  "sea-ice": {
   "kind": "tiles",
   "recorded": "2026-10-17",
@@ -12107,6 +12635,234 @@
      "designated": 1984,
      "t": "1984-01-01T00:00:00.000Z",
      "state": "WY"
+    }
+   }
+  ]
+ },
+ "wind-flow": {
+  "kind": "geojson",
+  "recorded": "2026-10-17",
+  "bbox": [
+   -120.5,
+   37,
+   -118.5,
+   38.5
+  ],
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.5,
+      37
+     ]
+    },
+    "properties": {
+     "name": "37.00°N 120.50°W",
+     "node": 0,
+     "east": -1.18,
+     "north": -0.21,
+     "speed": 1.2,
+     "tempC": 10.4
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.3824,
+      37
+     ]
+    },
+    "properties": {
+     "name": "37.00°N 120.38°W",
+     "node": 1,
+     "east": -1.29,
+     "north": -0.63,
+     "speed": 1.43,
+     "tempC": 10.9
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.2647,
+      37
+     ]
+    },
+    "properties": {
+     "name": "37.00°N 120.26°W",
+     "node": 2,
+     "east": -1.38,
+     "north": -0.24,
+     "speed": 1.4,
+     "tempC": 11
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.1471,
+      37
+     ]
+    },
+    "properties": {
+     "name": "37.00°N 120.15°W",
+     "node": 3,
+     "east": -0.58,
+     "north": -0.15,
+     "speed": 0.6,
+     "tempC": 11.3
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.0294,
+      37
+     ]
+    },
+    "properties": {
+     "name": "37.00°N 120.03°W",
+     "node": 4,
+     "east": -0.99,
+     "north": 0.67,
+     "speed": 1.2,
+     "tempC": 13.5
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -119.9118,
+      37
+     ]
+    },
+    "properties": {
+     "name": "37.00°N 119.91°W",
+     "node": 5,
+     "east": -1.38,
+     "north": 0.17,
+     "speed": 1.39,
+     "tempC": 15.7
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -119.7941,
+      37
+     ]
+    },
+    "properties": {
+     "name": "37.00°N 119.79°W",
+     "node": 6,
+     "east": -1.55,
+     "north": 0.86,
+     "speed": 1.77,
+     "tempC": 17.5
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -119.6765,
+      37
+     ]
+    },
+    "properties": {
+     "name": "37.00°N 119.68°W",
+     "node": 7,
+     "east": -2.88,
+     "north": -1.66,
+     "speed": 3.32,
+     "tempC": 21.1
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -119.5588,
+      37
+     ]
+    },
+    "properties": {
+     "name": "37.00°N 119.56°W",
+     "node": 8,
+     "east": -1.87,
+     "north": -3.83,
+     "speed": 4.26,
+     "tempC": 19.5
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -119.4412,
+      37
+     ]
+    },
+    "properties": {
+     "name": "37.00°N 119.44°W",
+     "node": 9,
+     "east": -1.65,
+     "north": -3.88,
+     "speed": 4.22,
+     "tempC": 19.3
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -119.3235,
+      37
+     ]
+    },
+    "properties": {
+     "name": "37.00°N 119.32°W",
+     "node": 10,
+     "east": -3.28,
+     "north": -1.74,
+     "speed": 3.71,
+     "tempC": 21.3
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -119.2059,
+      37
+     ]
+    },
+    "properties": {
+     "name": "37.00°N 119.21°W",
+     "node": 11,
+     "east": -3.23,
+     "north": -1.57,
+     "speed": 3.59,
+     "tempC": 18.1
     }
    }
   ]

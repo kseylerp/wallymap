@@ -26,6 +26,7 @@ import {
   collectPlaceholder,
   findPickPoint,
   H3_EDGE_M,
+  isOceanDemTile404,
   labelProblems,
   layoutProblems,
   lineVisibilityProblem,
@@ -235,12 +236,19 @@ async function checkOne(browser: Browser, item: ScreenItem, size: Size): Promise
   const pageErrors = new Set<string>();
   const consoleErrors = new Set<string>();
   page.on("pageerror", (e) => pageErrors.add(e.message.split("\n")[0].slice(0, 200)));
+  // Mapbox has no terrain DEM tile over open ocean and answers 404 by design (isOceanDemTile404); the browser still logs
+  // "Failed to load resource" for each, so those lines (the console names the tile in its location) are left out.
   page.on("console", (m) => {
-    if (m.type() === "error") consoleErrors.add(m.text().split("\n")[0].slice(0, 200));
+    if (m.type() !== "error") return;
+    const text = m.text();
+    if (/status of 404/.test(text) && isOceanDemTile404(m.location().url ?? "", 404)) return;
+    consoleErrors.add(text.split("\n")[0].slice(0, 200));
   });
   // A failed request's console line has no URL; this names it.
   page.on("response", (r) => {
-    if (r.status() >= 400) consoleErrors.add(`HTTP ${r.status()} from ${r.url().replace(/access_token=[^&]+/, "access_token=…").slice(0, 120)}`);
+    if (r.status() >= 400 && !isOceanDemTile404(r.url(), r.status())) {
+      consoleErrors.add(`HTTP ${r.status()} from ${r.url().replace(/access_token=[^&]+/, "access_token=…").slice(0, 120)}`);
+    }
   });
   const shot = `${item.slug}-${size.name}.png`;
   const lineShots: string[] = [];

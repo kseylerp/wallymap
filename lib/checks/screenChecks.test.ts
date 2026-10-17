@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isOceanDemTile404,
   labelProblems,
   layoutProblems,
   lineVisibilityProblem,
@@ -105,5 +106,15 @@ describe("line visibility", () => {
     // The Tahoe reading at 331355b: most samples on sage over green forest, a few in clearings.
     expect(lineVisibilityProblem("OpenStreetMap trails", "Topo", [15, 22, 23, 26, 32, 43, 52, 26, 22, 15])).not.toBeNull();
     expect(lineVisibilityProblem("OpenStreetMap trails", "Topo", [])).toBeNull();
+  });
+});
+
+describe("isOceanDemTile404", () => {
+  it("leaves out only 404s from Mapbox's terrain DEM tiles", () => {
+    expect(isOceanDemTile404("https://api.mapbox.com/v4/mapbox.mapbox-terrain-dem-v1/6/19/25@2x.pngraw?access_token=x", 404)).toBe(true);
+    expect(isOceanDemTile404("https://api.mapbox.com/raster/v1/mapbox.mapbox-terrain-dem-v1/7/39/50.png?access_token=x", 404)).toBe(true);
+    expect(isOceanDemTile404("https://api.mapbox.com/v4/mapbox.mapbox-terrain-dem-v1/6/19/25@2x.pngraw", 500)).toBe(false);
+    expect(isOceanDemTile404("https://api.mapbox.com/v4/mapbox.satellite/6/19/25@2x.jpg90", 404)).toBe(false);
+    expect(isOceanDemTile404("http://localhost:5600/api/layer/climbing", 404)).toBe(false);
   });
 });

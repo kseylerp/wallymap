@@ -505,3 +505,12 @@ export function collectPointSamples({ layerId, max }: { layerId: string; max: nu
   if (points.length <= max) return points;
   return Array.from({ length: max }, (_, i) => points[Math.floor((i * points.length) / max)]);
 }
+
+/**
+ * True for a 404 from Mapbox's terrain DEM tiles (mapbox-terrain-dem-v1): Mapbox serves no tile over open ocean and
+ * answers 404 by design (checked 2026-10-17: 6/19/25 and 7/39/50 off New England are 404, land tiles at the same zooms
+ * 200, the tileset's maxzoom is 14), and the map skips those tiles. Only these are left out of the zero-errors check.
+ */
+export function isOceanDemTile404(url: string, status: number): boolean {
+  return status === 404 && /^https:\/\/api\.mapbox\.com\/(?:v4|raster\/v1)\/mapbox\.mapbox-terrain-dem-v1\/\d+\/\d+\/\d+/.test(url);
+}

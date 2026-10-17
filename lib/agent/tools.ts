@@ -3,10 +3,11 @@ import { z } from "zod";
 import { getLayer, listLayers } from "@/layers/registry";
 import { BBoxSchema, bboxAreaKm2, hardMaxAreaKm2, type BBox, type Coverage, type Layer, type LayerError } from "@/layers/types";
 import { runLayer } from "@/lib/layers/run";
-import { isFullLayerResult, summarizeLayerResult, type SummaryStyle } from "@/lib/layers/summarize";
+import { highestOf, isFullLayerResult, summarizeLayerResult, type SummaryStyle } from "@/lib/layers/summarize";
 import { VIEW_KINDS, type Basemap, type RenderMode, type TimeMode } from "@/lib/render/state";
 import { normalizeRenderInput } from "./renderInput";
 import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
+import { checkNote } from "./noteCheck";
 import { createTurn, inputKeyOf, isWideQuery, placeKey, type Turn } from "./turn";
 import { repairToolName } from "./toolNames";
 import { gistFor } from "./vocabulary";
@@ -329,7 +330,9 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: T
       const view = fromView(bbox);
       const body = (await runLayer(layer.id, { bbox, zoom, input, fromView: view })).body;
       const ok = !("error" in body);
-      turn.queries.push({ layerId: layer.id, bbox, inputKey: inputKeyOf(input), ok, drawable: drawable(body), wide: ok && isWideQuery(layer, bbox) });
+      const highest = "kind" in body && body.kind === "geojson" ? highestOf(body.data.features, { ...layer.style, attributes: layer.attributes }) : undefined;
+      const top = highest?.top[0] && { ...highest.top[0], by: highest.by, ...(highest.unit !== undefined && { unit: highest.unit }) };
+      turn.queries.push({ layerId: layer.id, bbox, inputKey: inputKeyOf(input), ok, drawable: drawable(body), wide: ok && isWideQuery(layer, bbox), ...(top && { top }) });
       if (ok && layer.id === "physical-regions") turn.regionQueried = true;
       // The user is looking at a view too wide for this layer: name the layers that can still answer at this scale.
       if (view && "error" in body && body.hint === "zoom_in") {
@@ -483,6 +486,7 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
         const layerId = input.layerId.replace(/<\|[\s\S]*$/, "").trim();
         const out = normalizeRenderInput({ ...input, layerId }, getLayer(layerId), turn.question);
         turn.drawn.add(layerId);
+        if (typeof out.view === "string") turn.views.set(layerId, out.view);
         return out;
       },
     }),
@@ -556,9 +560,10 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
       toModelOutput: ({ output }) => ({ type: "json", value: routeOutputForModel(output) as JSONValue }),
     }),
     note: tool({
-      description: "Show a short markdown note beside the map.",
+      description: "Show a short markdown note beside the map: the answer, at most 120 words.",
       inputSchema: z.object({ markdown: z.string() }),
-      execute: async (input) => input,
+      // A note too long, or one that leaves out the top item a "which is highest" question asks for, comes back once to be rewritten.
+      execute: async (input) => checkNote(input.markdown, turn) ?? input,
     }),
   };
 

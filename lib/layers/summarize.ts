@@ -39,12 +39,23 @@ export type DateSpan = {
   scrubber: string;
 };
 
+/** The named features highest by the primary measure, highest first. */
+export type Highest = { by: string; unit?: string; top: { name: string; value: number }[] };
+
+/** Most features listed in `highest`. */
+export const HIGHEST_SIZE = 3;
+
 /** What the model sees for a geojson result; the full data goes to the map only. */
 export type GeojsonSummary = {
   kind: "geojson";
   featureCount: number;
   geometryTypes: Record<string, number>;
   bbox: BBox | null;
+  /**
+   * The three named features highest by the layer's primary measure (its sized measure, else v), so the note can name
+   * the top one when the question asks which ranks highest.
+   */
+  highest?: Highest;
   /** Over every feature with a numeric v. */
   stats?: ValueStats;
   /** Lines only: the length of every line together, in km. */
@@ -335,6 +346,31 @@ function statsOf(
   };
 }
 
+/**
+ * The HIGHEST_SIZE named features highest by the primary measure (the measure attribute that sizes features, else the
+ * first measure, else v), or undefined when no named feature carries a number for it.
+ */
+export function highestOf(features: { properties: GeoJsonProperties }[], style: SummaryStyle): Highest | undefined {
+  const measures = (style.attributes ?? []).filter((a) => a.type === "measure");
+  const measure = measures.find((a) => a.encode === "size") ?? measures[0];
+  const key = measure?.key ?? "v";
+  const unit = measure?.unit ?? style.unit;
+  const rows = features.flatMap((f) => {
+    const p = (f.properties ?? {}) as Props;
+    const value = num(p[key]);
+    const name = nameOf(p);
+    return value === undefined || name === undefined || /^unnamed\b/i.test(name) ? [] : [{ name, value }];
+  });
+  if (rows.length === 0) return undefined;
+  const seen = new Set<string>();
+  const top = rows
+    .sort((a, b) => b.value - a.value)
+    .filter((r) => (seen.has(r.name) ? false : (seen.add(r.name), true)))
+    .slice(0, HIGHEST_SIZE)
+    .map((r) => ({ name: r.name.length > TOP_NAME_MAX_CHARS ? `${r.name.slice(0, TOP_NAME_MAX_CHARS - 1)}…` : r.name, value: round(r.value) }));
+  return { by: measure?.label ?? "value", ...(unit !== undefined && { unit }), top };
+}
+
 /** The span of the features' dates, or undefined when none carries one. */
 function datesOf(features: { properties: GeoJsonProperties }[], timeField: string): DateSpan | undefined {
   const times = features.flatMap((f) => {
@@ -478,9 +514,11 @@ export function summarizeLayerResult(
   const areaUnit = style.unit !== undefined && AREA_UNITS.has(style.unit) ? style.unit : undefined;
   const attributes = attributeSummaries(style, features);
   const help = helpLines(fieldHelp, style);
+  const highest = highestOf(features, style);
   return {
     kind: "geojson",
     featureCount: features.length,
+    ...(highest !== undefined && { highest }),
     geometryTypes,
     bbox: west <= east ? [west, south, east, north] : null,
     ...(stats !== undefined && { stats }),

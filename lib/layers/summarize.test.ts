@@ -360,3 +360,19 @@ describe("summarizeLayerResult: attributes and help for the model (spec ยง12b, ย
     expect(out.help?.v).toBe("Singletrack Scale. Scale: 0 (easiest) to 6 (hardest). Source: OSM wiki.");
   });
 });
+
+describe("summarizeLayerResult highest", () => {
+  it("lists the three named features highest by the primary measure, highest first, skipping unnamed ones", () => {
+    const point = (name: string, mw: number) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [0, 0] }, properties: { name, mw, v: 1 } });
+    const summary = summarizeLayerResult(
+      {
+        kind: "geojson",
+        data: { type: "FeatureCollection", features: [point("Small", 5), point("Unnamed plant", 900), point("Horse Hollow", 736), point("Roscoe", 782), point("Mid", 300)] },
+        citation: { source: "t", url: "https://example.com", retrieved: "2026-10-16" },
+      },
+      "power-plants",
+      { attributes: [{ key: "mw", type: "measure", label: "Capacity", unit: "MW", encode: "size" }] },
+    );
+    expect(summary).toMatchObject({ highest: { by: "Capacity", unit: "MW", top: [{ name: "Roscoe", value: 782 }, { name: "Horse Hollow", value: 736 }, { name: "Mid", value: 300 }] } });
+  });
+});

@@ -112,9 +112,9 @@ function featureNames(output: unknown): string[] {
   return features.flatMap((f) => (typeof f.properties?.name === "string" ? [f.properties.name] : []));
 }
 
-/** Lower case, straight apostrophes, single spaces: how a name and the note are compared. */
+/** Lower case, straight apostrophes and hyphens, single spaces: how a name and the note are compared ("NA‑0420" with a non-breaking hyphen is NA-0420). */
 function comparable(text: string): string {
-  return text.toLowerCase().replace(/[\u2018\u2019`]/g, "'").replace(/\s+/g, " ");
+  return text.toLowerCase().replace(/[\u2018\u2019`]/g, "'").replace(/[\u2010-\u2015\u2212]/g, "-").replace(/[\s\u00a0\u202f]+/g, " ");
 }
 
 type RuleResult = { ok: boolean; [detail: string]: unknown };

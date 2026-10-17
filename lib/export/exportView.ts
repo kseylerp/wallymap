@@ -205,7 +205,8 @@ export async function zipBundle(bundle: ExportBundle, now: Date = new Date()): P
   return new Blob([zipStored(entries, now) as BlobPart], { type: "application/zip" });
 }
 
-function clickDownload(name: string, blob: Blob): void {
+/** Starts the browser's save for one blob; call it only from a click the user confirmed. */
+export function clickDownload(name: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

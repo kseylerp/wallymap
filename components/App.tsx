@@ -282,7 +282,7 @@ export function App() {
           shownLayers={view.layers}
           compareSlot={<CompareControl state={state} dispatch={dispatch} />}
           scenarioSlot={<ScenarioScrubbers state={state} dispatch={dispatch} />}
-          exportSlot={<ExportControl mapState={state} catalog={catalog} />}
+          exportSlot={<ExportControl mapState={state} catalog={catalog} dispatch={dispatch} />}
           scenario={state.scenario}
           compare={state.compare}
           zoom={state.viewport.zoom}

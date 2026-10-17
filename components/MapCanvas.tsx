@@ -20,6 +20,7 @@ import { visibleState } from "@/lib/render/view";
 import { animateSeriesLines, resetSeriesLines } from "@/lib/render/seriesLines";
 import { fieldAt, flowFrame, flowLayersOf, ParticleSystem, type FieldSnapshot, type ParticleView } from "@/lib/render/particles";
 import { metersPerPixel } from "@/lib/render/deck";
+import { captureStore } from "@/lib/export/capture";
 import { playheadStore } from "@/lib/render/playhead";
 import {
   bearingAt,
@@ -483,9 +484,12 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     });
     const initialSets = safeDeckLayers(initial).main;
     deckLayersRef.current = initialSets;
+    // The playback export copies deck's canvas right after each frame (lib/export/capture.ts).
+    const deckRendered = new Set<() => void>();
     const overlay = new MapboxOverlay({
       interleaved: false,
       layers: initialSets,
+      onAfterRender: () => deckRendered.forEach((listener) => listener()),
       layerFilter: deckLayerFilter(() => pickPasses(deckLayersRef.current as unknown as Parameters<typeof pickPasses>[0]).draped),
     });
     map.addControl(overlay);
@@ -559,12 +563,26 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
 
     mapRef.current = map;
     overlayRef.current = overlay;
+    captureStore.set({
+      mapCanvas: () => map.getCanvas(),
+      deckCanvas: () => overlay.getCanvas?.() ?? null,
+      onMapRender: (listener) => {
+        map.on("render", listener);
+        return () => map.off("render", listener);
+      },
+      onDeckRender: (listener) => {
+        deckRendered.add(listener);
+        return () => deckRendered.delete(listener);
+      },
+      repaint: () => map.triggerRepaint(),
+    });
     // Development only: the eval's screen checks (scripts/evalScreens.ts) project features and read the deck labels.
     if (process.env.NODE_ENV === "development") (window as unknown as { __wallyMap?: unknown }).__wallyMap = { map, overlay };
     appliedBasemapRef.current = initial.basemap;
     lastCameraRef.current = initial.viewport;
 
     return () => {
+      captureStore.set(null);
       cancelAnimationFrame(hoverFrame);
       sidesRef.current = syncSideOverlays(map, sidesRef.current, { main: [], a: [], b: [] });
       map.removeControl(overlay);

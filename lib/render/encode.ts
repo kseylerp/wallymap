@@ -19,7 +19,7 @@ export const ENCODE_RAMP = "scoreLine" as const;
 /** Line width from the size channel, in pixels: the thinnest reach to the largest river. */
 export const ENCODED_LINE = { minPx: 1.25, maxPx: 9, casingPx: 2 } as const;
 /** Symbol radius from the size channel, in pixels. */
-export const ENCODED_POINT = { minPx: 3.5, maxPx: 17, strokePx: 1.25, haloPx: 1.5, fillAlpha: 0.88 } as const;
+export const ENCODED_POINT = { minPx: 3, maxPx: 13, strokePx: 1, haloPx: 1.25, fillAlpha: 0.9 } as const;
 
 /** One channel resolved against the data: the attribute it reads, its words, and the range the data spans. */
 export type Channel = {
@@ -114,11 +114,15 @@ export function resolveEncoding(layer: EncodableLayer, op: Pick<RenderOp, "encod
   return { ...(size && { size }), ...(color && { color }) };
 }
 
-/** A size channel's 0..1 share for a value: the square root of its share of the largest (from zero), else of the range. */
+/**
+ * A size channel's 0..1 share for a value: the square root of its share of the largest when the values start near zero
+ * (flow, capacity, storage: a mark's area or width grows with the value), else the square root of its place in the
+ * range (magnitude 2.5 to 5.7 would otherwise draw every quake nearly as large as the largest).
+ */
 export function sizeT(value: unknown, extent: [number, number] | null): number {
   if (typeof value !== "number" || !Number.isFinite(value) || !extent) return extent ? 0 : 0.5;
   const [lo, hi] = extent;
-  if (lo >= 0) return hi > 0 ? Math.sqrt(Math.min(1, Math.max(0, value / hi))) : 0;
+  if (lo >= 0 && lo <= hi * 0.1) return hi > 0 ? Math.sqrt(Math.min(1, Math.max(0, value / hi))) : 0;
   return Math.sqrt(Math.min(1, Math.max(0, (value - lo) / (hi - lo))));
 }
 

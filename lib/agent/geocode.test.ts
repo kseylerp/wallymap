@@ -351,7 +351,26 @@ describe("geocode", () => {
       expect(await geocode("Ruby Mountains")).toMatchObject({ center: [-115.475, 40.622], source: "mapbox" });
     });
 
-    it("never asks Search Box for a name that is not range-like", async () => {
+    it("answers a natural feature the place geocoder only knows as a street with its point of interest (Half Dome, not Half Dome Court)", async () => {
+      // Live 2026-10-17: v6 answered "Half Dome" with Half Dome Court in Boynton Beach, Florida.
+      routed(
+        [{ name: "Half Dome Court", feature_type: "street", full_address: "Half Dome Court, Boynton Beach, Florida 33473, United States", coordinates: { longitude: -80.177, latitude: 26.507 } }],
+        [poi("Half Dome", ["mountain"], -119.53326, 37.746003, "Yosemite National Park, California 95389, United States")],
+      );
+      const result = await geocode("Half Dome");
+      if ("error" in result) throw new Error("expected a match");
+      expect(result.center).toEqual([-119.53326, 37.746003]);
+      const { bboxAreaKm2 } = await import("@/layers/types");
+      expect(bboxAreaKm2(result.bbox)).toBeLessThan(150);
+    });
+
+    it("keeps a street when the asked text is an address (it has a house number)", async () => {
+      const urls = routed([{ name: "123 Main Street", feature_type: "address", coordinates: { longitude: -120, latitude: 39 } }], []);
+      expect(await geocode("123 Main Street")).toMatchObject({ name: "123 Main Street" });
+      expect(urls.some((u) => u.pathname.includes("searchbox"))).toBe(false);
+    });
+
+    it("never asks Search Box for a name that is not range-like and found a town", async () => {
       const urls = routed([{ name: "Truckee", coordinates: { longitude: -120.18, latitude: 39.33 } }], []);
       await geocode("Truckee");
       expect(urls.some((u) => u.pathname.includes("searchbox"))).toBe(false);

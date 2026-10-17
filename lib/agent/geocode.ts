@@ -25,6 +25,7 @@ const featureSchema = z.object({
   properties: z.object({
     name: z.string().optional(),
     full_address: z.string().optional(),
+    feature_type: z.string().optional(),
     bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional(),
     coordinates: z.object({ longitude: z.number(), latitude: z.number() }),
   }),
@@ -82,10 +83,16 @@ const RANGE_PLACE_TYPES = "region,district,place,locality";
  */
 const LANDFORM_HALF_SPAN_KM = 38;
 
-/** A box of LANDFORM_HALF_SPAN_KM around a point, square on the ground. */
-function landformBBox([lng, lat]: [number, number]): BBox {
-  const dLat = LANDFORM_HALF_SPAN_KM / 110.57;
-  const dLng = LANDFORM_HALF_SPAN_KM / (111.32 * Math.max(0.1, Math.cos((lat * Math.PI) / 180)));
+/**
+ * Half the side of the box put around a single named feature (a rock, a peak, a lake) found as a point of interest:
+ * about 10 km across, the feature and its surroundings.
+ */
+const FEATURE_HALF_SPAN_KM = 5;
+
+/** A box of `halfSpanKm` (LANDFORM_HALF_SPAN_KM by default) around a point, square on the ground. */
+function landformBBox([lng, lat]: [number, number], halfSpanKm: number = LANDFORM_HALF_SPAN_KM): BBox {
+  const dLat = halfSpanKm / 110.57;
+  const dLng = halfSpanKm / (111.32 * Math.max(0.1, Math.cos((lat * Math.PI) / 180)));
   return [lng - dLng, lat - dLat, lng + dLng, lat + dLat];
 }
 
@@ -94,7 +101,7 @@ function landformBBox([lng, lat]: [number, number]): BBox {
  * first, then one with no category (how Mapbox lists most ranges), never a business that only shares the name, and
  * then Mapbox's own order (which follows `proximity`). Null when none matches or the search fails.
  */
-async function landformResult(place: string, proximity: [number, number] | undefined, token: string): Promise<GeocodeResult | null> {
+async function landformResult(place: string, proximity: [number, number] | undefined, token: string, halfSpanKm: number = LANDFORM_HALF_SPAN_KM): Promise<GeocodeResult | null> {
   const name = place.split(",")[0];
   try {
     const found = await fetchCandidates(place, { proximity }, token, "poi");
@@ -106,7 +113,7 @@ async function landformResult(place: string, proximity: [number, number] | undef
       .sort((a, b) => a.rank - b.rank || a.c.order - b.c.order);
     const best = ranked[0]?.c;
     if (best === undefined) return null;
-    return { bbox: landformBBox(best.center), center: best.center, name: best.label, source: "mapbox" };
+    return { bbox: landformBBox(best.center, halfSpanKm), center: best.center, name: best.label, source: "mapbox" };
   } catch {
     return null;
   }
@@ -140,7 +147,8 @@ async function firstRegion(names: string[]): Promise<RegionMatch | null> {
  * word, such as the town of Basin, Colorado. The result's `source` says which one answered.
  * When Mapbox finds only a point or a town, a named physical region (Natural Earth) wins, and for a range-like name
  * (isRangeLike) so does a Search Box landform of that exact name, boxed to about 76 km; range-like names also never
- * resolve to streets.
+ * resolve to streets. Any other name with no house number that lands on a street or an address ("Half Dome" was Half
+ * Dome Court in Florida) is looked up as a point of interest of exactly that name first, boxed to about 10 km.
  */
 export async function geocode(
   place: string,
@@ -178,8 +186,16 @@ export async function geocode(
       return landform ?? { error: `No match for ${place}` };
     }
 
-    const { name, full_address, bbox, coordinates } = feature.data.properties;
+    const { name, full_address, bbox, coordinates, feature_type } = feature.data.properties;
     const center: [number, number] = [coordinates.longitude, coordinates.latitude];
+
+    // The place geocoder has no natural features, so "Half Dome" came back as Half Dome Court in Boynton Beach, Florida.
+    // A name with no house number that lands on a street or an address is looked up as a point of interest of exactly
+    // that name first (a natural one, or one with no category), boxed to about 10 km.
+    if ((feature_type === "street" || feature_type === "address") && !/\d/.test(place)) {
+      const poi = await landformResult(place, opts.proximity, token, rangeLike ? LANDFORM_HALF_SPAN_KM : FEATURE_HALF_SPAN_KM);
+      if (poi) return poi;
+    }
 
     // Mapbox answers "the Andes" or "Sierra Nevada" with a town or a point; a named physical region is better, and for
     // a range Natural Earth lacks ("Wind River Range"), a landform point of that name.

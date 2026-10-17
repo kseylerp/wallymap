@@ -6,6 +6,7 @@ import { buildExportBundle, clickDownload, downloadBundle, formatBytes, MAX_LOOS
 import { captureStore, Compositor, recordingPlan, VIDEO_LIMITS, webmType, type Caption } from "@/lib/export/capture";
 import { channelText, encodeColor, resolveEncoding, sizeWord } from "@/lib/render/encode";
 import { playheadStore, stepOverrideStore } from "@/lib/render/playhead";
+import { mapStateStore } from "@/lib/render/wally/playback";
 import { rgbToHex } from "@/lib/render/ramp";
 import { bucketAt } from "@/lib/render/reducer";
 import { frameAggregate, frameDate, valueAt } from "@/lib/render/series";
@@ -69,6 +70,11 @@ export function captionOf(state: MapState, playhead: number): Caption {
     }
   }).filter(Boolean))];
   return { title: titles.slice(0, 2).join(" · ") || "WallyMap", ...(date && { date }), ...(total && { total }), ...(totalLabel && { totalLabel }), legend, source: hosts.join(", ") };
+}
+
+// Development only: the story checks compose a still in the page without pressing Export (no download in automation).
+if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
+  (window as unknown as { __wallyCapture?: unknown }).__wallyCapture = { Compositor, captureStore, captionOf, visibleState, playheadStore, mapStateStore };
 }
 
 type Pending =

@@ -1,7 +1,7 @@
 import type { Feature } from "geojson";
 import type { CardFact, CardSpec, FieldHelp } from "@/layers/types";
 import { formatValue as formatNumber } from "@/lib/format";
-import { formatDate, formatValue, friendlyKey, summarizeFeature, type Row } from "@/lib/render/inspect";
+import { formatTime, formatValue, friendlyKey, isYearOnly, summarizeFeature, type Row } from "@/lib/render/inspect";
 
 /**
  * The inspect card's content for one feature (spec §12b, owner 2026-10-14): the measure under its own name ("Routes 5"),
@@ -22,7 +22,7 @@ export type CardContent = {
 };
 
 /** Keys the card never lists as a row: the title, the date chip, internals. */
-const HIDDEN = new Set(["name", "t", "signals", "popularityNote", "aggregate", "tallest", "stack"]);
+const HIDDEN = new Set(["name", "t", "tPrecision", "signals", "popularityNote", "aggregate", "tallest", "stack"]);
 
 /**
  * Unit suffixes in property keys: `maxLengthM` reads "Max length … m", `areaKm2` "Area … km²", `swellPeriodS` "Swell
@@ -88,7 +88,7 @@ export function factValue(fact: CardFact, props: Record<string, unknown>): strin
     case "m":
       return typeof raw === "number" ? `${formatNumber(fact.key, Math.round(raw), undefined, 0)} m` : String(raw);
     case "date":
-      return typeof raw === "string" ? formatDate(raw) : String(raw);
+      return typeof raw === "string" ? formatTime(raw, props) : String(raw);
     case "list": {
       const items = Array.isArray(raw) ? raw.map(String) : String(raw).split(/\s*[,;]\s*/);
       // Codes in a list read through the fact's values ("advanced" → "Advanced").
@@ -99,6 +99,7 @@ export function factValue(fact: CardFact, props: Record<string, unknown>): strin
     case "pct":
       return typeof raw === "number" ? `${Math.round(raw * 100)}%` : String(raw);
     default:
+      if (isYearOnly(raw, props)) return String(raw).trim().slice(0, 4);
       return typeof raw === "number" ? `${formatNumber(fact.key, raw, fact.unit)}${unit}` : `${formatValue(raw, undefined, fact.key)}${unit}`;
   }
 }
@@ -169,7 +170,12 @@ export function cardContent(feature: Feature, opts: { unit?: string; card?: Card
       continue;
     }
     const { label, unit: keyUnit } = humanKey(key);
-    const value = typeof raw === "number" ? `${formatNumber(key, raw)}${keyUnit ? ` ${keyUnit}` : ""}` : formatValue(raw, undefined, key);
+    const value =
+      typeof raw === "number"
+        ? `${formatNumber(key, raw)}${keyUnit ? ` ${keyUnit}` : ""}`
+        : isYearOnly(raw, props)
+          ? String(raw).trim().slice(0, 4)
+          : formatValue(raw, undefined, key);
     details.push({ key, label, value, ...withHelp(fieldHelp?.[key]) });
   }
   if (feature.id !== undefined && !("id" in props)) details.unshift({ key: "id", label: "Id", value: String(feature.id) });

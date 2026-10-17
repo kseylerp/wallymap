@@ -166,8 +166,9 @@ function HexCellBody({
     if (cell.measure.counted > 1) rows.push({ key: "median", label: `Median ${cell.measure.label.toLowerCase()}`, value: amount(cell.measure.median, cell.measure.unit) });
   }
   if (cell.span) {
-    const first = formatDate(cell.span.first);
-    const latest = formatDate(cell.span.latest);
+    const when = (iso: string) => (cell.span?.yearOnly ? iso.slice(0, 4) : formatDate(iso));
+    const first = when(cell.span.first);
+    const latest = when(cell.span.latest);
     rows.push({ key: "dates", label: "Dates", value: first === latest ? first : `${first} – ${latest}` });
   }
   return (

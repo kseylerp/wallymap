@@ -3,7 +3,7 @@ import { cellArea, cellToBoundary, cellToLatLng, getHexagonAreaAvg, getResolutio
 import type { Attribute, BBox } from "@/layers/types";
 import { attributeGroups, chipAttribute, declaredGroups, primaryMeasure, valueKeys } from "@/lib/render/attributes";
 import type { LayerFilters } from "@/lib/render/filters";
-import { featureCenter } from "@/lib/render/inspect";
+import { featureCenter, isYearOnly } from "@/lib/render/inspect";
 import type { HexBasis } from "@/lib/render/state";
 
 /**
@@ -235,7 +235,7 @@ export type HexCellSummary = {
   /** The main category's shares in this cell, largest first (four, then "Other"). */
   shares?: { label: string; parts: CellShare[] };
   measure?: { label: string; unit?: string; sum: number; median: number; counted: number };
-  span?: { first: string; latest: string };
+  span?: { first: string; latest: string; yearOnly?: boolean };
   /** The top five named features, by the measure when there is one. */
   named: CellNamed[];
   bbox: BBox;
@@ -319,7 +319,12 @@ export function summarizeCell(cell: HexCell, cells: HexCell[], basis: HexBasis, 
   const times = cell.members.map((f) => f.properties?.[ctx.timeKey]).filter((t): t is string => typeof t === "string" && !Number.isNaN(Date.parse(t)));
   if (times.length > 0) {
     times.sort((a, b) => Date.parse(a) - Date.parse(b));
-    summary.span = { first: times[0], latest: times[times.length - 1] };
+    // Dates known only to the year (a dam's completion) read as years, not "Jan 1".
+    const yearOnly = cell.members.every((f) => {
+      const t = f.properties?.[ctx.timeKey];
+      return typeof t !== "string" || isYearOnly(t, f.properties);
+    });
+    summary.span = { first: times[0], latest: times[times.length - 1], ...(yearOnly && { yearOnly: true }) };
   }
   // Members of one name are one row with their count and summed measure: a wind farm's 58 turbines are "Mesquite Star
   // (58)", not "Mesquite Star" five times.

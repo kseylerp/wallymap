@@ -2,6 +2,7 @@ import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import type { BBox, Layer, Surface } from "@/layers/types";
 import { rankedTop } from "@/lib/render/attributes";
 import { cardContent, type CardRow } from "@/lib/render/card";
+import { summarizeFeature } from "@/lib/render/inspect";
 import { searchable } from "@/lib/render/filters";
 import { ROUTE_ERROR_ID } from "@/lib/render/reducer";
 import type { MapState } from "@/lib/render/state";
@@ -21,7 +22,8 @@ import { isAcronymName, isAllCaps } from "@/layers/_shared/names";
  * - duplicates: no place listed twice (an OSM node and a cliff line of the same crag), on the map or in Rank by's top 10,
  *   and no two top-10 entries with one measure under one name stem (Granby Dam and Granby Dikes 1 to 4, one reservoir).
  * - card: the inspect card's rows read as words (no raw keys, "Value", bare URLs, unexplained scores), and no card or
- *   Rank by title is in capitals unless it is an acronym ("PIO XI" is Pio XI).
+ *   Rank by title is in capitals unless it is an acronym ("PIO XI" is Pio XI), and no date known only to the year reads
+ *   "Jan 1, 1963".
  * - layerIds: every layer on the map is a registered layer (no garbled tool names).
  * - place: for a question about a place, the features are in or near it, and every entry of Rank by's top 10 is.
  */
@@ -607,13 +609,43 @@ export function titleProblems(name: string | null): string[] {
   return [`the title "${name}" is in capitals`];
 }
 
+/** January 1 written as a day ("Jan 1, 1963"). */
+const JAN_1_TEXT = /\bJan 1, (\d{4})\b/;
+
+/**
+ * What is wrong with a card's dates: "Jan 1, 1963" (the chip or a row) for a date known only to the year, which the
+ * feature gives elsewhere (a dam's yearCompleted 1963) or which every dated feature of the layer shares (`yearsOnly`).
+ */
+export function dateProblems(feature: Feature, layer: Pick<LayerInfo, "card" | "fieldHelp" | "style">, yearsOnly: boolean): string[] {
+  const props = (feature.properties ?? {}) as Record<string, unknown>;
+  const chip = summarizeFeature(feature, layer.style.unit).date;
+  const texts = [...(chip ? [chip] : []), ...cardRows(feature, layer as LayerInfo).map(({ row }) => row.value)];
+  const problems: string[] = [];
+  for (const text of texts) {
+    const m = JAN_1_TEXT.exec(text);
+    if (!m) continue;
+    const named = Object.entries(props).some(([k, v]) => k !== "t" && (v === Number(m[1]) || v === m[1]));
+    if (named || yearsOnly) problems.push(`"${m[0]}" stands for a year only and should read "${m[1]}"`);
+  }
+  return problems;
+}
+
+/** True when every dated feature is dated January 1 at midnight: dates known only to the year. */
+function allJanFirst(features: Feature[]): boolean {
+  const dated = features.map((f) => f.properties?.t).filter((t): t is string => typeof t === "string");
+  return dated.length > 0 && dated.every((t) => /^\d{4}-01-01(?:[T ]00:00(?::00(?:\.0+)?)?Z?)?$/.test(t));
+}
+
 export function checkCards(layers: Drawn[]): CheckResult {
   const failures: string[] = [];
   for (const layer of layers) {
     if (!layer.info) continue;
     const seen = new Map<string, Feature>();
+    const yearsOnly = allJanFirst(layer.data.features);
     for (const f of layer.data.features.slice(0, CARD_FEATURES)) {
-      for (const p of [...titleProblems(nameOf(f)), ...cardRowProblems(cardRows(f, layer.info), layer.info)]) if (!seen.has(p)) seen.set(p, f);
+      for (const p of [...titleProblems(nameOf(f)), ...cardRowProblems(cardRows(f, layer.info), layer.info), ...dateProblems(f, layer.info, yearsOnly)]) {
+        if (!seen.has(p)) seen.set(p, f);
+      }
     }
     // The Rank by list's names are titles too (each opens its card).
     const { top } = rankedTop(layer.info, layer.op, layer.loaded, layer.data, RANKED_TOP_N);

@@ -408,3 +408,14 @@ describe("timePresets (spec §12c: presets beside the scrubber)", () => {
     expect(timePresets(timeIndex(dated(["2026-10-15T01:00:00Z", "2026-10-15T02:00:00Z"]), { now })!, now)).toEqual([]);
   });
 });
+
+describe("dates known only to the year", () => {
+  it("step by year even over a few years (every date January 1 at midnight)", () => {
+    const years = fc("2014-01-01T00:00:00.000Z", "2016-01-01T00:00:00.000Z", "2019-01-01T00:00:00.000Z");
+    const index = timeIndex({ w: layer("w", years) });
+    expect(index?.bucket).toBe("year");
+    expect(windowLabel([index!.min, index!.max], index!.bucket)).toBe("2014 – 2019");
+    // One real date among them keeps the finer steps.
+    expect(timeIndex({ w: layer("w", fc("2014-01-01T00:00:00.000Z", "2016-06-14T00:00:00.000Z")) })?.bucket).toBe("month");
+  });
+});

@@ -314,6 +314,16 @@ describe("card text", () => {
     expect(checkCards(drawn(mapWith({ id: "glaciers", features: fixed, mode: "polygons" }))).ok).toBe(true);
   });
 
+  it("fails \"Jan 1, 1963\" on a card for a date known only to the year, passes the year", () => {
+    const jan1 = (name: string, year: number) => point(-111 - year / 1000, 37, { name, storageAf: 1000, v: 1000, t: `${year}-01-01T00:00:00.000Z` });
+    // No year property: the card cannot tell, but every dam is dated January 1, so the layer's dates are years.
+    const bare = checkCards(drawn(mapWith({ id: "dams", features: [jan1("A Dam", 1963), jan1("B Dam", 1950)] })));
+    expect(bare.ok).toBe(false);
+    expect(bare.failures[0]).toMatch(/"Jan 1, 1963" stands for a year only and should read "1963"/);
+    const named = [1963, 1950].map((y, i) => ({ ...jan1(`Dam ${i}`, y), properties: { ...jan1(`Dam ${i}`, y).properties, yearCompleted: y } }));
+    expect(checkCards(drawn(mapWith({ id: "dams", features: named }))).ok).toBe(true);
+  });
+
   it("passes a score with help, years and plain labels", () => {
     expect(cardRowProblems([row("v", "Hazard score", "1,200", "measure", { text: "Navajo AUM score" }), row("year", "Year", "2021"), row("kind", "Kind", "crag")], {})).toEqual([]);
   });

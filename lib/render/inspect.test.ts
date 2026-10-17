@@ -11,7 +11,7 @@ import {
   pickToSelection,
   summarizeFeature,
 } from "@/lib/render/inspect";
-import { deckLayerFilter, pickPasses as pickPassesOf } from "@/lib/render/inspect";
+import { deckLayerFilter, formatTime, isYearOnly, pickPasses as pickPassesOf } from "@/lib/render/inspect";
 
 const trail: Feature = {
   type: "Feature",
@@ -202,5 +202,17 @@ describe("a sighting's title", () => {
     const sighting = { type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [-115.57, 51.18] }, properties: { species: "American Red Squirrel", scientificName: "Tamiasciurus hudsonicus" } };
     expect(summarizeFeature(sighting).name).toBe("American Red Squirrel");
     expect(summarizeFeature({ ...sighting, properties: { ...sighting.properties, name: "Bow River sighting" } }).name).toBe("Bow River sighting");
+  });
+});
+
+describe("a date known only to the year", () => {
+  it("reads \"1963\", not \"Jan 1, 1963\", when the feature gives that year (a dam's completion)", () => {
+    const dam = { type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [-111.48, 36.94] }, properties: { name: "Glen Canyon Dam", yearCompleted: 1963, t: "1963-01-01T00:00:00.000Z" } };
+    expect(summarizeFeature(dam).date).toBe("1963");
+    expect(isYearOnly("1963-01-01", { year: 1963 })).toBe(true);
+    expect(isYearOnly("1963-01-01T00:00:00Z", { tPrecision: "year" })).toBe(true);
+    // A real January 1 event keeps its day.
+    expect(summarizeFeature({ ...dam, properties: { name: "Quake", t: "2024-01-01T00:00:00.000Z" } }).date).toBe("Jan 1, 2024");
+    expect(formatTime("2016-03-12", { year: 2016 })).toBe("Mar 12, 2016");
   });
 });

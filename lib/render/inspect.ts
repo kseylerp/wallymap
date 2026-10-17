@@ -250,6 +250,28 @@ export function friendlyKey(key: string, signal = false): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+/** January 1 at midnight (or a bare date of January 1): how sources write a date they know only to the year. */
+const JAN_FIRST = /^(\d{4})-01-01(?:[T ]00:00(?::00(?:\.0+)?)?(?:Z|[+-]00:?00)?)?$/;
+
+/**
+ * True when a date stands for a year only: January 1 at midnight and the feature gives that same year elsewhere (a dam's
+ * yearCompleted 1963 beside t "1963-01-01T00:00:00.000Z", a fire's year, a wilderness's designated), or the feature says
+ * so (`tPrecision: "year"`). A real January 1 event keeps its day.
+ */
+export function isYearOnly(value: unknown, props: Record<string, unknown> | null | undefined): boolean {
+  if (typeof value !== "string") return false;
+  const m = JAN_FIRST.exec(value.trim());
+  if (!m || !props) return false;
+  if (props.tPrecision === "year") return true;
+  const year = Number(m[1]);
+  return Object.entries(props).some(([k, v]) => k !== "t" && k !== "v" && (v === year || v === m[1]));
+}
+
+/** A feature's date as a reader sees it: "1963" for a year-only date (isYearOnly), else "Mar 12, 2016". */
+export function formatTime(value: string, props: Record<string, unknown> | null | undefined): string {
+  return isYearOnly(value, props) ? value.trim().slice(0, 4) : formatDate(value);
+}
+
 /** "2021-08-14" → "Aug 14, 2021" (read as a calendar date, so no time-zone shift). */
 export function formatDate(value: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
@@ -315,7 +337,7 @@ export function summarizeFeature(feature: Feature, unit?: string, maxRows = 8): 
   // A sighting has no name of its own: its species is what it is called ("Feature" was the card's title for every sighting).
   const named = typeof props.name === "string" && props.name.trim() ? props.name : typeof props.species === "string" ? props.species : "";
   const name = named.trim() ? named.trim() : null;
-  const date = typeof props.t === "string" ? formatDate(props.t) : typeof props.t === "number" ? String(props.t) : null;
+  const date = typeof props.t === "string" ? formatTime(props.t, props) : typeof props.t === "number" ? String(props.t) : null;
   let value: Row | null = null;
   // Layers often copy a named property into `v` (fire perimeters: v = acres); the stat then takes that name.
   const twin =
@@ -335,7 +357,7 @@ export function summarizeFeature(feature: Feature, unit?: string, maxRows = 8): 
   const details: Row[] = [];
   for (const [key, raw] of Object.entries(props)) {
     if (SPECIAL_KEYS.has(key) || key === twin || raw === null || raw === undefined || raw === "") continue;
-    const row = { key, label: friendlyKey(key), value: formatValue(raw, undefined, key) };
+    const row = { key, label: friendlyKey(key), value: isYearOnly(raw, props) ? String(raw).trim().slice(0, 4) : formatValue(raw, undefined, key) };
     if (DETAIL_KEY.test(key) || rows.length >= maxRows) details.push(row);
     else rows.push(row);
   }

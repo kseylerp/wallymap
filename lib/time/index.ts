@@ -58,6 +58,9 @@ function nextStart(ms: number, bucket: Bucket): number {
   return ms + DAY_MS;
 }
 
+/** January 1 at midnight UTC, how a year-only date is written. */
+const JAN_FIRST = /^\d{4}-01-01(?:[T ]00:00(?::00(?:\.0+)?)?(?:Z|[+-]00:?00)?)?$/;
+
 function parseT(v: unknown): number | null {
   if (typeof v !== "string") return null;
   const ms = Date.parse(v);
@@ -74,6 +77,8 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: TimeIndexO
   const layerIds: string[] = [];
   const tileSets: { cadence: TileTime["cadence"]; starts: number[] }[] = [];
   const now = opts?.now ?? Date.now();
+  // Every date is January 1 at midnight: dates known only to the year (dams by year completed), stepped by year.
+  let yearsOnly = true;
   for (const layer of Object.values(layers)) {
     if (layer.result.kind === "tiles") {
       const time = layer.result.data.time;
@@ -86,9 +91,11 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: TimeIndexO
     }
     let any = false;
     for (const f of layer.result.data.features) {
-      const ms = parseT((f.properties as Record<string, unknown> | null)?.t);
+      const t = (f.properties as Record<string, unknown> | null)?.t;
+      const ms = parseT(t);
       if (ms === null) continue;
       stamps.push(ms);
+      if (!JAN_FIRST.test(String(t))) yearsOnly = false;
       any = true;
     }
     if (any) layerIds.push(layer.id);
@@ -107,7 +114,7 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: TimeIndexO
     min = Math.min(min, starts[0]);
     max = Math.max(max, starts[starts.length - 1]);
   }
-  const bucket = chooseBucket(max - min, opts?.maxBuckets ?? 60);
+  const bucket = yearsOnly && tileSets.length === 0 ? "year" : chooseBucket(max - min, opts?.maxBuckets ?? 60);
 
   const starts: number[] = [];
   for (let s = floorTo(min, bucket); s <= max; s = nextStart(s, bucket)) starts.push(s);

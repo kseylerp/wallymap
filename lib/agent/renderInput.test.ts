@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import "@/layers";
 import { getLayer } from "@/layers/registry";
-import { measureAsked, normalizeFilters, normalizeRenderInput } from "./renderInput";
+import { measureAsked, normalizeFilters, normalizeRenderInput, viewAsked } from "./renderInput";
 
 const attrs = (id: string) => getLayer(id)?.attributes ?? [];
 const include = (id: string, key: string, values: string[]) =>
@@ -85,6 +85,33 @@ describe("density by a measure, from the question's words", () => {
   it("leaves the render alone when the question does not ask it, or the layer has no such measure", () => {
     const input = { layerId: "power-plants", view: "ranked" };
     expect(normalizeRenderInput(input, getLayer("power-plants"), "Which power plants are largest in Texas?")).toEqual(input);
-    expect(normalizeRenderInput({ layerId: "uranium" }, getLayer("uranium"), "Where are most of the mines by capacity?")).toEqual({ layerId: "uranium" });
+    // Uranium has no capacity: no hex sum (the words still ask where most are, so the view is density).
+    expect(normalizeRenderInput({ layerId: "uranium" }, getLayer("uranium"), "Where are most of the mines by capacity?")).toEqual({ layerId: "uranium", view: "density" });
+  });
+});
+
+describe("the view a question asks for", () => {
+  it("reads clear cues and leaves change questions and plain ones alone", () => {
+    expect(viewAsked("Busiest ports on the Gulf Coast")).toBe("ranked");
+    expect(viewAsked("Which counties in Florida had the most disaster declarations?")).toBe("ranked");
+    expect(viewAsked("Where are most of the old mines in Nevada?")).toBe("density");
+    expect(viewAsked("Where are the most groundwater wells around Phoenix?")).toBe("density");
+    expect(viewAsked("Heatmap of brown bear sightings in Alaska")).toBe("density");
+    expect(viewAsked("Where did beetles kill trees in Colorado over the last ten years?")).toBe("timeline");
+    expect(viewAsked("Tell me about Mount Kilimanjaro")).toBe("detail");
+    expect(viewAsked("How much less sea ice is in the Arctic this September than in 2012?")).toBeNull();
+    expect(viewAsked("Has Grand Staircase-Escalante gotten smaller since 2021?")).toBeNull();
+    expect(viewAsked("Which large fires burned in Oregon in 2020?")).toBeNull();
+  });
+
+  it("fills in the view the model left out, and puts density or timeline in place of ranked, on a layer that can draw it", () => {
+    const ports = getLayer("ports");
+    expect(normalizeRenderInput({ layerId: "ports" }, ports, "Busiest ports on the Gulf Coast").view).toBe("ranked");
+    const trees = getLayer("tree-mortality");
+    expect(normalizeRenderInput({ layerId: "tree-mortality", view: "ranked" }, trees, "Where did beetles kill trees in Colorado over the last ten years?").view).toBe("timeline");
+    const mines = getLayer("mines");
+    expect(normalizeRenderInput({ layerId: "mines", view: "ranked" }, mines, "Where are most of the old mines in Nevada?").view).toBe("density");
+    // A view the model chose for another reason stays.
+    expect(normalizeRenderInput({ layerId: "ports", view: "detail" }, ports, "Busiest ports on the Gulf Coast").view).toBe("detail");
   });
 });

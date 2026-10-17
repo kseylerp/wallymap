@@ -1,4 +1,5 @@
 import type { Attribute, Layer } from "@/layers/types";
+import type { ViewKind } from "@/lib/render/state";
 import { declaredGroups } from "@/lib/render/attributes";
 
 /**
@@ -6,7 +7,8 @@ import { declaredGroups } from "@/lib/render/attributes";
  * words the user sees (chip labels such as "Hard" or "Expert", band names such as "Elite", codes such as "D3", "T4",
  * "S3" or "Class IV") become the raw values the data holds, and a question that asks where most of a measure is
  * ("most wind farms by capacity", "where is most of the capacity") draws the density view with hex cells summing that
- * measure. Unknown keys and values pass through untouched.
+ * measure. A question whose words call for a standard view ("busiest", "where are the most", "over the last ten years")
+ * gets it when the model named none. Unknown keys and values pass through untouched.
  */
 
 type Obj = Record<string, unknown>;
@@ -112,6 +114,33 @@ function measureNamed(attributes: Attribute[], words: string): Attribute | undef
     });
 }
 
+/** View cues in a question's words, strongest first: only clear ones, so anything else is left to the model and the map. */
+const VIEW_CUES: [Exclude<ViewKind, "change" | "scenario" | "route">, RegExp][] = [
+  ["density", /\b(?:heat ?map|hot ?spots?|where (?:are|is|do) (?:the )?most|where (?:are|is) most of)\b/],
+  ["timeline", /\b(?:year by year|over (?:the )?(?:last|past) (?:\d+|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|few|several) (?:years|decades)|over time|each year|by (?:the )?(?:year|decade)s?)\b/],
+  ["ranked", /\b(?:busiest|biggest|largest|highest|deepest|tallest|longest|top \d+|which\b[^?]*\b(?:the )?most)\b/],
+  ["detail", /^(?:tell me about|how deep is|how tall is|how high is|what rock is)\b/],
+];
+
+/** A question about change ("since 2021", "before and after", "than in 2012"): its view is the model's compare. */
+const CHANGE_CUE = /\b(?:before and after|changed?|shrunk|shrink|shrank|grown|grew|smaller|bigger|less|more|compared?)\b[^?]*\b(?:since|than in|than|to|with)\b|\bbefore and after\b/;
+
+/** The standard view a question's words call for, or null when they name none clearly (or ask about change). */
+export function viewAsked(question: string): ViewKind | null {
+  const q = question.replace(/@view=\S+/g, " ").toLowerCase().trim();
+  if (CHANGE_CUE.test(q)) return null;
+  return VIEW_CUES.find(([, cue]) => cue.test(q))?.[0] ?? null;
+}
+
+/** True when a layer can be drawn in `view`: a timeline needs dates, density points, ranked a measure. */
+function viewFits(view: ViewKind, layer: Pick<Layer, "attributes" | "style">): boolean {
+  const attributes = layer.attributes ?? [];
+  if (view === "timeline") return layer.style.timeField !== undefined || attributes.some((a) => a.type === "time");
+  if (view === "density") return layer.style.geometry === "point";
+  if (view === "ranked") return attributes.some((a) => a.type === "measure") || layer.style.unit !== undefined || layer.style.extrude === "v";
+  return true;
+}
+
 /**
  * The render input as the map should get it: filters on attribute values, and for "most … by <measure>" or "where is
  * most of the <measure>" on a point layer with that measure, the density view with hex cells colored by its sum.
@@ -122,6 +151,12 @@ export function normalizeRenderInput(input: Obj, layer: Pick<Layer, "attributes"
   const out: Obj = { ...input };
   if (typeof out.filters === "object" && out.filters !== null && !Array.isArray(out.filters)) {
     out.filters = normalizeFilters(out.filters as Obj, attributes);
+  }
+  // The view the question asks for: filled in when the model left it out, and put in place of ranked when the words
+  // ask where most are (density) or how things went over the years (timeline), on a layer that can draw it.
+  const asked = viewAsked(question);
+  if (asked && viewFits(asked, layer) && (out.view === undefined || (out.view === "ranked" && (asked === "density" || asked === "timeline")))) {
+    out.view = asked;
   }
   const words = measureAsked(question);
   const measure = words ? measureNamed(attributes, words) : undefined;

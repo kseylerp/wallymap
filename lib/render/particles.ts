@@ -25,9 +25,12 @@ const PIXELS_PER_FRAME = 1.1;
 export const TRAIL = 7;
 /** Frames a particle lives, give or take a third. */
 const PARTICLE_LIFE = 90;
-const STREAK_PX = 1.6;
-/** Opacity of the slowest and the fastest streaks (brightness is speed). */
-const ALPHA = { slow: 0.25, fast: 1 } as const;
+const STREAK_PX = 1.8;
+/**
+ * Opacity of the slowest and the fastest streaks (brightness is speed, by the square root of the share of the field's
+ * fast speed). The slow end stays readable on satellite imagery: at 0.25 a calm valley's streaks vanished into it.
+ */
+const ALPHA = { slow: 0.45, fast: 1 } as const;
 
 /** The field at one moment: per node, u and v (m/s), the color share (or -1), and whether it has a value. */
 export type FieldSnapshot = {
@@ -244,8 +247,9 @@ export class ParticleSystem {
       this.age[p] = Math.floor(this.rand() * this.life[p]);
     }
     this.count = count;
-    // Degrees one pixel spans: the field's fast speed moves PIXELS_PER_FRAME pixels each frame.
-    const metresPerFrame = (PIXELS_PER_FRAME * view.metersPerPixel) / field.fast;
+    // A particle at the field's fast speed moves PIXELS_PER_FRAME pixels a frame; slower ones by the square root of their
+    // share, so a calm valley beside a gale at sea still visibly drifts.
+    const metresAtFast = PIXELS_PER_FRAME * view.metersPerPixel;
     const [bw, bs, be, bn] = view.bounds;
     const slot = (this.head + 1) % TRAIL;
     for (let p = 0; p < count; p++) {
@@ -259,8 +263,10 @@ export class ParticleSystem {
         continue;
       }
       const cos = Math.max(0.05, Math.cos((lat * Math.PI) / 180));
-      lng += (here.u * metresPerFrame) / (111_320 * cos);
-      lat += (here.v * metresPerFrame) / 110_540;
+      const speed = Math.hypot(here.u, here.v);
+      const metres = speed > 0 ? (metresAtFast * Math.sqrt(Math.min(2, speed / field.fast))) / speed : 0;
+      lng += (here.u * metres) / (111_320 * cos);
+      lat += (here.v * metres) / 110_540;
       this.lng[p] = lng;
       this.lat[p] = lat;
       this.history[(p * TRAIL + slot) * 2] = lng;
@@ -277,7 +283,7 @@ export class ParticleSystem {
       this.source[p * 2 + 1] = this.history[(p * TRAIL + from) * 2 + 1];
       this.target[p * 2] = this.lng[p];
       this.target[p * 2 + 1] = this.lat[p];
-      const s = Math.min(1, this.speed[p] / field.fast);
+      const s = Math.sqrt(Math.min(1, this.speed[p] / field.fast));
       // Fade in after birth and out before death, so streaks do not pop.
       const fade = Math.min(1, this.age[p] / 8, (this.life[p] - this.age[p]) / 8);
       const alpha = Math.max(0, (ALPHA.slow + (ALPHA.fast - ALPHA.slow) * s) * fade);

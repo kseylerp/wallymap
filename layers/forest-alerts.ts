@@ -28,7 +28,7 @@ const DAY_MS = 86_400_000;
 
 const COVERAGE_NOTE =
   "Alerts cover the tropics only (about 30°S to 30°N); there are no alerts here for Europe or North America, " +
-  "where this alert set is not published";
+  "where this alert set is not published; for recent clearing outside the tropics query disturbance (daily, worldwide), and forest-loss for yearly loss";
 
 /** The raster tile template for alerts on or after `startDate` (YYYY-MM-DD). */
 export function alertTileUrl(startDate: string): string {
@@ -45,7 +45,7 @@ const forestAlerts = defineLayer({
     "Use it to show where forest is being cleared or damaged right now in the tropics (Amazon, Congo Basin, Southeast Asia, Central America, and so on). " +
     "Caveats: an alert means tree cover changed, not that the cause is logging; it can also be fire, storm damage, floods, mining or farming. " +
     "Some alerts are false positives, especially under clouds, and confidence is mixed. " +
-    "Coverage is the tropics only (about 30°S to 30°N); nothing is available for Europe, North America or higher latitudes (use forest-loss for yearly loss anywhere). " +
+    "Coverage is the tropics only (about 30°S to 30°N); nothing is available for Europe, North America or higher latitudes (for fresh clearing anywhere else use disturbance, which is daily and worldwide; for yearly loss use forest-loss). " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms. " +
     "Works at any size of region; it is most useful zoomed in to a forest area.",
   coverage: { bbox: [-180, -30, 180, 30] },
@@ -56,7 +56,12 @@ const forestAlerts = defineLayer({
   input: z.object({}),
   style: { geometry: "polygon", color: layerColor("forest-alerts"), raster: { saturation: -0.35, swatch: "#E8368F" } },
 
-  async query(): Promise<LayerResult | LayerError> {
+  async query(ctx): Promise<LayerResult | LayerError> {
+    // A box wholly outside the tropics holds no alerts: say so and name the layer that does cover it, instead of drawing
+    // an empty layer ("where has forest just been cleared in British Columbia?" ended on one).
+    if (ctx.bbox[1] > 30 || ctx.bbox[3] < -30) {
+      return { error: `No forest alerts here: they cover the tropics only (about 30°S to 30°N). For recent clearing here query disturbance (daily, worldwide).`, hint: "unavailable" };
+    }
     const now = new Date();
     const startDate = new Date(now.getTime() - WINDOW_DAYS * DAY_MS).toISOString().slice(0, 10);
     return {

@@ -45,7 +45,7 @@ const forestLoss = defineLayer({
     "Use it to show where forest has disappeared, anywhere in the world. " +
     "Caveats: loss means the tree canopy was removed or died, for any reason: logging, farming, wildfire, storms, plantation harvest, development. " +
     "It does not by itself mean illegal clearing, deforestation or logging, and regrowth is not subtracted. " +
-    "Loss is detected once a year, so the newest year is usually published a few months after it ends. " +
+    "Loss is detected once a year, so the newest year is usually published a few months after it ends; for what was cleared just now (the last days or weeks) use forest-alerts in the tropics or disturbance anywhere. " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms. " +
     "Works at any size of region, from the whole world down to a few kilometres.",
   coverage: "global",

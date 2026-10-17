@@ -57,6 +57,13 @@ describe("forest-alerts layer", () => {
     expect(layer.description).toMatch(/logging/i);
   });
 
+  it("answers a box outside the tropics with an error that names disturbance, not an empty layer", async () => {
+    const r = await layer.query({ ...ctx(vi.fn()), bbox: [-125, 48, -115, 56] }, {});
+    expect(r).toMatchObject({ error: expect.stringContaining("disturbance"), hint: "unavailable" });
+    // A box that reaches the tropics still draws.
+    expect(await layer.query({ ...ctx(vi.fn()), bbox: [-60, 20, -50, 40] }, {})).toMatchObject({ kind: "tiles" });
+  });
+
   it("runs through runLayer", async () => {
     const res = await runLayer("forest-alerts", { bbox: AMAZON, zoom: 6 });
     expect(res.status).toBe(200);

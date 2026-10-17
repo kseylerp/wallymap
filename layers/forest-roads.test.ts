@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { mvumWhere, normalizeMvum } from "./forest-roads";
+import layer, { mvumOffset, mvumWhere, normalizeMvum } from "./forest-roads";
+import { hardMaxAreaKm2 } from "./types";
+import { WHOLE_US_KM2 } from "./_shared/coverage";
 import raw from "./__fixtures__/forest-roads.tahoe.json";
 
 const fixture = raw as unknown as FeatureCollection;
@@ -82,6 +84,16 @@ describe("normalizeMvum", () => {
     expect(fc.features[1].properties).toMatchObject({ seasonal: false });
   });
 
+  it("keeps the segment length as miles, to two decimals, and leaves it out when missing or zero", () => {
+    const row = (id: string, gis_miles: unknown) => ({
+      type: "Feature" as const,
+      geometry: { type: "LineString" as const, coordinates: [[0, 0], [1, 1]] },
+      properties: { id, symbol: "1", gis_miles },
+    });
+    const fc = normalizeMvum({ type: "FeatureCollection", features: [row("1", 35.0649), row("2", null), row("3", 0)] });
+    expect(fc.features.map((f) => f.properties?.miles)).toEqual([35.06, undefined, undefined]);
+  });
+
   it("skips rows with no geometry or no route id", () => {
     const fc = normalizeMvum({
       type: "FeatureCollection",
@@ -99,10 +111,12 @@ describe("normalizeMvum", () => {
 });
 
 describe("forest-roads layer", () => {
-  it("declares US coverage, no key and a 25,000 km2 cap", () => {
+  it("declares US coverage, no key, a 25,000 km2 cap and the longest segments up to the whole US past it", () => {
     expect(layer.coverage).toBe("us");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(25_000);
+    expect(layer.wide).toEqual({ orderBy: "segment length in miles", rank: "longest", limit: 2000 });
+    expect(hardMaxAreaKm2(layer)).toBe(WHOLE_US_KM2);
     expect(layer.style).toEqual({ geometry: "line", color: "#3A3A3C" });
     expect(layer.license).toBe("Public domain (USDA Forest Service)");
   });
@@ -161,8 +175,46 @@ describe("forest-roads layer", () => {
     expect(stub).not.toHaveBeenCalled();
   });
 
-  it("returns 422 zoom_in from runLayer for a bbox over 25,000 km2", async () => {
-    const res = await runLayer("forest-roads", { bbox: [-123, 36, -119, 40] });
+  it("simplifies to about 10 m for a forest and to 1/4,000 of the box's width for a wide view", () => {
+    expect(mvumOffset(TAHOE, false)).toBe(0.0001);
+    expect(mvumOffset([-112, 37, -109, 39.5], true)).toBe(0.00075);
+    expect(mvumOffset([-120.2, 38.85, -120.19, 39], true)).toBe(0.0001);
+  });
+
+  it("over 25,000 km2 fetches the longest segments first with a count, and run.ts writes the note", async () => {
+    const rows = {
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", geometry: { type: "LineString", coordinates: [[-111, 38], [-110, 38]] }, properties: { id: "1", name: "ELK RIDGE", symbol: "1", gis_miles: 35.07 } },
+        { type: "Feature", geometry: { type: "LineString", coordinates: [[-111, 38], [-111, 38.1]] }, properties: { id: "2", symbol: "2", gis_miles: 2.5 } },
+      ],
+      exceededTransferLimit: true,
+    };
+    const stub = vi.fn(async (url: string) => json(params(url).get("returnCountOnly") === "true" ? { count: 2440 } : rows));
+    vi.stubGlobal("fetch", stub);
+    try {
+      // South-east Utah, about 72,500 km².
+      const res = await runLayer("forest-roads", { bbox: [-112, 37, -109, 39.5], zoom: 7 });
+      expect(res.status).toBe(200);
+      const query = stub.mock.calls.map((c) => params(c[0])).find((p) => p.get("returnCountOnly") !== "true");
+      expect(query?.get("where")).toBe("symbol IN ('1','2','3','4') AND gis_miles > 0");
+      expect(query?.get("orderByFields")).toBe("gis_miles DESC");
+      expect(query?.get("resultRecordCount")).toBe("2000");
+      expect(query?.get("maxAllowableOffset")).toBe("0.00075");
+      if (!("kind" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
+      expect(res.body.data.features.map((f) => f.properties?.miles)).toEqual([35.07, 2.5]);
+      expect(res.body).toMatchObject({
+        total: 2440,
+        truncated: true,
+        coverageNote: "Showing the 2 longest of 2,440 (ranked by segment length in miles); zoom in under 25,000 km² for all",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("returns 422 zoom_in from runLayer only for a box wider than the whole US", async () => {
+    const res = await runLayer("forest-roads", { bbox: [-180, -60, 180, 80] });
     expect(res.status).toBe(422);
     expect(res.body).toMatchObject({ hint: "zoom_in" });
   });

@@ -20,13 +20,22 @@
  * Symbols: 1 open to all vehicles yearlong, 2 all vehicles seasonal, 3 highway-legal only yearlong,
  * 4 highway-legal only seasonal, 11 special designation yearlong, 12 special designation seasonal.
  * Those six are the only values in the layer. The default filter drops 11 and 12.
+ * gis_miles (the segment's length in miles) becomes `miles`.
+ *
+ * Wide mode (over 25,000 km², up to the whole US): the same query ordered by gis_miles, longest first, capped at the
+ * wide strategy's limit and simplified to the view, with a count of every matching segment as `total`; run.ts writes
+ * the note. ArcGIS ranks the whole national layer in one ordered page, so no box inside the US is too wide.
+ * Live smoke check (wide), 2026-10-16: south-east Utah (-112,37 to -109,39.5, about 72,500 km²): 2,000 longest of 2,440
+ * (Elk Ridge, 35 miles, first), 0.9 to 1.0 s, 0.9 MB; Colorado (-109,37 to -102,41, about 270,000 km²): 2,000 of 8,681,
+ * 11.7 to 14.0 s, 1.0 MB; the West (-125,31 to -102,49): 2,000 of 112,950 (Lolo Trail, 77 miles, first), 7.8 s; the
+ * lower 48 (about 15 million km²): 2,000 of 146,233, 8.8 to 9.6 s, 0.8 MB.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
-import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
+import { OUTSIDE_US_NOTE, WHOLE_US_KM2, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
 
 const SERVICE_URL = "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/1";
@@ -41,9 +50,12 @@ const FIELDS = [
   "highclearancevehicle",
   "surfacetype",
   "forestname",
+  "gis_miles",
 ];
 
 const MAX_RECORDS = 2000;
+/** Over this the layer answers with the longest segments only (its maxAreaKm2). */
+export const ALL_ROADS_MAX_AREA_KM2 = 25_000;
 const SEASONAL_SYMBOLS = new Set(["2", "4", "12"]);
 
 const inputSchema = z.object({
@@ -59,6 +71,11 @@ export function mvumWhere(includeAllRoads: boolean): string {
 
 function str(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+}
+
+/** Simplification tolerance in degrees: about 10 m for a forest, about 1/4,000 of the box's width for a wide view. */
+export function mvumOffset(bbox: BBox, wide: boolean): number {
+  return wide ? Math.max(0.0001, (bbox[2] - bbox[0]) / 4_000) : 0.0001;
 }
 
 /** Maps MVUM road rows to line features, skipping rows with no geometry or route id. */
@@ -78,7 +95,7 @@ export function normalizeMvum(fc: FeatureCollection): FeatureCollection {
           ? false
           : symbol !== undefined && SEASONAL_SYMBOLS.has(symbol);
 
-    const properties: Record<string, string | boolean> = {
+    const properties: Record<string, string | number | boolean> = {
       routeId,
       access: str(p.mvum_symbol_name) ?? "Unknown",
       seasonal,
@@ -91,6 +108,9 @@ export function normalizeMvum(fc: FeatureCollection): FeatureCollection {
     if (forest !== undefined) properties.forest = forest;
     const surface = str(p.surfacetype);
     if (surface !== undefined) properties.surface = surface;
+    if (typeof p.gis_miles === "number" && Number.isFinite(p.gis_miles) && p.gis_miles > 0) {
+      properties.miles = Math.round(p.gis_miles * 100) / 100;
+    }
 
     features.push({ type: "Feature", geometry: f.geometry, properties });
   }
@@ -111,19 +131,22 @@ const forestRoads = defineLayer({
   description:
     "US Forest Service roads that are legally open to public motor vehicles (from each forest's Motor Vehicle Use Map), the roads you drive to find a dispersed (free, undeveloped) campsite in a National Forest. " +
     "Each line has routeId, name (when it has one), forest, access (the Forest Service class, such as 'Roads open to highway legal vehicles only, Seasonal'), " +
-    "seasonal (true when closed part of the year), passengerCar (true when ordinary cars may use it) and highClearance, and surface (paved, gravel, native dirt). " +
+    "seasonal (true when closed part of the year), passengerCar (true when ordinary cars may use it) and highClearance, surface (paved, gravel, native dirt) and miles (the segment's length). " +
     "By default it shows roads open to ordinary highway-legal vehicles; set includeAllRoads to true to also include special-designation roads that allow only certain vehicle types. " +
     "IMPORTANT CAVEAT: the Forest Service's national data does NOT say which roads allow dispersed camping, so this layer does not either. " +
     "Many forests allow camping within a set distance (often one vehicle length to 300 feet) of these roads, but rules differ by forest and ranger district and can be closed by fire or season; " +
     "tell the user to confirm with the local ranger district or the forest's MVUM before camping. " +
     "Pair it with the campsites layer to show developed sites and trailhead parking. " +
     "United States National Forests only (nothing on other land or outside the US); dates the roads are open are not included beyond the seasonal flag. " +
-    "Zoom in to a region under 25,000 km² (about a 160 km square) first; at most 2,000 road segments are returned and the result says so when it trims.",
+    "Up to 25,000 km² (about a 160 km square) it returns the roads in the box, at most 2,000 segments, and says so when it trims; any wider US box, up to the whole country, returns the 2,000 longest segments, longest first, and the note gives the total.",
   coverage: "us",
   surface: "land",
   license: "Public domain (USDA Forest Service)",
   requiredEnv: [],
-  maxAreaKm2: 25_000,
+  maxAreaKm2: ALL_ROADS_MAX_AREA_KM2,
+  // Ranking the whole national layer costs one count and one ordered page (under 12 s live), so the hard cap is the US.
+  hardMaxAreaKm2: WHOLE_US_KM2,
+  wide: { orderBy: "segment length in miles", rank: "longest", limit: MAX_RECORDS },
   input: inputSchema,
   style: { geometry: "line", color: layerColor("forest-roads") },
 
@@ -132,21 +155,21 @@ const forestRoads = defineLayer({
       return { kind: "geojson", data: EMPTY, citation: citation(), coverageNote: OUTSIDE_US_NOTE };
     }
 
-    const area = bboxAreaKm2(ctx.bbox);
-    if (area > forestRoads.maxAreaKm2) {
-      return {
-        error: `Area is ${Math.round(area)} km²; zoom in to under ${forestRoads.maxAreaKm2} km²`,
-        hint: "zoom_in",
-      };
-    }
-
+    // Wide (over 25,000 km²): the longest segments first, capped at the strategy's limit, plus a count for the note.
+    const wide = ctx.wide === true;
     const result = await arcgisQuery(ctx, SERVICE_URL, {
-      where: mvumWhere(input.includeAllRoads),
+      // A segment with no length would sort first in a descending order and fill the cap.
+      where: wide ? `${mvumWhere(input.includeAllRoads)} AND gis_miles > 0` : mvumWhere(input.includeAllRoads),
       outFields: FIELDS,
       bbox: ctx.bbox,
       maxRecords: MAX_RECORDS,
-      maxAllowableOffset: 0.0001,
-      cacheSuffix: "mvum-roads",
+      maxAllowableOffset: mvumOffset(ctx.bbox, wide),
+      ...(wide && {
+        orderByFields: "gis_miles DESC",
+        resultRecordCount: Math.min(MAX_RECORDS, ctx.wideStrategy?.limit ?? MAX_RECORDS),
+        withCount: true,
+      }),
+      cacheSuffix: wide ? "mvum-roads:longest" : "mvum-roads",
       // The MVUM changes a few times a year at most.
       ttlSeconds: 86_400,
     });
@@ -156,7 +179,8 @@ const forestRoads = defineLayer({
       kind: "geojson",
       data: normalizeMvum(result.fc),
       citation: citation(),
-      ...(result.truncated ? { coverageNote: "Showing the first 2,000 road segments; zoom in for the rest" } : {}),
+      ...(result.total !== undefined && { total: result.total }),
+      ...(result.truncated && !wide ? { coverageNote: "Showing the first 2,000 road segments; zoom in for the rest" } : {}),
     };
   },
 });

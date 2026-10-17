@@ -100,6 +100,8 @@ describe("the view a question asks for", () => {
     expect(viewAsked("Where did beetles kill trees in Colorado over the last ten years?")).toBe("timeline");
     expect(viewAsked("Tell me about Mount Kilimanjaro")).toBe("detail");
     expect(viewAsked("Wolf packs in Washington since 2014")).toBe("timeline");
+    expect(viewAsked("Earthquakes in Japan this month")).toBe("timeline");
+    expect(viewAsked("How dry is Colorado this week?")).toBeNull();
     expect(viewAsked("How much less sea ice is in the Arctic this September than in 2012?")).toBeNull();
     expect(viewAsked("Has Grand Staircase-Escalante gotten smaller since 2021?")).toBeNull();
     expect(viewAsked("Which large fires burned in Oregon in 2020?")).toBeNull();

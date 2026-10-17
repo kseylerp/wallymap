@@ -117,7 +117,7 @@ function measureNamed(attributes: Attribute[], words: string): Attribute | undef
 /** View cues in a question's words, strongest first: only clear ones, so anything else is left to the model and the map. */
 const VIEW_CUES: [Exclude<ViewKind, "change" | "scenario" | "route">, RegExp][] = [
   ["density", /\b(?:heat ?map|hot ?spots?|where (?:are|is|do) (?:the )?most|where (?:are|is) most of)\b/],
-  ["timeline", /\b(?:year by year|over (?:the )?(?:last|past) (?:\d+|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|few|several) (?:years|decades)|over time|each year|by (?:the )?(?:year|decade)s?|since (?:19|20)\d\d)\b/],
+  ["timeline", /\b(?:year by year|over (?:the )?(?:last|past) (?:\d+|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|few|several) (?:years|decades)|over time|each year|by (?:the )?(?:year|decade)s?|since (?:19|20)\d\d|this (?:month|year)|in the (?:last|past) (?:\d+|few|several) (?:days|weeks|months))\b/],
   ["ranked", /\b(?:busiest|biggest|largest|highest|deepest|tallest|longest|top \d+|which\b[^?]*\b(?:the )?most)\b/],
   ["detail", /^(?:tell me about|how deep is|how tall is|how high is|what rock is)\b/],
 ];

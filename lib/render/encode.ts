@@ -17,11 +17,12 @@ import type { LoadedLayer, RenderOp } from "@/lib/render/state";
 export const ENCODE_RAMP = "scoreLine" as const;
 
 /**
- * Line width from the size channel, in pixels: the thinnest reach to the largest river. On satellite imagery a thin
+ * Line width from the size channel, in pixels: the thinnest reach to the largest river (1.25 px: at 0.6 px most of a
+ * river network did not show on Topo, screen check 2026-10-17). On satellite imagery a thin
  * reach vanished into the photo (coordinator, 2026-10-17), so there the thinnest is `imageryMinPx` and every line takes
  * the trails' casing, `imageryCasingPx` wider than its core (TRAIL_LINE: 2.5 px core, 4.5 px casing).
  */
-export const ENCODED_LINE = { minPx: 0.6, maxPx: 12, casingMinPx: 1, casingMaxPx: 2, imageryMinPx: 1.75, imageryCasingPx: 2 } as const;
+export const ENCODED_LINE = { minPx: 1.25, maxPx: 12, casingMinPx: 1, casingMaxPx: 2, imageryMinPx: 1.75, imageryCasingPx: 2 } as const;
 /** Symbol radius from the size channel, in pixels. */
 export const ENCODED_POINT = { minPx: 3, maxPx: 13, strokePx: 1, haloPx: 1.25, fillAlpha: 0.9 } as const;
 

@@ -213,6 +213,13 @@ export const SIBLING_FADE = 0.35;
 export const AREA_OUTLINE_SIBLING_FADE = 0.8;
 
 /**
+ * While a line is selected, the rest of its layer keeps this share of its alpha (and its white casing
+ * AREA_OUTLINE_SIBLING_FADE): at SIBLING_FADE the ski routes around Chamonix and the river network on satellite left
+ * one line on the map (screen check readings, 2026-10-17).
+ */
+export const LINE_SIBLING_FADE = 0.6;
+
+/**
  * The change view's delta (spec §12): what only A had (lost) wally pink with a pink hatch, what only B has (gained)
  * purple, unchanged dark grey; lines draw unchanged sage (never a dark grey line).
  */

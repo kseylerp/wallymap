@@ -8,6 +8,8 @@ import {
   isPaletteColor,
   LINE,
   LINE_CLASSES,
+  LINE_SIBLING_FADE,
+  AREA_OUTLINE_SIBLING_FADE,
   lineClassFor,
   lineColorFor,
   lineRampFor,
@@ -298,7 +300,7 @@ function shareOf(prop: "sz" | "ct"): ExpressionSpecification {
 }
 
 /**
- * The `line-width` of an encoded line: the size share (the square root of the flow's share of the largest) from 0.6 px
+ * The `line-width` of an encoded line: the size share (the square root of the flow's share of the largest) from 1.25 px
  * to 12 px; its casing a pixel wider at the thin end and two at the wide end, so a creek is not all white halo. On
  * imagery the thinnest is 1.75 px and the casing two pixels wider throughout, as the trails' (a thin river read as
  * nothing on the photo).
@@ -360,7 +362,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
   const routeCasing = LINE_CLASSES.route.casing;
   const encoded = entry.look.kind === "encoded" && entry.look.size !== undefined;
   const imagery = entry.imagery === true;
-  const fade = encoded ? ENCODED_SIBLING_FADE : SIBLING_FADE;
+  const fade = encoded ? ENCODED_SIBLING_FADE : LINE_SIBLING_FADE;
   const baseCasing: number | ExpressionSpecification = encoded
     ? encodedLineWidth(0, true, imagery)
     : routed
@@ -402,7 +404,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
     paint: {
       "line-color": twoTone ? LINE_CLASSES[twoTone].color : SAGE,
       "line-width": LINE.width,
-      "line-opacity": faded(entry, 1, 0),
+      "line-opacity": faded(entry, 1, 0, fade),
       ...(twoTone && { "line-dasharray": buttDashInWidths(LINE_CLASSES[twoTone].dash) }),
     },
   };
@@ -412,7 +414,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
       type: "line",
       source,
       layout,
-      paint: { "line-color": WHITE, "line-width": casingWidth, "line-opacity": faded(entry, LINE.casingOpacity, 1, fade) },
+      paint: { "line-color": WHITE, "line-width": casingWidth, "line-opacity": faded(entry, LINE.casingOpacity, 1, Math.max(fade, AREA_OUTLINE_SIBLING_FADE)) },
     },
     core,
     dash,
@@ -423,7 +425,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
       // A requested color, a score ramp or a delta replaces the class look, routes included: nothing to draw here.
       filter: routed ? isRoute : ["==", ["get", "cls"], "none"],
       layout,
-      paint: { "line-gradient": gradientExpression(), "line-width": LINE_CLASSES.route.width, "line-opacity": faded(entry, 1, 0) },
+      paint: { "line-gradient": gradientExpression(), "line-width": LINE_CLASSES.route.width, "line-opacity": faded(entry, 1, 0, fade) },
     },
     {
       id: lineLayerId(entry.id, "selected"),

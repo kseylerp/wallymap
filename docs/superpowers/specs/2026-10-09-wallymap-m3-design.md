@@ -159,3 +159,11 @@ The example draws every river in North America from its own data, one frame per 
 - **The caption follows the data's shape.** The note gives the low and the peak with numbers, the ratio between them ("more than quadruples"), whether it repeats each year, named features that drive it, and the named event that explains an anomaly ("swollen in April 2025 by the Ohio Valley flood"), then says what width and color mean.
 - **Playback exports.** A timeline view can be saved as a short video and a still, with the legend, date and running total included, in WallyMap's style.
 - **A river pulse layer.** River lines (HydroRIVERS or equivalent geometry) with width from daily discharge (Open-Meteo Flood API, GloFAS, global) and color from water temperature where a source exists, for a basin or region, played daily.
+
+#### 13a. Second example: mapped.earth "Cook Inlet, a Week of Currents" (owner, 2026-10-17)
+
+Surface currents hour by hour for a week, drawn as moving particles: color is water temperature, brightness is speed. Mechanics to borrow:
+- **Flow fields as moving particles.** Any vector field (ocean and tidal currents, wind, river velocity) animates as particles advected along the field, with color for a second variable and brightness or trail length for speed. Sources: NOAA Operational Forecast Systems (CIOFS, SFBOFS and the other OFS models, hourly), Open-Meteo Marine ocean currents (global), Open-Meteo wind (global, hourly).
+- **Hourly frames over days.** The time scrubber steps hourly for forecast and model fields.
+- **A linked curve.** A small time-series chart beside the map (Anchorage tide height) with the playhead synced, so reversals line up with high and low tide; reused for river discharge, wind speed at a point, snow depth.
+- **Use cases from the comments:** where the current helps a sailboat race or a paddle trip at a given hour; where warm and cold water masses meet (salmon, fishing); a named superlative in the caption ("the water at Anchorage dropped 32 feet in seven hours").

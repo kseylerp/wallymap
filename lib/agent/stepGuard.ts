@@ -330,6 +330,19 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
     }
   }
 
+  // 3b. Ending with nothing drawn after a layer said the place is over its limit: its first wider-scale layer answers the
+  // whole place first, and the model writes its answer from that (brown bears over Alaska: GBIF density, not "zoom in").
+  const endingEmpty = (calls.some((c) => c.toolName === "note") || (calls.length === 0 && rejected.length === 0)) && !turn.queries.some((q) => q.ok && q.drawable);
+  if (endingEmpty && !turn.noted) {
+    for (const q of turn.queries.filter((r) => r.zoomIn)) {
+      const hint = widerScaleHints(q.layerId, q.bbox).find((h) => !turn.queries.some((r) => r.layerId === h.layerId));
+      if (!hint) continue;
+      calls = [{ toolCallId: guardId(), toolName: `${QUERY}${hint.layerId}`, input: { ...(hint.input ?? {}), bbox: q.bbox } }];
+      turn.note(`${q.layerId} was over its limit and nothing was drawn: ${QUERY}${hint.layerId} answers the whole box before the answer`);
+      return { calls, dropText: true, rejected, changed: true };
+    }
+  }
+
   // 4a. A question about change ("less sea ice than in 2012", "before and after") whose layer answered for two dates
   // and was never compared: the compare goes in before the turn ends, older date as A, newer as B.
   const endingNow = calls.some((c) => c.toolName === "note") || (calls.length === 0 && rejected.length === 0);

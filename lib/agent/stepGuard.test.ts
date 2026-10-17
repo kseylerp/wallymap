@@ -440,3 +440,25 @@ describe("step guard: a question about change", () => {
     expect(calls.some((c) => c.name === "compare")).toBe(false);
   });
 });
+
+describe("step guard: nothing drawn after a too-wide answer", () => {
+  it("asks the wider-scale layer for the whole place before the turn ends (brown bears over Alaska)", async () => {
+    const ALASKA: BBox = [-179.9, 51.15, -129.98, 71.42];
+    runLayer.mockImplementation(async (id: string, { bbox }: { bbox: BBox }) =>
+      id === "species"
+        ? { status: 422, body: { error: "Area is 5983222 km²; zoom in to under 200000 km²", hint: "zoom_in" } }
+        : { status: 200, body: { kind: "geojson", data: { type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "Point", coordinates: [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2] }, properties: { name: "Ursus arctos" } }] }, citation: { source: "t", url: "https://e.x", retrieved: "2026" } } },
+    );
+    const { calls, turn } = await run("Heatmap of brown bear sightings in Alaska", [
+      { calls: [{ name: "query_species", input: { bbox: ALASKA, taxon: "Ursus arctos" } }] },
+      { calls: [{ name: "note", input: { markdown: "Zoom in to see bears." } }] },
+      { calls: [{ name: "note", input: { markdown: "Brown bear records cluster on the Kenai and Kodiak." } }] },
+      { text: "- More?" },
+    ], { bbox: ALASKA, zoom: 3, center: [-153, 64] });
+    const names = calls.map((c) => c.name);
+    expect(names).toEqual(["query_species", "query_gbif-occurrences", "render", "note"]);
+    expect(calls[1].input).toMatchObject({ density: true, bbox: ALASKA });
+    expect(String(calls[3].input.markdown)).toMatch(/Kenai/);
+    expect(turn.log.join("\n")).toMatch(/answers the whole box before the answer/);
+  });
+});

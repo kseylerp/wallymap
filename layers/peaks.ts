@@ -24,6 +24,7 @@ import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { rankedSparql, wikimediaFetch } from "./_shared/wikimedia";
+import { haversineKm } from "./_shared/geo";
 import { layerColor } from "@/lib/render/palette";
 
 export const SPARQL_ENDPOINT = "https://query.wikidata.org/sparql";
@@ -123,6 +124,9 @@ function metres(value: string | undefined): number | undefined {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
 }
 
+/** Two items of one name closer than this are one summit listed twice. */
+const TWIN_KM = 0.2;
+
 /** Peaks as points: v is the elevation in metres, prominence is its own property. Items with no name in any form are dropped. */
 export function normalizePeaks(bindings: Binding[]): Feature<Point>[] {
   const features: Feature<Point>[] = [];
@@ -136,6 +140,9 @@ export function normalizePeaks(bindings: Binding[]): Feature<Point>[] {
     const coords = parseWkt(b.coord.value);
     if (coords === null) continue;
     seen.add(id);
+    // Wikidata sometimes holds one summit twice (Mount Watkins as Q3322181 and Q131056543, same point): the first, which
+    // sorts higher because it has the elevation, stands for both.
+    if (features.some((f) => f.properties?.name === name && haversineKm(f.geometry.coordinates, coords) < TWIN_KM)) continue;
 
     const elevation = metres(b.elev?.value);
     const prominence = metres(b.prom?.value);

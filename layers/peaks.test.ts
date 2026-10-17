@@ -95,6 +95,16 @@ describe("normalizePeaks", () => {
     expect(out[0].properties).toMatchObject({ name: "Cerro Torre", v: 3128 });
   });
 
+  it("lists one summit once when Wikidata holds it twice at one point (Mount Watkins), keeping the one with the elevation", () => {
+    const item = (q: string) => ({ value: `http://www.wikidata.org/entity/${q}` });
+    const out = normalizePeaks([
+      { item: item("Q3322181"), itemLabel: { value: "Mount Watkins" }, coord: { value: "Point(-119.5176494 37.7828327)" }, elev: { value: "2590" } },
+      { item: item("Q131056543"), itemLabel: { value: "Mount Watkins" }, coord: { value: "Point(-119.5176494 37.7828327)" } },
+      { item: item("Q99"), itemLabel: { value: "Mount Watkins" }, coord: { value: "Point(-110 40)" } },
+    ]);
+    expect(out.map((f) => f.properties?.wikidata)).toEqual(["Q3322181", "Q99"]);
+  });
+
   it("drops unnamed items, repeated ids and bad coordinates", () => {
     const item = (q: string) => ({ value: `http://www.wikidata.org/entity/${q}` });
     const out = normalizePeaks([

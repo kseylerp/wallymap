@@ -22,7 +22,8 @@
  *   for "where are most of the mines in Nevada"; USMIN's symbols (153,150 in Nevada against 24,474 MRDS records, 2026-10-17) are only
  *   counted, and the note says they are left out. Nevada's 24,474 came back in 13 pages in about 2 s cold.
  * Duplicates: USMIN often draws a mine MRDS also lists ("Silver King Mine" from both at one spot); in "both", a USMIN symbol within 1 km of
- *   an MRDS site of the same name is dropped (MRDS has the commodities), and one record listing a site twice within 1 km keeps the first.
+ *   an MRDS site of the same name is dropped (MRDS has the commodities), one record listing a site twice within 1 km keeps the first, and
+ *   two records of one name at one spot (15 m) are one site whatever their main commodity.
  * Wide (over 15,000 km², up to 60,000): named sites only (USMIN stores a blank name as one space, so most of its symbols drop out),
  *   2,000 split between the records asked, plus a count of every site in the box. Smoke 2026-10-14, box -111,36,-108.5,38.4 (59,000 km²):
  *   1,962 named (1,000 MRDS, all 962 named USMIN) of 9,942 in 1.0 s.
@@ -224,6 +225,8 @@ export const GENERIC_MINE_NAMES = new Set(["tunnel", "adit", "shaft", "mine shaf
 
 /** One site listed twice is within this distance of itself. */
 const SAME_SITE_KM = 1;
+/** Two records of one name closer than this are one spot (the duplicates check's same-spot distance). */
+const SAME_SPOT_KM = 0.015;
 
 /**
  * One mine listed once: a USMIN symbol within 1 km of an MRDS site of the same name goes (MRDS carries the
@@ -245,8 +248,10 @@ export function dedupeMines(features: Feature<Point>[]): Feature<Point>[] {
     }
     const kept = byName.get(key) ?? [];
     const twin = kept.find((k) => {
-      if (haversineKm(k.geometry.coordinates, f.geometry.coordinates) > SAME_SITE_KM) return false;
-      return k.properties?.source !== p.source || k.properties?.kind === p.kind;
+      const km = haversineKm(k.geometry.coordinates, f.geometry.coordinates);
+      if (km > SAME_SITE_KM) return false;
+      // At one spot it is one site whatever each record calls its main commodity ("Prince Mine": lead in one, silver in the other).
+      return km <= SAME_SPOT_KM || k.properties?.source !== p.source || k.properties?.kind === p.kind;
     });
     if (twin) continue;
     kept.push(f);

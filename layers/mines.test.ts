@@ -262,8 +262,10 @@ describe("mines layer", () => {
       pt(-117.101, 40.601, { name: "Tunnel", kind: "Adit", source: "USMIN" }),
       pt(-117.5, 40.5, { name: "Big Pay Mine", kind: "gold", source: "MRDS" }),
       pt(-117.503, 40.501, { name: "Big Pay Mine", kind: "gold", source: "MRDS" }),
+      pt(-114.47, 37.9, { name: "Prince Mine", kind: "lead", source: "MRDS" }),
+      pt(-114.47, 37.9, { name: "Prince Mine", kind: "silver", source: "MRDS" }),
     ]);
-    expect(kept.map((f) => `${f.properties?.name} ${f.properties?.source}`)).toEqual(["Silver King Mine MRDS", "Big Pay Mine MRDS", "Tunnel USMIN", "Tunnel USMIN"]);
+    expect(kept.map((f) => `${f.properties?.name} ${f.properties?.source}`)).toEqual(["Silver King Mine MRDS", "Big Pay Mine MRDS", "Prince Mine MRDS", "Tunnel USMIN", "Tunnel USMIN"]);
   });
 
   it("tells the model the data are historic and old workings are unsafe", () => {

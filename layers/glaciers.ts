@@ -33,6 +33,7 @@ import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
 import { nameAttribute, timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
+import { geometryBBox } from "./_shared/geo";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
 
@@ -203,6 +204,16 @@ function centerOf(geometry: Geometry): [number, number] {
  * any outline are kept, with all of their outlines, oldest first. A wide view passes no glacier cap (its row limit bounds it)
  * and a coarser vertex step.
  */
+/** Share of the two boxes' union that both cover (1 for one outline). */
+function boxOverlap(a: [number, number, number, number], b: [number, number, number, number]): number {
+  const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
+  const h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+  if (w <= 0 || h <= 0) return 0;
+  const area = (r: [number, number, number, number]) => (r[2] - r[0]) * (r[3] - r[1]);
+  const inter = w * h;
+  return inter / (area(a) + area(b) - inter);
+}
+
 export function normalizeGlaciers(
   json: unknown,
   options: { maxGlaciers?: number; stepDeg?: number } = {},
@@ -260,14 +271,21 @@ export function normalizeGlaciers(
     if (seen.has(key)) continue;
     seen.add(key);
     if (r.name !== undefined && r.time !== 0) {
-      const group = byNameDate.get(`${r.name}|${r.time}`) ?? [];
-      const twin = group.find((o) => Math.abs(o.center[0] - r.center[0]) < SAME_PLACE_DEG && Math.abs(o.center[1] - r.center[1]) < SAME_PLACE_DEG);
+      // Case aside ("STEFFEN" and "Steffen", two ids mapped by one institution on one day) and by outline as well as center.
+      const nameKey = `${r.name.toLowerCase()}|${r.time}`;
+      const group = byNameDate.get(nameKey) ?? [];
+      const box = geometryBBox(r.feature.geometry);
+      const twin = group.find((o) => {
+        if (Math.abs(o.center[0] - r.center[0]) < SAME_PLACE_DEG && Math.abs(o.center[1] - r.center[1]) < SAME_PLACE_DEG) return true;
+        const other = geometryBBox(o.feature.geometry);
+        return box !== null && other !== null && boxOverlap(box, other) >= 0.8;
+      });
       if (twin !== undefined) {
         if (root(twin.id) !== root(r.id)) parent.set(root(r.id), root(twin.id));
         continue;
       }
       group.push(r);
-      byNameDate.set(`${r.name}|${r.time}`, group);
+      byNameDate.set(nameKey, group);
     }
     unique.push(r);
   }

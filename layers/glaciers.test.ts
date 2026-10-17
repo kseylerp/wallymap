@@ -126,6 +126,18 @@ describe("glaciers layer", () => {
     expect(data.features[0].properties).not.toHaveProperty("t");
   });
 
+  it("draws Steffen once when two ids map it on one day under two spellings (STEFFEN, Steffen)", () => {
+    const poly = (w: number, s: number) => ({ type: "Polygon", coordinates: [[[w, s], [w + 0.5, s], [w + 0.5, s + 0.6], [w, s + 0.6], [w, s]]] });
+    const row = (name: string, id: string, w: number, s: number, area: number) => ({
+      type: "Feature",
+      geometry: poly(w, s),
+      properties: { line_type: "glac_bound", glac_id: id, glac_name: name, db_area: area, src_date: "2001-03-11T00:00:00Z" },
+    });
+    const { data } = normalizeGlaciers({ type: "FeatureCollection", features: [row("STEFFEN", "G286460E47399S", -73.8, -47.7, 429.9), row("Steffen", "G286443E47304S", -73.79, -47.69, 428.5)] });
+    expect(data.features).toHaveLength(1);
+    expect(data.features[0].properties).toMatchObject({ name: "STEFFEN", glacierId: "G286460E47399S" });
+  });
+
   it("calls a region code or placeholder an unnamed glacier", () => {
     const poly = { type: "Polygon", coordinates: [[[0, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]]] };
     const row = (name: string | null, id: string) => ({

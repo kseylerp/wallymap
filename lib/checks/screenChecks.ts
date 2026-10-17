@@ -169,12 +169,27 @@ export const LINE_VISIBLE_DIFF = 32;
  * A line layer's visibility on one basemap: the mean color change at sampled points along its rendered lines between
  * the map with the layer and without it (each a mean of the three channels, 0 to 255).
  */
-export function lineVisibilityProblem(layerId: string, basemap: string, diffs: number[], what: "lines" | "symbols" = "lines"): string | null {
+export function lineVisibilityProblem(layerId: string, basemap: string, diffs: number[], what: "lines" | "symbols" | "outlines" = "lines"): string | null {
   if (diffs.length === 0) return null;
   const mean = diffs.reduce((a, b) => a + b, 0) / diffs.length;
   if (mean >= LINE_VISIBLE_DIFF) return null;
-  const where = what === "lines" ? "along them" : "under them";
+  const where = what === "symbols" ? "under them" : "along them";
   return `${layerId} ${what} barely show on ${basemap}: hiding them changes the pixels ${where} by ${mean.toFixed(1)} of 255 on average (needs ${LINE_VISIBLE_DIFF}).`;
+}
+
+/**
+ * The smallest mean pixel change (0 to 255) inside an area layer's polygons between shown and hidden for its fill (tint
+ * and hatch) to count as visible. The hatch covers only part of the inside, so this is lower than for lines; calibrated
+ * on the owner's cases (see AREA_FILL_VISIBLE_DIFF's readings in the Last run of docs/questions.md).
+ */
+export const AREA_FILL_VISIBLE_DIFF = 10;
+
+/** An area layer's fill on one basemap: the mean pixel change at points inside its polygons between shown and hidden. */
+export function areaFillProblem(layerId: string, basemap: string, diffs: number[]): string | null {
+  if (diffs.length === 0) return null;
+  const mean = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+  if (mean >= AREA_FILL_VISIBLE_DIFF) return null;
+  return `${layerId} areas barely show on ${basemap}: hiding them changes the pixels inside them by ${mean.toFixed(1)} of 255 on average (needs ${AREA_FILL_VISIBLE_DIFF}).`;
 }
 
 /* ---------- Browser half (each function runs inside the page: no imports, no outer variables) ---------- */
@@ -504,6 +519,73 @@ export function collectPointSamples({ layerId, max }: { layerId: string; max: nu
   }
   if (points.length <= max) return points;
   return Array.from({ length: max }, (_, i) => points[Math.floor((i * points.length) / max)]);
+}
+
+/**
+ * Runs in the page (development build): screen points on an area layer's drawn polygons (deck's `<layer>…:polygons`
+ * GeoJsonLayer, the map flat), not under a panel: `outline` at the midpoints of the rings' edges, `inside` on a grid
+ * within the polygons (in screen space, so it lands on the tint and the hatch alike).
+ */
+export function collectAreaSamples({ layerId, max }: { layerId: string; max: number }): { outline: { x: number; y: number }[]; inside: { x: number; y: number }[] } {
+  type MapLike = { project: (p: [number, number]) => { x: number; y: number }; getCanvas: () => HTMLCanvasElement };
+  type Deckish = { id: string; props: Record<string, unknown> };
+  type Geo = { type: string; coordinates: unknown };
+  const empty = { outline: [], inside: [] };
+  const hook = (window as unknown as { __wallyMap?: { map: MapLike; overlay: { _deck?: { layerManager?: { getLayers: () => Deckish[] } } } } }).__wallyMap;
+  if (!hook) return empty;
+  const { map, overlay } = hook;
+  const canvas = map.getCanvas();
+  const cr = canvas.getBoundingClientRect();
+  const layer = (overlay._deck?.layerManager?.getLayers() ?? []).find(
+    (l) => (l.id.startsWith(`${layerId}:`) || l.id.startsWith(`${layerId}@`)) && /:(polygons|columns)$/.test(l.id) && l.props.filled === true,
+  );
+  if (!layer) return empty;
+  const data = layer.props.data as { features?: { geometry?: Geo | null }[] } | undefined;
+  const rings: { x: number; y: number }[][] = [];
+  for (const f of data?.features ?? []) {
+    const g = f.geometry;
+    if (!g) continue;
+    const polys = (g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : []) as number[][][][];
+    for (const poly of polys) {
+      for (const ring of poly) {
+        rings.push(
+          ring.map((c) => {
+            const q = map.project([c[0], c[1]]);
+            return { x: q.x + cr.x, y: q.y + cr.y };
+          }),
+        );
+      }
+    }
+  }
+  const onMap = (x: number, y: number) => x >= cr.x + 2 && y >= cr.y + 2 && x <= cr.x + cr.width - 3 && y <= cr.y + cr.height - 3 && document.elementFromPoint(x, y) === canvas;
+  const outline: { x: number; y: number }[] = [];
+  for (const ring of rings) {
+    for (let i = 0; i + 1 < ring.length; i++) {
+      const x = Math.round((ring[i].x + ring[i + 1].x) / 2);
+      const y = Math.round((ring[i].y + ring[i + 1].y) / 2);
+      if (onMap(x, y)) outline.push({ x, y });
+    }
+  }
+  // Even-odd over every ring: holes stay out.
+  const insideAny = (x: number, y: number) => {
+    let inside = false;
+    for (const ring of rings) {
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const a = ring[i];
+        const b = ring[j];
+        if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+      }
+    }
+    return inside;
+  };
+  const inside: { x: number; y: number }[] = [];
+  for (let y = Math.ceil(cr.y) + 4; y < cr.y + cr.height - 4; y += 3) {
+    for (let x = Math.ceil(cr.x) + 4; x < cr.x + cr.width - 4; x += 3) {
+      if (insideAny(x, y) && document.elementFromPoint(x, y) === canvas) inside.push({ x, y });
+    }
+  }
+  const thin = <T,>(list: T[]) => (list.length <= max ? list : Array.from({ length: max }, (_, i) => list[Math.floor((i * list.length) / max)]));
+  return { outline: thin(outline), inside: thin(inside) };
 }
 
 /**

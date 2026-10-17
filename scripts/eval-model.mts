@@ -757,8 +757,8 @@ function evaluate(run: Run): Evaluated {
 
 /**
  * The questions the screen checks open (scripts/evalScreens.ts), about a dozen covering lines (trails, mountain bike
- * facets, ski routes), points (crags, surf, dams, wildlife), hexes (wind capacity), areas (fire perimeters, glaciers, a
- * monument), ranked cards (uranium) and two layers at once (campsites and roads); each at desktop and phone size.
+ * facets, ski routes), points (crags, surf, dams, wildlife), hexes (wind capacity), areas (fire perimeters, glaciers in
+ * the Wind Rivers and on Patagonia's ice, a monument), ranked cards (uranium) and two layers at once (campsites and roads); each at desktop and phone size.
  */
 export const SCREEN_QUESTIONS = [
   "Show hiking trails around Lake Tahoe",
@@ -772,6 +772,8 @@ export const SCREEN_QUESTIONS = [
   "Where are most of the wind farms by capacity in West Texas?",
   "Which wildfires burned near Yosemite in the last 10 years?",
   "Glaciers in the Wind River Range",
+  // Ice under the outlines on satellite: the hardest ground for an area to show on.
+  "Biggest glaciers in Patagonia",
   "How has Bears Ears changed since 2021?",
   "Which uranium mines near the Navajo Nation score highest?",
 ];

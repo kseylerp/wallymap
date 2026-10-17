@@ -19,6 +19,8 @@ import { chromium, type Browser, type Page } from "@playwright/test";
 import { listLayers } from "@/layers";
 import type { BBox } from "@/layers/types";
 import {
+  areaFillProblem,
+  collectAreaSamples,
   collectLabels,
   collectLayout,
   collectLineSamples,
@@ -165,18 +167,79 @@ async function openCard(page: Page, state: MapState): Promise<string | null> {
   return null;
 }
 
-/** Each line layer on Topo and Topo + Satellite: the mean pixel change along its lines when its row's Hide is pressed. */
+type RenderOps = MapState["renderOps"];
+
+/**
+ * Measures each op on the map as it stands, labelled `on` ("Topo + Satellite in 3D"): the mean pixel change along its
+ * lines, under its symbols, along its outlines and inside its areas between the map with the layer and with the row's
+ * opacity at 0. `fill: false` skips the insides (a selection fades them on purpose).
+ */
+async function measureOps(page: Page, state: MapState, ops: RenderOps, on: string, out: { readings: string[]; problems: string[] }, { fill: withFill = true } = {}): Promise<void> {
+  const { readings, problems } = out;
+  for (const op of ops) {
+    const title = state.layers[op.layerId].title;
+    const what = op.mode === "points" ? "symbols" : op.mode === "lines" ? "lines" : "outlines";
+    const areas = what === "outlines" ? await page.evaluate(collectAreaSamples, { layerId: op.layerId, max: 400 }) : null;
+    const points =
+      what === "lines"
+        ? await page.evaluate(collectLineSamples, { layerId: op.layerId, max: 400 })
+        : what === "symbols"
+          ? await page.evaluate(collectPointSamples, { layerId: op.layerId, max: 400 })
+          : (areas?.outline ?? []);
+    if (points.length < 5) {
+      readings.push(`${title} on ${on}: too few ${what === "lines" ? "line points" : what === "symbols" ? "symbols" : "outline points"} on screen to measure (${points.length})`);
+      continue;
+    }
+    const shown = (await page.screenshot()).toString("base64");
+    // The row's opacity at 0, not its Hide: hiding a dated layer also closes the time panel, which moves the camera and
+    // changes every pixel. Rows without the slider fall back to Hide (older rows named it "Show <title>").
+    const slider = page.locator(`[data-layer-id="${op.layerId}"] [data-testid="opacity-slider"]`).first();
+    const before = (await slider.count()) > 0 ? await slider.inputValue() : null;
+    const toggle = page
+      .locator(`[data-layer-id="${op.layerId}"] [data-testid="visibility-toggle"], button[aria-label="Hide ${title}"], button[aria-label="Show ${title}"]`)
+      .first();
+    if (before !== null) await slider.fill("0");
+    else await toggle.click({ force: true });
+    await settle(page, 800);
+    const hidden = (await page.screenshot()).toString("base64");
+    if (before !== null) await slider.fill(before);
+    else await toggle.click({ force: true });
+    await settle(page, 500);
+    const diffs = await page.evaluate(pixelDiffs, { a: `data:image/png;base64,${shown}`, b: `data:image/png;base64,${hidden}`, points });
+    const mean = diffs.reduce((s, d) => s + d, 0) / diffs.length;
+    readings.push(`${title} ${what} on ${on}: ${mean.toFixed(1)} mean pixel change over ${diffs.length} points`);
+    const problem = lineVisibilityProblem(title, on, diffs, what);
+    if (problem) problems.push(problem);
+    if (withFill && areas && areas.inside.length >= 5) {
+      const fill = await page.evaluate(pixelDiffs, { a: `data:image/png;base64,${shown}`, b: `data:image/png;base64,${hidden}`, points: areas.inside });
+      const fillMean = fill.reduce((s, d) => s + d, 0) / fill.length;
+      readings.push(`${title} fill on ${on}: ${fillMean.toFixed(1)} mean pixel change over ${fill.length} points`);
+      const fillProblem = areaFillProblem(title, on, fill);
+      if (fillProblem) problems.push(fillProblem);
+    }
+  }
+}
+
+/**
+ * Each line, symbol and area layer on Topo and Topo + Satellite: the mean pixel change along its lines, under its
+ * symbols, along its outlines and inside its areas when its row's Hide is pressed. Everything is measured flat (on 3D
+ * terrain the native lines drape away from where map.project puts them); areas are measured again on 3D terrain when
+ * the question ended in 3D, the way people first see them (glacier outlines on ice read far fainter draped than flat).
+ */
 async function lineChecks(page: Page, state: MapState, slug: string): Promise<{ problems: string[]; readings: string[]; shots: string[] }> {
   const problems: string[] = [];
   const readings: string[] = [];
   const shots: string[] = [];
-  // Lines and symbols (points drawn as symbols), each measured the same way.
-  const lines = state.renderOps.filter((o) => o.visible && (o.mode === "lines" || o.mode === "points") && state.layers[o.layerId]?.result.kind === "geojson");
+  // Lines, symbols (points drawn as symbols) and areas (their outlines and their insides), each measured the same way.
+  const lines = state.renderOps.filter(
+    (o) => o.visible && (o.mode === "lines" || o.mode === "points" || o.mode === "polygons" || (o.mode === "columns" && state.layers[o.layerId]?.style.geometry === "polygon")) && state.layers[o.layerId]?.result.kind === "geojson",
+  );
   if (lines.length === 0) return { problems, readings, shots };
   const start = state.basemap;
-  // Flat for the measurement: on 3D terrain the drape shifts the lines away from where map.project puts them.
   const threeD = page.locator('button[aria-label="3D terrain"]').first();
   const wasOn = (await threeD.count()) > 0 && (await threeD.getAttribute("aria-pressed")) === "true";
+
+
   if (wasOn) {
     await threeD.click({ force: true });
     await settle(page, 1500);
@@ -188,30 +251,20 @@ async function lineChecks(page: Page, state: MapState, slug: string): Promise<{ 
     const lineShot = `${slug}-lines-${basemap.value}.jpg`;
     await page.screenshot({ path: join(OUT_DIR, lineShot), type: "jpeg", quality: 70 });
     shots.push(lineShot);
-    for (const op of lines) {
-      const title = state.layers[op.layerId].title;
-      const what = op.mode === "points" ? "symbols" : "lines";
-      const points = what === "lines" ? await page.evaluate(collectLineSamples, { layerId: op.layerId, max: 400 }) : await page.evaluate(collectPointSamples, { layerId: op.layerId, max: 400 });
-      if (points.length < 5) {
-        readings.push(`${title} on ${basemap.label}: too few ${what === "lines" ? "line points" : "symbols"} on screen to measure (${points.length})`);
-        continue;
-      }
-      const shown = (await page.screenshot()).toString("base64");
-      // The row's Hide (older rows named it "Show <title>" with a pressed state).
-      const toggle = page
-        .locator(`[data-layer-id="${op.layerId}"] [data-testid="visibility-toggle"], button[aria-label="Hide ${title}"], button[aria-label="Show ${title}"]`)
-        .first();
-      await toggle.click({ force: true });
-      await settle(page, 800);
-      const hidden = (await page.screenshot()).toString("base64");
-      await toggle.click({ force: true });
-      await settle(page, 500);
-      const diffs = await page.evaluate(pixelDiffs, { a: `data:image/png;base64,${shown}`, b: `data:image/png;base64,${hidden}`, points });
-      const mean = diffs.reduce((s, d) => s + d, 0) / diffs.length;
-      readings.push(`${title} on ${basemap.label}: ${mean.toFixed(1)} mean pixel change over ${diffs.length} points`);
-      const problem = lineVisibilityProblem(title, basemap.label, diffs, what);
-      if (problem) problems.push(problem);
+    await measureOps(page, state, lines, `${basemap.label}`, { readings, problems });
+  }
+  // Areas again on 3D terrain, draped as people see them.
+  const areaOps = lines.filter((o) => o.mode === "polygons" || o.mode === "columns");
+  if (wasOn && areaOps.length > 0) {
+    await threeD.click({ force: true });
+    await settle(page, 2500);
+    for (const basemap of BASEMAPS) {
+      await pickBasemap(page, basemap.button);
+      await settle(page, 2000);
+      await measureOps(page, state, areaOps, `${basemap.label} in 3D`, { readings, problems });
     }
+    await threeD.click({ force: true });
+    await settle(page, 1000);
   }
   // Back to the basemap and the 3D the question ended on.
   const back = BASEMAPS.find((b) => b.value === start);
@@ -289,6 +342,12 @@ async function checkOne(browser: Browser, item: ScreenItem, size: Size): Promise
     const after = layoutProblems(await page.evaluate(collectLayout, PANELS));
     problems.push(...new Set([...before, ...after]));
     await page.screenshot({ path: join(OUT_DIR, shot) });
+    // With a card open the other areas of its layer fade, but their outlines must still show (the owner's glaciers on
+    // Topo + Satellite: siblings of a selected glacier vanished on the ice).
+    if (!phone && opened) {
+      const areaOps = item.state.renderOps.filter((o) => o.visible && (o.mode === "polygons" || o.mode === "columns") && item.state.layers[o.layerId]?.style.geometry === "polygon");
+      await measureOps(page, item.state, areaOps, "the map with a card open", { readings: notes, problems }, { fill: false });
+    }
     // Zero errors per question (coordinator, 2026-10-16): every uncaught error, every console error, and the dev badge
     // once the checks are done.
     for (const e of pageErrors) problems.push(`The page threw an error: ${e}`);

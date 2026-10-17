@@ -104,6 +104,11 @@ export type LoadedLayer = {
   /** The fields a person can slice the layer by (spec §12c), from the catalog: the row's controls. */
   attributes?: Attribute[];
   /**
+   * Set on a layer narrowed by its filters or the time window (lib/render/view.ts): every loaded feature, so a measure's
+   * size and color keep one range across frames and filters (lib/render/encode.ts).
+   */
+  allData?: GeoJSON.FeatureCollection;
+  /**
    * The layer's own query input the agent asked for (surf `forecast: true`, a fire-weather `date`), without the bbox and
    * zoom; unset for the default input. A share link carries it, so opening the link asks for the same data.
    */

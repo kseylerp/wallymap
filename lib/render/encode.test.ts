@@ -46,6 +46,12 @@ describe("two measures on one mark", () => {
     expect(channelText(enc!.color!)).toBe("Water temperature 4–20 °C");
   });
 
+  it("keeps the range of every loaded feature when a frame or a filter narrows the data", () => {
+    const narrowed: FeatureCollection = { type: "FeatureCollection", features: [DATA.features[0]] };
+    const enc = resolveEncoding({ ...layer("point", DATA), allData: DATA }, undefined, narrowed);
+    expect(enc?.size?.extent).toEqual([0, 400]);
+  });
+
   it("never sizes by a class, and drops a key the layer does not declare", () => {
     expect(resolveEncoding(layer("point", DATA, { size: "conf", color: "nope" }), undefined, DATA)).toBeNull();
   });

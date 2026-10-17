@@ -34,7 +34,7 @@ export type Channel = {
 
 export type ResolvedEncoding = { size?: Channel; color?: Channel };
 
-type EncodableLayer = Pick<LoadedLayer, "attributes" | "style">;
+type EncodableLayer = Pick<LoadedLayer, "attributes" | "style"> & Partial<Pick<LoadedLayer, "allData">>;
 
 /** The pair a layer draws with: the op's choice over the layer's declared pair ("" switches a channel off). */
 export function askedEncoding(layer: EncodableLayer, op: Pick<RenderOp, "encode"> | undefined): Encoding {
@@ -111,7 +111,9 @@ function channelOf(attr: Attribute | undefined, key: string, data: FeatureCollec
  * The layer's two channels against `data`, or null when neither applies: a channel needs its key to be one of the
  * layer's attributes (size a measure; color a measure, ordinal or category) and the data to hold values for it.
  */
-export function resolveEncoding(layer: EncodableLayer, op: Pick<RenderOp, "encode"> | undefined, data: FeatureCollection): ResolvedEncoding | null {
+export function resolveEncoding(layer: EncodableLayer, op: Pick<RenderOp, "encode"> | undefined, shown: FeatureCollection): ResolvedEncoding | null {
+  // The range comes from every loaded feature, so a frame or a filter never rescales the marks.
+  const data = layer.allData ?? shown;
   const asked = askedEncoding(layer, op);
   const size = asked.size ? channelOf(attributeFor(layer, asked.size), asked.size, data, "size") : undefined;
   const color = asked.color ? channelOf(attributeFor(layer, asked.color), asked.color, data, "color") : undefined;

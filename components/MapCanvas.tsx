@@ -574,7 +574,11 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
         deckRendered.add(listener);
         return () => deckRendered.delete(listener);
       },
-      repaint: () => map.triggerRepaint(),
+      // Deck draws only when something changed, so a capture asks it to draw too (`redraw` with a reason forces it).
+      repaint: () => {
+        map.triggerRepaint();
+        (overlay as unknown as { _deck?: { redraw: (reason?: string) => void } })._deck?.redraw("capture");
+      },
     });
     // Development only: the eval's screen checks (scripts/evalScreens.ts) project features and read the deck labels.
     if (process.env.NODE_ENV === "development") (window as unknown as { __wallyMap?: unknown }).__wallyMap = { map, overlay };

@@ -53,7 +53,8 @@ function remember(layer: LoadedLayer, key: string, derive: () => LoadedLayer): L
 
 function withData(layer: LoadedLayer, data: FeatureCollection): LoadedLayer {
   if (layer.result.kind !== "geojson" || data === layer.result.data) return layer;
-  return { ...layer, result: { ...layer.result, data } };
+  // Every loaded feature stays reachable: the encoding's range does not shrink with a frame or a filter.
+  return { ...layer, allData: layer.allData ?? layer.result.data, result: { ...layer.result, data } };
 }
 
 /** A layer's filters that restrict something, from its render op. */

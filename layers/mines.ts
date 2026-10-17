@@ -33,6 +33,7 @@ import type { Feature, FeatureCollection, Point } from "geojson";
 import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp, type QueryContext } from "./types";
 import { haversineKm } from "./_shared/geo";
 import { nameAttribute } from "./_shared/bands";
+import { displayName } from "./_shared/names";
 import { registerLayer } from "./registry";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -215,9 +216,12 @@ export function normalizeUsmin(fc: FeatureCollection): Feature<Point>[] {
   return out;
 }
 
-/** A site name as duplicates compare it: case, punctuation and spacing ignored. */
+/**
+ * A site name as duplicates compare it: read the way the map shows it ("Mt. Diablo Mine" is "Mount Diablo Mine", as MRDS lists
+ * one site under both spellings 226 m apart), case, punctuation and spacing ignored.
+ */
 function nameKey(name: unknown): string {
-  return typeof name === "string" ? name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim() : "";
+  return typeof name === "string" ? displayName(name, "mines").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim() : "";
 }
 
 /** Names that say what a working is, not which one: many separate tunnels and shafts carry them. */

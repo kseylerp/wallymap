@@ -268,6 +268,16 @@ describe("mines layer", () => {
     expect(kept.map((f) => `${f.properties?.name} ${f.properties?.source}`)).toEqual(["Silver King Mine MRDS", "Big Pay Mine MRDS", "Prince Mine MRDS", "Tunnel USMIN", "Tunnel USMIN"]);
   });
 
+  it("lists a mine once when MRDS spells it two ways (Mt. and Mount) within 1 km", () => {
+    const pt = (lon: number, lat: number, props: Record<string, unknown>) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [lon, lat] }, properties: props });
+    const kept = dedupeMines([
+      pt(-118.08177, 38.14854, { name: "Mt. Diablo Mine", kind: "silver", source: "MRDS" }),
+      pt(-118.08344, 38.14687, { name: "Mount Diablo Mine", kind: "silver", source: "MRDS" }),
+      pt(-118.2, 38.3, { name: "Mt. Diablo Mine", kind: "silver", source: "MRDS" }),
+    ]);
+    expect(kept).toHaveLength(2);
+  });
+
   it("tells the model the data are historic and old workings are unsafe", () => {
         expect(layer.description).toMatch(/around 2011/);
     expect(layer.description).toMatch(/does not mean a mine is open or safe/);

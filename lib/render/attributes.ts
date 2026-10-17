@@ -355,14 +355,27 @@ export function holdsNumbers(data: FeatureCollection, key: string): boolean {
   return data.features.some((f) => typeof f.properties?.[key] === "number");
 }
 
-/** The measures a layer row offers under "Rank by": the declared measures that hold numbers in the loaded data. */
-export function rankableMeasures(layer: WithAttributes, data: FeatureCollection): Attribute[] {
-  return measuresOf(layer).filter((m) => holdsNumbers(data, m.key));
+/**
+ * The measures a layer row offers under "Rank by": the declared measures that hold numbers in the loaded data, plus the
+ * time attribute the row is ranked by when that is the pick (a dam list sorted by "Year completed"), so the select says
+ * what the list is sorted by instead of "None".
+ */
+export function rankableMeasures(layer: WithAttributes, data: FeatureCollection, pick?: string): Attribute[] {
+  const measures = measuresOf(layer).filter((m) => holdsNumbers(data, m.key));
+  if (pick === undefined || pick === "" || measures.some((m) => m.key === pick)) return measures;
+  const time = attributesOf(layer).find((a) => a.type === "time" && a.key === pick && holdsNumbers(data, a.key));
+  if (time) return [...measures, time];
+  // A layer that declares no measure ranks by its `v` (a ranked view's fallback): the select names it too.
+  if (pick === "v" && !attributesOf(layer).some((a) => a.key === "v") && holdsNumbers(data, "v")) return [...measures, { key: "v", type: "measure", label: "Value" }];
+  return measures;
 }
 
-/** What the row ranks by: the op's pick ("" is None), else the layer's primary measure when the data holds it. */
+/**
+ * What the row ranks by: the op's pick ("" is None), else the layer's primary measure when the data holds it. A pick the
+ * select does not offer (a measure this data lacks) is None, so the list never shows under "None".
+ */
 export function effectiveRankBy(op: { rankBy?: string }, layer: WithAttributes, measures: Attribute[]): string | undefined {
-  if (op.rankBy !== undefined) return op.rankBy === "" ? undefined : op.rankBy;
+  if (op.rankBy !== undefined) return op.rankBy !== "" && measures.some((m) => m.key === op.rankBy) ? op.rankBy : undefined;
   const primary = primaryMeasure(layer);
   return measures.find((m) => m.key === primary?.key)?.key ?? measures[0]?.key;
 }
@@ -389,7 +402,7 @@ export function rankedTop(
   shown: FeatureCollection,
   n: number,
 ): { key: string | undefined; measures: Attribute[]; top: Feature[] } {
-  const measures = rankableMeasures(layer, data);
+  const measures = rankableMeasures(layer, data, op.rankBy);
   const key = effectiveRankBy(op, layer, measures);
   return { key, measures, top: key ? topPlaces(shown, key, n) : [] };
 }

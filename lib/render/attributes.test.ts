@@ -269,4 +269,17 @@ describe("Rank by lists one row per named place", () => {
     const data = fc([seg("Rubicon Trail", -120.1, 78), seg("Rubicon Trail", -120.095, 76)]);
     expect(rankedTop(layer, {}, data, data, 10)).toMatchObject({ key: "v", top: [{ properties: { v: 78 } }] });
   });
+
+  it("says Year completed when the list is sorted by year, and shows no list under None", () => {
+    const layer = { attributes: [{ key: "storageAf", type: "measure", label: "Storage" }, { key: "yearCompleted", type: "time", label: "Year completed" }] as Attribute[] };
+    const dam = (name: string, lon: number, storageAf: number, yearCompleted: number): Feature => ({ type: "Feature", geometry: { type: "Point", coordinates: [lon, 36] }, properties: { name, storageAf, yearCompleted } });
+    const data = fc([dam("Windy Gap", -106, 10, 1985), dam("Glen Canyon Dam", -111.5, 29_875_000, 1963)]);
+    const byYear = rankedTop(layer, { rankBy: "yearCompleted" }, data, data, 10);
+    expect(byYear.key).toBe("yearCompleted");
+    expect(byYear.measures.map((m) => m.label)).toEqual(["Storage", "Year completed"]);
+    expect(byYear.top.map((f) => f.properties?.name)).toEqual(["Windy Gap", "Glen Canyon Dam"]);
+    expect(rankedTop(layer, { rankBy: "" }, data, data, 10)).toMatchObject({ key: undefined, top: [] });
+    // A pick the select does not offer is None, not a list under "None".
+    expect(rankedTop(layer, { rankBy: "heightFt" }, data, data, 10)).toMatchObject({ key: undefined, top: [] });
+  });
 });

@@ -536,17 +536,26 @@ describe("step guard: a data story says what size and color mean", () => {
   const meaning = "Line width is Flow (m³/s); color is Flow vs. the period's median (%), sage low to purple high.";
   const storyTurn = () => {
     const turn = createTurn({ question: "How has the Mississippi's flow changed over the last three months?" });
-    turn.queries.push({ layerId: "river-pulse", bbox: [-97, 29, -86, 48], inputKey: "[]", ok: true, drawable: true, wide: false, meaning });
+    turn.queries.push({
+      layerId: "river-pulse",
+      bbox: [-97, 29, -86, 48],
+      inputKey: "[]",
+      ok: true,
+      drawable: true,
+      wide: false,
+      meaning,
+      caption: "Flow at Mississippi: lowest 7,210 m³/s on 2026-09-20, peak 19,587 m³/s on 2026-08-31 (it nearly triples); now 14,190 m³/s. No repeat. " + meaning,
+    });
     turn.drawn.add("river-pulse");
     return turn;
   };
 
   it("adds the sentence to a note that leaves it out, and leaves a note that has it", async () => {
     const turn = storyTurn();
-    const note = { toolCallId: "n1", toolName: "note", input: { markdown: "Peak 19,587 m³/s on 31 Aug." } };
+    const note = { toolCallId: "n1", toolName: "note", input: { markdown: "Low 7,210 and peak 19,587 m³/s on 31 Aug." } };
     const decision = await decideStep({ calls: [note], hasText: false }, turn, ["note"]);
-    expect(decision.calls[0].input.markdown).toBe(`Peak 19,587 m³/s on 31 Aug.\n\n${meaning}`);
-    const kept = await decideStep({ calls: [{ ...note, input: { markdown: "Peak 19,587 m³/s; width is flow, color the median share." } }] , hasText: false }, storyTurn(), ["note"]);
+    expect(decision.calls[0].input.markdown).toBe(`Low 7,210 and peak 19,587 m³/s on 31 Aug.\n\n${meaning}`);
+    const kept = await decideStep({ calls: [{ ...note, input: { markdown: "Low 7,210, peak 19,587 m³/s; width is flow, color the median share." } }], hasText: false }, storyTurn(), ["note"]);
     expect(kept.changed).toBe(false);
   });
 
@@ -554,5 +563,12 @@ describe("step guard: a data story says what size and color mean", () => {
     const text = "The flow peaked at 19,587 m³/s.\n\n- How does it compare?\n- What about the Ohio?";
     expect(withMeaning(text, meaning)).toBe(`The flow peaked at 19,587 m³/s.\n\n${meaning}\n\n- How does it compare?\n- What about the Ohio?`);
     expect(saysMeaning(meaning)).toBe(true);
+  });
+
+  it("adds the low and the peak from the story when the answer gives neither", async () => {
+    const note = { toolCallId: "n1", toolName: "note", input: { markdown: "The Mississippi is drawn day by day." } };
+    const decision = await decideStep({ calls: [note], hasText: false }, storyTurn(), ["note"]);
+    expect(decision.calls[0].input.markdown).toContain("lowest 7,210 m³/s on 2026-09-20, peak 19,587 m³/s on 2026-08-31 (it nearly triples); now 14,190 m³/s.");
+    expect(decision.calls[0].input.markdown).toContain(meaning);
   });
 });

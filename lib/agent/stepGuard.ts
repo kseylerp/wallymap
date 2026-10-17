@@ -453,28 +453,47 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
     turn.note(`closing text with no note cut from ${noteWords(draft.text)} to ${noteWords(text)} words`);
     changed = true;
   }
-  // 6. A data story's answer says what size (or width, or brightness) and color mean (spec §13): the encoding sentence is
-  // added to the note, or to a closing text with no note (before its follow-up questions), when it leaves that out.
-  const meaning = turn.queries.findLast((q) => q.ok && q.meaning !== undefined)?.meaning;
-  if (meaning) {
+  // 6. A data story's answer has the data's shape (spec §13): the low and the peak with numbers and dates, and what size
+  // (or width, or brightness) and color mean. What the note, or a closing text with no note, leaves out is added from
+  // the story: its first sentence (the low and the peak) and the encoding sentence, before the follow-up questions.
+  const story = turn.queries.findLast((q) => q.ok && q.meaning !== undefined);
+  if (story?.meaning) {
+    const additions = (answer: string) => [
+      ...(story.caption && !hasLowAndPeak(answer) ? [firstSentence(story.caption)] : []),
+      ...(!saysMeaning(answer) ? [story.meaning as string] : []),
+    ];
     const at = calls.findIndex((c) => c.toolName === "note");
     if (at >= 0) {
       const markdown = typeof calls[at].input.markdown === "string" ? (calls[at].input.markdown as string) : "";
-      if (!saysMeaning(markdown)) {
-        calls = calls.map((c, i) => (i === at ? { ...c, input: { ...c.input, markdown: `${markdown.trimEnd()}\n\n${meaning}` } } : c));
-        turn.note("added what size and color mean to the note");
+      const add = additions(markdown);
+      if (add.length > 0) {
+        calls = calls.map((c, i) => (i === at ? { ...c, input: { ...c.input, markdown: `${markdown.trimEnd()}\n\n${add.join(" ")}` } } : c));
+        turn.note("added the story's shape (low and peak, what size and color mean) to the note");
         changed = true;
       }
     } else if (!hasNote && calls.length === 0 && rejected.length === 0 && !dropText && !leakedText && !turn.noted) {
       const base = text ?? draft.text;
-      if (base && !saysMeaning(base)) {
-        text = withMeaning(base, meaning);
-        turn.note("added what size and color mean to the closing text");
+      const add = base ? additions(base) : [];
+      if (base && add.length > 0) {
+        text = withMeaning(base, add.join(" "));
+        turn.note("added the story's shape (low and peak, what size and color mean) to the closing text");
         changed = true;
       }
     }
   }
   return { calls, dropText: dropText || leakedText, rejected, changed, ...(text !== undefined && { text }) };
+}
+
+/** True when an answer gives a low (or weakest) and a peak (or strongest). */
+export function hasLowAndPeak(text: string): boolean {
+  const t = text.toLowerCase();
+  return /\b(low|lowest|minimum|weakest|slack|calm|bottom)/.test(t) && /\b(peak|high|highest|maximum|strongest|fastest)/.test(t);
+}
+
+/** A caption's first sentence (up to its first full stop followed by a space and a capital). */
+function firstSentence(caption: string): string {
+  const m = /^.*?[.;](?=\s+[A-Z])/.exec(caption);
+  return (m ? m[0] : caption).replace(/;$/, ".");
 }
 
 /** True when an answer says what the marks' size (or width, or brightness) and color mean. */

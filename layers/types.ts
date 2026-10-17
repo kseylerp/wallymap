@@ -206,6 +206,8 @@ export type CardSpec = {
   facts?: CardFact[];
   /** Properties holding URLs, shown as named links. */
   links?: { key: string; label: string }[];
+  /** Properties the card never lists: internal codes and repeats of a row it already shows (kind repeating the event). */
+  hidden?: string[];
 };
 
 /**

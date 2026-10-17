@@ -18,7 +18,7 @@
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { bboxesDisjoint } from "./_shared/coverage";
@@ -200,6 +200,39 @@ function isTimeout(err: unknown): boolean {
   return typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
 }
 
+const STEMS_URL = "https://www.sciencebase.gov/catalog/item/63d40479d34e06fef150e7b4";
+const STEMS_SOURCE = "USGS, Assessment of Giant Sequoia Mortality and Regeneration within Burned Groves (ver. 4.0)";
+
+/** What a tree card's crown shares and diameter mean (spec §12b), in the survey's own words. */
+const HELP: Record<string, FieldHelp> = {
+  crownLivePercent: { text: "Share of the tree's canopy still alive and green after the fire.", unit: "%", scale: "0 to 100", source: STEMS_SOURCE, url: STEMS_URL },
+  crownScorchPercent: {
+    text: "Share of the canopy scorched: foliage dead, brown and dried out by the fire's heat.",
+    unit: "%",
+    scale: "0 to 100",
+    source: STEMS_SOURCE,
+    url: STEMS_URL,
+  },
+  crownTorchPercent: { text: "Share of the canopy torched: foliage killed by catching fire.", unit: "%", scale: "0 to 100", source: STEMS_SOURCE, url: STEMS_URL },
+  diameterCm: { text: "Trunk diameter 1.37 m above the ground, measured on the uphill side; given only when measured.", unit: "cm", source: STEMS_SOURCE, url: STEMS_URL },
+};
+
+/** The tree card: alive or dead, where, which fire, and how much of the crown survived. */
+const CARD: CardSpec = {
+  facts: [
+    { key: "kind", label: "Status", values: { live: "Alive", dead: "Dead" } },
+    { key: "grove", label: "Grove" },
+    { key: "fire", label: "Fire" },
+    { key: "crownLivePercent", label: "Crown still green", unit: "%", format: "int" },
+    { key: "crownScorchPercent", label: "Crown scorched", unit: "%", format: "int" },
+    { key: "crownTorchPercent", label: "Crown burned", unit: "%", format: "int" },
+    { key: "diameterCm", label: "Trunk diameter", unit: "cm", format: "int" },
+    { key: "observed", label: "Last surveyed", format: "date" },
+  ],
+  // status repeats kind.
+  hidden: ["status"],
+};
+
 const sequoiaMortality = defineLayer({
   id: "sequoia-mortality",
   title: "Giant sequoia fire survival",
@@ -220,6 +253,8 @@ const sequoiaMortality = defineLayer({
   wide: { orderBy: "trunk diameter in cm", limit: WIDE_LIMIT },
   input: z.object({}),
   style: { geometry: "point", color: layerColor("sequoia-mortality"), cluster: true },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

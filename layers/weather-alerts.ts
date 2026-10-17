@@ -31,7 +31,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, MultiPolygon, Point, Polygon, Position } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { bboxesDisjoint, outsideUs } from "./_shared/coverage";
@@ -353,6 +353,62 @@ async function getJson(ctx: QueryContext, url: string, label: string, cacheKey: 
   }
 }
 
+const CAP_SOURCE = { source: "National Weather Service alerts (Common Alerting Protocol)", url: "https://www.weather.gov/alerts" };
+
+const HELP: Record<string, FieldHelp> = {
+  severity: {
+    text: "How great a threat the alert describes, in the National Weather Service's alert terms: Extreme, Severe, Moderate or Minor (Unknown when not given).",
+    scale: "Minor, Moderate, Severe, Extreme",
+    ...CAP_SOURCE,
+  },
+  urgency: { text: "How soon people should act, in the alert's own terms: Immediate, Expected, Future or Past.", ...CAP_SOURCE },
+  certainty: { text: "How sure the forecaster is that the event will happen, in the alert's own terms: Observed, Likely, Possible or Unlikely.", ...CAP_SOURCE },
+  temperatureC: { text: "Air temperature 2 m above the ground now, from the Open-Meteo weather model at the centre of the view (a model value, not a station reading).", unit: "°C" },
+  windKmh: { text: "Wind speed 10 m above the ground now, from the Open-Meteo weather model.", unit: "km/h" },
+  gustKmh: { text: "Wind gusts 10 m above the ground now, from the Open-Meteo weather model.", unit: "km/h" },
+};
+
+const WEATHER_WORDS: Record<string, string> = {
+  clear: "Clear",
+  "partly cloudy": "Partly cloudy",
+  overcast: "Overcast",
+  fog: "Fog",
+  drizzle: "Drizzle",
+  rain: "Rain",
+  snow: "Snow",
+  "rain showers": "Rain showers",
+  "snow showers": "Snow showers",
+  thunderstorm: "Thunderstorm",
+  unknown: "Unknown",
+};
+
+/**
+ * One card for both feature kinds: an alert (event, severity, ends ...) and the "now" point (temperature, wind ...).
+ * No measure: v is the severity rank on an alert and the temperature on the now point, both shown in words below.
+ */
+const CARD: CardSpec = {
+  facts: [
+    { key: "event", label: "Alert" },
+    { key: "severity", label: "Severity" },
+    { key: "urgency", label: "Urgency" },
+    { key: "certainty", label: "Certainty" },
+    { key: "expires", label: "Ends", format: "date" },
+    { key: "headline", label: "Headline" },
+    { key: "areaDesc", label: "Areas" },
+    { key: "instruction", label: "What to do" },
+    { key: "senderName", label: "Issued by" },
+    { key: "weather", label: "Weather", values: WEATHER_WORDS },
+    { key: "temperatureC", label: "Temperature", unit: "°C", format: "1dp" },
+    { key: "windKmh", label: "Wind", unit: "km/h", format: "1dp" },
+    { key: "gustKmh", label: "Gusts", unit: "km/h", format: "1dp" },
+    { key: "precipitationMm", label: "Precipitation", unit: "mm", format: "1dp" },
+    { key: "snowfallCm", label: "Snowfall", unit: "cm", format: "1dp" },
+  ],
+  /** Kind repeats the event (or is "now"); the WMO weather code is the Weather row in words. */
+  hidden: ["kind", "weatherCode"],
+  links: [{ key: "url", label: "Full alert from the National Weather Service" }],
+};
+
 const weatherAlerts = defineLayer({
   id: "weather-alerts",
   title: "Weather alerts (NWS, live) and current weather",
@@ -375,6 +431,8 @@ const weatherAlerts = defineLayer({
   wide: { orderBy: "severity", limit: WIDE_LIMIT, rank: "most severe" },
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("weather-alerts"), fillOpacity: 0.25, timeField: "t" },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

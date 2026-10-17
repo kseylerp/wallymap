@@ -220,6 +220,18 @@ const DIFFICULTY_LABELS: Record<string, string> = {
   extreme: "Extreme",
 };
 
+/** piste:grooming values in words, the combined ones included ("classic+skating"). */
+const GROOMING_LABELS: Record<string, string> = {
+  classic: "Classic",
+  skating: "Skating",
+  "classic+skating": "Classic and skating",
+  "skating+classic": "Classic and skating",
+  "classic;skating": "Classic and skating",
+  mogul: "Moguls",
+  backcountry: "Not groomed (backcountry)",
+  scooter: "Packed by snowmobile",
+};
+
 const ATTRIBUTES: Attribute[] = [
   { key: "v", type: "ordinal", label: "Difficulty", encode: "color", levels: PISTE_LEVELS, scale: PISTE_SCALE },
   { key: "kind", type: "category", label: "Kind", levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
@@ -256,9 +268,15 @@ const HELP: Record<string, FieldHelp> = {
     url: "https://wiki.openstreetmap.org/wiki/Key:piste:grooming",
   },
   status: { text: "The piste:status tag as mapped (for example open or closed); it is not a live conditions report." },
-  lit: { text: "True when the piste is lit for night skiing (piste:lit)." },
+  lit: { text: "Whether the piste is lit for night skiing (piste:lit)." },
+  route: { text: "Yes when the line is a named ski route (an OpenStreetMap route relation made of many segments), not a single piste." },
   network: { text: "The trail system the piste belongs to, from the OpenStreetMap network tag." },
   t: { text: "The date a mapper last checked the piste on the ground (check_date), when tagged." },
+};
+
+const OSM_ELEMENT: FieldHelp = {
+  text: "The OpenStreetMap element this comes from: node, way or relation, then its number (open it at openstreetmap.org).",
+  url: "https://www.openstreetmap.org/",
 };
 
 const CARD: CardSpec = {
@@ -266,11 +284,14 @@ const CARD: CardSpec = {
   facts: [
     { key: "difficulty", label: "Difficulty", values: DIFFICULTY_LABELS },
     { key: "kind", label: "Kind", values: KIND_LABELS },
-    { key: "grooming", label: "Grooming" },
+    { key: "grooming", label: "Grooming", format: "list", values: GROOMING_LABELS },
     { key: "network", label: "Trail system" },
     { key: "lit", label: "Lit at night" },
     { key: "status", label: "Status" },
     { key: "t", label: "Last checked", format: "date" },
+    { key: "ref", label: "Run number" },
+    { key: "route", label: "Named ski route", values: { true: "Yes" } },
+    { key: "osmId", label: "OpenStreetMap element", help: OSM_ELEMENT },
   ],
 };
 

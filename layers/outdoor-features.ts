@@ -20,7 +20,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { overpassCounts, overpassQuery } from "./_shared/overpass";
 import {
@@ -317,6 +317,80 @@ export function featuresNote(features: Feature[], matched: number, rawElements: 
     : `${head}; the box was not truncated`;
 }
 
+/** Each kind in words for the card. */
+const KIND_LABELS: Record<Kind, string> = {
+  hut: "Hut",
+  shelter: "Shelter",
+  hot_spring: "Hot spring",
+  spring: "Spring",
+  waterfall: "Waterfall",
+  cave: "Cave entrance",
+  pass: "Mountain pass",
+  saddle: "Saddle",
+  peak: "Peak",
+  viewpoint: "Viewpoint",
+  drinking_water: "Drinking water",
+};
+
+const ELEVATION: FieldHelp = { text: "Height above sea level in metres, as the mapper tagged it (OpenStreetMap ele).", unit: "m" };
+
+const HELP: Record<string, FieldHelp> = {
+  ele: ELEVATION,
+  v: ELEVATION,
+  potable: {
+    text: "Whether the water is mapped as safe to drink (OpenStreetMap drinking_water); a mapped spring is not tested water, so treat wild water before drinking.",
+    source: "OpenStreetMap wiki, Key:drinking_water",
+    url: "https://wiki.openstreetmap.org/wiki/Key:drinking_water",
+  },
+  capacity: { text: "How many beds or places the hut or shelter has, as mapped (OpenStreetMap capacity or beds)." },
+  seasonal: { text: "Whether the feature is only there or open part of the year, as mapped (OpenStreetMap seasonal), sometimes naming the seasons." },
+  reservation: { text: "Whether the hut takes or needs a booking, as mapped (OpenStreetMap reservation); prices and dates are not included." },
+};
+
+const OSM_ELEMENT: FieldHelp = {
+  text: "The OpenStreetMap element this comes from: node, way or relation, then its number (open it at openstreetmap.org).",
+  url: "https://www.openstreetmap.org/",
+};
+
+const CARD: CardSpec = {
+  measure: { key: "ele", label: "Elevation", unit: "m" },
+  facts: [
+    { key: "kind", label: "Type", values: KIND_LABELS },
+    { key: "heightM", label: "Waterfall height", unit: "m", format: "m" },
+    { key: "capacity", label: "Beds or places", format: "int" },
+    {
+      key: "shelterType",
+      label: "Shelter",
+      values: {
+        basic_hut: "Basic hut",
+        weather_shelter: "Weather shelter",
+        lean_to: "Lean-to",
+        rock_shelter: "Rock shelter",
+        field_shelter: "Field shelter",
+        sun_shelter: "Sun shelter",
+        pavilion: "Pavilion",
+        changing_rooms: "Changing rooms",
+      },
+    },
+    { key: "potable", label: "Safe to drink" },
+    { key: "fee", label: "Fee" },
+    {
+      key: "reservation",
+      label: "Booking",
+      values: { required: "Required", recommended: "Recommended", yes: "Taken", no: "Not taken", members_only: "Members only" },
+    },
+    {
+      key: "seasonal",
+      label: "Seasonal",
+      format: "list",
+      values: { yes: "Yes", no: "No", spring: "Spring", summer: "Summer", autumn: "Autumn", winter: "Winter", wet_season: "Wet season", dry_season: "Dry season" },
+    },
+    { key: "wikipedia", label: "Wikipedia article" },
+    { key: "wikidata", label: "Wikidata item" },
+    { key: "osmId", label: "OpenStreetMap element", help: OSM_ELEMENT },
+  ],
+};
+
 const outdoorFeatures = defineLayer({
   id: "outdoor-features",
   title: "Huts, springs, peaks and other backcountry features",
@@ -343,6 +417,8 @@ const outdoorFeatures = defineLayer({
   input: inputSchema,
   // M4 hint: extrude v (peaks), cluster (Task 0's StyleHints fields).
   style: { geometry: "point", color: layerColor("outdoor-features"), extrude: "v", cluster: true },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input: FeaturesInput): Promise<LayerResult | LayerError> {
     const kinds = input.kinds ?? KINDS;

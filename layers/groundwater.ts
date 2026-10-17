@@ -20,7 +20,7 @@
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { defineLayer, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type QueryContext, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -117,6 +117,41 @@ export function normalizeWells(body: unknown): Feature<Point>[] {
   return out;
 }
 
+const WELLS_URL = "https://api.waterdata.usgs.gov/ogcapi/v1/collections/latest-field-measurements";
+
+/** What a well card's depth and status mean (spec §12b). */
+const HELP: Record<string, FieldHelp> = {
+  v: {
+    text:
+      "How far below the land surface the water stood in the well at the newest manual measurement; negative means the water stands above the " +
+      "ground, as in a flowing well. One reading per well, so it shows no trend.",
+    unit: "ft below land surface",
+    source: "USGS Water Data API, latest field measurements (parameter 72019)",
+    url: WELLS_URL,
+  },
+  kind: { text: "Whether the well was measured undisturbed: static is the resting water level; otherwise it was pumped or disturbed." },
+  condition: { text: "The qualifiers the USGS recorded with the measurement, such as Static (undisturbed) or Pumping." },
+  approval: { text: "Whether the USGS has approved the measurement or it is still provisional and may be revised." },
+};
+
+/** The well card: depth to water under its own name, when and how it was measured. */
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Depth to water", unit: "ft" },
+  facts: [
+    { key: "date", label: "Measured", format: "date" },
+    { key: "kind", label: "Water level", values: { static: "Static (undisturbed)", other: "Pumped or otherwise disturbed", unspecified: "Condition not given" } },
+    { key: "condition", label: "Conditions noted" },
+    { key: "method", label: "Method" },
+    { key: "approval", label: "Review status" },
+    { key: "site", label: "USGS site" },
+  ],
+  links: [
+    { key: "url", label: "USGS well page" },
+  ],
+  // siteNo repeats site without its prefix.
+  hidden: ["siteNo"],
+};
+
 const groundwater = defineLayer({
   id: "groundwater",
   title: "Groundwater levels",
@@ -139,6 +174,8 @@ const groundwater = defineLayer({
       .describe("Only wells measured in this year or later (default: five years back)."),
   }),
   style: { geometry: "point", color: layerColor("groundwater"), unit: "ft", extrude: "v", heat: true },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

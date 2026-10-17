@@ -25,7 +25,7 @@
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { rankedSparql, wikimediaFetch } from "./_shared/wikimedia";
@@ -271,6 +271,30 @@ export function buildFeatures(hits: Hit[], summaries: Map<number, Summary>, lang
   });
 }
 
+const HELP: Record<string, FieldHelp> = {
+  languages: {
+    text:
+      "How many Wikipedia language editions have an article on this place (Wikidata sitelinks), a rough measure of how well known it is; " +
+      "a wide view ranks places by it.",
+    source: "Wikidata",
+    url: "https://www.wikidata.org/",
+  },
+  extract: { text: "The first two sentences of the article, as Wikipedia gives them; read the article for more." },
+};
+
+const CARD: CardSpec = {
+  facts: [
+    { key: "extract", label: "From the article" },
+    { key: "languages", label: "Wikipedia languages", format: "int" },
+  ],
+  /** Title is the article title, already the card heading. */
+  hidden: ["title"],
+  links: [
+    { key: "url", label: "Read on Wikipedia" },
+    { key: "thumbnail", label: "Picture" },
+  ],
+};
+
 const wikipediaNearby = defineLayer({
   id: "wikipedia-nearby",
   title: "Wikipedia nearby",
@@ -292,6 +316,8 @@ const wikipediaNearby = defineLayer({
   wide: { mode: "named", orderBy: "number of Wikipedia languages", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("wikipedia-nearby"), cluster: true },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const { lang } = input;

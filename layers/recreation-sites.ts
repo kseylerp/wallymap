@@ -24,7 +24,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
@@ -320,6 +320,41 @@ export function interleave<T>(a: T[], b: T[], limit: number): T[] {
 
 const inputSchema = z.object({});
 
+const HELP: Record<string, FieldHelp> = {
+  kind: {
+    text:
+      "The type of site, from the Forest Service's own marker group, or read from the name for BLM facilities and sites (BLM only says 'facility'), so it can be wrong.",
+  },
+  status: { text: "Open or closed as the Forest Service's nightly feed from the Recreation Portal reports it; not a live closure notice." },
+  reservable: { text: "BLM marks the facility as reservable; check dates and fees on the linked page or recreation.gov." },
+};
+
+const KIND_LABELS: Record<string, string> = {
+  campground: "Campground",
+  trailhead: "Trailhead",
+  "day use area": "Day use area",
+  "water access": "Water access (boat ramp or beach)",
+  viewpoint: "Viewpoint",
+  trail: "Trail",
+  "visitor center": "Visitor center",
+  "winter sports": "Winter sports area",
+  "OHV area": "Off-highway vehicle area",
+  "recreation area": "Recreation area",
+};
+
+const CARD: CardSpec = {
+  facts: [
+    { key: "kind", label: "Type", values: KIND_LABELS },
+    { key: "agency", label: "Managed by", values: { USFS: "US Forest Service", BLM: "Bureau of Land Management" } },
+    { key: "forest", label: "Forest" },
+    { key: "state", label: "State" },
+    { key: "status", label: "Status", values: { open: "Open", closed: "Closed" } },
+    { key: "reservable", label: "Reservable", values: { true: "Yes" } },
+    { key: "activities", label: "Activities", format: "list" },
+  ],
+  links: [{ key: "url", label: "Agency page" }],
+};
+
 const recreationSites = defineLayer({
   id: "recreation-sites",
   title: "Recreation sites",
@@ -342,6 +377,8 @@ const recreationSites = defineLayer({
   wide: { mode: "named", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("recreation-sites"), cluster: true },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx: QueryContext): Promise<LayerResult | LayerError> {
     const citation = {

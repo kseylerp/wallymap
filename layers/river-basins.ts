@@ -17,7 +17,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult } from "./types";
+import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -105,6 +105,36 @@ export function normalizeBasins(fc: FeatureCollection, level: Level): FeatureCol
   return { type: "FeatureCollection", features };
 }
 
+const WBD_URL = "https://www.usgs.gov/national-hydrography/watershed-boundary-dataset";
+
+/** What the area, code and level on a basin card mean (spec §12b). */
+const HELP: Record<string, FieldHelp> = {
+  v: { text: "The unit's area in square kilometres.", unit: "km²", source: "USGS Watershed Boundary Dataset", url: WBD_URL },
+  huc: {
+    text:
+      "The hydrologic unit code, the USGS identifier for this drainage area: 2 digits for a region, 4 for a subregion, 6 for a basin, 8 for a " +
+      "subbasin, 10 for a watershed. A longer code nests inside the unit named by its first digits.",
+    source: "USGS Watershed Boundary Dataset",
+    url: WBD_URL,
+  },
+  kind: {
+    text: "How fine this unit is in the USGS nesting of drainage areas, from the 22 regions down to watersheds.",
+    scale: "Region (2-digit code), subregion (4), basin (6), subbasin (8), watershed (10)",
+  },
+};
+
+/** The basin card: its area, its level in words and its code. */
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Area", unit: "km²" },
+  facts: [
+    { key: "kind", label: "Level", values: { huc2: "Region", huc4: "Subregion", huc6: "Basin", huc8: "Subbasin", huc10: "Watershed" } },
+    { key: "huc", label: "Hydrologic unit code" },
+    { key: "states", label: "States", format: "list", values: { CN: "Canada" } },
+  ],
+  // hucLevel repeats kind as a digit count.
+  hidden: ["hucLevel"],
+};
+
 const riverBasins = defineLayer({
   id: "river-basins",
   title: "River basins and watersheds",
@@ -123,6 +153,8 @@ const riverBasins = defineLayer({
       .describe("Hydrologic unit level: huc2 regions, huc4 subregions, huc6 basins, huc8 subbasins, huc10 watersheds. Default follows the zoom."),
   }),
   style: { geometry: "polygon", color: layerColor("river-basins"), fillOpacity: 0.1 },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

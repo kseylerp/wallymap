@@ -15,7 +15,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { bboxesDisjoint } from "./_shared/coverage";
@@ -67,6 +67,40 @@ export function normalizeGroves(fc: FeatureCollection): FeatureCollection {
   return { type: "FeatureCollection", features };
 }
 
+/** The grove map's land steward codes, spelled out. */
+const STEWARDS: Record<string, string> = {
+  "NPS SEKI": "Sequoia and Kings Canyon National Parks",
+  "NPS Yosemite": "Yosemite National Park",
+  "USFS SQF GSNM": "Sequoia National Forest (Giant Sequoia National Monument)",
+  "USFS SNF": "Sierra National Forest",
+  "USFS SNF & SQF GSNM": "Sierra and Sequoia National Forests (Giant Sequoia National Monument)",
+  "USFS TNF": "Tahoe National Forest",
+  "DOI BLM": "Bureau of Land Management",
+  TRIR: "Tule River Indian Reservation",
+  "Cal-Fire": "CAL FIRE (California Department of Forestry and Fire Protection)",
+  // Spelled this way in the source.
+  "UC Berekeley": "University of California, Berkeley",
+};
+
+/** What a grove card's numbers mean (spec §12b). */
+const HELP: Record<string, FieldHelp> = {
+  v: {
+    text: "The grove's area from the 2024 grove map, which the service labels a draft.",
+    unit: "acres",
+    source: "Giant sequoia grove boundaries (2024), Sequoia and Kings Canyon National Parks",
+    url: "https://www.nps.gov/seki/learn/nature/giant-sequoias.htm",
+  },
+  stewards: { text: "Who manages the land in the grove, as the grove map lists it." },
+};
+
+/** The grove card: its area and who manages it, in words. */
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Area", unit: "acres" },
+  facts: [{ key: "stewards", label: "Land managed by", format: "list", values: STEWARDS }],
+  // kind is always "grove".
+  hidden: ["kind"],
+};
+
 const sequoiaGroves = defineLayer({
   id: "sequoia-groves",
   title: "Giant sequoia groves",
@@ -85,6 +119,8 @@ const sequoiaGroves = defineLayer({
   wide: { orderBy: "acres", limit: WIDE_LIMIT },
   input: z.object({}),
   style: { geometry: "polygon", color: layerColor("sequoia-groves"), unit: "acres", fillOpacity: 0.3 },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

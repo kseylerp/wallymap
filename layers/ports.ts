@@ -18,7 +18,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -106,6 +106,43 @@ function isTimeout(err: unknown): boolean {
   return typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
 }
 
+const PORTS_URL = "https://geodata.bts.gov/datasets/usdot::principal-ports/about";
+const PORTS_SOURCE = "US Army Corps of Engineers, Waterborne Commerce Statistics, via BTS";
+
+/** What a port card's tonnage and rank mean (spec §12b). */
+const HELP: Record<string, FieldHelp> = {
+  v: {
+    text: "Total cargo the port handled in calendar year 2023, domestic plus foreign, by weight in short tons (2,000 lb), not value or containers.",
+    unit: "short tons",
+    source: PORTS_SOURCE,
+    url: PORTS_URL,
+  },
+  rank: {
+    text:
+      "The port's place among the 150 principal US ports by total tonnage in calendar year 2023, in the US Army Corps of Engineers Waterborne " +
+      "Commerce data: 1 handled the most cargo.",
+    scale: "1 is the most tons",
+    source: PORTS_SOURCE,
+    url: PORTS_URL,
+  },
+  kind: { text: "Coastal ports are on the sea coasts, internal ports on rivers and inland waterways, Great Lakes ports on the Great Lakes." },
+};
+
+/** The port card: 2023 cargo under its own name, its rank, and the split by direction. */
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Cargo in 2023", unit: "short tons" },
+  facts: [
+    { key: "rank", label: "Rank among US ports", format: "int" },
+    { key: "kind", label: "Port type", values: { Coastal: "Coastal", Internal: "Inland (rivers and waterways)", "Great Lakes": "Great Lakes" } },
+    { key: "domesticTons", label: "Domestic", unit: "short tons", format: "int" },
+    { key: "foreignTons", label: "Foreign", unit: "short tons", format: "int" },
+    { key: "importTons", label: "Imports", unit: "short tons", format: "int" },
+    { key: "exportTons", label: "Exports", unit: "short tons", format: "int" },
+  ],
+  // portCode is a USACE identifier with no meaning to a reader.
+  hidden: ["portCode"],
+};
+
 const ports = defineLayer({
   id: "ports",
   title: "Principal US ports",
@@ -124,6 +161,8 @@ const ports = defineLayer({
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
   style: { geometry: "point", color: layerColor("ports"), unit: "short tons", extrude: "v" },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

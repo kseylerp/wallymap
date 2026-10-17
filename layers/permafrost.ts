@@ -22,7 +22,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { mapServerExportTileUrl } from "./_shared/arcgis-tiles";
@@ -73,6 +73,37 @@ export function normalizePermafrost(fc: FeatureCollection): Feature<Geometry>[] 
   return out;
 }
 
+const IPA_URL = "https://nsidc.org/data/ggd318/versions/2";
+const IPA_SOURCE = "IPA Circum-Arctic Map of Permafrost and Ground-Ice Conditions (Brown et al., NSIDC)";
+
+/** What a permafrost zone's classes mean (spec §12b), in the map's own terms. */
+const HELP: Record<string, FieldHelp> = {
+  kind: {
+    text: "How much of the ground is frozen year-round in this zone.",
+    scale: "Continuous 90 to 100%, discontinuous 50 to 90%, sporadic 10 to 50%, isolated 0 to 10%",
+    source: IPA_SOURCE,
+    url: IPA_URL,
+  },
+  percent: { text: "The share of the ground frozen year-round, as the zone's class range.", source: IPA_SOURCE, url: IPA_URL },
+  groundIce: {
+    text: "How much ice the top 10 to 20 m of ground holds: high over 20%, medium 10 to 20%, low under 10%. High-ice ground slumps and sinks most when it thaws.",
+    source: IPA_SOURCE,
+    url: IPA_URL,
+  },
+  relict: { text: "Old permafrost left from colder times." },
+};
+
+/** The zone card: the zone in words, its share of frozen ground, ground ice and landform. */
+const CARD: CardSpec = {
+  facts: [
+    { key: "kind", label: "Zone", values: { continuous: "Continuous", discontinuous: "Discontinuous", sporadic: "Sporadic", isolated: "Isolated" } },
+    { key: "percent", label: "Ground frozen" },
+    { key: "groundIce", label: "Ground ice" },
+    { key: "landform", label: "Landform" },
+    { key: "relict", label: "Relict permafrost", values: { yes: "Yes" } },
+  ],
+};
+
 const permafrost = defineLayer({
   id: "permafrost",
   title: "Permafrost zones",
@@ -91,6 +122,8 @@ const permafrost = defineLayer({
   maxAreaKm2: 5_000_000,
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("permafrost"), fillOpacity: 0.4 },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const retrieved = new Date().toISOString();

@@ -16,7 +16,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, MultiPolygon, Polygon, Position } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { bboxesDisjoint } from "./_shared/coverage";
@@ -137,6 +137,31 @@ export function parseHmsKml(kml: string, day: string, within?: BBox): Feature<Po
 
 type DayResult = { day: string; features: Feature<Polygon | MultiPolygon>[] } | { day: string; missing: true } | { day: string; error: string };
 
+const DENSITY_HELP: FieldHelp = {
+  text:
+    "How thick the smoke is overhead, as NOAA analysts class it from the satellite images: Light, Medium or Heavy (1, 2 or 3 on the map). It is the " +
+    "whole column of air, not the air you breathe at the ground.",
+  scale: "Light (1), Medium (2), Heavy (3)",
+  source: "NOAA NESDIS Hazard Mapping System",
+  url: "https://www.ospo.noaa.gov/products/land/hms.html",
+};
+
+const HELP: Record<string, FieldHelp> = {
+  density: DENSITY_HELP,
+  v: DENSITY_HELP,
+  satellite: { text: "The GOES weather satellite whose images the analyst drew the plume from (GOES East or GOES West)." },
+};
+
+/** The density class in words is the measure; v (its number, 1 to 3) is what the map shades by. */
+const CARD: CardSpec = {
+  measure: { key: "density", label: "Smoke density class" },
+  facts: [
+    { key: "satellite", label: "Satellite", values: { "GOES-EAST": "GOES East", "GOES-WEST": "GOES West" } },
+    { key: "start", label: "Seen from", format: "date" },
+    { key: "end", label: "Seen until", format: "date" },
+  ],
+};
+
 const smoke = defineLayer({
   id: "smoke",
   title: "Wildfire smoke",
@@ -158,6 +183,8 @@ const smoke = defineLayer({
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("smoke"), unit: "class", fillOpacity: 0.35 },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = Date.now();

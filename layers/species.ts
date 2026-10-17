@@ -181,11 +181,23 @@ function isTimeout(err: unknown): boolean {
   return typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
 }
 
+/** iNaturalist licence codes as their licences are written. */
+export const LICENSE_LABELS: Record<string, string> = {
+  cc0: "CC0 (no rights reserved)",
+  "cc-by": "CC BY",
+  "cc-by-sa": "CC BY-SA",
+  "cc-by-nd": "CC BY-ND",
+  "cc-by-nc": "CC BY-NC",
+  "cc-by-nc-sa": "CC BY-NC-SA",
+  "cc-by-nc-nd": "CC BY-NC-ND",
+  "all-rights-reserved": "All rights reserved",
+};
+
 const HELP: Record<string, FieldHelp> = {
   v: { text: "Always 1: each point is one sighting, so where points pile up is where people see and post things." },
   license: {
     text:
-      "The licence the observer chose for the observation (for example cc-by-nc or cc0); all-rights-reserved when none; cite or link it when " +
+      "The licence the observer chose for the observation (for example CC BY-NC or CC0); all rights reserved when none; cite or link it when " +
       "showing it.",
     source: "iNaturalist",
     url: "https://www.inaturalist.org/",
@@ -195,9 +207,11 @@ const HELP: Record<string, FieldHelp> = {
 
 const CARD: CardSpec = {
   facts: [
+    // A sighting has no name, so the species leads the card.
+    { key: "species", label: "Species" },
     { key: "scientificName", label: "Scientific name" },
     { key: "observedOn", label: "Seen on", format: "date" },
-    { key: "license", label: "Licence" },
+    { key: "license", label: "Licence", values: LICENSE_LABELS },
   ],
   links: [{ key: "url", label: "Observation on iNaturalist" }],
 };

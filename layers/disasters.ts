@@ -28,7 +28,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { bboxAreaKm2, defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { outsideUs } from "./_shared/coverage";
@@ -287,6 +287,73 @@ async function femaPart(ctx: QueryContext, years: number, now: number): Promise<
   }
 }
 
+const FEMA_URL = "https://www.fema.gov/disaster/declarations";
+
+const DECLARATIONS: FieldHelp = {
+  text:
+    "How many FEMA disaster declarations named this county in the years asked for (default the last 5). A declaration means federal aid was " +
+    "approved, not how bad the damage was.",
+  source: "FEMA, Disaster Declarations Summaries",
+  url: FEMA_URL,
+};
+
+const HELP: Record<string, FieldHelp> = {
+  v: DECLARATIONS,
+  alertLevel: {
+    text: "The GDACS alert level for the event: green minor, orange moderate, red severe humanitarian impact.",
+    scale: "green, orange, red",
+    source: "GDACS (Global Disaster Alert and Coordination System)",
+    url: "https://www.gdacs.org/",
+  },
+  fips: {
+    text: "The county's five-digit FIPS code (two digits for the state, three for the county), the US Census identifier the FEMA declarations are joined to the county outline by.",
+  },
+  kinds: { text: "How many of the county's declarations were of each kind of disaster in the period." },
+};
+
+/** Kinds in words: GDACS's four and FEMA's incident types (lowercased by femaKind). */
+const KIND_LABELS: Record<string, string> = {
+  flood: "Flood",
+  cyclone: "Tropical cyclone (hurricane, typhoon or tropical storm)",
+  drought: "Drought",
+  wildfire: "Wildfire",
+  "severe storm": "Severe storm",
+  "winter storm": "Winter storm",
+  "severe ice storm": "Severe ice storm",
+  snowstorm: "Snowstorm",
+  tornado: "Tornado",
+  earthquake: "Earthquake",
+  tsunami: "Tsunami",
+  "volcanic eruption": "Volcanic eruption",
+  "mud/landslide": "Mudslide or landslide",
+  "dam/levee break": "Dam or levee break",
+  biological: "Biological (disease outbreak)",
+  other: "Other",
+};
+
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Disaster declarations" },
+  facts: [
+    { key: "kind", label: "Disaster", values: KIND_LABELS },
+    { key: "source", label: "Source", values: { GDACS: "GDACS global disaster alerts", FEMA: "FEMA disaster declarations" } },
+    { key: "alertLevel", label: "Alert level", values: { green: "Green (minor)", orange: "Orange (moderate)", red: "Red (severe)" } },
+    { key: "severity", label: "Severity" },
+    { key: "country", label: "Country" },
+    { key: "current", label: "Ongoing", values: { yes: "Yes", no: "No" } },
+    { key: "until", label: "Last updated", format: "date" },
+    { key: "latest", label: "Latest declaration" },
+    { key: "kinds", label: "Declarations by kind", format: "list" },
+    { key: "declarations", label: "Recent declarations" },
+    { key: "state", label: "State" },
+    { key: "fips", label: "County FIPS code" },
+    { key: "eventId", label: "GDACS event" },
+  ],
+  links: [
+    { key: "url", label: "GDACS report" },
+    { key: "footprintUrl", label: "Affected area (GeoJSON)" },
+  ],
+};
+
 const disasters = defineLayer({
   id: "disasters",
   title: "Disasters (GDACS alerts and FEMA declarations)",
@@ -306,6 +373,8 @@ const disasters = defineLayer({
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("disasters"), fillOpacity: 0.35, timeField: "t" },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = Date.now();

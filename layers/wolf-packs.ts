@@ -16,7 +16,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { bboxesDisjoint } from "./_shared/coverage";
@@ -85,6 +85,36 @@ export function simplifyOffset(bbox: BBox): number {
   return Math.min(0.02, Math.max(0.001, span / 300));
 }
 
+const STATUS_HELP: FieldHelp = {
+  text:
+    "The pack's status that year as the Washington Department of Fish and Wildlife records it: Breeding Pairs, Nonbreeding Pack or Single Wolf " +
+    "Territory. This layer does not publish it for 2014 to 2021.",
+  source: "Washington Department of Fish and Wildlife",
+  url: "https://wdfw.wa.gov/species-habitats/species/canis-lupus",
+};
+
+const HELP: Record<string, FieldHelp> = { kind: STATUS_HELP, status: STATUS_HELP };
+
+/** kind is the status, or "Not recorded" before 2022, so it is the one status row; status itself is not repeated. */
+const CARD: CardSpec = {
+  facts: [
+    { key: "pack", label: "Pack" },
+    { key: "year", label: "Year" },
+    {
+      key: "kind",
+      label: "Pack status",
+      values: {
+        "Breeding Pairs": "Breeding pair",
+        "Nonbreeding Pack": "Pack, not breeding",
+        "Single Wolf Territory": "Single wolf's territory",
+        [NOT_RECORDED]: "Not published for this year",
+      },
+    },
+  ],
+  /** Status is the pack status row again (kind holds it, or "Not recorded"). */
+  hidden: ["status"],
+};
+
 const wolfPacks = defineLayer({
   id: "wolf-packs",
   title: "Wolf packs (Washington)",
@@ -104,6 +134,8 @@ const wolfPacks = defineLayer({
   wide: { orderBy: "year", limit: WIDE_LIMIT, rank: "newest" },
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("wolf-packs"), fillOpacity: 0.3 },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

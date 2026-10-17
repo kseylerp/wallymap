@@ -29,7 +29,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type Attribute, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type Attribute, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { nameAttribute, timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
@@ -375,6 +375,28 @@ const ATTRIBUTES: Attribute[] = [
   nameAttribute("Title", "title"),
 ];
 
+const SOURCE_NAMES: Record<string, string> = { commons: "Wikimedia Commons", mapillary: "Mapillary" };
+
+const HELP: Record<string, FieldHelp> = {
+  languages: {
+    text: "How many Wikipedia language editions have an article about the place in the photo (Wikidata sitelinks); a wide view ranks places by it, so the best-known come first.",
+    source: "Wikidata",
+    url: "https://www.wikidata.org/",
+  },
+  wikidata: { text: "The Wikidata item of the place the photo shows (wide views only)." },
+};
+
+/** No measure: v is always 1 (one photo), so the card leaves it out. */
+const CARD: CardSpec = {
+  facts: [
+    { key: "source", label: "Source", values: SOURCE_NAMES },
+    { key: "title", label: "File name" },
+    { key: "languages", label: "Wikipedia languages", format: "int" },
+    { key: "wikidata", label: "Wikidata item" },
+  ],
+  links: [{ key: "url", label: "Open the photo" }],
+};
+
 const photos = defineLayer({
   id: "photos",
   title: "Photo density",
@@ -398,6 +420,8 @@ const photos = defineLayer({
   wide: { mode: "named", orderBy: "number of Wikipedia languages", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("photos") },
+  fieldHelp: HELP,
+  card: CARD,
   attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {

@@ -21,7 +21,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -104,6 +104,27 @@ export function normalizeCriticalHabitat(fc: FeatureCollection): FeatureCollecti
   return { type: "FeatureCollection", features };
 }
 
+const FWS_SOURCE = { source: "US Fish and Wildlife Service, Critical Habitat", url: "https://ecos.fws.gov/ecp/report/table/critical-habitat.html" };
+
+const HELP: Record<string, FieldHelp> = {
+  status: { text: "Final means the designation is in force; Proposed means it is a proposed rule, not yet in force.", ...FWS_SOURCE },
+  listingStatus: { text: "How the species is listed under the Endangered Species Act: Endangered or Threatened (or proposed for either).", ...FWS_SOURCE },
+  federalRegister: { text: "The Federal Register citation of the rule that designated the habitat: the volume, FR, then the page.", ...FWS_SOURCE },
+};
+
+const CARD: CardSpec = {
+  facts: [
+    { key: "species", label: "Species" },
+    { key: "scientificName", label: "Scientific name" },
+    { key: "listingStatus", label: "Listed as" },
+    { key: "status", label: "Designation", values: { Final: "Final (in force)", Proposed: "Proposed (not yet in force)" } },
+    { key: "published", label: "Rule published", format: "date" },
+    { key: "federalRegister", label: "Federal Register rule" },
+  ],
+  /** Kind is the species again, kept for filtering. */
+  hidden: ["kind"],
+};
+
 const criticalHabitat = defineLayer({
   id: "critical-habitat",
   title: "Critical habitat",
@@ -124,6 +145,8 @@ const criticalHabitat = defineLayer({
   wide: { orderBy: "area", limit: MAX_RECORDS },
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("critical-habitat"), fillOpacity: 0.25 },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

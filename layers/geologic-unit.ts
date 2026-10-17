@@ -14,7 +14,7 @@
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
@@ -112,6 +112,36 @@ export function identifyFeature(
   return { type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] }, properties };
 }
 
+const MACROSTRAT_URL = "https://macrostrat.org/";
+
+/** What the ages and map scale on a rock card mean (spec §12b). */
+const HELP: Record<string, FieldHelp> = {
+  ageTopMa: { text: "The youngest age of the map unit, in millions of years before present.", unit: "million years ago", source: "Macrostrat", url: MACROSTRAT_URL },
+  ageBottomMa: { text: "The oldest age of the map unit, in millions of years before present.", unit: "million years ago", source: "Macrostrat", url: MACROSTRAT_URL },
+  mapScale: { text: "Which Macrostrat map this unit comes from: large is the most detailed, then medium, small and tiny." },
+  alsoMapped: { text: "What Macrostrat's coarser maps call the same spot." },
+};
+
+/** The rock card: the unit's age span, rocks and description, and the source map. */
+const CARD: CardSpec = {
+  facts: [
+    { key: "age", label: "Age" },
+    { key: "ageTopMa", label: "Youngest age", unit: "million years ago" },
+    { key: "ageBottomMa", label: "Oldest age", unit: "million years ago" },
+    { key: "lithology", label: "Rock types" },
+    { key: "description", label: "Description" },
+    { key: "formations", label: "Formations" },
+    {
+      key: "mapScale",
+      label: "Map detail",
+      values: { large: "Large scale (most detailed)", medium: "Medium scale", small: "Small scale", tiny: "Tiny scale (least detailed)" },
+    },
+    { key: "alsoMapped", label: "On coarser maps" },
+    { key: "reference", label: "Source map" },
+  ],
+  links: [{ key: "url", label: "Open on Macrostrat" }],
+};
+
 const geologicUnit = defineLayer({
   id: "geologic-unit",
   title: "Geologic unit at a point",
@@ -130,6 +160,8 @@ const geologicUnit = defineLayer({
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
   style: { geometry: "point", color: layerColor("geologic-unit") },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

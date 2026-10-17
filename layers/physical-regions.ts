@@ -17,7 +17,7 @@ import {
   regionProp,
   regionRank,
 } from "@/lib/agent/naturalEarth";
-import { bboxAreaKm2, defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { bboxAreaKm2, defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { bboxesDisjoint } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
@@ -84,6 +84,50 @@ function toPolygonFeature(feature: Feature, kind: RegionKind): Feature<Geometry>
   return { type: "Feature", geometry: feature.geometry, properties };
 }
 
+/** Every Natural Earth feature class the file holds (read 2026-10-16), in words; continents are never returned. */
+const FEATURE_CLASS_LABELS: Record<string, string> = {
+  "Range/mtn": "Mountain range",
+  Desert: "Desert",
+  Plain: "Plain",
+  Plateau: "Plateau",
+  Basin: "Basin",
+  Peninsula: "Peninsula",
+  "Pen/cape": "Peninsula or cape",
+  Island: "Island",
+  "Island group": "Island group",
+  Valley: "Valley",
+  Lowland: "Lowland",
+  Gorge: "Gorge",
+  Delta: "Delta",
+  Wetlands: "Wetlands",
+  Coast: "Coast",
+  Foothills: "Foothills",
+  Tundra: "Tundra",
+  Isthmus: "Isthmus",
+  Depression: "Depression",
+  Lake: "Lake",
+  Geoarea: "Named region",
+};
+
+const HELP: Record<string, FieldHelp> = {
+  featureClass: {
+    text: "The kind of landform as Natural Earth classes it (its feature class), such as mountain range, desert, plateau or island group.",
+    source: "Natural Earth, 10m geography regions",
+    url: "https://www.naturalearthdata.com/downloads/10m-physical-vectors/10m-physical-labels/",
+  },
+};
+
+const CARD: CardSpec = {
+  facts: [
+    { key: "featureClass", label: "Landform", values: FEATURE_CLASS_LABELS },
+    { key: "altName", label: "Also called" },
+    { key: "region", label: "Continent or ocean" },
+    { key: "subregion", label: "Part of" },
+  ],
+  /** Kind is the landform grouped for filtering (range, desert ... other). */
+  hidden: ["kind"],
+};
+
 const physicalRegions = defineLayer({
   id: "physical-regions",
   title: "Named physical regions",
@@ -102,6 +146,8 @@ const physicalRegions = defineLayer({
   maxAreaKm2: 30_000_000,
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("physical-regions"), fillOpacity: 0 },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     let fc: FeatureCollection;

@@ -14,7 +14,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type CardSpec, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { bboxesDisjoint } from "./_shared/coverage";
@@ -61,6 +61,18 @@ export function normalizeRange(fc: FeatureCollection, historic: boolean): Featur
   return features;
 }
 
+const CARD: CardSpec = {
+  facts: [
+    {
+      key: "kind",
+      label: "Range",
+      values: { current: "Current range", experimental: "Experimental release area (current)", historic: "Historic range (early 1800s)" },
+    },
+  ],
+  /** Era repeats what the range says (today or early 1800s). */
+  hidden: ["era"],
+};
+
 const condorRange = defineLayer({
   id: "condor-range",
   title: "California condor range",
@@ -79,6 +91,7 @@ const condorRange = defineLayer({
   wide: { orderBy: "area", limit: WIDE_LIMIT },
   input: z.object({}),
   style: { geometry: "polygon", color: layerColor("condor-range"), fillOpacity: 0.25 },
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

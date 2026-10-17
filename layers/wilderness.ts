@@ -10,7 +10,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult } from "./types";
+import { bboxAreaKm2, defineLayer, type CardSpec, type FieldHelp, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -73,6 +73,32 @@ export function normalizeWilderness(fc: FeatureCollection): FeatureCollection {
   return { type: "FeatureCollection", features };
 }
 
+/** The managing agencies spelled out for the card (the property keeps the short form). */
+const AGENCY_NAMES: Record<string, string> = {
+  USFS: "US Forest Service",
+  BLM: "Bureau of Land Management",
+  NPS: "National Park Service",
+  FWS: "US Fish and Wildlife Service",
+};
+
+const ACRES: FieldHelp = { text: "The area of the wilderness in acres as the service records it, which can differ slightly from the drawn shape.", unit: "acres" };
+
+const HELP: Record<string, FieldHelp> = {
+  acres: ACRES,
+  v: ACRES,
+  designated: { text: "The year Congress designated the area as wilderness." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "acres", label: "Area", unit: "acres" },
+  facts: [
+    { key: "agency", label: "Managed by", values: AGENCY_NAMES },
+    // A year: printed as it is ("1964"), never with a thousands comma.
+    { key: "designated", label: "Designated", format: "date" },
+    { key: "state", label: "State" },
+  ],
+};
+
 const wilderness = defineLayer({
   id: "wilderness",
   title: "Wilderness areas",
@@ -92,6 +118,8 @@ const wilderness = defineLayer({
   maxAreaKm2: 400_000,
   input: z.object({}),
   style: { geometry: "polygon", color: layerColor("wilderness"), fillOpacity: 0.22 },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

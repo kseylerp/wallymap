@@ -118,7 +118,7 @@ export function cardContent(feature: Feature, opts: { unit?: string; card?: Card
   const summary = summarizeFeature(feature, unit, card ? 0 : 8);
   if (!card) return plainContent(feature, summary, unit, fieldHelp);
 
-  const used = new Set<string>(HIDDEN);
+  const used = new Set<string>([...HIDDEN, ...(card.hidden ?? [])]);
   let measure: CardRow | null = null;
   // Properties the measure already shows (its twin copies of v): not repeated as facts.
   const shown = new Set<string>();
@@ -155,6 +155,8 @@ export function cardContent(feature: Feature, opts: { unit?: string; card?: Card
   for (const [key, raw] of Object.entries(props)) {
     if (used.has(key) || raw === null || raw === undefined || raw === "") continue;
     if (typeof raw === "object") continue;
+    // v is the number the map draws by: a schema with no measure, or whose measure is shown, has named it elsewhere.
+    if (key === "v" && (!card.measure || measure !== null)) continue;
     // An address the schema does not name is still a link by name, not text.
     if (isUrl(raw)) {
       links.push(urlLink(key, raw));

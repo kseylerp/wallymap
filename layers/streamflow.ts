@@ -40,7 +40,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type Citation, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type Citation, type LayerError, type LayerResult, type QueryContext, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { outsideUs } from "./_shared/coverage";
@@ -590,6 +590,53 @@ async function queryWaterDataApi(
   return { kind: "geojson", data, citation, coverageNote: notes.join("; "), ...(total !== undefined && { total }) };
 }
 
+const USGS_WATER_URL = "https://waterservices.usgs.gov/";
+
+/** What each number on a gauge card means (spec §12b), in the layer's own terms. */
+const HELP: Record<string, FieldHelp> = {
+  v: {
+    text:
+      "Discharge: the volume of water passing the gauge, in cubic feet per second (cfs); US readings are provisional. Outside the US it is the " +
+      "GloFAS model's daily estimate converted to cfs, not a measurement. When the layer is asked for gage height instead, this number is the " +
+      "water level in feet, whose zero point differs from gauge to gauge.",
+    unit: "cubic feet per second (cfs)",
+    source: "USGS; GloFAS via Open-Meteo outside the US",
+    url: USGS_WATER_URL,
+  },
+  pctOfMedian: {
+    text:
+      "Today's flow as a percent of the median flow for this calendar day over the gauge's record: 100% is a typical day, under 50% is low, " +
+      "over 150% is high. It compares one reading to a daily median, so dam releases and daily snowmelt swing it.",
+    unit: "%",
+    scale: "Percent of the day's median; given for the 30 largest-flow gauges in view",
+    source: "USGS NWIS daily statistics",
+    url: USGS_WATER_URL,
+  },
+  medianCfs: {
+    text: "The median of the daily mean flows for this calendar day over the gauge's years of record.",
+    unit: "cfs",
+    source: "USGS NWIS daily statistics",
+    url: USGS_WATER_URL,
+  },
+  vsNormal: { text: "Today's flow against the median for the date: low is under 50%, normal 50 to 150%, high over 150%." },
+  tempC: { text: "Water temperature where the gauge measures it; trout get stressed above about 20 °C.", unit: "°C" },
+  dischargeM3s: { text: "The GloFAS model's daily discharge in its own unit; a rough estimate, not a gauge reading.", unit: "cubic metres per second" },
+};
+
+/** The gauge card: the flow under its own name, then how it compares with the date's normal. */
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Flow", unit: "cfs" },
+  facts: [
+    { key: "vsNormal", label: "Running", values: { low: "Low for the date", normal: "Normal for the date", high: "High for the date" } },
+    { key: "pctOfMedian", label: "Flow vs. the date's median", unit: "%", format: "int" },
+    { key: "medianCfs", label: "Median flow for the date", unit: "cfs" },
+    { key: "tempC", label: "Water temperature", unit: "°C", format: "1dp" },
+    { key: "dischargeM3s", label: "Flow in cubic metres", unit: "m³/s", format: "1dp" },
+    { key: "kind", label: "Reading", values: { gauge: "Measured at a USGS gauge", model: "Modelled by GloFAS (a rough estimate)" } },
+    { key: "siteId", label: "USGS site" },
+  ],
+};
+
 const streamflow = defineLayer({
   id: "streamflow",
   title: "Stream flow (USGS gauges, live)",
@@ -614,6 +661,8 @@ const streamflow = defineLayer({
   wide: { orderBy: "current flow or gage height", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("streamflow"), unit: "cfs" },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

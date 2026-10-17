@@ -32,7 +32,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, WHOLE_US_KM2, outsideUs } from "./_shared/coverage";
@@ -125,6 +125,59 @@ const citation = () => ({
   retrieved: new Date().toISOString(),
 });
 
+const MVUM_SOURCE = { source: "USDA Forest Service, Motor Vehicle Use Map: Roads", url: "https://data.fs.usda.gov/geodata/edw/datasets.php" };
+
+const HELP: Record<string, FieldHelp> = {
+  miles: {
+    text: "The length of this road segment in miles, as the Forest Service's Motor Vehicle Use Map measures it (gis_miles); a road is often several segments.",
+    unit: "mi",
+    ...MVUM_SOURCE,
+  },
+  access: { text: "Which vehicles the Motor Vehicle Use Map opens the road to, and whether all year or only part of it.", ...MVUM_SOURCE },
+  routeId: { text: "The Forest Service road number, as signed on the road and printed on the forest's Motor Vehicle Use Map.", ...MVUM_SOURCE },
+};
+
+/** The six MVUM classes in plain words. */
+const ACCESS_LABELS: Record<string, string> = {
+  "Roads open to all Vehicles, Yearlong": "All vehicles, all year",
+  "Roads open to all Vehicles, Seasonal": "All vehicles, part of the year",
+  "Roads open to highway legal vehicles only, Yearlong": "Highway-legal vehicles only, all year",
+  "Roads open to highway legal vehicles only, Seasonal": "Highway-legal vehicles only, part of the year",
+  "Special Designation, Yearlong": "Special designation (certain vehicles only), all year",
+  "Special Designation, Seasonal": "Special designation (certain vehicles only), part of the year",
+};
+
+/** Every surface type the layer holds (distinct values read live 2026-10-16), code and all, in plain words. */
+const SURFACE_LABELS: Record<string, string> = {
+  "AC - ASPHALT": "Asphalt",
+  "P - PAVED": "Paved",
+  "PCC - PORTLAND CEMENT CONCRETE": "Concrete",
+  "BST - BITUMINOUS SURFACE TREATMENT": "Chip seal (bituminous surface treatment)",
+  "AGG - CRUSHED AGGREGATE OR GRAVEL": "Gravel",
+  "AGG - LIMESTONE": "Limestone gravel",
+  "AGG - SCORIA": "Scoria (volcanic cinder) gravel",
+  "PIT - PIT RUN SHOT ROCK": "Pit-run rock",
+  "IMP - IMPROVED NATIVE MATERIAL": "Improved dirt (native material with added rock)",
+  "CSOIL - COMPACTED SOIL": "Compacted soil",
+  "NAT - NATIVE MATERIAL": "Dirt (native material)",
+  "FSOIL - FROZEN SOIL": "Frozen soil",
+  "SOD - GRASS": "Grass",
+  "OTHER - OTHER": "Other",
+};
+
+const CARD: CardSpec = {
+  facts: [
+    { key: "routeId", label: "Road number" },
+    { key: "access", label: "Open to", values: ACCESS_LABELS },
+    { key: "seasonal", label: "Seasonal", values: { true: "Yes, closed part of the year", false: "No, open all year" } },
+    { key: "passengerCar", label: "Passenger cars", values: { true: "Open", false: "Not listed as open" } },
+    { key: "highClearance", label: "High-clearance vehicles", values: { true: "Open", false: "Not listed as open" } },
+    { key: "surface", label: "Surface", values: SURFACE_LABELS },
+    { key: "miles", label: "Segment length", unit: "mi" },
+    { key: "forest", label: "Forest" },
+  ],
+};
+
 const forestRoads = defineLayer({
   id: "forest-roads",
   title: "Forest Service roads open to motor vehicles",
@@ -149,14 +202,8 @@ const forestRoads = defineLayer({
   wide: { orderBy: "segment length in miles", rank: "longest", limit: MAX_RECORDS },
   input: inputSchema,
   style: { geometry: "line", color: layerColor("forest-roads") },
-  fieldHelp: {
-    miles: {
-      text: "The length of this road segment in miles, as the Forest Service's Motor Vehicle Use Map measures it (gis_miles); a road is often several segments.",
-      unit: "mi",
-      source: "USDA Forest Service, Motor Vehicle Use Map: Roads",
-      url: "https://data.fs.usda.gov/geodata/edw/datasets.php",
-    },
-  },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     if (outsideUs(ctx.bbox)) {

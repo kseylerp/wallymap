@@ -213,23 +213,28 @@ function isTimeout(err: unknown): boolean {
 
 const BASIS_URL = "https://docs.gbif.org/course-data-use/en/basis-of-record.html";
 
+/** GBIF's basisOfRecord values, as normalizeOccurrences writes them (lower case, spaces). */
+const BASIS_VALUES = [
+  "human observation",
+  "machine observation",
+  "preserved specimen",
+  "living specimen",
+  "fossil specimen",
+  "material sample",
+  "material citation",
+  "observation",
+  "occurrence",
+];
+
+const sentenceCase = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
+
 const ATTRIBUTES: Attribute[] = [
   {
     key: "basisOfRecord",
     type: "category",
     label: "Record type",
     primary: true,
-    levels: [
-      "human observation",
-      "machine observation",
-      "preserved specimen",
-      "living specimen",
-      "fossil specimen",
-      "material sample",
-      "material citation",
-      "observation",
-      "occurrence",
-    ].map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })),
+    levels: BASIS_VALUES.map((value) => ({ value, label: sentenceCase(value) })),
   },
   { key: "species", type: "category", label: "Species" },
   { key: "year", type: "time", label: "Year" },
@@ -254,13 +259,16 @@ const HELP: Record<string, FieldHelp> = {
 
 const CARD: CardSpec = {
   facts: [
-    { key: "scientificName", label: "Scientific name" },
+    // A record has no name, so the species leads the card; scientificName is the same Latin name, so it is not repeated.
+    { key: "species", label: "Species" },
     { key: "t", label: "Date", format: "date" },
-    { key: "basisOfRecord", label: "Record type" },
+    { key: "basisOfRecord", label: "Record type", values: Object.fromEntries(BASIS_VALUES.map((v) => [v, sentenceCase(v)])) },
     { key: "dataset", label: "Dataset" },
     { key: "uncertaintyM", label: "Position uncertainty", format: "m" },
     { key: "license", label: "Licence" },
   ],
+  /** ScientificName is the same Latin name as species. */
+  hidden: ["scientificName"],
   links: [{ key: "url", label: "Source record" }],
 };
 

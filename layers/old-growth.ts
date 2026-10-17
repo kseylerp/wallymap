@@ -17,7 +17,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -93,6 +93,40 @@ export function normalizeOldGrowth(fc: FeatureCollection): FeatureCollection {
   return { type: "FeatureCollection", features };
 }
 
+const FS_URL = "https://www.fs.usda.gov/managing-land/old-growth-forests";
+const FS_SOURCE = "US Forest Service, Mature and Old-Growth Forest inventory";
+
+/** What a fireshed card's acres and errors mean (spec §12b). */
+const HELP: Record<string, FieldHelp> = {
+  v: {
+    text:
+      "Acres of old-growth forest on federal land inside this fireshed (an accounting block of about 250,000 acres), estimated from Forest " +
+      "Inventory and Analysis plots; the polygon is the fireshed, not where the stands are.",
+    unit: "acres",
+    source: FS_SOURCE,
+    url: FS_URL,
+  },
+  matureAcres: { text: "Acres of mature forest on federal land in the fireshed that is not yet old growth, from the same plot estimate.", unit: "acres", source: FS_SOURCE, url: FS_URL },
+  oldGrowthErrorPercent: {
+    text: "The survey's standard error for the old-growth acres, in percent: higher means a less certain estimate (small firesheds and rare forest types carry large error).",
+    unit: "%",
+    source: FS_SOURCE,
+    url: FS_URL,
+  },
+  matureErrorPercent: { text: "The survey's standard error for the mature-forest acres, in percent: higher means a less certain estimate.", unit: "%", source: FS_SOURCE, url: FS_URL },
+};
+
+/** The fireshed card: old growth under its own name, mature forest, and how sure the estimates are. */
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Old-growth forest", unit: "acres" },
+  facts: [
+    { key: "matureAcres", label: "Mature forest", unit: "acres", format: "int" },
+    { key: "forestType", label: "Forest type" },
+    { key: "oldGrowthErrorPercent", label: "Old-growth standard error", unit: "%", format: "int" },
+    { key: "matureErrorPercent", label: "Mature standard error", unit: "%", format: "int" },
+  ],
+};
+
 const oldGrowth = defineLayer({
   id: "old-growth",
   title: "Old-growth and mature forest",
@@ -112,6 +146,8 @@ const oldGrowth = defineLayer({
   wide: { orderBy: "old-growth acres", limit: WIDE_LIMIT },
   input: z.object({}),
   style: { geometry: "polygon", color: layerColor("old-growth"), unit: "acres", fillOpacity: 0.35, extrude: "v" },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

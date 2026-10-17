@@ -23,7 +23,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -169,6 +169,49 @@ export function normalizeLines(fc: FeatureCollection, source: Source): Feature<G
   return features;
 }
 
+/** What the voltage and types on a line card mean (spec §12b). */
+const HELP: Record<string, FieldHelp> = {
+  v: { text: "The power line's operating voltage, as the federal transmission-line data gives it.", unit: "kilovolts (kV)", source: "HIFLD electric power transmission lines" },
+  voltageClass: { text: "The voltage band the data files the line under: under 100, 100 to 161, 220 to 287, 345, 500, 735 kV and above, or direct current." },
+  pipelineType: { text: "Interstate pipelines cross state lines; intrastate pipelines stay inside one state." },
+};
+
+/** The line card: voltage for power lines, then what the line is and who runs it. */
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Voltage", unit: "kV" },
+  facts: [
+    {
+      key: "kind",
+      label: "Line",
+      values: {
+        "natural gas pipeline": "Natural gas pipeline",
+        "crude oil pipeline": "Crude oil pipeline",
+        "gas liquids pipeline": "Gas liquids pipeline (propane, ethane)",
+        "petroleum products pipeline": "Petroleum products pipeline",
+        "transmission line": "Power transmission line",
+      },
+    },
+    { key: "operator", label: "Operator" },
+    { key: "owner", label: "Owner" },
+    { key: "pipelineType", label: "Pipeline type", values: { interstate: "Interstate", intrastate: "Intrastate" } },
+    {
+      key: "status",
+      label: "Status",
+      values: { operating: "Operating", "in service": "In service", "under construction": "Under construction", "not available": "Not given" },
+    },
+    {
+      key: "voltageClass",
+      label: "Voltage class",
+      values: { "UNDER 100 kV": "Under 100 kV", "735 AND ABOVE kV": "735 kV and above", "DC kV": "Direct current", "NOT AVAILABLE kV": "Not given" },
+    },
+    {
+      key: "lineType",
+      label: "Line type",
+      values: { "ac; overhead": "AC, overhead", "ac; underground": "AC, underground", "dc; overhead": "DC, overhead", "dc; underground": "DC, underground" },
+    },
+  ],
+};
+
 const pipelinesLines = defineLayer({
   id: "pipelines-lines",
   title: "Pipelines and power lines",
@@ -188,6 +231,8 @@ const pipelinesLines = defineLayer({
   wide: { orderBy: "length, power lines by voltage", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "line", color: layerColor("pipelines-lines") },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

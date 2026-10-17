@@ -30,7 +30,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point, Position } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { outsideUs } from "./_shared/coverage";
@@ -38,7 +38,7 @@ import { namedOverpassQuery, overpassCounts, overpassQuery } from "./_shared/ove
 import { arcgisQuery } from "./_shared/arcgis";
 import { haversineKm } from "./_shared/geo";
 import { fetchIv, ivStrips, parseIv, type IvSite } from "./_shared/usgs";
-import { normalizeObservations } from "./species";
+import { LICENSE_LABELS, normalizeObservations } from "./species";
 import { layerColor } from "@/lib/render/palette";
 
 const USFS_ACTIVITIES =
@@ -215,6 +215,61 @@ async function inatSightings(ctx: QueryContext, days: number, now: Date) {
   }
 }
 
+const HELP: Record<string, FieldHelp> = {
+  waterTempC: {
+    text:
+      "The latest water temperature at the nearest USGS stream gauge within 30 km, which may be a different water body; trout feed best around " +
+      "10 to 18 °C and are stressed above about 20 °C.",
+    unit: "°C",
+    source: "USGS Water Data (instantaneous values)",
+    url: "https://waterdata.usgs.gov/",
+  },
+  waterTempKm: { text: "How far the gauge that gave the water temperature is from this point.", unit: "km" },
+  status: { text: "Open or closed as the Forest Service's nightly recreation feed reports it; not a live closure notice." },
+  license: { text: "The licence the observer chose for the sighting; all rights reserved when none; cite or link it when showing it." },
+};
+
+const KIND_LABELS: Record<string, string> = {
+  access: "Fishing spot or area",
+  ramp: "Boat ramp",
+  pier: "Fishing pier",
+  sighting: "Fish sighting",
+};
+
+/** No measure: v is 1 on a sighting (one fish seen) and absent elsewhere. */
+const OSM_ELEMENT: FieldHelp = {
+  text: "The OpenStreetMap element this comes from: node, way or relation, then its number (open it at openstreetmap.org).",
+  url: "https://www.openstreetmap.org/",
+};
+
+const CARD: CardSpec = {
+  facts: [
+    { key: "kind", label: "Type", values: KIND_LABELS },
+    { key: "species", label: "Species" },
+    { key: "scientificName", label: "Scientific name" },
+    { key: "observedOn", label: "Seen on", format: "date" },
+    { key: "waterTempC", label: "Water temperature", unit: "°C", format: "1dp" },
+    { key: "waterTempSite", label: "Temperature gauge" },
+    { key: "waterTempKm", label: "Gauge distance", format: "km" },
+    { key: "waterTempAt", label: "Temperature read", format: "date" },
+    { key: "activities", label: "Activities", format: "list" },
+    { key: "forest", label: "Forest" },
+    { key: "status", label: "Status", values: { open: "Open", closed: "Closed", none: "Not reported" } },
+    {
+      key: "access",
+      label: "Access",
+      values: { yes: "Public", permissive: "Allowed by the owner", private: "Private", customers: "Customers only", permit: "Permit needed", no: "No public access" },
+    },
+    { key: "fee", label: "Fee", values: { yes: "Yes", no: "No" } },
+    { key: "boat", label: "Boats", values: { yes: "Allowed", no: "Not allowed" } },
+    { key: "operator", label: "Run by" },
+    { key: "source", label: "Source", values: { OpenStreetMap: "OpenStreetMap", USFS: "US Forest Service", iNaturalist: "iNaturalist" } },
+    { key: "license", label: "Licence", values: LICENSE_LABELS },
+    { key: "osmId", label: "OpenStreetMap element", help: OSM_ELEMENT },
+  ],
+  links: [{ key: "url", label: "Source page" }],
+};
+
 const fishing = defineLayer({
   id: "fishing",
   title: "Fishing (access, boat ramps, recent catches, water temperature)",
@@ -241,6 +296,8 @@ const fishing = defineLayer({
   wide: { mode: "named", limit: 2000 },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("fishing"), cluster: true, timeField: "t" },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

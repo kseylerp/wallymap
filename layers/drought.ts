@@ -231,12 +231,14 @@ const HELP: Record<string, FieldHelp> = {
   week: { text: "The Tuesday the weekly map is valid for." },
 };
 
+/** The category with its name ("Severe drought (D2)"), so the bare code never stands alone. */
 const CARD: CardSpec = {
   facts: [
-    { key: "kind", label: "Category" },
-    { key: "category", label: "Drought level" },
+    { key: "kind", label: "Drought category", values: Object.fromEntries(CATEGORIES.map((name, dm) => [`D${dm}`, `${name} (D${dm})`])) },
     { key: "week", label: "Week of", format: "date" },
   ],
+  /** Category is the name the drought category already shows. */
+  hidden: ["category"],
 };
 
 const drought = defineLayer({

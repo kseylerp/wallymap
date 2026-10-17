@@ -21,7 +21,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -109,6 +109,35 @@ async function fromService(ctx: QueryContext, url: string, tag: string) {
   });
 }
 
+const AQUIFERS_URL = "https://pubs.usgs.gov/publication/70046037";
+
+/** What the rock and code on an aquifer card mean (spec §12b). */
+const HELP: Record<string, FieldHelp> = {
+  kind: {
+    text:
+      "The aquifer's rock: unconsolidated sand and gravel, semiconsolidated sand and gravel, sandstone, carbonate rock, sandstone and carbonate " +
+      "rock, or igneous and metamorphic rock.",
+    source: "USGS Principal Aquifers (2003)",
+    url: AQUIFERS_URL,
+  },
+  aquiferCode: {
+    text: "The aquifer's code number in the USGS Principal Aquifers data: an identifier for the named aquifer, not a measurement.",
+    source: "USGS Principal Aquifers (2003)",
+    url: AQUIFERS_URL,
+  },
+};
+
+/** The aquifer card: the rock in words, the other name, and the USGS code with its meaning. */
+const CARD: CardSpec = {
+  facts: [
+    { key: "kind", label: "Rock type" },
+    { key: "alias", label: "Also called" },
+    { key: "aquiferCode", label: "USGS aquifer code", format: "int" },
+  ],
+  // rockType is the numeric code behind kind.
+  hidden: ["rockType"],
+};
+
 const aquifers = defineLayer({
   id: "aquifers",
   title: "Principal aquifers",
@@ -123,6 +152,8 @@ const aquifers = defineLayer({
   wide: { orderBy: "area", limit: WIDE_LIMIT },
   input: z.object({}),
   style: { geometry: "polygon", color: layerColor("aquifers"), fillOpacity: 0.2 },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

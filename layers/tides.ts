@@ -26,7 +26,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, WHOLE_US_KM2, outsideUs } from "./_shared/coverage";
@@ -236,6 +236,54 @@ async function getJson(
   }
 }
 
+const COOPS_URL = "https://tidesandcurrents.noaa.gov/";
+
+/** What each height on a station card means (spec §12b): all are feet above the chart datum, MLLW. */
+const HELP: Record<string, FieldHelp> = {
+  v: {
+    text:
+      "Predicted height of the next high or low tide, in feet above mean lower low water (MLLW), the chart datum; a negative height is an " +
+      "unusually low tide.",
+    unit: "ft above MLLW",
+    source: "NOAA CO-OPS tide predictions",
+    url: COOPS_URL,
+  },
+  thenV: { text: "Predicted height of the high or low tide after the next one.", unit: "ft above MLLW", source: "NOAA CO-OPS tide predictions", url: COOPS_URL },
+  observedNow: {
+    text:
+      "Water level measured by the station's live gauge within the last few minutes. When it differs from the prediction by a foot or more, " +
+      "wind or a storm surge is pushing the water.",
+    unit: "ft above MLLW",
+    source: "NOAA CO-OPS water levels",
+    url: COOPS_URL,
+  },
+  upcoming: { text: "The next four predicted highs and lows: height in feet above MLLW, time in UTC, then month and day." },
+};
+
+const TIDE: Record<string, string> = { high: "High tide", low: "Low tide" };
+
+/** The station card: the next tide's height under its own name, the one after, and the live level. */
+const CARD: CardSpec = {
+  measure: { key: "v", label: "Next tide height", unit: "ft" },
+  facts: [
+    { key: "nextType", label: "Next tide", values: TIDE },
+    { key: "thenType", label: "Tide after that", values: TIDE },
+    { key: "thenV", label: "Height of the tide after that", unit: "ft", format: "1dp" },
+    { key: "thenT", label: "Date of the tide after that", format: "date" },
+    { key: "upcoming", label: "Next highs and lows (UTC)" },
+    { key: "observedNow", label: "Water level now", unit: "ft", format: "1dp" },
+    { key: "observedAt", label: "Water level measured on", format: "date" },
+    { key: "liveGauge", label: "Live water-level gauge", values: { yes: "Yes" } },
+    { key: "state", label: "State" },
+    { key: "stationId", label: "NOAA station" },
+  ],
+  links: [
+    { key: "url", label: "NOAA station page" },
+  ],
+  // kind repeats nextType.
+  hidden: ["kind"],
+};
+
 const tides = defineLayer({
   id: "tides",
   title: "Tides (NOAA, next high and low)",
@@ -259,6 +307,8 @@ const tides = defineLayer({
   wide: { orderBy: "next tide height in feet", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("tides"), unit: "ft", timeField: "t" },
+  fieldHelp: HELP,
+  card: CARD,
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const now = new Date();

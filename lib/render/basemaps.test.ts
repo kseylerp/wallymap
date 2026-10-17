@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { basemapStyle, basemapStyleUrl, dataOnlyStyle, DATA_ONLY_STYLE } from "@/lib/render/basemaps";
 import { decodeState } from "@/lib/render/permalink";
-import { isDenseNetwork } from "@/lib/render/views";
+import { isDenseNetwork, preferredBasemap } from "@/lib/render/views";
 import type { LoadedLayer } from "@/lib/render/state";
 
 const OUTDOORS = "mapbox://styles/mapbox/outdoors-v12";
@@ -40,10 +40,18 @@ describe("basemapStyleUrl", () => {
 });
 
 describe("the data-only basemap (spec §13)", () => {
-  it("is WallyMap's own style: land, water, a hairline coast and faint borders, no roads, labels or relief", () => {
+  it("is WallyMap's own style: land, water and lakes, a hairline coast, faint borders and major places, no roads or relief", () => {
     const style = dataOnlyStyle();
-    expect(style.layers.map((l) => l.id)).toEqual(["data-only-land", "data-only-water", "data-only-coast", "data-only-countries"]);
-    expect(style.layers.some((l) => l.type === "symbol" || l.type === "hillshade")).toBe(false);
+    expect(style.layers.map((l) => l.id)).toEqual([
+      "data-only-land",
+      "data-only-water",
+      "data-only-coast",
+      "data-only-states",
+      "data-only-countries",
+      "data-only-state-labels",
+      "data-only-cities",
+    ]);
+    expect(style.layers.some((l) => l.type === "hillshade" || ("source-layer" in l && l["source-layer"] === "road"))).toBe(false);
     expect(basemapStyleUrl("data-only")).toBe(DATA_ONLY_STYLE);
     expect(typeof basemapStyle("data-only")).toBe("object");
     expect(basemapStyle("outdoors")).toBe(OUTDOORS);
@@ -66,5 +74,9 @@ describe("the data-only basemap (spec §13)", () => {
     expect(isDenseNetwork(layer(20), { visible: true, mode: "lines" })).toBe(false);
     expect(isDenseNetwork(layer(3, { series: { times: ["2026-10-01"], step: "day", now: 0 } }), { visible: true, mode: "lines" })).toBe(true);
     expect(isDenseNetwork(layer(200), { visible: false, mode: "lines" })).toBe(false);
+    // Wind over mountains reads best over the terrain: its row offers Topographical, never Data only.
+    const wind = { ...layer(3), style: { geometry: "point" as const, color: "#3A3A3C", basemap: "outdoors" as const } };
+    expect(preferredBasemap(wind, { visible: true, mode: "points" })).toBe("outdoors");
+    expect(preferredBasemap(layer(200), { visible: true, mode: "lines" })).toBe("data-only");
   });
 });

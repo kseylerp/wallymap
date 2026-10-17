@@ -17,7 +17,7 @@ import type { LoadedLayer, RenderOp } from "@/lib/render/state";
 export const ENCODE_RAMP = "scoreLine" as const;
 
 /** Line width from the size channel, in pixels: the thinnest reach to the largest river. */
-export const ENCODED_LINE = { minPx: 1.25, maxPx: 9, casingPx: 2 } as const;
+export const ENCODED_LINE = { minPx: 0.6, maxPx: 12, casingMinPx: 1, casingMaxPx: 2 } as const;
 /** Symbol radius from the size channel, in pixels. */
 export const ENCODED_POINT = { minPx: 3, maxPx: 13, strokePx: 1, haloPx: 1.25, fillAlpha: 0.9 } as const;
 

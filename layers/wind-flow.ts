@@ -66,7 +66,7 @@ const windFlow = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 4_000_000,
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("wind-flow"), unit: "m/s", encode: { size: "speed", color: "tempC" }, series: "hour" },
+  style: { geometry: "point", color: layerColor("wind-flow"), unit: "m/s", encode: { size: "speed", color: "tempC" }, series: "hour", basemap: "outdoors" },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,

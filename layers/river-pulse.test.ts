@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Position } from "geojson";
-import riverPulse, { clipLine, cutLine, interpolateFlow, joinRuns, MAX_SAMPLES, planSamples, reachesOf, reachFeatures, runsIn, type Run } from "./river-pulse";
+import riverPulse, { clipLine, cutLine, interpolateFlow, joinRuns, MAX_SAMPLES, outletEnds, planPoints, reachesOf, reachFeatures, runsIn, type Run } from "./river-pulse";
 import { attributeProblems } from "./attributes";
 import { biggestSwing, ratioWords, repeatLag, seriesStory } from "@/lib/layers/story";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
@@ -31,7 +31,7 @@ describe("river pulse geometry", () => {
     expect(joined.find((r) => r.name === "Big")?.km).toBe(170);
   });
 
-  it("cuts a run into reaches of about the step, and samples the most important rivers first", () => {
+  it("cuts a run into reaches of about the step, and reads the most important rivers first within the budget", () => {
     expect(cutLine(line(0, 10), 170).length).toBeGreaterThanOrEqual(4);
     const features = [
       { type: "Feature", geometry: { type: "LineString", coordinates: line(0, 10) }, properties: { name: "Main", scalerank: 1, featurecla: "River" } },
@@ -39,13 +39,43 @@ describe("river pulse geometry", () => {
     ] as never;
     const runs = runsIn(features, [-1, 39, 11, 42]);
     expect(runs[0].name).toBe("Main");
-    const { runs: kept, samples } = planSamples(runs, 3);
-    expect(samples).toHaveLength(3);
-    expect(kept.map((r) => r.name)).toEqual(["Main", "Creek"].slice(0, kept.length));
-    expect(samples.every((s) => s.run === 0 || s.run === 1)).toBe(true);
-    const reaches = reachesOf(kept);
-    expect(reaches.length).toBeGreaterThan(5);
-    expect(MAX_SAMPLES).toBeLessThanOrEqual(48);
+    // A point snapped ahead of time on Main is used as it is; Creek gets a new one.
+    const known = [{ name: "Main", at: [5, 40.02], cell: [5.05, 40] }];
+    const { runs: kept, samples } = planPoints(runs, known);
+    expect(kept.map((r) => r.name)).toEqual(["Main", "Creek"]);
+    expect(samples[0]).toMatchObject({ run: 0, cell: [5.05, 40] });
+    expect(samples.filter((x) => !x.cell)).toHaveLength(1);
+    // No budget left for new points: Creek is not drawn.
+    expect(planPoints(runs, known, { maxNew: 0 }).runs.map((r) => r.name)).toEqual(["Main"]);
+    expect(reachesOf(kept).length).toBeGreaterThan(5);
+    expect(MAX_SAMPLES).toBeLessThanOrEqual(200);
+  });
+
+  it("finds where rivers leave the view: a tributary flows into its river, the river's mouth is an outlet", () => {
+    const main: Run = { name: "Main", rank: 1, line: line(0, 4), km: 340 };
+    // A tributary from the north, ending on Main's line at 2°E.
+    const trib: Run = { name: "Trib", rank: 5, line: [[2, 42], [2, 41], [2, 40.001]], km: 220 };
+    // Main gains flow toward its east end (its mouth); the tributary toward its south end.
+    const flow = (run: number, km: number) => (run === 0 ? 100 + km : 50 + km);
+    expect(outletEnds([main, trib], flow)).toEqual(["end", null]);
+  });
+
+  it("totals the flow at the outlets, so water is not counted twice", () => {
+    const main: Run = { name: "Main", rank: 1, line: line(0, 4), km: 340 };
+    const trib: Run = { name: "Trib", rank: 5, line: [[2, 42], [2, 41], [2, 40.001]], km: 220 };
+    const reaches = reachesOf([main, trib], 6);
+    const samples = [
+      { run: 0, atKm: 10, at: [0.1, 40] },
+      { run: 0, atKm: 330, at: [3.9, 40] },
+      { run: 1, atKm: 110, at: [2, 41] },
+    ];
+    const t = (q: number) => ({ time: DAYS, q: DAYS.map(() => q) });
+    const built = reachFeatures(reaches, samples, [t(100), t(400), t(50)], "2026-10-15T10:00:00Z", [main, trib])!;
+    const outlets = built.data.features.filter((f) => f.properties?.outlet === true);
+    expect(outlets.map((f) => f.properties?.name)).toEqual(["Main"]);
+    const story = seriesStory(built.data.features, built.series, riverPulse.attributes)!;
+    expect(story.measure).toMatch(/^Total flow to the sea, all outlets combined/);
+    expect(story.peak.value).toBe(Math.round(outlets[0].properties?.q as number));
   });
 
   it("interpolates a reach's flow between its river's sample points by distance", () => {

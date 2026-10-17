@@ -28,10 +28,10 @@ export function basemapStyleUrl(b: Basemap): string {
 }
 
 /**
- * "Data only" (spec §13: "when a dense network is the answer, the basemap steps back ... so rivers, trails or fire
- * lines outline the land by themselves"): land off-white, water the off-white surface with a dark grey hairline coast,
- * faint country lines, and nothing else: no roads, labels, hillshade or buildings. Drawn from Mapbox Streets' water
- * and admin layers in WallyMap's own palette.
+ * "Data only" (spec §13: the basemap steps back so a dense network outlines the land by itself): land off-white, water
+ * (sea and lakes) the off-white surface with a dark grey hairline coast, faint country and state lines, and the major
+ * cities and the states named in low contrast so you can tell where you are; no roads, hillshade or buildings. Drawn
+ * from Mapbox Streets in WallyMap's own palette.
  */
 export function dataOnlyStyle(): StyleSpecification {
   const c = DATA_ONLY_BASEMAP;
@@ -51,12 +51,50 @@ export function dataOnlyStyle(): StyleSpecification {
         paint: { "line-color": c.coast, "line-opacity": c.coastOpacity, "line-width": 0.6 },
       },
       {
+        id: "data-only-states",
+        type: "line",
+        source: "data-only",
+        "source-layer": "admin",
+        filter: ["all", ["==", ["get", "admin_level"], 1], ["==", ["get", "maritime"], "false"]],
+        paint: { "line-color": c.coast, "line-opacity": c.stateOpacity, "line-width": 0.6, "line-dasharray": [2, 2] },
+      },
+      {
         id: "data-only-countries",
         type: "line",
         source: "data-only",
         "source-layer": "admin",
         filter: ["all", ["==", ["get", "admin_level"], 0], ["==", ["get", "maritime"], "false"], ["==", ["get", "disputed"], "false"]],
         paint: { "line-color": c.coast, "line-opacity": c.borderOpacity, "line-width": 0.75, "line-dasharray": [3, 2] },
+      },
+      {
+        id: "data-only-state-labels",
+        type: "symbol",
+        source: "data-only",
+        "source-layer": "place_label",
+        filter: ["==", ["get", "class"], "state"],
+        maxzoom: 7,
+        layout: {
+          "text-field": ["coalesce", ["get", "name_en"], ["get", "name"]],
+          "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
+          "text-size": 10,
+          "text-transform": "uppercase",
+          "text-letter-spacing": 0.15,
+        },
+        paint: { "text-color": c.label, "text-opacity": c.labelOpacity * 0.6, "text-halo-color": c.labelHalo, "text-halo-width": 1 },
+      },
+      {
+        id: "data-only-cities",
+        type: "symbol",
+        source: "data-only",
+        "source-layer": "place_label",
+        // Major cities first, more as the map zooms in (Mapbox's symbolrank: 1 the largest).
+        filter: ["all", ["==", ["get", "class"], "settlement"], ["<=", ["get", "symbolrank"], ["step", ["zoom"], 6, 6, 9, 8, 12]]],
+        layout: {
+          "text-field": ["coalesce", ["get", "name_en"], ["get", "name"]],
+          "text-font": ["DIN Pro Regular", "Arial Unicode MS Regular"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 3, 10, 10, 12],
+        },
+        paint: { "text-color": c.label, "text-opacity": c.labelOpacity, "text-halo-color": c.labelHalo, "text-halo-width": 1.2 },
       },
     ],
   };

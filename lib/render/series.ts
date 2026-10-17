@@ -82,7 +82,8 @@ export function aggregateMeasure(layer: Pick<LoadedLayer, "attributes">): (Attri
   return (layer.attributes ?? []).find((a): a is Attribute & { aggregate: NonNullable<Attribute["aggregate"]> } => a.type === "measure" && a.aggregate !== undefined);
 }
 
-function label(kind: AggregateKind, attr: Pick<Attribute, "label"> | undefined, layer: LoadedLayer): string {
+function label(kind: AggregateKind, attr: Pick<Attribute, "label" | "aggregateLabel"> | undefined, layer: LoadedLayer): string {
+  if (attr?.aggregateLabel) return attr.aggregateLabel;
   const word = attr?.label.toLowerCase() ?? "";
   if (kind === "sum") return `Total ${word}`;
   if (kind === "max") return `Highest ${word} in view`;
@@ -125,7 +126,12 @@ export function layerAggregate(layer: LoadedLayer, time: Pick<TimeState, "index"
   if (series) {
     if (!measure) return null;
     const frames = layerFrames(layer, buckets);
-    const columns = data.features.map((f) => seriesOf(f, measure.key)).filter((v): v is (number | null)[] => v !== undefined);
+    // Only the features the measure is totalled over (river pulse: its outlets), so no water is counted twice.
+    const over = measure.aggregateOver;
+    const columns = data.features
+      .filter((f) => !over || f.properties?.[over] === true)
+      .map((f) => seriesOf(f, measure.key))
+      .filter((v): v is (number | null)[] => v !== undefined);
     values = frames.map((k) => {
       if (k < 0) return null;
       const at = columns.map((c) => c[k]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));

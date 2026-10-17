@@ -153,6 +153,15 @@ export function isDenseNetwork(layer: LoadedLayer, op: { visible: boolean; mode:
   return layer.style.geometry === "line" && op.mode === "lines" && layer.result.data.features.length >= DENSE_NETWORK_MIN_LINES;
 }
 
+/**
+ * The basemap a drawn layer's row offers (spec §13): the one its style names, else Data only for a dense network;
+ * undefined when the layer has no preference.
+ */
+export function preferredBasemap(layer: LoadedLayer, op: { visible: boolean; mode: string } | undefined): "data-only" | "outdoors" | undefined {
+  if (!op?.visible) return undefined;
+  return layer.style.basemap ?? (isDenseNetwork(layer, op) ? "data-only" : undefined);
+}
+
 /** The legend's sentence for a view: what the encoding means, in words (spec §12: "what pink means in this view"). */
 export function viewCaption(view: ViewKind | undefined, layer: LoadedLayer, compare?: CompareState, hexes?: string): string | undefined {
   const measure = attributeFor(layer, measureKeyOf(layer));

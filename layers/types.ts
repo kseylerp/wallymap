@@ -98,6 +98,8 @@ export type LayerResult =
       linked?: LinkedSeries;
       /** Present when the features are the nodes of a vector field drawn as particles (ocean currents, wind). */
       flow?: FlowField;
+      /** A title that says what this answer holds ("River flow, daily (142 rivers)"), over the layer's own. */
+      title?: string;
       /**
        * Wide results only: how many features the source holds in the box (a count pre-check), when the result keeps
        * fewer. lib/layers/run.ts states it in the coverage note ("the 2,000 largest of 4,512").
@@ -201,6 +203,11 @@ export type StyleHints = {
    * view (lib/agent/renderInput.ts), played frame by frame.
    */
   series?: "day" | "hour";
+  /**
+   * The basemap the layer reads best on, which its row offers: `data-only` when the data draws the land (river networks,
+   * currents), `outdoors` (Topographical, with relief and place names) when the ground matters (wind over mountains).
+   */
+  basemap?: "data-only" | "outdoors";
 };
 
 /** Which attribute sizes a mark and which colors it (spec §13: "height is that day's flow, color is water temperature"). */
@@ -250,6 +257,10 @@ export type Attribute = {
    * aggregate measure counts its features per frame instead.
    */
   aggregate?: "sum" | "max" | "mean";
+  /** Only features where this property is true are totalled (river pulse: the outlets, so no water is counted twice). */
+  aggregateOver?: string;
+  /** The total's name in the scrubber and the caption ("Total flow to the sea, all outlets combined"). */
+  aggregateLabel?: string;
 };
 
 /** One chip of a category or ordinal attribute: the raw value the data holds and its plain label (and what it means). */

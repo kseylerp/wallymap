@@ -67,6 +67,7 @@ export function attributeProblems(layer: Pick<Layer, "id" | "style" | "fieldHelp
     }
   }
   for (const a of attributes) if (a.aggregate !== undefined && a.type !== "measure") problems.push(`${layer.id} attribute ${a.key} totals a ${a.type}; only a measure has an aggregate`);
+  for (const a of attributes) if ((a.aggregateOver !== undefined || a.aggregateLabel !== undefined) && a.aggregate === undefined) problems.push(`${layer.id} attribute ${a.key} names how it is totalled but has no aggregate`);
   const card = layer.card;
   if (card?.measure && (!card.measure.label.trim() || /^value$/i.test(card.measure.label.trim()))) {
     problems.push(`${layer.id} card measure needs its own name, not "Value"`);

@@ -144,7 +144,21 @@ export function seriesStory(
     const v = s.slice(0, series.now + 1).filter(num);
     return v.length ? v.reduce((a, b) => a + b, 0) / v.length : -Infinity;
   };
-  const lead = rows.reduce((best, x) => (meanOf(x.s) > meanOf(best.s) ? x : best));
+  // A measure totalled over some features (river pulse: its outlets) follows that total; otherwise the feature with the
+  // most of it.
+  const over = measure.aggregate === "sum" ? measure.aggregateOver : undefined;
+  const totalled = over ? rows.filter((x) => x.f.properties?.[over] === true) : [];
+  const lead =
+    totalled.length > 0
+      ? {
+          f: { type: "Feature", geometry: null, properties: { name: undefined } } as unknown as Feature,
+          s: series.times.map((_, k) => {
+            const vals = totalled.map((x) => x.s[k]).filter(num);
+            return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) : null;
+          }),
+        }
+      : rows.reduce((best, x) => (meanOf(x.s) > meanOf(best.s) ? x : best));
+  const totalLabel = totalled.length > 0 ? (measure.aggregateLabel ?? `Total ${measure.label.toLowerCase()}`) : undefined;
   const observed = lead.s.slice(0, series.now + 1);
   let lo = -1;
   let hi = -1;
@@ -258,7 +272,7 @@ export function seriesStory(
     ? `${linkedStory.label} at ${linkedStory.place} runs ${linkedStory.low} to ${linkedStory.high} ${linkedStory.unit}${linkedStory.repeats ? `, repeating ${linkedStory.repeats}` : ""}${linkedStory.biggestSwing ? `; it ${linkedStory.biggestSwing}` : ""}.`
     : "";
   const caption = [
-    `${measure.label} at ${name ?? "its highest point"}: ${lowWord} ${amount(low)} on ${day(lo)}, ${peakWord} ${amount(peak)} on ${day(hi)}${ratio !== null ? ` (it ${ratioWords(ratio)})` : ""}; now ${amount((lead.s[series.now] as number) ?? peak)}.`,
+    `${totalLabel ? `${totalLabel} (${totalled.length} outlets)` : `${measure.label} at ${name ?? "its highest point"}`}: ${lowWord} ${amount(low)} on ${day(lo)}, ${peakWord} ${amount(peak)} on ${day(hi)}${ratio !== null ? ` (it ${ratioWords(ratio)})` : ""}; now ${amount((lead.s[series.now] as number) ?? peak)}.`,
     `${repeats}.`,
     driverLine,
     forecastLine,
@@ -268,7 +282,7 @@ export function seriesStory(
     .join(" ");
   return {
     caption,
-    measure: `${measure.label}${unit} where it is highest on average${name ? ` (${name})` : ""}`,
+    measure: totalLabel ? `${totalLabel}${unit}, ${totalled.length} outlets` : `${measure.label}${unit} where it is highest on average${name ? ` (${name})` : ""}`,
     frames: {
       from: t[0].slice(0, 10),
       to: t[t.length - 1].slice(0, 10),

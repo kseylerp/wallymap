@@ -1,7 +1,13 @@
 "use client";
 
 import { channelText, rampCss, resolveEncoding, sizeWord } from "@/lib/render/encode";
-import type { LoadedLayer, RenderOp } from "@/lib/render/state";
+import { frameSpread } from "@/lib/render/seriesLines";
+import { frameIndex, layerFrames } from "@/lib/render/series";
+import type { LoadedLayer, RenderOp, TimeState } from "@/lib/render/state";
+
+function amount(n: number): string {
+  return n.toLocaleString("en-US", { maximumFractionDigits: Math.abs(n) >= 100 ? 0 : 1 });
+}
 
 /**
  * The legend lines for two measures on one mark (spec §13): what width (or size, or height) means and what color means,
@@ -9,7 +15,7 @@ import type { LoadedLayer, RenderOp } from "@/lib/render/state";
  * wedge, thin to thick; a color line the ramp as a bar from its low to its high end (a category its first and last
  * level). Nothing renders for a layer without a pair.
  */
-export function EncodingLegend({ layer, op, data }: { layer: LoadedLayer; op: RenderOp; data: GeoJSON.FeatureCollection }) {
+export function EncodingLegend({ layer, op, data, time }: { layer: LoadedLayer; op: RenderOp; data: GeoJSON.FeatureCollection; time?: TimeState }) {
   const encoding = resolveEncoding(layer, op, data);
   if (!encoding) return null;
   // A flow field's particles: brighter is faster, the color the second variable.
@@ -17,6 +23,14 @@ export function EncodingLegend({ layer, op, data }: { layer: LoadedLayer; op: Re
   const drawn = flow || op.mode === "lines" || op.mode === "points" || op.mode === "columns";
   if (!drawn) return null;
   const { size, color } = encoding;
+  // A series line colors across the frame's own spread (lib/render/seriesLines.ts): the legend gives that day's range.
+  const series = layer.result.kind === "geojson" ? layer.result.series : undefined;
+  let colorText = color ? channelText(color) : "";
+  if (color && !color.levels && series && time?.index.series && layer.style.geometry === "line") {
+    const k = layerFrames(layer, time.index.buckets)[frameIndex(time)] ?? series.now;
+    const spread = frameSpread(data.features, color.key, Math.max(0, k));
+    if (spread) colorText = `${color.label} ${amount(spread[0])}–${amount(spread[1])}${color.unit ? ` ${color.unit}` : ""} this ${series.step}`;
+  }
   return (
     <div data-testid="encode-legend" className="mt-1.5 space-y-1 text-[11.5px] leading-4 text-ink">
       {size && (
@@ -35,7 +49,7 @@ export function EncodingLegend({ layer, op, data }: { layer: LoadedLayer; op: Re
           <span aria-hidden className="h-2 w-7 shrink-0 rounded-[2px]" style={{ background: `linear-gradient(to right, ${rampCss()})` }} />
           <span className="min-w-0 truncate">
             <span className="small-caps mr-1 text-ink!">Color</span>
-            {channelText(color)}
+            {colorText}
           </span>
         </p>
       )}

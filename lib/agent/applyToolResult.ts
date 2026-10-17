@@ -181,7 +181,7 @@ function queryActions(layerId: string, input: unknown, output: Obj, catalog: Lay
       type: "layer_loaded",
       layer: {
         id: layerId,
-        title: entry?.title ?? layerId,
+        title: (typeof output.title === "string" && output.title) || (entry?.title ?? layerId),
         style,
         result: output,
         receivedAt: new Date().toISOString(),

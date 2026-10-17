@@ -32,24 +32,36 @@ import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { haversineKm } from "./_shared/geo";
 import { layerColor } from "@/lib/render/palette";
 import { createCache } from "@/lib/fetch";
+import RIVER_POINTS from "@/data/river-points.json";
+
+/** The points snapped ahead of time (scripts/river-points.mts). */
+const KNOWN_POINTS: readonly KnownPoint[] = (RIVER_POINTS as { points: KnownPoint[] }).points;
 
 export const NE_RIVERS_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_lake_centerlines.geojson";
+/** Natural Earth's North America supplement: 4,897 more river lines (tributaries the world file leaves out). */
+export const NE_RIVERS_NA_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_north_america.geojson";
+/** Where the North America supplement applies. */
+const NA_BOX: BBox = [-170, 14, -50, 75];
 const FLOOD_API = "https://flood-api.open-meteo.com/v1/flood";
 /**
- * Most points the flow is read at. Open-Meteo's free tier allows 600 calls a minute and 5,000 an hour, where a location
- * is one call per two weeks of days (so 99 days count about 7): a point never seen before costs 9 for its 3 x 3 cells
- * over one week, then about 7 for its full months, so a cold query of 30 points costs about 480 and a warm one 210.
+ * The request budget. Open-Meteo's free tier allows 5,000 calls an hour and 10,000 a day, where a location counts one
+ * call per two weeks of days (92 past and 7 forecast days count about 7). A load reads at most MAX_POINTS points (about
+ * 1,200 calls cold, nothing again that day: each point's months are cached per day, shared by every box), most of them
+ * snapped to their river's model cell ahead of time (data/river-points.json, scripts/river-points.mts); a river with no
+ * such point is read at a point snapped now (9 calls for its 3 x 3 cells), at most MAX_NEW_POINTS a load.
  */
-export const MAX_SAMPLES = 30;
-/** One sample per this much river, at most MAX_SAMPLES_PER_RUN per run. */
-export const SAMPLE_SPACING_KM = 500;
-const MAX_SAMPLES_PER_RUN = 5;
+export const MAX_POINTS = 170;
+export const MAX_NEW_POINTS = 40;
+export const MAX_SAMPLES = MAX_POINTS;
+/** One sample per this much river when snapping now, at most MAX_SAMPLES_PER_RUN per run. */
+export const SAMPLE_SPACING_KM = 700;
+const MAX_SAMPLES_PER_RUN = 3;
 /** Most reaches drawn; their flow is interpolated between the samples, so they cost nothing upstream. */
-export const MAX_REACHES = 320;
+export const MAX_REACHES = 900;
 /** The shortest reach drawn. */
 export const MIN_REACH_KM = 20;
 /** A river run shorter than this inside the box is left out. */
-const MIN_RUN_KM = 30;
+const MIN_RUN_KM = 60;
 /** Locations per flood-API request (a 3 x 3 neighbourhood is 9 per sample). */
 const BATCH = 216;
 /** Offsets in degrees: GloFAS cells are 0.05°, so these are the 3 x 3 cells around a point. */
@@ -68,24 +80,59 @@ type NeFeature = Feature<LineString | GeoJSON.MultiLineString, { name?: string |
 export type Run = { name: string; rank: number; line: Position[]; km: number };
 /** One reach as drawn: its run, its line, and how far along the run its middle lies. */
 export type Reach = { id: string; run: number; name: string; line: Position[]; atKm: number; lengthKm: number };
-/** One point the flow is read at: its run, how far along it, and where. */
-export type Sample = { run: number; atKm: number; at: Position };
+/**
+ * One point the flow is read at: its run, how far along it, where, and `cell` when its model cell is already known
+ * (snapped ahead of time); without one it is snapped now.
+ */
+export type Sample = { run: number; atKm: number; at: Position; cell?: Position };
 
-let loading: Promise<NeFeature[]> | undefined;
+/** A point snapped ahead of time: its river, where on the river, and the model cell that carries the river there. */
+export type KnownPoint = { name: string; at: Position; cell: Position };
 
-/** The Natural Earth river lines, fetched once per process (and from the shared cache for 30 days). */
-async function riverLines(ctx: QueryContext): Promise<NeFeature[]> {
-  loading ??= (async () => {
-    const res = await ctx.fetch(NE_RIVERS_URL, { cacheKey: "ne:rivers-centerlines", ttlSeconds: 30 * 86_400, timeoutMs: 45_000 });
-    if (!res.ok) throw new Error(`Natural Earth rivers returned ${res.status}`);
-    const body = (await res.json()) as { features?: NeFeature[] };
-    if (!Array.isArray(body.features)) throw new Error("Natural Earth rivers: no features");
-    return body.features.filter((f) => f.geometry && (f.properties?.featurecla === "River" || f.properties?.featurecla === "Lake Centerline"));
-  })().catch((err) => {
-    loading = undefined;
-    throw err;
-  });
-  return loading;
+const loading = new Map<string, Promise<NeFeature[]>>();
+
+/** One Natural Earth river file, fetched once per process (and from the shared cache for 30 days). */
+function riverFile(ctx: QueryContext, url: string, key: string): Promise<NeFeature[]> {
+  let file = loading.get(url);
+  if (!file) {
+    file = (async () => {
+      const res = await ctx.fetch(url, { cacheKey: key, ttlSeconds: 30 * 86_400, timeoutMs: 45_000 });
+      if (!res.ok) throw new Error(`Natural Earth rivers returned ${res.status}`);
+      const body = (await res.json()) as { features?: NeFeature[] };
+      if (!Array.isArray(body.features)) throw new Error("Natural Earth rivers: no features");
+      return body.features.filter((f) => f.geometry && (f.properties?.featurecla === "River" || f.properties?.featurecla === "Lake Centerline"));
+    })().catch((err) => {
+      loading.delete(url);
+      throw err;
+    });
+    loading.set(url, file);
+  }
+  return file;
+}
+
+function intersects(a: BBox, b: BBox): boolean {
+  return a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
+}
+
+/**
+ * The river lines for a box: the world file, plus in North America the supplement's tributaries (its partial copies of
+ * rivers the world file already draws are left out, so no river is drawn twice).
+ */
+export async function riverLinesFor(ctx: QueryContext, bbox: BBox): Promise<NeFeature[]> {
+  const world = await riverFile(ctx, NE_RIVERS_URL, "ne:rivers-centerlines");
+  if (!intersects(bbox, NA_BOX)) return world;
+  const na = await riverFile(ctx, NE_RIVERS_NA_URL, "ne:rivers-north-america").catch(() => [] as NeFeature[]);
+  return mergeRiverFiles(world, na);
+}
+
+/** The world file's lines and the supplement's, without the supplement's lines of a river the world file has. */
+export function mergeRiverFiles(world: NeFeature[], extra: NeFeature[]): NeFeature[] {
+  const named = new Set(world.map((f) => riverName(f).toLowerCase()));
+  return [...world, ...extra.filter((f) => !named.has(riverName(f).toLowerCase()))];
+}
+
+function riverName(f: NeFeature): string {
+  return (f.properties?.name_en || f.properties?.name || "").trim() || "Unnamed river";
 }
 
 function inBox([lng, lat]: Position, [w, s, e, n]: BBox): boolean {
@@ -154,7 +201,7 @@ export function runsIn(lines: NeFeature[], bbox: BBox): Run[] {
   for (const f of lines) {
     const g = f.geometry;
     const raw = g.type === "LineString" ? [g.coordinates] : g.coordinates;
-    const name = (f.properties?.name_en || f.properties?.name || "").trim() || "Unnamed river";
+    const name = riverName(f);
     const rank = Number(f.properties?.scalerank ?? 12);
     for (const line of raw) for (const run of clipLine(line, bbox)) runs.push({ name, rank, line: run, km: lengthKm(run) });
   }
@@ -223,6 +270,102 @@ export function planSamples(runs: Run[], maxSamples = MAX_SAMPLES): { runs: Run[
   return { runs: kept, samples };
 }
 
+/** Metres from `p` to the segment a→b, on a flat projection at p's latitude (fine within a few kilometres). */
+function segmentKm(p: Position, a: Position, b: Position): { km: number; t: number } {
+  const k = Math.cos((p[1] * Math.PI) / 180) * 111.32;
+  const ax = (a[0] - p[0]) * k;
+  const ay = (a[1] - p[1]) * 110.57;
+  const bx = (b[0] - p[0]) * k;
+  const by = (b[1] - p[1]) * 110.57;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 > 0 ? Math.min(1, Math.max(0, -(ax * dx + ay * dy) / len2)) : 0;
+  return { km: Math.hypot(ax + t * dx, ay + t * dy), t };
+}
+
+/** How far `p` lies from a line (km) and how far along the line its nearest point is (km). */
+export function nearestOnLine(line: Position[], p: Position): { km: number; atKm: number } {
+  let best = { km: Infinity, atKm: 0 };
+  let along = 0;
+  for (let i = 1; i < line.length; i++) {
+    const seg = haversineKm(line[i - 1], line[i]);
+    const { km, t } = segmentKm(p, line[i - 1], line[i]);
+    if (km < best.km) best = { km, atKm: along + t * seg };
+    along += seg;
+  }
+  return best;
+}
+
+/** A point snapped ahead of time belongs to a run when it names the same river and lies this close to its line. */
+const KNOWN_KM = 12;
+
+/**
+ * Where the flow is read, within the request budget: runs most important first; a run takes the points snapped ahead
+ * of time on it (same river, within KNOWN_KM), else up to MAX_SAMPLES_PER_RUN new points (one per SAMPLE_SPACING_KM)
+ * while fewer than `maxNew` new points are planned; a run left without a point is not drawn. At most `maxPoints` in all.
+ */
+export function planPoints(
+  runs: Run[],
+  known: readonly KnownPoint[],
+  { maxPoints = MAX_POINTS, maxNew = MAX_NEW_POINTS }: { maxPoints?: number; maxNew?: number } = {},
+): { runs: Run[]; samples: Sample[] } {
+  const byName = new Map<string, KnownPoint[]>();
+  for (const k of known) byName.set(k.name.toLowerCase(), [...(byName.get(k.name.toLowerCase()) ?? []), k]);
+  const kept: Run[] = [];
+  const samples: Sample[] = [];
+  let fresh = 0;
+  for (const run of runs) {
+    if (samples.length >= maxPoints) break;
+    const on = (byName.get(run.name.toLowerCase()) ?? [])
+      .map((k) => ({ k, near: nearestOnLine(run.line, k.at) }))
+      .filter((x) => x.near.km <= KNOWN_KM)
+      .slice(0, maxPoints - samples.length);
+    if (on.length > 0) {
+      const index = kept.length;
+      kept.push(run);
+      for (const { k, near } of on) samples.push({ run: index, atKm: near.atKm, at: k.at, cell: k.cell });
+      continue;
+    }
+    if (fresh >= maxNew) continue;
+    const n = Math.min(maxNew - fresh, maxPoints - samples.length, Math.max(1, Math.min(MAX_SAMPLES_PER_RUN, Math.round(run.km / SAMPLE_SPACING_KM))));
+    const index = kept.length;
+    kept.push(run);
+    for (let k = 0; k < n; k++) {
+      const atKm = ((k + 0.5) / n) * run.km;
+      samples.push({ run: index, atKm, at: pointAlong(run.line, atKm) });
+    }
+    fresh += n;
+  }
+  return { runs: kept, samples };
+}
+
+/** Two rivers meet when one's end lies this close to the other's line. */
+const MEET_KM = 3;
+
+/**
+ * Where each run leaves the network (spec §13: "discharge to the sea, every outlet combined"): its downstream end
+ * (the end with more flow; on equal flow the end that meets another river, else the line's last point, as Natural Earth
+ * draws rivers toward their mouths) when that end meets no other river, so it reaches the sea, a lake or the edge of the
+ * box. Returns, per run, true at 0 km, at its far end, or null when it flows into another river.
+ */
+export function outletEnds(runs: Run[], flowAt: (run: number, atKm: number) => number | null): ("start" | "end" | null)[] {
+  const meets = (p: Position, self: number) => runs.some((r, j) => j !== self && nearestOnLine(r.line, p).km <= MEET_KM);
+  return runs.map((run, i) => {
+    const a = run.line[0];
+    const b = run.line[run.line.length - 1];
+    const fa = flowAt(i, 0);
+    const fb = flowAt(i, run.km);
+    const meetA = meets(a, i);
+    const meetB = meets(b, i);
+    let down: "start" | "end";
+    if (fa !== null && fb !== null && Math.abs(fa - fb) > 0.05 * Math.max(fa, fb)) down = fa > fb ? "start" : "end";
+    else if (meetA !== meetB) down = meetA ? "start" : "end";
+    else down = "end";
+    return (down === "start" ? meetA : meetB) ? null : down;
+  });
+}
+
 /** The kept runs cut into at most MAX_REACHES reaches of equal length (at least MIN_REACH_KM), each with its middle's distance. */
 export function reachesOf(runs: Run[], maxReaches = MAX_REACHES): Reach[] {
   const total = runs.reduce((km, r) => km + r.km, 0);
@@ -280,6 +423,45 @@ function hashOf(points: Position[]): string {
 }
 
 const pointKey = (p: Position) => `river-pulse:cell:${p[0].toFixed(3)},${p[1].toFixed(3)}`;
+
+/** Locations per request when reading the months. */
+const FLOW_BATCH = 100;
+
+/**
+ * Each point's daily flow for the period, from the cache when this point was read today (by any box), else read in
+ * batches of FLOW_BATCH and cached until tomorrow. Returns the flows in point order and how many points were read.
+ */
+async function flowsFor(ctx: QueryContext, points: Position[], days: number, forecastDays: number, day: string): Promise<{ flows: (Flood | null)[]; read: number }> {
+  const key = (p: Position) => `river-pulse:q:${day}:${days}:${forecastDays}:${p[0].toFixed(3)},${p[1].toFixed(3)}`;
+  const flows: (Flood | null)[] = await Promise.all(
+    points.map(async (p) => {
+      try {
+        const hit = await cells.get(key(p));
+        const parsed = hit ? (JSON.parse(hit) as Flood) : null;
+        return parsed && Array.isArray(parsed.time) && Array.isArray(parsed.q) ? parsed : null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const missing = points.map((p, i) => ({ p, i })).filter((x) => flows[x.i] === null);
+  const batches: { p: Position; i: number }[][] = [];
+  for (let i = 0; i < missing.length; i += FLOW_BATCH) batches.push(missing.slice(i, i + FLOW_BATCH));
+  const answers = await inTurns(
+    batches.map((b) => () => floodBatch(ctx, b.map((x) => x.p), days, forecastDays, `river-pulse:flow:${day}:${days}:${forecastDays}:${hashOf(b.map((x) => x.p))}`, 86_400)),
+    2,
+  );
+  await Promise.all(
+    batches.flatMap((b, k) =>
+      b.map(async ({ p, i }, j) => {
+        const flow = answers[k][j];
+        flows[i] = flow;
+        if (flow) await cells.set(key(p), JSON.stringify(flow), 86_400).catch(() => {});
+      }),
+    ),
+  );
+  return { flows, read: missing.length };
+}
 const cells = createCache();
 
 /**
@@ -368,7 +550,13 @@ export function interpolateFlow(atKm: number, samples: { atKm: number; q: (numbe
  * median over the past days), the plain `q` and `pct` at today's frame, and the period's low and peak with dates. A
  * reach between a run's sample points takes their flow interpolated by distance (`readAt` says so).
  */
-export function reachFeatures(reaches: Reach[], samples: Sample[], flows: (Flood | null)[], todayIso: string): { data: FeatureCollection; series: SeriesAxis } | null {
+export function reachFeatures(
+  reaches: Reach[],
+  samples: Sample[],
+  flows: (Flood | null)[],
+  todayIso: string,
+  runs?: Run[],
+): { data: FeatureCollection; series: SeriesAxis } | null {
   const times = flows.find((f) => f !== null)?.time;
   if (!times || times.length === 0) return null;
   const today = todayIso.slice(0, 10);
@@ -380,6 +568,24 @@ export function reachFeatures(reaches: Reach[], samples: Sample[], flows: (Flood
     if (!flow || flow.time.length !== times.length) return;
     byRun.set(s.run, [...(byRun.get(s.run) ?? []), { atKm: s.atKm, q: flow.q }]);
   });
+  // The reach at each run's outlet (its downstream end, where it meets no other river) carries `outlet`: their sum is
+  // the flow leaving the view, all outlets combined.
+  const outletReach = new Set<Reach>();
+  if (runs) {
+    const flowAt = (run: number, atKm: number) => {
+      const s = byRun.get(run);
+      if (!s) return null;
+      const vals = interpolateFlow(atKm, s).slice(0, now + 1).filter((v): v is number => typeof v === "number");
+      return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    };
+    outletEnds(runs, flowAt).forEach((end, i) => {
+      if (!end || !byRun.has(i)) return;
+      const target = end === "start" ? 0 : runs[i].km;
+      let best: Reach | undefined;
+      for (const r of reaches) if (r.run === i && (!best || Math.abs(r.atKm - target) < Math.abs(best.atKm - target))) best = r;
+      if (best) outletReach.add(best);
+    });
+  }
   const features: Feature[] = [];
   for (const reach of reaches) {
     const runSamples = byRun.get(reach.run);
@@ -413,6 +619,7 @@ export function reachFeatures(reaches: Reach[], samples: Sample[], flows: (Flood
         ...(peak >= 0 && { peakQ: q[peak], peakDate: times[peak] }),
         ...(low >= 0 && { lowQ: q[low], lowDate: times[low] }),
         readAt: read ? "model" : "between",
+        ...(outletReach.has(reach) && { outlet: true }),
         series: { q, pct },
       },
     });
@@ -460,24 +667,24 @@ const CARD: CardSpec = {
     { key: "lowDate", label: "Lowest on", format: "date" },
     { key: "lengthKm", label: "Reach length", unit: "km", format: "int" },
   ],
-  hidden: ["reachId", "series", "project", "readAt"],
+  hidden: ["reachId", "series", "project", "readAt", "outlet"],
 };
 
 const ATTRIBUTES: Attribute[] = [
-  { key: "q", type: "measure", label: "Flow", unit: "m³/s", encode: "size", aggregate: "max" },
+  { key: "q", type: "measure", label: "Flow", unit: "m³/s", encode: "size", aggregate: "sum", aggregateOver: "outlet", aggregateLabel: "Total flow to the sea, all outlets combined" },
   { key: "pct", type: "measure", label: "Flow vs. the period's median", unit: "%" },
   { key: "name", type: "name", label: "River" },
 ];
 
 const riverPulse = defineLayer({
   id: "river-pulse",
-  title: "River pulse (daily flow, whole network)",
+  title: "River flow, daily",
   description:
-    "How a whole river network's flow changed day by day: every river reach in the box (Natural Earth rivers cut into reaches) with its modelled daily discharge (GloFAS) for the past days (default 92, about three months) and the forecast days (default 7), played day by day on the time scrubber. " +
-    "Each reach has name, q (flow in m³/s at today's frame), pct (that day's flow as a percent of the reach's own median over the period), medianQ, peakQ with peakDate, lowQ with lowDate, and a series of q and pct per day; line width is the day's flow and color is pct (sage below the median, purple well above). " +
-    "Use it for 'how has the Mississippi's flow changed', 'is the Ohio running high this month', 'show the river pulse of the Danube basin'. " +
-    "The summary's story gives the low and the peak of the largest reach with their dates, the ratio between them, whether it repeats, and the reaches that swelled most (the drivers). " +
-    "Caveats: GloFAS is a 5 km model driven by weather, not gauges (dams and diversions are only roughly modelled); a reach is read at one model cell near its middle; small rivers are left out at wide views; past days are capped at 92, so a yearly cycle cannot be seen. " +
+    "How a region's rivers flowed day by day: the named rivers in the box (Natural Earth rivers, with North America's tributaries; at most 170 read points, so the largest rivers first) cut into reaches, with modelled daily discharge (GloFAS) for the past days (default 92, about three months) and the forecast days (default 7), played day by day on the time scrubber. " +
+    "Each reach has name, q (flow in m³/s at today's frame), pct (that day's flow as a percent of the reach's own median over the period), medianQ, peakQ with peakDate, lowQ with lowDate, outlet (true where a river leaves the view: a mouth, a lake or the edge), and a series of q and pct per day; line width is the day's flow and color is pct across that day's spread (sage the lowest, purple the highest). " +
+    "Use it for 'how has the Mississippi's flow changed', 'is the Ohio running high this month', 'show the river flow of the Danube basin'. " +
+    "The total is the flow to the sea, all outlets combined; the summary's story gives its low and peak with dates, the ratio, whether it repeats, and the rivers that swelled most (the drivers). " +
+    "Caveats: GloFAS is a 5 km model driven by weather, not gauges (dams and diversions are only roughly modelled); each river is read at one to three points and interpolated between them; small rivers are left out; past days are capped at 92, so a yearly cycle cannot be seen. " +
     "Any box up to a continent answers; use streamflow for live gauge readings.",
   coverage: "global",
   surface: "land",
@@ -485,7 +692,7 @@ const riverPulse = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 25_000_000,
   input: inputSchema,
-  style: { geometry: "line", color: layerColor("river-pulse"), unit: "m³/s", encode: { size: "q", color: "pct" }, series: "day" },
+  style: { geometry: "line", color: layerColor("river-pulse"), unit: "m³/s", encode: { size: "q", color: "pct" }, series: "day", basemap: "data-only" },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
@@ -494,7 +701,7 @@ const riverPulse = defineLayer({
     const now = new Date();
     let lines: NeFeature[];
     try {
-      lines = await riverLines(ctx);
+      lines = await riverLinesFor(ctx, ctx.bbox);
     } catch (err) {
       return { error: `Natural Earth rivers could not be loaded: ${err instanceof Error ? err.message : "unknown error"}`, hint: "upstream" };
     }
@@ -503,22 +710,29 @@ const riverPulse = defineLayer({
       url: GLOFAS_URL,
       retrieved: now.toISOString(),
     };
-    const { runs, samples } = planSamples(runsIn(lines, ctx.bbox));
+    const { runs, samples } = planPoints(runsIn(lines, ctx.bbox), KNOWN_POINTS);
     if (samples.length === 0) {
       return { kind: "geojson", data: { type: "FeatureCollection", features: [] }, citation, coverageNote: "No Natural Earth rivers in this box; zoom out or pick a basin" };
     }
-    const at = await riverCells(ctx, samples.map((s) => s.at));
+    const fresh = samples.map((s, i) => ({ s, i })).filter((x) => !x.s.cell);
+    const snapped = fresh.length > 0 ? await riverCells(ctx, fresh.map((x) => x.s.at)) : [];
+    const at = samples.map((s) => s.cell ?? s.at);
+    fresh.forEach((x, k) => (at[x.i] = snapped[k]));
     const day = now.toISOString().slice(0, 10);
-    const flows = await floodBatch(ctx, at, input.days, input.forecastDays, `river-pulse:flow:${day}:${input.days}:${input.forecastDays}:${hashOf(at)}`, 6 * 3_600);
-    if (flows.every((f) => f === null)) return { error: "The Open-Meteo flood API did not answer for these rivers (it may be over its minute limit); try again shortly", hint: "upstream" };
-    const built = reachFeatures(reachesOf(runs), samples, flows, now.toISOString());
+    const { flows, read } = await flowsFor(ctx, at, input.days, input.forecastDays, day);
+    if (flows.every((f) => f === null)) return { error: "The Open-Meteo flood API did not answer for these rivers (it may be over its free limit); try again shortly", hint: "upstream" };
+    const built = reachFeatures(reachesOf(runs), samples, flows, now.toISOString(), runs);
     if (!built) return { error: "The Open-Meteo flood API returned no usable discharge here", hint: "upstream" };
+    // The request count, against the free tier's 5,000 calls an hour (a location counts a call per 14 days asked for).
+    const calls = Math.round(read * ((input.days + input.forecastDays) / 14) + fresh.length * NEIGHBOURS.length);
+    console.info(`[river-pulse] ${samples.length} points (${fresh.length} snapped now), ${read} read upstream: about ${calls} Open-Meteo calls`);
     const rivers = new Set(built.data.features.map((f) => f.properties?.name)).size;
+    const outlets = built.data.features.filter((f) => f.properties?.outlet === true).length;
     const notes = [
-      `${built.data.features.length} reaches of ${rivers} rivers with daily GloFAS discharge (modelled, not gauged), ${input.days} past days and ${input.forecastDays} forecast days`,
-      `read at ${samples.length} points and interpolated along each river between them`,
+      `${rivers} rivers in ${built.data.features.length} reaches with daily GloFAS discharge (modelled, not gauged), ${input.days} past days and ${input.forecastDays} forecast days`,
+      `read at ${samples.length} points and interpolated along each river; ${outlets} outlets (mouths and edges of the view)`,
     ];
-    return { kind: "geojson", data: built.data, series: built.series, citation, coverageNote: notes.join("; ") };
+    return { kind: "geojson", data: built.data, series: built.series, citation, coverageNote: notes.join("; "), title: `River flow, daily (${rivers} rivers)` };
   },
 });
 

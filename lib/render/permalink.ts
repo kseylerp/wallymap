@@ -561,7 +561,7 @@ export async function restoreFromPermalink(
       type: "layer_loaded",
       layer: {
         id: layer.id,
-        title: entry?.title ?? layer.id,
+        title: (result.kind === "geojson" && result.title) || (entry?.title ?? layer.id),
         style,
         result,
         receivedAt: new Date().toISOString(),

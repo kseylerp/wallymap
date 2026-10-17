@@ -11,7 +11,7 @@ import { InfoMark } from "@/components/FieldHelp";
 import type { FieldHelp } from "@/layers/types";
 import { attributeFilterSummary, attributesOf, chipAttribute } from "@/lib/render/attributes";
 import { cellContext, hexCells, hexLegendSentence, levelLabel, usableBasis } from "@/lib/render/hexCells";
-import { isDenseNetwork, viewCaption } from "@/lib/render/views";
+import { preferredBasemap, viewCaption } from "@/lib/render/views";
 import type { Feature } from "geojson";
 import { LegendKey } from "@/components/LegendKey";
 import { EncodingLegend } from "@/components/EncodingLegend";
@@ -286,6 +286,8 @@ type RowProps = {
   threeD?: boolean;
   expandAttributes?: boolean;
   basemap?: MapState["basemap"];
+  /** The time scrubber, for a series legend's range on the frame shown. */
+  time?: TimeState;
 };
 
 /** A threshold readout: "All" at the data minimum, else "≥ 1,204 acres" (scores without a unit). */
@@ -378,6 +380,7 @@ function LegendRow({
   threeD = false,
   expandAttributes = false,
   basemap,
+  time,
 }: RowProps) {
   const visible = op?.visible ?? false;
   const opacity = op?.opacity ?? 1;
@@ -428,6 +431,8 @@ function LegendRow({
   const swatch = isRaster ? layer.style.raster?.swatch : undefined;
   const keySymbol: LegendSymbol = symbol.kind === "tiles" && swatch ? { ...symbol, color: swatch } : symbol;
   const keyFilter = isRaster ? rasterKeyFilter(layer.style.raster) : "";
+  // The basemap this layer reads best on (Data only for a river network, Topographical for wind over mountains).
+  const preferred = preferredBasemap(layer, op);
   // A flow field draws as moving particles: its grid nodes have no other way to draw, no names to rank, nothing to filter.
   const flowField = layer.result.kind === "geojson" && layer.result.flow !== undefined;
   const pointModes = op && layer.result.kind === "geojson" && layer.style.geometry === "point" && !flowField;
@@ -513,16 +518,16 @@ function LegendRow({
         </p>
       )}
       {/* A dense network draws the land itself (spec §13): one click lets the basemap step back. */}
-      {basemap !== undefined && basemap !== "data-only" && isDenseNetwork(layer, op) && (
-        <p data-testid="data-only-offer" className="mt-1 flex min-w-0 items-baseline gap-1.5 text-[11.5px] leading-4 text-ink-muted">
-          <span className="min-w-0 truncate">The data can draw the land:</span>
-          <button type="button" onClick={() => dispatch({ type: "set_basemap", basemap: "data-only" })} className="dashed-link shrink-0 text-ink">
-            Data only basemap
+      {basemap !== undefined && preferred !== undefined && basemap !== preferred && (
+        <p data-testid="basemap-offer" className="mt-1 flex min-w-0 items-baseline gap-1.5 text-[11.5px] leading-4 text-ink-muted">
+          <span className="min-w-0 truncate">{preferred === "data-only" ? "The data can draw the land:" : "Reads best over the terrain:"}</span>
+          <button type="button" onClick={() => dispatch({ type: "set_basemap", basemap: preferred })} className="dashed-link shrink-0 text-ink">
+            {preferred === "data-only" ? "Data only basemap" : "Topographical basemap"}
           </button>
         </p>
       )}
       {/* Two measures on one mark (spec §13): what width or size and what color mean, with units and range. */}
-      {op?.visible && data && (!hexes || op.mode === "columns") && <EncodingLegend layer={layer} op={op} data={data} />}
+      {op?.visible && data && (!hexes || op.mode === "columns") && <EncodingLegend layer={layer} op={op} data={data} time={time} />}
       {hexSentence && (
         <p data-testid="hex-legend" className="mt-1 text-[11.5px] leading-4 text-ink">
           {hexSentence}
@@ -744,6 +749,7 @@ export function LayerStack({
               threeD={threeD}
               expandAttributes={expandAttributes}
               basemap={basemap}
+              time={time}
               dragProps={{
                 // Only the key starts a drag, so the slider and text stay usable.
                 draggable: armed === layer.id,

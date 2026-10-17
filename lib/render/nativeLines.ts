@@ -294,9 +294,14 @@ function shareOf(prop: "sz" | "ct"): ExpressionSpecification {
   return ["to-number", ["coalesce", ["feature-state", prop], ["get", prop]], -1];
 }
 
-/** The `line-width` of an encoded line: the size share from the thinnest to the widest line, in pixels. */
-export function encodedLineWidth(extra = 0): ExpressionSpecification {
-  return ["interpolate", ["linear"], ["max", 0, shareOf("sz")], 0, ENCODED_LINE.minPx + extra, 1, ENCODED_LINE.maxPx + extra];
+/**
+ * The `line-width` of an encoded line: the size share (the square root of the flow's share of the largest) from 0.6 px
+ * to 12 px; its casing a pixel wider at the thin end and two at the wide end, so a creek is not all white halo.
+ */
+export function encodedLineWidth(extra = 0, casing = false): ExpressionSpecification {
+  const lo = ENCODED_LINE.minPx + extra + (casing ? ENCODED_LINE.casingMinPx : 0);
+  const hi = ENCODED_LINE.maxPx + extra + (casing ? ENCODED_LINE.casingMaxPx : 0);
+  return ["interpolate", ["linear"], ["max", 0, shareOf("sz")], 0, lo, 1, hi];
 }
 
 /** The `line-color` of an encoded line: its color share on the ramp at nine stops; no value draws sage. */
@@ -343,7 +348,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
   const routeCasing = LINE_CLASSES.route.casing;
   const encoded = entry.look.kind === "encoded" && entry.look.size !== undefined;
   const baseCasing: number | ExpressionSpecification = encoded
-    ? encodedLineWidth(ENCODED_LINE.casingPx)
+    ? encodedLineWidth(0, true)
     : routed
       ? ["match", ["get", "cls"], "route", routeCasing, LINE.casing]
       : LINE.casing;

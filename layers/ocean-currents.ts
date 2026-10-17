@@ -153,7 +153,7 @@ const oceanCurrents = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 4_000_000,
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("ocean-currents"), unit: "m/s", encode: { size: "speed", color: "sst" }, series: "hour" },
+  style: { geometry: "point", color: layerColor("ocean-currents"), unit: "m/s", encode: { size: "speed", color: "sst" }, series: "hour", basemap: "data-only" },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,

@@ -88,6 +88,30 @@ describe("glaciers layer", () => {
     expect(lyellOutlines.map((f) => f.properties?.earlier)).toEqual([undefined, "1984 0.37 km²"]);
   });
 
+  it("lists one earlier entry per year: the same team's outline, else how many and their range", () => {
+    // Pio XI in GLIMS: three 2001 outlines (Newcastle, Chile, Zurich) of 1,351, 1,244 and 1,233 km² beside a 2016 Zurich outline.
+    const square = { type: "Polygon", coordinates: [[[0, 0], [0.5, 0], [0.5, 0.5], [0, 0.5], [0, 0]]] };
+    const outline = (date: string, area: number, institution: string, anlys: number, subm: number) => ({
+      type: "Feature",
+      geometry: square,
+      properties: { line_type: "glac_bound", glac_id: "G1", glac_name: "PIO XI", db_area: area, src_date: `${date}T00:00:00Z`, chief_affl: institution, anlys_id: anlys, subm_id: subm },
+    });
+    const all = [
+      outline("2016-03-12", 1245.46, "University of Zurich-Irchel", 693147, 702),
+      outline("2007-09-06", 1344.67, "Newcastle University", 101190, 559),
+      outline("2001-08-04", 1350.51, "Newcastle University", 101853, 560),
+      outline("2001-03-12", 1244.47, "Universidad de Chile", 731302, 730),
+      outline("2001-12-03", 1233.08, "University of Zurich-Irchel", 947869, 764),
+    ];
+    const earlierOf = (features: unknown[]) => normalizeGlaciers({ type: "FeatureCollection", features }).data.features.at(-1)?.properties?.earlier;
+    // Exactly one 2001 outline is from the current outline's institution: it stands for the year.
+    expect(earlierOf(all)).toBe("2007 1,345 km² · 2001 1,233 km²");
+    // None from its team (no 2001 Zurich outline), so the year says how many and the range.
+    expect(earlierOf(all.filter((f) => f.properties.subm_id !== 764))).toBe("2007 1,345 km² · 2 outlines in 2001 (1,244–1,351 km²)");
+    // The same submission as the current outline wins over the other teams.
+    expect(earlierOf([...all.filter((f) => f.properties.subm_id !== 764), outline("2001-06-01", 1290, "Somewhere Else", 5, 702)])).toBe("2007 1,345 km² · 2001 1,290 km²");
+  });
+
   it("does not merge same-named glaciers far apart, or unnamed ones near each other", () => {
     const square = (x: number) => ({ type: "Polygon", coordinates: [[[x, 0], [x + 0.01, 0], [x + 0.01, 0.01], [x, 0.01], [x, 0]]] });
     const row = (id: string, name: string | null, x: number, area: number) => ({

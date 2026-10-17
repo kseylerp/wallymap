@@ -171,6 +171,9 @@ type Row = {
   /** The glacier's name when it has a real one (not a region code or placeholder). */
   name: string | undefined;
   center: [number, number];
+  /** GLIMS analysis and submission ids of the outline (who mapped it, in which upload), as the source gives them. */
+  analysis: number | undefined;
+  submission: number | undefined;
   feature: Feature<Geometry>;
 };
 
@@ -251,7 +254,7 @@ export function normalizeGlaciers(
     const institution = str(p.chief_affl);
     if (institution !== undefined) properties.institution = institution;
 
-    rows.push({ id, area, time: dated ? srcDate : 0, name, center: centerOf(geometry), feature: { type: "Feature", geometry, properties } });
+    rows.push({ id, area, time: dated ? srcDate : 0, name, center: centerOf(geometry), analysis: num(p.anlys_id), submission: num(p.subm_id), feature: { type: "Feature", geometry, properties } });
   }
   rows.sort((a, b) => b.area - a.area);
 
@@ -315,29 +318,75 @@ export function normalizeGlaciers(
   return { data: { type: "FeatureCollection", features: kept.map((r) => r.feature) }, truncated };
 }
 
-/** Most earlier outlines one card lists, newest first. */
+/** Most earlier years one card lists, newest first. */
 const EARLIER_SHOWN = 4;
 
+function areaDigits(km2: number): number {
+  return km2 >= 100 ? 0 : km2 >= 1 ? 1 : 2;
+}
+
+function areaNumber(km2: number): string {
+  return km2.toLocaleString("en-US", { maximumFractionDigits: areaDigits(km2) });
+}
+
 function areaText(km2: number): string {
-  const digits = km2 >= 100 ? 0 : km2 >= 1 ? 1 : 2;
-  return `${km2.toLocaleString("en-US", { maximumFractionDigits: digits })} km²`;
+  return `${areaNumber(km2)} km²`;
+}
+
+/** True when two outlines were mapped by one team: the same analysis or submission, else the same institution. */
+function sameAnalyst(a: Row, b: Row): boolean {
+  if (a.analysis !== undefined && a.analysis === b.analysis) return true;
+  if (a.submission !== undefined && a.submission === b.submission) return true;
+  return false;
+}
+
+function institutionOf(r: Row): string | undefined {
+  const v = r.feature.properties?.institution;
+  return typeof v === "string" ? v : undefined;
+}
+
+/**
+ * One entry of the earlier list for one year of survey images. A year with one survey date is "2001 1,244 km²". GLIMS
+ * often holds several outlines of one year (three 2001 outlines of Pio XI, 1,233 to 1,351 km², from three teams and
+ * dates), which would read as one glacier of three sizes; there the entry is the outline mapped by the same analyst or
+ * submission as the current one (else the same institution) when exactly one was, and otherwise says how many there
+ * are and their range: "3 outlines in 2001 (1,233–1,351 km²)".
+ */
+function earlierEntry(year: number, outlines: Row[], current: Row): string {
+  if (outlines.length === 1) return `${year} ${areaText(outlines[0].area)}`;
+  const institution = institutionOf(current);
+  for (const same of [outlines.filter((o) => sameAnalyst(o, current)), institution === undefined ? [] : outlines.filter((o) => institutionOf(o) === institution)]) {
+    if (same.length === 1) return `${year} ${areaText(same[0].area)}`;
+  }
+  const areas = outlines.map((o) => o.area);
+  const lo = Math.min(...areas);
+  const hi = Math.max(...areas);
+  // Two ranges that print alike ("1,244–1,244") are one size.
+  const range = areaNumber(lo) === areaNumber(hi) ? areaText(lo) : `${areaNumber(lo)}–${areaText(hi)}`;
+  return `${outlines.length} outlines in ${year} (${range})`;
 }
 
 /**
  * Gives each dated outline `earlier`: the glacier's outlines from before it, newest first ("2001 1,378 km² · 1986
- * 1,402 km²"), so the card of the latest outline (the one the map draws on top and the Rank by list names) says how
- * the glacier has changed.
+ * 1,402 km²"), one entry per year of survey images (see earlierEntry), so the card of the latest outline (the one the
+ * map draws on top and the Rank by list names) says how the glacier has changed.
  */
 function addEarlierOutlines(rows: Row[]): void {
   const byId = new Map<string, Row[]>();
   for (const r of rows) if (r.time !== 0) byId.set(r.id, [...(byId.get(r.id) ?? []), r]);
   for (const series of byId.values()) {
     for (const r of series) {
-      const before = series.filter((o) => o.time < r.time).sort((a, b) => b.time - a.time);
+      const before = series.filter((o) => o.time < r.time);
       if (before.length === 0 || !r.feature.properties) continue;
-      r.feature.properties.earlier = before
+      const years = new Map<number, Row[]>();
+      for (const o of before) {
+        const year = new Date(o.time).getUTCFullYear();
+        years.set(year, [...(years.get(year) ?? []), o]);
+      }
+      r.feature.properties.earlier = [...years.entries()]
+        .sort((a, b) => b[0] - a[0])
         .slice(0, EARLIER_SHOWN)
-        .map((o) => `${new Date(o.time).getUTCFullYear()} ${areaText(o.area)}`)
+        .map(([year, outlines]) => earlierEntry(year, outlines, r))
         .join(" · ");
     }
   }
@@ -362,7 +411,7 @@ const HELP: Record<string, FieldHelp> = {
   date: { text: "When the satellite or aerial image behind this outline was taken; the ice has usually changed since." },
   glacierId: { text: "The GLIMS glacier id; outlines of one glacier from different dates share it." },
   institution: { text: "The team that mapped this outline for GLIMS." },
-  earlier: { text: "This glacier's outlines from earlier images in GLIMS, newest first: the year of the image and the area then." },
+  earlier: { text: "This glacier's outlines from earlier images in GLIMS, newest first: the year of the image and the area then. A year with several outlines shows the one mapped by the same team as this outline, or how many there are and their range." },
 };
 
 const CARD: CardSpec = {

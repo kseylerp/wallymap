@@ -20,6 +20,7 @@ import {
   usableBasis,
 } from "@/lib/render/hexCells";
 import { DARK_GREY } from "@/lib/render/palette";
+import { PlacedLabelLayer } from "@/lib/render/placedLabels";
 import { initialMapState, type LoadedLayer, type MapState, type RenderOp } from "@/lib/render/state";
 
 const citation = { source: "EIA", url: "https://www.eia.gov", retrieved: "2026-10-15" };
@@ -182,5 +183,16 @@ describe("ranked labels do not pile up", () => {
     const named = [plant(-83.68, 37.8, "x", 110, "Military Wall"), plant(-83.679, 37.8001, "x", 46, "Left Flank"), plant(-83.6, 37.75, "x", 57, "Long Wall")];
     expect(declutterLabels(named, 11, 37.8).map((f) => f.properties?.name)).toEqual(["Military Wall", "Long Wall"]);
     expect(declutterLabels(named, 17, 37.8)).toHaveLength(3);
+  });
+
+  it("are placed against the screen, so a label near the map's edge moves inward (labelPlacement.ts)", () => {
+    const insets = () => ({ top: 56, right: 0, bottom: 72, left: 0 });
+    const layers = buildDeckLayers(stateWith({ mode: "points", view: "ranked" }), { labelInsets: insets });
+    const placed = layers.find((l) => l.id === "power-plants:points:placed") as PlacedLabelLayer<Feature> | undefined;
+    expect(placed).toBeInstanceOf(PlacedLabelLayer);
+    // The drawn text keeps the id the screen checks read (lib/checks/screenChecks.ts collectLabels).
+    expect(placed!.props.textId).toBe("power-plants:points:labels");
+    expect(placed!.props.getInsets).toBe(insets);
+    expect(placed!.props.data.map((f) => f.properties?.name)).toContain("Permian Gas");
   });
 });

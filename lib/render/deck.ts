@@ -41,6 +41,7 @@ import type { HexBasis, LoadedLayer, MapState, RenderMode, RenderOp, Viewport } 
 import { extentOf, hatchStepOf, primaryMeasure, sizeScale, topPlaces } from "@/lib/render/attributes";
 import { basisLabel, basisScale, basisT, cellContext, hexCells, registerCell, usableBasis, type CellContext, type HexCell } from "@/lib/render/hexCells";
 import { RANKED_LABELS } from "@/lib/render/views";
+import { PlacedLabelLayer } from "@/lib/render/placedLabels";
 
 type Rgba = [number, number, number, number];
 
@@ -371,7 +372,12 @@ type OpContext = {
   threeD: boolean;
   /** The id this op's deck layers are named after, when not the op's layer id (compare side B). */
   deckId?: string;
+  /** The floating panels' insets over the map canvas, so ranked labels stay in the clear part (placedLabels.ts). */
+  labelInsets?: LabelInsets;
 };
+
+/** The floating panels' insets over a canvas of this size (MapCanvas reads them from the page). */
+export type LabelInsets = (canvas: { width: number; height: number }) => Padding;
 
 /** A palette color asked for by the layer panel or a compare side; anything else is ignored (palette only). */
 function requestedColor(color: string | undefined): string | undefined {
@@ -664,7 +670,6 @@ function rankedSizing(data: GeoJSON.FeatureCollection, key: string): { key: stri
   return { key, extent: memoExtent(data, key), top: topPlaces(data, key, RANKED_LABELS) };
 }
 
-/** Name labels for a ranked view's top features: dark grey on a white halo, above the symbol. */
 /** A ranked label's box on screen, for declutter: about this wide per character and this tall, in CSS pixels. */
 const LABEL_BOX = { charPx: 6.5, heightPx: 16 } as const;
 
@@ -688,6 +693,7 @@ export function declutterLabels(features: Feature[], zoom: number, latitude: num
   return out;
 }
 
+/** Name labels for a ranked view's top features: dark grey on a white halo, above the symbol, inside the clear map. */
 function rankedLabelLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const { data, terrain, deckId, style } = ctx;
   const rankKey = rankKeyOf(op, ctx);
@@ -696,26 +702,31 @@ function rankedLabelLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer
   const named = top.filter((f) => typeof f.properties?.name === "string" && f.properties.name !== "");
   const labelled = declutterLabels(named, ctx.zoom, ctx.latitude);
   if (labelled.length === 0) return [];
+  const labelKey = deckLayerKey(deckId ?? op.layerId, terrain);
   return [
-    new TextLayer<Feature>({
-      id: `${deckLayerKey(deckId ?? op.layerId, terrain)}:points:labels`,
+    // Placed again as the camera moves, so a label near the edge of the clear map moves inward (labelPlacement.ts).
+    new PlacedLabelLayer<Feature>({
+      id: `${labelKey}:points:placed`,
+      textId: `${labelKey}:points:labels`,
       data: labelled,
-      pickable: false,
       getPosition: markerPosition,
       getText: (f) => String(f.properties?.name),
-      getSize: 11,
-      sizeUnits: "pixels",
-      getPixelOffset: (f) => [0, -Math.round((SYMBOL_SIZE_PX * sizeScale(f.properties?.[key], extent)) / 2) - 8],
-      getColor: hexToRgba(HEX_TILE.label, Math.round(255 * opacity)),
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-      fontWeight: 600,
-      characterSet: "auto",
-      fontSettings: { sdf: true, buffer: 6 },
-      outlineWidth: 0.6,
-      outlineColor: hexToRgba(HEX_TILE.labelHalo, Math.round(240 * opacity)),
-      billboard: true,
-      parameters: { cullMode: "none", depthCompare: "always" },
-      ...terrainProps(terrain, "offset"),
+      size: 11,
+      getGap: (f) => Math.round((SYMBOL_SIZE_PX * sizeScale(f.properties?.[key], extent)) / 2) + 8,
+      getInsets: ctx.labelInsets,
+      textProps: {
+        pickable: false,
+        getColor: hexToRgba(HEX_TILE.label, Math.round(255 * opacity)),
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+        fontWeight: 600,
+        characterSet: "auto",
+        fontSettings: { sdf: true, buffer: 6 },
+        outlineWidth: 0.6,
+        outlineColor: hexToRgba(HEX_TILE.labelHalo, Math.round(240 * opacity)),
+        billboard: true,
+        parameters: { cullMode: "none", depthCompare: "always" },
+        ...terrainProps(terrain, "offset"),
+      },
     }),
   ];
 }
@@ -1575,7 +1586,7 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim() ?? "";
  */
 export function buildDeckLayerSets(
   state: MapState,
-  { mapboxToken = MAPBOX_TOKEN }: { mapboxToken?: string } = {},
+  { mapboxToken = MAPBOX_TOKEN, labelInsets }: { mapboxToken?: string; labelInsets?: LabelInsets } = {},
 ): { main: Layer[]; a: Layer[]; b: Layer[] } {
   const main: Layer[] = [];
   const a: Layer[] = [];
@@ -1603,6 +1614,7 @@ export function buildDeckLayerSets(
       latitude: state.viewport.latitude,
       terrain,
       threeD: state.terrain && !state.flattened,
+      labelInsets,
     };
     if (compare?.layerId !== op.layerId || !mode) {
       main.push(...safeLayersFor(op, ctx));
@@ -1681,7 +1693,7 @@ function hoverLayers(state: MapState, terrain: boolean): Layer[] {
  * list: `buildDeckLayerSets`' main set plus any swipe sides (without their own terrain copies). Heat ops yield only
  * their clicked feature's symbol here; Mapbox draws the heatmap.
  */
-export function buildDeckLayers(state: MapState, options: { mapboxToken?: string } = {}): Layer[] {
+export function buildDeckLayers(state: MapState, options: { mapboxToken?: string; labelInsets?: LabelInsets } = {}): Layer[] {
   const { main, a, b } = buildDeckLayerSets(state, options);
   const sides = [...a, ...b].filter((l) => l.id !== DECK_TERRAIN_ID);
   return sides.length > 0 ? [...main, ...sides] : main;

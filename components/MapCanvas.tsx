@@ -44,6 +44,8 @@ import {
   speedKmPerMin,
 } from "@/lib/render/wally/playback";
 import { visibleMapPadding } from "@/lib/render/viewportPadding";
+import { clearInsets } from "@/lib/render/labelPlacement";
+import { safeAreaInsets } from "@/lib/render/safeArea";
 import { samplePoints } from "@/lib/render/wally/sample";
 import {
   BUILDINGS_LAYER_ID,
@@ -167,12 +169,38 @@ function tileUrlsKey(view: MapState): string {
 
 type DeckLayerSets = { main: Layer[]; a: Layer[]; b: Layer[] };
 
+/** The floating panels a ranked label must stay clear of (the inspect card comes and goes, so it is left out). */
+const LABEL_OBSTACLES = ['[data-testid="top-bar"]', 'section[aria-label="Chat"]', '[data-testid="layer-stack"]'];
+
+/**
+ * How far the floating panels and the phone's safe area reach into the map canvas, so ranked labels stay in the
+ * clear part (lib/render/labelPlacement.ts). Read from the page each time the labels are placed.
+ */
+function panelInsets(canvas: { width: number; height: number }): Padding {
+  const box = document.querySelector('[data-testid="map-canvas"]')?.getBoundingClientRect();
+  if (!box) return { top: 0, right: 0, bottom: 0, left: 0 };
+  const panels = LABEL_OBSTACLES.flatMap((selector) => {
+    const el = document.querySelector<HTMLElement>(selector);
+    const r = el?.getBoundingClientRect();
+    if (!el || !r || r.width === 0 || r.height === 0 || getComputedStyle(el).visibility === "hidden") return [];
+    return [{ left: r.left - box.left, top: r.top - box.top, right: r.right - box.left, bottom: r.bottom - box.top }];
+  });
+  const covered = clearInsets(canvas, panels);
+  const safe = safeAreaInsets();
+  return {
+    top: Math.max(covered.top, safe.top),
+    right: Math.max(covered.right, safe.right),
+    bottom: Math.max(covered.bottom, safe.bottom),
+    left: Math.max(covered.left, safe.left),
+  };
+}
+
 /** An unsupported render mode must not crash the canvas, so failures render no deck layers. */
 function safeDeckLayers(state: MapState): DeckLayerSets {
   try {
     // The visible view: features outside the time window (and filtered out in the layer panel) are not drawn.
     const view = visibleState(state);
-    const sets = buildDeckLayerSets(view);
+    const sets = buildDeckLayerSets(view, { labelInsets: panelInsets });
     // A swiped scenario tile layer (sea level rise) draws its two amounts in the side overlays too.
     const tiles = tileSwipeLayers(view);
     return tiles.a.length + tiles.b.length === 0 ? sets : { ...sets, a: [...sets.a, ...tiles.a], b: [...sets.b, ...tiles.b] };

@@ -79,11 +79,11 @@ function useShortViewport(): boolean {
 
 const MODE_LABEL: Record<CompareMode, string> = { swipe: "Swipe", toggle: "Toggle", delta: "Delta" };
 
-/** Text button segment: black when pressed (the app's primary), muted text otherwise. */
+/** Text button segment: the selected chip when pressed (deep sage outline on white), ink text otherwise. */
 const SEG =
   "h-6 rounded-[4px] px-2.5 text-[12px] whitespace-nowrap transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:text-ink-muted/40";
 const SEG_IDLE = "text-ink hover:bg-mist/70";
-const SEG_ON = "bg-primary text-on-primary";
+const SEG_ON = "control-on";
 const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 hover:text-ink";
 
 /**

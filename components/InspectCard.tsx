@@ -214,7 +214,7 @@ function HexCellBody({
       <button
         type="button"
         onClick={onAsk}
-        className="press mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-primary text-[14px] font-medium text-on-primary transition duration-150 ease-out hover:opacity-85"
+        className="press mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-primary text-[14px] font-semibold text-on-primary transition duration-150 ease-out hover:bg-primary-hover"
       >
         <MessageCircle aria-hidden size={16} strokeWidth={2} />
         Ask about this cell
@@ -420,7 +420,7 @@ export function InspectCard({
                 </span>
               )}
             </p>
-            <h3 className="mt-0.5 font-serif text-[1.15rem] leading-snug font-semibold break-words text-ink">
+            <h3 className="mt-0.5 font-serif text-[1.15rem] leading-[1.08] font-semibold break-words text-ink">
               {cell && origin ? `${cell.count.toLocaleString("en-US")} ${cell.count === 1 ? "feature" : origin.ctx.noun} in this cell` : (summary.name ?? "Feature")}
             </h3>
           </div>
@@ -528,7 +528,7 @@ export function InspectCard({
         <button
           type="button"
           onClick={ask}
-          className="press mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-primary text-[14px] font-medium text-on-primary transition duration-150 ease-out hover:opacity-85"
+          className="press mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-primary text-[14px] font-semibold text-on-primary transition duration-150 ease-out hover:bg-primary-hover"
         >
           <MessageCircle aria-hidden size={16} strokeWidth={2} />
           {busy ? "Chat is busy" : "Ask about this"}

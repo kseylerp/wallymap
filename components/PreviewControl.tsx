@@ -224,7 +224,7 @@ function Dock({ state, route, onActions }: DockProps) {
           onClick={toggle}
           aria-label={playback.playing ? "Pause preview" : "Play preview"}
           title={playback.playing ? "Pause (Space)" : "Play (Space)"}
-          className="press flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary transition duration-150 ease-out hover:opacity-85"
+          className="press flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary transition duration-150 ease-out hover:bg-primary-hover"
         >
           {playback.playing ? (
             <Pause aria-hidden size={16} strokeWidth={2.5} fill="currentColor" />
@@ -273,7 +273,7 @@ function Dock({ state, route, onActions }: DockProps) {
               aria-pressed={playback.speed === s}
               aria-label={`Speed ${s}×`}
               className={`h-7 rounded-full px-1.5 text-[11.5px] font-semibold tabular-nums transition-colors ${
-                playback.speed === s ? "bg-primary text-on-primary" : "text-ink-muted hover:text-ink"
+                playback.speed === s ? "control-on" : "text-ink-muted hover:text-ink"
               }`}
             >
               {s}×
@@ -289,7 +289,7 @@ function Dock({ state, route, onActions }: DockProps) {
             aria-pressed={profileOpen}
             title={profileOpen ? "Hide elevation profile" : "Show elevation profile"}
             className={`flex size-8 shrink-0 items-center justify-center rounded-full transition-colors ${
-              profileOpen ? "bg-primary text-on-primary" : "text-ink-muted hover:bg-mist hover:text-ink"
+              profileOpen ? "control-on" : "text-ink-muted hover:bg-mist hover:text-ink"
             }`}
           >
             <Mountain aria-hidden size={16} strokeWidth={2} />

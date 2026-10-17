@@ -734,7 +734,7 @@ export function ChatRail({
                 onClick={() => void stop()}
                 aria-label="Stop"
                 title="Stop"
-                className="press flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary transition duration-150 ease-out hover:opacity-85"
+                className="press flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary transition duration-150 ease-out hover:bg-primary-hover"
               >
                 <Square aria-hidden size={14} strokeWidth={2.5} fill="currentColor" />
               </button>
@@ -745,7 +745,7 @@ export function ChatRail({
                 aria-label="Send"
                 title="Send"
                 // The primary (black) button only once there is something to send.
-                className="press flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary transition duration-150 ease-out hover:opacity-85 disabled:bg-mist disabled:text-ink-muted disabled:hover:opacity-100"
+                className="press flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary transition duration-150 ease-out hover:bg-primary-hover disabled:bg-mist disabled:text-ink-muted disabled:hover:bg-mist"
               >
                 <ArrowUp aria-hidden size={18} strokeWidth={2.25} />
               </button>

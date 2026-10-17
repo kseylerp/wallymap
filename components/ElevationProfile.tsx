@@ -280,7 +280,7 @@ export function ElevationProfile({
         <span
           aria-hidden
           data-testid="profile-readout"
-          className="pointer-events-none absolute top-0 rounded-full bg-primary px-1.5 py-px text-[10.5px] font-semibold text-on-primary tabular-nums"
+          className="pointer-events-none absolute top-0 rounded-full bg-ink px-1.5 py-px text-[10.5px] font-semibold text-white tabular-nums"
           style={{
             left: Math.min(width - 60, Math.max(PAD.left, cursorX - 28)),
           }}

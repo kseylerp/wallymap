@@ -59,10 +59,10 @@ export function MapControls({ onZoomIn, onZoomOut, onGlobe, threeD, onToggle3D }
         aria-pressed={threeD}
         aria-label="3D terrain"
         title={threeD ? "Flatten the map" : "Show 3D terrain"}
-        // Pressed: the primary button look (ink with white text; globals.css makes it beat the pill surface for pressed
+        // Pressed: the selected chip (deep sage outline on white; globals.css makes it beat the pill surface for pressed
         // map controls). Off: the off-white pill.
         className={`map-pill overflow-hidden rounded-[10px] text-[12px] font-medium tracking-tight tabular-nums ${
-          threeD ? `${BUTTON_BASE} bg-primary text-on-primary` : BUTTON
+          threeD ? `${BUTTON_BASE} control-on` : BUTTON
         }`}
       >
         3D

@@ -44,8 +44,8 @@ const PILL = "map-pill flex h-9 items-center rounded-pill text-ink";
 const SEG =
   "relative flex h-7 items-center gap-1.5 rounded-pill text-[13px] whitespace-nowrap transition-colors duration-150 ease-out";
 const IDLE = "text-ink hover:bg-mist/70";
-/** Pressed segments are the black primary button. */
-const ACTIVE = "bg-primary text-on-primary";
+/** Pressed segments are the selected chip: a deep sage outline and text on white, as on wally.guide. */
+const ACTIVE = "control-on";
 
 /**
  * The map pills in the top-left corner: the Wally logo (a button that resets the map), the basemap switch, the
@@ -224,7 +224,7 @@ export function MapPills({
                 autoFocus
                 disabled={exporting}
                 onClick={() => void confirmExport()}
-                className="press rounded-pill bg-primary px-3 py-1 font-medium text-on-primary"
+                className="press rounded-[12px] bg-primary px-3 py-1 font-semibold text-on-primary transition-colors duration-150 hover:bg-primary-hover"
               >
                 Export
               </button>

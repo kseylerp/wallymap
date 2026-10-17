@@ -23,11 +23,19 @@
   --line: rgba(0, 0, 0, 0.07);
   --mist: #e4e1dc;
 
-  /* Wally purple: links, the route gradient and small accents only. Buttons and active controls are ink. */
+  /* Wally purple: links, the route gradient and small accents only. */
   --accent: #6e5bff;
-  /* Primary buttons and active control states: ink with white text, in both themes. */
-  --button-primary: var(--ink);
+  /* Primary buttons, as on wally.guide: coral fill, white semibold text, a deeper coral on hover. */
+  --button-primary: var(--coral);
+  --button-primary-hover: #e84e4e;
   --button-primary-text: #ffffff;
+  /*
+   * Chips and pressed controls, as on wally.guide (.chip-on / .chip-off): white fill, a 1px outline. Selected is the
+   * deep sage outline and text; unselected is the warm grey line with ink text.
+   */
+  --control-fill: #ffffff;
+  --control-line: #dfdbd3;
+  --sage-deep: #6e8a62;
   /* Map palette (lib/render/palette.ts, spec §11): pink (coral) route start, compare B and hazards; purple selection,
      the time window and compare A; sage protected land; dark grey data lines and outlines. */
   --coral: #f57272;
@@ -95,6 +103,10 @@
   --color-accent: var(--accent);
   --color-primary: var(--button-primary);
   --color-on-primary: var(--button-primary-text);
+  --color-primary-hover: var(--button-primary-hover);
+  --color-control-fill: var(--control-fill);
+  --color-control-line: var(--control-line);
+  --color-sage-deep: var(--sage-deep);
   --color-coral: var(--coral);
   --color-sage: var(--sage);
   --color-sage-tint: var(--sage-tint);
@@ -176,10 +188,21 @@
   }
 }
 
-/* Primary buttons: ink with white text (bg-primary text-on-primary). */
+/* Primary buttons: coral with white semibold text (bg-primary text-on-primary hover:bg-primary-hover). */
 @utility btn-primary {
   background-color: var(--button-primary);
   color: var(--button-primary-text);
+  font-weight: 600;
+  &:hover {
+    background-color: var(--button-primary-hover);
+  }
+}
+
+/* A pressed toggle or segment: wally.guide's selected chip, a deep sage outline and text on white. */
+@utility control-on {
+  background-color: var(--control-fill);
+  color: var(--sage-deep);
+  box-shadow: inset 0 0 0 1px var(--sage-deep);
 }
 
 /*
@@ -560,8 +583,9 @@ textarea:focus-visible {
   color: var(--ink);
 }
 .mode-segment[aria-pressed="true"] {
-  background: var(--button-primary);
-  color: var(--button-primary-text);
+  background: var(--control-fill);
+  color: var(--sage-deep);
+  box-shadow: inset 0 0 0 1px var(--sage-deep);
 }
 .mode-segment:focus-visible {
   outline: 2px solid var(--slate);
@@ -669,23 +693,32 @@ textarea:focus-visible {
   gap: 5px;
   height: 20px;
   padding: 1px 7px 0;
-  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
-  border-radius: 4px;
+  border: 1px solid var(--control-line);
+  border-radius: 6px;
+  background: var(--control-fill);
   font-size: 11.5px;
   line-height: 17px;
-  color: var(--ink);
+  color: color-mix(in srgb, var(--ink) 80%, transparent);
   transition:
     background-color 150ms var(--ease-out),
     border-color 150ms var(--ease-out),
     color 150ms var(--ease-out);
 }
 .filter-chip:hover {
-  border-color: var(--ink);
+  border-color: color-mix(in srgb, var(--ink) 40%, transparent);
+  color: var(--ink);
 }
+/* Selected, as wally.guide's .chip-on: a checkmark and the deep sage outline, same fill and weight as the rest. */
 .filter-chip[aria-pressed="true"] {
-  border-color: var(--ink);
-  background: var(--button-primary);
-  color: var(--button-primary-text);
+  border-color: var(--sage-deep);
+  color: var(--sage-deep);
+}
+.filter-chip[aria-pressed="true"]::before {
+  content: "\2713";
+  align-self: center;
+  margin-right: -1px;
+  font-weight: 700;
+  line-height: 1;
 }
 .filter-chip-count {
   font-size: 10.5px;
@@ -915,8 +948,9 @@ textarea:focus-visible {
     color 150ms var(--ease-out);
 }
 .time-play[aria-pressed="true"] {
-  background: var(--button-primary);
-  color: var(--button-primary-text);
+  border-color: var(--sage-deep);
+  background: var(--control-fill);
+  color: var(--sage-deep);
 }
 .time-mode {
   font-size: 12px;
@@ -934,20 +968,21 @@ textarea:focus-visible {
 }
 
 /*
- * Primary buttons and active control states are ink with white text, never the accent. These unlayered rules beat
- * the components' utility classes (and the 3D toggle's inline tint) so the chrome picks it up without component edits:
- * the send button once there is text, the active basemap, and pressed map controls.
+ * The send button once there is text is the coral primary; the active basemap and pressed map controls are the
+ * selected chip (deep sage outline on white). These unlayered rules beat the components' utility classes.
  */
-.chat-surface button[type="submit"]:not(:disabled),
-[role="group"][aria-label="Basemap"] button[aria-pressed="true"],
-.map-controls button[aria-pressed="true"] {
+.chat-surface button[type="submit"]:not(:disabled) {
   background-color: var(--button-primary) !important;
   color: var(--button-primary-text) !important;
 }
-.chat-surface button[type="submit"]:not(:disabled):hover,
-[role="group"][aria-label="Basemap"] button[aria-pressed="true"]:hover,
-.map-controls button[aria-pressed="true"]:hover {
-  background-color: color-mix(in srgb, var(--button-primary) 85%, transparent) !important;
+.chat-surface button[type="submit"]:not(:disabled):hover {
+  background-color: var(--button-primary-hover) !important;
+}
+[role="group"][aria-label="Basemap"] button[aria-pressed="true"],
+.map-controls button[aria-pressed="true"] {
+  background-color: var(--control-fill) !important;
+  color: var(--sage-deep) !important;
+  box-shadow: inset 0 0 0 1px var(--sage-deep);
 }
 
 /*

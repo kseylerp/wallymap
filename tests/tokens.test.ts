@@ -52,11 +52,19 @@ describe("tokens in app/globals.css", () => {
     expect(tokenValue(light, "--route-gradient")).toContain("#f57272");
   });
 
-  it("makes primary buttons ink with white text, not the accent", () => {
+  it("makes primary buttons coral with white text, as on wally.guide", () => {
     const light = block(":root");
-    expect(tokenValue(light, "--button-primary")).toBe("var(--ink)");
+    expect(tokenValue(light, "--button-primary")).toBe("var(--coral)");
+    expect(tokenValue(light, "--button-primary-hover")).toBe("#e84e4e");
     expect(tokenValue(light, "--button-primary-text")).toBe("#ffffff");
     expect(css).toMatch(/\.chat-surface button\[type="submit"\]:not\(:disabled\)/);
+  });
+
+  it("styles selected chips and pressed controls as wally.guide's selected chip: deep sage outline on white", () => {
+    const light = block(":root");
+    expect(tokenValue(light, "--sage-deep")).toBe("#6e8a62");
+    expect(tokenValue(light, "--control-line")).toBe("#dfdbd3");
+    expect(tokenValue(light, "--control-fill")).toBe("#ffffff");
   });
 
   it("defines the map palette tokens: pink, purple, sage, off-white, dark grey", () => {

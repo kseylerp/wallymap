@@ -31,7 +31,7 @@ export function EmptyState({ onPick, onClose, questions = EXAMPLE_QUESTIONS, onM
         </button>
       )}
       {/* Text only: the logo lives in the corner map pill. */}
-      <h2 className="font-serif text-[20px] leading-tight font-medium tracking-normal text-ink">WallyMap</h2>
+      <h2 className="font-serif text-[20px] font-semibold text-ink">WallyMap</h2>
       <p className="mt-2 text-[14px] leading-snug text-ink-muted">
         Ask the map. Every answer is drawn, cited, and exportable.
       </p>
@@ -41,7 +41,7 @@ export function EmptyState({ onPick, onClose, questions = EXAMPLE_QUESTIONS, onM
             <button
               type="button"
               onClick={() => onPick(q)}
-              className="group press flex h-full min-h-11 w-full items-center gap-2 rounded-[16px] border border-line bg-paper px-4 py-2 text-left text-[15px] leading-snug text-ink transition duration-150 ease-out hover:border-ink/20 hover:bg-mist sm:py-2.5"
+              className="group press flex h-full min-h-11 w-full items-center gap-2 rounded-[12px] border border-control-line bg-control-fill px-4 py-2 text-left text-[15px] leading-snug text-ink transition duration-150 ease-out hover:border-ink/40 sm:py-2.5"
             >
               <span className="flex-1">{q}</span>
               <ChevronRight

@@ -21,7 +21,7 @@ export default function PageError({ error, retry }: { error: Error & { digest?: 
         <button
           type="button"
           onClick={() => retry()}
-          className="press mt-4 h-9 rounded-pill bg-primary px-4 text-[14px] font-medium text-on-primary transition duration-150 ease-out hover:opacity-85"
+          className="press mt-4 h-9 rounded-[12px] bg-primary px-4 text-[14px] font-semibold text-on-primary transition duration-150 ease-out hover:bg-primary-hover"
         >
           Retry
         </button>

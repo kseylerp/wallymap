@@ -79,9 +79,9 @@ describe("zoom_in errors for the current view name layers that answer at this sc
     expect(widerScaleFor("campsites", [-112, 37, -109, 40])).toContain("query_public-lands");
   });
 
-  it("is left out when the query was not about the view", async () => {
+  it("is also given for a named place too wide for the layer, measured on the place's box", async () => {
     const named = await run(buildTools()["query_osm-trails"], { bbox: PATAGONIA, zoom: 5, namedOnly: false });
-    expect(named).not.toHaveProperty("widerScale");
+    expect((named as { widerScale?: string[] }).widerScale?.length ?? 0).toBeGreaterThan(0);
   });
 
   it("only names registered layers, and each query tool says what to use at a wider scale", () => {

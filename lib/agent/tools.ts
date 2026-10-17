@@ -365,10 +365,10 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: T
       const zoomIn = "error" in body && body.hint === "zoom_in";
       turn.queries.push({ layerId: layer.id, bbox, inputKey: inputKeyOf(input), ok, drawable: drawable(body), wide: ok && isWideQuery(layer, bbox), ...(top && { top }), ...(zoomIn && { zoomIn }) });
       if (ok && layer.id === "physical-regions") turn.regionQueried = true;
-      // The user is looking at a view too wide for this layer: name the layers that can still answer at this scale.
-      if (view && "error" in body && body.hint === "zoom_in") {
-        const widerScale = widerScaleFor(layer.id, view.bbox);
-        return { ...body, widerScale } satisfies ZoomInError;
+      // A view or a named place too wide for this layer: name the layers that can still answer at this scale.
+      if ("error" in body && body.hint === "zoom_in") {
+        const widerScale = widerScaleFor(layer.id, view?.bbox ?? bbox);
+        return widerScale.length > 0 || view ? ({ ...body, widerScale } satisfies ZoomInError) : body;
       }
       return body;
     },

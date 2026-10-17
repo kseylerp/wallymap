@@ -10,6 +10,9 @@ import type { MapView } from "./view";
  * Tools are built per request, so a Turn lives for one question.
  */
 
+/** Most model steps in one turn: room for geocode, several queries, renders and the note. */
+export const MAX_STEPS = 12;
+
 /** One query this turn: the layer, the box it ran on, its other inputs, and how it answered. */
 export type QueryRecord = {
   layerId: string;
@@ -23,6 +26,8 @@ export type QueryRecord = {
   wide: boolean;
   /** The named feature highest by the layer's primary measure, when the result has one. */
   top?: { name: string; value: number; by: string; unit?: string };
+  /** The box was over the layer's hard area limit (a zoom_in error): no part of it is worth asking again. */
+  zoomIn?: boolean;
 };
 
 export type Geocoder = (place: string, opts?: { proximity?: [number, number] }) => Promise<GeocodeResult | GeocodeError>;
@@ -45,6 +50,10 @@ export type Turn = {
   noteRewrites: Set<string>;
   /** What the server did for the model this turn, one line each (also logged to the server console). */
   log: string[];
+  /** The model step about to run (0 first), set before each step (lib/agent/agent.ts prepareStep). */
+  step: number;
+  /** True once a note was shown (not sent back to be rewritten). */
+  noted: boolean;
   /** A place lookup, shared by the geocode tool and the step guard so one text is looked up once. */
   lookup(place: string): Promise<GeocodeResult | GeocodeError>;
   /** Records a server action in `log` and the console. */
@@ -69,6 +78,8 @@ export function createTurn({ question = "", view = null, geocoder = mapboxGeocod
     regionQueried: false,
     noteRewrites: new Set(),
     log: [],
+    step: 0,
+    noted: false,
     lookup(place) {
       const key = placeKey(place);
       let found = lookups.get(key);

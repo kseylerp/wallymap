@@ -9,7 +9,7 @@ import { nearBox, nearPlace } from "./places";
 import { normalizeRenderInput } from "./renderInput";
 import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
 import { checkNote } from "./noteCheck";
-import { createTurn, inputKeyOf, isWideQuery, placeKey, type Turn } from "./turn";
+import { createTurn, inputKeyOf, isWideQuery, MAX_STEPS, placeKey, type Turn } from "./turn";
 import { repairToolName } from "./toolNames";
 import { gistFor } from "./vocabulary";
 import type { MapView } from "./view";
@@ -354,7 +354,8 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: T
       const ok = !("error" in body);
       const highest = "kind" in body && body.kind === "geojson" ? highestOf(body.data.features, { ...layer.style, attributes: layer.attributes }) : undefined;
       const top = highest?.top[0] && { ...highest.top[0], by: highest.by, ...(highest.unit !== undefined && { unit: highest.unit }) };
-      turn.queries.push({ layerId: layer.id, bbox, inputKey: inputKeyOf(input), ok, drawable: drawable(body), wide: ok && isWideQuery(layer, bbox), ...(top && { top }) });
+      const zoomIn = "error" in body && body.hint === "zoom_in";
+      turn.queries.push({ layerId: layer.id, bbox, inputKey: inputKeyOf(input), ok, drawable: drawable(body), wide: ok && isWideQuery(layer, bbox), ...(top && { top }), ...(zoomIn && { zoomIn }) });
       if (ok && layer.id === "physical-regions") turn.regionQueried = true;
       // The user is looking at a view too wide for this layer: name the layers that can still answer at this scale.
       if (view && "error" in body && body.hint === "zoom_in") {
@@ -588,7 +589,8 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
       description: "Show a short markdown note beside the map: the answer, at most 120 words.",
       inputSchema: z.object({ markdown: z.string() }),
       // A note too long, or one that leaves out the top item a "which is highest" question asks for, comes back once to be rewritten.
-      execute: async (input) => checkNote(input.markdown, turn) ?? input,
+      // On the last step there is no step left to rewrite, so the note is shown (cut to the limit when too long).
+      execute: async (input) => checkNote(input.markdown, turn, { lastStep: turn.step >= MAX_STEPS - 1 }) ?? input,
     }),
   };
 

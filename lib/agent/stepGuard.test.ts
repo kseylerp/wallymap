@@ -3,9 +3,10 @@ import { convertArrayToReadableStream, MockLanguageModelV4 } from "ai/test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import "@/layers";
 import type { BBox } from "@/layers/types";
-import { leakedCalls, stepGuard } from "./stepGuard";
+import { prepareStepFor } from "./agent";
+import { leakedCalls, repeatReason, stepGuard } from "./stepGuard";
 import { buildTools } from "./tools";
-import { createTurn, type Geocoder } from "./turn";
+import { createTurn, MAX_STEPS, type Geocoder } from "./turn";
 import type { MapView } from "./view";
 
 // Layer queries answer from here (no network): one named point inside the asked box.
@@ -296,5 +297,62 @@ describe("step guard: one line per way (popularity colours the trails)", () => {
       { text: "- More?" },
     ]);
     expect(calls.map((c) => c.name)).toEqual(["geocode", "query_popularity", "render", "note"]);
+  });
+});
+
+describe("step guard: no asking again (shrinking, repeats, failures, the step budget)", () => {
+  const NEVADA: BBox = [-120, 35, -114, 42];
+  const RENO: BBox = [-120, 39.3, -119.3, 40.6];
+  const tooWide = async () => ({ status: 422, body: { error: "Area is 402280 km²; zoom in to under 60000 km²", hint: "zoom_in" } });
+
+  it("never queries a part of a box the layer said was over its limit (the Nevada mines turn)", async () => {
+    runLayer.mockImplementation(tooWide);
+    const { calls, prompts, turn } = await run("Where are most of the old mines in Nevada?", [
+      { calls: [{ name: "query_mines", input: { bbox: NEVADA } }] },
+      { calls: [{ name: "query_mines", input: { bbox: RENO } }] },
+      { calls: [{ name: "note", input: { markdown: "Mines records need a smaller area than Nevada." } }] },
+      { text: "- Zoom to a district?" },
+    ], { bbox: NEVADA, zoom: 6, center: [-117, 38.5] });
+    expect(calls.filter((c) => c.name === "query_mines")).toHaveLength(1);
+    expect(JSON.stringify(prompts[2])).toMatch(/over its area limit, and a smaller box inside it/);
+    expect(turn.log.join("\n")).toMatch(/mines: query dropped \(a part of a box that was over its limit\)/);
+  });
+
+  it("drops the same query on a box it already answered, in a later step or the same one", async () => {
+    const { calls } = await run("Which large fires burned in Oregon in 2020?", [
+      { calls: [{ name: "query_fire-perimeters", input: { bbox: TAHOE, minAcres: 1000 } }, { name: "query_fire-perimeters", input: { bbox: [-120.1, 39, -120, 39.1], minAcres: 1000 } }] },
+      { calls: [{ name: "query_fire-perimeters", input: { bbox: TAHOE, minAcres: 1000 } }, { name: "render", input: { layerId: "fire-perimeters" } }] },
+      { calls: [{ name: "note", input: { markdown: "Fires." } }] },
+      { text: "- More?" },
+    ], { bbox: TAHOE, zoom: 9, center: [-120.04, 39.1] });
+    expect(calls.filter((c) => c.name === "query_fire-perimeters")).toHaveLength(1);
+  });
+
+  it("stops a layer that failed twice, and one asked three times", async () => {
+    runLayer.mockImplementation(async () => ({ status: 503, body: { error: "ArcGIS service returned 404", hint: "upstream" } }));
+    const boxes: BBox[] = [[-110, 38, -109.9, 38.1], [-110.5, 38, -110.4, 38.1], [-111, 38, -110.9, 38.1]];
+    const failing = await run("Active mining claims near Moab", [
+      ...boxes.map((bbox) => ({ calls: [{ name: "query_mining-claims", input: { bbox } }] })),
+      { calls: [{ name: "note", input: { markdown: "Claims are unavailable." } }] },
+      { text: "- Try later?" },
+    ], { bbox: [-111, 38, -109, 39], zoom: 8, center: [-110, 38.5] });
+    expect(failing.calls.filter((c) => c.name === "query_mining-claims")).toHaveLength(2);
+  });
+
+  it("offers only drawing and the note in the last two steps, and only the note on the last", async () => {
+    const turn = createTurn({ question: "Where are most of the old mines in Nevada?" });
+    const prepare = prepareStepFor(turn, ["query_mines", "render", "compare", "note", "geocode"]);
+    expect(prepare({ stepNumber: 3 })).toEqual({});
+    expect(prepare({ stepNumber: MAX_STEPS - 2 })).toEqual({ activeTools: ["render", "compare", "note"] });
+    expect(prepare({ stepNumber: MAX_STEPS - 1 })).toEqual({ activeTools: ["note"], toolChoice: "required" });
+    turn.noted = true;
+    expect(prepare({ stepNumber: MAX_STEPS - 1 })).toEqual({});
+  });
+
+  it("drops a query proposed in the last two steps before a note", () => {
+    const turn = createTurn({ question: "Where are most of the old mines in Nevada?" });
+    turn.step = MAX_STEPS - 2;
+    const reason = repeatReason({ toolCallId: "x", toolName: "query_mines", input: { bbox: RENO } }, turn, [], true);
+    expect(reason?.why).toBe("two steps left and no note yet");
   });
 });

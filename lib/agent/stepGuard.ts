@@ -6,7 +6,8 @@ import type { GeocodeResult } from "./geocode";
 import { placeCandidates } from "./places";
 import { normalizeRenderInput } from "./renderInput";
 import { repairToolName } from "./toolNames";
-import { inputKeyOf, undrawn, type Turn } from "./turn";
+import { widerScaleFor } from "./tools";
+import { inputKeyOf, MAX_STEPS, undrawn, type Turn } from "./turn";
 
 /**
  * The step guard: a language-model middleware that reads each step the model proposes before the SDK runs its tools,
@@ -84,6 +85,69 @@ function withDefaults(layerId: string, input: Record<string, unknown>): Record<s
 const POPULARITY_OF: Record<string, string> = { popularity: "osm-trails", "popularity-campsites": "campsites" };
 /** A question about how popular or busy places are; "best" and "most visited" count. */
 const ASKS_POPULAR = /\b(?:popular\w*|busiest|busy|crowd\w*|congest\w*|foot traffic|quiet\w*|best|most visited|least visited)\b/i;
+
+/** Most queries of one layer in one turn: a third look is enough to answer or to say the layer cannot. */
+export const MAX_QUERIES_PER_LAYER = 3;
+
+/**
+ * Why a query would only spend a step asking again, or null when it asks something new: a part of a box the layer
+ * already said was over its limit, a box inside one it already answered with the same inputs (in an earlier step or
+ * this one), a layer that failed twice or was asked MAX_QUERIES_PER_LAYER times, or any query in the last two steps
+ * before a note.
+ */
+export function repeatReason(c: DraftCall, turn: Turn, askedHere: DraftCall[], finalSteps: boolean): { why: string; text: string } | null {
+  const layerId = layerOf(c.toolName);
+  if (finalSteps) {
+    return {
+      why: "two steps left and no note yet",
+      text: "Not queried: two steps are left in this turn. Render what has answered (if it is not drawn yet) and write the note now from those results.",
+    };
+  }
+  const box = isBBox(c.input.bbox) ? c.input.bbox : null;
+  const mine = turn.queries.filter((q) => q.layerId === layerId);
+  const tooWide = box ? mine.find((q) => q.zoomIn && (inside(box, q.bbox) || overlapShare(box, q.bbox) > 0.5)) : undefined;
+  if (tooWide) {
+    const wider = widerScaleFor(layerId, tooWide.bbox);
+    return {
+      why: "a part of a box that was over its limit",
+      text:
+        `Not queried: ${layerId} already said [${tooWide.bbox.join(", ")}] is over its area limit, and a smaller box inside it would answer only part of the place asked about. ` +
+        (wider.length > 0 ? `Answer at this scale with ${wider.join(" or ")}, or say` : "Say") +
+        ` in the note that ${layerId} needs a smaller area. Do not query ${layerId} again.`,
+    };
+  }
+  const key = inputKeyOf(withDefaults(layerId, c.input));
+  const same = box
+    ? [...mine.filter((q) => q.ok).map((q) => ({ bbox: q.bbox, key: q.inputKey })), ...askedHere.filter((d) => d.toolName === c.toolName && isBBox(d.input.bbox)).map((d) => ({ bbox: d.input.bbox as BBox, key: inputKeyOf(withDefaults(layerId, d.input)) }))].find(
+        (q) => q.key === key && inside(box, q.bbox),
+      )
+    : undefined;
+  if (same) {
+    return {
+      why: "the same inputs on a box it already answered",
+      text: `Not queried: ${layerId} already answered [${same.bbox.join(", ")}] with these inputs, which holds this box. Use that result: render it if you have not, then write the note.`,
+    };
+  }
+  const failed = mine.filter((q) => !q.ok && !q.zoomIn).length;
+  if (failed >= 2) {
+    return { why: "failed twice", text: `Not queried: ${layerId} failed twice this turn. Say in the note that it is unavailable right now, and answer from the rest.` };
+  }
+  if (mine.length + askedHere.filter((d) => d.toolName === c.toolName).length >= MAX_QUERIES_PER_LAYER) {
+    return {
+      why: `asked ${MAX_QUERIES_PER_LAYER} times`,
+      text: `Not queried: ${layerId} was asked ${MAX_QUERIES_PER_LAYER} times this turn. Answer from what came back: render it and write the note.`,
+    };
+  }
+  return null;
+}
+
+/** The share of `a`'s area that lies inside `b`. */
+function overlapShare(a: BBox, b: BBox): number {
+  const w = Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0]));
+  const h = Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+  const area = (a[2] - a[0]) * (a[3] - a[1]);
+  return area > 0 ? (w * h) / area : 0;
+}
 
 /** Query calls that would locate the place themselves: physical-regions outlines a named region. */
 const LOCATING_QUERIES = new Set(["query_physical-regions"]);
@@ -170,6 +234,24 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
       "Use that first result: render it if you have not, then write the note; do not query a smaller box inside it.";
     rejected.push({ call: c, reason });
     turn.note(`${layerId}: a second query on a smaller box inside its wide answer was dropped`);
+    changed = true;
+    return false;
+  });
+
+  // 2a. No asking again: a layer is not queried on a part of a box it could not answer (zoom_in), on a box inside one
+  // it already answered with the same inputs, after failing twice, or more than MAX_QUERIES_PER_LAYER times; and with
+  // two steps left and no note, nothing is queried at all. The steps go to drawing and the note instead.
+  const finalSteps = turn.step >= MAX_STEPS - 2 && !turn.noted;
+  const askedHere: DraftCall[] = [];
+  calls = calls.filter((c) => {
+    if (!isQuery(c.toolName)) return true;
+    const reason = repeatReason(c, turn, askedHere, finalSteps);
+    if (reason === null) {
+      askedHere.push(c);
+      return true;
+    }
+    rejected.push({ call: c, reason: reason.text });
+    turn.note(`${layerOf(c.toolName)}: query dropped (${reason.why})`);
     changed = true;
     return false;
   });

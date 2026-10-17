@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asksForTop, checkNote, NOTE_MAX_WORDS } from "./noteCheck";
+import { asksForTop, checkNote, NOTE_MAX_WORDS, noteWords, trimNote } from "./noteCheck";
 import { createTurn } from "./turn";
 
 const uraniumTurn = () => {
@@ -20,14 +20,31 @@ describe("note check", () => {
   it("sends a note over the word limit back once, then shows the next one", () => {
     const turn = createTurn({ question: "Show hiking trails around Lake Tahoe" });
     const long = Array.from({ length: NOTE_MAX_WORDS + 20 }, (_, i) => `word${i}`).join(" ");
-    expect(checkNote(long, turn)?.error).toMatch(/has 160 words/);
-    expect(checkNote(long, turn)).toBeNull();
+    expect((checkNote(long, turn) as { error: string }).error).toMatch(/has 160 words/);
+    // The rewrite is still too long: it is shown, cut to the limit.
+    const shown = checkNote(long, turn) as { markdown: string };
+    expect(noteWords(shown.markdown)).toBeLessThanOrEqual(NOTE_MAX_WORDS);
     expect(turn.log[0]).toMatch(/rewrite \(long\)/);
+    expect(turn.noted).toBe(true);
+  });
+
+  it("cuts a long note on the last step instead of sending it back", () => {
+    const turn = createTurn({ question: "Show hiking trails around Lake Tahoe" });
+    const long = ["## Trails", ...Array.from({ length: 30 }, (_, i) => `- Trail ${i} runs ${i} km along the lake shore.`)].join("\n");
+    const shown = checkNote(long, turn, { lastStep: true }) as { markdown: string };
+    expect(noteWords(shown.markdown)).toBeLessThanOrEqual(NOTE_MAX_WORDS);
+    expect(shown.markdown.startsWith("## Trails\n- Trail 0")).toBe(true);
+    expect(turn.noteRewrites.size).toBe(0);
+  });
+
+  it("trimNote keeps whole lines, then whole sentences, and drops a dangling heading", () => {
+    expect(trimNote("one two three.\n## Next\nfour five six.", 4)).toBe("one two three.");
+    expect(trimNote("a b. c d. e f g h.", 4)).toBe("a b. c d.");
   });
 
   it("asks for the top one by name when the question asks which ranks highest, once", () => {
     const turn = uraniumTurn();
-    expect(checkNote("Mines with high scores cluster near Cameron.", turn)?.error).toMatch(/NA-0420 \(Hazard score 17,600\)/);
+    expect((checkNote("Mines with high scores cluster near Cameron.", turn) as { error: string }).error).toMatch(/NA-0420 \(Hazard score 17,600\)/);
     expect(checkNote("Mines with high scores cluster near Cameron.", turn)).toBeNull();
   });
 

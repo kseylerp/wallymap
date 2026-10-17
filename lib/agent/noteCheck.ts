@@ -72,11 +72,51 @@ export function noteProblem(markdown: string, turn: Turn): { reason: string; err
   return null;
 }
 
-/** The note tool's check: an error the model rewrites from (logged on the turn), or null to show the note as written. */
-export function checkNote(markdown: string, turn: Turn): { error: string } | null {
+/**
+ * The note cut to whole lines (or, inside a line, whole sentences) within `max` words, so a note never runs past the
+ * limit even when its rewrite is still long or no step is left to rewrite it. Headings left with nothing under them go.
+ */
+export function trimNote(markdown: string, max = NOTE_MAX_WORDS): string {
+  if (noteWords(markdown) <= max) return markdown;
+  const out: string[] = [];
+  let used = 0;
+  for (const line of markdown.split("\n")) {
+    const words = noteWords(line);
+    if (used + words <= max) {
+      out.push(line);
+      used += words;
+      continue;
+    }
+    // The first line that does not fit keeps the sentences that do.
+    let kept = "";
+    for (const sentence of line.split(/(?<=[.!?])\s+/)) {
+      const n = noteWords(sentence);
+      if (used + n > max) break;
+      kept = kept ? `${kept} ${sentence}` : sentence;
+      used += n;
+    }
+    if (kept) out.push(kept);
+    break;
+  }
+  while (out.length > 0 && (/^\s*(?:#{1,6}\s|\*\*[^*]+\*\*\s*$)/.test(out[out.length - 1]) || out[out.length - 1].trim() === "")) out.pop();
+  return out.join("\n").trimEnd();
+}
+
+/**
+ * The note tool's check: an error the model rewrites from (logged on the turn), the note cut to the word limit (a
+ * rewrite still too long, or no step left to rewrite it), or null to show the note as written.
+ */
+export function checkNote(markdown: string, turn: Turn, opts: { lastStep?: boolean } = {}): { error: string } | { markdown: string } | null {
   const problem = noteProblem(markdown, turn);
-  if (!problem) return null;
-  turn.noteRewrites.add(problem.reason);
-  turn.note(`note sent back to rewrite (${problem.reason}): ${problem.error.split(";")[0].split(":")[0]}`);
-  return { error: problem.error };
+  if (problem && !opts.lastStep) {
+    turn.noteRewrites.add(problem.reason);
+    turn.note(`note sent back to rewrite (${problem.reason}): ${problem.error.split(";")[0].split(":")[0]}`);
+    return { error: problem.error };
+  }
+  turn.noted = true;
+  if (noteWords(markdown) > NOTE_MAX_WORDS) {
+    turn.note(`note cut from ${noteWords(markdown)} to ${NOTE_MAX_WORDS} words or fewer`);
+    return { markdown: trimNote(markdown) };
+  }
+  return null;
 }

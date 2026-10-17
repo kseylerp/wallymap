@@ -114,12 +114,13 @@ const permafrost = defineLayer({
     "Set canada to true to draw the Atlas of Canada permafrost map (Natural Resources Canada) as map tiles instead, which is more detailed for Canada but returns map tiles, not features. " +
     "Example questions: 'Is there permafrost under Fairbanks?', 'Where is the permafrost continuous in Alaska?', 'Which areas have ice-rich permafrost that could thaw?'. User words: permafrost, frozen ground, thawing ground. " +
     "Caveats: a broad 1:10,000,000 map compiled in the 1990s, so it shows zones, not whether a given lot is frozen, and it predates recent thaw; the polygons are a third-party copy whose licence is not stated. " +
-    "Northern Hemisphere only (south of about 25°N returns nothing). Zoom in to under 5,000,000 km² first.",
+    "Northern Hemisphere only (south of about 25°N returns nothing). Zoom in to under 7,000,000 km² first (all of Alaska fits).",
   coverage: { bbox: [-180, 25, 180, 90] },
   surface: "land",
   license: "Unstated: a third-party ArcGIS copy of the IPA Circum-Arctic map (Brown et al., NSIDC, who ask for citation); Canada tiles Open Government Licence - Canada (NRCan)",
   requiredEnv: [],
-  maxAreaKm2: 5_000_000,
+  // All of Alaska (its box, 5,983,000 km², spans the Aleutians) answers.
+  maxAreaKm2: 7_000_000,
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("permafrost"), fillOpacity: 0.4 },
   fieldHelp: HELP,

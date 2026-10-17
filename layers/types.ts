@@ -141,7 +141,17 @@ export type StyleHints = {
    * `swatch` is the tiles' raw color, so the layer panel's key can show it through the same filter.
    */
   raster?: RasterHint | null;
+  /**
+   * Two measures on one mark (spec §13): `size` (line width, symbol radius, column height) and `color` (the sage → pink
+   * → purple ramp), each the key of one of the layer's attributes (size a measure; color a measure, ordinal or
+   * category). The map draws them by default; the render op can swap or switch either off (RenderOp.encode), and the
+   * legend names both with their units and range.
+   */
+  encode?: Encoding;
 };
+
+/** Which attribute sizes a mark and which colors it (spec §13: "height is that day's flow, color is water temperature"). */
+export type Encoding = { size?: string; color?: string };
 
 /**
  * What kind of field an attribute is (spec §12c); the type picks the control. `category`: chips with counts (a legend
@@ -181,6 +191,12 @@ export type Attribute = {
   encode?: "color" | "dash" | "width" | "size";
   versions?: boolean;
   primary?: boolean;
+  /**
+   * Measure: how the timeline's live aggregate totals it per frame (spec §13, "a live aggregate per frame"): `sum`
+   * (capacity, acres, flow to the sea), `max` (the largest reach's flow) or `mean` (a temperature). A layer with no
+   * aggregate measure counts its features per frame instead.
+   */
+  aggregate?: "sum" | "max" | "mean";
 };
 
 /** One chip of a category or ordinal attribute: the raw value the data holds and its plain label (and what it means). */

@@ -20,6 +20,7 @@ import {
 } from "@/lib/render/palette";
 import { rampColor, rgbToHex } from "@/lib/render/ramp";
 import { colorStops, encodedAttribute, valueKey } from "@/lib/render/attributes";
+import { colorT, encodeColor, ENCODED_LINE, resolveEncoding, sizeT, type Channel } from "@/lib/render/encode";
 import type { MapState, RenderOp, Selection } from "@/lib/render/state";
 import { chainParts, gradientExpression } from "@/lib/render/wally/routeLine";
 
@@ -67,7 +68,13 @@ export type LineLook =
    * The encoded ordinal (spec §12c, an attribute with `encode: "color"`): each class of `key` on the sage → pink →
    * purple ramp, easy to hard, in the declared order (`stops`: raw value to color); a value it does not name draws sage.
    */
-  | { kind: "facet"; key: string; stops: [string, string][] };
+  | { kind: "facet"; key: string; stops: [string, string][] }
+  /**
+   * Two measures on one line (spec §13): width from the size channel (the square root of its share of the largest),
+   * color from the color channel on the sage → pink → purple ramp. A series layer (river pulse) moves both every frame
+   * through feature state (`sz`, `ct`), over the values the source was uploaded with.
+   */
+  | { kind: "encoded"; size?: Pick<Channel, "key" | "extent">; color?: Pick<Channel, "key" | "extent" | "levels"> };
 
 /** One drawn line layer: what the sync uploads and styles, and what a pick maps back into. */
 export type LineEntry = {
@@ -160,20 +167,23 @@ export function lineEntries(view: MapState): LineEntry[] {
     }
     const requested = isPaletteColor(op.color) ? lineColorFor(op.color) : undefined;
     const encoded = encodedAttribute(loaded);
+    const pair = requested ? null : resolveEncoding(loaded, op, data);
     const look: LineLook = requested
       ? { kind: "solid", color: requested }
-      : encoded
-        ? { kind: "facet", key: encoded.key, stops: colorStops(encoded) }
-        : loaded.style.unit === "score"
-          ? { kind: "ramp" }
-          : { kind: "classes" };
+      : pair
+        ? { kind: "encoded", ...(pair.size && { size: { key: pair.size.key, extent: pair.size.extent } }), ...(pair.color && { color: pair.color }) }
+        : encoded
+          ? { kind: "facet", key: encoded.key, stops: colorStops(encoded) }
+          : loaded.style.unit === "score"
+            ? { kind: "ramp" }
+            : { kind: "classes" };
     entries.push({ id: op.layerId, layerId: op.layerId, data, look, opacity, shown: true, selected: indexOf(data, picked?.feature) });
   }
   return entries;
 }
 
 /** Source feature properties: the index back into the entry's data, the line class, and what the paint reads. */
-export type LineProps = { i: number; cls: LineClass | "delta"; v: number | null; delta?: string; fv?: string };
+export type LineProps = { i: number; cls: LineClass | "delta"; v: number | null; delta?: string; fv?: string; sz?: number; ct?: number };
 
 const sourceMemo = new WeakMap<FeatureCollection, Map<string, FeatureCollection>>();
 
@@ -185,7 +195,10 @@ const sourceMemo = new WeakMap<FeatureCollection, Map<string, FeatureCollection>
  * ways are chained so the gradient runs along it (chainParts).
  */
 export function lineSourceData(entry: Pick<LineEntry, "data" | "layerId" | "look">): FeatureCollection {
-  const key = `${entry.layerId}|${entry.look.kind}${entry.look.kind === "facet" ? `|${entry.look.key}` : ""}`;
+  const look = entry.look;
+  const key = `${entry.layerId}|${look.kind}${look.kind === "facet" ? `|${look.key}` : ""}${
+    look.kind === "encoded" ? `|${look.size?.key ?? ""}:${look.size?.extent?.join(",") ?? ""}|${look.color?.key ?? ""}:${look.color?.extent?.join(",") ?? ""}` : ""
+  }`;
   let byKey = sourceMemo.get(entry.data);
   if (!byKey) {
     byKey = new Map();
@@ -204,12 +217,21 @@ export function lineSourceData(entry: Pick<LineEntry, "data" | "layerId" | "look
     const properties: LineProps = { i, cls, v: Number.isFinite(n) ? n : null };
     if (kind === "delta") properties.delta = String(f.properties?.delta ?? "both");
     if (entry.look.kind === "facet") properties.fv = valueKey(f.properties?.[entry.look.key]) ?? "";
+    if (look.kind === "encoded") {
+      if (look.size) properties.sz = round3(sizeT(f.properties?.[look.size.key], look.size.extent));
+      if (look.color) properties.ct = round3(colorT(f.properties?.[look.color.key], look.color) ?? -1);
+    }
     const geometry = cls === "route" && (g.type === "LineString" || g.type === "MultiLineString") ? chainParts(g) : g;
-    features.push({ type: "Feature", geometry, properties });
+    // The index doubles as the feature id, so a series layer can move each line by feature state.
+    features.push({ type: "Feature", id: i, geometry, properties });
   });
   const out: FeatureCollection = { type: "FeatureCollection", features };
   byKey.set(key, out);
   return out;
+}
+
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
 }
 
 /**
@@ -262,7 +284,25 @@ function coreColor(entry: Pick<LineEntry, "look" | "layerId">): string | Express
       return ["match", ["get", "cls"], ...CORE_CLASSES.flatMap((c) => [c, coreOf(c)]), SAGE] as ExpressionSpecification;
     case "facet":
       return facetLineColor(entry.look.stops);
+    case "encoded":
+      return entry.look.color ? encodedLineColor() : SAGE;
   }
+}
+
+/** A share (0..1) from feature state when a series has set one, else from the uploaded property. */
+function shareOf(prop: "sz" | "ct"): ExpressionSpecification {
+  return ["to-number", ["coalesce", ["feature-state", prop], ["get", prop]], -1];
+}
+
+/** The `line-width` of an encoded line: the size share from the thinnest to the widest line, in pixels. */
+export function encodedLineWidth(extra = 0): ExpressionSpecification {
+  return ["interpolate", ["linear"], ["max", 0, shareOf("sz")], 0, ENCODED_LINE.minPx + extra, 1, ENCODED_LINE.maxPx + extra];
+}
+
+/** The `line-color` of an encoded line: its color share on the ramp at nine stops; no value draws sage. */
+export function encodedLineColor(): ExpressionSpecification {
+  const stops = Array.from({ length: 9 }, (_, k) => [k / 8, rgbToHex(encodeColor(k / 8))]).flat();
+  return ["case", ["<", shareOf("ct"), 0], SAGE, ["interpolate", ["linear"], shareOf("ct"), ...stops]] as ExpressionSpecification;
 }
 
 function classWidth(c: LineClass): number {
@@ -301,17 +341,23 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
   const layout = { "line-cap": "round", "line-join": "round", visibility: entry.shown ? "visible" : "none" } as const;
   const sel: ExpressionSpecification = ["==", ["get", "i"], entry.selected];
   const routeCasing = LINE_CLASSES.route.casing;
-  const baseCasing: number | ExpressionSpecification = routed ? ["match", ["get", "cls"], "route", routeCasing, LINE.casing] : LINE.casing;
-  const casingWidth: number | ExpressionSpecification = entry.selected < 0 ? baseCasing : ["case", sel, SELECTED_LINE.casing, baseCasing];
+  const encoded = entry.look.kind === "encoded" && entry.look.size !== undefined;
+  const baseCasing: number | ExpressionSpecification = encoded
+    ? encodedLineWidth(ENCODED_LINE.casingPx)
+    : routed
+      ? ["match", ["get", "cls"], "route", routeCasing, LINE.casing]
+      : LINE.casing;
+  const casingWidth: number | ExpressionSpecification = entry.selected < 0 || encoded ? baseCasing : ["case", sel, SELECTED_LINE.casing, baseCasing];
   const core: LineLayerSpecification = {
     id: lineLayerId(entry.id, "core"),
     type: "line",
     source,
-    layout,
+    // Encoded lines: the widest draw last, so a big river is never cut by a small tributary's casing.
+    layout: encoded ? { ...layout, "line-sort-key": ["to-number", ["get", "sz"], 0] } : layout,
     paint: {
       "line-color": coreColor(entry),
-      // Classes with their own width (thin forest roads); the rest at the data line width.
-      "line-width": classes ? coreWidth() : LINE.width,
+      // Classes with their own width (thin forest roads); an encoded size its share; the rest at the data line width.
+      "line-width": classes ? coreWidth() : encoded ? encodedLineWidth() : LINE.width,
       // The selected feature draws in the highlight layer above.
       "line-opacity": faded(entry, 1, 0),
       ...(classes && { "line-dasharray": coreDash() }),
@@ -366,7 +412,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
       source,
       filter: sel,
       layout,
-      paint: { "line-color": SELECTED_LINE.color, "line-width": SELECTED_LINE.width, "line-opacity": entry.opacity },
+      paint: { "line-color": SELECTED_LINE.color, "line-width": encoded ? encodedLineWidth(1) : SELECTED_LINE.width, "line-opacity": entry.opacity },
     },
   ];
 }

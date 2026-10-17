@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe("parseFirmsCsv", () => {
-  it("parses the fixture into points with t, v, confidence and daynight", () => {
+  it("parses the fixture into points with t, v, brightness, confidence and daynight", () => {
     const fc = parseFirmsCsv(CSV);
     expect(fc.features).toHaveLength(100);
     const first = fc.features[0];
@@ -28,6 +28,7 @@ describe("parseFirmsCsv", () => {
     expect(first.properties).toEqual({
       t: "2026-10-05T09:30:00Z",
       v: 0.63,
+      brightK: 303.03,
       confidence: "n",
       daynight: "N",
     });

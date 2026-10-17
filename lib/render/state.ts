@@ -1,5 +1,5 @@
 import type { Feature, LineString } from "geojson";
-import type { Attribute, BBox, CardSpec, FieldHelp, LayerResult, StyleHints } from "@/layers/types";
+import type { Attribute, BBox, CardSpec, Encoding, FieldHelp, LayerResult, StyleHints } from "@/layers/types";
 import type { CompareSpec } from "@/lib/render/compare";
 import type { LayerFilters } from "@/lib/render/filters";
 import type { TimeIndex, TimeWindow } from "@/lib/time";
@@ -60,6 +60,11 @@ export type RenderOp = {
   rankBy?: string;
   /** What a hex cell's color means (spec §12d) when the layer draws as hexes or columns; unset is the count. */
   hexBasis?: HexBasis;
+  /**
+   * Two measures on one mark (spec §13): the attribute that sizes the mark and the one that colors it, over the layer's
+   * own `style.encode`; "" switches that channel off. Unset keeps the layer's declared pair.
+   */
+  encode?: Encoding;
 };
 
 /**

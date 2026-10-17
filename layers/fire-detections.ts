@@ -63,6 +63,8 @@ export function parseFirmsCsv(text: string): FeatureCollection {
   const iFrp = col("frp");
   const iConf = col("confidence");
   const iDay = col("daynight");
+  // Brightness temperature: VIIRS calls it bright_ti4 (the I-4 band), MODIS brightness (band 21/22).
+  const iBright = col("bright_ti4") !== -1 ? col("bright_ti4") : col("brightness");
   if (iLat === -1 || iLon === -1) return { type: "FeatureCollection", features: [] };
 
   const features: Feature<Point>[] = [];
@@ -80,6 +82,8 @@ export function parseFirmsCsv(text: string): FeatureCollection {
 
     const frp = iFrp === -1 ? null : numeric(cells[iFrp]);
     if (frp !== null) properties.v = frp;
+    const bright = iBright === -1 ? null : numeric(cells[iBright]);
+    if (bright !== null) properties.brightK = bright;
 
     const rawConf = iConf === -1 ? undefined : cells[iConf]?.trim();
     if (rawConf) properties.confidence = numeric(rawConf) ?? rawConf;
@@ -121,7 +125,8 @@ const ATTRIBUTES: Attribute[] = [
       { value: "h", label: "High" },
     ],
   },
-  { key: "v", type: "measure", label: "Fire power", unit: "MW", encode: "size" },
+  { key: "v", type: "measure", label: "Fire power", unit: "MW", encode: "size", aggregate: "sum" },
+  { key: "brightK", type: "measure", label: "Brightness", unit: "K" },
   {
     key: "daynight",
     type: "category",
@@ -153,6 +158,14 @@ const HELP: Record<string, FieldHelp> = {
     url: "https://www.earthdata.nasa.gov/data/tools/firms/faq",
   },
   daynight: { text: "D when the satellite saw the fire on a daytime pass, N on a night pass." },
+  brightK: {
+    text:
+      "Brightness temperature of the fire pixel in kelvin, as the satellite's heat band read it (VIIRS I-4, MODIS band 21/22); a hotter " +
+      "pixel reads higher, and VIIRS saturates near 367 K.",
+    unit: "K",
+    source: "NASA FIRMS",
+    url: "https://www.earthdata.nasa.gov/data/tools/firms/faq",
+  },
   t: { text: "UTC time of the satellite pass that saw the hotspot." },
 };
 
@@ -162,6 +175,7 @@ const CARD: CardSpec = {
     { key: "t", label: "Seen", format: "date" },
     { key: "confidence", label: "Confidence", values: { l: "Low", n: "Nominal", h: "High" } },
     { key: "daynight", label: "Pass", values: { D: "Day", N: "Night" } },
+    { key: "brightK", label: "Brightness temperature", unit: "K", format: "1dp" },
   ],
 };
 
@@ -170,7 +184,7 @@ const fireDetections = defineLayer({
   title: "Active fire detections",
   description:
     "Satellite hotspots from NASA FIRMS: each point is a spot a satellite saw burning (or very hot) in the last 1 to 5 days (default 3; NASA allows no more than 5). " +
-    "Each point has t (UTC time of the satellite pass), v (fire radiative power in megawatts, a measure of how intensely it burns), confidence and daynight (D day pass, N night pass). " +
+    "Each point has t (UTC time of the satellite pass), v (fire radiative power in megawatts, a measure of how intensely it burns), brightK (the pixel's brightness temperature in kelvin), confidence and daynight (D day pass, N night pass); the map sizes each point by v and colors it by brightK. " +
     "Confidence is l, n or h (low, nominal, high) for VIIRS and a 0 to 100 number for MODIS. " +
     "Use it to show where fire is burning right now or recently, anywhere in the world. " +
     "Caveats: detections are heat points, not fire outlines (use fire-perimeters for the burned area); one fire often produces many points; " +
@@ -185,7 +199,7 @@ const fireDetections = defineLayer({
   maxAreaKm2: 2_000_000,
   wide: { orderBy: "detection time", rank: "newest", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("fire-detections"), unit: "MW" },
+  style: { geometry: "point", color: layerColor("fire-detections"), unit: "MW", encode: { size: "v", color: "brightK" } },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,

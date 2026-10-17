@@ -80,6 +80,11 @@ export type GeojsonSummary = {
   attributes?: AttributeSummary[];
   /** What the layer's numbers and codes mean (spec §12b), by property: the note explains a score in these words. */
   help?: Record<string, string>;
+  /**
+   * Two measures on one mark (spec §13): what size (or width) and color mean on the map, in words, so the note can end
+   * by saying so.
+   */
+  encoding?: string;
 };
 
 /** An attribute as the model sees it: `values` maps each chip label to the raw values render.filters includes. */
@@ -423,7 +428,22 @@ export function drawnYearsOf(url: string): string | undefined {
 }
 
 /** What the summary reads from a layer's style (v's unit, the date field, the geometry) and its attributes. */
-export type SummaryStyle = Partial<Pick<StyleHints, "unit" | "timeField" | "geometry">> & { attributes?: Attribute[] };
+export type SummaryStyle = Partial<Pick<StyleHints, "unit" | "timeField" | "geometry" | "encode">> & { attributes?: Attribute[] };
+
+/** "Width is Flow (m³/s); color is Water temperature (°C), sage low to purple high": the layer's pair in words. */
+export function encodingSentence(style: SummaryStyle): string | undefined {
+  const named = (key: string | undefined) => {
+    const attr = key ? style.attributes?.find((a) => a.key === key) : undefined;
+    return attr ? `${attr.label}${attr.unit ? ` (${attr.unit})` : ""}` : undefined;
+  };
+  const size = named(style.encode?.size);
+  const color = named(style.encode?.color);
+  if (!size && !color) return undefined;
+  const word = style.geometry === "line" ? "Line width" : "Symbol size";
+  const parts = [size && `${word} is ${size}`, color && `color is ${color}, sage low to purple high`].filter(Boolean);
+  const text = parts.join("; ");
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+}
 
 /**
  * The attributes of a result: chip labels with the raw values they stand for and their counts (every declared label,
@@ -522,6 +542,7 @@ export function summarizeLayerResult(
   const attributes = attributeSummaries(style, features);
   const help = helpLines(fieldHelp, style);
   const highest = highestOf(features, style);
+  const encoding = encodingSentence(style);
   return {
     kind: "geojson",
     featureCount: features.length,
@@ -539,6 +560,7 @@ export function summarizeLayerResult(
     ...truncationOf(body),
     ...(attributes !== undefined && { attributes }),
     ...(help !== undefined && { help }),
+    ...(encoding !== undefined && { encoding }),
   };
 }
 

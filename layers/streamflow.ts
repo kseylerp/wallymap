@@ -40,7 +40,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type Citation, type LayerError, type LayerResult, type QueryContext, type CardSpec, type FieldHelp } from "./types";
+import { defineLayer, type Attribute, type Citation, type LayerError, type LayerResult, type QueryContext, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { outsideUs } from "./_shared/coverage";
@@ -637,6 +637,16 @@ const CARD: CardSpec = {
   ],
 };
 
+/**
+ * Flow sizes each gauge and water temperature colors it (spec §13: "height is that day's flow, color is water
+ * temperature"); gauges without a temperature sensor draw off-white. Percent of median ranks the gauges running high.
+ */
+const ATTRIBUTES: Attribute[] = [
+  { key: "v", type: "measure", label: "Flow", unit: "cfs", encode: "size", aggregate: "sum" },
+  { key: "tempC", type: "measure", label: "Water temperature", unit: "°C" },
+  { key: "pctOfMedian", type: "measure", label: "Flow vs. the date's median", unit: "%" },
+];
+
 const streamflow = defineLayer({
   id: "streamflow",
   title: "Stream flow (USGS gauges, live)",
@@ -660,9 +670,10 @@ const streamflow = defineLayer({
   // Default hard cap (1.6 million km²): about 7 IV strips in the lower 48, fetched in parallel.
   wide: { orderBy: "current flow or gage height", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("streamflow"), unit: "cfs" },
+  style: { geometry: "point", color: layerColor("streamflow"), unit: "cfs", encode: { size: "v", color: "tempC" } },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

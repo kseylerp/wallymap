@@ -256,7 +256,9 @@ const ATTRIBUTES: Attribute[] = [
     label: "Fuel",
     levels: FUELS.map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })),
   },
-  { key: "v", type: "measure", label: "Capacity", unit: "MW", encode: "size", presets: PLANT_CAPACITY },
+  { key: "v", type: "measure", label: "Capacity", unit: "MW", encode: "size", presets: PLANT_CAPACITY, aggregate: "sum" },
+  // Wind turbines and solar projects only (the EIA plants carry no year): the color of the pair below.
+  { key: "year", type: "measure", label: "Year online" },
   timeAttribute("Online"),
   nameAttribute(),
 ];
@@ -318,7 +320,7 @@ const powerPlants = defineLayer({
   hardMaxAreaKm2: WHOLE_US_KM2,
   wide: { orderBy: "capacity in MW", limit: MAX_PLANTS },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("power-plants"), unit: "MW", extrude: "v", cluster: true },
+  style: { geometry: "point", color: layerColor("power-plants"), unit: "MW", extrude: "v", cluster: true, encode: { size: "v", color: "year" } },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,

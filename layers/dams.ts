@@ -298,7 +298,7 @@ const dams = defineLayer({
   hardMaxAreaKm2: WHOLE_US_KM2,
   wide: { orderBy: "storage in acre-feet", limit: MAX_DAMS },
   input: z.object({}),
-  style: { geometry: "point", color: layerColor("dams"), unit: "acre-feet", extrude: "v", cluster: true },
+  style: { geometry: "point", color: layerColor("dams"), unit: "acre-feet", extrude: "v", cluster: true, encode: { size: "storageAf", color: "heightFt" } },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,

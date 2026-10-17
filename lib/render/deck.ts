@@ -18,6 +18,7 @@ import {
   isPaletteColor,
   LINE,
   lineColorFor,
+  DARK_GREY as DARK_GREY_HEX,
   OFF_WHITE,
   PINK,
   PURPLE,
@@ -43,6 +44,7 @@ import { extentOf, hatchStepOf, primaryMeasure, sizeScale, topPlaces } from "@/l
 import { basisLabel, basisScale, basisT, cellContext, hexCells, registerCell, usableBasis, type CellContext, type HexCell } from "@/lib/render/hexCells";
 import { RANKED_LABELS } from "@/lib/render/views";
 import { PlacedLabelLayer } from "@/lib/render/placedLabels";
+import { colorT, encodeColor, ENCODED_POINT, pointRadiusAt, resolveEncoding, sizeT, valuesOf, type ResolvedEncoding } from "@/lib/render/encode";
 
 type Rgba = [number, number, number, number];
 
@@ -435,10 +437,15 @@ function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
   const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
   const mode: RenderMode = op.mode;
   switch (mode) {
-    case "points":
+    case "points": {
       // A ranked layer keeps its symbols (sized, named) however many there are: the row lists the top N.
       if (ctx.data.features.length > hexbinThreshold && !rankKeyOf(op, ctx)) return hexTileLayers(op, ctx, opacity);
+      // Two measures on one mark (spec §13): proportional discs sized by one measure and colored by the other.
+      // Without a color value the layer keeps its shaped symbols, sized by the size measure.
+      const encoding = encodingOf(op, ctx);
+      if (encoding?.color) return [...encodedPointLayers(op, ctx, opacity, encoding), ...rankedLabelLayers(op, ctx, opacity)];
       return [...symbolLayers(op, ctx, opacity), ...rankedLabelLayers(op, ctx, opacity)];
+    }
     case "hexbin":
       return hexTileLayers(op, ctx, opacity);
     case "clusters":
@@ -641,8 +648,9 @@ function scoreAreaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[]
 function symbolLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const { data, selected, zoom, terrain, deckId } = ctx;
   const size = symbolSizePx(zoom);
-  // Ranked (a ranked view, or "Rank by" in the row) sizes the symbols by the measure and names its top few (spec §12c).
-  const rankKey = rankKeyOf(op, ctx);
+  // Ranked (a ranked view, or "Rank by" in the row) sizes the symbols by the measure and names its top few (spec §12c);
+  // otherwise the layer's size measure (spec §13) sizes them.
+  const rankKey = rankKeyOf(op, ctx) ?? encodingOf(op, ctx)?.size?.key;
   const ranked = rankKey ? rankedSizing(data, rankKey) : undefined;
   return [
     new IconLayer<Feature>({
@@ -666,6 +674,109 @@ function symbolLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       ...terrainProps(terrain, "offset", [unpremultiplySpriteExtension]),
     }),
   ];
+}
+
+/** The op's two channels on its data (spec §13), or null when the layer has none to draw. */
+function encodingOf(op: RenderOp, ctx: Pick<OpContext, "layer" | "data">): ResolvedEncoding | null {
+  return ctx.layer ? resolveEncoding(ctx.layer, op, ctx.data) : null;
+}
+
+/** Features largest first, so small discs draw over large ones and stay clickable (made once per collection and key). */
+const bySizeMemo = new WeakMap<GeoJSON.FeatureCollection, Map<string, Feature[]>>();
+function largestFirst(data: GeoJSON.FeatureCollection, key: string | undefined): Feature[] {
+  if (!key) return data.features;
+  let byKey = bySizeMemo.get(data);
+  if (!byKey) {
+    byKey = new Map();
+    bySizeMemo.set(data, byKey);
+  }
+  const hit = byKey.get(key);
+  if (hit) return hit;
+  const num = (f: Feature) => {
+    const v = f.properties?.[key];
+    return typeof v === "number" && Number.isFinite(v) ? v : -Infinity;
+  };
+  const sorted = [...data.features].sort((a, b) => num(b) - num(a));
+  byKey.set(key, sorted);
+  return sorted;
+}
+
+const ENCODED_STROKE = hexToRgba(DARK_GREY_HEX);
+const ENCODED_EMPTY = hexToRgba(OFF_WHITE, Math.round(255 * ENCODED_POINT.fillAlpha));
+
+/**
+ * Points with two measures on one mark (spec §13): a disc whose area grows with the size measure (radius by the square
+ * root of its share of the largest) and whose fill sits on the sage → pink → purple ramp by the color measure, a dark
+ * grey 1.25px stroke over a white halo, largest drawn first. A feature without a color value is off-white; the
+ * selected one purple.
+ */
+function encodedPointLayers(op: RenderOp, ctx: OpContext, opacity: number, encoding: ResolvedEncoding): Layer[] {
+  const { data, selected, terrain, deckId } = ctx;
+  const id = `${deckLayerKey(deckId ?? op.layerId, terrain)}:encoded`;
+  const { size, color } = encoding;
+  const radius = (f: Feature) => (size ? pointRadiusAt(sizeT(f.properties?.[size.key], size.extent)) : symbolSizePx(ctx.zoom) / 2 + 1);
+  const fill = (f: Feature): Rgba => {
+    if (f === selected) return withOpacity(SELECT, opacity);
+    const t = color ? colorT(f.properties?.[color.key], color) : null;
+    const base: Rgba = t === null ? ENCODED_EMPTY : [...encodeColor(t), Math.round(255 * ENCODED_POINT.fillAlpha)];
+    const c = withOpacity(base, opacity);
+    return selected ? withOpacity(c, SIBLING_FADE) : c;
+  };
+  const stroke = (f: Feature): Rgba => {
+    const c = withOpacity(ENCODED_STROKE, opacity);
+    return selected && f !== selected ? withOpacity(c, SIBLING_FADE) : c;
+  };
+  const trigger = [selectionKey(selected), opacity, size?.key ?? "", size?.extent?.join(",") ?? "", color?.key ?? "", color?.extent?.join(",") ?? ""];
+  const features = largestFirst(data, size?.key);
+  return [
+    new ScatterplotLayer<Feature>({
+      id: `${id}:halo`,
+      data: features,
+      pickable: false,
+      getPosition: markerPosition,
+      getRadius: (f) => radius(f) + ENCODED_POINT.strokePx / 2 + ENCODED_POINT.haloPx,
+      radiusUnits: "pixels",
+      filled: true,
+      stroked: false,
+      getFillColor: withOpacity(hexToRgba(WHITE_HEX, 230), opacity * (selected ? SIBLING_FADE : 1)),
+      updateTriggers: { getRadius: trigger, getFillColor: trigger },
+      billboard: true,
+      parameters: { cullMode: "none", depthCompare: "always" },
+      ...terrainProps(terrain, "offset"),
+    }),
+    new ScatterplotLayer<Feature>({
+      id,
+      data: features,
+      pickable: true,
+      getPosition: markerPosition,
+      getRadius: radius,
+      radiusUnits: "pixels",
+      filled: true,
+      stroked: true,
+      getFillColor: fill,
+      getLineColor: stroke,
+      getLineWidth: ENCODED_POINT.strokePx,
+      lineWidthUnits: "pixels",
+      updateTriggers: { getRadius: trigger, getFillColor: trigger, getLineColor: trigger },
+      billboard: true,
+      parameters: { cullMode: "none", depthCompare: "always" },
+      ...terrainProps(terrain, "offset"),
+    }),
+  ];
+}
+
+/** A cell's mean of the color channel's values (each frame of a series counts), as its 0..1 place on the ramp. */
+export function cellColorT(members: readonly Feature[], channel: NonNullable<ResolvedEncoding["color"]>): number | null {
+  if (channel.levels) {
+    const ts = members.map((f) => colorT(f.properties?.[channel.key], channel)).filter((t): t is number => t !== null);
+    return ts.length > 0 ? ts.reduce((a, b) => a + b, 0) / ts.length : null;
+  }
+  const values = members.flatMap((f) => {
+    const v = f.properties?.[channel.key];
+    return typeof v === "number" && Number.isFinite(v) ? [v] : valuesOf(f, channel.key).slice(0, 1);
+  });
+  if (values.length === 0) return null;
+  return colorT(values.reduce((a, b) => a + b, 0) / values.length, channel);
 }
 
 /** A ranked point layer's sizing: the measure key, its extent, and the top features to name. */
@@ -1230,19 +1341,32 @@ function columnSet(
  * inspect card shows its count and most common names.
  */
 function columnLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
-  const cellsCtx = cellCtx(ctx);
+  const encoding = encodingOf(op, ctx);
+  const base = cellCtx(ctx);
+  // Two measures on one column (spec §13): height is the size measure's sum per cell, the walls take the color
+  // measure's mean on the ramp.
+  const sizeAttr = encoding?.size ? (ctx.layer?.attributes ?? []).find((a) => a.key === encoding.size?.key) : undefined;
+  const cellsCtx: CellContext = sizeAttr ? { ...base, measure: sizeAttr } : base;
   // The op's basis; else a layer that extrudes by value stands by its measure's sum (or v's, without one).
-  const by: ColumnBy = op.hexBasis ?? (ctx.style.extrude === "v" ? (cellsCtx.measure ? "sum" : "v") : "count");
-  const { cells, caps, max, heightM, label } = hexColumns(ctx.data, columnResolution(ctx.zoom), by, cellsCtx);
+  const by: ColumnBy = op.hexBasis ?? (sizeAttr ? "sum" : ctx.style.extrude === "v" ? (cellsCtx.measure ? "sum" : "v") : "count");
+  const resolution = columnResolution(ctx.zoom);
+  const { cells, caps, max, heightM, label } = hexColumns(ctx.data, resolution, by, cellsCtx);
   const valueOf = (f: Feature) => Number(f.properties?.stack) || 0;
   const selected = ctx.selected && cells.features.includes(ctx.selected as ColumnFeature) ? ctx.selected : undefined;
+  const color = encoding?.color;
+  const members = color ? new Map(hexCells(ctx.data, resolution).map((c) => [c.h3, c.members])) : undefined;
+  const wall = (f: Feature): Rgba => {
+    if (!color || !members) return columnWallColor(valueOf(f), max, f.properties?.tallest === true);
+    const t = cellColorT(members.get(String(f.properties?.h3)) ?? [], color);
+    return t === null ? columnWallColor(valueOf(f), max, false) : [...encodeColor(t), Math.round(255 * HEX_COLUMN.topWallAlpha)];
+  };
   return columnSet(
-    `${deckLayerKey(ctx.deckId ?? op.layerId, ctx.terrain)}:columns`,
+    `${deckLayerKey(ctx.deckId ?? op.layerId, ctx.terrain)}:columns${color ? ":encoded" : ""}`,
     cells,
     caps,
-    label,
+    color ? [] : label,
     (f) => (valueOf(f) / (max || 1)) * heightM,
-    (f) => columnWallColor(valueOf(f), max, f.properties?.tallest === true),
+    wall,
     { ...ctx, selected },
     opacity,
   );

@@ -38,6 +38,8 @@ export type PermalinkLayer = {
   view?: ViewKind | null;
   opacity?: number;
   color?: string;
+  /** Two measures on one mark (`<size>|<color>`, "" for a channel switched off). */
+  encode?: { size?: string; color?: string };
   input?: Record<string, unknown>;
 };
 
@@ -266,8 +268,9 @@ function round(value: number, digits: number): string {
 }
 
 /**
- * One `l=` entry: `<id>:<mode>:<visible>:<rank>:<basis>:<view>:<opacity>:<color>`, the last four URI-encoded where
- * needed and trailing empty fields left off. Rank by None ("") is "-", so it is not read back as "rank by default"; no
+ * One `l=` entry: `<id>:<mode>:<visible>:<rank>:<basis>:<view>:<opacity>:<color>:<encode>`, the last five URI-encoded
+ * where needed and trailing empty fields left off. `encode` is `<size>|<color>` (spec §13), each part present only when
+ * the op set it. Rank by None ("") is "-", so it is not read back as "rank by default"; no
  * view is "-" too, so the restore does not pick one the sender did not have.
  */
 function layerEntry(op: RenderOp): string {
@@ -276,7 +279,8 @@ function layerEntry(op: RenderOp): string {
   const view = op.view ?? "-";
   const opacity = op.opacity !== undefined && Number.isFinite(op.opacity) && op.opacity !== 1 ? round(op.opacity, 3) : "";
   const color = op.color ? encodeURIComponent(op.color) : "";
-  const fields = [encodeURIComponent(op.layerId), op.mode, op.visible ? "1" : "0", rank, basis, view, opacity, color];
+  const enc = op.encode ? encodeURIComponent(`${op.encode.size ?? "~"}|${op.encode.color ?? "~"}`) : "";
+  const fields = [encodeURIComponent(op.layerId), op.mode, op.visible ? "1" : "0", rank, basis, view, opacity, color, enc];
   while (fields[fields.length - 1] === "") fields.pop();
   return fields.join(":");
 }
@@ -335,7 +339,7 @@ function safeDecode(value: string): string | null {
 function parseLayers(value: string): PermalinkLayer[] {
   const layers: PermalinkLayer[] = [];
   for (const entry of value.split(",")) {
-    const [rawId, mode, visible, rawRank, rawBasis, rawView, rawOpacity, rawColor] = entry.split(":");
+    const [rawId, mode, visible, rawRank, rawBasis, rawView, rawOpacity, rawColor, rawEncode] = entry.split(":");
     const id = rawId ? safeDecode(rawId) : null;
     if (!id) continue;
     const rankBy = rawRank === "-" ? "" : rawRank ? safeDecode(rawRank) : null;
@@ -345,6 +349,7 @@ function parseLayers(value: string): PermalinkLayer[] {
     const view = rawView === undefined ? undefined : VIEW_KINDS.includes(rawView as ViewKind) ? (rawView as ViewKind) : null;
     const opacity = rawOpacity ? Number(rawOpacity) : NaN;
     const color = rawColor ? safeDecode(rawColor) : null;
+    const encode = rawEncode ? parseEncode(safeDecode(rawEncode)) : null;
     layers.push({
       id,
       mode: RENDER_MODES.includes(mode as RenderMode) ? (mode as RenderMode) : undefined,
@@ -354,9 +359,20 @@ function parseLayers(value: string): PermalinkLayer[] {
       ...(view !== undefined && { view }),
       ...(Number.isFinite(opacity) && { opacity: Math.min(1, Math.max(0, opacity)) }),
       ...(color && color.length <= 64 && { color }),
+      ...(encode && { encode }),
     });
   }
   return layers;
+}
+
+/** `<size>|<color>` back to an encoding: "~" is a channel the op left to the layer, "" one it switched off. */
+function parseEncode(value: string | null): { size?: string; color?: string } | null {
+  if (!value || !value.includes("|")) return null;
+  const [size, color] = value.split("|");
+  const out: { size?: string; color?: string } = {};
+  if (size !== "~" && size.length <= 64) out.size = size;
+  if (color !== "~" && color.length <= 64) out.color = color;
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 function parseScenario(value: string): PermalinkScenario | null {
@@ -569,6 +585,7 @@ export async function restoreFromPermalink(
         ...(layer.view && { view: layer.view }),
         ...(layer.opacity !== undefined && { opacity: layer.opacity }),
         ...(layer.color && { color: layer.color }),
+        ...(layer.encode && { encode: layer.encode }),
       },
       ...(layer.mode === undefined && { defaultMode: true }),
       ...(layer.view !== undefined && { exact: true }),

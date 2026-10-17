@@ -12,6 +12,7 @@ import { cellContext, hexCells, hexLegendSentence, levelLabel, usableBasis } fro
 import { viewCaption } from "@/lib/render/views";
 import type { Feature } from "geojson";
 import { LegendKey } from "@/components/LegendKey";
+import { EncodingLegend } from "@/components/EncodingLegend";
 import { formatValue } from "@/lib/format";
 import { rasterKeyFilter } from "@/lib/render/rasterCalm";
 import { currentScenarioValue, scenarioOf, scenarioValueText } from "@/lib/render/scenario";
@@ -500,6 +501,8 @@ function LegendRow({
           {caption}
         </p>
       )}
+      {/* Two measures on one mark (spec §13): what width or size and what color mean, with units and range. */}
+      {op?.visible && data && (!hexes || op.mode === "columns") && <EncodingLegend layer={layer} op={op} data={data} />}
       {hexSentence && (
         <p data-testid="hex-legend" className="mt-1 text-[11.5px] leading-4 text-ink">
           {hexSentence}

@@ -55,6 +55,18 @@ export function attributeProblems(layer: Pick<Layer, "id" | "style" | "fieldHelp
     if (a.help) checkHelp(problems, `${where} help`, a.help);
   });
   if (attributes.filter((a) => a.primary).length > 1) problems.push(`${layer.id} marks more than one attribute primary`);
+  // Two measures on one mark (spec §13): size reads a measure, color a measure, ordinal or category.
+  for (const channel of ["size", "color"] as const) {
+    const key = layer.style.encode?.[channel];
+    if (key === undefined) continue;
+    const attr = attributes.find((x) => x.key === key);
+    if (!attr) problems.push(`${layer.id} encodes ${channel} by ${key}, which is not one of its attributes`);
+    else if (channel === "size" && attr.type !== "measure") problems.push(`${layer.id} encodes size by ${key}, a ${attr.type}; size reads a measure`);
+    else if (channel === "color" && attr.type !== "measure" && attr.type !== "ordinal" && attr.type !== "category") {
+      problems.push(`${layer.id} encodes color by ${key}, a ${attr.type}; color reads a measure, ordinal or category`);
+    }
+  }
+  for (const a of attributes) if (a.aggregate !== undefined && a.type !== "measure") problems.push(`${layer.id} attribute ${a.key} totals a ${a.type}; only a measure has an aggregate`);
   const card = layer.card;
   if (card?.measure && (!card.measure.label.trim() || /^value$/i.test(card.measure.label.trim()))) {
     problems.push(`${layer.id} card measure needs its own name, not "Value"`);

@@ -558,7 +558,8 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
         "(the query summary's sample properties name them), e.g. { sac_scale: { include: [\"alpine_hiking\"] } } or " +
         "{ acres: { range: [1000, 1000000] } }, written from the query summary's attributes so the layer row's chips show " +
         "the same choice; they replace the layer's filters, and {} clears them. rankBy ranks by a measure (the row lists the " +
-        "top 10, symbols sized by it). hexBasis colors hex cells: count, sum of the measure, share of hexShare, or recency. view names the " +
+        "top 10, symbols sized by it). hexBasis colors hex cells: count, sum of the measure, share of hexShare, or recency. sizeBy and colorBy put two " +
+        "measures on one mark (width or symbol size, and color), from the summary's attributes; the layer has its own pair. view names the " +
         "standard view the answer is drawn in: change (two versions or two dates of one layer: then vs now, what changed), " +
         "timeline (dated features: over time, year by year, since), ranked (largest, most, deepest, highest, how full), " +
         "density (where are the most, hotspots, many points), detail (one thing: tell me about, how deep is), scenario (a " +
@@ -573,6 +574,14 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
         rankBy: z.string().optional().describe("Rank by this measure's key (from the summary's attributes of type measure)"),
         hexBasis: z.enum(HEX_BASES).optional().describe("Hex cells' color: count (default), sum of the measure, share (with hexShare), recency"),
         hexShare: z.string().optional().describe("With hexBasis share: the chip value whose share colors the cells, e.g. wind"),
+        sizeBy: z
+          .string()
+          .optional()
+          .describe("Two measures on one mark: the measure key that sizes it (line width, symbol size, column height); \"\" for none. Omit for the layer's own pair"),
+        colorBy: z
+          .string()
+          .optional()
+          .describe("Two measures on one mark: the measure (or class) key that colors it on the sage to purple ramp; \"\" for none. Omit for the layer's own pair"),
       }),
       // Labels become values and "most … by <measure>" becomes hex cells by its sum, before the map or the trace sees it.
       execute: async (input) => {

@@ -177,7 +177,7 @@ const earthquakes = defineLayer({
   maxAreaKm2: 5_000_000,
   wide: { orderBy: "magnitude", rank: "strongest", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("earthquakes"), unit: "M", extrude: "v", heat: true },
+  style: { geometry: "point", color: layerColor("earthquakes"), unit: "M", extrude: "v", heat: true, encode: { size: "v", color: "depthKm" } },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,

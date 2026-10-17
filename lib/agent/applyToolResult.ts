@@ -116,6 +116,14 @@ export function hexBasisOf(basis: unknown, share: unknown): HexBasis | null {
   return isHexBasis(basis) ? basis : null;
 }
 
+/** The render tool's `sizeBy` and `colorBy` as an encoding, or null when it named neither. */
+export function encodeOf(size: unknown, color: unknown): RenderOp["encode"] | null {
+  const out: NonNullable<RenderOp["encode"]> = {};
+  if (typeof size === "string") out.size = size.trim();
+  if (typeof color === "string") out.color = color.trim();
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 /** The render tool's `mode` as a RenderMode: `symbols` is the map's `points`; anything unknown is null. */
 export function renderModeOf(mode: unknown): RenderMode | null {
   if (mode === "symbols") return "points";
@@ -140,6 +148,9 @@ function renderActions(output: Obj, catalog: LayerCatalog): MapAction[] {
   if (typeof output.rankBy === "string" && output.rankBy.trim() !== "") op.rankBy = output.rankBy.trim();
   const basis = hexBasisOf(output.hexBasis, output.hexShare);
   if (basis) op.hexBasis = basis;
+  // Two measures on one mark (spec §13): the keys asked for over the layer's own pair ("" switches one off).
+  const encode = encodeOf(output.sizeBy, output.colorBy);
+  if (encode) op.encode = encode;
   const actions: MapAction[] = [asked ? { type: "render", op } : { type: "render", op, defaultMode: true }];
   // `scenario` moves a scenario layer's scrubber (sea level rise feet); the reducer snaps it and ignores other layers.
   if (isNumber(output.scenario)) actions.push({ type: "set_scenario", layerId, value: output.scenario });

@@ -499,6 +499,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
                     filters: op.filters !== undefined ? activeFilters(op.filters) : old.filters,
                     ...((op.rankBy ?? old.rankBy) !== undefined && { rankBy: op.rankBy ?? old.rankBy }),
                     ...((op.hexBasis ?? old.hexBasis) && { hexBasis: op.hexBasis ?? old.hexBasis }),
+                    ...((op.encode ?? old.encode) && { encode: { ...old.encode, ...op.encode } }),
                   }
                 : old,
             );

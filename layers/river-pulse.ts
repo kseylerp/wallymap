@@ -469,7 +469,7 @@ const cells = createCache();
  * for 30 days, so only points never seen before cost a (short, 7-day) call for their 3 x 3 cells. A point whose cells
  * all fail keeps its own position.
  */
-async function riverCells(ctx: QueryContext, points: Position[]): Promise<Position[]> {
+async function riverCells(ctx: QueryContext, points: Position[]): Promise<{ cells: Position[]; asked: number }> {
   const known = await Promise.all(
     points.map(async (p) => {
       try {
@@ -482,7 +482,7 @@ async function riverCells(ctx: QueryContext, points: Position[]): Promise<Positi
     }),
   );
   const unknown = points.map((p, i) => ({ p, i })).filter((x) => known[x.i] === null);
-  if (unknown.length === 0) return known as Position[];
+  if (unknown.length === 0) return { cells: known as Position[], asked: 0 };
   const grid = unknown.flatMap(({ p }) => NEIGHBOURS.map(([dx, dy]): Position => [p[0] + dx, p[1] + dy]));
   const batches: Position[][] = [];
   for (let i = 0; i < grid.length; i += BATCH) batches.push(grid.slice(i, i + BATCH));
@@ -501,7 +501,7 @@ async function riverCells(ctx: QueryContext, points: Position[]): Promise<Positi
       if (best) await cells.set(pointKey(p), JSON.stringify(best.at), 30 * 86_400).catch(() => {});
     }),
   );
-  return out as Position[];
+  return { cells: out as Position[], asked: unknown.length };
 }
 
 /** Runs `tasks` at most `limit` at a time, in order. */
@@ -715,7 +715,7 @@ const riverPulse = defineLayer({
       return { kind: "geojson", data: { type: "FeatureCollection", features: [] }, citation, coverageNote: "No Natural Earth rivers in this box; zoom out or pick a basin" };
     }
     const fresh = samples.map((s, i) => ({ s, i })).filter((x) => !x.s.cell);
-    const snapped = fresh.length > 0 ? await riverCells(ctx, fresh.map((x) => x.s.at)) : [];
+    const { cells: snapped, asked } = fresh.length > 0 ? await riverCells(ctx, fresh.map((x) => x.s.at)) : { cells: [], asked: 0 };
     const at = samples.map((s) => s.cell ?? s.at);
     fresh.forEach((x, k) => (at[x.i] = snapped[k]));
     const day = now.toISOString().slice(0, 10);
@@ -724,8 +724,8 @@ const riverPulse = defineLayer({
     const built = reachFeatures(reachesOf(runs), samples, flows, now.toISOString(), runs);
     if (!built) return { error: "The Open-Meteo flood API returned no usable discharge here", hint: "upstream" };
     // The request count, against the free tier's 5,000 calls an hour (a location counts a call per 14 days asked for).
-    const calls = Math.round(read * ((input.days + input.forecastDays) / 14) + fresh.length * NEIGHBOURS.length);
-    console.info(`[river-pulse] ${samples.length} points (${fresh.length} snapped now), ${read} read upstream: about ${calls} Open-Meteo calls`);
+    const calls = Math.round(read * ((input.days + input.forecastDays) / 14) + asked * NEIGHBOURS.length);
+    console.info(`[river-pulse] ${samples.length} points (${asked} snapped now), ${read} read upstream: about ${calls} Open-Meteo calls`);
     const rivers = new Set(built.data.features.map((f) => f.properties?.name)).size;
     const outlets = built.data.features.filter((f) => f.properties?.outlet === true).length;
     const notes = [

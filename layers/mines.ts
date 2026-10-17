@@ -395,7 +395,8 @@ const mines = defineLayer({
       const records = normalizeMrds(result.fc);
       // Lighter points for tens of thousands of sites: coordinates to about 10 m, and no record link (the id stays).
       const features = dedupeMines(records).map((f) => {
-        const { url: _url, ...properties } = f.properties ?? {};
+        const properties = { ...f.properties };
+        delete properties.url;
         const [lon, lat] = f.geometry.coordinates;
         return { ...f, geometry: { type: "Point" as const, coordinates: [Math.round(lon * 1e4) / 1e4, Math.round(lat * 1e4) / 1e4] }, properties };
       });

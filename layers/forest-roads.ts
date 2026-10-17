@@ -149,6 +149,14 @@ const forestRoads = defineLayer({
   wide: { orderBy: "segment length in miles", rank: "longest", limit: MAX_RECORDS },
   input: inputSchema,
   style: { geometry: "line", color: layerColor("forest-roads") },
+  fieldHelp: {
+    miles: {
+      text: "The length of this road segment in miles, as the Forest Service's Motor Vehicle Use Map measures it (gis_miles); a road is often several segments.",
+      unit: "mi",
+      source: "USDA Forest Service, Motor Vehicle Use Map: Roads",
+      url: "https://data.fs.usda.gov/geodata/edw/datasets.php",
+    },
+  },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     if (outsideUs(ctx.bbox)) {

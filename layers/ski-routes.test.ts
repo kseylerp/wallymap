@@ -148,7 +148,7 @@ describe("ski-routes layer", () => {
     expect(layer.license).toContain("ODbL");
     expect(layer.maxAreaKm2).toBe(2500);
     expect(layer.wide).toEqual({ mode: "named", orderBy: "length in km", limit: 1000 });
-    expect(hardMaxAreaKm2(layer)).toBe(10_000);
+    expect(hardMaxAreaKm2(layer)).toBe(100_000);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toContain("OVERPASS_URL");
     expect(layer.style.geometry).toBe("line");
@@ -187,8 +187,9 @@ describe("ski-routes layer", () => {
     expect(stub).toHaveBeenCalledTimes(2);
   });
 
-  it("returns 422 zoom_in from runLayer over the 10,000 km2 hard cap and 400 for a bad kind", async () => {
-    const big = await runLayer("ski-routes", { bbox: [6, 45, 8, 46.5] });
+  it("returns 422 zoom_in from runLayer over the 100,000 km2 hard cap and 400 for a bad kind", async () => {
+    // The western Alps, about 128,000 km².
+    const big = await runLayer("ski-routes", { bbox: [5.5, 44.5, 10.5, 47.5] });
     expect(big.status).toBe(422);
     expect(big.body).toMatchObject({ hint: "zoom_in" });
     const bad = await runLayer("ski-routes", { bbox: CHAMONIX, input: { kind: "snowboard" } });
@@ -196,7 +197,7 @@ describe("ski-routes layer", () => {
   });
 });
 
-// Valais and Aosta, about 8,700 km²: over the 2,500 km² soft cap, under the 10,000 km² hard cap.
+// Valais and Aosta, about 8,700 km²: over the 2,500 km² soft cap, under the 100,000 km² hard cap.
 const ALPS: [number, number, number, number] = [6.5, 45.5, 7.5, 46.3];
 
 describe("ski-routes wide mode", () => {
@@ -238,6 +239,21 @@ describe("ski-routes wide mode", () => {
         truncated: true,
         coverageNote: "Showing the 1 named of 7,657 (ranked by length in km); zoom in under 2,500 km² for all",
       });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("answers a ski region (Switzerland, about 76,000 km²) instead of asking to zoom in", async () => {
+    const stub = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) =>
+      new Response(JSON.stringify(decodeURIComponent(String(init?.body)).includes("out ids bb") ? scan : geometry), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("ski-routes", { bbox: [6, 45.8, 10.5, 47.8], zoom: 7 });
+      expect(res.status).toBe(200);
+      if (!("kind" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
+      expect(res.body.data.features.map((f) => f.properties?.name)).toEqual(["Haute Route", "Piste des Lacs"]);
     } finally {
       vi.unstubAllGlobals();
     }

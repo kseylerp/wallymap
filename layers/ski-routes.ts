@@ -7,10 +7,15 @@
  * Tags read: piste:type, piste:difficulty, piste:name, name, ref, piste:grooming, piste:status, piste:lit,
  * network, check_date (becomes `t`). Closed outline areas (area=yes) are skipped so they do not overdraw the runs.
  * Live smoke check: Chamonix, France (45.85,6.8 to 46,7.05), 2026-10-09: 317 features (151 downhill, 103 nordic, 37 skitour, 26 other), no truncation; Truckee CA nordic only: 260.
- * Wide mode (over 2,500 km², up to 10,000): a scan of the named piste ways and ski routes (ids and bounds), then the
- * geometry of the 1,000 longest inside the box (see buildNamedScanQuery in osm-trails), with `total` every piste way and route.
+ * Wide mode (over 2,500 km², up to WIDE_MAX_AREA_KM2, 100,000): a scan of the named piste ways and ski routes (ids and
+ * bounds), then the geometry of the 1,000 longest inside the box (see buildNamedScanQuery in osm-trails), simplified to
+ * what the view can show, with `total` every piste way and route.
  * Live smoke check (wide), 2026-10-14: Valais and Aosta (6.5,45.5 to 7.5,46.3, about 8,700 km²): 1,000 kept of 7,657
  * (4,621 named), 9.0 s.
+ * Live smoke check (wide), 2026-10-16, for the 100,000 km² cap: Wasatch (-112.5,40 to -110.5,41.5, about 28,000 km²): 999
+ * named of 2,905, 3.8 s, 0.3 MB; Colorado resorts (-108,38.5 to -104.5,40.5, about 66,500 km²): 1,000 of 5,097, 3.7 s,
+ * 0.3 MB; Switzerland (6,45.8 to 10.5,47.8, about 76,000 km², 35,000 piste ways, the densest anywhere): 1,000 of 35,360,
+ * 9.5 to 16.7 s, 0.4 MB. A 128,000 km² Alpine box took 21 s, too near the 25 s Overpass limit, hence 100,000.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
@@ -18,7 +23,14 @@ import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryCo
 import { PISTE_LEVELS, PISTE_SCALE, nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { overpassCounts, overpassQuery } from "./_shared/overpass";
-import { buildNamedGeometryQuery, buildNamedScanQuery, longestNamedFirst, pickNamedByLength } from "./osm-trails";
+import {
+  buildNamedGeometryQuery,
+  buildNamedScanQuery,
+  longestNamedFirst,
+  pickNamedByLength,
+  routeTolerance,
+  simplifiedFeature,
+} from "./osm-trails";
 import {
   bboxClause,
   returnedNote,
@@ -43,6 +55,11 @@ export const MAX_ROUTES = 50;
 export const MAX_ROUTE_WAYS = 3_000;
 /** Most named pistes and routes in a wide answer (the wide strategy's limit). */
 export const WIDE_LIMIT = 1_000;
+/**
+ * Largest box the layer answers (its hardMaxAreaKm2), with the named pistes and routes longest first: a ski region
+ * (Colorado's resorts, the Wasatch, the Valais) instead of a "zoom in". Measured in the header.
+ */
+export const WIDE_MAX_AREA_KM2 = 100_000;
 
 export const PISTE_KINDS = ["downhill", "nordic", "skitour", "sled"] as const;
 
@@ -180,7 +197,8 @@ async function queryWide(ctx: QueryContext, input: SkiInput): Promise<LayerResul
   if (picked.ways.length + picked.relations.length > 0) {
     const body = await overpassQuery(ctx, buildNamedGeometryQuery(ctx.bbox, picked, MAX_ROUTE_WAYS));
     if (!body.ok) return { error: body.error, hint: "upstream" };
-    features = longestNamedFirst(normalizeSki(body.json, input.kind).features, limit);
+    const tolerance = routeTolerance(ctx.bbox);
+    features = longestNamedFirst(normalizeSki(body.json, input.kind).features, limit).map((f) => simplifiedFeature(f, tolerance));
   }
 
   return {
@@ -267,13 +285,14 @@ const skiRoutes = defineLayer({
     "Set kind to focus on one type. " +
     "Caveats: this is volunteer mapping of marked pistes, not avalanche terrain or a conditions report (backcountry skiing routes are sparsely mapped outside the Alps; combine with snowpack for snow depth); " +
     "difficulty colors differ by country, lifts and open or closed status are not included, and trails may be closed or ungroomed. " +
-    "At most 2,000 piste ways and 50 routes are returned (a route is drawn only where it crosses the box) and the note gives the count; over 2,500 km² only the 1,000 longest named ones.",
+    "At most 2,000 piste ways and 50 routes are returned (a route is drawn only where it crosses the box) and the note gives the count; over 2,500 km² (up to 100,000 km², a whole ski region) the 1,000 longest named ones.",
   coverage: "global",
   surface: "land",
   license: "ODbL (OpenStreetMap contributors)",
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 2500,
+  hardMaxAreaKm2: WIDE_MAX_AREA_KM2,
   wide: { mode: "named", orderBy: "length in km", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "line", color: layerColor("ski-routes") },

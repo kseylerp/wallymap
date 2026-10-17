@@ -39,10 +39,12 @@
  *   --save <dir>     also writes each question's run (tool calls and closing text) to <dir> as gzipped JSON
  *   --replay <dir>   reads the runs from <dir> instead of calling the model (checks and rules only, no credits)
  *   --only <text>    runs only the set's questions containing <text> (case ignored; a|b for either)
+ *   --tag coverage   runs only the coverage questions (COVERAGE_QUESTIONS), each also held to its expected layers and view
  *   --screens        after the set, the screen checks (scripts/evalScreens.ts) on SCREEN_QUESTIONS: each one's final
  *                    map opened by permalink in a browser at desktop and phone size; see that file for the server.
  */
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { generateText } from "ai";
 import { getLayer, listLayers } from "@/layers";
@@ -52,7 +54,7 @@ import type { MapView } from "@/lib/agent/view";
 import { parseMapView } from "@/lib/agent/viewContext";
 import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
 import { reduce } from "@/lib/render/reducer";
-import { initialMapState, type MapState } from "@/lib/render/state";
+import { initialMapState, type MapState, type RenderMode, type ViewKind } from "@/lib/render/state";
 import { visibleState } from "@/lib/render/view";
 import { lineEntries } from "@/lib/render/nativeLines";
 import { boundsOf } from "@/lib/render/views";
@@ -90,7 +92,7 @@ function isTiles(output: unknown): boolean {
 }
 
 /** Questions between the eval markers in docs/questions.md, one per "- " line. */
-function readEvalSet(): string[] {
+export function readEvalSet(): string[] {
   const text = readFileSync(new URL("../docs/questions.md", import.meta.url), "utf8");
   const m = text.match(/<!-- eval:start -->([\s\S]*?)<!-- eval:end -->/);
   if (!m) throw new Error("docs/questions.md is missing the eval:start / eval:end markers");
@@ -389,6 +391,131 @@ const QUESTION_RULES: Record<string, (calls: ToolCall[], notes: string[], view: 
   "show only sport crags at red river gorge": (calls) => sportCragsRule(calls),
 };
 
+/**
+ * What a coverage question must end with (docs/questions.md, "Coverage questions"): `layers` each queried, answered
+ * without an error and, when the answer held features or tiles, drawn ("a|b" for either layer); `view` the standard
+ * view the drawn layer ends in (route: a route on the map; change: also a compare on the layer); `mode` its Show as.
+ * An empty `layers` is a route question, answered by the route tool alone.
+ */
+export type CoverageExpect = { layers: string[]; view?: ViewKind; mode?: RenderMode };
+
+/**
+ * The coverage questions, keyed by the question in lower case (without its @view): together with the older questions
+ * (LAYERS_IN_OLDER_QUESTIONS) every registered layer is asked about, and every standard view is expected at least twice.
+ */
+export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
+  // Change: then vs now.
+  "has grand staircase-escalante gotten smaller since 2021?": { layers: ["monuments"], view: "change" },
+  "how much less sea ice is in the arctic this september than in 2012?": { layers: ["sea-ice"], view: "change" },
+  "show lahaina before and after the 2023 fire": { layers: ["imagery-by-date"], view: "change" },
+  "did lake mead shrink since the 1980s?": { layers: ["surface-water"] },
+  // Timeline: dated features over time.
+  "wolf packs in washington since 2014": { layers: ["wolf-packs"], view: "timeline" },
+  "where did beetles kill trees in colorado over the last ten years?": { layers: ["tree-mortality"], view: "timeline" },
+  "earthquakes in japan this month": { layers: ["earthquakes"], view: "timeline" },
+  // Ranked: biggest, highest, busiest, most.
+  "busiest ports on the gulf coast": { layers: ["ports"], view: "ranked" },
+  "highest peaks in the southern alps of new zealand": { layers: ["peaks"], view: "ranked" },
+  "biggest glaciers in patagonia": { layers: ["glaciers"], view: "ranked" },
+  "which counties in florida had the most disaster declarations?": { layers: ["disasters"], view: "ranked" },
+  // Density: where are the most.
+  "where are most of the old mines in nevada?": { layers: ["mines"], view: "density" },
+  "where are the most groundwater wells around phoenix?": { layers: ["groundwater"], view: "density" },
+  "heatmap of brown bear sightings in alaska": { layers: ["gbif-occurrences|species"], view: "density", mode: "heat" },
+  "show power plants in arizona as 3d columns by megawatts": { layers: ["power-plants"], mode: "columns" },
+  // Detail: one thing.
+  "what rock is table mountain made of?": { layers: ["geologic-unit"], view: "detail" },
+  "tell me about mount kilimanjaro": { layers: ["peaks|wikipedia-nearby"], view: "detail" },
+  "how deep is crater lake?": { layers: ["lakes"], view: "detail" },
+  // Scenario: an amount of sea level rise.
+  "show charleston with 6 feet of sea level rise": { layers: ["sea-level-rise"], view: "scenario" },
+  "what would 2 feet of sea level rise do to honolulu?": { layers: ["sea-level-rise"], view: "scenario" },
+  // Route: plan a route.
+  "plan a bike ride from banff to lake louise": { layers: [], view: "route" },
+  "walking route from zermatt to the hörnli hut": { layers: [], view: "route" },
+  "plan a hike from happy isles to the top of half dome": { layers: [], view: "route" },
+  // Layers no older question asks about, one question each.
+  "where is the ogallala aquifer?": { layers: ["aquifers"] },
+  "which large fires burned in oregon in 2020?": { layers: ["burn-severity"] },
+  "is the tongass a carbon sink?": { layers: ["carbon-flux"] },
+  "can i see condors near big sur?": { layers: ["condor-range"] },
+  "critical habitat for the desert tortoise near st. george": { layers: ["critical-habitat"] },
+  "any floods or cyclones in mozambique right now?": { layers: ["disasters"] },
+  "where has forest just been cleared in british columbia?": { layers: ["disturbance"] },
+  "how dry is colorado this week?": { layers: ["drought"] },
+  "wildfire risk around bend": { layers: ["fire-hazard"] },
+  "fire danger in southern california this week": { layers: ["fire-weather"] },
+  "where can i fish for trout near bozeman?": { layers: ["fishing"] },
+  "is there flooding along the zambezi right now?": { layers: ["flood-extent"] },
+  "is downtown asheville in a flood zone?": { layers: ["flood-zones"] },
+  "new deforestation alerts in the congo this month": { layers: ["forest-alerts"] },
+  "show the geology of the grand canyon": { layers: ["geology"] },
+  "where are the wild horses in nevada?": { layers: ["grazing-allotments"] },
+  "show plant hardiness zones in vermont": { layers: ["hardiness-zones"] },
+  "what's the land cover around torres del paine?": { layers: ["land-cover"] },
+  "active mining claims near moab": { layers: ["mining-claims"] },
+  "where is the old-growth forest in oregon?": { layers: ["old-growth"] },
+  "rapids on the middle fork salmon": { layers: ["paddling"] },
+  "kayaking rivers near queenstown": { layers: ["paddling"] },
+  "where is the permafrost in alaska?": { layers: ["permafrost"] },
+  "did spring come early in virginia this year?": { layers: ["phenology"] },
+  "where do people take photos around mount fuji?": { layers: ["photos"] },
+  "pipelines and power lines near midland, texas": { layers: ["pipelines-lines"] },
+  "trailheads and picnic areas in the coconino national forest": { layers: ["recreation-sites"] },
+  "what watershed is denver in?": { layers: ["river-basins"] },
+  "is there wildfire smoke over seattle today?": { layers: ["smoke"] },
+  "when is low tide at acadia?": { layers: ["tides"] },
+  "tell me about the history of bodie": { layers: ["wikipedia-nearby"] },
+  // Is it safe or open now, near me, compare two places.
+  "is it safe to hike at paradise on mount rainier today?": { layers: ["weather-alerts"] },
+  "are the forest roads open for camping near flagstaff?": { layers: ["forest-roads"] },
+  "huts near here": { layers: ["outdoor-features"] },
+  "where can i fish here": { layers: ["fishing"] },
+  "which is more remote, the gila or the bob marshall?": { layers: ["remoteness"] },
+  "compare snow depth at mount baker and mount hood": { layers: ["snowpack"] },
+};
+
+/** Layers the older eval questions (before the coverage questions) already ask about, per their Last run tool lists. */
+export const LAYERS_IN_OLDER_QUESTIONS = [
+  "osm-trails", "fire-perimeters", "fire-detections", "forest-loss", "snowpack", "snow-cover", "streamflow", "campsites",
+  "forest-roads", "species", "outdoor-features", "popularity", "popularity-campsites", "public-lands", "wilderness",
+  "night-lights", "population", "remoteness", "physical-regions", "surf", "peaks", "protected-areas-world", "mtb-trails",
+  "ski-routes", "climbing", "lakes", "weather-alerts", "earthquakes", "geologic-unit", "glaciers", "greenness",
+  "gbif-occurrences", "reservoir-levels", "dams", "monuments", "uranium", "sea-level-trends", "sea-level-rise",
+  "methane-plumes", "temperature-anomaly", "sequoia-groves", "sequoia-mortality", "power-plants",
+];
+
+/** The coverage expectation for a question as written in the set (its @view dropped), if it is one. */
+export function coverageFor(raw: string): CoverageExpect | undefined {
+  return COVERAGE_QUESTIONS[raw.replace(/\s*@view=.*$/, "").trim().toLowerCase()];
+}
+
+/** A coverage question's rule: each expected layer answered and drawn, and the view and Show as it expects. */
+export function coverageRule(expect: CoverageExpect, calls: ToolCall[]): RuleResult {
+  const state = mapAfter(calls);
+  const layers = expect.layers.map((alts) => {
+    const ids = alts.split("|");
+    const queries = calls.filter((c) => ids.some((id) => c.toolName === `query_${id}`));
+    const answered = queries.filter((c) => c.output !== undefined && !isLayerError(c.output));
+    const returned = answered.some((c) => (featureCount(c.output) ?? 0) > 0 || isTiles(c.output));
+    const drawn = state.renderOps.some((o) => ids.includes(o.layerId));
+    return { layer: alts, queried: queries.length, answered: answered.length, drawn, ok: answered.length > 0 && (!returned || drawn) };
+  });
+  const ids = expect.layers.flatMap((alts) => alts.split("|"));
+  const ops = state.renderOps.filter((o) => ids.includes(o.layerId));
+  const views = ops.map((o) => o.view);
+  const routes = Object.keys(state.routes).length;
+  const viewOk =
+    expect.view === undefined ||
+    (expect.view === "route"
+      ? routes > 0 || state.renderOps.some((o) => o.view === "route")
+      : views.includes(expect.view) || (expect.view === "change" && state.compare !== undefined && ids.includes(state.compare.layerId)));
+  const modes = ops.map((o) => o.mode);
+  const modeOk = expect.mode === undefined || modes.includes(expect.mode);
+  const ok = layers.every((l) => l.ok) && viewOk && modeOk;
+  return { ok, layers, ...(expect.view ? { view: expect.view, views, viewOk } : {}), ...(expect.mode ? { mode: expect.mode, modes, modeOk } : {}), ...(expect.view === "route" ? { routes } : {}) };
+}
+
 /** Every coverage note the queries returned, so a wide result's "Showing the N largest of M" line is in the output. */
 function coverageNotes(calls: ToolCall[]): string[] {
   return calls.flatMap((c) => {
@@ -530,9 +657,12 @@ function evaluate(run: Run): Evaluated {
   // With no note, the closing text is the answer, as for noteWords.
   const answer = notes.length > 0 ? notes : [text];
   const rule = QUESTION_RULES[question.trim().toLowerCase()]?.(calls, answer, view);
+  const expect = coverageFor(question);
+  const coverage = expect ? coverageRule(expect, calls) : undefined;
   const rulesOk =
     brief &&
     (rule?.ok ?? true) &&
+    (coverage?.ok ?? true) &&
     (wideView
       ? wideViewOk
       : routed && !queried
@@ -555,6 +685,7 @@ function evaluate(run: Run): Evaluated {
       noteWords,
       ...(dupHeadings.length > 0 ? { dupHeadings } : {}),
       ...(rule ? { rule, answer: answer.join("\n") } : {}),
+      ...(coverage ? { coverage } : {}),
       model,
       ok,
       rulesOk,
@@ -628,34 +759,42 @@ async function question(raw: string, opts: { save?: string; replay?: string }): 
   }
 }
 
-const args = process.argv.slice(2);
-const save = argValue(args, "--save");
-const replay = argValue(args, "--replay");
-const only = argValue(args, "--only")?.toLowerCase().split("|");
-const screens = args.includes("--screens");
-if (args.includes("--set")) {
-  const questions = readEvalSet().filter((q) => !only || only.some((o) => q.toLowerCase().includes(o)));
-  let passed = 0;
-  const forScreens: { raw: string; slug: string; state: MapState; failures: string[] }[] = [];
-  for (const q of questions) {
-    const outcome = await question(q, { save, replay });
-    if (outcome.ok) passed += 1;
-    console.log(JSON.stringify(outcome.line));
-    if (screens && "state" in outcome && SCREEN_QUESTIONS.includes(q)) {
-      forScreens.push({ raw: q, slug: slugOf(q), state: outcome.state, failures: outcome.checks.flatMap((c) => c.failures) });
+/** Run only as a script (node or tsx with this file), so tests can import the question data without calling the model. */
+const isMain = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  const args = process.argv.slice(2);
+  const save = argValue(args, "--save");
+  const replay = argValue(args, "--replay");
+  const only = argValue(args, "--only")?.toLowerCase().split("|");
+  const tag = argValue(args, "--tag");
+  if (tag !== undefined && tag !== "coverage") throw new Error(`Unknown --tag ${tag} (only "coverage")`);
+  const screens = args.includes("--screens");
+  if (args.includes("--set")) {
+    const questions = readEvalSet()
+      .filter((q) => !only || only.some((o) => q.toLowerCase().includes(o)))
+      .filter((q) => tag !== "coverage" || coverageFor(q) !== undefined);
+    let passed = 0;
+    const forScreens: { raw: string; slug: string; state: MapState; failures: string[] }[] = [];
+    for (const q of questions) {
+      const outcome = await question(q, { save, replay });
+      if (outcome.ok) passed += 1;
+      console.log(JSON.stringify(outcome.line));
+      if (screens && "state" in outcome && SCREEN_QUESTIONS.includes(q)) {
+        forScreens.push({ raw: q, slug: slugOf(q), state: outcome.state, failures: outcome.checks.flatMap((c) => c.failures) });
+      }
     }
+    console.log(`ok ${passed}/${questions.length}`);
+    if (screens) {
+      const { runScreens } = await import("@/scripts/evalScreens");
+      const screenResult = await runScreens(forScreens);
+      console.log(`screens ok ${screenResult.passed}/${screenResult.total} (contact sheet ${screenResult.sheet})`);
+      if (screenResult.passed < screenResult.total) process.exitCode = 1;
+    }
+    if (passed < questions.length) process.exitCode = 1;
+  } else {
+    const raw = args.filter((a, i) => !a.startsWith("--") && !["--save", "--replay", "--only", "--tag"].includes(args[i - 1])).join(" ") || "Show hiking trails around Lake Tahoe";
+    const outcome = await question(raw, { save, replay });
+    console.log(JSON.stringify(outcome.line));
+    if (!outcome.ok && "error" in outcome.line) process.exitCode = 1;
   }
-  console.log(`ok ${passed}/${questions.length}`);
-  if (screens) {
-    const { runScreens } = await import("@/scripts/evalScreens");
-    const screenResult = await runScreens(forScreens);
-    console.log(`screens ok ${screenResult.passed}/${screenResult.total} (contact sheet ${screenResult.sheet})`);
-    if (screenResult.passed < screenResult.total) process.exitCode = 1;
-  }
-  if (passed < questions.length) process.exitCode = 1;
-} else {
-  const raw = args.filter((a, i) => !a.startsWith("--") && !["--save", "--replay", "--only"].includes(args[i - 1])).join(" ") || "Show hiking trails around Lake Tahoe";
-  const outcome = await question(raw, { save, replay });
-  console.log(JSON.stringify(outcome.line));
-  if (!outcome.ok && "error" in outcome.line) process.exitCode = 1;
 }

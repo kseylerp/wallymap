@@ -141,6 +141,26 @@ Beyond the six starters, these tools shape follow-up questions. They appear in t
 - `list_layers` may appear first in the trace; it does not change the result.
 - Public data servers can be slow, so a query can take 10 to 30 seconds.
 
+## Coverage questions
+
+The 60 questions after "Show only sport crags at Red River Gorge" in the eval set make sure every layer and every standard view is asked about, so the map checks see each layer before the owner does. With the older questions, every registered layer appears in at least one question, and each view (change, timeline, ranked, density, detail, scenario, route) is expected at least twice. They mix regions (US West and East, Alaska, Hawaii, Canada, the Alps, Patagonia, New Zealand, Japan, Africa) and kinds: where is, which is biggest or highest, show only, what changed since, here (`@view`), plan a route, is it safe or open now, and compare two places.
+
+Each coverage question also has a pass expectation in `COVERAGE_QUESTIONS` (scripts/eval-model.mts): the layers it must query, get an answer from and draw (either of two, written `a|b`), the view the drawn layer must end in where it matters, and for two questions the Show as mode (heat, columns). A route view passes when a route is on the map; a change view also passes when the layer is open in a compare. `--tag coverage` runs only these questions:
+
+```bash
+node --env-file=.env.local --import tsx scripts/eval-model.mts --set --tag coverage --save /tmp/coverage
+```
+
+- **Change**: Grand Staircase-Escalante since 2021 (`monuments`), Arctic sea ice against 2012 (`sea-ice`), Lahaina before and after the fire (`imagery-by-date`); Lake Mead since the 1980s (`surface-water`, no view expected).
+- **Timeline**: Washington wolf packs since 2014 (`wolf-packs`), Colorado beetle kill (`tree-mortality`), Japan earthquakes this month (`earthquakes`).
+- **Ranked**: Gulf Coast ports (`ports`), New Zealand's highest peaks (`peaks`), Patagonia's biggest glaciers (`glaciers`), Florida disaster declarations (`disasters`).
+- **Density**: Nevada mines (`mines`), Phoenix groundwater wells (`groundwater`), Alaska brown bears as a heatmap (`gbif-occurrences` or `species`, Show as Heat); Arizona power plants as columns (Show as Columns).
+- **Detail**: Table Mountain's rock (`geologic-unit`), Kilimanjaro (`peaks` or `wikipedia-nearby`), Crater Lake's depth (`lakes`).
+- **Scenario**: Charleston at 6 feet and Honolulu at 2 feet of sea level rise (`sea-level-rise`).
+- **Route**: Banff to Lake Louise by bike, Zermatt to the Hörnli Hut on foot, Happy Isles to Half Dome (the `route` tool alone).
+- **One question per layer no older question asks about**: aquifers, burn-severity, carbon-flux, condor-range, critical-habitat, disasters (Mozambique), disturbance, drought, fire-hazard, fire-weather, fishing, flood-extent, flood-zones, forest-alerts, geology, grazing-allotments, hardiness-zones, land-cover, mining-claims, old-growth, paddling (twice), permafrost, phenology, photos, pipelines-lines, recreation-sites, river-basins, smoke, tides, wikipedia-nearby.
+- **Safe or open now, here, compare**: weather at Paradise (`weather-alerts`), forest roads near Flagstaff (`forest-roads`), huts around Zermatt on a map view (`outdoor-features`), fishing on the Kenai on a map view (`fishing`), the Gila against the Bob Marshall (`remoteness`), snow at Mount Baker against Mount Hood (`snowpack`).
+
 ## Eval set
 
 `scripts/eval-model.mts --set` reads the questions below (the lines starting with `- ` between the markers), runs each one through the real agent with the model in `MODEL_NAME`, and prints one JSON line per question and a final `ok N/M`. It spends model credits and calls live data servers. The set covers trails, both fire layers, forest loss, snow, stream flow, campsites and roads, species, photos with popularity, public lands with wilderness, night lights with population, remoteness (which also looks up a named physical region), a walking route, fire year by year, a compare over time, a sources check, popular campsites, a physical-region outline, two "here" questions that carry a map view (`@view=[w,s,e,n]`, the bbox the browser would send) and pass without a geocode, one question on a view far wider than the trails layer allows (the whole Baltic, no place named), which passes only when the agent answers at that scale (at least one query succeeds and is drawn) without calling set_view or retrying a layer more than once, and twelve M4 questions, one per theme: mountain biking, ski touring, climbing, lake depth, surf today, river level, weather warnings, earthquakes, rock type at a point, glaciers, greenness compared over a year, and species records drawn as a heatmap, and ten Batch F questions: reservoir level, dams by decade, a monument then and now, uranium mines, a sea level trend, a sea level rise scenario, methane plumes, a county temperature anomaly, sequoia fire deaths, and a glacier's retreat, and the owner's two Tierra del Fuego questions on a wide view with no place named (great hikes, which must draw wider-scale layers instead of refusing; deforestation or water rise), and the owner's "good hiking in French Guiana", which passes only when a query that holds hiking candidates succeeds (trails with named routes, peaks, outdoor features or protected areas), population and night lights are not queried, and the note, within 150 words, names at least three places from the returned features, and the owner's "wind farms in West Texas" on a 392,000 km² view, which passes only when power-plants answers with at least 100 features, no power-plants query uses a box under 90% of the view (no shrinking) or errors, and the note names the largest site by MW, and "dams in the Colorado River basin", which passes when a dams query over the basin answers with features and no zoom_in error. Every question also fails when a note runs over 150 words or a heading appears twice across the notes and the closing text.
@@ -207,6 +227,66 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - Which uranium mines near the Navajo Nation score highest?
 - Where are most of the wind farms by capacity in West Texas?
 - Show only sport crags at Red River Gorge
+- Has Grand Staircase-Escalante gotten smaller since 2021?
+- How much less sea ice is in the Arctic this September than in 2012?
+- Show Lahaina before and after the 2023 fire
+- Did Lake Mead shrink since the 1980s?
+- Wolf packs in Washington since 2014
+- Where did beetles kill trees in Colorado over the last ten years?
+- Earthquakes in Japan this month
+- Busiest ports on the Gulf Coast
+- Highest peaks in the Southern Alps of New Zealand
+- Biggest glaciers in Patagonia
+- Which counties in Florida had the most disaster declarations?
+- Where are most of the old mines in Nevada?
+- Where are the most groundwater wells around Phoenix?
+- Heatmap of brown bear sightings in Alaska
+- Show power plants in Arizona as 3D columns by megawatts
+- What rock is Table Mountain made of?
+- Tell me about Mount Kilimanjaro
+- How deep is Crater Lake?
+- Show Charleston with 6 feet of sea level rise
+- What would 2 feet of sea level rise do to Honolulu?
+- Plan a bike ride from Banff to Lake Louise
+- Walking route from Zermatt to the Hörnli Hut
+- Plan a hike from Happy Isles to the top of Half Dome
+- Where is the Ogallala aquifer?
+- Which large fires burned in Oregon in 2020?
+- Is the Tongass a carbon sink?
+- Can I see condors near Big Sur?
+- Critical habitat for the desert tortoise near St. George
+- Any floods or cyclones in Mozambique right now?
+- Where has forest just been cleared in British Columbia?
+- How dry is Colorado this week?
+- Wildfire risk around Bend
+- Fire danger in Southern California this week
+- Where can I fish for trout near Bozeman?
+- Is there flooding along the Zambezi right now?
+- Is downtown Asheville in a flood zone?
+- New deforestation alerts in the Congo this month
+- Show the geology of the Grand Canyon
+- Where are the wild horses in Nevada?
+- Show plant hardiness zones in Vermont
+- What's the land cover around Torres del Paine?
+- Active mining claims near Moab
+- Where is the old-growth forest in Oregon?
+- Rapids on the Middle Fork Salmon
+- Kayaking rivers near Queenstown
+- Where is the permafrost in Alaska?
+- Did spring come early in Virginia this year?
+- Where do people take photos around Mount Fuji?
+- Pipelines and power lines near Midland, Texas
+- Trailheads and picnic areas in the Coconino National Forest
+- What watershed is Denver in?
+- Is there wildfire smoke over Seattle today?
+- When is low tide at Acadia?
+- Tell me about the history of Bodie
+- Is it safe to hike at Paradise on Mount Rainier today?
+- Are the forest roads open for camping near Flagstaff?
+- Huts near here @view=[7.6,45.85,7.95,46.1]
+- Where can I fish here @view=[-151.2,60.4,-150,60.6]
+- Which is more remote, the Gila or the Bob Marshall?
+- Compare snow depth at Mount Baker and Mount Hood
 <!-- eval:end -->
 
 ## Last run

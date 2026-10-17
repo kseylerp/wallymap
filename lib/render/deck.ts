@@ -1551,8 +1551,44 @@ const unpremultiplyExtension = new UnpremultiplyExtension();
 /** Deck's terrain tiles that fail (sea tiles the DEM does not have) are skipped quietly. */
 export function ignoreTileError(): void {}
 
+type TerrainTile = Parameters<TerrainLayer["getTiledTerrainData"]>[0];
+type TerrainLoad = Parameters<TerrainLayer["loadTerrain"]>[0];
+
+/**
+ * The terrain copy with each tile's mesh cut exactly at the tile's edges. Deck's TerrainLayer grows every tile mesh by
+ * one DEM pixel on each side so opaque tiles hide the cracks between them, which makes neighbours overlap in a band two
+ * DEM pixels wide (about 5 km at zoom 5). Our mesh is transparent and shows the draped hex tiles and areas, so in that
+ * band the translucent cover was blended twice: a dashed dark seam along every terrain tile edge across the hex cells
+ * in 3D, plainest around zoom 5 where one cell spans a tile boundary. Exact edges still meet (adjacent tiles share the
+ * same edge coordinates), and the skirts deck hangs below each tile still fill any crack from the edges' heights.
+ */
+export class SeamlessTerrainLayer extends TerrainLayer {
+  static layerName = "SeamlessTerrainLayer";
+  /** The exact bounds of the tile being loaded, set for the one synchronous loadTerrain call it makes. */
+  private tileBounds: TerrainLoad["bounds"] | null = null;
+
+  getTiledTerrainData(tile: TerrainTile) {
+    const { viewport } = this.context;
+    if (viewport.isGeospatial && "west" in tile.bbox) {
+      const { west, south, east, north } = tile.bbox;
+      const [x0, y0] = viewport.projectFlat([west, south]);
+      const [x1, y1] = viewport.projectFlat([east, north]);
+      this.tileBounds = [x0, y0, x1, y1];
+    }
+    try {
+      return super.getTiledTerrainData(tile);
+    } finally {
+      this.tileBounds = null;
+    }
+  }
+
+  loadTerrain(props: TerrainLoad) {
+    return super.loadTerrain(this.tileBounds ? { ...props, bounds: this.tileBounds } : props);
+  }
+}
+
 function terrainSourceLayer(token: string): Layer {
-  return new TerrainLayer({
+  return new SeamlessTerrainLayer({
     id: DECK_TERRAIN_ID,
     elevationData: demTileUrl(token),
     elevationDecoder: demDecoder(),

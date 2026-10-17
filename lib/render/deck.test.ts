@@ -1,9 +1,11 @@
 import { IconLayer, TextLayer } from "@deck.gl/layers";
 import { describe, expect, it } from "vitest";
 import { FillStyleExtension, _TerrainExtension as TerrainExtension } from "@deck.gl/extensions";
+import { WebMercatorViewport } from "@deck.gl/core";
 import { H3HexagonLayer, TerrainLayer } from "@deck.gl/geo-layers";
 import {
   SIBLING_FADE,
+  SeamlessTerrainLayer,
   UNLIT,
   UnpremultiplyExtension,
   bboxToViewport,
@@ -488,6 +490,38 @@ describe("draping on 3D terrain", () => {
     const decoder = p.elevationDecoder as Record<string, number>;
     expect(decoder.rScaler).toBeCloseTo(6553.6 * 1.2);
     expect(decoder.offset).toBeCloseTo(-12000);
+  });
+
+  it("cuts each terrain tile's mesh at the tile's own edges, so neighbours meet without an overlap band", () => {
+    const [source] = buildDeckLayers(on(trails()), { mapboxToken: TOKEN });
+    expect(source).toBeInstanceOf(SeamlessTerrainLayer);
+    // Load two neighbouring zoom-5 tiles (split at 31.95°N, the seam that crossed West Texas) and keep the bounds deck
+    // would mesh them over.
+    const meshed: number[][] = [];
+    const layer = new SeamlessTerrainLayer({
+      id: "t",
+      elevationData: "https://dem/{z}/{x}/{y}.png",
+      fetch: (_url: unknown, { loadOptions }: { loadOptions?: { terrain: { bounds: number[] } } }) => {
+        meshed.push(loadOptions?.terrain.bounds ?? []);
+        return Promise.resolve(null);
+      },
+    });
+    const viewport = new WebMercatorViewport({ width: 800, height: 600, longitude: -101.25, latitude: 32, zoom: 5 });
+    Object.assign(layer, { context: { viewport }, state: { isTiled: true } });
+    const tile = (y: number) => {
+      const lat = (row: number) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * row) / 32))) * 180) / Math.PI;
+      return { index: { x: 7, y, z: 5 }, id: `7-${y}-5`, bbox: { west: -101.25, east: -90, north: lat(y), south: lat(y + 1) }, zoom: 5 };
+    };
+    void layer.getTiledTerrainData(tile(12) as never);
+    void layer.getTiledTerrainData(tile(13) as never);
+    const exact = (y: number) => {
+      const { west, south, east, north } = tile(y).bbox;
+      return [...viewport.projectFlat([west, south]), ...viewport.projectFlat([east, north])];
+    };
+    expect(meshed[0]).toEqual(exact(12));
+    expect(meshed[1]).toEqual(exact(13));
+    // The northern tile's bottom edge is the southern tile's top edge: shared, not overlapped (deck's own pads by a DEM pixel).
+    expect(meshed[0][1]).toBe(meshed[1][3]);
   });
 
   // Lines no longer drape in deck: Mapbox drapes its own line layers (nativeLines.ts).

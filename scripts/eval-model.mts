@@ -43,6 +43,8 @@
  *                    one whose layer is under a documented outage (Layer.outage) and did not answer is skipped, not passed
  *   --screens        after the set, the screen checks (scripts/evalScreens.ts) on SCREEN_QUESTIONS: each one's final
  *                    map opened by permalink in a browser at desktop and phone size; see that file for the server.
+ *                    Refuses to start with under 5 GB free disk, stops cleanly under 2 GB, and prints the disk the run
+ *                    used at its peak (scripts/diskGuard.ts).
  */
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -62,6 +64,7 @@ import { boundsOf } from "@/lib/render/views";
 import { runMapChecks, type CheckResult, type LayerInfo, type PlaceRef } from "@/lib/checks/mapChecks";
 import type { BBox } from "@/layers/types";
 import { nearBox, nearPlace } from "@/lib/agent/places";
+import { freeBytes, sizeText, START_MIN_FREE, watchDisk, type DiskGuard } from "@/scripts/diskGuard";
 
 
 const model = process.env.MODEL_NAME ?? "(unset)";
@@ -837,6 +840,16 @@ if (isMain) {
   const tag = argValue(args, "--tag");
   if (tag !== undefined && tag !== "coverage") throw new Error(`Unknown --tag ${tag} (only "coverage")`);
   const screens = args.includes("--screens");
+  // Screens fill the disk (a dev server, Chromium, screenshots): not started short of space, stopped cleanly when low.
+  let disk: DiskGuard | undefined;
+  if (screens) {
+    const free = freeBytes();
+    if (free < START_MIN_FREE) {
+      console.error(`Not running screens: ${sizeText(free)} free disk, under the ${sizeText(START_MIN_FREE)} they need.`);
+      process.exit(1);
+    }
+    disk = watchDisk((left) => console.error(`eval: free disk is down to ${sizeText(left)}; stopping the run cleanly`));
+  }
   if (args.includes("--set")) {
     const questions = readEvalSet()
       .filter((q) => !only || only.some((o) => q.toLowerCase().includes(o)))
@@ -845,6 +858,7 @@ if (isMain) {
     let skipped = 0;
     const forScreens: { raw: string; slug: string; state: MapState; failures: string[] }[] = [];
     for (const q of questions) {
+      if (disk?.low()) break;
       const outcome = await question(q, { save, replay });
       if (outcome.ok) passed += 1;
       else if (outcome.skipped) skipped += 1;
@@ -857,9 +871,11 @@ if (isMain) {
     console.log(`ok ${passed}/${questions.length - skipped}${skipped > 0 ? ` (${skipped} skipped: documented outage)` : ""}`);
     if (screens) {
       const { runScreens } = await import("@/scripts/evalScreens");
-      const screenResult = await runScreens(forScreens);
-      console.log(`screens ok ${screenResult.passed}/${screenResult.total} (contact sheet ${screenResult.sheet})`);
-      if (screenResult.passed < screenResult.total) process.exitCode = 1;
+      const screenResult = disk?.low() ? undefined : await runScreens(forScreens, { disk });
+      if (screenResult) console.log(`screens ok ${screenResult.passed}/${screenResult.total} (contact sheet ${screenResult.sheet})`);
+      if (!screenResult || screenResult.passed < screenResult.total) process.exitCode = 1;
+      disk?.stop();
+      console.log(`${disk?.low() ? "stopped: free disk under 2 GB; " : ""}${disk?.report()}`);
     }
     if (passed < questions.length - skipped) process.exitCode = 1;
   } else {

@@ -6,13 +6,18 @@
  * Topo and on Topo + Satellite (the pixels along its lines change when it is hidden). Screenshots and a contact sheet
  * (index.html) go to .superpowers/m3/checks/.
  *
- * The app runs from a clean copy of HEAD: unless CHECKS_BASE_URL (default http://localhost:5600) already answers, a git
- * worktree is added at CHECKS_WORKTREE (default <tmp>/wallymap-wt-checks), .env.local copied in, `pnpm dev -p 5600`
- * started, and both are removed afterwards. The development build exposes the map to these checks (MapCanvas.tsx
+ * The app runs from a clean copy of HEAD: unless CHECKS_BASE_URL (default http://localhost:5600) already answers, ONE git
+ * worktree at a fixed path (<tmp>/wallymap-wt-checks) is reused (checked out at HEAD, cleaned, its node_modules kept) or
+ * added once, .env.local copied in and `pnpm dev -p 5600` started. When the run ends (also on a failure or Ctrl-C) the
+ * server stops and the worktree's `.next` cache and Playwright output are deleted; the worktree itself stays for the
+ * next run (`removeScreensWorktree` deletes it). The development build exposes the map to these checks (MapCanvas.tsx
  * `__wallyMap`). Export is never clicked.
+ *
+ * Disk: the checks folder keeps only the latest run (cleared at the start; each question's shots keep fixed names), the
+ * line pictures are JPEG at quality 80, and the run stops cleanly when free disk drops under 2 GB (scripts/diskGuard.ts).
  */
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "@playwright/test";
@@ -38,6 +43,7 @@ import {
 } from "@/lib/checks/screenChecks";
 import { bboxToViewport } from "@/lib/render/deck";
 import { encodeState } from "@/lib/render/permalink";
+import { sizeText, watchDisk, type DiskGuard } from "@/scripts/diskGuard";
 import type { Basemap, MapState } from "@/lib/render/state";
 import { visibleState } from "@/lib/render/view";
 import { visibleMapPadding } from "@/lib/render/viewportPadding";
@@ -55,6 +61,8 @@ const ROOT = resolve(new URL("..", import.meta.url).pathname);
 const OUT_DIR = join(ROOT, ".superpowers/m3/checks");
 const PORT = 5600;
 const BASE_URL = process.env.CHECKS_BASE_URL ?? `http://localhost:${PORT}`;
+/** The one worktree the screens ever use: reused run after run, never a second one. */
+export const WORKTREE = join(tmpdir(), "wallymap-wt-checks");
 /** The basemaps a line layer must show on, by the basemap buttons' accessible names (components/MapPills.tsx). */
 const BASEMAPS: { value: Basemap; label: string; button: string }[] = [
   { value: "outdoors", label: "Topo", button: "Topographical" },
@@ -77,32 +85,86 @@ async function answers(url: string): Promise<boolean> {
   }
 }
 
+/** True when `dir` is a registered worktree of this repository. */
+function isWorktree(dir: string): boolean {
+  const list = execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: ROOT, encoding: "utf8" });
+  return list.split("\n").some((line) => line === `worktree ${resolve(dir)}` || line === `worktree ${dir}`);
+}
+
+/** The worktree at HEAD: the existing one checked out and cleaned (node_modules and .env.local kept), else a new one. */
+function prepareWorktree(dir: string): void {
+  if (existsSync(dir) && isWorktree(dir)) {
+    console.error(`screens: reusing the worktree at ${dir}`);
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
+    execFileSync("git", ["checkout", "--detach", "--force", head], { cwd: dir, stdio: "ignore" });
+    execFileSync("git", ["clean", "-fdx", "-e", "node_modules", "-e", ".env.local"], { cwd: dir, stdio: "ignore" });
+    return;
+  }
+  // A leftover folder that is no longer a worktree goes, so there is only ever this one.
+  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  execFileSync("git", ["worktree", "prune"], { cwd: ROOT, stdio: "ignore" });
+  console.error(`screens: adding the worktree at ${dir}`);
+  execFileSync("git", ["worktree", "add", "--detach", dir, "HEAD"], { cwd: ROOT, stdio: "ignore" });
+}
+
+/** Deletes what a run leaves in the worktree: the dev server's `.next` cache and any Playwright output. */
+function cleanWorktree(dir: string): void {
+  for (const sub of [".next", "test-results", "playwright-report", "blob-report"]) rmSync(join(dir, sub), { recursive: true, force: true });
+}
+
+/** Removes the screens worktree entirely (node_modules included); the next run adds it again. */
+export function removeScreensWorktree(): void {
+  if (isWorktree(WORKTREE)) execFileSync("git", ["worktree", "remove", "--force", WORKTREE], { cwd: ROOT, stdio: "ignore" });
+  rmSync(WORKTREE, { recursive: true, force: true });
+  execFileSync("git", ["worktree", "prune"], { cwd: ROOT, stdio: "ignore" });
+}
+
 async function startServer(): Promise<() => void> {
   if (await answers(BASE_URL)) return () => {};
-  const dir = process.env.CHECKS_WORKTREE ?? join(tmpdir(), "wallymap-wt-checks");
-  console.error(`screens: adding a worktree of HEAD at ${dir}`);
-  execFileSync("git", ["worktree", "add", "--detach", dir, "HEAD"], { cwd: ROOT, stdio: "ignore" });
+  const dir = WORKTREE;
+  prepareWorktree(dir);
   copyFileSync(join(ROOT, ".env.local"), join(dir, ".env.local"));
   execFileSync("pnpm", ["install", "--offline", "--frozen-lockfile"], { cwd: dir, stdio: "ignore" });
   const child: ChildProcess = spawn("pnpm", ["dev", "-p", String(PORT)], { cwd: dir, stdio: "ignore", detached: true });
+  let stopped = false;
   const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
     try {
       if (child.pid) process.kill(-child.pid, "SIGTERM");
     } catch {
       // already gone
     }
     try {
-      execFileSync("git", ["worktree", "remove", "--force", dir], { cwd: ROOT, stdio: "ignore" });
+      cleanWorktree(dir);
     } catch {
-      console.error(`screens: could not remove the worktree at ${dir}`);
+      console.error(`screens: could not clean the worktree at ${dir}`);
     }
   };
+  // Ctrl-C or a kill still stops the server and deletes its cache.
+  const onSignal = (signal: NodeJS.Signals) => {
+    stop();
+    process.exit(signal === "SIGINT" ? 130 : 143);
+  };
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
   for (let i = 0; i < 120; i++) {
     if (await answers(BASE_URL)) return stop;
     await new Promise((r) => setTimeout(r, 1000));
   }
   stop();
   throw new Error(`the dev server at ${BASE_URL} did not start`);
+}
+
+/** Empties the checks folder of the last run's pictures, contact sheet and folders (reports in Markdown stay). */
+function clearChecks(): void {
+  mkdirSync(OUT_DIR, { recursive: true });
+  for (const name of readdirSync(OUT_DIR)) {
+    if (name.endsWith(".md")) continue;
+    rmSync(join(OUT_DIR, name), { recursive: true, force: true });
+  }
 }
 
 /* ---------- Permalinks ---------- */
@@ -121,6 +183,22 @@ function permalinkFor(state: MapState, size: Size): string {
 }
 
 /* ---------- Page helpers ---------- */
+
+/** Runs in the page: the console's scroll positions (its list and, on a phone, the console itself). */
+function saveScroll(): number[] {
+  const root = document.querySelector('[data-testid="layer-stack"]');
+  return root ? [root, ...Array.from(root.querySelectorAll("ul"))].map((el) => el.scrollTop) : [];
+}
+
+/** Runs in the page: puts the console's scroll positions back and moves focus off the control the harness used. */
+function restoreScroll(tops: number[]): void {
+  (document.activeElement as HTMLElement | null)?.blur?.();
+  const root = document.querySelector('[data-testid="layer-stack"]');
+  if (!root) return;
+  [root, ...Array.from(root.querySelectorAll("ul"))].forEach((el, i) => {
+    if (tops[i] !== undefined) el.scrollTop = tops[i];
+  });
+}
 
 async function settle(page: Page, ms = 1200): Promise<void> {
   await page
@@ -195,6 +273,7 @@ async function measureOps(page: Page, state: MapState, ops: RenderOps, on: strin
     // changes every pixel. Rows without the slider fall back to Hide (older rows named it "Show <title>").
     const slider = page.locator(`[data-layer-id="${op.layerId}"] [data-testid="opacity-slider"]`).first();
     const before = (await slider.count()) > 0 ? await slider.inputValue() : null;
+    const scrolls = await page.evaluate(saveScroll);
     const toggle = page
       .locator(`[data-layer-id="${op.layerId}"] [data-testid="visibility-toggle"], button[aria-label="Hide ${title}"], button[aria-label="Show ${title}"]`)
       .first();
@@ -204,6 +283,9 @@ async function measureOps(page: Page, state: MapState, ops: RenderOps, on: strin
     const hidden = (await page.screenshot()).toString("base64");
     if (before !== null) await slider.fill(before);
     else await toggle.click({ force: true });
+    // Filling the slider focused it and scrolled the console down to it; a person would not see that, so the console
+    // goes back to where it was (left mid-row, the console check would blame the app for the harness).
+    await page.evaluate(restoreScroll, scrolls);
     await settle(page, 500);
     const diffs = await page.evaluate(pixelDiffs, { a: `data:image/png;base64,${shown}`, b: `data:image/png;base64,${hidden}`, points });
     const mean = diffs.reduce((s, d) => s + d, 0) / diffs.length;
@@ -249,7 +331,7 @@ async function lineChecks(page: Page, state: MapState, slug: string): Promise<{ 
     await settle(page, 1500);
     // A small picture of the lines on this basemap for the contact sheet.
     const lineShot = `${slug}-lines-${basemap.value}.jpg`;
-    await page.screenshot({ path: join(OUT_DIR, lineShot), type: "jpeg", quality: 70 });
+    await page.screenshot({ path: join(OUT_DIR, lineShot), type: "jpeg", quality: 80 });
     shots.push(lineShot);
     await measureOps(page, state, lines, `${basemap.label}`, { readings, problems });
   }
@@ -407,27 +489,41 @@ ${sections.join("\n")}</body></html>`;
 
 /* ---------- Entry ---------- */
 
-export async function runScreens(items: ScreenItem[]): Promise<{ passed: number; total: number; sheet: string; results: ScreenResult[] }> {
-  mkdirSync(OUT_DIR, { recursive: true });
-  const stop = await startServer();
-  // The GPU (Metal on a Mac): SwiftShader renders 3D terrain so slowly that the page stops answering.
-  const browser = await chromium.launch({ args: process.platform === "darwin" ? ["--use-angle=metal", "--ignore-gpu-blocklist", "--enable-gpu"] : [] });
+export async function runScreens(
+  items: ScreenItem[],
+  opts: { disk?: DiskGuard } = {},
+): Promise<{ passed: number; total: number; sheet: string; results: ScreenResult[]; stoppedLow: boolean; disk: string }> {
+  clearChecks();
+  const disk = opts.disk ?? watchDisk((free) => console.error(`screens: free disk is down to ${sizeText(free)}; stopping after this screen`));
   const results: ScreenResult[] = [];
+  let stop = () => {};
+  let browser: Browser | undefined;
   try {
-    for (const item of items) {
+    stop = await startServer();
+    // The GPU (Metal on a Mac): SwiftShader renders 3D terrain so slowly that the page stops answering.
+    browser = await chromium.launch({ args: process.platform === "darwin" ? ["--use-angle=metal", "--ignore-gpu-blocklist", "--enable-gpu"] : [] });
+    screens: for (const item of items) {
       for (const size of SIZES) {
+        disk.sample();
+        if (disk.low()) break screens;
         const r = await checkOne(browser, item, size);
         results.push(r);
         console.log(JSON.stringify({ screen: item.raw, size: r.size, ok: r.problems.length === 0, problems: r.problems, notes: r.notes }));
       }
     }
   } finally {
-    await browser.close();
+    await browser?.close().catch(() => undefined);
     stop();
+    disk.sample();
+    if (!opts.disk) disk.stop();
   }
   const sheet = join(OUT_DIR, "index.html");
   writeFileSync(sheet, contactSheet(items, results));
-  const passed = items.filter((item) => results.filter((r) => r.slug === item.slug).every((r) => r.problems.length === 0)).length;
+  // A question passes only when both sizes ran without a problem (a run stopped for disk leaves some unchecked).
+  const passed = items.filter((item) => {
+    const mine = results.filter((r) => r.slug === item.slug);
+    return mine.length === SIZES.length && mine.every((r) => r.problems.length === 0);
+  }).length;
   if (!existsSync(sheet)) throw new Error("contact sheet not written");
-  return { passed, total: items.length, sheet, results };
+  return { passed, total: items.length, sheet, results, stoppedLow: disk.low(), disk: disk.report() };
 }

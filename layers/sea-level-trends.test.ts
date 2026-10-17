@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { parseTrends, trendFeatures, TRENDS_URL } from "./sea-level-trends";
+import layer, { MIN_STATIONS, parseTrends, trendFeatures, TRENDS_URL } from "./sea-level-trends";
 import fixture from "./__fixtures__/sealvltrends.sample.json";
 
 /** Recorded 2026-10-10: the SF Bay stations plus Nawiliwili, The Battery and Reykjavik, seasonal cycles stripped. */
@@ -11,7 +11,15 @@ function ctx(stub: ReturnType<typeof vi.fn>, bbox = SF) {
   return { bbox, zoom: 8, env: {}, fetch: stub as unknown as CachedFetch, cacheKey: "sea-level-trends:k" };
 }
 
-const ok = () => vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
+/** The recorded stations plus fillers far south of every test box, so the list is as long as NOAA's whole list must be. */
+const fullList = {
+  ...fixture,
+  SeaLvlTrends: [
+    ...fixture.SeaLvlTrends,
+    ...Array.from({ length: MIN_STATIONS }, (_, i) => ({ ...fixture.SeaLvlTrends[0], stationId: `filler-${i}`, stationName: `Filler ${i}`, latitude: -85, longitude: i - 50 })),
+  ],
+};
+const ok = () => vi.fn(async () => new Response(JSON.stringify(fullList), { status: 200 }));
 
 describe("sea-level-trends", () => {
   it("parses US and global stations", () => {
@@ -55,6 +63,17 @@ describe("sea-level-trends", () => {
     expect(r).toMatchObject({ kind: "geojson", coverageNote: expect.stringMatching(/No NOAA sea level trend stations/) });
     const down = vi.fn(async () => new Response("no", { status: 503 }));
     expect(await layer.query(ctx(down), {})).toMatchObject({ hint: "upstream" });
+  });
+
+  it("treats a list far shorter than NOAA's (one station, 2026-10-17) as an upstream fault, not an answer", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify({ count: 1, SeaLvlTrends: fixture.SeaLvlTrends.slice(0, 1) }), { status: 200 }));
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("sea-level-trends", { bbox: [-123, 37, -121.5, 38.5] });
+      expect(res.body).toEqual({ error: "NOAA sea level trends returned only part of its station list; try again later", hint: "upstream" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("describes the unit and its meaning for the model", () => {

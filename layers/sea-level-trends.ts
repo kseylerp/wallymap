@@ -27,6 +27,9 @@ import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { jsonObjectBody } from "@/lib/fetch/validate";
 import { layerColor } from "@/lib/render/palette";
 
+/** Fewer stations than this in the unfiltered list means NOAA sent a broken answer (the full list is about 509). */
+export const MIN_STATIONS = 100;
+
 export const TRENDS_URL = "https://api.tidesandcurrents.noaa.gov/dpapi/prod/webapi/product/sealvltrends.json?units=metric";
 const TTL_SECONDS = 7 * 86_400;
 export const MAX_STATIONS = 300;
@@ -176,10 +179,18 @@ const seaLevelTrends = defineLayer({
         // Not bbox-specific: every view shares one copy.
         cacheKey: "sea-level-trends:all",
         ttlSeconds: TTL_SECONDS,
-        validate: jsonObjectBody({ listKey: "SeaLvlTrends" }),
+        // The whole list is about 509 stations. On 2026-10-17 NOAA answered every request with one station (Lewisetta);
+        // a list that short is an upstream fault, never cached for a week under the shared key.
+        validate: jsonObjectBody({ listKey: "SeaLvlTrends", minLength: MIN_STATIONS }),
         timeoutMs: UPSTREAM_TIMEOUT_MS,
       });
-      if (!res.ok) return { error: `NOAA sea level trends returned ${res.status}`, hint: "upstream" };
+      if (!res.ok) {
+        const partial = res.headers.get("x-invalid-body") === "1";
+        return {
+          error: partial ? "NOAA sea level trends returned only part of its station list; try again later" : `NOAA sea level trends returned ${res.status}`,
+          hint: "upstream",
+        };
+      }
       body = await res.json();
     } catch (err) {
       const timedOut = typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";

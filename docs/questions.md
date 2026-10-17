@@ -75,7 +75,7 @@ The layers added in M4 answer questions like these. Each line gives the question
 - "How deep is Lake Tahoe?": `query_lakes` with `name: "Lake Tahoe"`; `v` is the maximum depth in metres.
 - "Glaciers in the Wind River Range": `query_glaciers` (areas in km²).
 - "Tallest peaks in the Sierra Nevada": `query_peaks` (elevation and prominence).
-- "Did Lake Mead shrink?": `query_surface-water` with `product: change`.
+- "Did Lake Mead shrink?": `query_surface-water` with `product: change`, or `query_reservoir-levels` for its storage record.
 - "Was the Sacramento Valley flooded last week?": `query_flood-extent` with a `date`.
 - "How much sea ice is in the Arctic this September compared to 2012?": `query_sea-ice` → `compare`.
 
@@ -152,7 +152,7 @@ Each coverage question also has a pass expectation in `COVERAGE_QUESTIONS` (scri
 node --env-file=.env.local --import tsx scripts/eval-model.mts --set --tag coverage --save /tmp/coverage
 ```
 
-- **Change**: Grand Staircase-Escalante since 2021 (`monuments`), Arctic sea ice against 2012 (`sea-ice`), Lahaina before and after the fire (`imagery-by-date`); Lake Mead since the 1980s (`surface-water`, no view expected).
+- **Change**: Grand Staircase-Escalante since 2021 (`monuments`), Arctic sea ice against 2012 (`sea-ice`), Lahaina before and after the fire (`imagery-by-date`); Lake Mead since the 1980s (`surface-water` or `reservoir-levels`, no view expected).
 - **Timeline**: Washington wolf packs since 2014 (`wolf-packs`), Colorado beetle kill (`tree-mortality`), Japan earthquakes this month (`earthquakes`).
 - **Ranked**: Gulf Coast ports (`ports`), New Zealand's highest peaks (`peaks`), Patagonia's biggest glaciers (`glaciers`), Florida disaster declarations (`disasters`).
 - **Density**: Nevada mines (`mines`), Phoenix groundwater wells (`groundwater`), Alaska brown bears as a heatmap (`gbif-occurrences` or `species`, Show as Heat); Arizona power plants as columns (Show as Columns).

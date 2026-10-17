@@ -453,7 +453,8 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   "has grand staircase-escalante gotten smaller since 2021?": { layers: ["monuments"], view: "change" },
   "how much less sea ice is in the arctic this september than in 2012?": { layers: ["sea-ice"], view: "change" },
   "show lahaina before and after the 2023 fire": { layers: ["imagery-by-date"], view: "change" },
-  "did lake mead shrink since the 1980s?": { layers: ["surface-water"] },
+  // Satellite water area or the reservoir's own storage record: either answers whether it shrank.
+  "did lake mead shrink since the 1980s?": { layers: ["surface-water|reservoir-levels"] },
   // Timeline: dated features over time.
   "wolf packs in washington since 2014": { layers: ["wolf-packs"], view: "timeline" },
   "where did beetles kill trees in colorado over the last ten years?": { layers: ["tree-mortality"], view: "timeline" },

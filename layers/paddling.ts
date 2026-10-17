@@ -9,11 +9,15 @@
  * Tags read: whitewater (rapid, put_in, egress, hazard, portage_way, ...), whitewater:rapid_grade,
  * whitewater:rapid_name, whitewater:section_grade, whitewater:section_name, name, distance, ref, network, check_date (becomes `t`).
  * Live smoke check: Avisio valley, Trentino, Italy (46.1,11 to 46.4,11.6), 2026-10-09: 51 features (32 rapid, 4 access, 15 section); Aare near Bern, Switzerland (46.75,7.35 to 46.98,7.65): 13 (3 access, 4 rapid, 5 section, 1 canoe route). No truncation.
- * Wide mode (over 2,500 km², up to 10,000): one query for the named features only (a name, whitewater:rapid_name or
+ * Wide mode (over 2,500 km², up to WIDE_MAX_AREA_KM2, 100,000): one query for the named features only (a name, whitewater:rapid_name or
  * whitewater:section_name), the first 1,000 by OpenStreetMap id plus up to 50 named canoe routes clipped to the box,
  * with `total` every paddling feature in the box. Points have no length, so there is no ranking.
  * Live smoke check (wide), 2026-10-14: Aare from Bern to Thun (7,46.3 to 8.2,47, about 7,200 km²): 46 named of 59
  * (26 access, 17 section, 2 rapid, 1 canoe route), 8.3 s.
+ * Live smoke check (wide), 2026-10-16, for the 100,000 km² cap: Colorado (-108,38 to -105,40.5, about 71,500 km²): 41
+ * named of 102, 4.3 s; central Idaho (-117,43 to -113,46, about 105,000 km²): 285 of 310, 2.5 s; the Alps are the
+ * costly case (the node scan, not the answer): eastern Switzerland (7,46 to 10,47.6, about 40,000 km²) 112 of 164 in
+ * 10.7 s, all of Switzerland (6,45.8 to 10.5,47.8, about 76,000 km²) 207 of 361 in 18.7 s, near Overpass's 25 s limit.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
@@ -48,6 +52,11 @@ export const MAX_ROUTES = 50;
 export const MAX_ROUTE_WAYS = 3_000;
 /** Most named features in a wide answer (the wide strategy's limit). */
 export const WIDE_LIMIT = 1_000;
+/**
+ * Largest box the layer answers (its hardMaxAreaKm2), with the named rapids, sections, access points and routes: a
+ * whitewater region (Colorado, central Idaho) instead of a "zoom in". Measured in the header.
+ */
+export const WIDE_MAX_AREA_KM2 = 100_000;
 /** Tags that name a paddling feature, for the wide answer's named filter. */
 const NAME_KEYS = ["name", "whitewater:rapid_name", "whitewater:section_name"];
 
@@ -311,7 +320,7 @@ const paddling = defineLayer({
     "Set whitewaterOnly to true to skip flatwater canoe routes. " +
     "Caveats: coverage is uneven, strongest in the Alps and parts of Europe and thin in many whitewater regions (the US West is sparse); a river with no features here may still be a famous run, so treat it as a lead and not a guide; " +
     "grades are volunteer-entered and change with water level and year, and nothing here reports current flow, so combine with streamflow (cfs) before paddling or rafting; closures, permits and dam releases are not included. " +
-    "Each of the two element sets is cut at 1,500 and canoe routes at 50 (a route is drawn only where it crosses the box) and the note gives the count; over 2,500 km² only the first 1,000 named features. " +
+    "Each of the two element sets is cut at 1,500 and canoe routes at 50 (a route is drawn only where it crosses the box) and the note gives the count; over 2,500 km² (up to 100,000 km², a whole region) only the first 1,000 named features. " +
     "Features are a mix of points and lines; switch the display mode to points to see them all as symbols.",
   coverage: "global",
   surface: "land",
@@ -319,6 +328,7 @@ const paddling = defineLayer({
   requiredEnv: [],
   optionalEnv: ["OVERPASS_URL"],
   maxAreaKm2: 2500,
+  hardMaxAreaKm2: WIDE_MAX_AREA_KM2,
   // Rapids and access points have no length, so the wide answer keeps the named ones in OpenStreetMap id order.
   wide: { mode: "named", limit: WIDE_LIMIT },
   input: inputSchema,

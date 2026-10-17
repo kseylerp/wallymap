@@ -145,7 +145,7 @@ describe("paddling layer", () => {
     expect(layer.license).toContain("ODbL");
     expect(layer.maxAreaKm2).toBe(2500);
     expect(layer.wide).toEqual({ mode: "named", limit: 1000 });
-    expect(hardMaxAreaKm2(layer)).toBe(10_000);
+    expect(hardMaxAreaKm2(layer)).toBe(100_000);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toContain("OVERPASS_URL");
     expect(layer.style.geometry).toBe("line");
@@ -196,8 +196,9 @@ describe("paddling layer", () => {
     expect(stub).toHaveBeenCalledTimes(2);
   });
 
-  it("returns 422 zoom_in from runLayer over the 10,000 km2 hard cap and 400 for a bad minGrade", async () => {
-    const big = await runLayer("paddling", { bbox: [10, 45, 12, 47] });
+  it("returns 422 zoom_in from runLayer over the 100,000 km2 hard cap and 400 for a bad minGrade", async () => {
+    // The Alps east of Bern, about 200,000 km².
+    const big = await runLayer("paddling", { bbox: [8, 44, 14, 48] });
     expect(big.status).toBe(422);
     expect(big.body).toMatchObject({ hint: "zoom_in" });
     const bad = await runLayer("paddling", { bbox: TRENTINO, input: { minGrade: 9 } });
@@ -205,7 +206,7 @@ describe("paddling layer", () => {
   });
 });
 
-// The Aare from Bern to Thun, about 7,200 km²: over the 2,500 km² soft cap, under the 10,000 km² hard cap.
+// The Aare from Bern to Thun, about 7,200 km²: over the 2,500 km² soft cap, under the 100,000 km² hard cap.
 const AARE: [number, number, number, number] = [7, 46.3, 8.2, 47];
 
 describe("paddling wide mode", () => {
@@ -236,6 +237,18 @@ describe("paddling wide mode", () => {
       },
     ],
   };
+
+  it("answers a whitewater region (Colorado, about 71,500 km²) instead of asking to zoom in", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(body), { status: 200 }));
+    vi.stubGlobal("fetch", stub);
+    try {
+      const res = await runLayer("paddling", { bbox: [-108, 38, -105, 40.5], zoom: 7 });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ total: 59, truncated: true });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 
   it("answers through runLayer with the named features only, every feature as total and run.ts's note", async () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(body), { status: 200 }));

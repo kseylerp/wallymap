@@ -114,10 +114,10 @@ function Chips({
   );
 }
 
-/** A measure's value as the top 10 shows it: "110 routes", "1,350 MW", "72" for a score. */
-function measureText(value: unknown, attr: Attribute | undefined): string {
+/** A measure's value as the top 10 shows it: "110 routes", "1,350 MW", "72" for a score, "1985" for a year. */
+function measureText(value: unknown, attr: Attribute | undefined, key = attr?.key ?? "v"): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "";
-  const text = formatValue(attr?.key ?? "v", value, attr?.unit);
+  const text = formatValue(key, value, attr?.unit);
   return attr?.unit && attr.unit !== "score" ? `${text} ${attr.unit}` : text;
 }
 
@@ -173,7 +173,7 @@ function RankBy({ layer, op, data, shown, dispatch }: { layer: LoadedLayer; op: 
               >
                 <span className="w-4 shrink-0 text-right text-ink-muted tabular-nums">{i + 1}</span>
                 <span className="min-w-0 flex-1 truncate">{rowName(f)}</span>
-                <span className="shrink-0 text-ink-muted tabular-nums">{measureText(f.properties?.[rankBy], attr)}</span>
+                <span className="shrink-0 text-ink-muted tabular-nums">{measureText(f.properties?.[rankBy], attr, rankBy)}</span>
               </button>
             </li>
           ))}

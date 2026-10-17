@@ -401,7 +401,9 @@ export function applyView(state: MapState, layerId: string, view: ViewKind): Map
     // A measure is ranked, not filtered (spec §12c): every feature stays, sized by the measure, the top 10 listed.
     const rankBy = op.rankBy ?? rankedMeasure(layer);
     if (rankBy) op = { ...op, rankBy };
-    if (layer.style.geometry === "point" && op.mode !== "points") op = { ...op, mode: "points" };
+    // Sized symbols, unless 3D columns were asked for: columns as tall as the measure rank it too ("as 3D columns by
+    // megawatts" came out as flat symbols).
+    if (layer.style.geometry === "point" && op.mode !== "points" && op.mode !== "columns") op = { ...op, mode: "points" };
   }
   if (view === "density" && layer.style.geometry === "point") {
     // A colour basis asked for (spec §12d: "where is most of the capacity") draws hex cells; else clusters, or heat.

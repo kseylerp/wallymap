@@ -139,6 +139,13 @@ describe("the ranked and detail views", () => {
     expect(viewCaption("ranked", mines)).toBe("Symbol size: hazard score; the top 10 named");
   });
 
+  it("keeps 3D columns asked for in a ranked view, and turns clusters into ranked symbols", () => {
+    const columns = run(initialMapState, { type: "layer_loaded", layer: mines }, { type: "render", op: { layerId: "uranium", mode: "columns", visible: true, view: "ranked" } });
+    expect(columns.renderOps[0]).toMatchObject({ view: "ranked", mode: "columns" });
+    const clusters = run(initialMapState, { type: "layer_loaded", layer: mines }, { type: "render", op: { layerId: "uranium", mode: "clusters", visible: true, view: "ranked" } });
+    expect(clusters.renderOps[0].mode).toBe("points");
+  });
+
   it("selects the one feature and frames it in the lower third", () => {
     const lake = layer("lakes", { geometry: "point", color: "#000" }, [point(-120, 39, { name: "Tahoe", v: 501 })]);
     const s = run(

@@ -5,6 +5,7 @@ import { BBoxSchema, bboxAreaKm2, hardMaxAreaKm2, type BBox, type Coverage, type
 import { runLayer } from "@/lib/layers/run";
 import { isFullLayerResult, summarizeLayerResult, type SummaryStyle } from "@/lib/layers/summarize";
 import { VIEW_KINDS, type Basemap, type RenderMode, type TimeMode } from "@/lib/render/state";
+import { normalizeRenderInput } from "./renderInput";
 import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
 import { createTurn, inputKeyOf, isWideQuery, placeKey, type Turn } from "./turn";
 import { repairToolName } from "./toolNames";
@@ -477,10 +478,10 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
         hexBasis: z.enum(HEX_BASES).optional().describe("Hex cells' color: count (default), sum of the measure, share (with hexShare), recency"),
         hexShare: z.string().optional().describe("With hexBasis share: the chip value whose share colors the cells, e.g. wind"),
       }),
-      // Recorded as drawn for the step guard, under the layer id without template junk.
+      // Labels become values and "most … by <measure>" becomes hex cells by its sum, before the map or the trace sees it.
       execute: async (input) => {
         const layerId = input.layerId.replace(/<\|[\s\S]*$/, "").trim();
-        const out = { ...input, layerId };
+        const out = normalizeRenderInput({ ...input, layerId }, getLayer(layerId), turn.question);
         turn.drawn.add(layerId);
         return out;
       },

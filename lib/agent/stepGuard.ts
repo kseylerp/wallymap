@@ -4,6 +4,7 @@ import type { BBox } from "@/layers/types";
 import { bboxAreaKm2 } from "@/layers/types";
 import type { GeocodeResult } from "./geocode";
 import { placeCandidates } from "./places";
+import { normalizeRenderInput } from "./renderInput";
 import { repairToolName } from "./toolNames";
 import { inputKeyOf, undrawn, type Turn } from "./turn";
 
@@ -167,7 +168,7 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean }
       const renders = pending.map((layerId): DraftCall => ({
         toolCallId: guardId(),
         toolName: "render",
-        input: { layerId },
+        input: normalizeRenderInput({ layerId }, getLayer(layerId), turn.question),
       }));
       const at = calls.findIndex((c) => c.toolName === "note");
       calls = at === -1 ? renders : [...calls.slice(0, at), ...renders, ...calls.slice(at)];

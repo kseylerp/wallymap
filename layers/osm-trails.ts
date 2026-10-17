@@ -487,8 +487,10 @@ async function queryRoutes(ctx: QueryContext, input: OsmTrailsInput): Promise<La
 
 /**
  * Step 1 of a wide named answer: every match of `selectors` in the box counted, then the ones carrying any of
- * `nameKeys` counted and listed as ids and bounds only (no tags, no geometry), at most ROUTE_SCAN_MAX. Read the two
- * counts with overpassCounts (every match, then the named) and pick with pickNamedByLength.
+ * `nameKeys` counted and listed as ids and bounds only (no tags, no geometry), relations first and at most
+ * ROUTE_SCAN_MAX of each: in one list the ways come first, so a box with more named ways than that (Utah and Colorado
+ * hold 6,000 rated trails) would cut every route. Read the two counts with overpassCounts (every match, then the named)
+ * and pick with pickNamedByLength.
  */
 export function buildNamedScanQuery(selectors: string[], nameKeys: string[], bbox: BBox): string {
   const [west, south, east, north] = bbox;
@@ -496,7 +498,8 @@ export function buildNamedScanQuery(selectors: string[], nameKeys: string[], bbo
   const named = nameKeys.map((key) => `way.all["${key}"];rel.all["${key}"];`).join("");
   return (
     `[out:json][timeout:25];(${selectors.map((sel) => `${sel}${area};`).join("")})->.all;.all out count;` +
-    `(${named})->.named;.named out count;.named out ids bb ${ROUTE_SCAN_MAX};`
+    `(${named})->.named;.named out count;` +
+    `rel.named->.nr;.nr out ids bb ${ROUTE_SCAN_MAX};way.named->.nw;.nw out ids bb ${ROUTE_SCAN_MAX};`
   );
 }
 

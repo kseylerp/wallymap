@@ -235,7 +235,7 @@ describe("mtb-trails wide mode", () => {
       expect(res.status).toBe(200);
       const bodies = respond.mock.calls.map((c) => decodeURIComponent(String((c[1] as RequestInit).body)));
       expect(bodies[0]).toContain('way["mtb:scale"](38,-112.5,39,-111.5);');
-      expect(bodies[0]).toContain('(way.all["name"];rel.all["name"];)->.named;.named out count;.named out ids bb 5000;');
+      expect(bodies[0]).toContain('(way.all["name"];rel.all["name"];)->.named;.named out count;rel.named->.nr;.nr out ids bb 5000;way.named->.nw;.nw out ids bb 5000;');
       expect(bodies[1]).toContain("way(id:12,11);out tags geom;rel(id:21)->.r;");
       if (!("kind" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
       expect(res.body.data.features.map((f) => f.properties?.name)).toEqual(["Big Loop", "Long", "Short"]);

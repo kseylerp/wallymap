@@ -413,7 +413,7 @@ describe("named-line helpers for the other OSM layers' wide mode", () => {
   it("scans every match and the named ones with counts, ids and bounds only", () => {
     expect(buildNamedScanQuery(['way["mtb:scale"]', 'rel["route"="mtb"]'], ["name"], BOX)).toBe(
       '[out:json][timeout:25];(way["mtb:scale"](38,-112.5,39,-111.5);rel["route"="mtb"](38,-112.5,39,-111.5);)->.all;.all out count;' +
-        '(way.all["name"];rel.all["name"];)->.named;.named out count;.named out ids bb 5000;',
+        '(way.all["name"];rel.all["name"];)->.named;.named out count;rel.named->.nr;.nr out ids bb 5000;way.named->.nw;.nw out ids bb 5000;',
     );
   });
 

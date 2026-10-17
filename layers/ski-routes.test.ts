@@ -229,7 +229,7 @@ describe("ski-routes wide mode", () => {
       expect(first).toContain('way["piste:type"="nordic"]["area"!="yes"](45.5,6.5,46.3,7.5);');
       expect(first).toContain('rel["route"~"^(ski|piste)$"][!"piste:type"](45.5,6.5,46.3,7.5);');
       expect(first).toContain('way.all["piste:name"];');
-      expect(first).toContain(".named out ids bb 5000;");
+      expect(first).toContain(".named out count;rel.named->.nr;.nr out ids bb 5000;way.named->.nw;.nw out ids bb 5000;");
       if (!("kind" in res.body) || res.body.kind !== "geojson") throw new Error("expected geojson");
       // The skitour relation is dropped by the nordic filter, as on the normal path.
       expect(res.body.data.features.map((f) => f.properties?.name)).toEqual(["Piste des Lacs"]);

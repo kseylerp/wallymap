@@ -36,9 +36,10 @@ describe("rasterKeyFilter", () => {
 
 describe("layer raster hints", () => {
   const hint = (id: string) => getLayer(id)?.style.raster;
-  it("sets the calmed look on the GIBS and GFW layers and leaves imagery alone", () => {
-    expect(hint("flood-extent")).toMatchObject({ hueRotate: 40, saturation: -0.5 });
-    expect(hint("forest-loss")).toMatchObject({ saturation: -0.35 });
+  it("sets the calmed look on the GIBS and GFW layers, draws keyed classes as served, and leaves imagery alone", () => {
+    // Flood water and forest loss are drawn in the colors their keys name, so they are not desaturated.
+    expect(hint("flood-extent")).toMatchObject({ saturation: 0 });
+    expect(hint("forest-loss")).toMatchObject({ saturation: 0 });
     expect(hint("snow-cover")).toMatchObject({ brightnessMax: 0.92 });
     expect(hint("land-cover")).toMatchObject({ saturation: -0.4, opacity: 0.65 });
     expect(hint("imagery-by-date")).toBeNull();

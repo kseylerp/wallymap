@@ -165,7 +165,7 @@ function audit(): { panelWidth: number; problems: Problem[]; titles: string[]; s
   return {
     panelWidth: Math.round(p.width),
     problems,
-    titles: [...panel.querySelectorAll("[title]")].filter((el) => !el.classList.contains("info-mark") && !el.closest('[data-testid="attribute-controls"]')).map(name),
+    titles: [...panel.querySelectorAll("[title]")].filter((el) => !el.classList.contains("info-mark") && !el.closest('[data-testid="attribute-controls"]') && !el.closest('[data-testid="row-legend"]')).map(name),
     segments: shown('[data-testid="mode-control"]'),
     select: shown('[data-testid="mode-select"]'),
   };
@@ -195,7 +195,8 @@ describe("the layer row stays inside the panel (real layout, headless Chromium)"
     await page.close();
     expect(result.panelWidth).toBe(panel);
     expect(result.problems).toEqual([]);
-    // No tooltips on the row's own controls (the facet chips keep theirs until the filter redesign).
+    // No tooltips on the row's own controls (the facet chips keep theirs until the filter redesign; a key entry's
+    // help, such as what "Contained" means for a fire, is a hover note on the key, not on a control).
     expect(result.titles).toEqual([]);
     expect(result.segments).toBe(segments);
     expect(result.select).toBe(!segments);

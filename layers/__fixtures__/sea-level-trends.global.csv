@@ -1,0 +1,3 @@
+Station ID, Station Name, First Year, Last Year, Year Range, % Complete, MSL Trends (mm/yr), +/- 95% CI (mm/yr) , MSL Trend (ft/century), +/- 95% CI (ft/century), Latitude, Longitude
+010-001,"Reykjavik, Iceland, ",1956,2022,67,98,2.41,0.36,0.79,0.12,64.1500,-21.9333
+025-021,"Ny-Alesund, Norway, ",1976,2022,47,90,-5.14,0.6,-1.69,0.2,78.9285,11.9380

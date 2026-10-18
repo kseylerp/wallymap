@@ -543,8 +543,8 @@ const remoteness = defineLayer({
     if (minScore > 0) {
       notes.push(
         features.length === 0
-          ? `No hexagon in view scores ${minScore} or more, so none is remote by this measure; ask for minScore 0 to see every hexagon`
-          : `Showing the ${features.length.toLocaleString("en-US")} of ${scored.length.toLocaleString("en-US")} hexagons scoring ${minScore} or more; ask for minScore 0 to see every hexagon`,
+          ? `No hexagon in view scores ${minScore} or more, so none is remote by this measure; ask to see every hexagon`
+          : `Showing the ${features.length.toLocaleString("en-US")} of ${scored.length.toLocaleString("en-US")} hexagons scoring ${minScore} or more; ask to see every hexagon`,
       );
     }
 

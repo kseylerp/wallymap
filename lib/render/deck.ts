@@ -789,7 +789,12 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
     return hexToRgba(c.toUpperCase() === SAGE_HEX.toUpperCase() ? DARK_GREY_HEX : c);
   };
   // The white casing is wide enough that an outline never reads as one of the basemap's own lines (contours, borders).
-  const casingWidth = recipe.outlineWidth + 2 * Math.max(recipe.casing, AREA_CASING_MIN);
+  // Draped on 3D terrain an outline is drawn into the terrain's cover texture, coarser than the screen, where a 1.25px
+  // line blurred away (glacier edges over the Wind River snow read 11 of 255 in the screen checks): it draws wider there.
+  // The core widens most (a colored edge reads on snow, where the white casing adds nothing); the casing a little less.
+  const boost = terrain ? AREA_DRAPE_LINE_BOOST : 1;
+  const outlineWidth = recipe.outlineWidth * boost;
+  const casingWidth = outlineWidth + 2 * Math.max(recipe.casing, AREA_CASING_MIN) * (terrain ? AREA_DRAPE_CASING_BOOST : 1);
   const sizeKey = sizeMeasureKey(ctx);
   const sized = sizeKey ? { key: sizeKey, extent: memoExtent(data, sizeKey) } : undefined;
   return [
@@ -799,7 +804,7 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       pickable: false,
       filled: false,
       getLineColor: colorFor(WHITE, opacity, selected, undefined, AREA_OUTLINE_SIBLING_FADE),
-      getLineWidth: widthFor(casingWidth, SELECTED_AREA.outlineWidth + 2 * SELECTED_AREA.casing, selected),
+      getLineWidth: widthFor(casingWidth, (SELECTED_AREA.outlineWidth + 2 * SELECTED_AREA.casing) * boost, selected),
       lineWidthUnits: widths.units,
       lineWidthScale: widths.scale,
       updateTriggers,
@@ -821,7 +826,7 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
             return selected ? withOpacity(c, AREA_OUTLINE_SIBLING_FADE) : c;
           }
         : colorFor(hexToRgba(recipe.outline), opacity, selected, SELECT, AREA_OUTLINE_SIBLING_FADE),
-      getLineWidth: widthFor(recipe.outlineWidth, SELECTED_AREA.outlineWidth, selected),
+      getLineWidth: widthFor(outlineWidth, SELECTED_AREA.outlineWidth * boost, selected),
       lineWidthUnits: widths.units,
       lineWidthScale: widths.scale,
       fillPatternEnabled: Boolean(canvas),
@@ -845,7 +850,7 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
             pickable: false,
             filled: false,
             getLineColor: colorFor(WHITE, opacity, selected, undefined, AREA_OUTLINE_SIBLING_FADE),
-            getLineWidth: widthFor(casingWidth, SELECTED_AREA.outlineWidth + 2 * SELECTED_AREA.casing, selected),
+            getLineWidth: widthFor(casingWidth, (SELECTED_AREA.outlineWidth + 2 * SELECTED_AREA.casing) * boost, selected),
             lineWidthUnits: widths.units,
             lineWidthScale: widths.scale,
             updateTriggers,
@@ -857,7 +862,7 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
             pickable: true,
             filled: false,
             getLineColor: (f: Feature) => (f === selected ? withOpacity(SELECT, opacity) : withOpacity(outlineOf(f), selected ? opacity * AREA_OUTLINE_SIBLING_FADE : opacity)),
-            getLineWidth: widthFor(recipe.outlineWidth + 0.5, SELECTED_AREA.outlineWidth, selected),
+            getLineWidth: widthFor(outlineWidth + 0.5 * boost, SELECTED_AREA.outlineWidth * boost, selected),
             lineWidthUnits: widths.units,
             lineWidthScale: widths.scale,
             updateTriggers,
@@ -874,6 +879,10 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
  * color on all three basemaps, the hatch still on top.
  */
 export const CATEGORY_AREA_TINT = 0.42;
+/** How much wider an area's outline and casing draw while draped on 3D terrain (see areaLayers). */
+export const AREA_DRAPE_LINE_BOOST = 4;
+/** How much wider an area's white casing draws on each side while draped. */
+export const AREA_DRAPE_CASING_BOOST = 4;
 export const AREA_CASING_MIN = 1.25;
 
 /**

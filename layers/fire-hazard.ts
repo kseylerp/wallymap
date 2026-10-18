@@ -8,6 +8,10 @@
  * (data, 13 to 33 KB) and Canada and Puerto Rico (blank, 334 bytes). The service's own colours run green (very low),
  * light yellow, yellow, orange, red (very high), with grey non-burnable land and blue water.
  * The layer returns a raster tile template and makes no upstream call.
+ * Colors (2026-10-18): a Colormap rendering rule redraws the classes on the palette's ordinal ramp, low sage, moderate
+ * orange, high pink, very high purple (lib/render/ramp scoreLine at 0, 1/3, 2/3 and 1), and leaves very low, non-burnable
+ * and water transparent so the relief and roads read through (audit 2026-10-17: opaque, no key, brown vs green unreadable).
+ * Checked near McCall, Idaho (z9): 61,080 of 65,536 pixels drew in the four colors; non-burnable and water were clear.
  * Smoke through runLayer (2026-10-09): Montana bbox returns the tile template (200); a European bbox returns an empty
  * result with the outside-the-US note (the check is the rough US extent, so Canada near the border still gets tiles, which
  * are blank there). Live tiles fetched through the produced template: Montana z7 37 KB in 0.4 s.
@@ -18,17 +22,38 @@ import { registerLayer } from "./registry";
 import { imageServerExportTileUrl } from "./_shared/arcgis-tiles";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
+import type { LegendSpec } from "./types";
 
 const SERVICE =
   "https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer";
 
-export const WHP_TILE_URL = imageServerExportTileUrl(SERVICE, { noData: 0 });
+/** Low to very high on the palette's ordinal ramp; very low, non-burnable (6) and water (7) are left out, so transparent. */
+export const CLASS_COLORS: { value: number; label: string; hex: string; help: string }[] = [
+  { value: 2, label: "Low", hex: "#9FB693", help: "Fire would usually be easy to control." },
+  { value: 3, label: "Moderate", hex: "#DF914D", help: "Fire could be hard to control under dry, windy weather." },
+  { value: 4, label: "High", hex: "#E25CA7", help: "Fuels and terrain favour intense fire that is hard to control." },
+  { value: 5, label: "Very high", hex: "#6E5BFF", help: "The hardest places to control a wildfire." },
+];
+
+const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+const RENDERING_RULE = encodeURIComponent(
+  JSON.stringify({ rasterFunction: "Colormap", rasterFunctionArguments: { Colormap: CLASS_COLORS.map((c) => [c.value, ...rgb(c.hex)]) } }),
+);
+
+export const WHP_TILE_URL = `${imageServerExportTileUrl(SERVICE, { noData: 0 })}&renderingRule=${RENDERING_RULE}`;
+
+export const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Wildfire hazard potential",
+  items: CLASS_COLORS.map((c) => ({ label: c.label, value: c.value, color: c.hex, symbol: "raster" as const, help: c.help })),
+  note: "Very low hazard, land that cannot burn (rock, farmland, towns) and water are left clear. A long-run rating, not today's fire danger.",
+};
 
 const fireHazard = defineLayer({
   id: "fire-hazard",
   title: "Wildfire hazard potential",
   description:
-    "Map of where a wildfire would be hardest to control in the United States, from the US Forest Service Wildfire Hazard Potential index (2023 version, 270 m cells), drawn as map tiles in five classes: very low (green), low, moderate, high and very high (red), plus grey for land that cannot burn and blue for water. " +
+    "Map of where a wildfire would be hardest to control in the United States, from the US Forest Service Wildfire Hazard Potential index (2023 version, 270 m cells), drawn as map tiles in four colors: low (sage green), moderate (orange), high (pink) and very high (purple); very low hazard, land that cannot burn and water are left clear. " +
     "Use it for 'fire risk', 'how fire-prone is this area', 'where would a wildfire be intense' or when weighing a trip, campsite or home against fire danger. " +
     "Caveats: it ranks the long-run chance of a hard-to-manage fire from fuels, past burn probability and fire intensity modelling; it is not a forecast of fire this season, not today's fire danger or weather, and not a map of past fires (use fire-perimeters and fire-detections for those). " +
     "A high class does not mean a fire is burning or likely this year, and a low class does not make a place safe. " +
@@ -40,7 +65,10 @@ const fireHazard = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
-  style: { geometry: "polygon", color: layerColor("fire-hazard"), raster: { saturation: -0.45, swatch: "#E8503A" } },
+  // The rendering rule already draws the palette's ramp: as served, at 70% so relief and roads stay readable.
+  style: { geometry: "polygon", color: layerColor("fire-hazard"), raster: { saturation: 0, opacity: 0.7, swatch: "#E25CA7" } },
+  legend: LEGEND,
+  time: { shape: "single", dates: ["2023"] },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

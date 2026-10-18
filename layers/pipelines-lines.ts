@@ -68,7 +68,7 @@ const SOURCES: Record<Source, { url: string; fields: string[]; order: string; ki
   },
   transmission: {
     url: `${BASE}/US_Electric_Power_Transmission_Lines/FeatureServer/0`,
-    fields: ["ID", "TYPE", "STATUS", "OWNER", "VOLTAGE", "VOLT_CLASS"],
+    fields: ["ID", "TYPE", "STATUS", "OWNER", "VOLTAGE", "VOLT_CLASS", "SUB_1", "SUB_2"],
     order: "VOLTAGE DESC",
     kind: "transmission line",
   },
@@ -165,6 +165,20 @@ export function voltageBandOf(kv: number | undefined, voltClass: string | undefi
 }
 
 /** Converts one service's rows to lines with kind, name, operator and, for power lines, voltage as `v`. */
+/** Words kept in capitals when a name in capitals is set in plain case: company suffixes and short codes. */
+const KEEP_CAPS = /^(LLC|LP|L\.P\.|INC|INC\.|II|III|IV|EHV|USA|US|TVA|WAPA|PG&E|SCE|AEP|ERCOT|NV|TX|NM|CO|LLP|SS|SW|NE|NW|SE)$/;
+
+/** "ONCOR ELECTRIC DELIVERY CO." reads "Oncor Electric Delivery Co.", "WAPA-- WESTERN AREA POWER" reads "WAPA Western Area Power". */
+export function plainCase(text: string): string {
+  if (text !== text.toUpperCase()) return text.trim();
+  return text
+    .replace(/-{2,}/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => (KEEP_CAPS.test(w) ? w : w.charAt(0) + w.slice(1).toLowerCase()))
+    .join(" ");
+}
+
 export function normalizeLines(fc: FeatureCollection, source: Source): Feature<Geometry>[] {
   const spec = SOURCES[source];
   const features: Feature<Geometry>[] = [];
@@ -178,8 +192,12 @@ export function normalizeLines(fc: FeatureCollection, source: Source): Feature<G
       const owner = str(p.OWNER);
       const status = str(p.STATUS);
       const voltageClass = str(p.VOLT_CLASS);
-      properties.name = owner !== undefined ? `${owner} transmission line` : "Transmission line";
-      if (owner !== undefined) properties.owner = owner;
+      // Named by its owner, voltage and the substations it joins, so two lines of one owner read apart in the top 10.
+      const ends = [str(p.SUB_1), str(p.SUB_2)].filter((x): x is string => x !== undefined && !/^(NOT AVAILABLE|UNKNOWN|TAP\d*)/i.test(x)).map(plainCase);
+      const who = owner !== undefined && !/^NOT AVAILABLE$/i.test(owner) ? plainCase(owner) : undefined;
+      const kvText = kv !== undefined && kv > 0 ? ` ${kv} kV` : "";
+      properties.name = `${who ?? "Transmission"}${kvText} line${ends.length === 2 ? `, ${ends[0]} to ${ends[1]}` : ends.length === 1 ? ` from ${ends[0]}` : ""}`;
+      if (owner !== undefined) properties.owner = plainCase(owner);
       if (status !== undefined) properties.status = status.toLowerCase();
       if (kv !== undefined && kv > 0) {
         properties.voltageKv = kv;

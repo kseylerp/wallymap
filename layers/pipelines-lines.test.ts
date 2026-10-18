@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { FRESHNESS_NOTE, normalizeLines, perServiceCap, sourcesFor, voltageBandOf, whereFor, wideOffset } from "./pipelines-lines";
+import layer, { FRESHNESS_NOTE, normalizeLines, perServiceCap, plainCase, sourcesFor, voltageBandOf, whereFor, wideOffset } from "./pipelines-lines";
 import { legendOf } from "./contract";
 import { cardContent } from "@/lib/render/card";
 import gas from "./__fixtures__/pipelines-lines.gas.json";
@@ -90,8 +90,8 @@ describe("pipelines-lines layer", () => {
     const lines = normalizeLines(fixtures.US_Electric_Power_Transmission_Lines, "transmission");
     expect(lines[0].properties).toEqual({
       kind: "transmission line",
-      name: "ONCOR ELECTRIC DELIVERY CO. transmission line",
-      owner: "ONCOR ELECTRIC DELIVERY CO.",
+      name: "Oncor Electric Delivery Co. 345 kV line",
+      owner: "Oncor Electric Delivery Co.",
       status: "in service",
       voltageKv: 345,
       v: 345,
@@ -272,5 +272,14 @@ describe("pipelines-lines layer", () => {
     expect(layer.description).toMatch(/frozen copy/);
     expect(layer.description).toMatch(/must not be used to dig/);
     expect(layer.description).toMatch(/minKv/);
+  });
+
+  it("names a power line by owner, voltage and the substations it joins, so two lines of one owner read apart", () => {
+    const [line] = normalizeLines(
+      { type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "LineString", coordinates: [[0, 0], [1, 1]] }, properties: { OWNER: "ONCOR ELECTRIC DELIVERY CO.", VOLTAGE: 345, SUB_1: "ODESSA EHV", SUB_2: "MOSS" } }] },
+      "transmission",
+    );
+    expect(line.properties?.name).toBe("Oncor Electric Delivery Co. 345 kV line, Odessa EHV to Moss");
+    expect(plainCase("WAPA-- WESTERN AREA POWER ADMINISTRATION")).toBe("WAPA Western Area Power Administration");
   });
 });

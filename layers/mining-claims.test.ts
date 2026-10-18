@@ -123,7 +123,7 @@ describe("mining-claims layer", () => {
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(2_500);
     expect(layer.wide).toEqual({ mode: "named", limit: 2000 });
-    expect(hardMaxAreaKm2(layer)).toBe(10_000);
+    expect(hardMaxAreaKm2(layer)).toBe(20_000);
     expect(layer.input.parse({})).toEqual({ status: "active" });
     expect(layer.input.safeParse({ status: "all" }).success).toBe(false);
     expect(layer.style).toMatchObject({ geometry: "polygon", color: "#F57272" });

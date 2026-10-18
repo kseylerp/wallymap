@@ -300,6 +300,9 @@ const miningClaims = defineLayer({
   license: "Public domain (US Bureau of Land Management, MLRS; Nevada Division of Minerals)",
   requiredEnv: [],
   maxAreaKm2: 2_500,
+  // "Near Moab" asks about 13,000 km²; the wide answer is capped at MAX_CLAIMS, so a town-sized radius still answers
+  // (in Alaska and Nevada with claims, elsewhere with the offline status) instead of being refused.
+  hardMaxAreaKm2: 20_000,
   wide: { mode: "named", limit: MAX_CLAIMS },
   input: z.object({
     status: z

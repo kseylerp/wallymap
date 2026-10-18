@@ -65,12 +65,12 @@ describe("toolResultToActions", () => {
       catalog,
       [],
     );
-    expect(actions).toEqual([{ type: "set_basemap", basemap: "outdoors-satellite" }]);
+    expect(actions).toEqual([{ type: "set_basemap", basemap: "outdoors-satellite", agent: true }]);
   });
 
   it("set_basemap switches the basemap", () => {
     const actions = toolResultToActions("set_basemap", { style: "satellite" }, { style: "satellite" }, canvas, catalog, []);
-    expect(actions).toEqual([{ type: "set_basemap", basemap: "satellite" }]);
+    expect(actions).toEqual([{ type: "set_basemap", basemap: "satellite", agent: true }]);
   });
 
   it("render produces a visible render op", () => {

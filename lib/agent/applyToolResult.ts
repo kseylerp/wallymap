@@ -463,7 +463,7 @@ export function toolResultToActions(
       // The answer is written: a named place nothing was fitted to yet gets the camera now.
       return [{ type: "place_settle" }];
     case "set_basemap":
-      return BASEMAPS.includes(output.style as Basemap) ? [{ type: "set_basemap", basemap: output.style as Basemap }] : [];
+      return BASEMAPS.includes(output.style as Basemap) ? [{ type: "set_basemap", basemap: output.style as Basemap, agent: true }] : [];
     case "render":
       return renderActions({ ...output, layerId: typeof output.layerId === "string" ? cleanLayerId(output.layerId) : output.layerId }, catalog);
     case "route":

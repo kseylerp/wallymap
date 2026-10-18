@@ -28,7 +28,8 @@ import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { countiesInBbox, type County } from "./_shared/counties";
-import { layerColor, OFF_WHITE, PINK, PURPLE } from "@/lib/render/palette";
+import { DARK_GREY, layerColor, OFF_WHITE, PINK, PURPLE } from "@/lib/render/palette";
+import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
 
 const BASE = "https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/county/mapping/110/tavg";
 const TTL_SECONDS = 7 * 86_400;
@@ -197,7 +198,9 @@ export const ATTRIBUTES: Attribute[] = [
 
 /**
  * The key: a diverging ramp from cool (purple) through normal (off-white) to warm (pink), in °F against the 1901-2000
- * average. Zero is the middle, so a +3 county and a -3 county are equally strong.
+ * average, darkening past ±6 °F so a +12 county reads hotter than a +8 one (at ±8 a September where all of Texas ran
+ * 8 to 12 °F warm drew one flat pink, owner 2026-10-18). Zero is the middle, so a +3 county and a -3 county are equally
+ * strong; the scale is fixed so answers compare.
  */
 export const LEGEND: LegendSpec = {
   kind: "ramp",
@@ -205,11 +208,13 @@ export const LEGEND: LegendSpec = {
   field: "v",
   unit: "°F",
   stops: [
-    { label: "8 °F cooler", value: -8, color: PURPLE },
+    { label: "12 °F cooler", value: -12, color: rgbToHex(interpolateStops([PURPLE, DARK_GREY], 0.45)) },
+    { label: "6 °F cooler", value: -6, color: PURPLE },
     { label: "Normal", value: 0, color: OFF_WHITE },
-    { label: "8 °F warmer", value: 8, color: PINK },
+    { label: "6 °F warmer", value: 6, color: PINK },
+    { label: "12 °F warmer", value: 12, color: rgbToHex(interpolateStops([PINK, DARK_GREY], 0.45)) },
   ],
-  note: "Purple is cooler than the 1901–2000 average for the same months, pink warmer; the scale is fixed at ±8 °F so periods compare, and holds its end colors beyond.",
+  note: "Purple is cooler than the 1901–2000 average for the same months, pink warmer, darker past 6 °F; the scale is fixed at ±12 °F so periods compare, and holds its end colors beyond.",
 };
 
 /** The inspect card (spec §12b): the anomaly under its own name, then the temperatures and the rank in words. */
@@ -238,7 +243,7 @@ const temperatureAnomaly = defineLayer({
     "Each polygon is a county with v (the anomaly in degrees Fahrenheit, °F: the period's average temperature minus the 1901-2000 average for the same months; +3 means 3 °F warmer than the 20th-century normal), " +
     "kind ('warmer', 'cooler' or 'normal'), averageF (the period's average temperature), normalF (the 1901-2000 average), warmestRank (1 = the warmest on record since 1895, out of years), period (e.g. 'September 2026'), months and t (the period's last day). " +
     "period is the final month as YYYYMM (default: the newest NOAA has published, usually last month, out about the 8th); months is 1 (that month), 3 (the three months ending then, a season) or 12 (the year ending then). " +
-    "The map colors each county on a scale centred on normal: purple cooler, off-white normal, pink warmer (fixed at ±8 °F so answers compare); recordWarm and recordCool flag the warmest or coolest period on record. " +
+    "The map colors each county on a scale centred on normal: purple cooler, off-white normal, pink warmer, darker past 6 °F (fixed at ±12 °F so answers compare); recordWarm and recordCool flag the warmest or coolest period on record. " +
     "Example questions: 'Was this summer hotter than normal here?', 'Which counties had a record warm year?', 'How unusual was last month's heat in Texas?'. User words: warming, temperature anomaly, hotter than normal. " +
     "Caveats: the baseline is 1901-2000, so most recent periods read warm against it; county values are area averages from a gridded dataset, not one station; the newest month can be revised slightly. " +
     "Connecticut is missing (NOAA still uses its old counties). The map view must be under 16,000,000 km² (the lower 48 fit).",

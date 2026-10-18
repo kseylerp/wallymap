@@ -12,6 +12,8 @@ import type { FieldHelp } from "@/layers/types";
 import { attributeFilterSummary, attributesOf, chipAttribute } from "@/lib/render/attributes";
 import { cellContext, hexCells, hexLegendSentence, levelLabel, usableBasis } from "@/lib/render/hexCells";
 import { preferredBasemap, viewCaption } from "@/lib/render/views";
+import { featuresInView, useInView } from "@/lib/render/inView";
+import { areasAsHexes } from "@/lib/render/deck";
 import type { LayerFailure } from "@/lib/render/state";
 import type { Feature } from "geojson";
 import { LegendKey } from "@/components/LegendKey";
@@ -138,7 +140,11 @@ function PointModeControl({ layer, mode, dispatch }: { layer: LoadedLayer; mode:
 }
 
 /** True when a point layer draws as hex cells: hex tiles, columns, or symbols past the hex threshold. */
-export function drawsHexes(layer: LoadedLayer, op: RenderOp | undefined): boolean {
+export function drawsHexes(layer: LoadedLayer, op: RenderOp | undefined, view?: { zoom: number; latitude: number }): boolean {
+  // Areas too small to see at the zoom draw as cells (lib/render/deck.ts areasAsHexes).
+  if (op?.mode === "polygons" && view && layer.result.kind === "geojson" && layer.style.geometry === "polygon") {
+    return areasAsHexes(layer.allData ?? layer.result.data, view.zoom, view.latitude);
+  }
   if (!op || layer.style.geometry !== "point" || layer.result.kind !== "geojson") return false;
   if (op.mode === "hexbin" || op.mode === "columns") return true;
   return op.mode === "points" && layer.result.data.features.length > hexbinThreshold && !op.rankBy && op.view !== "ranked";
@@ -313,6 +319,8 @@ type RowProps = {
   selected: boolean;
   compare?: MapState["compare"];
   zoom?: number;
+  /** The map's center, whose latitude says how small an area is on screen. */
+  center?: [number, number];
   threeD?: boolean;
   expandAttributes?: boolean;
   basemap?: MapState["basemap"];
@@ -407,6 +415,7 @@ function LegendRow({
   selected,
   compare,
   zoom = 10,
+  center,
   threeD = false,
   expandAttributes = false,
   basemap,
@@ -436,7 +445,7 @@ function LegendRow({
           .join(" · ")
       : "";
   const shownData = shownLayer?.result.kind === "geojson" ? shownLayer.result.data : data;
-  const hexes = op?.visible && data ? drawsHexes(layer, op) : false;
+  const hexes = op?.visible && data ? drawsHexes(layer, op, { zoom, latitude: center?.[1] ?? 0 }) : false;
   // Hex cells say their size and what darker means (spec §12d), on the drawn cells.
   const hexSentence = useMemo(() => {
     if (!hexes || !op || !shownData) return undefined;
@@ -466,17 +475,20 @@ function LegendRow({
   );
   // The legend from the contract and what the map draws; a category whose chips already key it is left to the chips,
   // and two measures on one mark keep their own lines (EncodingLegend).
+  const inView = useInView();
   const legendBlocks = useMemo(() => {
     if (!op?.visible || (hexes && op.mode !== "columns")) return [];
     const chip = chipAttribute(layer);
     // EncodingLegend keys points, lines and columns; areas (a choropleth) are keyed here.
     const encoded = new Set(op.mode === "polygons" ? [] : [layer.style.encode?.size, layer.style.encode?.color].filter(Boolean));
-    return rowLegend(layer, op, shownData).filter(
+    // Counts and classes follow the view (lib/render/inView.ts) once the map has reported where it is.
+    const view = inView.bounds ? { data: shownData ? featuresInView(shownData, inView.bounds) : null, tile: inView.tiles[layer.id] } : undefined;
+    return rowLegend(layer, op, shownData, view).filter(
       // The chips show the same kinds with the same colors and counts: they are the key.
       // Tiles have no features, so no chips: their key stays (hardiness zones, public lands by manager).
       (b) => !(b.kind === "categories" && b.field && b.field === chip?.key && layer.result.kind === "geojson") && !(b.field && encoded.has(b.field)),
     );
-  }, [layer, op, shownData, hexes]);
+  }, [layer, op, shownData, hexes, inView]);
   const symbol = layerLegend(layer, op);
   // A raster layer's key shows the tiles' raw color through the same filter the map applies (lib/render/rasterCalm.ts).
   const isRaster = layer.result.kind === "tiles" && layer.result.data.format === "raster" && symbol.kind === "tiles";
@@ -570,6 +582,11 @@ function LegendRow({
         </span>
         <InfoMark help={sourceHelp} label={`the source of ${layer.title}`} />
       </p>
+      {!failure && layer.result.kind === "tiles" && layer.result.viewNote && (
+        <p data-testid="row-view-note" className="mt-1 text-[11.5px] leading-4 text-ink">
+          {layer.result.viewNote}.
+        </p>
+      )}
       {failure && (
         <p role="status" data-testid="layer-failure" className="mt-1 text-[11.5px] leading-4 text-ink">
           {failure}
@@ -823,6 +840,7 @@ export function LayerStack({
               selected={selectedLayerId === layer.id}
               compare={compare}
               zoom={zoom}
+              center={center}
               threeD={threeD}
               expandAttributes={expandAttributes}
               basemap={basemap}

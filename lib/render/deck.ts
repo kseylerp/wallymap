@@ -26,6 +26,7 @@ import {
   scoreRampFor,
   SELECTED_AREA,
   SIBLING_FADE,
+  CLASS_SIBLING_FADE,
   AREA_OUTLINE_SIBLING_FADE,
   symbolSizePx,
   WHITE as WHITE_HEX,
@@ -48,7 +49,7 @@ import { extentOf, hatchStepOf, primaryMeasure, sizeScale, topPlaces } from "@/l
 import { basisLabel, basisScale, basisT, cellContext, hexCells, registerCell, usableBasis, type CellContext, type HexCell } from "@/lib/render/hexCells";
 import { RANKED_LABELS } from "@/lib/render/views";
 import { PlacedLabelLayer } from "@/lib/render/placedLabels";
-import { colorT, divergingColor, encodeColor, ENCODED_POINT, isDiverging, levelColor, pointRadiusAt, resolveEncoding, sizeT, valuesOf, type ResolvedEncoding } from "@/lib/render/encode";
+import { channelColor, colorT, encodeColor, ENCODED_POINT, levelColor, pointRadiusAt, resolveEncoding, sizeT, valuesOf, type ResolvedEncoding } from "@/lib/render/encode";
 
 type Rgba = [number, number, number, number];
 
@@ -121,10 +122,10 @@ function colorFor(color: Rgba, opacity: number, selected: Feature | undefined, s
 }
 
 /** A per-feature color with op opacity and the selection fade applied. */
-function perFeature(color: (f: Feature) => Rgba, opacity: number, selected: Feature | undefined): (f: Feature) => Rgba {
+function perFeature(color: (f: Feature) => Rgba, opacity: number, selected: Feature | undefined, fade: number = SIBLING_FADE): (f: Feature) => Rgba {
   return (f: Feature) => {
     const c = withOpacity(color(f), opacity);
-    return selected && f !== selected ? withOpacity(c, SIBLING_FADE) : c;
+    return selected && f !== selected ? withOpacity(c, fade) : c;
   };
 }
 
@@ -555,6 +556,8 @@ function polygonLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
     return [...polygonLayers(op, { ...ctx, data: areasOnly }, opacity), ...symbolLayers({ ...op, mode: "points" }, { ...ctx, data: points }, opacity)];
   }
   if (points === ctx.data && points.features.length > 0) return [...symbolLayers({ ...op, mode: "points" }, ctx, opacity), ...labelLayers(op, ctx, opacity)];
+  // Most areas too small to see at this zoom: H3 cells say where they are (AREA_HEX), the areas return as you zoom in.
+  if (op.mode === "polygons" && areasAsHexes(ctx.data, ctx.zoom, ctx.latitude)) return hexTileLayers(op, ctx, opacity);
   // A color channel on areas (temperature anomaly by county): a choropleth, on the diverging ramp across zero.
   const color = encodingOf(op, ctx)?.color;
   if (color && !requestedColor(op.color)) return [...choroplethLayers(op, ctx, opacity, color), ...labelLayers(op, ctx, opacity)];
@@ -680,11 +683,26 @@ function smallAreas(data: GeoJSON.FeatureCollection, zoom: number, latitude: num
   return out;
 }
 
+/** At least this many areas, and at least this share of them too small to see at the zoom, before areas draw as hex cells. */
+export const AREA_HEX = { minAreas: 30, smallShare: 0.5 } as const;
+
+/**
+ * True when a layer's areas draw as H3 cells at this zoom: most of them are too small to see (tree die-off patches at
+ * state scale read as specks and dots, owner 2026-10-18), so the cells count them (or sum their measure) and say where
+ * they cluster; zooming in brings the areas back.
+ */
+export function areasAsHexes(data: GeoJSON.FeatureCollection, zoom: number, latitude: number): boolean {
+  let areas = 0;
+  for (const f of data.features) if (isArea(f)) areas++;
+  if (areas < AREA_HEX.minAreas) return false;
+  return smallAreas(data, zoom, latitude).length >= AREA_HEX.smallShare * areas;
+}
+
 /**
  * Patches too small to see at this zoom (tree die-off, a sliver of habitat): a dot in the area's own color at each
  * center, picked like the area (`<id>:small`), so the map never reads empty where the data has features.
  */
-function smallAreaDots(op: RenderOp, ctx: OpContext, opacity: number, colorOf: (f: Feature) => Rgba): Layer[] {
+function smallAreaDots(op: RenderOp, ctx: OpContext, opacity: number, colorOf: (f: Feature) => Rgba, fade: number = SIBLING_FADE): Layer[] {
   const { data, selected, terrain } = ctx;
   const small = smallAreas(data, ctx.zoom, ctx.latitude);
   if (small.length === 0) return [];
@@ -699,7 +717,7 @@ function smallAreaDots(op: RenderOp, ctx: OpContext, opacity: number, colorOf: (
       radiusUnits: "pixels",
       filled: true,
       stroked: true,
-      getFillColor: (f) => withOpacity([...colorOf(f).slice(0, 3), 235] as Rgba, selected && f !== selected ? opacity * SIBLING_FADE : opacity),
+      getFillColor: (f) => withOpacity([...colorOf(f).slice(0, 3), 235] as Rgba, selected && f !== selected ? opacity * fade : opacity),
       getLineColor: (f) => (f === selected ? withOpacity(SELECT, opacity) : withOpacity(hexToRgba(WHITE_HEX, 230), opacity)),
       getLineWidth: (f) => (f === selected ? 2 : 1),
       lineWidthUnits: "pixels",
@@ -738,8 +756,10 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const tintAlpha = key ? Math.max(recipe.tint, CATEGORY_AREA_TINT) : recipe.tint;
   // A group the legend draws as a line is an outline only (no tint, no hatch), unless selected.
   const filled = (f: Feature) => f === selected || !key || !groupOf(key, f)?.outline;
-  const tint = perFeature((f) => hexToRgba(colorOf(f), filled(f) ? Math.round(255 * tintAlpha) : 0), opacity, selected);
-  const hatch = perFeature((f) => hexToRgba(colorOf(f), filled(f) ? Math.round(255 * recipe.hatchAlpha) : 0), opacity, selected);
+  // Kinds told apart by color keep most of it while a card is open: the other areas are the comparison.
+  const fade = key ? CLASS_SIBLING_FADE : SIBLING_FADE;
+  const tint = perFeature((f) => hexToRgba(colorOf(f), filled(f) ? Math.round(255 * tintAlpha) : 0), opacity, selected, fade);
+  const hatch = perFeature((f) => hexToRgba(colorOf(f), filled(f) ? Math.round(255 * recipe.hatchAlpha) : 0), opacity, selected, fade);
   // A sage area's edge in dark grey: sage on green Topo vanishes (grazing land, river basins), the dark edge does not.
   const outlineOf = (f: Feature): Rgba => {
     const c = key ? kindColor(f) : recipe.outline;
@@ -793,16 +813,23 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       updateTriggers,
       ...terrainProps(terrain, "drape", [fillExtension]),
     }),
-    ...smallAreaDots(op, ctx, opacity, (f) => hexToRgba(kindColor(f), 230)),
+    ...smallAreaDots(op, ctx, opacity, (f) => hexToRgba(kindColor(f), 230), fade),
   ];
 }
 
-/** An area's tint when a category colors it (readable on green Topo and under satellite), and its least white casing. */
-export const CATEGORY_AREA_TINT = 0.22;
+/**
+ * An area's tint when a category colors it, and its least white casing. 0.22 left protected areas by category, critical
+ * habitat and grazing kinds barely tinted on Topo and satellite (owner, 2026-10-18); at 0.42 each kind reads as its
+ * color on all three basemaps, the hatch still on top.
+ */
+export const CATEGORY_AREA_TINT = 0.42;
 export const AREA_CASING_MIN = 1.25;
 
-/** A choropleth's fill alpha: solid enough to read the value, the ground still showing. */
-export const CHOROPLETH_ALPHA = 0.62;
+/**
+ * A choropleth's fill alpha: solid enough that each class reads on Topo, Topo + Satellite and Satellite (0.62 left
+ * +8 to +12 °F counties barely tinted on satellite, owner 2026-10-18); the white edges and the relief still show.
+ */
+export const CHOROPLETH_ALPHA = 0.8;
 
 /**
  * Areas colored by a measure or class (style.encode.color): a solid fill on the encode ramp (sage → pink → purple),
@@ -813,10 +840,9 @@ function choroplethLayers(op: RenderOp, ctx: OpContext, opacity: number, channel
   const { data, selected, terrain } = ctx;
   const { id, trigger } = opIds(op, ctx, opacity, undefined);
   const widths = pixelWidths(ctx);
-  const diverging = isDiverging(channel);
   const fill = (f: Feature): Rgba => {
-    const v = f.properties?.[channel.key];
-    const rgb = diverging ? divergingColor(v, channel) : (() => { const t = colorT(v, channel); return t === null ? null : encodeColor(t); })();
+    const own = levelColor(f.properties?.[channel.key], channel);
+    const rgb = own ? hexToRgb(own) : channelColor(f.properties?.[channel.key], channel);
     return rgb ? [rgb[0], rgb[1], rgb[2], Math.round(255 * CHOROPLETH_ALPHA)] : hexToRgba(DARK_GREY_HEX, 26);
   };
   return [
@@ -825,7 +851,8 @@ function choroplethLayers(op: RenderOp, ctx: OpContext, opacity: number, channel
       data,
       pickable: true,
       filled: true,
-      getFillColor: perFeature(fill, opacity, selected),
+      // The map is the comparison: with a card open the other areas keep most of their color (CLASS_SIBLING_FADE).
+      getFillColor: perFeature(fill, opacity, selected, CLASS_SIBLING_FADE),
       getLineColor: colorFor(hexToRgba(WHITE_HEX, 200), opacity, selected, SELECT, AREA_OUTLINE_SIBLING_FADE),
       getLineWidth: widthFor(0.75, SELECTED_AREA.outlineWidth, selected),
       lineWidthUnits: widths.units,
@@ -833,7 +860,7 @@ function choroplethLayers(op: RenderOp, ctx: OpContext, opacity: number, channel
       updateTriggers: { getFillColor: [...trigger, channel.key, channel.extent?.join(",") ?? ""], getLineColor: trigger, getLineWidth: trigger },
       ...terrainProps(terrain, "drape"),
     }),
-    ...smallAreaDots(op, ctx, opacity, fill),
+    ...smallAreaDots(op, ctx, opacity, fill, CLASS_SIBLING_FADE),
   ];
 }
 
@@ -954,12 +981,12 @@ function encodedPointLayers(op: RenderOp, ctx: OpContext, opacity: number, encod
   const radius = (f: Feature) => (size ? pointRadiusAt(sizeT(f.properties?.[size.key], size.extent)) : symbolSizePx(ctx.zoom) / 2 + 1);
   const fill = (f: Feature): Rgba => {
     const own = color ? levelColor(f.properties?.[color.key], color) : null;
-    const t = color && !own ? colorT(f.properties?.[color.key], color) : null;
+    const rgb = color && !own ? channelColor(f.properties?.[color.key], color) : null;
     const base: Rgba = own
       ? [...hexToRgb(own), Math.round(255 * ENCODED_POINT.fillAlpha)]
-      : t === null
+      : rgb === null
         ? ENCODED_EMPTY
-        : [...encodeColor(t), Math.round(255 * ENCODED_POINT.fillAlpha)];
+        : [...rgb, Math.round(255 * ENCODED_POINT.fillAlpha)];
     const c = withOpacity(base, opacity);
     return selected && f !== selected ? withOpacity(c, SIBLING_FADE) : c;
   };
@@ -1805,6 +1832,41 @@ function withoutLines(data: GeoJSON.FeatureCollection): GeoJSON.FeatureCollectio
 }
 
 const edgesMemo = new WeakMap<GeoJSON.FeatureCollection, { kept: GeoJSON.FeatureCollection; edges: GeoJSON.FeatureCollection }>();
+/** The tint under a change view's lost ground (its pink hatch on top): a fill that reads at state scale, the map under it showing. */
+export const DELTA_LOST_TINT = 0.3;
+
+const cutsMemo = new WeakMap<GeoJSON.FeatureCollection, { lostCuts: GeoJSON.FeatureCollection; edges: GeoJSON.FeatureCollection }>();
+/** A delta's earlier-edge features split into the lost ground of changed areas (`deltaLost`) and the edges themselves. */
+function splitLostCuts(edges: GeoJSON.FeatureCollection): { lostCuts: GeoJSON.FeatureCollection; edges: GeoJSON.FeatureCollection } {
+  let out = cutsMemo.get(edges);
+  if (!out) {
+    const cuts = edges.features.filter((f) => f.properties?.deltaLost === true);
+    out =
+      cuts.length === 0
+        ? { lostCuts: { type: "FeatureCollection", features: [] }, edges }
+        : { lostCuts: { type: "FeatureCollection", features: cuts }, edges: { ...edges, features: edges.features.filter((f) => f.properties?.deltaLost !== true) } };
+    cutsMemo.set(edges, out);
+  }
+  return out;
+}
+
+const lostWithCutsMemo = new WeakMap<GeoJSON.FeatureCollection, WeakMap<GeoJSON.FeatureCollection, GeoJSON.FeatureCollection>>();
+/** Areas only in A plus the lost ground of changed areas, made once per pair. */
+function withLostCuts(lost: GeoJSON.FeatureCollection, cuts: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
+  if (cuts.features.length === 0) return lost;
+  let byCuts = lostWithCutsMemo.get(lost);
+  if (!byCuts) {
+    byCuts = new WeakMap();
+    lostWithCutsMemo.set(lost, byCuts);
+  }
+  let out = byCuts.get(cuts);
+  if (!out) {
+    out = { type: "FeatureCollection", features: [...lost.features, ...cuts.features] };
+    byCuts.set(cuts, out);
+  }
+  return out;
+}
+
 /** A delta split into its drawn features and the earlier edges of changed areas, made once per collection. */
 function splitEdges(data: GeoJSON.FeatureCollection): { kept: GeoJSON.FeatureCollection; edges: GeoJSON.FeatureCollection } {
   let out = edgesMemo.get(data);
@@ -1890,13 +1952,15 @@ function deltaLayers(op: RenderOp, { data: all, selected, terrain }: OpContext):
   }
   // Delta lines are native Mapbox lines (lib/render/nativeLines.ts); deck keeps the areas and points. The earlier edges
   // of changed areas (a glacier's 1966 outline under its 2015 one) draw apart, as a pink line under the later outline.
-  const { kept: data, edges } = splitEdges(withoutLines(all));
-  if (data.features.length === 0 && edges.features.length === 0) return [];
+  const { kept: data, edges: allEdges } = splitEdges(withoutLines(all));
+  if (data.features.length === 0 && allEdges.features.length === 0) return [];
+  // The ground a changed area lost (A minus B) fills pink like an area that is gone; the rest are the earlier edges.
+  const { lostCuts, edges } = splitLostCuts(allEdges);
   const updateTriggers = { getFillColor: trigger, getLineColor: trigger, getLineWidth: trigger };
   const strokeWidth = (f: Feature) => (isArea(f) ? DELTA_STROKE.polygon : DELTA_STROKE.line);
   // What only A had (lost) carries a pink hatch over its tint (spec §12), so it reads as gone on any basemap.
   const canvas = hatchAtlasCanvas();
-  const lost = lostAreas(data);
+  const lost = withLostCuts(lostAreas(data), lostCuts);
   const hatch: Layer[] =
     canvas && lost.features.length > 0
       ? [
@@ -1906,7 +1970,8 @@ function deltaLayers(op: RenderOp, { data: all, selected, terrain }: OpContext):
             pickable: false,
             filled: true,
             stroked: false,
-            getFillColor: (f: Feature) => fade(f, hexToRgba(PINK, 230)),
+            // The lost ground is the answer: it stays readable while a card is open.
+            getFillColor: (f: Feature) => fade(f, hexToRgba(PINK, 230), AREA_OUTLINE_SIBLING_FADE),
             fillPatternEnabled: true,
             fillPatternAtlas: canvas,
             fillPatternMapping: hatchAtlas().mapping,
@@ -1914,8 +1979,9 @@ function deltaLayers(op: RenderOp, { data: all, selected, terrain }: OpContext):
             fillPatternSizeUnits: "pixels",
             getFillPattern: () => hatchPatternId(PINK as HatchColor, DELTA_HATCH_STEP),
             getFillPatternScale: 1 / HATCH_SCALE,
-            getFillPatternBackgroundColor: [0, 0, 0, 0],
-            updateTriggers: { getFillColor: trigger },
+            // A pink tint under the hatch, so lost ground reads as a filled area, not a hatch of thin lines.
+            getFillPatternBackgroundColor: (f: Feature) => fade(f, hexToRgba(PINK, Math.round(255 * DELTA_LOST_TINT)), AREA_OUTLINE_SIBLING_FADE),
+            updateTriggers: { getFillColor: trigger, getFillPatternBackgroundColor: trigger },
             ...terrainProps(terrain, "drape", [fillExtension]),
           }),
         ]

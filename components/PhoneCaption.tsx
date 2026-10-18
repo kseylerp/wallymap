@@ -5,6 +5,7 @@ import { RowLegend } from "@/components/RowLegend";
 import { TimePanel, wholeSpan, windowText } from "@/components/TimePanel";
 import { shortTitle } from "@/layers/contract";
 import { failureLine, layerSourceStatus, timeShape } from "@/lib/render/contract";
+import { featuresInView, useInView } from "@/lib/render/inView";
 import { rowLegend, type LegendBlock } from "@/lib/render/legendView";
 import { compareSideText, deltaKey, effectiveMode } from "@/lib/render/compareView";
 import { compareSummary } from "@/lib/render/compare";
@@ -77,6 +78,7 @@ export function PhoneCaption({ state, shown, onOpen }: { state: MapState; shown:
   const drawn = layer ? shown[layer.id] : undefined;
   const compared = state.compare?.layerId === layer?.id ? state.compare : undefined;
   const deltaMode = compared && effectiveMode(state) === "delta";
+  const inView = useInView();
   const blocks = useMemo((): LegendBlock[] => {
     if (!layer || !top) return [];
     if (compared && deltaMode) {
@@ -92,8 +94,13 @@ export function PhoneCaption({ state, shown, onOpen }: { state: MapState; shown:
         },
       ];
     }
-    return rowLegend(layer, top, drawn?.result.kind === "geojson" ? drawn.result.data : null);
-  }, [layer, top, drawn, compared, deltaMode]);
+    const data = drawn?.result.kind === "geojson" ? drawn.result.data : null;
+    // The mini legend keys what is in view (lib/render/inView.ts): the zones around Denver, not 3a, 6a, 9a and 12a.
+    const view = inView.bounds
+      ? { data: data ? featuresInView(data, inView.bounds) : null, tile: inView.tiles[layer.id], zoom: state.viewport.zoom, latitude: state.viewport.latitude }
+      : undefined;
+    return rowLegend(layer, top, data, view);
+  }, [layer, top, drawn, compared, deltaMode, inView, state.viewport.zoom, state.viewport.latitude]);
   // Snapshots state their change; a compare on the layer states the compare's (the owner's glacier case on a phone).
   const change = useMemo(
     () => (layer && (compared || timeShape(layer).shape === "snapshots") ? layerChange(layer, top?.filters, compared) : null),
@@ -133,6 +140,11 @@ export function PhoneCaption({ state, shown, onOpen }: { state: MapState; shown:
         <p className="mt-1 line-clamp-2 text-[11.5px] leading-4 text-ink">{failure}</p>
       ) : (
         <>
+          {layer.result.kind === "tiles" && layer.result.viewNote && (
+            <p className="mt-1 line-clamp-2 text-[11.5px] leading-4 text-ink" data-testid="phone-caption-view-note">
+              {layer.result.viewNote}.
+            </p>
+          )}
           {change && (
             <p className="mt-1 line-clamp-3 text-[11.5px] leading-4 text-ink" data-testid="phone-caption-change">
               {change.text.split(". ")[0].replace(/\.$/, "")}.

@@ -12,7 +12,7 @@ import {
   type Viewport,
 } from "@/lib/render/state";
 import type { BBox } from "@/layers/types";
-import { boundsOf, changeCompare, defaultView, padBBox, rankedMeasure, unionBBox, viewTarget } from "@/lib/render/views";
+import { boundsOf, changeCompare, choroplethBasemap, defaultView, isChoropleth, padBBox, rankedMeasure, unionBBox, viewTarget } from "@/lib/render/views";
 import { applyFilters, isActiveEntry, type LayerFilters } from "@/lib/render/filters";
 import { stepWindow, timeIndex, type TimeIndex, type TimeWindow } from "@/lib/time";
 import { arrivalPitch, fitZoomOffset } from "@/lib/render/wally/terrain";
@@ -478,6 +478,11 @@ function reduceAction(state: MapState, action: MapAction): MapState {
     }
     case "set_basemap":
       if (state.basemap === action.basemap) return state;
+      // The agent never puts a choropleth answer on imagery (isChoropleth); the person's own pick always stands.
+      if (action.agent && (action.basemap === "satellite" || action.basemap === "outdoors-satellite")) {
+        const choropleth = state.renderOps.some((o) => o.visible && state.layers[o.layerId] && isChoropleth(state.layers[o.layerId]));
+        if (choropleth) return state;
+      }
       // A style swap drops the route layers the preview draws on, so the preview ends with it.
       return { ...state, basemap: action.basemap, playback: undefined };
     case "layer_loaded": {
@@ -544,7 +549,10 @@ function reduceAction(state: MapState, action: MapAction): MapState {
             );
       // Heat draws no features of its own, so a selection on a layer that turns into heat would point at nothing drawn.
       const selected = op.mode === "heat" ? dropSelectionOf(state, op.layerId) : state.selected;
-      const next = withShownChange(state, { ...state, renderOps, selected }, action.op.layerId);
+      // A choropleth answer's first draw leaves satellite imagery for Topographical (or the layer's own basemap); a share
+      // link (exact) keeps the basemap it carries.
+      const basemap = index === -1 && loaded && !action.exact ? (choroplethBasemap(loaded, state.basemap) ?? state.basemap) : state.basemap;
+      const next = withShownChange(state, { ...state, renderOps, selected, ...(basemap !== state.basemap && { basemap, playback: undefined }) }, action.op.layerId);
       // A share link's op is the sender's as drawn: its view (or none) stays, and the view's preset is not run again,
       // so it cannot move the mode, rank or compare the link carries.
       if (action.exact) return next;

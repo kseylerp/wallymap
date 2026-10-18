@@ -9,22 +9,25 @@
  *   carries one source layer. The map draws them in this layer's palette tint with hatch and outline (the renderer's vector polygon
  *   recipe), not in Macrostrat's per-unit colours. The tile server is a public service run by the Macrostrat team; set no key.
  * Drawing (2026-10-18): each unit is filled by the age of its youngest rock (`best_age_top`, millions of years) in five
- * eras (GEOLOGY_LEGEND, a stepped ramp sage → pink → purple → dark grey), so units read apart by age; decoded over the
+ * eras (GEOLOGY_LEGEND, a stepped ramp pale pink → pink → purple → dark grey), so units read apart by age; decoded over the
  * Tetons (z10 196/374) every unit carries best_age_top, name, age (a period name such as "Archean"), lith and descrip.
  * Smoke check 2026-10-10 (live, keyless, through runLayer): a tile result with the Macrostrat URL, and tiles fetched at z8, z12 and z16 over Tahoe all 200.
  */
 import { z } from "zod";
 import { defineLayer, type Attribute, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
-import { DARK_GREY, layerColor, PINK, PURPLE, SAGE } from "@/lib/render/palette";
+import { DARK_GREY, layerColor, OFF_WHITE, PINK, PURPLE } from "@/lib/render/palette";
 import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
 
 export const GEOLOGY_TILE_URL = "https://tiles.macrostrat.org/carto/{z}/{x}/{y}.mvt";
 export const GEOLOGY_SOURCE_LAYER = "units";
 
-/** The eras a unit's youngest age falls in, youngest first: the lower bound in millions of years and the fill. */
+/**
+ * The eras a unit's youngest age falls in, youngest first: the lower bound in millions of years and the fill, darker
+ * with age. The youngest is a pale pink, not sage: sage valley fill blended into Topo's own green (owner, 2026-10-18).
+ */
 export const ERAS: { label: string; from: number; color: string }[] = [
-  { label: "Quaternary (under 2.6 million years: young sediments, glacial deposits, recent lava)", from: 0, color: SAGE },
+  { label: "Quaternary (under 2.6 million years: young sediments, glacial deposits, recent lava)", from: 0, color: rgbToHex(interpolateStops([OFF_WHITE, PINK], 0.45)) },
   { label: "Tertiary (2.6 to 66 million years)", from: 2.58, color: PINK },
   { label: "Mesozoic (66 to 252 million years)", from: 66, color: PURPLE },
   { label: "Paleozoic (252 to 541 million years)", from: 252, color: rgbToHex(interpolateStops([PURPLE, DARK_GREY], 0.5)) },
@@ -85,7 +88,7 @@ const geology = defineLayer({
   title: "Geology",
   description:
     "The geologic map: bedrock and surface rock units from Macrostrat, a compilation of geologic maps (world coverage, most detailed in the United States). " +
-    "It draws as map tiles, each unit filled by the age of its youngest rock in five eras with a legend (Quaternary sage, Tertiary pink, Mesozoic purple, Paleozoic grey-purple, Precambrian dark grey), and tapping a unit shows its name, age and description; it carries no features you can count or list. " +
+    "It draws as map tiles, each unit filled by the age of its youngest rock in five eras with a legend (Quaternary pale pink, Tertiary pink, Mesozoic purple, Paleozoic grey-purple, Precambrian dark grey), and tapping a unit shows its name, age and description; it carries no features you can count or list. " +
     "Use it for 'show the geology', 'geologic map', 'rock types around here', 'where does the rock change'. " +
     "To answer 'what rock is here', 'what is this peak made of' or 'how old is the ground at this spot', call the geologic-unit layer with that place's lon and lat; it returns the unit name, age, rock type and description. " +
     "Caveats: geologic maps are drawn at the scale of their source, so edges are generalised and small outcrops are missed; units can be loose ('undivided granitic rocks'); " +

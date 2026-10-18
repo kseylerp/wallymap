@@ -206,6 +206,13 @@ export const LINE_CLASSES = {
 export const SIBLING_FADE = 0.35;
 
 /**
+ * Areas colored by a ramp or by kind (choropleths, categories) fade only to this share while one is selected: the
+ * other areas are what the selected one is compared against, and at 0.35 a card open over Texas left every county
+ * but the selected one barely tinted (owner, 2026-10-18). The selected area's purple outline marks it.
+ */
+export const CLASS_SIBLING_FADE = 0.85;
+
+/**
  * While an area is selected, the outlines (and their white casings) of the rest of its layer keep this share of their
  * alpha: their fill fades with SIBLING_FADE, but at 0.35 a glacier's dark 1px outline vanished on satellite ice and the
  * map seemed to hold one glacier (owner, 2026-10-16).

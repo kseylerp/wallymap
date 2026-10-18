@@ -9,7 +9,8 @@ import { attributeFor, measureKeyOf, primaryMeasure, topFeatures, versionSides, 
 import { applyFilters, type LayerFilters } from "@/lib/render/filters";
 import { featureBBox } from "@/lib/render/inspect";
 import { scenarioOf } from "@/lib/render/scenario";
-import type { CompareState, LoadedLayer, ViewKind } from "@/lib/render/state";
+import type { Basemap, CompareState, LoadedLayer, ViewKind } from "@/lib/render/state";
+import { categoryKey } from "@/lib/render/categories";
 
 /**
  * The standard views (spec §12), the pure half: which view a layer's data asks for when the agent names none, what the
@@ -196,6 +197,31 @@ export function isDenseNetwork(layer: LoadedLayer, op: { visible: boolean; mode:
 export function preferredBasemap(layer: LoadedLayer, op: { visible: boolean; mode: string } | undefined): "data-only" | "outdoors" | undefined {
   if (!op?.visible) return undefined;
   return layer.style.basemap ?? (isDenseNetwork(layer, op) ? "data-only" : undefined);
+}
+
+/**
+ * True for a map whose areas are colored by a ramp or by kind (temperature anomaly by county, hardiness zones, drought,
+ * geology, land cover, protected areas by category): the color is the answer, and satellite imagery under it changes
+ * every color, so such answers open on Topographical (or the layer's own basemap), never Satellite (owner, 2026-10-18).
+ * Snapshot layers (glacier surveys, monument boundaries) color by date, not value, and keep the imagery.
+ */
+export function isChoropleth(layer: LoadedLayer): boolean {
+  if (layer.style.geometry !== "polygon" || layer.style.unit === "score") return false;
+  if (timeShape(layer).shape === "snapshots") return false;
+  if (layer.style.encode?.color) return true;
+  const legend = layer.result.legend ?? layer.legend;
+  if (legend && (legend.kind === "categories" || legend.kind === "ramp")) {
+    const colored = [...(legend.items ?? []), ...(legend.stops ?? [])].filter((i) => i.color).length;
+    if (colored >= 3) return true;
+  }
+  const all = layer.allData ?? (layer.result.kind === "geojson" ? layer.result.data : null);
+  return categoryKey(layer, all) !== undefined;
+}
+
+/** The basemap a choropleth answer opens on when the map is on imagery: its own preference, else Topographical. */
+export function choroplethBasemap(layer: LoadedLayer, current: Basemap): Basemap | undefined {
+  if (current !== "satellite" && current !== "outdoors-satellite") return undefined;
+  return isChoropleth(layer) ? (layer.style.basemap ?? "outdoors") : undefined;
 }
 
 /** The legend's sentence for a view: what the encoding means, in words (spec §12: "what pink means in this view"). */

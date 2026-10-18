@@ -140,8 +140,8 @@ describe("temperature-anomaly", () => {
     expect(contractProblems(layer)).toEqual([]);
     const legend = legendOf(layer);
     expect(legend).toMatchObject({ kind: "ramp", field: "v", unit: "°F" });
-    expect(legend.stops?.map((s) => s.value)).toEqual([-8, 0, 8]);
-    expect(legend.stops?.[1]).toMatchObject({ label: "Normal" });
+    expect(legend.stops?.map((s) => s.value)).toEqual([-12, -6, 0, 6, 12]);
+    expect(legend.stops?.[2]).toMatchObject({ label: "Normal" });
     expect(timeShapeOf(layer).shape).toBe("single");
   });
 

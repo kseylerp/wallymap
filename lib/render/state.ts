@@ -250,7 +250,8 @@ export type MapAction =
   | { type: "set_view"; viewport: Partial<Viewport>; fit?: boolean }
   | { type: "set_terrain"; terrain: boolean }
   | { type: "set_flattened"; flattened: boolean }
-  | { type: "set_basemap"; basemap: Basemap }
+  /** `agent`: asked by the agent (set_basemap tool), which may not put a choropleth answer on imagery. */
+  | { type: "set_basemap"; basemap: Basemap; agent?: boolean }
   | { type: "layer_loaded"; layer: LoadedLayer }
   | { type: "layer_error"; layerId: string; message: string; sourceStatus?: SourceStatus; input?: Record<string, unknown> }
   /**

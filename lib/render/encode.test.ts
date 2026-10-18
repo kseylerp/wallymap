@@ -118,3 +118,23 @@ describe("two measures on one mark", () => {
     expect(decodeState(untouched)?.layers[0].encode).toEqual({ color: "conf" });
   });
 });
+
+describe("a declared fixed scale (owner, 2026-10-18: the hottest Texas counties drew purple, the key's cooler color)", () => {
+  it("colors by the legend's stops, not the data's range, and holds the end colors beyond", async () => {
+    const { resolveEncoding, channelColor } = await import("@/lib/render/encode");
+    const { hexToRgb } = await import("@/lib/render/ramp");
+    const layer = {
+      attributes: [{ key: "v", type: "measure" as const, label: "Anomaly", unit: "°F" }],
+      style: { geometry: "polygon" as const, color: "#3A3A3C", encode: { color: "v" } },
+      legend: { kind: "ramp" as const, field: "v", stops: [{ label: "cool", value: -8, color: "#6E5BFF" }, { label: "normal", value: 0, color: "#FAF9F5" }, { label: "warm", value: 8, color: "#F57272" }] },
+    };
+    const warm: FeatureCollection = { type: "FeatureCollection", features: [3, 8.4, 12.3].map((v): Feature => ({ type: "Feature", properties: { v }, geometry: { type: "Point", coordinates: [0, 0] } })) };
+    const channel = resolveEncoding(layer, undefined, warm)!.color!;
+    expect(channel.stops).toHaveLength(3);
+    // Every county ran warm: the hottest is the warm end, never the ramp's purple top.
+    expect(channelColor(12.3, channel)).toEqual(hexToRgb("#F57272"));
+    expect(channelColor(8, channel)).toEqual(hexToRgb("#F57272"));
+    expect(channelColor(0, channel)).toEqual(hexToRgb("#FAF9F5"));
+    expect(channelColor(-20, channel)).toEqual(hexToRgb("#6E5BFF"));
+  });
+});

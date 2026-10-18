@@ -18,7 +18,7 @@ export function Swatch({ color, shape, outline = false, dash }: { color?: string
   if (shape === "polygon" || shape === "raster") {
     return (
       <svg aria-hidden viewBox="0 0 14 10" width={14} height={10} className="shrink-0">
-        <rect x={1} y={1} width={12} height={8} rx={1} fill={c} fillOpacity={outline ? 0 : shape === "raster" ? 0.85 : 0.35} stroke={c} strokeWidth={1.25} />
+        <rect x={1} y={1} width={12} height={8} rx={1} fill={c} fillOpacity={outline ? 0 : shape === "raster" ? 0.85 : 0.7} stroke={c} strokeWidth={1.25} />
       </svg>
     );
   }
@@ -37,6 +37,11 @@ function Entry({ entry, shape, filter }: { entry: LegendEntry; shape: LegendBloc
       </span>
       <span className="min-w-0 truncate">{entry.label}</span>
       {entry.count !== undefined && <span className="shrink-0 text-ink-muted tabular-nums">{entry.count.toLocaleString("en-US")}</span>}
+      {entry.count === undefined && entry.share !== undefined && (
+        <span className="shrink-0 text-ink-muted tabular-nums" title="Share of the map in view">
+          {entry.share < 0.01 ? "<1%" : `${Math.round(entry.share * 100)}%`}
+        </span>
+      )}
     </li>
   );
 }
@@ -61,8 +66,9 @@ function Title({ block }: { block: LegendBlock }) {
 function mostDrawn(entries: LegendBlock["entries"], n: number): LegendBlock["entries"] {
   if (entries.length <= n) return entries;
   // No counts (tiles): the ends and evenly spaced kinds between, so a 19-zone key reads 3a … 12a, not 3a to 4b.
-  if (!entries.some((e) => e.count !== undefined)) return Array.from({ length: n }, (_, i) => entries[Math.round((i * (entries.length - 1)) / (n - 1))]);
-  const keep = new Set([...entries].sort((x, y) => (y.count ?? 0) - (x.count ?? 0)).slice(0, n));
+  const size = (e: LegendBlock["entries"][number]) => e.count ?? e.share;
+  if (!entries.some((e) => size(e) !== undefined)) return Array.from({ length: n }, (_, i) => entries[Math.round((i * (entries.length - 1)) / (n - 1))]);
+  const keep = new Set([...entries].sort((x, y) => (size(y) ?? 0) - (size(x) ?? 0)).slice(0, n));
   return entries.filter((e) => keep.has(e));
 }
 
@@ -84,11 +90,22 @@ export function RowLegend({ blocks, compact = false }: { blocks: LegendBlock[]; 
           {block.kind === "ramp" && (
             <div className={compact ? "max-w-[260px]" : undefined}>
               {compact && block.title && <p className="truncate text-ink-muted">{block.title}</p>}
-              <div
-                aria-hidden
-                className="h-2 rounded-[2px] border border-line"
-                style={{ background: `linear-gradient(to right, ${(block.colors ?? []).join(", ")})`, ...(block.filter && { filter: block.filter }) }}
-              />
+              <div className="relative">
+                <div
+                  aria-hidden
+                  className="h-2 rounded-[2px] border border-line"
+                  style={{ background: `linear-gradient(to right, ${(block.colors ?? []).join(", ")})`, ...(block.filter && { filter: block.filter }) }}
+                />
+                {block.range && (
+                  // The values in view, bracketed on the fixed scale.
+                  <div
+                    aria-hidden
+                    data-testid="legend-range"
+                    className="absolute -top-[3px] h-[14px] rounded-[2px] border-[1.5px] border-ink"
+                    style={{ left: `${(block.range.from * 100).toFixed(1)}%`, width: `max(4px, ${((block.range.to - block.range.from) * 100).toFixed(1)}%)` }}
+                  />
+                )}
+              </div>
               {/* End labels wrap (up to three lines) rather than cut: "Sink: takes up carbon" is the key's meaning. */}
               <div className="mt-0.5 flex justify-between gap-2 text-[10.5px] leading-[13px] text-ink-muted tabular-nums">
                 {(block.entries.length > 3 ? [block.entries[0], block.entries[Math.floor(block.entries.length / 2)], block.entries[block.entries.length - 1]] : block.entries).map((e, i, shown) => (
@@ -100,6 +117,11 @@ export function RowLegend({ blocks, compact = false }: { blocks: LegendBlock[]; 
                   </span>
                 ))}
               </div>
+              {block.range && (
+                <p className="mt-0.5 truncate text-[10.5px] leading-[13px] text-ink tabular-nums" data-testid="legend-range-text">
+                  {block.range.text}
+                </p>
+              )}
             </div>
           )}
           {block.kind === "size" && (

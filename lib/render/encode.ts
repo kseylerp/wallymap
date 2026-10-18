@@ -1,7 +1,7 @@
 import type { Feature, FeatureCollection } from "geojson";
-import type { Attribute, Encoding } from "@/layers/types";
+import type { Attribute, Encoding, LegendSpec } from "@/layers/types";
 import { attributeFor, declaredGroups, groupColors, valueKey } from "@/lib/render/attributes";
-import { compareRampColor, rampColor, rgbToHex, type Rgb } from "@/lib/render/ramp";
+import { compareRampColor, hexToRgb, interpolateStops, rampColor, rgbToHex, type Rgb } from "@/lib/render/ramp";
 import { CATEGORY_COLORS, OTHER_COLOR } from "@/lib/render/categories";
 import type { LoadedLayer, RenderOp } from "@/lib/render/state";
 
@@ -38,11 +38,40 @@ export type Channel = {
   levels?: { values: string[]; label: string; color: string }[];
   /** A category (fuel, publisher): each level draws in its own palette color, not along a ramp. */
   categorical?: boolean;
+  /**
+   * A fixed scale the layer's legend declares (a ramp on this key whose stops all carry a value and a color): values
+   * draw at their place between those stops and hold the end colors beyond, whatever range the data spans. Without it
+   * a temperature anomaly where every county ran warm drew on the data's own range, hottest purple, against a key that
+   * said purple is cooler (owner, 2026-10-18).
+   */
+  stops?: { value: number; color: string }[];
 };
 
 export type ResolvedEncoding = { size?: Channel; color?: Channel };
 
-type EncodableLayer = Pick<LoadedLayer, "attributes" | "style"> & Partial<Pick<LoadedLayer, "allData">>;
+type EncodableLayer = Pick<LoadedLayer, "attributes" | "style"> & Partial<Pick<LoadedLayer, "allData" | "legend">> & { result?: { legend?: LegendSpec } };
+
+/** The fixed stops a layer's legend declares for `key` (a ramp whose stops all have a value and a color, ascending). */
+export function declaredStops(layer: Partial<Pick<LoadedLayer, "legend">> & { result?: { legend?: LegendSpec } }, key: string): { value: number; color: string }[] | undefined {
+  const legend = layer.result?.legend ?? layer.legend;
+  if (!legend || legend.kind !== "ramp" || legend.field !== key) return undefined;
+  const stops = legend.stops ?? [];
+  if (stops.length < 2 || !stops.every((s) => typeof s.value === "number" && Number.isFinite(s.value) && typeof s.color === "string")) return undefined;
+  const out = stops.map((s) => ({ value: s.value as number, color: s.color as string }));
+  return out.every((s, i) => i === 0 || s.value > out[i - 1].value) ? out : undefined;
+}
+
+/** A value's color on declared stops: interpolated between the two around it (in OKLCH), the end colors beyond. */
+export function stopsColor(value: unknown, stops: { value: number; color: string }[]): Rgb | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || stops.length === 0) return null;
+  if (value <= stops[0].value) return hexToRgb(stops[0].color);
+  const last = stops[stops.length - 1];
+  if (value >= last.value) return hexToRgb(last.color);
+  const i = stops.findIndex((s) => s.value > value) - 1;
+  const a = stops[i];
+  const b = stops[i + 1];
+  return interpolateStops([a.color, b.color], (value - a.value) / (b.value - a.value));
+}
 
 /** The pair a layer draws with: the op's choice over the layer's declared pair ("" switches a channel off). */
 export function askedEncoding(layer: EncodableLayer, op: Pick<RenderOp, "encode"> | undefined): Encoding {
@@ -126,7 +155,9 @@ export function resolveEncoding(layer: EncodableLayer, op: Pick<RenderOp, "encod
   const data = layer.allData ?? shown;
   const asked = askedEncoding(layer, op);
   const size = asked.size ? channelOf(attributeFor(layer, asked.size), asked.size, data, "size") : undefined;
-  const color = asked.color ? channelOf(attributeFor(layer, asked.color), asked.color, data, "color") : undefined;
+  const colorBase = asked.color ? channelOf(attributeFor(layer, asked.color), asked.color, data, "color") : undefined;
+  const fixed = colorBase && !colorBase.levels ? declaredStops(layer, colorBase.key) : undefined;
+  const color = colorBase && fixed ? { ...colorBase, stops: fixed } : colorBase;
   if (!size && !color) return null;
   return { ...(size && { size }), ...(color && { color }) };
 }
@@ -165,8 +196,8 @@ export function colorT(value: unknown, channel: Pick<Channel, "extent" | "levels
 }
 
 /** True when a color channel's values run both sides of zero (an anomaly): it draws on the diverging ramp. */
-export function isDiverging(channel: Pick<Channel, "extent" | "levels">): boolean {
-  return !channel.levels && channel.extent !== null && channel.extent[0] < 0 && channel.extent[1] > 0;
+export function isDiverging(channel: Pick<Channel, "extent" | "levels" | "stops">): boolean {
+  return !channel.levels && !channel.stops && channel.extent !== null && channel.extent[0] < 0 && channel.extent[1] > 0;
 }
 
 /**
@@ -182,6 +213,17 @@ export function divergingColor(value: unknown, channel: Pick<Channel, "extent">)
 /** The diverging ramp as CSS stops for a legend bar, purple (low) through off-white (zero) to pink (high). */
 export function divergingCss(steps = 9): string {
   return Array.from({ length: steps }, (_, k) => `${rgbToHex(compareRampColor((k / (steps - 1)) * 2 - 1))} ${Math.round((k / (steps - 1)) * 100)}%`).join(", ");
+}
+
+/**
+ * A color channel's color for a value, as the map draws it: the layer's declared stops when it has them, else the
+ * diverging ramp across zero, else its place on the encode ramp; null without a value.
+ */
+export function channelColor(value: unknown, channel: Channel): Rgb | null {
+  if (channel.stops) return stopsColor(value, channel.stops);
+  if (isDiverging(channel)) return divergingColor(value, channel);
+  const t = colorT(value, channel);
+  return t === null ? null : encodeColor(t);
 }
 
 /** The ramp color at `t` (0..1). */

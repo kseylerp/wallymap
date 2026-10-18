@@ -135,6 +135,12 @@ export type LayerResult =
       };
       citation: Citation;
       coverageNote?: string;
+      /**
+       * One short sentence on what the drawn picture shows that its date alone does not ("No snow on the ground in view;
+       * the last clear day with snow was Oct 12"), so a clear map reads as an answer: the layer row and the phone's first
+       * screen print it.
+       */
+      viewNote?: string;
       /** Whether the layer's source answered (SourceStatus). Absent means it did. */
       sourceStatus?: SourceStatus;
       /** This answer's own key, over the layer's (`legend`) and the derived one (legendOf). */

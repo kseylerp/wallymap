@@ -56,13 +56,20 @@ export function landHatchOpacity(opacity = 1, alpha = 0.9): ExpressionSpecificat
   return ["interpolate", ["linear"], ["zoom"], 12, at(1), 15, at(0.5)];
 }
 
-/** Fill opacity of tile areas keyed in their own colors: solid 0.55 out to zoom 11, easing to 0.3 by 15. */
+/**
+ * Fill opacity of tile areas keyed in their own colors (hardiness zones, geologic eras): 0.8 out to zoom 11, easing to
+ * 0.45 by 15 so trails and labels read at trailhead zooms. At 0.55 the zones around Denver were one pale lavender on
+ * Topo (owner, 2026-10-18).
+ */
 export const SOLID_TILE_FILL: [number, number][] = [
-  [9, 0.55],
-  [11, 0.55],
-  [13.5, 0.4],
-  [15, 0.3],
+  [9, 0.8],
+  [11, 0.78],
+  [13.5, 0.6],
+  [15, 0.45],
 ];
+
+/** Thin white edges between solid-keyed tile areas (county and zone borders): they part the classes, never read as contours. */
+export const SOLID_TILE_EDGE = { width: 0.6, opacity: 0.55 } as const;
 
 /** landFillOpacity, with the `solid` values of `field` at SOLID_TILE_FILL instead of the tint. */
 function solidFillOpacity(opacity: number, solid: string[], field: string, tint: number): ExpressionSpecification {
@@ -87,8 +94,8 @@ export const LAND_OUTLINE = { opacity: 0.8 } as const;
 type VectorLayerSpec = FillLayerSpecification | LineLayerSpecification | CircleLayerSpecification;
 
 /** The hatch pattern a vector tile area layer draws with (its id is a Mapbox image added by `ensureHatchImages`). */
-/** A categorized tile layer's tint: strong enough that each kind's color reads on green Topo. */
-export const CATEGORY_TILE_TINT = 0.24;
+/** A categorized tile layer's tint: strong enough that each kind's color reads on green Topo and under satellite. */
+export const CATEGORY_TILE_TINT = 0.42;
 
 /** Every hatch pattern a set of specs names (a plain id, or each output of a match expression). */
 export function hatchPatternsOf(specs: { paint?: Record<string, unknown> }[]): string[] {
@@ -132,15 +139,14 @@ export function vectorTileLayerSpecs(
   const layout = { visibility: visible ? ("visible" as const) : ("none" as const) };
   if (geometry === "polygon" && !requested && key?.steps && key.steps.length > 1) {
     // A stepped ramp (geology by the era of its youngest rock): each unit filled solid in its step's color.
-    const r = areaRecipe(id);
     const [first, ...rest] = key.steps;
     const color = ["step", ["to-number", ["get", key.field], -1], first[1], ...rest.flatMap(([v, c]) => [v, c])] as unknown as string;
     const fill = ["interpolate", ["linear"], ["zoom"], ...SOLID_TILE_FILL.flatMap(([z, o]) => [z, Math.round(o * opacity * 1000) / 1000])] as ExpressionSpecification;
     return [
       { id: layerId, type: "fill", ...common, layout, paint: { "fill-color": color, "fill-opacity": fill } },
       { id: `${layerId}-hatch`, type: "fill", ...common, layout, paint: { "fill-pattern": vectorHatchPattern(id), "fill-opacity": 0 } },
-      { id: `${layerId}-casing`, type: "line", ...common, layout: { ...layout, "line-join": "round" }, paint: { "line-color": WHITE, "line-width": 1, "line-opacity": 0.5 * opacity } },
-      { id: `${layerId}-line`, type: "line", ...common, layout: { ...layout, "line-join": "round" }, paint: { "line-color": r.outline, "line-width": 0.5, "line-opacity": 0.35 * opacity } },
+      { id: `${layerId}-casing`, type: "line", ...common, layout: { ...layout, "line-join": "round" }, paint: { "line-color": WHITE, "line-width": 0, "line-opacity": 0 } },
+      { id: `${layerId}-line`, type: "line", ...common, layout: { ...layout, "line-join": "round" }, paint: { "line-color": WHITE, "line-width": SOLID_TILE_EDGE.width, "line-opacity": SOLID_TILE_EDGE.opacity * opacity } },
     ];
   }
   if (geometry === "polygon") {
@@ -185,8 +191,12 @@ export function vectorTileLayerSpecs(
         type: "line",
         ...common,
         layout: lineLayout,
-        // Solid-keyed areas step by fill; their boundaries (fractal zone edges) stay faint so they do not read as contours.
-        paint: { "line-color": match(r.outline, (c) => c), "line-width": solid.length > 0 ? 0.5 : r.outlineWidth, "line-opacity": (solid.length > 0 ? 0.35 : LAND_OUTLINE.opacity) * opacity },
+        // Solid-keyed areas step by fill; their boundaries (fractal zone edges) are thin white lines that part the
+        // classes without reading as contours or roads.
+        paint:
+          solid.length > 0
+            ? { "line-color": WHITE, "line-width": SOLID_TILE_EDGE.width, "line-opacity": SOLID_TILE_EDGE.opacity * opacity }
+            : { "line-color": match(r.outline, (c) => c), "line-width": r.outlineWidth, "line-opacity": LAND_OUTLINE.opacity * opacity },
       },
     ];
   }

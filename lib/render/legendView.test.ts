@@ -94,3 +94,46 @@ describe("failures are visible", () => {
     expect(reduce(s, { type: "remove_layer", layerId: "weather-alerts" }).errors).toEqual([]);
   });
 });
+
+describe("legends list what is in view (owner, 2026-10-18)", () => {
+  it("a tile key keeps only the classes sampled in view, with their share of it", async () => {
+    const { HARDINESS_LEGEND } = await import("@/layers/hardiness-zones");
+    const layer: LoadedLayer = {
+      id: "hardiness-zones",
+      title: "Plant hardiness zones",
+      style: { geometry: "polygon", color: "#9FB693" },
+      legend: HARDINESS_LEGEND,
+      result: { kind: "tiles", data: { url: "https://t/{z}/{x}/{y}.pbf", minzoom: 0, maxzoom: 12, format: "vector", sourceLayer: "z", geometry: "polygon" }, citation },
+      receivedAt: "",
+    };
+    const op = { layerId: layer.id, mode: "polygons" as const, visible: true };
+    // Without a view the key lists every half-zone.
+    expect(rowLegend(layer, op, null)[0].entries).toHaveLength(19);
+    const values = [...Array(6).fill("5"), ...Array(3).fill("6"), "4"];
+    const block = rowLegend(layer, op, null, { data: null, tile: { field: "_symbol", values } })[0];
+    expect(block.entries.map((e) => [e.label.split(" (")[0], e.share])).toEqual([
+      ["Zone 5a", 0.1],
+      ["Zone 5b", 0.6],
+      ["Zone 6a", 0.3],
+    ]);
+  });
+
+  it("GeoJSON counts follow the features in view, and a ramp marks the view's range on its fixed scale", () => {
+    const area = (x: number, v: number): Feature => ({ type: "Feature", properties: { v }, geometry: { type: "Polygon", coordinates: [[[x, 0], [x + 1, 0], [x + 1, 1], [x, 0]]] } });
+    const all = { type: "FeatureCollection" as const, features: [area(0, 2), area(10, 6), area(20, 10)] };
+    const layer: LoadedLayer = {
+      id: "temperature-anomaly",
+      title: "Temperature anomaly",
+      style: { geometry: "polygon", color: "#3A3A3C", encode: { color: "v" } },
+      attributes: [{ key: "v", type: "measure", label: "Anomaly", unit: "°F" }],
+      legend: { kind: "ramp", field: "v", unit: "°F", stops: [{ label: "cool", value: -8, color: PURPLE }, { label: "Normal", value: 0, color: "#FAF9F5" }, { label: "warm", value: 8, color: PINK }] },
+      result: { kind: "geojson", data: all, citation },
+      receivedAt: "",
+    };
+    const inView = { ...all, features: all.features.slice(1) };
+    const ramp = rowLegend(layer, { layerId: layer.id, mode: "polygons", visible: true }, all, { data: inView })[0];
+    expect(ramp.range?.text).toBe("In view: +6 to +10 °F");
+    expect(ramp.range?.from).toBeCloseTo(0.875);
+    expect(ramp.range?.to).toBe(1);
+  });
+});

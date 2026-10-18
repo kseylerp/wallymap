@@ -546,7 +546,7 @@ describe("tile areas keyed in colors of their own (hardiness zones)", () => {
     const fill = specs.find((s) => s.id === "tiles-hardiness-zones")!;
     const hatch = specs.find((s) => s.id === "tiles-hardiness-zones-hatch")!;
     expect(JSON.stringify(fill.paint)).toContain('"literal",["0","1"]');
-    expect(JSON.stringify(fill.paint)).toContain("0.55");
+    expect(JSON.stringify(fill.paint)).toContain("0.8");
     expect(JSON.stringify((hatch.paint as Record<string, unknown>)["fill-opacity"])).toMatch(/"case".*,0,/);
   });
 });

@@ -5,7 +5,8 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import mapboxgl from "mapbox-gl";
 import { useCallback, useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { MapSetupNotice } from "@/components/MapSetupNotice";
-import { drawnLineEntries, syncHeatLayers, syncLineLayers, syncSatelliteHybrid, syncTileLayers } from "@/components/mapTiles";
+import { drawnLineEntries, syncHeatLayers, syncLineLayers, syncSatelliteHybrid, syncTileLayers, tileKeyOf } from "@/components/mapTiles";
+import { setInView, type InView, type TileSample } from "@/lib/render/inView";
 import { ensureRouteImages, setRouteProgress, syncRouteLayers } from "@/components/routeLayers";
 import { basemapStyle, basemapStyleUrl } from "@/lib/render/basemaps";
 import { swipeStore } from "@/lib/render/compareView";
@@ -411,6 +412,44 @@ function particleView(map: mapboxgl.Map): ParticleView | null {
   };
 }
 
+/** Grid points sampled over the canvas for each vector tile layer's in-view classes (lib/render/inView.ts). */
+const IN_VIEW_GRID = { columns: 28, rows: 18 } as const;
+let lastInViewKey = "";
+
+/**
+ * Reports what the map shows for the legends: the visible bounds, and for each drawn vector tile layer whose areas a
+ * key field colors (hardiness zones, geology, public lands), that field's value at a grid of points over the canvas.
+ */
+function reportInView(map: mapboxgl.Map, state: MapState): void {
+  const b = map.getBounds();
+  const bounds: InView["bounds"] = b ? [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()] : null;
+  const tiles: Record<string, TileSample> = {};
+  const canvas = map.getCanvas();
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  for (const op of state.renderOps) {
+    const layer = state.layers[op.layerId];
+    if (!op.visible || layer?.result.kind !== "tiles" || layer.result.data.format !== "vector") continue;
+    const field = tileKeyOf(layer)?.field;
+    const id = `tiles-${layer.id}`;
+    if (!field || !map.getLayer(id)) continue;
+    const values: string[] = [];
+    for (let r = 0; r < IN_VIEW_GRID.rows; r++) {
+      for (let c = 0; c < IN_VIEW_GRID.columns; c++) {
+        const point: [number, number] = [((c + 0.5) * width) / IN_VIEW_GRID.columns, ((r + 0.5) * height) / IN_VIEW_GRID.rows];
+        const hit = map.queryRenderedFeatures(point, { layers: [id] })[0];
+        const v = hit?.properties?.[field];
+        if (v !== undefined && v !== null) values.push(String(v));
+      }
+    }
+    tiles[layer.id] = { field, values };
+  }
+  const key = JSON.stringify([bounds?.map((n) => n.toFixed(4)), tiles]);
+  if (key === lastInViewKey) return;
+  lastInViewKey = key;
+  setInView({ bounds, tiles });
+}
+
 function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -500,6 +539,15 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     });
     map.addControl(overlay);
 
+    // The legends key what is in view: report it whenever the map comes to rest (moved, or new tiles drawn).
+    map.on("idle", () => {
+      if (followingRef.current) return;
+      try {
+        reportInView(map, stateRef.current);
+      } catch {
+        // A style mid-swap has no layers to query; the next idle reports.
+      }
+    });
     map.on("moveend", () => {
       if (followingRef.current) return;
       const camera = cameraOf(map);

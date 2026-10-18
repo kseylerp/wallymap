@@ -22,8 +22,8 @@ import { z } from "zod";
 import { defineLayer, type Attribute, type AttributeLevel, type BBox, type FieldHelp, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { bboxesDisjoint } from "./_shared/coverage";
-import { layerColor, OFF_WHITE, PINK, PURPLE } from "@/lib/render/palette";
-import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
+import { layerColor, PINK, PURPLE } from "@/lib/render/palette";
+import { interpolateStops, oklchToRgb, rgbToHex, rgbToOklch } from "@/lib/render/ramp";
 
 export const HARDINESS_TILE_URL =
   "https://vectortileservices1.arcgis.com/rKbpcgHXWYYaP4pQ/arcgis/rest/services/phzm_us_zones_shp_2023_view/VectorTileServer/tile/{z}/{y}/{x}.pbf";
@@ -52,11 +52,21 @@ export function zoneLabel(zone: string): string {
 }
 
 
+/** How much darker a "b" half-zone is than its "a" neighbours (OKLCH lightness, 0 to 1). */
+export const HALF_ZONE_LIGHTNESS_STEP = 0.1;
+
 /**
- * One color per half-zone, cold to warm on the diverging ramp the app uses for temperature (purple colder, off-white
- * mild, pink warmer; spec §11), so neighbouring zones step visibly and none reads as water or forest (3a purple, 7b off-white, 12a pink).
+ * One color per half-zone, cold purple to warm pink (spec §11), every zone saturated (no pale middle: through off-white
+ * the zones around Denver were one pale lavender, owner 2026-10-18), and the two halves of a zone alternating in
+ * lightness ("a" lighter, "b" darker), so the half-zones that meet on the ground (5b beside 6a) always differ visibly
+ * and none reads as water or forest.
  */
-export const ZONE_COLORS: string[] = HALF_ZONES.map((_, i) => rgbToHex(interpolateStops([PURPLE, OFF_WHITE, PINK], i / (HALF_ZONES.length - 1))));
+export const ZONE_COLORS: string[] = HALF_ZONES.map((zone, i) => {
+  const base = interpolateStops([PURPLE, PINK], i / (HALF_ZONES.length - 1));
+  if (zone.endsWith("a")) return rgbToHex(base);
+  const [l, c, h] = rgbToOklch(base);
+  return rgbToHex(oklchToRgb([l - HALF_ZONE_LIGHTNESS_STEP, c, h]));
+});
 
 const ZONE_HELP: FieldHelp = {
   text: "The USDA hardiness half-zone: the band of the average yearly lowest winter temperature over 1991 to 2020, 5 °F wide. It tells which perennial plants are likely to survive the winter.",
@@ -76,7 +86,7 @@ export const HARDINESS_LEGEND: LegendSpec = {
   field: "_symbol",
   unit: "°F",
   items: HALF_ZONES.map((zone, i) => ({ label: zoneLabel(zone), value: i, color: ZONE_COLORS[i], symbol: "polygon" as const })),
-  note: "Average yearly lowest winter temperature, 1991 to 2020; colder zones purple, mild zones pale, warmer pink.",
+  note: "Average yearly lowest winter temperature, 1991 to 2020; colder zones purple, warmer pink, the a half of each zone lighter than the b half.",
 };
 
 const NOTE = "This hardiness map covers the lower 48 states only; Alaska, Hawaii and Puerto Rico are not in it";
@@ -87,7 +97,7 @@ const hardinessZones = defineLayer({
   description:
     "The USDA Plant Hardiness Zone Map (2023 edition) for the lower 48 states: the coldest-winter bands that tell gardeners which perennial plants, shrubs and trees are likely to survive. " +
     "Zones run from 3a (coldest) to 12a (warmest), in half-zones of 5 °F, each based on the average yearly lowest winter temperature over 1991 to 2020, so zone 7a is about 0 to 5 °F and zone 9b about 25 to 30 °F. " +
-    "The map fills each half-zone in its own color, cold purple through pale to warm pink, with a legend naming every zone and its temperature band, and tapping the map names the zone there. " +
+    "The map fills each half-zone in its own color, cold purple to warm pink with the a and b halves alternating light and dark, with a legend naming every zone and its temperature band, and tapping the map names the zone there. " +
     "Use it for 'what growing zone is this', 'where is zone 8', 'what grows here' or 'has my growing zone warmed' questions (about half the country moved to the next warmer half-zone between the 2012 map and this one). " +
     "Returns map tiles drawn on the globe, not features you can count or list, and you cannot see the rendered map: say the zones are shown, colored by zone with the legend, and do not state a place's zone yourself; for an exact address point the user to the official lookup at planthardiness.ars.usda.gov. " +
     "Caveats: zones describe winter cold only, not heat, rainfall, soil or frost dates; local microclimates (cities, valleys, slopes) differ from the zone drawn. " +

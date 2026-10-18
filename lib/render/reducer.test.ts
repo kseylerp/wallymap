@@ -56,6 +56,30 @@ describe("reduce", () => {
     expect(recovered.errors).toEqual([]);
   });
 
+  it("a choropleth answer opens on Topographical, never satellite; the agent cannot put it back on imagery, a person can", () => {
+    const counties: LoadedLayer = {
+      id: "temperature-anomaly",
+      title: "Temperature anomaly",
+      style: { geometry: "polygon", color: "#3A3A3C", encode: { color: "v" } },
+      attributes: [{ key: "v", type: "measure", label: "Anomaly" }],
+      result: {
+        kind: "geojson",
+        data: { type: "FeatureCollection", features: [{ type: "Feature", properties: { v: 3 }, geometry: { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] } }] },
+        citation: { source: "NOAA", url: "https://ncei.noaa.gov", retrieved: "2026-10-18" },
+      },
+      receivedAt: "2026-10-18T00:00:00Z",
+    };
+    const loaded = reduce({ ...initialMapState, basemap: "satellite" }, { type: "layer_loaded", layer: counties });
+    const drawn = reduce(loaded, { type: "render", op: { layerId: "temperature-anomaly", mode: "polygons", visible: true } });
+    expect(drawn.basemap).toBe("outdoors");
+    expect(reduce(drawn, { type: "set_basemap", basemap: "outdoors-satellite", agent: true }).basemap).toBe("outdoors");
+    expect(reduce(drawn, { type: "set_basemap", basemap: "satellite" }).basemap).toBe("satellite");
+    // A share link keeps the basemap it carries; a line layer is no choropleth.
+    expect(reduce(loaded, { type: "render", op: { layerId: "temperature-anomaly", mode: "polygons", visible: true }, exact: true }).basemap).toBe("satellite");
+    const trails = reduce(reduce(initialMapState, { type: "layer_loaded", layer }), { type: "render", op: { layerId: "osm-trails", mode: "lines", visible: true } });
+    expect(trails.basemap).toBe("outdoors-satellite");
+  });
+
   it("defaults to the outdoors-satellite hybrid basemap", () => {
     expect(initialMapState.basemap).toBe("outdoors-satellite");
   });

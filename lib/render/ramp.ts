@@ -124,3 +124,25 @@ export function lightness(rgb: Rgb): number {
 export function rgbaString([r, g, b]: Rgb, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${Math.round(alpha * 1000) / 1000})`;
 }
+
+/** sRGB to OKLab (L, a, b). */
+function rgbToOklab(rgb: Rgb): [number, number, number] {
+  const [L, C, h] = rgbToOklch(rgb);
+  const rad = (h * Math.PI) / 180;
+  return [L, C * Math.cos(rad), C * Math.sin(rad)];
+}
+
+/**
+ * How different two colors look: the OKLab distance ×100 (about 2 is a just-noticeable step side by side; classes of a
+ * map key should differ by several times that once drawn over the basemap).
+ */
+export function deltaE(p: Rgb, q: Rgb): number {
+  const a = rgbToOklab(p);
+  const b = rgbToOklab(q);
+  return 100 * Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+/** `color` drawn at `alpha` over `under` (sRGB blending, as the map's fills are). */
+export function compositeOver(color: Rgb, alpha: number, under: Rgb): Rgb {
+  return [0, 1, 2].map((k) => Math.round(color[k] * alpha + under[k] * (1 - alpha))) as Rgb;
+}

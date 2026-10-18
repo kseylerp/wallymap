@@ -1,5 +1,6 @@
 "use client";
 
+import { chipAttribute } from "@/lib/render/attributes";
 import { channelText, rampCss, resolveEncoding, sizeWord } from "@/lib/render/encode";
 import { frameSpread } from "@/lib/render/seriesLines";
 import { frameIndex, layerFrames } from "@/lib/render/series";
@@ -48,8 +49,9 @@ export function EncodingLegend({ layer, op, data, time }: { layer: LoadedLayer; 
           </span>
         </p>
       )}
-      {color?.categorical && color.levels && (
-        // A category's kinds each in their own color (power plants by fuel): swatches, not a ramp.
+      {color?.categorical && color.levels && color.key !== chipAttribute(layer)?.key && (
+        // A category's kinds each in their own color: swatches, not a ramp. Left out when the row's chips are that same
+        // category: they are the key, in the colors the map draws (two keys disagreed on pipelines, 2026-10-18).
         <ul className="flex flex-wrap gap-x-3 gap-y-0.5" data-testid="encode-color">
           {color.levels.map((l, i) => (
             <li key={`${l.label}-${i}`} className="flex min-w-0 items-center gap-1.5">

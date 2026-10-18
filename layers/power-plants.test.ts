@@ -250,7 +250,7 @@ describe("power-plants layer", () => {
     expect(fuelGroupOf("petroleum")).toBe("Coal and oil");
     expect(fuelGroupOf("batteries")).toBe("Batteries and other");
     const group = layer.attributes?.find((a) => a.key === "fuelGroup");
-    expect(group).toMatchObject({ type: "category", encode: "color" });
+    expect(group).toMatchObject({ type: "ordinal", encode: "color" });
     // Solar first (sage) and gas near the purple end, so the two never look alike.
     expect(group?.levels?.map((l) => l.value)).toEqual([...FUEL_GROUPS]);
     expect(FUEL_GROUPS.indexOf("Natural gas") - FUEL_GROUPS.indexOf("Solar")).toBeGreaterThanOrEqual(4);

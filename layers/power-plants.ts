@@ -314,7 +314,10 @@ const ATTRIBUTES: Attribute[] = [
   },
   {
     key: "fuelGroup",
-    type: "category",
+    // Clean to fossil is an order: one ramp (sage to pink to purple) on the map, the chips and both legends. As a category
+    // the map drew the first four kinds in the category colors and the rest off-white while the phone key used the ramp.
+    type: "ordinal",
+    scale: "EIA energy sources (EIA-860M), grouped from clean to fossil",
     label: "Fuel group (clean to fossil)",
     levels: FUEL_GROUPS.map((value) => ({ value, label: value })),
     encode: "color",

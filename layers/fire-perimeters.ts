@@ -16,6 +16,12 @@
  *   attr_FireDiscoveryDateTime (date, epoch ms), attr_POOJurisdictionalAgency,
  *   attr_IncidentTypeCategory ("WF" wildfire | "RX" prescribed).
  *
+ * Containment (since 2026-10-18): WFIGS_Incident_Locations/FeatureServer/0 (the incident points, 2020 on, same org),
+ *   IrwinID, PercentContained, ContainmentDateTime, FireOutDateTime (epoch ms), FireCauseGeneral. One bbox query (incidents
+ *   of at least half minAcres discovered since the start year, cached 30 minutes) is joined to the WFIGS perimeters by IRWIN
+ *   id (braces and case ignored), so the card says whether a fire is out, contained or how much is contained. Checked
+ *   2026-10-18: eastern Oregon -121,42,-116.4,46.3 since 2025 held 245 incidents. A failed join leaves the perimeters as
+ *   they were and says so.
  * Smoke wide (2026-10-14, through runLayer): the far West -125,32,-110,45 (about 1.9 million km²), yearsBack 10, returned 451 fires
  * of 4,104 in 8.3 s (925 KB, 250 per service at 0.05 degrees), the Martin fire (431,754 acres) first. Asking 1,000 per service
  * timed out at 25 s twice, so the wide limit is 500.
@@ -32,6 +38,46 @@ import { layerColor } from "@/lib/render/palette";
 const ORG = "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services";
 const HISTORY_URL = `${ORG}/InterAgencyFirePerimeterHistory_All_Years_View/FeatureServer/0`;
 const WFIGS_URL = `${ORG}/WFIGS_Interagency_Perimeters/FeatureServer/0`;
+const LOCATIONS_URL = `${ORG}/WFIGS_Incident_Locations/FeatureServer/0`;
+const LOCATION_FIELDS = ["IrwinID", "PercentContained", "ContainmentDateTime", "FireOutDateTime", "FireCauseGeneral"];
+
+/**
+ * The jurisdiction codes the records use, in words (audit 2026-10-17: BLM, C&L, DL, ARNG, DOF and PRI were unreadable).
+ * Codes not listed pass through as written.
+ */
+export const AGENCY_NAMES: Record<string, string> = {
+  BLM: "Bureau of Land Management",
+  USFS: "US Forest Service",
+  FS: "US Forest Service",
+  NPS: "National Park Service",
+  FWS: "US Fish and Wildlife Service",
+  USFWS: "US Fish and Wildlife Service",
+  DNR: "State natural resources department",
+  BIA: "Bureau of Indian Affairs",
+  BOR: "Bureau of Reclamation",
+  DOD: "Department of Defense",
+  ARNG: "Army National Guard",
+  DOE: "Department of Energy",
+  ST: "State",
+  STATE: "State",
+  DOF: "State forestry department",
+  DL: "State lands department",
+  CNTY: "County",
+  "C&L": "County or local",
+  CITY: "City",
+  PRI: "Private land",
+  PVT: "Private land",
+  TRIBE: "Tribal land",
+  OTHR: "Other",
+};
+
+export function agencyName(code: string | undefined): string | undefined {
+  if (code === undefined) return undefined;
+  return AGENCY_NAMES[code.toUpperCase()] ?? code;
+}
+
+/** An IRWIN id without braces, upper case, so perimeter and incident records match. */
+export const irwinKey = (id: unknown) => (typeof id === "string" && id.trim() ? id.replace(/[{}]/g, "").trim().toUpperCase() : undefined);
 
 /** First year the WFIGS service is used instead of the history view. */
 const WFIGS_FROM_YEAR = 2020;
@@ -91,7 +137,10 @@ function perimeter(
     t: fields.t,
     v: fields.acres,
   };
-  if (fields.agency !== undefined) properties.agency = fields.agency;
+  if (fields.agency !== undefined) {
+    properties.agency = agencyName(fields.agency) ?? fields.agency;
+    properties.agencyCode = fields.agency;
+  }
   return { type: "Feature", geometry: base.geometry, properties };
 }
 
@@ -107,7 +156,8 @@ function fromHistory(fc: FeatureCollection): Candidate[] {
     out.push({
       key,
       recency: acres,
-      feature: perimeter(f, { name, year, acres, agency: str(p.AGENCY), t: `${year}-01-01T00:00:00.000Z` }),
+      // The history records only the year: mid-year, so a ten-year histogram does not stack every old fire on January 1.
+      feature: perimeter(f, { name, year, acres, agency: str(p.AGENCY), t: `${year}-07-01T00:00:00.000Z` }),
     });
   }
   return out;
@@ -123,16 +173,23 @@ function fromWfigs(fc: FeatureCollection): Candidate[] {
     const date = new Date(discovered);
     const name = str(p.poly_IncidentName) ?? "Unnamed fire";
     const year = date.getUTCFullYear();
+    const feature = perimeter(f, {
+      name,
+      year,
+      acres,
+      agency: str(p.attr_POOJurisdictionalAgency),
+      t: date.toISOString(),
+    });
+    const props = feature.properties as Record<string, string | number>;
+    props.discovered = date.toISOString();
+    const mapped = num(p.poly_DateCurrent);
+    if (mapped !== undefined) props.lastMapped = new Date(mapped).toISOString();
+    const irwin = irwinKey(p.poly_IRWINID);
+    if (irwin !== undefined) props.irwinId = irwin;
     out.push({
       key: str(p.poly_IRWINID) ?? `${name.toLowerCase()}|${year}`,
       recency: num(p.poly_DateCurrent) ?? 0,
-      feature: perimeter(f, {
-        name,
-        year,
-        acres,
-        agency: str(p.attr_POOJurisdictionalAgency),
-        t: date.toISOString(),
-      }),
+      feature,
     });
   }
   return out;
@@ -201,6 +258,56 @@ export function normalizeFirePerimeters(
   return { type: "FeatureCollection", features: kept.map((c) => c.feature) };
 }
 
+export type Incident = { contained?: number; containedAt?: number; outAt?: number; cause?: string };
+
+/** Incident points by IRWIN id, from a WFIGS_Incident_Locations answer. */
+export function incidentsById(fc: FeatureCollection): Map<string, Incident> {
+  const out = new Map<string, Incident>();
+  for (const f of fc.features) {
+    const p = f.properties ?? {};
+    const id = irwinKey(p.IrwinID);
+    if (id === undefined) continue;
+    out.set(id, {
+      ...(num(p.PercentContained) !== undefined && { contained: num(p.PercentContained) }),
+      ...(num(p.ContainmentDateTime) !== undefined && { containedAt: num(p.ContainmentDateTime) }),
+      ...(num(p.FireOutDateTime) !== undefined && { outAt: num(p.FireOutDateTime) }),
+      ...(str(p.FireCauseGeneral) !== undefined && { cause: str(p.FireCauseGeneral) }),
+    });
+  }
+  return out;
+}
+
+/**
+ * Adds the go/no-go facts to each perimeter whose incident is known: `status` (out, contained or active), `contained` (%),
+ * `outDate`, `containedDate` and `cause`; the incident id is dropped once used. Returns how many perimeters were joined.
+ */
+export function joinIncidents(fc: FeatureCollection, incidents: Map<string, Incident>): number {
+  let joined = 0;
+  for (const f of fc.features) {
+    const p = f.properties as Record<string, string | number> | null;
+    if (!p) continue;
+    const id = typeof p.irwinId === "string" ? p.irwinId : undefined;
+    delete p.irwinId;
+    const inc = id === undefined ? undefined : incidents.get(id);
+    if (!inc) continue;
+    joined += 1;
+    if (inc.outAt !== undefined) {
+      p.status = "out";
+      p.outDate = new Date(inc.outAt).toISOString();
+    } else if (inc.containedAt !== undefined || (inc.contained ?? 0) >= 100) {
+      p.status = "contained";
+    } else {
+      p.status = "active";
+    }
+    if (inc.containedAt !== undefined) p.containedDate = new Date(inc.containedAt).toISOString();
+    // A fire out or contained is 100% contained even when its last percent report was older (Tamarack: 84%, then out).
+    if (p.status !== "active") p.contained = 100;
+    else if (inc.contained !== undefined) p.contained = inc.contained;
+    if (inc.cause !== undefined) p.cause = inc.cause;
+  }
+  return joined;
+}
+
 const TRUNCATED_NOTE = "Showing the 2,000 largest fires; zoom in for all";
 
 /**
@@ -220,6 +327,17 @@ const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 const ATTRIBUTES: Attribute[] = [
   { key: "acres", type: "measure", label: "Acres burned", unit: "acres", encode: "size", presets: NWCG_FIRE_SIZE },
   { key: "year", type: "time", label: "Year" },
+  {
+    key: "status",
+    type: "category",
+    label: "Status",
+    primary: true,
+    levels: [
+      { value: "active", label: "Still burning", help: "Not yet fully contained." },
+      { value: "contained", label: "Contained", help: "A control line holds all the way around; may still smoulder inside." },
+      { value: "out", label: "Out", help: "Declared out by the fire managers." },
+    ],
+  },
   { key: "agency", type: "category", label: "Agency" },
   nameAttribute(),
 ];
@@ -237,17 +355,32 @@ const HELP: Record<string, FieldHelp> = {
   acres: ACRES,
   v: ACRES,
   year: { text: "The fire year (the year the fire was discovered)." },
-  t: { text: "When the fire was discovered; fires before 2020 show January 1 of their fire year because the history records only the year." },
-  agency: { text: "The agency with jurisdiction where the fire started, as the record gives it." },
+  t: { text: "When the fire was discovered; fires before 2020 are placed mid-year (July 1) because the history records only the year." },
+  discovered: { text: "When the fire was discovered (2020 on; the older history records only the year)." },
+  agency: { text: "The agency with jurisdiction where the fire started, in words (the record's code is agencyCode)." },
+  contained: {
+    text: "How much of the fire's edge has a control line, as the incident last reported it; 100% means contained.",
+    unit: "%",
+    source: "NIFC WFIGS Incident Locations",
+    url: "https://data-nifc.opendata.arcgis.com/",
+  },
+  status: { text: "Out (declared out), Contained (a line all the way around) or Still burning, from the incident record (2020 on)." },
+  lastMapped: { text: "When this perimeter was last mapped; a fire still burning can have grown since." },
 };
 
 const CARD: CardSpec = {
   measure: { key: "acres", label: "Acres burned", unit: "acres" },
   facts: [
+    { key: "status", label: "Status", values: { active: "Still burning", contained: "Contained", out: "Out" } },
+    { key: "contained", label: "Contained", unit: "%", format: "int" },
+    { key: "outDate", label: "Declared out", format: "date" },
+    { key: "lastMapped", label: "Perimeter last mapped", format: "date" },
+    { key: "discovered", label: "Discovered", format: "date" },
     { key: "year", label: "Year" },
-    { key: "t", label: "Discovered", format: "date" },
+    { key: "cause", label: "Cause" },
     { key: "agency", label: "Agency" },
   ],
+  hidden: ["agencyCode", "containedDate", "t", "v"],
 };
 
 const firePerimeters = defineLayer({
@@ -255,7 +388,8 @@ const firePerimeters = defineLayer({
   title: "Wildfire perimeters",
   description:
     "Outlines of US wildfires from the National Interagency Fire Center: current fires (shown as the latest mapped perimeter) and past years. " +
-    "Each polygon has name, year, acres, agency (when known), t (discovery date, or January 1 of the fire year for fires before 2020) and v (burned acres, from the mapped perimeter). " +
+    "Each polygon has name, year, acres, agency (in words, when known), t (discovery date, or July 1 of the fire year for fires before 2020) and v (burned acres, from the mapped perimeter). " +
+    "Fires from 2020 on also have status ('active' still burning, 'contained' or 'out'), contained (percent of the edge contained), outDate, lastMapped (when the perimeter was last mapped; a burning fire may have grown since), discovered and cause, from the incident record. " +
     "Use yearsBack (1 to 25, default 10) to choose how far back to go and minAcres (default 100) to hide small fires. " +
     "United States only; elsewhere it returns nothing. Perimeters are simplified for display, so acreage is approximate and edges are not survey-grade. " +
     "Each source returns at most 2,000 fires, largest first; when that cap is hit the result says so, so zoom in for the rest. " +
@@ -274,6 +408,8 @@ const firePerimeters = defineLayer({
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // The biggest fires carry their names on the map.
+  labels: { field: "name", max: 5, rankBy: "acres" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const retrieved = new Date();
@@ -297,6 +433,16 @@ const firePerimeters = defineLayer({
       maxAllowableOffset: offsetFor(ctx.bbox, wide),
       ...(wideLimit !== undefined && { resultRecordCount: Math.floor(wideLimit / (both ? 2 : 1)), withCount: true }),
     };
+    // The incident points (containment, out date) for the WFIGS years, asked alongside the perimeters.
+    const locations = arcgisQuery(ctx, LOCATIONS_URL, {
+      where: `FireDiscoveryDateTime >= DATE '${wfigsStart}-01-01' AND IncidentSize >= ${input.minAcres / 2}`,
+      outFields: LOCATION_FIELDS,
+      bbox: ctx.bbox,
+      maxRecords: 2000,
+      orderByFields: "IncidentSize DESC",
+      cacheSuffix: "perimeters-incidents",
+      ttlSeconds: 1800,
+    });
     const [history, wfigs] = await Promise.all([
       both
         ? arcgisQuery(ctx, HISTORY_URL, {
@@ -322,15 +468,24 @@ const firePerimeters = defineLayer({
 
     if (!history.ok) return { error: history.error, hint: "upstream" };
     if (!wfigs.ok) return { error: wfigs.error, hint: "upstream" };
+    const incidents = await locations;
 
     // The total is perimeter rows in both services, so a fire the history view repeats can count twice; close enough for a note.
     const total = wide && history.total !== undefined && wfigs.total !== undefined ? history.total + wfigs.total : undefined;
+    const data = normalizeFirePerimeters(history.fc, wfigs.fc);
+    const notes: string[] = [];
+    if (incidents.ok) joinIncidents(data, incidentsById(incidents.fc));
+    else {
+      joinIncidents(data, new Map());
+      notes.push("Containment could not be loaded right now, so the fires' status is not shown");
+    }
+    if ((history.truncated || wfigs.truncated) && !wide) notes.push(TRUNCATED_NOTE);
     return {
       kind: "geojson",
-      data: normalizeFirePerimeters(history.fc, wfigs.fc),
+      data,
       citation,
       ...(total !== undefined && { total }),
-      ...((history.truncated || wfigs.truncated) && !wide ? { coverageNote: TRUNCATED_NOTE } : {}),
+      ...(notes.length > 0 && { coverageNote: notes.join("; ") }),
     };
   },
 });

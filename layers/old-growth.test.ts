@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { normalizeOldGrowth, simplifyOffset } from "./old-growth";
+import layer, { OLD_GROWTH_CLASSES, normalizeOldGrowth, oldGrowthClass, simplifyOffset } from "./old-growth";
+import { contractProblems, legendOf } from "./contract";
 import { hardMaxAreaKm2 } from "./types";
 import raw from "./__fixtures__/old-growth.cascades.json";
 
@@ -73,7 +74,7 @@ describe("old-growth layer", () => {
     expect(calls).toHaveLength(1);
     const url = new URL(calls[0][0]);
     expect(url.origin + url.pathname).toBe(
-      "https://apps.fs.usda.gov/fsgisx02/rest/services/wo_nfs_gstc/WO_OSC_GapAnalysis_OldGrowthAndMatureForests/MapServer/29/query",
+      "https://apps.fs.usda.gov/fsgisx02/rest/services/wo_nfs_gstc/WO_OSC_GapAnalysis_OldGrowthAndMatureForests/MapServer/31/query",
     );
     expect(url.searchParams.get("resultRecordCount")).toBe("200");
     expect(url.searchParams.get("orderByFields")).toBe("OLD_GROWTH_ACRES DESC");
@@ -167,5 +168,19 @@ describe("old-growth layer", () => {
     expect(layer.description).toMatch(/finest unit/);
     expect(layer.description).toMatch(/estimates/);
     expect(layer.description).toMatch(/federal/i);
+  });
+
+  it("fills firesheds by old-growth class on the ramp, ranks by old-growth acres, and keys the legend to the classes", () => {
+    expect([0, 4_999, 5_000, 21_334, 50_000, 130_822].map(oldGrowthClass)).toEqual(["under-5k", "under-5k", "5k-20k", "20k-50k", "50k-up", "50k-up"]);
+    for (const f of normalizeOldGrowth(fixture).features) {
+      expect(f.properties?.oldGrowthClass).toBe(oldGrowthClass(Number(f.properties?.oldGrowthAcres)));
+    }
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "oldGrowthClass", unit: "acres" });
+    expect(legend.items?.map((i) => i.color)).toEqual(OLD_GROWTH_CLASSES.map((c) => c.color));
+    expect(layer.attributes?.find((a) => a.key === "oldGrowthAcres")).toMatchObject({ type: "measure", encode: "size" });
+    expect(layer.labels).toEqual({ field: "name", max: 6, rankBy: "oldGrowthAcres" });
+    expect(layer.description).toMatch(/whole fireshed/);
+    expect(contractProblems(layer)).toEqual([]);
   });
 });

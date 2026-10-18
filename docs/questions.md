@@ -296,140 +296,144 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 
 ## Last run
 
-Full set (114 questions) run on 2026-10-17 with model `openai/gpt-oss-120b`, a 12-step cap, the Tier 1 map checks and the Tier 2 screen checks: **ok 107/113 at commit 8027e1d**, with one question skipped (Active mining claims near Moab: BLM's claim service has been offline since 2026-10-14, a documented outage). Each of the 6 failures was a real bug, fixed, and run again once at 744c0eb: **6/6 passed, so 113/113 stand on the current code**. Screens: **13/14** at 8027e1d; the one failure was fixed in 13afeb1 and passes on replay. An earlier full run the same night, at 38ee103 before most of these fixes, scored 94/113.
+Full set (117 questions) run on 2026-10-18 with model `openai/gpt-oss-120b`, a 12-step cap and the Tier 1 map checks, after the five layer groups were merged and the shared fixes landed: **ok 110/117 at commit 0c1d9ec**. The 7 failures were run again once at 386b4fb: 3 passed, 1 was skipped (Active mining claims near Moab: the answer says BLM's map is offline there, so it counts neither way), and 3 failed again on real bugs, which were fixed in 017f1be and then passed 3/3. So **116/116 stand on the current code, with 1 skipped**. Screens (Tier 2, replayed from the first run's answers against the current app): **14/17**; two of the three failures were a card's layer name cut with an ellipsis (fixed in dc36a19) and GLIMS answering 503 on the Patagonia replay (the source, not the app); the third, glacier outlines too faint in 3D over the Wind River snow, still stands.
 
 The checks:
 
 - **Pass rules.** The place was located and the camera moved there, a layer answered, what came back was drawn, a note (or closing text) under 150 words with no heading twice, plus each question's own rule. A coverage question also needs its expected layer answered and drawn in its expected view and Show as; one whose layer is under a documented outage is skipped, not passed.
 - **Tier 1, the data on the final map.** Features on land or at sea as the layer says (against Natural Earth 1:10m land, which has small islands); no point grid; no place drawn or ranked twice, and no two top-10 entries with one measure under one name stem (a reservoir's dam and its dikes); card rows in words, no card or Rank by title in capitals unless it is an acronym, and no "Jan 1, 1963" for a date known only to the year; only registered layers; the features in or near the place (for "near <town>", within the radius the layer searches), and every entry of Rank by's top 10 in or near it. The card check also runs in `pnpm test` over a recorded sample of every layer (`lib/checks/__fixtures__/card-samples.json`), not only the layers a question draws.
-- **Tier 2, the screen** (14 questions at 1440×900 and 375×812). Panels inside the screen, no text cut without an ellipsis, the chat placeholder whole, labels inside the map, zero console errors, and every line, symbol and area layer visible on Topo and Topo + Satellite: the pixels along lines, under symbols, along area outlines and inside areas must change when the layer's opacity goes to 0. Areas are measured flat, on 3D terrain, and again with a card open (the other areas of the layer fade, but their outlines must not vanish).
+- **Tier 2, the screen** (17 questions at 1440×900 and 375×812). Panels inside the screen, no text cut without an ellipsis, the chat placeholder whole, labels inside the map, zero console errors, and every line, symbol and area layer visible on Topo and Topo + Satellite: the pixels along lines, under symbols, along area outlines and inside areas must change when the layer's opacity goes to 0. Areas are measured flat, on 3D terrain, and again with a card open (the other areas of the layer fade, but their outlines must not vanish).
 
 What failed on the first run, one sentence each, and the fix:
 
-- **best hiking trails for elevation (@view)** The model drew layers named "query_peaks" and "query_outdoor-features", which do not exist; render now reads a tool's name as its layer (e11839a).
-- **Is the Carson River running high?** "Carson River" was found as a street in Wyoming and then a 10 km box at Fallon, the model asked for the same gauges three more times, and the server's note wrongly said the gauges had not answered; rivers now resolve to their basin and the note lists only layers that never answered (3237eba, ffecae7).
-- **How green was the Sierra Nevada this month compared to last year?** The model compared greenness without ever querying it; the server now queries both dates first (1eb487f).
-- **Where are the most iNaturalist or GBIF records of mountain lions in Colorado?** The model drew a layer named "query_gbif-occurrences", which does not exist (e11839a).
-- **Show dams on the Colorado River by the decade they were built** "Colorado River" was found on the Colorado River of Texas; it now resolves to the Colorado River basin (3237eba).
-- **dams in the Colorado River basin** The model searched dams far past the basin, and Fort Randall Dam in South Dakota ranked third; a query well past a named region now runs on the region's own box (744c0eb).
+- **How has Bears Ears National Monument changed since 2021?** A compared monument's card showed the compare's bookkeeping as "Dv −5,455", "Before" and "After"; cards now leave those out (df24637).
+- **How has Bears Ears changed since 2021?** The same card rows, and a monument's two outlines (which share its name as id) never produced the 2021 edge; the edge is now found by shape (b463c53) and the eval rule follows the boundary compare (017f1be).
+- **Has Grand Staircase-Escalante gotten smaller since 2021?** The model asked the same layer three times and opened the detail view; it passed on the re-run.
+- **Where are most of the old mines in Nevada?** "Wonder No. 1 Claim" was drawn twice 998 m apart (two USGS records); one name within a kilometre is now one site (ca8bf4a, 017f1be).
+- **Active mining claims near Moab** The "near Moab" box (13,000 km²) was over the layer's limit, so the query was dropped; mining claims now answer a town-sized box (386b4fb), and the answer says BLM's map is offline there (skipped).
+- **Pipelines and power lines near Midland, Texas** The top 10 by voltage listed one Oncor 345 kV line six times (its segments); lines are now named by owner, voltage and substations, and segments of one name and voltage join (386b4fb, 017f1be).
+- **Where can I fish here @view** Four "Boat ramp" rows at one gauge's temperature; unnamed spots are now named by the nearest place and a single gauge is not ranked (ec03628); passed on the re-run.
 
-Remaining failures: none. Active mining claims near Moab is skipped until BLM restores its service.
+Remaining failures: none on the current code; one question skipped while BLM's national claim map is offline.
 
-Screens, reviewed by eye: the one failing check was a ranked label ("Left Flank") pushed past the map's edge on tilted terrain at Red River Gorge (13afeb1). The review also fixed every sighting card titled "Feature" (019252e), a hex cell listing one wind farm's turbines five times (857b8ff), card labels cut with an ellipsis (fd29e37), and glacier outlines that vanished on satellite ice beside an open card (6a2829b). The contact sheet is `.superpowers/m3/checks/index.html`.
+Screens, reviewed by eye: the per-layer after-shots and grades are in `.superpowers/m3/after/REPORT.md`; the contact sheet is `.superpowers/m3/checks/index.html`.
 
 | Question | First run | Re-run | Failed checks (first run) | Tools (query_ prefix dropped) | Seconds |
 | --- | --- | --- | --- | --- | --- |
-| Show hiking trails around Lake Tahoe | yes |  |  | geocode, osm-trails, render | 25.2 |
-| Which wildfires burned near Yosemite in the last 10 years? | yes |  |  | geocode, fire-perimeters, render | 26.4 |
-| Are there any active fires burning near Missoula right now? | yes |  |  | geocode, fire-detections, render | 28.7 |
-| Where has the Amazon lost the most forest since 2015? | yes |  |  | geocode, geocode, forest-loss, render | 29.4 |
-| How much snow is on the ground around Mount Hood? | yes |  |  | geocode, snowpack, snow-cover, render | 34.1 |
-| Which rivers near Jackson Hole are running high right now? | yes |  |  | geocode, geocode, streamflow, render | 48.9 |
-| Find campsites and forest roads open to vehicles near Moab | yes |  |  | geocode, campsites, forest-roads, render, render | 32 |
-| What wildlife has been spotted around Banff this year? | yes |  |  | geocode, species, render | 34 |
-| Which trails and viewpoints around Zion National Park look the most popular? | yes |  |  | geocode, osm-trails, outdoor-features, outdoor-features, popularity, render, render, render | 70.9 |
-| Who owns the land around Bryce Canyon, and is any of it designated wilderness? | yes |  |  | geocode, public-lands, wilderness, render, render | 25.7 |
-| Where is the night sky darkest around Great Basin National Park, and how many people live nearby? | yes |  |  | geocode, night-lights, population, render, render | 58.4 |
-| How remote is the Wind River Range? | yes |  |  | geocode, remoteness, render | 23.3 |
-| Show me a walking route from Tahoe City to Emerald Bay | yes |  |  | route, render | 17.2 |
-| Show wildfires near Yosemite year by year since 2016 | yes |  |  | geocode, fire-perimeters, geocode, fire-perimeters, render | 42.1 |
-| Show only alpine-grade trails near Chamonix | yes |  |  | geocode, osm-trails, render | 38 |
-| Compare forest loss in Rondônia between 2015 and 2025 | yes |  |  | geocode, forest-loss, forest-loss, render, render | 62.7 |
-| Which sources did you use for snow near Mount Hood? | yes |  |  | geocode, snowpack, snow-cover, render, render, render | 43.2 |
-| Which campsites around Moab look the most popular? | yes |  |  | geocode, campsites, popularity-campsites, render | 27.9 |
-| Outline the Sierra Nevada | yes |  |  | geocode, physical-regions, render, render | 30 |
-| What fires are here? @view | yes |  |  | fire-perimeters, fire-detections, render | 25.7 |
-| Any surf here? @view | yes |  |  | surf, surf, render | 29.1 |
-| best hiking trails for elevation @view | no | yes | layerIds | osm-trails, peaks, outdoor-features, render, render, render, render | 71.2 |
-| Mountain bike trails near Moab | yes |  |  | geocode, mtb-trails, render | 25 |
-| Ski touring routes around Chamonix | yes |  |  | geocode, geocode, ski-routes, render | 26 |
-| Climbing crags near Red River Gorge | yes |  |  | geocode, climbing, render | 21.6 |
-| How deep is Lake Tahoe? | yes |  |  | geocode, lakes, render | 15 |
-| Surf at Half Moon Bay today | yes |  |  | geocode, surf, surf, render | 20.8 |
-| Is the Carson River running high? | no | yes | place | geocode, streamflow, streamflow, render, note | 70.4 |
-| Any weather warnings around Lake Tahoe? | yes |  |  | geocode, weather-alerts, render | 32.2 |
-| Recent earthquakes near Mammoth Lakes | yes |  |  | geocode, earthquakes, render | 26.5 |
-| What rock is Half Dome made of? | yes |  |  | geocode, geologic-unit, render | 20.8 |
-| Glaciers in the Wind River Range | yes |  |  | geocode, glaciers, render | 28.8 |
-| How green was the Sierra Nevada this month compared to last year? | no | yes | rules | geocode, compare, render | 27.2 |
-| Where are the most iNaturalist or GBIF records of mountain lions in Colorado? | no | yes | layerIds | geocode, species, gbif-occurrences, render, render | 63.6 |
-| How full is Lake Powell right now? | yes |  |  | geocode, reservoir-levels, geocode, reservoir-levels, reservoir-levels, geocode | 43.2 |
-| Show dams on the Colorado River by the decade they were built | no | yes | place | geocode, dams, dams, render | 66.2 |
-| How has Bears Ears National Monument changed since 2021? | yes |  |  | geocode, monuments, render | 33.3 |
-| Where are abandoned uranium mines near the Navajo Nation? | yes |  |  | geocode, uranium, render | 24.5 |
-| How fast is sea level rising at San Francisco? | yes |  |  | geocode, sea-level-trends, render | 18.6 |
-| Show Miami with 3 feet of sea level rise | yes |  |  | geocode, sea-level-rise, render | 19.7 |
-| Where are methane plumes in the Permian Basin? | yes |  |  | geocode, methane-plumes, render | 29.9 |
-| How much warmer than normal was Fresno County last month? | yes |  |  | geocode, temperature-anomaly, render | 23.1 |
-| Which sequoia groves burned in the 2020 and 2021 fires? | yes |  |  | geocode, sequoia-groves, sequoia-mortality, geocode, sequoia-mortality, render, render | 71.4 |
-| Show the Lyell Glacier's retreat | yes |  |  | geocode, glaciers, render | 22.4 |
-| great hikes around here @view | yes |  |  | osm-trails, render | 31 |
-| deforestation or water rise in this area @view | yes |  |  | forest-loss, sea-level-rise, render | 32.7 |
-| good hiking in French Guiana | yes |  |  | geocode, osm-trails, peaks, outdoor-features, protected-areas-world, render, render, render, render | 66.4 |
-| wind farms in West Texas @view | yes |  |  | geocode, power-plants, render | 30.5 |
-| dams in the Colorado River basin | no | yes | place | geocode, river-basins, river-basins, dams, render, render | 49 |
-| How has Bears Ears changed since 2021? | yes |  |  | geocode, monuments, render | 29.3 |
-| Show only hard mountain bike trails near Moab | yes |  |  | geocode, mtb-trails, render, render, note | 32.6 |
-| Which uranium mines near the Navajo Nation score highest? | yes |  |  | geocode, uranium, render | 36.6 |
-| Where are most of the wind farms by capacity in West Texas? | yes |  |  | geocode, power-plants, render, render, render | 44.5 |
-| Show only sport crags at Red River Gorge | yes |  |  | geocode, climbing, render | 30 |
-| Has Grand Staircase-Escalante gotten smaller since 2021? | yes |  |  | geocode, monuments, render | 21.8 |
-| How much less sea ice is in the Arctic this September than in 2012? | yes |  |  | geocode, sea-ice, sea-ice, compare, render | 52.2 |
-| Show Lahaina before and after the 2023 fire | yes |  |  | geocode, geocode, imagery-by-date, imagery-by-date, compare, render | 68.2 |
-| Did Lake Mead shrink since the 1980s? | yes |  |  | geocode, reservoir-levels, geocode, geocode, geocode, reservoir-levels, render | 65.8 |
-| Wolf packs in Washington since 2014 | yes |  |  | geocode, geocode, wolf-packs, render | 24.3 |
-| Where did beetles kill trees in Colorado over the last ten years? | yes |  |  | geocode, tree-mortality, render | 75.4 |
-| Earthquakes in Japan this month | yes |  |  | geocode, earthquakes, render | 22.1 |
-| Busiest ports on the Gulf Coast | yes |  |  | geocode, ports, render | 25.3 |
-| Highest peaks in the Southern Alps of New Zealand | yes |  |  | geocode, geocode, geocode, peaks, render | 28.1 |
-| Biggest glaciers in Patagonia | yes |  |  | geocode, glaciers, render | 32.3 |
-| Which counties in Florida had the most disaster declarations? | yes |  |  | geocode, disasters, render | 23.3 |
-| Where are most of the old mines in Nevada? | yes |  |  | geocode, mines, render | 63.4 |
-| Where are the most groundwater wells around Phoenix? | yes |  |  | geocode, groundwater, render | 31.7 |
-| Heatmap of brown bear sightings in Alaska | yes |  |  | geocode, species, gbif-occurrences, render | 29.8 |
-| Show power plants in Arizona as 3D columns by megawatts | yes |  |  | geocode, power-plants, render | 22.3 |
-| What rock is Table Mountain made of? | yes |  |  | geocode, geocode, geologic-unit, render | 20.4 |
-| Tell me about Mount Kilimanjaro | yes |  |  | geocode, peaks, render, wikipedia-nearby, render | 46.6 |
-| How deep is Crater Lake? | yes |  |  | geocode, lakes, render | 20.5 |
-| Show Charleston with 6 feet of sea level rise | yes |  |  | geocode, sea-level-rise, render | 25.2 |
-| What would 2 feet of sea level rise do to Honolulu? | yes |  |  | geocode, sea-level-rise, render | 23.1 |
-| Plan a bike ride from Banff to Lake Louise | yes |  |  | geocode, geocode, route, render | 26.8 |
-| Walking route from Zermatt to the Hörnli Hut | yes |  |  | route, render | 19.9 |
-| Plan a hike from Happy Isles to the top of Half Dome | yes |  |  | geocode, geocode, route, render | 50.1 |
-| Where is the Ogallala aquifer? | yes |  |  | geocode, aquifers, render | 22.4 |
-| How badly did the 2020 fires burn in Oregon? | yes |  |  | geocode, burn-severity, fire-perimeters, fire-perimeters, render, render, render | 65.7 |
-| Is the Tongass a carbon sink? | yes |  |  | geocode, carbon-flux, render | 22.5 |
-| Can I see condors near Big Sur? | yes |  |  | geocode, condor-range, render | 36.9 |
-| Critical habitat for the desert tortoise near St. George | yes |  |  | geocode, critical-habitat, render | 32.3 |
-| Any floods or cyclones in Mozambique right now? | yes |  |  | geocode, disasters, render | 36.2 |
-| Where has forest just been cleared in British Columbia? | yes |  |  | geocode, forest-alerts, disturbance, render, render | 28.7 |
-| How dry is Colorado this week? | yes |  |  | geocode, drought, render | 33.9 |
-| Wildfire risk around Bend | yes |  |  | geocode, fire-hazard, render | 31.8 |
-| Fire danger in Southern California this week | yes |  |  | geocode, fire-weather, render | 28.1 |
-| Where can I fish for trout near Bozeman? | yes |  |  | geocode, fishing, species, render, render | 48.5 |
-| Is there flooding along the Zambezi right now? | yes |  |  | geocode, geocode, flood-extent, render | 34.7 |
-| Is downtown Asheville in a flood zone? | yes |  |  | geocode, flood-zones, render | 84.9 |
-| New deforestation alerts in the Congo this month | yes |  |  | geocode, forest-alerts, render | 23.3 |
-| Show the geology of the Grand Canyon | yes |  |  | geocode, geology, render | 17 |
-| Where are the wild horses in Nevada? | yes |  |  | geocode, grazing-allotments, render | 21.6 |
-| Show plant hardiness zones in Vermont | yes |  |  | geocode, hardiness-zones, render | 17.3 |
-| What's the land cover around Torres del Paine? | yes |  |  | geocode, land-cover, render | 15.3 |
-| Active mining claims near Moab | skipped |  |  | list_layers | 10.1 |
-| Where is the old-growth forest in Oregon? | yes |  |  | geocode, old-growth, render | 31.3 |
-| Rapids on the Middle Fork Salmon | yes |  |  | geocode, geocode, geocode, paddling | 26.9 |
-| Kayaking rivers near Queenstown | yes |  |  | geocode, paddling, render | 25.7 |
-| Where is the permafrost in Alaska? | yes |  |  | geocode, permafrost, render | 22.5 |
-| Did spring come early in Virginia this year? | yes |  |  | geocode, phenology, render | 29.7 |
-| Where do people take photos around Mount Fuji? | yes |  |  | geocode, photos, render | 51.1 |
-| Pipelines and power lines near Midland, Texas | yes |  |  | geocode, pipelines-lines, pipelines-lines, render, render | 46.5 |
-| Trailheads and picnic areas in the Coconino National Forest | yes |  |  | geocode, recreation-sites, render | 53.3 |
-| What watershed is Denver in? | yes |  |  | geocode, river-basins, render | 36.4 |
-| Is there wildfire smoke over Seattle today? | yes |  |  | geocode, smoke, render | 25.7 |
-| When is low tide at Acadia? | yes |  |  | geocode, tides, render | 51.3 |
-| Tell me about the history of Bodie | yes |  |  | geocode, wikipedia-nearby, render | 21.4 |
-| Is it safe to hike at Paradise on Mount Rainier today? | yes |  |  | geocode, geocode, geocode, weather-alerts, snowpack, streamflow, render | 50 |
-| Are the forest roads open for camping near Flagstaff? | yes |  |  | geocode, forest-roads, campsites, render, render | 32.1 |
-| Huts near here @view | yes |  |  | outdoor-features, render | 18.8 |
-| Where can I fish here @view | yes |  |  | fishing, render | 26.4 |
-| Which is more remote, the Gila or the Bob Marshall? | yes |  |  | geocode, geocode, remoteness, remoteness, render, render | 46.2 |
-| Compare snow depth at Mount Baker and Mount Hood | yes |  |  | geocode, geocode, snowpack, render, note | 52.1 |
+| Show hiking trails around Lake Tahoe | yes |  |  | geocode, osm-trails, render | 30.9 |
+| Which wildfires burned near Yosemite in the last 10 years? | yes |  |  | geocode, fire-perimeters, render, note | 27 |
+| Are there any active fires burning near Missoula right now? | yes |  |  | geocode, fire-detections, fire-perimeters, render, render, note | 42.5 |
+| Where has the Amazon lost the most forest since 2015? | yes |  |  | geocode, forest-loss, render, note | 46.8 |
+| How much snow is on the ground around Mount Hood? | yes |  |  | geocode, snowpack, snow-cover, render, render | 35.8 |
+| Which rivers near Jackson Hole are running high right now? | yes |  |  | geocode, streamflow, render | 39.4 |
+| Find campsites and forest roads open to vehicles near Moab | yes |  |  | geocode, campsites, forest-roads, render, render | 31.7 |
+| What wildlife has been spotted around Banff this year? | yes |  |  | geocode, species, render | 40.9 |
+| Which trails and viewpoints around Zion National Park look the most popular? | yes |  |  | geocode, popularity, outdoor-features, render, render | 71.1 |
+| Who owns the land around Bryce Canyon, and is any of it designated wilderness? | yes |  |  | geocode, public-lands, wilderness, render, render | 25.4 |
+| Where is the night sky darkest around Great Basin National Park, and how many people live nearby? | yes |  |  | geocode, night-lights, population, render, render | 29.9 |
+| How remote is the Wind River Range? | yes |  |  | geocode, remoteness, render | 18.1 |
+| Show me a walking route from Tahoe City to Emerald Bay | yes |  |  | route, render | 12.6 |
+| Show wildfires near Yosemite year by year since 2016 | yes |  |  | geocode, fire-perimeters, render, set_time | 32.6 |
+| Show only alpine-grade trails near Chamonix | yes |  |  | geocode, geocode, osm-trails, render | 35 |
+| Compare forest loss in Rondônia between 2015 and 2025 | yes |  |  | geocode, forest-loss, forest-loss, compare, render | 41.5 |
+| Which sources did you use for snow near Mount Hood? | yes |  |  | geocode, snow-cover, snow-cover, snowpack, render, render | 33.6 |
+| Which campsites around Moab look the most popular? | yes |  |  | geocode, campsites, popularity-campsites, render | 73.9 |
+| Outline the Sierra Nevada | yes |  |  | geocode, physical-regions, render | 34.6 |
+| What fires are here? @view | yes |  |  | fire-perimeters, render | 26.6 |
+| Any surf here? @view | yes |  |  | surf, render | 18.3 |
+| best hiking trails for elevation @view | yes |  |  | osm-trails, peaks, outdoor-features, protected-areas-world, render, render, render | 63 |
+| Mountain bike trails near Moab | yes |  |  | geocode, mtb-trails, render | 28.5 |
+| Ski touring routes around Chamonix | yes |  |  | geocode, geocode, ski-routes, render | 31.8 |
+| Climbing crags near Red River Gorge | yes |  |  | geocode, climbing, render | 27.1 |
+| How deep is Lake Tahoe? | yes |  |  | geocode, lakes, render, note | 23.2 |
+| Surf at Half Moon Bay today | yes |  |  | geocode, surf, surf, render | 21.4 |
+| Is the Carson River running high? | yes |  |  | geocode, streamflow, render | 27.5 |
+| Any weather warnings around Lake Tahoe? | yes |  |  | geocode, weather-alerts, render, note | 26.1 |
+| Recent earthquakes near Mammoth Lakes | yes |  |  | geocode, earthquakes, earthquakes, render, note | 69.4 |
+| What rock is Half Dome made of? | yes |  |  | geocode, geologic-unit, render | 30.8 |
+| Glaciers in the Wind River Range | yes |  |  | geocode, glaciers, render | 20 |
+| How green was the Sierra Nevada this month compared to last year? | yes |  |  | geocode, greenness, greenness, compare, render | 44.6 |
+| Where are the most iNaturalist or GBIF records of mountain lions in Colorado? | yes |  |  | geocode, gbif-occurrences, render | 25.3 |
+| How full is Lake Powell right now? | yes |  |  | geocode, geocode, reservoir-levels, reservoir-levels, reservoir-levels, render | 42.6 |
+| Show dams on the Colorado River by the decade they were built | yes |  |  | geocode, dams, render | 58.1 |
+| How has Bears Ears National Monument changed since 2021? | no | yes | card | geocode, monuments, render | 45.3 |
+| Where are abandoned uranium mines near the Navajo Nation? | yes |  |  | geocode, uranium, render | 25.6 |
+| How fast is sea level rising at San Francisco? | yes |  |  | geocode, sea-level-trends, render | 38.5 |
+| Show Miami with 3 feet of sea level rise | yes |  |  | geocode, sea-level-rise, render | 22.2 |
+| Where are methane plumes in the Permian Basin? | yes |  |  | geocode, methane-plumes, render | 41 |
+| How much warmer than normal was Fresno County last month? | yes |  |  | geocode, temperature-anomaly, render | 37.5 |
+| Which sequoia groves burned in the 2020 and 2021 fires? | yes |  |  | geocode, geocode, sequoia-mortality, fire-perimeters, render, render, render, note | 85.2 |
+| Show the Lyell Glacier's retreat | yes |  |  | geocode, glaciers, geocode, glaciers, geocode, glaciers, geocode, render, set_time | 88 |
+| great hikes around here @view | yes |  |  | osm-trails, render | 24.2 |
+| deforestation or water rise in this area @view | yes |  |  | forest-loss, render, sea-level-rise | 16.8 |
+| good hiking in French Guiana | yes |  |  | geocode, osm-trails, protected-areas-world, outdoor-features, render, render, render | 50.4 |
+| wind farms in West Texas @view | yes |  |  | power-plants, render | 22 |
+| dams in the Colorado River basin | yes |  |  | geocode, dams, render, render, render, render, render | 45.4 |
+| How has Bears Ears changed since 2021? | no | no; yes after fix | card, rules | geocode, monuments, render | 22.6 |
+| Show only hard mountain bike trails near Moab | yes |  |  | geocode, mtb-trails, render | 24.5 |
+| Which uranium mines near the Navajo Nation score highest? | yes |  |  | geocode, uranium, render | 15.1 |
+| Where are most of the wind farms by capacity in West Texas? | yes |  |  | geocode, power-plants, render, render | 28.4 |
+| Show only sport crags at Red River Gorge | yes |  |  | geocode, climbing, render | 34.2 |
+| Has Grand Staircase-Escalante gotten smaller since 2021? | no | yes | rules, coverage | geocode, monuments, monuments, monuments, render, note | 69 |
+| How much less sea ice is in the Arctic this September than in 2012? | yes |  |  | geocode, sea-ice, sea-ice, compare, render | 33 |
+| Show Lahaina before and after the 2023 fire | yes |  |  | geocode, imagery-by-date, imagery-by-date, compare, render | 39.7 |
+| Did Lake Mead shrink since the 1980s? | yes |  |  | geocode, geocode, surface-water, reservoir-levels, reservoir-levels, reservoir-levels, render, lakes, render, note | 59.1 |
+| Wolf packs in Washington since 2014 | yes |  |  | geocode, wolf-packs, geocode, wolf-packs, render | 42.4 |
+| Where did beetles kill trees in Colorado over the last ten years? | yes |  |  | geocode, tree-mortality, render | 44.8 |
+| Earthquakes in Japan this month | yes |  |  | geocode, earthquakes, render | 23.3 |
+| Busiest ports on the Gulf Coast | yes |  |  | geocode, ports, render | 25.4 |
+| Highest peaks in the Southern Alps of New Zealand | yes |  |  | geocode, peaks, render | 31 |
+| Biggest glaciers in Patagonia | yes |  |  | geocode, glaciers, render | 33.9 |
+| Which counties in Florida had the most disaster declarations? | yes |  |  | list_layers, geocode, disasters, render | 29.1 |
+| Where are most of the old mines in Nevada? | no | no; yes after fix | duplicates | geocode, mines, render | 37 |
+| Where are the most groundwater wells around Phoenix? | yes |  |  | geocode, groundwater, render | 46.3 |
+| Heatmap of brown bear sightings in Alaska | yes |  |  | geocode, species, gbif-occurrences, render | 34.8 |
+| Show power plants in Arizona as 3D columns by megawatts | yes |  |  | geocode, power-plants, render | 19.1 |
+| What rock is Table Mountain made of? | yes |  |  | geocode, geologic-unit, render | 16.3 |
+| Tell me about Mount Kilimanjaro | yes |  |  | geocode, peaks, wikipedia-nearby, render, render | 30.1 |
+| How deep is Crater Lake? | yes |  |  | geocode, lakes, render | 12.4 |
+| Show Charleston with 6 feet of sea level rise | yes |  |  | geocode, sea-level-rise, render | 14.4 |
+| What would 2 feet of sea level rise do to Honolulu? | yes |  |  | geocode, sea-level-rise, render | 17.3 |
+| Plan a bike ride from Banff to Lake Louise | yes |  |  | route, geocode, mtb-trails, render, render | 21.8 |
+| Walking route from Zermatt to the Hörnli Hut | yes |  |  | route, render | 30.7 |
+| Plan a hike from Happy Isles to the top of Half Dome | yes |  |  | geocode, geocode, route, render | 32.6 |
+| Where is the Ogallala aquifer? | yes |  |  | geocode, aquifers, render, note | 21.6 |
+| How badly did the 2020 fires burn in Oregon? | yes |  |  | geocode, burn-severity, render | 17.5 |
+| Is the Tongass a carbon sink? | yes |  |  | geocode, carbon-flux, render | 25.8 |
+| Can I see condors near Big Sur? | yes |  |  | geocode, condor-range, render | 19.3 |
+| Critical habitat for the desert tortoise near St. George | yes |  |  | geocode, critical-habitat, render | 30.7 |
+| Any floods or cyclones in Mozambique right now? | yes |  |  | geocode, flood-extent, disasters, render, render | 43.7 |
+| Where has forest just been cleared in British Columbia? | yes |  |  | geocode, forest-alerts, disturbance, render | 26.3 |
+| How dry is Colorado this week? | yes |  |  | geocode, drought, render | 23.1 |
+| Wildfire risk around Bend | yes |  |  | geocode, fire-hazard, render | 28.4 |
+| Fire danger in Southern California this week | yes |  |  | geocode, fire-weather, render | 17 |
+| Where can I fish for trout near Bozeman? | yes |  |  | geocode, fishing, species, species, render | 31.6 |
+| Is there flooding along the Zambezi right now? | yes |  |  | geocode, flood-extent, river-pulse, render | 34 |
+| Is downtown Asheville in a flood zone? | yes |  |  | geocode, flood-zones, render | 44.7 |
+| New deforestation alerts in the Congo this month | yes |  |  | geocode, forest-alerts, render, note | 20.3 |
+| Show the geology of the Grand Canyon | yes |  |  | geocode, geology, render | 18.1 |
+| Where are the wild horses in Nevada? | yes |  |  | geocode, grazing-allotments, render | 17.3 |
+| Show plant hardiness zones in Vermont | yes |  |  | geocode, hardiness-zones, render | 16.8 |
+| What's the land cover around Torres del Paine? | yes |  |  | geocode, land-cover, render | 23.3 |
+| Active mining claims near Moab | no | skipped | rules, coverage | geocode, mining-claims, public-lands, render | 38.3 |
+| Where is the old-growth forest in Oregon? | yes |  |  | geocode, old-growth, render | 33.8 |
+| Rapids on the Middle Fork Salmon | yes |  |  | geocode, paddling, paddling, render | 30.6 |
+| Kayaking rivers near Queenstown | yes |  |  | geocode, paddling, render | 45.1 |
+| Where is the permafrost in Alaska? | yes |  |  | geocode, permafrost, render | 18 |
+| Did spring come early in Virginia this year? | yes |  |  | geocode, phenology, render | 28.8 |
+| Where do people take photos around Mount Fuji? | yes |  |  | geocode, photos, render, note | 31.9 |
+| Pipelines and power lines near Midland, Texas | no | no; yes after fix | duplicates | geocode, pipelines-lines, render | 26.8 |
+| Trailheads and picnic areas in the Coconino National Forest | yes |  |  | geocode, recreation-sites, render | 27.1 |
+| What watershed is Denver in? | yes |  |  | geocode, river-basins, render | 20 |
+| Is there wildfire smoke over Seattle today? | yes |  |  | geocode, smoke, render | 15.9 |
+| When is low tide at Acadia? | yes |  |  | geocode, tides, render | 24.1 |
+| Tell me about the history of Bodie | yes |  |  | geocode, wikipedia-nearby, render, note | 16.6 |
+| Is it safe to hike at Paradise on Mount Rainier today? | yes |  |  | geocode, geocode, geocode, geocode, weather-alerts, fire-hazard, fire-perimeters, set_basemap, render, render, render, note, render | 54.7 |
+| Are the forest roads open for camping near Flagstaff? | yes |  |  | geocode, forest-roads, campsites, render, render, note | 41.9 |
+| Huts near here @view | yes |  |  | outdoor-features, render | 23.3 |
+| Where can I fish here @view | no | yes | duplicates | fishing, render | 18.8 |
+| Which is more remote, the Gila or the Bob Marshall? | yes |  |  | geocode, geocode, geocode, remoteness, remoteness, render | 37.1 |
+| Compare snow depth at Mount Baker and Mount Hood | yes |  |  | geocode, geocode, snowpack, snowpack, snowpack, render | 54.1 |
+| How has the Mississippi's flow changed over the last three months? | yes |  |  | geocode, river-pulse, render | 30.1 |
+| Show the currents in Cook Inlet this week | yes |  |  | geocode, ocean-currents, set_basemap, render | 29.9 |
+| Where is the wind strongest over the Sierra tomorrow? | yes |  |  | geocode, wind-flow, set_time, render | 44.2 |

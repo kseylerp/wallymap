@@ -26,6 +26,7 @@ import type { BBox } from "@/layers/types";
 import {
   areaFillProblem,
   collectAreaSamples,
+  collectTileAreaSamples,
   collectLabels,
   collectLayout,
   collectLineSamples,
@@ -48,7 +49,7 @@ import { sizeText, watchDisk, type DiskGuard } from "@/scripts/diskGuard";
 import type { Basemap, MapState } from "@/lib/render/state";
 import { visibleState } from "@/lib/render/view";
 import { visibleMapPadding } from "@/lib/render/viewportPadding";
-import { boundsOf } from "@/lib/render/views";
+import { boundsOf, isChoropleth } from "@/lib/render/views";
 
 export type ScreenItem = { raw: string; slug: string; state: MapState; failures: string[] };
 
@@ -69,6 +70,14 @@ const BASEMAPS: { value: Basemap; label: string; button: string }[] = [
   { value: "outdoors", label: "Topo", button: "Topographical" },
   { value: "outdoors-satellite", label: "Topo + Satellite", button: "Topographical + Satellite" },
 ];
+
+/** Satellite: area fills are measured on it too (lines and symbols on the two above). */
+const SATELLITE = { value: "satellite" as Basemap, label: "Satellite", button: "Satellite" };
+
+/** True for a vector tile layer drawn as areas (hardiness zones, geology, public lands): its fill is measured. */
+function isVectorTileArea(layer: MapState["layers"][string] | undefined): boolean {
+  return layer?.result.kind === "tiles" && layer.result.data.format === "vector" && (layer.result.data.geometry ?? layer.style.geometry) === "polygon";
+}
 
 /** Presses a basemap button in the top bar. */
 async function pickBasemap(page: Page, button: string): Promise<void> {
@@ -286,6 +295,24 @@ async function openCard(page: Page, state: MapState): Promise<string | null> {
 
 type RenderOps = MapState["renderOps"];
 
+/** The pixel change at `points` between the map as it stands and with the layer's row at opacity 0 (as measureOps does). */
+async function shownHiddenDiffs(page: Page, layerId: string, title: string, points: { x: number; y: number }[]): Promise<number[]> {
+  const shown = (await page.screenshot()).toString("base64");
+  const slider = page.locator(`[data-layer-id="${layerId}"] [data-testid="opacity-slider"]`).first();
+  const before = (await slider.count()) > 0 ? await slider.inputValue() : null;
+  const scrolls = await page.evaluate(saveScroll);
+  const toggle = page.locator(`[data-layer-id="${layerId}"] [data-testid="visibility-toggle"], button[aria-label="Hide ${title}"], button[aria-label="Show ${title}"]`).first();
+  if (before !== null) await slider.fill("0");
+  else await toggle.click({ force: true });
+  await settle(page, 800);
+  const hidden = (await page.screenshot()).toString("base64");
+  if (before !== null) await slider.fill(before);
+  else await toggle.click({ force: true });
+  await page.evaluate(restoreScroll, scrolls);
+  await settle(page, 500);
+  return page.evaluate(pixelDiffs, { a: `data:image/png;base64,${shown}`, b: `data:image/png;base64,${hidden}`, points });
+}
+
 /**
  * Measures each op on the map as it stands, labelled `on` ("Topo + Satellite in 3D"): the mean pixel change along its
  * lines, under its symbols, along its outlines and inside its areas between the map with the layer and with the row's
@@ -295,6 +322,22 @@ async function measureOps(page: Page, state: MapState, ops: RenderOps, on: strin
   const { readings, problems } = out;
   for (const op of ops) {
     const title = state.layers[op.layerId].title;
+    const choropleth = isChoropleth(state.layers[op.layerId]);
+    // Vector tile areas (hardiness zones, geology, public lands) have no outlines to sample: their fill is the check.
+    if (state.layers[op.layerId].result.kind === "tiles") {
+      if (!withFill) continue;
+      const inside = await page.evaluate(collectTileAreaSamples, { layerId: op.layerId, max: 400 });
+      if (inside.length < 5) {
+        readings.push(`${title} fill on ${on}: too few points inside its areas on screen to measure (${inside.length})`);
+        continue;
+      }
+      const fill = await shownHiddenDiffs(page, op.layerId, title, inside);
+      const fillMean = fill.reduce((a, d) => a + d, 0) / fill.length;
+      readings.push(`${title} fill on ${on}: ${fillMean.toFixed(1)} mean pixel change over ${fill.length} points`);
+      const fillProblem = areaFillProblem(title, on, fill, choropleth);
+      if (fillProblem) problems.push(fillProblem);
+      continue;
+    }
     const what = op.mode === "points" ? "symbols" : op.mode === "lines" ? "lines" : "outlines";
     const areas = what === "outlines" ? await page.evaluate(collectAreaSamples, { layerId: op.layerId, max: 400 }) : null;
     const points =
@@ -338,7 +381,7 @@ async function measureOps(page: Page, state: MapState, ops: RenderOps, on: strin
       const fill = await page.evaluate(pixelDiffs, { a: `data:image/png;base64,${shown}`, b: `data:image/png;base64,${hidden}`, points: areas.inside });
       const fillMean = fill.reduce((s, d) => s + d, 0) / fill.length;
       readings.push(`${title} fill on ${on}: ${fillMean.toFixed(1)} mean pixel change over ${fill.length} points`);
-      const fillProblem = areaFillProblem(title, on, fill);
+      const fillProblem = areaFillProblem(title, on, fill, choropleth);
       if (fillProblem) problems.push(fillProblem);
     }
   }
@@ -356,7 +399,11 @@ async function lineChecks(page: Page, state: MapState, slug: string): Promise<{ 
   const shots: string[] = [];
   // Lines, symbols (points drawn as symbols) and areas (their outlines and their insides), each measured the same way.
   const lines = state.renderOps.filter(
-    (o) => o.visible && (o.mode === "lines" || o.mode === "points" || o.mode === "polygons" || (o.mode === "columns" && state.layers[o.layerId]?.style.geometry === "polygon")) && state.layers[o.layerId]?.result.kind === "geojson",
+    (o) =>
+      o.visible &&
+      (((o.mode === "lines" || o.mode === "points" || o.mode === "polygons" || (o.mode === "columns" && state.layers[o.layerId]?.style.geometry === "polygon")) &&
+        state.layers[o.layerId]?.result.kind === "geojson") ||
+        isVectorTileArea(state.layers[o.layerId])),
   );
   if (lines.length === 0) return { problems, readings, shots };
   const start = state.basemap;
@@ -377,8 +424,14 @@ async function lineChecks(page: Page, state: MapState, slug: string): Promise<{ 
     shots.push(lineShot);
     await measureOps(page, state, lines, `${basemap.label}`, { readings, problems });
   }
-  // Areas again on 3D terrain, draped as people see them.
+  // Areas (their fills) on Satellite too: a choropleth must read on all three basemaps (owner, 2026-10-18).
   const areaOps = lines.filter((o) => o.mode === "polygons" || o.mode === "columns");
+  if (areaOps.length > 0) {
+    await pickBasemap(page, SATELLITE.button);
+    await settle(page, 1500);
+    await measureOps(page, state, areaOps, SATELLITE.label, { readings, problems });
+  }
+  // Areas again on 3D terrain, draped as people see them.
   if (wasOn && areaOps.length > 0) {
     await threeD.click({ force: true });
     await settle(page, 2500);

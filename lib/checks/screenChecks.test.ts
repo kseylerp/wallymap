@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  areaFillProblem,
+  CHOROPLETH_FILL_VISIBLE_DIFF,
   isOceanDemTile404,
   labelProblems,
   layoutProblems,
@@ -144,5 +146,16 @@ describe("console rows", () => {
   it("fails a row scrolled mid-row (the dams row at its opacity slider, Rank by cut off), and passes one shown from its header", () => {
     expect(layoutProblems(panel([{ id: "dams", top: 136, bottom: 640 }]))).toEqual(["In the console, the dams row is scrolled mid-row: its header is 180px above the top of the list."]);
     expect(layoutProblems(panel([{ id: "dams", top: 316, bottom: 820 }]))).toEqual([]);
+  });
+});
+
+
+describe("area fills (owner, 2026-10-18: choropleths too faint on satellite)", () => {
+  it("holds a choropleth's fill to a higher bar than a tinted, hatched area", () => {
+    const faint = [14, 16, 18, 15];
+    expect(areaFillProblem("Glaciers", "Satellite", faint)).toBeNull();
+    expect(areaFillProblem("Temperature anomaly", "Satellite", faint, true)).toMatch(/fills barely show on Satellite: .* by 15\.8 of 255 .*needs 24/);
+    expect(areaFillProblem("Temperature anomaly", "Satellite", [CHOROPLETH_FILL_VISIBLE_DIFF, 50], true)).toBeNull();
+    expect(areaFillProblem("Temperature anomaly", "Satellite", [], true)).toBeNull();
   });
 });

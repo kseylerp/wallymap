@@ -227,12 +227,24 @@ export function lineVisibilityProblem(layerId: string, basemap: string, diffs: n
  */
 export const AREA_FILL_VISIBLE_DIFF = 10;
 
-/** An area layer's fill on one basemap: the mean pixel change at points inside its polygons between shown and hidden. */
-export function areaFillProblem(layerId: string, basemap: string, diffs: number[]): string | null {
+/**
+ * The smallest mean pixel change inside a choropleth's areas (colored by a ramp or by kind, lib/render/views.ts
+ * isChoropleth): the color is the answer, so it must read as a fill, not a tint. Calibrated 2026-10-18 on the owner's
+ * cases: Texas counties at 0.62 alpha with a card open (every other county faded to 0.22) and the hardiness zones
+ * around Denver at 0.55 read faint; at 0.8 they change the pixels by 40 to 60 on Topo, Topo + Satellite and Satellite.
+ */
+export const CHOROPLETH_FILL_VISIBLE_DIFF = 24;
+
+/**
+ * An area layer's fill on one basemap: the mean pixel change at points inside its polygons between shown and hidden,
+ * against AREA_FILL_VISIBLE_DIFF (a tint and a hatch), or CHOROPLETH_FILL_VISIBLE_DIFF when `choropleth`.
+ */
+export function areaFillProblem(layerId: string, basemap: string, diffs: number[], choropleth = false): string | null {
   if (diffs.length === 0) return null;
   const mean = diffs.reduce((a, b) => a + b, 0) / diffs.length;
-  if (mean >= AREA_FILL_VISIBLE_DIFF) return null;
-  return `${layerId} areas barely show on ${basemap}: hiding them changes the pixels inside them by ${mean.toFixed(1)} of 255 on average (needs ${AREA_FILL_VISIBLE_DIFF}).`;
+  const needs = choropleth ? CHOROPLETH_FILL_VISIBLE_DIFF : AREA_FILL_VISIBLE_DIFF;
+  if (mean >= needs) return null;
+  return `${layerId} ${choropleth ? "fills" : "areas"} barely show on ${basemap}: hiding them changes the pixels inside them by ${mean.toFixed(1)} of 255 on average (needs ${needs}).`;
 }
 
 /* ---------- Browser half (each function runs inside the page: no imports, no outer variables) ---------- */
@@ -650,6 +662,33 @@ export function collectAreaSamples({ layerId, max }: { layerId: string; max: num
   }
   const thin = <T,>(list: T[]) => (list.length <= max ? list : Array.from({ length: max }, (_, i) => list[Math.floor((i * list.length) / max)]));
   return { outline: thin(outline), inside: thin(inside) };
+}
+
+/**
+ * Runs in the page (development build): screen points inside a vector tile area layer (`tiles-<id>`, a grid over the
+ * canvas where the layer has a feature), not under a panel; empty when the layer is not a vector fill.
+ */
+export function collectTileAreaSamples({ layerId, max }: { layerId: string; max: number }): { x: number; y: number }[] {
+  type MapLike = {
+    getCanvas: () => HTMLCanvasElement;
+    getLayer: (id: string) => { type: string } | undefined;
+    queryRenderedFeatures: (p: [number, number], o: { layers: string[] }) => unknown[];
+  };
+  const hook = (window as unknown as { __wallyMap?: { map: MapLike } }).__wallyMap;
+  if (!hook) return [];
+  const id = `tiles-${layerId}`;
+  if (hook.map.getLayer(id)?.type !== "fill") return [];
+  const canvas = hook.map.getCanvas();
+  const r = canvas.getBoundingClientRect();
+  const points: { x: number; y: number }[] = [];
+  for (let y = 8; y < r.height - 8; y += 12) {
+    for (let x = 8; x < r.width - 8; x += 12) {
+      if (document.elementFromPoint(x + r.x, y + r.y) !== canvas) continue;
+      if (hook.map.queryRenderedFeatures([x, y], { layers: [id] }).length > 0) points.push({ x: Math.round(x + r.x), y: Math.round(y + r.y) });
+    }
+  }
+  if (points.length <= max) return points;
+  return Array.from({ length: max }, (_, i) => points[Math.floor((i * points.length) / max)]);
 }
 
 /**

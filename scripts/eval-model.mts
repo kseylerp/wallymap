@@ -817,7 +817,8 @@ function evaluate(run: Run): Evaluated {
 /**
  * The questions the screen checks open (scripts/evalScreens.ts), about a dozen covering lines (trails, mountain bike
  * facets, ski routes), points (crags, surf, dams, wildlife), hexes (wind capacity), areas (fire perimeters, glaciers in
- * the Wind Rivers and on Patagonia's ice, a monument), ranked cards (uranium) and two layers at once (campsites and roads); each at desktop and phone size.
+ * the Wind Rivers and on Patagonia's ice, a monument), choropleths (county temperature, hardiness zones, drought), ranked
+ * cards (uranium) and two layers at once (campsites and roads); each at desktop and phone size.
  */
 export const SCREEN_QUESTIONS = [
   "Show hiking trails around Lake Tahoe",
@@ -835,6 +836,10 @@ export const SCREEN_QUESTIONS = [
   "Biggest glaciers in Patagonia",
   "How has Bears Ears changed since 2021?",
   "Which uranium mines near the Navajo Nation score highest?",
+  // Choropleths (owner, 2026-10-18: too faint on satellite): the fill must read on Topo, Topo + Satellite and Satellite.
+  "How much warmer than normal was Fresno County last month?",
+  "Show plant hardiness zones in Vermont",
+  "How dry is Colorado this week?",
   // Data stories (spec §13, §13a): a whole river network day by day, currents and wind as moving particles.
   "How has the Mississippi's flow changed over the last three months?",
   "Show the currents in Cook Inlet this week",

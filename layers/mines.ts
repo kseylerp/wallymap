@@ -371,12 +371,10 @@ export const GENERIC_MINE_NAMES = new Set(["tunnel", "adit", "shaft", "mine shaf
 
 /** One site listed twice is within this distance of itself. */
 const SAME_SITE_KM = 1;
-/** Two records of one name closer than this are one spot (the duplicates check's same-spot distance). */
-const SAME_SPOT_KM = 0.015;
 
 /**
  * One mine listed once: a USMIN symbol within 1 km of an MRDS site of the same name goes (MRDS carries the
- * commodities), and a record that lists one name twice within 1 km, as one kind, keeps the first. Unnamed USMIN symbols
+ * commodities), and a name listed twice within 1 km keeps the first. Unnamed USMIN symbols
  * (named by their type, "Adit") are left alone: many separate adits share that word.
  */
 export function dedupeMines(features: Feature<Point>[]): Feature<Point>[] {
@@ -393,12 +391,9 @@ export function dedupeMines(features: Feature<Point>[]): Feature<Point>[] {
       continue;
     }
     const kept = byName.get(key) ?? [];
-    const twin = kept.find((k) => {
-      const km = haversineKm(k.geometry.coordinates, f.geometry.coordinates);
-      if (km > SAME_SITE_KM) return false;
-      // At one spot it is one site whatever each record calls its main commodity ("Prince Mine": lead in one, silver in the other).
-      return km <= SAME_SPOT_KM || k.properties?.source !== p.source || k.properties?.kind === p.kind;
-    });
+    // One name within a kilometre is one site, whatever each record calls its main commodity ("Prince Mine": lead in one,
+    // silver in the other; "Wonder No. 1 Claim" listed twice 1 km apart). Generic names never get here.
+    const twin = kept.find((k) => haversineKm(k.geometry.coordinates, f.geometry.coordinates) <= SAME_SITE_KM);
     if (twin) continue;
     kept.push(f);
     byName.set(key, kept);

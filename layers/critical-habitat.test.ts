@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { normalizeCriticalHabitat, simplifyOffset, speciesWhere } from "./critical-habitat";
+import layer, { MEANING, federalRegisterCitation, normalizeCriticalHabitat, simplifyOffset, speciesWhere, thinGeometry } from "./critical-habitat";
+import { contractProblems, legendOf } from "./contract";
 import finalRaw from "./__fixtures__/critical-habitat.tahoe.json";
 import proposedRaw from "./__fixtures__/critical-habitat.proposed.json";
 
@@ -48,9 +49,28 @@ describe("critical-habitat layer", () => {
       scientificName: "Rana sierrae",
       status: "Final",
       listingStatus: "Endangered",
-      federalRegister: "81FR59046 59119",
+      federalRegister: "81 FR 59046",
+      ruleUrl: "https://www.federalregister.gov/citation/81-FR-59046",
       published: "2016-08-26",
+      meaning: MEANING,
     });
+  });
+
+  it("thins outlines to the asked offset, fills by listing status with a legend, and says what a designation means", () => {
+    const count = (fc: { features: { geometry: unknown }[] }) => fc.features.reduce((n, f) => n + (JSON.stringify(f.geometry).match(/\[-?\d/g) ?? []).length, 0);
+    const thinned = normalizeCriticalHabitat(finalFc, 0.01);
+    expect(thinned.features).toHaveLength(finalFc.features.length);
+    expect(count(thinned)).toBeLessThan(count(normalizeCriticalHabitat(finalFc)));
+    const ring: [number, number][] = [[0, 0], [0.001, 0], [0.002, 0], [0.05, 0], [0.05, 0.05], [0, 0.05], [0, 0]];
+    expect(thinGeometry({ type: "Polygon", coordinates: [ring] }, 0.01)).toEqual({ type: "Polygon", coordinates: [[[0, 0], [0.05, 0], [0.05, 0.05], [0, 0.05], [0, 0]]] });
+    expect(federalRegisterCitation("78FR10449 10497")).toEqual({ text: "78 FR 10449", url: "https://www.federalregister.gov/citation/78-FR-10449" });
+    expect(federalRegisterCitation("see shapefile")).toBeUndefined();
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "listingStatus" });
+    expect(legend.items?.slice(0, 2).map((i) => [i.label, i.color])).toEqual([["Endangered", "#F57272"], ["Threatened", "#6E5BFF"]]);
+    expect(layer.attributes?.find((a) => a.primary)?.key).toBe("species");
+    expect(layer.card?.links).toEqual([{ key: "ruleUrl", label: "Read the rule" }]);
+    expect(contractProblems(layer)).toEqual([]);
   });
 
   it("falls back to the scientific name, skips placeholder dates and drops rows without geometry", () => {
@@ -64,7 +84,7 @@ describe("critical-habitat layer", () => {
       ],
     });
     expect(fc.features).toHaveLength(2);
-    expect(fc.features[0].properties).toEqual({ species: "Rana muscosa", kind: "Rana muscosa", scientificName: "Rana muscosa" });
+    expect(fc.features[0].properties).toEqual({ species: "Rana muscosa", kind: "Rana muscosa", scientificName: "Rana muscosa", meaning: MEANING });
     expect(fc.features[1].properties?.species).toBe("Unnamed species");
     for (const f of finalFc.features.length ? normalizeCriticalHabitat(finalFc).features : []) expect(f.properties).not.toHaveProperty("t");
   });

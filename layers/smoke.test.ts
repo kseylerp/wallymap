@@ -4,7 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
-import layer, { kmlUrl, parseHmsKml } from "./smoke";
+import type { FeatureCollection } from "geojson";
+import { attributeProblems } from "./attributes";
+import { cardTitle, contractProblems, legendOf } from "./contract";
+import layer, { FORECAST_URL, forecastFeatures, kmlUrl, parseHmsKml } from "./smoke";
+/**
+ * NDGD smoke forecast answer recorded 2026-10-18 ~06:25 UTC (run 03:00 UTC) over the West Coast: one real polygon of each
+ * class present (3-25, 25-63, 63-158) cut to its extent, with the clean-air class and the 158-1000 class (none forecast
+ * that day) added on the same shape so every class is read; hours 06:00:01 to 09:00:01 as the feed stamps them.
+ */
+import forecastFixture from "./__fixtures__/smoke-ndgd.forecast.json";
 
 const KML = readFileSync(path.join(__dirname, "__fixtures__/smoke.hms.kml"), "utf8");
 const US: [number, number, number, number] = [-125, 24, -66, 50];
@@ -25,15 +34,56 @@ describe("parseHmsKml", () => {
     const [light, medium, heavy] = features;
     expect(light.geometry.type).toBe("Polygon");
     expect(light.properties).toEqual({
-      t: "2026-10-08T00:00:00.000Z",
+      t: "2026-10-08T12:00:00.000Z",
       v: 1,
       density: "Light",
       satellite: "GOES-WEST",
       start: "2026-10-08T12:00:00.000Z",
       end: "2026-10-08T15:00:00.000Z",
+      seen: "2026-10-08, 12:00–15:00 UTC",
+      heading: "Light smoke overhead, seen 12:00–15:00 UTC",
     });
     expect(medium.properties).toMatchObject({ v: 2, density: "Medium", satellite: "GOES-EAST", start: "2026-10-08T20:00:00.000Z" });
     expect(heavy.properties).toMatchObject({ v: 3, density: "Heavy" });
+    // The card's title is the density and the hours, not "Feature" (audit 2026-10-17).
+    expect(cardTitle(layer, medium)).toBe("Medium smoke overhead, seen 20:00–23:30 UTC");
+  });
+
+  it("colors polygons by density on one four-step scale with a key (audit 2026-10-17: one pink for all)", () => {
+    expect(layer.style.encode).toEqual({ color: "density" });
+    expect(attributeProblems(layer)).toEqual([]);
+    expect(contractProblems(layer)).toEqual([]);
+    expect(legendOf(layer).items?.map((i) => i.label)).toEqual(["Light", "Medium", "Heavy", "Very heavy"]);
+  });
+
+  it("reads the near-surface forecast: clean air dropped, hourly t, the PM2.5 class on the shared scale", () => {
+    const features = forecastFeatures(forecastFixture as unknown as FeatureCollection);
+    expect(features.map((f) => f.properties?.density)).toEqual(["Light", "Medium", "Heavy", "Very heavy"]);
+    expect(features[1].properties).toMatchObject({
+      t: "2026-10-18T07:00:00.000Z",
+      kind: "forecast",
+      v: 2,
+      pm25: "25–63 µg/m³",
+      run: "2026-10-18T03:00:00.000Z",
+      heading: "Medium smoke near the ground (25–63 µg/m³), forecast for 2026-10-18 07:00 UTC",
+    });
+  });
+
+  it("source forecast asks the NDGD feed for the view from this hour on", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-18T06:25:00Z"));
+    try {
+      const stub = vi.fn(async (_url: string, _init?: unknown) => new Response(JSON.stringify(forecastFixture), { status: 200 }));
+      const r = await layer.query(ctx(stub, [-125, 32, -114, 46]), layer.input.parse({ source: "forecast" }));
+      if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+      const url = new URL(stub.mock.calls[0][0]);
+      expect(url.origin + url.pathname).toBe(`${FORECAST_URL}/query`);
+      expect(url.searchParams.get("where")).toBe("smoke_classdesc <> '0 - 3' AND todate >= TIMESTAMP '2026-10-18 06:00:00'");
+      expect(r.data.features).toHaveLength(4);
+      expect(r.coverageNote).toBe("Smoke near the ground forecast hourly from 2026-10-18 06:00 to 2026-10-18 09:00 UTC");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps lon,lat order, drops altitude, and closes rings", () => {
@@ -94,20 +144,20 @@ describe("smoke layer", () => {
 
   it("fetches the requested day with a bbox-independent cache key and returns cited polygons", async () => {
     const stub = vi.fn(async () => kmlResponse());
-    const r = await layer.query(ctx(stub), { date: "2026-10-08", days: 1 });
+    const r = await layer.query(ctx(stub), { source: "observed", date: "2026-10-08", days: 1 });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(stub).toHaveBeenCalledTimes(1);
     expect(calls(stub)[0][0]).toBe(kmlUrl("2026-10-08"));
     expect(calls(stub)[0][1]).toMatchObject({ cacheKey: "hms-smoke:2026-10-08" });
     expect(r.data.features).toHaveLength(3);
-    expect(r.data.features.every((f) => f.properties?.t === "2026-10-08T00:00:00.000Z")).toBe(true);
+    expect(r.data.features.every((f) => String(f.properties?.t).startsWith("2026-10-08T"))).toBe(true);
     expect(r.citation.source).toMatch(/Hazard Mapping System/);
     expect(r.coverageNote).toBe("Smoke for 2026-10-08");
   });
 
   it("filters polygons to the bbox", async () => {
     const stub = vi.fn(async () => kmlResponse());
-    const r = await layer.query(ctx(stub, SPOKANE), { date: "2026-10-08", days: 1 });
+    const r = await layer.query(ctx(stub, SPOKANE), { source: "observed", date: "2026-10-08", days: 1 });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(1);
     expect(r.data.features[0].properties?.v).toBe(2);
@@ -115,7 +165,7 @@ describe("smoke layer", () => {
 
   it("without a date asks for today and one earlier day, and shows the newest map that exists", async () => {
     const stub = vi.fn(async (url: string) => (url.includes("20261009") ? new Response("", { status: 404 }) : kmlResponse()));
-    const r = await layer.query(ctx(stub as unknown as ReturnType<typeof vi.fn>), { days: 1 });
+    const r = await layer.query(ctx(stub as unknown as ReturnType<typeof vi.fn>), { source: "observed", days: 1 });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(calls(stub as unknown as ReturnType<typeof vi.fn>).map((c) => c[0])).toEqual([kmlUrl("2026-10-09"), kmlUrl("2026-10-08")]);
     expect(r.data.features).toHaveLength(3);
@@ -124,16 +174,16 @@ describe("smoke layer", () => {
 
   it("loads several days, notes a day with no map, and stamps each feature with its own day", async () => {
     const stub = vi.fn(async (url: string) => (url.includes("20261007") ? new Response("", { status: 404 }) : kmlResponse()));
-    const r = await layer.query(ctx(stub as unknown as ReturnType<typeof vi.fn>), { date: "2026-10-08", days: 3 });
+    const r = await layer.query(ctx(stub as unknown as ReturnType<typeof vi.fn>), { source: "observed", date: "2026-10-08", days: 3 });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(6);
-    expect(new Set(r.data.features.map((f) => f.properties?.t))).toEqual(new Set(["2026-10-08T00:00:00.000Z", "2026-10-06T00:00:00.000Z"]));
+    expect(new Set(r.data.features.map((f) => String(f.properties?.t).slice(0, 10)))).toEqual(new Set(["2026-10-08", "2026-10-06"]));
     expect(r.coverageNote).toBe("Smoke for 2026-10-06 to 2026-10-08; no map published for 2026-10-07");
   });
 
   it("returns an empty collection with a note when the day has no map", async () => {
     const stub = vi.fn(async () => new Response("", { status: 404 }));
-    const r = await layer.query(ctx(stub), { date: "2026-10-01", days: 1 });
+    const r = await layer.query(ctx(stub), { source: "observed", date: "2026-10-01", days: 1 });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toEqual([]);
     expect(r.coverageNote).toBe("No HMS smoke map was published for 2026-10-01");
@@ -141,16 +191,16 @@ describe("smoke layer", () => {
 
   it("maps an upstream failure to an upstream error", async () => {
     const stub = vi.fn(async () => new Response("down", { status: 503 }));
-    expect(await layer.query(ctx(stub), { date: "2026-10-08", days: 1 })).toMatchObject({ hint: "upstream" });
+    expect(await layer.query(ctx(stub), { source: "observed", date: "2026-10-08", days: 1 })).toMatchObject({ hint: "upstream" });
     const thrower = vi.fn(async () => {
       throw new Error("network");
     });
-    expect(await layer.query(ctx(thrower), { date: "2026-10-08", days: 1 })).toMatchObject({ hint: "upstream" });
+    expect(await layer.query(ctx(thrower), { source: "observed", date: "2026-10-08", days: 1 })).toMatchObject({ hint: "upstream" });
   });
 
   it("says smoke is not mapped outside the Americas without calling upstream", async () => {
     const stub = vi.fn();
-    const r = await layer.query(ctx(stub, [2, 48, 3, 49]), { days: 1 });
+    const r = await layer.query(ctx(stub, [2, 48, 3, 49]), { source: "observed", days: 1 });
     expect(stub).not.toHaveBeenCalled();
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toEqual([]);
@@ -159,11 +209,11 @@ describe("smoke layer", () => {
 
   it("clamps a future date to today and rejects one before 2005", async () => {
     const stub = vi.fn(async () => kmlResponse());
-    const r = await layer.query(ctx(stub), { date: "2026-10-20", days: 1 });
+    const r = await layer.query(ctx(stub), { source: "observed", date: "2026-10-20", days: 1 });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(calls(stub)[0][0]).toBe(kmlUrl("2026-10-09"));
     expect(r.coverageNote).toContain("showing 2026-10-09");
-    expect(await layer.query(ctx(vi.fn()), { date: "2005-08-04", days: 1 })).toMatchObject({ error: expect.stringContaining("2005-08-05") });
+    expect(await layer.query(ctx(vi.fn()), { source: "observed", date: "2005-08-04", days: 1 })).toMatchObject({ error: expect.stringContaining("2005-08-05") });
   });
 
   it("rejects days outside 1 to 7 and a malformed date at the input schema", () => {
@@ -180,7 +230,7 @@ describe("smoke layer", () => {
 
   it("summarizes to counts and the citation for the model", async () => {
     const stub = vi.fn(async () => kmlResponse());
-    expect(summarizeLayerResult(await layer.query(ctx(stub), { date: "2026-10-08", days: 1 }))).toMatchObject({ kind: "geojson", featureCount: 3 });
+    expect(summarizeLayerResult(await layer.query(ctx(stub), { source: "observed", date: "2026-10-08", days: 1 }))).toMatchObject({ kind: "geojson", featureCount: 3 });
   });
 
   it("runs through runLayer with a stubbed fetch via the global", async () => {

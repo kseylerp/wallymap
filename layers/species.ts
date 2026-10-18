@@ -16,6 +16,16 @@
  *   - with no taxon, a density map instead of points: GBIF density tiles of the iNaturalist Research-grade Observations
  *     dataset (datasetKey 50c9509d-22c7-4a22-a47d-8c48425ef4a7, the copy iNaturalist shares with GBIF weekly), whole years
  *     covering `days`. Unconfirmed observations are not in that dataset, which the note says when researchGradeOnly is off.
+ * Taxon (2026-10-18): a name is resolved to one iNaturalist taxon before the search, so "elk" means Cervus canadensis and
+ *   not moose (Alces alces is "elk" in British English) or elk thistle, which `taxon_name` matched. The country under the
+ *   box comes from https://api.inaturalist.org/v1/places/nearby (the standard place with admin_level 0) and is passed as
+ *   `preferred_place_id` with `locale=en` to https://api.inaturalist.org/v1/taxa/autocomplete?q=, which then ranks and
+ *   names taxa as people there do (in the US "elk" puts Cervus canadensis, common name Elk, first; without the place it
+ *   came second to moose). pickTaxon takes an exact scientific name, then an exact common name, then an exact matched
+ *   term, then the first result. Observations are asked for by `taxon_id` (descendants included) through the slim v2
+ *   endpoint, and each one is grouped under its species (`taxon.min_species_taxon_id`), so the subspecies American Elk
+ *   and the species Elk are one chip. Smoke 2026-10-18 near Estes Park (-105.7,40.3,-105.4,40.45), 365 days, "elk":
+ *   683 sightings, all Cervus canadensis (158 at species rank, 42 of the first 200 as the subspecies American Elk).
  * Smoke wide 2026-10-14 (through runLayer), box -123,37,-120,40 (about 88,000 km²), 365 days: taxon "birds" returned the 1,857 most recent
  *   of 26,626 in 14.4 s (591 KB; 143 obscured left out); "mule deer" all 1,655 in 7.1 s; no taxon the density tiles in 0.0 s. Before the
  *   v2 `fields` request and the overlapped pages, the "mule deer" fetch took 35.6 s (v1 pages were about 14 MB each).
@@ -28,17 +38,21 @@ import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
 
-const ENDPOINT = "https://api.inaturalist.org/v1/observations";
 /**
- * The v2 endpoint takes the same parameters plus `fields`, which cuts a 200-row page from about 14 MB to 85 KB; a wide
- * fetch of ten pages uses it.
+ * The v2 endpoint takes the v1 parameters plus `fields`, which cuts a 200-row page from about 14 MB to 85 KB, so every
+ * fetch uses it.
  */
 const ENDPOINT_V2 = "https://api.inaturalist.org/v2/observations";
-const V2_FIELDS = "id,uri,observed_on,time_observed_at,obscured,license_code,species_guess,geojson,taxon.name,taxon.preferred_common_name";
+const V2_FIELDS =
+  "id,uri,observed_on,time_observed_at,obscured,license_code,species_guess,geojson,taxon.id,taxon.name,taxon.rank,taxon.preferred_common_name,taxon.min_species_taxon_id";
+const AUTOCOMPLETE_URL = "https://api.inaturalist.org/v1/taxa/autocomplete";
+const PLACES_URL = "https://api.inaturalist.org/v1/places/nearby";
+/** Taxon names and countries do not change; a week keeps repeat questions to one request. */
+const LOOKUP_TTL_SECONDS = 7 * 86_400;
 const PER_PAGE = 200;
-const MAX_PAGES = 3;
-/** Most observations a wide result with a taxon carries, the most recent: 10 pages. */
-const WIDE_LIMIT = 2_000;
+/** Most observations a result carries, the most recent: 10 pages started 600 ms apart (a year of elk near Estes Park is 683). */
+const MAX_PAGES = 10;
+const WIDE_LIMIT = MAX_PAGES * PER_PAGE;
 /** GBIF density tiles, used for a wide view with no taxon. */
 const DENSITY_URL = "https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@1x.png";
 /** GBIF's copy of iNaturalist research-grade observations. */
@@ -69,8 +83,11 @@ const observationSchema = z.object({
     .nullish(),
   taxon: z
     .object({
+      id: z.number().nullish(),
       name: z.string().nullish(),
+      rank: z.string().nullish(),
       preferred_common_name: z.string().nullish(),
+      min_species_taxon_id: z.number().nullish(),
     })
     .nullish(),
 });
@@ -80,13 +97,19 @@ const pageSchema = z.object({
   results: z.array(z.unknown()),
 });
 
-/** Request URL for one page; `now` is injected so the date maths is testable. `slim` asks v2 for only the fields read. */
+/** One taxon the asked name stands for: its iNaturalist id, scientific name, rank and common name. */
+export type ResolvedTaxon = { id: number; name: string; rank?: string; commonName?: string };
+
+/** What the page URLs filter by: a resolved taxon id, or the raw name when the lookup failed; the country for names. */
+export type TaxonFilter = { taxonId?: number; placeId?: number };
+
+/** Request URL for one page of the slim v2 endpoint; `now` is injected so the date maths is testable. */
 export function observationsUrl(
   bbox: BBox,
   input: Pick<SpeciesInput, "days" | "taxon" | "researchGradeOnly">,
   pageNo: number,
   now: Date,
-  slim = false,
+  filter: TaxonFilter = {},
 ): string {
   const [west, south, east, north] = bbox;
   const d1 = new Date(now.getTime() - input.days * MS_PER_DAY).toISOString().slice(0, 10);
@@ -103,9 +126,77 @@ export function observationsUrl(
     order: "desc",
   });
   if (input.researchGradeOnly) search.set("quality_grade", "research");
-  if (input.taxon !== undefined) search.set("taxon_name", input.taxon);
-  if (slim) search.set("fields", V2_FIELDS);
-  return `${slim ? ENDPOINT_V2 : ENDPOINT}?${search.toString()}`;
+  if (filter.taxonId !== undefined) search.set("taxon_id", String(filter.taxonId));
+  else if (input.taxon !== undefined) search.set("taxon_name", input.taxon);
+  // Common names as people in the box's country say them ("Elk" in the US, "Wapiti" elsewhere).
+  search.set("locale", "en");
+  if (filter.placeId !== undefined) search.set("preferred_place_id", String(filter.placeId));
+  search.set("fields", V2_FIELDS);
+  return `${ENDPOINT_V2}?${search.toString()}`;
+}
+
+/** The standard places under a box (country, state, county...), for the country whose common names to use. */
+export function placesUrl(bbox: BBox): string {
+  const [west, south, east, north] = bbox;
+  const r = (n: number) => n.toFixed(2);
+  return `${PLACES_URL}?nelat=${r(north)}&nelng=${r(east)}&swlat=${r(south)}&swlng=${r(west)}&per_page=10`;
+}
+
+/** Taxon autocomplete for a name, ranked and named for a country when one is known. */
+export function autocompleteUrl(q: string, placeId?: number): string {
+  const search = new URLSearchParams({ q, per_page: "10", locale: "en", is_active: "true" });
+  if (placeId !== undefined) search.set("preferred_place_id", String(placeId));
+  return `${AUTOCOMPLETE_URL}?${search.toString()}`;
+}
+
+const placesSchema = z.object({
+  results: z.object({ standard: z.array(z.object({ id: z.number(), admin_level: z.number().nullish() })).optional() }).optional(),
+});
+
+/** The country (admin level 0) among the standard places under a box, or undefined. */
+export function countryOf(json: unknown): number | undefined {
+  const parsed = placesSchema.safeParse(json);
+  if (!parsed.success) return undefined;
+  return parsed.data.results?.standard?.find((p) => p.admin_level === 0)?.id;
+}
+
+const autocompleteSchema = z.object({
+  results: z.array(
+    z.object({
+      id: z.number(),
+      name: z.string(),
+      rank: z.string().nullish(),
+      preferred_common_name: z.string().nullish(),
+      matched_term: z.string().nullish(),
+      is_active: z.boolean().nullish(),
+    }),
+  ),
+});
+
+const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+
+/**
+ * The one taxon a name stands for, from an autocomplete answer (already ranked for the country): an exact scientific
+ * name, else an exact common name, else an exact matched term (another common name or synonym), else the first
+ * result. Null when there is none.
+ */
+export function pickTaxon(q: string, json: unknown): ResolvedTaxon | null {
+  const parsed = autocompleteSchema.safeParse(json);
+  if (!parsed.success) return null;
+  const results = parsed.data.results.filter((r) => r.is_active !== false);
+  const want = norm(q);
+  const hit =
+    results.find((r) => norm(r.name) === want) ??
+    results.find((r) => norm(r.preferred_common_name) === want) ??
+    results.find((r) => norm(r.matched_term) === want) ??
+    results[0];
+  if (!hit) return null;
+  return {
+    id: hit.id,
+    name: hit.name,
+    ...(hit.rank && { rank: hit.rank }),
+    ...(hit.preferred_common_name && { commonName: hit.preferred_common_name }),
+  };
 }
 
 /** GBIF density tile template (`{z}/{x}/{y}` stay for the map) of iNaturalist research-grade observations, whole years covering `days`. */
@@ -134,7 +225,9 @@ function observedAt(time: string | undefined, date: string | undefined): string 
 /**
  * Converts an observations page into points. Observations with obscured coordinates or no point are
  * left out (`skipped` counts them) because their position is wrong or missing; rows with no usable
- * date or id are dropped silently.
+ * date or id are dropped silently. Each point carries `taxonId`, the species it belongs to (iNaturalist's
+ * `min_species_taxon_id`); one identified below species (a subspecies) also carries `identifiedAs` and is named by its
+ * species in `groupBySpecies`.
  */
 export function normalizeObservations(json: unknown): { data: FeatureCollection<Point>; skipped: number } {
   const features: Feature<Point>[] = [];
@@ -156,7 +249,8 @@ export function normalizeObservations(json: unknown): { data: FeatureCollection<
     if (t === null) continue;
 
     const scientific = clean(obs.taxon?.name);
-    const species = clean(obs.taxon?.preferred_common_name) ?? scientific ?? clean(obs.species_guess) ?? "Unidentified";
+    const common = clean(obs.taxon?.preferred_common_name);
+    const species = common ?? scientific ?? clean(obs.species_guess) ?? "Unidentified";
     const properties: Record<string, string | number> = {
       species,
       observedOn: date ?? t.slice(0, 10),
@@ -167,10 +261,45 @@ export function normalizeObservations(json: unknown): { data: FeatureCollection<
       license: clean(obs.license_code) ?? "all-rights-reserved",
     };
     if (scientific !== undefined) properties.scientificName = scientific;
+    const own = obs.taxon?.id ?? undefined;
+    const speciesId = obs.taxon?.min_species_taxon_id ?? own;
+    if (typeof speciesId === "number") properties.taxonId = speciesId;
+    if (typeof own === "number" && typeof speciesId === "number" && own !== speciesId) {
+      properties.identifiedAs = common && scientific ? `${common} (${scientific})` : species;
+    }
 
     features.push({ type: "Feature", geometry: { type: "Point", coordinates: obs.geojson.coordinates }, properties });
   }
   return { data: { type: "FeatureCollection", features }, skipped };
+}
+
+/**
+ * Names every point by its species (one name per `taxonId`), so the Species chips group by taxon: a sighting identified
+ * as a subspecies (American Elk, Cervus canadensis canadensis) takes its species' name (Elk, Cervus canadensis), read
+ * from a sighting identified at species rank, else from the asked taxon, else the subspecies' first two Latin words.
+ */
+export function groupBySpecies(features: Feature<Point>[], asked?: ResolvedTaxon | null): void {
+  const names = new Map<number, { species: string; scientificName?: string }>();
+  for (const f of features) {
+    const p = (f.properties ?? {}) as Record<string, unknown>;
+    if (typeof p.taxonId === "number" && p.identifiedAs === undefined && typeof p.species === "string" && !names.has(p.taxonId)) {
+      names.set(p.taxonId, { species: p.species, ...(typeof p.scientificName === "string" && { scientificName: p.scientificName }) });
+    }
+  }
+  if (asked && !names.has(asked.id)) names.set(asked.id, { species: asked.commonName ?? asked.name, scientificName: asked.name });
+  for (const f of features) {
+    const p = (f.properties ?? {}) as Record<string, unknown>;
+    if (typeof p.taxonId !== "number" || p.identifiedAs === undefined) continue;
+    let name = names.get(p.taxonId);
+    if (!name) {
+      const binomial = typeof p.scientificName === "string" ? p.scientificName.split(/\s+/).slice(0, 2).join(" ") : undefined;
+      name = binomial ? { species: binomial, scientificName: binomial } : { species: String(p.species) };
+      names.set(p.taxonId, name);
+    }
+    p.species = name.species;
+    if (name.scientificName) p.scientificName = name.scientificName;
+    else delete p.scientificName;
+  }
 }
 
 function sleep(ms: number): Promise<void> {
@@ -203,33 +332,41 @@ const HELP: Record<string, FieldHelp> = {
     url: "https://www.inaturalist.org/",
   },
   observedOn: { text: "The date the organism was seen, as the observer entered it." },
+  identifiedAs: {
+    text: "The community identified this sighting more finely than species (a subspecies or variety); the map groups it under its species.",
+    source: "iNaturalist",
+    url: "https://www.inaturalist.org/",
+  },
+  species: { text: "The species the sighting belongs to, by its common name where people in this country have one; sightings of a subspecies count under their species." },
 };
 
 const CARD: CardSpec = {
   facts: [
     { key: "scientificName", label: "Scientific name" },
+    { key: "identifiedAs", label: "Identified as" },
     { key: "observedOn", label: "Seen on", format: "date" },
     { key: "license", label: "Licence", values: LICENSE_LABELS },
   ],
   links: [{ key: "url", label: "Observation on iNaturalist" }],
-  // The species is the card's title (lib/render/inspect.ts).
-  hidden: ["species"],
+  // The species is the card's title (lib/render/inspect.ts); taxonId is the grouping key, v is always 1.
+  hidden: ["species", "taxonId", "v"],
 };
 
-const ATTRIBUTES: Attribute[] = [{ key: "species", type: "category", label: "Species" }, timeAttribute("Seen")];
+const ATTRIBUTES: Attribute[] = [{ key: "species", type: "category", label: "Species", primary: true }, timeAttribute("Seen")];
 
 const species = defineLayer({
   id: "species",
   title: "Species sightings",
   description:
-    "Wildlife and plant sightings that people logged on iNaturalist: each point is one observation with species (common name, or scientific if none), scientificName, observedOn (date), t (when it was seen) and url (the observation page). " +
+    "Wildlife and plant sightings that people logged on iNaturalist: each point is one observation with species (the species' common name as people in that country say it, or the scientific name if none), scientificName, taxonId (the iNaturalist species id), observedOn (date), t (when it was seen) and url (the observation page); " +
+    "a sighting identified as a subspecies counts under its species and keeps identifiedAs (for example 'American Elk (Cervus canadensis canadensis)'). " +
     "v is always 1 (one sighting), so density shows where people see things. Each point also has license (the photographer's licence, such as cc-by-nc or cc0; cite or link the url when showing it). " +
     "Use it to answer what lives or flowers somewhere, or where to look for a kind of animal or plant. " +
-    "Set taxon to a name to filter, for example 'birds', 'mule deer' or 'Pandion haliaetus'; a group name such as 'birds' includes every bird in it, and plain common names work best (a bare class name like 'Aves' matched far fewer sightings when tested). Leave it out for all species. " +
+    "Set taxon to a name to filter, for example 'elk', 'birds', 'mule deer' or 'Pandion haliaetus'. The name is resolved to one iNaturalist taxon first, using the common names of the country under the view, so 'elk' in the US means Cervus canadensis, not moose or elk thistle; a group name such as 'birds' includes every bird in it. The coverage note names the taxon used. Leave it out for all species. " +
     "days (1 to 3650, default 365) sets how far back to look; researchGradeOnly (default true) keeps only observations the community has confirmed to species level, so turn it off to include unconfirmed ones. " +
     "Caveats: this reflects where people go and post, not where animals are, so trails, roads and towns look busy and remote areas look empty; absence of points is not absence of the species. " +
     "Sightings of threatened species and ones whose observer hid their location are left out (the result says how many), so rare animals are under-counted. " +
-    "At most 600 of the most recent sightings are returned (3 pages of 200). " +
+    "At most 2,000 of the most recent sightings are returned (10 pages of 200), and the result says when there are more. " +
     "Over 50,000 km² (about a 220 km square) it returns the 2,000 most recent with a taxon, or a density map without one.",
   coverage: "global",
   surface: "any",
@@ -242,6 +379,15 @@ const species = defineLayer({
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // Sightings are events over the days asked for; the scrubber's step follows the data.
+  time: { shape: "continuous" },
+  legend: {
+    kind: "symbol",
+    items: [{ label: "One sighting", symbol: "point", color: layerColor("species") }],
+    note: "Each dot is one iNaturalist sighting. Dots pile up where people look and post, not only where the species lives; the Species chips list what is in view.",
+  },
+  // The newest five sightings are named (the source order is newest first).
+  labels: { field: "species", max: 5 },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();
@@ -262,14 +408,30 @@ const species = defineLayer({
         coverageNote: notes.join("; "),
       };
     }
-    // Wide with a taxon: the most recent sightings up to the strategy's limit.
+    // The most recent sightings up to the limit (a wide view's strategy may ask for fewer).
     const maxPages = ctx.wide ? Math.ceil(Math.min(WIDE_LIMIT, ctx.wideStrategy?.limit ?? WIDE_LIMIT) / PER_PAGE) : MAX_PAGES;
+
+    const notes: string[] = [];
+    // The country under the view names and ranks taxa as people there do; without it names fall back to iNaturalist's defaults.
+    const placeId = await countryUnder(ctx);
+    let asked: ResolvedTaxon | null = null;
+    if (input.taxon !== undefined) {
+      const resolved = await resolveTaxon(ctx, input.taxon, placeId);
+      if ("error" in resolved) return resolved;
+      if (resolved.taxon === null) {
+        notes.push(`the iNaturalist name lookup failed, so "${input.taxon}" was matched as text and may include other species`);
+      } else {
+        asked = resolved.taxon;
+        notes.push(`"${input.taxon}" was read as ${taxonWords(asked)}`);
+      }
+    }
+    const filter: TaxonFilter = { ...(asked && { taxonId: asked.id }), ...(placeId !== undefined && { placeId }) };
 
     type Page = { ok: true; body: unknown; results: number; total: number | undefined } | { ok: false; error: LayerError };
     const getPage = async (pageNo: number): Promise<Page> => {
       let body: unknown;
       try {
-        const res = await ctx.fetch(observationsUrl(ctx.bbox, input, pageNo, now, ctx.wide === true), {
+        const res = await ctx.fetch(observationsUrl(ctx.bbox, input, pageNo, now, filter), {
           cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:inat-p${pageNo}`,
           ttlSeconds: CACHE_TTL_SECONDS,
           signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
@@ -298,21 +460,9 @@ const species = defineLayer({
     const pages: Page[] = [first];
     if (first.results >= PER_PAGE) {
       const needed = Math.min(maxPages, Math.ceil(total / PER_PAGE));
-      if (ctx.wide) {
-        // Ten sequential pages took 36 s, so a wide fetch starts the rest 600 ms apart (the same request rate) without
-        // waiting for each answer.
-        const rest = Array.from({ length: Math.max(0, needed - 1) }, (_, i) =>
-          sleep(PAGE_SPACING_MS * (i + 1)).then(() => getPage(i + 2)),
-        );
-        pages.push(...(await Promise.all(rest)));
-      } else {
-        for (let pageNo = 2; pageNo <= needed; pageNo++) {
-          await sleep(PAGE_SPACING_MS);
-          const page = await getPage(pageNo);
-          pages.push(page);
-          if (!page.ok || page.results < PER_PAGE) break;
-        }
-      }
+      // Ten sequential pages took 36 s, so the rest start 600 ms apart (the same request rate) without waiting for each answer.
+      const rest = Array.from({ length: Math.max(0, needed - 1) }, (_, i) => sleep(PAGE_SPACING_MS * (i + 1)).then(() => getPage(i + 2)));
+      pages.push(...(await Promise.all(rest)));
     }
 
     const features: Feature<Point>[] = [];
@@ -331,8 +481,8 @@ const species = defineLayer({
       if (page.results < PER_PAGE) break;
     }
     const hitPageCap = failedPage === null && pages.length === maxPages && total > fetched;
+    groupBySpecies(features, asked);
 
-    const notes: string[] = [];
     if (skipped > 0) {
       notes.push(
         `${skipped} observation${skipped === 1 ? "" : "s"} with hidden (obscured) locations ${skipped === 1 ? "was" : "were"} left out`,
@@ -357,6 +507,58 @@ const species = defineLayer({
     };
   },
 });
+
+type Ctx = Parameters<typeof species.query>[0];
+
+/** "Elk (Cervus canadensis, a species, with its subspecies)": the taxon a name was read as, in words. */
+export function taxonWords(t: ResolvedTaxon): string {
+  const latin = t.commonName && t.commonName.toLowerCase() !== t.name.toLowerCase() ? `${t.commonName} (${t.name})` : t.name;
+  return t.rank === "species" ? `${latin} and its subspecies` : t.rank ? `${latin}, the whole ${t.rank}` : latin;
+}
+
+/** The iNaturalist id of the country under the view's centre, or undefined when the lookup fails or finds none. */
+async function countryUnder(ctx: Ctx): Promise<number | undefined> {
+  const cx = (ctx.bbox[0] + ctx.bbox[2]) / 2;
+  const cy = (ctx.bbox[1] + ctx.bbox[3]) / 2;
+  const at: BBox = [cx - 0.01, cy - 0.01, cx + 0.01, cy + 0.01];
+  try {
+    const res = await ctx.fetch(placesUrl(at), {
+      cacheKey: ctx.cacheKey === undefined ? undefined : `inat:country:${cx.toFixed(1)},${cy.toFixed(1)}`,
+      ttlSeconds: LOOKUP_TTL_SECONDS,
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+    if (!res.ok) return undefined;
+    return countryOf(await res.json());
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The one taxon `name` stands for (pickTaxon), or `taxon: null` when the lookup itself failed (the caller then matches
+ * the name as text); an error the model can act on when iNaturalist knows no such name.
+ */
+async function resolveTaxon(ctx: Ctx, name: string, placeId: number | undefined): Promise<{ taxon: ResolvedTaxon | null } | LayerError> {
+  let body: unknown;
+  try {
+    const res = await ctx.fetch(autocompleteUrl(name, placeId), {
+      // A name resolves the same way for every view in a country, so the key leaves out the bbox.
+      cacheKey: ctx.cacheKey === undefined ? undefined : `inat:taxon:${placeId ?? "any"}:${name.toLowerCase()}`,
+      ttlSeconds: LOOKUP_TTL_SECONDS,
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+    if (!res.ok) return { taxon: null };
+    body = await res.json();
+  } catch {
+    return { taxon: null };
+  }
+  if (!autocompleteSchema.safeParse(body).success) return { taxon: null };
+  const taxon = pickTaxon(name, body);
+  if (taxon === null) {
+    return { error: `iNaturalist knows no species or group called "${name}"; try a common name (mule deer) or a Latin one (Odocoileus hemionus)` };
+  }
+  return { taxon };
+}
 
 registerLayer(species);
 

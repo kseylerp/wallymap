@@ -71,3 +71,15 @@ describe("flood-zones layer", () => {
     expect(contractProblems(layer)).toEqual([]);
   });
 });
+
+describe("flood-zones identify (a tap on the tiles)", () => {
+  it("names the zone at a point in plain words, with insurance and elevation when FEMA sets them", async () => {
+    const { floodZoneFeature, floodZoneTitle } = await import("./flood-zones");
+    const f = floodZoneFeature({ lon: -105.28, lat: 40.01 }, { FLD_ZONE: "AE", ZONE_SUBTY: "", SFHA_TF: "T", STATIC_BFE: "5301.2", DEPTH: "-9999", DFIRM_ID: "08013C" });
+    expect(f?.properties).toEqual({ name: "1% annual chance flood (100-year)", zone: "AE", insurance: "Usually required (special flood hazard area)", bfeFt: 5301.2, study: "08013C" });
+    expect(floodZoneTitle("AE", "FLOODWAY")).toBe("Regulatory floodway (1% annual chance flood)");
+    expect(floodZoneTitle("X", "0.2 PCT ANNUAL CHANCE FLOOD HAZARD")).toBe("0.2% annual chance flood (500-year)");
+    expect(floodZoneTitle("X", "AREA OF MINIMAL FLOOD HAZARD")).toMatch(/^Minimal flood hazard/);
+    expect(floodZoneFeature({ lon: 0, lat: 0 }, {})).toBeNull();
+  });
+});

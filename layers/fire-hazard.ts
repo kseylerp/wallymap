@@ -23,6 +23,7 @@ import { imageServerExportTileUrl } from "./_shared/arcgis-tiles";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
 import type { LegendSpec } from "./types";
+import { imageServerIdentify, isLayerError, pointFeature } from "./_shared/identify";
 
 const SERVICE =
   "https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer";
@@ -69,6 +70,22 @@ const fireHazard = defineLayer({
   style: { geometry: "polygon", color: layerColor("fire-hazard"), raster: { saturation: 0, opacity: 0.7, swatch: "#E25CA7" } },
   legend: LEGEND,
   time: { shape: "single", dates: ["2023"] },
+  card: { facts: [{ key: "hazard", label: "Wildfire hazard" }, { key: "meaning", label: "What it means" }] },
+
+  // A tap on the tiles asks the ImageServer for the class there (the pixel value 1 to 7).
+  async identify(ctx, at) {
+    const value = await imageServerIdentify(ctx, SERVICE, at);
+    if (value === null || isLayerError(value)) return value;
+    const n = Number(value);
+    const shown = CLASS_COLORS.find((c) => c.value === n);
+    const other: Record<number, [string, string]> = {
+      1: ["Very low", "Fire would be easy to control; drawn clear."],
+      6: ["Land that cannot burn", "Rock, farmland, towns or bare ground."],
+      7: ["Water", "Lakes, rivers and the sea."],
+    };
+    const [label, meaning] = shown ? [shown.label, shown.help] : (other[n] ?? [`Class ${value}`, ""]);
+    return pointFeature(at, { name: `${label} wildfire hazard`, hazard: label, ...(meaning && { meaning }) });
+  },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

@@ -114,6 +114,8 @@ export type LoadedLayer = {
   legend?: LegendSpec;
   labels?: LabelSpec;
   display?: DisplaySpec;
+  /** True when a tap on the layer's raster tiles asks its source what is there (POST /api/layer/<id>/identify). */
+  identify?: boolean;
   /**
    * Set on a layer narrowed by its filters or the time window (lib/render/view.ts): every loaded feature, so a measure's
    * size and color keep one range across frames and filters (lib/render/encode.ts).

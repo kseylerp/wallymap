@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { FeatureCollection, LineString } from "geojson";
+import type { Feature, FeatureCollection, LineString } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 
 export type BBox = [west: number, south: number, east: number, north: number];
@@ -204,6 +204,9 @@ export type QueryContext = {
   wideStrategy?: WideStrategy;
 };
 
+/** Where a tap landed on a raster layer, and what the tiles there show (Layer.identify). */
+export type IdentifyPoint = { lon: number; lat: number; time?: string; scenario?: number | string };
+
 export type StyleHints = {
   geometry: "point" | "line" | "polygon";
   color: string;
@@ -394,6 +397,13 @@ export type Layer<I extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawSha
   // Method syntax keeps parameter checking bivariant so Layer<specific> is
   // assignable to the default Layer in the registry.
   query(ctx: QueryContext, input: z.infer<I>): Promise<LayerResult | LayerError>;
+  /**
+   * Raster tiles only: what the drawn picture shows at one point (a flood zone, a hazard class), asked of the source's
+   * own identify or feature-info endpoint, so a tap on the map opens a card. `ctx.bbox` is a small box around the
+   * point and `ctx.zoom` the map's zoom; `at.time` is the start of the tile period on screen (ISO) when the tiles are
+   * dated, `at.scenario` the scenario value shown. Null where the source has nothing there (outside coverage, no data).
+   */
+  identify?(ctx: QueryContext, at: IdentifyPoint, input: z.infer<I>): Promise<Feature | null | LayerError>;
   style: StyleHints;
   /** Help for the properties the inspect card shows, by property key (`v` included): the card's serif "i" (spec §12b). */
   fieldHelp?: Record<string, FieldHelp>;

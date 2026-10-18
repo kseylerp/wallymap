@@ -17,10 +17,12 @@
  * calming washed the pale cyan out on Topo.
  */
 import { z } from "zod";
-import { defineLayer, type LayerError, type LayerResult, type LegendSpec } from "./types";
+import type { Feature } from "geojson";
+import { defineLayer, type CardSpec, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { mapServerExportTileUrl } from "./_shared/arcgis-tiles";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
+import { isLayerError, mapServerIdentify, pointFeature } from "./_shared/identify";
 import { layerColor } from "@/lib/render/palette";
 
 const SERVICE = "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer";
@@ -42,6 +44,68 @@ export const FLOOD_ZONES_LEGEND: LegendSpec = {
   note: "Drawn only from about zoom 14 (street level); zoomed out the map shows nothing.",
 };
 
+/** FEMA's zone and subtype at a tapped point, in plain words (the card's title). */
+export function floodZoneTitle(zone: string, subtype: string): string {
+  const sub = subtype.toUpperCase();
+  if (/FLOODWAY/.test(sub)) return "Regulatory floodway (1% annual chance flood)";
+  if (/0\.2 PCT|500/.test(sub)) return "0.2% annual chance flood (500-year)";
+  if (/LEVEE/.test(sub)) return "Reduced flood risk due to a levee";
+  if (/FUTURE/.test(sub)) return "Future conditions 1% annual chance flood";
+  switch (zone.toUpperCase()) {
+    case "A":
+      return "1% annual chance flood (100-year), no flood elevation set";
+    case "AE":
+    case "A99":
+      return "1% annual chance flood (100-year)";
+    case "AH":
+      return "1% annual chance shallow ponding, 1 to 3 ft (100-year)";
+    case "AO":
+      return "1% annual chance sheet flow, 1 to 3 ft (100-year)";
+    case "V":
+    case "VE":
+      return "1% annual chance coastal flood with waves (100-year)";
+    case "D":
+      return "Undetermined flood hazard (not studied)";
+    case "OPEN WATER":
+      return "Open water";
+    case "X":
+      return "Minimal flood hazard (outside the 500-year floodplain)";
+    default:
+      return `Flood zone ${zone}`;
+  }
+}
+
+/** One FEMA flood hazard area at a point, as a card feature (null outside a mapped area). */
+export function floodZoneFeature(at: { lon: number; lat: number }, a: Record<string, unknown>): Feature | null {
+  const zone = String(a.FLD_ZONE ?? "").trim();
+  if (!zone) return null;
+  const subtype = String(a.ZONE_SUBTY ?? "").trim();
+  const number = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > -9000 ? n : undefined;
+  };
+  const bfe = number(a.STATIC_BFE);
+  const depth = number(a.DEPTH);
+  return pointFeature(at, {
+    name: floodZoneTitle(zone, subtype),
+    zone,
+    insurance: a.SFHA_TF === "T" ? "Usually required (special flood hazard area)" : "Not required by FEMA",
+    ...(bfe !== undefined && { bfeFt: bfe }),
+    ...(depth !== undefined && { depthFt: depth }),
+    ...(a.DFIRM_ID ? { study: String(a.DFIRM_ID) } : {}),
+  });
+}
+
+const CARD: CardSpec = {
+  facts: [
+    { key: "zone", label: "FEMA zone" },
+    { key: "insurance", label: "Flood insurance" },
+    { key: "bfeFt", label: "Base flood elevation", unit: "ft" },
+    { key: "depthFt", label: "Flood depth", unit: "ft" },
+    { key: "study", label: "Flood study" },
+  ],
+};
+
 const floodZones = defineLayer({
   id: "flood-zones",
   title: "FEMA flood zones",
@@ -61,8 +125,21 @@ const floodZones = defineLayer({
   // FEMA's colors as served: the default raster calming made the pale 1% cyan vanish on Topo.
   style: { geometry: "polygon", color: layerColor("flood-zones"), raster: null },
   legend: FLOOD_ZONES_LEGEND,
+  card: CARD,
+  fieldHelp: {
+    zone: { text: "FEMA's flood zone code: A, AE, AH, AO, V and VE are the 1% annual chance (100-year) floodplain; X is outside it (shaded X is the 500-year floodplain); D is not studied." },
+    bfeFt: { text: "The height the 1% annual chance flood is expected to reach, above the map's vertical datum (usually NAVD 88).", unit: "ft" },
+    insurance: { text: "Inside a special flood hazard area, flood insurance is usually required for buildings with a federally backed mortgage." },
+  },
   // The current effective flood maps: no time panel.
   time: { shape: "none" },
+
+  // A tap on the tiles asks FEMA which zone is there (MapServer identify on layer 28).
+  async identify(ctx, at) {
+    const attributes = await mapServerIdentify(ctx, SERVICE, at, "all:28");
+    if (attributes === null || isLayerError(attributes)) return attributes;
+    return floodZoneFeature(at, attributes);
+  },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

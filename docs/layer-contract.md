@@ -7,7 +7,9 @@ declaration fails the tests, never the map.
 
 ## `time?: TimeSpec` and `timeShapeOf(layer, data?)`
 
-`{ shape: "none" | "single" | "snapshots" | "continuous"; dates?: string[]; span?: { start; end }; step?: "hour" | "day" | "month" | "year" }`
+`{ shape: "none" | "single" | "snapshots" | "continuous"; dates?: string[]; span?: { start; end }; step?: "hour" | "day" | "month" | "year"; changeNoun?: string }`
+
+`changeNoun` names one area of a snapshot layer in the change key ("Ice" for glaciers: "Ice lost since the 1960s", "Ice in the 2010s", "New ice since the 1960s"); unset reads "Area".
 
 - **none**: time is not the question (dams, peaks). No time panel.
 - **single**: one reading, or one latest reading per site (groundwater wells, snow stations). Say the date; no scrubber.
@@ -67,3 +69,7 @@ The inspect card's title, never "Feature": the feature's `heading`, `name`, `tit
 (through the layer's levels for that key) and nearest place (`place`, `nearest`, `near`, `town`, `location`,
 `county`), as "Earthquake 10 km WSW of South Lake Tahoe, CA" or "Rapid near Fayetteville"; else the kind or the
 layer's short title with its rank ("Wolf packs #3"). Give features a `place` or `kind` when they have no name.
+
+## `identify?(ctx, at, input)` (raster tile layers)
+
+A raster picture has no features to pick, so a tap on it opens nothing unless the layer can ask its source what is drawn at the point. `identify` does that through the source's own endpoint (`layers/_shared/identify.ts`: ArcGIS MapServer `identify`, ArcGIS ImageServer `identify` for a pixel value, WMS `GetFeatureInfo` as GeoServer JSON) and returns one feature for the card (title in `name`, facts the layer's `card` lists), `null` where the source has nothing there, or `{ error }`. `at` carries the point, plus the start of the tile period on screen (`time`, ISO) for dated tiles and the scenario value shown (`scenario`), so the answer matches the picture. The browser calls `POST /api/layer/<id>/identify` (`lib/render/identify.ts`) when a tap picks nothing else; the catalog marks such layers `identify: true`. Layers with identify: flood-zones (FEMA zone), fire-hazard (hazard class), burn-severity (severity of the year shown), land-cover (the NLCD class of the map year shown; WorldCover has no feature-info service). Vector tile layers (geology, hardiness zones, public lands) need none: their features are picked from the tiles.

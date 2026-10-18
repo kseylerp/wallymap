@@ -211,3 +211,42 @@ export async function runLayer(id: string, params: RunLayerParams): Promise<RunL
     return { status: 503, body: withSourceStatus({ error: String(err), hint: "upstream" }, layer, thrown) };
   }
 }
+
+export type IdentifyParams = { lon: unknown; lat: unknown; zoom?: number; input?: unknown; time?: unknown; scenario?: unknown };
+export type IdentifyResponse = { status: number; body: { feature: GeoJSON.Feature | null } | LayerError };
+
+/**
+ * What a raster tile layer shows at one point (Layer.identify): the source's identify or feature-info answer as one
+ * feature for the card, `{ feature: null }` where the source has nothing there. 404 for a layer without identify.
+ */
+export async function identifyLayer(id: string, params: IdentifyParams): Promise<IdentifyResponse> {
+  const layer = getLayer(id);
+  if (!layer?.identify) return { status: 404, body: { error: `Layer ${id} cannot identify a point`, hint: "unavailable" } };
+  const at = z
+    .object({
+      lon: z.number().min(-180).max(180),
+      lat: z.number().min(-90).max(90),
+      time: z.string().max(40).optional(),
+      scenario: z.union([z.number(), z.string().max(40)]).optional(),
+    })
+    .safeParse({ lon: params.lon, lat: params.lat, time: params.time ?? undefined, scenario: params.scenario ?? undefined });
+  if (!at.success) return { status: 400, body: { error: `Invalid point: ${z.prettifyError(at.error)}` } };
+  const input = layer.input.safeParse(params.input ?? {});
+  if (!input.success) return { status: 400, body: { error: `Invalid input: ${z.prettifyError(input.error)}` } };
+  const zoom = params.zoom ?? DEFAULT_ZOOM;
+  // A box about one screen pixel's worth of ground on each side, for sources that want an extent with the point.
+  const half = Math.max(1e-5, 180 / 2 ** (zoom + 8));
+  const { lon, lat } = at.data;
+  const bbox: BBox = [lon - half, lat - half, lon + half, lat + half];
+  try {
+    const result = await layer.identify(
+      { bbox, zoom, env: layerEnv(layer), fetch: createLayerFetch(id), cacheKey: `${cacheKeyFor(layer.id, bbox, input.data)}:identify` },
+      at.data,
+      input.data,
+    );
+    if (result && "error" in result) return { status: 503, body: result };
+    return { status: 200, body: { feature: result } };
+  } catch (err) {
+    return { status: 503, body: { error: String(err), hint: "upstream" } };
+  }
+}

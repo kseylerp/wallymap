@@ -21,6 +21,7 @@ import { z } from "zod";
 import { defineLayer, type BBox, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { imageServerExportTileUrl } from "./_shared/arcgis-tiles";
+import { imageServerIdentify, isLayerError, pointFeature } from "./_shared/identify";
 import { layerColor, PINK, PURPLE, SAGE } from "@/lib/render/palette";
 
 const HOST = "https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation";
@@ -107,6 +108,21 @@ const burnSeverity = defineLayer({
   style: { geometry: "polygon", color: layerColor("burn-severity"), raster: { saturation: 0, opacity: 0.85, swatch: PINK } },
   legend: LEGEND,
   time: { shape: "continuous", step: "year" },
+  card: { facts: [{ key: "severity", label: "Burn severity" }, { key: "meaning", label: "What it means" }, { key: "year", label: "Fire year" }] },
+
+  // A tap asks the year's mosaic for the severity class there (the pixel value; 1 unburned, 2 to 4 low to high).
+  async identify(ctx, at, input) {
+    const region = regionFor(ctx.bbox);
+    const shown = at.time ? Number(at.time.slice(0, 4)) : input.year;
+    const year = Math.min(Number.isFinite(shown) ? shown : input.year, REGIONS[region].last);
+    const value = await imageServerIdentify(ctx, `${HOST}/USFS_EDW_MTBS_${region}/ImageServer`, at, { mosaicRule: JSON.stringify({ where: `year=${year}` }) });
+    if (value === null || isLayerError(value)) return value;
+    const item = LEGEND.items?.find((i) => i.value === Number(value));
+    const other: Record<number, string> = { 1: "Unburned to low", 5: "Increased greenness", 6: "Not mapped (cloud or gap)" };
+    const severity = item?.label ?? other[Number(value)];
+    if (!severity) return null;
+    return pointFeature(at, { name: `${severity} burn severity, ${year}`, severity, ...(item?.help && { meaning: item.help }), year: String(year) });
+  },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const region = regionFor(ctx.bbox);

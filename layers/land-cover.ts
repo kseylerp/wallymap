@@ -24,6 +24,7 @@ import { z } from "zod";
 import { defineLayer, type LayerError, type LayerResult, type LegendSpec, type TileScenario } from "./types";
 import { registerLayer } from "./registry";
 import { wmsTileUrl } from "./_shared/wms";
+import { isLayerError, pointFeature, wmsFeatureInfo } from "./_shared/identify";
 import { layerColor } from "@/lib/render/palette";
 
 /** Map years the NLCD display service publishes for the lower 48. */
@@ -127,6 +128,21 @@ const landCover = defineLayer({
   legend: LAND_COVER_LEGEND,
   // WorldCover is one map (2021); NLCD's nine years step through the tile scenario instead of a scrubber.
   time: { shape: "single", dates: ["2021"] },
+  card: { facts: [{ key: "cover", label: "Land cover" }, { key: "year", label: "Map year" }] },
+
+  // A tap on the NLCD map asks MRLC for the class there (GetFeatureInfo PALETTE_INDEX); WorldCover's tiles have no
+  // feature-info service, so a tap there opens nothing.
+  async identify(ctx, at, input) {
+    if (!input.nlcd) return null;
+    const asked = at.scenario !== undefined ? Number(at.scenario) : (input.year ?? 2021);
+    const epoch = nlcdEpoch(Number.isFinite(asked) ? asked : 2021);
+    if (epoch === null) return null;
+    const props = await wmsFeatureInfo(ctx, NLCD_ENDPOINT, `NLCD_${epoch}_Land_Cover_L48`, at);
+    if (props === null || isLayerError(props)) return props;
+    const cls = NLCD_CLASSES.find((c) => c.value === Number(props.PALETTE_INDEX));
+    if (!cls) return null;
+    return pointFeature(at, { name: cls.label, cover: cls.label, year: `NLCD ${epoch}` });
+  },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     const retrieved = new Date().toISOString();

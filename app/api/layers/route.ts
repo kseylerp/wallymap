@@ -20,6 +20,8 @@ export async function GET(): Promise<Response> {
       ...(l.legend && { legend: l.legend }),
       ...(l.labels && { labels: l.labels }),
       ...(l.display && { display: l.display }),
+      // A raster layer a tap can ask what is drawn at a point (POST /api/layer/<id>/identify).
+      ...(l.identify && { identify: true }),
     })),
   );
 }

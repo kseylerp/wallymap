@@ -6,8 +6,8 @@ import { TimePanel, wholeSpan, windowText } from "@/components/TimePanel";
 import { shortTitle } from "@/layers/contract";
 import { failureLine, layerSourceStatus, timeShape } from "@/lib/render/contract";
 import { rowLegend, type LegendBlock } from "@/lib/render/legendView";
-import { compareSideText, effectiveMode } from "@/lib/render/compareView";
-import { DELTA_COLORS } from "@/lib/render/palette";
+import { compareSideText, deltaKey, effectiveMode } from "@/lib/render/compareView";
+import { compareSummary } from "@/lib/render/compare";
 import type { LoadedLayer, MapAction, MapState } from "@/lib/render/state";
 import { layerChange } from "@/lib/render/views";
 import { periodOfUrl } from "@/lib/time";
@@ -63,17 +63,12 @@ export function PhoneCaption({ state, shown, onOpen }: { state: MapState; shown:
       // The delta's own key (spec §12 change view): what pink, grey and purple mean on this map.
       const a = compareSideText(compared, "a", layer);
       const b = compareSideText(compared, "b", layer);
-      const area = layer.style.geometry === "polygon";
+      const delta = drawn?.result.kind === "geojson" ? compareSummary(drawn.result.data) : null;
       return [
         {
           kind: "categories",
-          shape: area ? "polygon" : layer.style.geometry,
-          entries: [
-            { label: `Only ${a}`, color: DELTA_COLORS["a-only"] },
-            ...(area ? [{ label: `${a} edge`, color: DELTA_COLORS["a-only"], outline: true }] : []),
-            { label: b.charAt(0).toUpperCase() + b.slice(1), color: DELTA_COLORS.both },
-            { label: `Only ${b}`, color: DELTA_COLORS["b-only"] },
-          ],
+          shape: layer.style.geometry,
+          entries: deltaKey(layer, a, b, delta).map(({ label, color, outline }) => ({ label, color, ...(outline && { outline }) })),
         },
       ];
     }

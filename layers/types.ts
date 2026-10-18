@@ -429,6 +429,11 @@ export type TimeSpec = {
   /** Continuous (or snapshots): first and last date covered. */
   span?: { start: string; end: string };
   step?: "hour" | "day" | "month" | "year";
+  /**
+   * Snapshots of areas: what one area is, as the change key says it ("Ice" for glaciers: "Ice lost since the 1960s").
+   * Unset reads "Area".
+   */
+  changeNoun?: string;
 };
 
 /** One entry of a categories or symbol legend: the label people read, the raw value it stands for, and its swatch. */

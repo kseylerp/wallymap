@@ -13,9 +13,9 @@
  * condor critical habitat (1976) but no current range service, CEC's North American range is NatureServe's older outline, and
  * California's CWHR range covers one state. So the layer says "range as mapped by NPS in 2018; northern California releases
  * since 2022 are not in it" in the description, the note, the card and the legend.
- * Drawing: the current ranges are meant filled in sage and the early-1800s range as an outline only. The shared area renderer
- * draws one fill per layer, so the layer declares `era` as a category with `encode: "color"` and a legend saying so; the
- * per-feature fill is a request to the renderer.
+ * Drawing: the current ranges filled in sage and the early-1800s range as an outline only. The layer declares `era` as a
+ * category with `encode: "color"`; the area renderer draws a legend item with symbol "line" as an outline only
+ * (lib/render/categories.ts `outline`).
  * Smoke through runLayer (2026-10-10): box -125,29,-107,52 returned 4 polygons in 0.2 s (3 KB); the Sequoia box
  * -119.8,35.5,-118.8,36.5 returned the current California range and the historic range.
  * Smoke wide (2026-10-14): North America -170,18,-60,72 (about 50 million km²) returned all 4 polygons of 4 in 0.5 s (3 KB).
@@ -102,7 +102,7 @@ const CARD: CardSpec = {
 
 /**
  * Today filled in sage, the early 1800s as an outline only. `era` encodes color (Today first, so sage on the ramp); the
- * area renderer does not yet draw a fill per feature (see the header), so the legend states the intended drawing.
+ * legend's line item makes the early-1800s areas an outline (see the header).
  */
 const ATTRIBUTES: Attribute[] = [
   {

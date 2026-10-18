@@ -600,7 +600,7 @@ const glaciers = defineLayer({
   card: CARD,
   attributes: ATTRIBUTES,
   // Snapshots: the survey years in view (filled from the data's `t`, one per survey), compared two at a time.
-  time: { shape: "snapshots", step: "year" },
+  time: { shape: "snapshots", step: "year", changeNoun: "Ice" },
   labels: { field: "name", max: 8, rankBy: "areaKm2" },
 
   async query(ctx): Promise<LayerResult | LayerError> {

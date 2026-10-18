@@ -88,8 +88,8 @@ describe("CompareControl", () => {
 
   it("shows the delta counts in the legend", () => {
     render(<Harness spy={() => {}} initial={comparing("delta")} />);
-    // Delta is the change view: each side named in its own words, lost pink and gained purple.
-    expect(screen.getByRole("list", { name: "Legend" }).textContent).toMatch(/^only .+2only .+1both0$/);
+    // Delta is the change view: each side named in its own words, lost pink, kept grey, gained purple.
+    expect(screen.getByRole("list", { name: "Legend" }).textContent).toMatch(/^Only in .+2In both0Only in .+1$/);
   });
 
   it("moves the swipe handle with the arrow keys", () => {

@@ -82,7 +82,6 @@ export function layerIdFromDeckId(deckId: string): string | null {
   let id = layerId;
   for (const tag of [DECK_TERRAIN_TAG, HEX_DELTA_TAG, DELTA_TAG]) if (id.endsWith(tag)) id = id.slice(0, -tag.length);
   return id;
-  return layerId;
 }
 
 /** The app layer id behind a vector tile source (`tiles-<id>`) or Mapbox layer (`tiles-<id>`, `tiles-<id>-line`). */

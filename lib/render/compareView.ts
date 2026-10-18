@@ -9,6 +9,7 @@ import { tileUrlForTime, type TimeWindow } from "@/lib/time";
 import { versionSides, versionsAttribute } from "@/lib/render/attributes";
 import { epochLabel, epochWindow, identityKey, snapshotEpochs } from "@/lib/render/change";
 import { timeShape } from "@/lib/render/contract";
+import { DELTA_COLORS } from "@/lib/render/palette";
 
 /**
  * Compare over time, the view half (spec §7): what the map draws for the compared layer. The pure engine is
@@ -317,6 +318,39 @@ export function compareSideText(compare: CompareState, which: "a" | "b", layer: 
   const unit = scenarioOf(layer)?.unit;
   if (compare.scenario && unit !== undefined) return scenarioValueText(compare.scenario[which], unit);
   return windowText(compare[which]);
+}
+
+/** One entry of the delta's key: the label people read, its color, whether it draws as a line, and its count. */
+export type DeltaKeyEntry = { label: string; color: string; outline?: boolean; count?: number };
+
+/**
+ * The change view's key in plain words, shared by the compare strip and the phone caption. Areas matched across dates
+ * (a glacier by its id) read as what was lost, what is there at B, and what is new, with the earlier edge explained in
+ * the first item: "Ice lost since the 1960s (the pink line is its edge then)", "Ice in the 2010s", "New ice since the
+ * 1960s" (only when there is some). Points and lines read "Only in A", "In both", "Only in B".
+ */
+export function deltaKey(
+  layer: LoadedLayer,
+  a: string,
+  b: string,
+  summary: { aOnly: number; bOnly: number; both: number } | null,
+): DeltaKeyEntry[] {
+  const count = (n: number | undefined) => (n === undefined ? {} : { count: n });
+  // Only one area at two dates (snapshots: a glacier, a monument) loses or gains ground; fires in two windows do not.
+  if (layer.style.geometry === "polygon" && timeShape(layer).shape === "snapshots") {
+    const noun = timeShape(layer).changeNoun ?? layer.time?.changeNoun ?? "Area";
+    const lower = noun.toLowerCase();
+    return [
+      { label: `${noun} lost since ${a} (the pink line is its edge then)`, color: DELTA_COLORS["a-only"], ...count(summary?.aOnly) },
+      { label: `${noun} in ${b}`, color: DELTA_COLORS.both, ...count(summary?.both) },
+      ...(summary === null || summary.bOnly > 0 ? [{ label: `New ${lower} since ${a}`, color: DELTA_COLORS["b-only"], ...count(summary?.bOnly) }] : []),
+    ];
+  }
+  return [
+    { label: `Only in ${a}`, color: DELTA_COLORS["a-only"], ...count(summary?.aOnly) },
+    { label: "In both", color: DELTA_COLORS.both, ...count(summary?.both) },
+    { label: `Only in ${b}`, color: DELTA_COLORS["b-only"], ...count(summary?.bOnly) },
+  ];
 }
 
 /** True while the compared layer is hidden in the layer panel: nothing is drawn, so toggle does not tick. */

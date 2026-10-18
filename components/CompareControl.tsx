@@ -8,6 +8,7 @@ import {
   compareSides,
   compareSideText,
   defaultCompare,
+  deltaKey,
   effectiveMode,
   hasPreset,
   isComparable,
@@ -506,20 +507,30 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
           </div>
 
           <ul aria-label="Legend" className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-ink-muted">
-            <li className="flex items-center gap-1.5">
-              <Swatch color={sideColor("a")} />
-              {mode === "delta" ? `only ${compareSideText(compare, "a", layer)}` : "A only"}
-              {summary && <span className="text-ink tabular-nums">{summary.aOnly.toLocaleString()}</span>}
-            </li>
-            <li className="flex items-center gap-1.5">
-              <Swatch color={sideColor("b")} />
-              {mode === "delta" ? `only ${compareSideText(compare, "b", layer)}` : "B only"}
-              {summary && <span className="text-ink tabular-nums">{summary.bOnly.toLocaleString()}</span>}
-            </li>
-            <li className="flex items-center gap-1.5">
-              <Swatch color={mode === "delta" ? DELTA_COLORS.both : COMPARE_COLORS.both} />
-              both{summary && <span className="text-ink tabular-nums">{summary.both.toLocaleString()}</span>}
-            </li>
+            {mode === "delta" ? (
+              deltaKey(layer, compareSideText(compare, "a", layer), compareSideText(compare, "b", layer), summary).map((e) => (
+                <li key={e.label} className="flex items-center gap-1.5">
+                  <Swatch color={e.color} />
+                  {e.label}
+                  {e.count !== undefined && <span className="text-ink tabular-nums">{e.count.toLocaleString()}</span>}
+                </li>
+              ))
+            ) : (
+              <>
+                <li className="flex items-center gap-1.5">
+                  <Swatch color={sideColor("a")} />
+                  Only in A{summary && <span className="text-ink tabular-nums">{summary.aOnly.toLocaleString()}</span>}
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <Swatch color={sideColor("b")} />
+                  Only in B{summary && <span className="text-ink tabular-nums">{summary.bOnly.toLocaleString()}</span>}
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <Swatch color={COMPARE_COLORS.both} />
+                  In both{summary && <span className="text-ink tabular-nums">{summary.both.toLocaleString()}</span>}
+                </li>
+              </>
+            )}
             {mode !== "delta" && (
               <li className="ml-auto text-[11px]">{mode === "swipe" ? "Drag the handle" : "Space pauses"}</li>
             )}

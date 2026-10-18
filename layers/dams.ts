@@ -7,8 +7,7 @@
  *   NAME, NIDID, YEAR_COMPLETED (integer, 0 or null when unknown), NID_STORAGE (acre-feet, the capacity NID uses),
  *   NID_HEIGHT (feet), PRIMARY_PURPOSE (spelled out, e.g. "Hydroelectric"), HAZARD_POTENTIAL ("High" | "Significant" | "Low" |
  *   "Undetermined"), RIVER_OR_STREAM, STATE, PRIMARY_OWNER_TYPE, PRIMARY_DAM_TYPE, CONDITION_ASSESSMENT.
- * Output: v = NID_STORAGE (acre-feet), t = January 1 of the year completed (so the scrubber plays dams by decade),
- * kind = primary purpose, plus name, nidId, heightFt, yearCompleted, purpose, hazard, river, state, owner, damType, condition.
+ * Output: v = NID_STORAGE (acre-feet), kind = primary purpose (no `t`: the year completed is a property, not a timeline), plus name, nidId, heightFt, yearCompleted, purpose, hazard, river, state, owner, damType, condition.
  * Results are ordered by storage so the 2,000-dam cap keeps the biggest. Dams with no storage figure (about 3% of 92,627) are
  * filtered out with `NID_STORAGE > 0`, because a descending sort puts the null ones first and they would fill the cap.
  * Smoke check 2026-10-10 (live, through runLayer): the Glen Canyon box (-111.55,36.9,-111.4,37) returned Glen Canyon Dam (completed 1963,
@@ -20,7 +19,16 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import {
+  defineLayer,
+  type LayerError,
+  type LayerResult,
+  type CardSpec,
+  type Attribute,
+  type FieldHelp,
+  type LegendSpec,
+  type MeasurePreset,
+} from "./types";
 import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
@@ -64,13 +72,15 @@ function num(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-/** "1966-01-01T00:00:00.000Z" for a plausible completion year; Date.UTC would turn years 0 to 99 into 1900s, so build the string. */
-function yearToIso(year: number): string | undefined {
-  if (!Number.isInteger(year) || year < 1000 || year > 2100) return undefined;
-  return `${year}-01-01T00:00:00.000Z`;
+/** A plausible completion year (the inventory writes 0 or nonsense when it does not know). */
+function plausibleYear(year: number): boolean {
+  return Number.isInteger(year) && year >= 1000 && year <= 2100;
 }
 
-/** Service rows to dam points with readable names plus `t` (year completed) and `v` (storage in acre-feet). */
+/**
+ * Service rows to dam points with readable names, `yearCompleted` and `v` (storage in acre-feet). No `t`: the year a dam
+ * was built is a fact about it, not a timeline (time is not the question for dams; owner audit 2026-10-17).
+ */
 export function normalizeDams(fc: FeatureCollection): FeatureCollection {
   const features: Feature<Geometry>[] = [];
   for (const f of fc.features) {
@@ -89,11 +99,7 @@ export function normalizeDams(fc: FeatureCollection): FeatureCollection {
       properties.v = storage;
     }
     if (height !== undefined && height > 0) properties.heightFt = height;
-    const iso = year === undefined ? undefined : yearToIso(year);
-    if (year !== undefined && iso !== undefined) {
-      properties.yearCompleted = year;
-      properties.t = iso;
-    }
+    if (year !== undefined && plausibleYear(year)) properties.yearCompleted = year;
     if (purpose !== undefined) {
       properties.purpose = purpose;
       properties.kind = purpose;
@@ -211,6 +217,27 @@ export function groupStructures(features: Feature<Geometry>[]): Feature<Geometry
 
 const NID_URL = "https://nid.sec.usace.army.mil";
 
+/** Storage classes, ten times apart (the legend's log steps). */
+const STORAGE_CLASSES: MeasurePreset[] = [
+  { label: "Under 10,000 acre-feet", max: 9_999 },
+  { label: "10,000 to 100,000 acre-feet", min: 10_000, max: 99_999 },
+  { label: "100,000 to 1 million acre-feet", min: 100_000, max: 999_999 },
+  { label: "1 million acre-feet and up", min: 1_000_000 },
+];
+
+/** Height classes; the inventory's own threshold for a large dam is 50 ft. */
+const HEIGHT_CLASSES: MeasurePreset[] = [
+  { label: "Under 50 ft", max: 49 },
+  { label: "50 to 199 ft", min: 50, max: 199 },
+  { label: "200 ft and up", min: 200 },
+];
+
+const ERA_CLASSES: MeasurePreset[] = [
+  { label: "Before 1930", max: 1929 },
+  { label: "1930 to 1969", min: 1930, max: 1969 },
+  { label: "1970 and later", min: 1970 },
+];
+
 const ATTRIBUTES: Attribute[] = [
   {
     key: "hazard",
@@ -223,12 +250,32 @@ const ATTRIBUTES: Attribute[] = [
       { value: "Undetermined", label: "Undetermined" },
     ],
   },
-  { key: "storageAf", type: "measure", label: "Storage", unit: "acre-feet", encode: "size" },
-  { key: "heightFt", type: "measure", label: "Height", unit: "ft" },
+  { key: "storageAf", type: "measure", label: "Storage", unit: "acre-feet", encode: "size", presets: STORAGE_CLASSES },
+  { key: "heightFt", type: "measure", label: "Height", unit: "ft", presets: HEIGHT_CLASSES },
   { key: "kind", type: "category", label: "Purpose" },
-  { key: "yearCompleted", type: "time", label: "Year completed" },
+  // A fact about the dam, ranked like any measure; not the time scrubber.
+  { key: "yearCompleted", type: "measure", label: "Year completed", presets: ERA_CLASSES },
   nameAttribute(),
 ];
+
+/**
+ * The size key, on a log scale: each stop is ten times the last, since storage runs from a few acre-feet to Lake Mead's
+ * 26 million and a square-root scale left every dam but the largest looking alike (audit 2026-10-17).
+ */
+const LEGEND: LegendSpec = {
+  kind: "size",
+  title: "Storage",
+  field: "storageAf",
+  unit: "acre-feet",
+  stops: [
+    { label: "1,000", value: 1_000 },
+    { label: "10,000", value: 10_000 },
+    { label: "100,000", value: 100_000 },
+    { label: "1 million", value: 1_000_000 },
+    { label: "10 million", value: 10_000_000 },
+  ],
+  note: "Each step is ten times the storage. Color is the dam's height in feet, sage for low through pink to purple for the tallest in view.",
+};
 
 const STORAGE: FieldHelp = {
   text:
@@ -288,7 +335,7 @@ const dams = defineLayer({
   id: "dams",
   title: "Dams",
   description:
-    "US dams from the National Inventory of Dams (Army Corps of Engineers): every high- and significant-hazard dam plus the larger low-hazard ones. Each point has name, v and storageAf (capacity in acre-feet), heightFt, yearCompleted and t (January 1 of that year, so the time scrubber plays dams by decade), purpose and kind (Hydroelectric, Flood Risk Reduction, Irrigation, Water Supply, Recreation and so on), hazard (High, Significant or Low: the damage if it failed, not the chance of failure or a safety rating), river, state, owner, damType and condition. A reservoir's dikes and saddle dams are folded into its main dam (structures, e.g. \"4 dikes\"), since the inventory gives each the whole reservoir's storage. About 3% of dams have no storage figure and are left out; year completed is missing for some old dams. At most 2,000 dams, biggest storage first; any US box answers, and over 250,000 km\u00b2 the note gives the total.",
+    "US dams from the National Inventory of Dams (Army Corps of Engineers): every high- and significant-hazard dam plus the larger low-hazard ones. Each point has name, v and storageAf (capacity in acre-feet), heightFt, yearCompleted (a fact about the dam; there is no timeline), purpose and kind (Hydroelectric, Flood Risk Reduction, Irrigation, Water Supply, Recreation and so on), hazard (High, Significant or Low: the damage if it failed, not the chance of failure or a safety rating), river, state, owner, damType and condition. A reservoir's dikes and saddle dams are folded into its main dam (structures, e.g. \"4 dikes\"), since the inventory gives each the whole reservoir's storage. About 3% of dams have no storage figure and are left out; year completed is missing for some old dams. At most 2,000 dams, biggest storage first; any US box answers, and over 250,000 km\u00b2 the note gives the total.",
   coverage: "us",
   surface: "land",
   license: "Public domain (US Army Corps of Engineers, National Inventory of Dams)",
@@ -302,6 +349,10 @@ const dams = defineLayer({
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // When a dam was built is a property of the dam, not the question: no time panel.
+  time: { shape: "none" },
+  legend: LEGEND,
+  labels: { field: "name", max: 5, rankBy: "storageAf" },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

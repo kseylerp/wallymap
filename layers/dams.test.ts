@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { cardContent } from "@/lib/render/card";
 import layer, { normalizeDams, structureStem, structuresText } from "./dams";
+import { contractProblems, labelsOf, legendOf, timeShapeOf } from "./contract";
 import raw from "./__fixtures__/dams.bayarea.json";
 
 /** The fixture is the live National Inventory of Dams answer for this box, 12 largest by storage, recorded 2026-10-10. */
@@ -35,7 +37,7 @@ describe("dams layer", () => {
     expect(layer.style).toMatchObject({ geometry: "point", extrude: "v", unit: "acre-feet" });
   });
 
-  it("turns service rows into points with storage in v, the year built in t and the purpose as kind", () => {
+  it("turns service rows into points with storage in v, the year built as a fact (no t) and the purpose as kind", () => {
     const fc = normalizeDams(fixture);
     expect(fc.features).toHaveLength(fixture.features.length);
     const vaqueros = fc.features.find((f) => f.properties?.name === "Los Vaqueros");
@@ -46,7 +48,6 @@ describe("dams layer", () => {
       storageAf: 160000,
       heightFt: 231,
       yearCompleted: 1997,
-      t: "1997-01-01T00:00:00.000Z",
       purpose: "Water Supply",
       kind: "Water Supply",
       hazard: "High",
@@ -55,9 +56,26 @@ describe("dams layer", () => {
       owner: "Public Utility",
       damType: "Earth",
     });
-    // A year in the 1800s stays a 4-digit year (Date.UTC would not).
     const crystal = fc.features.find((f) => f.properties?.name === "Ler Crystal Springs");
-    expect(crystal?.properties?.t).toBe("1888-01-01T00:00:00.000Z");
+    expect(crystal?.properties?.yearCompleted).toBe(1888);
+    // The year built is a fact, not a timeline: no feature carries `t`, so no time panel opens.
+    for (const f of fc.features) expect(f.properties).not.toHaveProperty("t");
+  });
+
+  it("has no time, keys size by storage on ten-times steps with height as color, and labels the five largest", () => {
+    const data = normalizeDams(fixture);
+    expect(timeShapeOf(layer, data)).toEqual({ shape: "none" });
+    const legend = legendOf(layer, data);
+    expect(legend).toMatchObject({ kind: "size", field: "storageAf", unit: "acre-feet" });
+    const values = legend.stops?.map((s) => s.value) ?? [];
+    expect(values).toEqual([1_000, 10_000, 100_000, 1_000_000, 10_000_000]);
+    expect(legend.note).toMatch(/height/);
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 5, rankBy: "storageAf" });
+    expect(layer.attributes?.find((a) => a.key === "yearCompleted")?.type).toBe("measure");
+    expect(layer.attributes?.some((a) => a.type === "time")).toBe(false);
+    const card = cardContent(data.features[0], { unit: layer.style.unit, card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.facts.find((f) => f.key === "yearCompleted")?.value).toBe("1997");
+    expect(contractProblems(layer)).toEqual([]);
   });
 
   it("drops rows with no geometry and leaves out missing, zero or implausible values", () => {
@@ -160,7 +178,7 @@ describe("dams layer", () => {
     expect(layer.description).toMatch(/hazard/);
     expect(layer.description).toMatch(/safety rating/);
     expect(layer.description).toMatch(/About 3% of dams have no storage figure and are left out/);
-    expect(layer.description).toMatch(/decade/);
+    expect(layer.description).toMatch(/there is no timeline/);
   });
 
   it("folds a reservoir's dikes into its main dam, so Granby is one entry with \"4 dikes\"", () => {

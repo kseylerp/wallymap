@@ -10,21 +10,51 @@
  * whole CSV for the box and days is read (bounded by the 5-day maximum) and the 5,000 newest detections are kept, with the
  * row count as the total. Smoke wide 2026-10-14 (through runLayer): central Africa 10,-15,40,5 (about 7,400,000 km²), 5 days, VIIRS SNPP,
  * returned the 5,000 newest of 29,154 in 1.5 s (823 KB); the western US -125,25,-95,50, 3 days, all 452 in 3.0 s.
+ * All three VIIRS satellites (since 2026-10-18, the default source VIIRS_ALL): SNPP, NOAA-20 and NOAA-21 each pass about
+ * twice a day, so one satellite alone can leave "right now" 12 hours old (audit 2026-10-17). The three CSVs are fetched in
+ * parallel (one FIRMS call each, cached 30 minutes) and merged; each point keeps its `satellite`. When one satellite fails
+ * the others still answer, with a note. Fire power is totalled per frame as the strongest pixel (`max`), not the sum: VIIRS
+ * gives the same power to neighbouring pixels of one fire, and three satellites see the same fire, so a sum counted it
+ * several times.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp, type QueryContext } from "./types";
 import { timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
 
-const SOURCES = ["VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "MODIS_NRT"] as const;
+const VIIRS = ["VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT"] as const;
+const SOURCES = ["VIIRS_ALL", ...VIIRS, "MODIS_NRT"] as const;
+type Source = (typeof SOURCES)[number];
+type OneSource = Exclude<Source, "VIIRS_ALL">;
+
+/** Plain names for the satellites, as the card shows them. */
+export const SATELLITES: Record<OneSource, string> = {
+  VIIRS_SNPP_NRT: "Suomi NPP (VIIRS)",
+  VIIRS_NOAA20_NRT: "NOAA-20 (VIIRS)",
+  VIIRS_NOAA21_NRT: "NOAA-21 (VIIRS)",
+  MODIS_NRT: "Terra and Aqua (MODIS)",
+};
 
 const inputSchema = z.object({
   days: z.number().int().min(1).max(5).default(3),
-  source: z.enum(SOURCES).default("VIIRS_SNPP_NRT"),
+  source: z.enum(SOURCES).default("VIIRS_ALL"),
 });
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "Hotspot, Oct 17 09:42 UTC" and "108 MW": the card's title and the map label for a detection. */
+export function describeDetection(properties: Record<string, unknown>): { heading: string; label?: string } {
+  const t = typeof properties.t === "string" ? properties.t : "";
+  const when = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(t) ? `${MONTHS[Number(t.slice(5, 7)) - 1]} ${Number(t.slice(8, 10))} ${t.slice(11, 16)} UTC` : "";
+  const frp = typeof properties.v === "number" ? properties.v : undefined;
+  return {
+    heading: `Hotspot${when ? `, ${when}` : ""}`,
+    ...(frp !== undefined && { label: `${frp >= 10 ? Math.round(frp) : frp.toFixed(1)} MW` }),
+  };
+}
 
 /** Most points returned; keeps the strongest so a 5-day, country-sized request stays drawable. */
 const MAX_POINTS = 5_000;
@@ -90,6 +120,7 @@ export function parseFirmsCsv(text: string): FeatureCollection {
     const daynight = iDay === -1 ? undefined : cells[iDay]?.trim();
     if (daynight) properties.daynight = daynight;
 
+    Object.assign(properties, describeDetection(properties));
     features.push({ type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] }, properties });
   }
   return { type: "FeatureCollection", features };
@@ -113,6 +144,46 @@ function timeOf(feature: Feature): number {
   return typeof t === "string" ? Date.parse(t) : -Infinity;
 }
 
+type Fetched = { ok: true; fc: FeatureCollection } | { ok: false; error: string };
+
+/** One satellite's FIRMS CSV for the view, parsed (each point marked with its satellite), or why it failed. */
+async function fetchSource(ctx: QueryContext, key: string, source: OneSource, days: number, several: boolean): Promise<Fetched> {
+  const [west, south, east, north] = ctx.bbox;
+  const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${key}/${source}/${west},${south},${east},${north}/${days}`;
+  let status: number;
+  let ok: boolean;
+  let body: string;
+  try {
+    const res = await ctx.fetch(url, {
+      cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:firms${several ? `:${source}` : ""}`,
+      // FIRMS answers a bad key with a 200 "Invalid MAP_KEY." text; only cache a real CSV (or an empty one).
+      shouldCache: firmsBodyCacheable,
+      // Hotspots are near-real-time; the default 24 hour cache would show stale fires.
+      ttlSeconds: 1800,
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+    status = res.status;
+    ok = res.ok;
+    body = await res.text();
+  } catch (err) {
+    const timedOut = typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
+    return { ok: false, error: timedOut ? `FIRMS timed out after ${UPSTREAM_TIMEOUT_MS / 1000} seconds` : "FIRMS returned no response" };
+  }
+  // FIRMS reports bad keys and parameters as a plain-text body ("Invalid MAP_KEY."), sometimes with a 4xx.
+  if (body.trimStart().startsWith("Invalid")) {
+    return { ok: false, error: `FIRMS rejected the request: ${body.trimStart().split(/\r?\n/)[0].slice(0, 200)}` };
+  }
+  if (!ok) return { ok: false, error: `FIRMS returned ${status}` };
+  // Anything that is not a CSV (an HTML error page, say) must not be shown as "no fires".
+  const firstLine = body.trimStart().split(/\r?\n/)[0];
+  if (body.trim() !== "" && !firstLine.includes("latitude")) {
+    return { ok: false, error: `FIRMS returned an unexpected response: ${firstLine.slice(0, 80)}` };
+  }
+  const fc = body.trim() === "" ? EMPTY : parseFirmsCsv(body);
+  for (const f of fc.features) if (f.properties) f.properties.satellite = source;
+  return { ok: true, fc };
+}
+
 const ATTRIBUTES: Attribute[] = [
   {
     key: "confidence",
@@ -125,7 +196,19 @@ const ATTRIBUTES: Attribute[] = [
       { value: "h", label: "High" },
     ],
   },
-  { key: "v", type: "measure", label: "Fire power", unit: "MW", encode: "size", aggregate: "sum" },
+  {
+    key: "v",
+    type: "measure",
+    label: "Fire power",
+    unit: "MW",
+    encode: "size",
+    aggregate: "max",
+    aggregateLabel: "Strongest fire power seen",
+    presets: [
+      { label: "Strong: 50 MW or more", min: 50 },
+      { label: "Very strong: 200 MW or more", min: 200 },
+    ],
+  },
   { key: "brightK", type: "measure", label: "Brightness", unit: "K" },
   {
     key: "daynight",
@@ -135,6 +218,12 @@ const ATTRIBUTES: Attribute[] = [
       { value: "D", label: "Day" },
       { value: "N", label: "Night" },
     ],
+  },
+  {
+    key: "satellite",
+    type: "category",
+    label: "Satellite",
+    levels: (Object.keys(SATELLITES) as OneSource[]).map((value) => ({ value, label: SATELLITES[value] })),
   },
   timeAttribute("Seen"),
 ];
@@ -176,7 +265,9 @@ const CARD: CardSpec = {
     { key: "confidence", label: "Confidence", values: { l: "Low", n: "Nominal", h: "High" } },
     { key: "daynight", label: "Pass", values: { D: "Day", N: "Night" } },
     { key: "brightK", label: "Brightness temperature", unit: "K", format: "1dp" },
+    { key: "satellite", label: "Satellite", values: SATELLITES },
   ],
+  hidden: ["heading", "label"],
 };
 
 const fireDetections = defineLayer({
@@ -190,7 +281,8 @@ const fireDetections = defineLayer({
     "Caveats: detections are heat points, not fire outlines (use fire-perimeters for the burned area); one fire often produces many points; " +
     "VIIRS sources are about 375 m resolution and MODIS about 1 km; data arrives roughly 3 hours after the pass; " +
     "industrial flares, gas wells and volcanoes also show up. " +
-    "Pick VIIRS_SNPP_NRT (default), VIIRS_NOAA20_NRT or MODIS_NRT with source. At most the 5,000 strongest (by v) are returned. " +
+    "source VIIRS_ALL (default) merges the three VIIRS satellites (Suomi NPP, NOAA-20, NOAA-21), so the newest pass is a few hours old at most; each point keeps its satellite. Pick one with VIIRS_SNPP_NRT, VIIRS_NOAA20_NRT, VIIRS_NOAA21_NRT or MODIS_NRT. " +
+    "The same fire is often seen by several satellites and as several neighbouring pixels with the same power, so count fires by clusters, not points; the running total is the strongest fire power seen, not a sum. At most the 5,000 strongest (by v) are returned. " +
     "Over 2,000,000 km² (about the size of Mexico) it returns the 5,000 newest.",
   coverage: "global",
   surface: "land",
@@ -203,6 +295,9 @@ const fireDetections = defineLayer({
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // Detections arrive pass by pass over a few days: a scrubber by the hour, never a compare of two "days" (the last is partial).
+  time: { shape: "continuous", step: "hour" },
+  labels: { field: "label", max: 5, rankBy: "v" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const key = ctx.env.FIRMS_MAP_KEY;
@@ -210,51 +305,22 @@ const fireDetections = defineLayer({
       return { error: "Layer fire-detections needs FIRMS_MAP_KEY", hint: "unavailable" };
     }
 
-    const [west, south, east, north] = ctx.bbox;
-    const url =
-      `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${key}/${input.source}/` +
-      `${west},${south},${east},${north}/${input.days}`;
-
-    let status: number;
-    let ok: boolean;
-    let body: string;
-    try {
-      const res = await ctx.fetch(url, {
-        cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:firms`,
-        // FIRMS answers a bad key with a 200 "Invalid MAP_KEY." text; only cache a real CSV (or an empty one).
-        shouldCache: firmsBodyCacheable,
-        // Hotspots are near-real-time; the default 24 hour cache would show stale fires.
-        ttlSeconds: 1800,
-        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-      });
-      status = res.status;
-      ok = res.ok;
-      body = await res.text();
-    } catch (err) {
-      const timedOut =
-        typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
-      return {
-        error: timedOut
-          ? `FIRMS timed out after ${UPSTREAM_TIMEOUT_MS / 1000} seconds`
-          : "FIRMS returned no response",
-        hint: "upstream",
-      };
+    const sources: OneSource[] = input.source === "VIIRS_ALL" ? [...VIIRS] : [input.source];
+    const got = await Promise.all(sources.map((source) => fetchSource(ctx, key, source, input.days, sources.length > 1)));
+    const answered = got.filter((g): g is Extract<Fetched, { ok: true }> => g.ok);
+    if (answered.length === 0) {
+      const first = got[0] as Extract<Fetched, { ok: false }>;
+      return { error: first.error, hint: "upstream" };
     }
-
-    // FIRMS reports bad keys and parameters as a plain-text body ("Invalid MAP_KEY."), sometimes with a 4xx.
-    if (body.trimStart().startsWith("Invalid")) {
-      const firstLine = body.trimStart().split(/\r?\n/)[0].slice(0, 200);
-      return { error: `FIRMS rejected the request: ${firstLine}`, hint: "upstream" };
-    }
-    if (!ok) return { error: `FIRMS returned ${status}`, hint: "upstream" };
-
-    // Anything that is not a CSV (an HTML error page, say) must not be shown as "no fires".
-    const firstLine = body.trimStart().split(/\r?\n/)[0];
-    if (body.trim() !== "" && !firstLine.includes("latitude")) {
-      return { error: `FIRMS returned an unexpected response: ${firstLine.slice(0, 80)}`, hint: "upstream" };
-    }
-
-    const parsed = body.trim() === "" ? EMPTY : parseFirmsCsv(body);
+    const parsed: FeatureCollection = { type: "FeatureCollection", features: answered.flatMap((g) => g.fc.features) };
+    const failedNote =
+      answered.length < got.length
+        ? `${got
+            .map((g, i) => (g.ok ? null : SATELLITES[sources[i]]))
+            .filter((n) => n !== null)
+            .join(" and ")} did not answer; showing the other satellites`
+        : undefined;
+    const sourceLabel = input.source === "VIIRS_ALL" ? "VIIRS (Suomi NPP, NOAA-20, NOAA-21)" : input.source;
 
     // Wide: the newest detections up to the strategy's limit, with the full count; run.ts writes the note.
     if (ctx.wide) {
@@ -266,8 +332,9 @@ const fireDetections = defineLayer({
           ? { type: "FeatureCollection", features: [...parsed.features].sort((a, b) => timeOf(b) - timeOf(a)).slice(0, limit) }
           : parsed,
         ...(cut && { total: parsed.features.length }),
+        ...(failedNote && { coverageNote: failedNote }),
         citation: {
-          source: `NASA FIRMS ${input.source} (public, attribution requested)`,
+          source: `NASA FIRMS ${sourceLabel} (public, attribution requested)`,
           url: "https://firms.modaps.eosdis.nasa.gov/",
           retrieved: new Date().toISOString(),
         },
@@ -287,9 +354,11 @@ const fireDetections = defineLayer({
     return {
       kind: "geojson",
       data,
-      ...(capped ? { coverageNote: `Showing the ${MAX_POINTS.toLocaleString("en-US")} strongest detections` } : {}),
+      ...((capped || failedNote) && {
+        coverageNote: [capped ? `Showing the ${MAX_POINTS.toLocaleString("en-US")} strongest detections` : null, failedNote ?? null].filter(Boolean).join("; "),
+      }),
       citation: {
-        source: `NASA FIRMS ${input.source} (public, attribution requested)`,
+        source: `NASA FIRMS ${sourceLabel} (public, attribution requested)`,
         url: "https://firms.modaps.eosdis.nasa.gov/",
         retrieved: new Date().toISOString(),
       },

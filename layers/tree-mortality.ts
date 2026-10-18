@@ -167,14 +167,27 @@ export function normalizeIds(fc: FeatureCollection): Feature<Geometry>[] {
     const host = str(p.host) ?? str(p.host_group);
     if (host !== undefined) properties.host = host;
     const mid = num(p.percent_mid);
-    if (mid !== undefined) properties.v = mid;
+    if (mid !== undefined) {
+      properties.v = mid;
+      // Its own key with its own unit, so the card never shows a bare "20" (audit 2026-10-17).
+      properties.percentDead = mid;
+    }
     const label = str(p.percent_affected);
     if (label !== undefined) properties.percentAffected = label;
     const acres = num(p.acres);
     if (acres !== undefined) properties.acres = Math.round(acres);
+    properties.heading = dieOffHeading(properties);
     features.push({ type: "Feature", geometry: f.geometry, properties });
   }
   return features;
+}
+
+/** "Subalpine fir die-off: western balsam bark beetle": the tree and the cause, the card's title. */
+export function dieOffHeading(properties: Record<string, string | number>): string {
+  const host = typeof properties.host === "string" ? properties.host.trim() : "";
+  const tree = host ? host.charAt(0).toUpperCase() + host.slice(1) : "Tree";
+  const agent = typeof properties.agent === "string" && properties.agent !== "unknown agent" ? `: ${properties.agent}` : "";
+  return `${tree} die-off${agent}`;
 }
 
 /** California 1973 to 2019 rows: v is the number of trees killed. */
@@ -199,6 +212,7 @@ export function normalizeCdfw(fc: FeatureCollection): Feature<Geometry>[] {
     if (acres !== undefined) properties.acres = Math.round(acres);
     const forest = str(p.FOR_TYPE1);
     if (forest !== undefined) properties.forestType = forest;
+    properties.heading = dieOffHeading(properties);
     features.push({ type: "Feature", geometry: f.geometry, properties });
   }
   return features;
@@ -206,8 +220,25 @@ export function normalizeCdfw(fc: FeatureCollection): Feature<Geometry>[] {
 
 const IDS_PAGE = "https://www.fs.usda.gov/science-technology/data-tools-products/fhp-mapping-reporting/detection-surveys";
 
+/**
+ * Two measures, each in its own unit (the survey changed in 2021): the share of trees dead (2021 on) colors the polygons
+ * and has the survey's own classes as presets; trees killed (California, 1973 to 2019) sizes them. The cause is the
+ * category people slice by (mountain pine beetle, spruce beetle ...).
+ */
 const ATTRIBUTES: Attribute[] = [
+  {
+    key: "percentDead",
+    type: "measure",
+    label: "Share of trees dead",
+    unit: "%",
+    presets: [
+      { label: "Moderate or worse: 11% or more dead", min: 11 },
+      { label: "Severe or worse: 30% or more dead", min: 30 },
+      { label: "Very severe: over 50% dead", min: 50 },
+    ],
+  },
   { key: "treesKilled", type: "measure", label: "Trees killed", unit: "trees", encode: "size" },
+  { key: "agent", type: "category", label: "Cause" },
   { key: "year", type: "time", label: "Year" },
 ];
 
@@ -221,6 +252,12 @@ const TREES: FieldHelp = {
 
 const HELP: Record<string, FieldHelp> = {
   treesKilled: TREES,
+  percentDead: {
+    text: "Share of the trees in the polygon that were dead, the middle of the class the survey crew sketched from the aircraft (Moderate 11-29% is 20%).",
+    unit: "%",
+    source: "US Forest Service Insect and Disease Survey",
+    url: IDS_PAGE,
+  },
   v: {
     text:
       "Not one unit: for 1973 to 2019 rows the number of trees killed, for 2021 to 2025 rows the percent of trees dead (the middle of the " +
@@ -240,8 +277,9 @@ const HELP: Record<string, FieldHelp> = {
 };
 
 const CARD: CardSpec = {
-  measure: { key: "v", label: "Trees killed or percent dead" },
+  measure: { key: "percentDead", label: "Share of trees dead", unit: "%" },
   facts: [
+    { key: "treesKilled", label: "Trees killed", unit: "trees", format: "int" },
     { key: "agent", label: "Cause" },
     { key: "host", label: "Trees" },
     { key: "year", label: "Survey year" },
@@ -250,6 +288,7 @@ const CARD: CardSpec = {
     { key: "acres", label: "Area", unit: "acres", format: "int" },
     { key: "forestType", label: "Forest type" },
   ],
+  hidden: ["heading", "v", "measure", "source", "t"],
 };
 
 const treeMortality = defineLayer({
@@ -274,7 +313,7 @@ const treeMortality = defineLayer({
   hardMaxAreaKm2: 700_000,
   wide: { orderBy: "trees killed, or percent dead from 2021", limit: WIDE_LIMIT, rank: "worst" },
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("tree-mortality"), fillOpacity: 0.4 },
+  style: { geometry: "polygon", color: layerColor("tree-mortality"), fillOpacity: 0.4, encode: { color: "percentDead" } },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,

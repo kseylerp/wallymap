@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { LEVELS, LEVEL_SPECS, levelForArea, levelForZoom, normalizeBasins } from "./river-basins";
+import layer, { LEVELS, LEVEL_SPECS, REGION_LEVELS, levelForArea, levelForZoom, normalizeBasins } from "./river-basins";
+import { contractProblems, legendOf } from "./contract";
 import huc8Raw from "./__fixtures__/river-basins.huc8.json";
 import huc2Raw from "./__fixtures__/river-basins.huc2.json";
 
@@ -53,11 +54,24 @@ describe("normalizeBasins", () => {
       kind: "huc8",
       hucLevel: 8,
       huc: "14080204",
+      region: "14",
+      regionName: "Upper Colorado region",
       areaSqKm: 10617,
       v: 10617,
       states: "AZ,NM,UT",
     });
     expect(normalizeBasins(huc2, "huc2").features[1].properties).toMatchObject({ name: "Upper Colorado Region", huc: "14", kind: "huc2" });
+  });
+
+  it("fills units by the region they drain to, with a legend whose neighbouring codes differ, and labels the largest", () => {
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "region" });
+    expect(legend.items).toHaveLength(22);
+    expect(legend.items?.find((i) => i.value === "10")?.label).toBe("Missouri region");
+    for (let i = 1; i < REGION_LEVELS.length; i++) expect(REGION_LEVELS[i].color).not.toBe(REGION_LEVELS[i - 1].color);
+    expect(layer.labels).toEqual({ field: "name", max: 10, rankBy: "areaSqKm" });
+    expect(layer.card?.facts?.find((f) => f.key === "regionName")?.label).toBe("Drains to");
+    expect(contractProblems(layer)).toEqual([]);
   });
 
   it("skips rows without geometry and tolerates missing fields", () => {

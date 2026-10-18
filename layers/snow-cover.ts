@@ -19,10 +19,13 @@
  *   the old 60% desaturation turned that into a faint tan, so snow on the Cascades on 2026-03-10 hardly showed and the
  *   words named colors that were not on screen. The tiles are now drawn as served (no saturation or hue change) and the
  *   legend lists GIBS's own colors (colormap MODIS_NDSI_Snow_Cover.xml).
- * Empty days: with no date asked, the layer reads the view's tiles for the newest day (layers/snow-cover-probe.ts); when
- *   they hold no snow (early season, or cloud), it steps back (daily for a week, every 3 days to a month, weekly to six
- *   months) and shows the newest day with snow in the view, saying so. An asked date is never moved; the note says when it
- *   shows no snow. Live 2026-10-18: Mount Hood [-122,45,-121,46] has snow on 2026-10-17 (the glaciers, thin new snow).
+ * Cloudy days: with no date asked, the layer reads the view's tiles (layers/snow-cover-probe.ts) and shows the newest day
+ *   the satellite saw the ground (MODIS's own cloud class: at most a quarter of the view's land under cloud or unseen),
+ *   looking back daily for two weeks and every other day to a month; a clear day without snow says so and names the
+ *   last clear day with snow; no clear day says "no clear view of the ground in the last N days". Live 2026-10-18 over
+ *   Mount Hood [-122.6,44.9,-120.8,45.85]: Oct 17 all cloud, Oct 16 clear (1%) with no snow, Oct 14 81% cloud with 278
+ *   "snow" pixels over the lowlands (the old fallback's pick), Oct 12 clear (8%) with 2,650 snow pixels on the peaks.
+ *   An asked date is never moved; the note says when it shows no snow.
  */
 import { z } from "zod";
 import { defineLayer, type LayerError, type LayerResult, type LegendSpec, type QueryContext } from "./types";
@@ -30,7 +33,7 @@ import { registerLayer } from "./registry";
 import { dateInput, isoDay, resolveTileDate } from "./_shared/dated-tiles";
 import { gibsDatedResult, type GibsDatedSpec } from "./_shared/gibs-dated";
 import { mapServerExportTileUrl } from "./_shared/arcgis-tiles";
-import { latestSnowDay, lookbackDays, MIN_SNOW_PIXELS, snowInView } from "./snow-cover-probe";
+import { clearLookbackDays, coverInView, hiddenShare, latestClearDay, MAX_HIDDEN_SHARE, MIN_SNOW_PIXELS, snowInView } from "./snow-cover-probe";
 import { layerColor } from "@/lib/render/palette";
 
 const NOHRSC_SERVICE = "https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer";
@@ -95,21 +98,47 @@ export const DEPTH_LEGEND: LegendSpec = {
 export const DEPTH_CLASSES_NOTE =
   "Snow depth in inches, NOAA's colors: 0.4 to 2 grey-green, 2 to 4 teal, 4 to 10 light blue, 10 to 20 blue, 20 to 39 indigo, 39 to 59 violet, 59 to 98 purple, 98 to 197 magenta, over 197 plum to brown";
 
+/** Readable day, "Oct 16". */
+function shortDay(day: string): string {
+  return new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
 /**
- * The day to draw with no date asked: the newest day when it has snow in the view, else the newest earlier day that has,
- * and a note saying which. Unknown (GIBS not answering) keeps the newest day.
+ * The day to draw with no date asked: the newest day the satellite saw the view's ground (MODIS's cloud mask: at most
+ * a quarter of the land under cloud or unseen, latestClearDay), never a cloudy day whose cloud reads as snow (owner,
+ * 2026-10-18: the old "newest day with snow" fell back to Oct 14, 81% cloud, and painted snow over Portland). When
+ * that clear day shows no snow, the note says so and names the last clear day that did; when no day in the last month
+ * was clear, it keeps the newest day and says there was no clear view. GIBS not answering keeps the newest day.
  */
-async function dayWithSnow(ctx: QueryContext, now: number): Promise<{ date: string; note?: string } | null> {
+async function clearDayChoice(ctx: QueryContext, now: number): Promise<{ date: string; note?: string; view?: string } | null> {
   const choice = resolveTileDate(undefined, { from: MODIS_SPEC.from, latestOffsetDays: -MODIS_SPEC.daysBack, label: MODIS_SPEC.label }, now);
   if (!choice.ok) return null;
   const newest = choice.date;
-  const search = await latestSnowDay(MODIS_SPEC.gibsId, MODIS_SPEC.level, ctx.bbox, lookbackDays(newest, MODIS_SPEC.from), now);
-  if (search.found === newest) return { date: newest };
-  if (search.found !== null) {
-    return { date: search.found, note: `Snow cover for ${search.found}, the newest day with snow in the view; none was seen on ${newest} (no snow on the ground, or cloud)` };
+  const days = clearLookbackDays(newest, MODIS_SPEC.from);
+  const search = await latestClearDay(MODIS_SPEC.gibsId, MODIS_SPEC.level, ctx.bbox, days, now);
+  if (search.found === null) {
+    if (search.unknown || search.oldest === null) return { date: newest };
+    const span = Math.round((Date.parse(`${newest}T00:00:00Z`) - Date.parse(`${search.oldest}T00:00:00Z`)) / 86_400_000) + 1;
+    return {
+      date: newest,
+      note: `Snow cover for ${newest}; no clear view of the ground in the last ${span} days (cloud over most of the view), so snow under the cloud is not shown`,
+      view: `No clear view of the ground in the last ${span} days: cloud hides any snow`,
+    };
   }
-  if (search.unknown || search.oldest === null) return { date: newest };
-  return { date: newest, note: `Snow cover for ${newest}; no snow seen in the view on any day checked from ${search.oldest} to ${newest}` };
+  const found = search.found;
+  const lead = found === newest ? `Snow cover for ${found}, a clear view of the ground` : `Snow cover for ${found}, the newest day the satellite saw the ground here (cloud hid it after, through ${shortDay(newest)})`;
+  if (search.cover.snow >= MIN_SNOW_PIXELS) return found === newest ? { date: found } : { date: found, note: lead, view: `The newest clear view of the ground; cloud hid it after, through ${shortDay(newest)}` };
+  // A clear day with no snow is the answer; the last clear day that had snow says when it went.
+  const earlier = days.slice(days.indexOf(found) + 1);
+  let last: string | null = null;
+  for (let i = 0; i < earlier.length && last === null; i += 6) {
+    const batch = earlier.slice(i, i + 6);
+    const covers = await Promise.all(batch.map((d) => coverInView(MODIS_SPEC.gibsId, MODIS_SPEC.level, ctx.bbox, d, now)));
+    const k = covers.findIndex((c) => c !== null && (hiddenShare(c) ?? 1) <= MAX_HIDDEN_SHARE && c.snow >= MIN_SNOW_PIXELS);
+    if (k >= 0) last = batch[k];
+  }
+  const since = last ? `; the last clear day with snow in view was ${shortDay(last)}` : `, nor on any clear day back to ${shortDay(earlier[earlier.length - 1] ?? found)}`;
+  return { date: found, note: `${lead}; no snow on the ground in view that day${since}`, view: `No snow on the ground in view${last ? `; last seen ${shortDay(last)}` : ""}` };
 }
 
 const snowCover = defineLayer({
@@ -118,7 +147,7 @@ const snowCover = defineLayer({
   description:
     "Global satellite map of where the ground is snow-covered, from NASA's MODIS sensor on the Terra satellite (Normalized Difference Snow Index, NDSI), on a daily image that goes back to February 2000. " +
     "Snow is drawn in NASA's colors: pale yellow for thin or patchy snow, through orange, to red-pink where the ground is fully snow covered; snow-free ground, cloud and night are clear. " +
-    "date (YYYY-MM-DD) picks the day; without it the layer shows yesterday, or, when the view has no snow that day (early season, or cloud), the newest earlier day with snow in the view, and its coverageNote says so: tell the user which day is shown. " +
+    "date (YYYY-MM-DD) picks the day; without it the layer shows the newest day the satellite saw the ground through clear sky (cloud is never read as snow), and its coverageNote says which day, whether it shows snow, the last clear day with snow, or that there was no clear view: tell the user which day is shown and what it says. " +
     "The day can be moved with the time scrubber or compare to see how snow cover changed between two dates or years. " +
     "Set depth to true for the US snow depth analysis from NOAA's National Operational Hydrologic Remote Sensing Center (SNODAS-style modelled depth, about 1 km, in inches: grey-green under 2 in, blue 4 to 20 in, purple 20 to 98 in, magenta to brown deeper); it covers the lower 48 states only, shows the latest analysis (updated four times a day), and has no date. " +
     "Use it for 'snow cover', 'is there snow on the ground', 'how deep is the snow', 'when did the snow line retreat', 'early or late snow year' and similar. " +
@@ -148,12 +177,14 @@ const snowCover = defineLayer({
         // An asked day is never moved; say when it shows no snow, so a clear map reads as an answer.
         const shown = /for (\d{4}-\d{2}-\d{2})/.exec(r.coverageNote ?? "")?.[1] ?? input.date;
         const n = await snowInView(MODIS_SPEC.gibsId, MODIS_SPEC.level, ctx.bbox, shown, now);
-        return n !== null && n < MIN_SNOW_PIXELS ? { ...r, coverageNote: `${r.coverageNote}; no snow seen in the view that day (none on the ground, or hidden by cloud)` } : r;
+        return n !== null && n < MIN_SNOW_PIXELS
+          ? { ...r, coverageNote: `${r.coverageNote}; no snow seen in the view that day (none on the ground, or hidden by cloud)`, viewNote: "No snow seen in view that day (none on the ground, or hidden by cloud)" }
+          : r;
       }
-      const pick = await dayWithSnow(ctx, now);
+      const pick = await clearDayChoice(ctx, now);
       const r = gibsDatedResult(MODIS_SPEC, pick?.date, now);
       if (!("kind" in r) || r.kind !== "tiles" || !pick?.note) return r;
-      return { ...r, coverageNote: pick.note };
+      return { ...r, coverageNote: pick.note, ...(pick.view && { viewNote: pick.view }) };
     }
     if (input.date !== undefined) {
       return { error: "Snow depth (depth: true) is only the latest analysis, so it takes no date; omit date, or use depth: false for a past day" };

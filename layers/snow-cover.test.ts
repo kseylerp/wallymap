@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { legendOf, legendProblems } from "./contract";
 import layer, { DEPTH_LEGEND, NDSI_LEGEND, nohrscDepthTileUrl } from "./snow-cover";
-import { CLOUD_INDEX, clearSnowProbeMemo, decodePalettePng, lookbackDays, probeTiles, snowPixels } from "./snow-cover-probe";
+import { clearLookbackDays, CLOUD_INDEX, clearSnowProbeMemo, coverOf, decodePalettePng, hiddenShare, probeTiles, snowPixels } from "./snow-cover-probe";
 
 const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
 
@@ -31,13 +31,18 @@ function palettePng(fill: (x: number, y: number) => number): Uint8Array {
 }
 const SNOW_TILE = palettePng(() => 60);
 const BARE_TILE = palettePng(() => 0);
+/** Cloud over everything but a band of "snow" (cloud the satellite read as snow, the Portland case). */
+const CLOUD_TILE = palettePng((x) => (x < 40 ? 60 : CLOUD_INDEX));
 
-/** Serves GIBS NDSI tiles: snow on the days in `snowDays` (all days when omitted), bare ground otherwise. */
-function gibs(snowDays?: string[]) {
+/**
+ * Serves GIBS NDSI tiles: snow on the days in `snowDays` (all days when omitted), cloud on `cloudDays`, bare ground
+ * otherwise.
+ */
+function gibs(snowDays?: string[], cloudDays: string[] = []) {
   return vi.fn(async (url: string) => {
     const day = /\/default\/(\d{4}-\d{2}-\d{2})\//.exec(url)?.[1] ?? "";
-    const snow = snowDays === undefined || snowDays.includes(day);
-    return new Response(Buffer.from(snow ? SNOW_TILE : BARE_TILE), { status: 200, headers: { "content-type": "image/png" } });
+    const tile = cloudDays.includes(day) ? CLOUD_TILE : snowDays === undefined || snowDays.includes(day) ? SNOW_TILE : BARE_TILE;
+    return new Response(Buffer.from(tile), { status: 200, headers: { "content-type": "image/png" } });
   });
 }
 
@@ -156,18 +161,32 @@ describe("snow-cover layer", () => {
     expect(layer.description).toMatch(/pale yellow/);
   });
 
-  it("steps back from an empty newest day to the newest day with snow in the view, and says so", async () => {
+  it("shows the newest clear day with no snow as no snow, naming the last clear day that had some", async () => {
     vi.stubGlobal("fetch", gibs(["2026-10-05"]));
     const r = await tiles({});
-    expect(r.data.url).toContain("/default/2026-10-05/");
-    expect(r.coverageNote).toBe("Snow cover for 2026-10-05, the newest day with snow in the view; none was seen on 2026-10-08 (no snow on the ground, or cloud)");
+    expect(r.data.url).toContain("/default/2026-10-08/");
+    expect(r.coverageNote).toBe("Snow cover for 2026-10-08, a clear view of the ground; no snow on the ground in view that day; the last clear day with snow in view was Oct 5");
   });
 
-  it("keeps the newest day and says no snow was seen when the whole look-back is empty", async () => {
-    vi.stubGlobal("fetch", gibs([]));
+  it("never falls back to a cloudy day whose cloud reads as snow: it steps back to the newest clear day (owner, 2026-10-18)", async () => {
+    // Oct 8 and 7 cloudy with "snow" at the edge, Oct 6 clear and snowy.
+    vi.stubGlobal("fetch", gibs(["2026-10-06", "2026-10-07", "2026-10-08"], ["2026-10-07", "2026-10-08"]));
+    const r = await tiles({});
+    expect(r.data.url).toContain("/default/2026-10-06/");
+    expect(r.coverageNote).toBe("Snow cover for 2026-10-06, the newest day the satellite saw the ground here (cloud hid it after, through Oct 8)");
+  });
+
+  it("says there was no clear view when cloud covered every day of the last month", async () => {
+    vi.stubGlobal("fetch", gibs([], clearLookbackDays("2026-10-08", "2000-02-24")));
     const r = await tiles({});
     expect(r.data.url).toContain("/default/2026-10-08/");
-    expect(r.coverageNote).toBe("Snow cover for 2026-10-08; no snow seen in the view on any day checked from 2026-04-07 to 2026-10-08");
+    expect(r.coverageNote).toBe("Snow cover for 2026-10-08; no clear view of the ground in the last 30 days (cloud over most of the view), so snow under the cloud is not shown");
+  });
+
+  it("keeps the newest day with no note when it is clear and snowy", async () => {
+    const r = await tiles({});
+    expect(r.data.url).toContain("/default/2026-10-08/");
+    expect(r.coverageNote).toBe("Snow cover for 2026-10-08");
   });
 
   it("keeps the newest day with no claim when GIBS does not answer the probe", async () => {
@@ -187,11 +206,21 @@ describe("snow-cover layer", () => {
     expect(r.coverageNote).toBe("Snow cover for 2026-03-10; no snow seen in the view that day (none on the ground, or hidden by cloud)");
   });
 
-  it("looks back daily for a week, then every 3 days, then weekly to six months", () => {
-    const days = lookbackDays("2026-10-17", "2000-02-24");
-    expect(days.slice(0, 8)).toEqual(["2026-10-17", "2026-10-16", "2026-10-15", "2026-10-14", "2026-10-13", "2026-10-12", "2026-10-11", "2026-10-08"]);
-    expect(days[days.length - 1]).toBe("2026-04-16");
-    expect(lookbackDays("2000-02-26", "2000-02-24")).toEqual(["2000-02-26", "2000-02-25", "2000-02-24"]);
+  it("looks for a clear day daily for two weeks, then every other day to a month", () => {
+    const days = clearLookbackDays("2026-10-17", "2000-02-24");
+    expect(days.slice(0, 3)).toEqual(["2026-10-17", "2026-10-16", "2026-10-15"]);
+    expect(days[13]).toBe("2026-10-04");
+    expect(days[14]).toBe("2026-10-02");
+    expect(days[days.length - 1]).toBe("2026-09-18");
+    expect(clearLookbackDays("2000-02-26", "2000-02-24")).toEqual(["2000-02-26", "2000-02-25", "2000-02-24"]);
+  });
+
+  it("measures how much of the view's land the satellite could not see", () => {
+    const img = decodePalettePng(CLOUD_TILE)!;
+    const c = coverOf(img, [0, 0, 256, 256]);
+    expect(c.cloud).toBe(216 * 256);
+    expect(hiddenShare(c)).toBeGreaterThan(0.8);
+    expect(hiddenShare(coverOf(decodePalettePng(BARE_TILE)!, [0, 0, 256, 256]))).toBe(0);
   });
 });
 

@@ -140,11 +140,118 @@ export function snowPixels(img: PaletteImage, [x0, y0, x1, y1]: ProbeTile["px"])
   return n;
 }
 
+/** What a tile's pixel window shows of the ground: snow, snow-free land, cloud, and pixels not seen (night, missing). */
+export type Cover = { snow: number; ground: number; cloud: number; unseen: number };
+
+/** Palette indices the satellite did not see the land at: missing data (101), night (103). Ocean (105) and inland water (104) are not land. */
+const UNSEEN = new Set([101, 102, 103, 107, 108]);
+
+/** Counts a tile's window: snow (as `snowPixels` counts it), snow-free land (index 0), cloud (CLOUD_INDEX) and unseen land. */
+export function coverOf(img: PaletteImage, px: ProbeTile["px"]): Cover {
+  const [x0, y0, x1, y1] = px;
+  let ground = 0;
+  let cloud = 0;
+  let unseen = 0;
+  for (let y = y0; y < Math.min(y1, img.height); y++) {
+    for (let x = x0; x < Math.min(x1, img.width); x++) {
+      const v = img.index[y * img.width + x];
+      if (v === 0) ground++;
+      else if (v === CLOUD_INDEX) cloud++;
+      else if (UNSEEN.has(v)) unseen++;
+    }
+  }
+  return { snow: snowPixels(img, px), ground, cloud, unseen };
+}
+
+/**
+ * The share of the view's land the satellite could not see that day (cloud, night or missing), 0 to 1; null without
+ * land in view. Snow under a mostly cloudy sky is not trusted: MODIS calls some cloud snow (Portland's lowlands
+ * "snow-covered" in mid-October, 2026-10-14, owner 2026-10-18).
+ */
+export function hiddenShare(c: Cover): number | null {
+  const land = c.snow + c.ground + c.cloud + c.unseen;
+  return land === 0 ? null : (c.cloud + c.unseen) / land;
+}
+
+/** A day counts as a clear view of the ground when at most this share of the view's land is under cloud or unseen. */
+export const MAX_HIDDEN_SHARE = 0.25;
+
 const memo = new Map<string, { n: number | null; until: number }>();
+const coverMemo = new Map<string, { c: Cover | null; until: number }>();
+
+/** What the view's tiles show on `day` (summed over the tiles), or null when any tile could not be read. */
+export async function coverInView(gibsId: string, level: number, bbox: BBox, day: string, now: number, fetchImpl: typeof fetch = fetch): Promise<Cover | null> {
+  const tiles = probeTiles(bbox, level);
+  const covers = await Promise.all(
+    tiles.map(async (t) => {
+      const url = gibsTileUrl(gibsId, day, level).replace("{z}", String(t.z)).replace("{y}", String(t.y)).replace("{x}", String(t.x));
+      const key = `${url}|${t.px.join(",")}`;
+      const hit = coverMemo.get(key);
+      if (hit && hit.until > now) return hit.c;
+      let c: Cover | null = null;
+      try {
+        const res = await fetchImpl(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+        if (res.ok) {
+          const img = decodePalettePng(new Uint8Array(await res.arrayBuffer()));
+          c = img === null ? null : coverOf(img, t.px);
+        }
+      } catch {
+        c = null;
+      }
+      if (c !== null) {
+        if (coverMemo.size >= MEMO_MAX) coverMemo.delete(coverMemo.keys().next().value as string);
+        const recent = Date.parse(`${day}T00:00:00Z`) > now - RECENT_MS;
+        coverMemo.set(key, { c, until: recent ? now + RECENT_MEMO_MS : Number.POSITIVE_INFINITY });
+      }
+      return c;
+    }),
+  );
+  if (covers.some((c) => c === null)) return null;
+  return covers.reduce<Cover>((a, c) => ({ snow: a.snow + c!.snow, ground: a.ground + c!.ground, cloud: a.cloud + c!.cloud, unseen: a.unseen + c!.unseen }), { snow: 0, ground: 0, cloud: 0, unseen: 0 });
+}
+
+/** Days to look for a clear view: every day for two weeks, then every other day to a month. */
+export function clearLookbackDays(newest: string, from: string): string[] {
+  const base = Date.parse(`${newest}T00:00:00Z`);
+  const offsets: number[] = [];
+  for (let d = 0; d <= 13; d++) offsets.push(d);
+  for (let d = 15; d <= 29; d += 2) offsets.push(d);
+  return offsets.map((d) => isoDay(base - d * DAY_MS)).filter((d) => d >= from);
+}
+
+export type ClearSearch =
+  | { found: string; cover: Cover; checked: number }
+  | { found: null; checked: number; oldest: string | null; unknown: boolean };
+
+/**
+ * The newest day in `days` (newest first) when the satellite saw the view's ground (at most MAX_HIDDEN_SHARE of its land
+ * under cloud or unseen), with what it saw; `unknown` when a day could not be read.
+ */
+export async function latestClearDay(gibsId: string, level: number, bbox: BBox, days: string[], now: number, fetchImpl: typeof fetch = fetch, wave = 6): Promise<ClearSearch> {
+  let checked = 0;
+  let unknown = false;
+  for (let i = 0; i < days.length; i += wave) {
+    const batch = days.slice(i, i + wave);
+    const covers = await Promise.all(batch.map((d) => coverInView(gibsId, level, bbox, d, now, fetchImpl)));
+    checked += batch.length;
+    for (let k = 0; k < batch.length; k++) {
+      const c = covers[k];
+      if (c === null) {
+        unknown = true;
+        continue;
+      }
+      const hidden = hiddenShare(c);
+      if (hidden !== null && hidden <= MAX_HIDDEN_SHARE) return { found: batch[k], cover: c, checked };
+    }
+    if (i === 0 && covers.every((c) => c === null)) break;
+  }
+  return { found: null, checked, oldest: days.length > 0 ? days[Math.min(days.length, checked) - 1] : null, unknown };
+}
 
 /** Clears the memo (tests). */
 export function clearSnowProbeMemo(): void {
   memo.clear();
+  coverMemo.clear();
 }
 
 /** Snow pixels in the view's tiles on `day`, or null when any tile could not be read. */
@@ -176,48 +283,4 @@ export async function snowInView(gibsId: string, level: number, bbox: BBox, day:
   );
   if (counts.some((c) => c === null)) return null;
   return counts.reduce<number>((a, c) => a + (c ?? 0), 0);
-}
-
-/** Days to look back from `newest` for snow: every day for a week, every 3 days to a month, then weekly to six months. */
-export function lookbackDays(newest: string, from: string): string[] {
-  const base = Date.parse(`${newest}T00:00:00Z`);
-  const offsets: number[] = [];
-  for (let d = 0; d <= 6; d++) offsets.push(d);
-  for (let d = 9; d <= 30; d += 3) offsets.push(d);
-  for (let d = 37; d <= 184; d += 7) offsets.push(d);
-  return offsets.map((d) => isoDay(base - d * DAY_MS)).filter((d) => d >= from);
-}
-
-export type SnowSearch =
-  | { found: string; checked: number }
-  | { found: null; checked: number; oldest: string | null; unknown: boolean };
-
-/**
- * The newest day in `days` (newest first) with snow in the view, reading `wave` days at a time; `unknown` when a day
- * could not be read, so "no snow" is never claimed for a day that was not seen.
- */
-export async function latestSnowDay(
-  gibsId: string,
-  level: number,
-  bbox: BBox,
-  days: string[],
-  now: number,
-  fetchImpl: typeof fetch = fetch,
-  wave = 6,
-): Promise<SnowSearch> {
-  let checked = 0;
-  let unknown = false;
-  for (let i = 0; i < days.length; i += wave) {
-    const batch = days.slice(i, i + wave);
-    const counts = await Promise.all(batch.map((d) => snowInView(gibsId, level, bbox, d, now, fetchImpl)));
-    checked += batch.length;
-    for (let k = 0; k < batch.length; k++) {
-      const n = counts[k];
-      if (n === null) unknown = true;
-      else if (n >= MIN_SNOW_PIXELS) return { found: batch[k], checked };
-    }
-    // Every probe of the first wave failed: GIBS is not answering, so stop rather than read six months of failures.
-    if (i === 0 && counts.every((c) => c === null)) break;
-  }
-  return { found: null, checked, oldest: days.length > 0 ? days[Math.min(days.length, checked) - 1] : null, unknown };
 }

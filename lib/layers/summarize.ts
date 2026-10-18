@@ -1,5 +1,8 @@
 import type { Geometry, GeoJsonProperties, Position } from "geojson";
-import type { Attribute, BBox, Citation, FieldHelp, LayerError, LayerResult, StyleHints, TileTime } from "@/layers/types";
+import type { Attribute, BBox, Citation, FieldHelp, LayerError, LayerResult, SourceStatus, StyleHints, TileTime, TimeSpec } from "@/layers/types";
+import { shortTitle, timeShapeOf } from "@/layers/contract";
+import { changeStatement, epochLabel, epochWindow, identityKey, snapshotEpochs } from "@/lib/render/change";
+import { failureLine } from "@/lib/render/contract";
 import { attributeGroups, declaredGroups, isChipAttribute } from "@/lib/render/attributes";
 import { formatValue } from "@/lib/format";
 import { seriesStory, type SeriesStory } from "./story";
@@ -70,6 +73,11 @@ export type GeojsonSummary = {
   top?: string[];
   citation: Citation;
   coverageNote?: string;
+  /** Snapshot layers (survey dates): the change between the first and last epoch, from every feature. */
+  change?: SnapshotChange;
+  /** A source that failed: its status, and the line the note must say. */
+  sourceStatus?: SourceStatus;
+  failure?: string;
   /** Wide results that left features out: always true when present. */
   truncated?: true;
   /** With truncated: what was ranked out and how the kept features were chosen; the note says so in one clause. */
@@ -124,6 +132,8 @@ export type TilesSummary = {
   coverageNote?: string;
   truncated?: true;
   rankedOut?: string;
+  sourceStatus?: SourceStatus;
+  failure?: string;
 };
 
 export type LayerResultSummary = GeojsonSummary | TilesSummary;
@@ -206,9 +216,8 @@ function timeSummary(t: TileTime): NonNullable<TilesSummary["time"]> {
  */
 const TILE_MEANING: Record<string, (years: string | undefined) => string> = {
   "flood-extent": () =>
-    "All open water detected on that one day: every lake, fjord, river and coastal inlet in view shows as water, not only floods. " +
-    "It is a state, not a change, so it cannot show water rising or falling by itself. " +
-    "For rise or shrink use surface-water with product change, or compare two flood-extent dates.",
+    "Flood water only (Copernicus Global Flood Monitoring), observed over the last 12 days: permanent lakes, rivers and the sea are not drawn. " +
+    "For long-term rise or shrink of a lake use surface-water with product change.",
   "surface-water": () =>
     "A 1984-2021 history, not a recent date. Only product change (lost red, gained green) or transitions shows change; occurrence, seasonality and recurrence show where water usually is.",
   "forest-loss": (years) =>
@@ -392,7 +401,7 @@ export function highestOf(features: { properties: GeoJsonProperties }[], style: 
 }
 
 /** The span of the features' dates, or undefined when none carries one. */
-function datesOf(features: { properties: GeoJsonProperties }[], timeField: string): DateSpan | undefined {
+function datesOf(features: { properties: GeoJsonProperties }[], timeField: string, shape: TimeSpec["shape"] = "continuous"): DateSpan | undefined {
   const times = features.flatMap((f) => {
     const t = f.properties ? dateOf(f.properties as Props, timeField) : undefined;
     return t === undefined ? [] : [t];
@@ -406,7 +415,12 @@ function datesOf(features: { properties: GeoJsonProperties }[], timeField: strin
     ...(years.length <= DATE_YEARS_MAX && { years }),
     yearCount: years.length,
     dated: times.length,
-    scrubber: `Already open in the layer panel over ${span}; say so in the note and do not offer it as a follow-up.`,
+    scrubber:
+      shape === "snapshots"
+        ? `Mapped on ${years.length} survey dates (${span}); the map draws the newest of each thing, with a stepper between the dates and a compare of the first and last; state the change (the summary's change), never a total that adds different dates.`
+        : shape === "continuous"
+          ? `A time panel over ${span} is one tap away in the layer panel; mention it only when the question is about time, and do not offer it as a follow-up.`
+          : `Dated ${span}; no time panel (time is not the question for this layer).`,
   };
 }
 
@@ -436,7 +450,13 @@ export function drawnYearsOf(url: string): string | undefined {
 }
 
 /** What the summary reads from a layer's style (v's unit, the date field, the geometry) and its attributes. */
-export type SummaryStyle = Partial<Pick<StyleHints, "unit" | "timeField" | "geometry" | "encode">> & { attributes?: Attribute[] };
+export type SummaryStyle = Partial<Pick<StyleHints, "unit" | "timeField" | "geometry" | "encode">> & {
+  attributes?: Attribute[];
+  /** The layer's declared time shape (docs/layer-contract.md); inferred from the data when absent. */
+  time?: TimeSpec;
+  /** The layer's title, for the change statement's noun ("glaciers"). */
+  title?: string;
+};
 
 /** "Width is Flow (m³/s); color is Water temperature (°C), sage low to purple high": the layer's pair in words. */
 export function encodingSentence(style: SummaryStyle, flow = false): string | undefined {
@@ -519,6 +539,7 @@ export function summarizeLayerResult(
       citation: body.citation,
       ...(body.coverageNote !== undefined && { coverageNote: body.coverageNote }),
       ...truncationOf(body),
+      ...failureOf(body, null),
     };
   }
 
@@ -541,8 +562,10 @@ export function summarizeLayerResult(
 
   const top = topOf(layerId, features);
   const timeField = style.timeField ?? "t";
+  const shape = timeShapeOf({ time: style.time, style: { geometry: style.geometry ?? "point", color: "", timeField: style.timeField }, attributes: style.attributes }, body).shape;
   const stats = statsOf(features, style.unit, timeField, layerId === undefined ? undefined : SERIES_ID[layerId]);
-  const dates = datesOf(features, timeField);
+  const dates = datesOf(features, timeField, shape);
+  const change = shape === "snapshots" ? snapshotChange(features, timeField, style, layerId) : undefined;
   const lines = (geometryTypes.LineString ?? 0) + (geometryTypes.MultiLineString ?? 0);
   const polygons = (geometryTypes.Polygon ?? 0) + (geometryTypes.MultiPolygon ?? 0);
   const totalLengthKm = lines > 0 ? round(features.reduce((km, f) => km + lineLengthKm(f.geometry), 0)) : undefined;
@@ -573,6 +596,61 @@ export function summarizeLayerResult(
     ...(help !== undefined && { help }),
     ...(encoding !== undefined && { encoding }),
     ...(story !== undefined && { story }),
+    ...(change !== undefined && { change }),
+    ...failureOf(body, features.length),
+  };
+}
+
+/** A failed source's status and the one line the note says ("NOAA's weather service is returning errors…"). */
+function failureOf(body: LayerResult, drawn: number | null): { sourceStatus?: SourceStatus; failure?: string } {
+  const line = failureLine(body.sourceStatus, drawn);
+  return line && body.sourceStatus ? { sourceStatus: body.sourceStatus, failure: `Say this in the note: ${line}` } : {};
+}
+
+/** The change between a snapshot layer's first and last survey epochs, computed from every feature (lib/render/change.ts). */
+export type SnapshotChange = { statement: string; a: string; b: string; matched: number; before?: number; after?: number; share?: number };
+
+function snapshotChange(features: GeoJSON.Feature[], timeField: string, style: SummaryStyle, layerId?: string): SnapshotChange | undefined {
+  const days = new Set<string>();
+  for (const f of features) {
+    const t = f.properties?.[timeField];
+    if (typeof t === "string" && !Number.isNaN(Date.parse(t))) days.add(t.slice(0, 10));
+  }
+  const epochs = snapshotEpochs([...days]);
+  if (epochs.length < 2) return undefined;
+  const [first, last] = [epochs[0], epochs[epochs.length - 1]];
+  const inside = (w: [string, string]) => (f: GeoJSON.Feature) => {
+    const t = Date.parse(String(f.properties?.[timeField] ?? ""));
+    return t >= Date.parse(w[0]) && t <= Date.parse(w[1]);
+  };
+  const a = features.filter(inside(epochWindow(first)));
+  const b = features.filter(inside(epochWindow(last)));
+  const has = (k: string) => features.some((f) => typeof f.properties?.[k] === "number");
+  const primary = style.attributes?.find((x) => x.type === "measure" && x.encode === "size") ?? style.attributes?.find((x) => x.type === "measure");
+  const measure = has("areaKm2")
+    ? { key: "areaKm2", label: "Area", unit: "km²" }
+    : primary && has(primary.key)
+      ? { key: primary.key, label: primary.label, ...(primary.unit && { unit: primary.unit }) }
+      : undefined;
+  const aLabel = epochLabel(first);
+  const bLabel = epochLabel(last);
+  const said = changeStatement(a, b, {
+    noun: shortTitle({ id: layerId ?? "features", title: style.title ?? layerId ?? "features" }).toLowerCase(),
+    aLabel,
+    bLabel,
+    idKey: identityKey(features, timeField),
+    ...(measure && { measure }),
+    timeField,
+  });
+  if (!said) return undefined;
+  return {
+    statement: said.text,
+    a: aLabel,
+    b: bLabel,
+    matched: said.matched,
+    ...(said.before !== undefined && { before: Math.round(said.before * 100) / 100 }),
+    ...(said.after !== undefined && { after: Math.round(said.after * 100) / 100 }),
+    ...(said.share !== undefined && { share: Math.round(said.share * 1000) / 1000 }),
   };
 }
 

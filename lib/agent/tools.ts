@@ -453,7 +453,12 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: T
     // The UI part keeps the full body for the map; the model gets a summary with v's statistics in the layer's unit.
     toModelOutput: ({ output }) => ({
       type: "json",
-      value: layerResultForModel(output, layer.id, { ...layer.style, ...(layer.attributes && { attributes: layer.attributes }) }, layer.fieldHelp),
+      value: layerResultForModel(
+        output,
+        layer.id,
+        { ...layer.style, ...(layer.attributes && { attributes: layer.attributes }), ...(layer.time && { time: layer.time }), title: layer.title },
+        layer.fieldHelp,
+      ),
     }),
   });
 }

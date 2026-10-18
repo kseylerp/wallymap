@@ -177,10 +177,10 @@ describe("tile summaries say what the picture means", () => {
     expect((summary as { shows: string }).shows).toContain("Tree cover lost in 2015-2025 only");
   });
 
-  it("flood-extent says it shows all open water on one day, not change, and how to show change", () => {
+  it("flood-extent says it shows flood water over the last 12 days, not permanent water", () => {
     const summary = summarizeLayerResult(tiles("https://gibs.example/OPERA/{z}/{y}/{x}.png"), "flood-extent") as { shows: string };
-    expect(summary.shows).toMatch(/All open water detected on that one day/);
-    expect(summary.shows).toMatch(/not a change/);
+    expect(summary.shows).toMatch(/Flood water only/);
+    expect(summary.shows).toMatch(/last 12 days/);
     expect(summary.shows).toMatch(/surface-water with product change/);
   });
 
@@ -266,7 +266,15 @@ describe("summarizeLayerResult stats", () => {
   it("gives the date span and the distinct years the scrubber covers", () => {
     const summary = summarizeLayerResult(windRiver, "glaciers", { unit: "km²" }) as GeojsonSummary;
     expect(summary.dates).toMatchObject({ from: "1966-08-01", to: "2015-08-01", years: ["1966", "2015"], yearCount: 2, dated: 43 });
-    expect(summary.dates?.scrubber).toMatch(/^Already open in the layer panel over 1966 to 2015;/);
+    // Two surveys of the same glaciers are snapshots: the newest of each draws, and the change is stated.
+    expect(summary.dates?.scrubber).toMatch(/^Mapped on 2 survey dates \(1966 to 2015\); the map draws the newest of each thing/);
+    expect(summary.change?.statement).toMatch(/^1 glaciers? mapped in both 1966 and 2015|mapped in both 1966 and 2015/);
+  });
+
+  it("says a failed source in the note's words", () => {
+    const failed = { ...windRiver, sourceStatus: { ok: false as const, reason: "server-error" as const, message: "GLIMS's server is returning errors (503)." } };
+    const summary = summarizeLayerResult(failed, "glaciers") as GeojsonSummary;
+    expect(summary.failure).toBe("Say this in the note: GLIMS's server is returning errors (503). Showing what it returned before the error.");
   });
 
   it("leaves out the year list past DATE_YEARS_MAX and reads the layer's own time field", () => {

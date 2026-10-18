@@ -680,6 +680,35 @@ function smallAreas(data: GeoJSON.FeatureCollection, zoom: number, latitude: num
   return out;
 }
 
+/**
+ * Patches too small to see at this zoom (tree die-off, a sliver of habitat): a dot in the area's own color at each
+ * center, picked like the area (`<id>:small`), so the map never reads empty where the data has features.
+ */
+function smallAreaDots(op: RenderOp, ctx: OpContext, opacity: number, colorOf: (f: Feature) => Rgba): Layer[] {
+  const { data, selected, terrain } = ctx;
+  const small = smallAreas(data, ctx.zoom, ctx.latitude);
+  if (small.length === 0) return [];
+  const { id, trigger } = opIds(op, ctx, opacity, undefined);
+  return [
+    new ScatterplotLayer<Feature>({
+      id: `${id}:small`,
+      data: small,
+      pickable: true,
+      getPosition: markerPosition,
+      getRadius: (f) => (f === selected ? 5 : 3.5),
+      radiusUnits: "pixels",
+      filled: true,
+      stroked: true,
+      getFillColor: (f) => withOpacity([...colorOf(f).slice(0, 3), 235] as Rgba, selected && f !== selected ? opacity * SIBLING_FADE : opacity),
+      getLineColor: (f) => (f === selected ? withOpacity(SELECT, opacity) : withOpacity(hexToRgba(WHITE_HEX, 230), opacity)),
+      getLineWidth: (f) => (f === selected ? 2 : 1),
+      lineWidthUnits: "pixels",
+      updateTriggers: { getFillColor: trigger, getLineColor: trigger, getLineWidth: trigger, getRadius: trigger },
+      ...terrainProps(terrain, "offset"),
+    }),
+  ];
+}
+
 function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const { data, selected, terrain } = ctx;
   const requested = requestedColor(op.color);
@@ -764,30 +793,7 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       updateTriggers,
       ...terrainProps(terrain, "drape", [fillExtension]),
     }),
-    // Patches too small to see at this zoom (tree die-off, a sliver of habitat): a dot in the area's color at each
-    // center, picked like the area, so the map never reads empty where the data has features.
-    ...(() => {
-      const small = smallAreas(data, ctx.zoom, ctx.latitude);
-      if (small.length === 0) return [];
-      return [
-        new ScatterplotLayer<Feature>({
-          id: `${id}:small`,
-          data: small,
-          pickable: true,
-          getPosition: markerPosition,
-          getRadius: (f) => (f === selected ? 5 : 3.5),
-          radiusUnits: "pixels",
-          filled: true,
-          stroked: true,
-          getFillColor: (f) => withOpacity(hexToRgba(kindColor(f), 230), selected && f !== selected ? opacity * SIBLING_FADE : opacity),
-          getLineColor: (f) => (f === selected ? withOpacity(SELECT, opacity) : withOpacity(hexToRgba(WHITE_HEX, 230), opacity)),
-          getLineWidth: (f) => (f === selected ? 2 : 1),
-          lineWidthUnits: "pixels",
-          updateTriggers: { getFillColor: trigger, getLineColor: trigger, getLineWidth: trigger, getRadius: trigger },
-          ...terrainProps(terrain, "offset"),
-        }),
-      ];
-    })(),
+    ...smallAreaDots(op, ctx, opacity, (f) => hexToRgba(kindColor(f), 230)),
   ];
 }
 
@@ -827,6 +833,7 @@ function choroplethLayers(op: RenderOp, ctx: OpContext, opacity: number, channel
       updateTriggers: { getFillColor: [...trigger, channel.key, channel.extent?.join(",") ?? ""], getLineColor: trigger, getLineWidth: trigger },
       ...terrainProps(terrain, "drape"),
     }),
+    ...smallAreaDots(op, ctx, opacity, fill),
   ];
 }
 

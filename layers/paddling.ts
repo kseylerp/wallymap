@@ -10,9 +10,8 @@
  * (`out tags geom(bbox)`), give each point its river (nearest river first, else nearest stream or canal), so an unnamed
  * rapid reads "Rapid on Gauley River". Live check, Gauley River, WV (38.1,-81.1 to 38.25,-80.8), 2026-10-18: 13 rapids,
  * all named, none graded, every one on the Gauley River (4 river ways, 385 vertices; 0.7 s).
- * Drawn as points (style.geometry "point"): lines mode strokes only lines, and most paddling features are points, so a
- * line default drew nothing on a river of rapids. Sections and canoe routes keep their line geometry and show as one
- * marker at their middle until the renderer draws a mixed answer's points and lines together.
+ * Drawn as lines (style.geometry "line"): sections and canoe routes stroke their course, and the answer's points (rapids,
+ * put-ins, hazards) draw as symbols beside them in the same lines mode (lib/render/deck.ts `case "lines"`).
  * Tags read: whitewater (rapid, put_in, egress, hazard, portage_way, ...), whitewater:rapid_grade,
  * whitewater:rapid_name, whitewater:section_grade, whitewater:section_name, name, distance, ref, network, check_date (becomes `t`).
  * Live smoke check: Avisio valley, Trentino, Italy (46.1,11 to 46.4,11.6), 2026-10-09: 51 features (32 rapid, 4 access, 15 section); Aare near Bern, Switzerland (46.75,7.35 to 46.98,7.65): 13 (3 access, 4 rapid, 5 section, 1 canoe route). No truncation.
@@ -397,7 +396,7 @@ const LEGEND: LegendSpec = {
     })),
     { label: NO_CLASS, color: OFF_WHITE, symbol: "point", help: "No whitewater class is tagged for this feature (most US rapids, and every put-in)." },
   ],
-  note: "Every feature is a marker: sections and canoe routes sit at their middle; switch to lines to see their course.",
+  note: "Sections and canoe routes are lines along their course; rapids, put-ins and hazards are markers.",
 };
 
 const SCALE_URL = "https://americanwhitewater.org/content/Wiki/safety:internation_scale_of_river_difficulty";
@@ -469,7 +468,7 @@ const paddling = defineLayer({
     "Caveats: coverage is uneven, strongest in the Alps and parts of Europe and thin in many whitewater regions (the US West is sparse); a river with no features here may still be a famous run, so treat it as a lead and not a guide; " +
     "grades are volunteer-entered and change with water level and year, and nothing here reports current flow, so combine with streamflow (cfs) before paddling or rafting; closures, permits and dam releases are not included. " +
     "Each of the two element sets is cut at 1,500 and canoe routes at 50 (a route is drawn only where it crosses the box) and the note gives the count; over 2,500 km² (up to 100,000 km², a whole region) only the first 1,000 named features. " +
-    "The map draws every feature as a marker colored by class (off-white where none is mapped), sections and canoe routes at their middle; switch the display mode to lines to see the sections and routes as lines.",
+    "The map draws sections and canoe routes as lines along their course and rapids, put-ins and hazards as markers, colored by class (off-white where none is mapped).",
   coverage: "global",
   surface: "land",
   license: "ODbL (OpenStreetMap contributors)",
@@ -480,8 +479,8 @@ const paddling = defineLayer({
   // Rapids and access points have no length, so the wide answer keeps the named ones in OpenStreetMap id order.
   wide: { mode: "named", limit: WIDE_LIMIT },
   input: inputSchema,
-  // Points: most features are rapids and put-ins, which lines mode does not draw (see the header).
-  style: { geometry: "point", color: layerColor("paddling"), encode: { color: "v" } },
+  // Lines: sections and routes stroke their course; rapids and put-ins draw as symbols in the same mode (see the header).
+  style: { geometry: "line", color: layerColor("paddling"), encode: { color: "v" } },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,

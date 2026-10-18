@@ -143,7 +143,7 @@ describe("normalizePaddling", () => {
 });
 
 describe("paddling layer", () => {
-  it("declares global ODbL coverage, a 2,500 km2 cap, point style and the activity words", () => {
+  it("declares global ODbL coverage, a 2,500 km2 cap, line style and the activity words", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toContain("ODbL");
     expect(layer.maxAreaKm2).toBe(2500);
@@ -151,8 +151,8 @@ describe("paddling layer", () => {
     expect(hardMaxAreaKm2(layer)).toBe(100_000);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toContain("OVERPASS_URL");
-    // Points: lines mode strokes only lines, so a line default drew nothing on a river of rapids (the Gauley).
-    expect(layer.style.geometry).toBe("point");
+    // Lines: sections stroke their course, and lines mode draws the rapids and put-ins as symbols beside them.
+    expect(layer.style.geometry).toBe("line");
     expect(layer.style.encode).toEqual({ color: "v" });
     for (const word of ["whitewater", "kayaking", "canoe"]) expect(layer.description).toContain(word);
   });

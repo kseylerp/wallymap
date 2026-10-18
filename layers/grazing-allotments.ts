@@ -11,17 +11,19 @@
  *   name and outline are one area, drawn once (mergeTwins); the kept one names the other in `alsoDesignated`.
  * Smoke through runLayer (2026-10-09): central Nevada -117,39,-116,40 returned 26 allotments, 10 herd management
  * areas and 13 herd areas in 0.7 s (see the test for the recorded counts).
+ * Drawing (2026-10-18): `kind` is the layer's color category (KIND_LEVELS, GRAZING_LEGEND): herd management areas sage, historic
+ * herd areas pink, allotments dark grey, stacked allotments first so the horse areas draw on top.
  * Smoke wide (2026-10-14): Nevada -119,37,-114,42 (about 240,000 km²) returned 535 polygons of 1,024 (333 per service) in 1.6 s
  * (276 KB); the first, cold call took 24 s, so the BLM servers are sometimes slow to wake.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type Attribute, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { geometryBBox } from "./_shared/geo";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
-import { layerColor } from "@/lib/render/palette";
+import { DARK_GREY, layerColor, PINK, SAGE } from "@/lib/render/palette";
 
 const BASE = "https://gis.blm.gov/arcgis/rest/services/range";
 const ALLOTMENTS = `${BASE}/BLM_Natl_Grazing_Allotment/MapServer/12`;
@@ -151,14 +153,108 @@ export function mergeTwins(features: Feature<Geometry>[]): Feature<Geometry>[] {
   return features.filter((f) => kept.some((k) => k.feature === f));
 }
 
+/** The three kinds in plain words, with what each means (the chips, the legend and the card read these). */
+export const KIND_LEVELS = [
+  {
+    value: "herd-management-area",
+    label: "Wild horse and burro management area",
+    help: "Land the BLM or Forest Service manages today for a herd of wild horses or burros: the place to look for them.",
+  },
+  {
+    value: "herd-area",
+    label: "Historic herd area (1971)",
+    help: "Where wild horses or burros lived when the 1971 Wild Free-Roaming Horses and Burros Act passed; outside a management area it usually has no herd today.",
+  },
+  {
+    value: "allotment",
+    label: "Grazing allotment",
+    help: "An area where the BLM permits livestock (cattle or sheep) to graze; it does not mean animals are there now.",
+  },
+] as const;
+
+const KIND_COLORS: Record<GrazingKind, string> = { "herd-management-area": SAGE, "herd-area": PINK, allotment: DARK_GREY };
+
+/** The map's key: one fill per kind, herd management areas sage, historic herd areas pink, allotments dark grey. */
+export const GRAZING_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Area",
+  field: "kind",
+  items: KIND_LEVELS.map((l) => ({ label: l.label, value: l.value, color: KIND_COLORS[l.value], symbol: "polygon" as const, help: l.help })),
+};
+
+const ACRES: FieldHelp = { text: "The area's size as the BLM records it (GIS acres for allotments, BLM acres for herd areas).", unit: "acres", source: "Bureau of Land Management", url: "https://gis.blm.gov/" };
+
+const ATTRIBUTES: Attribute[] = [
+  { key: "kind", type: "category", label: "Area", levels: KIND_LEVELS.map((l) => ({ ...l })), encode: "color", primary: true },
+  {
+    key: "animals",
+    type: "category",
+    label: "Animals",
+    levels: [
+      { value: "horses", label: "Horses" },
+      { value: "burros", label: "Burros" },
+      { value: "horses and burros", label: "Horses and burros" },
+    ],
+  },
+  {
+    key: "acres",
+    type: "measure",
+    label: "Size",
+    unit: "acres",
+    encode: "size",
+    help: ACRES,
+    presets: [
+      { label: "Under 10,000 acres", max: 10_000 },
+      { label: "10,000 to 100,000 acres", min: 10_000, max: 100_000 },
+      { label: "100,000 acres and up", min: 100_000 },
+    ],
+  },
+  { key: "name", type: "name", label: "Name" },
+];
+
+const HELP: Record<string, FieldHelp> = {
+  kind: { text: KIND_LEVELS.map((l) => `${l.label}: ${l.help}`).join(" ") },
+  acres: ACRES,
+  animals: { text: "Which wild animals the herd area is for, as the BLM records it (HERD_TYPE)." },
+  agency: { text: "The agency that manages the herd: BLM (Bureau of Land Management) or USFS (Forest Service)." },
+  allotmentNumber: { text: "The BLM's number for this grazing allotment, used on its grazing permits." },
+  herdId: { text: "The BLM's code for this herd area or herd management area." },
+  alsoDesignated: { text: "Other designations with the same name and outline, drawn once." },
+};
+
+const CARD: CardSpec = {
+  measure: { key: "acres", label: "Size", unit: "acres", help: ACRES },
+  facts: [
+    { key: "kind", label: "Area", values: Object.fromEntries(KIND_LEVELS.map((l) => [l.value, l.label])) },
+    { key: "animals", label: "Animals" },
+    { key: "agency", label: "Managed by", values: { BLM: "Bureau of Land Management", USFS: "US Forest Service" } },
+    { key: "alsoDesignated", label: "Also designated" },
+    { key: "allotmentNumber", label: "Allotment number" },
+    { key: "herdId", label: "Herd area code" },
+    { key: "state", label: "State" },
+  ],
+  hidden: ["v"],
+};
+
+/** Draw order: allotments underneath, then historic herd areas, then the herd management areas on top. */
+const STACK: Record<GrazingKind, number> = { allotment: 0, "herd-area": 1, "herd-management-area": 2 };
+
+/** The features in draw order (STACK), keeping the services' order within a kind. */
+export function stack(features: Feature<Geometry>[]): Feature<Geometry>[] {
+  return features
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => STACK[a.f.properties?.kind as GrazingKind] - STACK[b.f.properties?.kind as GrazingKind] || a.i - b.i)
+    .map(({ f }) => f);
+}
+
 const grazingAllotments = defineLayer({
   id: "grazing-allotments",
-  title: "Grazing allotments and wild horse areas",
+  title: "BLM grazing allotments and wild horse areas",
   description:
-    "Where cattle and sheep graze on Bureau of Land Management (BLM) public land, and where wild horses and burros live, drawn as polygons. " +
-    "kind is 'allotment' (a livestock grazing allotment: name, allotmentNumber, state, acres), 'herd-management-area' (land the BLM or Forest Service currently manages for a wild horse or burro herd: name, herdId, animals, agency, state, acres) or 'herd-area' (where wild horses and burros were found in 1971, many no longer managed for them). v is acres for all three. " +
-    "Use it for 'where is there grazing or cattle on public land', 'is this allotment grazed', or 'where can I see wild horses or burros'. Set show to 'allotments' or 'herds' to draw one group; the default draws both. " +
-    "Caveats: an allotment is an administrative area where grazing is permitted, not proof that livestock are there now; allotments can include private and state land, and their gate and fence positions are not shown. " +
+    "Bureau of Land Management (BLM) grazing allotments, where cattle and sheep may graze on BLM public land, and the wild horse and burro areas, drawn as polygons in three distinct fills with a legend. " +
+    "kind is 'herd-management-area' (land the BLM or Forest Service manages today for a wild horse or burro herd: name, herdId, animals, agency, state, acres; drawn sage, on top), 'herd-area' (where wild horses and burros were found in 1971, many no longer managed for them; drawn pink) or 'allotment' (a livestock grazing allotment: name, allotmentNumber, state, acres; drawn dark grey, underneath). acres (and v) is the size for all three. " +
+    "Use it for 'where is there grazing or cattle on public land', 'is this allotment grazed', or 'where can I see wild horses or burros'. For wild horse or burro questions set show to 'herds' so only the herd areas draw, and point to the management areas; for grazing questions set show to 'allotments'; the default draws both. " +
+    "Caveats: only BLM allotments are included; Forest Service grazing allotments, a large share of federal grazing, are not in this dataset. An allotment is an administrative area where grazing is permitted, not proof that livestock are there now; allotments can include private and state land, and their gate and fence positions are not shown. " +
     "Herd areas are historic ranges, so a herd area outside a herd management area usually has no animals today, and herd management areas are the better place to look for wild horses. Animals are not located, only their ranges. " +
     "United States only (mostly the western states; Alaska has no BLM allotments in this dataset). Boundaries are simplified for display, so edges are not survey-grade. " +
     "At most 2,000 polygons per group are returned, largest first, and the result says when that cap is hit. " +
@@ -171,6 +267,13 @@ const grazingAllotments = defineLayer({
   wide: { orderBy: "acres", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("grazing-allotments"), fillOpacity: 0.18 },
+  attributes: ATTRIBUTES,
+  legend: GRAZING_LEGEND,
+  fieldHelp: HELP,
+  card: CARD,
+  labels: { field: "name", max: 8, rankBy: "acres" },
+  // Current boundaries, no dates.
+  time: { shape: "none" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {
@@ -243,7 +346,7 @@ const grazingAllotments = defineLayer({
 
     return {
       kind: "geojson",
-      data: { type: "FeatureCollection", features: mergeTwins(features) },
+      data: { type: "FeatureCollection", features: stack(mergeTwins(features)) },
       citation,
       ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),

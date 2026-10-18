@@ -6,6 +6,7 @@ import layer, { mergeTwins, normalizeGrazing, simplifyOffset } from "./grazing-a
 import allotmentsRaw from "./__fixtures__/grazing-allotments.allotments.json";
 import hmaRaw from "./__fixtures__/grazing-allotments.hma.json";
 import haRaw from "./__fixtures__/grazing-allotments.ha.json";
+import { contractProblems, legendOf } from "./contract";
 
 const allotments = allotmentsRaw as unknown as FeatureCollection;
 const hma = hmaRaw as unknown as FeatureCollection;
@@ -222,8 +223,35 @@ describe("grazing-allotments layer", () => {
     expect((await runLayer("grazing-allotments", { bbox: NEVADA, input: { show: "x" } })).status).toBe(400);
   });
 
-  it("describes grazing in the words people use", () => {
+  it("describes grazing in the words people use, says it is BLM only and sends horse questions to the herds", () => {
     for (const word of ["cattle", "wild horses", "burros", "grazing"]) expect(layer.description).toContain(word);
+    expect(layer.title).toBe("BLM grazing allotments and wild horse areas");
+    expect(layer.description).toMatch(/Forest Service grazing allotments.*are not in this dataset/);
+    expect(layer.description).toMatch(/wild horse or burro questions set show to 'herds'/);
+  });
+
+  it("draws the three kinds as three categories with a matching legend, horse areas on top", async () => {
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "kind" });
+    expect(legend.items?.map((i) => [i.value, i.label, i.color])).toEqual([
+      ["herd-management-area", "Wild horse and burro management area", "#9FB693"],
+      ["herd-area", "Historic herd area (1971)", "#F57272"],
+      ["allotment", "Grazing allotment", "#3A3A3C"],
+    ]);
+    const kind = layer.attributes?.find((a) => a.key === "kind");
+    expect(kind).toMatchObject({ type: "category", encode: "color", primary: true });
+    expect(kind?.levels?.map((l) => l.value)).toEqual(["herd-management-area", "herd-area", "allotment"]);
+    expect(layer.card?.facts?.find((f) => f.key === "kind")?.values?.["herd-area"]).toBe("Historic herd area (1971)");
+    expect(layer.fieldHelp?.kind?.text).toMatch(/1971/);
+    expect(contractProblems(layer)).toEqual([]);
+
+    // Recorded central Nevada answer: allotments first, herd management areas last, so the horse areas draw over the allotments.
+    const r = await layer.query(ctx(serviceStub()), { show: "both" });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const order = r.data.features.map((f) => f.properties?.kind as string);
+    const firstHma = order.indexOf("herd-management-area");
+    expect(order.lastIndexOf("allotment")).toBeLessThan(firstHma);
+    expect(order.slice(firstHma).every((k) => k === "herd-management-area")).toBe(true);
   });
 });
 

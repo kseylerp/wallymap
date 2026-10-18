@@ -470,6 +470,8 @@ export function checkDuplicates(layers: Drawn[]): CheckResult {
     if (!OBSERVATION_LAYERS.has(layer.id)) {
       const byName = new Map<string, Feature[]>();
       for (const f of layer.data.features) {
+        // The ground a changed area lost (lib/render/compare.ts lostGround) is part of that area, not a second place.
+        if (f.properties?.deltaLost === true) continue;
         const name = nameOf(f);
         const norm = name ? normalName(name) : "";
         if (isUnnamed(norm) || GENERIC_NAMES.has(norm)) continue;

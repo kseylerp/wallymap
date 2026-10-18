@@ -179,6 +179,16 @@ describe("duplicates", () => {
     expect(result.failures).toHaveLength(1);
   });
 
+  it("passes a monument's outline and the ground it lost, which carry its name (lost ground is part of it)", () => {
+    const square = (d: number): GeoJSON.Polygon => ({ type: "Polygon", coordinates: [[[-110, 37], [-110 + d, 37], [-110 + d, 37 + d], [-110, 37 + d], [-110, 37]]] });
+    const features: Feature[] = [
+      { type: "Feature", geometry: square(1), properties: { name: "Bears Ears", delta: "a-only", deltaEdge: true } },
+      { type: "Feature", geometry: square(1), properties: { name: "Bears Ears", delta: "a-only", deltaEdge: true, deltaLost: true, lostKm2: 9000 } },
+      { type: "Feature", geometry: square(0.1), properties: { name: "Bears Ears", delta: "both" } },
+    ];
+    expect(checkDuplicates(drawn(mapWith({ id: "monuments", features, mode: "polygons" }))).ok).toBe(true);
+  });
+
   it("passes one name at two far-apart places, two trail segments, and repeated sightings", () => {
     const far = [point(-83.66, 37.72, { name: "The Gallery", v: 5 }), point(-84.5, 38.5, { name: "The Gallery", v: 3 })];
     expect(checkDuplicates(drawn(mapWith({ id: "climbing", features: far }))).ok).toBe(true);

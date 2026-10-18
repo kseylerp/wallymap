@@ -203,11 +203,13 @@ export function preferredBasemap(layer: LoadedLayer, op: { visible: boolean; mod
  * True for a map whose areas are colored by a ramp or by kind (temperature anomaly by county, hardiness zones, drought,
  * geology, land cover, protected areas by category): the color is the answer, and satellite imagery under it changes
  * every color, so such answers open on Topographical (or the layer's own basemap), never Satellite (owner, 2026-10-18).
- * Snapshot layers (glacier surveys, monument boundaries) color by date, not value, and keep the imagery.
+ * Snapshot and version layers (glacier surveys, monument boundaries) color by date, not value, and keep the imagery.
  */
 export function isChoropleth(layer: LoadedLayer): boolean {
   if (layer.style.geometry !== "polygon" || layer.style.unit === "score") return false;
   if (timeShape(layer).shape === "snapshots") return false;
+  // Two versions of the same areas (monument boundaries, 2021 against current) compare outlines, not values.
+  if (layer.attributes?.some((a) => a.versions)) return false;
   if (layer.style.encode?.color) return true;
   const legend = layer.result.legend ?? layer.legend;
   if (legend && (legend.kind === "categories" || legend.kind === "ramp")) {

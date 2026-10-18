@@ -375,7 +375,8 @@ async function measureOps(page: Page, state: MapState, ops: RenderOps, on: strin
     const q = (f: number) => sorted[Math.min(sorted.length - 1, Math.floor(f * sorted.length))].toFixed(0);
     const share = what === "lines" ? `, ${Math.round(visibleShare(diffs) * 100)}% of them showing (quartiles ${q(0.25)} / ${q(0.5)} / ${q(0.75)})` : "";
     readings.push(`${title} ${what} on ${on}: ${mean.toFixed(1)} mean pixel change over ${diffs.length} points${share}`);
-    const problem = lineVisibilityProblem(title, on, diffs, what);
+    // A choropleth's edges are thin white lines that part its classes by design (owner, 2026-10-18); its fill is the check.
+    const problem = choropleth && what === "outlines" ? null : lineVisibilityProblem(title, on, diffs, what);
     if (problem) problems.push(problem);
     if (withFill && areas && areas.inside.length >= 5) {
       const fill = await page.evaluate(pixelDiffs, { a: `data:image/png;base64,${shown}`, b: `data:image/png;base64,${hidden}`, points: areas.inside });

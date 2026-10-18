@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { cardTitle, contractProblems, displayOf, labelsOf, legendOf, timeShapeOf } from "./contract";
 import layer, {
   BLM_FACILITIES_URL,
   BLM_SHOWN_FACILITIES,
   BLM_SITES_URL,
   USFS_URL,
+  byKind,
   dedupe,
   interleave,
   kindFromName,
@@ -294,5 +296,41 @@ describe("recreation-sites layer", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("recreation-sites kinds and key", () => {
+  it("declares kind as the primary chip set covering every kind the layer returns, with agency, status and reservable", () => {
+    const kind = layer.attributes?.find((a) => a.key === "kind");
+    expect(kind).toMatchObject({ type: "category", primary: true });
+    expect(kind?.levels?.map((l) => l.label)).toEqual(
+      expect.arrayContaining(["Campgrounds", "Trailheads", "Day use and picnic areas", "Water access", "Visitor centers", "Winter sports", "Off-highway vehicle areas"]),
+    );
+    const values = new Set(kind?.levels?.map((l) => l.value));
+    for (const f of [...normalizeUsfs(usfsFc), ...normalizeBlmFacilities(facilitiesFc), ...normalizeBlmSites(sitesFc)]) {
+      expect(values.has(f.properties.kind as string)).toBe(true);
+    }
+    expect(layer.attributes?.map((a) => a.key)).toEqual(expect.arrayContaining(["agency", "status", "reservable", "name"]));
+    expect(legendOf(layer)).toMatchObject({ kind: "categories", field: "kind" });
+    expect(legendOf(layer).items?.[0].label).toBe("Campgrounds");
+    expect(timeShapeOf(layer).shape).toBe("none");
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 6 });
+    expect(displayOf(layer).units).toBe("us");
+    expect(contractProblems(layer)).toEqual([]);
+  });
+
+  it("lists campgrounds first and trailheads next so the labels name them, and every card has a real title", async () => {
+    const r = geojson(await layer.query(ctx(routed()), {}));
+    const kinds = r.data.features.map((f) => f.properties?.kind);
+    const firstOther = kinds.findIndex((k) => k !== "campground");
+    expect(firstOther).toBeGreaterThan(0);
+    expect(kinds.slice(firstOther).includes("campground")).toBe(false);
+    expect(kinds[firstOther]).toBe("trailhead");
+    for (const f of r.data.features) expect(cardTitle(layer, f)).not.toMatch(/^feature$/i);
+  });
+
+  it("keeps the source order within a kind", () => {
+    const pt = (name: string, kind: string) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [0, 0] }, properties: { name, kind } });
+    expect(byKind([pt("a", "trail"), pt("b", "campground"), pt("c", "trail"), pt("d", "campground")]).map((f) => f.properties.name)).toEqual(["b", "d", "a", "c"]);
   });
 });

@@ -14,14 +14,18 @@
  * 9 x 6 degree box is about 9 s per 200 units upstream, which is why the finer levels have smaller area limits. States can include "CN" (Canada).
  * Smoke wide 2026-10-14 (live, through runLayer): the US with Alaska -170,18,-60,72 (about 50 million km2) returned all 21 regions of 21
  * in 7.1 s (51 KB at 0.08 degrees), Alaska Region first.
+ * Drawing (2026-10-18): each unit carries `region`, the 2-digit region it drains to (the first two digits of its code), and
+ * `regionName`; the region is the color category (REGION_LEVELS, six fills cycling by code so neighbouring regions differ),
+ * and the ten largest units are labelled with their names, so "what watershed is Boulder in" is answered on the map.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
+import { bboxAreaKm2, defineLayer, type Attribute, type LayerError, type LayerResult, type CardSpec, type FieldHelp, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
-import { layerColor } from "@/lib/render/palette";
+import { DARK_GREY, layerColor, PINK, PURPLE, SAGE } from "@/lib/render/palette";
+import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
 
 const SERVICE_URL = "https://hydro.nationalmap.gov/arcgis/rest/services/wbd/MapServer";
 /** Boundaries change about yearly. */
@@ -66,6 +70,45 @@ export function levelForArea(wanted: Level, area: number): Level {
   return LEVELS[i];
 }
 
+/** The 22 two-digit hydrologic regions, by code (USGS Watershed Boundary Dataset). */
+export const REGION_NAMES: Record<string, string> = {
+  "01": "New England",
+  "02": "Mid Atlantic",
+  "03": "South Atlantic-Gulf",
+  "04": "Great Lakes",
+  "05": "Ohio",
+  "06": "Tennessee",
+  "07": "Upper Mississippi",
+  "08": "Lower Mississippi",
+  "09": "Souris-Red-Rainy",
+  "10": "Missouri",
+  "11": "Arkansas-White-Red",
+  "12": "Texas-Gulf",
+  "13": "Rio Grande",
+  "14": "Upper Colorado",
+  "15": "Lower Colorado",
+  "16": "Great Basin",
+  "17": "Pacific Northwest",
+  "18": "California",
+  "19": "Alaska",
+  "20": "Hawaii",
+  "21": "Caribbean",
+  "22": "South Pacific",
+};
+
+/** Six fills cycled by region code, so regions with neighbouring codes (mostly neighbours on the map) differ. */
+const REGION_FILLS = [SAGE, PURPLE, PINK, DARK_GREY, rgbToHex(interpolateStops([SAGE, DARK_GREY], 0.5)), rgbToHex(interpolateStops([PURPLE, PINK], 0.5))];
+
+export const REGION_LEVELS = Object.entries(REGION_NAMES).map(([value, name], i) => ({ value, label: `${name} region`, color: REGION_FILLS[i % REGION_FILLS.length] }));
+
+export const BASINS_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Drains to region",
+  field: "region",
+  items: REGION_LEVELS.map(({ value, label, color }) => ({ label, value, color, symbol: "polygon" as const })),
+  note: "Each unit is filled by the two-digit region it drains to; zoom in for subregions, subbasins and watersheds.",
+};
+
 /** Most units in a wide result (over 20 million km² only regions are drawn, and there are 22). */
 const WIDE_LIMIT = 1000;
 
@@ -92,7 +135,14 @@ export function normalizeBasins(fc: FeatureCollection, level: Level): FeatureCol
       hucLevel: spec.digits,
     };
     const huc = str(p[spec.field]);
-    if (huc !== undefined) properties.huc = huc;
+    if (huc !== undefined) {
+      properties.huc = huc;
+      const region = huc.slice(0, 2);
+      if (REGION_NAMES[region] !== undefined) {
+        properties.region = region;
+        properties.regionName = `${REGION_NAMES[region]} region`;
+      }
+    }
     const area = num(p.areasqkm);
     if (area !== undefined) {
       properties.areaSqKm = Math.round(area);
@@ -121,25 +171,33 @@ const HELP: Record<string, FieldHelp> = {
     text: "How fine this unit is in the USGS nesting of drainage areas, from the 22 regions down to watersheds.",
     scale: "Region (2-digit code), subregion (4), basin (6), subbasin (8), watershed (10)",
   },
+  regionName: { text: "The 2-digit hydrologic region this unit drains to (the first two digits of its code), such as the Missouri region.", source: "USGS Watershed Boundary Dataset", url: WBD_URL },
 };
+
+const ATTRIBUTES: Attribute[] = [
+  { key: "region", type: "category", label: "Drains to region", levels: REGION_LEVELS.map(({ value, label }) => ({ value, label })), encode: "color", primary: true },
+  { key: "areaSqKm", type: "measure", label: "Area", unit: "km²" },
+  { key: "name", type: "name", label: "Name" },
+];
 
 /** The basin card: its area, its level in words and its code. */
 const CARD: CardSpec = {
   measure: { key: "v", label: "Area", unit: "km²" },
   facts: [
     { key: "kind", label: "Level", values: { huc2: "Region", huc4: "Subregion", huc6: "Basin", huc8: "Subbasin", huc10: "Watershed" } },
+    { key: "regionName", label: "Drains to" },
     { key: "huc", label: "Hydrologic unit code" },
     { key: "states", label: "States", format: "list", values: { CN: "Canada" } },
   ],
-  // hucLevel repeats kind as a digit count.
-  hidden: ["hucLevel"],
+  // hucLevel repeats kind as a digit count; region is regionName's code; areaSqKm is the measure again.
+  hidden: ["hucLevel", "region", "areaSqKm"],
 };
 
 const riverBasins = defineLayer({
   id: "river-basins",
   title: "River basins and watersheds",
   description:
-    "US drainage basins from the USGS Watershed Boundary Dataset: the land that drains to one river or outlet. Each polygon has name, huc (hydrologic unit code; longer codes nest inside shorter ones), kind and hucLevel (huc2 regions to huc10 watersheds), v and areaSqKm, and states. The level follows the zoom, or set level; a level too fine for the view steps up to a coarser one and the result says so. Outlines are simplified and a basin is not a legal boundary. At most 2,000 units, largest first. Limits: huc4 3,500,000 km², huc6 1,000,000, huc8 250,000, huc10 40,000; over 20,000,000 it gives regions and a total.",
+    "US drainage basins from the USGS Watershed Boundary Dataset: the land that drains to one river or outlet. Each polygon has name, huc (hydrologic unit code; longer codes nest inside shorter ones), kind and hucLevel (huc2 regions to huc10 watersheds), v and areaSqKm, states, and region and regionName (the 2-digit region it drains to, such as the Missouri region). The map fills units by that region with a legend and labels the ten largest by name. The level follows the zoom, or set level; a level too fine for the view steps up to a coarser one and the result says so. Outlines are simplified and a basin is not a legal boundary. At most 2,000 units, largest first. Limits: huc4 3,500,000 km², huc6 1,000,000, huc8 250,000, huc10 40,000; over 20,000,000 it gives regions and a total.",
   coverage: "us",
   surface: "land",
   license: "Public domain (USGS Watershed Boundary Dataset)",
@@ -155,6 +213,10 @@ const riverBasins = defineLayer({
   style: { geometry: "polygon", color: layerColor("river-basins"), fillOpacity: 0.1 },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
+  legend: BASINS_LEGEND,
+  labels: { field: "name", max: 10, rankBy: "areaSqKm" },
+  time: { shape: "none" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

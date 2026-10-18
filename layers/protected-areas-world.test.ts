@@ -2,22 +2,27 @@ import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
-import layer, { MAX_AREAS, WDPA_POLYGONS, WDPA_TILE_URL, mergeDesignations, normalizeProtectedAreas, simplifyOffset } from "./protected-areas-world";
+import layer, {
+  MAX_AREAS,
+  PROTECTION_LEVELS,
+  WDPA_POLYGONS,
+  WDPA_POLYGONS_FALLBACK,
+  WDPA_WHERE,
+  mergeDesignations,
+  normalizeProtectedAreas,
+  simplifyOffset,
+} from "./protected-areas-world";
+import { contractProblems, legendOf } from "./contract";
 import guiana from "./__fixtures__/protected-areas-world.guiana.json";
 import type { FeatureCollection } from "geojson";
 
 const WORLD: [number, number, number, number] = [-179, -60, 179, 80];
 
-function ctx(stub: ReturnType<typeof vi.fn>) {
-  return { bbox: WORLD, zoom: 3, env: {}, fetch: stub as unknown as CachedFetch };
-}
-
 describe("protected-areas-world layer", () => {
-  it("builds the verified MapServer export tile template for both sublayers", () => {
-    expect(WDPA_TILE_URL).toBe(
-      "https://data-gis.unep-wcmc.org/server/rest/services/ProtectedSites/The_World_Database_of_Protected_Areas/MapServer/export" +
-        "?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&f=image&transparent=true&layers=show:0,1",
-    );
+  it("reads UNEP-WCMC's hosted copy first and keeps the old server as the fallback", () => {
+    expect(WDPA_POLYGONS).toBe("https://services5.arcgis.com/Mj0hjvkNtV7NRhA7/arcgis/rest/services/WDPA_v0/FeatureServer/1");
+    expect(WDPA_POLYGONS_FALLBACK).toBe("https://data-gis.unep-wcmc.org/server/rest/services/ProtectedSites/The_World_Database_of_Protected_Areas/MapServer/1");
+    expect(WDPA_WHERE).toBe("desig_type <> 'International'");
   });
 
   it("declares global coverage and a non-commercial license, with no env", () => {
@@ -25,38 +30,32 @@ describe("protected-areas-world layer", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toMatch(/non-commercial/i);
     expect(layer.requiredEnv).toEqual([]);
-    expect(layer.maxAreaKm2).toBe(Number.POSITIVE_INFINITY);
+    expect(layer.maxAreaKm2).toBe(25_000_000);
     expect(layer.input.parse({})).toEqual({});
   });
 
-  it("returns a raster tiles result without calling upstream, and says it is non-commercial", async () => {
-    const stub = vi.fn();
-    const r = await layer.query(ctx(stub), {});
-    expect(stub).not.toHaveBeenCalled();
-    if (!("kind" in r) || r.kind !== "tiles") throw new Error("expected tiles");
-    expect(r.data).toMatchObject({ format: "raster", minzoom: 3, maxzoom: 14, tileSize: 256, url: WDPA_TILE_URL });
-    expect(r.data.time).toBeUndefined();
-    expect(r.citation.source).toMatch(/non-commercial/i);
-    expect(r.citation.source).toContain("UNEP-WCMC");
-    expect(r.coverageNote).toMatch(/non-commercial/i);
-  });
-
-  it("summarizes to the tile URL and the licence note for the model", async () => {
-    const summary = summarizeLayerResult(await layer.query(ctx(vi.fn()), {}));
-    expect(summary).toMatchObject({ kind: "tiles", format: "raster", url: WDPA_TILE_URL });
-    expect(summary).toHaveProperty("coverageNote", expect.stringMatching(/non-commercial/i));
-  });
-
-  it("runs through runLayer at world scale", async () => {
+  it("asks the whole world to zoom in instead of timing out", async () => {
     const r = await runLayer("protected-areas-world", { bbox: WORLD, zoom: 3 });
-    expect(r.status).toBe(200);
+    expect(r.status).toBe(422);
+    expect(r.body).toMatchObject({ hint: "zoom_in" });
   });
 
-  it("describes protection in the words people use and warns about the licence and the picture-only output when wide", () => {
+  it("fills each area by how strictly it is protected, with a matching legend", () => {
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "protection" });
+    expect(legend.items?.map((i) => i.value)).toEqual(["strict", "park", "habitat", "sustainable", "none"]);
+    expect(new Set(legend.items?.map((i) => i.color)).size).toBe(5);
+    expect(legend.items?.[1]).toMatchObject({ label: "National park (IUCN II)", color: "#9FB693" });
+    expect(PROTECTION_LEVELS.map((l) => l.value)).toEqual(legend.items?.map((i) => i.value));
+    expect(layer.attributes?.find((a) => a.key === "protection")).toMatchObject({ encode: "color", primary: true });
+    expect(contractProblems(layer)).toEqual([]);
+  });
+
+  it("describes protection in the words people use and warns about the licence and what is left out", () => {
     expect(layer.description).toMatch(/protected/i);
     expect(layer.description).toMatch(/non-commercial/i);
-    expect(layer.description).toContain("under 500,000 km² it returns named polygons");
-    expect(layer.description).toMatch(/a picture you cannot list, count or name/i);
+    expect(layer.description).toMatch(/International designations .* are left out/);
+    expect(layer.description).toMatch(/returns an error saying so rather than an empty map/);
   });
 });
 
@@ -66,11 +65,13 @@ const GUIANA: [number, number, number, number] = [-54.6, 2.1, -51.6, 5.8];
 describe("protected-areas-world named polygons for a region", () => {
   const ctxAt = (stub: ReturnType<typeof vi.fn>) => ({ bbox: GUIANA, zoom: 7, env: {}, fetch: stub as unknown as CachedFetch });
 
-  it("queries the WDPA polygon layer largest first, capped and simplified", async () => {
+  it("queries the hosted WDPA polygons, national and regional only, largest first, capped and simplified", async () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(guiana), { status: 200 }));
     await layer.query(ctxAt(stub), {});
+    expect(stub).toHaveBeenCalledTimes(1);
     const url = new URL(String((stub.mock.calls[0] as unknown[])[0]));
     expect(url.origin + url.pathname).toBe(`${WDPA_POLYGONS}/query`);
+    expect(url.searchParams.get("where")).toBe(WDPA_WHERE);
     expect(url.searchParams.get("orderByFields")).toBe("gis_area DESC");
     expect(url.searchParams.get("resultRecordCount")).toBe(String(MAX_AREAS));
     expect(url.searchParams.get("maxAllowableOffset")).toBe(String(simplifyOffset(GUIANA)));
@@ -88,11 +89,12 @@ describe("protected-areas-world named polygons for a region", () => {
     expect(r.data.features.find((f) => f.properties?.name === "Nouragues")?.properties).toMatchObject({
       designation: "National Nature Reserve",
       iucn: "IV",
+      protection: "habitat",
       areaKm2: 1066,
       v: 1066,
       country: "GUF",
     });
-    expect(r.coverageNote).toMatch(/^5 protected areas in this region, largest first; .*non-commercial/);
+    expect(r.coverageNote).toMatch(/^5 national and regional protected areas in this region, largest first; international designations .*non-commercial/);
     expect(r.citation.source).toMatch(/non-commercial/i);
   });
 
@@ -101,19 +103,29 @@ describe("protected-areas-world named polygons for a region", () => {
       type: "FeatureCollection",
       features: [{ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: { name: "X", iucn_cat: "Not Reported", gis_area: 2.34 } }],
     } as FeatureCollection);
-    expect(fc.features[0].properties).toEqual({ name: "X", areaKm2: 2.3, v: 2.3 });
+    expect(fc.features[0].properties).toEqual({ name: "X", protection: "none", areaKm2: 2.3, v: 2.3 });
 
     const capped = { ...guiana, exceededTransferLimit: true };
     const stub = vi.fn(async () => new Response(JSON.stringify(capped), { status: 200 }));
     const r = await layer.query(ctxAt(stub), {});
-    expect(r).toMatchObject({ kind: "geojson", coverageNote: expect.stringMatching(/^The 5 largest protected areas in this region/) });
+    expect(r).toMatchObject({ kind: "geojson", coverageNote: expect.stringMatching(/^The 5 largest national and regional protected areas in this region/) });
   });
 
-  it("falls back to the tiles when the service fails", async () => {
+  it("asks the old server when the hosted copy fails, and says the source is fine when it answers", async () => {
+    const stub = vi.fn(async (url: string) => (url.startsWith(WDPA_POLYGONS) ? new Response("down", { status: 500 }) : new Response(JSON.stringify(guiana), { status: 200 })));
+    const r = await layer.query(ctxAt(stub), {});
+    expect(stub).toHaveBeenCalledTimes(2);
+    expect(String((stub.mock.calls[1] as unknown[])[0])).toContain(WDPA_POLYGONS_FALLBACK);
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features).toHaveLength(5);
+    expect(r.sourceStatus).toEqual({ ok: true });
+  });
+
+  it("returns an upstream error with the source status when both servers fail, never a blank map", async () => {
     const stub = vi.fn(async () => new Response("down", { status: 500 }));
     const r = await layer.query(ctxAt(stub), {});
-    if (!("kind" in r) || r.kind !== "tiles") throw new Error("expected tiles");
-    expect(r.coverageNote).toMatch(/could not be loaded.*non-commercial/);
+    expect(r).toMatchObject({ hint: "upstream", sourceStatus: { ok: false, reason: "server-error" } });
+    expect("error" in r && r.error).toMatch(/did not answer/);
   });
 
   it("summarizes the largest parks by name for the note", async () => {

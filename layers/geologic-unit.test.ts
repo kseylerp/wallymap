@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { identifyFeature } from "./geologic-unit";
+import layer, { ageSpanText, identifyFeature, lithologyText } from "./geologic-unit";
 import fixture from "./__fixtures__/geologic-unit.tahoe.json";
 
 /** The fixture is a real Macrostrat response for (lon -120.0, lat 38.9): four units, one per map scale. */
@@ -64,7 +64,9 @@ describe("geologic-unit layer", () => {
       ageBottomMa: 259.1,
       mapScale: "medium",
     });
-    expect(String(granite?.properties?.lithology)).toContain("granodiorite");
+    expect(String(granite?.properties?.lithology)).toMatch(/^Granodiorite, with granite/);
+    expect(String(granite?.properties?.lithology)).not.toMatch(/[{}]|Major:/);
+    expect(granite?.properties?.rock).toMatch(/; Lopingian to Tertiary, 2\.6 to 259 million years old$/);
     expect(String(granite?.properties?.formations).length).toBeLessThanOrEqual(200);
   });
 
@@ -93,5 +95,33 @@ describe("geologic-unit layer", () => {
   it("is registered separately from the geology tiles and rejects a missing point through runLayer", async () => {
     const r = await runLayer("geologic-unit", { bbox: [-170, -60, 170, 70] });
     expect(r.status).toBe(400);
+  });
+
+  it("leads the Grand Teton card with the rock in words and its age in years, not raw source syntax", () => {
+    const teton = identifyFeature(-110.8023, 43.7412, [
+      {
+        name: "Granitic rocks of 2,600-Ma Age Group",
+        lith: "Major:{granite}, Minor:{granodiorite,amphibolite,quartz monzonite}, Incidental:{metasedimentary}",
+        descrip: "Teton Range--Mount Owen Quartz Monzonite. Age 2,500+/- Ma; may be of Early Proterozoic age. Gros Ventre and Washakie Ranges--Granitic rocks.",
+        t_int_name: "Archean",
+        b_int_name: "Archean",
+        t_age: 2500,
+        b_age: 4000,
+        scale: "medium",
+      },
+    ]);
+    expect(teton?.properties).toMatchObject({
+      rock: "Granite, with granodiorite, amphibolite and quartz monzonite, and some metasedimentary rock; Archean, 2.5 to 4 billion years old",
+      lithology: "Granite, with granodiorite, amphibolite and quartz monzonite, and some metasedimentary rock",
+      description: "Teton Range--Mount Owen Quartz Monzonite.",
+    });
+    expect(String(teton?.properties?.fullDescription)).toContain("Gros Ventre");
+    expect(layer.card?.facts?.[0].key).toBe("rock");
+    expect(layer.card?.facts?.map((f) => f.key)).not.toContain("alsoMapped");
+    expect(lithologyText("sandstone and shale")).toBe("sandstone and shale");
+    expect(lithologyText("Major:{coarse alluvium,fine alluvium}")).toBe("Coarse alluvium and fine alluvium");
+    expect(ageSpanText(0.0117, 0.0117)).toBe("about 11,700 years old");
+    expect(ageSpanText(66, 252)).toBe("66 to 252 million years old");
+    expect(ageSpanText(2.588, 2500)).toBe("2.6 million to 2.5 billion years old");
   });
 });

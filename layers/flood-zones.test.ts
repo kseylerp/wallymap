@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
+import { contractProblems, legendOf } from "./contract";
 import layer, { FLOOD_ZONES_TILE_URL } from "./flood-zones";
 
 const HOUSTON: [number, number, number, number] = [-95.5, 29.7, -95.3, 29.8];
@@ -58,5 +59,15 @@ describe("flood-zones layer", () => {
     expect(layer.description).toMatch(/floodplain/i);
     expect(layer.description).toMatch(/zoom 14/);
     expect(layer.description).toMatch(/not a forecast/i);
+  });
+
+  it("draws FEMA's tiles as served and keys them with the colors FEMA draws", () => {
+    expect(layer.style.raster).toBeNull();
+    const legend = legendOf(layer);
+    expect(legend.kind).toBe("categories");
+    expect(legend.items?.[0]).toMatchObject({ color: "#00E5FF", symbol: "raster" });
+    expect(legend.items?.map((i) => i.color)).toContain("#FF8100");
+    expect(legend.note).toMatch(/zoom 14/);
+    expect(contractProblems(layer)).toEqual([]);
   });
 });

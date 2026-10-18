@@ -18,14 +18,18 @@
  *   sand and gravel) from the Esri copy in 0.4 s; a Nevada-Utah box -120,38,-114,41 returned 123 polygons from the Nevada copy in 0.6 s.
  * Smoke wide 2026-10-14 (live, through runLayer): the lower 48 -125,24,-66,50 (about 15 million km2) returned the 1,000 largest of 2,609
  *   polygons from the Esri copy in 0.8 s (529 KB at 0.295 degrees), High Plains Aquifer first.
+ * Drawing (2026-10-18): `rockType` is the color category (ROCK_LEVELS: sand and gravel sage, sandstone pink, carbonate purple,
+ *   igneous and metamorphic dark grey, the mixed classes in between) with a legend; the High Plains aquifer carries the flag
+ *   `ogallala` so it can be singled out with one chip, and its card points to the groundwater layer for water levels.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type FieldHelp } from "./types";
+import { defineLayer, type Attribute, type BBox, type LayerError, type LayerResult, type LegendSpec, type QueryContext, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
-import { layerColor } from "@/lib/render/palette";
+import { DARK_GREY, layerColor, PINK, PURPLE, SAGE } from "@/lib/render/palette";
+import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
 
 export const NEVADA_COPY =
   "https://arcgis.water.nv.gov/arcgis/rest/services/BaseLayers/USGS_Aquifers_Principal/FeatureServer/0";
@@ -47,6 +51,29 @@ export const ROCK_TYPES: Record<number, string> = {
   500: "Sandstone and carbonate rock",
   600: "Igneous and metamorphic rock",
 };
+
+const mix = (a: string, b: string) => rgbToHex(interpolateStops([a, b], 0.5));
+
+/** The rock types as the map fills them. */
+export const ROCK_LEVELS: { value: number; label: string; color: string }[] = [
+  { value: 100, label: ROCK_TYPES[100], color: SAGE },
+  { value: 200, label: ROCK_TYPES[200], color: mix(SAGE, PINK) },
+  { value: 300, label: ROCK_TYPES[300], color: PINK },
+  { value: 400, label: ROCK_TYPES[400], color: PURPLE },
+  { value: 500, label: ROCK_TYPES[500], color: mix(PINK, PURPLE) },
+  { value: 600, label: ROCK_TYPES[600], color: DARK_GREY },
+];
+
+export const AQUIFERS_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Aquifer rock",
+  field: "rockType",
+  items: ROCK_LEVELS.map(({ value, label, color }) => ({ label, value, color, symbol: "polygon" as const })),
+  note: "The shallowest principal aquifer, mapped at 1:2.5 million in 2003; the High Plains (Ogallala) aquifer is sand and gravel.",
+};
+
+/** On the High Plains aquifer's card: where its water levels are. */
+export const OGALLALA_NOTE = "Water levels in many High Plains wells have fallen since irrigation began in the 1950s; the groundwater layer shows measured well levels";
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
@@ -80,13 +107,17 @@ export function normalizeAquifers(fc: FeatureCollection): FeatureCollection {
     const rock = num(p.ROCK_TYPE);
     if (rock === 999) continue;
     const name = str(p.AQ_NAME) ?? "Unnamed aquifer";
-    const properties: Record<string, string | number> = { name };
+    const properties: Record<string, string | number | boolean> = { name };
     const kind = (rock !== undefined ? ROCK_TYPES[rock] : undefined) ?? str(p.ROCK_NAME);
     if (kind !== undefined) properties.kind = kind;
     if (rock !== undefined) properties.rockType = rock;
     const code = num(p.AQ_CODE);
     if (code !== undefined) properties.aquiferCode = code;
-    if (/high plains/i.test(name)) properties.alias = "Ogallala";
+    if (/high plains/i.test(name)) {
+      properties.alias = "Ogallala";
+      properties.ogallala = true;
+      properties.waterLevels = OGALLALA_NOTE;
+    }
     features.push({ type: "Feature", geometry: f.geometry, properties });
   }
   return { type: "FeatureCollection", features };
@@ -132,17 +163,24 @@ const CARD: CardSpec = {
   facts: [
     { key: "kind", label: "Rock type" },
     { key: "alias", label: "Also called" },
+    { key: "waterLevels", label: "Water levels" },
     { key: "aquiferCode", label: "USGS aquifer code", format: "int" },
   ],
-  // rockType is the numeric code behind kind.
-  hidden: ["rockType"],
+  // rockType is the numeric code behind kind; ogallala is the chip's flag.
+  hidden: ["rockType", "ogallala"],
 };
+
+const ATTRIBUTES: Attribute[] = [
+  { key: "rockType", type: "category", label: "Aquifer rock", levels: ROCK_LEVELS.map(({ value, label }) => ({ value, label })), encode: "color", primary: true },
+  { key: "ogallala", type: "flag", label: "High Plains (Ogallala) aquifer" },
+  { key: "name", type: "name", label: "Aquifer name" },
+];
 
 const aquifers = defineLayer({
   id: "aquifers",
   title: "Principal aquifers",
   description:
-    "Principal aquifers of the United States (the rock or sand layers that hold pumped groundwater), including the High Plains (Ogallala) aquifer. Each polygon has name, kind (the rock: sand and gravel, sandstone, carbonate rock, igneous and metamorphic), rockType, aquiferCode, and alias 'Ogallala' on the High Plains. It shows the shallowest principal aquifer at 1:2.5 million scale (2003), so it is regional, the glacial aquifers of the northern states are missing, and it is not a well map; use groundwater for water levels. Read from third-party copies of USGS data. Over 6,000,000 km² it keeps the 1,000 largest.",
+    "Principal aquifers of the United States (the rock or sand layers that hold pumped groundwater), including the High Plains (Ogallala) aquifer. Each polygon has name, kind (the rock: sand and gravel, sandstone, carbonate rock, igneous and metamorphic), rockType, aquiferCode, and on the High Plains alias 'Ogallala', ogallala (true) and waterLevels. The map fills each aquifer by its rock with a legend, and the Ogallala can be picked out with its chip. It shows the shallowest principal aquifer at 1:2.5 million scale (2003), so it is regional, the glacial aquifers of the northern states are missing, and it is not a well map; use groundwater for water levels. Read from third-party copies of USGS data. Over 6,000,000 km² it keeps the 1,000 largest.",
   coverage: "us",
   surface: "land",
   license:
@@ -154,6 +192,11 @@ const aquifers = defineLayer({
   style: { geometry: "polygon", color: layerColor("aquifers"), fillOpacity: 0.2 },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
+  legend: AQUIFERS_LEGEND,
+  labels: { field: "name", max: 8 },
+  // One 2003 atlas: no time panel.
+  time: { shape: "none" },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

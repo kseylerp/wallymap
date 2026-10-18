@@ -20,14 +20,19 @@
  * Smoke wide 2026-10-14 (live, through runLayer): the US with Alaska -170,18,-60,72 (about 50 million km²) returned 1,003 polygons of
  *   1,081 in 2.8 s (286 KB). The current layer now holds 1,078 polygons, 942 of them California Coastal National Monument rocks, so
  *   a wide view keeps the 1,000 largest and leaves out only the smallest rocks.
+ * Compare (2026-10-18): the parts of one monument of one kind merge into one feature (mergeByName: Bears Ears 2021 is two
+ *   polygons, the California Coastal rocks are hundreds), every feature's `id` is its name so the compare matches a monument's
+ *   2021 and current outlines, and only monuments that have both carry `boundary` (the versions attribute): the others go to
+ *   both sides of the compare, so Canyons of the Ancients no longer reads as a new monument. Bears Ears and Grand
+ *   Staircase-Escalante, which the BLM layer leaves without a code, are National Monuments.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp, type LegendSpec } from "./types";
 import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
-import { layerColor } from "@/lib/render/palette";
+import { DARK_GREY, layerColor, PURPLE, SAGE } from "@/lib/render/palette";
 
 export const CURRENT_URL = "https://gis.blm.gov/arcgis/rest/services/lands/BLM_Natl_NLCS_NM_NCA_poly/MapServer/1";
 export const HISTORIC_URL =
@@ -49,6 +54,24 @@ const DESIGNATION_WORDS =
   /\s+(National Monument|National Conservation Area|National Scenic Area|Outstanding Natural Area|Cooperative Management and Protection Area|Forest Reserve|NCA)\s*$/i;
 
 const NAME_FIXES: Record<string, string> = { "Grand Staircase Escalante": "Grand Staircase-Escalante" };
+
+/** Units the BLM layer leaves without a designation code or words in the name (listed live 2026-10-18), by their designating act. */
+const KNOWN_DESIGNATIONS: Record<string, string> = {
+  "Bears Ears": "National Monument",
+  "Grand Staircase-Escalante": "National Monument",
+  "Vermilion Cliffs": "National Monument",
+  "Agua Fria": "National Monument",
+  "Grand Canyon-Parashant": "National Monument",
+  Jurassic: "National Monument",
+  "Avi Kwa Ame": "National Monument",
+  "Sonoran Desert": "National Monument",
+  "Ironwood Forest": "National Monument",
+  "Baaj Nwaavjo I'tah Kukveni - Ancestral Footprints of the Grand Canyon": "National Monument",
+  "Gila Box Riparian": "National Conservation Area",
+  "Las Cienegas": "National Conservation Area",
+  "San Pedro Riparian": "National Conservation Area",
+  "John Wesley Powell": "National Conservation Area",
+};
 
 export type Version = "current" | "2021";
 
@@ -96,7 +119,7 @@ export function normalizeCurrent(fc: FeatureCollection): Feature<Geometry>[] {
     if (raw === undefined) continue;
     const area = Math.round(areaKm2(f.geometry));
     const properties: Record<string, string | number> = { name: baseName(raw), kind: "current", source: "BLM National Conservation Lands" };
-    const designation = designationOf(raw, str(p.sma_code));
+    const designation = designationOf(raw, str(p.sma_code)) ?? KNOWN_DESIGNATIONS[baseName(raw)];
     if (designation !== undefined) properties.designation = designation;
     const state = str(p.STATE_ADMN) ?? str(p.STATE_GEOG);
     if (state !== undefined) properties.state = state;
@@ -135,6 +158,41 @@ export function normalizeHistoric(fc: FeatureCollection): Feature<Geometry>[] {
   return out;
 }
 
+/**
+ * One feature per monument and kind: parts with the same name merge into a MultiPolygon with their areas added (Bears Ears
+ * 2021 is 5,666 and 263 km²; the California Coastal National Monument is hundreds of rocks). Each feature's `id` is its name,
+ * so the compare matches the 2021 and current outlines of one monument; monuments with both kinds get `boundary` (the
+ * versions the change view compares), and the rest none, so they sit on both sides as unchanged instead of "new".
+ */
+export function mergeByName(features: Feature<Geometry>[]): Feature<Geometry>[] {
+  const groups = new Map<string, Feature<Geometry>[]>();
+  for (const f of features) {
+    const key = `${f.properties?.kind}|${f.properties?.name}`;
+    groups.set(key, [...(groups.get(key) ?? []), f]);
+  }
+  const merged: Feature<Geometry>[] = [];
+  for (const parts of groups.values()) {
+    const first = parts[0];
+    const properties: Record<string, unknown> = { ...first.properties, id: first.properties?.name };
+    let geometry: Geometry = first.geometry;
+    if (parts.length > 1) {
+      const polygons = parts.flatMap((f) => (f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.type === "MultiPolygon" ? f.geometry.coordinates : []));
+      geometry = { type: "MultiPolygon", coordinates: polygons };
+      const area = parts.reduce((sum, f) => sum + Number(f.properties?.areaKm2 ?? 0), 0);
+      if (area > 0) {
+        properties.areaKm2 = area;
+        properties.v = area;
+      }
+      properties.parts = parts.length;
+    }
+    merged.push({ type: "Feature", geometry, properties });
+  }
+  const kindsOf = new Map<string, Set<unknown>>();
+  for (const f of merged) kindsOf.set(String(f.properties?.name), (kindsOf.get(String(f.properties?.name)) ?? new Set()).add(f.properties?.kind));
+  for (const f of merged) if (f.properties && (kindsOf.get(String(f.properties.name))?.size ?? 0) > 1) f.properties.boundary = f.properties.kind;
+  return merged;
+}
+
 /** Simplification in degrees: about 1/500 of the view width, between 0.0005 and 0.02 (0.05 over a wide box). */
 export function offsetFor(bbox: BBox, wide = false): number {
   const width = bbox[2] - bbox[0];
@@ -144,12 +202,32 @@ export function offsetFor(bbox: BBox, wide = false): number {
 /** Most polygons in a wide result; the whole dataset is under 70, so this only bounds the request. */
 const WIDE_LIMIT = 1000;
 
+/** Designations as the map fills them: national monuments sage, national conservation areas purple, the rest dark grey. */
+const DESIGNATION_GROUPS: { label: string; color: string; values: string[] }[] = [
+  { label: "National Monument", color: SAGE, values: ["National Monument"] },
+  { label: "National Conservation Area", color: PURPLE, values: ["National Conservation Area"] },
+  {
+    label: "Other conservation designation",
+    color: DARK_GREY,
+    values: ["Outstanding Natural Area", "Forest Reserve", "National Scenic Area", "Cooperative Management and Protection Area"],
+  },
+];
+
+export const MONUMENTS_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Designation",
+  field: "designation",
+  items: DESIGNATION_GROUPS.flatMap((g) => g.values.map((value) => ({ label: g.label, value, color: g.color, symbol: "polygon" as const }))),
+  note: "Compare 2021 with current to see a monument's lost ground; monuments with only one outline show as unchanged.",
+};
+
 const ATTRIBUTES: Attribute[] = [
   {
-    key: "kind",
+    key: "boundary",
     type: "category",
     label: "Boundary",
     versions: true,
+    primary: true,
     levels: [
       { value: "2021", label: "2021 boundary" },
       { value: "current", label: "Current boundary" },
@@ -159,8 +237,10 @@ const ATTRIBUTES: Attribute[] = [
     key: "designation",
     type: "category",
     label: "Designation",
-    levels: [...new Set(Object.values(DESIGNATIONS))].map((value) => ({ value, label: value })),
+    encode: "color",
+    levels: DESIGNATION_GROUPS.flatMap((g) => g.values.map((value) => ({ value, label: g.label }))),
   },
+  { key: "areaKm2", type: "measure", label: "Area", unit: "km²", encode: "size" },
   nameAttribute(),
 ];
 
@@ -178,6 +258,8 @@ const HELP: Record<string, FieldHelp> = {
       "extent.",
   },
   designation: { text: "The BLM National Conservation Lands designation: national monument, national conservation area or a similar unit." },
+  boundary: { text: "Which outline of a monument that has two: its 2021 boundary (Utah AGRC's copy) or its current BLM boundary." },
+  parts: { text: "How many separate pieces make up the outline (islands, rocks, detached parcels)." },
   source: { text: "Which dataset the outline came from." },
 };
 
@@ -187,15 +269,17 @@ const CARD: CardSpec = {
     { key: "kind", label: "Boundary", values: { current: "Current boundary", "2021": "2021 boundary" } },
     { key: "designation", label: "Designation" },
     { key: "state", label: "State" },
+    { key: "parts", label: "Pieces" },
     { key: "source", label: "Source" },
   ],
+  hidden: ["id", "boundary", "v"],
 };
 
 const monuments = defineLayer({
   id: "monuments",
-  title: "National monuments and conservation areas",
+  title: "BLM national monuments and conservation areas",
   description:
-    "BLM national monuments and national conservation areas, as drawn now and, for the Utah monuments, in 2021. Each polygon has name, designation, state, kind ('current' or '2021'), v and areaKm2, and source. The current layer reflects the July 2026 boundary changes: Bears Ears is about 490 km² now against 5,700 in 2021, and Grand Staircase-Escalante about 730 against 7,600. version (both, current or 2021) picks what to return; compare the two kinds for then versus now. BLM-managed lands only, 2021 outlines exist only for Utah's monuments, and outlines are simplified, not for legal use.",
+    "BLM national monuments and national conservation areas (Bureau of Land Management lands only: National Park Service and Forest Service monuments such as Devils Tower or Mount St. Helens are not here), as drawn now and, for the Utah monuments, in 2021. Each monument is one feature per kind (its pieces merged) with name, designation, state, kind ('current' or '2021'), v and areaKm2, parts (pieces, when more than one), source, and boundary when it has both outlines. The map fills each by designation with a legend. The current layer reflects the July 2026 boundary changes: Bears Ears is about 490 km² now against 5,700 in 2021, and Grand Staircase-Escalante about 730 against 7,600. version (both, current or 2021) picks what to return; compare the two kinds for then versus now: the compare matches a monument's two outlines by name and states each one's area and the difference, and monuments with only a current outline count as unchanged. BLM-managed lands only, 2021 outlines exist only for Utah's monuments, and outlines are simplified, not for legal use.",
   coverage: "us",
   surface: "any",
   license: "Public domain (BLM National Conservation Lands; Utah AGRC copy of 2021 boundaries)",
@@ -212,6 +296,10 @@ const monuments = defineLayer({
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  legend: MONUMENTS_LEGEND,
+  labels: { field: "name", max: 8, rankBy: "areaKm2" },
+  // Two versions of the same monuments (boundary), compared by the change view: snapshots, not a scrubber.
+  time: { shape: "snapshots", dates: ["2021", "2026"] },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {
@@ -272,7 +360,8 @@ const monuments = defineLayer({
     }
 
     // Biggest first so small monuments draw on top; "2021" before "current" so the present outline is never hidden.
-    features.sort(
+    const merged = mergeByName(features);
+    merged.sort(
       (a, b) =>
         (a.properties?.kind === b.properties?.kind ? 0 : a.properties?.kind === "2021" ? -1 : 1) ||
         Number(b.properties?.v ?? 0) - Number(a.properties?.v ?? 0),
@@ -282,7 +371,7 @@ const monuments = defineLayer({
     const total = wide && counts.every((c) => c !== undefined) ? counts.reduce((a: number, c) => a + (c ?? 0), 0) : undefined;
     return {
       kind: "geojson",
-      data: { type: "FeatureCollection", features },
+      data: { type: "FeatureCollection", features: merged },
       citation,
       ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),

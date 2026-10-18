@@ -16,29 +16,137 @@
  *                    "Private Conservation Land"; private parcels usually have no agency, only a "Private ..." designation
  *       access       open | restricted | closed | unknown (raw Pub_Access)
  *       category     protected_area | wilderness | state_park | nature_reserve | managed_forest | national_park | national_monument
- *   The map draws these polygons as a sage tint and 45° hatch (not colored by manager); see vectorTileLayerSpecs in components/mapTiles.ts.
+ *   Drawing (2026-10-18): `agency` is the layer's color category in six groups (MANAGER_GROUPS, PUBLIC_LANDS_LEGEND): the
+ *   legend lists each raw agency value with its group color, so the tile renderer can fill by `agency` with a match expression;
+ *   features without an agency (private conservation land, about 7%) take the "Other or unrecorded" group.
  * No upstream call is made by the layer: it only hands the tile URL to the map.
  */
 import { z } from "zod";
-import { defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type Attribute, type AttributeLevel, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
-import { layerColor } from "@/lib/render/palette";
+import { DARK_GREY, layerColor, PINK, PURPLE, SAGE } from "@/lib/render/palette";
+import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
 
 export const PADUS_TILE_URL = "https://storage.googleapis.com/wally-tiles/padus/v1/{z}/{x}/{y}.pbf";
 export const PADUS_SOURCE_LAYER = "padus";
+
+/** Who manages the land, in six groups the approved palette can tell apart, each listing the PAD-US `agency` values it holds. */
+export const MANAGER_GROUPS: { label: string; color: string; help: string; agencies: Record<string, string> }[] = [
+  {
+    label: "National parks and wildlife refuges",
+    color: SAGE,
+    help: "Managed by the National Park Service or the Fish and Wildlife Service.",
+    agencies: { NPS: "National Park Service", FWS: "US Fish and Wildlife Service" },
+  },
+  {
+    label: "National forests",
+    color: rgbToHex(interpolateStops([SAGE, DARK_GREY], 0.5)),
+    help: "Managed by the US Forest Service.",
+    agencies: { USFS: "US Forest Service" },
+  },
+  {
+    label: "Bureau of Land Management",
+    color: DARK_GREY,
+    help: "Public land managed by the Bureau of Land Management, mostly open range in the West.",
+    agencies: { BLM: "Bureau of Land Management" },
+  },
+  {
+    label: "Other federal (military, dams, energy)",
+    color: rgbToHex(interpolateStops([DARK_GREY, PURPLE], 0.5)),
+    help: "Army Corps of Engineers, Bureau of Reclamation, Department of Defense, Department of Energy, Tennessee Valley Authority and other federal agencies; often closed to the public.",
+    agencies: {
+      USACE: "US Army Corps of Engineers",
+      USBR: "Bureau of Reclamation",
+      DOD: "Department of Defense",
+      DOE: "Department of Energy",
+      TVA: "Tennessee Valley Authority",
+      ARS: "Agricultural Research Service",
+      NRCS: "Natural Resources Conservation Service",
+    },
+  },
+  {
+    label: "State land and state parks",
+    color: PURPLE,
+    help: "Owned or managed by a state: state parks, forests, wildlife areas and state trust land.",
+    agencies: { State: "State agency", "State Parks": "State parks agency" },
+  },
+  {
+    label: "Local, tribal and private conservation land",
+    color: PINK,
+    help: "City and county parks, tribal land, and land held by land trusts and other nonprofits; access varies.",
+    agencies: { Local: "Local government", Tribal: "Tribal government", NGO: "Private nonprofit (land trust)" },
+  },
+];
+
+/** What every raw `agency` value means, for the card. */
+export const AGENCY_NAMES: Record<string, string> = Object.assign({}, ...MANAGER_GROUPS.map((g) => g.agencies));
+
+const AGENCY_LEVELS: AttributeLevel[] = MANAGER_GROUPS.flatMap((g) => Object.keys(g.agencies).map((value) => ({ value, label: g.label, help: g.help })));
+
+/**
+ * The key the map fills by: one item per raw `agency` value, labelled with its group and carrying the group's color, so a
+ * tile `match` on `agency` reads straight off it (the legend shows one swatch per label). Unlisted or missing agencies draw
+ * in the layer's own sage outline only.
+ */
+export const PUBLIC_LANDS_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Managed by",
+  field: "agency",
+  items: MANAGER_GROUPS.flatMap((g) => Object.keys(g.agencies).map((value) => ({ label: g.label, value, color: g.color, symbol: "polygon" as const, help: g.help }))),
+  note: "Areas with no manager recorded (often private conservation land) are outlined only. One place can carry overlapping areas, such as a wilderness inside a national forest.",
+};
+
+const ACCESS_HELP: FieldHelp = {
+  text: "PAD-US public access: open (open to the public without a permit), restricted (a permit, fee or season applies, or only part is open), closed (no public access), unknown (not recorded). Check the managing agency before relying on it.",
+  source: "USGS PAD-US 4.1, Pub_Access",
+  url: "https://www.usgs.gov/programs/gap-analysis-project/science/pad-us-data-overview",
+};
+
+const ATTRIBUTES: Attribute[] = [
+  { key: "agency", type: "category", label: "Managed by", levels: AGENCY_LEVELS, encode: "color", primary: true },
+  {
+    key: "access",
+    type: "category",
+    label: "Public access",
+    help: ACCESS_HELP,
+    levels: [
+      { value: "open", label: "Open" },
+      { value: "restricted", label: "Restricted" },
+      { value: "closed", label: "Closed" },
+      { value: "unknown", label: "Unknown" },
+    ],
+  },
+];
+
+const CATEGORY_NAMES: Record<string, string> = {
+  protected_area: "Public or conservation land",
+  wilderness: "Wilderness area",
+  state_park: "State park",
+  nature_reserve: "Nature reserve",
+  managed_forest: "Managed forest",
+  national_park: "National park",
+  national_monument: "National monument",
+};
+
+const CARD: CardSpec = {
+  facts: [
+    { key: "agency", label: "Managed by", values: AGENCY_NAMES },
+    { key: "designation", label: "Designation", values: { PUB: "Public land (no special designation)" } },
+    { key: "access", label: "Public access", values: { open: "Open", restricted: "Restricted", closed: "Closed", unknown: "Not recorded" }, help: ACCESS_HELP },
+    { key: "category", label: "Kind of land", values: CATEGORY_NAMES },
+  ],
+};
 
 const publicLands = defineLayer({
   id: "public-lands",
   title: "Public land ownership",
   description:
-    "Who owns and manages land across the United States, from the USGS Protected Areas Database (PAD-US 4.1), drawn as tinted areas with white outlines. " +
-    "Colors show the manager: National Park Service dark green, Forest Service olive green, BLM tan, Fish and Wildlife Service teal, state land and state parks blue, " +
-    "wilderness areas deep green whoever manages them, and every other manager (other federal land such as the Bureau of Reclamation, Army Corps or military; local, tribal, " +
-    "and private conservation land held by land trusts and other nonprofits) lavender. The tint fades as the map zooms in so trails stay readable. " +
+    "Who owns and manages land across the United States, from the USGS Protected Areas Database (PAD-US 4.1), drawn as tinted, hatched areas with a legend. " +
+    "Fills show the manager in six groups: national parks and wildlife refuges (National Park Service, Fish and Wildlife Service) sage; national forests (Forest Service) dark sage; Bureau of Land Management dark grey; other federal land (military, Army Corps, Reclamation, energy) grey-purple; state land and state parks purple; local, tribal and private conservation land pink. Areas with no manager recorded are outlined only. " +
     "PAD-US combines a Fee layer (who holds title) with Designation and Easement layers (wilderness areas, roadless areas, recreation areas, conservation easements), " +
     "so one place can carry several overlapping polygons, for example a wilderness area inside a national forest. " +
-    "Each area has a name, a manager, a designation and a coarse public-access flag (open, restricted, closed, unknown). " +
+    "Each area has a name, a manager (agency), a designation and a coarse public-access flag (open, restricted, closed, unknown); tapping an area shows them in plain words. " +
     "Use it to show public land ownership on the map so the user can see where national forest, BLM, park, or state land lies; the model itself cannot read the map. " +
     "Caveats: this is ownership and management, not access rules. It does not say whether camping, hunting, fires, drones or vehicles are allowed, " +
     "private land outside the database is simply not drawn, and boundaries are approximate at parcel scale; check the managing agency before relying on it. " +
@@ -53,6 +161,12 @@ const publicLands = defineLayer({
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
   style: { geometry: "polygon", color: layerColor("public-lands"), fillOpacity: 0.28 },
+  attributes: ATTRIBUTES,
+  legend: PUBLIC_LANDS_LEGEND,
+  card: CARD,
+  fieldHelp: { access: ACCESS_HELP, agency: { text: "The agency that manages the land (PAD-US Mang_Name), grouped on the map: " + MANAGER_GROUPS.map((g) => `${g.label}: ${g.help}`).join(" ") } },
+  // PAD-US 4.1, one edition: no time panel.
+  time: { shape: "none" },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     // Outside the US the tiles are simply empty, so they are returned anyway along with the note.

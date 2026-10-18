@@ -15,6 +15,16 @@
  * (-54.6,2.1,-51.6,5.8) 47 polygons, 75 KB, 0.5 s (largest Parque Nacional Montanhas Do Tumucumaque, 38,295 km²); a
  * 270,000 km² Alps box holds 16,852, the 300 largest came back in 2.8 s (700 KB). Some names carry a literal backslash
  * before an apostrophe ("D\'Adhésion"); it is removed. Fixture: layers/__fixtures__/protected-areas-world.guiana.json.
+ * Source switch (2026-10-18): data-gis.unep-wcmc.org answered every query and export with an error ("Could not access any server
+ * machines", HTTP 500 on export), so the map drew nothing. UNEP-WCMC's own hosted copy on ArcGIS Online is now the primary:
+ *   https://services5.arcgis.com/Mj0hjvkNtV7NRhA7/arcgis/rest/services/WDPA_v0/FeatureServer/1  "WDPA_poly_Latest"
+ *   (same lowercase fields plus desig_type; data last edited 2026-10-05; maxRecordCount 2000; supports orderBy and geojson).
+ * The old MapServer stays as the fallback for the same query; when both fail the answer is an upstream error with its source
+ * status, never a blank tile layer. International designations (UNESCO-MAB biosphere reserves, World Heritage and Ramsar
+ * sites, desig_type 'International') are left out: they overlay the national parks and buried them (Costa Rica box
+ * -86,8,-82.5,11.3: the five largest of 183 were international, an 18,312 km² Nicaraguan biosphere reserve first). Live
+ * 2026-10-18 through runLayer: that box returned 159 national and regional areas in 1.0 s (234 KB). Over 500,000 km² the same query keeps
+ * the 300 largest, drawn coarser, instead of the tile picture (the old export is down too).
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection } from "geojson";
@@ -27,22 +37,22 @@ import {
   type FieldHelp,
   type LayerError,
   type LayerResult,
+  type LegendSpec,
   type QueryContext,
 } from "./types";
 import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
-import { mapServerExportTileUrl } from "./_shared/arcgis-tiles";
 import { arcgisQuery } from "./_shared/arcgis";
-import { layerColor } from "@/lib/render/palette";
+import { DARK_GREY, layerColor, PURPLE, SAGE, SURFACE } from "@/lib/render/palette";
+import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
 
-const SERVICE = "https://data-gis.unep-wcmc.org/server/rest/services/ProtectedSites/The_World_Database_of_Protected_Areas/MapServer";
-
-/** Both the polygon (1) and point (0) sublayers: small reserves are only points in the database. */
-export const WDPA_TILE_URL = mapServerExportTileUrl(SERVICE, { layers: "show:0,1" });
-
-/** The polygon sublayer, queried for named features in regions under FEATURES_MAX_AREA_KM2. */
-export const WDPA_POLYGONS = `${SERVICE}/1`;
-/** Regions up to this size get named polygons; wider ones get the tiles. */
+/** UNEP-WCMC's hosted WDPA polygons on ArcGIS Online: the primary source. */
+export const WDPA_POLYGONS = "https://services5.arcgis.com/Mj0hjvkNtV7NRhA7/arcgis/rest/services/WDPA_v0/FeatureServer/1";
+/** The older UNEP-WCMC MapServer's polygon sublayer: asked only when the hosted copy fails. */
+export const WDPA_POLYGONS_FALLBACK = "https://data-gis.unep-wcmc.org/server/rest/services/ProtectedSites/The_World_Database_of_Protected_Areas/MapServer/1";
+/** National and regional designations only: international overlays (biosphere reserves, World Heritage, Ramsar) bury the parks. */
+export const WDPA_WHERE = "desig_type <> 'International'";
+/** Over this size the 300 largest are drawn coarser (simplifyOffset with `wide`). */
 export const FEATURES_MAX_AREA_KM2 = 500_000;
 /** Most polygons returned, largest first. */
 export const MAX_AREAS = 300;
@@ -58,10 +68,32 @@ function citation() {
   };
 }
 
-/** Display simplification in degrees: about 1/1,500 of the region's width, between ~50 m and ~2 km. */
-export function simplifyOffset(bbox: BBox): number {
-  return Math.min(0.02, Math.max(0.0005, (bbox[2] - bbox[0]) / 1_500));
+/** Display simplification in degrees: about 1/1,500 of the region's width, between ~50 m and ~2 km (~10 km over a wide box). */
+export function simplifyOffset(bbox: BBox, wide = false): number {
+  return Math.min(wide ? 0.1 : 0.02, Math.max(0.0005, (bbox[2] - bbox[0]) / 1_500));
 }
+
+/** IUCN categories grouped by how strictly the land is protected: the map's color category (`protection`). */
+export type Protection = "strict" | "park" | "habitat" | "sustainable" | "none";
+
+const PROTECTION_OF: Record<string, Protection> = { Ia: "strict", Ib: "strict", II: "park", III: "habitat", IV: "habitat", V: "sustainable", VI: "sustainable" };
+
+/** The groups in order, strictest first, with their fills: purple, sage, a darker sage, dark grey, and a pale surface for none. */
+export const PROTECTION_LEVELS: { value: Protection; label: string; help: string; color: string }[] = [
+  { value: "strict", label: "Strict reserve or wilderness (IUCN Ia, Ib)", help: "Managed mainly for science or wilderness; visits limited.", color: PURPLE },
+  { value: "park", label: "National park (IUCN II)", help: "Large natural areas protecting ecosystems, open for visits and recreation.", color: SAGE },
+  { value: "habitat", label: "Natural monument or habitat area (IUCN III, IV)", help: "A landmark feature, or an area managed for particular species or habitats.", color: rgbToHex(interpolateStops([SAGE, DARK_GREY], 0.5)) },
+  { value: "sustainable", label: "Protected landscape or sustainable use (IUCN V, VI)", help: "Lived-in landscapes and areas where natural resources are used sustainably.", color: DARK_GREY },
+  { value: "none", label: "No IUCN category reported", help: "The country reported no IUCN category, or it does not apply to this designation.", color: SURFACE },
+];
+
+export const PROTECTION_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Protection",
+  field: "protection",
+  items: PROTECTION_LEVELS.map((l) => ({ label: l.label, value: l.value, color: l.color, symbol: "polygon" as const, help: l.help })),
+  note: "International designations (biosphere reserves, World Heritage and Ramsar sites) are left out; they overlay the areas shown.",
+};
 
 /** IUCN categories that say something; "Not Reported", "Not Applicable" and "Not Assigned" are left out. */
 const IUCN = /^(Ia|Ib|II|III|IV|V|VI)$/;
@@ -94,6 +126,7 @@ export function normalizeProtectedAreas(fc: FeatureCollection): FeatureCollectio
     if (english !== undefined && english !== name) properties.nameEnglish = english;
     if (typeof p.desig_eng === "string" && p.desig_eng.trim() !== "") properties.designation = p.desig_eng.trim();
     if (typeof p.iucn_cat === "string" && IUCN.test(p.iucn_cat)) properties.iucn = p.iucn_cat;
+    properties.protection = PROTECTION_OF[String(properties.iucn ?? "")] ?? "none";
     const area = positive(p.gis_area) ?? positive(p.rep_area);
     if (area !== undefined) {
       properties.areaKm2 = area >= 10 ? Math.round(area) : Math.round(area * 10) / 10;
@@ -164,38 +197,43 @@ export function mergeDesignations(features: Feature[]): Feature[] {
   return kept.map((k) => k.f);
 }
 
-function tilesResult(note?: string): LayerResult {
-  return {
-    kind: "tiles",
-    data: { url: WDPA_TILE_URL, minzoom: 3, maxzoom: 14, format: "raster", tileSize: 256 },
-    citation: citation(),
-    coverageNote: note ?? "Free for non-commercial use only (UNEP-WCMC and IUCN); gaps may mean unreported areas, not unprotected land",
-  };
-}
-
-/** Named polygons for a region under FEATURES_MAX_AREA_KM2, or the tiles when the service fails. */
-async function queryFeatures(ctx: QueryContext): Promise<LayerResult> {
-  const result = await arcgisQuery(ctx, WDPA_POLYGONS, {
+/** One query of a WDPA polygon service: national and regional areas in the box, largest first, capped and simplified. */
+function queryService(ctx: QueryContext, url: string, wide: boolean) {
+  return arcgisQuery(ctx, url, {
+    where: WDPA_WHERE,
     outFields: WDPA_FIELDS,
     bbox: ctx.bbox,
     maxRecords: MAX_AREAS,
     orderByFields: "gis_area DESC",
-    maxAllowableOffset: simplifyOffset(ctx.bbox),
-    cacheSuffix: "wdpa:polygons",
+    maxAllowableOffset: simplifyOffset(ctx.bbox, wide),
+    cacheSuffix: url === WDPA_POLYGONS ? "wdpa:hosted" : "wdpa:polygons",
   });
+}
+
+/**
+ * Named polygons from UNEP-WCMC's hosted copy, else from its older MapServer; an upstream error with the source status
+ * when neither answers (so the row says the source is down instead of drawing nothing).
+ */
+async function queryFeatures(ctx: QueryContext): Promise<LayerResult | LayerError> {
+  const wide = bboxAreaKm2(ctx.bbox) > FEATURES_MAX_AREA_KM2;
+  const hosted = await queryService(ctx, WDPA_POLYGONS, wide);
+  const result = hosted.ok ? hosted : await queryService(ctx, WDPA_POLYGONS_FALLBACK, wide);
   if (!result.ok) {
-    return tilesResult(`The named areas could not be loaded (${result.error}), so the map shows the tiles; ${LICENCE_NOTE}`);
+    const message = `The World Database on Protected Areas did not answer (UNEP-WCMC hosted copy: ${hosted.ok ? "ok" : hosted.error}; UNEP-WCMC server: ${result.error}).`;
+    return { error: message, hint: "upstream", sourceStatus: { ok: false, reason: "server-error", message } };
   }
   const data = normalizeProtectedAreas(result.fc);
   const n = data.features.length.toLocaleString("en-US");
   const head = result.truncated
-    ? `The ${n} largest protected areas in this region (more, smaller ones exist; zoom in for them)`
-    : `${n} protected areas in this region, largest first`;
+    ? `The ${n} largest national and regional protected areas in this region (more, smaller ones exist; zoom in for them)`
+    : `${n} national and regional protected areas in this region, largest first`;
   return {
     kind: "geojson",
     data,
     citation: citation(),
-    coverageNote: `${head}; reserves recorded only as points are not included; ${LICENCE_NOTE}`,
+    coverageNote: `${head}; international designations (biosphere reserves, World Heritage and Ramsar sites) and reserves recorded only as points are not included; ${LICENCE_NOTE}`,
+    // The fallback answered after the hosted copy failed: the source is fine as far as the person is concerned.
+    ...(!hosted.ok && { sourceStatus: { ok: true as const } }),
   };
 }
 
@@ -212,8 +250,27 @@ const IUCN_NAMES: Record<string, string> = {
 };
 
 const ATTRIBUTES: Attribute[] = [
+  {
+    key: "protection",
+    type: "category",
+    label: "Protection",
+    levels: PROTECTION_LEVELS.map(({ value, label, help }) => ({ value, label, help })),
+    encode: "color",
+    primary: true,
+  },
   { key: "iucn", type: "category", label: "IUCN category", levels: Object.entries(IUCN_NAMES).map(([value, label]) => ({ value, label })) },
-  { key: "areaKm2", type: "measure", label: "Area", unit: "km²" },
+  {
+    key: "areaKm2",
+    type: "measure",
+    label: "Area",
+    unit: "km²",
+    encode: "size",
+    presets: [
+      { label: "Under 10 km²", max: 10 },
+      { label: "10 to 1,000 km²", min: 10, max: 1_000 },
+      { label: "1,000 km² and up", min: 1_000 },
+    ],
+  },
   nameAttribute(),
 ];
 
@@ -234,6 +291,7 @@ const HELP: Record<string, FieldHelp> = {
   },
   areaKm2: AREA,
   v: AREA,
+  protection: { text: "How strictly the area is protected, from its IUCN category: " + PROTECTION_LEVELS.map((l) => `${l.label}: ${l.help}`).join(" "), url: IUCN_URL },
   designation: { text: "The legal designation in English as the country reports it (National Park, Nature Reserve and so on)." },
   statusYear: { text: "The year the area was designated or its current status was set." },
   realm: { text: "Whether the area is terrestrial, marine or coastal (both)." },
@@ -244,39 +302,45 @@ const CARD: CardSpec = {
   measure: { key: "areaKm2", label: "Area", unit: "km²" },
   facts: [
     { key: "designation", label: "Designation" },
+    { key: "protection", label: "Protection", values: Object.fromEntries(PROTECTION_LEVELS.map((l) => [l.value, l.label])) },
     { key: "iucn", label: "IUCN category", values: IUCN_NAMES },
     { key: "statusYear", label: "Designated" },
     { key: "realm", label: "Realm" },
     { key: "country", label: "Country" },
   ],
+  hidden: ["v", "siteId"],
 };
 
 const protectedAreasWorld = defineLayer({
   id: "protected-areas-world",
   title: "Protected areas of the world",
   description:
-    "Protected areas of the world (national parks, nature reserves, wilderness, marine protected areas and similar) from the World Database on Protected Areas run by UNEP-WCMC and IUCN. " +
-    "In a region under 500,000 km² it returns named polygons, largest first (up to 300): name, designation (National Park, Nature Reserve...), iucn category when assigned, and areaKm2 and v (area in km²), so you can name and compare the parks; " +
-    "over 500,000 km² it returns map tiles instead (green for land and inland water, blue for ocean), a picture you cannot list, count or name areas from. " +
+    "Protected areas of the world (national parks, nature reserves, wilderness, marine protected areas and similar) from the World Database on Protected Areas run by UNEP-WCMC and IUCN, read from UNEP-WCMC's hosted copy. " +
+    "It returns named polygons, largest first (up to 300): name, designation (National Park, Nature Reserve...), iucn category when assigned, protection (the IUCN category grouped as strict reserve or wilderness, national park, natural monument or habitat area, protected landscape or sustainable use, or none reported), and areaKm2 and v (area in km²), so you can name and compare the parks. " +
+    "The map fills each area by its protection group with a legend; over 500,000 km² it keeps the 300 largest and draws them coarser. " +
+    "International designations (UNESCO biosphere reserves, World Heritage and Ramsar sites) are left out because they overlay and hide the national parks; say so if asked about them. " +
     "Use it for 'is this place protected', 'where are the parks and reserves in this country' or 'how much of this coast is a marine reserve', anywhere in the world, and as the global counterpart of the US-only public-lands and wilderness layers. " +
-    "It shows that an area is protected, not how strictly: a strict nature reserve and a multiple-use forest look alike. " +
-    "Coverage depends on what each country reports, so a gap can mean the data is missing and not that the land is unprotected, and many small reserves are recorded only as points (on the tiles as dots, and left out of the named polygons). " +
+    "Coverage depends on what each country reports, so a gap can mean the data is missing and not that the land is unprotected; many countries report no IUCN category, and many small reserves are recorded only as points and are left out. " +
     "Licence: free for non-commercial use only; commercial use needs permission from UNEP-WCMC, so say so when the user plans to use it commercially. " +
-    "Tiles appear from about zoom level 3 (a continent view) and are slow to draw when zoomed far out. Works at any size of region.",
+    "If the database does not answer, the layer returns an error saying so rather than an empty map. Works for regions up to about a continent (25 million km²); zoom in from a whole-world view.",
   coverage: "global",
   surface: "any",
   license: "Non-commercial use only (UNEP-WCMC and IUCN, Protected Planet terms); commercial use needs a licence",
   requiredEnv: [],
-  maxAreaKm2: Number.POSITIVE_INFINITY,
+  // About a continent (Brazil's box, 18.5 million km², took 4 s on 2026-10-18); the whole world timed out after 25 s.
+  maxAreaKm2: 25_000_000,
   input: z.object({}),
   style: { geometry: "polygon", color: layerColor("protected-areas-world") },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  legend: PROTECTION_LEGEND,
+  labels: { field: "name", max: 10, rankBy: "areaKm2" },
+  // Current designations; the status year is a fact on the card, not a time axis.
+  time: { shape: "none" },
 
   async query(ctx): Promise<LayerResult | LayerError> {
-    if (bboxAreaKm2(ctx.bbox) <= FEATURES_MAX_AREA_KM2) return queryFeatures(ctx);
-    return tilesResult();
+    return queryFeatures(ctx);
   },
 });
 

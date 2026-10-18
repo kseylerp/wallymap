@@ -14,17 +14,22 @@
  * Utah -110,40,-109,41 returned 19 (121 KB).
  * Smoke wide (2026-10-14): Pacific Northwest -125,42,-116,49 (about 600,000 km²) returned all 390 firesheds of 390 in 2.6 s (1.2 MB:
  * federal-land firesheds carry many small holes, which simplification cannot remove), McCredie Springs first.
+ * 2026-10-18: switched from layer 29 (the federal-land remainder of each fireshed, a checkerboard of slivers that read as a map of
+ * federal land) to layer 31 "Fireshed Boundaries (Full)", the same fields (OLD_GROWTH_ACRES, MATURE_ACRES, standard errors,
+ * ForestType) on the whole fireshed shape. The acres still count federal land only. Firesheds are filled by old-growth class
+ * (OLD_GROWTH_CLASSES, an ordinal on the sage → pink → purple ramp) and old-growth acres is the Rank by and size measure.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type FieldHelp } from "./types";
+import { defineLayer, type Attribute, type BBox, type LayerError, type LayerResult, type LegendSpec, type QueryContext, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
-import { layerColor } from "@/lib/render/palette";
+import { layerColor, PINK, PURPLE, SAGE } from "@/lib/render/palette";
+import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
 
 const SERVICE_URL =
-  "https://apps.fs.usda.gov/fsgisx02/rest/services/wo_nfs_gstc/WO_OSC_GapAnalysis_OldGrowthAndMatureForests/MapServer/29";
+  "https://apps.fs.usda.gov/fsgisx02/rest/services/wo_nfs_gstc/WO_OSC_GapAnalysis_OldGrowthAndMatureForests/MapServer/31";
 
 const FIELDS = ["Fireshed_Name", "OLD_GROWTH_ACRES", "MATURE_ACRES", "OLD_GROWTH_SE_PERC", "MATURE_SE_PERC", "ForestType"];
 
@@ -39,6 +44,30 @@ const WIDE_LIMIT = 1000;
 const TRUNCATED_NOTE = "Showing the 200 firesheds with the most old growth in view; zoom in for the rest";
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
+
+/** Old-growth acres in four classes, little to most, on the sage → pink → purple ramp. */
+export const OLD_GROWTH_CLASSES: { value: string; label: string; min: number; color: string }[] = [
+  { value: "under-5k", label: "Under 5,000 acres of old growth", min: 0, color: SAGE },
+  { value: "5k-20k", label: "5,000 to 20,000 acres", min: 5_000, color: rgbToHex(interpolateStops([SAGE, PINK], 0.5)) },
+  { value: "20k-50k", label: "20,000 to 50,000 acres", min: 20_000, color: PINK },
+  { value: "50k-up", label: "50,000 acres and up", min: 50_000, color: PURPLE },
+];
+
+/** The class of an old-growth acreage. */
+export function oldGrowthClass(acres: number): string {
+  let value = OLD_GROWTH_CLASSES[0].value;
+  for (const c of OLD_GROWTH_CLASSES) if (acres >= c.min) value = c.value;
+  return value;
+}
+
+export const OLD_GROWTH_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Old-growth forest in the fireshed",
+  field: "oldGrowthClass",
+  unit: "acres",
+  items: OLD_GROWTH_CLASSES.map(({ value, label, color }) => ({ label, value, color, symbol: "polygon" as const })),
+  note: "Federal land only; a fireshed is about 250,000 acres, and the old growth is somewhere inside it, not across it.",
+};
 
 function str(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
@@ -80,6 +109,7 @@ export function normalizeOldGrowth(fc: FeatureCollection): FeatureCollection {
     if (oldGrowth !== undefined) {
       properties.oldGrowthAcres = oldGrowth;
       properties.v = oldGrowth;
+      properties.oldGrowthClass = oldGrowthClass(oldGrowth);
     }
     if (mature !== undefined) properties.matureAcres = mature;
     const oldError = num(p.OLD_GROWTH_SE_PERC);
@@ -117,6 +147,30 @@ const HELP: Record<string, FieldHelp> = {
 };
 
 /** The fireshed card: old growth under its own name, mature forest, and how sure the estimates are. */
+const ATTRIBUTES: Attribute[] = [
+  {
+    key: "oldGrowthClass",
+    type: "ordinal",
+    label: "Old-growth forest",
+    scale: "Old-growth acres on federal land in the fireshed",
+    levels: OLD_GROWTH_CLASSES.map(({ value, label }) => ({ value, label })),
+    encode: "color",
+    primary: true,
+  },
+  {
+    key: "oldGrowthAcres",
+    type: "measure",
+    label: "Old-growth forest",
+    unit: "acres",
+    encode: "size",
+    aggregate: "sum",
+    presets: OLD_GROWTH_CLASSES.map((c, i) => ({ label: c.label, min: c.min, ...(i + 1 < OLD_GROWTH_CLASSES.length && { max: OLD_GROWTH_CLASSES[i + 1].min }) })),
+  },
+  { key: "matureAcres", type: "measure", label: "Mature forest", unit: "acres", aggregate: "sum" },
+  { key: "forestType", type: "category", label: "Forest type" },
+  { key: "name", type: "name", label: "Fireshed" },
+];
+
 const CARD: CardSpec = {
   measure: { key: "v", label: "Old-growth forest", unit: "acres" },
   facts: [
@@ -125,6 +179,7 @@ const CARD: CardSpec = {
     { key: "oldGrowthErrorPercent", label: "Old-growth standard error", unit: "%", format: "int" },
     { key: "matureErrorPercent", label: "Mature standard error", unit: "%", format: "int" },
   ],
+  hidden: ["oldGrowthClass", "oldGrowthAcres"],
 };
 
 const oldGrowth = defineLayer({
@@ -135,7 +190,8 @@ const oldGrowth = defineLayer({
     "Each polygon has name (the fireshed, such as Battle Peak, Oregon), v and oldGrowthAcres (acres of old-growth forest on federal land inside it), matureAcres (acres of mature forest that is not yet old growth), forestType (the commonest forest type, for example Douglas-fir) and oldGrowthErrorPercent and matureErrorPercent (the survey's standard error, in percent). " +
     "With 3D on, firesheds rise with their old-growth acres. " +
     "Use it for 'where is old growth', 'which national forests have the most mature forest' or 'how much ancient forest is left near here'. " +
-    "Caveats: the figures are sample-based estimates (plots), so small firesheds and rare forest types carry large error, and the polygon is the whole fireshed, not the stands: old growth is not located inside it. " +
+    "The map fills each fireshed by its old-growth class (under 5,000 acres sage, up to 50,000 acres and more purple) with a legend, and Rank by lists the firesheds with the most. " +
+    "Caveats: the figures are sample-based estimates (plots), so small firesheds and rare forest types carry large error, and the polygon is the whole fireshed, not the stands: old growth is not located inside it, and the acres count federal land only. " +
     "Only federal land is counted, so private, state and tribal forest are not. At most 200 firesheds are returned, those with the most old growth first, and the result says when it trims. " +
     "United States only. Over 300,000 km² (a 550 km square) it keeps the 1,000 with the most old growth.",
   coverage: "us",
@@ -148,6 +204,11 @@ const oldGrowth = defineLayer({
   style: { geometry: "polygon", color: layerColor("old-growth"), unit: "acres", fillOpacity: 0.35, extrude: "v" },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
+  legend: OLD_GROWTH_LEGEND,
+  labels: { field: "name", max: 6, rankBy: "oldGrowthAcres" },
+  // One inventory (2023): no time panel.
+  time: { shape: "none" },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

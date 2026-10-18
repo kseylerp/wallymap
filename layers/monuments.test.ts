@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { CURRENT_URL, HISTORIC_URL, areaKm2, baseName, normalizeCurrent, normalizeHistoric, offsetFor } from "./monuments";
+import layer, { CURRENT_URL, HISTORIC_URL, areaKm2, baseName, mergeByName, normalizeCurrent, normalizeHistoric, offsetFor } from "./monuments";
+import { contractProblems, legendOf, timeShapeOf } from "./contract";
 import currentRaw from "./__fixtures__/monuments.current.json";
 import historicRaw from "./__fixtures__/monuments.historic.json";
 
@@ -88,7 +89,8 @@ describe("normalizers", () => {
     });
     expect(canyons?.properties?.areaKm2).toBe(canyons?.properties?.v);
     const bears = now.find((f) => f.properties?.name === "Bears Ears");
-    expect(bears?.properties).not.toHaveProperty("designation");
+    // The BLM layer has no code for Bears Ears; it is a National Monument all the same.
+    expect(bears?.properties?.designation).toBe("National Monument");
   });
 
   it("labels 2021 rows as National Monuments of kind '2021' and skips conservation areas and rows without geometry", () => {
@@ -126,9 +128,10 @@ describe("monuments layer", () => {
   it("returns both versions, 2021 first and biggest first, and says what the kinds mean", async () => {
     const stub = upstream();
     const r = geojson(await layer.query(ctx(stub, UTAH, "monuments:k"), { version: "both" }));
-    expect(r.data.features).toHaveLength(8);
+    // Bears Ears 2021 is two polygons, merged into one feature.
+    expect(r.data.features).toHaveLength(7);
     const kinds = r.data.features.map((f) => f.properties?.kind);
-    expect(kinds).toEqual(["2021", "2021", "2021", "current", "current", "current", "current", "current"]);
+    expect(kinds).toEqual(["2021", "2021", "current", "current", "current", "current", "current"]);
     expect(r.data.features[0].properties).toMatchObject({ name: "Grand Staircase-Escalante", kind: "2021" });
     expect(r.coverageNote).toBe("Two outlines: the 2021 boundary of the Utah monuments and the current BLM boundary");
 
@@ -151,7 +154,7 @@ describe("monuments layer", () => {
 
     const onlyThen = upstream();
     const then = geojson(await layer.query(ctx(onlyThen), { version: "2021" }));
-    expect(then.data.features).toHaveLength(3);
+    expect(then.data.features).toHaveLength(2);
     expect(String(onlyThen.mock.calls[0][0]).startsWith(HISTORIC_URL)).toBe(true);
   });
 
@@ -194,7 +197,7 @@ describe("monuments layer", () => {
       expect(cur.searchParams.get("resultRecordCount")).toBe("1000");
       expect(cur.searchParams.get("maxAllowableOffset")).toBe("0.05");
       expect(res.body).toMatchObject({ total: 60, truncated: true });
-      expect((res.body as { coverageNote?: string }).coverageNote).toMatch(/^Showing the 8 largest of 60 \(ranked by area\)/);
+      expect((res.body as { coverageNote?: string }).coverageNote).toMatch(/^Showing the 7 largest of 60 \(ranked by area\)/);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -205,7 +208,31 @@ describe("monuments layer", () => {
     expect((await runLayer("monuments", { bbox: [-180, -80, 180, 80] })).status).toBe(422);
   });
 
+  it("matches a monument's two outlines by name, leaves one-outline monuments as unchanged, and names Bears Ears a monument", async () => {
+    const r = geojson(await layer.query(ctx(upstream()), { version: "both" }));
+    const props = r.data.features.map((f) => f.properties ?? {});
+    const bears = props.filter((p) => p.name === "Bears Ears");
+    expect(bears.map((p) => [p.kind, p.boundary, p.id, p.designation])).toEqual([
+      ["2021", "2021", "Bears Ears", "National Monument"],
+      ["current", "current", "Bears Ears", "National Monument"],
+    ]);
+    // The two 2021 pieces add up (about 5,666 + 263 km²) and say how many there are.
+    expect(bears[0]).toMatchObject({ parts: 2 });
+    expect(Number(bears[0].areaKm2)).toBeGreaterThan(5_900);
+    const canyons = props.find((p) => String(p.name).startsWith("Canyons of the Ancients"));
+    expect(canyons).toBeDefined();
+    expect(canyons).not.toHaveProperty("boundary");
+    expect(canyons?.id).toBe(canyons?.name);
+    expect(mergeByName([])).toEqual([]);
+    expect(timeShapeOf(layer)).toMatchObject({ shape: "snapshots", dates: ["2021", "2026"] });
+    expect(legendOf(layer)).toMatchObject({ kind: "categories", field: "designation" });
+    expect(layer.attributes?.find((a) => a.versions)?.key).toBe("boundary");
+    expect(contractProblems(layer)).toEqual([]);
+  });
+
   it("explains the July 2026 changes and how to compare", () => {
+    expect(layer.title).toBe("BLM national monuments and conservation areas");
+    expect(layer.description).toMatch(/Devils Tower .* are not here/);
     expect(layer.description).toMatch(/July 2026/);
     expect(layer.description).toMatch(/Bears Ears/);
     expect(layer.description).toMatch(/compare/);

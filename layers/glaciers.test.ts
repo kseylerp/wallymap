@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { Polygon } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { glimsCountUrl, glimsUrl, normalizeGlaciers, thinGeometry } from "./glaciers";
+import layer, { changeText, glimsCountUrl, glimsUrl, normalizeGlaciers, surveyYears, thinGeometry } from "./glaciers";
+import { legendOf, timeShapeOf } from "./contract";
 import raw from "./__fixtures__/glaciers.alps.json";
 import lyell from "./__fixtures__/glaciers.lyell.json";
+import windRiver from "./__fixtures__/glaciers.wind-river.json";
 
 const MONTE_ROSA: [number, number, number, number] = [7.8, 45.8, 8.0, 46.0];
 
@@ -54,21 +56,67 @@ describe("glaciers layer", () => {
       areaKm2: 40.231,
       v: 40.231,
       date: "2009-09-15",
-      t: "2009-09-15T00:00:00.000Z",
+      t: "2009",
+      survey: "2009",
+      id: "G007800E45965N",
     });
     expect(typeof gorner.institution).toBe("string");
     for (const f of data.features) expect(["Polygon", "MultiPolygon"]).toContain(f.geometry.type);
   });
 
-  it("drops non-outline rows and keeps every dated outline, one per glacier id and date", () => {
-    const { data } = normalizeGlaciers(raw);
+  it("drops non-outline rows and keeps one outline per glacier and survey", () => {
+    const { data, surveys } = normalizeGlaciers(raw);
     const ids = data.features.map((f) => f.properties?.glacierId);
     expect(ids).not.toContain("ROCK1");
+    // Schwarzberg has two 2003 outlines a week apart: one survey, so the later one stands for it; the card lists the other.
     const schwarzberg = data.features.filter((f) => f.properties?.glacierId === "G007922E46000N");
-    expect(schwarzberg.map((f) => f.properties?.date)).toEqual(["2003-08-06", "2003-08-13"]);
+    expect(schwarzberg.map((f) => f.properties?.date)).toEqual(["2003-08-13"]);
+    expect(schwarzberg[0].properties?.earlier).toMatch(/^2003 /);
     const keys = data.features.map((f) => `${f.properties?.glacierId}|${f.properties?.t}`);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(data.features).toHaveLength(6);
+    expect(data.features).toHaveLength(5);
+    // 2003, 2009 and 2011 images are one survey (2009 has the most outlines); 2017 is within ten years of it too.
+    expect(surveys.map((s) => s.year)).toEqual([2009]);
+  });
+
+  it("groups Wind River image years into the 1966 and 2015 surveys and states the retreat of the glaciers in both", () => {
+    const { data, surveys, change } = normalizeGlaciers(windRiver);
+    expect(surveys).toEqual([
+      { year: 1966, from: 1963, to: 1974, outlines: 276 },
+      { year: 2015, from: 2015, to: 2019, outlines: 141 },
+    ]);
+    expect(new Set(data.features.map((f) => f.properties?.t))).toEqual(new Set(["1966", "2015"]));
+    expect(change).toMatchObject({ glaciers: 117, firstYear: 1966, lastYear: 2015 });
+    expect(change && Math.round(change.firstKm2 * 10) / 10).toBe(42.5);
+    expect(change && Math.round(change.lastKm2 * 10) / 10).toBe(21.9);
+    expect(change && changeText(change)).toBe("117 glaciers outlined in both the 1966 and the 2015 survey covered 42.5 km² then and 21.9 km² in 2015, 48% less");
+    // Gannett Glacier: one outline per survey under one id, so the compare matches them; the 2015 one carries the loss.
+    const gannett = data.features.filter((f) => f.properties?.name === "Gannett Glacier").map((f) => f.properties);
+    expect(gannett).toEqual([
+      expect.objectContaining({ id: "G250356E43195N", survey: "1966", areaKm2: 3.321 }),
+      expect.objectContaining({ id: "G250356E43195N", survey: "2015", areaKm2: 2.324, firstKm2: 3.321, lostPct: 30 }),
+    ]);
+    // The time panel sees two snapshots, not a continuous scrubber.
+    expect(timeShapeOf(layer, data)).toMatchObject({ shape: "snapshots", dates: ["1966", "2015"], step: "year" });
+  });
+
+  it("puts the retreat first in the note and the surveys in the title", async () => {
+    const stub = vi.fn(async () => json(windRiver));
+    const r = await layer.query(ctx(stub), {});
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.title).toBe("Glaciers, surveys of 1966 and 2015");
+    expect(r.coverageNote).toMatch(/^117 glaciers outlined in both the 1966 and the 2015 survey covered 42\.5 km² then and 21\.9 km² in 2015, 48% less; /);
+    expect(r.coverageNote).toMatch(/1966 \(images from 1963 to 1974, 276 outlines\), 2015 \(images from 2015 to 2019, 141 outlines\)/);
+  });
+
+  it("makes a survey of the most common year and everything within ten years of it", () => {
+    const of = (pairs: [number, number][]) => Object.fromEntries(surveyYears(new Map(pairs)));
+    expect(of([[1963, 2], [1966, 220], [1974, 54], [2015, 137], [2019, 3]])).toEqual({ 1963: 1966, 1966: 1966, 1974: 1966, 2015: 2015, 2019: 2015 });
+    expect(of([[1975, 3], [1984, 40], [2013, 2], [2014, 41]])).toEqual({ 1975: 1984, 1984: 1984, 2013: 2014, 2014: 2014 });
+  });
+
+  it("keys the legend to glacier area", () => {
+    expect(legendOf(layer)).toMatchObject({ kind: "size", field: "areaKm2", unit: "km²" });
   });
 
   it("plays Lyell and Maclure retreat: two dated outlines each, oldest first, area shrinking", () => {
@@ -77,7 +125,8 @@ describe("glaciers layer", () => {
     // GLIMS gives Lyell Glacier two ids with a 1984 and a 2014 outline each; they merge into one series under the larger id.
     const lyellOutlines = data.features.filter((f) => f.properties?.name === "Lyell Glacier");
     expect(lyellOutlines.map((f) => f.properties?.glacierId)).toEqual(["G240738E37743N", "G240738E37743N"]);
-    expect(lyellOutlines.map((f) => f.properties?.t)).toEqual(["1984-09-09T00:00:00.000Z", "2014-09-09T00:00:00.000Z"]);
+    expect(lyellOutlines.map((f) => f.properties?.t)).toEqual(["1984", "2014"]);
+    expect(lyellOutlines[1].properties).toMatchObject({ firstKm2: 0.373, lostPct: 32 });
     expect(lyellOutlines.map((f) => f.properties?.v)).toEqual([0.373, 0.253]);
     const maclure = data.features.filter((f) => f.properties?.glacierId === "G240720E37746N");
     expect(maclure.map((f) => f.properties?.date)).toEqual(["1984-09-09", "2014-09-09"]);
@@ -240,7 +289,8 @@ describe("glaciers layer", () => {
     const stub2 = vi.fn(async () => json({ type: "FeatureCollection", features: few }));
     const r2 = await layer.query(ctx(stub2), {});
     if (!("kind" in r2) || r2.kind !== "geojson") throw new Error("expected geojson");
-    expect(r2.data.features).toHaveLength(900);
+    // Nine image years (1900 to 1908) are one survey, so each of the 100 glaciers keeps one outline.
+    expect(r2.data.features).toHaveLength(100);
     expect(r2.coverageNote).toMatch(/900 biggest outlines/);
   });
 
@@ -254,8 +304,8 @@ describe("glaciers layer", () => {
     expect(calls[0][0]).toBe(glimsUrl(MONTE_ROSA));
     expect(calls[0][1].cacheKey).toBe("glaciers:k:glims");
     expect(calls[0][1].ttlSeconds).toBe(7 * 86_400);
-    expect(r.data.features.length).toBe(6);
-    expect(r.coverageNote).toMatch(/Outlines exist only for the dates glaciers were mapped \(years in view: 2003, 2009, 2011, 2017\)/);
+    expect(r.data.features.length).toBe(5);
+    expect(r.coverageNote).toMatch(/Outlines exist only for the surveys glaciers were mapped in \(one survey in view: 2009 \(images from 2003 to 2017, 5 outlines\)\)/);
     expect(r.coverageNote).not.toMatch(/largest/);
     expect(r.citation.source).toContain("GLIMS");
   });
@@ -312,7 +362,7 @@ describe("glaciers layer", () => {
       const r = await runLayer("glaciers", { bbox: [7, 45.5, 8.5, 46.5], zoom: 8 });
       expect(r.status).toBe(200);
       // Fewer rows than the limit came back, so every outline is there and the count is not quoted.
-      expect(r.body).toMatchObject({ coverageNote: expect.stringMatching(/^Showing all 6 in this wide view \(ranked by area in km²\)/) });
+      expect(r.body).toMatchObject({ coverageNote: expect.stringMatching(/^Showing all 5 in this wide view \(ranked by area in km²\)/) });
       expect(r.body).not.toHaveProperty("total");
     } finally {
       vi.unstubAllGlobals();

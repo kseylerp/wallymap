@@ -14,6 +14,9 @@ import { askAboutCellText, cellOf, rankWords, roughly, summarizeCell, type HexCe
 import { HEX_TILE } from "@/lib/render/palette";
 import { formatValue as formatNumber } from "@/lib/format";
 import { previewFeature } from "@/lib/render/wally/playback";
+import { featureTitle, layerDisplay } from "@/lib/render/contract";
+import { localTime } from "@/lib/render/units";
+import { useIsPhone } from "@/components/useIsPhone";
 
 type Point = { x: number; y: number };
 
@@ -85,11 +88,27 @@ export function place(
   return { left, top, below, pointerX, pointer, offscreen };
 }
 
+/** Line layers a person travels (trails, routes, rivers): only they offer "Preview route" (never a pipeline). */
+const TRAVELLED = /trail|route|ski|mtb|paddl|road|river|path|hike|bike|walk|canoe|climb|track|stream/i;
+
+/** Characters past which a value reads as a paragraph rather than a right-aligned figure. */
+const LONG_VALUE = 60;
+
 /** Fact rows on hairlines: the label (with the serif "i" when the layer explains the field), the value right-aligned. */
 function RowList({ rows }: { rows: CardRow[] }) {
   return (
     <dl className="text-[13px] leading-5">
-      {rows.map((r) => (
+      {rows.map((r) =>
+        r.value.length > LONG_VALUE ? (
+          // A long value (an article's opening sentences) reads as a paragraph under its label, left-aligned.
+          <div key={r.key} className="border-t border-line py-1.5" data-field={r.key}>
+            <dt className="flex items-center gap-1 text-ink-muted">
+              {r.label}
+              {r.help && <InfoMark help={r.help} label={r.label} />}
+            </dt>
+            <dd className="mt-0.5 text-left break-words text-ink">{r.value}</dd>
+          </div>
+        ) : (
         <div key={r.key} className="flex items-baseline justify-between gap-3 border-t border-line py-1.5" data-field={r.key}>
           <dt className="flex min-w-0 max-w-[52%] shrink-0 items-center gap-1 text-ink-muted">
             <span className="truncate" title={r.label}>
@@ -99,7 +118,8 @@ function RowList({ rows }: { rows: CardRow[] }) {
           </dt>
           <dd className="min-w-0 text-right break-words text-ink tabular-nums">{r.value}</dd>
         </div>
-      ))}
+        ),
+      )}
     </dl>
   );
 }
@@ -256,11 +276,21 @@ export function InspectCard({
 
   const unit = layer.style.unit;
   const summary = useMemo(() => summarizeFeature(selection.feature, unit), [selection.feature, unit]);
+  // Units and clock (docs/layer-contract.md display): US first for US data, times in the feature's own zone.
+  const display = useMemo(() => ({ ...layerDisplay(layer), at: selection.lngLat }), [layer, selection.lngLat]);
   const content = useMemo(
-    () => cardContent(selection.feature, { unit, card: layer.card, fieldHelp: layer.fieldHelp }),
-    [selection.feature, unit, layer.card, layer.fieldHelp],
+    () => cardContent(selection.feature, { unit, card: layer.card, fieldHelp: layer.fieldHelp, display }),
+    [selection.feature, unit, layer.card, layer.fieldHelp, display],
   );
-  const { citation, coverageNote } = layer.result;
+  // The title names the thing (cardTitle), never "Feature".
+  const title = useMemo(() => featureTitle(layer, selection.feature), [layer, selection.feature]);
+  const rawT = selection.feature.properties?.[layer.style.timeField ?? "t"];
+  const when = (typeof rawT === "string" && localTime(rawT, selection.lngLat, display)) || summary.date;
+  const { citation } = layer.result;
+  const isPhone = useIsPhone();
+  // Phones: a bottom sheet, folded to its top (title, measure, first facts) until the handle is tapped or dragged up.
+  const [sheetTall, setSheetTall] = useState(false);
+  const dragRef = useRef<number | null>(null);
   const line = isLineFeature(selection.feature);
   const sideB = selection.side === "b";
   // A hex tile or column: the cell's summary instead of the feature's properties (spec §12d).
@@ -363,11 +393,12 @@ export function InspectCard({
   // Plays the line as a route preview; `onPreviewRoute` (framing the line) is the fallback when no preview
   // control is mounted to run one.
   const preview = () => {
-    if (!previewFeature(selection.feature, layer.id, summary.name ?? undefined)) onPreviewRoute();
+    if (!previewFeature(selection.feature, layer.id, summary.name ?? title)) onPreviewRoute();
   };
 
   const placement = anchor && size ? place(anchor, size, view) : null;
-  const hidden = !placement || placement.offscreen;
+  // A phone's sheet does not follow the point: it is always on screen.
+  const hidden = isPhone ? false : !placement || placement.offscreen;
   const focusedRef = useRef(false);
   useEffect(() => {
     if (hidden || focusedRef.current) return;
@@ -379,21 +410,57 @@ export function InspectCard({
     <div
       ref={cardRef}
       role="dialog"
-      aria-label={`${layer.title}${sideB ? " (compare side B)" : ""}: ${cell ? "Hex cell" : (summary.name ?? "Feature")}`}
+      aria-label={`${layer.title}${sideB ? " (compare side B)" : ""}: ${cell ? "Hex cell" : title}`}
       tabIndex={-1}
       data-testid="inspect-card"
       data-side={sideB ? "b" : undefined}
-      className="inspect-card absolute z-30 rounded-[12px] border border-line bg-paper text-ink outline-none"
-      style={{
-        width: `min(${MAX_WIDTH}px, calc(100vw - ${EDGE * 2}px - var(--safe-left) - var(--safe-right)))`,
-        left: placement?.left ?? 0,
-        top: placement?.top ?? 0,
-        visibility: hidden ? "hidden" : "visible",
-        transformOrigin: placement ? `${placement.pointerX}px ${placement.below ? 0 : "100%"}` : undefined,
-      }}
+      data-card-sheet={isPhone ? (sheetTall ? "tall" : "peek") : undefined}
+      className={
+        isPhone
+          ? "inspect-card fixed inset-x-0 bottom-0 z-40 flex flex-col rounded-t-panel border border-line bg-paper pr-(--safe-right) pb-(--safe-bottom) pl-(--safe-left) text-ink outline-none"
+          : "inspect-card absolute z-30 rounded-[12px] border border-line bg-paper text-ink outline-none"
+      }
+      style={
+        isPhone
+          ? { maxHeight: sheetTall ? "85dvh" : "35dvh", transition: "max-height 300ms cubic-bezier(0.2, 0.8, 0.2, 1)" }
+          : {
+              width: `min(${MAX_WIDTH}px, calc(100vw - ${EDGE * 2}px - var(--safe-left) - var(--safe-right)))`,
+              left: placement?.left ?? 0,
+              top: placement?.top ?? 0,
+              visibility: hidden ? "hidden" : "visible",
+              transformOrigin: placement ? `${placement.pointerX}px ${placement.below ? 0 : "100%"}` : undefined,
+            }
+      }
     >
+      {isPhone && (
+        <button
+          type="button"
+          data-testid="card-sheet-handle"
+          aria-label={sheetTall ? "Shrink card" : "Expand card"}
+          onPointerDown={(e) => {
+            dragRef.current = e.clientY;
+            e.currentTarget.setPointerCapture?.(e.pointerId);
+          }}
+          onPointerUp={(e) => {
+            const start = dragRef.current;
+            dragRef.current = null;
+            if (start === null) return;
+            const dy = e.clientY - start;
+            if (Math.abs(dy) < 30) setSheetTall((t) => !t);
+            else if (dy < 0) setSheetTall(true);
+            else if (sheetTall) setSheetTall(false);
+            else onClose();
+          }}
+          onClick={(e) => {
+            if (e.detail === 0) setSheetTall((t) => !t);
+          }}
+          className="flex h-5 w-full shrink-0 touch-none items-start justify-center pt-2"
+        >
+          <span aria-hidden className="h-[5px] w-9 rounded-full bg-ink/20" />
+        </button>
+      )}
       {/* The pointer: a rotated square tucked under the card's edge, aimed at the clicked point. */}
-      {placement?.pointer && (
+      {!isPhone && placement?.pointer && (
         <span
           aria-hidden
           className="absolute size-3 rotate-45 border-line bg-paper"
@@ -406,7 +473,7 @@ export function InspectCard({
         />
       )}
 
-      <div className="relative max-h-[min(70dvh,560px)] overflow-y-auto overscroll-contain px-4 pt-3 pb-3.5">
+      <div className={isPhone ? "relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-1 pb-3.5" : "relative max-h-[min(70dvh,560px)] overflow-y-auto overscroll-contain px-4 pt-3 pb-3.5"}>
         <header className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-1.5 text-[11.5px] font-medium text-ink-muted">
@@ -422,7 +489,7 @@ export function InspectCard({
               )}
             </p>
             <h3 className="mt-0.5 font-serif text-[1.15rem] leading-[1.08] font-semibold break-words text-ink">
-              {cell && origin ? `${cell.count.toLocaleString("en-US")} ${cell.count === 1 ? "feature" : origin.ctx.noun} in this cell` : (summary.name ?? "Feature")}
+              {cell && origin ? `${cell.count.toLocaleString("en-US")} ${cell.count === 1 ? "feature" : origin.ctx.noun} in this cell` : title}
             </h3>
           </div>
           <button
@@ -446,11 +513,11 @@ export function InspectCard({
           />
         )}
 
-        {!cell && (summary.date || summary.estimate) && (
+        {!cell && (when || summary.estimate) && (
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {summary.date && (
-              <span className="rounded-pill bg-sage-tint px-2 py-0.5 text-[11.5px] font-medium text-ink tabular-nums">
-                {summary.date}
+            {when && (
+              <span className="rounded-pill bg-sage-tint px-2 py-0.5 text-[11.5px] font-medium text-ink tabular-nums" data-testid="inspect-date">
+                {when}
               </span>
             )}
             {summary.estimate && (
@@ -468,6 +535,12 @@ export function InspectCard({
             </span>
             <span className="text-[1.35rem] leading-none font-semibold text-ink tabular-nums">{content.measure.value}</span>
           </div>
+        )}
+
+        {!cell && content.image && (
+          // The feature's own picture (a Wikipedia thumbnail), inline beside its facts.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={content.image.url} alt={content.image.label} data-testid="inspect-image" className="mt-2.5 max-h-36 w-auto max-w-full rounded-[6px] border border-line object-cover" loading="lazy" />
         )}
 
         {!cell && content.facts.length > 0 && (
@@ -508,8 +581,6 @@ export function InspectCard({
           <p className="mt-2 text-[13px] text-ink-muted">This feature has no properties beyond its shape.</p>
         )}
 
-        {coverageNote && !cell && <p className="mt-2.5 text-[12px] leading-snug text-ink-muted">{coverageNote}</p>}
-
         <p className="mt-2.5 text-[12px] text-ink-muted">
           Source:{" "}
           <a
@@ -538,7 +609,7 @@ export function InspectCard({
           <ActionRow onClick={() => void copy()} icon={copied ? Check : Copy}>
             {copied ? "Copied" : "Copy GeoJSON"}
           </ActionRow>
-          {line && (
+          {line && TRAVELLED.test(layer.id) && (
             <ActionRow onClick={preview} icon={Route}>
               Preview route
             </ActionRow>

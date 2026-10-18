@@ -376,7 +376,7 @@ textarea:focus-visible {
  * and moves right of the panel only while the panel is open.
  */
 .map-controls {
-  bottom: calc(100px + var(--safe-bottom));
+  bottom: calc(112px + var(--safe-bottom));
 }
 .mapboxgl-ctrl-bottom-left,
 .mapboxgl-ctrl-bottom-right {
@@ -391,13 +391,35 @@ textarea:focus-visible {
 :root:has([data-chat-state="collapsed"]) .mapboxgl-ctrl-bottom-left {
   bottom: calc(108px + var(--safe-bottom));
 }
-/* The open sheet is 46dvh from the bottom edge and keeps the home indicator inside it. */
+/* The open sheet is 34dvh from the bottom edge and keeps the home indicator inside it. The controls keep 20px clear of
+   the attribution "i" (it once touched the 3D button). */
 :root:has([data-chat-state="open"]) .map-controls {
-  bottom: calc(46dvh + 32px);
+  bottom: calc(34dvh + 44px);
 }
 :root:has([data-chat-state="open"]) .mapboxgl-ctrl-bottom-left,
 :root:has([data-chat-state="open"]) .mapboxgl-ctrl-bottom-right {
-  bottom: 46dvh;
+  bottom: 34dvh;
+}
+/* A phone's card sheet (folded to 35dvh) lifts the controls and the attribution above it. */
+:root:has([data-card-sheet="peek"]) .map-controls {
+  bottom: calc(35dvh + 44px);
+}
+:root:has([data-card-sheet="peek"]) .mapboxgl-ctrl-bottom-left,
+:root:has([data-card-sheet="peek"]) .mapboxgl-ctrl-bottom-right {
+  bottom: 35dvh;
+}
+/* The phone's one-row time panel sits above the chat stack, left of the map controls. */
+.phone-time-dock {
+  bottom: calc(76px + var(--safe-bottom));
+}
+:root:has([data-chat-state="collapsed"]) .phone-time-dock {
+  bottom: calc(116px + var(--safe-bottom));
+}
+:root:has([data-chat-state="open"]) .phone-time-dock {
+  bottom: calc(34dvh + 8px);
+}
+:root:has([data-card-sheet]) .phone-time-dock {
+  display: none;
 }
 @media (min-width: 768px) {
   .map-controls,

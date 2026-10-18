@@ -2,6 +2,8 @@ import type { Feature } from "geojson";
 import type { CardFact, CardSpec, FieldHelp } from "@/layers/types";
 import { formatValue as formatNumber } from "@/lib/format";
 import { formatTime, formatValue, friendlyKey, isYearOnly, summarizeFeature, type Row } from "@/lib/render/inspect";
+import type { ResolvedDisplay } from "@/layers/contract";
+import { localTime, quantity } from "@/lib/render/units";
 
 /**
  * The inspect card's content for one feature (spec §12b, owner 2026-10-14): the measure under its own name ("Routes 5"),
@@ -19,7 +21,23 @@ export type CardContent = {
   details: CardRow[];
   /** Popularity and remoteness signals (no schema needed). */
   signals: CardRow[];
+  /** A picture the feature links (a Wikipedia thumbnail), shown inline rather than as a link. */
+  image?: CardLink;
 };
+
+/**
+ * How the card prints numbers and times (docs/layer-contract.md `display`): the layer's units (US first with metric
+ * second for US-centred data), the clock, and where the feature is (its local zone). Without it, values print as held.
+ */
+export type CardDisplay = ResolvedDisplay & { at?: [number, number] | null };
+
+/** Keys the card never shows: internal ids (the source's own row keys) and query notes that belong to the layer row. */
+const INTERNAL = /^(id|fid|gid|objectid|globalid|uuid|osm_?id|osm_?type|h3|wikidata|irwinid|ref)$|(_id|Id|ID)$|^(note|notes|queryNote|error|errors|warning|debug)$/;
+
+/** A link that is a picture: shown inline on the card. */
+function isImageLink(link: CardLink): boolean {
+  return /thumbnail|image|photo|picture/i.test(link.key) || /\.(jpe?g|png|gif|webp)(\?|$)/i.test(link.url);
+}
 
 /** Keys the card never lists as a row: the title, the date chip, internals. */
 const HIDDEN = new Set(["name", "heading", "t", "tPrecision", "signals", "popularityNote", "aggregate", "tallest", "stack"]);
@@ -82,7 +100,7 @@ function isUrl(value: unknown): value is string {
 }
 
 /** A fact's value as text in its format and unit; null when the feature has nothing for it. */
-export function factValue(fact: CardFact, props: Record<string, unknown>): string | null {
+export function factValue(fact: CardFact, props: Record<string, unknown>, display?: CardDisplay): string | null {
   if (fact.parts) {
     const parts = fact.parts
       .map((p) => ({ p, v: props[p.key] }))
@@ -97,6 +115,11 @@ export function factValue(fact: CardFact, props: Record<string, unknown>): strin
   if (fact.values && (typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean") && fact.values[String(raw)] !== undefined) {
     return fact.values[String(raw)];
   }
+  // In the layer's display units, the other system second ("5,280 ft (1,609 m)").
+  if (display && typeof raw === "number" && (fact.unit || fact.format === "km" || fact.format === "m") && fact.format !== "pct") {
+    const u = fact.format === "km" ? "km" : fact.format === "m" ? "m" : fact.unit;
+    if (u && u !== "°") return quantity(fact.format === "int" ? Math.round(raw) : raw, u, display, fact.key);
+  }
   switch (fact.format) {
     case "int":
       return typeof raw === "number" ? `${formatNumber(fact.key, Math.round(raw), undefined, 0)}${unit}` : `${String(raw)}${unit}`;
@@ -107,7 +130,7 @@ export function factValue(fact: CardFact, props: Record<string, unknown>): strin
     case "m":
       return typeof raw === "number" ? `${formatNumber(fact.key, Math.round(raw), undefined, 0)} m` : String(raw);
     case "date":
-      return typeof raw === "string" ? formatTime(raw, props) : String(raw);
+      return typeof raw === "string" ? ((display && localTime(raw, display.at, display)) || formatTime(raw, props)) : String(raw);
     case "list": {
       const items = Array.isArray(raw) ? raw.map(String) : String(raw).split(/\s*[,;]\s*/);
       // Codes in a list read through the fact's values ("advanced" → "Advanced").
@@ -133,11 +156,14 @@ function helpFor(key: string, own: FieldHelp | undefined, fieldHelp: Record<stri
  * property (identifiers included) under Details, humanised. Without a schema, the plain summary (summarizeFeature)
  * with help attached and the score's name in place of "Score".
  */
-export function cardContent(feature: Feature, opts: { unit?: string; card?: CardSpec; fieldHelp?: Record<string, FieldHelp> } = {}): CardContent {
-  const { unit, card, fieldHelp } = opts;
+export function cardContent(
+  feature: Feature,
+  opts: { unit?: string; card?: CardSpec; fieldHelp?: Record<string, FieldHelp>; display?: CardDisplay } = {},
+): CardContent {
+  const { unit, card, fieldHelp, display } = opts;
   const props = (feature.properties ?? {}) as Record<string, unknown>;
   const summary = summarizeFeature(feature, unit, card ? 0 : 8);
-  if (!card) return plainContent(feature, summary, unit, fieldHelp);
+  if (!card) return withImage(plainContent(feature, summary, unit, fieldHelp, display));
 
   const used = new Set<string>([...HIDDEN, ...(card.hidden ?? [])]);
   let measure: CardRow | null = null;
@@ -146,7 +172,12 @@ export function cardContent(feature: Feature, opts: { unit?: string; card?: Card
   if (card.measure && props[card.measure.key] !== undefined && props[card.measure.key] !== null) {
     const m = card.measure;
     const raw = props[m.key];
-    const value = typeof raw === "number" ? `${formatNumber(m.key, raw, m.unit)}${m.unit ? ` ${m.unit}` : ""}` : formatValue(raw, m.unit, m.key);
+    const value =
+      typeof raw === "number"
+        ? display && m.unit
+          ? quantity(raw, m.unit, display, m.key)
+          : `${formatNumber(m.key, raw, m.unit)}${m.unit ? ` ${m.unit}` : ""}`
+        : formatValue(raw, m.unit, m.key);
     // `v` copied into a named property (routes, hazard score) is the same number: listed once, with either's help.
     const twins = Object.keys(props).filter((k) => k !== m.key && (k === "v" || m.key === "v") && props[k] === raw);
     const help = helpFor(m.key, m.help, fieldHelp) ?? twins.map((k) => fieldHelp?.[k]).find(Boolean);
@@ -160,7 +191,7 @@ export function cardContent(feature: Feature, opts: { unit?: string; card?: Card
   const facts: CardRow[] = [];
   for (const fact of card.facts ?? []) {
     if (shown.has(fact.key)) continue;
-    const value = factValue(fact, props);
+    const value = factValue(fact, props, display);
     used.add(fact.key);
     for (const p of fact.parts ?? []) used.add(p.key);
     if (value === null) continue;
@@ -181,6 +212,7 @@ export function cardContent(feature: Feature, opts: { unit?: string; card?: Card
   for (const [key, raw] of Object.entries(props)) {
     if (used.has(key) || raw === null || raw === undefined || raw === "") continue;
     if (typeof raw === "object") continue;
+    if (display && INTERNAL.test(key)) continue;
     // v is the number the map draws by: a schema with no measure, or whose measure is shown, has named it elsewhere.
     if (key === "v" && (!card.measure || measure !== null)) continue;
     // An address the schema does not name is still a link by name, not text.
@@ -191,14 +223,22 @@ export function cardContent(feature: Feature, opts: { unit?: string; card?: Card
     const { label, unit: keyUnit } = humanKey(key);
     const value =
       typeof raw === "number"
-        ? `${formatNumber(key, raw)}${keyUnit ? ` ${keyUnit}` : ""}`
+        ? display && keyUnit
+          ? quantity(raw, keyUnit, display, key)
+          : `${formatNumber(key, raw)}${keyUnit ? ` ${keyUnit}` : ""}`
         : isYearOnly(raw, props)
           ? String(raw).trim().slice(0, 4)
-          : formatValue(raw, undefined, key);
+          : ((display && typeof raw === "string" && localTime(raw, display.at, display)) || formatValue(raw, undefined, key));
     details.push({ key, label, value, ...withHelp(fieldHelp?.[key]) });
   }
-  if (feature.id !== undefined && !("id" in props)) details.unshift({ key: "id", label: "Id", value: String(feature.id) });
-  return { measure, ...dropEmpty(facts, details, measure !== null), links, signals: summary.signals };
+  if (feature.id !== undefined && !("id" in props) && !display) details.unshift({ key: "id", label: "Id", value: String(feature.id) });
+  return withImage({ measure, ...dropEmpty(facts, details, measure !== null), links, signals: summary.signals });
+}
+
+/** The first picture link, taken out of the links to show inline. */
+function withImage(content: CardContent): CardContent {
+  const image = content.links.find(isImageLink);
+  return image ? { ...content, image, links: content.links.filter((l) => l !== image) } : content;
 }
 
 const NAME_IN_SOURCE_HELP: FieldHelp = {
@@ -215,6 +255,7 @@ function plainContent(
   summary: ReturnType<typeof summarizeFeature>,
   unit: string | undefined,
   fieldHelp: Record<string, FieldHelp> | undefined,
+  display?: CardDisplay,
 ): CardContent {
   const props = (feature.properties ?? {}) as Record<string, unknown>;
   let measure: CardRow | null = summary.value;
@@ -239,12 +280,16 @@ function plainContent(
     });
   // A unit in the key ("precipitationMm") reads as a unit on the value, as with a schema.
   const attach = (rows: Row[]): CardRow[] =>
-    rows.map((r) => {
-      const { label, unit: keyUnit } = humanKey(r.key);
-      const raw = props[r.key];
-      const unitRow = keyUnit && typeof raw === "number" ? { label, value: `${r.value} ${keyUnit}` } : {};
-      return { ...r, ...unitRow, ...withHelp(fieldHelp?.[r.key]) };
-    });
+    rows
+      .filter((r) => !(display && INTERNAL.test(r.key)))
+      .map((r) => {
+        const { label, unit: keyUnit } = humanKey(r.key);
+        const raw = props[r.key];
+        const unitRow =
+          keyUnit && typeof raw === "number" ? { label, value: display ? quantity(raw, keyUnit, display, r.key) : `${r.value} ${keyUnit}` } : {};
+        const timed = display && typeof raw === "string" ? localTime(raw, display.at, display) : null;
+        return { ...r, ...unitRow, ...(timed && { value: timed }), ...withHelp(fieldHelp?.[r.key]) };
+      });
   const rows = dropEmpty(attach(keep(summary.rows)), attach(keep(summary.details)), measure !== null);
   return { measure, facts: rows.facts, links, details: rows.details, signals: attach(summary.signals) };
 }

@@ -4,7 +4,8 @@ import { primaryMeasure, valueKeys } from "@/lib/render/attributes";
 import { categoryKey, type CategoryKey } from "@/lib/render/categories";
 import { layerKey } from "@/lib/render/contract";
 import { channelExtent, ENCODE_RAMP } from "@/lib/render/encode";
-import { lineRampFor, scoreRampFor, type RampName } from "@/lib/render/palette";
+import { areaRecipe, lineRampFor, scoreRampFor, type RampName } from "@/lib/render/palette";
+import { shortTitle } from "@/layers/contract";
 import type { LoadedLayer, RenderOp } from "@/lib/render/state";
 import { rampSamples } from "@/lib/render/wally/legend";
 
@@ -120,8 +121,13 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, data: Fe
       break;
     }
     case "size":
-      if (shape === "point") {
-        blocks.push({ kind: "size", ...(spec.title && { title: spec.title }), ...(spec.field && { field: spec.field }), ...(spec.unit && { unit: spec.unit }), entries: (spec.stops ?? []).map((s) => ({ label: s.label })), shape });
+      if (shape === "point" || shape === "polygon") {
+        // Areas show a size measure as hatch density (lib/render/deck.ts areaStep): sparse is small, dense is large.
+        const sizeAttr = layer.attributes?.find((a) => a.key === spec.field);
+        const extent = all && spec.field ? channelExtent(all, spec.field) : null;
+        const unit = spec.unit && spec.unit !== "score" ? ` ${spec.unit}` : "";
+        const entries = extent ? [{ label: `${amount(extent[0])}${unit}` }, { label: `${amount(extent[1])}${unit}` }] : (spec.stops ?? []).map((s) => ({ label: s.label }));
+        blocks.push({ kind: "size", title: spec.title ?? sizeAttr?.label, ...(spec.field && { field: spec.field }), ...(spec.unit && { unit: spec.unit }), entries, shape });
       }
       break;
     case "image":
@@ -142,6 +148,10 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, data: Fe
       const unit = measure.unit && measure.unit !== "score" ? ` ${measure.unit}` : "";
       blocks.push({ kind: "size", title: measure.label, field: measure.key, entries: [{ label: `${amount(extent[0])}${unit}` }, { label: `${amount(extent[1])}${unit}` }], shape });
     }
+  }
+  // Every row has a key: at least the layer's own swatch and name, in the color it draws.
+  if (blocks.length === 0 || blocks.every((b) => b.kind === "size")) {
+    blocks.unshift({ kind: "categories", entries: [{ label: shortTitle(layer), color: op?.color ?? areaRecipe(layer.id).color }], shape });
   }
   return blocks;
 }

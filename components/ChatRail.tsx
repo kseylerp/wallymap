@@ -591,7 +591,8 @@ export function ChatRail({
                 "glass-strong rise-in overflow-hidden transition-[height] duration-350 ease-(--ease-out)",
                 // Phones: a bottom sheet that snaps between half and tall, edge to edge (the composer keeps clear of
                 // the home indicator, the content of the side insets).
-                tall ? "inset-x-0 bottom-0 h-[90dvh] rounded-t-panel" : "inset-x-0 bottom-0 h-[46dvh] rounded-t-panel",
+                // Folded, the answer leaves the map at least 65% of the screen (owner: phone sheets ≤ 35%).
+                tall ? "inset-x-0 bottom-0 h-[90dvh] rounded-t-panel" : "inset-x-0 bottom-0 h-[34dvh] rounded-t-panel",
                 "max-md:pr-(--safe-right) max-md:pl-(--safe-left)",
                 // md and up: a floating panel in the bottom-left corner.
                 "md:inset-x-auto md:bottom-[calc(var(--safe-bottom)+1rem)] md:left-[calc(var(--safe-left)+1rem)] md:h-auto md:max-h-[72dvh] md:w-[420px] md:rounded-panel",

@@ -10,6 +10,8 @@ import { ScenarioScrubbers, useScenarioPlay } from "@/components/ScenarioScrubbe
 import { MapCanvas, type MapHandle } from "@/components/MapCanvas";
 import { MapControls } from "@/components/MapControls";
 import { MapPills } from "@/components/MapPills";
+import { PhoneCaption, PhoneTimeDock } from "@/components/PhoneCaption";
+import { useIsPhone } from "@/components/useIsPhone";
 import { useSuggestionsCard } from "@/components/useSuggestionsCard";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { fetchCatalog } from "@/lib/agent/catalog";
@@ -171,6 +173,7 @@ export function App() {
   }
 
   const suggestions = useSuggestionsCard();
+  const isPhone = useIsPhone();
   const hasLayers = Object.keys(state.layers).length > 0 || state.errors.some((e) => catalog?.[e.layerId] !== undefined);
   const layerPanelOpen = layersOpen && hasLayers;
   const canCompare = useMemo(() => Object.values(state.layers).some(isComparable), [state.layers]);
@@ -293,6 +296,18 @@ export function App() {
           errors={state.errors}
         />
       </div>
+
+      {/* Phones with the console closed: the top layer's date and key under the pills, and the time panel as one row. */}
+      {isPhone && !layerPanelOpen && Object.keys(state.layers).length > 0 && (
+        <>
+          <div className="pointer-events-none absolute top-(--console-top,60px) left-[calc(var(--safe-left)+12px)] z-20 max-w-[calc(100vw-80px-var(--safe-left)-var(--safe-right))]">
+            <PhoneCaption state={state} shown={view.layers} onOpen={() => setLayersOpen(true)} />
+          </div>
+          <div className="phone-time-dock pointer-events-none absolute left-[calc(var(--safe-left)+12px)] z-20 w-[calc(100vw-80px-var(--safe-left)-var(--safe-right))]">
+            <PhoneTimeDock state={state} dispatch={dispatch} />
+          </div>
+        </>
+      )}
 
       {selected && selectedLayer && (
         <InspectCard

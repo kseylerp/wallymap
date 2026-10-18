@@ -120,20 +120,19 @@ describe("field help on the inspect card (spec §12b)", () => {
     expect(rows).toEqual(["Precipitation 0.4 mm", "Snowfall 2 cm"]);
   });
 
-  it("shows URL properties as named links, never as text (Wikipedia nearby's url and thumbnail)", () => {
+  it("shows URL properties as named links, never as text, and a picture inline (Wikipedia nearby's url and thumbnail)", () => {
     const page: GeoJSON.Feature = {
       type: "Feature",
       geometry: { type: "Point", coordinates: [-83.7, 37.8] },
       properties: { name: "Lee City, Kentucky", url: "https://en.wikipedia.org/wiki/Lee_City", thumbnail: "https://upload.wikimedia.org/x.jpg", distanceM: 900 },
     };
     const plain = cardContent(page, {});
-    expect(plain.links).toEqual([
-      { key: "url", label: "Link", url: "https://en.wikipedia.org/wiki/Lee_City" },
-      { key: "thumbnail", label: "Image", url: "https://upload.wikimedia.org/x.jpg" },
-    ]);
+    expect(plain.links).toEqual([{ key: "url", label: "Link", url: "https://en.wikipedia.org/wiki/Lee_City" }]);
+    expect(plain.image).toEqual({ key: "thumbnail", label: "Image", url: "https://upload.wikimedia.org/x.jpg" });
     expect([...plain.facts, ...plain.details].some((r) => r.value.includes("https://"))).toBe(false);
     const schema = cardContent(page, { card: { facts: [{ key: "distanceM", label: "Distance", format: "m" }] } });
-    expect(schema.links.map((l) => l.label)).toEqual(["Link", "Image"]);
+    expect(schema.links.map((l) => l.label)).toEqual(["Link"]);
+    expect(schema.image?.label).toBe("Image");
     expect(schema.details.some((r) => r.value.includes("https://"))).toBe(false);
   });
 

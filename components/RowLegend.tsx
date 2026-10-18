@@ -56,7 +56,7 @@ function Title({ block }: { block: LegendBlock }) {
  */
 export function RowLegend({ blocks, compact = false }: { blocks: LegendBlock[]; compact?: boolean }) {
   if (blocks.length === 0) return null;
-  const shown = compact ? blocks.slice(0, 1) : blocks;
+  const shown = compact ? blocks.slice(0, 2) : blocks;
   return (
     <div data-testid="row-legend" className={compact ? "min-w-0 text-[11px] leading-4 text-ink" : "mt-1.5 space-y-1.5 text-[11.5px] leading-4 text-ink"}>
       {shown.map((block, k) => (
@@ -83,13 +83,28 @@ export function RowLegend({ blocks, compact = false }: { blocks: LegendBlock[]; 
           )}
           {block.kind === "size" && (
             <p className="flex min-w-0 items-center gap-1.5">
-              <svg aria-hidden viewBox="0 0 34 14" width={34} height={14} className="shrink-0">
-                {[2.5, 4.5, 6.5].map((r, i) => (
-                  <circle key={r} cx={4 + i * 10 + (i ? 2 : 0)} cy={7} r={r} fill="none" stroke={DARK_GREY} strokeWidth={1} />
-                ))}
-              </svg>
+              {block.shape === "polygon" ? (
+                <svg aria-hidden viewBox="0 0 30 12" width={30} height={12} className="shrink-0">
+                  {[0, 1].map((k) => (
+                    <g key={k}>
+                      <rect x={1 + k * 16} y={1} width={12} height={10} fill="none" stroke={DARK_GREY} strokeWidth={1} />
+                      {Array.from({ length: k ? 6 : 2 }, (_, i) => {
+                        const step = k ? 4 : 10;
+                        const x = 1 + k * 16 + i * step;
+                        return <line key={i} x1={x} y1={11} x2={x + 10} y2={1} stroke={DARK_GREY} strokeWidth={0.75} />;
+                      })}
+                    </g>
+                  ))}
+                </svg>
+              ) : (
+                <svg aria-hidden viewBox="0 0 34 14" width={34} height={14} className="shrink-0">
+                  {[2.5, 4.5, 6.5].map((r, i) => (
+                    <circle key={r} cx={4 + i * 10 + (i ? 2 : 0)} cy={7} r={r} fill="none" stroke={DARK_GREY} strokeWidth={1} />
+                  ))}
+                </svg>
+              )}
               <span className="min-w-0 truncate">
-                {compact && block.title ? `${block.title}: ` : "Size: "}
+                {block.shape === "polygon" ? `Denser hatch, larger ${(block.title ?? "value").toLowerCase()}: ` : compact && block.title ? `${block.title}: ` : "Size: "}
                 {block.entries.map((e) => e.label).join(" to ")}
               </span>
             </p>

@@ -1,5 +1,7 @@
 "use client";
 
+import { useIsPhone } from "@/components/useIsPhone";
+
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { Mountain, Pause, Play, X } from "lucide-react";
@@ -39,20 +41,6 @@ function typingIn(target: EventTarget | null): boolean {
 
 function useMapState(): MapState | null {
   return useSyncExternalStore(mapStateStore.subscribe, mapStateStore.get, () => null);
-}
-
-/** Phones (under the md breakpoint) float the dock above the sheet instead of inside it. */
-function useIsPhone(): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      if (typeof window === "undefined" || !window.matchMedia) return () => {};
-      const mq = window.matchMedia("(max-width: 767px)");
-      mq.addEventListener("change", onChange);
-      return () => mq.removeEventListener("change", onChange);
-    },
-    () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 767px)").matches,
-    () => false,
-  );
 }
 
 export function PreviewControl({ onActions }: PreviewControlProps) {

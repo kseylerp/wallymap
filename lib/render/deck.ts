@@ -47,7 +47,7 @@ import { extentOf, hatchStepOf, primaryMeasure, sizeScale, topPlaces } from "@/l
 import { basisLabel, basisScale, basisT, cellContext, hexCells, registerCell, usableBasis, type CellContext, type HexCell } from "@/lib/render/hexCells";
 import { RANKED_LABELS } from "@/lib/render/views";
 import { PlacedLabelLayer } from "@/lib/render/placedLabels";
-import { colorT, encodeColor, ENCODED_POINT, pointRadiusAt, resolveEncoding, sizeT, valuesOf, type ResolvedEncoding } from "@/lib/render/encode";
+import { colorT, divergingColor, encodeColor, ENCODED_POINT, isDiverging, pointRadiusAt, resolveEncoding, sizeT, valuesOf, type ResolvedEncoding } from "@/lib/render/encode";
 
 type Rgba = [number, number, number, number];
 
@@ -553,6 +553,9 @@ function polygonLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
     return [...polygonLayers(op, { ...ctx, data: areasOnly }, opacity), ...symbolLayers({ ...op, mode: "points" }, { ...ctx, data: points }, opacity)];
   }
   if (points === ctx.data && points.features.length > 0) return [...symbolLayers({ ...op, mode: "points" }, ctx, opacity), ...labelLayers(op, ctx, opacity)];
+  // A color channel on areas (temperature anomaly by county): a choropleth, on the diverging ramp across zero.
+  const color = encodingOf(op, ctx)?.color;
+  if (color && !requestedColor(op.color)) return [...choroplethLayers(op, ctx, opacity, color), ...labelLayers(op, ctx, opacity)];
   const areas = ctx.style.unit === "score" ? scoreAreaLayers(op, ctx, opacity) : areaLayers(op, ctx, opacity);
   // A ranked view labels its top areas on the map, as it labels its top symbols (lib/render/views.ts).
   return [...areas, ...labelLayers(op, ctx, opacity)];
@@ -713,6 +716,41 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
 /** An area's tint when a category colors it (readable on green Topo and under satellite), and its least white casing. */
 export const CATEGORY_AREA_TINT = 0.22;
 export const AREA_CASING_MIN = 1.25;
+
+/** A choropleth's fill alpha: solid enough to read the value, the ground still showing. */
+export const CHOROPLETH_ALPHA = 0.62;
+
+/**
+ * Areas colored by a measure or class (style.encode.color): a solid fill on the encode ramp (sage → pink → purple),
+ * or the diverging ramp when the values run both sides of zero (purple cooler or less, pink warmer or more), with thin
+ * white edges; no value draws a faint grey. The selected area is outlined purple.
+ */
+function choroplethLayers(op: RenderOp, ctx: OpContext, opacity: number, channel: NonNullable<ResolvedEncoding["color"]>): Layer[] {
+  const { data, selected, terrain } = ctx;
+  const { id, trigger } = opIds(op, ctx, opacity, undefined);
+  const widths = pixelWidths(ctx);
+  const diverging = isDiverging(channel);
+  const fill = (f: Feature): Rgba => {
+    const v = f.properties?.[channel.key];
+    const rgb = diverging ? divergingColor(v, channel) : (() => { const t = colorT(v, channel); return t === null ? null : encodeColor(t); })();
+    return rgb ? [rgb[0], rgb[1], rgb[2], Math.round(255 * CHOROPLETH_ALPHA)] : hexToRgba(DARK_GREY_HEX, 26);
+  };
+  return [
+    new GeoJsonLayer({
+      id,
+      data,
+      pickable: true,
+      filled: true,
+      getFillColor: perFeature(fill, opacity, selected),
+      getLineColor: colorFor(hexToRgba(WHITE_HEX, 200), opacity, selected, SELECT, AREA_OUTLINE_SIBLING_FADE),
+      getLineWidth: widthFor(0.75, SELECTED_AREA.outlineWidth, selected),
+      lineWidthUnits: widths.units,
+      lineWidthScale: widths.scale,
+      updateTriggers: { getFillColor: [...trigger, channel.key, channel.extent?.join(",") ?? ""], getLineColor: trigger, getLineWidth: trigger },
+      ...terrainProps(terrain, "drape"),
+    }),
+  ];
+}
 
 /** Score areas (remoteness cells): the layer's ramp on `v` with white 1px edges at 0.8; the selected cell purple-edged. */
 function scoreAreaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {

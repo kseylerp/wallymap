@@ -118,4 +118,23 @@ describe("encode by default (owner: 'needs to be discernible')", () => {
     expect(tint(square(0, "today"))[3]).toBeGreaterThan(0);
     expect(tint(square(2, "historic"))[3]).toBe(0);
   });
+
+  it("colors areas by a measure across zero on the diverging ramp: purple cooler, pink warmer (temperature anomaly)", () => {
+    const county = (x: number, v: number): Feature => ({
+      type: "Feature",
+      geometry: { type: "Polygon", coordinates: [[[x, 0], [x + 1, 0], [x + 1, 1], [x, 1], [x, 0]]] },
+      properties: { v },
+    });
+    const anomaly: Attribute = { key: "v", type: "measure", label: "Departure from normal", unit: "°F" };
+    const feats = [county(0, -4), county(2, 0), county(4, 8)];
+    const layers = buildDeckLayers(
+      stateOf({ id: "temperature-anomaly", style: { geometry: "polygon", color: DARK_GREY, encode: { color: "v" } }, attributes: [anomaly] }, feats, "polygons"),
+    );
+    const poly = layers.find((l) => l.id.endsWith(":polygons"))!;
+    const fill = (poly.props as Props).getFillColor as (f: Feature) => number[];
+    const [cool, zero, warm] = feats.map((f) => fill(f));
+    expect(cool[2]).toBeGreaterThan(cool[0]); // purple: blue over red
+    expect(warm[0]).toBeGreaterThan(warm[2]); // pink: red over blue
+    expect(zero[0]).toBeGreaterThan(240); // off-white at zero
+  });
 });

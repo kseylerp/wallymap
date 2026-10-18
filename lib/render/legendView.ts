@@ -4,7 +4,8 @@ import { declaredGroups, encodedAttribute, primaryMeasure, valueKeys } from "@/l
 import { LINE_DASHES, UNRATED_LABEL, UNRATED_LINE } from "@/lib/render/nativeLines";
 import { categoryKey, type CategoryKey } from "@/lib/render/categories";
 import { layerKey } from "@/lib/render/contract";
-import { channelExtent, ENCODE_RAMP } from "@/lib/render/encode";
+import { channelExtent, ENCODE_RAMP, isDiverging, resolveEncoding } from "@/lib/render/encode";
+import { compareRampColor, rgbToHex } from "@/lib/render/ramp";
 import { areaRecipe, lineRampFor, SAGE, scoreRampFor, type RampName } from "@/lib/render/palette";
 import { shortTitle } from "@/layers/contract";
 import type { LoadedLayer, RenderOp } from "@/lib/render/state";
@@ -108,6 +109,21 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, data: Fe
       break;
     case "ramp": {
       const declared = (spec.stops ?? []).every((s) => s.color);
+      // A measure that runs both sides of zero draws on the diverging ramp (purple below, pink above): so does its key.
+      const channel = spec.field && all ? resolveEncoding(layer, op, all)?.color : undefined;
+      if (!declared && channel && channel.key === spec.field && isDiverging(channel) && channel.extent) {
+        const unit = channel.unit ? ` ${channel.unit}` : "";
+        const m = Math.max(Math.abs(channel.extent[0]), Math.abs(channel.extent[1]));
+        blocks.push({
+          kind: "ramp",
+          title: spec.title ?? channel.label,
+          field: spec.field,
+          entries: [{ label: `−${amount(m)}${unit}` }, { label: "0" }, { label: `+${amount(m)}${unit}` }],
+          colors: [-1, -0.5, 0, 0.5, 1].map((t) => rgbToHex(compareRampColor(t))),
+          shape,
+        });
+        break;
+      }
       const colors = declared ? spec.stops!.map((s) => s.color!) : rampSamples(rampOf(layer));
       blocks.push({
         kind: "ramp",

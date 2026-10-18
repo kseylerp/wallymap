@@ -469,7 +469,8 @@ function LegendRow({
   const legendBlocks = useMemo(() => {
     if (!op?.visible || (hexes && op.mode !== "columns")) return [];
     const chip = chipAttribute(layer);
-    const encoded = new Set([layer.style.encode?.size, layer.style.encode?.color].filter(Boolean));
+    // EncodingLegend keys points, lines and columns; areas (a choropleth) are keyed here.
+    const encoded = new Set(op.mode === "polygons" ? [] : [layer.style.encode?.size, layer.style.encode?.color].filter(Boolean));
     return rowLegend(layer, op, shownData).filter(
       (b) => !(b.kind === "categories" && b.field && b.field === chip?.key && b.shape !== "line" && !layer.legend && !layer.result.legend) && !(b.field && encoded.has(b.field)),
     );

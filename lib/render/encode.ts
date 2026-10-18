@@ -1,7 +1,7 @@
 import type { Feature, FeatureCollection } from "geojson";
 import type { Attribute, Encoding } from "@/layers/types";
 import { attributeFor, declaredGroups, groupColors, valueKey } from "@/lib/render/attributes";
-import { rampColor, rgbToHex, type Rgb } from "@/lib/render/ramp";
+import { compareRampColor, rampColor, rgbToHex, type Rgb } from "@/lib/render/ramp";
 import type { LoadedLayer, RenderOp } from "@/lib/render/state";
 
 /**
@@ -150,6 +150,26 @@ export function colorT(value: unknown, channel: Pick<Channel, "extent" | "levels
   if (typeof value !== "number" || !Number.isFinite(value) || !channel.extent) return null;
   const [lo, hi] = channel.extent;
   return Math.min(1, Math.max(0, (value - lo) / (hi - lo)));
+}
+
+/** True when a color channel's values run both sides of zero (an anomaly): it draws on the diverging ramp. */
+export function isDiverging(channel: Pick<Channel, "extent" | "levels">): boolean {
+  return !channel.levels && channel.extent !== null && channel.extent[0] < 0 && channel.extent[1] > 0;
+}
+
+/**
+ * A diverging channel's color for a value: purple below zero (cooler, less), off-white at zero, pink above (warmer,
+ * more), each side scaled to the larger of the two ends so equal departures read equally. Null without a value.
+ */
+export function divergingColor(value: unknown, channel: Pick<Channel, "extent">): Rgb | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || !channel.extent) return null;
+  const m = Math.max(Math.abs(channel.extent[0]), Math.abs(channel.extent[1])) || 1;
+  return compareRampColor(value / m);
+}
+
+/** The diverging ramp as CSS stops for a legend bar, purple (low) through off-white (zero) to pink (high). */
+export function divergingCss(steps = 9): string {
+  return Array.from({ length: steps }, (_, k) => `${rgbToHex(compareRampColor((k / (steps - 1)) * 2 - 1))} ${Math.round((k / (steps - 1)) * 100)}%`).join(", ");
 }
 
 /** The ramp color at `t` (0..1). */

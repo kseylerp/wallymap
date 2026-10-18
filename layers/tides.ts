@@ -482,8 +482,9 @@ const CARD: CardSpec = {
     { key: "state", label: "State" },
   ],
   links: [{ key: "url", label: "NOAA station page" }],
-  // Codes, and the numbers the rows above already print.
-  hidden: ["stationId", "nextType", "nextAt", "v", "thenType", "thenAt", "thenV", "observedAt", "series"],
+  // Codes, and the numbers the rows above already print. thenT and upcoming are the UTC fields answers carried before
+  // 2026-10-18 (saved maps and cached answers still hold them); the tide rows replace them.
+  hidden: ["stationId", "nextType", "nextAt", "v", "thenType", "thenAt", "thenV", "observedAt", "series", "thenT", "upcoming"],
 };
 
 const ATTRIBUTES: Attribute[] = [

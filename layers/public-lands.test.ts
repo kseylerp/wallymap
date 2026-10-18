@@ -3,7 +3,8 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
 import { OUTSIDE_US_NOTE } from "./_shared/coverage";
-import layer from "./public-lands";
+import layer, { MANAGER_GROUPS } from "./public-lands";
+import { contractProblems, legendOf } from "./contract";
 
 const TAHOE: [number, number, number, number] = [-120.3, 38.8, -119.8, 39.3];
 const ALPS: [number, number, number, number] = [6, 45, 8, 47];
@@ -63,6 +64,28 @@ describe("public-lands layer", () => {
     expect(layer.description).toMatch(/private/i);
     expect(layer.description).toMatch(/not .*access|access rules/i);
     expect(layer.description).toContain("You cannot see the rendered map");
+  });
+
+  it("fills by manager in six groups, keys every raw agency value to its group color, and names codes on the card", () => {
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "agency", title: "Managed by" });
+    const byValue = Object.fromEntries((legend.items ?? []).map((i) => [i.value, i]));
+    // Values seen in the live tiles (Moab, 2026-10-18): BLM, USFS, State, State Parks, Local.
+    for (const v of ["NPS", "FWS", "USFS", "BLM", "USACE", "USBR", "DOD", "DOE", "TVA", "ARS", "NRCS", "State", "State Parks", "Local", "Tribal", "NGO"]) {
+      expect(byValue[v], v).toBeDefined();
+    }
+    expect(byValue.NPS.color).toBe(byValue.FWS.color);
+    expect(byValue.State.label).toBe(byValue["State Parks"].label);
+    expect(byValue.BLM).toMatchObject({ label: "Bureau of Land Management", color: "#3A3A3C" });
+    expect(new Set((legend.items ?? []).map((i) => i.label)).size).toBe(MANAGER_GROUPS.length);
+    expect(new Set(MANAGER_GROUPS.map((g) => g.color)).size).toBe(MANAGER_GROUPS.length);
+    expect(layer.attributes?.find((a) => a.key === "agency")).toMatchObject({ encode: "color", primary: true });
+    const facts = Object.fromEntries((layer.card?.facts ?? []).map((f) => [f.key, f]));
+    expect(facts.agency.values?.BLM).toBe("Bureau of Land Management");
+    expect(facts.designation.values?.PUB).toBe("Public land (no special designation)");
+    expect(facts.category.values?.protected_area).toBe("Public or conservation land");
+    expect(facts.access.help?.text).toMatch(/restricted/);
+    expect(contractProblems(layer)).toEqual([]);
   });
 
   it("summarizes to a vector tiles result with the source layer", async () => {

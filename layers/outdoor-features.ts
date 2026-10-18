@@ -20,8 +20,19 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult } from "./types";
+import {
+  defineLayer,
+  type Attribute,
+  type AttributeLevel,
+  type BBox,
+  type CardSpec,
+  type FieldHelp,
+  type LayerError,
+  type LayerResult,
+  type LegendSpec,
+} from "./types";
 import { registerLayer } from "./registry";
+import { nameAttribute } from "./_shared/bands";
 import { overpassCounts, overpassQuery } from "./_shared/overpass";
 import {
   bboxClause,
@@ -66,8 +77,10 @@ export const MAX_POINTS = 5_000;
 export const ALL_KINDS_MAX_AREA_KM2 = 10_000;
 
 const inputSchema = z.object({
-  /** Only these kinds; all kinds when left out. */
+  /** Only these kinds; every kind but peaks when left out (peaks join when listed here or with includePeaks). */
   kinds: z.array(z.enum(KINDS)).min(1).optional(),
+  /** Add named peaks (left out by default: the basemap already labels them). */
+  includePeaks: z.boolean().optional(),
 });
 
 type FeaturesInput = z.infer<typeof inputSchema>;
@@ -317,6 +330,71 @@ export function featuresNote(features: Feature[], matched: number, rawElements: 
     : `${head}; the box was not truncated`;
 }
 
+/** The kinds a query asks for: the listed ones (plus peaks with includePeaks), else every kind but peaks unless asked. */
+export function kindsFor(input: FeaturesInput): Kind[] {
+  const listed = input.kinds ?? KINDS.filter((k) => k !== "peak");
+  return KINDS.filter((k) => listed.includes(k) || (k === "peak" && input.includePeaks === true));
+}
+
+/** The lower 48, Alaska and Hawaii as boxes: a view centred in one reads feet first. */
+const US_BOXES: BBox[] = [
+  [-125, 24.4, -66.9, 49.4],
+  [-170, 51, -129.9, 71.5],
+  [-161, 18.8, -154.7, 22.4],
+];
+
+/** True when the box is centred in the United States, where elevations and heights read in feet first. */
+export function usView(bbox: BBox): boolean {
+  const [x, y] = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+  return US_BOXES.some(([w, s, e, n]) => x >= w && x <= e && y >= s && y <= n);
+}
+
+const FT_PER_M = 3.28084;
+const whole = (n: number) => Math.round(n).toLocaleString("en-US");
+
+/** A height in metres in both systems, the reader's first: "10,712 ft (3,265 m)" in the US, "3,265 m (10,712 ft)" elsewhere. */
+export function bothUnits(m: number, us: boolean): string {
+  return us ? `${whole(m * FT_PER_M)} ft (${whole(m)} m)` : `${whole(m)} m (${whole(m * FT_PER_M)} ft)`;
+}
+
+/** Unnamed features within this distance of a named one are titled after it ("Spring near Hagerman Pass"). */
+export const NEAR_KM = 5;
+
+/**
+ * Ready for the map and the card: elevation and waterfall height as text in both units (feet first in a US view),
+ * a heading for unnamed features from the nearest named one within NEAR_KM ("Viewpoint near Skinner Hut"), and the
+ * named features first in kind priority order (huts, shelters, springs before viewpoints), so the labels, which go to
+ * the first named features, name huts and springs.
+ */
+export function presentFeatures(features: Feature<Point>[], us: boolean): Feature<Point>[] {
+  const named = features.filter((f) => typeof f.properties?.name === "string");
+  const km = (a: Feature<Point>, b: Feature<Point>) => {
+    const [x1, y1] = a.geometry.coordinates;
+    const [x2, y2] = b.geometry.coordinates;
+    return Math.hypot((x2 - x1) * 111.32 * Math.cos((y1 * Math.PI) / 180), (y2 - y1) * 110.57);
+  };
+  const out = features.map((f) => {
+    const p = { ...(f.properties ?? {}) } as Props;
+    if (typeof p.ele === "number") p.elevation = bothUnits(p.ele, us);
+    if (typeof p.heightM === "number") p.fallHeight = bothUnits(p.heightM, us);
+    if (typeof p.name !== "string") {
+      let best: { name: string; d: number } | null = null;
+      for (const n of named) {
+        const d = km(f, n);
+        if (d <= NEAR_KM && (best === null || d < best.d)) best = { name: String(n.properties?.name), d };
+      }
+      const noun = KIND_LABELS[p.kind as Kind] ?? "Backcountry feature";
+      p.heading = best ? `${noun} near ${best.name}` : noun;
+    }
+    return { ...f, properties: p };
+  });
+  const rank = (f: Feature) => (typeof f.properties?.name === "string" ? 0 : 1);
+  return out
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => rank(a.f) - rank(b.f) || priority(a.f) - priority(b.f) || a.i - b.i)
+    .map(({ f }) => f);
+}
+
 /** Each kind in words for the card. */
 const KIND_LABELS: Record<Kind, string> = {
   hut: "Hut",
@@ -332,11 +410,17 @@ const KIND_LABELS: Record<Kind, string> = {
   drinking_water: "Drinking water",
 };
 
-const ELEVATION: FieldHelp = { text: "Height above sea level in metres, as the mapper tagged it (OpenStreetMap ele).", unit: "m" };
+const ELEVATION: FieldHelp = {
+  text: "Height above sea level as the mapper tagged it (OpenStreetMap ele, in metres), shown in feet and metres.",
+  source: "OpenStreetMap wiki, Key:ele",
+  url: "https://wiki.openstreetmap.org/wiki/Key:ele",
+};
 
 const HELP: Record<string, FieldHelp> = {
   ele: ELEVATION,
+  elevation: ELEVATION,
   v: ELEVATION,
+  fallHeight: { text: "How tall the waterfall is, as mapped (OpenStreetMap height, in metres), shown in feet and metres." },
   potable: {
     text: "Whether the water is mapped as safe to drink (OpenStreetMap drinking_water); a mapped spring is not tested water, so treat wild water before drinking.",
     source: "OpenStreetMap wiki, Key:drinking_water",
@@ -347,16 +431,47 @@ const HELP: Record<string, FieldHelp> = {
   reservation: { text: "Whether the hut takes or needs a booking, as mapped (OpenStreetMap reservation); prices and dates are not included." },
 };
 
-const OSM_ELEMENT: FieldHelp = {
-  text: "The OpenStreetMap element this comes from: node, way or relation, then its number (open it at openstreetmap.org).",
-  url: "https://www.openstreetmap.org/",
+/** The kind chips, in the order the row shows them; passes and saddles share one chip. */
+const KIND_LEVELS: AttributeLevel[] = [
+  { value: "hut", label: "Huts and cabins", help: "Alpine and wilderness huts, bothies and cabins you can sleep in." },
+  { value: "shelter", label: "Shelters", help: "Open shelters and lean-tos for weather, not bus or picnic shelters." },
+  { value: "drinking_water", label: "Drinking water", help: "Taps, fountains and pumps." },
+  { value: "spring", label: "Springs", help: "Natural springs; a mapped spring is not tested water." },
+  { value: "hot_spring", label: "Hot springs" },
+  { value: "waterfall", label: "Waterfalls" },
+  { value: "cave", label: "Caves", help: "Cave entrances." },
+  { value: "peak", label: "Peaks", help: "Named summits; left out unless asked for, since the basemap already names them." },
+  { value: "pass", label: "Passes and saddles" },
+  { value: "saddle", label: "Passes and saddles" },
+  { value: "viewpoint", label: "Viewpoints", help: "Scenic overlooks." },
+];
+
+const ATTRIBUTES: Attribute[] = [
+  { key: "kind", type: "category", label: "Kind", primary: true, levels: KIND_LEVELS },
+  { key: "ele", type: "measure", label: "Elevation", unit: "m", help: ELEVATION },
+  { key: "potable", type: "flag", label: "Mapped safe to drink", help: HELP.potable },
+  nameAttribute(),
+];
+
+/** What the map draws: one point per feature, sorted into these kinds. */
+const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Kind",
+  field: "kind",
+  items: KIND_LEVELS.filter((l, i) => KIND_LEVELS.findIndex((m) => m.label === l.label) === i).map((l) => ({
+    label: l.label,
+    value: l.value,
+    symbol: "point" as const,
+    ...(l.help && { help: l.help }),
+  })),
+  note: "Peaks are left out unless asked for; the basemap already names them.",
 };
 
 const CARD: CardSpec = {
-  measure: { key: "ele", label: "Elevation", unit: "m" },
+  measure: { key: "elevation", label: "Elevation", help: ELEVATION },
   facts: [
     { key: "kind", label: "Type", values: KIND_LABELS },
-    { key: "heightM", label: "Waterfall height", unit: "m", format: "m" },
+    { key: "fallHeight", label: "Waterfall height" },
     { key: "capacity", label: "Beds or places", format: "int" },
     {
       key: "shelterType",
@@ -387,21 +502,23 @@ const CARD: CardSpec = {
     },
     { key: "wikipedia", label: "Wikipedia article" },
     { key: "wikidata", label: "Wikidata item" },
-    { key: "osmId", label: "Map element", help: OSM_ELEMENT },
   ],
+  // The OpenStreetMap id and the raw metres are plumbing; the elevation line already shows both units.
+  hidden: ["osmId", "ele", "heightM"],
 };
 
 const outdoorFeatures = defineLayer({
   id: "outdoor-features",
   title: "Huts, springs, peaks and other backcountry features",
   description:
-    "Backcountry points of interest from OpenStreetMap, anywhere in the world, one point each with kind to filter on: " +
+    "Backcountry points of interest from OpenStreetMap, anywhere in the world, one point each with kind to filter on. " +
+    "Peaks are left out by default because the basemap already labels them: set includePeaks true, or list 'peak' in kinds, when the question is about peaks or summits. Kinds: " +
     "'hut' (alpine and wilderness huts, bothies and cabins you can sleep in), 'shelter' (open shelters and lean-tos, not bus stops), " +
     "'spring' and 'drinking_water' (natural springs and water sources: taps, fountains and pumps; potable says whether the water is mapped as safe to drink), 'hot_spring' (natural hot springs), " +
     "'waterfall' (heightM when mapped), 'cave' (cave entrances), 'peak' (named mountain peaks and summits, with ele in metres, and v = the elevation so taller peaks draw taller), 'saddle' and 'pass' (named saddles and mountain passes) and 'viewpoint' (scenic overlooks). " +
     "Also name, ele (metres), capacity (beds or places) for huts and shelters, fee, seasonal, and the date last checked (t) when mapped. " +
     "Use it for questions like: where are the huts or shelters on this route, where can I find a water source or spring, what are the peaks and summits around here, where are hot springs or waterfalls, or find viewpoints and caves nearby. " +
-    "Pass kinds (for example ['hut', 'spring']) to get only those. " +
+    "Pass kinds (for example ['hut', 'spring']) to get only those. Elevations and waterfall heights read in feet first with metres second in a US view. " +
     "Caveats: volunteer-mapped, so it misses features and some are out of date; springs and taps can be dry or seasonal and a mapped spring is not tested water, so treat any wild water as needing treatment; " +
     "hut bookings, prices and winter status are not included; peaks and saddles need a name to be listed and elevations come from mapper data (peaks has Wikidata elevation and prominence for notable summits). " +
     "Over 10,000 km² it lists up to 2,000 named features (unnamed ones left out) and how many there are in all. Within a kind the query keeps the lowest OpenStreetMap ids, not the tallest or nearest (peaks that have an elevation are fetched first, up to 2,000, then up to 1,000 without one): each kind is cut at 1,000 and the whole result at 5,000, and if the 5,000 cap bites, huts, shelters and springs are kept first and the tallest of the fetched peaks. The coverage note gives the count and says if it was cut.",
@@ -419,9 +536,17 @@ const outdoorFeatures = defineLayer({
   style: { geometry: "point", color: layerColor("outdoor-features"), extrude: "v", cluster: true },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
+  // Places, not readings: the check_date in `t` is when a mapper last looked, not a time to scrub.
+  time: { shape: "none" },
+  legend: LEGEND,
+  // The first named features, which presentFeatures puts in kind priority order: huts, shelters and springs first.
+  labels: { field: "name", max: 8 },
 
   async query(ctx, input: FeaturesInput): Promise<LayerResult | LayerError> {
-    const kinds = input.kinds ?? KINDS;
+    const kinds = kindsFor(input);
+    const us = usView(ctx.bbox);
+    const peaksNote = kinds.includes("peak") ? "" : "; peaks are left out (the basemap names them), ask for peaks to add them";
     const cacheKinds = KINDS.filter((k) => kinds.includes(k)).join(",");
 
     // Wide: one named-only set over every requested kind, bounded by the strategy's limit; the first count is the total.
@@ -431,13 +556,13 @@ const outdoorFeatures = defineLayer({
         cacheSuffix: `outdoor-features:named:${cacheKinds}`,
       });
       if (!wide.ok) return { error: wide.error, hint: "upstream" };
-      const features = capPoints(normalizeFeatures(wide.json, kinds).features, limit);
+      const features = presentFeatures(capPoints(normalizeFeatures(wide.json, kinds).features, limit), us);
       const [all] = overpassCounts(wide.json);
       return {
         kind: "geojson",
         data: { type: "FeatureCollection", features },
         ...(all !== undefined && { total: all }),
-        coverageNote: featuresNote(features, all ?? features.length, features.length, false, true),
+        coverageNote: featuresNote(features, all ?? features.length, features.length, false, true) + peaksNote,
         citation: osmCitation(),
       };
     }
@@ -453,12 +578,12 @@ const outdoorFeatures = defineLayer({
     const rawElements = body.filter((e) => (e as { type?: unknown }).type !== "count").length;
     const matched = countedTotal(result.json) ?? rawElements;
     const capped = rawReturned > MAX_POINTS;
-    const features = capped ? capPoints(all.features) : all.features;
+    const features = presentFeatures(capped ? capPoints(all.features) : all.features, us);
 
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features },
-      coverageNote: featuresNote(features, matched, rawElements, capped),
+      coverageNote: featuresNote(features, matched, rawElements, capped) + peaksNote,
       citation: osmCitation(),
     };
   },

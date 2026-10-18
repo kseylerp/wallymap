@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { buildFeaturesQuery, buildWideFeaturesQuery, classify, KINDS, normalizeFeatures } from "./outdoor-features";
+import { cardContent } from "@/lib/render/card";
+import { cardTitle, contractProblems, labelsOf, legendOf, timeShapeOf } from "./contract";
+import layer, { bothUnits, buildFeaturesQuery, buildWideFeaturesQuery, classify, kindsFor, KINDS, normalizeFeatures, usView } from "./outdoor-features";
 import fixture from "./__fixtures__/outdoor-features.tahoe.json";
 
 const TAHOE: [number, number, number, number] = [-120.3, 38.8, -119.9, 39.1];
@@ -173,7 +175,7 @@ describe("outdoor-features layer", () => {
 
   it("posts one Overpass query, returns the points and says the box was truncated when counts exceed the listing", async () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
-    const r = geojson(await layer.query(ctx(stub, "outdoor-features:k"), {}));
+    const r = geojson(await layer.query(ctx(stub, "outdoor-features:k"), { includePeaks: true }));
     expect(stub).toHaveBeenCalledTimes(1);
     const [url, init] = stub.mock.calls[0] as unknown as [string, RequestInit & { cacheKey?: string }];
     expect(url).toBe("https://overpass-api.de/api/interpreter");
@@ -207,7 +209,7 @@ describe("outdoor-features layer", () => {
       })),
     ];
     const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
-    const r = geojson(await layer.query(ctx(stub), {}));
+    const r = geojson(await layer.query(ctx(stub), { includePeaks: true }));
     expect(r.data.features).toHaveLength(5000);
     expect(r.data.features.filter((f) => f.properties?.kind === "hut")).toHaveLength(10);
     const eles = r.data.features.flatMap((f) => (f.properties?.kind === "peak" ? [f.properties.v as number] : []));
@@ -253,7 +255,7 @@ describe("outdoor-features layer", () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(body), { status: 200 }));
     vi.stubGlobal("fetch", stub);
     try {
-      const res = await runLayer("outdoor-features", { bbox: [5, 44, 14, 48], zoom: 6 });
+      const res = await runLayer("outdoor-features", { bbox: [5, 44, 14, 48], zoom: 6, input: { includePeaks: true } });
       expect(res.status).toBe(200);
       expect(stub).toHaveBeenCalledTimes(1);
       const init = (stub.mock.calls[0] as unknown as [string, RequestInit])[1];
@@ -277,7 +279,7 @@ describe("outdoor-features layer", () => {
       ...Array.from({ length: 2500 }, (_, i) => ({ type: "node", id: i + 1, lat: 46, lon: 7, tags: { natural: "peak", name: `P${i}`, ele: String(1000 + i) } })),
     ];
     const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
-    const r = geojson(await layer.query({ ...ctx(stub), bbox: [5, 44, 14, 48], wide: true, wideStrategy: layer.wide }, {}));
+    const r = geojson(await layer.query({ ...ctx(stub), bbox: [5, 44, 14, 48], wide: true, wideStrategy: layer.wide }, { includePeaks: true }));
     expect(r.data.features).toHaveLength(2000);
     expect(r.data.features.slice(0, 5).every((f) => f.properties?.kind === "hut")).toBe(true);
     expect(r.data.features[5].properties?.v).toBe(3499);
@@ -297,5 +299,65 @@ describe("outdoor-features layer", () => {
     expect(big.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/under 1500000 km²$/) });
     const bad = await runLayer("outdoor-features", { bbox: TAHOE, input: { kinds: ["castle"] } });
     expect(bad.status).toBe(400);
+  });
+});
+
+describe("outdoor-features kinds, card and key", () => {
+  const stubFixture = () => vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
+
+  it("leaves peaks out by default and says so; includePeaks or listing peak brings them back", async () => {
+    expect(kindsFor({})).not.toContain("peak");
+    expect(kindsFor({ includePeaks: true })).toContain("peak");
+    expect(kindsFor({ kinds: ["peak"] })).toEqual(["peak"]);
+    expect(kindsFor({ kinds: ["hut"], includePeaks: true })).toEqual(["hut", "peak"]);
+    const stub = stubFixture();
+    const r = geojson(await layer.query(ctx(stub), {}));
+    expect(r.data.features.some((f) => f.properties?.kind === "peak")).toBe(false);
+    expect(r.coverageNote).toMatch(/peaks are left out \(the basemap names them\), ask for peaks to add them$/);
+    const [, init] = stub.mock.calls[0] as unknown as [string, RequestInit];
+    expect(decodeURIComponent(String(init.body))).not.toContain('"natural"="peak"');
+    expect(layer.description).toContain("Peaks are left out by default");
+  });
+
+  it("declares kind as the primary chip set with plain levels, a categories key, no time and labels", () => {
+    const kind = layer.attributes?.find((a) => a.key === "kind");
+    expect(kind).toMatchObject({ type: "category", primary: true });
+    expect(new Set(kind?.levels?.map((l) => l.label))).toEqual(
+      new Set(["Huts and cabins", "Shelters", "Drinking water", "Springs", "Hot springs", "Waterfalls", "Caves", "Peaks", "Passes and saddles", "Viewpoints"]),
+    );
+    expect(kind?.levels?.map((l) => l.value).sort()).toEqual([...KINDS].sort());
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "kind" });
+    expect(legend.items?.map((i) => i.label)).toContain("Huts and cabins");
+    expect(legend.items?.filter((i) => i.label === "Passes and saddles")).toHaveLength(1);
+    expect(timeShapeOf(layer, normalizeFeatures(fixture)).shape).toBe("none");
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 8 });
+    expect(contractProblems(layer)).toEqual([]);
+  });
+
+  it("puts named huts, shelters and springs first so the labels name them, and titles unnamed points by the nearest name", async () => {
+    const r = geojson(await layer.query(ctx(stubFixture()), {}));
+    expect(r.data.features[0].properties?.kind).toBe("hut");
+    const firstUnnamed = r.data.features.findIndex((f) => typeof f.properties?.name !== "string");
+    expect(r.data.features.slice(firstUnnamed).every((f) => typeof f.properties?.name !== "string")).toBe(true);
+    const viewpoint = r.data.features.find((f) => f.properties?.osmId === "node/775374981");
+    expect(viewpoint && cardTitle(layer, viewpoint)).toBe("Viewpoint near Johnson Pass");
+    for (const f of r.data.features) expect(cardTitle(layer, f)).not.toMatch(/feature/i);
+  });
+
+  it("shows elevation in feet first in a US view and metres first elsewhere, with no map element id on the card", async () => {
+    const r = geojson(await layer.query(ctx(stubFixture()), {}));
+    const echo = r.data.features.find((f) => f.properties?.name === "Echo Summit");
+    if (!echo) throw new Error("Echo Summit missing");
+    const card = cardContent(echo, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.measure).toMatchObject({ label: "Elevation", value: "7,377 ft (2,249 m)" });
+    const rows = [...card.facts, ...card.details].map((row) => row.label);
+    expect(rows).not.toContain("Map element");
+    expect(rows.some((l) => /osm/i.test(l))).toBe(false);
+    const fall = r.data.features.find((f) => f.properties?.name === "Upper Pyramid Creek Cascade");
+    expect(fall?.properties?.fallHeight).toBe("43 ft (13 m)");
+    expect(usView(TAHOE)).toBe(true);
+    expect(usView([5, 44, 14, 48])).toBe(false);
+    expect(bothUnits(4808, false)).toBe("4,808 m (15,774 ft)");
   });
 });

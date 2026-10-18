@@ -55,35 +55,36 @@ export function greennessSpec(index: keyof typeof GIBS_IDS): GibsDatedSpec {
   };
 }
 
-/** NDVI in GIBS's colors (colormap MODIS_L3_NDVI.xml, its labelled stops, read 2026-10-18). */
+/** NDVI in GIBS's colors (colormap MODIS_L3_NDVI.xml, its labelled stops, read 2026-10-18). Short labels; the note says what they mean. */
 export const NDVI_LEGEND: LegendSpec = {
   kind: "ramp",
   title: "Greenness (NDVI)",
   field: "ndvi",
   stops: [
-    { label: "0 bare, rock or snow", value: 0, color: "#F1ECEC" },
-    { label: "0.2 dry or sparse", value: 0.2, color: "#B19883" },
-    { label: "0.3", value: 0.3, color: "#BFDE77" },
-    { label: "0.4 grass or crops", value: 0.4, color: "#8FB716" },
-    { label: "0.6 leafy", value: 0.6, color: "#398700" },
-    { label: "0.8 dense forest", value: 0.8, color: "#056400" },
-    { label: "1.0", value: 1, color: "#001800" },
+    { label: "Bare", value: 0, color: "#F1ECEC" },
+    { label: "Dry", value: 0.2, color: "#B19883" },
+    { label: "Sparse", value: 0.3, color: "#BFDE77" },
+    { label: "Grass", value: 0.4, color: "#8FB716" },
+    { label: "Leafy", value: 0.6, color: "#398700" },
+    { label: "Forest", value: 0.8, color: "#056400" },
+    { label: "Dense", value: 1, color: "#001800" },
   ],
-  note: "Water is clear. EVI (index evi) uses a similar ramp that reaches dark green sooner: 0.2 #BFDE77, 0.4 #539700, 0.6 #086700, 0.8 #002400.",
+  note: "NDVI runs from about 0 on bare ground, rock or snow, through 0.2 to 0.3 for dry or sparse plants and 0.4 for grass or crops, to 0.8 and above in dense forest; water is clear.",
 };
 
-/** EVI in GIBS's colors (colormap MODIS_L3_EVI.xml), for a key when index is evi. */
+/** EVI in GIBS's colors (colormap MODIS_L3_EVI.xml), the answer's key when index is evi. */
 export const EVI_LEGEND: LegendSpec = {
   kind: "ramp",
   title: "Greenness (EVI)",
   field: "evi",
   stops: [
-    { label: "0 bare", value: 0, color: "#F1ECEC" },
-    { label: "0.2", value: 0.2, color: "#BFDE77" },
-    { label: "0.4", value: 0.4, color: "#539700" },
-    { label: "0.6", value: 0.6, color: "#086700" },
-    { label: "0.8 dense forest", value: 0.8, color: "#002400" },
+    { label: "Bare", value: 0, color: "#F1ECEC" },
+    { label: "Sparse", value: 0.2, color: "#BFDE77" },
+    { label: "Grass", value: 0.4, color: "#539700" },
+    { label: "Leafy", value: 0.6, color: "#086700" },
+    { label: "Dense", value: 0.8, color: "#002400" },
   ],
+  note: "EVI runs from about 0 on bare ground, through 0.2 for sparse plants and 0.4 for grass or crops, to 0.8 in dense forest, reaching dark green sooner than NDVI; water is clear.",
 };
 
 const greenness = defineLayer({
@@ -112,14 +113,15 @@ const greenness = defineLayer({
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     const r = gibsDatedResult(greennessSpec(input.index), input.date);
     if (!("kind" in r) || r.kind !== "tiles") return r;
+    const legend = input.index === "evi" ? EVI_LEGEND : NDVI_LEGEND;
     // GIBS answers with the whole composite containing the day, so name its 16 days rather than the requested day.
     const shown = /for (\d{4}-\d{2}-\d{2})/.exec(r.coverageNote ?? "")?.[1];
-    if (shown === undefined) return r;
+    if (shown === undefined) return { ...r, legend };
     const start = compositeStart(shown);
     const end = new Date(Date.parse(`${start}T00:00:00Z`) + 15 * 86_400_000).toISOString().slice(0, 10);
     const name = input.index === "ndvi" ? "NDVI" : "EVI";
     const moved = /\((.+)\)$/.exec(r.coverageNote ?? "")?.[1];
-    return { ...r, coverageNote: `${name} 16-day composite ${start} to ${end} (the composite containing ${shown})${moved ? `; ${moved}` : ""}` };
+    return { ...r, legend, coverageNote: `${name} 16-day composite ${start} to ${end} (the composite containing ${shown})${moved ? `; ${moved}` : ""}` };
   },
 });
 

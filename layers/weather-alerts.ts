@@ -436,7 +436,8 @@ export function nowFeature(body: unknown, centre: [number, number]): Feature<Poi
   const p: Record<string, string | number> = {
     kind: "now",
     name: "Current conditions (model)",
-    t: new Date(`${c.time}:00Z`).toISOString(),
+    // When the reading is for, under its own key: the alerts' `t` is an onset and reads "Starts" on the card.
+    observed: new Date(`${c.time}:00Z`).toISOString(),
     v: c.temperature_2m!,
     temperatureC: c.temperature_2m!,
   };
@@ -553,6 +554,7 @@ const CARD: CardSpec = {
     { key: "until", label: "Until (local time)" },
     { key: "expires", label: "Ends", format: "date" },
     { key: "t", label: "Starts", format: "date" },
+    { key: "observed", label: "Observed", format: "date" },
     { key: "areaDesc", label: "Areas" },
     { key: "instruction", label: "What to do" },
     { key: "urgency", label: "Urgency" },
@@ -563,12 +565,14 @@ const CARD: CardSpec = {
     { key: "temperatureF", label: "Temperature", unit: "°F", format: "int" },
     { key: "windMph", label: "Wind", unit: "mph", format: "int" },
     { key: "gustMph", label: "Gusts", unit: "mph", format: "int" },
-    { key: "temperatureC", label: "Temperature (metric)", unit: "°C", format: "1dp" },
     { key: "precipitationMm", label: "Precipitation", unit: "mm", format: "1dp" },
     { key: "snowfallCm", label: "Snowfall", unit: "cm", format: "1dp" },
   ],
-  /** The heading is the title; kind and event repeat it; the WMO code is the Weather row in words; metric wind repeats mph. */
-  hidden: ["kind", "event", "heading", "weatherCode", "windKmh", "gustKmh", "marine", "v"],
+  /**
+   * The heading is the title; kind and event repeat it; the WMO code is the Weather row in words; metric temperature
+   * and wind repeat the Temperature and Wind rows, which already print both systems.
+   */
+  hidden: ["kind", "event", "heading", "weatherCode", "temperatureC", "windKmh", "gustKmh", "marine", "v"],
   links: [{ key: "url", label: "Full alert from the National Weather Service" }],
 };
 
@@ -601,7 +605,7 @@ const weatherAlerts = defineLayer({
     "Active National Weather Service warnings, watches and advisories in view, plus the weather right now at the centre of the view. User words: warnings, alerts, weather alerts, red flag warning, avalanche warning, winter storm, flood, heat, wind advisory, is there a warning, what's the weather. " +
     "Each alert is an area with kind and event (e.g. 'Red Flag Warning', 'Avalanche Warning', 'Winter Storm Warning', 'Flood Watch', 'Wind Advisory'), severity (Extreme, Severe, Moderate, Minor) and v as its rank (4 to 1), " +
     "heading (event and areas, e.g. 'Coastal Flood Warning, Hatteras Island'), t (onset, UTC), expires (when it ends, UTC), until (the end in the issuing office's own words and time zone, e.g. 'October 20 at 5:00PM EDT'), headline, urgency, certainty, areaDesc (the named zones), senderName (the NWS office), instruction (what to do) and url. Alerts are sorted most severe first; the map colors them by severity. " +
-    "Set event to filter by name, e.g. 'red flag' or 'avalanche'; set marine true to add marine alerts (gale, small craft and storm warnings over coastal waters and the Great Lakes). One extra point, kind 'now', is current conditions from the Open-Meteo model at the view's centre: temperatureC (v), temperatureF, windKmh and windMph, gustKmh and gustMph, precipitationMm, snowfallCm and weather (e.g. 'snow showers'), t = the 15-minute model time. " +
+    "Set event to filter by name, e.g. 'red flag' or 'avalanche'; set marine true to add marine alerts (gale, small craft and storm warnings over coastal waters and the Great Lakes). One extra point, kind 'now', is current conditions from the Open-Meteo model at the view's centre: temperatureC (v), temperatureF, windKmh and windMph, gustKmh and gustMph, precipitationMm, snowfallCm and weather (e.g. 'snow showers'), observed = the 15-minute model time. " +
     "Alerts are live (refreshed every 5 minutes). Example questions: 'Are there any red flag warnings near Tahoe?', 'Is there an avalanche warning for the Wasatch?'. " +
     "Every active alert touching the view comes from the full NWS feed with its own shape (Esri's Living Atlas copy, checked to be under two hours old); if that feed is down the layer asks NWS directly and finds zones by sampling points, which can miss a small zone (the coverageNote says so). " +
     "Caveats: alerts are United States only, land zones only unless marine is set (use surf for sea state); an alert's area is its whole forecast zone, which can be larger than the hazard; avalanche warnings come from NWS only when an avalanche centre asks for one, so check the local avalanche centre; " +

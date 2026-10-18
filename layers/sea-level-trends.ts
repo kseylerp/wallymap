@@ -215,7 +215,8 @@ export function trendFeatures(trends: Trend[], [w, s, e, n]: BBox): Feature<Poin
         v: t.trend,
         kind: t.trend < 0 ? "falling" : "rising",
         ftPerCentury: Math.round((t.trend * 100 * 100) / MM_PER_FOOT) / 100,
-        inPerDecade: round2(t.trend / 2.54),
+        // Four decimals, not two: the card shows it back in cm per decade (x 2.54), which must equal the mm/yr shown.
+        inPerDecade: Math.round((t.trend / 2.54) * 10_000) / 10_000,
         network: t.affil === "US" ? "US" : "global",
         url: stationUrl(t),
       };

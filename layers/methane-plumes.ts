@@ -115,7 +115,8 @@ export function sourcesUrl(bbox: BBox, days: number, now: number): string {
 const capital = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 /**
- * The card's title and the map label: "Oil and gas source, Permian" or "Landfill plume, 2026-04-21", and "1,337 kg/h"
+ * The card's title and the map label: "Oil and gas source, Permian" or "Landfill plume, 2026-04-21", and "1,337 kg/h"; the
+ * ranked list's name, "Oil and gas plume, 1,337 kg/h"
  * (Carbon Mapper's source names are coordinates codes, CH4_1B2_250m_-103.85841_31.87325, so they are not the title).
  */
 export function describeMethane(props: Record<string, string | number>): void {
@@ -125,6 +126,9 @@ export function describeMethane(props: Record<string, string | number>): void {
       ? `${sector} source${props.basin ? `, ${props.basin}` : ""}`
       : `${sector} plume${typeof props.t === "string" ? `, ${props.t.slice(0, 10)}` : ""}`;
   if (typeof props.v === "number") props.label = `${Math.round(props.v).toLocaleString("en-US")} kg/h`;
+  // The ranked list's row name: one flight sees many plumes of one sector on one day, so the rate tells them apart.
+  const kind = `${sector} ${props.kind === "source" ? "source" : "plume"}`;
+  props.name = typeof props.label === "string" ? `${kind}, ${props.label}` : String(props.heading);
 }
 
 /** One point per plume: kind "plume", t = observation time, v = emission rate kg/h when Carbon Mapper published one. */

@@ -102,10 +102,7 @@ export async function gibsNewestDay(ctx: QueryContext, gibsId: string, matrixSet
   }
 }
 
-/**
- * The key for the default (GFM) map: one color, flood water only. The optical and MODIS sources draw GIBS's own classes,
- * named in the note.
- */
+/** The key for the default (GFM) map: one color, flood water only. The other sources answer with their own keys below. */
 export const LEGEND: LegendSpec = {
   kind: "categories",
   title: "Flood water (Copernicus GFM)",
@@ -117,9 +114,37 @@ export const LEGEND: LegendSpec = {
       help: "Water where there is normally none, seen by Sentinel-1 radar in the days shown; lakes and rivers that are always there stay clear.",
     },
   ],
-  note:
-    "Empty means no flooding was seen in those days. Source opera draws open water dark blue, partial water pale blue, cloud grey, snow cyan and dry land white; source modis draws flood red, recurring flood yellow and normal water light blue.",
+  note: "Clear where no flooding was seen in those days, including lakes and rivers that are always there.",
 };
+
+/** OPERA surface water classes in GIBS's colors (colormap OPERA_Dynamic_Surface_Water_Extent.xml, read 2026-10-18). */
+export const OPERA_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Surface water (OPERA)",
+  items: [
+    { label: "Open water", value: 1, color: "#0000FF", symbol: "raster" },
+    { label: "Partial water", value: 2, color: "#B4D5F4", symbol: "raster" },
+    { label: "Snow or ice", value: 3, color: "#00FFFF", symbol: "raster" },
+    { label: "Cloud", value: 4, color: "#AFAFAF", symbol: "raster" },
+    { label: "Not water", value: 0, color: "#FFFFFF", symbol: "raster" },
+  ],
+  note: "Shows all water, not only flood water; clear where the satellite took no picture that day.",
+};
+
+/** MODIS flood classes in GIBS's colors (colormap MODIS_Flood.xml, read 2026-10-18). */
+export const MODIS_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Flood (MODIS)",
+  items: [
+    { label: "Flood", value: 3, color: "#FA1E24", symbol: "raster" },
+    { label: "Recurring flood", value: 2, color: "#FFFF00", symbol: "raster" },
+    { label: "Normal water", value: 1, color: "#32D2F5", symbol: "raster" },
+    { label: "Not enough data", value: 255, color: "#AFAFAF", symbol: "raster" },
+  ],
+  note: "Clear where there is no water.",
+};
+
+const SOURCE_LEGENDS = { opera: OPERA_LEGEND, modis: MODIS_LEGEND } as const;
 
 const floodExtent = defineLayer({
   id: "flood-extent",
@@ -171,20 +196,23 @@ const floodExtent = defineLayer({
           url: "https://global-flood.emergency.copernicus.eu/",
           retrieved: new Date(now).toISOString(),
         },
+        legend: LEGEND,
         coverageNote:
           `Flood water seen by Sentinel-1 radar from ${start} to ${choice.date} (${input.days} days)` +
           `${choice.note ? ` (${choice.note})` : ""}; empty means no flooding seen; visible from about zoom 7 in`,
       };
     }
     const spec = SPECS[input.source];
+    const legend = SOURCE_LEGENDS[input.source];
     const newest = await gibsNewestDay(ctx, spec.gibsId, spec.matrixSet);
     if (newest === null) {
       const r = gibsDatedResult({ ...spec, daysBack: spec.fallbackDaysBack }, input.date, now);
       if ("error" in r) return r;
-      return { ...r, coverageNote: `${r.coverageNote ?? ""}; GIBS did not say its newest day, so the day was guessed` };
+      return { ...r, legend, coverageNote: `${r.coverageNote ?? ""}; GIBS did not say its newest day, so the day was guessed` };
     }
     // The archive's real end (a week behind for OPERA), so neither the default nor the scrubber asks for a blank day.
-    return gibsDatedResult({ ...spec, to: newest, daysBack: 0 }, input.date, now);
+    const r = gibsDatedResult({ ...spec, to: newest, daysBack: 0 }, input.date, now);
+    return "error" in r ? r : { ...r, legend };
   },
 });
 

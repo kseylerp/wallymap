@@ -5,6 +5,7 @@ import { cardTitle, contractProblems, displayOf, legendOf, timeShapeOf } from ".
 import esriFixture from "./__fixtures__/weather-alerts-esri.outer-banks.json";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { cardContent } from "@/lib/render/card";
 import layer, {
   ESRI_ALERTS,
   esriAlertFeatures,
@@ -132,6 +133,17 @@ describe("helpers", () => {
     expect(weatherWords(73)).toBe("snow");
     expect(weatherWords(95)).toBe("thunderstorm");
     expect(nowFeature({}, [0, 0])).toBeNull();
+  });
+
+  it("cards the reading as Observed, with one temperature row in both systems", () => {
+    const f = nowFeature(nowFixture, [-120.2, 38.95])!;
+    const card = cardContent(f, { card: layer.card, fieldHelp: layer.fieldHelp, display: { ...displayOf(layer), at: [-120.2, 38.95] } });
+    const rows = [...card.facts, ...card.details];
+    const labels = rows.map((r) => r.label);
+    expect(labels).toContain("Observed");
+    expect(labels).not.toContain("Starts");
+    expect(labels.filter((l) => /temperature/i.test(l))).toEqual(["Temperature"]);
+    expect(rows.find((r) => r.label === "Temperature")?.value).toMatch(/°F \(.*°C\)$/);
   });
 });
 

@@ -3,6 +3,7 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { attributeProblems } from "./attributes";
 import { cardTitle, contractProblems, legendOf } from "./contract";
+import { rowName, topPlaces } from "@/lib/render/attributes";
 import layer, { datetimeWindow, plumeFeatures, plumesUrl, sourceFeatures, sourcesUrl } from "./methane-plumes";
 import plumesFixture from "./__fixtures__/carbonmapper-plumes.bakersfield.json";
 import sourcesFixture from "./__fixtures__/carbonmapper-sources.bakersfield.json";
@@ -140,5 +141,18 @@ describe("methane-plumes", () => {
     const plume = plumeFeatures((plumesFixture as { items: unknown[] }).items).find((f) => typeof f.properties?.t === "string");
     expect(cardTitle(layer, plume!)).toMatch(/ plume, \d{4}-\d{2}-\d{2}$/);
     expect(layer.labels).toEqual({ field: "label", max: 5, rankBy: "v" });
+  });
+
+  it("names every leak so the Rank by list tells them apart, never 'Unnamed'", () => {
+    const features = [
+      ...sourceFeatures((sourcesFixture as { features: unknown[] }).features),
+      ...plumeFeatures((plumesFixture as { items: unknown[] }).items),
+    ];
+    const names = topPlaces({ type: "FeatureCollection", features }, "v", 10).map(rowName);
+    expect(names).toHaveLength(10);
+    expect(names).not.toContain("Unnamed");
+    expect(new Set(names).size).toBe(names.length);
+    for (const name of names) expect(name).toMatch(/^[A-Z][a-z].* (source|plume), [\d,]+ kg\/h$/);
+    for (const name of names) expect(name.length).toBeLessThanOrEqual(40);
   });
 });

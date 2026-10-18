@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { contractProblems, timeShapeOf } from "./contract";
-import layer, { parseFirmsCsv } from "./fire-detections";
+import layer, { detectionName, parseFirmsCsv } from "./fire-detections";
+import { rowName, topPlaces } from "@/lib/render/attributes";
 
 const CSV = readFileSync(path.join(__dirname, "__fixtures__/fire-detections.sample.csv"), "utf8");
 const BBOX: [number, number, number, number] = [-125, 32, -114, 42];
@@ -259,6 +260,19 @@ describe("fire-detections layer", () => {
     expect(r.data.features).toHaveLength(300);
     expect(new Set(r.data.features.map((f) => f.properties?.satellite))).toEqual(new Set(["VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT"]));
     expect(r.citation.source).toBe("NASA FIRMS VIIRS (Suomi NPP, NOAA-20, NOAA-21) (public, attribution requested)");
+  });
+
+  it("names each detection by satellite and local pass time, so the Rank by list is never 'Unnamed'", async () => {
+    vi.stubEnv("FIRMS_MAP_KEY", KEY);
+    const stub = vi.fn(async (_url: string, _init?: unknown) => new Response(CSV, { status: 200 }));
+    const r = await layer.query(ctx(stub), layer.input.parse({}));
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const names = topPlaces(r.data, "v", 10).map(rowName);
+    expect(names).toHaveLength(10);
+    expect(names).not.toContain("Unnamed");
+    for (const name of names) expect(name).toMatch(/^(Suomi NPP|NOAA-20|NOAA-21), [A-Z][a-z]{2} \d{1,2} \d{1,2}:\d{2} [AP]M [A-Z]{3,4}$/);
+    expect(detectionName("VIIRS_NOAA20_NRT", "2026-10-17T09:42:00Z", [-121.9, 37.5])).toBe("NOAA-20, Oct 17 2:42 AM PDT");
+    expect(detectionName("MODIS_NRT", undefined, [-121.9, 37.5])).toBe("Hotspot, MODIS");
   });
 
   it("keeps the satellites that answered when one fails, and says which did not", async () => {

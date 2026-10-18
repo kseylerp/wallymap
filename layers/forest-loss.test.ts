@@ -45,7 +45,7 @@ describe("forest-loss layer", () => {
     expect(r.data.time).toEqual({
       template: expect.stringContaining("start_year=2015&end_year={year}&"),
       cadence: "yearly",
-      from: "2001",
+      from: "2015",
       to: "2025",
     });
     expect(r.coverageNote).toBe("Tree cover lost 2015–2025, where canopy was at least 30% in 2000");

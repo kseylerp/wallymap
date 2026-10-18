@@ -106,6 +106,16 @@ describe("greenness layer", () => {
     expect(NDVI_LEGEND.stops?.at(-1)).toMatchObject({ value: 1, color: "#001800" });
   });
 
+  it("keeps stop labels short and the notes plain sentences without color codes", async () => {
+    for (const legend of [NDVI_LEGEND, EVI_LEGEND]) {
+      for (const stop of legend.stops ?? []) expect(stop.label.length).toBeLessThanOrEqual(8);
+      expect(legend.note).not.toMatch(/#[0-9A-Fa-f]{6}/);
+      expect(legend.note).toMatch(/^[A-Z].*\.$/);
+    }
+    expect((await tiles({ index: "evi" })).legend).toBe(EVI_LEGEND);
+    expect((await tiles({})).legend).toBe(NDVI_LEGEND);
+  });
+
   it("runs through runLayer and rejects a bad date", async () => {
     expect((await runLayer("greenness", { bbox: ALPS, zoom: 5 })).status).toBe(200);
     expect((await runLayer("greenness", { bbox: ALPS, input: { date: "soon" } })).status).toBe(400);

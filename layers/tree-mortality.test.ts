@@ -4,6 +4,7 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { attributeProblems } from "./attributes";
 import { cardTitle, contractProblems, legendOf } from "./contract";
+import { rowName, topPlaces } from "@/lib/render/attributes";
 import layer, { cdfwWhere, idsWhere, normalizeCdfw, normalizeIds, offsetFor, planYears, surveyYears } from "./tree-mortality";
 import ids from "./__fixtures__/tree-mortality.ids-tahoe.json";
 import cdfw from "./__fixtures__/tree-mortality.cdfw-tahoe.json";
@@ -85,6 +86,7 @@ describe("tree-mortality layer", () => {
       percentAffected: "Moderate (11-29%)",
       acres: 11079,
       heading: "California red fir die-off: fir engraver",
+      name: "California red fir, fir engraver (2022)",
     });
     expect(new Set(features.map((f) => f.properties?.year))).toEqual(new Set([2022, 2023, 2025]));
   });
@@ -118,6 +120,7 @@ describe("tree-mortality layer", () => {
       t: "2016-01-01T00:00:00.000Z",
       agent: "unknown agent",
       heading: "Tree die-off",
+      name: "Trees (2016)",
     });
   });
 
@@ -307,5 +310,14 @@ describe("tree-mortality layer", () => {
     expect(layer.attributes?.find((a) => a.key === "agent")).toMatchObject({ type: "category", label: "Cause" });
     const [first] = normalizeIds(idsFc);
     expect(cardTitle(layer, first)).toBe("California red fir die-off: fir engraver");
+  });
+
+  it("names each die-off by tree, cause and year, so the Rank by list is never 'Unnamed'", () => {
+    for (const features of [normalizeIds(idsFc), normalizeCdfw(cdfwFc)]) {
+      const names = topPlaces({ type: "FeatureCollection", features }, "v", 10).map(rowName);
+      expect(names.length).toBeGreaterThan(0);
+      expect(names).not.toContain("Unnamed");
+      for (const name of names) expect(name).toMatch(/^[A-Z][^,]*(, [^,]+)? \(\d{4}\)$/);
+    }
   });
 });

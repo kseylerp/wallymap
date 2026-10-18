@@ -177,6 +177,7 @@ export function normalizeIds(fc: FeatureCollection): Feature<Geometry>[] {
     const acres = num(p.acres);
     if (acres !== undefined) properties.acres = Math.round(acres);
     properties.heading = dieOffHeading(properties);
+    properties.name = dieOffName(properties);
     features.push({ type: "Feature", geometry: f.geometry, properties });
   }
   return features;
@@ -188,6 +189,14 @@ export function dieOffHeading(properties: Record<string, string | number>): stri
   const tree = host ? host.charAt(0).toUpperCase() + host.slice(1) : "Tree";
   const agent = typeof properties.agent === "string" && properties.agent !== "unknown agent" ? `: ${properties.agent}` : "";
   return `${tree} die-off${agent}`;
+}
+
+/** "Subalpine fir, western balsam bark beetle (2024)": the tree, the cause and the year, the ranked list's name. */
+export function dieOffName(properties: Record<string, string | number>): string {
+  const host = typeof properties.host === "string" ? properties.host.trim() : "";
+  const tree = host ? host.charAt(0).toUpperCase() + host.slice(1) : "Trees";
+  const agent = typeof properties.agent === "string" && properties.agent !== "unknown agent" ? `, ${properties.agent}` : "";
+  return `${tree}${agent}${typeof properties.year === "number" ? ` (${properties.year})` : ""}`;
 }
 
 /** California 1973 to 2019 rows: v is the number of trees killed. */
@@ -213,6 +222,7 @@ export function normalizeCdfw(fc: FeatureCollection): Feature<Geometry>[] {
     const forest = str(p.FOR_TYPE1);
     if (forest !== undefined) properties.forestType = forest;
     properties.heading = dieOffHeading(properties);
+    properties.name = dieOffName(properties);
     features.push({ type: "Feature", geometry: f.geometry, properties });
   }
   return features;

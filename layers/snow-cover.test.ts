@@ -5,8 +5,8 @@ import { summarizeLayerResult } from "@/lib/layers/summarize";
 import { tileUrlForTime } from "@/lib/time";
 import { readFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
-import { legendOf } from "./contract";
-import layer, { NDSI_LEGEND, nohrscDepthTileUrl } from "./snow-cover";
+import { legendOf, legendProblems } from "./contract";
+import layer, { DEPTH_LEGEND, NDSI_LEGEND, nohrscDepthTileUrl } from "./snow-cover";
 import { CLOUD_INDEX, clearSnowProbeMemo, decodePalettePng, lookbackDays, probeTiles, snowPixels } from "./snow-cover-probe";
 
 const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
@@ -108,6 +108,13 @@ describe("snow-cover layer", () => {
     expect(r.data.time).toBeUndefined();
     expect(r.coverageNote).toMatch(/lower 48/);
     expect(r.citation.source).toMatch(/NOHRSC/);
+    expect(legendOf(layer, r)).toBe(DEPTH_LEGEND);
+    expect(legendProblems(DEPTH_LEGEND, "depth")).toEqual([]);
+  });
+
+  it("the daily key describes only the NDSI snow classes it draws", () => {
+    expect(NDSI_LEGEND.note).not.toMatch(/depth|inch|\bin\b/i);
+    expect(NDSI_LEGEND.items?.every((i) => /snow/i.test(i.label))).toBe(true);
   });
 
   it("depth: true with a date is an error that says why", async () => {

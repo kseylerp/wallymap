@@ -67,9 +67,28 @@ export const NDSI_LEGEND: LegendSpec = {
     { label: "Heavy snow (0.61 to 0.80)", value: "61-80", color: "#F09689", symbol: "raster" },
     { label: "Snow covered (0.81 to 1.0)", value: "81-100", color: "#F08081", symbol: "raster" },
   ],
-  note:
-    "Clear where there is no snow, and also under cloud and at night (the satellite cannot see). In depth mode the colors are NOAA's depth classes instead: " +
-    "grey-green under 2 in, teal and blue 2 to 20 in, indigo and purple 20 to 98 in, magenta to brown over 98 in.",
+  note: "Clear where there is no snow, and also under cloud and at night (the satellite cannot see).",
+};
+
+/** NOAA's depth classes in inches as the MapServer draws them (layer 0's legend images, read 2026-10-18): the depth answer's key. */
+export const DEPTH_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Snow depth (NOAA)",
+  unit: "in",
+  items: [
+    { label: "0.4 to 2 in", value: "0.39-2", color: "#ABC1BF", symbol: "raster" },
+    { label: "2 to 4 in", value: "2-3.9", color: "#66C1C4", symbol: "raster" },
+    { label: "4 to 10 in", value: "3.9-9.8", color: "#63A9CB", symbol: "raster" },
+    { label: "10 to 20 in", value: "9.8-20", color: "#5079C8", symbol: "raster" },
+    { label: "20 to 39 in", value: "20-39", color: "#3C3FC2", symbol: "raster" },
+    { label: "39 to 59 in", value: "39-59", color: "#5720C3", symbol: "raster" },
+    { label: "59 to 98 in", value: "59-98", color: "#7D01BB", symbol: "raster" },
+    { label: "98 to 197 in", value: "98-197", color: "#B404B1", symbol: "raster" },
+    { label: "197 to 295 in", value: "197-295", color: "#A91377", symbol: "raster" },
+    { label: "295 to 394 in", value: "295-394", color: "#992B50", symbol: "raster" },
+    { label: "Over 394 in", value: "394-787", color: "#8B4545", symbol: "raster" },
+  ],
+  note: "Modelled snow depth for the lower 48 states; clear where there is less than 0.4 in.",
 };
 
 /** The depth analysis's classes in inches as NOAA draws them (MapServer legend, read 2026-10-18), for the answer's note. */
@@ -147,6 +166,7 @@ const snowCover = defineLayer({
         url: "https://www.nohrsc.noaa.gov/nsa/",
         retrieved: new Date().toISOString(),
       },
+      legend: DEPTH_LEGEND,
       coverageNote: `Snow depth (NOAA), latest NOHRSC analysis for ${isoDay(Date.now())}, lower 48 states, updated several times a day; not scrubbable. ${DEPTH_CLASSES_NOTE}`,
     };
   },

@@ -83,7 +83,8 @@ const forestLoss = defineLayer({
         time: {
           template: lossTileUrl(input.startYear, "{year}", input.canopyThreshold),
           cadence: "yearly",
-          from: "2001",
+          // The scrubber spans the years asked for, so its window and the row's "lost 2015–2025" agree.
+          from: String(input.startYear),
           to: String(FOREST_LOSS_LATEST_YEAR),
         },
       },

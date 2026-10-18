@@ -3,8 +3,8 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
 import { tileUrlForTime } from "@/lib/time";
-import { contractProblems, legendOf, timeShapeOf } from "./contract";
-import layer, { gfmTileUrl, gibsDomainsUrl, lastDomainDay } from "./flood-extent";
+import { contractProblems, legendOf, legendProblems, timeShapeOf } from "./contract";
+import layer, { gfmTileUrl, gibsDomainsUrl, lastDomainDay, LEGEND, MODIS_LEGEND, OPERA_LEGEND } from "./flood-extent";
 
 const MEMPHIS: [number, number, number, number] = [-90.3, 34.9, -89.8, 35.3];
 /** GIBS DescribeDomains answers recorded 2026-10-18 ~06:10 UTC (OPERA HLS ended 2026-10-11; MODIS ran to that day). */
@@ -106,6 +106,15 @@ describe("flood-extent layer", () => {
     for (const word of ["gfm", "opera", "modis", "daily", "flooded", "flood extent", "cloud", "surface-water", "radar"]) {
       expect(layer.description).toContain(word);
     }
+  });
+
+  it("keys each source by the colors it draws, and the GFM note names no other source's colors", async () => {
+    expect(LEGEND.note).not.toMatch(/opera|modis|blue|yellow|grey|white/i);
+    expect(legendOf(layer, await tiles({}))).toBe(LEGEND);
+    expect(legendOf(layer, await tiles({ source: "opera" }))).toBe(OPERA_LEGEND);
+    expect(legendOf(layer, await tiles({ source: "modis" }))).toBe(MODIS_LEGEND);
+    expect(legendOf(layer, await tiles({ source: "modis" }, gibs(true)))).toBe(MODIS_LEGEND);
+    for (const legend of [OPERA_LEGEND, MODIS_LEGEND]) expect(legendProblems(legend, "flood")).toEqual([]);
   });
 
   it("summarizes to the tile URL and time range for the model", async () => {

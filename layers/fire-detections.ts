@@ -24,6 +24,7 @@ import { timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
+import { zoneAt } from "@/lib/render/units";
 
 const VIIRS = ["VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT"] as const;
 const SOURCES = ["VIIRS_ALL", ...VIIRS, "MODIS_NRT"] as const;
@@ -37,6 +38,25 @@ export const SATELLITES: Record<OneSource, string> = {
   VIIRS_NOAA21_NRT: "NOAA-21 (VIIRS)",
   MODIS_NRT: "Terra and Aqua (MODIS)",
 };
+
+/** The satellite as a ranked row names it: short, the instrument left to the card. */
+const SATELLITE_SHORT: Record<OneSource, string> = {
+  VIIRS_SNPP_NRT: "Suomi NPP",
+  VIIRS_NOAA20_NRT: "NOAA-20",
+  VIIRS_NOAA21_NRT: "NOAA-21",
+  MODIS_NRT: "MODIS",
+};
+
+/**
+ * The ranked list's name for a detection: the satellite and the pass in the place's local time, "NOAA-20, Oct 17
+ * 2:42 AM PDT". Neighbouring pixels of one pass share it, so the list shows one fire per pass, not each pixel.
+ */
+export function detectionName(source: OneSource, t: unknown, [lon, lat]: [number, number]): string {
+  const ms = typeof t === "string" ? Date.parse(t) : Number.NaN;
+  if (Number.isNaN(ms)) return `Hotspot, ${SATELLITE_SHORT[source]}`;
+  const when = new Date(ms).toLocaleString("en-US", { timeZone: zoneAt([lon, lat]), month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
+  return `${SATELLITE_SHORT[source]}, ${when.replace(",", "")}`;
+}
 
 const inputSchema = z.object({
   days: z.number().int().min(1).max(5).default(3),
@@ -180,7 +200,11 @@ async function fetchSource(ctx: QueryContext, key: string, source: OneSource, da
     return { ok: false, error: `FIRMS returned an unexpected response: ${firstLine.slice(0, 80)}` };
   }
   const fc = body.trim() === "" ? EMPTY : parseFirmsCsv(body);
-  for (const f of fc.features) if (f.properties) f.properties.satellite = source;
+  for (const f of fc.features) {
+    if (!f.properties) continue;
+    f.properties.satellite = source;
+    f.properties.name = detectionName(source, f.properties.t, (f.geometry as Point).coordinates as [number, number]);
+  }
   return { ok: true, fc };
 }
 

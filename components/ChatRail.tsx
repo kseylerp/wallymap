@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDate } from "@/lib/render/inspect";
+
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, getToolName, isToolUIPart, type UIMessage } from "ai";
 import { ArrowUp, ChevronDown, ChevronUp, Square } from "lucide-react";
@@ -144,7 +146,7 @@ function SourcesLine({ sources }: { sources: Source[] }) {
           </a>
         </span>
       ))}
-      {retrieved && <span className="ml-2 tabular-nums">{retrieved}</span>}
+      {retrieved && <span className="ml-2 tabular-nums">retrieved {formatDate(retrieved)}</span>}
     </p>
   );
 }

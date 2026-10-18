@@ -566,6 +566,8 @@ export function summarizeLayerResult(
   const stats = statsOf(features, style.unit, timeField, layerId === undefined ? undefined : SERIES_ID[layerId]);
   const dates = datesOf(features, timeField, shape);
   const change = shape === "snapshots" ? snapshotChange(features, timeField, style, layerId) : undefined;
+  // The finding first: the model reads the dates line, so it carries the change itself.
+  if (dates && change) dates.scrubber = `${dates.scrubber} The change to state in the note, as it is: "${change.statement}"`;
   const lines = (geometryTypes.LineString ?? 0) + (geometryTypes.MultiLineString ?? 0);
   const polygons = (geometryTypes.Polygon ?? 0) + (geometryTypes.MultiPolygon ?? 0);
   const totalLengthKm = lines > 0 ? round(features.reduce((km, f) => km + lineLengthKm(f.geometry), 0)) : undefined;

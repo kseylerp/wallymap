@@ -176,7 +176,7 @@ describe("ChatRail sources line", () => {
     ];
     render(rail());
     const line = screen.getByTestId("sources-line");
-    expect(line.textContent).toBe("Sources OpenStreetMap · NIFC2026-10-09");
+    expect(line.textContent).toBe("Sources OpenStreetMap · NIFCretrieved Oct 9, 2026");
     const links = Array.from(line.querySelectorAll("a"));
     expect(links.map((a) => a.getAttribute("href"))).toEqual([
       "https://www.openstreetmap.org/copyright",

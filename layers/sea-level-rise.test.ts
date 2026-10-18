@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { compactDescription } from "@/lib/agent/tools";
 import { loadedScenarioValue, scenarioTileUrl } from "@/lib/render/scenario";
-import layer, { SLR_SCENARIO, slrTileUrl } from "./sea-level-rise";
+import { displayOf, legendOf } from "./contract";
+import layer, { SLR_LEGEND, SLR_SCENARIO, slrTileUrl } from "./sea-level-rise";
 
 const MIAMI: [number, number, number, number] = [-80.35, 25.65, -80.1, 25.9];
 
@@ -51,6 +52,17 @@ describe("sea-level-rise", () => {
   it("returns nothing outside the US", async () => {
     const r = await layer.query(ctx(vi.fn(), [2, 51, 4, 53]), layer.input.parse({}));
     expect(r).toMatchObject({ kind: "geojson", coverageNote: "No data outside the United States" });
+  });
+
+  it("draws NOAA's colors as served, with a key that names the newly flooded land, and US units", async () => {
+    expect(layer.style.raster).toMatchObject({ saturation: 0 });
+    expect(legendOf(layer)).toBe(SLR_LEGEND);
+    expect(SLR_LEGEND.items?.map((i) => i.color)).toEqual(["#B6EDF0", "#2B90E1", "#090991", "#55FF00"]);
+    expect(displayOf(layer).units).toBe("us");
+    const r = await layer.query(ctx(vi.fn()), layer.input.parse({}));
+    expect(r).toMatchObject({ coverageNote: expect.stringContaining("(pale cyan; navy is today's sea") });
+    expect(layer.description).toContain("pale cyan where land newly floods");
+    expect(compactDescription(layer.description, { inputs: ["feet"] })).toContain("pale cyan");
   });
 
   it("tells the model about MHHW, 2050, the scenario scrubber and compare by scenario", () => {

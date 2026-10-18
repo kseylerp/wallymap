@@ -1,0 +1,82 @@
+{
+ "count": 144,
+ "SeaLvlTrends": [
+  {
+   "stationId": "8771013",
+   "stationName": "Eagle Point",
+   "affil": "US",
+   "annotation": null,
+   "trendUnits": "inches/decade",
+   "latitude": 29.481306,
+   "longitude": -94.917253,
+   "trend": 4.8,
+   "trendError": 0.27,
+   "startDate": "08/15/1993",
+   "endDate": "12/15/2025",
+   "monthlyMeans": "https://api.tidesandcurrents.noaa.gov/dpapi/prod/webapi/product/sealvltrends.json?station=8771013&details=monthlymeans&units=english&trendType=SINGLE",
+   "events": []
+  },
+  {
+   "stationId": "8771450",
+   "stationName": "Galveston Pier 21",
+   "affil": "US",
+   "annotation": null,
+   "trendUnits": "inches/decade",
+   "latitude": 29.309999,
+   "longitude": -94.793297,
+   "trend": 2.61,
+   "trendError": 0.04,
+   "startDate": "01/15/1904",
+   "endDate": "12/15/2025",
+   "monthlyMeans": "https://api.tidesandcurrents.noaa.gov/dpapi/prod/webapi/product/sealvltrends.json?station=8771450&details=monthlymeans&units=english&trendType=SINGLE",
+   "events": []
+  },
+  {
+   "stationId": "9414290",
+   "stationName": "San Francisco",
+   "affil": "US",
+   "annotation": "Possible datum shift",
+   "trendUnits": "inches/decade",
+   "latitude": 37.806306,
+   "longitude": -122.465889,
+   "trend": 0.78,
+   "trendError": 0.03,
+   "startDate": "09/01/1897",
+   "endDate": "12/15/2025",
+   "monthlyMeans": "https://api.tidesandcurrents.noaa.gov/dpapi/prod/webapi/product/sealvltrends.json?station=9414290&details=monthlymeans&units=english&trendType=SINGLE",
+   "events": [
+    {
+     "eventType": "Earthquake",
+     "startDate": "04/18/1906",
+     "endDate": null
+    },
+    {
+     "eventType": "Datum Shift",
+     "startDate": "08/01/1897",
+     "endDate": null
+    }
+   ]
+  },
+  {
+   "stationId": "9450460",
+   "stationName": "Ketchikan",
+   "affil": "US",
+   "annotation": null,
+   "trendUnits": "inches/decade",
+   "latitude": 55.3319444,
+   "longitude": -131.6261111,
+   "trend": -0.14,
+   "trendError": 0.04,
+   "startDate": "01/15/1919",
+   "endDate": "12/15/2025",
+   "monthlyMeans": "https://api.tidesandcurrents.noaa.gov/dpapi/prod/webapi/product/sealvltrends.json?station=9450460&details=monthlymeans&units=english&trendType=SINGLE",
+   "events": [
+    {
+     "eventType": "Questionable Data",
+     "startDate": "06/15/1966",
+     "endDate": "09/15/1968"
+    }
+   ]
+  }
+ ]
+}

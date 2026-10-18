@@ -3,7 +3,8 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
 import { tileUrlForTime } from "@/lib/time";
-import layer, { annualTileUrl, dailyTileUrl } from "./phenology";
+import { legendOf } from "./contract";
+import layer, { annualTileUrl, dailyTileUrl, LEGEND_URL } from "./phenology";
 
 const OHIO: [number, number, number, number] = [-84, 38, -80, 41];
 
@@ -33,30 +34,46 @@ describe("phenology layer", () => {
     expect(layer.maxAreaKm2).toBe(Number.POSITIVE_INFINITY);
   });
 
-  it("defaults to the leaf anomaly 31 days back on the NPN WMS", async () => {
+  it("after spring (October) defaults to the season's final map, 30 June, on the NPN WMS", async () => {
     const r = await tiles({});
     expect(r.data.url).toBe(
-      "https://geoserver.usanpn.org/geoserver/wms?service=WMS&version=1.3.0&request=GetMap&layers=si-x:leaf_anomaly&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}&time=2026-09-08",
+      "https://geoserver.usanpn.org/geoserver/wms?service=WMS&version=1.3.0&request=GetMap&layers=si-x:leaf_anomaly&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}&time=2026-06-30",
     );
     expect(r.data).toMatchObject({ minzoom: 0, format: "raster" });
     expect(r.coverageNote).toContain("First leaf");
-    expect(r.coverageNote).toContain("2026-09-08");
+    expect(r.coverageNote).toContain("2026-06-30 (spring is complete by 2026-06-30, so this is the season's final map)");
     expect(r.coverageNote).toContain("lower 48");
   });
 
-  it("publishes a daily time block for the current year and the scrubber fills it", async () => {
+  it("after spring the scrubber spans January to June, so playing it shows spring arriving", async () => {
     const r = await tiles({ stage: "bloom" });
     expect(r.data.url).toContain("layers=si-x:bloom_anomaly&");
-    expect(r.data.time).toEqual({ template: dailyTileUrl("bloom", "{date}"), cadence: "daily", from: "2026-01-01", daysBack: 31 });
+    expect(r.data.time).toEqual({ template: dailyTileUrl("bloom", "{date}"), cadence: "daily", from: "2026-01-01", to: "2026-06-30", daysBack: 31 });
     expect(tileUrlForTime(r.data.url, r.data.time, ["2026-01-01", "2026-04-15T00:00:00Z"], Date.now())).toContain("&time=2026-04-15");
-    expect(tileUrlForTime(r.data.url, r.data.time, ["2026-01-01", "2026-10-09T00:00:00Z"], Date.now())).toContain("&time=2026-09-08");
+    expect(tileUrlForTime(r.data.url, r.data.time, ["2026-01-01", "2026-10-09T00:00:00Z"], Date.now())).toContain("&time=2026-06-30");
   });
 
-  it("clamps a date past the newest day and rejects one before this year", async () => {
-    const r = await tiles({ date: "2026-10-01" });
-    expect(r.data.url).toContain("&time=2026-09-08");
-    expect(r.coverageNote).toContain("showing 2026-09-08");
+  it("during spring defaults to the newest daily map, 31 days back, with no end to the scrubber", async () => {
+    vi.setSystemTime(new Date("2026-05-20T12:00:00Z"));
+    const r = await tiles({});
+    expect(r.data.url).toContain("&time=2026-04-19");
+    expect(r.data.time).toEqual({ template: dailyTileUrl("leaf", "{date}"), cadence: "daily", from: "2026-01-01", daysBack: 31 });
+    const late = await tiles({ date: "2026-05-15" });
+    expect(late.data.url).toContain("&time=2026-04-19");
+    expect(late.coverageNote).toContain("showing 2026-04-19");
+  });
+
+  it("shows 30 June for an asked summer day and rejects one before this year", async () => {
+    const r = await tiles({ date: "2026-08-01" });
+    expect(r.data.url).toContain("&time=2026-06-30");
+    expect(r.coverageNote).toContain("season's final map (asked 2026-08-01)");
     expect(await layer.query(ctx(vi.fn()), { stage: "leaf", date: "2025-12-31" })).toMatchObject({ error: expect.stringContaining("use year (1981 to 2024)") });
+  });
+
+  it("draws the NPN colors as served, keyed by NPN's own legend image", () => {
+    expect(layer.style.raster).toMatchObject({ saturation: 0 });
+    expect(legendOf(layer)).toMatchObject({ kind: "image", imageUrl: LEGEND_URL, unit: "days" });
+    expect(LEGEND_URL).toMatch(/^https:\/\/geoserver\.usanpn\.org\/.*request=GetLegendGraphic.*layer=si-x:leaf_anomaly$/);
   });
 
   it("year picks the annual PRISM anomaly with a yearly {year} template", async () => {

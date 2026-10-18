@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
-import layer, { PRODUCTS, waterTileUrl } from "./surface-water";
+import { legendOf, legendProblems } from "./contract";
+import layer, { LEGENDS, PRODUCTS, waterTileUrl } from "./surface-water";
 
 const SALTON: [number, number, number, number] = [-116.2, 33.1, -115.4, 33.7];
 
@@ -61,6 +62,20 @@ describe("surface-water layer", () => {
       format: "raster",
       url: expect.stringContaining("/change/"),
     });
+  });
+
+  it("draws the JRC colors as served, with a key per product that names them", async () => {
+    expect(layer.style.raster).toMatchObject({ saturation: 0 });
+    expect(layer.style.raster).not.toHaveProperty("hueRotate");
+    expect(legendOf(layer)).toBe(LEGENDS.occurrence);
+    for (const p of PRODUCTS) expect(legendProblems(LEGENDS[p], p)).toEqual([]);
+    expect(LEGENDS.change.items?.map((i) => [i.label, i.color])).toEqual([
+      ["Water lost", "#FF0000"],
+      ["No change", "#000000"],
+      ["Water gained", "#00FF00"],
+    ]);
+    expect((await tiles({ product: "change" })).coverageNote).toMatch(/black where water stayed the same/);
+    expect((await tiles({})).coverageNote).toMatch(/faint magenta/);
   });
 
   it("runs through runLayer and rejects a bad product", async () => {

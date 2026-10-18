@@ -3,7 +3,8 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
 import { tileUrlForTime } from "@/lib/time";
-import layer from "./sea-ice";
+import { legendOf } from "./contract";
+import layer, { CONCENTRATION_LEGEND, EXTENT_LEGEND } from "./sea-ice";
 
 const ARCTIC: [number, number, number, number] = [-60, 70, 20, 82];
 
@@ -84,6 +85,17 @@ describe("sea-ice layer", () => {
       kind: "tiles",
       time: { cadence: "daily", from: "2002-06-01" },
     });
+  });
+
+  it("draws the tiles as served, with a key in GIBS's own colors and the colors named per product", async () => {
+    expect(layer.style.raster).toMatchObject({ saturation: 0 });
+    const key = legendOf(layer);
+    expect(key).toBe(CONCENTRATION_LEGEND);
+    expect(key.items?.map((i) => i.color)).toEqual(["#B800B8", "#0084FF", "#44C100", "#FFD400", "#FF5555", "#FFE6E6"]);
+    expect(EXTENT_LEGEND.items?.[0]).toMatchObject({ label: "Sea ice", color: "#FF6464" });
+    expect((await tiles({})).coverageNote).toMatch(/red to pale pink is solid pack ice/);
+    expect((await tiles({ product: "extent" })).coverageNote).toMatch(/coral pink is sea ice/);
+    expect(layer.description).not.toMatch(/warm colors mean/);
   });
 
   it("runs through runLayer", async () => {

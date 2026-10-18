@@ -75,7 +75,14 @@ function probeUrl(sensor: Sensor, day: string, tile: { x: number; y: number }): 
   return gibsTileUrl(SENSORS[sensor].id, day, LEVEL).replace("{z}", String(PROBE_ZOOM)).replace("{y}", String(tile.y)).replace("{x}", String(tile.x));
 }
 
-/** Length of the probe tile's body, or null when the call failed (unknown, not blank). */
+/** A probe's answer for a day GIBS has not published (404): no imagery to show, and not a failure. */
+export const UNPUBLISHED = -1;
+
+/**
+ * Length of the probe tile's body; UNPUBLISHED when GIBS answers 404 (a day after its newest published day, or outside
+ * the layer's time dimension); null when the call failed (unknown, not blank). On 2026-10-18 HLS ran to 2026-10-11, a
+ * week behind, and the 404s for 12 to 16 October were reported as "could not be checked".
+ */
 async function probe(ctx: QueryContext, sensor: Sensor, day: string, tile: { x: number; y: number }, now: number): Promise<number | null> {
   const recent = Date.parse(`${day}T00:00:00Z`) > now - 7 * DAY_MS;
   try {
@@ -84,6 +91,7 @@ async function probe(ctx: QueryContext, sensor: Sensor, day: string, tile: { x: 
       ttlSeconds: recent ? RECENT_PROBE_TTL : OLD_PROBE_TTL,
       timeoutMs: UPSTREAM_TIMEOUT_MS,
     });
+    if (res.status === 404) return UNPUBLISHED;
     if (!res.ok) return null;
     return (await res.text()).length;
   } catch {
@@ -91,14 +99,20 @@ async function probe(ctx: QueryContext, sensor: Sensor, day: string, tile: { x: 
   }
 }
 
-/** `unchecked`: days nearer the asked day than the answer (or all days, when none had a pass) whose probes all failed. */
-export type Pick = { day: string; sensor: Sensor; probes: number; unchecked: string[] } | { day: null; probes: number; unchecked: string[] };
+/**
+ * `unchecked`: days nearer the asked day than the answer (or all days, when none had a pass) whose probes all failed;
+ * `unpublished`: such days GIBS has not published yet (every sensor answered 404).
+ */
+export type Pick =
+  | { day: string; sensor: Sensor; probes: number; unchecked: string[]; unpublished: string[] }
+  | { day: null; probes: number; unchecked: string[]; unpublished: string[] };
 
 /** The nearest day with imagery over the bbox centre, and the sensor whose tile there is fuller. */
 export async function nearestPass(ctx: QueryContext, bbox: BBox, days: string[], sensors: Sensor[], now: number): Promise<Pick> {
   const tile = tileFor((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2, PROBE_ZOOM);
   let probes = 0;
   const unchecked: string[] = [];
+  const unpublished: string[] = [];
   for (let i = 0; i < days.length; i += DAYS_PER_WAVE) {
     const wave = days.slice(i, i + DAYS_PER_WAVE);
     const sizes = await Promise.all(
@@ -108,11 +122,12 @@ export async function nearestPass(ctx: QueryContext, bbox: BBox, days: string[],
     for (const day of wave) {
       const ofDay = sizes.filter((s) => s.day === day);
       const hits = ofDay.filter((s) => s.size !== null && s.size >= HIT_CHARS).sort((a, b) => (b.size ?? 0) - (a.size ?? 0));
-      if (hits.length > 0) return { day, sensor: hits[0].sensor, probes, unchecked };
+      if (hits.length > 0) return { day, sensor: hits[0].sensor, probes, unchecked, unpublished };
       if (ofDay.length > 0 && ofDay.every((s) => s.size === null)) unchecked.push(day);
+      else if (ofDay.length > 0 && ofDay.every((s) => s.size === UNPUBLISHED)) unpublished.push(day);
     }
   }
-  return { day: null, probes, unchecked };
+  return { day: null, probes, unchecked, unpublished };
 }
 
 const imageryByDate = defineLayer({
@@ -133,6 +148,11 @@ const imageryByDate = defineLayer({
   maxAreaKm2: 1_000_000,
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("imagery-by-date"), raster: null },
+  legend: {
+    kind: "symbol",
+    items: [{ label: "True-colour satellite image (Landsat or Sentinel-2, 30 m)", symbol: "raster" }],
+    note: "Natural colours as the satellite saw them: clouds white, burn scars dark brown, water dark blue; blank where no satellite passed that day.",
+  },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = Date.now();
@@ -162,6 +182,10 @@ const imageryByDate = defineLayer({
           ? `${SENSORS[sensor].label} true colour for ${day}`
           : `${SENSORS[sensor].label} true colour for ${day}, the nearest day with a pass over the view to ${asked}`;
       if (pick.unchecked.length > 0) note += `; nearer days could not be checked (${pick.unchecked.join(", ")})`;
+      if (pick.unpublished.length > 0) {
+        const u = [...pick.unpublished].sort();
+        note += `; NASA has not published ${u.length === 1 ? u[0] : `${u[0]} to ${u[u.length - 1]}`} yet`;
+      }
     }
     if (choice.note !== undefined) note += ` (${choice.note})`;
 

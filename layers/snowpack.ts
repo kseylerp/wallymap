@@ -26,11 +26,20 @@
  * kg/m3 "settled", -3.3 °C; Fielding Lake 4 in, SWE 1.3 in, 325 kg/m3 "wet/dense", +1 in in 24 h.
  * Wide smoke through runLayer (2026-10-14), whole West [-125,31,-102,49] (3.9 million km²), 11.2 s cold: all 831
  * stations (804 with a depth reading; early-season depths 0-6 in), 9 data calls of up to 100 stations.
+ * Normal (added 2026-10-18): `data?...&elements=WTEQ&duration=DAILY&centralTendencyType=MEDIAN` gives each daily SWE
+ *   value its 1991-2020 `median` for that day, and `timingCentralTendencies` (medianOnset month/day, medianPeak value):
+ *   Mount Hood Test Site 651:OR:SNTL on 2026-03-01 had 16.4 in against a median of 43.6 (38%); on 2026-10-16, 0.0 against
+ *   0.0, onset normally 30 Oct, peak 59.4 in. In a view under 400,000 km² the layer asks for it alongside the hourly
+ *   data (cached 6 hours) and adds pctMedian (only when the median is 1 in or more, so October's 0/0 is never a
+ *   percentage), vsNormal (NRCS-style bands), normalOnset and medianPeakIn. Stations are colored by vsNormal, sized by
+ *   depth, and the three deepest are named on the map.
+ * The reading time is also given in the station's own time zone (readingLocal, "Oct 17, 5 PM PDT"): `t` is UTC, and its
+ *   calendar day was a day ahead of a western viewer in the evening. A data call that answers 5xx is tried once more.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
-import { nameAttribute, timeAttribute } from "./_shared/bands";
+import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, WHOLE_US_KM2, bboxesDisjoint, outsideUs } from "./_shared/coverage";
@@ -54,6 +63,98 @@ const DATA_TTL_SECONDS = 900;
 export const WIDE_LIMIT = 1000;
 const MIN_DEPTH_FOR_DENSITY_IN = 2;
 const MAX_PLAUSIBLE_DENSITY = 650;
+/** Medians change once a day. */
+const MEDIAN_TTL_SECONDS = 6 * 3_600;
+/** Below this median SWE (in) a percentage of median says nothing (October: 0 against 0). */
+export const MIN_MEDIAN_SWE_IN = 1;
+
+/** NRCS-style bands of percent of median SWE, low to high. */
+export const VS_NORMAL = [
+  { value: "well-below", label: "Well below normal (under 70%)", max: 70 },
+  { value: "below", label: "Below normal (70 to 89%)", max: 90 },
+  { value: "near", label: "Near normal (90 to 109%)", max: 110 },
+  { value: "above", label: "Above normal (110 to 129%)", max: 130 },
+  { value: "well-above", label: "Well above normal (130% and up)", max: Number.POSITIVE_INFINITY },
+] as const;
+
+export function vsNormalOf(pct: number): (typeof VS_NORMAL)[number]["value"] {
+  return (VS_NORMAL.find((b) => pct < b.max) ?? VS_NORMAL[VS_NORMAL.length - 1]).value;
+}
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** A station's IANA zone from its standard-time offset and state (Arizona keeps standard time all year). */
+export function stationZone(offsetHours: number | undefined, triplet: string): string {
+  const state = triplet.split(":")[1];
+  if (state === "AZ") return "America/Phoenix";
+  if (offsetHours === -9 || state === "AK") return "America/Anchorage";
+  if (offsetHours === -7) return "America/Denver";
+  return "America/Los_Angeles";
+}
+
+/** "Oct 17, 5 PM PDT" in the station's own zone. */
+export function localReading(ms: number, zone: string): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone: zone, month: "short", day: "numeric", hour: "numeric", timeZoneName: "short" }).format(new Date(ms));
+}
+
+const MedianSchema = z.object({
+  stationTriplet: z.string(),
+  data: z
+    .array(
+      z.object({
+        stationElement: z.object({ elementCode: z.string() }).passthrough().optional(),
+        timingCentralTendencies: z
+          .object({
+            medianPeak: z.object({ value: z.number().nullish() }).passthrough().nullish(),
+            medianOnset: z.object({ month: z.number(), day: z.number() }).passthrough().nullish(),
+          })
+          .passthrough()
+          .nullish(),
+        values: z.array(z.object({ date: z.string(), value: z.number().nullish(), median: z.number().nullish() })).optional(),
+      }),
+    )
+    .optional(),
+});
+export type SnotelMedian = z.infer<typeof MedianSchema>;
+
+/** Each station's newest daily SWE against its median for that day, and when snow normally arrives and peaks. */
+export type Normal = { swe?: number; median?: number; onset?: string; peakIn?: number };
+
+export function parseMedians(rows: SnotelMedian[]): Map<string, Normal> {
+  const out = new Map<string, Normal>();
+  for (const row of rows) {
+    const block = row.data?.find((d) => d.stationElement?.elementCode === "WTEQ");
+    if (!block) continue;
+    const n: Normal = {};
+    const latest = [...(block.values ?? [])].reverse().find((v) => typeof v.value === "number" && typeof v.median === "number");
+    if (latest) {
+      n.swe = latest.value as number;
+      n.median = latest.median as number;
+    }
+    const onset = block.timingCentralTendencies?.medianOnset;
+    if (onset && onset.month >= 1 && onset.month <= 12) n.onset = `${MONTH_NAMES[onset.month - 1]} ${onset.day}`;
+    const peak = block.timingCentralTendencies?.medianPeak?.value;
+    if (typeof peak === "number" && Number.isFinite(peak)) n.peakIn = round1(peak);
+    out.set(row.stationTriplet, n);
+  }
+  return out;
+}
+
+/** Adds pctMedian and vsNormal (when the median is 1 in or more), normalOnset and medianPeakIn to each station. */
+export function addNormals(fc: FeatureCollection, normals: Map<string, Normal>): void {
+  for (const f of fc.features) {
+    const p = f.properties as Record<string, string | number>;
+    const n = normals.get(String(p.stationId));
+    if (!n) continue;
+    if (n.swe !== undefined && n.median !== undefined && n.median >= MIN_MEDIAN_SWE_IN) {
+      p.pctMedian = Math.round((100 * n.swe) / n.median);
+      p.vsNormal = vsNormalOf(p.pctMedian);
+      p.medianSwe = n.median;
+    }
+    if (n.onset) p.normalOnset = n.onset;
+    if (n.peakIn !== undefined) p.medianPeakIn = n.peakIn;
+  }
+}
 
 const WEST_US: BBox = [-125, 31, -102, 49];
 const ALASKA: BBox = [-170, 51, -129, 72];
@@ -166,6 +267,7 @@ export function joinSnotel(stations: SnotelStation[], data: SnotelData[], bbox: 
     const depth = depths[depths.length - 1];
     if (depth !== undefined) {
       properties.t = new Date(depth.time).toISOString();
+      properties.readingLocal = localReading(depth.time, stationZone(s.dataTimeZone, s.stationTriplet));
       properties.v = depth.value;
       const swe = nearest(series.get("WTEQ") ?? [], depth.time, 2 * HOUR_MS);
       if (swe !== undefined) properties.swe = swe.value;
@@ -222,7 +324,9 @@ async function fetchRows(
   validate: (body: string) => boolean = jsonArrayBody({ minLength: 0 }),
 ): Promise<Fetched> {
   try {
-    const res = await ctx.fetch(url, { cacheKey, ttlSeconds, validate, timeoutMs: UPSTREAM_TIMEOUT_MS });
+    let res = await ctx.fetch(url, { cacheKey, ttlSeconds, validate, timeoutMs: UPSTREAM_TIMEOUT_MS });
+    // AWDB answers an occasional 500 that the next call does not (one in three during the 2026-10-17 audit): try once more.
+    if (res.status >= 500) res = await ctx.fetch(url, { cacheKey, ttlSeconds, validate, timeoutMs: UPSTREAM_TIMEOUT_MS });
     if (!res.ok) return { ok: false, error: `SNOTEL ${label} returned ${res.status}` };
     const body: unknown = await res.json();
     if (!Array.isArray(body)) return { ok: false, error: `SNOTEL ${label} did not return a list` };
@@ -257,7 +361,14 @@ const ATTRIBUTES: Attribute[] = [
     ],
   },
   { key: "v", type: "measure", label: "Snow depth", unit: "in", encode: "size" },
-  timeAttribute("Reading"),
+  {
+    key: "vsNormal",
+    type: "ordinal",
+    label: "Compared with normal",
+    scale: "Percent of the 1991-2020 median snow water equivalent for the day",
+    levels: VS_NORMAL.map((b) => ({ value: b.value, label: b.label })),
+  },
+  { key: "pctMedian", type: "measure", label: "Percent of normal", unit: "%" },
   nameAttribute(),
 ];
 
@@ -287,18 +398,38 @@ const HELP: Record<string, FieldHelp> = {
   },
   new24h: { text: "How much the depth rose over the last 24 hours (0 when it settled or melted); 1 to 2 inches may be sensor noise.", unit: "in" },
   tempC: { text: "Air temperature at the latest reading.", unit: "°C" },
+  pctMedian: {
+    text:
+      "Today's snow water equivalent as a share of the station's 1991-2020 median for this day: 100% is a normal year, 50% half the usual water. " +
+      "Left out when the median is under 1 inch (early and late season), where a percentage means nothing.",
+    unit: "%",
+    source: "USDA NRCS SNOTEL (AWDB daily medians)",
+    url: SNOTEL_URL,
+  },
+  vsNormal: { text: "The percent of normal in bands: well below under 70%, below 70 to 89%, near 90 to 109%, above 110 to 129%, well above 130% and up." },
+  medianSwe: { text: "The station's 1991-2020 median snow water equivalent for this day of the year.", unit: "in" },
+  normalOnset: { text: "The day snow normally starts to stay on the ground at this station (median of past years)." },
+  medianPeakIn: { text: "The station's median yearly peak snow water equivalent: how much water a normal winter builds.", unit: "in" },
+  readingLocal: { text: "When the latest hourly reading was taken, in the station's own time zone." },
 };
 
 const CARD: CardSpec = {
   measure: { key: "v", label: "Snow depth", unit: "in" },
   facts: [
     { key: "swe", label: "Snow water equivalent", unit: "in" },
+    { key: "pctMedian", label: "Percent of normal", unit: "%", format: "int" },
+    { key: "vsNormal", label: "Compared with normal", values: Object.fromEntries(VS_NORMAL.map((b) => [b.value, b.label])) },
+    { key: "medianSwe", label: "Normal for today", unit: "in" },
+    { key: "normalOnset", label: "Snow normally arrives" },
+    { key: "medianPeakIn", label: "Normal peak", unit: "in" },
     { key: "new24h", label: "New in 24 h", unit: "in" },
     { key: "type", label: "Snow type" },
     { key: "tempC", label: "Air temperature", unit: "°C" },
     { key: "elevationFt", label: "Elevation", unit: "ft", format: "int" },
-    { key: "t", label: "Reading", format: "date" },
+    { key: "readingLocal", label: "Reading" },
   ],
+  // t is the same reading in UTC, shown as readingLocal.
+  hidden: ["t"],
 };
 
 const snowpack = defineLayer({
@@ -306,7 +437,8 @@ const snowpack = defineLayer({
   title: "Snowpack (SNOTEL, live)",
   description:
     "Live snowpack at NRCS SNOTEL automated mountain stations in the western United States and Alaska, updated hourly. User words: snowpack, snow depth, how much snow, powder, fresh snow, new snow, SWE, snow water equivalent, is it wet or dry snow. " +
-    "Each point is a station with name, stationId, elevationFt (feet), t (UTC time of the latest hourly reading, usually under 2 hours old) and v (snow depth in inches). " +
+    "Each point is a station with name, stationId, elevationFt (feet), t (UTC time of the latest hourly reading, usually under 2 hours old; readingLocal is the same in the station's own time, e.g. 'Oct 17, 5 PM PDT') and v (snow depth in inches). " +
+    "pctMedian is today's snow water equivalent as a percent of the station's 1991-2020 median for the day and vsNormal its band ('well-below' under 70, 'below', 'near' 90 to 109, 'above', 'well-above' 130 and up), given only when the median is 1 inch or more (so not in early fall); normalOnset is when snow normally arrives and medianPeakIn a normal year's peak SWE. Use these for 'is it a good snow year'. The map colors stations by vsNormal, sizes them by depth and names the three deepest. " +
     "swe is snow water equivalent in inches (the water you would get by melting the snow, the standard measure of how much water the snowpack holds). " +
     "density is SWE / depth in kg/m³ and type classes it: 'powder' (under 150, light dry snow), 'settled' (150 to 300), 'wet/dense' (over 300, spring or rain-soaked snow), or 'no snow' when the depth is 0. " +
     "new24h is how many inches the depth rose over the last 24 hours (0 when it settled or melted); tempC is air temperature in °C. " +
@@ -325,7 +457,11 @@ const snowpack = defineLayer({
   hardMaxAreaKm2: WHOLE_US_KM2,
   wide: { orderBy: "snow depth in inches", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("snowpack"), unit: "in", timeField: "t" },
+  style: { geometry: "point", color: layerColor("snowpack"), unit: "in", timeField: "t", encode: { size: "v", color: "vsNormal" } },
+  // One latest reading per station: say when, never scrub (docs/layer-contract.md).
+  time: { shape: "single" },
+  labels: { field: "name", max: 3, rankBy: "v" },
+  display: { units: "us", timeZone: "local" },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
@@ -365,20 +501,38 @@ const snowpack = defineLayer({
     const batches: SnotelStation[][] = [];
     for (let i = 0; i < inside.length; i += BATCH_SIZE) batches.push(inside.slice(i, i + BATCH_SIZE));
 
-    const results = await Promise.all(
-      batches.map((batch, i) =>
-        fetchRows(
-          ctx,
-          `${AWDB}/data?stationTriplets=${batch.map((s) => s.stationTriplet).join(",")}` +
-            `&elements=SNWD,WTEQ,TOBS&duration=HOURLY&beginDate=${begin}&endDate=${end}&returnFlags=false`,
-          "data call",
-          ctx.cacheKey === undefined
-            ? undefined
-            : `${ctx.cacheKey}:snotel-hourly${batches.length > 1 ? `:${i}` : ""}`,
-          DATA_TTL_SECONDS,
+    // The daily medians ride alongside in a view under 400,000 km² (the wide West would double its nine data calls).
+    const dayBegin = encodeURIComponent(stamp(now.getTime() - 2 * 24 * HOUR_MS).slice(0, 10));
+    const dayEnd = encodeURIComponent(stamp(now.getTime()).slice(0, 10));
+    const medianCalls = ctx.wide
+      ? []
+      : batches.map((batch, i) =>
+          fetchRows(
+            ctx,
+            `${AWDB}/data?stationTriplets=${batch.map((s) => s.stationTriplet).join(",")}` +
+              `&elements=WTEQ&duration=DAILY&beginDate=${dayBegin}&endDate=${dayEnd}&centralTendencyType=MEDIAN&returnFlags=false`,
+            "median call",
+            ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:snotel-median${batches.length > 1 ? `:${i}` : ""}`,
+            MEDIAN_TTL_SECONDS,
+          ),
+        );
+    const [results, medians] = await Promise.all([
+      Promise.all(
+        batches.map((batch, i) =>
+          fetchRows(
+            ctx,
+            `${AWDB}/data?stationTriplets=${batch.map((s) => s.stationTriplet).join(",")}` +
+              `&elements=SNWD,WTEQ,TOBS&duration=HOURLY&beginDate=${begin}&endDate=${end}&returnFlags=false`,
+            "data call",
+            ctx.cacheKey === undefined
+              ? undefined
+              : `${ctx.cacheKey}:snotel-hourly${batches.length > 1 ? `:${i}` : ""}`,
+            DATA_TTL_SECONDS,
+          ),
         ),
       ),
-    );
+      Promise.all(medianCalls),
+    ]);
 
     const rows: SnotelData[] = [];
     for (const result of results) {
@@ -387,8 +541,23 @@ const snowpack = defineLayer({
     }
 
     const joined = joinSnotel(inside, rows, ctx.bbox, now);
+    // A failed median call leaves the comparison out; the readings still answer.
+    const medianRows = medians.flatMap((m) => (m.ok ? parseRows(MedianSchema, m.rows) : []));
+    if (medianRows.length > 0) addNormals(joined, parseMedians(medianRows));
     const { data, total } = ctx.wide ? keepDeepest(joined, ctx.wideStrategy?.limit ?? WIDE_LIMIT) : { data: joined, total: undefined };
-    return { kind: "geojson", data, citation, ...(total !== undefined && { total }) };
+    const compared = data.features.filter((f) => typeof f.properties?.pctMedian === "number").length;
+    const notes: string[] = [];
+    if (compared > 0) notes.push(`${compared} of ${data.features.length} stations compared with their 1991-2020 median snow water for the day`);
+    else if (!ctx.wide && medianRows.length > 0) {
+      // In season order (a September onset comes before a November one), so the middle one is the typical date.
+      const season = (o: string) => ((MONTH_NAMES.indexOf(o.slice(0, 3)) + 4) % 12) * 31 + Number(o.slice(4));
+      const onsets = data.features
+        .map((f) => f.properties?.normalOnset)
+        .filter((o): o is string => typeof o === "string")
+        .sort((a, b) => season(a) - season(b));
+      notes.push(`Too early in the season to compare with normal (median snow water under 1 inch)${onsets.length > 0 ? `; snow normally arrives around ${onsets[Math.floor(onsets.length / 2)]}` : ""}`);
+    }
+    return { kind: "geojson", data, citation, ...(total !== undefined && { total }), ...(notes.length > 0 && { coverageNote: notes.join("; ") }) };
   },
 });
 

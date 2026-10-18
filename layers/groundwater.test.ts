@@ -2,8 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { hardMaxAreaKm2 } from "./types";
-import layer, { LIMIT, WIDE_LIMIT, normalizeWells, sinceYear } from "./groundwater";
+import { legendOf, labelsOf, timeShapeOf } from "./contract";
+import layer, { HISTORY_LIMIT, LIMIT, WIDE_LIMIT, addContext, levelOf, normalizeWells, parseHistory, sinceYear, waterLevelPercentile } from "./groundwater";
 import fixture from "./__fixtures__/groundwater.kearney.json";
+/** The same 12 wells' manual readings since 2006 (field-measurements, the Kearney box), recorded 2026-10-18. */
+import history from "./__fixtures__/groundwater.kearney-history.json";
 
 /** A real Water Data API answer for this box (parameter 72019, measured 2024 or later), recorded 2026-10-10, cut to its first 12 wells. */
 const KEARNEY: [number, number, number, number] = [-100.2, 40.6, -99.8, 40.9];
@@ -28,6 +31,9 @@ function geojson(r: Awaited<ReturnType<typeof layer.query>>) {
 }
 
 type Call = [string, RequestInit & { cacheKey?: string; ttlSeconds?: number }];
+
+/** The call for the newest readings (the history call runs beside it). */
+const latestCall = (stub: ReturnType<typeof vi.fn>) => stub.mock.calls.find((c) => String(c[0]).includes("/latest-field-measurements/")) as unknown as Call;
 
 describe("normalizeWells", () => {
   it("turns each well into a point with depth in v, the time in t and the USGS id", () => {
@@ -96,8 +102,8 @@ describe("groundwater layer", () => {
     const stub = vi.fn(async () => json(fixture));
     const r = geojson(await layer.query(ctx(stub, { cacheKey: "groundwater:k" }), {}));
     expect(r.data.features).toHaveLength(12);
-    expect(r.coverageNote).toBe("Latest manual measurement per well since 2021; depth is feet below land surface");
-    const [url, init] = stub.mock.calls[0] as unknown as Call;
+    expect(r.coverageNote).toBe("Latest manual measurement per well since 2021; depth is feet below land surface; 0 of 12 wells compared with their own readings since 2006");
+    const [url, init] = latestCall(stub);
     const params = new URL(url).searchParams;
     expect(url).toContain("/ogcapi/v1/collections/latest-field-measurements/items?");
     expect(params.get("parameter_code")).toBe("72019");
@@ -112,7 +118,7 @@ describe("groundwater layer", () => {
   it("uses sinceYear in the filter and the key, and sends USGS_API_KEY when set", async () => {
     const stub = vi.fn(async () => json(fixture));
     await layer.query(ctx(stub, { env: { USGS_API_KEY: "test-key" }, cacheKey: "k" }), { sinceYear: 2010 });
-    const [url, init] = stub.mock.calls[0] as unknown as Call;
+    const [url, init] = latestCall(stub);
     expect(new URL(url).searchParams.get("time")).toBe("2010-01-01T00:00:00Z/..");
     expect(init.cacheKey).toBe("k:groundwater:2010");
     expect(init.headers).toEqual({ "X-Api-Key": "test-key" });
@@ -175,7 +181,8 @@ describe("groundwater layer", () => {
       expect(res.body).toMatchObject({
         total: 2492,
         truncated: true,
-        coverageNote: "Showing the 12 first of 2,492; zoom in under 40,000 km² for all; Latest manual measurement per well since 2021; depth is feet below land surface",
+        coverageNote:
+          "Showing the 12 first of 2,492; zoom in under 40,000 km² for all; Latest manual measurement per well since 2021; depth is feet below land surface; zoom in under 12,000 km² to compare each well with its own record",
       });
     } finally {
       vi.unstubAllGlobals();
@@ -194,5 +201,72 @@ describe("groundwater layer", () => {
     expect(layer.description).toMatch(/water table/);
     expect(layer.description).toMatch(/negative/);
     expect(layer.description).toMatch(/cannot show a trend/);
+  });
+
+  it("is one reading per well (no scrubber), colored by depth, with the three deepest labelled by their depth", () => {
+    expect(layer.time).toEqual({ shape: "single" });
+    expect(timeShapeOf(layer, { type: "FeatureCollection", features: normalizeWells(fixture) }).shape).toBe("single");
+    expect(layer.style.encode).toEqual({ color: "v" });
+    expect(legendOf(layer)).toMatchObject({ kind: "ramp", field: "v", unit: "ft below land surface" });
+    expect(labelsOf(layer)).toEqual({ field: "depthLabel", max: 3, rankBy: "v" });
+    expect(normalizeWells(fixture)[0].properties?.depthLabel).toBe("82 ft");
+  });
+
+  it("says the method in words and flags a depth over 1,500 ft as a probable error", () => {
+    let n = 0;
+    const row = (props: Record<string, unknown>) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [-100, 41] },
+      properties: { monitoring_location_id: `USGS-${n++}`, value: "68.14", unit_of_measure: "ft", time: "2025-04-01", ...props },
+    });
+    const wells = normalizeWells({
+      features: [
+        row({ observing_procedure_code: "O", observing_procedure: "GW level, estim, report, observ" }),
+        row({ observing_procedure_code: "V", observing_procedure: "GW level, calib electric tape" }),
+        row({ observing_procedure: "GW level, steel tape" }),
+        row({ value: "2976.72", observing_procedure_code: "S" }),
+      ],
+    });
+    expect(wells.map((w) => w.properties?.method)).toEqual(["Reported or estimated (no tape reading)", "Calibrated electric tape", "Steel tape", "Steel tape"]);
+    expect(wells[3].properties?.check).toMatch(/probably a data entry error/);
+    expect(wells[0].properties?.check).toBeUndefined();
+  });
+
+  it("places the newest reading in the well's own record: share of earlier readings deeper than now, and its class", () => {
+    const record = parseHistory(history);
+    const site = record?.get("USGS-404046099504501") ?? [];
+    expect(site.length).toBe(37);
+    // 82.00 ft on 2025-06-10 against readings of 77 to 85 ft since 2006.
+    const c = waterLevelPercentile(82, "2025-06-10", site);
+    expect(c).toMatchObject({ since: 2006 });
+    expect(c?.pct).toBeGreaterThan(0);
+    expect(c?.pct).toBeLessThan(100);
+    expect(waterLevelPercentile(82, "2025-06-10", site.slice(0, 5))).toBeUndefined();
+    expect([5, 10, 24, 25, 75, 76, 90, 91, 100].map(levelOf)).toEqual(["much-below", "below", "below", "normal", "normal", "above", "above", "much-above", "much-above"]);
+  });
+
+  it("adds the comparison to every Kearney well with enough record, and says how many", async () => {
+    const stub = vi.fn(async (url: string) => json(url.includes("/field-measurements/") ? history : fixture));
+    const r = geojson(await layer.query(ctx(stub, { cacheKey: "k" }), {}));
+    const hist = stub.mock.calls.map((c) => new URL(String(c[0]))).find((u) => u.pathname.endsWith("/field-measurements/items"));
+    expect(hist?.searchParams.get("time")).toBe("2006-01-01T00:00:00Z/..");
+    expect(hist?.searchParams.get("bbox")).toBe("-100.2,40.6,-99.8,40.9");
+    expect(hist?.searchParams.get("skipGeometry")).toBe("true");
+    const compared = r.data.features.filter((f) => typeof f.properties?.pct === "number");
+    expect(compared.length).toBe(12);
+    expect(compared[0].properties).toMatchObject({ level: expect.any(String), medianFt: expect.any(Number), recordSince: 2006 });
+    expect(r.coverageNote).toContain("12 of 12 wells compared with their own readings since 2006");
+  });
+
+  it("leaves the comparison out when the history page is cut at its limit or the box is too big", async () => {
+    expect(addContext(normalizeWells(fixture), new Map())).toBe(0);
+    const full = { features: Array.from({ length: HISTORY_LIMIT }, () => history.features[0]) };
+    const stub = vi.fn(async (url: string) => json(url.includes("/field-measurements/") ? full : fixture));
+    const r = geojson(await layer.query(ctx(stub), {}));
+    expect(r.data.features.some((f) => f.properties?.pct !== undefined)).toBe(false);
+    const big = vi.fn(async (_url: string) => json(fixture));
+    const wide = geojson(await layer.query(ctx(big, { bbox: [-101, 40, -99, 41.5] }), {}));
+    expect(big.mock.calls.some((c) => String(c[0]).includes("/field-measurements/"))).toBe(false);
+    expect(wide.coverageNote).toContain("zoom in under 12,000 km² to compare each well with its own record");
   });
 });

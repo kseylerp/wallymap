@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { WIDE_LIMIT, joinSnotel, keepDeepest, snowType, type SnotelData, type SnotelStation } from "./snowpack";
+import { labelsOf, legendOf, timeShapeOf } from "./contract";
+import layer, { WIDE_LIMIT, addNormals, joinSnotel, keepDeepest, localReading, parseMedians, snowType, stationZone, vsNormalOf, type SnotelData, type SnotelMedian, type SnotelStation } from "./snowpack";
+import marchMedians from "./__fixtures__/snowpack-median.march.json";
+import octoberMedians from "./__fixtures__/snowpack-median.october.json";
 import { hardMaxAreaKm2 } from "./types";
 import stationsFixture from "./__fixtures__/snotel-stations.json";
 import hourlyFixture from "./__fixtures__/snotel-hourly.tahoe.json";
@@ -125,9 +128,10 @@ describe("snowpack layer", () => {
     const stub = routedStub();
     const r = await layer.query(ctx(stub, "snowpack:k"), {});
     expect(r).toMatchObject({ kind: "geojson" });
-    const calls = stub.mock.calls as unknown as [string, { ttlSeconds?: number }][];
-    expect(cacheKeys(stub)).toEqual(["snowpack:stations:WTEQ", "snowpack:k:snotel-hourly"]);
-    expect(calls[1][1].ttlSeconds).toBe(900);
+    const calls = stub.mock.calls as unknown as [string, { cacheKey?: string; ttlSeconds?: number }][];
+    expect(cacheKeys(stub).sort()).toEqual(["snowpack:k:snotel-hourly", "snowpack:k:snotel-median", "snowpack:stations:WTEQ"]);
+    expect(calls.find((c) => c[1].cacheKey === "snowpack:k:snotel-hourly")?.[1].ttlSeconds).toBe(900);
+    expect(calls.find((c) => c[1].cacheKey === "snowpack:k:snotel-median")?.[1].ttlSeconds).toBe(21_600);
   });
 
   it("asks for SNWD, WTEQ and TOBS hourly over a window around now", async () => {
@@ -136,7 +140,7 @@ describe("snowpack layer", () => {
     const stationsUrl = String(stub.mock.calls[0][0]);
     expect(param(stationsUrl, "stationTriplets")).toBe("*:*:SNTL");
     expect(param(stationsUrl, "activeOnly")).toBe("true");
-    const url = String(stub.mock.calls[1][0]);
+    const url = String(stub.mock.calls.find((c) => param(c[0], "duration") === "HOURLY")?.[0]);
     expect((param(url, "stationTriplets") ?? "").split(",")).toHaveLength(17);
     expect(param(url, "elements")).toBe("SNWD,WTEQ,TOBS");
     expect(param(url, "duration")).toBe("HOURLY");
@@ -154,8 +158,10 @@ describe("snowpack layer", () => {
     }));
     const stub = vi.fn(async (url: string) => json(url.includes("/stations?") ? many : []));
     const r = await layer.query(ctx(stub, "snowpack:k"), {});
-    const dataCalls = stub.mock.calls.filter((c) => String(c[0]).includes("/data?"));
+    const dataCalls = stub.mock.calls.filter((c) => String(c[0]).includes("/data?") && param(c[0], "duration") === "HOURLY");
     expect(dataCalls.map((c) => (param(c[0], "stationTriplets") ?? "").split(",").length)).toEqual([100, 100, 5]);
+    const medianCalls = stub.mock.calls.filter((c) => param(c[0], "centralTendencyType") === "MEDIAN");
+    expect(medianCalls.map((c) => (param(c[0], "stationTriplets") ?? "").split(",").length)).toEqual([100, 100, 5]);
     const keys = cacheKeys(stub);
     expect(new Set(keys).size).toBe(keys.length);
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
@@ -256,5 +262,65 @@ describe("snowpack wide mode (over 400,000 km²)", () => {
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(5);
     expect(r.total).toBe(17);
+  });
+});
+
+describe("snowpack against normal, local time and labels", () => {
+  const fc = () => ({
+    type: "FeatureCollection" as const,
+    features: ["356:CA:SNTL", "651:OR:SNTL"].map((stationId) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [-120, 39] },
+      properties: { name: stationId, stationId, v: 40 } as Record<string, string | number>,
+    })),
+  });
+
+  it("gives percent of the day's median and its band in March (Mount Hood 16.4 in against 43.6: 38%, well below)", () => {
+    const data = fc();
+    addNormals(data, parseMedians(marchMedians as unknown as SnotelMedian[]));
+    expect(data.features[1].properties).toMatchObject({ pctMedian: 38, vsNormal: "well-below", medianSwe: 43.6, normalOnset: "Oct 30", medianPeakIn: 59.4 });
+    expect(data.features[0].properties).toMatchObject({ pctMedian: 70, vsNormal: "below", normalOnset: "Nov 5" });
+    expect([69, 70, 89, 90, 109, 110, 129, 130, 200].map(vsNormalOf)).toEqual(["well-below", "below", "below", "near", "near", "above", "above", "well-above", "well-above"]);
+  });
+
+  it("never turns October's 0 against 0 into a percentage, but says when snow normally arrives", async () => {
+    const data = fc();
+    addNormals(data, parseMedians(octoberMedians as unknown as SnotelMedian[]));
+    expect(data.features[1].properties).not.toHaveProperty("pctMedian");
+    expect(data.features[1].properties).toMatchObject({ normalOnset: "Oct 30" });
+    const stub = vi.fn(async (url: string) => json(url.includes("/stations?") ? stations : url.includes("MEDIAN") ? octoberMedians : hourly));
+    const r = await layer.query(ctx(stub), {});
+    expect(r).toMatchObject({ coverageNote: expect.stringMatching(/^Too early in the season to compare with normal/) });
+  });
+
+  it("says the reading in the station's own zone, not the UTC day", () => {
+    // 2026-10-18 00:00 UTC is the evening of 17 October on the West Coast.
+    expect(localReading(Date.parse("2026-10-18T00:00:00Z"), stationZone(-8, "651:OR:SNTL"))).toBe("Oct 17, 5 PM PDT");
+    expect(stationZone(-7, "1000:AZ:SNTL")).toBe("America/Phoenix");
+    expect(stationZone(-7, "1000:CO:SNTL")).toBe("America/Denver");
+    expect(stationZone(-9, "1000:AK:SNTL")).toBe("America/Anchorage");
+    const blueLakes = joinSnotel(stations, hourly, TAHOE, NOW).features.find((f) => typeof f.properties?.readingLocal === "string");
+    expect(blueLakes?.properties?.readingLocal).toMatch(/^Oct 9, \d{1,2} (AM|PM) PDT$/);
+  });
+
+  it("is one reading per station, colored by band, sized by depth, with the three deepest named", () => {
+    expect(layer.time).toEqual({ shape: "single" });
+    expect(timeShapeOf(layer).shape).toBe("single");
+    expect(layer.style.encode).toEqual({ size: "v", color: "vsNormal" });
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 3, rankBy: "v" });
+    expect(legendOf(layer)).toMatchObject({ kind: "categories", field: "vsNormal" });
+  });
+
+  it("tries a data call once more after a 500 before giving up", async () => {
+    let failed = false;
+    const stub = vi.fn(async (url: string) => {
+      if (url.includes("/stations?")) return json(stations);
+      if (!failed && url.includes("HOURLY")) {
+        failed = true;
+        return new Response("busy", { status: 500 });
+      }
+      return json(url.includes("MEDIAN") ? [] : hourly);
+    });
+    expect(await layer.query(ctx(stub), {})).toMatchObject({ kind: "geojson" });
   });
 });

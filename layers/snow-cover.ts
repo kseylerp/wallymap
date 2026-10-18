@@ -13,16 +13,24 @@
  *     (layer 0 = snow depth, 4 = snow water equivalent; "not time enabled", refreshed 01Z, 05Z, 11Z and 17Z). Its `export`
  *     operation answers 200 image/png for any Web Mercator bbox; over the Cascades (Mount Rainier) it drew coloured depth
  *     pixels, and `identify` there returned a depth value. It is the current analysis only: no date, no scrubber.
- *     Legend classes run in 12 steps from a trace to several metres; their unit is not stated in the service metadata,
- *     so the description does not quote one.
- * No upstream call is made by the layer: it only builds the URL for the map to fetch.
+ *     Its legend (MapServer/legend, read 2026-10-18) gives 12 depth classes in inches, drawn grey-green through blue and
+ *     purple to brown: 0.39-2, 2-3.9, 3.9-9.8, 9.8-20, 20-39, 39-59, 59-98, 98-197, 197-295, 295-394, 394-787 in.
+ * Colors (2026-10-18): GIBS draws NDSI snow from pale yellow (NDSI 0.01-0.20) through orange to red (1.0), not blue-white;
+ *   the old 60% desaturation turned that into a faint tan, so snow on the Cascades on 2026-03-10 hardly showed and the
+ *   words named colors that were not on screen. The tiles are now drawn as served (no saturation or hue change) and the
+ *   legend lists GIBS's own colors (colormap MODIS_NDSI_Snow_Cover.xml).
+ * Empty days: with no date asked, the layer reads the view's tiles for the newest day (layers/snow-cover-probe.ts); when
+ *   they hold no snow (early season, or cloud), it steps back (daily for a week, every 3 days to a month, weekly to six
+ *   months) and shows the newest day with snow in the view, saying so. An asked date is never moved; the note says when it
+ *   shows no snow. Live 2026-10-18: Mount Hood [-122,45,-121,46] has snow on 2026-10-17 (the glaciers, thin new snow).
  */
 import { z } from "zod";
-import { defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type LegendSpec, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
-import { dateInput } from "./_shared/dated-tiles";
+import { dateInput, isoDay, resolveTileDate } from "./_shared/dated-tiles";
 import { gibsDatedResult, type GibsDatedSpec } from "./_shared/gibs-dated";
 import { mapServerExportTileUrl } from "./_shared/arcgis-tiles";
+import { latestSnowDay, lookbackDays, MIN_SNOW_PIXELS, snowInView } from "./snow-cover-probe";
 import { layerColor } from "@/lib/render/palette";
 
 const NOHRSC_SERVICE = "https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer";
@@ -48,13 +56,52 @@ export function nohrscDepthTileUrl(): string {
   return mapServerExportTileUrl(NOHRSC_SERVICE, { layers: `show:${NOHRSC_DEPTH_LAYER}` });
 }
 
+/** NDSI classes as GIBS draws them (colormap MODIS_NDSI_Snow_Cover.xml, each class's middle color). */
+export const NDSI_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Snow cover (NDSI)",
+  items: [
+    { label: "Thin or patchy snow (NDSI 0.01 to 0.20)", value: "1-20", color: "#F0F089", symbol: "raster" },
+    { label: "Light snow (0.21 to 0.40)", value: "21-40", color: "#F0D289", symbol: "raster" },
+    { label: "Moderate snow (0.41 to 0.60)", value: "41-60", color: "#F0B489", symbol: "raster" },
+    { label: "Heavy snow (0.61 to 0.80)", value: "61-80", color: "#F09689", symbol: "raster" },
+    { label: "Snow covered (0.81 to 1.0)", value: "81-100", color: "#F08081", symbol: "raster" },
+  ],
+  note:
+    "Clear where there is no snow, and also under cloud and at night (the satellite cannot see). In depth mode the colors are NOAA's depth classes instead: " +
+    "grey-green under 2 in, teal and blue 2 to 20 in, indigo and purple 20 to 98 in, magenta to brown over 98 in.",
+};
+
+/** The depth analysis's classes in inches as NOAA draws them (MapServer legend, read 2026-10-18), for the answer's note. */
+export const DEPTH_CLASSES_NOTE =
+  "Snow depth in inches, NOAA's colors: 0.4 to 2 grey-green, 2 to 4 teal, 4 to 10 light blue, 10 to 20 blue, 20 to 39 indigo, 39 to 59 violet, 59 to 98 purple, 98 to 197 magenta, over 197 plum to brown";
+
+/**
+ * The day to draw with no date asked: the newest day when it has snow in the view, else the newest earlier day that has,
+ * and a note saying which. Unknown (GIBS not answering) keeps the newest day.
+ */
+async function dayWithSnow(ctx: QueryContext, now: number): Promise<{ date: string; note?: string } | null> {
+  const choice = resolveTileDate(undefined, { from: MODIS_SPEC.from, latestOffsetDays: -MODIS_SPEC.daysBack, label: MODIS_SPEC.label }, now);
+  if (!choice.ok) return null;
+  const newest = choice.date;
+  const search = await latestSnowDay(MODIS_SPEC.gibsId, MODIS_SPEC.level, ctx.bbox, lookbackDays(newest, MODIS_SPEC.from), now);
+  if (search.found === newest) return { date: newest };
+  if (search.found !== null) {
+    return { date: search.found, note: `Snow cover for ${search.found}, the newest day with snow in the view; none was seen on ${newest} (no snow on the ground, or cloud)` };
+  }
+  if (search.unknown || search.oldest === null) return { date: newest };
+  return { date: newest, note: `Snow cover for ${newest}; no snow seen in the view on any day checked from ${search.oldest} to ${newest}` };
+}
+
 const snowCover = defineLayer({
   id: "snow-cover",
   title: "Snow cover",
   description:
-    "Global satellite map of where the ground is snow-covered, from NASA's MODIS sensor on the Terra satellite (Normalized Difference Snow Index): snow and ice show as bright blue-white, on a daily image that goes back to February 2000. " +
-    "date (YYYY-MM-DD) picks the day and defaults to yesterday; the day can be moved with the time scrubber or compare to see how snow cover changed between two dates or years. " +
-    "Set depth to true for the US snow depth analysis from NOAA's National Operational Hydrologic Remote Sensing Center (SNODAS-style modelled depth, about 1 km, stronger colors for deeper snow); it covers the lower 48 states only, shows the latest analysis (updated four times a day), and has no date. " +
+    "Global satellite map of where the ground is snow-covered, from NASA's MODIS sensor on the Terra satellite (Normalized Difference Snow Index, NDSI), on a daily image that goes back to February 2000. " +
+    "Snow is drawn in NASA's colors: pale yellow for thin or patchy snow, through orange, to red-pink where the ground is fully snow covered; snow-free ground, cloud and night are clear. " +
+    "date (YYYY-MM-DD) picks the day; without it the layer shows yesterday, or, when the view has no snow that day (early season, or cloud), the newest earlier day with snow in the view, and its coverageNote says so: tell the user which day is shown. " +
+    "The day can be moved with the time scrubber or compare to see how snow cover changed between two dates or years. " +
+    "Set depth to true for the US snow depth analysis from NOAA's National Operational Hydrologic Remote Sensing Center (SNODAS-style modelled depth, about 1 km, in inches: grey-green under 2 in, blue 4 to 20 in, purple 20 to 98 in, magenta to brown deeper); it covers the lower 48 states only, shows the latest analysis (updated four times a day), and has no date. " +
     "Use it for 'snow cover', 'is there snow on the ground', 'how deep is the snow', 'when did the snow line retreat', 'early or late snow year' and similar. " +
     "Example questions: where is there snow in the Sierra today, how does snow cover in the Alps compare with a year ago, how deep is the snowpack in Colorado. " +
     "Caveats: the satellite sees snow only through clear sky, so cloudy days leave gaps or look patchy, forests can hide snow, and a day may be missing; it shows whether snow is there, not how deep or how much water is in it (depth mode and the snowpack layer give amounts). " +
@@ -67,10 +114,28 @@ const snowCover = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("snow-cover"), raster: { saturation: -0.6, brightnessMax: 0.92, swatch: "#BFE8FF" } },
+  // Drawn as served, so the pixels are GIBS's own colors and the legend names them (the old calm filter turned snow tan).
+  // brightnessMax 0.92 only keeps the white flash of the brightest pixels down (tests/rasterCalm.test.ts); the legend
+  // gives the raw colors, which the panel shows through the same filter as the swatch.
+  style: { geometry: "polygon", color: layerColor("snow-cover"), raster: { saturation: 0, brightnessMax: 0.92, opacity: 0.9, swatch: "#F0B489" } },
+  legend: NDSI_LEGEND,
 
-  async query(_ctx, input): Promise<LayerResult | LayerError> {
-    if (!input.depth) return gibsDatedResult(MODIS_SPEC, input.date);
+  async query(ctx, input): Promise<LayerResult | LayerError> {
+    if (!input.depth) {
+      const now = Date.now();
+      if (input.date !== undefined) {
+        const r = gibsDatedResult(MODIS_SPEC, input.date, now);
+        if (!("kind" in r) || r.kind !== "tiles") return r;
+        // An asked day is never moved; say when it shows no snow, so a clear map reads as an answer.
+        const shown = /for (\d{4}-\d{2}-\d{2})/.exec(r.coverageNote ?? "")?.[1] ?? input.date;
+        const n = await snowInView(MODIS_SPEC.gibsId, MODIS_SPEC.level, ctx.bbox, shown, now);
+        return n !== null && n < MIN_SNOW_PIXELS ? { ...r, coverageNote: `${r.coverageNote}; no snow seen in the view that day (none on the ground, or hidden by cloud)` } : r;
+      }
+      const pick = await dayWithSnow(ctx, now);
+      const r = gibsDatedResult(MODIS_SPEC, pick?.date, now);
+      if (!("kind" in r) || r.kind !== "tiles" || !pick?.note) return r;
+      return { ...r, coverageNote: pick.note };
+    }
     if (input.date !== undefined) {
       return { error: "Snow depth (depth: true) is only the latest analysis, so it takes no date; omit date, or use depth: false for a past day" };
     }
@@ -82,7 +147,7 @@ const snowCover = defineLayer({
         url: "https://www.nohrsc.noaa.gov/nsa/",
         retrieved: new Date().toISOString(),
       },
-      coverageNote: "Latest NOHRSC snow depth analysis (lower 48 states, updated several times a day); not scrubbable",
+      coverageNote: `Snow depth (NOAA), latest NOHRSC analysis for ${isoDay(Date.now())}, lower 48 states, updated several times a day; not scrubbable. ${DEPTH_CLASSES_NOTE}`,
     };
   },
 });

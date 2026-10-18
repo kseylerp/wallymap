@@ -120,6 +120,19 @@ describe("imagery-by-date", () => {
     expect(none.coverageNote).toMatch(/not verified: the satellite check failed for 2020-06-01, /);
   });
 
+  it("reads a 404 as a day NASA has not published yet, not as a failed check", async () => {
+    // HLS ran a week behind on 2026-10-18: GIBS answered 404 for the days after its newest published day.
+    const lagging = vi.fn(async (url: string) => {
+      const day = url.match(/\/default\/(\d{4}-\d{2}-\d{2})\//)?.[1] ?? "";
+      if (day > "2026-10-05") return new Response("not found", { status: 404 });
+      return stub()(url);
+    });
+    const r = await tiles(lagging, {});
+    expect(r.data.url).toContain("/2026-10-05/");
+    expect(r.coverageNote).toContain("NASA has not published 2026-10-06 to 2026-10-08 yet");
+    expect(r.coverageNote).not.toContain("could not be checked");
+  });
+
   it("publishes a daily time template for the scrubber and compare", async () => {
     const r = await tiles(stub(), { date: "2026-09-28" });
     expect(r.data).toMatchObject({ minzoom: 5, maxzoom: 12, format: "raster" });

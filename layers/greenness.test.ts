@@ -3,7 +3,8 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
 import { tileUrlForTime } from "@/lib/time";
-import layer, { compositeStart } from "./greenness";
+import { legendOf, legendProblems } from "./contract";
+import layer, { compositeStart, EVI_LEGEND, NDVI_LEGEND } from "./greenness";
 
 const ALPS: [number, number, number, number] = [5, 44, 15, 48];
 
@@ -94,6 +95,15 @@ describe("greenness layer", () => {
   it("summarizes to the tile URL and the time range for the model", async () => {
     const summary = summarizeLayerResult(await layer.query(ctx(vi.fn()), { index: "ndvi" }));
     expect(summary).toMatchObject({ kind: "tiles", format: "raster", time: { cadence: "16day", from: "2000-03-05", daysBack: 25 } });
+  });
+
+  it("draws GIBS's ramp as served, with a key in its colors from bare to dense forest", () => {
+    expect(layer.style.raster).toMatchObject({ saturation: 0 });
+    expect(legendOf(layer)).toBe(NDVI_LEGEND);
+    expect(legendProblems(NDVI_LEGEND, "ndvi")).toEqual([]);
+    expect(legendProblems(EVI_LEGEND, "evi")).toEqual([]);
+    expect(NDVI_LEGEND.stops?.[0]).toMatchObject({ value: 0, color: "#F1ECEC" });
+    expect(NDVI_LEGEND.stops?.at(-1)).toMatchObject({ value: 1, color: "#001800" });
   });
 
   it("runs through runLayer and rejects a bad date", async () => {

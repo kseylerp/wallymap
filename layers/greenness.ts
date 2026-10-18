@@ -15,7 +15,7 @@
  * No upstream call is made by the layer: it only builds the URL for the map to fetch.
  */
 import { z } from "zod";
-import { defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { dateInput } from "./_shared/dated-tiles";
 import { gibsDatedResult, type GibsDatedSpec } from "./_shared/gibs-dated";
@@ -55,11 +55,42 @@ export function greennessSpec(index: keyof typeof GIBS_IDS): GibsDatedSpec {
   };
 }
 
+/** NDVI in GIBS's colors (colormap MODIS_L3_NDVI.xml, its labelled stops, read 2026-10-18). */
+export const NDVI_LEGEND: LegendSpec = {
+  kind: "ramp",
+  title: "Greenness (NDVI)",
+  field: "ndvi",
+  stops: [
+    { label: "0 bare, rock or snow", value: 0, color: "#F1ECEC" },
+    { label: "0.2 dry or sparse", value: 0.2, color: "#B19883" },
+    { label: "0.3", value: 0.3, color: "#BFDE77" },
+    { label: "0.4 grass or crops", value: 0.4, color: "#8FB716" },
+    { label: "0.6 leafy", value: 0.6, color: "#398700" },
+    { label: "0.8 dense forest", value: 0.8, color: "#056400" },
+    { label: "1.0", value: 1, color: "#001800" },
+  ],
+  note: "Water is clear. EVI (index evi) uses a similar ramp that reaches dark green sooner: 0.2 #BFDE77, 0.4 #539700, 0.6 #086700, 0.8 #002400.",
+};
+
+/** EVI in GIBS's colors (colormap MODIS_L3_EVI.xml), for a key when index is evi. */
+export const EVI_LEGEND: LegendSpec = {
+  kind: "ramp",
+  title: "Greenness (EVI)",
+  field: "evi",
+  stops: [
+    { label: "0 bare", value: 0, color: "#F1ECEC" },
+    { label: "0.2", value: 0.2, color: "#BFDE77" },
+    { label: "0.4", value: 0.4, color: "#539700" },
+    { label: "0.6", value: 0.6, color: "#086700" },
+    { label: "0.8 dense forest", value: 0.8, color: "#002400" },
+  ],
+};
+
 const greenness = defineLayer({
   id: "greenness",
   title: "Vegetation greenness",
   description:
-    "Global satellite map of how green the land is, from NASA's MODIS sensor on the Terra satellite: a vegetation index drawn as a color ramp from brown (bare ground, rock, snow, water) to dark green (dense, healthy leaves). " +
+    "Global satellite map of how green the land is, from NASA's MODIS sensor on the Terra satellite: a vegetation index drawn in NASA's colors from near-white and tan (bare ground, rock, snow) through brown (dry) and yellow-green (grass, crops) to dark green (dense, healthy leaves); water is clear. " +
     "It is a 16-day composite, one image per 16-day period (the composites restart every 1 January), published from March 2000 to about 25 days ago; date (YYYY-MM-DD) picks the period containing that day and defaults to the newest. " +
     "index is ndvi (NDVI, the default and classic greenness index, about 0 for bare ground to about 0.9 for dense forest) or evi (EVI, the enhanced vegetation index, which works better over very dense forest and is less washed out by haze). " +
     "Use it for 'how green is it', 'greenness', 'is the vegetation drought-stressed', 'when does spring green-up start', 'green vs brown season', or to compare the same place in two years by moving the date or using compare. " +
@@ -74,7 +105,9 @@ const greenness = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("greenness"), raster: { saturation: -0.5, swatch: "#2E9E3E" } },
+  // As served, so the ramp matches the key (the old half desaturation dulled the greens into Topo's forest tint).
+  style: { geometry: "polygon", color: layerColor("greenness"), raster: { saturation: 0, opacity: 0.85, swatch: "#398700" } },
+  legend: NDVI_LEGEND,
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     const r = gibsDatedResult(greennessSpec(input.index), input.date);

@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { normalizePermafrost, permafrostOffset } from "./permafrost";
+import { cardTitle, legendOf } from "./contract";
+import layer, { dropSlivers, normalizePermafrost, permafrostOffset } from "./permafrost";
 import fixture from "./__fixtures__/permafrost.fairbanks.json";
 
 /** Recorded 2026-10-10 for [-150,63,-145,66] (permafrost classes only, largest first), trimmed to 10 small polygons. */
@@ -29,7 +30,7 @@ describe("permafrost", () => {
       ],
     };
     expect(normalizePermafrost(extra).map((x) => x.properties)).toEqual([
-      { kind: "sporadic", percent: "10-50%", v: 30, groundIce: "high (over 20%)", landform: "lowland or highland with thick sediment", relict: "yes" },
+      { name: "Sporadic permafrost zone", kind: "sporadic", percent: "10-50%", v: 30, groundIce: "high (over 20%)", landform: "lowland or highland with thick sediment", relict: "yes" },
     ]);
   });
 
@@ -42,9 +43,9 @@ describe("permafrost", () => {
     const u = new URL(url);
     expect(u.searchParams.get("where")).toBe("EXTENT IN ('C','D','S','I')");
     expect(u.searchParams.get("orderByFields")).toBe("Shape__Area DESC");
-    expect(u.searchParams.get("maxAllowableOffset")).toBe("0.025");
-    expect(init).toMatchObject({ cacheKey: "permafrost:k:zones", ttlSeconds: 2_592_000 });
-    expect(permafrostOffset([-170, 55, -140, 72])).toBe(0.1);
+    expect(u.searchParams.get("maxAllowableOffset")).toBe("0.013");
+    expect(init).toMatchObject({ cacheKey: "permafrost:k:zones-v2", ttlSeconds: 2_592_000 });
+    expect(permafrostOffset([-170, 55, -140, 72])).toBe(0.075);
     expect(r.citation.source).toContain("licence not stated");
   });
 
@@ -69,6 +70,30 @@ describe("permafrost", () => {
     expect(none).not.toHaveBeenCalled();
     const down = vi.fn(async () => new Response("no", { status: 500 }));
     expect(await layer.query(ctx(down), layer.input.parse({}))).toMatchObject({ hint: "upstream" });
+  });
+
+  it("colors zones on the ordinal ramp, keys the four classes and titles the card by its zone", () => {
+    expect(layer.style.encode).toEqual({ color: "kind" });
+    const key = legendOf(layer);
+    expect(key).toMatchObject({ kind: "categories", field: "kind" });
+    expect(key.items?.map((i) => i.value)).toEqual(["isolated", "sporadic", "discontinuous", "continuous"]);
+    const f = normalizePermafrost(fixture as FeatureCollection)[2];
+    expect(cardTitle(layer, f)).toBe("Discontinuous permafrost zone");
+  });
+
+  it("drops the triangle slivers simplification leaves, keeping real polygons and multipolygon parts", () => {
+    const tri = (x: number, size: number) => [[[x, 64], [x + size, 64], [x, 64 + size], [x, 64]]];
+    const big = [[[0, 60], [1, 60], [1, 61], [0.5, 61.5], [0, 61], [0, 60]]];
+    const features = [
+      { type: "Feature" as const, properties: {}, geometry: { type: "Polygon" as const, coordinates: tri(0, 0.01) } },
+      { type: "Feature" as const, properties: {}, geometry: { type: "Polygon" as const, coordinates: tri(0, 0.5) } },
+      { type: "Feature" as const, properties: {}, geometry: { type: "MultiPolygon" as const, coordinates: [big, tri(2, 0.01)] } },
+      { type: "Feature" as const, properties: {}, geometry: { type: "Polygon" as const, coordinates: big } },
+    ];
+    const { features: kept, dropped } = dropSlivers(features, 0.035);
+    expect(dropped).toBe(2);
+    expect(kept).toHaveLength(3);
+    expect(kept[1].geometry).toEqual({ type: "MultiPolygon", coordinates: [big] });
   });
 
   it("states the unstated licence and the user's words", async () => {

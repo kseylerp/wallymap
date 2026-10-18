@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { GEOLOGY_SOURCE_LAYER, GEOLOGY_TILE_URL } from "./geology";
+import { contractProblems, legendOf } from "./contract";
+import layer, { ERAS, GEOLOGY_SOURCE_LAYER, GEOLOGY_TILE_URL } from "./geology";
 
 const BBOX: [number, number, number, number] = [-120.2, 38.8, -119.8, 39.0];
 
@@ -46,5 +47,17 @@ describe("geology layer", () => {
     const r = await runLayer("geology", { bbox: [-170, -60, 170, 70] });
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ kind: "tiles" });
+  });
+
+  it("fills units by the era of their youngest rock with a stepped legend and a card for a tapped unit", () => {
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "ramp", field: "best_age_top", unit: "million years" });
+    expect(legend.stops?.map((st) => st.value)).toEqual([0, 2.58, 66, 252, 541]);
+    expect(new Set(legend.stops?.map((st) => st.color)).size).toBe(5);
+    expect(ERAS[4].color).toBe("#3A3A3C");
+    expect(layer.style.encode).toEqual({ color: "best_age_top" });
+    expect(layer.card?.facts?.map((f) => f.key)).toEqual(["age", "best_age_top", "best_age_bottom", "lith", "descrip"]);
+    expect(layer.description).not.toMatch(/does not colour rock types/);
+    expect(contractProblems(layer)).toEqual([]);
   });
 });

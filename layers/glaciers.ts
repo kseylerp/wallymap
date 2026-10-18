@@ -27,11 +27,15 @@
  * every glacier among them kept with the one-outline-per-date series, thinned to about 400 m, plus a WFS 1.1 hits count quoted when the
  * row limit cut some off. Smoke wide 2026-10-14 (through runLayer): Chugach -149,60.6,-145,61.8 (about 28,600 km²) returned 1,134 outlines
  * of 6,621 in 5.2 s (2.2 MB out; GLIMS sent about 37 MB raw), Columbia Glacier first.
+ * Surveys (2026-10-18): outlines are grouped into survey campaigns (groupSurveys), so time is a few snapshots compared glacier by
+ * glacier (`id` = glacier id). Wind River Range box -109.9,42.9,-109.3,43.45 (all Portland State University): image years 1963 (2),
+ * 1966 (222), 1974 (52), 2015 (138) and 2019 (3) make two surveys, 1966 and 2015; 117 glaciers outlined in both went from 42.5 to
+ * 21.9 km² (48% less), 417 outlines in 0.6 s (401 KB). Fixture glaciers.wind-river.json is that answer with outlines cut to boxes.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
-import { nameAttribute, timeAttribute } from "./_shared/bands";
+import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { geometryBBox } from "./_shared/geo";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
@@ -220,9 +224,9 @@ function boxOverlap(a: [number, number, number, number], b: [number, number, num
 export function normalizeGlaciers(
   json: unknown,
   options: { maxGlaciers?: number; stepDeg?: number } = {},
-): { data: FeatureCollection; truncated: boolean } {
+): { data: FeatureCollection; truncated: boolean; surveys: Survey[]; change?: SurveyChange } {
   const maxGlaciers = options.maxGlaciers ?? MAX_GLACIERS;
-  const empty = { data: { type: "FeatureCollection", features: [] } as FeatureCollection, truncated: false };
+  const empty = { data: { type: "FeatureCollection", features: [] } as FeatureCollection, truncated: false, surveys: [] };
   if (typeof json !== "object" || json === null || !("features" in json) || !Array.isArray(json.features)) return empty;
 
   const rows: Row[] = [];
@@ -315,7 +319,119 @@ export function normalizeGlaciers(
     .filter((r) => keep.has(r.id))
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0) || a.time - b.time);
   addEarlierOutlines(kept);
-  return { data: { type: "FeatureCollection", features: kept.map((r) => r.feature) }, truncated };
+  const { rows: surveyed, surveys, change } = groupSurveys(kept);
+  return { data: { type: "FeatureCollection", features: surveyed.map((r) => r.feature) }, truncated, surveys, change };
+}
+
+/** Image years within this many years of a survey's main year are one survey (GLIMS outlines come in survey campaigns). */
+export const SURVEY_WINDOW_YEARS = 10;
+
+/** One survey in view: its main year (the year most outlines were mapped from), the image years it spans and its outline count. */
+export type Survey = { year: number; from: number; to: number; outlines: number };
+
+/** Glaciers outlined in both the first and the last survey in view, and their total area in each. */
+export type SurveyChange = { glaciers: number; firstYear: number; lastYear: number; firstKm2: number; lastKm2: number };
+
+/**
+ * The surveys among image years: the year with the most outlines is a survey, and every year within SURVEY_WINDOW_YEARS of
+ * it joins it; then the most common year left, and so on. Wind River Range (Portland State University): 1963, 1966 and
+ * 1974 images are the 1966 survey, 2015 and 2019 the 2015 survey. Returns the survey year of each image year.
+ */
+export function surveyYears(counts: Map<number, number>): Map<number, number> {
+  const byCount = [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0]);
+  const survey = new Map<number, number>();
+  for (const [anchor] of byCount) {
+    if (survey.has(anchor)) continue;
+    for (const [year] of byCount) if (!survey.has(year) && Math.abs(year - anchor) <= SURVEY_WINDOW_YEARS) survey.set(year, anchor);
+  }
+  return survey;
+}
+
+const yearOf = (r: Row) => new Date(r.time).getUTCFullYear();
+
+/**
+ * Groups dated outlines into surveys (surveyYears) so the map, the time panel and the compare see a few snapshots, not a
+ * scatter of image dates: `t` becomes the survey year ("1966") and `survey` says it, while `date` keeps the image date.
+ * A glacier keeps one outline per survey (the one whose image year is closest to the survey year, the later on a tie), and
+ * `id` is its glacier id, so the compare matches a glacier's outlines across surveys. Each outline of the last survey whose
+ * glacier was also outlined in the first gets `firstKm2` and `lostPct` (the share of that area gone), and `change` totals
+ * those glaciers: in the Wind River Range, 117 glaciers went from 42.5 km² in 1966 to 21.9 km² in 2015.
+ */
+function groupSurveys(rows: Row[]): { rows: Row[]; surveys: Survey[]; change?: SurveyChange } {
+  const counts = new Map<number, number>();
+  for (const r of rows) if (r.time !== 0) counts.set(yearOf(r), (counts.get(yearOf(r)) ?? 0) + 1);
+  const surveyOf = surveyYears(counts);
+
+  const best = new Map<string, Row>();
+  const kept: Row[] = [];
+  for (const r of rows) {
+    if (r.feature.properties) r.feature.properties.id = r.id;
+    if (r.time === 0) {
+      kept.push(r);
+      continue;
+    }
+    const survey = surveyOf.get(yearOf(r)) as number;
+    const key = `${r.id}|${survey}`;
+    const other = best.get(key);
+    const gap = (x: Row) => Math.abs(yearOf(x) - survey);
+    if (other === undefined || gap(r) < gap(other) || (gap(r) === gap(other) && r.time > other.time)) best.set(key, r);
+  }
+  const chosen = new Set(best.values());
+  const surveys = new Map<number, Survey>();
+  for (const r of rows) {
+    if (r.time === 0 || !chosen.has(r)) continue;
+    const year = surveyOf.get(yearOf(r)) as number;
+    const s = surveys.get(year) ?? { year, from: yearOf(r), to: yearOf(r), outlines: 0 };
+    s.from = Math.min(s.from, yearOf(r));
+    s.to = Math.max(s.to, yearOf(r));
+    s.outlines += 1;
+    surveys.set(year, s);
+    if (r.feature.properties) {
+      r.feature.properties.t = String(year);
+      r.feature.properties.survey = String(year);
+    }
+    kept.push(r);
+  }
+  // Keep the input order (largest glacier first, oldest outline first).
+  const order = new Map(rows.map((r, i) => [r, i]));
+  kept.sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+  const list = [...surveys.values()].sort((a, b) => a.year - b.year);
+  if (list.length < 2) return { rows: kept, surveys: list };
+
+  const [first, last] = [list[0].year, list[list.length - 1].year];
+  const firstArea = new Map<string, number>();
+  for (const r of kept) if (r.feature.properties?.survey === String(first)) firstArea.set(r.id, r.area);
+  let glaciers = 0;
+  let firstKm2 = 0;
+  let lastKm2 = 0;
+  for (const r of kept) {
+    const before = firstArea.get(r.id);
+    if (r.feature.properties?.survey !== String(last) || before === undefined || !r.feature.properties) continue;
+    glaciers += 1;
+    firstKm2 += before;
+    lastKm2 += r.area;
+    r.feature.properties.firstKm2 = Math.round(before * 1000) / 1000;
+    r.feature.properties.lostPct = Math.round((1 - r.area / before) * 100);
+  }
+  const change = glaciers > 0 ? { glaciers, firstYear: first, lastYear: last, firstKm2, lastKm2 } : undefined;
+  return { rows: kept, surveys: list, ...(change && { change }) };
+}
+
+/** "1966 (images from 1963 to 1974, 276 outlines)". */
+function surveyText(s: Survey): string {
+  const span = s.from === s.to ? `images from ${s.from}` : `images from ${s.from} to ${s.to}`;
+  return `${s.year} (${span}, ${s.outlines.toLocaleString("en-US")} outline${s.outlines === 1 ? "" : "s"})`;
+}
+
+/**
+ * The retreat in one sentence: "117 glaciers outlined in both the 1966 and the 2015 survey covered 42.5 km² then and
+ * 21.9 km² in 2015, 48% less".
+ */
+export function changeText(c: SurveyChange): string {
+  const pct = Math.round((1 - c.lastKm2 / c.firstKm2) * 100);
+  const trend = pct > 0 ? `${pct}% less` : pct < 0 ? `${-pct}% more` : "about the same";
+  const plural = c.glaciers === 1 ? "glacier" : "glaciers";
+  return `${c.glaciers.toLocaleString("en-US")} ${plural} outlined in both the ${c.firstYear} and the ${c.lastYear} survey covered ${areaText(c.firstKm2)} then and ${areaText(c.lastKm2)} in ${c.lastYear}, ${trend}`;
 }
 
 /** Most earlier years one card lists, newest first. */
@@ -396,7 +512,25 @@ function isTimeout(err: unknown): boolean {
   return typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
 }
 
-const ATTRIBUTES: Attribute[] = [{ key: "areaKm2", type: "measure", label: "Area", unit: "km²", encode: "size" }, timeAttribute("Mapped"), nameAttribute()];
+const ATTRIBUTES: Attribute[] = [
+  {
+    key: "areaKm2",
+    type: "measure",
+    label: "Area",
+    unit: "km²",
+    encode: "size",
+    aggregate: "sum",
+    presets: [
+      { label: "Ice patches: under 0.1 km²", max: 0.1 },
+      { label: "Small: 0.1 to 1 km²", min: 0.1, max: 1 },
+      { label: "Large: 1 to 10 km²", min: 1, max: 10 },
+      { label: "Very large: 10 km² and up", min: 10 },
+    ],
+  },
+  { key: "lostPct", type: "measure", label: "Ice lost since the first survey", unit: "%" },
+  { key: "survey", type: "category", label: "Survey", primary: true },
+  nameAttribute(),
+];
 
 const AREA: FieldHelp = {
   text: "The glacier's area in this outline as GLIMS records it (db_area), for the date of the image it was mapped from.",
@@ -409,6 +543,9 @@ const HELP: Record<string, FieldHelp> = {
   areaKm2: AREA,
   v: AREA,
   date: { text: "When the satellite or aerial image behind this outline was taken; the ice has usually changed since." },
+  survey: { text: "The survey this outline belongs to: GLIMS outlines come in mapping campaigns, and images taken within about 10 years of a campaign's main year count as that survey." },
+  firstKm2: { text: "This glacier's area in the first survey in view, for comparison with this outline.", unit: "km²" },
+  lostPct: { text: "The share of the glacier's area in the first survey in view that is gone in this outline. Part of a change can be a different team or image drawing the edge differently.", unit: "%" },
   glacierId: { text: "The GLIMS glacier id; outlines of one glacier from different dates share it." },
   institution: { text: "The team that mapped this outline for GLIMS." },
   earlier: { text: "This glacier's outlines from earlier images in GLIMS, newest first: the year of the image and the area then. A year with several outlines shows the one mapped by the same team as this outline, or how many there are and their range." },
@@ -417,11 +554,15 @@ const HELP: Record<string, FieldHelp> = {
 const CARD: CardSpec = {
   measure: { key: "areaKm2", label: "Area", unit: "km²" },
   facts: [
+    { key: "survey", label: "Survey" },
+    { key: "lostPct", label: "Ice lost since the first survey", unit: "%" },
+    { key: "firstKm2", label: "Area in the first survey", unit: "km²" },
     { key: "date", label: "Mapped from image of", format: "date" },
     { key: "earlier", label: "Earlier outlines" },
     { key: "institution", label: "Mapped by" },
     { key: "glacierId", label: "GLIMS id" },
   ],
+  hidden: ["id", "t", "v"],
 };
 
 const glaciers = defineLayer({
@@ -429,12 +570,15 @@ const glaciers = defineLayer({
   title: "Glaciers",
   description:
     "Outlines of the world's glaciers and ice caps from GLIMS (Global Land Ice Measurements from Space), drawn as polygons. " +
-    "Each polygon has name (many glaciers are unnamed), glacierId, v and areaKm2 (the glacier's area in square kilometres), t and date (when the satellite image behind that outline was taken) and institution (who mapped it); a later outline has earlier (the glacier's earlier outlines, year and area, newest first). The map and the Rank by list give each glacier by its latest outline in view. " +
-    "A glacier mapped more than once comes back once per image date with the same glacierId, so the time scrubber plays its retreat: Lyell and Maclure Glaciers in Yosemite shrink between 1984 and 2014 (Lyell from 0.37 to 0.25 km², Maclure from 0.26 to 0.14 km²). Compare v across dates of one glacierId to say how much ice it lost. " +
-    "Use it to show where glaciers are, which are biggest, how much ice a range holds, and how glaciers have shrunk, for example 'where are the glaciers near Mount Rainier', 'the largest glaciers in this part of Alaska' or 'show how Lyell Glacier has retreated'. With 3D on, the map can raise glaciers by area. " +
-    "Caveats: this is an inventory, not a current survey. The outlines date from about 1970 to the 2020s depending on the glacier, so the date matters and most glaciers have shrunk since; do not read the newest outline as today's ice edge. Many glaciers have only one date, and different teams and image dates make some outline changes partly mapping differences, not melt. " +
+    "GLIMS outlines come in surveys (mapping campaigns), so the answer is a few snapshots, not a continuous record: outlines whose image years fall within about 10 years of a survey's main year are grouped as that survey. " +
+    "Each polygon has name (many glaciers are unnamed), glacierId, v and areaKm2 (the glacier's area in square kilometres), survey and t (the survey year), date (when the image behind that outline was taken) and institution (who mapped it); a later outline has earlier (the glacier's earlier outlines, year and area, newest first). " +
+    "A glacier keeps one outline per survey under the same glacierId, so two surveys compare glacier by glacier: an outline of the last survey whose glacier was also outlined in the first has firstKm2 (its area then) and lostPct (the share of that ice gone). " +
+    "The coverage note states the change in the glaciers outlined in both the first and last survey, and the title names the surveys. In the Wind River Range, Wyoming, 117 glaciers outlined in both the 1966 and the 2015 survey covered 42.5 km² then and 21.9 km² in 2015, 48% less; quote that kind of figure, never a total that adds glaciers from different surveys. " +
+    "Lyell and Maclure Glaciers in Yosemite shrink between the 1984 and 2014 surveys (Lyell from 0.37 to 0.25 km², Maclure from 0.26 to 0.14 km²), a retreat the compare shows. " +
+    "Use it to show where glaciers are, which are biggest, how much ice a range holds, and how glaciers have shrunk, for example 'where are the glaciers near Mount Rainier', 'the largest glaciers in this part of Alaska' or 'show how the Wind River glaciers have retreated'. With 3D on, the map can raise glaciers by area. " +
+    "Caveats: this is an inventory, not a current survey. Surveys date from about 1950 to the 2020s depending on the range, so the date matters and most glaciers have shrunk since; do not read the newest outline as today's ice edge. Many glaciers have only one survey, and different teams and image dates make some outline changes partly mapping differences, not melt. " +
     "GLIMS sometimes gives one glacier two ids (Lyell Glacier has two); named glaciers with the same date and place are merged under one glacierId, but unnamed ones can still overlap. Some small ice patches are listed as glaciers and some real glaciers are missing. " +
-    "At most the 300 largest glaciers in view are returned (each with all its dated outlines). Outlines are simplified for display (details under about 40 m are dropped). " +
+    "At most the 300 largest glaciers in view are returned (each with one outline per survey). Outlines are simplified for display (details under about 40 m are dropped). " +
     "Works worldwide. Over 8,000 km² (about a 90 km square) it returns the 1,500 largest outlines, drawn coarser (about 400 m).",
   coverage: "global",
   surface: "land",
@@ -455,6 +599,9 @@ const glaciers = defineLayer({
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // Snapshots: the survey years in view (filled from the data's `t`, one per survey), compared two at a time.
+  time: { shape: "snapshots", step: "year" },
+  labels: { field: "name", max: 8, rankBy: "areaKm2" },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     // Wide (over 8,000 km², up to the hard cap): the largest outlines by area, server-sorted and capped at the strategy's
@@ -488,7 +635,7 @@ const glaciers = defineLayer({
       };
     }
 
-    const { data, truncated } =
+    const { data, truncated, surveys, change } =
       wideRows === undefined ? normalizeGlaciers(body) : normalizeGlaciers(body, { maxGlaciers: Infinity, stepDeg: WIDE_VERTEX_STEP_DEG });
     const rows =
       typeof body === "object" && body !== null && "features" in body && Array.isArray(body.features) ? body.features.length : 0;
@@ -496,10 +643,11 @@ const glaciers = defineLayer({
     const count = await counting;
     const total = wideRows !== undefined && rows >= wideRows && count !== undefined && count > data.features.length ? count : undefined;
     const notes: string[] = [];
-    const years = [...new Set(data.features.map((f) => String(f.properties?.date ?? "").slice(0, 4)).filter((y) => y !== ""))].sort();
-    if (years.length > 0) {
+    if (change) notes.push(changeText(change));
+    if (surveys.length > 0) {
+      const shown = surveys.slice(0, 6).map(surveyText).join(", ");
       notes.push(
-        `Outlines exist only for the dates glaciers were mapped (years in view: ${years.slice(0, 8).join(", ")}${years.length > 8 ? " and more" : ""}); the ice between those dates is not shown`,
+        `Outlines exist only for the surveys glaciers were mapped in (${surveys.length === 1 ? "one survey" : `${surveys.length} surveys`} in view: ${shown}${surveys.length > 6 ? " and more" : ""}); the ice between surveys is not shown`,
       );
     }
     if (wideRows !== undefined) {
@@ -510,9 +658,12 @@ const glaciers = defineLayer({
       notes.push(`Showing the ${MAX_ROWS} biggest outlines in view; some later outlines of smaller glaciers may be missing, so zoom in`);
     }
 
+    const years = surveys.map((s) => s.year);
+    const title = years.length >= 2 ? `Glaciers, surveys of ${years.slice(0, -1).join(", ")} and ${years[years.length - 1]}` : years.length === 1 ? `Glaciers, ${years[0]} survey` : undefined;
     return {
       kind: "geojson",
       data,
+      ...(title !== undefined && { title }),
       ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
       citation: {

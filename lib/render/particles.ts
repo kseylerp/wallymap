@@ -287,7 +287,8 @@ export class ParticleSystem {
       // Fade in after birth and out before death, so streaks do not pop.
       const fade = Math.min(1, this.age[p] / 8, (this.life[p] - this.age[p]) / 8);
       const alpha = Math.max(0, (ALPHA.slow + (ALPHA.fast - ALPHA.slow) * s) * fade);
-      const [r, g, b] = encodeColor(this.shade[p] >= 0 ? this.shade[p] : 0);
+      // A field with no color variable (wind) is colored by its speed on the same ramp, slow sage to fast purple.
+      const [r, g, b] = encodeColor(this.shade[p] >= 0 ? this.shade[p] : s);
       this.colors[p * 4] = r;
       this.colors[p * 4 + 1] = g;
       this.colors[p * 4 + 2] = b;

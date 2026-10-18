@@ -799,6 +799,12 @@ function symbolLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       pickable: true,
       getPosition: markerPosition,
       getIcon: (f) => atlasIcon(pinIconFor(op.layerId, f, f === selected, size, encode(f))),
+      // A symbol with a compass direction (a buoy's swell, a surf break's facing) turns to it: deck turns
+      // counter-clockwise from up, a bearing clockwise from north.
+      getAngle: (f: Feature) => {
+        const d = f.properties?.directionDeg;
+        return typeof d === "number" && Number.isFinite(d) ? -d : 0;
+      },
       // A symbol with no value for the measure draws smallest, never at the middle size it would otherwise claim.
       getSize: ranked
         ? (f: Feature) => {

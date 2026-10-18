@@ -159,6 +159,10 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, data: Fe
       }
       break;
   }
+  // A flow field with no color variable (wind) colors its particles by speed (lib/render/particles.ts).
+  if (layer.result.kind === "geojson" && layer.result.flow && !layer.result.flow.color) {
+    blocks.push({ kind: "ramp", title: "Speed", entries: [{ label: "Slow" }, { label: "Fast" }], colors: rampSamples(ENCODE_RAMP), shape });
+  }
   // Lines: kinds told apart by dash (pipelines), and lines the difficulty scale does not rate (a thin grey dash).
   if (shape === "line" && data) {
     const dashAttr = layer.attributes?.find((a) => a.encode === "dash" && (a.levels?.length ?? 0) > 1);

@@ -121,6 +121,14 @@ function visibleLayer(
       // applyFilters copies even when it keeps everything; the original keeps deck from re-uploading.
       const kept = filtered.features.length === data.features.length ? data : filtered;
       if (newest) return withData(layer, newestOfEach(kept, layer.style.timeField ?? "t"));
+      // A series steps its frames by the window; its stations with no frames (one reading, no hourly values) stay drawn
+      // as static symbols rather than vanishing outside the frame (surf and tides fixer, 2026-10-18).
+      if (window && layer.result.kind === "geojson" && layer.result.series) {
+        const moving = kept.features.filter((f) => f.properties?.series !== undefined);
+        const still = kept.features.filter((f) => f.properties?.series === undefined);
+        if (still.length === 0) return withData(layer, filterByWindow(kept, window));
+        return withData(layer, { ...kept, features: [...filterByWindow({ ...kept, features: moving }, window).features, ...still] });
+      }
       return withData(layer, window ? filterByWindow(kept, window) : kept);
     });
   }

@@ -1,9 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { articleUrl, buildFeatures, cellsOf, cleanExtract, extractsUrl, geosearchUrl, wideArticlesQuery, wideHits } from "./wikipedia-nearby";
+import { legendOf, labelsOf, timeShapeOf } from "./contract";
+import layer, {
+  articleUrl,
+  buildFeatures,
+  cellsOf,
+  cleanExtract,
+  extractsUrl,
+  geosearchUrl,
+  sitelinkCounts,
+  sitelinksQuery,
+  wideArticlesQuery,
+  wideHits,
+} from "./wikipedia-nearby";
 import geoFixture from "./__fixtures__/wikipedia-nearby.geosearch.json";
 import extractsFixture from "./__fixtures__/wikipedia-nearby.extracts.json";
+/** Real answers recorded 2026-10-18 around El Capitan and Yosemite Falls: geosearch (7 kept), extracts with Wikidata ids, sitelinks. */
+import yosemite from "./__fixtures__/wikipedia-nearby.yosemite.json";
+
+const YOSEMITE: [number, number, number, number] = [-119.65, 37.72, -119.58, 37.76];
 
 /** Fixtures are real English Wikipedia answers for this box (South Lake Tahoe), recorded 2026-10-09: 23 articles, 20 extracts. */
 vi.mock("./_shared/wikimedia", async (importOriginal) => {
@@ -55,7 +71,8 @@ describe("urls", () => {
   it("asks for two-sentence intro extracts and 320 px thumbnails for the page ids", () => {
     const url = new URL(extractsUrl([1, 2, 3]));
     expect(url.searchParams.get("pageids")).toBe("1|2|3");
-    expect(url.searchParams.get("prop")).toBe("extracts|pageimages");
+    expect(url.searchParams.get("prop")).toBe("extracts|pageimages|pageprops");
+    expect(url.searchParams.get("ppprop")).toBe("wikibase_item");
     expect(url.searchParams.get("exsentences")).toBe("2");
     expect(url.searchParams.get("exintro")).toBe("1");
     expect(url.searchParams.get("explaintext")).toBe("1");
@@ -234,6 +251,62 @@ describe("wikipedia-nearby layer", () => {
       throw Object.assign(new Error("t"), { name: "TimeoutError" });
     });
     expect(await layer.query(ctx(slow), input)).toMatchObject({ error: expect.stringContaining("timed out"), hint: "upstream" });
+  });
+
+  it("counts each article's Wikipedia languages in one Wikidata request, so El Capitan and Yosemite Falls draw biggest (Yosemite fixture)", async () => {
+    const stub = vi.fn(async (url: string, init?: { body?: string }) => {
+      if (url.includes("list=geosearch")) return json(yosemite.geosearch);
+      if (url.includes("prop=extracts")) return json(yosemite.extracts);
+      if (url.startsWith("https://query.wikidata.org/sparql")) {
+        expect(new URLSearchParams(init?.body ?? "").get("query")).toContain("wd:Q1124852");
+        return json(yosemite.sitelinks);
+      }
+      throw new Error(`unexpected url ${url}`);
+    });
+    const r = geojson(await layer.query(ctx(stub, "wiki:y", YOSEMITE), { lang: "en" }));
+    expect(stub.mock.calls.filter((c) => String(c[0]).includes("wikidata"))).toHaveLength(1);
+    const ranked = r.data.features
+      .map((f) => [f.properties?.name, f.properties?.languages])
+      .sort((a, b) => Number(b[1]) - Number(a[1]))
+      .slice(0, 3);
+    expect(ranked).toEqual([
+      ["El Capitan", 41],
+      ["Yosemite Falls", 40],
+      ["Yosemite Valley", 33],
+    ]);
+    expect(r.coverageNote).toBeUndefined();
+  });
+
+  it("keeps every article one size and says so when Wikidata does not answer", async () => {
+    const stub = vi.fn(async (url: string) => {
+      if (url.includes("list=geosearch")) return json(yosemite.geosearch);
+      if (url.includes("prop=extracts")) return json(yosemite.extracts);
+      return new Response("boom", { status: 500 });
+    });
+    const r = geojson(await layer.query(ctx(stub, "wiki:y2", YOSEMITE), { lang: "en" }));
+    expect(r.data.features.every((f) => f.properties?.languages === undefined)).toBe(true);
+    expect(r.coverageNote).toContain("every symbol is one size");
+  });
+
+  it("builds the sitelinks query from checked Q ids only and reads the counts", () => {
+    expect(sitelinksQuery(["Q1", "Q22", "bad }"])).toBe("SELECT ?item ?links WHERE { VALUES ?item { wd:Q1 wd:Q22 } ?item wikibase:sitelinks ?links . }");
+    expect(sitelinkCounts(yosemite.sitelinks)?.get("Q1124852")).toBe(41);
+    expect(sitelinkCounts({ nope: 1 })).toBeNull();
+  });
+
+  it("declares a name search, languages as the size measure, no time, a size legend and labels for the five best-known", () => {
+    expect(layer.attributes?.map((a) => [a.key, a.type, a.encode])).toEqual([
+      ["name", "name", undefined],
+      ["languages", "measure", "size"],
+    ]);
+    expect(layer.style.encode).toEqual({ size: "languages" });
+    expect(timeShapeOf(layer)).toEqual({ shape: "none" });
+    const legend = legendOf(layer);
+    expect(legend.kind).toBe("size");
+    expect(legend.stops?.map((s) => s.value)).toEqual([1, 10, 30, 60]);
+    expect(legend.note).toMatch(/Bigger means more Wikipedia language editions/);
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 5, rankBy: "languages" });
+    expect(layer.card?.measure).toEqual({ key: "languages", label: "Wikipedia languages" });
   });
 
   it("rejects a view over the hard cap (4 x 1,000 km²) through runLayer", async () => {

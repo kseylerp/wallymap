@@ -115,7 +115,9 @@ const snowCover = defineLayer({
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
   // Drawn as served, so the pixels are GIBS's own colors and the legend names them (the old calm filter turned snow tan).
-  style: { geometry: "polygon", color: layerColor("snow-cover"), raster: { saturation: 0, opacity: 0.9, swatch: "#F0B489" } },
+  // brightnessMax 0.92 only keeps the white flash of the brightest pixels down (tests/rasterCalm.test.ts); the legend
+  // gives the raw colors, which the panel shows through the same filter as the swatch.
+  style: { geometry: "polygon", color: layerColor("snow-cover"), raster: { saturation: 0, brightnessMax: 0.92, opacity: 0.9, swatch: "#F0B489" } },
   legend: NDSI_LEGEND,
 
   async query(ctx, input): Promise<LayerResult | LayerError> {

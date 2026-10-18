@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
+import { contractProblems, legendOf } from "./contract";
 import layer, { lossTileUrl } from "./forest-loss";
 
 const AMAZON: [number, number, number, number] = [-60, -10, -50, 0];
@@ -47,6 +48,13 @@ describe("forest-loss layer", () => {
       from: "2001",
       to: "2025",
     });
+    expect(r.coverageNote).toBe("Tree cover lost 2015–2025, where canopy was at least 30% in 2000");
+  });
+
+  it("keys the loss pink the tiles draw, unfiltered (audit 2026-10-17: no key)", () => {
+    expect(contractProblems(layer)).toEqual([]);
+    expect(legendOf(layer).items).toEqual([expect.objectContaining({ label: "Tree cover lost in the years shown", color: "#E44692" })]);
+    expect(layer.style.raster).toMatchObject({ saturation: 0 });
   });
 
   it("rejects a start year after the end year", async () => {

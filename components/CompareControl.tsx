@@ -23,6 +23,7 @@ import { visibleState } from "@/lib/render/view";
 import { DELTA_COLORS } from "@/lib/render/palette";
 import { changeMeasures, layerChange } from "@/lib/render/views";
 import { formatValue } from "@/lib/format";
+import { timeShape } from "@/lib/render/contract";
 
 /** Toggle mode flips A and B this often (spec §7: 1 Hz). */
 export const FLIP_MS = 1000;
@@ -340,8 +341,9 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
         <div className="flex min-w-0 items-center gap-1.5">
           <Swatch color={color} />
           <span className="w-3 shrink-0 text-[12px] font-medium text-ink">{name}</span>
-          {compare.by ? (
-            // A compare by version names its side (2021 boundary); there are no dates to edit.
+          {compare.by || (label && timeShape(layer).shape === "snapshots") ? (
+            // A compare by version (2021 boundary) or between surveys (1966) names its side; there are no dates to edit,
+            // and a phone's date fields cut "01/01/1966" short.
             <span className="min-w-0 truncate text-[12px] text-ink" data-testid={`compare-version-${which}`}>
               {compareSideText(compare, which, layer)}
             </span>
@@ -360,7 +362,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
             </>
           )}
         </div>
-        {label && !compare.by && (
+        {label && !compare.by && timeShape(layer).shape !== "snapshots" && (
           <p className="truncate pl-[34px] text-[11.5px] leading-4 text-ink-muted" title={label}>
             {label}
           </p>

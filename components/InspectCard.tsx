@@ -487,11 +487,12 @@ export function InspectCard({
       <div className={isPhone ? "relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-1 pb-3.5" : "relative max-h-[min(70dvh,560px)] overflow-y-auto overscroll-contain px-4 pt-3 pb-3.5"}>
         <header className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-1.5 text-[11.5px] font-medium text-ink-muted">
+            <p className="flex items-start gap-1.5 text-[11.5px] leading-4 font-medium text-ink-muted">
               <span aria-hidden data-testid="inspect-swatch" className="shrink-0">
                 <LegendKey symbol={swatch} size={16} />
               </span>
-              <span className="truncate">{layer.title}</span>
+              {/* The layer's name wraps (two lines at most) rather than cut: "Glaciers, surveys of 1870, 1974, 1986…". */}
+              <span className="line-clamp-2 min-w-0 break-words">{layer.title}</span>
               {/* Picked on a compare's side B: a plain text marker, as the console labels the sides. */}
               {sideB && (
                 <span data-testid="inspect-side" title="Compare side B" className="shrink-0 rounded-pill border border-line px-1.5 text-[10.5px] leading-4 font-semibold text-ink">

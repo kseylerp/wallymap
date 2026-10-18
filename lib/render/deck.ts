@@ -1852,7 +1852,8 @@ function deltaLayers(op: RenderOp, { data: all, selected, terrain }: OpContext):
             data: edges,
             pickable: false,
             filled: false,
-            getLineColor: (f: Feature) => fade(f, hexToRgba(WHITE_HEX, 230)),
+            // The earlier edge is the answer (what was lost): it stays readable while a card is open.
+            getLineColor: (f: Feature) => fade(f, hexToRgba(WHITE_HEX, 230), AREA_OUTLINE_SIBLING_FADE),
             getLineWidth: DELTA_STROKE.polygon + 2 * DELTA_STROKE.casing,
             lineWidthUnits: "pixels",
             updateTriggers,
@@ -1863,7 +1864,7 @@ function deltaLayers(op: RenderOp, { data: all, selected, terrain }: OpContext):
             data: edges,
             pickable: false,
             filled: false,
-            getLineColor: (f: Feature) => fade(f, DELTA_RGB["a-only"]),
+            getLineColor: (f: Feature) => fade(f, DELTA_RGB["a-only"], AREA_OUTLINE_SIBLING_FADE),
             getLineWidth: DELTA_STROKE.polygon,
             lineWidthUnits: "pixels",
             updateTriggers,

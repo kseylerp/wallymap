@@ -1,0 +1,185 @@
+{
+ "version": 0.6,
+ "generator": "Overpass API 0.7.60.6 e2dc3e5b",
+ "note": "Moab, UT (38.5,-109.65 to 38.68,-109.4), recorded 2026-10-18: count elements and 3 ways (Slickrock with both ratings, an IMBA-only named track, an unnamed IMBA-only track), trimmed to 12 vertices.",
+ "elements": [
+  {
+   "type": "count",
+   "id": 0,
+   "tags": {
+    "nodes": "0",
+    "ways": "107",
+    "relations": "0",
+    "total": "107"
+   }
+  },
+  {
+   "type": "count",
+   "id": 0,
+   "tags": {
+    "nodes": "0",
+    "ways": "0",
+    "relations": "15",
+    "total": "15"
+   }
+  },
+  {
+   "type": "way",
+   "id": 26187707,
+   "tags": {
+    "bicycle": "designated",
+    "dirtbike:scale": "?",
+    "highway": "path",
+    "maxspeed": "15 mph",
+    "motorcycle": "yes",
+    "mtb:scale": "3",
+    "mtb:scale:imba": "3",
+    "name": "Slickrock",
+    "operator": "Sand Flats Recreation Area",
+    "surface": "ground"
+   },
+   "geometry": [
+    {
+     "lat": 38.5817788,
+     "lon": -109.519291
+    },
+    {
+     "lat": 38.5818871,
+     "lon": -109.5192643
+    },
+    {
+     "lat": 38.581965,
+     "lon": -109.519224
+    },
+    {
+     "lat": 38.582161,
+     "lon": -109.519112
+    },
+    {
+     "lat": 38.582226,
+     "lon": -109.519043
+    },
+    {
+     "lat": 38.582291,
+     "lon": -109.518899
+    },
+    {
+     "lat": 38.582361,
+     "lon": -109.518842
+    },
+    {
+     "lat": 38.582522,
+     "lon": -109.518832
+    },
+    {
+     "lat": 38.582586,
+     "lon": -109.518806
+    },
+    {
+     "lat": 38.582667,
+     "lon": -109.518742
+    },
+    {
+     "lat": 38.582763,
+     "lon": -109.518723
+    },
+    {
+     "lat": 38.585453,
+     "lon": -109.518573
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 29435854,
+   "tags": {
+    "bicycle": "yes",
+    "highway": "track",
+    "motor_vehicle": "yes",
+    "mtb:scale:imba": "3",
+    "name": "Cliff Hanger Trail",
+    "smoothness": "very_horrible",
+    "source": "Bing",
+    "surface": "ground",
+    "tracktype": "grade5"
+   },
+   "geometry": [
+    {
+     "lat": 38.5239736,
+     "lon": -109.6016327
+    },
+    {
+     "lat": 38.524128,
+     "lon": -109.601675
+    },
+    {
+     "lat": 38.524231,
+     "lon": -109.6016
+    },
+    {
+     "lat": 38.5243031,
+     "lon": -109.6015318
+    },
+    {
+     "lat": 38.5244042,
+     "lon": -109.6015276
+    },
+    {
+     "lat": 38.5245651,
+     "lon": -109.6015226
+    },
+    {
+     "lat": 38.524783,
+     "lon": -109.60161
+    },
+    {
+     "lat": 38.524879,
+     "lon": -109.601635
+    },
+    {
+     "lat": 38.5249725,
+     "lon": -109.601637
+    },
+    {
+     "lat": 38.5250233,
+     "lon": -109.601656
+    },
+    {
+     "lat": 38.5250519,
+     "lon": -109.6016484
+    },
+    {
+     "lat": 38.522165,
+     "lon": -109.608126
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 10106382,
+   "tags": {
+    "highway": "track",
+    "mtb:scale:imba": "1",
+    "tracktype": "grade1"
+   },
+   "geometry": [
+    {
+     "lat": 38.5486817,
+     "lon": -109.5925172
+    },
+    {
+     "lat": 38.546928,
+     "lon": -109.5930113
+    },
+    {
+     "lat": 38.5466118,
+     "lon": -109.5932122
+    },
+    {
+     "lat": 38.545901,
+     "lon": -109.5936636
+    }
+   ]
+  }
+ ]
+}

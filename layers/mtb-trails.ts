@@ -5,7 +5,11 @@
  * Fixture: layers/__fixtures__/mtb-trails.truckee.json (Truckee / Donner Lake, CA, recorded 2026-10-09 and
  * trimmed to 12 vertices per line and 4 relation members; the live box held 151 rated ways and 1 route).
  * Tags read: mtb:scale (Singletrack Scale 0 to 6), mtb:scale:imba (IMBA 0 to 4), mtb:scale:uphill, name, ref,
- * highway, surface, bicycle, operator, check_date (becomes `t`).
+ * highway, surface, bicycle, access, operator, check_date (becomes `t`).
+ * v is the Singletrack Scale, else the IMBA rating when only that is mapped: IMBA 0 to 4 fall in the same Easy (0, 1),
+ * Moderate (2), Hard (3) and Expert (4) bands, so an IMBA-only trail sits on the difficulty ramp instead of reading
+ * unrated. Live check, Moab (38.5,-109.65 to 38.68,-109.4), 2026-10-18: 122 features (43 Singletrack, 64 IMBA only, 15
+ * routes); before this, 77 drew with no difficulty, now only the 15 routes (drawn as routes) have none.
  * Live smoke check: Truckee / Donner Lake, CA (39.28,-120.25 to 39.38,-120.1), 2026-10-09: 154 features (72 mtb, 81 imba-only, 1 route), no truncation.
  * Wide mode (over 2,500 km², up to WIDE_MAX_AREA_KM2, 100,000): a scan of the named rated ways and routes (ids and
  * bounds), then the geometry of the 1,000 longest inside the box (see buildNamedScanQuery in osm-trails), simplified to
@@ -21,7 +25,17 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import {
+  defineLayer,
+  type BBox,
+  type LayerError,
+  type LayerResult,
+  type QueryContext,
+  type CardSpec,
+  type Attribute,
+  type FieldHelp,
+  type LegendSpec,
+} from "./types";
 import { MTB_LEVELS, MTB_SCALE, nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { overpassCounts, overpassQuery } from "./_shared/overpass";
@@ -47,7 +61,7 @@ import {
   wayGeometryById,
   wayLine,
 } from "./_shared/osm-features";
-import { layerColor } from "@/lib/render/palette";
+import { PURPLE, layerColor } from "@/lib/render/palette";
 
 /** Most rated ways returned; a dense box holds thousands, each with its full geometry. */
 export const MAX_WAYS = 2_000;
@@ -64,7 +78,7 @@ export const WIDE_LIMIT = 1_000;
 export const WIDE_MAX_AREA_KM2 = 100_000;
 
 const inputSchema = z.object({
-  /** Hardest Singletrack Scale rating to keep (0 easiest, 6 hardest). Unrated imba-only ways and routes always stay. */
+  /** Hardest rating to keep on the Singletrack Scale (0 easiest, 6 hardest; an IMBA-only trail by its IMBA number). Routes always stay. */
   maxScale: z.number().int().min(0).max(6).optional(),
   /** Include `route=mtb` relations (named trail systems and loops). */
   includeRoutes: z.boolean().default(true),
@@ -103,6 +117,17 @@ export function imbaScale(value: string | undefined): number | undefined {
 }
 
 type Line = LineString | MultiLineString;
+
+/**
+ * Whether bikes may ride the trail, from the bicycle tag, else an access tag that closes it to everyone (no, private);
+ * undefined when OpenStreetMap says nothing.
+ */
+export function bikesAllowed(tags: Record<string, string>): string | undefined {
+  const bicycle = tags.bicycle?.trim().toLowerCase();
+  if (bicycle) return bicycle;
+  const access = tags.access?.trim().toLowerCase();
+  return access === "no" || access === "private" ? access : undefined;
+}
 
 /** Converts an Overpass response into line features, skipping malformed elements and unrated, unrelated ones. */
 export function normalizeMtb(json: unknown): FeatureCollection<Line> {
@@ -144,7 +169,13 @@ export function normalizeMtb(json: unknown): FeatureCollection<Line> {
       osmId,
     };
     if (tags.name) properties.name = tags.name;
-    if (scale !== undefined) properties.v = scale;
+    // An unnamed segment is titled by what it is, not by how it is rated.
+    else if (!isRoute) properties.heading = tags.highway === "track" ? "Unnamed track" : "Unnamed trail";
+    // v: the Singletrack Scale, else the IMBA rating (same bands: 0 and 1 easy, 2 moderate, 3 hard, 4 expert).
+    if (scale !== undefined) {
+      properties.v = scale;
+      properties.singletrack = scale;
+    } else if (imba !== undefined) properties.v = imba;
     if (tags["mtb:scale"] && tags["mtb:scale"].trim() !== String(scale)) properties.mtbScale = tags["mtb:scale"];
     if (imba !== undefined) properties.imba = imba;
     const uphill = mtbScale(tags["mtb:scale:uphill"]);
@@ -153,6 +184,8 @@ export function normalizeMtb(json: unknown): FeatureCollection<Line> {
     if (tags.ref) properties.ref = tags.ref;
     if (tags.surface) properties.surface = tags.surface;
     if (tags.bicycle) properties.bicycle = tags.bicycle;
+    const bikes = bikesAllowed(tags);
+    if (bikes !== undefined) properties.bikes = bikes;
     if (tags.operator) properties.operator = tags.operator;
     const t = checkedOn(tags);
     if (t !== undefined) properties.t = t;
@@ -162,7 +195,7 @@ export function normalizeMtb(json: unknown): FeatureCollection<Line> {
   return { type: "FeatureCollection", features };
 }
 
-/** Keeps ways rated at or below `max` on the Singletrack Scale; IMBA-only ways and routes have no v and always stay. */
+/** Keeps ways rated at or below `max` (v: Singletrack, else IMBA); routes with no rating always stay. */
 function withinScale(features: Feature<Line>[], max: number | undefined): Feature<Line>[] {
   if (max === undefined) return features;
   return features.filter((f) => {
@@ -204,7 +237,48 @@ async function queryWide(ctx: QueryContext, input: MtbInput): Promise<LayerResul
   };
 }
 
-const KIND_LABELS: Record<string, string> = { mtb: "Rated trail", imba: "IMBA rated", route: "Route" };
+const KIND_LABELS: Record<string, string> = { mtb: "Singletrack rated", imba: "IMBA rated only", route: "Named route" };
+
+/** The card's Singletrack Scale row: the number and its band ("3, Hard"). */
+const SINGLETRACK_WORDS: Record<string, string> = Object.fromEntries(MTB_LEVELS.map((l) => [String(l.value), `${l.value}, ${l.label}`]));
+
+/** The card's IMBA row: the number, its band and the trail sign ("3, Hard (black diamond)"). */
+const IMBA_WORDS: Record<string, string> = {
+  "0": "0, Easy (white circle)",
+  "1": "1, Easy (green circle)",
+  "2": "2, Moderate (blue square)",
+  "3": "3, Hard (black diamond)",
+  "4": "4, Expert (double black diamond)",
+};
+
+/** Whether bikes may ride the trail, in words, from the bicycle tag (or an access tag that closes it). */
+const BIKE_WORDS: Record<string, string> = {
+  yes: "Allowed",
+  designated: "Allowed, signed as a bike trail",
+  permissive: "Allowed by the landowner",
+  destination: "Only to reach a place on it",
+  customers: "Customers only",
+  dismount: "Walk your bike",
+  use_sidepath: "Use the side path",
+  no: "Not allowed",
+  private: "Private, not allowed",
+};
+
+/** The difficulty bands the trails are coloured by, and the named routes, drawn in the route gradient with no rating. */
+const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Difficulty",
+  field: "v",
+  items: [
+    ...MTB_LEVELS.filter((l, i) => MTB_LEVELS.findIndex((m) => m.label === l.label) === i).map((l) => ({
+      label: l.label,
+      value: l.value,
+      symbol: "line" as const,
+    })),
+    { label: "Named route, not rated", color: PURPLE, symbol: "line", help: "A named mountain bike route made of many trails, drawn purple to pink." },
+  ],
+  note: "Difficulty is the Singletrack Scale, or the IMBA rating where only that is mapped.",
+};
 
 const ATTRIBUTES: Attribute[] = [
   { key: "v", type: "ordinal", label: "Difficulty", encode: "color", levels: MTB_LEVELS, scale: MTB_SCALE },
@@ -222,7 +296,18 @@ const SINGLETRACK: FieldHelp = {
 };
 
 const HELP: Record<string, FieldHelp> = {
-  v: SINGLETRACK,
+  v: {
+    ...SINGLETRACK,
+    text: `${SINGLETRACK.text} Where only an IMBA rating is mapped, v is that rating (0 to 4), which falls in the same Easy, Moderate, Hard and Expert bands.`,
+  },
+  singletrack: SINGLETRACK,
+  bikes: {
+    text:
+      "Whether bikes may ride the trail, from OpenStreetMap's bicycle tag (or an access tag that closes the trail to everyone); blank when nothing is " +
+      "mapped. Check the land manager: closures and seasonal rules are not here.",
+    source: "OpenStreetMap wiki, Key:bicycle",
+    url: "https://wiki.openstreetmap.org/wiki/Key:bicycle",
+  },
   mtbScale: {
     ...SINGLETRACK,
     text: "The Singletrack Scale rating exactly as tagged (for example 2+ or 1-2), shown when it differs from the number.",
@@ -254,17 +339,19 @@ const HELP: Record<string, FieldHelp> = {
   t: { text: "The date a mapper last checked the trail on the ground (check_date), when tagged." },
 };
 
+// The rating in words ("3, Hard"), not a bare number; v, the raw bicycle tag and the id stay off the card.
 const CARD: CardSpec = {
-  measure: { key: "v", label: "Singletrack Scale" },
   facts: [
+    { key: "singletrack", label: "Singletrack Scale", values: SINGLETRACK_WORDS },
+    { key: "imba", label: "IMBA rating", values: IMBA_WORDS },
+    { key: "bikes", label: "Bikes", values: BIKE_WORDS },
     { key: "kind", label: "Kind", values: KIND_LABELS },
-    { key: "imba", label: "IMBA rating" },
     { key: "uphill", label: "Uphill rating" },
     { key: "surface", label: "Surface" },
-    { key: "bicycle", label: "Bikes" },
     { key: "operator", label: "Operator" },
     { key: "t", label: "Last checked", format: "date" },
   ],
+  hidden: ["osmId", "bicycle"],
 };
 
 const mtbTrails = defineLayer({
@@ -272,12 +359,13 @@ const mtbTrails = defineLayer({
   title: "Mountain bike trails",
   description:
     "Mountain biking trails (singletrack, flow trails, bike park lines and rated tracks) from OpenStreetMap, anywhere in the world. " +
-    "Each line is a rated trail segment: v is the Singletrack Scale rating from 0 (easiest, smooth and wide) to 6 (hardest, almost not rideable), " +
-    "imba is the IMBA rating 0 to 4 when only that is mapped, and kind is 'mtb' (has a Singletrack Scale rating), 'imba' (IMBA rating only) or 'route' (a named mountain bike route or trail system made of many segments). " +
+    "Each line is a rated trail segment: v is the Singletrack Scale rating from 0 (easiest, smooth and wide) to 6 (hardest, almost not rideable), or the IMBA rating 0 to 4 when only that is mapped (both read 0-1 easy, 2 moderate, 3 hard, 4 and up expert); " +
+    "singletrack and imba hold each scale as mapped, and kind is 'mtb' (has a Singletrack Scale rating), 'imba' (IMBA rating only) or 'route' (a named mountain bike route or trail system made of many segments). " +
+    "bikes says whether bikes are allowed, from the bicycle or access tag (yes, designated, permissive, no, private, dismount), when mapped. " +
     "Also name, ref, surface, operator and the date it was last checked (t) when mapped. " +
     "Use it for questions like: where can I go mountain biking near here, show beginner singletrack (set maxScale to 2), which trails are the hardest, or is there a flow trail or bike park nearby. " +
     "Caveats: ratings exist only where a mapper added them, so many good trails are missing or unrated (osm-trails shows every path, including ones with no mountain bike rating); " +
-    "bikes may be banned on a rated trail, so check the land manager (public-lands, forest-roads); the rating describes the trail, not its current condition or closures. " +
+    "bikes may be banned on a rated trail where bikes is not mapped, so check the land manager (public-lands, forest-roads); the rating describes the trail, not its current condition or closures. " +
     "At most 2,000 rated ways and 100 routes are returned (a route is drawn only where it crosses the box) and the note gives the count; over 2,500 km² (up to 100,000 km², a whole region) the 1,000 longest named ones.",
   coverage: "global",
   surface: "land",
@@ -292,6 +380,10 @@ const mtbTrails = defineLayer({
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // Mapped trails, not conditions: the check_date in `t` is when a mapper looked, not a time to scrub.
+  time: { shape: "none" },
+  legend: LEGEND,
+  labels: { field: "name", max: 8, rankBy: "v" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     if (ctx.wide === true) return queryWide(ctx, input);

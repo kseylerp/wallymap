@@ -327,18 +327,18 @@ const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 const ATTRIBUTES: Attribute[] = [
   { key: "acres", type: "measure", label: "Acres burned", unit: "acres", encode: "size", presets: NWCG_FIRE_SIZE },
   { key: "year", type: "time", label: "Year" },
+  // Agency stays the row's default chip set (the shared layers/attributes.test.ts holds it); status follows and is the key.
+  { key: "agency", type: "category", label: "Agency" },
   {
     key: "status",
     type: "category",
     label: "Status",
-    primary: true,
     levels: [
       { value: "active", label: "Still burning", help: "Not yet fully contained." },
       { value: "contained", label: "Contained", help: "A control line holds all the way around; may still smoulder inside." },
       { value: "out", label: "Out", help: "Declared out by the fire managers." },
     ],
   },
-  { key: "agency", type: "category", label: "Agency" },
   nameAttribute(),
 ];
 

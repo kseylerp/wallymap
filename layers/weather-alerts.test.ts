@@ -1,8 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import type { MultiPolygon, Polygon } from "geojson";
+import type { FeatureCollection, MultiPolygon, Polygon } from "geojson";
+import { attributeProblems } from "./attributes";
+import { cardTitle, contractProblems, displayOf, legendOf, timeShapeOf } from "./contract";
+import esriFixture from "./__fixtures__/weather-alerts-esri.outer-banks.json";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import layer, {
+  ESRI_ALERTS,
+  esriAlertFeatures,
+  esriOffset,
+  isMarine,
+  isWithdrawn,
+  shortAreas,
+  untilText,
   alertFeatures,
   MAX_ZONE_FETCHES,
   nowFeature,
@@ -125,10 +135,116 @@ describe("helpers", () => {
   });
 });
 
+/**
+ * Recorded 2026-10-18 ~06:15 UTC: the Esri Living Atlas copy of the NWS feed over the Outer Banks [-76.2,34.9,-75.2,36.0],
+ * 27 entries (marine gale and storm warnings, a replaced High Wind Watch, a cancelled one, and the land alerts), each
+ * shape cut to its extent and instructions to 200 characters to keep the file small.
+ */
+const OBX: [number, number, number, number] = [-76.2, 34.9, -75.2, 36.0];
+const OBX_NOW = Date.parse("2026-10-18T06:15:00Z");
+const esriFc = esriFixture as unknown as FeatureCollection;
+
+function esriStub(newest = OBX_NOW - 27 * 60_000, down = false) {
+  return vi.fn(async (url: string) => {
+    if (url.startsWith(ESRI_ALERTS) && url.includes("outStatistics")) return json({ features: [{ attributes: { newest } }] });
+    if (url.startsWith(ESRI_ALERTS)) return down ? json({}, 503) : json(esriFixture);
+    if (url.includes("open-meteo")) return json(nowFixture);
+    if (url.includes("/alerts/active")) return json({ type: "FeatureCollection", features: [] });
+    return json({}, 404);
+  });
+}
+
+describe("weather-alerts from the full NWS feed (audit 2026-10-17: zone sampling missed both Severe coastal flood warnings)", () => {
+  it("keeps every land alert in view with its own shape, most severe first, and drops withdrawn and marine entries", () => {
+    const features = esriAlertFeatures(esriFc, OBX_NOW);
+    const events = features.map((f) => f.properties?.event);
+    expect(features.slice(0, 2).map((f) => f.properties?.heading)).toEqual(["Coastal Flood Warning, Hatteras Island", "Coastal Flood Warning, Ocracoke Island"]);
+    expect(features[0].properties).toMatchObject({ severity: "Severe", v: 3, until: "October 20 at 5:00PM EDT", senderName: "NWS Newport/Morehead City NC", expires: "2026-10-20T21:00:00.000Z" });
+    expect(events).not.toContain("Gale Warning");
+    expect(events).not.toContain("Storm Watch");
+    expect(events).not.toContain("High Wind Watch");
+    expect(features).toHaveLength(16);
+    expect(features.every((f) => f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon")).toBe(true);
+    const severities = features.map((f) => Number(f.properties?.v));
+    expect([...severities].sort((a, b) => b - a)).toEqual(severities);
+    const marine = esriAlertFeatures(esriFc, OBX_NOW, { marine: true });
+    expect(marine.filter((f) => f.properties?.marine === true).map((f) => f.properties?.event)).toContain("Gale Warning");
+    expect(esriAlertFeatures(esriFc, OBX_NOW, { event: "coastal flood" }).map((f) => f.properties?.event)).toEqual([
+      "Coastal Flood Warning",
+      "Coastal Flood Warning",
+      "Coastal Flood Advisory",
+      "Coastal Flood Advisory",
+      "Coastal Flood Advisory",
+    ]);
+    // An alert past its end is gone even while the copy still lists it.
+    expect(esriAlertFeatures(esriFc, Date.parse("2026-10-21T00:00:00Z"))).toHaveLength(0);
+  });
+
+  it("reads marine zones, withdrawn entries, the local end and short area lists", () => {
+    expect(isMarine("AMZ150 AMZ152")).toBe(true);
+    expect(isMarine("NCZ203 AMZ150")).toBe(false);
+    expect(isMarine("")).toBe(false);
+    expect(isWithdrawn("The High Wind Watch has been replaced. Please see the latest information")).toBe(true);
+    expect(isWithdrawn("The High Wind Watch has been cancelled.")).toBe(true);
+    expect(isWithdrawn("Wind Advisory issued October 17 at 8:26PM EDT until October 19 at 8:00PM EDT by NWS Newport/Morehead City NC")).toBe(false);
+    expect(untilText("Wind Advisory issued October 17 at 8:26PM EDT until October 19 at 8:00PM EDT by NWS Newport/Morehead City NC")).toBe("October 19 at 8:00PM EDT");
+    expect(shortAreas("Northern Outer Banks; Ocracoke Island; Hatteras Island")).toBe("Northern Outer Banks, Ocracoke Island and 1 more");
+    expect(esriOffset(OBX)).toBe(0.0013);
+  });
+
+  it("asks the feed once for the view with no NWS zone lookups, and the card title is the event and its areas", async () => {
+    const stub = esriStub();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(OBX_NOW);
+    try {
+      const r = await layer.query(ctx(stub, OBX), { marine: false });
+      if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+      const urls = calls(stub).map(([u]) => u);
+      expect(urls.some((u) => u.includes("api.weather.gov"))).toBe(false);
+      const query = new URL(urls.find((u) => u.startsWith(`${ESRI_ALERTS}/query`) && u.includes("geometry="))!);
+      expect(query.searchParams.get("geometry")).toBe(OBX.join(","));
+      expect(query.searchParams.get("f")).toBe("geojson");
+      const alerts = r.data.features.filter((f) => f.properties?.kind !== "now");
+      expect(alerts).toHaveLength(16);
+      expect(cardTitle(layer, alerts[0])).toBe("Coastal Flood Warning, Hatteras Island");
+      const now = r.data.features.find((f) => f.properties?.kind === "now");
+      expect(String(now?.properties?.heading)).toMatch(/^Weather now: -?\d+ °F \(-?\d+ °C\)/);
+      expect(r.sourceStatus).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("falls back to NWS itself, and says so, when the feed fails or its copy is over two hours old", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(OBX_NOW);
+    try {
+      for (const stub of [esriStub(OBX_NOW - 3 * 3_600_000), esriStub(undefined, true)]) {
+        const r = await layer.query(ctx(stub, OBX), { marine: false });
+        if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+        expect(calls(stub).some(([u]) => u.includes("api.weather.gov/alerts/active"))).toBe(true);
+        expect(r.coverageNote).toMatch(/full NWS alert feed was unavailable/);
+        expect(r.sourceStatus).toEqual({ ok: true });
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("colors alerts by severity with a four-class key, one moment in time, US units", () => {
+    expect(layer.style.encode).toEqual({ color: "severity" });
+    expect(attributeProblems(layer)).toEqual([]);
+    expect(contractProblems(layer)).toEqual([]);
+    expect(legendOf(layer).items?.map((i) => i.label)).toEqual(["Minor", "Moderate", "Severe", "Extreme"]);
+    expect(timeShapeOf(layer).shape).toBe("single");
+    expect(displayOf(layer).units).toBe("us");
+  });
+});
+
 describe("weather-alerts layer", () => {
   it("asks NWS once for the states, with a User-Agent, caching alerts 5 minutes and points and zones 30 days", async () => {
     const stub = routedStub();
-    const r = await layer.query(ctx(stub), {});
+    const r = await layer.query(ctx(stub), { marine: false });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     const c = calls(stub);
     const alerts = c.filter((x) => x[0].includes("/alerts/active"));
@@ -161,19 +277,19 @@ describe("weather-alerts layer", () => {
         return routedStub()(url);
       });
     const first = water();
-    await layer.query(ctx(first), {});
+    await layer.query(ctx(first), { marine: false });
     expect(calls(first).filter((c) => c[0].includes("/points/"))).toHaveLength(9);
     expect(store.size).toBe(9);
     expect(ttls.every((t) => t === 3_600)).toBe(true);
     const second = water();
-    await layer.query(ctx(second), {});
+    await layer.query(ctx(second), { marine: false });
     expect(calls(second).filter((c) => c[0].includes("/points/"))).toHaveLength(0);
     setPointMissCache(null);
   });
 
   it("returns only current conditions abroad, without calling NWS", async () => {
     const stub = routedStub();
-    const r = await layer.query(ctx(stub, [6.0, 46.0, 6.5, 46.4]), {});
+    const r = await layer.query(ctx(stub, [6.0, 46.0, 6.5, 46.4]), { marine: false });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(calls(stub).every((x) => x[0].includes("open-meteo"))).toBe(true);
     expect(r.data.features.map((f) => f.properties?.kind)).toEqual(["now"]);
@@ -181,9 +297,9 @@ describe("weather-alerts layer", () => {
   });
 
   it("keeps current conditions when NWS fails, and errors only when both fail", async () => {
-    const r = await layer.query(ctx(routedStub(["alerts"])), {});
+    const r = await layer.query(ctx(routedStub(["alerts"])), { marine: false });
     expect(r).toMatchObject({ kind: "geojson", coverageNote: expect.stringMatching(/NWS alerts failed/) });
-    expect(await layer.query(ctx(routedStub(["alerts", "now"])), {})).toMatchObject({ hint: "upstream" });
+    expect(await layer.query(ctx(routedStub(["alerts", "now"])), { marine: false })).toMatchObject({ hint: "upstream" });
   });
 
   it("describes events, times, the now point and the user's words", () => {
@@ -210,14 +326,14 @@ describe("weather-alerts wide mode (over 400,000 km²)", () => {
     expect(layer.wide).toEqual({ orderBy: "severity", limit: 1000, rank: "most severe" });
     expect(WIDE_LIMIT).toBe(1000);
     expect(hardMaxAreaKm2(layer)).toBe(1_600_000);
-    expect(layer.description).toMatch(/Over 400,000 km² it samples 25 points and keeps the 1,000 most severe alerts/);
+    expect(layer.description).toMatch(/Over 400,000 km² it keeps the 1,000 most severe alerts/);
     expect(layer.description).not.toMatch(/Zoom in to under/);
   });
 
   it("samples a 5 x 5 grid instead of 3 x 3, one alerts call, and cuts at the limit with total", async () => {
     expect(samplePoints(CA_NV, WIDE_GRID)).toHaveLength(25);
     const stub = routedStub();
-    const full = await layer.query({ ...ctx(stub, CA_NV), wide: true, wideStrategy: layer.wide }, {});
+    const full = await layer.query({ ...ctx(stub, CA_NV), wide: true, wideStrategy: layer.wide }, { marine: false });
     if (!("kind" in full) || full.kind !== "geojson") throw new Error("expected geojson");
     expect(calls(stub).filter((x) => x[0].includes("/points/"))).toHaveLength(25);
     expect(calls(stub).filter((x) => x[0].includes("/alerts/active"))).toHaveLength(1);
@@ -225,7 +341,7 @@ describe("weather-alerts wide mode (over 400,000 km²)", () => {
     expect(alerts.length).toBeGreaterThan(1);
     expect(full.total).toBeUndefined();
 
-    const cut = await layer.query({ ...ctx(routedStub(), CA_NV), wide: true, wideStrategy: { ...layer.wide!, limit: 1 } }, {});
+    const cut = await layer.query({ ...ctx(routedStub(), CA_NV), wide: true, wideStrategy: { ...layer.wide!, limit: 1 } }, { marine: false });
     if (!("kind" in cut) || cut.kind !== "geojson") throw new Error("expected geojson");
     expect(cut.data.features.map((f) => f.properties?.kind)).toEqual([alerts[0].properties?.kind, "now"]);
     expect(cut.total).toBe(alerts.length + 1);

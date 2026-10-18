@@ -2,7 +2,20 @@
  * Weather alerts: active National Weather Service warnings, watches and advisories, plus current weather at the
  * centre of the view from Open-Meteo.
  *
- * NWS (https://api.weather.gov, keyless; a User-Agent is required), verified live 2026-10-10 ~02:00 UTC:
+ * Primary source (since 2026-10-18): the NWS active-alerts feed with each alert's full shape, as Esri's Living Atlas
+ * re-publishes it every few minutes (keyless FeatureServer, the "Events Ordered by Size and Severity" layer):
+ *   https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/NWS_Watches_Warnings_v1/FeatureServer/6
+ *   One bbox query returns every alert whose area touches the view, polygons included (fields Event, Severity,
+ *   Summary, Link, Urgency, Certainty, Start, End_, Updated, Affected, AreaIds, Instruction, Uid). Verified live
+ *   2026-10-18 ~06:15 UTC over the Outer Banks [-76.2,34.9,-75.2,36.0]: 27 alerts in one call, including both Severe
+ *   Coastal Flood Warnings (Hatteras and Ocracoke Islands) the zone sampling below had missed; the newest Updated in the
+ *   feed was 27 minutes old. The feed keeps an alert that NWS has cancelled or replaced until it expires, with a Summary
+ *   such as "The High Wind Watch has been replaced", so those are dropped. Marine zones (AreaIds AMZ, ANZ, GMZ, PZZ ...)
+ *   are left out unless asked for.
+ *   Its newest Updated time is checked (one statistics query, cached 5 minutes): when it is more than two hours old, or
+ *   the feed fails, the layer falls back to NWS itself (below), so a stalled copy never answers.
+ *
+ * Fallback, NWS (https://api.weather.gov, keyless; a User-Agent is required), verified live 2026-10-10 ~02:00 UTC:
  *   - /alerts/active with no filter is every US alert (699 alerts, 5 MB), too big per request. `?point=` is one
  *     point only. `?area=CA,NV` (comma-separated state codes) returned 46 alerts in 284 KB, so the states whose
  *     rough bbox (STATE_BBOXES, padded) touches the view are asked for in one call, cached 5 minutes under a
@@ -31,8 +44,9 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, MultiPolygon, Point, Polygon, Position } from "geojson";
-import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type Attribute, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
+import { arcgisQuery } from "./_shared/arcgis";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { bboxesDisjoint, outsideUs } from "./_shared/coverage";
 import { geometryBBox } from "./_shared/geo";
@@ -83,7 +97,146 @@ const SEVERITY_RANK: Record<string, number> = { Extreme: 4, Severe: 3, Moderate:
 const inputSchema = z.object({
   /** Case-insensitive text to match in the event name, e.g. "red flag", "avalanche", "winter storm". */
   event: z.string().trim().min(1).max(120).optional(),
+  /** Also show marine alerts (gale, small craft and storm warnings over coastal waters and the Great Lakes). */
+  marine: z.boolean().default(false),
 });
+
+/* ---------- Primary: the NWS feed as Esri's Living Atlas re-publishes it, one bbox query ---------- */
+
+export const ESRI_ALERTS = "https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/NWS_Watches_Warnings_v1/FeatureServer/6";
+const ESRI_FIELDS = ["Event", "Severity", "Summary", "Link", "Urgency", "Certainty", "Start", "End_", "Updated", "Affected", "AreaIds", "Instruction", "Uid"];
+/** The feed is used only while its newest alert update is younger than this; older means the copy has stalled. */
+export const ESRI_STALE_MS = 2 * 3_600_000;
+/** Marine zone prefixes (coastal waters, the Great Lakes, offshore): an alert whose zones all start so is a marine alert. */
+const MARINE_PREFIXES = new Set(["AM", "AN", "GM", "LC", "LE", "LH", "LM", "LO", "LS", "PH", "PK", "PM", "PS", "PZ", "SL"]);
+
+export function isMarine(areaIds: string | null | undefined): boolean {
+  const ids = (areaIds ?? "").split(/[\s,;]+/).filter(Boolean);
+  return ids.length > 0 && ids.every((id) => MARINE_PREFIXES.has(id.slice(0, 2).toUpperCase()));
+}
+
+/** True for a feed entry NWS has already withdrawn: "The High Wind Watch has been cancelled / replaced / has expired". */
+export function isWithdrawn(summary: string | null | undefined): boolean {
+  return /\bhas (been cancell?ed|been replaced|expired)\b/i.test(summary ?? "");
+}
+
+/** "October 20 at 5:00PM EDT" from "… issued October 17 at 8:33PM EDT until October 20 at 5:00PM EDT by NWS …": the office's own clock. */
+export function untilText(summary: string | null | undefined): string | undefined {
+  const m = /\buntil (.+?)(?: by NWS\b|$)/i.exec(summary ?? "");
+  return m ? m[1].trim().replace(/\.$/, "") : undefined;
+}
+
+/** The first areas of an alert, short enough for a title: "Hatteras Island", "Mainland Dare and Mainland Hyde", "A, B and 3 more". */
+export function shortAreas(affected: string | null | undefined): string | undefined {
+  const parts = (affected ?? "")
+    .split(/;\s*/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return undefined;
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+  return `${parts[0]}, ${parts[1]} and ${parts.length - 2} more`;
+}
+
+const isoOf = (ms: unknown) => (typeof ms === "number" && Number.isFinite(ms) ? new Date(ms).toISOString() : undefined);
+
+/**
+ * Alert areas from the feed's GeoJSON: withdrawn and expired entries dropped, marine ones unless asked, the event filter
+ * applied, sorted most severe first (then the soonest to start). Properties match the NWS fallback's, plus `heading`
+ * ("Coastal Flood Warning, Hatteras Island") and `until` (the end in the issuing office's own time, from the alert text).
+ */
+export function esriAlertFeatures(fc: FeatureCollection, now: number, opts: { event?: string; marine?: boolean } = {}): Feature[] {
+  const needle = opts.event?.toLowerCase();
+  const out: Feature[] = [];
+  for (const f of fc.features) {
+    const p = (f.properties ?? {}) as Record<string, unknown>;
+    const text = (key: string) => (typeof p[key] === "string" ? (p[key] as string).trim() : "");
+    const event = text("Event");
+    if (!event || !isArea(f.geometry)) continue;
+    if (isWithdrawn(text("Summary"))) continue;
+    if (typeof p.End_ === "number" && p.End_ < now) continue;
+    const marine = isMarine(text("AreaIds"));
+    if (marine && !opts.marine) continue;
+    if (needle !== undefined && !event.toLowerCase().includes(needle)) continue;
+    const severity = text("Severity") || "Unknown";
+    const short = shortAreas(text("Affected"));
+    const props: Record<string, string | number | boolean> = {
+      kind: event,
+      event,
+      heading: short ? `${event}, ${short}` : event,
+      severity,
+      v: SEVERITY_RANK[severity] ?? 0,
+    };
+    const start = isoOf(p.Start);
+    if (start) props.t = start;
+    const end = isoOf(p.End_);
+    if (end) props.expires = end;
+    const until = untilText(text("Summary"));
+    if (until) props.until = until;
+    if (text("Summary")) props.headline = text("Summary");
+    if (text("Affected")) props.areaDesc = text("Affected").replace(/;\s*/g, "; ");
+    for (const [from, to] of [["Urgency", "urgency"], ["Certainty", "certainty"], ["Instruction", "instruction"]] as const) {
+      if (text(from) && text(from).toLowerCase() !== "unknown") props[to] = text(from).replace(/(?<!\n)\n(?!\n)/g, " ");
+    }
+    const office = /\bby (NWS .+?)\s*$/i.exec(text("Summary"))?.[1];
+    if (office) props.senderName = office;
+    if (text("Link").startsWith("https://")) props.url = text("Link");
+    if (marine) props.marine = true;
+    out.push({ type: "Feature", geometry: f.geometry, properties: props });
+  }
+  return out.sort(
+    (x, y) => Number(y.properties?.v ?? 0) - Number(x.properties?.v ?? 0) || String(x.properties?.t ?? "").localeCompare(String(y.properties?.t ?? "")),
+  );
+}
+
+/** Simplification for the view: about 1/800 of its width in degrees, between 0.0005° (~50 m) and 0.05°. */
+export function esriOffset([w, , e]: BBox): number {
+  return Math.min(0.05, Math.max(0.0005, Number(((e - w) / 800).toPrecision(2))));
+}
+
+type EsriAnswer = { ok: true; features: Feature[] } | { ok: false; why: string };
+
+/** Newest `Updated` in the whole feed (ms), or null when the statistics query fails. */
+async function esriNewest(ctx: QueryContext): Promise<number | null> {
+  const stats = encodeURIComponent(JSON.stringify([{ statisticType: "max", onStatisticField: "Updated", outStatisticFieldName: "newest" }]));
+  try {
+    const res = await ctx.fetch(`${ESRI_ALERTS}/query?where=1%3D1&outStatistics=${stats}&f=json`, {
+      cacheKey: "weather-alerts:esri:newest",
+      ttlSeconds: ALERTS_TTL_SECONDS,
+      validate: JSON_OBJECT_BODY,
+      timeoutMs: UPSTREAM_TIMEOUT_MS,
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { features?: { attributes?: { newest?: unknown } }[] };
+    const newest = body.features?.[0]?.attributes?.newest;
+    return typeof newest === "number" && Number.isFinite(newest) ? newest : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Every alert touching the view from the feed, or why the feed cannot be used (failed, or its copy has stalled). */
+async function esriAlerts(ctx: QueryContext, now: number, event: string | undefined, marine: boolean): Promise<EsriAnswer> {
+  const offset = esriOffset(ctx.bbox);
+  const [result, newest] = await Promise.all([
+    arcgisQuery(ctx, ESRI_ALERTS, {
+      outFields: ESRI_FIELDS,
+      bbox: ctx.bbox,
+      maxAllowableOffset: offset,
+      maxRecords: 2000,
+      cacheSuffix: `esri-alerts:${offset}`,
+      ttlSeconds: ALERTS_TTL_SECONDS,
+    }),
+    esriNewest(ctx),
+  ]);
+  if (!result.ok) return { ok: false, why: result.error };
+  if (newest !== null && now - newest > ESRI_STALE_MS) {
+    return { ok: false, why: `its copy of the alerts was last updated ${Math.round((now - newest) / 3_600_000)} hours ago` };
+  }
+  return { ok: true, features: esriAlertFeatures(result.fc, now, { event, marine }) };
+}
+
+/* ---------- Fallback: NWS itself, per state, with zone shapes found by sampling the view ---------- */
 
 /** State codes whose padded extent touches the bbox, sorted. */
 export function statesFor(bbox: BBox): string[] {
@@ -223,9 +376,11 @@ export function alertFeatures(
       geometry = { type: "MultiPolygon", coordinates: shapes.flatMap(polygonsOf).map((poly) => poly.map(roundRing)) };
     }
     if (geometry === null) continue;
+    const short = shortAreas(p.areaDesc);
     const props: Record<string, string | number> = {
       kind: p.event,
       event: p.event,
+      heading: short ? `${p.event}, ${short}` : p.event,
       severity: p.severity ?? "Unknown",
       v: SEVERITY_RANK[p.severity ?? ""] ?? 0,
     };
@@ -293,6 +448,12 @@ export function nowFeature(body: unknown, centre: [number, number]): Feature<Poi
     p.weatherCode = c.weather_code;
     p.weather = weatherWords(c.weather_code);
   }
+  // US units beside the model's metric ones (the alerts are US), and a heading that reads as the answer.
+  p.temperatureF = Math.round((c.temperature_2m! * 9) / 5 + 32);
+  if (typeof c.wind_speed_10m === "number") p.windMph = Math.round(c.wind_speed_10m / 1.609344);
+  if (typeof c.wind_gusts_10m === "number") p.gustMph = Math.round(c.wind_gusts_10m / 1.609344);
+  const wind = typeof p.windMph === "number" ? `, wind ${p.windMph} mph${typeof p.gustMph === "number" && p.gustMph > p.windMph ? ` gusting ${p.gustMph}` : ""}` : "";
+  p.heading = `Weather now: ${p.temperatureF} °F (${Math.round(c.temperature_2m!)} °C)${wind}${typeof p.weather === "string" && p.weather !== "unknown" ? `, ${p.weather}` : ""}`;
   return { type: "Feature", geometry: { type: "Point", coordinates: centre }, properties: p };
 }
 
@@ -388,26 +549,50 @@ const WEATHER_WORDS: Record<string, string> = {
  */
 const CARD: CardSpec = {
   facts: [
-    { key: "event", label: "Alert" },
     { key: "severity", label: "Severity" },
-    { key: "urgency", label: "Urgency" },
-    { key: "certainty", label: "Certainty" },
+    { key: "until", label: "Until (local time)" },
     { key: "expires", label: "Ends", format: "date" },
-    { key: "headline", label: "Headline" },
+    { key: "t", label: "Starts", format: "date" },
     { key: "areaDesc", label: "Areas" },
     { key: "instruction", label: "What to do" },
+    { key: "urgency", label: "Urgency" },
+    { key: "certainty", label: "Certainty" },
+    { key: "headline", label: "Headline" },
     { key: "senderName", label: "Issued by" },
     { key: "weather", label: "Weather", values: WEATHER_WORDS },
-    { key: "temperatureC", label: "Temperature", unit: "°C", format: "1dp" },
-    { key: "windKmh", label: "Wind", unit: "km/h", format: "1dp" },
-    { key: "gustKmh", label: "Gusts", unit: "km/h", format: "1dp" },
+    { key: "temperatureF", label: "Temperature", unit: "°F", format: "int" },
+    { key: "windMph", label: "Wind", unit: "mph", format: "int" },
+    { key: "gustMph", label: "Gusts", unit: "mph", format: "int" },
+    { key: "temperatureC", label: "Temperature (metric)", unit: "°C", format: "1dp" },
     { key: "precipitationMm", label: "Precipitation", unit: "mm", format: "1dp" },
     { key: "snowfallCm", label: "Snowfall", unit: "cm", format: "1dp" },
   ],
-  /** Kind repeats the event (or is "now"); the WMO weather code is the Weather row in words. */
-  hidden: ["kind", "weatherCode"],
+  /** The heading is the title; kind and event repeat it; the WMO code is the Weather row in words; metric wind repeats mph. */
+  hidden: ["kind", "event", "heading", "weatherCode", "windKmh", "gustKmh", "marine", "v"],
   links: [{ key: "url", label: "Full alert from the National Weather Service" }],
 };
+
+/**
+ * What a person slices alerts by (spec §12c): severity is the ordinal the map colors (Minor sage through Extreme
+ * purple) and the row's chips; the event name is an open category (Wind Advisory, Coastal Flood Warning ...).
+ */
+export const ATTRIBUTES: Attribute[] = [
+  {
+    key: "severity",
+    type: "ordinal",
+    label: "Severity",
+    scale: "NWS alert severity (Common Alerting Protocol): Minor, Moderate, Severe, Extreme",
+    encode: "color",
+    primary: true,
+    levels: [
+      { value: "Minor", label: "Minor", help: "Minimal to no known threat to life or property (most advisories)." },
+      { value: "Moderate", label: "Moderate", help: "Possible threat to life or property." },
+      { value: "Severe", label: "Severe", help: "Significant threat to life or property (most warnings)." },
+      { value: "Extreme", label: "Extreme", help: "Extraordinary threat to life or property." },
+    ],
+  },
+  { key: "event", type: "category", label: "Alert" },
+];
 
 const weatherAlerts = defineLayer({
   id: "weather-alerts",
@@ -415,12 +600,12 @@ const weatherAlerts = defineLayer({
   description:
     "Active National Weather Service warnings, watches and advisories in view, plus the weather right now at the centre of the view. User words: warnings, alerts, weather alerts, red flag warning, avalanche warning, winter storm, flood, heat, wind advisory, is there a warning, what's the weather. " +
     "Each alert is an area with kind and event (e.g. 'Red Flag Warning', 'Avalanche Warning', 'Winter Storm Warning', 'Flood Watch', 'Wind Advisory'), severity (Extreme, Severe, Moderate, Minor) and v as its rank (4 to 1), " +
-    "t (onset, UTC), expires (when it ends, UTC), headline, urgency, certainty, areaDesc (the named zones), senderName (the NWS office), instruction (what to do) and url. Alerts are sorted most severe first. " +
-    "Set event to filter by name, e.g. 'red flag' or 'avalanche'. One extra point, kind 'now', is current conditions from the Open-Meteo model at the view's centre: temperatureC (v), windKmh, gustKmh, precipitationMm, snowfallCm and weather (e.g. 'snow showers'), t = the 15-minute model time. " +
+    "heading (event and areas, e.g. 'Coastal Flood Warning, Hatteras Island'), t (onset, UTC), expires (when it ends, UTC), until (the end in the issuing office's own words and time zone, e.g. 'October 20 at 5:00PM EDT'), headline, urgency, certainty, areaDesc (the named zones), senderName (the NWS office), instruction (what to do) and url. Alerts are sorted most severe first; the map colors them by severity. " +
+    "Set event to filter by name, e.g. 'red flag' or 'avalanche'; set marine true to add marine alerts (gale, small craft and storm warnings over coastal waters and the Great Lakes). One extra point, kind 'now', is current conditions from the Open-Meteo model at the view's centre: temperatureC (v), temperatureF, windKmh and windMph, gustKmh and gustMph, precipitationMm, snowfallCm and weather (e.g. 'snow showers'), t = the 15-minute model time. " +
     "Alerts are live (refreshed every 5 minutes). Example questions: 'Are there any red flag warnings near Tahoe?', 'Is there an avalanche warning for the Wasatch?'. " +
-    "Caveats: alerts are United States only and land zones only (marine warnings are left out; use surf for sea state); an alert's area is its whole forecast zone, which can be larger than the hazard; " +
-    "zones in view are found by sampling 9 points across it, so a small zone between them can be missed; avalanche warnings come from NWS only when an avalanche centre asks for one, so check the local avalanche centre; " +
-    "the 'now' point is a model value, not a station reading, free for non-commercial use only. Over 400,000 km² it samples 25 points and keeps the 1,000 most severe alerts.",
+    "Every active alert touching the view comes from the full NWS feed with its own shape (Esri's Living Atlas copy, checked to be under two hours old); if that feed is down the layer asks NWS directly and finds zones by sampling points, which can miss a small zone (the coverageNote says so). " +
+    "Caveats: alerts are United States only, land zones only unless marine is set (use surf for sea state); an alert's area is its whole forecast zone, which can be larger than the hazard; avalanche warnings come from NWS only when an avalanche centre asks for one, so check the local avalanche centre; " +
+    "the 'now' point is a model value, not a station reading, free for non-commercial use only. Over 400,000 km² it keeps the 1,000 most severe alerts.",
   coverage: "global",
   surface: "any",
   license: "Public domain (NOAA NWS); current conditions from Open-Meteo, CC BY 4.0, free for non-commercial use only",
@@ -430,9 +615,14 @@ const weatherAlerts = defineLayer({
   // /points and zone lookups stay capped (WIDE_GRID, MAX_ZONE_FETCHES), so the cost does not grow past it.
   wide: { orderBy: "severity", limit: WIDE_LIMIT, rank: "most severe" },
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("weather-alerts"), fillOpacity: 0.25, timeField: "t" },
+  style: { geometry: "polygon", color: layerColor("weather-alerts"), fillOpacity: 0.25, timeField: "t", encode: { color: "severity" } },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
+  // Alerts in force now: one moment, no scrubber (their onsets are not a time series).
+  time: { shape: "single" },
+  labels: { field: "event", max: 5, rankBy: "v" },
+  display: { units: "us", timeZone: "local" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();
@@ -455,9 +645,18 @@ const weatherAlerts = defineLayer({
     let alertsError: string | null = null;
     let alertTotal: number | undefined;
 
+    // Alerts arrive most severe first, so a wide cut keeps the most severe.
+    const limit = ctx.wide ? (ctx.wideStrategy?.limit ?? WIDE_LIMIT) : Infinity;
+    const feed = states.length === 0 ? null : await esriAlerts(ctx, now.getTime(), input.event, input.marine);
+
     if (states.length === 0) {
       notes.push("NWS alerts cover the United States only");
+    } else if (feed?.ok) {
+      if (feed.features.length > limit) alertTotal = feed.features.length;
+      features.push(...feed.features.slice(0, limit));
+      if (feed.features.length === 0) notes.push(input.event ? `No active “${input.event}” alerts in view` : "No active NWS alerts in view");
     } else {
+      notes.push(`The full NWS alert feed was unavailable (${feed?.why ?? "no answer"}), so alerts were found by sampling ${ctx.wide ? WIDE_GRID * WIDE_GRID : GRID * GRID} points in view; a small zone between them can be missed`);
       const alertsRes = await getJson(
         ctx,
         `${NWS}/alerts/active?status=actual&area=${states.join(",")}`,
@@ -489,8 +688,6 @@ const weatherAlerts = defineLayer({
           }
         });
         const placed = alertFeatures(alerts, inView, zones, ctx.bbox, input.event);
-        // Alerts arrive most severe first, so a wide cut keeps the most severe.
-        const limit = ctx.wide ? (ctx.wideStrategy?.limit ?? WIDE_LIMIT) : Infinity;
         if (placed.features.length > limit) alertTotal = placed.features.length;
         features.push(...placed.features.slice(0, limit));
         if (placed.features.length === 0) notes.push(input.event ? `No active “${input.event}” alerts in view` : "No active NWS alerts in view");
@@ -515,10 +712,13 @@ const weatherAlerts = defineLayer({
     }
 
     const data: FeatureCollection = { type: "FeatureCollection", features };
+    // NWS itself answered after the feed failed: the alerts are real, if possibly incomplete (the note says so).
+    const fellBack = feed !== null && !feed.ok && alertsError === null;
     return {
       kind: "geojson",
       data,
       citation,
+      ...(fellBack && { sourceStatus: { ok: true } as const }),
       ...(alertTotal !== undefined && { total: alertTotal }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };

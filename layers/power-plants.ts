@@ -17,22 +17,27 @@
  * The wind and solar APIs return a plain JSON array, no count header; the layer asks for one row more than it shows and
  * says it trimmed when that extra row arrives. The two do not duplicate the plants: wind and solar plants appear in all three,
  * so `source` picks one to avoid double counting; the USGS two carry the year online that the EIA mirror lacks.
- * Output properties: name, kind (fuel; "wind"; "solar"), v (MW), plus plant: utility, state, county, technology, nameplateMw,
- * dataPeriod; wind: project, turbines, projectMw, manufacturer, model, hubHeightM, rotorDiameterM, year; solar: state, county,
- * mwDc, technology, siteType, battery, year. t = January 1 of the year online (wind and solar only).
+ * Output properties: name, kind (fuel; "wind"; "solar"), fuelGroup (the fuel's color group, clean to fossil), v (MW), plus plant:
+ * utility, state, county, technology, nameplateMw, dataPeriod ("February 2025"); wind: project, turbines, projectMw, manufacturer,
+ * model, hubHeightM, rotorDiameterM, year; solar: state, county, mwDc, technology, siteType, battery, year. t = January 1 of the
+ * year online (wind and solar only). Symbols are sized by MW and colored by fuelGroup (style.encode).
+ * Newer sources checked 2026-10-18: the mirror still holds Period 202502 (data last edited 2025-07-01). EIA's own Energy Atlas plants
+ * service now needs a token; EIA-860M (July 2026) is free through the EIA API v2 but needs a free key (not configured; with the
+ * public DEMO_KEY one state took 11 s, too slow and rate-limited for the map) or a 14 MB monthly workbook; HIFLD's copy is gone. So
+ * the mirror stays, and its period is said on the card, in the legend and in the note, read from the data so a refresh shows.
  * Smoke through runLayer (2026-10-10): plants, Bay Area -122.5,37.5,-121.5,38.3 returned 100 plants in 0.3 s (34 KB, Delta Energy Center
  * 842 MW first); wind-turbines, Tehachapi -118.5,35,-118.1,35.3 returned 2,906 turbines in 3.0 s (913 KB); solar-projects, Mojave
  * -118.5,34.5,-117.5,35.3 returned 134 projects in 0.5 s (39 KB, Eland Solar 350 MW first); fuel coal in -98,31,-94,34 returned 6 (Martin Lake 2,410 MW).
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type LegendSpec, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
 import { PLANT_CAPACITY, nameAttribute, timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, WHOLE_US_KM2, outsideUs } from "./_shared/coverage";
-import { layerColor } from "@/lib/render/palette";
+import { OFF_WHITE, layerColor } from "@/lib/render/palette";
 
 const PLANTS_URL = "https://services2.arcgis.com/FiaPA4ga0iQKduv3/ArcGIS/rest/services/Power_Plants_in_the_US/FeatureServer/0";
 const WIND_URL = "https://energy.usgs.gov/api/uswtdb/v1/turbines";
@@ -54,6 +59,42 @@ const FUELS = [
 ] as const;
 
 const SOURCES = ["plants", "wind-turbines", "solar-projects"] as const;
+
+/**
+ * Fuel color groups, clean to fossil: the order is the sage → pink → purple ramp, so solar is sage and gas and coal
+ * purple. Batteries and "other" have no group color (off-white) and a chip of their own.
+ */
+export const FUEL_GROUPS = ["Solar", "Wind", "Hydro and other renewables", "Nuclear", "Natural gas", "Coal and oil"] as const;
+const OTHER_GROUP = "Batteries and other";
+
+const GROUP_OF: Record<string, string> = {
+  solar: "Solar",
+  wind: "Wind",
+  hydroelectric: "Hydro and other renewables",
+  "pumped storage": "Hydro and other renewables",
+  geothermal: "Hydro and other renewables",
+  biomass: "Hydro and other renewables",
+  nuclear: "Nuclear",
+  "natural gas": "Natural gas",
+  coal: "Coal and oil",
+  petroleum: "Coal and oil",
+  batteries: OTHER_GROUP,
+  other: OTHER_GROUP,
+};
+
+/** The color group of a fuel ("pumped storage" -> "Hydro and other renewables"); unknown fuels are "Batteries and other". */
+export function fuelGroupOf(fuel: string): string {
+  return GROUP_OF[fuel] ?? OTHER_GROUP;
+}
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** EIA's reporting period in words: "202502" -> "February 2025"; undefined when it is not a YYYYMM month. */
+export function periodWords(period: string): string | undefined {
+  const m = /^(\d{4})(\d{2})$/.exec(period);
+  const month = m ? MONTHS[Number(m[2]) - 1] : undefined;
+  return m && month ? `${month} ${m[1]}` : undefined;
+}
 
 const PLANT_FIELDS = ["Plant_Name", "Utility_Na", "State", "County", "PrimSource", "tech_desc", "Total_MW", "Install_MW", "Period"];
 const WIND_FIELDS = [
@@ -146,7 +187,7 @@ export function normalizePlants(fc: FeatureCollection): FeatureCollection {
     if (f.geometry?.type !== "Point") continue;
     const p = f.properties ?? {};
     const fuel = str(p.PrimSource) ?? "other";
-    const properties: Record<string, string | number> = { name: str(p.Plant_Name) ?? "Unnamed plant", kind: fuel };
+    const properties: Record<string, string | number> = { name: str(p.Plant_Name) ?? "Unnamed plant", kind: fuel, fuelGroup: fuelGroupOf(fuel) };
     const mw = num(p.Total_MW);
     if (mw !== undefined) {
       properties.mw = round1(mw);
@@ -156,14 +197,19 @@ export function normalizePlants(fc: FeatureCollection): FeatureCollection {
     if (nameplate !== undefined) properties.nameplateMw = round1(nameplate);
     const utility = str(p.Utility_Na);
     if (utility !== undefined) properties.utility = utility;
-    const tech = str(p.tech_desc);
-    if (tech !== undefined) properties.technology = tech;
+    // EIA lists a plant's technologies with a trailing separator ("Natural Gas Fired Combined Cycle; Batteries;").
+    const tech = str(p.tech_desc)
+      ?.split(";")
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .join("; ");
+    if (tech) properties.technology = tech;
     const county = str(p.County);
     if (county !== undefined) properties.county = county;
     const state = str(p.State);
     if (state !== undefined) properties.state = state;
-    const period = str(p.Period);
-    if (period !== undefined && /^\d{6}$/.test(period)) properties.dataPeriod = `${period.slice(0, 4)}-${period.slice(4)}`;
+    const period = periodWords(str(p.Period) ?? "");
+    if (period !== undefined) properties.dataPeriod = period;
     features.push({ type: "Feature", geometry: f.geometry, properties });
   }
   return { type: "FeatureCollection", features };
@@ -185,7 +231,7 @@ export function normalizeTurbines(rows: unknown[]): FeatureCollection {
     const geometry = pointFrom(r);
     if (geometry === null) continue;
     const project = str(r.p_name);
-    const properties: Record<string, string | number> = { name: project ?? "Wind turbine", kind: "wind" };
+    const properties: Record<string, string | number> = { name: project ?? "Wind turbine", kind: "wind", fuelGroup: "Wind" };
     if (project !== undefined) properties.project = project;
     const kw = num(r.t_cap);
     const projectMw = num(r.p_cap);
@@ -221,7 +267,7 @@ export function normalizeSolar(rows: unknown[]): FeatureCollection {
     const r = raw as Record<string, unknown>;
     const geometry = pointFrom(r);
     if (geometry === null) continue;
-    const properties: Record<string, string | number> = { name: str(r.p_name) ?? "Solar project", kind: "solar" };
+    const properties: Record<string, string | number> = { name: str(r.p_name) ?? "Solar project", kind: "solar", fuelGroup: "Solar" };
     const ac = num(r.p_cap_ac);
     if (ac !== undefined) {
       properties.mw = round1(ac);
@@ -245,19 +291,36 @@ export function normalizeSolar(rows: unknown[]): FeatureCollection {
   return { type: "FeatureCollection", features };
 }
 
+/** The plants' data month(s) as a note ("EIA plant data as of February 2025 ..."), read from the data so a refreshed copy says so. */
+function vintageNote(data: FeatureCollection): string[] {
+  const periods = [...new Set(data.features.map((f) => f.properties?.dataPeriod).filter((p): p is string => typeof p === "string"))];
+  if (periods.length === 0) return [];
+  return [`EIA plant data as of ${periods.join(" and ")} (an Esri copy of EIA's list): plants built, retired or renamed since are missing`];
+}
+
 function isTimeout(err: unknown): boolean {
   return typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
 }
+
+const FUEL_LABELS: Record<string, string> = Object.fromEntries(FUELS.map((value) => [value, value.charAt(0).toUpperCase() + value.slice(1)]));
 
 const ATTRIBUTES: Attribute[] = [
   {
     key: "kind",
     type: "category",
     label: "Fuel",
-    levels: FUELS.map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })),
+    levels: FUELS.map((value) => ({ value, label: FUEL_LABELS[value] })),
+    primary: true,
+  },
+  {
+    key: "fuelGroup",
+    type: "category",
+    label: "Fuel group (clean to fossil)",
+    levels: FUEL_GROUPS.map((value) => ({ value, label: value })),
+    encode: "color",
   },
   { key: "v", type: "measure", label: "Capacity", unit: "MW", encode: "size", presets: PLANT_CAPACITY, aggregate: "sum" },
-  // Wind turbines and solar projects only (the EIA plants carry no year): the color of the pair below.
+  // Wind turbines and solar projects only (the EIA plants carry no year).
   { key: "year", type: "measure", label: "Year online" },
   timeAttribute("Online"),
   nameAttribute(),
@@ -279,7 +342,14 @@ const HELP: Record<string, FieldHelp> = {
   nameplateMw: { text: "Nameplate capacity: the maximum output the generators are rated for, usually above the summer capacity.", unit: "MW" },
   projectMw: { text: "Capacity of the whole wind project this turbine belongs to.", unit: "MW" },
   mwDc: { text: "The solar project's DC capacity (panel rating), higher than its AC output to the grid.", unit: "MW" },
-  dataPeriod: { text: "The month of the EIA data the plant record comes from." },
+  dataPeriod: {
+    text:
+      "The month of the EIA data the plant record comes from. The copy this layer reads stops at February 2025, so plants built, retired " +
+      "or renamed since are not in it.",
+    source: "US EIA via the Esri Federal User Community mirror",
+    url: "https://www.eia.gov/electricity/data/eia860m/",
+  },
+  fuelGroup: { text: "The fuel's color on the map, from clean to fossil: solar, wind, hydro and other renewables, nuclear, natural gas, coal and oil." },
   hubHeightM: { text: "Height of the turbine hub above the ground.", unit: "m" },
   rotorDiameterM: { text: "Diameter of the circle the blades sweep.", unit: "m" },
   year: { text: "The year the wind or solar project came online." },
@@ -288,14 +358,30 @@ const HELP: Record<string, FieldHelp> = {
 const CARD: CardSpec = {
   measure: { key: "mw", label: "Capacity", unit: "MW" },
   facts: [
-    { key: "kind", label: "Fuel" },
+    { key: "kind", label: "Fuel", values: FUEL_LABELS },
     { key: "technology", label: "Technology" },
     { key: "utility", label: "Utility" },
     { key: "project", label: "Project" },
     { key: "turbines", label: "Turbines in project", format: "int" },
     { key: "year", label: "Online since" },
     { key: "state", label: "State" },
+    { key: "dataPeriod", label: "EIA data as of" },
   ],
+  // The color group repeats the fuel.
+  hidden: ["fuelGroup"],
+};
+
+const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Fuel, clean to fossil",
+  field: "fuelGroup",
+  items: [
+    ...FUEL_GROUPS.map((value) => ({ label: value, value })),
+    { label: OTHER_GROUP, value: OTHER_GROUP, color: OFF_WHITE },
+  ],
+  note:
+    "Size is capacity in MW. The plants list is EIA data as of February 2025 (an Esri copy), so plants built or retired since are missing; " +
+    "the wind turbine and solar databases are USGS's current releases.",
 };
 
 const powerPlants = defineLayer({
@@ -307,6 +393,7 @@ const powerPlants = defineLayer({
     "Set fuel (for example coal, nuclear, hydroelectric, natural gas) to show one fuel; it applies to plants only. " +
     "Wind turbines and solar projects carry t (January 1 of the year they came online) and year, so the time scrubber plays the build-out; the plants source has no dates. " +
     "Use it for 'where are the power plants', 'what coal plants are near here', 'show wind farms by the year they were built', 'how big is that solar farm' or 'which dams make electricity'. " +
+    "Symbols are sized by MW and colored by fuel from clean to fossil (fuelGroup: solar sage, wind, hydro and other renewables, nuclear, natural gas, coal and oil purple; batteries and other off-white). " +
     "Caveats: the plants list comes from a copy of EIA data with a data period of February 2025 (see dataPeriod), so it lags EIA and misses newer plants, retirements and renamed ones. The plants source also lists wind and solar plants, so do not add its wind and solar counts to the USGS ones. " +
     "Capacity is what a plant can produce, not what it did produce. About half the older wind turbines have no rating; their v is the project average per turbine. " +
     "Plants are capped at 2,000 per view (largest first), turbines at 3,000 and solar projects at 2,000, and the result says when it trims. Points cluster at low zoom. " +
@@ -320,10 +407,14 @@ const powerPlants = defineLayer({
   hardMaxAreaKm2: WHOLE_US_KM2,
   wide: { orderBy: "capacity in MW", limit: MAX_PLANTS },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("power-plants"), unit: "MW", extrude: "v", cluster: true, encode: { size: "v", color: "year" } },
+  style: { geometry: "point", color: layerColor("power-plants"), unit: "MW", extrude: "v", cluster: true, encode: { size: "v", color: "fuelGroup" } },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // Time is left to the data: plants have no dates (none); wind and solar are dated by year online (continuous).
+  legend: LEGEND,
+  labels: { field: "name", max: 5, rankBy: "v" },
+  display: { units: "us" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const retrieved = new Date().toISOString();
@@ -365,14 +456,17 @@ const powerPlants = defineLayer({
         cacheSuffix: "plants",
       });
       if (!res.ok) return { error: res.error, hint: "upstream" };
+      const data = normalizePlants(res.fc);
+      const notes = [
+        ...(res.truncated && !ctx.wide ? [`Showing the ${MAX_PLANTS.toLocaleString("en-US")} largest plants in view; zoom in or pick a fuel for the rest`] : []),
+        ...vintageNote(data),
+      ];
       return {
         kind: "geojson",
-        data: normalizePlants(res.fc),
+        data,
         citation,
         ...(res.total !== undefined && { total: res.total }),
-        ...(res.truncated && !ctx.wide
-          ? { coverageNote: `Showing the ${MAX_PLANTS.toLocaleString("en-US")} largest plants in view; zoom in or pick a fuel for the rest` }
-          : {}),
+        ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
       };
     }
 

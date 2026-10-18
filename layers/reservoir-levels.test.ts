@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import layer, { MAX_USBR_SITES, SITES, buildSeries, cdecDate, parseCdec, parseUsbrRows } from "./reservoir-levels";
+import { contractProblems, labelsOf, legendOf, timeShapeOf } from "./contract";
+import { cardContent } from "@/lib/render/card";
 
 /**
  * Fixtures were recorded from the live services on 2026-10-10: the last 12,000 bytes of the Powell and Mead elevation and
@@ -125,6 +127,29 @@ describe("reservoir-levels layer", () => {
     expect(series[0].t >= "2025-10").toBe(true);
     expect(r.coverageNote).toMatch(/Provisional/);
     expect(r.citation.source).toMatch(/Reclamation/);
+  });
+
+  it("sizes by storage, colors by percent full, is one reading per site and labels the five largest", async () => {
+    expect(layer.style.encode).toEqual({ size: "storageAf", color: "pctFull" });
+    expect(layer.attributes?.find((a) => a.key === "storageAf")).toMatchObject({ type: "measure", encode: "size", unit: "acre-feet" });
+    const r = geojson(await layer.query(ctx(upstream(), [-115.5, 35.5, -110, 38]), { years: 1 }));
+    const names = r.data.features.map((f) => f.properties?.name);
+    expect(names).toEqual(expect.arrayContaining(["Lake Powell", "Lake Mead"]));
+    const legend = legendOf(layer, r);
+    expect(legend).toMatchObject({ kind: "ramp", field: "pctFull", unit: "%" });
+    expect(legend.note).toMatch(/size is storage in acre-feet/i);
+    expect(timeShapeOf(layer, r).shape).toBe("single");
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 5, rankBy: "storageAf" });
+    // A near-empty Powell and a fuller Mead read differently on the color channel.
+    const pct = Object.fromEntries(r.data.features.map((f) => [f.properties?.name, f.properties?.pctFull]));
+    expect(pct["Lake Powell"]).toBe(22);
+    expect(typeof pct["Lake Mead"]).toBe("number");
+    const powell = r.data.features.find((f) => f.properties?.name === "Lake Powell");
+    if (!powell) throw new Error("no Powell");
+    const card = cardContent(powell, { unit: layer.style.unit, card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.facts.find((f) => f.label === "Percent full")?.value).toBe("22%");
+    expect([...card.facts, ...card.details].map((f) => f.key)).not.toContain("pctFull");
+    expect(contractProblems(layer)).toEqual([]);
   });
 
   it("asks the Reclamation file for its tail only, caches 6 hours, and keys each file separately", async () => {

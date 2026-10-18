@@ -754,7 +754,7 @@
  },
  "condor-range": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -121.93,
    35.774,
@@ -767,14 +767,15 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -121.6406,
-      36.1246
+      -112.6813,
+      47.9016
      ]
     },
     "properties": {
-     "name": "Current California Range For California Condors",
-     "kind": "current",
-     "era": "today"
+     "name": "Early 1800's Range For California Condors",
+     "heading": "Early 1800s range",
+     "kind": "historic",
+     "era": "early 1800s"
     }
    },
    {
@@ -782,14 +783,15 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -112.6813,
-      47.9016
+      -121.6406,
+      36.1246
      ]
     },
     "properties": {
-     "name": "Early 1800's Range For California Condors",
-     "kind": "historic",
-     "era": "early 1800s"
+     "name": "Current California Range For California Condors",
+     "heading": "Today: California range",
+     "kind": "current",
+     "era": "today"
     }
    }
   ]
@@ -827,7 +829,7 @@
  },
  "dams": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -112,
    35.5,
@@ -851,7 +853,6 @@
      "v": 29875000,
      "heightFt": 710,
      "yearCompleted": 1963,
-     "t": "1963-01-01T00:00:00.000Z",
      "purpose": "Hydroelectric",
      "kind": "Hydroelectric",
      "hazard": "High",
@@ -878,7 +879,6 @@
      "v": 629,
      "heightFt": 50,
      "yearCompleted": 1980,
-     "t": "1980-01-01T00:00:00.000Z",
      "purpose": "Other",
      "kind": "Other",
      "hazard": "Low",
@@ -905,7 +905,6 @@
      "v": 270,
      "heightFt": 29,
      "yearCompleted": 1969,
-     "t": "1969-01-01T00:00:00.000Z",
      "purpose": "Flood Risk Reduction",
      "kind": "Flood Risk Reduction",
      "hazard": "Low",
@@ -932,7 +931,6 @@
      "v": 230,
      "heightFt": 30,
      "yearCompleted": 1930,
-     "t": "1930-01-01T00:00:00.000Z",
      "purpose": "Irrigation",
      "kind": "Irrigation",
      "hazard": "High",
@@ -959,7 +957,6 @@
      "v": 204.20000000000002,
      "heightFt": 19,
      "yearCompleted": 1998,
-     "t": "1998-01-01T00:00:00.000Z",
      "purpose": "Other",
      "kind": "Other",
      "hazard": "Low",
@@ -986,7 +983,6 @@
      "v": 60,
      "heightFt": 30,
      "yearCompleted": 1930,
-     "t": "1930-01-01T00:00:00.000Z",
      "purpose": "Fire Protection, Stock, Or Small Fish Pond",
      "kind": "Fire Protection, Stock, Or Small Fish Pond",
      "hazard": "Low",
@@ -1001,7 +997,7 @@
  },
  "disasters": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -87.635,
    24.43,
@@ -1026,9 +1022,10 @@
      "v": 14,
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
-     "latest": "HURRICANE ISAIAS (EM-3655-FL)",
-     "kinds": "cyclone 13, wildfire 1",
-     "declarations": "2026-10-09 Tropical Storm: HURRICANE ISAIAS (EM-3655-FL); 2026-04-23 Fire: COW CREEK FIRE (FM-5632-FL); 2024-10-11 Hurricane: HURRICANE MILTON (DR-4834-FL); 2024-10-07 Hurricane: HURRICANE MILTON (EM-3622-FL); 2024-09-28 Hurricane: HURRICANE HELENE (DR-4828-FL)"
+     "latest": "Hurricane Isaias (EM-3655-FL)",
+     "first": "2022-09-24",
+     "kinds": "hurricane or tropical storm 13, wildfire 1",
+     "declarations": "2026-10-09 Hurricane Isaias; 2026-04-23 Cow Creek Fire; 2024-10-11 Hurricane Milton; and 11 earlier"
     }
    },
    {
@@ -1048,9 +1045,10 @@
      "v": 14,
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
-     "latest": "HURRICANE ISAIAS (EM-3655-FL)",
-     "kinds": "cyclone 13, severe storm 1",
-     "declarations": "2026-10-09 Tropical Storm: HURRICANE ISAIAS (EM-3655-FL); 2024-10-11 Hurricane: HURRICANE MILTON (DR-4834-FL); 2024-10-07 Hurricane: HURRICANE MILTON (EM-3622-FL); 2024-09-28 Hurricane: HURRICANE HELENE (DR-4828-FL); 2024-09-24 Tropical Storm: TROPICAL STORM HELENE (EM-3615-FL)"
+     "latest": "Hurricane Isaias (EM-3655-FL)",
+     "first": "2022-09-24",
+     "kinds": "hurricane or tropical storm 13, severe storm 1",
+     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 11 earlier"
     }
    },
    {
@@ -1070,9 +1068,10 @@
      "v": 13,
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
-     "latest": "HURRICANE ISAIAS (EM-3655-FL)",
-     "kinds": "cyclone 13",
-     "declarations": "2026-10-09 Tropical Storm: HURRICANE ISAIAS (EM-3655-FL); 2024-10-11 Hurricane: HURRICANE MILTON (DR-4834-FL); 2024-10-07 Hurricane: HURRICANE MILTON (EM-3622-FL); 2024-09-28 Hurricane: HURRICANE HELENE (DR-4828-FL); 2024-09-24 Tropical Storm: TROPICAL STORM HELENE (EM-3615-FL)"
+     "latest": "Hurricane Isaias (EM-3655-FL)",
+     "first": "2022-09-24",
+     "kinds": "hurricane or tropical storm 13",
+     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
     }
    },
    {
@@ -1092,9 +1091,10 @@
      "v": 13,
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
-     "latest": "HURRICANE ISAIAS (EM-3655-FL)",
-     "kinds": "cyclone 12, severe storm 1",
-     "declarations": "2026-10-09 Tropical Storm: HURRICANE ISAIAS (EM-3655-FL); 2024-10-11 Hurricane: HURRICANE MILTON (DR-4834-FL); 2024-10-07 Hurricane: HURRICANE MILTON (EM-3622-FL); 2024-09-28 Hurricane: HURRICANE HELENE (DR-4828-FL); 2024-09-24 Tropical Storm: TROPICAL STORM HELENE (EM-3615-FL)"
+     "latest": "Hurricane Isaias (EM-3655-FL)",
+     "first": "2022-09-24",
+     "kinds": "hurricane or tropical storm 12, severe storm 1",
+     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
     }
    },
    {
@@ -1114,9 +1114,10 @@
      "v": 13,
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
-     "latest": "HURRICANE ISAIAS (EM-3655-FL)",
-     "kinds": "cyclone 13",
-     "declarations": "2026-10-09 Tropical Storm: HURRICANE ISAIAS (EM-3655-FL); 2024-10-11 Hurricane: HURRICANE MILTON (DR-4834-FL); 2024-10-07 Hurricane: HURRICANE MILTON (EM-3622-FL); 2024-09-28 Hurricane: HURRICANE HELENE (DR-4828-FL); 2024-09-24 Tropical Storm: TROPICAL STORM HELENE (EM-3615-FL)"
+     "latest": "Hurricane Isaias (EM-3655-FL)",
+     "first": "2022-09-24",
+     "kinds": "hurricane or tropical storm 13",
+     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
     }
    },
    {
@@ -1136,9 +1137,10 @@
      "v": 13,
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
-     "latest": "HURRICANE ISAIAS (EM-3655-FL)",
-     "kinds": "cyclone 13",
-     "declarations": "2026-10-09 Tropical Storm: HURRICANE ISAIAS (EM-3655-FL); 2024-10-11 Hurricane: HURRICANE MILTON (DR-4834-FL); 2024-10-07 Hurricane: HURRICANE MILTON (EM-3622-FL); 2024-09-28 Hurricane: HURRICANE HELENE (DR-4828-FL); 2024-09-24 Tropical Storm: TROPICAL STORM HELENE (EM-3615-FL)"
+     "latest": "Hurricane Isaias (EM-3655-FL)",
+     "first": "2022-09-24",
+     "kinds": "hurricane or tropical storm 13",
+     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
     }
    },
    {
@@ -1158,9 +1160,10 @@
      "v": 13,
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
-     "latest": "HURRICANE ISAIAS (EM-3655-FL)",
-     "kinds": "cyclone 12, severe storm 1",
-     "declarations": "2026-10-09 Tropical Storm: HURRICANE ISAIAS (EM-3655-FL); 2024-10-11 Hurricane: HURRICANE MILTON (DR-4834-FL); 2024-10-07 Hurricane: HURRICANE MILTON (EM-3622-FL); 2024-09-28 Hurricane: HURRICANE HELENE (DR-4828-FL); 2024-09-24 Tropical Storm: TROPICAL STORM HELENE (EM-3615-FL)"
+     "latest": "Hurricane Isaias (EM-3655-FL)",
+     "first": "2022-09-24",
+     "kinds": "hurricane or tropical storm 12, severe storm 1",
+     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
     }
    },
    {
@@ -1180,9 +1183,10 @@
      "v": 13,
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
-     "latest": "HURRICANE ISAIAS (EM-3655-FL)",
-     "kinds": "cyclone 12, severe storm 1",
-     "declarations": "2026-10-09 Tropical Storm: HURRICANE ISAIAS (EM-3655-FL); 2024-10-11 Hurricane: HURRICANE MILTON (DR-4834-FL); 2024-10-07 Hurricane: HURRICANE MILTON (EM-3622-FL); 2024-09-28 Hurricane: HURRICANE HELENE (DR-4828-FL); 2024-09-24 Tropical Storm: TROPICAL STORM HELENE (EM-3615-FL)"
+     "latest": "Hurricane Isaias (EM-3655-FL)",
+     "first": "2022-09-24",
+     "kinds": "hurricane or tropical storm 12, severe storm 1",
+     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
     }
    },
    {
@@ -1202,9 +1206,10 @@
      "v": 13,
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
-     "latest": "HURRICANE ISAIAS (EM-3655-FL)",
-     "kinds": "cyclone 12, severe storm 1",
-     "declarations": "2026-10-09 Tropical Storm: HURRICANE ISAIAS (EM-3655-FL); 2024-10-11 Hurricane: HURRICANE MILTON (DR-4834-FL); 2024-10-07 Hurricane: HURRICANE MILTON (EM-3622-FL); 2024-09-28 Hurricane: HURRICANE HELENE (DR-4828-FL); 2024-09-24 Tropical Storm: TROPICAL STORM HELENE (EM-3615-FL)"
+     "latest": "Hurricane Isaias (EM-3655-FL)",
+     "first": "2022-09-24",
+     "kinds": "hurricane or tropical storm 12, severe storm 1",
+     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
     }
    },
    {
@@ -1224,9 +1229,10 @@
      "v": 13,
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
-     "latest": "HURRICANE ISAIAS (EM-3655-FL)",
-     "kinds": "cyclone 12, severe storm 1",
-     "declarations": "2026-10-09 Tropical Storm: HURRICANE ISAIAS (EM-3655-FL); 2024-10-11 Hurricane: HURRICANE MILTON (DR-4834-FL); 2024-10-07 Hurricane: HURRICANE MILTON (EM-3622-FL); 2024-09-28 Hurricane: HURRICANE HELENE (DR-4828-FL); 2024-09-24 Tropical Storm: TROPICAL STORM HELENE (EM-3615-FL)"
+     "latest": "Hurricane Isaias (EM-3655-FL)",
+     "first": "2022-09-24",
+     "kinds": "hurricane or tropical storm 12, severe storm 1",
+     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
     }
    },
    {
@@ -1246,9 +1252,10 @@
      "v": 12,
      "t": "2024-10-11T00:00:00.000Z",
      "kind": "cyclone",
-     "latest": "HURRICANE MILTON (DR-4834-FL)",
-     "kinds": "cyclone 12",
-     "declarations": "2024-10-11 Hurricane: HURRICANE MILTON (DR-4834-FL); 2024-10-07 Hurricane: HURRICANE MILTON (EM-3622-FL); 2024-09-28 Hurricane: HURRICANE HELENE (DR-4828-FL); 2024-09-24 Tropical Storm: TROPICAL STORM HELENE (EM-3615-FL); 2024-08-10 Tropical Storm: HURRICANE DEBBY (DR-4806-FL)"
+     "latest": "Hurricane Milton (DR-4834-FL)",
+     "first": "2022-09-24",
+     "kinds": "hurricane or tropical storm 12",
+     "declarations": "2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; 2024-09-28 Hurricane Helene; and 9 earlier"
     }
    },
    {
@@ -1268,9 +1275,10 @@
      "v": 12,
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
-     "latest": "HURRICANE ISAIAS (EM-3655-FL)",
-     "kinds": "cyclone 11, severe storm 1",
-     "declarations": "2026-10-09 Tropical Storm: HURRICANE ISAIAS (EM-3655-FL); 2024-10-11 Hurricane: HURRICANE MILTON (DR-4834-FL); 2024-10-07 Hurricane: HURRICANE MILTON (EM-3622-FL); 2024-09-28 Hurricane: HURRICANE HELENE (DR-4828-FL); 2024-08-10 Tropical Storm: HURRICANE DEBBY (DR-4806-FL)"
+     "latest": "Hurricane Isaias (EM-3655-FL)",
+     "first": "2022-09-24",
+     "kinds": "hurricane or tropical storm 11, severe storm 1",
+     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 9 earlier"
     }
    }
   ]
@@ -1384,7 +1392,7 @@
  },
  "earthquakes": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -119.089,
    37.549,
@@ -1402,10 +1410,13 @@
      ]
     },
     "properties": {
+     "heading": "Earthquake 11 km ESE of Mammoth Lakes, CA",
      "v": 2.48,
+     "magnitude": "M 2.5",
      "place": "11 km ESE of Mammoth Lakes, CA",
      "t": "2025-12-23T11:24:17.690Z",
      "depthKm": 5.4,
+     "depth": "5.4 km (3.4 mi)",
      "magType": "md",
      "kind": "earthquake",
      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75285236"
@@ -1421,10 +1432,13 @@
      ]
     },
     "properties": {
+     "heading": "Earthquake 13 km SE of Mammoth Lakes, CA",
      "v": 2.44,
+     "magnitude": "M 2.4",
      "place": "13 km SE of Mammoth Lakes, CA",
      "t": "2026-06-16T08:17:45.160Z",
      "depthKm": 6.2,
+     "depth": "6.2 km (3.9 mi)",
      "magType": "md",
      "kind": "earthquake",
      "felt": 2,
@@ -1441,10 +1455,13 @@
      ]
     },
     "properties": {
+     "heading": "Earthquake 12 km E of Mammoth Lakes, CA",
      "v": 2.36,
+     "magnitude": "M 2.4",
      "place": "12 km E of Mammoth Lakes, CA",
      "t": "2026-02-02T10:14:46.480Z",
      "depthKm": 6.4,
+     "depth": "6.4 km (4 mi)",
      "magType": "md",
      "kind": "earthquake",
      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75305466"
@@ -1460,10 +1477,13 @@
      ]
     },
     "properties": {
+     "heading": "Earthquake 11 km SE of Mammoth Lakes, CA",
      "v": 2.19,
+     "magnitude": "M 2.2",
      "place": "11 km SE of Mammoth Lakes, CA",
      "t": "2026-10-07T04:56:04.760Z",
      "depthKm": 3,
+     "depth": "3 km (1.9 mi)",
      "magType": "md",
      "kind": "earthquake",
      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75445791"
@@ -1479,10 +1499,13 @@
      ]
     },
     "properties": {
+     "heading": "Earthquake 7 km SSW of Mammoth Lakes, CA",
      "v": 2,
+     "magnitude": "M 2.0",
      "place": "7 km SSW of Mammoth Lakes, CA",
      "t": "2026-03-26T23:47:36.410Z",
      "depthKm": 2.8,
+     "depth": "2.8 km (1.7 mi)",
      "magType": "md",
      "kind": "earthquake",
      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75333547"
@@ -1498,10 +1521,13 @@
      ]
     },
     "properties": {
+     "heading": "Earthquake 13 km SE of Mammoth Lakes, CA",
      "v": 1.96,
+     "magnitude": "M 2.0",
      "place": "13 km SE of Mammoth Lakes, CA",
      "t": "2026-06-16T11:49:09.270Z",
      "depthKm": 6.5,
+     "depth": "6.5 km (4 mi)",
      "magType": "md",
      "kind": "earthquake",
      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75377686"
@@ -1517,10 +1543,13 @@
      ]
     },
     "properties": {
+     "heading": "Earthquake 12 km WNW of Toms Place, CA",
      "v": 1.96,
+     "magnitude": "M 2.0",
      "place": "12 km WNW of Toms Place, CA",
      "t": "2026-03-13T09:37:01.690Z",
      "depthKm": 9.9,
+     "depth": "9.9 km (6.2 mi)",
      "magType": "md",
      "kind": "earthquake",
      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75326842"
@@ -1536,10 +1565,13 @@
      ]
     },
     "properties": {
+     "heading": "Earthquake 14 km ESE of Mammoth Lakes, CA",
      "v": 1.93,
+     "magnitude": "M 1.9",
      "place": "14 km ESE of Mammoth Lakes, CA",
      "t": "2026-02-12T06:38:59.410Z",
      "depthKm": 4.7,
+     "depth": "4.7 km (2.9 mi)",
      "magType": "md",
      "kind": "earthquake",
      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75312487"
@@ -1555,10 +1587,13 @@
      ]
     },
     "properties": {
+     "heading": "Earthquake 7 km SSW of Mammoth Lakes, CA",
      "v": 1.87,
+     "magnitude": "M 1.9",
      "place": "7 km SSW of Mammoth Lakes, CA",
      "t": "2026-05-16T12:54:21.810Z",
      "depthKm": 2.8,
+     "depth": "2.8 km (1.7 mi)",
      "magType": "md",
      "kind": "earthquake",
      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75361301"
@@ -1574,10 +1609,13 @@
      ]
     },
     "properties": {
+     "heading": "Earthquake 14 km ESE of Mammoth Lakes, CA",
      "v": 1.81,
+     "magnitude": "M 1.8",
      "place": "14 km ESE of Mammoth Lakes, CA",
      "t": "2026-02-12T10:37:07.480Z",
      "depthKm": 4.6,
+     "depth": "4.6 km (2.9 mi)",
      "magType": "md",
      "kind": "earthquake",
      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75312632"
@@ -1593,10 +1631,13 @@
      ]
     },
     "properties": {
+     "heading": "Earthquake 12 km E of Mammoth Lakes, CA",
      "v": 1.77,
+     "magnitude": "M 1.8",
      "place": "12 km E of Mammoth Lakes, CA",
      "t": "2026-02-02T10:46:10.100Z",
      "depthKm": 6.4,
+     "depth": "6.4 km (4 mi)",
      "magType": "md",
      "kind": "earthquake",
      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75305551"
@@ -1612,10 +1653,13 @@
      ]
     },
     "properties": {
+     "heading": "Earthquake 9 km E of Mammoth Lakes, CA",
      "v": 1.72,
+     "magnitude": "M 1.7",
      "place": "9 km E of Mammoth Lakes, CA",
      "t": "2026-07-19T08:43:42.180Z",
      "depthKm": 7.2,
+     "depth": "7.2 km (4.5 mi)",
      "magType": "md",
      "kind": "earthquake",
      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75398866"
@@ -2700,7 +2744,7 @@
  },
  "gbif-occurrences": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -105.6,
    39.5,
@@ -2726,6 +2770,7 @@
      "scientificName": "Puma concolor",
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
+     "publisher": "inaturalist",
      "license": "CC BY-NC 4.0",
      "uncertaintyM": 1
     }
@@ -2748,6 +2793,7 @@
      "scientificName": "Puma concolor",
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
+     "publisher": "inaturalist",
      "license": "CC0",
      "uncertaintyM": 4
     }
@@ -2770,6 +2816,7 @@
      "scientificName": "Puma concolor",
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
+     "publisher": "inaturalist",
      "license": "CC BY-NC 4.0",
      "uncertaintyM": 168
     }
@@ -2792,6 +2839,7 @@
      "scientificName": "Puma concolor",
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
+     "publisher": "inaturalist",
      "license": "CC BY-NC 4.0",
      "uncertaintyM": 5
     }
@@ -2814,6 +2862,7 @@
      "scientificName": "Puma concolor",
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
+     "publisher": "inaturalist",
      "license": "CC BY-NC 4.0",
      "uncertaintyM": 482
     }
@@ -2836,6 +2885,7 @@
      "scientificName": "Puma concolor",
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
+     "publisher": "inaturalist",
      "license": "CC BY-NC 4.0",
      "uncertaintyM": 7
     }
@@ -2858,6 +2908,7 @@
      "scientificName": "Puma concolor",
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
+     "publisher": "inaturalist",
      "license": "CC BY-NC 4.0",
      "uncertaintyM": 482
     }
@@ -2880,6 +2931,7 @@
      "scientificName": "Puma concolor",
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
+     "publisher": "inaturalist",
      "license": "CC BY-NC 4.0",
      "uncertaintyM": 2584
     }
@@ -2902,6 +2954,7 @@
      "scientificName": "Puma concolor",
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
+     "publisher": "inaturalist",
      "license": "CC BY-NC 4.0",
      "uncertaintyM": 5
     }
@@ -2924,6 +2977,7 @@
      "scientificName": "Puma concolor",
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
+     "publisher": "inaturalist",
      "license": "CC BY-NC 4.0",
      "uncertaintyM": 3652
     }
@@ -2946,6 +3000,7 @@
      "scientificName": "Puma concolor",
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
+     "publisher": "inaturalist",
      "license": "CC BY-NC 4.0",
      "uncertaintyM": 24
     }
@@ -2968,6 +3023,7 @@
      "scientificName": "Puma concolor",
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
+     "publisher": "inaturalist",
      "license": "CC BY-NC 4.0",
      "uncertaintyM": 4
     }
@@ -3796,7 +3852,7 @@
  },
  "lakes": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -120.25,
    38.93,
@@ -3809,21 +3865,28 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.033333333,
-      39.083333333
+      -120.044998,
+      39.0885933
      ]
     },
     "properties": {
      "name": "Lake Tahoe",
-     "v": 501,
-     "depthM": 501,
      "kind": "lake",
-     "areaKm2": 502,
+     "depthM": 501,
+     "areaKm2": 495,
      "elevationM": 1899.5,
      "volumeKm3": 150,
      "wikipedia": "https://en.wikipedia.org/wiki/Lake_Tahoe",
      "wikidata": "Q169962",
-     "url": "https://www.wikidata.org/wiki/Q169962"
+     "url": "https://www.wikidata.org/wiki/Q169962",
+     "areaSource": "osm",
+     "sources": "both",
+     "osmUrl": "https://www.openstreetmap.org/relation/1823287",
+     "v": 495,
+     "areaText": "191 mi² (495 km²)",
+     "depthText": "1,644 ft (501 m)",
+     "elevationText": "6,232 ft (1,900 m)",
+     "volumeText": "122 million acre-feet (150 km³)"
     }
    },
    {
@@ -3831,37 +3894,23 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.122,
-      38.9422
-     ]
-    },
-    "properties": {
-     "name": "Eagle Lake",
-     "v": null,
-     "depthM": null,
-     "kind": "lake",
-     "wikipedia": "https://en.wikipedia.org/wiki/Eagle_Lake_(Desolation_Wilderness)",
-     "wikidata": "Q5325151",
-     "url": "https://www.wikidata.org/wiki/Q5325151"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -120.091944444,
-      38.940277777
+      -120.0919426,
+      38.9404104
      ]
     },
     "properties": {
      "name": "Cascade Lake",
-     "v": null,
-     "depthM": null,
      "kind": "lake",
      "wikipedia": "https://en.wikipedia.org/wiki/Cascade_Lake_(California)",
      "wikidata": "Q49300326",
-     "url": "https://www.wikidata.org/wiki/Q49300326"
+     "url": "https://www.wikidata.org/wiki/Q49300326",
+     "areaKm2": 0.857,
+     "areaSource": "osm",
+     "sources": "both",
+     "osmUrl": "https://www.openstreetmap.org/way/28639357",
+     "v": 0.857,
+     "areaText": "212 acres (0.86 km²)",
+     "depthText": "Not recorded"
     }
    },
    {
@@ -3869,17 +3918,89 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.150277777,
-      38.936666666
+      -120.2396475,
+      38.9965347
+     ]
+    },
+    "properties": {
+     "name": "Rockbound Lake",
+     "kind": "lake",
+     "areaKm2": 0.492,
+     "areaSource": "osm",
+     "sources": "osm",
+     "osmUrl": "https://www.openstreetmap.org/relation/1707175",
+     "v": 0.492,
+     "areaText": "122 acres (0.49 km²)",
+     "depthText": "Not recorded"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.2521129,
+      39.0015695
+     ]
+    },
+    "properties": {
+     "name": "Buck Island Lake",
+     "kind": "lake",
+     "areaKm2": 0.26,
+     "areaSource": "osm",
+     "sources": "osm",
+     "osmUrl": "https://www.openstreetmap.org/relation/1707177",
+     "v": 0.26,
+     "areaText": "64 acres (0.26 km²)",
+     "depthText": "Not recorded"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.1388936,
+      38.9794219
+     ]
+    },
+    "properties": {
+     "name": "Stony Ridge Lake",
+     "kind": "reservoir",
+     "areaKm2": 0.223,
+     "areaSource": "osm",
+     "elevationM": 2382,
+     "sources": "osm",
+     "osmUrl": "https://www.openstreetmap.org/way/125433165",
+     "v": 0.223,
+     "areaText": "55 acres (0.22 km²)",
+     "depthText": "Not recorded",
+     "elevationText": "7,815 ft (2,382 m)"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.1506136,
+      38.9368573
      ]
     },
     "properties": {
      "name": "Middle Velma Lake",
-     "v": null,
-     "depthM": null,
      "kind": "lake",
      "wikidata": "Q49305753",
-     "url": "https://www.wikidata.org/wiki/Q49305753"
+     "url": "https://www.wikidata.org/wiki/Q49305753",
+     "areaKm2": 0.176,
+     "areaSource": "osm",
+     "elevationM": 2408,
+     "sources": "both",
+     "osmUrl": "https://www.openstreetmap.org/relation/1706332",
+     "v": 0.176,
+     "areaText": "43 acres (0.18 km²)",
+     "depthText": "Not recorded",
+     "elevationText": "7,900 ft (2,408 m)"
     }
    },
    {
@@ -3887,17 +4008,131 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.166111111,
-      39.07
+      -120.2086547,
+      38.9289838
      ]
     },
     "properties": {
-     "name": "Quail Lake",
-     "v": null,
-     "depthM": null,
+     "name": "Lake Schmidell",
      "kind": "reservoir",
-     "wikidata": "Q49702397",
-     "url": "https://www.wikidata.org/wiki/Q49702397"
+     "areaKm2": 0.154,
+     "areaSource": "osm",
+     "elevationM": 2402,
+     "sources": "osm",
+     "osmUrl": "https://www.openstreetmap.org/way/59778902",
+     "wikidata": "Q49701581",
+     "url": "https://www.wikidata.org/wiki/Q49701581",
+     "v": 0.154,
+     "areaText": "38 acres (0.15 km²)",
+     "depthText": "Not recorded",
+     "elevationText": "7,881 ft (2,402 m)"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.1405315,
+      38.9387128
+     ]
+    },
+    "properties": {
+     "name": "Lower Velma Lake",
+     "kind": "lake",
+     "areaKm2": 0.134,
+     "areaSource": "osm",
+     "sources": "osm",
+     "osmUrl": "https://www.openstreetmap.org/relation/2329705",
+     "v": 0.134,
+     "areaText": "33 acres (0.13 km²)",
+     "depthText": "Not recorded"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.2002952,
+      39.0351714
+     ]
+    },
+    "properties": {
+     "name": "Miller Lake",
+     "kind": "lake",
+     "areaKm2": 0.115,
+     "areaSource": "osm",
+     "sources": "osm",
+     "osmUrl": "https://www.openstreetmap.org/way/388596035",
+     "v": 0.115,
+     "areaText": "28 acres (0.12 km²)",
+     "depthText": "Not recorded"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.1771813,
+      39.0407455
+     ]
+    },
+    "properties": {
+     "name": "McKinney Lake",
+     "kind": "lake",
+     "areaKm2": 0.104,
+     "areaSource": "osm",
+     "sources": "osm",
+     "osmUrl": "https://www.openstreetmap.org/way/182258083",
+     "v": 0.104,
+     "areaText": "26 acres (0.1 km²)",
+     "depthText": "Not recorded"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.1565661,
+      38.9919781
+     ]
+    },
+    "properties": {
+     "name": "Crag Lake",
+     "kind": "lake",
+     "areaKm2": 0.0808,
+     "areaSource": "osm",
+     "sources": "osm",
+     "osmUrl": "https://www.openstreetmap.org/relation/6442415",
+     "v": 0.0808,
+     "areaText": "20 acres (0.081 km²)",
+     "depthText": "Not recorded"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.1474804,
+      38.9296355
+     ]
+    },
+    "properties": {
+     "name": "Upper Velma Lake",
+     "kind": "lake",
+     "areaKm2": 0.074,
+     "areaSource": "osm",
+     "sources": "osm",
+     "osmUrl": "https://www.openstreetmap.org/relation/15978828",
+     "wikidata": "Q49314623",
+     "url": "https://www.wikidata.org/wiki/Q49314623",
+     "v": 0.074,
+     "areaText": "18 acres (0.074 km²)",
+     "depthText": "Not recorded"
     }
    }
   ]
@@ -4188,7 +4423,7 @@
  },
  "mines": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -117.542,
    39.997,
@@ -4196,45 +4431,6 @@
    41.001
   ],
   "features": [
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -117.43788999967232,
-      40.56183999984508
-     ]
-    },
-    "properties": {
-     "name": "Ore Drag Mine",
-     "kind": "antimony",
-     "source": "MRDS",
-     "commodities": "antimony, tungsten, silver",
-     "status": "Past Producer",
-     "grade": "B",
-     "id": "10008816",
-     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10008816"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -116.49137655099997,
-      40.19276380200006
-     ]
-    },
-    "properties": {
-     "name": "Adit",
-     "kind": "Adit",
-     "source": "USMIN",
-     "topoName": "Horse Creek Valley",
-     "topoYear": 1957,
-     "state": "NV",
-     "county": "Eureka"
-    }
-   },
    {
     "type": "Feature",
     "geometry": {
@@ -4248,6 +4444,7 @@
      "name": "True American Mine",
      "kind": "tungsten",
      "source": "MRDS",
+     "commodity": "tungsten",
      "commodities": "tungsten, molybdenum",
      "status": "Producer",
      "grade": "B",
@@ -4260,59 +4457,104 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -116.93427000015123,
-      40.349909999625204
+      -117.22232999999034,
+      40.3246199996946
      ]
     },
     "properties": {
-     "name": "George Shwin Prospect",
-     "kind": "tungsten",
-     "source": "MRDS",
-     "commodities": "tungsten",
-     "status": "Past Producer",
-     "grade": "D",
-     "id": "10014315",
-     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10014315"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -117.49428999984536,
-      40.80460999984151
-     ]
-    },
-    "properties": {
-     "name": "Adelaide Mine",
-     "kind": "copper",
-     "source": "MRDS",
-     "commodities": "copper, gold, silver, lead, zinc, tungsten",
-     "status": "Past Producer",
-     "grade": "B",
-     "id": "10014368",
-     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10014368"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -117.06010999995875,
-      40.64351000029138
-     ]
-    },
-    "properties": {
-     "name": "Piute Canyon Placer",
+     "name": "M.C. Coy Gold Deposit",
      "kind": "gold",
      "source": "MRDS",
+     "commodity": "gold",
+     "commodities": "gold, silver, copper",
+     "status": "Producer",
+     "grade": "B",
+     "id": "10047574",
+     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10047574",
+     "nameInSource": "Mc Coy Gold Deposit"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -116.88906410899995,
+      40.454462560000024
+     ]
+    },
+    "properties": {
+     "name": "Betty O'Neil Mine",
+     "kind": "Adit",
+     "featureType": "Adit",
+     "source": "USMIN",
+     "topoName": "Mt. Lewis",
+     "topoYear": 1949,
+     "state": "NV",
+     "county": "Lander"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -117.32401999982173,
+      40.928779999728064
+     ]
+    },
+    "properties": {
+     "name": "Silver Coin Group",
+     "kind": "silver",
+     "source": "MRDS",
+     "commodity": "silver",
+     "commodities": "silver, gold, lead, vanadium",
+     "status": "Producer",
+     "grade": "B",
+     "id": "10043950",
+     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10043950"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -117.05343999999103,
+      40.650729999981145
+     ]
+    },
+    "properties": {
+     "name": "B & M Placer Mine",
+     "kind": "gold",
+     "source": "MRDS",
+     "commodity": "gold",
+     "commodities": "gold",
+     "status": "Producer",
+     "grade": "B",
+     "id": "10043953",
+     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10043953"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -117.13094999970905,
+      40.531010000056405
+     ]
+    },
+    "properties": {
+     "name": "Copper Canyon Placers",
+     "kind": "gold",
+     "source": "MRDS",
+     "commodity": "gold",
      "commodities": "gold, silver",
-     "status": "Past Producer",
+     "status": "Producer",
      "grade": "B",
-     "id": "10026732",
-     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10026732"
+     "id": "10044004",
+     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10044004"
     }
    },
    {
@@ -4320,19 +4562,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -117.13789000001356,
-      40.51878999986648
+      -117.02787999985337,
+      40.60656999995283
      ]
     },
     "properties": {
-     "name": "Natomas Placer",
+     "name": "Northern Lights Deposit",
      "kind": "gold",
      "source": "MRDS",
-     "commodities": "gold, silver, pge_pd, copper",
-     "status": "Past Producer",
+     "commodity": "gold",
+     "commodities": "gold, silver, copper",
+     "status": "Producer",
      "grade": "B",
-     "id": "10039043",
-     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10039043"
+     "id": "10044047",
+     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10044047"
     }
    },
    {
@@ -4340,19 +4583,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -116.53481000008189,
-      40.13907999994723
+      -117.02454999989237,
+      40.62017999978922
      ]
     },
     "properties": {
-     "name": "Rossi Property",
-     "kind": "mercury",
+     "name": "Surprise Mine",
+     "kind": "gold",
      "source": "MRDS",
-     "commodities": "mercury",
-     "status": "Occurrence",
-     "grade": "C",
-     "id": "10040446",
-     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10040446"
+     "commodity": "gold",
+     "commodities": "gold, silver, copper",
+     "status": "Producer",
+     "grade": "A",
+     "id": "10044055",
+     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10044055"
     }
    },
    {
@@ -4360,19 +4604,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -116.48815000044493,
-      40.58351999995574
+      -116.83760999997226,
+      40.41240999979406
      ]
     },
     "properties": {
-     "name": "Beowawe Mine",
-     "kind": "mercury",
+     "name": "Blue Dick Antimony Mine",
+     "kind": "antimony",
      "source": "MRDS",
-     "commodities": "mercury",
-     "status": "Past Producer",
+     "commodity": "antimony",
+     "commodities": "antimony, silver, gold, selenium",
+     "status": "Producer",
      "grade": "B",
-     "id": "10040542",
-     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10040542"
+     "id": "10044077",
+     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10044077"
     }
    },
    {
@@ -4380,73 +4625,76 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -116.48981999999914,
-      40.5804700003425
+      -116.81232000017134,
+      40.43629999958184
      ]
     },
     "properties": {
-     "name": "Unnamed Occurence",
-     "kind": "mercury",
+     "name": "First Riffles Placer Mine",
+     "kind": "gold",
      "source": "MRDS",
-     "commodities": "mercury",
-     "status": "Occurrence",
-     "grade": "D",
-     "id": "10040566",
-     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10040566"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -116.48009999955458,
-      40.59074000011831
-     ]
-    },
-    "properties": {
-     "name": "Unnamed Occurrence",
-     "kind": "mercury",
-     "source": "MRDS",
-     "commodities": "mercury",
-     "status": "Occurrence",
-     "grade": "D",
-     "id": "10040567",
-     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10040567"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -117.52622999952253,
-      40.32823000021382
-     ]
-    },
-    "properties": {
-     "name": "Badger Mine",
-     "kind": "mercury",
-     "source": "MRDS",
-     "commodities": "mercury, gold",
-     "status": "Occurrence",
+     "commodity": "gold",
+     "commodities": "gold, silver",
+     "status": "Producer",
      "grade": "B",
-     "id": "10040581",
-     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10040581"
+     "id": "10044078",
+     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10044078"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -116.80649000045273,
+      40.41546999981529
+     ]
+    },
+    "properties": {
+     "name": "Hilltop Mine",
+     "kind": "gold",
+     "source": "MRDS",
+     "commodity": "gold",
+     "commodities": "gold, silver, copper, lead, zinc, bismuth, tin",
+     "status": "Producer",
+     "grade": "B",
+     "id": "10044080",
+     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10044080"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -116.80649000045273,
+      40.41546999981529
+     ]
+    },
+    "properties": {
+     "name": "Kimberly Consolidated Mines",
+     "kind": "gold",
+     "source": "MRDS",
+     "commodity": "gold",
+     "commodities": "gold, silver, copper, lead, arsenic, zinc",
+     "status": "Producer",
+     "grade": "B",
+     "id": "10044081",
+     "url": "https://mrdata.usgs.gov/mrds/show-mrds.php?dep_id=10044081"
     }
    }
   ]
  },
  "mining-claims": {
   "kind": "unavailable",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -109.8,
    38.4,
    -109.4,
    38.7
   ],
-  "error": "Mining claims unavailable: active claims (ArcGIS service returned 404)"
+  "error": "Mining claims are unavailable here: The Bureau of Land Management took its national mining claim map offline on 14 October 2026; claims can be shown only in Alaska (BLM Alaska) and Nevada (Nevada Divi"
  },
  "monuments": {
   "kind": "geojson",
@@ -5958,7 +6206,7 @@
  },
  "peaks": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    18,
    -34.5,
@@ -5971,16 +6219,21 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      18.997222222,
-      -33.984166666
+      18.9846427,
+      -34.0359403
      ]
     },
     "properties": {
-     "name": "Second Ridge Peak",
-     "elevation": 1433,
-     "v": 1433,
-     "wikidata": "Q31524424",
-     "url": "https://www.wikidata.org/wiki/Q31524424"
+     "name": "Somerset-Sneeukop",
+     "kind": "peak",
+     "elevation": 1590.4,
+     "elevationSource": "osm",
+     "sources": "osm",
+     "osmId": 1296339449,
+     "osmUrl": "https://www.openstreetmap.org/node/1296339449",
+     "v": 1590.4,
+     "elevationFt": 5218,
+     "elevationText": "1,590 m (5,218 ft)"
     }
    },
    {
@@ -5988,102 +6241,23 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      18.41352,
-      -33.96216
-     ]
-    },
-    "properties": {
-     "name": "Table Mountain",
-     "elevation": 1085,
-     "prominence": 1055,
-     "v": 1085,
-     "wikidata": "Q213360",
-     "url": "https://www.wikidata.org/wiki/Q213360"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      18.989722222,
-      -33.930833333
-     ]
-    },
-    "properties": {
-     "name": "Eikenhofpiek",
-     "elevation": 1351,
-     "v": 1351,
-     "wikidata": "Q31533446",
-     "url": "https://www.wikidata.org/wiki/Q31533446"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      18.985277777,
-      -33.937222222
-     ]
-    },
-    "properties": {
-     "name": "Buller's Kop",
-     "elevation": 1289,
-     "v": 1289,
-     "wikidata": "Q31534761",
-     "url": "https://www.wikidata.org/wiki/Q31534761"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      18.995555555,
-      -33.914166666
-     ]
-    },
-    "properties": {
-     "name": "Hutchinson's Peak",
-     "elevation": 1228,
-     "v": 1228,
-     "wikidata": "Q31530982",
-     "url": "https://www.wikidata.org/wiki/Q31530982"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      18.980555555,
-      -33.925833333
-     ]
-    },
-    "properties": {
-     "name": "Dragoon Peak",
-     "elevation": 1202,
-     "v": 1202,
-     "wikidata": "Q31533939",
-     "url": "https://www.wikidata.org/wiki/Q31533939"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      18.991388888,
-      -33.976388888
+      18.9914489,
+      -33.9765581
      ]
     },
     "properties": {
      "name": "First Ridge Peak",
-     "elevation": 1096,
-     "v": 1096,
+     "kind": "peak",
+     "elevation": 1517,
+     "elevationSource": "osm",
+     "sources": "both",
+     "osmId": 345446921,
+     "osmUrl": "https://www.openstreetmap.org/node/345446921",
      "wikidata": "Q31533081",
-     "url": "https://www.wikidata.org/wiki/Q31533081"
+     "url": "https://www.wikidata.org/wiki/Q31533081",
+     "v": 1517,
+     "elevationFt": 4977,
+     "elevationText": "1,517 m (4,977 ft)"
     }
    },
    {
@@ -6091,16 +6265,144 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      18.9986,
-      -33.9296
+      18.985751,
+      -34.0231069
+     ]
+    },
+    "properties": {
+     "name": "Triplet 1",
+     "kind": "peak",
+     "elevation": 1516,
+     "elevationSource": "osm",
+     "prominence": 116,
+     "sources": "osm",
+     "osmId": 4929629617,
+     "osmUrl": "https://www.openstreetmap.org/node/4929629617",
+     "v": 1516,
+     "elevationFt": 4974,
+     "elevationText": "1,516 m (4,974 ft)",
+     "prominenceFt": 381,
+     "prominenceText": "116 m (381 ft)"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      18.9972241,
+      -33.9836945
+     ]
+    },
+    "properties": {
+     "name": "Second Ridge Peak",
+     "kind": "peak",
+     "elevation": 1515,
+     "elevationSource": "osm",
+     "sources": "both",
+     "osmId": 345447053,
+     "osmUrl": "https://www.openstreetmap.org/node/345447053",
+     "wikidata": "Q31524424",
+     "url": "https://www.wikidata.org/wiki/Q31524424",
+     "v": 1515,
+     "elevationFt": 4970,
+     "elevationText": "1,515 m (4,970 ft)"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      18.9853111,
+      -34.0256045
+     ]
+    },
+    "properties": {
+     "name": "Triplet 2",
+     "kind": "peak",
+     "elevation": 1512,
+     "elevationSource": "osm",
+     "prominence": 72,
+     "sources": "osm",
+     "osmId": 4929629618,
+     "osmUrl": "https://www.openstreetmap.org/node/4929629618",
+     "v": 1512,
+     "elevationFt": 4961,
+     "elevationText": "1,512 m (4,961 ft)",
+     "prominenceFt": 236,
+     "prominenceText": "72 m (236 ft)"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      18.9726984,
+      -33.9651359
+     ]
+    },
+    "properties": {
+     "name": "Twins north peak",
+     "kind": "peak",
+     "elevation": 1494,
+     "elevationSource": "osm",
+     "prominence": 339,
+     "sources": "osm",
+     "osmId": 4466421927,
+     "osmUrl": "https://www.openstreetmap.org/node/4466421927",
+     "v": 1494,
+     "elevationFt": 4902,
+     "elevationText": "1,494 m (4,902 ft)",
+     "prominenceFt": 1112,
+     "prominenceText": "339 m (1,112 ft)"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      18.971748,
+      -33.9679683
+     ]
+    },
+    "properties": {
+     "name": "Twins south peak",
+     "kind": "peak",
+     "elevation": 1493.8,
+     "elevationSource": "osm",
+     "sources": "osm",
+     "osmId": 1391154567,
+     "osmUrl": "https://www.openstreetmap.org/node/1391154567",
+     "v": 1493.8,
+     "elevationFt": 4901,
+     "elevationText": "1,494 m (4,901 ft)"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      18.9993632,
+      -33.9296368
      ]
     },
     "properties": {
      "name": "Drakensteinpiek",
-     "elevation": 1057,
-     "v": 1057,
+     "kind": "peak",
+     "elevation": 1491,
+     "elevationSource": "osm",
+     "sources": "both",
+     "osmId": 345446943,
+     "osmUrl": "https://www.openstreetmap.org/node/345446943",
      "wikidata": "Q31533923",
-     "url": "https://www.wikidata.org/wiki/Q31533923"
+     "url": "https://www.wikidata.org/wiki/Q31533923",
+     "v": 1491,
+     "elevationFt": 4892,
+     "elevationText": "1,491 m (4,892 ft)"
     }
    },
    {
@@ -6108,16 +6410,24 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      18.4287239,
-      -33.9673171
+      18.9827308,
+      -34.0215875
      ]
     },
     "properties": {
-     "name": "Fernwood Peak",
-     "elevation": 1003,
-     "v": 1003,
-     "wikidata": "Q55984155",
-     "url": "https://www.wikidata.org/wiki/Q55984155"
+     "name": "Triplet 3",
+     "kind": "peak",
+     "elevation": 1479,
+     "elevationSource": "osm",
+     "prominence": 35,
+     "sources": "osm",
+     "osmId": 4929629616,
+     "osmUrl": "https://www.openstreetmap.org/node/4929629616",
+     "v": 1479,
+     "elevationFt": 4852,
+     "elevationText": "1,479 m (4,852 ft)",
+     "prominenceFt": 115,
+     "prominenceText": "35 m (115 ft)"
     }
    },
    {
@@ -6125,33 +6435,23 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      18.439263888,
-      -33.954752777
-     ]
-    },
-    "properties": {
-     "name": "Devil's Peak",
-     "elevation": 1002,
-     "v": 1002,
-     "wikidata": "Q917040",
-     "url": "https://www.wikidata.org/wiki/Q917040"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      18.988888888,
-      -33.972222222
+      18.9894082,
+      -33.9719279
      ]
     },
     "properties": {
      "name": "Virgin Peaks",
-     "elevation": 1000,
-     "v": 1000,
+     "kind": "peak",
+     "elevation": 1460,
+     "elevationSource": "osm",
+     "sources": "both",
+     "osmId": 345447056,
+     "osmUrl": "https://www.openstreetmap.org/node/345447056",
      "wikidata": "Q31520707",
-     "url": "https://www.wikidata.org/wiki/Q31520707"
+     "url": "https://www.wikidata.org/wiki/Q31520707",
+     "v": 1460,
+     "elevationFt": 4790,
+     "elevationText": "1,460 m (4,790 ft)"
     }
    },
    {
@@ -6159,16 +6459,43 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      18.3856,
-      -34.0542
+      18.9917699,
+      -34.0519131
      ]
     },
     "properties": {
-     "name": "Constantiaberg",
-     "elevation": 927,
-     "v": 927,
-     "wikidata": "Q3431166",
-     "url": "https://www.wikidata.org/wiki/Q3431166"
+     "name": "Landroskop",
+     "kind": "peak",
+     "elevation": 1435,
+     "elevationSource": "osm",
+     "sources": "osm",
+     "osmId": 4803501932,
+     "osmUrl": "https://www.openstreetmap.org/node/4803501932",
+     "v": 1435,
+     "elevationFt": 4708,
+     "elevationText": "1,435 m (4,708 ft)"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      18.9854287,
+      -33.9371887
+     ]
+    },
+    "properties": {
+     "name": "Bullerskop",
+     "kind": "peak",
+     "elevation": 1425,
+     "elevationSource": "osm",
+     "sources": "osm",
+     "osmId": 1391154108,
+     "osmUrl": "https://www.openstreetmap.org/node/1391154108",
+     "v": 1425,
+     "elevationFt": 4675,
+     "elevationText": "1,425 m (4,675 ft)"
     }
    }
   ]
@@ -6316,7 +6643,7 @@
  },
  "photos": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    138.65,
    35.3,
@@ -6335,9 +6662,11 @@
     },
     "properties": {
      "source": "commons",
+     "name": "Mount Fuji - panoramio",
      "title": "Mt. Fuji - panoramio.jpg",
      "v": 1,
-     "url": "https://commons.wikimedia.org/wiki/File:Mt._Fuji_-_panoramio.jpg"
+     "url": "https://commons.wikimedia.org/wiki/File:Mt._Fuji_-_panoramio.jpg",
+     "nameInSource": "Mt. Fuji - panoramio"
     }
    },
    {
@@ -6345,15 +6674,36 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      138.683637675,
-      35.302411025
+      138.7676393,
+      35.3679849
      ]
     },
     "properties": {
-     "source": "mapillary",
+     "source": "viewpoint",
+     "kind": "viewpoint",
      "v": 1,
-     "url": "https://www.mapillary.com/app/?pKey=843774593317303",
-     "t": "2021-11-07T05:21:38.828Z"
+     "osm": "https://www.openstreetmap.org/node/1402646535",
+     "name": "砂払い五合目「下り」",
+     "nearby": 0
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      138.733884,
+      35.3950362
+     ]
+    },
+    "properties": {
+     "source": "viewpoint",
+     "kind": "viewpoint",
+     "v": 1,
+     "osm": "https://www.openstreetmap.org/node/6091839586",
+     "name": "日の出展望台",
+     "direction": "75",
+     "nearby": 30
     }
    },
    {
@@ -6367,6 +6717,7 @@
     },
     "properties": {
      "source": "commons",
+     "name": "富士山 (30450386)",
      "title": "富士山 (30450386).jpg",
      "v": 1,
      "url": "https://commons.wikimedia.org/wiki/File:%E5%AF%8C%E5%A3%AB%E5%B1%B1_(30450386).jpg"
@@ -6383,9 +6734,28 @@
     },
     "properties": {
      "source": "commons",
+     "name": "富士山衛生センター下 - panoramio",
      "title": "富士山衛生センター下 - panoramio.jpg",
      "v": 1,
      "url": "https://commons.wikimedia.org/wiki/File:%E5%AF%8C%E5%A3%AB%E5%B1%B1%E8%A1%9B%E7%94%9F%E3%82%BB%E3%83%B3%E3%82%BF%E3%83%BC%E4%B8%8B_-_panoramio.jpg"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      138.735,
+      35.353
+     ]
+    },
+    "properties": {
+     "source": "commons",
+     "name": "Mount Fuji, Japan",
+     "title": "Mt. Fuji, Japan.jpg",
+     "v": 1,
+     "url": "https://commons.wikimedia.org/wiki/File:Mt._Fuji%2C_Japan.jpg",
+     "nameInSource": "Mt. Fuji, Japan"
     }
    },
    {
@@ -6399,6 +6769,7 @@
     },
     "properties": {
      "source": "commons",
+     "name": "元祖七合目 - panoramio",
      "title": "元祖七合目 - panoramio.jpg",
      "v": 1,
      "url": "https://commons.wikimedia.org/wiki/File:%E5%85%83%E7%A5%96%E4%B8%83%E5%90%88%E7%9B%AE_-_panoramio.jpg"
@@ -6415,9 +6786,29 @@
     },
     "properties": {
      "source": "commons",
+     "name": "Mount Fuji, Fujinomiya side in July - panoramio",
      "title": "Mt. Fuji, Fujinomiya side in July - panoramio.jpg",
      "v": 1,
-     "url": "https://commons.wikimedia.org/wiki/File:Mt._Fuji%2C_Fujinomiya_side_in_July_-_panoramio.jpg"
+     "url": "https://commons.wikimedia.org/wiki/File:Mt._Fuji%2C_Fujinomiya_side_in_July_-_panoramio.jpg",
+     "nameInSource": "Mt. Fuji, Fujinomiya side in July - panoramio"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      138.7293,
+      35.35965
+     ]
+    },
+    "properties": {
+     "source": "commons",
+     "name": "Mount Fuji - panoramio (2)",
+     "title": "Mt Fuji - panoramio (2).jpg",
+     "v": 1,
+     "url": "https://commons.wikimedia.org/wiki/File:Mt_Fuji_-_panoramio_(2).jpg",
+     "nameInSource": "Mt Fuji - panoramio (2)"
     }
    },
    {
@@ -6431,9 +6822,11 @@
     },
     "properties": {
      "source": "commons",
+     "name": "Mount Fuji Early Morning - panoramio",
      "title": "Mt. Fuji Early Morning - panoramio.jpg",
      "v": 1,
-     "url": "https://commons.wikimedia.org/wiki/File:Mt._Fuji_Early_Morning_-_panoramio.jpg"
+     "url": "https://commons.wikimedia.org/wiki/File:Mt._Fuji_Early_Morning_-_panoramio.jpg",
+     "nameInSource": "Mt. Fuji Early Morning - panoramio"
     }
    },
    {
@@ -6447,9 +6840,11 @@
     },
     "properties": {
      "source": "commons",
+     "name": "Mount Fuji - panoramio (1)",
      "title": "Mt Fuji - panoramio (1).jpg",
      "v": 1,
-     "url": "https://commons.wikimedia.org/wiki/File:Mt_Fuji_-_panoramio_(1).jpg"
+     "url": "https://commons.wikimedia.org/wiki/File:Mt_Fuji_-_panoramio_(1).jpg",
+     "nameInSource": "Mt Fuji - panoramio (1)"
     }
    },
    {
@@ -6457,63 +6852,16 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      138.728936,
-      35.359857
+      138.728142,
+      35.360008
      ]
     },
     "properties": {
      "source": "commons",
-     "title": "Beira do abismo - panoramio.jpg",
+     "name": "剣ヶ峰-馬の背から日の出。御殿場口方面（東向） - panoramio",
+     "title": "剣ヶ峰-馬の背から日の出。御殿場口方面（東向） - panoramio.jpg",
      "v": 1,
-     "url": "https://commons.wikimedia.org/wiki/File:Beira_do_abismo_-_panoramio.jpg"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      138.727156,
-      35.360328
-     ]
-    },
-    "properties": {
-     "source": "commons",
-     "title": "A panorama from Kengamine - panoramio.jpg",
-     "v": 1,
-     "url": "https://commons.wikimedia.org/wiki/File:A_panorama_from_Kengamine_-_panoramio.jpg"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      138.728786,
-      35.360181
-     ]
-    },
-    "properties": {
-     "source": "commons",
-     "title": "Gigante adormecido - panoramio.jpg",
-     "v": 1,
-     "url": "https://commons.wikimedia.org/wiki/File:Gigante_adormecido_-_panoramio.jpg"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      138.728442,
-      35.360308
-     ]
-    },
-    "properties": {
-     "source": "commons",
-     "title": "Snowboard - panoramio.jpg",
-     "v": 1,
-     "url": "https://commons.wikimedia.org/wiki/File:Snowboard_-_panoramio.jpg"
+     "url": "https://commons.wikimedia.org/wiki/File:%E5%89%A3%E3%83%B6%E5%B3%B0-%E9%A6%AC%E3%81%AE%E8%83%8C%E3%81%8B%E3%82%89%E6%97%A5%E3%81%AE%E5%87%BA%E3%80%82%E5%BE%A1%E6%AE%BF%E5%A0%B4%E5%8F%A3%E6%96%B9%E9%9D%A2%EF%BC%88%E6%9D%B1%E5%90%91%EF%BC%89_-_panoramio.jpg"
     }
    }
   ]
@@ -7539,7 +7887,7 @@
  },
  "ports": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -97.4,
    25.8,
@@ -7815,7 +8163,7 @@
  },
  "power-plants": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -114.816,
    31.332,
@@ -7835,6 +8183,7 @@
     "properties": {
      "name": "Palo Verde",
      "kind": "nuclear",
+     "fuelGroup": "Nuclear",
      "mw": 3937,
      "v": 3937,
      "nameplateMw": 4209.6,
@@ -7842,7 +8191,31 @@
      "technology": "Nuclear",
      "county": "Maricopa",
      "state": "Arizona",
-     "dataPeriod": "2025-02"
+     "dataPeriod": "February 2025"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.656111000325,
+      33.7766669999872
+     ]
+    },
+    "properties": {
+     "name": "Oe_az1",
+     "kind": "solar",
+     "fuelGroup": "Solar",
+     "mw": 32.5,
+     "v": 32.5,
+     "nameplateMw": 32.5,
+     "utility": "Onward Energy",
+     "technology": "Solar Photovoltaic",
+     "county": "La Paz",
+     "state": "Arizona",
+     "dataPeriod": "February 2025",
+     "nameInSource": "OE_AZ1"
     }
    },
    {
@@ -7857,14 +8230,15 @@
     "properties": {
      "name": "Springerville",
      "kind": "coal",
+     "fuelGroup": "Coal and oil",
      "mw": 1632.8,
      "v": 1632.8,
      "nameplateMw": 1779.2,
      "utility": "Tucson Electric Power Co",
-     "technology": "Conventional Steam Coal; Solar Photovoltaic;",
+     "technology": "Conventional Steam Coal; Solar Photovoltaic",
      "county": "Apache",
      "state": "Arizona",
-     "dataPeriod": "2025-02"
+     "dataPeriod": "February 2025"
     }
    },
    {
@@ -7879,6 +8253,7 @@
     "properties": {
      "name": "Glen Canyon Dam",
      "kind": "hydroelectric",
+     "fuelGroup": "Hydro and other renewables",
      "mw": 1312,
      "v": 1312,
      "nameplateMw": 1312,
@@ -7886,7 +8261,7 @@
      "technology": "Conventional Hydroelectric",
      "county": "Coconino",
      "state": "Arizona",
-     "dataPeriod": "2025-02"
+     "dataPeriod": "February 2025"
     }
    },
    {
@@ -7901,6 +8276,7 @@
     "properties": {
      "name": "Santan",
      "kind": "natural gas",
+     "fuelGroup": "Natural gas",
      "mw": 1286,
      "v": 1286,
      "nameplateMw": 1326,
@@ -7908,7 +8284,7 @@
      "technology": "Natural Gas Fired Combined Cycle",
      "county": "Maricopa",
      "state": "Arizona",
-     "dataPeriod": "2025-02"
+     "dataPeriod": "February 2025"
     }
    },
    {
@@ -7923,14 +8299,15 @@
     "properties": {
      "name": "Gemini Solar Hybrid",
      "kind": "solar",
+     "fuelGroup": "Solar",
      "mw": 1070,
      "v": 1070,
      "nameplateMw": 1070,
      "utility": "Gemini Solar",
-     "technology": "Batteries; Solar Photovoltaic;",
+     "technology": "Batteries; Solar Photovoltaic",
      "county": "Clark",
      "state": "Nevada",
-     "dataPeriod": "2025-02"
+     "dataPeriod": "February 2025"
     }
    },
    {
@@ -7945,6 +8322,7 @@
     "properties": {
      "name": "Harquahala Generating Project",
      "kind": "natural gas",
+     "fuelGroup": "Natural gas",
      "mw": 1042.9,
      "v": 1042.9,
      "nameplateMw": 1277.1,
@@ -7952,7 +8330,7 @@
      "technology": "Natural Gas Fired Combined Cycle",
      "county": "Maricopa",
      "state": "Arizona",
-     "dataPeriod": "2025-02"
+     "dataPeriod": "February 2025"
     }
    },
    {
@@ -7967,6 +8345,7 @@
     "properties": {
      "name": "Hoover Dam (AZ)",
      "kind": "hydroelectric",
+     "fuelGroup": "Hydro and other renewables",
      "mw": 1039.7,
      "v": 1039.7,
      "nameplateMw": 1039.4,
@@ -7974,7 +8353,7 @@
      "technology": "Conventional Hydroelectric",
      "county": "Mohave",
      "state": "Arizona",
-     "dataPeriod": "2025-02"
+     "dataPeriod": "February 2025"
     }
    },
    {
@@ -7989,6 +8368,7 @@
     "properties": {
      "name": "Hoover Dam (NV)",
      "kind": "hydroelectric",
+     "fuelGroup": "Hydro and other renewables",
      "mw": 1039.4,
      "v": 1039.4,
      "nameplateMw": 1039.4,
@@ -7996,7 +8376,7 @@
      "technology": "Conventional Hydroelectric",
      "county": "Clark",
      "state": "Nevada",
-     "dataPeriod": "2025-02"
+     "dataPeriod": "February 2025"
     }
    },
    {
@@ -8011,6 +8391,7 @@
     "properties": {
      "name": "Red Hawk",
      "kind": "natural gas",
+     "fuelGroup": "Natural gas",
      "mw": 1002,
      "v": 1002,
      "nameplateMw": 1140.3,
@@ -8018,7 +8399,7 @@
      "technology": "Natural Gas Fired Combined Cycle",
      "county": "Maricopa",
      "state": "Arizona",
-     "dataPeriod": "2025-02"
+     "dataPeriod": "February 2025"
     }
    },
    {
@@ -8033,14 +8414,15 @@
     "properties": {
      "name": "West Phoenix",
      "kind": "natural gas",
+     "fuelGroup": "Natural gas",
      "mw": 909,
      "v": 909,
      "nameplateMw": 1206.8,
      "utility": "Arizona Public Service Co",
-     "technology": "Natural Gas Fired Combined Cycle; Natural Gas Fired Combustion Turbine;",
+     "technology": "Natural Gas Fired Combined Cycle; Natural Gas Fired Combustion Turbine",
      "county": "Maricopa",
      "state": "Arizona",
-     "dataPeriod": "2025-02"
+     "dataPeriod": "February 2025"
     }
    },
    {
@@ -8055,6 +8437,7 @@
     "properties": {
      "name": "Coronado",
      "kind": "coal",
+     "fuelGroup": "Coal and oil",
      "mw": 762,
      "v": 762,
      "nameplateMw": 821.8,
@@ -8062,29 +8445,7 @@
      "technology": "Conventional Steam Coal",
      "county": "Apache",
      "state": "Arizona",
-     "dataPeriod": "2025-02"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -112.21529999987,
-      33.5561000000723
-     ]
-    },
-    "properties": {
-     "name": "Agua Fria",
-     "kind": "natural gas",
-     "mw": 741.2,
-     "v": 741.2,
-     "nameplateMw": 737.5,
-     "utility": "Salt River Project",
-     "technology": "Batteries; Natural Gas Fired Combustion Turbine; Natural Gas Steam Turbine; Solar Photovoltaic;",
-     "county": "Maricopa",
-     "state": "Arizona",
-     "dataPeriod": "2025-02"
+     "dataPeriod": "February 2025"
     }
    }
   ]
@@ -8896,7 +9257,7 @@
  },
  "reservoir-levels": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -123,
    40.4,
@@ -8917,12 +9278,13 @@
      "name": "Shasta Lake",
      "river": "Sacramento River",
      "source": "California DWR (CDEC)",
-     "v": 2369362,
-     "storageAf": 2369362,
-     "lastDate": "2026-10-15",
-     "t": "2026-10-15T00:00:00.000Z",
+     "v": 2362542,
+     "storageAf": 2362542,
+     "lastDate": "2026-10-16",
+     "t": "2026-10-16T00:00:00.000Z",
      "capacityAf": 4552000,
      "pctFull": 52,
+     "percentFull": "52%",
      "series": [
       {
        "t": "2021-11",
@@ -9177,12 +9539,13 @@
      "name": "Trinity Lake",
      "river": "Trinity River",
      "source": "California DWR (CDEC)",
-     "v": 1654349,
-     "storageAf": 1654349,
-     "lastDate": "2026-10-15",
-     "t": "2026-10-15T00:00:00.000Z",
+     "v": 1652722,
+     "storageAf": 1652722,
+     "lastDate": "2026-10-16",
+     "t": "2026-10-16T00:00:00.000Z",
      "capacityAf": 2448000,
      "pctFull": 68,
+     "percentFull": "68%",
      "series": [
       {
        "t": "2021-11",
@@ -10103,7 +10466,7 @@
  },
  "sequoia-groves": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -119.5,
    35.8,
@@ -11229,7 +11592,7 @@
  },
  "species": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -115.585,
    51.161,
@@ -11237,6 +11600,47 @@
    51.194
   ],
   "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -115.550895,
+      51.1838716667
+     ]
+    },
+    "properties": {
+     "species": "Mule Deer",
+     "observedOn": "2026-10-14",
+     "t": "2026-10-14T23:43:11.000Z",
+     "v": 1,
+     "url": "https://www.inaturalist.org/observations/408935542",
+     "license": "cc-by-nc",
+     "scientificName": "Odocoileus hemionus",
+     "taxonId": 42220
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -115.5630134997,
+      51.1719544997
+     ]
+    },
+    "properties": {
+     "species": "Mule Deer",
+     "observedOn": "2026-10-13",
+     "t": "2026-10-13T14:00:41.000Z",
+     "v": 1,
+     "url": "https://www.inaturalist.org/observations/408059293",
+     "license": "cc-by-nc",
+     "scientificName": "Odocoileus hemionus",
+     "taxonId": 42220,
+     "identifiedAs": "Rocky Mountain Mule Deer (Odocoileus hemionus hemionus)"
+    }
+   },
    {
     "type": "Feature",
     "geometry": {
@@ -11253,7 +11657,8 @@
      "v": 1,
      "url": "https://www.inaturalist.org/observations/408619334",
      "license": "all-rights-reserved",
-     "scientificName": "Symphoricarpos albus"
+     "scientificName": "Symphoricarpos albus",
+     "taxonId": 48523
     }
    },
    {
@@ -11272,7 +11677,8 @@
      "v": 1,
      "url": "https://www.inaturalist.org/observations/408421167",
      "license": "cc-by",
-     "scientificName": "Pyrola asarifolia"
+     "scientificName": "Pyrola asarifolia",
+     "taxonId": 78793
     }
    },
    {
@@ -11291,7 +11697,8 @@
      "v": 1,
      "url": "https://www.inaturalist.org/observations/408421158",
      "license": "cc-by",
-     "scientificName": "Pyrola asarifolia"
+     "scientificName": "Pyrola asarifolia",
+     "taxonId": 78793
     }
    },
    {
@@ -11310,7 +11717,28 @@
      "v": 1,
      "url": "https://www.inaturalist.org/observations/408397224",
      "license": "cc-by",
-     "scientificName": "Rubus idaeus"
+     "scientificName": "Rubus idaeus",
+     "taxonId": 54436
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -115.5843583333,
+      51.1839416667
+     ]
+    },
+    "properties": {
+     "species": "Arctic Butterbur",
+     "observedOn": "2026-10-14",
+     "t": "2026-10-14T15:29:29.000Z",
+     "v": 1,
+     "url": "https://www.inaturalist.org/observations/408998184",
+     "license": "cc-by-nc",
+     "scientificName": "Petasites frigidus",
+     "taxonId": 55780
     }
    },
    {
@@ -11329,7 +11757,28 @@
      "v": 1,
      "url": "https://www.inaturalist.org/observations/408419912",
      "license": "cc-by",
-     "scientificName": "Rubus idaeus"
+     "scientificName": "Rubus idaeus",
+     "taxonId": 54436
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -115.5840533333,
+      51.1839216667
+     ]
+    },
+    "properties": {
+     "species": "Arctic Butterbur",
+     "observedOn": "2026-10-14",
+     "t": "2026-10-14T15:28:42.000Z",
+     "v": 1,
+     "url": "https://www.inaturalist.org/observations/408998070",
+     "license": "cc-by-nc",
+     "scientificName": "Petasites frigidus",
+     "taxonId": 55780
     }
    },
    {
@@ -11348,7 +11797,8 @@
      "v": 1,
      "url": "https://www.inaturalist.org/observations/408419903",
      "license": "cc-by",
-     "scientificName": "Petasites frigidus"
+     "scientificName": "Petasites frigidus",
+     "taxonId": 55780
     }
    },
    {
@@ -11367,7 +11817,8 @@
      "v": 1,
      "url": "https://www.inaturalist.org/observations/408419878",
      "license": "cc-by",
-     "scientificName": "Petasites frigidus"
+     "scientificName": "Petasites frigidus",
+     "taxonId": 55780
     }
    },
    {
@@ -11386,83 +11837,8 @@
      "v": 1,
      "url": "https://www.inaturalist.org/observations/408419824",
      "license": "cc-by",
-     "scientificName": "Symphyotrichum ciliolatum"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -115.5708858333,
-      51.1767877778
-     ]
-    },
-    "properties": {
-     "species": "House Mouse",
-     "observedOn": "2026-10-13",
-     "t": "2026-10-14T03:19:46.000Z",
-     "v": 1,
-     "url": "https://www.inaturalist.org/observations/408206176",
-     "license": "cc-by",
-     "scientificName": "Mus musculus"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -115.571075,
-      51.1767783333
-     ]
-    },
-    "properties": {
-     "species": "House Mouse",
-     "observedOn": "2026-10-13",
-     "t": "2026-10-14T03:15:04.000Z",
-     "v": 1,
-     "url": "https://www.inaturalist.org/observations/408397338",
-     "license": "cc-by",
-     "scientificName": "Mus musculus"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -115.5614041997,
-      51.1710986
-     ]
-    },
-    "properties": {
-     "species": "American Red Squirrel",
-     "observedOn": "2026-10-13",
-     "t": "2026-10-13T21:41:34.000Z",
-     "v": 1,
-     "url": "https://www.inaturalist.org/observations/408178175",
-     "license": "cc-by-nc",
-     "scientificName": "Tamiasciurus hudsonicus"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -115.5513083333,
-      51.1824416667
-     ]
-    },
-    "properties": {
-     "species": "Wapiti",
-     "observedOn": "2026-10-13",
-     "t": "2026-10-13T20:55:49.000Z",
-     "v": 1,
-     "url": "https://www.inaturalist.org/observations/408143144",
-     "license": "cc-by-nc",
-     "scientificName": "Cervus canadensis"
+     "scientificName": "Symphyotrichum ciliolatum",
+     "taxonId": 169455
     }
    }
   ]
@@ -12565,7 +12941,7 @@
  },
  "uranium": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -110.963,
    35.058,
@@ -12594,7 +12970,11 @@
      "groundwaterScore": 10,
      "soilScore": 0,
      "airScore": 0,
-     "surfaceWaterScore": 160
+     "surfaceWaterScore": 160,
+     "cleanupStage": "Screened",
+     "priorityMine": false,
+     "cleanupFunding": "No settlement or enforcement yet",
+     "screeningReport": "https://www.epa.gov/navajo-nation-uranium-cleanup/tract-15-aum-site-screening-report"
     }
    },
    {
@@ -12619,7 +12999,71 @@
      "groundwaterScore": 10,
      "soilScore": 10,
      "airScore": 10,
-     "surfaceWaterScore": 160
+     "surfaceWaterScore": 160,
+     "cleanupStage": "Screened",
+     "priorityMine": false,
+     "cleanupFunding": "No settlement or enforcement yet",
+     "screeningReport": "https://www.epa.gov/navajo-nation-uranium-cleanup/horsetrail-aum-site-screening-report"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -110.346789533159,
+      37.0455257882231
+     ]
+    },
+    "properties": {
+     "name": "Taylor Reid No. 1 (A)",
+     "kind": "abandoned mine",
+     "source": "Navajo Nation abandoned uranium mines (2007)",
+     "aliases": "Taylor Reid 1; Taylor Reid Mine - A",
+     "mineId": 708,
+     "chapter": "OLJATO",
+     "region": "North Central",
+     "hazardScore": 510,
+     "v": 510,
+     "groundwaterScore": 330,
+     "soilScore": 10,
+     "airScore": 10,
+     "surfaceWaterScore": 160,
+     "cleanupStage": "Screened",
+     "priorityMine": false,
+     "cleanupFunding": "A responsible company, under EPA enforcement",
+     "responsibleParty": "Cyprus Amax / Western Nuclear Inc.",
+     "screeningReport": "https://www.epa.gov/navajo-nation-uranium-cleanup/taylor-reid-no-1-aum-site-screening-report"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -110.337703821828,
+      37.0422163687818
+     ]
+    },
+    "properties": {
+     "name": "Mitten No. 3",
+     "kind": "abandoned mine",
+     "source": "Navajo Nation abandoned uranium mines (2007)",
+     "aliases": "Mitten 3; Mitten #3; Mitten 31 Mine",
+     "mineId": 260,
+     "chapter": "OLJATO",
+     "region": "North Central",
+     "hazardScore": 690,
+     "v": 690,
+     "groundwaterScore": 390,
+     "soilScore": 70,
+     "airScore": 70,
+     "surfaceWaterScore": 160,
+     "cleanupStage": "Evaluated",
+     "priorityMine": true,
+     "cleanupFunding": "Environmental response trust (phase 1)",
+     "screeningReport": "https://www.epa.gov/navajo-nation-uranium-cleanup/mitten-no-3-aum-site-screening-report",
+     "evaluationReport": "https://semspub.epa.gov/work/09/100016422.pdf"
     }
    },
    {
@@ -12667,31 +13111,6 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -110.346789533159,
-      37.0455257882231
-     ]
-    },
-    "properties": {
-     "name": "Taylor Reid No. 1 (A)",
-     "kind": "abandoned mine",
-     "source": "Navajo Nation abandoned uranium mines (2007)",
-     "aliases": "Taylor Reid 1; Taylor Reid Mine - A",
-     "mineId": 708,
-     "chapter": "OLJATO",
-     "region": "North Central",
-     "hazardScore": 510,
-     "v": 510,
-     "groundwaterScore": 330,
-     "soilScore": 10,
-     "airScore": 10,
-     "surfaceWaterScore": 160
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
       -110.348610858622,
       37.0465662777238
      ]
@@ -12709,7 +13128,12 @@
      "groundwaterScore": 390,
      "soilScore": 0,
      "airScore": 0,
-     "surfaceWaterScore": 160
+     "surfaceWaterScore": 160,
+     "cleanupStage": "Screened",
+     "priorityMine": false,
+     "cleanupFunding": "A responsible company, under EPA enforcement",
+     "responsibleParty": "Cyprus Amax / Western Nuclear Inc.",
+     "screeningReport": "https://www.epa.gov/navajo-nation-uranium-cleanup/taylor-reid-no-1-aum-site-screening-report"
     }
    },
    {
@@ -12734,32 +13158,12 @@
      "groundwaterScore": 340,
      "soilScore": 20,
      "airScore": 20,
-     "surfaceWaterScore": 160
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -110.337703821828,
-      37.0422163687818
-     ]
-    },
-    "properties": {
-     "name": "Mitten No. 3",
-     "kind": "abandoned mine",
-     "source": "Navajo Nation abandoned uranium mines (2007)",
-     "aliases": "Mitten 3; Mitten #3; Mitten 31 Mine",
-     "mineId": 260,
-     "chapter": "OLJATO",
-     "region": "North Central",
-     "hazardScore": 690,
-     "v": 690,
-     "groundwaterScore": 390,
-     "soilScore": 70,
-     "airScore": 70,
-     "surfaceWaterScore": 160
+     "surfaceWaterScore": 160,
+     "cleanupStage": "Screened",
+     "priorityMine": false,
+     "cleanupFunding": "A responsible company, under EPA enforcement",
+     "responsibleParty": "Cyprus Amax / Western Nuclear Inc.",
+     "screeningReport": "https://www.epa.gov/navajo-nation-uranium-cleanup/c-3-aum-site-screening-report"
     }
    },
    {
@@ -12784,7 +13188,12 @@
      "groundwaterScore": 240,
      "soilScore": 70,
      "airScore": 70,
-     "surfaceWaterScore": 160
+     "surfaceWaterScore": 160,
+     "cleanupStage": "Screened",
+     "priorityMine": false,
+     "cleanupFunding": "A responsible company, under EPA enforcement",
+     "responsibleParty": "Cyprus Amax / Western Nuclear Inc.",
+     "screeningReport": "https://www.epa.gov/navajo-nation-uranium-cleanup/monument-no-3-aum-site-screening-report"
     }
    },
    {
@@ -12808,7 +13217,11 @@
      "groundwaterScore": 460,
      "soilScore": 30,
      "airScore": 30,
-     "surfaceWaterScore": 160
+     "surfaceWaterScore": 160,
+     "cleanupStage": "Screened",
+     "priorityMine": false,
+     "cleanupFunding": "No settlement or enforcement yet",
+     "screeningReport": "https://www.epa.gov/navajo-nation-uranium-cleanup/skyline-road-aum-site-screening-report"
     }
    },
    {
@@ -12833,7 +13246,11 @@
      "groundwaterScore": 460,
      "soilScore": 450,
      "airScore": 450,
-     "surfaceWaterScore": 160
+     "surfaceWaterScore": 160,
+     "cleanupStage": "Screened",
+     "priorityMine": false,
+     "cleanupFunding": "No settlement or enforcement yet",
+     "screeningReport": "https://www.epa.gov/navajo-nation-uranium-cleanup/norcross-aum-site-screening-report"
     }
    },
    {
@@ -12858,7 +13275,12 @@
      "groundwaterScore": 710,
      "soilScore": 1105,
      "airScore": 1105,
-     "surfaceWaterScore": 160
+     "surfaceWaterScore": 160,
+     "cleanupStage": "Evaluated",
+     "priorityMine": true,
+     "cleanupFunding": "Environmental response trust (phase 1)",
+     "screeningReport": "https://www.epa.gov/navajo-nation-uranium-cleanup/charles-keith-aum-site-screening-report",
+     "evaluationReport": "https://semspub.epa.gov/work/09/100016417.pdf"
     }
    }
   ]
@@ -12950,7 +13372,7 @@
  },
  "wikipedia-nearby": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    18.4,
    -34,
@@ -12972,7 +13394,8 @@
      "title": "Newlands, Cape Town",
      "url": "https://en.wikipedia.org/wiki/Newlands%2C_Cape_Town",
      "extract": "Newlands (Nuweland) is an upmarket suburb of Cape Town, South Africa. It is located at the foot of Table Mountain in the Southern Suburbs of Cape Town, and is the wettest suburb in South Africa due to its high winter rainfall.",
-     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4c/Newlands_view.jpg/330px-Newlands_view.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail"
+     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4c/Newlands_view.jpg/330px-Newlands_view.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "languages": 10
     }
    },
    {
@@ -12989,7 +13412,8 @@
      "title": "Montebello Design Centre",
      "url": "https://en.wikipedia.org/wiki/Montebello_Design_Centre",
      "extract": "The Montebello Design Centre is a non-profit art and craft space established in 1993 and located in Newlands, Cape Town, South Africa. The centre hosts over twenty craft workshops, shops, restaurants, and artist studios.",
-     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/09/Montebello_Design_Centre.jpg/330px-Montebello_Design_Centre.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail"
+     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/09/Montebello_Design_Centre.jpg/330px-Montebello_Design_Centre.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "languages": 2
     }
    },
    {
@@ -13006,7 +13430,8 @@
      "title": "Newlands Forest",
      "url": "https://en.wikipedia.org/wiki/Newlands_Forest",
      "extract": "Newlands Forest is a conservancy area on the eastern slopes of Table Mountain, beside the suburb of Newlands, Cape Town, South Africa. It is owned and maintained by the Table Mountain National Parks Board, along with the City Parks Department of Cape Town, and includes a Fire Station, Nursery and Reservoir.",
-     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5b/Newlands_forest.jpg/330px-Newlands_forest.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail"
+     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5b/Newlands_forest.jpg/330px-Newlands_forest.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "languages": 4
     }
    },
    {
@@ -13023,7 +13448,8 @@
      "title": "The Vineyard Hotel (Cape Town)",
      "url": "https://en.wikipedia.org/wiki/The_Vineyard_Hotel_(Cape_Town)",
      "extract": "The Vineyard is a 175 room hotel, restaurant and spa located in the suburb of Newlands, Cape Town in South Africa. The hotel is family owned by the Petousis family.",
-     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a3/Vineyard_Hotel_gardens.jpg/330px-Vineyard_Hotel_gardens.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail"
+     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a3/Vineyard_Hotel_gardens.jpg/330px-Vineyard_Hotel_gardens.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "languages": 2
     }
    },
    {
@@ -13039,7 +13465,8 @@
      "name": "South African College Schools",
      "title": "South African College Schools",
      "url": "https://en.wikipedia.org/wiki/South_African_College_Schools",
-     "extract": "The South African College Schools, colloquially known as SACS, is a public English medium primary and high education institution situated in Newlands – part of the Southern Suburbs region of Cape Town in the Western Cape province of South Africa. Founded in 1829, it is one of the oldest continuously-run schools in South Africa."
+     "extract": "The South African College Schools, colloquially known as SACS, is a public English medium primary and high education institution situated in Newlands – part of the Southern Suburbs region of Cape Town in the Western Cape province of South Africa. Founded in 1829, it is one of the oldest continuously-run schools in South Africa.",
+     "languages": 3
     }
    },
    {
@@ -13055,7 +13482,8 @@
      "name": "Sans Souci Girls' High School",
      "title": "Sans Souci Girls' High School",
      "url": "https://en.wikipedia.org/wiki/Sans_Souci_Girls'_High_School",
-     "extract": "Sans Souci Girls' High School is a Public English medium high school for girls situated in the suburb of Newlands in Cape Town in the Western Cape province of South Africa. The school was established in 1960 and was decreed by the apartheid-era South African government as whites only school."
+     "extract": "Sans Souci Girls' High School is a Public English medium high school for girls situated in the suburb of Newlands in Cape Town in the Western Cape province of South Africa. The school was established in 1960 and was decreed by the apartheid-era South African government as whites only school.",
+     "languages": 1
     }
    },
    {
@@ -13072,7 +13500,8 @@
      "title": "Grove Primary School (South Africa)",
      "url": "https://en.wikipedia.org/wiki/Grove_Primary_School_(South_Africa)",
      "extract": "The Grove Primary School is a school from pre-primary to Grade 7 in Claremont, Cape Town, Western Cape, South Africa. There are about 720 pupils at the Grove and the school Head is Mrs Candice Joshua.",
-     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5c/Herschel_Memorial_Obelisk_2024.jpg/330px-Herschel_Memorial_Obelisk_2024.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail"
+     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5c/Herschel_Memorial_Obelisk_2024.jpg/330px-Herschel_Memorial_Obelisk_2024.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "languages": 2
     }
    },
    {
@@ -13089,7 +13518,8 @@
      "title": "Cavendish Square (shopping centre)",
      "url": "https://en.wikipedia.org/wiki/Cavendish_Square_(shopping_centre)",
      "extract": "Cavendish Square, sometimes referred to as Cavendish, is a multi-story shopping mall located in the mixed-use suburb of Claremont, in the Southern Suburbs of Cape Town. Built in 1972, the center comprises 190 stores, and multiple floors of indoor parking.",
-     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3d/Cavendish_Square_Logo.svg/330px-Cavendish_Square_Logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail"
+     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3d/Cavendish_Square_Logo.svg/330px-Cavendish_Square_Logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "languages": 2
     }
    },
    {
@@ -13105,7 +13535,8 @@
      "name": "Westerford High School",
      "title": "Westerford High School",
      "url": "https://en.wikipedia.org/wiki/Westerford_High_School",
-     "extract": "Westerford High School is a public English medium co-educational high school situated in the suburbs of Rondebosch and Newlands in Cape Town in the Western Cape province of South Africa. It has a campus in Rondebosch where the main school buildings are located and a secondary campus in Newlands used for sport."
+     "extract": "Westerford High School is a public English medium co-educational high school situated in the suburbs of Rondebosch and Newlands in Cape Town in the Western Cape province of South Africa. It has a campus in Rondebosch where the main school buildings are located and a secondary campus in Newlands used for sport.",
+     "languages": 2
     }
    },
    {
@@ -13122,7 +13553,8 @@
      "title": "Claremont, Cape Town",
      "url": "https://en.wikipedia.org/wiki/Claremont%2C_Cape_Town",
      "extract": "Claremont is a suburb of Cape Town, South Africa, situated in the Southern Suburbs region of the city. It is a mixed-use area, with both residential properties and economically-important commercial sections.",
-     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/37/Claremont_aerial_view.jpg/330px-Claremont_aerial_view.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail"
+     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/37/Claremont_aerial_view.jpg/330px-Claremont_aerial_view.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "languages": 11
     }
    },
    {
@@ -13139,7 +13571,8 @@
      "title": "Newlands railway station",
      "url": "https://en.wikipedia.org/wiki/Newlands_railway_station",
      "extract": "Newlands Railway Station is a commuter rail station on the Cape Town Metrorail Southern Line which serves the suburb of Newlands in Cape Town. The station is operated by PRASA as part of the Metrorail Western Cape network.",
-     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/db/Newlands_station_platform_1_viewed_from_platform_2_%28cropped%29.jpg/330px-Newlands_station_platform_1_viewed_from_platform_2_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail"
+     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/db/Newlands_station_platform_1_viewed_from_platform_2_%28cropped%29.jpg/330px-Newlands_station_platform_1_viewed_from_platform_2_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "languages": 2
     }
    },
    {
@@ -13156,7 +13589,8 @@
      "title": "Werdmuller Centre",
      "url": "https://en.wikipedia.org/wiki/Werdmuller_Centre",
      "extract": "The Werdmuller Centre was a mixed-use shopping centre and notable modernist building located in Claremont, Cape Town, South Africa. Named after former Old Mutual chairman George Werdmuller, the centre was designed in a brutalist architectural style by Cape Town-based architect Roelof Uytenbogaardt in 1969.",
-     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f2/Werdmuller_Centre.jpg/330px-Werdmuller_Centre.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail"
+     "thumbnail": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f2/Werdmuller_Centre.jpg/330px-Werdmuller_Centre.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "languages": 2
     }
    }
   ]
@@ -13460,7 +13894,7 @@
  },
  "wolf-packs": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -124.862,
    45.544,
@@ -13473,32 +13907,17 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -117.52,
-      48.069
+      -117.141,
+      48.726
      ]
     },
     "properties": {
-     "pack": "Carpenter Ridge",
-     "kind": "Not recorded",
-     "year": 2017,
-     "t": "2017-01-01T00:00:00.000Z"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -121.446,
-      45.851
-     ]
-    },
-    "properties": {
-     "pack": "Big Muddy",
+     "heading": "Goodman Meadows",
+     "pack": "Goodman Meadows",
      "kind": "Nonbreeding Pack",
      "status": "Nonbreeding Pack",
-     "year": 2022,
-     "t": "2022-01-01T00:00:00.000Z"
+     "year": 2025,
+     "t": "2025-01-01T00:00:00.000Z"
     }
    },
    {
@@ -13506,15 +13925,17 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -117.445,
-      48.17
+      -117.195,
+      48.982
      ]
     },
     "properties": {
-     "pack": "Dirty Shirt",
-     "kind": "Not recorded",
-     "year": 2017,
-     "t": "2017-01-01T00:00:00.000Z"
+     "heading": "Salmo",
+     "pack": "Salmo",
+     "kind": "Nonbreeding Pack",
+     "status": "Nonbreeding Pack",
+     "year": 2025,
+     "t": "2025-01-01T00:00:00.000Z"
     }
    },
    {
@@ -13522,15 +13943,17 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -117.135,
-      48.339
+      -117.652,
+      46.169
      ]
     },
     "properties": {
-     "pack": "Goodman Meadows",
-     "kind": "Not recorded",
-     "year": 2017,
-     "t": "2017-01-01T00:00:00.000Z"
+     "heading": "Butte Creek",
+     "pack": "Butte Creek",
+     "kind": "Nonbreeding Pack",
+     "status": "Nonbreeding Pack",
+     "year": 2025,
+     "t": "2025-01-01T00:00:00.000Z"
     }
    },
    {
@@ -13538,15 +13961,17 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -119.879,
-      48.167
+      -117.99,
+      49.106
      ]
     },
     "properties": {
-     "pack": "Loup Loup",
-     "kind": "Not recorded",
-     "year": 2017,
-     "t": "2017-01-01T00:00:00.000Z"
+     "heading": "Wedge",
+     "pack": "Wedge",
+     "kind": "Nonbreeding Pack",
+     "status": "Nonbreeding Pack",
+     "year": 2025,
+     "t": "2025-01-01T00:00:00.000Z"
     }
    },
    {
@@ -13554,15 +13979,17 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -117.69,
-      48.829
+      -117.183,
+      48.089
      ]
     },
     "properties": {
-     "pack": "Leadpoint",
-     "kind": "Not recorded",
-     "year": 2017,
-     "t": "2017-01-01T00:00:00.000Z"
+     "heading": "Mt. Spokane",
+     "pack": "Mt. Spokane",
+     "kind": "Nonbreeding Pack",
+     "status": "Nonbreeding Pack",
+     "year": 2025,
+     "t": "2025-01-01T00:00:00.000Z"
     }
    },
    {
@@ -13570,15 +13997,17 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -121.471,
-      48.521
+      -120.458,
+      47.775
      ]
     },
     "properties": {
-     "pack": "Skagit",
-     "kind": "Not recorded",
-     "year": 2017,
-     "t": "2017-01-01T00:00:00.000Z"
+     "heading": "Maverick",
+     "pack": "Maverick",
+     "kind": "Breeding Pairs",
+     "status": "Breeding Pairs",
+     "year": 2025,
+     "t": "2025-01-01T00:00:00.000Z"
     }
    },
    {
@@ -13586,15 +14015,17 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -117.393,
-      48.627
+      -119.858,
+      49.085
      ]
     },
     "properties": {
-     "pack": "Smackout",
-     "kind": "Not recorded",
-     "year": 2017,
-     "t": "2017-01-01T00:00:00.000Z"
+     "heading": "Chopaka",
+     "pack": "Chopaka",
+     "kind": "Breeding Pairs",
+     "status": "Breeding Pairs",
+     "year": 2025,
+     "t": "2025-01-01T00:00:00.000Z"
     }
    },
    {
@@ -13602,15 +14033,17 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -117.973,
-      48.24
+      -120.023,
+      48.626
      ]
     },
     "properties": {
-     "pack": "Stranger",
-     "kind": "Not recorded",
-     "year": 2017,
-     "t": "2017-01-01T00:00:00.000Z"
+     "heading": "Chewuch",
+     "pack": "Chewuch",
+     "kind": "Breeding Pairs",
+     "status": "Breeding Pairs",
+     "year": 2025,
+     "t": "2025-01-01T00:00:00.000Z"
     }
    },
    {
@@ -13618,31 +14051,17 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.759,
-      47.213
+      -117.988,
+      46.198
      ]
     },
     "properties": {
-     "pack": "Teanaway",
-     "kind": "Not recorded",
-     "year": 2017,
-     "t": "2017-01-01T00:00:00.000Z"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -118.015,
-      46.026
-     ]
-    },
-    "properties": {
+     "heading": "Touchet",
      "pack": "Touchet",
-     "kind": "Not recorded",
-     "year": 2017,
-     "t": "2017-01-01T00:00:00.000Z"
+     "kind": "Breeding Pairs",
+     "status": "Breeding Pairs",
+     "year": 2025,
+     "t": "2025-01-01T00:00:00.000Z"
     }
    },
    {
@@ -13650,15 +14069,53 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -117.759,
-      46.002
+      -118.646,
+      49.079
      ]
     },
     "properties": {
-     "pack": "Tucannon",
-     "kind": "Not recorded",
-     "year": 2017,
-     "t": "2017-01-01T00:00:00.000Z"
+     "heading": "Vulcan",
+     "pack": "Vulcan",
+     "kind": "Nonbreeding Pack",
+     "status": "Nonbreeding Pack",
+     "year": 2025,
+     "t": "2025-01-01T00:00:00.000Z"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -117.129,
+      48.526
+     ]
+    },
+    "properties": {
+     "heading": "Skookum",
+     "pack": "Skookum",
+     "kind": "Breeding Pairs",
+     "status": "Breeding Pairs",
+     "year": 2025,
+     "t": "2025-01-01T00:00:00.000Z"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -119.207,
+      49.023
+     ]
+    },
+    "properties": {
+     "heading": "Beaver Creek",
+     "pack": "Beaver Creek",
+     "kind": "Breeding Pairs",
+     "status": "Breeding Pairs",
+     "year": 2025,
+     "t": "2025-01-01T00:00:00.000Z"
     }
    }
   ]

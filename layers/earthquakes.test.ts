@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { earthquakesCountUrl, earthquakesUrl, normalizeEarthquakes } from "./earthquakes";
+import { cardContent } from "@/lib/render/card";
+import { summarizeFeature } from "@/lib/render/inspect";
+import layer, { depthText, earthquakesCountUrl, earthquakesUrl, magnitudeText, normalizeEarthquakes, quakeHeading } from "./earthquakes";
+import { contractProblems, labelsOf, legendOf, timeShapeOf } from "./contract";
 import fixture from "./__fixtures__/earthquakes.tahoe.json";
 
 /** The fixture is a real USGS response for this box (365 days to 2026-10-09, M2.5+, biggest 12 events). */
@@ -91,7 +94,41 @@ describe("normalizeEarthquakes", () => {
       "garbage",
     ]);
     expect(fc.features).toHaveLength(1);
-    expect(fc.features[0].properties).toEqual({ v: 6.1, tsunami: "possible" });
+    expect(fc.features[0].properties).toEqual({ heading: "Earthquake", v: 6.1, magnitude: "M 6.1", tsunami: "possible" });
+  });
+
+  it("titles the card by kind and place and writes magnitude as M 5.7 and depth in km and mi", () => {
+    const fc = normalizeEarthquakes(fixture.features);
+    const biggest = fc.features[0];
+    expect(biggest.properties).toMatchObject({
+      heading: "Earthquake 20 km ESE of Silver Springs, Nevada",
+      magnitude: "M 5.7",
+      depth: "5 km (3.1 mi)",
+    });
+    expect(summarizeFeature(biggest).name).toBe("Earthquake 20 km ESE of Silver Springs, Nevada");
+    const card = cardContent(biggest, { unit: layer.style.unit, card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.measure).toMatchObject({ label: "Magnitude", value: "M 5.7" });
+    expect(card.measure?.help).toBeDefined();
+    expect(card.facts.find((f) => f.key === "depth")?.value).toBe("5 km (3.1 mi)");
+    expect([...card.facts, ...card.details].map((r) => r.key)).not.toContain("depthKm");
+    expect(quakeHeading("quarry blast", "Central California")).toBe("Quarry blast near Central California");
+    expect(magnitudeText(3.58)).toBe("M 3.6");
+    expect(depthText(410.3)).toBe("410 km (255 mi)");
+  });
+});
+
+describe("earthquakes contract", () => {
+  it("is continuous by day, keys size by magnitude with depth as color, and labels the five strongest", () => {
+    const data = normalizeEarthquakes(fixture.features);
+    expect(timeShapeOf(layer, data)).toMatchObject({ shape: "continuous", step: "day" });
+    const legend = legendOf(layer, data);
+    expect(legend).toMatchObject({ kind: "size", field: "v", unit: "M" });
+    expect(legend.stops?.map((s) => s.label)).toEqual(["M 2.5", "M 4", "M 5", "M 6", "M 7 and up"]);
+    expect(legend.note).toMatch(/depth/i);
+    expect(legend.note).toMatch(/km \(mi\)/);
+    expect(labelsOf(layer)).toEqual({ field: "magnitude", max: 5, rankBy: "v" });
+    expect(layer.style.encode).toEqual({ size: "v", color: "depthKm" });
+    expect(contractProblems(layer)).toEqual([]);
   });
 });
 

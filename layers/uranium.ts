@@ -11,7 +11,17 @@
  *     where siteRegulatoryDriver IN ('UMTRCA Title I', 'UMTRCA Title II', 'ULP') gives 64 sites (Title I: abandoned mill sites cleaned up by DOE;
  *     Title II: licensed mill sites handed to DOE for long-term care after cleanup; ULP: Uranium Leasing Program). Fields: featureName,
  *     siteStateCode, siteRegulatoryDriver, siteWebPageURL, siteFactSheetURL, siteTransferYear (a string, some in the future), subSiteId.
- * Output: Navajo points: kind "abandoned mine", v = composite hazard score, name, aliases, mineId, chapter, region and the four component scores.
+ *   US EPA Region 9 Navajo Nation abandoned uranium mine cleanup status (keyless MapServer, verified live 2026-10-18; 609 mine
+ *     polygons in layer 50 "All Mines", geojson works, about 3 s):
+ *     https://gispub.epa.gov/arcgis/rest/services/Region9/NavajoNationAUMSiteScreening/MapServer/50
+ *     Fields used: Mine_ID (the same mine id as the NMCDC points), SFD_Status (the furthest Superfund removal step done: preliminary site
+ *     screen, removal site evaluation, removal site assessment or design for cleanup, "and Priority Mine" for EPA's priority mines),
+ *     MineStatusAlt (who pays: Tronox Settlement, Phase 1 Trust, Phase 2 Trust, Enforcement Action or Other), EnfEntity (the responsible
+ *     party), SiteScreenReport and RemovalSiteEvalReport (report links). Joined to the 2007 scores by Mine_ID, so the card says how far
+ *     cleanup has come next to the old score; if the EPA service fails the scores still draw and the note says so.
+ * Output: Navajo points: kind "abandoned mine", v and hazardScore = composite hazard score (2007), name, aliases, mineId, chapter,
+ *   region, the four component scores, and from EPA cleanupStage, cleanupFunding, responsibleParty, priorityMine, screeningReport,
+ *   evaluationReport.
  *   DOE points: kind "mill tailings site" (Title I or II) or "leasing program", name, state, program, siteId, url, factSheet, transferYear.
  * Smoke check 2026-10-10 (live, through runLayer): the lower 48 box returned 666 points (602 Navajo mines, 64 DOE sites) in 0.3 s; a Four Corners
  *   box -112,35,-106,38 returned 616 (Tract 15, Oljato chapter, composite score 170, first).
@@ -20,19 +30,27 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp, type LegendSpec } from "./types";
 import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
-import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
+import { OUTSIDE_US_NOTE, bboxesDisjoint, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
 
 export const NAVAJO_URL =
   "https://services.arcgis.com/LGtNQDlIZBdntoA9/arcgis/rest/services/Navajo_Nation_Abandoned_Uranium_Mine_Point_Scores/FeatureServer/0";
 export const DOE_URL = "https://services7.arcgis.com/Oak1TVjJMSpGVWPC/arcgis/rest/services/DoeLmSitePoint/FeatureServer/0";
+export const EPA_AUM_URL = "https://gispub.epa.gov/arcgis/rest/services/Region9/NavajoNationAUMSiteScreening/MapServer/50";
+const EPA_FIELDS = ["Mine_ID", "SFD_Status", "MineStatusAlt", "EnfEntity", "PriorityMine", "SiteScreenReport", "RemovalSiteEvalReport"];
+/** Where the Navajo Nation mines and EPA's list lie (both extents, 2026-10-18, padded): the EPA list is asked only here. */
+export const NAVAJO_EXTENT: BBox = [-111.8, 35.0, -107.0, 37.5];
+/** The EPA mines are a few acres each: their outlines, coarsened, keep the request small (only the attributes are used). */
+const EPA_OFFSET = 0.01;
 export const DOE_WHERE = "siteRegulatoryDriver IN ('UMTRCA Title I', 'UMTRCA Title II', 'ULP')";
 /** Both datasets are static (one is a 2007 study). */
 const TTL_SECONDS = 7 * 86_400;
+/** EPA's cleanup list changes as work goes on: a day. */
+const CLEANUP_TTL_SECONDS = 86_400;
 /** Most sites per dataset in a view; also the wide limit. */
 const MAX_RECORDS = 2000;
 /** Wide views keep named sites only ("sorts after a space" also skips blank names). Every site had a name on 2026-10-14. */
@@ -116,6 +134,62 @@ export function tellApart(features: Feature<Point>[]): Feature<Point>[] {
   });
 }
 
+/** EPA's furthest cleanup step, in plain words, in the order the steps come (the Superfund removal process). */
+export const CLEANUP_STAGES = ["Screened", "Evaluated", "Assessed", "Cleanup designed"] as const;
+
+const STAGE_OF: [RegExp, (typeof CLEANUP_STAGES)[number]][] = [
+  [/design for cleanup/i, "Cleanup designed"],
+  [/removal site assessment/i, "Assessed"],
+  [/removal site evaluation/i, "Evaluated"],
+  [/site screen/i, "Screened"],
+];
+
+/** Who pays for a mine's cleanup (EPA MineStatusAlt), in plain words. */
+export const FUNDING_WORDS: Record<string, string> = {
+  "Tronox Settlement": "Tronox bankruptcy settlement",
+  "Phase 1 Trust": "Environmental response trust (phase 1)",
+  "Phase 2 Trust": "Environmental response trust (phase 2)",
+  "Enforcement Action": "A responsible company, under EPA enforcement",
+  Other: "No settlement or enforcement yet",
+};
+
+type Cleanup = Record<string, string | boolean>;
+
+/** EPA cleanup status per mine id, from the EPA Region 9 mine polygons: plain words and report links. */
+export function cleanupByMine(fc: FeatureCollection): Map<number, Cleanup> {
+  const out = new Map<number, Cleanup>();
+  for (const f of fc.features) {
+    const p = f.properties ?? {};
+    const id = num(p.Mine_ID);
+    if (id === undefined || out.has(id)) continue;
+    const status: Cleanup = {};
+    const step = str(p.SFD_Status)?.replace(/\s+/g, " ");
+    const stage = step === undefined ? undefined : STAGE_OF.find(([re]) => re.test(step))?.[1];
+    if (stage !== undefined) status.cleanupStage = stage;
+    status.priorityMine = str(p.PriorityMine) === "Priority" || /priority mine/i.test(step ?? "");
+    const funding = str(p.MineStatusAlt);
+    if (funding !== undefined) status.cleanupFunding = FUNDING_WORDS[funding] ?? funding;
+    const party = str(p.EnfEntity);
+    // The trusts are named by the funding row already; a company is named here.
+    if (party !== undefined && !/trust/i.test(party)) status.responsibleParty = party;
+    const screening = str(p.SiteScreenReport);
+    if (screening !== undefined && /^https?:\/\//.test(screening)) status.screeningReport = screening;
+    const evaluation = str(p.RemovalSiteEvalReport);
+    if (evaluation !== undefined && /^https?:\/\//.test(evaluation)) status.evaluationReport = evaluation;
+    out.set(id, status);
+  }
+  return out;
+}
+
+/** The Navajo points with EPA's cleanup status joined by mine id; mines EPA does not list are left as they are. */
+export function joinCleanup(features: Feature<Point>[], cleanup: Map<number, Cleanup>): Feature<Point>[] {
+  return features.map((f) => {
+    const id = f.properties?.mineId;
+    const status = typeof id === "number" ? cleanup.get(id) : undefined;
+    return status ? { ...f, properties: { ...f.properties, ...status } } : f;
+  });
+}
+
 /** DOE Legacy Management uranium sites as points; a transfer year in the future is reported as expectedTransferYear. */
 export function normalizeDoe(fc: FeatureCollection, thisYear: number): Feature<Point>[] {
   const out: Feature<Point>[] = [];
@@ -152,12 +226,59 @@ const KIND_LABELS: Record<string, string> = {
 
 const ATTRIBUTES: Attribute[] = [
   { key: "kind", type: "category", label: "Kind", levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
-  { key: "hazardScore", type: "measure", label: "Hazard score", unit: "score", encode: "size" },
+  {
+    key: "hazardScore",
+    type: "measure",
+    label: "Hazard score (2007)",
+    unit: "score",
+    encode: "size",
+    presets: [
+      { label: "Under 100", max: 100 },
+      { label: "100 to 1,000", min: 100, max: 1_000 },
+      { label: "1,000 and up", min: 1_000 },
+    ],
+  },
+  {
+    key: "cleanupStage",
+    type: "ordinal",
+    label: "EPA cleanup step",
+    scale: "EPA Superfund removal steps: site screening, removal site evaluation, removal site assessment, design for cleanup",
+    levels: CLEANUP_STAGES.map((value) => ({ value, label: value })),
+  },
+  {
+    key: "cleanupFunding",
+    type: "category",
+    label: "Cleanup paid by",
+    levels: Object.values(FUNDING_WORDS).map((value) => ({ value, label: value })),
+  },
+  { key: "priorityMine", type: "flag", label: "EPA priority mine" },
   nameAttribute(),
 ];
 
+/** The size key: 2007 scores, each step ten times the last. */
+const LEGEND: LegendSpec = {
+  kind: "size",
+  title: "Hazard score (2007 screening)",
+  field: "hazardScore",
+  unit: "score",
+  stops: [
+    { label: "10", value: 10 },
+    { label: "100", value: 100 },
+    { label: "1,000", value: 1_000 },
+    { label: "10,000", value: 10_000 },
+  ],
+  note:
+    "Navajo Nation mines are sized by a 2007 screening score, not today's conditions; the card adds how far EPA cleanup has come. " +
+    "DOE mill-tailings sites have no score and draw smallest.",
+};
+
 const EPA = {
   source: "Navajo Nation EPA and US EPA, Navajo abandoned uranium mine screening assessment (2007)",
+  url: "https://www.epa.gov/navajo-nation-uranium-cleanup",
+};
+
+const CLEANUP_SOURCE = {
+  source: "US EPA Region 9, Navajo Nation abandoned uranium mines map service",
   url: "https://www.epa.gov/navajo-nation-uranium-cleanup",
 };
 
@@ -192,12 +313,39 @@ const HELP: Record<string, FieldHelp> = {
   },
   transferYear: { text: "The year the site was transferred to DOE Legacy Management for long-term care." },
   expectedTransferYear: { text: "The year the site is expected to be transferred to DOE Legacy Management." },
+  cleanupStage: {
+    text:
+      "The furthest step of EPA's Superfund removal process done at the mine: a site screening (a first look), a removal site evaluation, " +
+      "a removal site assessment, or a design for cleanup. It does not mean the mine has been cleaned up.",
+    scale: "Screened, Evaluated, Assessed, Cleanup designed",
+    ...CLEANUP_SOURCE,
+  },
+  cleanupFunding: {
+    text:
+      "Who pays for the mine's cleanup: the Tronox bankruptcy settlement, the environmental response trust funded by settlements, a " +
+      "responsible company under EPA enforcement, or no settlement or enforcement yet.",
+    ...CLEANUP_SOURCE,
+  },
+  responsibleParty: { text: "The company EPA holds responsible for cleaning up the mine.", ...CLEANUP_SOURCE },
+  priorityMine: { text: "One of the mines EPA ranked first for cleanup, by their radiation levels and nearness to homes.", ...CLEANUP_SOURCE },
+  source: { text: "Which record the site comes from: the 2007 Navajo Nation screening scores, or DOE's list of uranium mill sites." },
+};
+
+/** Card wording for each record, with its vintage. */
+const SOURCE_WORDS: Record<string, string> = {
+  "Navajo Nation abandoned uranium mines (2007)": "2007 Navajo Nation EPA and US EPA screening; the score is not today's condition",
+  "DOE Office of Legacy Management": "US Department of Energy, Office of Legacy Management",
 };
 
 const CARD: CardSpec = {
-  measure: { key: "v", label: "Hazard score" },
+  measure: { key: "v", label: "Hazard score (2007 screening)" },
   facts: [
     { key: "kind", label: "Kind", values: KIND_LABELS },
+    { key: "cleanupStage", label: "EPA cleanup step reached" },
+    { key: "priorityMine", label: "EPA priority mine", values: { true: "Yes", false: "No" } },
+    { key: "cleanupFunding", label: "Cleanup paid by" },
+    { key: "responsibleParty", label: "Responsible party" },
+    { key: "source", label: "Record", values: SOURCE_WORDS },
     {
       key: "pathwayScores",
       label: "Pathway scores",
@@ -216,6 +364,8 @@ const CARD: CardSpec = {
   links: [
     { key: "url", label: "DOE site page" },
     { key: "factSheet", label: "Fact sheet" },
+    { key: "screeningReport", label: "EPA site screening report" },
+    { key: "evaluationReport", label: "EPA removal site evaluation" },
   ],
 };
 
@@ -223,7 +373,10 @@ const uranium = defineLayer({
   id: "uranium",
   title: "Uranium legacy sites",
   description:
-    "Legacy uranium sites in the western US: 602 abandoned mines on the Navajo Nation and about 60 Department of Energy mill-tailings sites. Each point has name, kind ('abandoned mine', 'mill tailings site' or 'leasing program') and source. Navajo mines have v and hazardScore (a 2007 screening score, 10 to about 17,600; higher is a higher estimated hazard, not a measured exposure; later cleanup not reflected), chapter and region. DOE sites have program (Title I or II), state, url and transferYear. Not every uranium mine: for historic mines elsewhere use mines with commodity uranium. Old workings and tailings can be dangerous. The lower 48 fits; over 20,000,000 km², named sites and the total.",
+    "Legacy uranium sites in the western US: 602 abandoned mines on the Navajo Nation and about 60 Department of Energy mill-tailings sites. Each point has name, kind ('abandoned mine', 'mill tailings site' or 'leasing program') and source. " +
+    "Navajo mines have v and hazardScore, a 2007 screening score (10 to about 17,600; higher is a higher estimated hazard, not a measured exposure, and not today's condition), chapter and region; symbols are sized by it and the five highest are named on the map. " +
+    "From EPA Region 9's current cleanup list they add cleanupStage (the furthest EPA step done: Screened, Evaluated, Assessed or Cleanup designed; not the same as cleaned up), priorityMine (true for EPA's priority mines), cleanupFunding (Tronox bankruptcy settlement, environmental response trust, a responsible company under enforcement, or no settlement or enforcement yet) and responsibleParty. " +
+    "DOE sites have program (Title I or II), state, url and transferYear. Not every uranium mine: for historic mines elsewhere use mines with commodity uranium. Old workings and tailings can be dangerous. The lower 48 fits; over 20,000,000 km², named sites and the total.",
   coverage: "us",
   surface: "land",
   license:
@@ -232,10 +385,15 @@ const uranium = defineLayer({
   maxAreaKm2: 20_000_000,
   wide: { mode: "named", limit: MAX_RECORDS },
   input: z.object({}),
-  style: { geometry: "point", color: layerColor("uranium"), unit: "score" },
+  style: { geometry: "point", color: layerColor("uranium"), unit: "score", encode: { size: "hazardScore" } },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // One screening, in 2007: the date is said, no scrubber (EPA's cleanup steps are on the card).
+  time: { shape: "single", dates: ["2007"] },
+  legend: LEGEND,
+  labels: { field: "name", max: 5, rankBy: "hazardScore" },
+  display: { units: "us" },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {
@@ -251,7 +409,9 @@ const uranium = defineLayer({
     // Wide (over 20,000,000 km²): named sites only, the limit shared between the two datasets, and a count of every site.
     const wide = ctx.wide === true && ctx.wideStrategy !== undefined;
     const perDataset = wide ? Math.floor((ctx.wideStrategy?.limit ?? MAX_RECORDS) / 2) : MAX_RECORDS;
-    const [navajo, doe, navajoCount, doeCount] = await Promise.all([
+    // EPA's cleanup status for the Navajo mines in the box (609 in all, so one page), joined by mine id, asked only near the
+    // Navajo Nation; a failure keeps the scores and says so.
+    const [navajo, doe, navajoCount, doeCount, epa] = await Promise.all([
       arcgisQuery(ctx, NAVAJO_URL, {
         outFields: ["Mine_Name", "Aliases", "Mine_ID", "Chapter", "Region", "GrndWtrScr", "Soil_Scr", "Air_Scr", "SurfWtrScr", "Comp_Scr"],
         where: wide ? NAVAJO_NAMED : undefined,
@@ -270,7 +430,18 @@ const uranium = defineLayer({
       }),
       wide ? arcgisCount(ctx, NAVAJO_URL, { bbox: ctx.bbox, ttlSeconds: TTL_SECONDS, cacheSuffix: "uranium:navajo" }) : null,
       wide ? arcgisCount(ctx, DOE_URL, { where: DOE_WHERE, bbox: ctx.bbox, ttlSeconds: TTL_SECONDS, cacheSuffix: "uranium:doe" }) : null,
+      bboxesDisjoint(ctx.bbox, NAVAJO_EXTENT)
+        ? null
+        : arcgisQuery(ctx, EPA_AUM_URL, {
+            outFields: EPA_FIELDS,
+            bbox: ctx.bbox,
+            maxAllowableOffset: EPA_OFFSET,
+            resultRecordCount: 1000,
+            ttlSeconds: CLEANUP_TTL_SECONDS,
+            cacheSuffix: "uranium:epa",
+          }),
     ]);
+    const cleanup = epa?.ok ? cleanupByMine(epa.fc) : null;
 
     const features: Feature<Point>[] = [];
     const notes: string[] = [];
@@ -283,7 +454,7 @@ const uranium = defineLayer({
       features.push(...normalize(res.fc));
       if (res.truncated && !wide) notes.push(`Showing 2,000 ${label} records; zoom in for the rest`);
     };
-    take(navajo, "Navajo mines", normalizeNavajo);
+    take(navajo, "Navajo mines", (fc) => (cleanup ? joinCleanup(normalizeNavajo(fc), cleanup) : normalizeNavajo(fc)));
     take(doe, "DOE sites", (fc) => normalizeDoe(fc, new Date().getUTCFullYear()));
 
     if (failed.length === 2) return { error: `Uranium site data unavailable: ${failed.join("; ")}`, hint: "upstream" };
@@ -291,7 +462,11 @@ const uranium = defineLayer({
     if (features.length === 0 && failed.length === 0) {
       notes.push("No Navajo Nation abandoned uranium mines or DOE uranium sites in this area; this layer does not cover other uranium mines (use mines with commodity uranium)");
     } else if (features.some((f) => f.properties?.kind === "abandoned mine")) {
-      notes.push("Hazard scores are from a 2007 screening and do not reflect cleanup since");
+      notes.push(
+        cleanup
+          ? "Hazard scores are from a 2007 screening, not today's conditions; each mine's EPA cleanup step is from EPA Region 9's current list"
+          : "Hazard scores are from a 2007 screening and do not reflect cleanup since; EPA's cleanup status could not be loaded",
+      );
     }
 
     // The total counts every site in the box, so it is only given when both datasets answered and counted.
@@ -303,6 +478,8 @@ const uranium = defineLayer({
       citation,
       ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
+      // Both main records answered: a failed cleanup join is said in the note, not as a failed source.
+      ...(epa !== null && !epa.ok && failed.length === 0 && { sourceStatus: { ok: true as const } }),
     };
   },
 });

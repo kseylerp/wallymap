@@ -7,18 +7,26 @@
  * Range For California Condors" (Arizona and Utah), "Current Baja California Experimental Range For California Condors"
  * and "Early 1800's Range For California Condors". Current polygons fit in -121.9,30.5 to -110.3,38.3; the historic one
  * in -125.4,29.9 to -107.9,51.5 (Pacific coast from British Columbia to Baja, inland to the Rockies).
- * Output properties: name, kind ("current" | "experimental" | "historic"), era ("today" | "early 1800s").
+ * Output properties: name, heading (a short title: "Today: California range"), kind ("current" | "experimental" | "historic"),
+ * era ("today" | "early 1800s").
+ * Vintage: both services were last edited 2018-06-26 (checked 2026-10-18). No newer free range map was found: USFWS publishes
+ * condor critical habitat (1976) but no current range service, CEC's North American range is NatureServe's older outline, and
+ * California's CWHR range covers one state. So the layer says "range as mapped by NPS in 2018; northern California releases
+ * since 2022 are not in it" in the description, the note, the card and the legend.
+ * Drawing: the current ranges are meant filled in sage and the early-1800s range as an outline only. The shared area renderer
+ * draws one fill per layer, so the layer declares `era` as a category with `encode: "color"` and a legend saying so; the
+ * per-feature fill is a request to the renderer.
  * Smoke through runLayer (2026-10-10): box -125,29,-107,52 returned 4 polygons in 0.2 s (3 KB); the Sequoia box
  * -119.8,35.5,-118.8,36.5 returned the current California range and the historic range.
  * Smoke wide (2026-10-14): North America -170,18,-60,72 (about 50 million km²) returned all 4 polygons of 4 in 0.5 s (3 KB).
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type CardSpec, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type Attribute, type BBox, type CardSpec, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { bboxesDisjoint } from "./_shared/coverage";
-import { layerColor } from "@/lib/render/palette";
+import { DARK_GREY, SAGE, layerColor } from "@/lib/render/palette";
 
 const BASE = "https://services1.arcgis.com/fBc8EJBxQRMcHlei/ArcGIS/rest/services";
 const CURRENT_URL = `${BASE}/Current_Range/FeatureServer/0`;
@@ -34,6 +42,16 @@ const TTL_SECONDS = 7 * 86_400;
 const WIDE_LIMIT = 1000;
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
+
+/** What the map and the card say about the vintage, everywhere it appears. */
+export const VINTAGE = "Range as mapped by NPS in 2018; northern California releases since 2022 are not in it";
+
+/** Short titles for the four outlines, for the card and the map labels (the source names are long). */
+const HEADINGS: [RegExp, string][] = [
+  [/southwest/i, "Today: Arizona and Utah release area"],
+  [/baja/i, "Today: Baja California release area"],
+  [/california range/i, "Today: California range"],
+];
 
 function str(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
@@ -52,10 +70,11 @@ export function normalizeRange(fc: FeatureCollection, historic: boolean): Featur
     if (!f.geometry) continue;
     const name = str(f.properties?.Name) ?? (historic ? "Historic range" : "Current range");
     const kind = historic ? "historic" : /experimental/i.test(name) ? "experimental" : "current";
+    const heading = historic ? "Early 1800s range" : (HEADINGS.find(([re]) => re.test(name))?.[1] ?? "Today: condor range");
     features.push({
       type: "Feature",
       geometry: f.geometry,
-      properties: { name, kind, era: historic ? "early 1800s" : "today" },
+      properties: { name, heading, kind, era: historic ? "early 1800s" : "today" },
     });
   }
   return features;
@@ -68,9 +87,56 @@ const CARD: CardSpec = {
       label: "Range",
       values: { current: "Current range", experimental: "Experimental release area (current)", historic: "Historic range (early 1800s)" },
     },
+    {
+      key: "era",
+      label: "When",
+      values: {
+        today: "Today, as mapped by NPS in 2018; releases in northern California since 2022 are not in it",
+        "early 1800s": "The early 1800s, a rough reconstruction; condors are long gone from most of it",
+      },
+    },
   ],
-  /** Era repeats what the range says (today or early 1800s). */
-  hidden: ["era"],
+  // The heading is the card's title.
+  hidden: ["heading"],
+};
+
+/**
+ * Today filled in sage, the early 1800s as an outline only. `era` encodes color (Today first, so sage on the ramp); the
+ * area renderer does not yet draw a fill per feature (see the header), so the legend states the intended drawing.
+ */
+const ATTRIBUTES: Attribute[] = [
+  {
+    key: "era",
+    type: "category",
+    label: "When",
+    levels: [
+      { value: "today", label: "Today", help: "Where condors live now, as mapped by NPS in 2018." },
+      { value: "early 1800s", label: "Early 1800s", help: "Where condors ranged in the early 1800s, a rough reconstruction." },
+    ],
+    encode: "color",
+    primary: true,
+  },
+  {
+    key: "kind",
+    type: "category",
+    label: "Range",
+    levels: [
+      { value: "current", label: "Current range" },
+      { value: "experimental", label: "Experimental release area" },
+      { value: "historic", label: "Historic range" },
+    ],
+  },
+];
+
+const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "California condor range",
+  field: "era",
+  items: [
+    { label: "Today", value: "today", color: SAGE, symbol: "polygon", help: "Filled: where condors live now (NPS, 2018)." },
+    { label: "Early 1800s", value: "early 1800s", color: DARK_GREY, symbol: "line", help: "Outline only: the early-1800s range." },
+  ],
+  note: `${VINTAGE}.`,
 };
 
 const condorRange = defineLayer({
@@ -82,6 +148,7 @@ const condorRange = defineLayer({
     "Use it for 'where do condors live', 'can I see a condor here' or 'how much has the condor's range shrunk'. Compare it with species or gbif-occurrences for real sightings. " +
     "Caveats: these are broad range outlines, not nesting sites or flight paths, and a condor can wander far outside them; being inside the outline does not mean condors are likely to be seen. " +
     "The historic outline is a rough reconstruction (the Pacific coast from British Columbia to Baja California and inland to the Rockies). " +
+    "The range is as mapped by NPS in 2018; northern California releases since 2022 (Redwood National Park and the Yurok Tribe) are not in it. " +
     "Western North America only; elsewhere it returns nothing. Works at any size of region (over 20 million km² it adds a total), so no need to zoom in first.",
   coverage: { bbox: EXTENT },
   surface: "land",
@@ -90,8 +157,13 @@ const condorRange = defineLayer({
   maxAreaKm2: 20_000_000,
   wide: { orderBy: "area", limit: WIDE_LIMIT },
   input: z.object({}),
-  style: { geometry: "polygon", color: layerColor("condor-range"), fillOpacity: 0.25 },
+  style: { geometry: "polygon", color: layerColor("condor-range"), fillOpacity: 0.25, encode: { color: "era" } },
   card: CARD,
+  attributes: ATTRIBUTES,
+  time: { shape: "none" },
+  legend: LEGEND,
+  labels: { field: "heading", max: 4 },
+  display: { units: "us" },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {
@@ -123,9 +195,10 @@ const condorRange = defineLayer({
     ]);
     if (!current.ok && !historic.ok) return { error: current.error, hint: "upstream" };
 
+    // The early-1800s outline first, so the map draws today's ranges over it (later features draw on top).
     const features = [
-      ...(current.ok ? normalizeRange(current.fc, false) : []),
       ...(historic.ok ? normalizeRange(historic.fc, true) : []),
+      ...(current.ok ? normalizeRange(current.fc, false) : []),
     ];
     const missing = !current.ok ? "current range" : !historic.ok ? "historic range" : undefined;
     const total = current.ok && historic.ok && current.total !== undefined && historic.total !== undefined ? current.total + historic.total : undefined;
@@ -134,7 +207,7 @@ const condorRange = defineLayer({
       data: { type: "FeatureCollection", features },
       citation,
       ...(total !== undefined && { total }),
-      ...(missing !== undefined ? { coverageNote: `The ${missing} could not be loaded, so only the other is shown` } : {}),
+      coverageNote: missing !== undefined ? `The ${missing} could not be loaded, so only the other is shown; ${VINTAGE}` : VINTAGE,
     };
   },
 });

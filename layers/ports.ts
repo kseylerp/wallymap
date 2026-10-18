@@ -18,7 +18,18 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
+import {
+  defineLayer,
+  type Attribute,
+  type BBox,
+  type LayerError,
+  type LayerResult,
+  type CardSpec,
+  type FieldHelp,
+  type LegendSpec,
+  type MeasurePreset,
+} from "./types";
+import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -128,6 +139,45 @@ const HELP: Record<string, FieldHelp> = {
   kind: { text: "Coastal ports are on the sea coasts, internal ports on rivers and inland waterways, Great Lakes ports on the Great Lakes." },
 };
 
+/** The year of the tonnage. Checked 2026-10-18: the Corps' Principal Ports service (edited July 2026) still holds calendar 2023. */
+export const DATA_YEAR = "2023";
+
+const PORT_TYPES = [
+  { value: "Coastal", label: "Coastal", help: "On a sea coast or a coastal bay." },
+  { value: "Internal", label: "Inland (rivers and waterways)", help: "On a river or inland waterway, such as the Mississippi and Ohio." },
+  { value: "Great Lakes", label: "Great Lakes", help: "On one of the Great Lakes." },
+];
+
+/** Tonnage classes for the size key and the "Rank by" presets. */
+const TON_CLASSES: MeasurePreset[] = [
+  { label: "Under 10 million short tons", max: 9_999_999 },
+  { label: "10 to 50 million short tons", min: 10_000_000, max: 49_999_999 },
+  { label: "50 to 100 million short tons", min: 50_000_000, max: 99_999_999 },
+  { label: "100 million short tons and up", min: 100_000_000 },
+];
+
+const ATTRIBUTES: Attribute[] = [
+  { key: "kind", type: "category", label: "Port type", levels: PORT_TYPES, primary: true },
+  { key: "tons", type: "measure", label: `Cargo in ${DATA_YEAR}`, unit: "short tons", encode: "size", presets: TON_CLASSES },
+  nameAttribute(),
+];
+
+/** Size is tonnage (the question is "which is busiest"); the year is stated because the data is not current. */
+const LEGEND: LegendSpec = {
+  kind: "size",
+  title: `Cargo in ${DATA_YEAR}`,
+  field: "tons",
+  unit: "short tons",
+  stops: [
+    { label: "1 million", value: 1_000_000 },
+    { label: "10 million", value: 10_000_000 },
+    { label: "50 million", value: 50_000_000 },
+    { label: "100 million", value: 100_000_000 },
+    { label: "300 million", value: 300_000_000 },
+  ],
+  note: `Total cargo by weight in calendar year ${DATA_YEAR}, the newest year the Army Corps of Engineers has published.`,
+};
+
 /** The port card: 2023 cargo under its own name, its rank, and the split by direction. */
 const CARD: CardSpec = {
   measure: { key: "v", label: "Cargo in 2023", unit: "short tons" },
@@ -160,9 +210,14 @@ const ports = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
-  style: { geometry: "point", color: layerColor("ports"), unit: "short tons", extrude: "v" },
-  fieldHelp: HELP,
+  style: { geometry: "point", color: layerColor("ports"), unit: "short tons", extrude: "v", encode: { size: "tons" } },
+  fieldHelp: { ...HELP, tons: HELP.v },
   card: CARD,
+  attributes: ATTRIBUTES,
+  // One annual figure per port: say the year, no scrubber.
+  time: { shape: "single", dates: [DATA_YEAR] },
+  legend: LEGEND,
+  labels: { field: "name", max: 5, rankBy: "tons" },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {
@@ -201,7 +256,12 @@ const ports = defineLayer({
       return { error: "BTS ports service did not return the expected list of ports", hint: "upstream" };
     }
 
-    return { kind: "geojson", data: normalizePorts(body), citation };
+    return {
+      kind: "geojson",
+      data: normalizePorts(body),
+      citation,
+      coverageNote: `Cargo figures are for calendar year ${DATA_YEAR}, the newest the Army Corps of Engineers has published`,
+    };
   },
 });
 

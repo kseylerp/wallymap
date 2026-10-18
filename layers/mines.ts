@@ -11,8 +11,12 @@
  *     ftr_name, topo_name and topo_date (the USGS topographic map the symbol was digitised from), state, county.
  * Both services put the "capped" flag under `properties` (see layers/_shared/arcgis.ts).
  * Density: Moab box -109.8,38.4,-109.4,38.7 held 169 MRDS records (128 mention uranium) and 1,526 USMIN symbols in -109.7,38.4,-109.5,38.6.
- * Output: MRDS points: kind = main commodity (gold, uranium, ...), status (dev_stat), commodities, grade, id, url, source "MRDS".
- *   USMIN points: kind = feature type, name, topoName, topoYear, state, county, source "USMIN". No v or t.
+ * Output: MRDS points: commodity and kind = main commodity in plain words (gold, uranium, sand and gravel; every code spelled out),
+ *   status (dev_stat as MRDS writes it; the card says it in plain words), commodities, grade, id, url, source "MRDS"; a site name ending in codes ("Lisbon Valley U,V")
+ *   has them spelled out. USMIN points: featureType and kind = feature type, name, topoName, topoYear, state, county, source "USMIN".
+ *   No v or t. Points are colored by status (style.encode.color) and ordered producers first for the map's five labels.
+ * Newer source checked 2026-10-18: MSHA's Mines data set (status active or abandoned, commodity) is free but only a 7.3 MB weekly zip
+ *   (arlweb.msha.gov/OpenGovernmentData/DataSets/Mines.zip), with no per-box service, so it is not used; the vintage is stated instead.
  * The `commodity` input filters MRDS only (USMIN symbols carry no commodity) with `code_list LIKE '% U %' OR ...` (both spellings of the
  *   list edges), which the server accepts.
  * Smoke check 2026-10-10 (live, through runLayer): Moab box -109.8,38.4,-109.4,38.7 returned 296 points in 0.6 s (169 MRDS, 127 USMIN; first MRDS "Discovery",
@@ -30,14 +34,14 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp, type QueryContext } from "./types";
+import { bboxAreaKm2, defineLayer, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp, type LegendSpec, type QueryContext } from "./types";
 import { haversineKm } from "./_shared/geo";
 import { nameAttribute } from "./_shared/bands";
 import { displayName } from "./_shared/names";
 import { registerLayer } from "./registry";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
-import { layerColor } from "@/lib/render/palette";
+import { OFF_WHITE, layerColor } from "@/lib/render/palette";
 
 export const MRDS_URL = "https://energy.usgs.gov/arcgis/rest/services/Hosted/Mineral_Resource_Data_System/FeatureServer/0";
 export const USMIN_URL =
@@ -60,53 +64,181 @@ const MAX_RECORDS = 2000;
 export const MRDS_NAMED = "site_name > ' '";
 export const USMIN_NAMED = "ftr_name > ' '";
 
-/** MRDS commodity codes to plain names (the common ones; others fall back to the code). */
+/**
+ * MRDS commodity codes to plain names. Every code the US records use (tallied 2026-10-18: 189 codes, SDG sand and gravel
+ * the third most common); a subtype the table does not name ("PGE_XX") reads as its base ("platinum-group metals"),
+ * and only a code unknown at both levels stays as it is.
+ */
 export const COMMODITY_NAMES: Record<string, string> = {
+  ABR: "abrasives",
+  ABR_C: "corundum",
+  ABR_E: "emery",
+  ABR_G: "garnet",
   AG: "silver",
   AL: "aluminum",
+  AND: "andalusite",
   AS: "arsenic",
+  ASB: "asbestos",
+  ASH: "volcanic ash",
   AU: "gold",
   B: "boron",
   BA: "barite",
   BE: "beryllium",
   BI: "bismuth",
-  BR: "brine",
+  BR: "bromine",
   CA: "calcium",
   CD: "cadmium",
+  CEM: "cement rock",
+  CL: "chlorine",
+  CLY: "clay",
+  CLY_BC: "ball clay",
+  CLY_BK: "brick clay",
+  CLY_BN: "bentonite",
+  CLY_C: "common clay",
+  CLY_FE: "fuller's earth",
+  CLY_FR: "fire clay",
+  CLY_H: "halloysite",
+  CLY_K: "kaolin",
   CO: "cobalt",
+  CO2: "carbon dioxide",
   COA: "coal",
+  COA_A: "anthracite",
+  COA_B: "bituminous coal",
+  COA_L: "lignite",
+  COA_S: "subbituminous coal",
   CR: "chromium",
+  CS: "cesium",
   CU: "copper",
+  DIT: "diatomite",
+  DOL: "dolomite",
   F: "fluorite",
   FE: "iron",
+  FE_PYR: "pyrite",
+  FLD: "feldspar",
   GA: "gallium",
+  GAS: "natural gas",
+  GE: "germanium",
+  GEM: "gemstones",
+  GEM_D: "diamond",
+  GEO: "geothermal",
+  GRF: "graphite",
+  GRT: "granite",
   GYP: "gypsum",
+  H2O: "water",
+  HE: "helium",
+  HF: "hafnium",
   HG: "mercury",
+  I: "iodine",
+  IN: "indium",
   K: "potash",
+  KYN: "kyanite",
   LI: "lithium",
+  LST: "limestone",
+  LWA: "lightweight aggregate",
+  MBL: "marble",
   MG: "magnesium",
+  MIC: "mica",
   MN: "manganese",
   MO: "molybdenum",
+  MPG: "mineral pigments",
+  N: "nitrates",
+  NA: "sodium",
+  NA_H: "salt",
+  NA_S: "sodium sulfate",
+  NA_SC: "soda ash",
   NB: "niobium",
   NI: "nickel",
+  OIL: "oil",
+  OIL_SA: "oil sands",
+  OIL_SH: "oil shale",
+  OLV: "olivine",
   P: "phosphate",
   PB: "lead",
+  PEA: "peat",
+  PER: "perlite",
+  PGE: "platinum-group metals",
+  PGE_IR: "iridium",
+  PGE_OS: "osmium",
+  PGE_PD: "palladium",
+  PGE_PT: "platinum",
+  PGE_RH: "rhodium",
+  PGE_RU: "ruthenium",
+  PPY: "pyrophyllite",
+  PUM: "pumice",
+  PYR: "pyrite",
+  QTZ: "quartz",
+  RA: "radium",
+  RB: "rubidium",
+  RE: "rhenium",
   REE: "rare earths",
   S: "sulfur",
   SB: "antimony",
+  SC: "scandium",
+  SD: "sand",
+  SDG: "sand and gravel",
+  SDG_FRAC: "frac sand",
   SE: "selenium",
   SIL: "silica",
+  SLA: "slate",
   SN: "tin",
   SR: "strontium",
+  STA: "staurolite",
+  STN: "stone",
+  STN_C: "crushed stone",
+  STN_D: "dimension stone",
+  STN_F: "flagstone",
+  TA: "tantalum",
   TE: "tellurium",
   TH: "thorium",
   TI: "titanium",
+  TL: "thallium",
+  TLC: "talc",
+  TRA: "travertine",
   U: "uranium",
   V: "vanadium",
+  VOL: "volcanic materials",
+  VRM: "vermiculite",
   W: "tungsten",
+  WOL: "wollastonite",
+  ZEO: "zeolites",
   ZN: "zinc",
   ZR: "zirconium",
 };
+
+/** One MRDS code in plain words: "SDG" -> "sand and gravel", "STN_C_S" -> "crushed stone", unknown -> lower case. */
+export function commodityName(code: string): string {
+  const parts = code.toUpperCase().split("_");
+  for (let n = parts.length; n > 0; n -= 1) {
+    const name = COMMODITY_NAMES[parts.slice(0, n).join("_")];
+    if (name !== undefined) return name;
+  }
+  return code.toLowerCase();
+}
+
+/**
+ * A site name ending in MRDS commodity codes ("Lisbon Valley U,V", "Mi Vida U-V") with the codes spelled out ("Lisbon
+ * Valley (uranium, vanadium)"); names whose last word is not a list of two or more known codes are left alone.
+ */
+export function spellCodesInName(name: string): string {
+  const m = /^(.*\S)\s+([A-Za-z]{1,3}(?:\s*[,/-]\s*[A-Za-z]{1,3})+)$/.exec(name.trim());
+  if (!m) return name;
+  const codes = m[2].split(/\s*[,/-]\s*/).map((c) => c.toUpperCase());
+  if (!codes.every((c) => COMMODITY_NAMES[c] !== undefined)) return name;
+  return `${m[1]} (${codes.map((c) => COMMODITY_NAMES[c]).join(", ")})`;
+}
+
+/** MRDS development status in plain words for the card ("Past Producer" -> "Past producer", "Plant" -> "Processing plant"); the data keeps the MRDS value. */
+export const STATUS_WORDS: Record<string, string> = {
+  Producer: "Producer",
+  "Past Producer": "Past producer",
+  Prospect: "Prospect",
+  Occurrence: "Occurrence",
+  Plant: "Processing plant",
+  Unknown: "Unknown",
+};
+
+/** Feature order for the map's labels: producers first, then past producers, then the rest; a named site before a generic one. */
+const STATUS_RANK: Record<string, number> = { Producer: 0, "Past Producer": 1, Plant: 2, Prospect: 3, Occurrence: 4, Unknown: 5 };
 
 /** Names the `commodity` input accepts, mapped to their MRDS code. */
 export const COMMODITY_CODES = {
@@ -156,27 +288,36 @@ function isPoint(geometry: unknown): geometry is Point {
   return typeof geometry === "object" && geometry !== null && "type" in geometry && geometry.type === "Point";
 }
 
-/** Commodity names for a code list: " U V" -> ["uranium", "vanadium"]; unknown codes stay as they are. */
+/** Commodity names for a code list: " U V" -> ["uranium", "vanadium"], " SDG" -> ["sand and gravel"]; unknown codes stay as they are. */
 export function commoditiesOf(codeList: string): string[] {
   return codeList
     .split(/\s+/)
     .filter((c) => c !== "")
-    .map((c) => COMMODITY_NAMES[c] ?? c.toLowerCase());
+    .map(commodityName);
 }
 
-/** MRDS rows to points: kind is the main commodity. */
+/**
+ * MRDS rows to points: `commodity` is the main commodity in plain words (also `kind`, which the duplicate check reads),
+ * `status` the development status as last recorded (about 2011).
+ */
 export function normalizeMrds(fc: FeatureCollection): Feature<Point>[] {
   const out: Feature<Point>[] = [];
   for (const f of fc.features) {
     if (!isPoint(f.geometry)) continue;
     const p = f.properties ?? {};
     const commodities = commoditiesOf(str(p.code_list) ?? "");
+    // MRDS writes a missing name as "Unknown" or "Unnamed ..." ("Unnamed Prospect"): the card says so in one way.
+    const site = str(p.site_name);
+    const unnamed = site === undefined || /^(unknown|unnamed\b.*)$/i.test(site);
     const properties: Record<string, string> = {
-      name: str(p.site_name) ?? "Unnamed site",
+      name: unnamed ? "Unnamed site" : spellCodesInName(site),
       kind: commodities[0] ?? "unknown",
       source: "MRDS",
     };
-    if (commodities.length > 0) properties.commodities = commodities.join(", ");
+    if (commodities.length > 0) {
+      properties.commodity = commodities[0];
+      properties.commodities = commodities.join(", ");
+    }
     const status = str(p.dev_stat);
     if (status !== undefined) properties.status = status;
     const grade = str(p.grade);
@@ -191,7 +332,7 @@ export function normalizeMrds(fc: FeatureCollection): Feature<Point>[] {
   return out;
 }
 
-/** USMIN rows to points: kind is the feature type (Mine, Adit, Quarry, ...). */
+/** USMIN rows to points: `featureType` (also `kind`) is the map symbol's type (Mine, Adit, Quarry, ...); no status or commodity. */
 export function normalizeUsmin(fc: FeatureCollection): Feature<Point>[] {
   const out: Feature<Point>[] = [];
   for (const f of fc.features) {
@@ -201,6 +342,7 @@ export function normalizeUsmin(fc: FeatureCollection): Feature<Point>[] {
     const properties: Record<string, string | number> = {
       name: str(p.ftr_name) ?? type,
       kind: type,
+      featureType: type,
       source: "USMIN",
     };
     const topo = str(p.topo_name);
@@ -265,6 +407,22 @@ export function dedupeMines(features: Feature<Point>[]): Feature<Point>[] {
   return out;
 }
 
+/**
+ * The features in label order (the map names the first few, `labels`): producers, past producers, plants, prospects,
+ * occurrences, unknown, then USMIN symbols; within each, named sites before generic ones ("Unnamed site", "Adit").
+ * The sort is stable, so the source order holds inside each group.
+ */
+export function orderForLabels(features: Feature<Point>[]): Feature<Point>[] {
+  const rank = (f: Feature<Point>) => {
+    const p = f.properties ?? {};
+    const status = STATUS_RANK[String(p.status)] ?? 6;
+    const key = nameKey(p.name);
+    const generic = key === "" || key === "unnamed site" || GENERIC_MINE_NAMES.has(key) || key === nameKey(p.kind);
+    return status * 2 + (generic ? 1 : 0);
+  };
+  return features.map((f, i) => ({ f, i, r: rank(f) })).sort((a, b) => a.r - b.r || a.i - b.i).map((x) => x.f);
+}
+
 /** Every MRDS deposit in a statewide box, paged in object-id order up to STATEWIDE_LIMIT: the records and how many match. */
 async function mrdsStatewide(ctx: QueryContext, where: string | undefined, suffix: string): Promise<{ result: ArcgisResult; count: number | null }> {
   const count = await arcgisCount(ctx, MRDS_URL, { where, bbox: ctx.bbox, ttlSeconds: TTL_SECONDS, cacheSuffix: suffix });
@@ -289,25 +447,74 @@ async function mrdsStatewide(ctx: QueryContext, where: string | undefined, suffi
   return { result: { ok: true, fc: { type: "FeatureCollection", features }, truncated: count !== null && count > features.length }, count };
 }
 
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** The common main commodities as chips, most common first (others still get a chip of their own from the data). */
+const COMMODITY_CHIPS = [
+  "gold", "sand and gravel", "copper", "iron", "crushed stone", "lead", "uranium", "silver", "manganese", "clay", "tungsten", "chromium",
+  "stone", "zinc", "mica", "barite", "limestone", "mercury", "aluminum", "fluorite", "phosphate", "vanadium", "molybdenum", "coal", "gypsum",
+  "lithium", "potash", "rare earths",
+];
+
+/**
+ * Status chips colored on the sage → pink → purple ramp in this order (a prospect is sage, a producer purple). Processing
+ * plants, unknown status and USMIN symbols (which have none) draw off-white and keep chips of their own.
+ */
+const STATUS_LEVELS = [
+  { value: "Prospect", label: "Prospect or occurrence", help: "Explored or reported, never recorded as producing." },
+  { value: "Occurrence", label: "Prospect or occurrence", help: "Explored or reported, never recorded as producing." },
+  { value: "Past Producer", label: "Past producer", help: "Produced before the record was last updated, closed by then." },
+  { value: "Producer", label: "Producer", help: "Producing when the record was last updated, about 2011; it may be closed now." },
+];
+
 const ATTRIBUTES: Attribute[] = [
   {
-    key: "kind",
+    key: "status",
     type: "category",
-    label: "Commodity",
-    levels: Object.keys(COMMODITY_CODES).map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })),
+    label: "Status (about 2011)",
+    levels: STATUS_LEVELS,
+    encode: "color",
+    primary: true,
   },
   {
-    key: "status",
-    type: "ordinal",
-    label: "Status",
-    scale: "USGS MRDS development status (occurrence to producer)",
-    levels: ["Occurrence", "Prospect", "Past Producer", "Producer", "Plant", "Unknown"].map((value) => ({ value, label: value })),
+    key: "commodity",
+    type: "category",
+    label: "Commodity",
+    levels: COMMODITY_CHIPS.map((value) => ({ value, label: capital(value) })),
   },
-  { key: "source", type: "category", label: "Record" },
+  { key: "featureType", type: "category", label: "Feature type" },
+  {
+    key: "source",
+    type: "category",
+    label: "Record",
+    levels: [
+      { value: "MRDS", label: "Deposit records (MRDS, about 2011)" },
+      { value: "USMIN", label: "Old topographic map symbols (USMIN)" },
+    ],
+  },
   nameAttribute(),
 ];
 
 const MRDS_URL_PAGE = "https://mrdata.usgs.gov/mrds/";
+
+/** Card wording for the record each point comes from: its vintage, on every card. */
+const RECORD_WORDS: Record<string, string> = {
+  MRDS: "USGS Mineral Resources Data System, a historic record last updated about 2011",
+  USMIN: "USGS mine symbol digitized from an old topographic map (see the map year)",
+};
+
+const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Status when last recorded (about 2011)",
+  field: "status",
+  items: [
+    { label: "Producer", value: "Producer", help: STATUS_LEVELS[3].help },
+    { label: "Past producer", value: "Past Producer", help: STATUS_LEVELS[2].help },
+    { label: "Prospect or occurrence", value: "Prospect", help: STATUS_LEVELS[0].help },
+    { label: "Plant, unknown, or a map symbol with no status", color: OFF_WHITE, help: "Processing plants, unknown status and USMIN mine symbols from old topographic maps." },
+  ],
+  note: "The deposit records (USGS MRDS) stopped updating about 2011 and the mine symbols come from USGS topographic maps of 1886 to 2006 (most around 1970), so a producer then may be closed now and new mines are missing.",
+};
 
 const HELP: Record<string, FieldHelp> = {
   kind: {
@@ -315,11 +522,17 @@ const HELP: Record<string, FieldHelp> = {
       "For MRDS sites the main commodity (the first one listed for the deposit); for USMIN symbols the feature type drawn on the old topographic " +
       "map.",
   },
+  commodity: {
+    text: "The deposit's main commodity, the first one its MRDS record lists, with the USGS code spelled out (SDG is sand and gravel).",
+    source: "USGS Mineral Resources Data System",
+    url: MRDS_URL_PAGE,
+  },
+  featureType: { text: "What the USGS mine symbol on the old topographic map shows: a mine, adit (tunnel), shaft, prospect pit, quarry, gravel pit and so on." },
   status: {
     text:
       "The development status recorded in the USGS Mineral Resources Data System when the record was last updated (systematic updates stopped in " +
       "2011), so it does not say whether a mine operates today.",
-    scale: "Occurrence, Prospect, Past Producer, Producer, Plant, Unknown",
+    scale: "Occurrence, Prospect, Past Producer, Producer, Plant (a processing plant), Unknown",
     source: "USGS Mineral Resources Data System",
     url: MRDS_URL_PAGE,
   },
@@ -331,28 +544,36 @@ const HELP: Record<string, FieldHelp> = {
   },
   topoName: { text: "The USGS topographic map the mine symbol was digitised from." },
   topoYear: { text: "The date of that topographic map: the symbol shows what was there then." },
-  source: { text: "MRDS: the USGS Mineral Resources Data System (deposits); USMIN: USGS mine symbols digitised from topographic maps." },
+  source: {
+    text:
+      "MRDS: the USGS Mineral Resources Data System, deposit records whose systematic updates stopped about 2011; USMIN: USGS mine symbols " +
+      "digitized from topographic maps, each as old as its map.",
+  },
 };
 
 const CARD: CardSpec = {
   facts: [
-    { key: "status", label: "Status" },
+    { key: "status", label: "Status when last recorded", values: STATUS_WORDS },
     { key: "commodities", label: "Commodities", format: "list" },
+    { key: "featureType", label: "Feature type" },
     { key: "topoName", label: "Topographic map" },
     { key: "topoYear", label: "Map year" },
     { key: "county", label: "County" },
-    { key: "source", label: "Record" },
+    { key: "source", label: "Record", values: RECORD_WORDS },
   ],
   links: [{ key: "url", label: "MRDS record" }],
-  // The deposit id is in the MRDS record link.
-  hidden: ["id"],
+  // The deposit id is in the MRDS record link; kind repeats the commodity or the feature type; the main commodity leads the list.
+  hidden: ["id", "kind", "commodity"],
 };
 
 const mines = defineLayer({
   id: "mines",
   title: "Mines and mineral deposits",
   description:
-    "Mines, prospects, quarries and mineral deposits in the US from two USGS records: MRDS (deposits and commodities) and USMIN (mine, shaft and tunnel symbols from old topographic maps). Each point has name, kind (MRDS: main commodity such as gold or uranium; USMIN: feature type such as Mine, Adit, Quarry) and source; MRDS adds status (Producer, Past Producer, Prospect, Occurrence), commodities and url, USMIN topoName and topoYear. commodity filters MRDS; source picks one record. MRDS stopped updating around 2011, so most sites are closed and new mines missing, and a point does not mean a mine is open or safe. At most 2,000 per record; over 15,000 km², 2,000 named sites and the total; over 60,000 km² (a state, to 1,200,000 km²), every MRDS deposit up to 30,000 and no USMIN symbols, for where most mines are.",
+    "Mines, prospects, quarries and mineral deposits in the US from two USGS records, both old: MRDS (deposit records whose updates stopped about 2011) and USMIN (mine, shaft and tunnel symbols digitized from USGS topographic maps of 1886 to 2006, most around 1970). " +
+    "Each point has name, source (MRDS or USMIN) and kind (MRDS: main commodity; USMIN: feature type). MRDS points add commodity (the main one in plain words, such as gold, uranium or sand and gravel), commodities (all of them), status (Producer, Past Producer, Prospect, Occurrence, Plant (a processing plant) or Unknown, as last recorded about 2011) and url; USMIN points add featureType (Mine, Adit, Prospect Pit, Quarry...), topoName and topoYear. " +
+    "The map colors points by status: producer purple, past producer pink, prospect or occurrence sage, the rest off-white. A producer in 2011 may be closed now, new mines are missing, and a point does not mean a mine is open or safe. " +
+    "commodity filters MRDS; source picks one record. At most 2,000 per record; over 15,000 km², 2,000 named sites and the total; over 60,000 km² (a state, to 1,200,000 km²), every MRDS deposit up to 30,000 and no USMIN symbols, for where most mines are.",
   coverage: "us",
   surface: "land",
   license: "Public domain (USGS MRDS and USMIN)",
@@ -370,10 +591,16 @@ const mines = defineLayer({
       .default("both")
       .describe("Which record: 'mrds' (deposits with commodities), 'usmin' (mine symbols from topographic maps) or 'both' (default)."),
   }),
-  style: { geometry: "point", color: layerColor("mines"), cluster: true },
+  style: { geometry: "point", color: layerColor("mines"), cluster: true, encode: { color: "status" } },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // Old records: the question is where and what, not when (the vintage is on every card and in the legend).
+  time: { shape: "none" },
+  legend: LEGEND,
+  // No measure to rank by: the features come producers first, named sites before generic ones (orderForLabels).
+  labels: { field: "name", max: 5, minZoom: 10 },
+  display: { units: "us" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {
@@ -403,7 +630,7 @@ const mines = defineLayer({
       if (!result.ok) return { error: `Mine records unavailable: MRDS (${result.error})`, hint: "upstream" };
       const records = normalizeMrds(result.fc);
       // Lighter points for tens of thousands of sites: coordinates to about 10 m, and no record link (the id stays).
-      const features = dedupeMines(records).map((f) => {
+      const features = orderForLabels(dedupeMines(records)).map((f) => {
         const properties = { ...f.properties };
         delete properties.url;
         const [lon, lat] = f.geometry.coordinates;
@@ -491,7 +718,7 @@ const mines = defineLayer({
 
     return {
       kind: "geojson",
-      data: { type: "FeatureCollection", features: dedupeMines(features) },
+      data: { type: "FeatureCollection", features: orderForLabels(dedupeMines(features)) },
       citation,
       ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),

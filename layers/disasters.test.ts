@@ -1,10 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { parseCounties } from "./_shared/counties";
-import layer, { femaCountyFeatures, femaKind, femaUrl, gdacsFeatures, gdacsUrl, parseFema } from "./disasters";
+import { labelsOf, legendOf, timeShapeOf } from "./contract";
+import layer, {
+  MAX_FOOTPRINTS,
+  femaCountyFeatures,
+  femaKind,
+  femaUrl,
+  footprintOf,
+  gdacsFeatures,
+  gdacsUrl,
+  parseFema,
+  severityOf,
+  simplifyRing,
+  titleOf,
+  withFootprints,
+} from "./disasters";
 import gdacsFixture from "./__fixtures__/gdacs-events.sample.json";
 import femaFixture from "./__fixtures__/fema-declarations.tx.json";
 import countiesFixture from "./__fixtures__/counties.houston.json";
+import footprintFixture from "./__fixtures__/disasters.gdacs-footprint-tc.json";
 
 /**
  * Recorded 2026-10-10: GDACS page 1 for FL, TC, DR (all levels) and WF (orange, red) over 90 days, trimmed to three US
@@ -28,6 +43,7 @@ function routed() {
   return vi.fn(async (url: string) => {
     if (url.includes("USA_Counties")) return json(countiesFixture);
     if (url.includes("fema.gov")) return json(femaFixture);
+    if (url.includes("getgeometry")) return url.includes("eventtype=TC") ? json(footprintFixture) : new Response("no", { status: 404 });
     const u = new URL(url);
     if (u.searchParams.get("pagenumber") !== "1") return new Response(null, { status: 204 });
     const code = u.searchParams.get("eventlist");
@@ -89,9 +105,9 @@ describe("FEMA", () => {
       v: 2,
       kind: "cyclone",
       t: "2024-07-09T00:00:00.000Z",
-      latest: "HURRICANE BERYL (DR-4798-TX)",
+      latest: "Hurricane Beryl (DR-4798-TX)",
     });
-    expect(String(harris?.properties?.declarations)).toMatch(/^2024-07-09 Hurricane: HURRICANE BERYL/);
+    expect(String(harris?.properties?.declarations)).toMatch(/^2024-07-09 Hurricane Beryl/);
     expect(f.every((x) => counties.some((c) => c.fips === x.properties?.fips))).toBe(true);
     expect(f.length).toBeGreaterThan(5);
   });
@@ -105,7 +121,7 @@ describe("disasters layer", () => {
     expect(r.data.features.filter((f) => f.properties?.source === "FEMA").length).toBeGreaterThan(5);
     expect(r.coverageNote).toBeUndefined();
     const c = calls(stub);
-    const gdacs = c.filter(([u]) => u.includes("gdacs"));
+    const gdacs = c.filter(([u]) => u.includes("geteventlist"));
     expect(gdacs.map(([u]) => new URL(u).searchParams.get("eventlist")).sort()).toEqual(["DR", "FL", "TC", "WF"]);
     expect(gdacs.find(([u]) => u.includes("eventlist=WF"))?.[0]).toContain("alertlevel=orange;red");
     expect(gdacs[0][1]).toMatchObject({ cacheKey: expect.stringMatching(/^disasters:gdacs:[A-Z]{2}:2026-07-12:2026-10-10:1$/), ttlSeconds: 3600 });
@@ -158,5 +174,89 @@ describe("disasters layer", () => {
   it("describes kinds, sources, inputs and the user's words", () => {
     for (const word of ["GDACS", "FEMA", "cyclone", "alertLevel", "days", "years", "disasters", "hurricane"]) expect(layer.description).toContain(word);
     expect(layer.input.parse({})).toEqual({ days: 90, years: 5 });
+  });
+});
+
+/** The live GDACS footprint file of Hurricane SIMON-26 (recorded 2026-10-18), trimmed to its centroid and three areas. */
+describe("the most severe events drawn at their affected area", () => {
+  it("picks a cyclone's 60 km/h swath, simplified, and says what the area is", () => {
+    const area = footprintOf("cyclone", footprintFixture);
+    expect(area?.extent).toBe("Winds of 60 km/h (37 mph) or more along the track");
+    expect(area?.geometry.type).toMatch(/Polygon$/);
+    const coords = JSON.stringify(area?.geometry.coordinates);
+    // Simplified to about 1 km and rounded to 3 decimals: far fewer vertices than the 714 GDACS sends.
+    expect((coords.match(/\],\[/g) ?? []).length).toBeLessThan(400);
+    expect(footprintOf("flood", footprintFixture)).toBeNull();
+    expect(footprintOf("cyclone", { nope: 1 })).toBeNull();
+    expect(simplifyRing([[0, 0], [1, 0.0001], [2, 0], [2, 2], [0, 0]], 0.01)).toEqual([[0, 0], [2, 0], [2, 2], [0, 0]]);
+  });
+
+  it("draws red and orange events as areas first, at most eight, keeps a point when the footprint fails, and skips green floods", async () => {
+    const points = gdacsFeatures(gdacsFixture.features, [-180, -90, 180, 90]);
+    const stub = vi.fn(async (url: string) => (url.includes("eventtype=TC") ? json(footprintFixture) : new Response("no", { status: 500 })));
+    const { features, drawn } = await withFootprints(ctx(stub), points);
+    const asked = (stub.mock.calls as unknown as [string][]).map(([u]) => new URL(u).searchParams.get("eventtype"));
+    expect(asked.length).toBeLessThanOrEqual(MAX_FOOTPRINTS);
+    expect(asked).not.toContain("FL");
+    expect(features).toHaveLength(points.length);
+    const areas = features.filter((f) => f.geometry.type !== "Point");
+    expect(drawn).toBe(areas.length);
+    expect(areas.every((f) => f.properties?.kind === "cyclone" && String(f.properties?.extent).startsWith("Winds of 60 km/h"))).toBe(true);
+    for (const name of ["Tropical Cyclone SIMON-26", "Tropical Cyclone ISAIAS-26"]) expect(areas.some((f) => f.properties?.name === name)).toBe(true);
+  });
+
+  it("draws the Gulf view's cyclones as swaths through the layer", async () => {
+    const r = await layer.query(ctx(routed(), GULF), layer.input.parse({}));
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const gdacs = r.data.features.filter((f) => f.properties?.source === "GDACS");
+    expect(gdacs.some((f) => f.geometry.type !== "Point")).toBe(true);
+  });
+});
+
+describe("plain words and the layer contract", () => {
+  it("turns GDACS severity into peak wind and the latest class, crop stress area and burned area; floods get nothing", () => {
+    expect(severityOf("cyclone", { severity: 249.9984, severitytext: "Tropical Depression (maximum wind speed of 250 km/h)", severityunit: "km/h" })).toEqual({
+      peakWindKmh: 250,
+      stage: "Tropical depression",
+    });
+    expect(severityOf("cyclone", { severity: 259, severitytext: "Hurricane/Typhoon > 74 mph (maximum wind speed of 259 km/h)", severityunit: "km/h" }).stage).toBe(
+      "Hurricane or typhoon",
+    );
+    expect(severityOf("drought", { severity: 1759971, severitytext: "Medium impact for agricultural drought in 1759971 km2", severityunit: "km2" })).toEqual({
+      affectedKm2: 1759971,
+      impact: "Medium impact on crops",
+    });
+    expect(severityOf("wildfire", { severity: 18310, severitytext: "Orange impact for forestfire in 18310 ha", severityunit: "ha" })).toEqual({ burnedHa: 18310 });
+    expect(severityOf("flood", { severity: 0, severitytext: "Magnitude 0 ", severityunit: "" })).toEqual({});
+    const simon = gdacsFeatures(gdacsFixture.features, [-180, -90, 180, 90]).find((f) => f.properties?.name === "Tropical Cyclone SIMON-26");
+    expect(simon?.properties).toMatchObject({ peakWindKmh: 250, stage: "Hurricane or typhoon" });
+    expect(simon?.properties?.severity).toBeUndefined();
+  });
+
+  it("writes FEMA titles in title case and lists three declarations with a count of the earlier ones", () => {
+    expect(titleOf({ declarationTitle: "SEVERE STORMS AND FLOODING", incidentType: "Flood" })).toBe("Severe Storms and Flooding");
+    expect(titleOf({ declarationTitle: null, incidentType: "Hurricane" })).toBe("Hurricane");
+    const rows = Array.from({ length: 5 }, (_, i) => ({
+      disasterNumber: 4900 + i,
+      femaDeclarationString: `DR-${4900 + i}-TX`,
+      declarationType: "DR",
+      declarationDate: `202${i}-06-01T00:00:00.000Z`,
+      incidentType: "Flood",
+      declarationTitle: "FLOODING",
+      fipsStateCode: "48",
+      fipsCountyCode: "201",
+    }));
+    const [harris] = femaCountyFeatures(rows, [{ fips: "48201", name: "Harris County", stateAbbr: "TX", geometry: { type: "Point", coordinates: [-95.4, 29.8] } }]);
+    expect(harris.properties).toMatchObject({ v: 5, first: "2020-06-01", kinds: "flood 5" });
+    expect(harris.properties?.declarations).toBe("2024-06-01 Flooding; 2023-06-01 Flooding; 2022-06-01 Flooding; and 2 earlier");
+  });
+
+  it("declares no time panel, hatch density by declarations with a legend that names both sources, and labels the busiest counties", () => {
+    expect(timeShapeOf(layer)).toEqual({ shape: "none" });
+    expect(layer.style.encode).toEqual({ size: "v" });
+    expect(layer.attributes?.find((a) => a.key === "v")).toMatchObject({ type: "measure", encode: "size" });
+    expect(legendOf(layer)).toMatchObject({ kind: "size", field: "v", note: expect.stringMatching(/GDACS alerts \(green minor, orange moderate, red severe\)/) });
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 5, rankBy: "v" });
+    expect(layer.card?.facts?.some((f) => f.key === "severity")).toBe(false);
   });
 });

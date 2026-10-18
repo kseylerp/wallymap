@@ -29,6 +29,7 @@ import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError,
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { rankedSparql, wikimediaFetch } from "./_shared/wikimedia";
+import { nameAttribute } from "./_shared/bands";
 import { bodyHash } from "@/lib/fetch/cache";
 import { layerColor } from "@/lib/render/palette";
 
@@ -68,11 +69,11 @@ export function geosearchUrl(bbox: BBox, lang = "en"): string {
   );
 }
 
-/** extracts and thumbnails for up to 20 page ids. */
+/** extracts, thumbnails and Wikidata item ids for up to 20 page ids. */
 export function extractsUrl(pageIds: number[], lang = "en"): string {
   return (
-    `${apiBase(lang)}?action=query&prop=extracts|pageimages&pageids=${pageIds.join("|")}` +
-    `&exintro=1&explaintext=1&exsentences=2&exlimit=max&piprop=thumbnail&pithumbsize=320&pilimit=max&format=json`
+    `${apiBase(lang)}?action=query&prop=extracts|pageimages|pageprops&pageids=${pageIds.join("|")}` +
+    `&exintro=1&explaintext=1&exsentences=2&exlimit=max&piprop=thumbnail&pithumbsize=320&pilimit=max&ppprop=wikibase_item&format=json`
   );
 }
 
@@ -82,6 +83,29 @@ export function extractsByTitleUrl(titles: string[], lang = "en"): string {
     `${apiBase(lang)}?action=query&prop=extracts|pageimages&titles=${encodeURIComponent(titles.join("|"))}` +
     `&exintro=1&explaintext=1&exsentences=2&exlimit=max&piprop=thumbnail&pithumbsize=320&pilimit=max&format=json`
   );
+}
+
+/** SPARQL for how many Wikipedia language editions cover each of these Wikidata items (checked Q ids only). */
+export function sitelinksQuery(qids: string[]): string {
+  const values = qids.filter((q) => /^Q\d+$/.test(q)).map((q) => `wd:${q}`).join(" ");
+  return `SELECT ?item ?links WHERE { VALUES ?item { ${values} } ?item wikibase:sitelinks ?links . }`;
+}
+
+const sitelinksSchema = z.object({
+  results: z.object({ bindings: z.array(z.object({ item: z.object({ value: z.string() }), links: z.object({ value: z.string() }) })) }),
+});
+
+/** Language counts by Q id from a sitelinksQuery answer; null when the answer is malformed. */
+export function sitelinkCounts(json: unknown): Map<string, number> | null {
+  const parsed = sitelinksSchema.safeParse(json);
+  if (!parsed.success) return null;
+  const counts = new Map<string, number>();
+  for (const b of parsed.data.results.bindings) {
+    const qid = b.item.value.split("/").pop() ?? "";
+    const n = Number(b.links.value);
+    if (/^Q\d+$/.test(qid) && Number.isFinite(n)) counts.set(qid, n);
+  }
+  return counts;
 }
 
 /**
@@ -201,6 +225,7 @@ const extractPageSchema = z.object({
           title: z.string().optional(),
           extract: z.string().nullable().optional(),
           thumbnail: z.object({ source: z.string() }).optional(),
+          pageprops: z.object({ wikibase_item: z.string().optional() }).optional(),
         }),
       ),
     })
@@ -209,7 +234,7 @@ const extractPageSchema = z.object({
 });
 
 type Hit = { pageid: number; title: string; lat: number; lon: number };
-type Summary = { extract?: string; thumbnail?: string };
+type Summary = { extract?: string; thumbnail?: string; qid?: string };
 type Outcome<T> = { ok: true; value: T } | { ok: false; error: string };
 
 function isTimeout(err: unknown): boolean {
@@ -243,6 +268,22 @@ async function wikiJson(ctx: QueryContext, url: string, cacheKey: string | undef
     }
   } catch (err) {
     return { ok: false, error: isTimeout(err) ? `Wikipedia timed out after ${UPSTREAM_TIMEOUT_MS / 1000} seconds` : "Wikipedia returned no response" };
+  }
+}
+
+/** How many Wikipedia language editions cover each Q id (one Wikidata request); null when Wikidata did not answer. */
+async function languageCounts(ctx: QueryContext, qids: string[], cacheKey: string): Promise<Map<string, number> | null> {
+  try {
+    const res = await wikimediaFetch(ctx.fetch, SPARQL_ENDPOINT, {
+      method: "POST",
+      headers: { accept: "application/sparql-results+json", "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ query: sitelinksQuery(qids) }).toString(),
+      cacheKey,
+    });
+    if (!res.ok) return null;
+    return sitelinkCounts(await res.json());
+  } catch {
+    return null;
   }
 }
 
@@ -283,10 +324,8 @@ const HELP: Record<string, FieldHelp> = {
 };
 
 const CARD: CardSpec = {
-  facts: [
-    { key: "extract", label: "From the article" },
-    { key: "languages", label: "Wikipedia languages", format: "int" },
-  ],
+  measure: { key: "languages", label: "Wikipedia languages" },
+  facts: [{ key: "extract", label: "From the article" }],
   /** Title is the article title, already the card heading. */
   hidden: ["title"],
   links: [
@@ -300,11 +339,11 @@ const wikipediaNearby = defineLayer({
   title: "Wikipedia nearby",
   description:
     "Wikipedia articles about places, landmarks and natural features inside the view, so you can tell the user the story of a place. " +
-    "Each point is one article with name and title (both the article title), url (the article), extract (the first two sentences of the article, plain text) and thumbnail (a small picture URL, when the article has one). " +
+    "Each point is one article with name and title (both the article title), url (the article), extract (the first two sentences of the article, plain text), thumbnail (a small picture URL, when the article has one) and languages (how many Wikipedia language editions cover the place, from Wikidata: a rough measure of how well known it is; the map draws better-known places bigger and names the top five). " +
     "Use it for 'history of this place', 'what is that lake / peak / ruin / pass', 'what is notable around here', 'tell me about this area', or 'points of interest'; quote the extract and link the url rather than adding facts from memory. " +
     "Input lang picks the Wikipedia language edition (default 'en'; for example 'es' or 'fr'). " +
     "Caveats: only articles that have coordinates appear, so coverage follows how well the area is documented (towns, parks, peaks and historic sites are well covered, backcountry features often are not); " +
-    "the extract is the opening of the article, not a summary of history, and some articles (lists, disambiguation) have none; the order and choice of articles is by distance, not importance. " +
+    "the extract is the opening of the article, not a summary of history, and some articles (lists, disambiguation) have none; in a close view the choice of articles is by distance from the centre, not importance (rank them by languages to find the best-known). " +
     "Wikipedia text is CC BY-SA 4.0: credit Wikipedia and link the article when you reuse it. " +
 "Wikipedia limits request size and rate, so the view is cut into cells of about 18 km and only the 100 articles nearest the centre get an extract. " +
     "Works worldwide. Over 1,000 km² (about a 30 km square) it returns the 500 best-known articles.",
@@ -315,9 +354,41 @@ const wikipediaNearby = defineLayer({
   maxAreaKm2: 1_000,
   wide: { mode: "named", orderBy: "number of Wikipedia languages", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("wikipedia-nearby"), cluster: true },
+  // The best-known places draw bigger: symbol size follows how many Wikipedia language editions cover them.
+  style: { geometry: "point", color: layerColor("wikipedia-nearby"), cluster: true, encode: { size: "languages" } },
   fieldHelp: HELP,
   card: CARD,
+  attributes: [
+    nameAttribute("Article"),
+    {
+      key: "languages",
+      type: "measure",
+      label: "Wikipedia languages",
+      unit: "editions",
+      encode: "size",
+      presets: [
+        { label: "Covered in 10 or more languages", min: 10 },
+        { label: "Covered in 30 or more languages", min: 30 },
+        { label: "Covered in 60 or more languages", min: 60 },
+      ],
+    },
+  ],
+  // Articles about places: time is not the question.
+  time: { shape: "none" },
+  legend: {
+    kind: "size",
+    title: "Wikipedia languages",
+    field: "languages",
+    unit: "editions",
+    stops: [
+      { label: "1", value: 1 },
+      { label: "10", value: 10 },
+      { label: "30", value: 30 },
+      { label: "60 or more", value: 60 },
+    ],
+    note: "Each symbol is one Wikipedia article about a place. Bigger means more Wikipedia language editions cover it, a rough measure of how well known it is.",
+  },
+  labels: { field: "name", max: 5, rankBy: "languages" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const { lang } = input;
@@ -418,6 +489,7 @@ const wikipediaNearby = defineLayer({
         const extract = page.extract ? cleanExtract(page.extract) : "";
         if (extract) summary.extract = extract;
         if (page.thumbnail?.source) summary.thumbnail = page.thumbnail.source;
+        if (page.pageprops?.wikibase_item) summary.qid = page.pageprops.wikibase_item;
         summaries.set(id, summary);
       }
       return { ok: true, value: null };
@@ -434,6 +506,19 @@ const wikipediaNearby = defineLayer({
     hits.forEach((hit, i) => {
       if ("languages" in hit && typeof hit.languages === "number" && features[i].properties) features[i].properties.languages = hit.languages;
     });
+    // A close view knows only titles from geosearch; one Wikidata request counts the languages of the described articles.
+    if (!ctx.wide) {
+      const qids = [...new Set([...summaries.values()].map((s) => s.qid).filter((q): q is string => q !== undefined && /^Q\d+$/.test(q)))];
+      const counts = qids.length > 0 ? await languageCounts(ctx, qids, `${base}:links:${bodyHash(qids.join("|"))}`) : new Map<string, number>();
+      if (counts === null) notes.push("how many Wikipedia languages cover each place could not be loaded, so every symbol is one size");
+      else {
+        hits.forEach((hit, i) => {
+          const qid = summaries.get(hit.pageid)?.qid;
+          const n = qid === undefined ? undefined : counts.get(qid);
+          if (n !== undefined && features[i].properties) features[i].properties.languages = n;
+        });
+      }
+    }
     if (features.length === 0 && failures.length === 0) notes.push("No Wikipedia articles with coordinates in this area");
 
     return {

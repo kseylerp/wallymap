@@ -27,8 +27,18 @@
  * the orange ISAIAS-26 over the US. Whole world, days=365: 654 points in 10.3 s, floods capped at 500.
  */
 import { z } from "zod";
-import type { Feature, FeatureCollection, Geometry, Point } from "geojson";
-import { bboxAreaKm2, defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
+import type { Feature, FeatureCollection, Geometry, MultiPolygon, Point, Polygon } from "geojson";
+import {
+  bboxAreaKm2,
+  defineLayer,
+  type Attribute,
+  type BBox,
+  type CardSpec,
+  type FieldHelp,
+  type LayerError,
+  type LayerResult,
+  type QueryContext,
+} from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { outsideUs } from "./_shared/coverage";
@@ -46,7 +56,11 @@ export const MAX_PAGES = 5;
 export const MAX_GDACS_EVENTS = MAX_PAGES * PAGE_SIZE;
 export const FEMA_MAX_AREA_KM2 = 3_000_000;
 const FEMA_TOP = 10_000;
-const LISTED = 5;
+const LISTED = 3;
+/** Most GDACS events per view drawn at their affected area (each is one more request, cached an hour). */
+export const MAX_FOOTPRINTS = 8;
+/** Footprint simplification, about 1 km. */
+const FOOTPRINT_TOLERANCE_DEG = 0.01;
 
 /** GDACS event types asked for, with the alert levels and the plain kind each becomes. */
 export const GDACS_KINDS = [
@@ -80,7 +94,7 @@ const gdacsSchema = z.object({
     fromdate: z.string().nullish(),
     todate: z.string().nullish(),
     iscurrent: z.string().nullish(),
-    severitydata: z.object({ severitytext: z.string().nullish() }).nullish(),
+    severitydata: z.object({ severity: z.number().nullish(), severitytext: z.string().nullish(), severityunit: z.string().nullish() }).nullish(),
     url: z.object({ report: z.string().nullish(), geometry: z.string().nullish() }).nullish(),
   }),
 });
@@ -90,6 +104,33 @@ function gdacsTime(t: string | null | undefined): string | undefined {
   if (!t) return undefined;
   const ms = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(t) ? t : `${t}Z`);
   return Number.isFinite(ms) ? new Date(ms).toISOString() : undefined;
+}
+
+/**
+ * GDACS's severity in plain fields, by kind. Cyclones: `peakWindKmh` (the strongest sustained wind over the storm's life)
+ * and `stage` (the class in the latest advisory: a storm that peaked as a hurricane reads "Tropical depression" once it
+ * weakens, which GDACS prints as "Tropical Depression (maximum wind speed of 250 km/h)"). Droughts: `affectedKm2`.
+ * Wildfires: `burnedHa`. Floods carry "Magnitude 0" for every event, so nothing.
+ */
+export function severityOf(
+  kind: string,
+  s: { severity?: number | null; severitytext?: string | null; severityunit?: string | null } | null | undefined,
+): Record<string, string | number> {
+  const value = typeof s?.severity === "number" && Number.isFinite(s.severity) && s.severity > 0 ? s.severity : undefined;
+  const text = s?.severitytext?.trim() ?? "";
+  if (kind === "cyclone") {
+    const out: Record<string, string | number> = {};
+    if (value !== undefined && s?.severityunit === "km/h") out.peakWindKmh = Math.round(value);
+    const stage = /^(hurricane|typhoon)/i.test(text) ? "Hurricane or typhoon" : /^tropical storm/i.test(text) ? "Tropical storm" : /^tropical depression/i.test(text) ? "Tropical depression" : undefined;
+    if (stage) out.stage = stage;
+    return out;
+  }
+  if (kind === "drought" && value !== undefined && s?.severityunit === "km2") {
+    const impact = /^(\w+) impact/i.exec(text)?.[1];
+    return { affectedKm2: Math.round(value), ...(impact && { impact: `${impact.charAt(0).toUpperCase()}${impact.slice(1).toLowerCase()} impact on crops` }) };
+  }
+  if (kind === "wildfire" && value !== undefined && s?.severityunit === "ha") return { burnedHa: Math.round(value) };
+  return {};
 }
 
 /** GDACS points inside the bbox, newest first, one per event (the latest episode wins). */
@@ -115,7 +156,7 @@ export function gdacsFeatures(raw: unknown[], [w, s, e, n]: BBox): Feature<Point
     if (p.alertlevel) props.alertLevel = p.alertlevel.toLowerCase();
     if (p.country) props.country = p.country;
     if (p.iscurrent) props.current = p.iscurrent === "true" ? "yes" : "no";
-    if (p.severitydata?.severitytext) props.severity = p.severitydata.severitytext;
+    Object.assign(props, severityOf(kind, p.severitydata));
     if (p.url?.report) props.url = p.url.report;
     if (p.url?.geometry) props.footprintUrl = p.url.geometry;
     const key = String(props.eventId);
@@ -125,6 +166,83 @@ export function gdacsFeatures(raw: unknown[], [w, s, e, n]: BBox): Feature<Point
     }
   }
   return [...byEvent.values()].sort((a, b) => String(b.properties?.t ?? "").localeCompare(String(a.properties?.t ?? "")));
+}
+
+type Position = number[];
+
+/** Perpendicular distance from `p` to the segment a–b, in degrees (fine for simplifying a drawn outline). */
+function segmentDistance(p: Position, a: Position, b: Position): number {
+  const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2));
+  return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+}
+
+/** Douglas–Peucker on one ring, keeping its first and last points; coordinates rounded to 3 decimals (about 100 m). */
+export function simplifyRing(ring: Position[], tolerance: number): Position[] {
+  if (ring.length <= 4) return ring.map(([x, y]) => [Math.round(x * 1000) / 1000, Math.round(y * 1000) / 1000]);
+  const keep = new Uint8Array(ring.length);
+  keep[0] = keep[ring.length - 1] = 1;
+  const stack: [number, number][] = [[0, ring.length - 1]];
+  while (stack.length > 0) {
+    const [i, j] = stack.pop() as [number, number];
+    let worst = -1;
+    let at = -1;
+    for (let k = i + 1; k < j; k++) {
+      const d = segmentDistance(ring[k], ring[i], ring[j]);
+      if (d > worst) [worst, at] = [d, k];
+    }
+    if (at !== -1 && worst > tolerance) {
+      keep[at] = 1;
+      stack.push([i, at], [at, j]);
+    }
+  }
+  return ring.filter((_, k) => keep[k] === 1).map(([x, y]) => [Math.round(x * 1000) / 1000, Math.round(y * 1000) / 1000]);
+}
+
+/** A polygon or multipolygon simplified ring by ring; rings that collapse below a triangle are dropped. */
+export function simplifyArea(g: Polygon | MultiPolygon, tolerance: number): Polygon | MultiPolygon | null {
+  const polygon = (rings: Position[][]) => rings.map((r) => simplifyRing(r, tolerance)).filter((r) => r.length >= 4);
+  if (g.type === "Polygon") {
+    const rings = polygon(g.coordinates);
+    return rings.length > 0 ? { type: "Polygon", coordinates: rings } : null;
+  }
+  const polys = g.coordinates.map(polygon).filter((rings) => rings.length > 0);
+  return polys.length > 0 ? { type: "MultiPolygon", coordinates: polys } : null;
+}
+
+/**
+ * The area to draw for one GDACS event from its footprint file (url.geometry): a cyclone's swath of winds of 60 km/h or
+ * more (the polygon labelled with the lowest wind speed, over the storm's whole track), a flood's affected area
+ * (Poly_Affected, not the wider Poly_Global), a drought's or wildfire's affected area (Poly_area). Null when the file has
+ * none. `extent` says in words what the drawn area is.
+ */
+export function footprintOf(kind: string, fc: unknown): { geometry: Polygon | MultiPolygon; extent: string } | null {
+  if (typeof fc !== "object" || fc === null || !Array.isArray((fc as { features?: unknown }).features)) return null;
+  const areas = ((fc as { features: unknown[] }).features as Feature[]).filter(
+    (f) => f?.geometry?.type === "Polygon" || f?.geometry?.type === "MultiPolygon",
+  ) as Feature<Polygon | MultiPolygon>[];
+  const label = (f: Feature) => String(f.properties?.polygonlabel ?? "");
+  const cls = (f: Feature) => String(f.properties?.Class ?? "");
+  let pick: Feature<Polygon | MultiPolygon> | undefined;
+  let extent = "Affected area";
+  if (kind === "cyclone") {
+    const winds = areas
+      .map((f) => ({ f, kmh: Number(/^(\d+) km\/h$/.exec(label(f).trim())?.[1]) }))
+      .filter((w) => Number.isFinite(w.kmh))
+      .sort((a, b) => a.kmh - b.kmh);
+    if (winds.length > 0) {
+      pick = winds[0].f;
+      extent = `Winds of ${winds[0].kmh} km/h (${Math.round(winds[0].kmh / 1.609)} mph) or more along the track`;
+    }
+  } else if (kind === "flood") {
+    pick = areas.find((f) => cls(f) === "Poly_Affected");
+  } else {
+    pick = areas.find((f) => cls(f) === "Poly_area");
+  }
+  if (!pick) return null;
+  const geometry = simplifyArea(pick.geometry, FOOTPRINT_TOLERANCE_DEG);
+  return geometry ? { geometry, extent } : null;
 }
 
 /** FEMA incident types in the same words as the GDACS kinds where they overlap. */
@@ -172,6 +290,22 @@ export function parseFema(body: unknown): FemaRow[] {
   });
 }
 
+/** Short kind words for the per-kind counts ("cyclone 2, flood 1"). */
+const KIND_SHORT: Record<string, string> = { cyclone: "hurricane or tropical storm", "mud/landslide": "landslide", "dam/levee break": "dam or levee break" };
+
+const SMALL_WORDS = new Set(["and", "or", "of", "the", "in", "on", "at", "to", "for"]);
+
+/** FEMA's upper-case titles in title case: "SEVERE STORMS AND FLOODING" → "Severe Storms and Flooding"; the incident type when there is none. */
+export function titleOf(r: Pick<FemaRow, "declarationTitle" | "incidentType">): string {
+  const raw = (r.declarationTitle ?? "").trim() || r.incidentType;
+  return raw
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w, i) => (i > 0 && SMALL_WORDS.has(w) ? w : w.replace(/^(\p{L})/u, (c) => c.toUpperCase())))
+    .join(" ")
+    .replace(/\bCovid-19\b/i, "COVID-19");
+}
+
 /**
  * One county polygon per county with declarations: v = number of declarations, t = the latest declaration date,
  * kind = its incident kind, declarations = the latest few as text, kinds = a count per kind.
@@ -204,12 +338,14 @@ export function femaCountyFeatures(rows: FemaRow[], counties: { fips: string; na
         v: list.length,
         t: new Date(latest.declarationDate).toISOString(),
         kind: femaKind(latest.incidentType),
-        latest: `${latest.declarationTitle ?? latest.incidentType} (${latest.femaDeclarationString ?? latest.disasterNumber})`,
-        kinds: [...counts.entries()].map(([k, n]) => `${k} ${n}`).join(", "),
-        declarations: list
-          .slice(0, LISTED)
-          .map((r) => `${r.declarationDate.slice(0, 10)} ${r.incidentType}: ${r.declarationTitle ?? ""} (${r.femaDeclarationString ?? r.disasterNumber})`)
-          .join("; "),
+        latest: `${titleOf(latest)} (${latest.femaDeclarationString ?? latest.disasterNumber})`,
+        first: list[list.length - 1].declarationDate.slice(0, 10),
+        kinds: [...counts.entries()].map(([k, n]) => `${KIND_SHORT[k] ?? k} ${n}`).join(", "),
+        declarations:
+          list
+            .slice(0, LISTED)
+            .map((r) => `${r.declarationDate.slice(0, 10)} ${titleOf(r)}`)
+            .join("; ") + (list.length > LISTED ? `; and ${list.length - LISTED} earlier` : ""),
       },
     });
   }
@@ -251,6 +387,45 @@ async function gdacsKind(ctx: QueryContext, k: (typeof GDACS_KINDS)[number], fro
     if (rows.length < PAGE_SIZE) return { ok: true, features, capped: false };
   }
   return { ok: true, features, capped: true };
+}
+
+const ALERT_RANK: Record<string, number> = { red: 3, orange: 2, green: 1 };
+
+/**
+ * Draws the most severe GDACS events in view at their affected area instead of a centre point: red, then orange, then
+ * green, newest first within a level, at most MAX_FOOTPRINTS. Green floods are skipped (their footprint files run to
+ * megabytes for a minor alert). An event whose footprint does not load keeps its point. Returns the events in order.
+ */
+export async function withFootprints(ctx: QueryContext, points: Feature<Point>[]): Promise<{ features: Feature[]; drawn: number }> {
+  const ranked = points
+    .filter((f) => typeof f.properties?.footprintUrl === "string" && String(f.properties.footprintUrl).startsWith("https://"))
+    .filter((f) => !(f.properties?.kind === "flood" && f.properties?.alertLevel === "green"))
+    .sort((a, b) => (ALERT_RANK[String(b.properties?.alertLevel)] ?? 0) - (ALERT_RANK[String(a.properties?.alertLevel)] ?? 0))
+    .slice(0, MAX_FOOTPRINTS);
+  const areas = new Map<Feature<Point>, { geometry: Polygon | MultiPolygon; extent: string }>();
+  await Promise.all(
+    ranked.map(async (f) => {
+      const url = String(f.properties?.footprintUrl);
+      try {
+        const res = await ctx.fetch(url, {
+          cacheKey: `disasters:gdacs:footprint:${new URL(url).search}`,
+          ttlSeconds: GDACS_TTL_SECONDS,
+          validate: jsonObjectBody({ listKey: "features", minLength: 0 }),
+          timeoutMs: UPSTREAM_TIMEOUT_MS,
+        });
+        if (!res.ok) return;
+        const area = footprintOf(String(f.properties?.kind), await res.json());
+        if (area) areas.set(f, area);
+      } catch {
+        // The point stays.
+      }
+    }),
+  );
+  const features = points.map((f): Feature => {
+    const area = areas.get(f);
+    return area ? { type: "Feature", geometry: area.geometry, properties: { ...f.properties, extent: area.extent } } : f;
+  });
+  return { features, drawn: areas.size };
 }
 
 type FemaPart =
@@ -309,7 +484,70 @@ const HELP: Record<string, FieldHelp> = {
     text: "The county's five-digit FIPS code (two digits for the state, three for the county), the US Census identifier the FEMA declarations are joined to the county outline by.",
   },
   kinds: { text: "How many of the county's declarations were of each kind of disaster in the period." },
+  peakWindKmh: {
+    text: "The strongest sustained wind GDACS recorded over the storm's life, not the wind now. A storm that peaked as a hurricane keeps that figure after it weakens.",
+    unit: "km/h",
+    source: "GDACS tropical cyclone alerts (from NOAA and JTWC advisories)",
+    url: "https://www.gdacs.org/",
+  },
+  stage: { text: "The storm's class in the latest advisory: tropical depression (under 63 km/h), tropical storm (63 to 118 km/h), or hurricane or typhoon (119 km/h and up)." },
+  affectedKm2: { text: "The area where GDACS's drought index shows crops under stress.", unit: "km²", source: "GDACS drought alerts (European Drought Observatory)" },
+  burnedHa: { text: "The burned area GDACS mapped for the fire from satellite detections.", unit: "ha", source: "GDACS wildfire alerts (GWIS)" },
+  extent: { text: "What the drawn area shows. Orange and red alerts (and up to eight events per view) are drawn at the affected area GDACS publishes; the rest are a point at the event's centre." },
+  first: { text: "The earliest declaration for this county in the years asked for." },
 };
+
+/** GDACS alert levels, as the source defines them. */
+const ALERT_LEVELS = [
+  { value: "green", label: "Green (minor)", help: "Minor impact expected; usually no international help needed." },
+  { value: "orange", label: "Orange (moderate)", help: "Moderate impact; national response may need help." },
+  { value: "red", label: "Red (severe)", help: "Severe humanitarian impact likely; international help may be needed." },
+];
+
+const ATTRIBUTES: Attribute[] = [
+  {
+    key: "source",
+    type: "category",
+    label: "Shown as",
+    primary: true,
+    levels: [
+      { value: "FEMA", label: "FEMA county declarations", help: "US counties named in a FEMA disaster declaration in the years asked for." },
+      { value: "GDACS", label: "GDACS alerts", help: "Floods, tropical cyclones, droughts and large wildfires worldwide in the days asked for." },
+    ],
+  },
+  { key: "alertLevel", type: "ordinal", label: "GDACS alert level", scale: "GDACS alert level (green, orange, red)", levels: ALERT_LEVELS },
+  {
+    key: "kind",
+    type: "category",
+    label: "Disaster",
+    levels: [
+      { value: "cyclone", label: "Hurricane or tropical storm" },
+      { value: "flood", label: "Flood" },
+      { value: "severe storm", label: "Severe storm" },
+      { value: "wildfire", label: "Wildfire" },
+      { value: "drought", label: "Drought" },
+      { value: "winter storm", label: "Winter storm" },
+      { value: "tornado", label: "Tornado" },
+      { value: "earthquake", label: "Earthquake" },
+      { value: "biological", label: "Disease outbreak" },
+    ],
+  },
+  {
+    key: "v",
+    type: "measure",
+    label: "FEMA declarations",
+    encode: "size",
+    help: DECLARATIONS,
+    presets: [
+      { label: "1", min: 1 },
+      { label: "2 or more", min: 2 },
+      { label: "4 or more", min: 4 },
+      { label: "8 or more", min: 8 },
+    ],
+  },
+  { key: "peakWindKmh", type: "measure", label: "Peak wind", unit: "km/h" },
+  { key: "name", type: "name", label: "Name" },
+];
 
 /** Kinds in words: GDACS's four and FEMA's incident types (lowercased by femaKind). */
 const KIND_LABELS: Record<string, string> = {
@@ -337,21 +575,24 @@ const CARD: CardSpec = {
     { key: "kind", label: "Disaster", values: KIND_LABELS },
     { key: "source", label: "Source", values: { GDACS: "GDACS global disaster alerts", FEMA: "FEMA disaster declarations" } },
     { key: "alertLevel", label: "Alert level", values: { green: "Green (minor)", orange: "Orange (moderate)", red: "Red (severe)" } },
-    { key: "severity", label: "Severity" },
+    { key: "stage", label: "Latest class" },
+    { key: "peakWindKmh", label: "Peak wind", unit: "km/h", format: "int" },
+    { key: "affectedKm2", label: "Crops under stress", unit: "km²", format: "int" },
+    { key: "impact", label: "Impact" },
+    { key: "burnedHa", label: "Burned area", unit: "ha", format: "int" },
+    { key: "extent", label: "Drawn area" },
     { key: "country", label: "Country" },
     { key: "current", label: "Ongoing", values: { yes: "Yes", no: "No" } },
+    { key: "t", label: "Began", format: "date" },
     { key: "until", label: "Last updated", format: "date" },
     { key: "latest", label: "Latest declaration" },
+    { key: "first", label: "Earliest in period", format: "date" },
     { key: "kinds", label: "Declarations by kind", format: "list" },
     { key: "declarations", label: "Recent declarations" },
     { key: "state", label: "State" },
-    { key: "fips", label: "County FIPS code" },
-    { key: "eventId", label: "GDACS event" },
   ],
-  links: [
-    { key: "url", label: "GDACS report" },
-    { key: "footprintUrl", label: "Affected area (GeoJSON)" },
-  ],
+  links: [{ key: "url", label: "GDACS report" }],
+  hidden: ["fips", "eventId", "footprintUrl"],
 };
 
 const disasters = defineLayer({
@@ -360,11 +601,11 @@ const disasters = defineLayer({
   description:
     "Recent disasters from two sources: GDACS alerts worldwide as points (floods, cyclones, droughts, and wildfires at orange or red alert only; small green wildfire alerts are left out) and, in the US, FEMA disaster declarations joined to county polygons by FIPS (v = declarations per county). " +
     "GDACS: GDACS alerts (the UN and European Commission disaster alert system) as points, one per event, for floods, tropical cyclones (hurricanes and typhoons), droughts and large wildfires, " +
-    "with source 'GDACS', kind ('flood', 'cyclone', 'drought' or 'wildfire'), name, t (start, UTC), until (last update), alertLevel ('green' minor, 'orange' moderate, 'red' severe humanitarian impact), country, current ('yes' while ongoing), severity (e.g. maximum wind speed), url (the GDACS report) and footprintUrl (GeoJSON of the affected area or storm track). " +
-    "FEMA: county polygons with source 'FEMA', v (how many declarations the county had in the period), t (the latest declaration date), kind (its incident: wildfire, flood, cyclone, severe storm, winter storm, tornado and so on), latest, kinds (a count per kind) and declarations (the latest five as text). " +
+    "with source 'GDACS', kind ('flood', 'cyclone', 'drought' or 'wildfire'), name, t (start, UTC), until (last update), alertLevel ('green' minor, 'orange' moderate, 'red' severe humanitarian impact), country, current ('yes' while ongoing), peakWindKmh and stage for cyclones (peak wind over the storm's life, and its class in the latest advisory), affectedKm2 for droughts, burnedHa for wildfires, url (the GDACS report). The most severe events in view (red, then orange, up to 8) are drawn at their affected area (a cyclone's swath of 60 km/h winds), with extent saying so; the rest are points at the centre. " +
+    "FEMA: county polygons with source 'FEMA', v (how many declarations the county had in the period), t (the latest declaration date), kind (its incident: wildfire, flood, cyclone, severe storm, winter storm, tornado and so on), latest, kinds (a count per kind) and first (the earliest date), declarations (the latest three as text). " +
     "days (1 to 730, default 90) is how far back GDACS alerts go; years (1 to 20, default 5) is how far back FEMA declarations go. " +
     "Example questions: 'What disasters hit Florida in the last five years?', 'Is there a hurricane near Mexico right now?', 'Which counties here had the most disaster declarations?'. User words: disasters, hurricane, disaster declaration. " +
-    "Caveats: GDACS points are an event's centre, not its extent, and small wildfires (green alerts) are left out (use fire-perimeters or fire-detections); a FEMA declaration means federal aid was approved, not how bad the damage was; tribal and statewide declarations are not drawn. " +
+    "Caveats: GDACS points are an event's centre, not its extent; small wildfires (green alerts) are left out (use fire-perimeters or fire-detections); a FEMA declaration means federal aid was approved, not how bad the damage was; tribal and statewide declarations are not drawn. " +
     "FEMA counties are added only when the view is under 3,000,000 km²; GDACS works at any size, up to 500 events per kind.",
   coverage: "global",
   surface: "any",
@@ -372,9 +613,26 @@ const disasters = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("disasters"), fillOpacity: 0.35, timeField: "t" },
+  style: { geometry: "polygon", color: layerColor("disasters"), fillOpacity: 0.2, timeField: "t", encode: { size: "v" } },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
+  // The windows are the inputs (days of GDACS alerts, years of FEMA declarations), and a county holds several dated
+  // declarations, so a scrubber over one date per county would hide the earlier ones: no time panel; dates are on the card.
+  time: { shape: "none" },
+  legend: {
+    kind: "size",
+    title: "FEMA declarations per county",
+    field: "v",
+    stops: [
+      { label: "1", value: 1 },
+      { label: "2", value: 2 },
+      { label: "4", value: 4 },
+      { label: "8+", value: 8 },
+    ],
+    note: "Denser hatching means more declarations in the years asked for. GDACS alerts (green minor, orange moderate, red severe) are drawn at their affected area for the most severe events in view (a cyclone's swath of 60 km/h winds) and as points otherwise.",
+  },
+  labels: { field: "name", max: 5, rankBy: "v" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = Date.now();
@@ -393,8 +651,10 @@ const disasters = defineLayer({
     }
 
     const points = gdacsFeatures(kinds.flatMap((k) => k.features), ctx.bbox);
+    const events = await withFootprints(ctx, points);
     const countyPolygons = fema !== null && fema.ok ? fema.features : [];
-    const features: Feature[] = [...countyPolygons, ...points];
+    // Counties first (drawn beneath), the alerts on top.
+    const features: Feature[] = [...countyPolygons, ...events.features];
 
     const notes: string[] = [];
     if (kinds.some((k) => k.capped)) notes.push(`Some GDACS kinds hit the ${MAX_GDACS_EVENTS}-event limit; shorten days for the rest`);
@@ -404,6 +664,7 @@ const disasters = defineLayer({
     if (fema !== null && fema.ok && fema.rowsTruncated) notes.push("Not every FEMA declaration fit (the query covers whole states); shorten years");
     if (fema !== null && fema.ok && fema.countiesTruncated) notes.push("Too many counties to show them all; zoom in");
     if (fema !== null && fema.ok && fema.connecticut) notes.push("Connecticut has no FEMA county polygons (FEMA uses its old counties)");
+    if (points.length > events.drawn && events.drawn > 0) notes.push(`${events.drawn} of ${points.length} GDACS alerts are drawn at their affected area; the rest are points at the event's centre`);
     if (features.length === 0) notes.push(`No GDACS alerts in the last ${input.days} days${wantFema ? ` and no FEMA declarations in ${input.years} years` : ""} in this view`);
 
     const data: FeatureCollection = { type: "FeatureCollection", features };

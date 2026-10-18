@@ -70,8 +70,8 @@ describe("attribute declarations (spec §12c) are checked at registry load", () 
     ["fire-detections", "confidence", "v"],
     ["gbif-occurrences", "basisOfRecord", undefined],
     ["species", "species", undefined],
-    ["photos", "source", undefined],
-    ["mines", "kind", undefined],
+    ["photos", "source", "nearby"],
+    ["mines", "status", undefined],
   ])("declares %s's chip set on %s and its measure on %s", (id, chip, measure) => {
     const layer = getLayer(id)!;
     expect(layer.attributes?.length, id).toBeGreaterThan(0);

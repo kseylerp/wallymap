@@ -1,5 +1,10 @@
 /**
- * Photo density from Wikimedia Commons geotagged files and Mapillary street-level images.
+ * Where people photograph: Wikimedia Commons geotagged files and OpenStreetMap viewpoints by default, Mapillary
+ * street-level images only when asked for (around Yosemite Valley 4,040 of 5,000 points were Mapillary dashcam frames
+ * along the roads, audit 2026-10-17).
+ *
+ * Viewpoints: Overpass (layers/_shared/overpass.ts) `nwr["tourism"="viewpoint"](bbox); out tags center 500;`. Each one's
+ * `nearby` counts the Commons photos fetched within 500 m, the measure that sizes and labels them.
  *
  * Commons: https://commons.wikimedia.org/w/api.php?action=query&list=geosearch&gsbbox=<north>|<west>|<south>|<east>
  *   &gsnamespace=6&gslimit=500&format=json&origin=*   (gsbbox order is top|left|bottom|right)
@@ -30,27 +35,46 @@
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import { defineLayer, type Attribute, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
-import { nameAttribute, timeAttribute } from "./_shared/bands";
+import { nameAttribute } from "./_shared/bands";
+import { overpassQuery } from "./_shared/overpass";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
-import { rankedSparql, wikimediaFetch } from "./_shared/wikimedia";
+import { WIKIMEDIA_USER_AGENT, rankedSparql, retryDelayMs, wikimediaFetch } from "./_shared/wikimedia";
 import { layerColor } from "@/lib/render/palette";
 
-const SOURCES = ["commons", "mapillary"] as const;
+const SOURCES = ["commons", "viewpoints", "mapillary"] as const;
 type Source = (typeof SOURCES)[number];
+/**
+ * Commons photos and named viewpoints answer "where do people photograph". Mapillary is mostly dashcam frames along
+ * roads (4,040 of the 5,000 points around Yosemite Valley, audit 2026-10-17), so it is only fetched when asked for.
+ */
+const DEFAULT_SOURCES: Source[] = ["commons", "viewpoints"];
 
 const inputSchema = z.object({
   sources: z
     .array(z.enum(SOURCES))
     .min(1)
-    .default([...SOURCES]),
+    .default([...DEFAULT_SOURCES]),
 });
 
+/** Most viewpoints asked of OpenStreetMap. */
+const VIEWPOINT_LIMIT = 500;
+/** A viewpoint's measure counts the Commons photos taken this close to it. */
+export const NEARBY_M = 500;
+
 const COMMONS_ENDPOINT = "https://commons.wikimedia.org/w/api.php";
-const COMMONS_USER_AGENT = "WildMap/0.1 (open-source outdoor map agent)";
+/** Wikimedia's policy wants a User-Agent with a way to reach the project; the shared one has the site URL. */
+const COMMONS_USER_AGENT = WIKIMEDIA_USER_AGENT;
 const COMMONS_LIMIT = 500;
 const COMMONS_CELL_KM = 15;
 const COMMONS_MAX_CELLS = 30;
+/**
+ * A full square (500 photos) holds only the photos nearest its middle: around Yosemite Valley (2026-10-18) the 500 of a
+ * 12 km square all lay within about 1.5 km of its centre, a false blob. So a full square is cut into four and each asked
+ * again, down to squares of about COMMONS_MIN_SPLIT_KM, within COMMONS_MAX_REQUESTS requests in all.
+ */
+const COMMONS_MIN_SPLIT_KM = 1.5;
+const COMMONS_MAX_REQUESTS = 48;
 
 const MAPILLARY_ENDPOINT = "https://graph.mapillary.com/images";
 const MAPILLARY_LIMIT = 2000;
@@ -102,6 +126,17 @@ function commonsCells(bbox: BBox): BBox[] {
   const lonStep = COMMONS_CELL_KM / (KM_PER_DEG_LON_EQUATOR * Math.max(Math.cos(midLatRad), 0.1));
   const latStep = COMMONS_CELL_KM / KM_PER_DEG_LAT;
   return tileBBox(bbox, lonStep, latStep);
+}
+
+/** The shorter side of a square in km. */
+function cellKm(cell: BBox): number {
+  const midLatRad = (((cell[1] + cell[3]) / 2) * Math.PI) / 180;
+  return Math.min((cell[2] - cell[0]) * KM_PER_DEG_LON_EQUATOR * Math.cos(midLatRad), (cell[3] - cell[1]) * KM_PER_DEG_LAT);
+}
+
+/** A square cut into its four quarters. */
+export function quarters(cell: BBox): BBox[] {
+  return tileBBox(cell, (cell[2] - cell[0]) / 2, (cell[3] - cell[1]) / 2);
 }
 
 function mapillaryCells(bbox: BBox): BBox[] {
@@ -234,6 +269,17 @@ export function widePhotoFeatures(json: unknown): PhotoFeature[] | null {
   return features;
 }
 
+/** A Commons file name as a card title: "Half_Dome_from_Glacier_Point.JPG" → "Half Dome from Glacier Point". */
+export function photoName(fileTitle: string): string {
+  const plain = fileTitle
+    .replace(/^File:/, "")
+    .replace(/\.(jpe?g|png|tiff?|gif|webp|svg|heic|ogv|webm)$/i, "")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return plain || fileTitle;
+}
+
 function commonsFeature(hit: { pageid: number; title: string; lat: number; lon: number }): PhotoFeature {
   const title = hit.title.replace(/^File:/, "");
   const wikiTitle = encodeURIComponent(hit.title.replace(/ /g, "_")).replace(/%3A/g, ":");
@@ -242,6 +288,7 @@ function commonsFeature(hit: { pageid: number; title: string; lat: number; lon: 
     geometry: { type: "Point", coordinates: [hit.lon, hit.lat] },
     properties: {
       source: "commons",
+      name: photoName(title),
       title,
       v: 1,
       url: `https://commons.wikimedia.org/wiki/${wikiTitle}`,
@@ -253,14 +300,76 @@ function mapillaryFeature(image: z.infer<typeof mapillaryPageSchema>["data"][num
   if (!image.geometry) return null;
   const properties: Record<string, string | number> = {
     source: "mapillary",
+    name: "Street-level image",
     v: 1,
     url: `https://www.mapillary.com/app/?pKey=${image.id}`,
   };
+  // `taken`, not `t`: time is not the question for this layer, so the date is a card fact and never drives a time panel.
   if (image.captured_at !== undefined) {
     const t = new Date(image.captured_at);
-    if (!Number.isNaN(t.getTime())) properties.t = t.toISOString();
+    if (!Number.isNaN(t.getTime())) properties.taken = t.toISOString();
   }
   return { type: "Feature", geometry: { type: "Point", coordinates: image.geometry.coordinates }, properties };
+}
+
+/** Overpass QL for OpenStreetMap viewpoints (`tourism=viewpoint`) in a box, one position each. */
+export function viewpointsQuery(bbox: BBox, limit = VIEWPOINT_LIMIT): string {
+  const [west, south, east, north] = bbox;
+  return `[out:json][timeout:25];nwr["tourism"="viewpoint"](${south},${west},${north},${east});out tags center ${limit};`;
+}
+
+const viewpointElementSchema = z.object({
+  type: z.enum(["node", "way", "relation"]),
+  id: z.number(),
+  lat: z.number().optional(),
+  lon: z.number().optional(),
+  center: z.object({ lat: z.number(), lon: z.number() }).optional(),
+  tags: z.record(z.string(), z.string()).optional(),
+});
+
+/**
+ * Viewpoints from an Overpass answer: kind "viewpoint", source "viewpoint", name (when OSM has one), direction (the
+ * compass direction it faces, as tagged), osm (the OpenStreetMap page) and v 1. Elements without a position are skipped.
+ */
+export function viewpointFeatures(json: unknown): PhotoFeature[] {
+  const elements = typeof json === "object" && json !== null ? (json as { elements?: unknown }).elements : undefined;
+  if (!Array.isArray(elements)) return [];
+  const features: PhotoFeature[] = [];
+  for (const raw of elements) {
+    const parsed = viewpointElementSchema.safeParse(raw);
+    if (!parsed.success) continue;
+    const el = parsed.data;
+    const lat = el.lat ?? el.center?.lat;
+    const lon = el.lon ?? el.center?.lon;
+    if (lat === undefined || lon === undefined) continue;
+    const tags = el.tags ?? {};
+    const properties: Record<string, string | number> = { source: "viewpoint", kind: "viewpoint", v: 1, osm: `https://www.openstreetmap.org/${el.type}/${el.id}` };
+    const name = tags.name?.trim();
+    if (name) properties.name = name;
+    const direction = tags.direction?.trim();
+    if (direction) properties.direction = direction;
+    features.push({ type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] }, properties });
+  }
+  return features;
+}
+
+/**
+ * Sets each viewpoint's `nearby`: how many of `photos` lie within NEARBY_M of it (a flat-earth distance, exact enough at
+ * 500 m), so the most photographed viewpoints draw biggest and get the labels.
+ */
+export function countNearby(viewpoints: PhotoFeature[], photos: PhotoFeature[]): void {
+  const latDeg = NEARBY_M / 111_320;
+  for (const vp of viewpoints) {
+    const [lon0, lat0] = vp.geometry.coordinates;
+    const lonDeg = latDeg / Math.max(Math.cos((lat0 * Math.PI) / 180), 0.01);
+    let n = 0;
+    for (const p of photos) {
+      const dLon = (p.geometry.coordinates[0] - lon0) / lonDeg;
+      const dLat = (p.geometry.coordinates[1] - lat0) / latDeg;
+      if (dLon * dLon + dLat * dLat <= 1) n += 1;
+    }
+    if (vp.properties) vp.properties.nearby = n;
+  }
 }
 
 type CellOutcome<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -289,6 +398,32 @@ async function pool<T, R>(items: T[], limit: number, worker: (item: T) => Promis
 
 type CommonsCell = { features: Map<number, PhotoFeature>; capped: boolean };
 
+/** How long to wait before asking Commons again after a 429, 503 or "too busy" (tests set it to 0). */
+export const commonsRetry = { waitMs: 1_500 };
+
+const sleepMs = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const isBusy = (json: unknown) =>
+  typeof json === "object" && json !== null && /too-busy|ratelimited/i.test(String((json as { error?: { code?: unknown } }).error?.code ?? ""));
+
+/** One Commons request: its status and parsed body (null when not JSON). Error bodies are never cached. */
+async function commonsGet(ctx: QueryContext, url: string, cacheKey: string): Promise<{ status: number; json: unknown; retryAfter: string | null }> {
+  const res = await ctx.fetch(url, {
+    cacheKey,
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    headers: { "user-agent": COMMONS_USER_AGENT },
+    // A 200 carrying { error } (too busy, too big) is not an answer to keep.
+    shouldCache: (text: string) => !/^\s*\{\s*"error"/.test(text),
+  });
+  const retryAfter = res.headers.get("retry-after");
+  if (!res.ok) return { status: res.status, json: null, retryAfter };
+  try {
+    return { status: res.status, json: await res.json(), retryAfter };
+  } catch {
+    return { status: res.status, json: null, retryAfter };
+  }
+}
+
 async function fetchCommonsCell(ctx: QueryContext, cell: BBox): Promise<CellOutcome<CommonsCell>> {
   const features = new Map<number, PhotoFeature>();
   let capped = false;
@@ -298,13 +433,18 @@ async function fetchCommonsCell(ctx: QueryContext, cell: BBox): Promise<CellOutc
   // One request, plus at most one continuation.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await ctx.fetch(commonsUrl(cell, continuation), {
-        cacheKey: attempt === 0 ? base : `${base}:more`,
-        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-        headers: { "user-agent": COMMONS_USER_AGENT },
-      });
-      if (!res.ok) return { ok: false, error: `Wikimedia Commons returned ${res.status}` };
-      const parsed = commonsPageSchema.safeParse(await res.json());
+      const url = commonsUrl(cell, continuation);
+      const cacheKey = attempt === 0 ? base : `${base}:more`;
+      let body = await commonsGet(ctx, url, cacheKey);
+      // Wikimedia answers a burst with 429 or 503, and its search with "too busy": wait once and ask again.
+      if (body.status === 429 || body.status === 503 || (body.status === 200 && isBusy(body.json))) {
+        // The advised wait when Wikimedia gives one (up to 10 s), else commonsRetry.waitMs.
+        const advised = body.retryAfter === null ? commonsRetry.waitMs : Math.min(10_000, retryDelayMs(body.retryAfter));
+        await sleepMs(commonsRetry.waitMs === 0 ? 0 : advised);
+        body = await commonsGet(ctx, url, cacheKey);
+      }
+      if (body.status !== 200) return { ok: false, error: `Wikimedia Commons returned ${body.status}` };
+      const parsed = commonsPageSchema.safeParse(body.json);
       if (!parsed.success) return { ok: false, error: "Wikimedia Commons returned an unexpected response" };
       if (parsed.data.error) {
         return { ok: false, error: `Wikimedia Commons error: ${parsed.data.error.code ?? "unknown"}` };
@@ -326,6 +466,40 @@ async function fetchCommonsCell(ctx: QueryContext, cell: BBox): Promise<CellOutc
     }
   }
   return { ok: true, value: { features, capped } };
+}
+
+/**
+ * Every Commons square, then the quarters of each full one (nearest the view's middle first), wave by wave, until no
+ * square is full, the squares are about COMMONS_MIN_SPLIT_KM across, or COMMONS_MAX_REQUESTS is spent. `capped` counts
+ * the full squares left uncut.
+ */
+async function fetchCommons(ctx: QueryContext, cells: BBox[]): Promise<{ outcomes: CellOutcome<CommonsCell>[]; capped: number; split: number }> {
+  const outcomes: CellOutcome<CommonsCell>[] = [];
+  let budget = COMMONS_MAX_REQUESTS - cells.length;
+  let capped = 0;
+  let split = 0;
+  let wave = cells;
+  let first = true;
+  while (wave.length > 0) {
+    // The quarters go two at a time: Commons search answered four at once with "too busy" (2026-10-18).
+    const results = await pool(wave, first ? CONCURRENCY : 2, (cell) => fetchCommonsCell(ctx, cell));
+    first = false;
+    outcomes.push(...results);
+    const full = wave.filter((_, i) => {
+      const o = results[i];
+      return o.ok && o.value.capped;
+    });
+    const next: BBox[] = [];
+    for (const cell of nearestCells(full, ctx.bbox, full.length)) {
+      if (budget >= 4 && cellKm(cell) >= COMMONS_MIN_SPLIT_KM) {
+        next.push(...quarters(cell));
+        budget -= 4;
+        split += 1;
+      } else capped += 1;
+    }
+    wave = next;
+  }
+  return { outcomes, capped, split };
 }
 
 type MapillaryCell = { features: Map<string, PhotoFeature>; capped: boolean };
@@ -365,19 +539,41 @@ const ATTRIBUTES: Attribute[] = [
   {
     key: "source",
     type: "category",
-    label: "Source",
+    label: "What it is",
+    primary: true,
     levels: [
-      { value: "commons", label: "Wikimedia Commons" },
-      { value: "mapillary", label: "Mapillary" },
+      { value: "commons", label: "Commons photo", help: "A geotagged photo on Wikimedia Commons." },
+      { value: "viewpoint", label: "Viewpoint", help: "A viewpoint mapped on OpenStreetMap; its size is how many Commons photos were taken within 500 m." },
+      { value: "mapillary", label: "Street-level image", help: "A Mapillary image, mostly dashcam and phone capture along roads; only when asked for." },
     ],
   },
-  timeAttribute("Taken"),
-  nameAttribute("Title", "title"),
+  {
+    key: "nearby",
+    type: "measure",
+    label: `Commons photos within ${NEARBY_M} m`,
+    unit: "photos",
+    encode: "size",
+    presets: [
+      { label: "10 or more photos", min: 10 },
+      { label: "50 or more photos", min: 50 },
+    ],
+  },
+  nameAttribute("Name"),
 ];
 
-const SOURCE_NAMES: Record<string, string> = { commons: "Wikimedia Commons", mapillary: "Mapillary" };
+const SOURCE_NAMES: Record<string, string> = {
+  commons: "Wikimedia Commons photo",
+  viewpoint: "Viewpoint on OpenStreetMap",
+  mapillary: "Mapillary street-level image",
+};
 
 const HELP: Record<string, FieldHelp> = {
+  nearby: {
+    text: `How many geotagged Wikimedia Commons photos in this view were taken within ${NEARBY_M} m of the viewpoint: how much people photograph from or around it.`,
+    unit: "photos",
+  },
+  direction: { text: "The compass direction the viewpoint faces, as mapped on OpenStreetMap (degrees or N, NE, ...)." },
+  taken: { text: "When the street-level image was captured, as Mapillary records it." },
   languages: {
     text: "How many Wikipedia language editions have an article about the place in the photo (Wikidata sitelinks); a wide view ranks places by it, so the best-known come first.",
     source: "Wikidata",
@@ -386,53 +582,80 @@ const HELP: Record<string, FieldHelp> = {
   wikidata: { text: "The Wikidata item of the place the photo shows (wide views only)." },
 };
 
-/** No measure: v is always 1 (one photo), so the card leaves it out. */
+/** The measure is a viewpoint's nearby photos; v is always 1 (one photo or place), so the card leaves it out. */
 const CARD: CardSpec = {
+  measure: { key: "nearby", label: `Commons photos within ${NEARBY_M} m`, unit: "photos" },
   facts: [
-    { key: "source", label: "Source", values: SOURCE_NAMES },
+    { key: "source", label: "What it is", values: SOURCE_NAMES },
+    { key: "direction", label: "Faces" },
+    { key: "taken", label: "Taken", format: "date" },
     { key: "title", label: "File name" },
     { key: "languages", label: "Wikipedia languages", format: "int" },
     { key: "wikidata", label: "Wikidata item" },
   ],
-  links: [{ key: "url", label: "Open the photo" }],
+  links: [
+    { key: "url", label: "Open the photo" },
+    { key: "osm", label: "Open on OpenStreetMap" },
+  ],
+  hidden: ["v", "kind"],
 };
 
 const photos = defineLayer({
   id: "photos",
   title: "Photo density",
   description:
-    "Where people have taken and shared geotagged photos: Wikimedia Commons files and Mapillary street-level images. Each point is one photo with source ('commons' or 'mapillary'), url (the photo page), v (always 1, so it draws as density), " +
-    "title (Commons only, the file name) and t (when it was taken, Mapillary only; Commons files have no date here). " +
-    "Use it to find scenic spots, popular viewpoints, trails and roads that have been photographed, or to judge how well-documented a place is. " +
-    "Pick sources with sources: ['commons'], ['mapillary'] or both (default). Mapillary needs a free token; when it is not configured the layer still returns Commons photos and says Mapillary was skipped. " +
-    "Caveats: this shows where people photograph, not what is there; roads and towns dominate Mapillary because it is mostly dashcam and phone capture, and remote trails often have none. " +
+    "Where people take and share photos: geotagged Wikimedia Commons photos and the named viewpoints mapped on OpenStreetMap (tourism=viewpoint). " +
+    "Each point has source ('commons' a photo, 'viewpoint' a mapped viewpoint, 'mapillary' a street-level image), name (the place for a viewpoint, the file name in words for a photo), url (the photo page) or osm (the viewpoint's OpenStreetMap page), and v (always 1). " +
+    "A viewpoint also has nearby (how many Commons photos in the view were taken within 500 m of it; the map sizes viewpoints by it and names the top five) and sometimes direction (the way it faces). " +
+    "Photos have title (the file name); street-level images have taken (the capture date). Commons gives no dates here, so this layer has no timeline. " +
+    "Use it for 'where do people photograph', scenic spots and popular viewpoints, or to judge how well-documented a place is. " +
+    "sources picks what to show: the default ['commons', 'viewpoints']; add 'mapillary' for street-level images (needs a free token; mostly dashcam frames along roads, so it is left out unless asked for). " +
+    "Caveats: this shows where people photograph, not what is there; Commons geotags include anything photographed (cars, buildings), and remote trails often have none. " +
     "Photo licences differ (Commons files are free licences, Mapillary images are CC BY-SA 4.0); link the url rather than reusing the image. " +
-    "The two services limit how much one request can cover, so large views are cut into squares: Commons is asked for every square (up to 500 photos each), but Mapillary only for the 8 small squares (about 5 km across) nearest the centre, " +
-    "and very busy squares are capped (Mapillary at about 2,000 images), so counts in dense areas are lower bounds. " +
-    "At most 5,000 points are returned (evenly thinned). For Mapillary, zoom in to a few square kilometres in a city. " +
+    "The services limit how much one request can cover, so large views are cut into squares: Commons is asked for every square (up to 500 photos each), Mapillary only for the 8 small squares (about 5 km across) nearest the centre, " +
+    "and very busy squares are capped, so counts in dense areas are lower bounds. " +
+    "At most 5,000 points are returned (evenly thinned). " +
     "Over 2,500 km² (about a 50 km square) it returns photos of the 500 best-known places, Commons only.",
   coverage: "global",
   surface: "any",
-  license: "Wikimedia Commons (various free licenses); Mapillary (CC BY-SA 4.0)",
+  license: "Wikimedia Commons (various free licenses); OpenStreetMap viewpoints (ODbL); Mapillary (CC BY-SA 4.0)",
   requiredEnv: [],
-  optionalEnv: ["MAPILLARY_TOKEN"],
+  optionalEnv: ["MAPILLARY_TOKEN", "OVERPASS_URL"],
   maxAreaKm2: 2_500,
   wide: { mode: "named", orderBy: "number of Wikipedia languages", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("photos") },
+  // Viewpoints grow with the photos taken around them; photos, viewpoints and street images take three colors.
+  style: { geometry: "point", color: layerColor("photos"), encode: { size: "nearby", color: "source" } },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // Where, not when: Commons geosearch gives no dates, so there is no timeline.
+  time: { shape: "none" },
+  legend: {
+    kind: "categories",
+    title: "What it is",
+    field: "source",
+    items: [
+      { label: "Commons photo", value: "commons", symbol: "point" },
+      { label: "Viewpoint", value: "viewpoint", symbol: "point", help: `Bigger means more Commons photos taken within ${NEARBY_M} m.` },
+      { label: "Street-level image", value: "mapillary", symbol: "point", help: "Only when asked for." },
+    ],
+    note:
+      `Each small dot is one geotagged photo; a viewpoint's symbol grows with the Commons photos taken within ${NEARBY_M} m of it. ` +
+      "With more than 2,000 points in view the map groups them into cells shaded by how many photos each holds: darker means more photos.",
+  },
+  labels: { field: "name", max: 5, rankBy: "nearby" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const wanted = new Set<Source>(input.sources);
     const token = ctx.env.MAPILLARY_TOKEN?.trim() ?? "";
     const useMapillary = wanted.has("mapillary") && token !== "";
     const useCommons = wanted.has("commons");
+    const useViewpoints = wanted.has("viewpoints");
     const notes: string[] = [];
 
     if (wanted.has("mapillary") && token === "") {
-      if (!useCommons) {
+      if (!useCommons && !useViewpoints) {
         return { error: "Mapillary needs MAPILLARY_TOKEN; ask for sources ['commons'] instead", hint: "unavailable" };
       }
       notes.push(NO_TOKEN_NOTE);
@@ -440,22 +663,24 @@ const photos = defineLayer({
 
     if (ctx.wide) {
       if (!useCommons) {
-        return { error: "Mapillary images load only for small areas; zoom in under 2,500 km², or ask for sources ['commons']", hint: "zoom_in" };
+        return { error: "Mapillary images and viewpoints load only for small areas; zoom in under 2,500 km², or ask for sources ['commons']", hint: "zoom_in" };
       }
-      return widePhotos(ctx, useMapillary ? [...notes, "Mapillary is left out at this scale"] : notes);
+      const left = [...(useMapillary ? ["Mapillary images"] : []), ...(useViewpoints ? ["viewpoints"] : [])];
+      return widePhotos(ctx, left.length > 0 ? [...notes, `${left.join(" and ")} are left out at this scale`] : notes);
     }
 
     const errors: string[] = [];
     let commons: PhotoFeature[] = [];
     let mapillary: PhotoFeature[] = [];
+    let viewpoints: PhotoFeature[] = [];
 
-    const [commonsRun, mapillaryRun] = await Promise.all([
+    const [commonsRun, mapillaryRun, viewpointRun] = await Promise.all([
       (async () => {
         if (!useCommons) return null;
         const all = commonsCells(ctx.bbox);
         const cells = nearestCells(all, ctx.bbox, COMMONS_MAX_CELLS);
-        const outcomes = await pool(cells, CONCURRENCY, (cell) => fetchCommonsCell(ctx, cell));
-        return { total: all.length, used: cells.length, outcomes };
+        const { outcomes, capped } = await fetchCommons(ctx, cells);
+        return { total: all.length, used: cells.length, outcomes, capped };
       })(),
       (async () => {
         if (!useMapillary) return null;
@@ -464,12 +689,18 @@ const photos = defineLayer({
         const outcomes = await pool(cells, CONCURRENCY, (cell) => fetchMapillaryCell(ctx, cell, token));
         return { total: all.length, used: cells.length, outcomes };
       })(),
+      useViewpoints ? overpassQuery(ctx, viewpointsQuery(ctx.bbox), { cacheSuffix: "photos:viewpoints" }) : Promise.resolve(null),
     ]);
+
+    if (viewpointRun) {
+      if (viewpointRun.ok) viewpoints = viewpointFeatures(viewpointRun.json);
+      else if (useCommons || useMapillary) notes.push(`OpenStreetMap viewpoints could not be loaded (${viewpointRun.error}), so only photos are shown`);
+      else return { error: viewpointRun.error, hint: "upstream" };
+    }
 
     if (commonsRun) {
       const merged = new Map<number, PhotoFeature>();
       let failed = 0;
-      let capped = 0;
       for (const o of commonsRun.outcomes) {
         if (!o.ok) {
           failed += 1;
@@ -477,12 +708,13 @@ const photos = defineLayer({
           continue;
         }
         for (const [id, f] of o.value.features) merged.set(id, f);
-        if (o.value.capped) capped += 1;
       }
       commons = [...merged.values()];
+      const capped = commonsRun.capped;
       if (failed > 0 && failed === commonsRun.outcomes.length) {
         // With no other source to fall back on the whole query fails below, so no note is needed.
-        if (mapillaryRun) notes.push(`All ${failed} Wikimedia Commons requests failed; showing Mapillary photos only`);
+        const rest = [...(mapillaryRun ? ["Mapillary photos"] : []), ...(viewpointRun?.ok ? ["viewpoints"] : [])];
+        if (rest.length > 0) notes.push(`All ${failed} Wikimedia Commons requests failed; showing ${rest.join(" and ")} only`);
       } else if (failed > 0) {
         notes.push(`${failed} of ${commonsRun.outcomes.length} Wikimedia Commons requests failed, so some areas may be missing photos`);
       }
@@ -490,7 +722,9 @@ const photos = defineLayer({
         notes.push(`Wikimedia Commons covers only the ${commonsRun.used} of ${commonsRun.total} map squares nearest the centre; zoom in for the rest`);
       }
       if (capped > 0) {
-        notes.push("Wikimedia Commons stops at 500 photos per square of about 15 km, so busy squares have more than shown");
+        notes.push(
+          `Wikimedia Commons stops at 500 photos per square (the ones nearest its middle), so ${capped === 1 ? "one busy square has" : `${capped} busy squares have`} more than shown; zoom in for the rest`,
+        );
       }
     }
 
@@ -525,7 +759,7 @@ const photos = defineLayer({
 
     // Only an error when every request that was made failed; otherwise partial results are returned with notes.
     const attempted = (commonsRun?.outcomes.length ?? 0) + (mapillaryRun?.outcomes.length ?? 0);
-    if (attempted > 0 && errors.length === attempted) {
+    if (attempted > 0 && errors.length === attempted && viewpointRun?.ok !== true) {
       if (commonsRun && mapillaryRun) {
         const first = [commonsRun, mapillaryRun].map((run) => {
           const failure = run.outcomes.find((o) => !o.ok);
@@ -536,6 +770,9 @@ const photos = defineLayer({
       return { error: errors[0], hint: "upstream" };
     }
 
+    // Counted on every Commons photo fetched, before any thinning.
+    if (commonsRun) countNearby(viewpoints, commons);
+
     const total = commons.length + mapillary.length;
     if (total > MAX_POINTS) {
       const keepCommons = Math.min(commons.length, Math.round((MAX_POINTS * commons.length) / total));
@@ -544,9 +781,11 @@ const photos = defineLayer({
       notes.push(`Showing an evenly thinned ${MAX_POINTS.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} photos`);
     }
 
-    const data: FeatureCollection = { type: "FeatureCollection", features: [...commons, ...mapillary] };
+    // Viewpoints last, so they draw over the photo dots.
+    const data: FeatureCollection = { type: "FeatureCollection", features: [...commons, ...mapillary, ...viewpoints] };
     const sources: string[] = [];
     if (useCommons) sources.push("Wikimedia Commons");
+    if (viewpointRun?.ok) sources.push("OpenStreetMap viewpoints (ODbL)");
     if (useMapillary) sources.push("Mapillary (CC BY-SA 4.0)");
 
     return {
@@ -555,7 +794,7 @@ const photos = defineLayer({
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
       citation: {
         source: sources.join(" and "),
-        url: useCommons ? "https://commons.wikimedia.org/" : "https://www.mapillary.com/",
+        url: useCommons ? "https://commons.wikimedia.org/" : useMapillary ? "https://www.mapillary.com/" : "https://www.openstreetmap.org/",
         retrieved: new Date().toISOString(),
       },
     };

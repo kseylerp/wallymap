@@ -3,6 +3,7 @@ import type { CachedFetch } from "@/lib/fetch";
 import { getLayer } from "./registry";
 import layer, { normalizePorts, portsUrl } from "./ports";
 import raw from "./__fixtures__/ports.gulf.json";
+import { contractProblems, labelsOf, legendOf, timeShapeOf } from "./contract";
 
 const GULF: [number, number, number, number] = [-97, 27, -88, 31];
 
@@ -20,7 +21,7 @@ describe("ports layer", () => {
     expect(layer.coverage).toBe("us");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.input.parse({})).toEqual({});
-    expect(layer.style).toEqual({ geometry: "point", color: "#3A3A3C", unit: "short tons", extrude: "v" });
+    expect(layer.style).toEqual({ geometry: "point", color: "#3A3A3C", unit: "short tons", extrude: "v", encode: { size: "tons" } });
     expect(layer.license).toMatch(/Public domain/);
   });
 
@@ -111,5 +112,24 @@ describe("ports layer", () => {
     expect(layer.description).toMatch(/short tons/);
     expect(layer.description).toMatch(/2023/);
     expect(layer.description).toMatch(/middle of the port's area/);
+  });
+
+  it("sizes ports by tons, chips them by type, labels the five busiest and states the 2023 year", async () => {
+    const data = normalizePorts(raw);
+    expect(layer.attributes?.find((a) => a.key === "tons")).toMatchObject({ type: "measure", encode: "size", unit: "short tons" });
+    const types = layer.attributes?.find((a) => a.key === "kind");
+    expect(types?.levels?.map((l) => l.label)).toEqual(["Coastal", "Inland (rivers and waterways)", "Great Lakes"]);
+    const legend = legendOf(layer, data);
+    expect(legend).toMatchObject({ kind: "size", field: "tons", unit: "short tons", title: "Cargo in 2023" });
+    expect(legend.note).toMatch(/2023/);
+    expect(timeShapeOf(layer, data)).toEqual({ shape: "single", dates: ["2023"] });
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 5, rankBy: "tons" });
+    // The labels rank by tons: Houston and South Louisiana lead the Gulf fixture.
+    const top = [...data.features].sort((a, b) => Number(b.properties?.tons) - Number(a.properties?.tons)).slice(0, 2);
+    expect(top.map((f) => f.properties?.name)).toEqual(["Houston Port Authority, TX", "South Louisiana, LA, Port of"]);
+    expect(contractProblems(layer)).toEqual([]);
+    const r = await layer.query(ctx(vi.fn(async () => json(raw))), {});
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.coverageNote).toMatch(/calendar year 2023/);
   });
 });

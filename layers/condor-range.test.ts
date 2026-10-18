@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { normalizeRange, simplifyOffset } from "./condor-range";
+import layer, { VINTAGE, normalizeRange, simplifyOffset } from "./condor-range";
+import { cardTitle, labelsOf, legendOf, timeShapeOf } from "./contract";
 import current from "./__fixtures__/condor-range.current.json";
 import historic from "./__fixtures__/condor-range.historic.json";
 
@@ -33,7 +34,7 @@ describe("condor-range layer", () => {
     expect(layer.hardMaxAreaKm2).toBeUndefined();
     expect(layer.wide).toEqual({ orderBy: "area", limit: 1000 });
     expect(layer.input.parse({})).toEqual({});
-    expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", fillOpacity: 0.25 });
+    expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", fillOpacity: 0.25, encode: { color: "era" } });
   });
 
   it("labels the three current polygons current or experimental, and the historic one historic", () => {
@@ -44,9 +45,14 @@ describe("condor-range layer", () => {
       ["Current Baja California Experimental Range For California Condors", "experimental"],
     ]);
     for (const f of now) expect(f.properties?.era).toBe("today");
+    expect(now.map((f) => cardTitle(layer, f))).toEqual([
+      "Today: California range",
+      "Today: Arizona and Utah release area",
+      "Today: Baja California release area",
+    ]);
     const old = normalizeRange(historicFc, true);
     expect(old).toHaveLength(1);
-    expect(old[0].properties).toMatchObject({ kind: "historic", era: "early 1800s" });
+    expect(old[0].properties).toMatchObject({ kind: "historic", era: "early 1800s", heading: "Early 1800s range" });
   });
 
   it("queries both services with the bbox and returns four polygons with a citation", async () => {
@@ -61,7 +67,9 @@ describe("condor-range layer", () => {
     expect(calls.map((c) => c[1].cacheKey).sort()).toEqual(["condor-range:k:condor-current", "condor-range:k:condor-historic"]);
     expect(calls[0][1].ttlSeconds).toBe(7 * 86_400);
     expect(r.data.features).toHaveLength(4);
-    expect(r.coverageNote).toBeUndefined();
+    // The early-1800s outline comes first, so today's ranges draw over it.
+    expect(r.data.features.map((f) => f.properties?.era)).toEqual(["early 1800s", "today", "today", "today"]);
+    expect(r.coverageNote).toBe("Range as mapped by NPS in 2018; northern California releases since 2022 are not in it");
     expect(r.citation.source).toContain("National Park Service");
   });
 
@@ -71,6 +79,7 @@ describe("condor-range layer", () => {
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(3);
     expect(r.coverageNote).toMatch(/historic range could not be loaded/);
+    expect(r.coverageNote).toContain(VINTAGE);
 
     const none = vi.fn(async () => new Response("no", { status: 500 }));
     expect(await layer.query(ctx(none), {})).toMatchObject({ hint: "upstream" });
@@ -106,7 +115,7 @@ describe("condor-range layer", () => {
         expect(u.searchParams.get("orderByFields")).toBe("Shape__Area DESC");
         expect(u.searchParams.get("resultRecordCount")).toBe("1000");
       }
-      expect(res.body).toMatchObject({ total: 4, coverageNote: "Showing all 4 in this wide view (ranked by area)" });
+      expect(res.body).toMatchObject({ total: 4, coverageNote: `Showing all 4 in this wide view (ranked by area); ${VINTAGE}` });
     } finally {
       vi.unstubAllGlobals();
     }
@@ -119,5 +128,23 @@ describe("condor-range layer", () => {
   it("describes ranges as outlines, not sightings", () => {
     expect(layer.description).toMatch(/not nesting sites/);
     expect(layer.description).toMatch(/early 1800s/);
+    expect(layer.description).toMatch(/as mapped by NPS in 2018; northern California releases since 2022/);
+  });
+
+  it("keys today filled in sage and the early 1800s as an outline, with the 2018 vintage on the legend and every card", () => {
+    const era = layer.attributes?.find((a) => a.key === "era");
+    expect(era).toMatchObject({ type: "category", encode: "color", primary: true });
+    expect(era?.levels?.map((l) => l.label)).toEqual(["Today", "Early 1800s"]);
+    const legend = legendOf(layer);
+    expect(legend.items).toEqual([
+      expect.objectContaining({ label: "Today", color: "#9FB693", symbol: "polygon" }),
+      expect.objectContaining({ label: "Early 1800s", color: "#3A3A3C", symbol: "line" }),
+    ]);
+    expect(legend.note).toBe(`${VINTAGE}.`);
+    const when = layer.card?.facts?.find((f) => f.key === "era");
+    expect(when?.values?.today).toMatch(/NPS in 2018/);
+    expect(when?.values?.["early 1800s"]).toMatch(/early 1800s/);
+    expect(labelsOf(layer)).toEqual({ field: "heading", max: 4 });
+    expect(timeShapeOf(layer)).toEqual({ shape: "none" });
   });
 });

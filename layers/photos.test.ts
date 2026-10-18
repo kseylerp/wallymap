@@ -1,9 +1,30 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import type { Feature, Point } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { commonsUrl, mapillaryUrl, tileBBox, widePhotoFeatures, widePhotosQuery } from "./photos";
+import { cardTitle, legendOf, labelsOf, timeShapeOf } from "./contract";
+import layer, {
+  commonsRetry,
+  commonsUrl,
+  countNearby,
+  mapillaryUrl,
+  photoName,
+  quarters,
+  tileBBox,
+  viewpointFeatures,
+  viewpointsQuery,
+  widePhotoFeatures,
+  widePhotosQuery,
+} from "./photos";
 import commonsFixture from "./__fixtures__/photos.commons.json";
 import mapillaryFixture from "./__fixtures__/photos.mapillary.json";
+/** OpenStreetMap viewpoints around Yosemite Valley (-119.66,37.70,-119.52,37.77), 8 of 42, recorded 2026-10-18. */
+import viewpointFixture from "./__fixtures__/photos.viewpoints-yosemite.json";
+
+// A retried 429 or "too busy" waits no real time in tests.
+beforeAll(() => {
+  commonsRetry.waitMs = 0;
+});
 
 const SLT: [number, number, number, number] = [-120.02, 38.9, -119.94, 38.97];
 const TOKEN = "MLY|test-token-0000";
@@ -102,12 +123,28 @@ describe("photos layer", () => {
   it("declares global coverage, an optional token, no required key and a 2,500 km2 cap", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.requiredEnv).toEqual([]);
-    expect(layer.optionalEnv).toEqual(["MAPILLARY_TOKEN"]);
+    expect(layer.optionalEnv).toEqual(["MAPILLARY_TOKEN", "OVERPASS_URL"]);
     expect(layer.maxAreaKm2).toBe(2_500);
     expect(layer.hardMaxAreaKm2).toBeUndefined();
     expect(layer.wide).toEqual({ mode: "named", orderBy: "number of Wikipedia languages", limit: 500 });
-    expect(layer.style).toEqual({ geometry: "point", color: "#3A3A3C" });
-    expect(layer.license).toBe("Wikimedia Commons (various free licenses); Mapillary (CC BY-SA 4.0)");
+    expect(layer.style).toEqual({ geometry: "point", color: "#3A3A3C", encode: { size: "nearby", color: "source" } });
+    expect(layer.license).toBe("Wikimedia Commons (various free licenses); OpenStreetMap viewpoints (ODbL); Mapillary (CC BY-SA 4.0)");
+  });
+
+  it("defaults to Commons photos and viewpoints, leaving Mapillary dashcam frames out unless asked for", () => {
+    expect(layer.input.parse({})).toEqual({ sources: ["commons", "viewpoints"] });
+  });
+
+  it("declares no time, a legend of what each dot is with a plain note on size and cells, and labels the five most photographed viewpoints", () => {
+    expect(timeShapeOf(layer, { type: "FeatureCollection", features: [] })).toEqual({ shape: "none" });
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "source" });
+    expect(legend.items?.map((i) => i.label)).toEqual(["Commons photo", "Viewpoint", "Street-level image"]);
+    expect(legend.note).toMatch(/grows with the Commons photos taken within 500 m/);
+    expect(legend.note).toMatch(/darker means more photos/);
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 5, rankBy: "nearby" });
+    expect(layer.attributes?.find((a) => a.key === "nearby")).toMatchObject({ type: "measure", encode: "size", unit: "photos" });
+    expect(layer.attributes?.some((a) => a.type === "time")).toBe(false);
   });
 
   it("skips Mapillary without a token, says so, and still returns Commons photos", async () => {
@@ -136,6 +173,7 @@ describe("photos layer", () => {
     expect(first.geometry).toEqual({ type: "Point", coordinates: [hit.lon, hit.lat] });
     expect(first.properties).toEqual({
       source: "commons",
+      name: "South Lake Tahoe, From Heavenly Gondolas 9-2010 (5758856325)",
       title: hit.title.replace(/^File:/, ""),
       v: 1,
       url: `https://commons.wikimedia.org/wiki/${encodeURIComponent(hit.title.replace(/ /g, "_")).replace(/%3A/g, ":")}`,
@@ -150,12 +188,12 @@ describe("photos layer", () => {
     await layer.query(ctx(stub, { cacheKey: "photos:k" }), { sources: ["commons"] });
     const [url, init] = stub.mock.calls[0] as unknown as [string, Init];
     expect(url).toContain("gsbbox=38.97|-120.02|38.9|-119.94");
-    expect((init.headers as Record<string, string>)["user-agent"]).toContain("WildMap");
+    expect((init.headers as Record<string, string>)["user-agent"]).toBe("WallyMap/0.1 (https://wallymap.vercel.app)");
     expect(init.signal).toBeInstanceOf(AbortSignal);
     expect(init.cacheKey).toBe("photos:k:commons:-120.02,38.9,-119.94,38.97");
   });
 
-  it("queries Mapillary with the token, caches 24 hours without the token in the key, and converts captured_at to ISO t", async () => {
+  it("queries Mapillary with the token, caches 24 hours without the token in the key, and converts captured_at to ISO taken", async () => {
     const stub = routed({});
     const r = geojson(await layer.query(ctx(stub, { token: TOKEN, cacheKey: "photos:k" }), { sources: ["mapillary"] }));
     const calls = stub.mock.calls.filter((c) => String(c[0]).startsWith("https://graph.mapillary.com"));
@@ -174,11 +212,13 @@ describe("photos layer", () => {
     expect(first.geometry).toEqual({ type: "Point", coordinates: image.geometry.coordinates });
     expect(first.properties).toEqual({
       source: "mapillary",
+      name: "Street-level image",
       v: 1,
       url: `https://www.mapillary.com/app/?pKey=${image.id}`,
-      t: new Date(image.captured_at).toISOString(),
+      taken: new Date(image.captured_at).toISOString(),
     });
-    expect(first.properties?.t).toBe("2018-07-15T00:56:09.482Z");
+    expect(first.properties?.taken).toBe("2018-07-15T00:56:09.482Z");
+    expect(first.properties).not.toHaveProperty("t");
     expect(JSON.stringify(r)).not.toContain(TOKEN);
   });
 
@@ -338,7 +378,7 @@ describe("photos layer", () => {
       commons: () => {
         n += 1;
         return n === 1
-          ? json({ error: { code: "cirrussearch-too-busy-error" } })
+          ? json({ error: { code: "internal_api_error" } })
           : json({ query: { geosearch: [{ pageid: n, ns: 6, title: `File:P${n}.jpg`, lat: 38.9, lon: -120 }] } });
       },
     });
@@ -380,6 +420,100 @@ describe("photos layer", () => {
     const res = await runLayer("photos", { bbox: [-121.5, 38, -120, 39] });
     expect(res.status).toBe(422);
     expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 10000 km²$/) });
+  });
+});
+
+describe("viewpoints and photo names", () => {
+  const YOSEMITE: [number, number, number, number] = [-119.66, 37.7, -119.52, 37.77];
+  const photoAt = (lon: number, lat: number, id: number) => ({ pageid: id, ns: 6, title: `File:P${id}.jpg`, lat, lon });
+
+  it("turns a Commons file name into words", () => {
+    expect(photoName("Half_Dome_from_Glacier_Point.JPG")).toBe("Half Dome from Glacier Point");
+    expect(photoName("File:Yosemite Falls 2019.jpeg")).toBe("Yosemite Falls 2019");
+  });
+
+  it("asks Overpass for tourism=viewpoint in the box, south-west-north-east", () => {
+    expect(viewpointsQuery(YOSEMITE)).toBe('[out:json][timeout:25];nwr["tourism"="viewpoint"](37.7,-119.66,37.77,-119.52);out tags center 500;');
+  });
+
+  it("reads OSM viewpoints with their name, the way they face and their OSM page (Yosemite fixture)", () => {
+    const vps = viewpointFeatures(viewpointFixture);
+    expect(vps).toHaveLength(8);
+    expect(vps[0].geometry.coordinates).toEqual([-119.5736664, 37.7306704]);
+    expect(vps[0].properties).toMatchObject({ source: "viewpoint", kind: "viewpoint", name: "Glacier Point", osm: "https://www.openstreetmap.org/node/331507160" });
+    const unnamed = vps.find((f) => f.properties?.name === undefined)!;
+    expect(cardTitle(layer, unnamed)).toBe("Viewpoint");
+    expect(viewpointFeatures({ nope: 1 })).toEqual([]);
+  });
+
+  it("counts the Commons photos within 500 m of each viewpoint", () => {
+    const vp: Feature<Point> = { type: "Feature", geometry: { type: "Point", coordinates: [-119.5736664, 37.7306704] }, properties: {} };
+    const near = (dEastM: number, dNorthM: number): Feature<Point> => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [-119.5736664 + dEastM / (111_320 * Math.cos((37.73 * Math.PI) / 180)), 37.7306704 + dNorthM / 111_320] },
+      properties: {},
+    });
+    countNearby([vp], [near(0, 0), near(400, 0), near(0, -490), near(360, 360), near(600, 0), near(0, 700)]);
+    expect(vp.properties?.nearby).toBe(3);
+  });
+
+  it("returns photos and viewpoints together, sized by nearby photos, citing OpenStreetMap", async () => {
+    const glacier = [-119.5736664, 37.7306704] as const;
+    const geosearch = [photoAt(glacier[0], glacier[1], 1), photoAt(glacier[0] + 0.001, glacier[1], 2), photoAt(-119.65, 37.765, 3)];
+    const stub = vi.fn(async (url: string) => {
+      if (url.startsWith("https://commons.wikimedia.org")) return json({ query: { geosearch } });
+      if (url.includes("overpass")) return json(viewpointFixture);
+      throw new Error(`unexpected url ${url}`);
+    });
+    const r = geojson(await layer.query(ctx(stub, { bbox: YOSEMITE }), { sources: ["commons", "viewpoints"] }));
+    expect(r.data.features).toHaveLength(3 + 8);
+    const glacierPoint = r.data.features.find((f) => f.properties?.name === "Glacier Point");
+    expect(glacierPoint?.properties?.nearby).toBe(2);
+    // Viewpoints come last, drawn over the photo dots.
+    expect(r.data.features.at(-1)?.properties?.source).toBe("viewpoint");
+    expect(r.citation.source).toBe("Wikimedia Commons and OpenStreetMap viewpoints (ODbL)");
+    expect(r.coverageNote).toBeUndefined();
+  });
+
+  it("keeps the photos and says so when Overpass fails", async () => {
+    const stub = vi.fn(async (url: string) => (url.startsWith("https://commons.wikimedia.org") ? json(commonsFixture) : new Response("down", { status: 504 })));
+    const r = geojson(await layer.query(ctx(stub), { sources: ["commons", "viewpoints"] }));
+    expect(r.data.features).toHaveLength(commonsFixture.query.geosearch.length);
+    expect(r.coverageNote).toMatch(/^OpenStreetMap viewpoints could not be loaded \(Overpass returned 504\), so only photos are shown$/);
+  });
+
+  it("cuts a full Commons square (its 500 are only the ones nearest its middle) into quarters and asks again", async () => {
+    const full = Array.from({ length: 500 }, (_, i) => photoAt(-119.59 + (i % 25) * 0.0001, 37.735 + Math.floor(i / 25) * 0.0001, i + 1));
+    const stub = vi.fn(async (url: string) => {
+      if (!url.startsWith("https://commons.wikimedia.org")) throw new Error(`unexpected url ${url}`);
+      const [n, w, s, e] = (new URL(url).searchParams.get("gsbbox") ?? "").split("|").map(Number);
+      // The whole view is full; each quarter holds a few photos of its own.
+      if (n === 37.77 && w === -119.66 && s === 37.7 && e === -119.52) return json({ query: { geosearch: full } });
+      return json({ query: { geosearch: [photoAt(w + 0.001, n - 0.001, Math.round(-w * 1e4 + n * 1e4))] } });
+    });
+    const r = geojson(await layer.query(ctx(stub, { bbox: YOSEMITE }), { sources: ["commons"] }));
+    expect(urlsOf(stub, "https://commons.wikimedia.org")).toHaveLength(1 + 4);
+    expect(r.data.features).toHaveLength(500 + 4);
+    expect(r.coverageNote).toBeUndefined();
+    expect(quarters([0, 0, 2, 2])).toEqual([
+      [0, 0, 1, 1],
+      [1, 0, 2, 1],
+      [0, 1, 1, 2],
+      [1, 1, 2, 2],
+    ]);
+  });
+
+  it("asks Commons once more after a 429 or a too-busy answer", async () => {
+    let n = 0;
+    const stub = routed({
+      commons: () => {
+        n += 1;
+        return n === 1 ? json({ error: { code: "cirrussearch-too-busy-error" } }) : json(commonsFixture);
+      },
+    });
+    const r = geojson(await layer.query(ctx(stub), { sources: ["commons"] }));
+    expect(n).toBe(2);
+    expect(r.data.features).toHaveLength(commonsFixture.query.geosearch.length);
   });
 });
 
@@ -427,13 +561,13 @@ describe("wide mode (over 2,500 km²)", () => {
     vi.stubGlobal("fetch", stub);
     vi.stubEnv("MAPILLARY_TOKEN", TOKEN);
     try {
-      const r = await runLayer("photos", { bbox: WIDE, zoom: 8 });
+      const r = await runLayer("photos", { bbox: WIDE, zoom: 8, input: { sources: ["commons", "viewpoints", "mapillary"] } });
       expect(r.status).toBe(200);
       expect(stub).toHaveBeenCalledTimes(1);
       expect(r.body).toMatchObject({
         total: 2,
         coverageNote:
-          "Showing all 2 in this wide view (ranked by number of Wikipedia languages); over 2,500 km² this shows the best-known places that have a Commons photo, not where photos were taken; Mapillary is left out at this scale",
+          "Showing all 2 in this wide view (ranked by number of Wikipedia languages); over 2,500 km² this shows the best-known places that have a Commons photo, not where photos were taken; Mapillary images and viewpoints are left out at this scale",
       });
     } finally {
       vi.unstubAllGlobals();

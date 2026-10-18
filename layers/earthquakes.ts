@@ -16,7 +16,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp, type LegendSpec, type MeasurePreset } from "./types";
 import { QUAKE_MAGNITUDE, nameAttribute, timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
@@ -89,7 +89,34 @@ const eventSchema = z.object({
 
 const responseSchema = z.object({ features: z.array(z.unknown()) });
 
-/** Points with `t` (event time), `v` (magnitude), depthKm and place; events without a magnitude or position are dropped. */
+const KM_PER_MILE = 1.609344;
+
+/** "M 3.6": the magnitude as seismologists write it, to one decimal (the catalog's 3.58 is not that precise). */
+export function magnitudeText(mag: number): string {
+  return `M ${mag.toFixed(1)}`;
+}
+
+/** "10.9 km (6.8 mi)": the catalog's kilometres first, miles second. */
+export function depthText(km: number): string {
+  const fmt = (n: number) => (Math.abs(n) >= 100 ? Math.round(n).toLocaleString("en-US") : String(Math.round(n * 10) / 10));
+  return `${fmt(km)} km (${fmt(km / KM_PER_MILE)} mi)`;
+}
+
+/**
+ * The card title: the event kind and where, as the catalog words it ("Earthquake 10 km WSW of Mammoth Lakes, CA",
+ * "Quarry blast near Central California"), so the card never reads "Feature".
+ */
+export function quakeHeading(kind: string | undefined, place: string | undefined): string {
+  const k = (kind ?? "").replace(/[_-]+/g, " ").trim() || "earthquake";
+  const noun = k.charAt(0).toUpperCase() + k.slice(1);
+  if (!place) return noun;
+  return /^\d.*\bof\b/i.test(place) ? `${noun} ${place}` : `${noun} near ${place}`;
+}
+
+/**
+ * Points with `t` (event time), `v` (magnitude), `magnitude` ("M 3.6"), depthKm and `depth` ("10.9 km (6.8 mi)"), place
+ * and `heading` (the card title); events without a magnitude or position are dropped.
+ */
 export function normalizeEarthquakes(raw: unknown[]): FeatureCollection<Point> {
   const features: Feature<Point>[] = [];
   for (const item of raw) {
@@ -97,10 +124,19 @@ export function normalizeEarthquakes(raw: unknown[]): FeatureCollection<Point> {
     if (!parsed.success || parsed.data.geometry === null || parsed.data.properties.mag === null) continue;
     const { coordinates } = parsed.data.geometry;
     const p = parsed.data.properties;
-    const properties: Record<string, string | number> = { v: p.mag as number };
+    const mag = p.mag as number;
+    const properties: Record<string, string | number> = {
+      heading: quakeHeading(p.type ?? undefined, p.place ?? undefined),
+      v: mag,
+      magnitude: magnitudeText(mag),
+    };
     if (p.place) properties.place = p.place;
     if (typeof p.time === "number") properties.t = new Date(p.time).toISOString();
-    if (coordinates.length > 2) properties.depthKm = Math.round(coordinates[2] * 10) / 10;
+    if (coordinates.length > 2) {
+      const depthKm = Math.round(coordinates[2] * 10) / 10;
+      properties.depthKm = depthKm;
+      properties.depth = depthText(depthKm);
+    }
     if (p.magType) properties.magType = p.magType;
     if (p.type) properties.kind = p.type;
     if (typeof p.felt === "number") properties.felt = p.felt;
@@ -115,9 +151,16 @@ export function normalizeEarthquakes(raw: unknown[]): FeatureCollection<Point> {
   return { type: "FeatureCollection", features };
 }
 
+/** The usual depth classes: shallow (under 70 km, nearly every quake in the lower 48), intermediate, deep. */
+const QUAKE_DEPTH: MeasurePreset[] = [
+  { label: "Shallow: under 70 km (43 mi)", max: 69.99 },
+  { label: "Intermediate: 70 to 300 km (43 to 186 mi)", min: 70, max: 299.99 },
+  { label: "Deep: 300 km (186 mi) and more", min: 300 },
+];
+
 const ATTRIBUTES: Attribute[] = [
   { key: "v", type: "measure", label: "Magnitude", unit: "M", encode: "size", presets: QUAKE_MAGNITUDE },
-  { key: "depthKm", type: "measure", label: "Depth", unit: "km" },
+  { key: "depthKm", type: "measure", label: "Depth", unit: "km", presets: QUAKE_DEPTH },
   { key: "kind", type: "category", label: "Kind" },
   timeAttribute("When"),
   nameAttribute("Place", "place"),
@@ -145,16 +188,37 @@ const HELP: Record<string, FieldHelp> = {
 };
 
 const CARD: CardSpec = {
-  measure: { key: "v", label: "Magnitude" },
+  // "M 3.6", the way magnitudes are written; `v` keeps the catalog's number for sizing and ranking.
+  measure: { key: "magnitude", label: "Magnitude" },
   facts: [
     { key: "t", label: "When", format: "date" },
-    { key: "depthKm", label: "Depth", format: "km" },
+    { key: "depth", label: "Depth" },
     { key: "magType", label: "Magnitude type" },
     { key: "felt", label: "Felt reports", format: "int" },
     { key: "kind", label: "Event type" },
     { key: "tsunami", label: "Tsunami flag" },
   ],
   links: [{ key: "url", label: "USGS event page" }],
+  // The title carries the place; depthKm is the depth row's number.
+  hidden: ["place", "depthKm"],
+};
+
+/** Size is magnitude (the primary measure); color is depth, on the sage (shallow) to purple (deep) ramp. */
+const LEGEND: LegendSpec = {
+  kind: "size",
+  title: "Magnitude",
+  field: "v",
+  unit: "M",
+  stops: [
+    { label: "M 2.5", value: 2.5 },
+    { label: "M 4", value: 4 },
+    { label: "M 5", value: 5 },
+    { label: "M 6", value: 6 },
+    { label: "M 7 and up", value: 7 },
+  ],
+  note:
+    "Larger circles are stronger quakes; each whole step is about 32 times the energy. Color is depth below the surface in km (mi): " +
+    "sage for shallow, through pink, to purple for the deepest in view.",
 };
 
 const earthquakes = defineLayer({
@@ -162,7 +226,8 @@ const earthquakes = defineLayer({
   title: "Earthquakes",
   description:
     "Recent earthquakes from the USGS Earthquake Catalog, worldwide. Each point is one event with v (magnitude, the usual Richter-style number), " +
-    "t (when it happened, UTC), depthKm (how deep below the surface, in kilometres), place (nearest town, for example '10 km WSW of South Lake Tahoe, CA'), " +
+    "magnitude (the same as text, 'M 3.6'), heading (kind and place, the card title), " +
+    "t (when it happened, UTC), depthKm (how deep below the surface, in kilometres; depth gives it with miles), place (nearest town, for example '10 km WSW of South Lake Tahoe, CA'), " +
     "magType, kind (earthquake, or quarry blast, explosion and similar non-quake events), felt (how many people reported feeling it, when known) and url (the USGS event page). " +
     "Use it for 'recent earthquakes here', 'has it been shaking lately', 'biggest quake this year', 'how active is this fault', or to see quakes over time: the time scrubber moves through t. " +
     "Input days sets how far back to look (default 365, up to 3650) and minMagnitude the smallest quake to include (default 2.5; lower it to 1.0 to see small tremors, though coverage of tiny quakes is uneven). " +
@@ -178,9 +243,14 @@ const earthquakes = defineLayer({
   wide: { orderBy: "magnitude", rank: "strongest", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("earthquakes"), unit: "M", extrude: "v", heat: true, encode: { size: "v", color: "depthKm" } },
-  fieldHelp: HELP,
+  fieldHelp: { ...HELP, magnitude: HELP.v, depth: HELP.depthKm },
   card: CARD,
   attributes: ATTRIBUTES,
+  // Events over a span: the scrubber steps by day.
+  time: { shape: "continuous", step: "day" },
+  legend: LEGEND,
+  // The five strongest in view, as "M 4.1".
+  labels: { field: "magnitude", max: 5, rankBy: "v" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     // Wide (over 5,000,000 km², up to the hard cap): the strongest events, capped at the strategy's limit, plus a count.

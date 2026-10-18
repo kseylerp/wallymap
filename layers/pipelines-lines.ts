@@ -179,6 +179,38 @@ export function plainCase(text: string): string {
     .join(" ");
 }
 
+/**
+ * One line per name and voltage: the services split a line into many segments, and the top 10 by voltage listed
+ * "Oncor Electric Delivery Co. 345 kV line" six times. Segments of one kind, name and voltage join as one
+ * MultiLineString (the first segment's properties), so a line is ranked once.
+ */
+export function mergeByName(features: Feature<Geometry>[]): Feature<Geometry>[] {
+  const groups = new Map<string, Feature<Geometry>[]>();
+  const out: Feature<Geometry>[] = [];
+  for (const f of features) {
+    const p = f.properties ?? {};
+    const lines = f.geometry.type === "LineString" ? [f.geometry.coordinates] : f.geometry.type === "MultiLineString" ? f.geometry.coordinates : null;
+    if (!lines || typeof p.name !== "string") {
+      out.push(f);
+      continue;
+    }
+    const key = `${p.kind}|${p.name}|${p.v ?? ""}`;
+    const group = groups.get(key);
+    if (group) group.push(f);
+    else {
+      groups.set(key, [f]);
+      out.push(f);
+    }
+  }
+  return out.map((f) => {
+    const p = f.properties ?? {};
+    const group = typeof p.name === "string" ? groups.get(`${p.kind}|${p.name}|${p.v ?? ""}`) : undefined;
+    if (!group || group.length < 2 || group[0] !== f) return f;
+    const coordinates = group.flatMap((g) => (g.geometry.type === "LineString" ? [g.geometry.coordinates] : g.geometry.type === "MultiLineString" ? g.geometry.coordinates : []));
+    return { ...f, geometry: { type: "MultiLineString", coordinates } };
+  });
+}
+
 export function normalizeLines(fc: FeatureCollection, source: Source): Feature<Geometry>[] {
   const spec = SOURCES[source];
   const features: Feature<Geometry>[] = [];
@@ -376,7 +408,7 @@ const pipelinesLines = defineLayer({
       return { error: first.ok ? "ArcGIS service returned no data" : first.error, hint: "upstream" };
     }
 
-    const features = ok.flatMap((r) => normalizeLines(r.res.fc, r.source));
+    const features = mergeByName(ok.flatMap((r) => normalizeLines(r.res.fc, r.source)));
     const notes: string[] = [FRESHNESS_NOTE];
     const trimmed = ok.filter((r) => r.res.truncated).map((r) => SOURCES[r.source].kind);
     if (trimmed.length > 0 && !ctx.wide) notes.push(`Showing the first ${cap.toLocaleString("en-US")} ${trimmed.join(", ")} in view; zoom in or pick one network for the rest`);

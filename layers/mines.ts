@@ -369,8 +369,8 @@ function nameKey(name: unknown): string {
 /** Names that say what a working is, not which one: many separate tunnels and shafts carry them. */
 export const GENERIC_MINE_NAMES = new Set(["tunnel", "adit", "shaft", "mine shaft", "prospect", "prospect pit", "mine", "quarry", "gravel pit", "borrow pit", "open pit mine"]);
 
-/** One site listed twice is within this distance of itself. */
-const SAME_SITE_KM = 1;
+/** One site listed twice is within this distance of itself (a little over the duplicates check's 1 km, so rounding never splits a pair). */
+const SAME_SITE_KM = 1.05;
 
 /**
  * One mine listed once: a USMIN symbol within 1 km of an MRDS site of the same name goes (MRDS carries the

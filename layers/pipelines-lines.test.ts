@@ -142,7 +142,8 @@ describe("pipelines-lines layer", () => {
     expect(kinds).toEqual(
       new Set(["natural gas pipeline", "crude oil pipeline", "gas liquids pipeline", "petroleum products pipeline", "transmission line"]),
     );
-    expect(r.data.features).toHaveLength(5 + 3 + 3 + 3 + 5);
+    // Two fixture segments share one name and kind, so they join as one line.
+    expect(r.data.features).toHaveLength(5 + 3 + 3 + 3 + 5 - 1);
     expect(r.coverageNote).toBe(FRESHNESS_NOTE);
     expect(r.citation.source).toMatch(/last updated mid-2025/);
   });
@@ -281,5 +282,17 @@ describe("pipelines-lines layer", () => {
     );
     expect(line.properties?.name).toBe("Oncor Electric Delivery Co. 345 kV line, Odessa EHV to Moss");
     expect(plainCase("WAPA-- WESTERN AREA POWER ADMINISTRATION")).toBe("WAPA Western Area Power Administration");
+  });
+});
+
+describe("pipelines-lines: one line per name and voltage", () => {
+  it("joins the segments of one owner's 345 kV line into one feature, and keeps other voltages apart", async () => {
+    const { mergeByName } = await import("./pipelines-lines");
+    const seg = (name: string, v: number, x: number): GeoJSON.Feature => ({ type: "Feature", geometry: { type: "LineString", coordinates: [[x, 0], [x + 1, 0]] }, properties: { kind: "transmission line", name, v } });
+    const out = mergeByName([seg("Oncor 345 kV line", 345, 0), seg("Oncor 345 kV line", 345, 2), seg("Oncor 138 kV line", 138, 4)] as never);
+    expect(out.map((f) => [f.properties?.name, f.geometry.type])).toEqual([
+      ["Oncor 345 kV line", "MultiLineString"],
+      ["Oncor 138 kV line", "LineString"],
+    ]);
   });
 });

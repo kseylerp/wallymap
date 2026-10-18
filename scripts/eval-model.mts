@@ -307,7 +307,8 @@ function contains(outer: number[] | undefined, inner: number[] | null): boolean 
 /**
  * "How has Bears Ears changed since 2021?" (the owner's Bears Ears case: the camera stayed Utah-wide, two thin
  * outlines, no change encoding): passes only when the map ends in the change view: a compare by version on monuments'
- * kind with both the 2021 and the current boundary drawn (lost and gained), and the camera fitted to the union of both.
+ * `boundary` (its 2021 and current outlines matched by name), with what was lost drawn (the 2021 edge, "a-only") and
+ * what remains ("both"), and the camera fitted to the union of both.
  */
 function bearsEarsChangeRule(calls: ToolCall[]): RuleResult {
   const state = mapAfter(calls);
@@ -316,7 +317,7 @@ function bearsEarsChangeRule(calls: ToolCall[]): RuleResult {
   const features = drawn?.result.kind === "geojson" ? drawn.result.data.features : [];
   const classes = [...new Set(features.map((f) => f.properties?.delta))];
   const union = boundsOf(features);
-  const ok = compare?.layerId === "monuments" && compare.by?.key === "kind" && classes.includes("a-only") && classes.includes("b-only") && contains(state.camera?.bbox, union);
+  const ok = compare?.layerId === "monuments" && compare.by?.key === "boundary" && classes.includes("a-only") && classes.includes("both") && contains(state.camera?.bbox, union);
   return { ok, view: state.renderOps.find((o) => o.layerId === "monuments")?.view, by: compare?.by, classes, camera: state.camera?.bbox, union };
 }
 

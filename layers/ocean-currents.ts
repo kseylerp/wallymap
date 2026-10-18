@@ -18,7 +18,7 @@
  * but serve NetCDF on curvilinear grids through THREDDS; reading them is a follow-up.
  */
 import { z } from "zod";
-import { defineLayer, type Attribute, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type LinkedSeries, type QueryContext } from "./types";
+import { defineLayer, type Attribute, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type LegendSpec, type LinkedSeries, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { readField, waterMask } from "./_shared/flowGrid";
 import { haversineKm } from "./_shared/geo";
@@ -137,6 +137,16 @@ const ATTRIBUTES: Attribute[] = [
   { key: "sst", type: "measure", label: "Water temperature", unit: "°C" },
 ];
 
+/** Particles colored by water temperature and brightened by speed, over the range in view (lib/render/particles.ts). */
+export const LEGEND: LegendSpec = {
+  kind: "ramp",
+  title: "Water temperature at the surface",
+  field: "sst",
+  unit: "°C",
+  stops: [{ label: "Coldest in view" }, { label: "Warmest in view" }],
+  note: "Streaks drift with the current; brighter, longer streaks are faster (1 m/s is about 2 knots). Land and model cells without water are blank.",
+};
+
 const oceanCurrents = defineLayer({
   id: "ocean-currents",
   title: "Ocean currents (hourly, moving)",
@@ -154,6 +164,7 @@ const oceanCurrents = defineLayer({
   maxAreaKm2: 4_000_000,
   input: inputSchema,
   style: { geometry: "point", color: layerColor("ocean-currents"), unit: "m/s", encode: { size: "speed", color: "sst" }, series: "hour", basemap: "data-only" },
+  legend: LEGEND,
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,

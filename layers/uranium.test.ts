@@ -3,23 +3,42 @@ import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { bboxAreaKm2, hardMaxAreaKm2 } from "./types";
-import layer, { DOE_NAMED, DOE_URL, DOE_WHERE, NAVAJO_NAMED, NAVAJO_URL, normalizeDoe, normalizeNavajo, tellApart } from "./uranium";
+import layer, {
+  DOE_NAMED,
+  DOE_URL,
+  DOE_WHERE,
+  EPA_AUM_URL,
+  NAVAJO_NAMED,
+  NAVAJO_URL,
+  cleanupByMine,
+  joinCleanup,
+  normalizeDoe,
+  normalizeNavajo,
+  tellApart,
+} from "./uranium";
+import { labelsOf, legendOf, timeShapeOf } from "./contract";
 import doeRaw from "./__fixtures__/uranium.doe.json";
+import epaRaw from "./__fixtures__/uranium.epa.json";
 import navajoRaw from "./__fixtures__/uranium.navajo.json";
 
-/** Live answers recorded 2026-10-10: 8 Navajo Nation mines near Oljato, and the DOE uranium mill sites in a Grants, New Mexico box. */
+/**
+ * Live answers recorded 2026-10-10: 8 Navajo Nation mines near Oljato, and the DOE uranium mill sites in a Grants, New Mexico box;
+ * and 2026-10-18: EPA Region 9's cleanup rows for those 8 mines and three more (Section 26, Lower Canyon, Cottonwood Butte).
+ */
 const navajo = navajoRaw as unknown as FeatureCollection;
 const doe = doeRaw as unknown as FeatureCollection;
+const epa = epaRaw as unknown as FeatureCollection;
 const FOUR_CORNERS: [number, number, number, number] = [-112, 35, -106, 38];
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
 }
 
-function upstream(overrides: { navajo?: () => Response; doe?: () => Response } = {}) {
+function upstream(overrides: { navajo?: () => Response; doe?: () => Response; epa?: () => Response } = {}) {
   return vi.fn(async (url: string) => {
     if (url.startsWith(`${NAVAJO_URL}/query`)) return overrides.navajo ? overrides.navajo() : json(navajo);
     if (url.startsWith(`${DOE_URL}/query`)) return overrides.doe ? overrides.doe() : json(doe);
+    if (url.startsWith(`${EPA_AUM_URL}/query`)) return overrides.epa ? overrides.epa() : json(epa);
     return new Response("not found", { status: 404 });
   });
 }
@@ -112,19 +131,38 @@ describe("uranium layer", () => {
     expect(layer.style).toMatchObject({ geometry: "point", color: "#F57272" });
   });
 
-  it("queries both services, the DOE one filtered to uranium programs, and notes the 2007 vintage", async () => {
+  it("queries both services and EPA's cleanup list, the DOE one filtered to uranium programs, and notes the 2007 vintage", async () => {
     const stub = upstream();
     const r = geojson(await layer.query(ctx(stub, FOUR_CORNERS, "u:k"), {}));
     expect(r.data.features).toHaveLength(13);
-    expect(r.data.features.filter((f) => f.properties?.kind === "abandoned mine")).toHaveLength(8);
-    expect(r.coverageNote).toBe("Hazard scores are from a 2007 screening and do not reflect cleanup since");
+    const mines = r.data.features.filter((f) => f.properties?.kind === "abandoned mine");
+    expect(mines).toHaveLength(8);
+    expect(mines.every((f) => typeof f.properties?.cleanupStage === "string")).toBe(true);
+    expect(r.coverageNote).toBe("Hazard scores are from a 2007 screening, not today's conditions; each mine's EPA cleanup step is from EPA Region 9's current list");
+    expect(r.sourceStatus).toBeUndefined();
     const calls = stub.mock.calls as unknown as [string, { cacheKey?: string; ttlSeconds?: number }][];
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
     const doeCall = calls.find((c) => c[0].startsWith(DOE_URL));
     expect(new URL(doeCall?.[0] ?? "").searchParams.get("where")).toBe(DOE_WHERE);
     expect(doeCall?.[1].cacheKey).toBe("u:k:uranium:doe");
     expect(calls.find((c) => c[0].startsWith(NAVAJO_URL))?.[1].cacheKey).toBe("u:k:uranium:navajo");
-    expect(calls.every((c) => c[1].ttlSeconds === 7 * 86_400)).toBe(true);
+    expect(calls.filter((c) => !c[0].startsWith(EPA_AUM_URL)).every((c) => c[1].ttlSeconds === 7 * 86_400)).toBe(true);
+    const epaCall = calls.find((c) => c[0].startsWith(EPA_AUM_URL));
+    expect(epaCall?.[1]).toMatchObject({ cacheKey: "u:k:uranium:epa", ttlSeconds: 86_400 });
+  });
+
+  it("keeps the 2007 scores and says so when EPA's cleanup list fails, without calling the source failed", async () => {
+    const r = geojson(await layer.query(ctx(upstream({ epa: () => json({}, 503) })), {}));
+    expect(r.data.features).toHaveLength(13);
+    expect(r.data.features.some((f) => f.properties?.cleanupStage !== undefined)).toBe(false);
+    expect(r.coverageNote).toBe("Hazard scores are from a 2007 screening and do not reflect cleanup since; EPA's cleanup status could not be loaded");
+    expect(r.sourceStatus).toEqual({ ok: true });
+  });
+
+  it("does not ask EPA far from the Navajo Nation", async () => {
+    const stub = upstream();
+    geojson(await layer.query(ctx(stub, [-109, 39, -108, 40]), {}));
+    expect((stub.mock.calls as unknown as [string][]).some((c) => c[0].startsWith(EPA_AUM_URL))).toBe(false);
   });
 
   it("keeps what loaded when one service fails, and errors when both do", async () => {
@@ -158,6 +196,7 @@ describe("uranium layer", () => {
       const url = String(input);
       const counting = new URL(url).searchParams.get("returnCountOnly") === "true";
       if (url.startsWith(NAVAJO_URL)) return counting ? json({ count: 8 }) : json(navajo);
+      if (url.startsWith(EPA_AUM_URL)) return json(epa);
       return counting ? json({ count: 5 }) : json(doe);
     });
     vi.stubGlobal("fetch", stub);
@@ -165,7 +204,7 @@ describe("uranium layer", () => {
       const res = await runLayer("uranium", { bbox: box, zoom: 3 });
       expect(res.status).toBe(200);
       const urls = stub.mock.calls.map((c) => new URL(String(c[0])));
-      const data = urls.filter((u) => !u.searchParams.has("returnCountOnly"));
+      const data = urls.filter((u) => !u.searchParams.has("returnCountOnly") && !u.href.startsWith(EPA_AUM_URL));
       expect(data.map((u) => u.searchParams.get("where")).sort()).toEqual([DOE_NAMED, NAVAJO_NAMED].sort());
       expect(data.every((u) => u.searchParams.get("resultRecordCount") === "1000")).toBe(true);
       expect(urls.filter((u) => u.searchParams.has("returnCountOnly")).map((u) => u.searchParams.get("where")).sort()).toEqual(["1=1", DOE_WHERE].sort());
@@ -176,8 +215,22 @@ describe("uranium layer", () => {
     }
   });
 
+  it("sizes by the 2007 score, names the top five by it, and says the vintage in the legend and on the card", () => {
+    expect(layer.style.encode).toEqual({ size: "hazardScore" });
+    expect(layer.attributes?.find((a) => a.key === "hazardScore")).toMatchObject({ type: "measure", encode: "size" });
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 5, rankBy: "hazardScore" });
+    expect(timeShapeOf(layer)).toEqual({ shape: "single", dates: ["2007"] });
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "size", field: "hazardScore", unit: "score" });
+    expect(legend.note).toMatch(/2007 screening score, not today's conditions/);
+    expect(layer.card?.measure?.label).toBe("Hazard score (2007 screening)");
+    expect(layer.card?.facts?.find((f) => f.key === "source")?.values?.["Navajo Nation abandoned uranium mines (2007)"]).toMatch(/2007/);
+    expect(layer.display).toEqual({ units: "us" });
+  });
+
   it("warns that scores are not exposure measures and points to mines for other uranium sites", () => {
     expect(layer.description).toMatch(/not a measured exposure/);
+    expect(layer.description).toMatch(/cleanupStage/);
     expect(layer.description).toMatch(/mines with commodity uranium/);
     expect(layer.description).toMatch(/Navajo/);
   });
@@ -194,5 +247,32 @@ describe("mines that share a name", () => {
       mine(-110.1, { name: "Tract 15", mineId: 1 }),
     ]);
     expect(out.map((f) => f.properties?.name)).toEqual(["Taylor Reid No. 1 (A)", "Taylor Reid No. 1 (B)", "Mitten No. 1 (A)", "Mitten No. 1 (mine 255)", "Tract 15"]);
+  });
+});
+
+describe("EPA cleanup status", () => {
+  it("reads EPA's furthest step, who pays and the reports in plain words, by mine id", () => {
+    const byMine = cleanupByMine(epa);
+    expect(byMine.get(397)).toEqual({
+      cleanupStage: "Screened",
+      priorityMine: false,
+      cleanupFunding: "No settlement or enforcement yet",
+      screeningReport: "https://www.epa.gov/navajo-nation-uranium-cleanup/tract-15-aum-site-screening-report",
+    });
+    expect(byMine.get(260)).toMatchObject({
+      cleanupStage: "Evaluated",
+      priorityMine: true,
+      cleanupFunding: "Environmental response trust (phase 1)",
+      evaluationReport: "https://semspub.epa.gov/work/09/100016422.pdf",
+    });
+    expect(byMine.get(260)).not.toHaveProperty("responsibleParty");
+    expect(byMine.get(708)).toMatchObject({ cleanupFunding: "A responsible company, under EPA enforcement", responsibleParty: "Cyprus Amax / Western Nuclear Inc." });
+  });
+
+  it("joins it onto the 2007 points by mine id and leaves unlisted mines alone", () => {
+    const joined = joinCleanup(normalizeNavajo(navajo), cleanupByMine(epa));
+    expect(joined[0].properties).toMatchObject({ name: "Tract 15", hazardScore: 170, cleanupStage: "Screened" });
+    const unlisted = joinCleanup(normalizeNavajo(navajo), new Map());
+    expect(unlisted[0].properties).not.toHaveProperty("cleanupStage");
   });
 });

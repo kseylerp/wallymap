@@ -18,7 +18,7 @@
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
+import { defineLayer, type Attribute, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { bboxesDisjoint } from "./_shared/coverage";
@@ -184,6 +184,7 @@ export function parseStems(csv: string, bbox?: BBox): StemParse {
     if (observed !== undefined) properties.observed = observed;
     const start = fire?.start ?? observed;
     if (start !== undefined) properties.t = `${start}T00:00:00.000Z`;
+    properties.heading = `${kind === "live" ? "Living" : "Dead"} giant sequoia${properties.grove ? `, ${properties.grove} grove` : ""}`;
 
     features.push({
       type: "Feature",
@@ -193,6 +194,49 @@ export function parseStems(csv: string, bbox?: BBox): StemParse {
   }
   return { features, notFound };
 }
+
+/**
+ * The answer in one line (audit 2026-10-17: "how many died" took a click per tree): dead of surveyed in the view, then the
+ * groves (30 or more trees) that lost the largest share. "1,423 of 2,818 surveyed trees dead (50%); most lost: Garfield 74%
+ * of 308, …".
+ */
+export function survivalNote(features: Feature[]): string | null {
+  if (features.length === 0) return null;
+  const pct = (dead: number, all: number) => Math.round((100 * dead) / all);
+  const dead = features.filter((f) => f.properties?.kind === "dead").length;
+  const groves = new Map<string, { dead: number; all: number }>();
+  for (const f of features) {
+    const g = f.properties?.grove;
+    if (typeof g !== "string") continue;
+    const c = groves.get(g) ?? { dead: 0, all: 0 };
+    c.all += 1;
+    if (f.properties?.kind === "dead") c.dead += 1;
+    groves.set(g, c);
+  }
+  const worst = [...groves.entries()]
+    .filter(([, c]) => c.all >= 30)
+    .sort((a, b) => b[1].dead / b[1].all - a[1].dead / a[1].all || b[1].all - a[1].all)
+    .slice(0, 3)
+    .map(([g, c]) => `${g} ${pct(c.dead, c.all)}% of ${c.all.toLocaleString("en-US")}`);
+  return `${dead.toLocaleString("en-US")} of ${features.length.toLocaleString("en-US")} surveyed trees dead (${pct(dead, features.length)}%)${worst.length > 0 ? `; most lost: ${worst.join(", ")}` : ""}`;
+}
+
+/** Alive or dead is the answer: the map's color and the row's chips; grove an open category; trunk size a measure. */
+export const ATTRIBUTES: Attribute[] = [
+  {
+    key: "kind",
+    type: "category",
+    label: "Status",
+    encode: "color",
+    primary: true,
+    levels: [
+      { value: "dead", label: "Dead", help: "Found dead on the last survey visit." },
+      { value: "live", label: "Alive", help: "Still alive on the last survey visit (some crown still green)." },
+    ],
+  },
+  { key: "grove", type: "category", label: "Grove" },
+  { key: "diameterCm", type: "measure", label: "Trunk diameter", unit: "cm" },
+];
 
 const STEM_FILE = textBody({ markers: [/TREE_ID/, /UTM_E/, /Last_Known_Status/], minChars: 1000 });
 
@@ -229,8 +273,8 @@ const CARD: CardSpec = {
     { key: "diameterCm", label: "Trunk diameter", unit: "cm", format: "int" },
     { key: "observed", label: "Last surveyed", format: "date" },
   ],
-  // status repeats kind.
-  hidden: ["status"],
+  // status repeats kind; the heading is the title.
+  hidden: ["status", "heading"],
 };
 
 const sequoiaMortality = defineLayer({
@@ -252,7 +296,10 @@ const sequoiaMortality = defineLayer({
   maxAreaKm2: 400_000,
   wide: { orderBy: "trunk diameter in cm", limit: WIDE_LIMIT },
   input: z.object({}),
-  style: { geometry: "point", color: layerColor("sequoia-mortality"), cluster: true },
+  style: { geometry: "point", color: layerColor("sequoia-mortality"), cluster: true, encode: { color: "kind" } },
+  attributes: ATTRIBUTES,
+  // Alive or dead after the fires is the question: t (the fire's start) is not a time series to step through or compare.
+  time: { shape: "none" },
   fieldHelp: HELP,
   card: CARD,
 
@@ -299,14 +346,15 @@ const sequoiaMortality = defineLayer({
     if (wideLimit !== undefined) {
       features = [...features].sort((a, b) => Number(b.properties?.diameterCm ?? -1) - Number(a.properties?.diameterCm ?? -1)).slice(0, wideLimit);
     }
+    const notes = [survivalNote(parsed.features)];
+    if (notFound > 0 && features.length > 0) notes.push(`${notFound} surveyed trees that could not be found on a later visit are left out`);
+    const coverageNote = notes.filter((n): n is string => n !== null).join("; ");
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features },
       citation,
       ...(wideLimit !== undefined && { total: parsed.features.length }),
-      ...(notFound > 0 && features.length > 0
-        ? { coverageNote: `${notFound} surveyed trees that could not be found on a later visit are left out` }
-        : {}),
+      ...(coverageNote && { coverageNote }),
     };
   },
 });

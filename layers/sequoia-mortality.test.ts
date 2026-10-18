@@ -3,7 +3,10 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { parseCsv, parseStems, utm11ToLonLat } from "./sequoia-mortality";
+import type { Feature } from "geojson";
+import { attributeProblems } from "./attributes";
+import { cardTitle, contractProblems, legendOf, timeShapeOf } from "./contract";
+import layer, { parseCsv, parseStems, survivalNote, utm11ToLonLat } from "./sequoia-mortality";
 
 const CSV = readFileSync(path.join(__dirname, "__fixtures__/sequoia-mortality.stems.csv"), "utf8");
 
@@ -131,7 +134,7 @@ describe("sequoia-mortality layer", () => {
     expect(layer.id).toBe("sequoia-mortality");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.input.parse({})).toEqual({});
-    expect(layer.style).toEqual({ geometry: "point", color: "#F57272", cluster: true });
+    expect(layer.style).toEqual({ geometry: "point", color: "#F57272", cluster: true, encode: { color: "kind" } });
     expect(layer.maxAreaKm2).toBe(400_000);
     expect(layer.wide).toEqual({ orderBy: "trunk diameter in cm", limit: 3000 });
     expect(layer.license).toMatch(/USGS/);
@@ -179,7 +182,7 @@ describe("sequoia-mortality layer", () => {
       expect(res.body.data.features).toHaveLength(25);
       const diameters = res.body.data.features.map((f) => Number(f.properties?.diameterCm ?? -1));
       expect(diameters).toEqual([...diameters].sort((a, b) => b - a));
-      expect(res.body).toMatchObject({ total: 25, coverageNote: "Showing all 25 in this wide view (ranked by trunk diameter in cm); 4 surveyed trees that could not be found on a later visit are left out" });
+      expect(res.body).toMatchObject({ total: 25, coverageNote: expect.stringMatching(/^Showing all 25 in this wide view \(ranked by trunk diameter in cm\); \d+ of 25 surveyed trees dead \(\d+%\).*; 4 surveyed trees that could not be found on a later visit are left out$/) });
       expect(res.body).not.toHaveProperty("truncated");
     } finally {
       vi.unstubAllGlobals();
@@ -205,5 +208,21 @@ describe("sequoia-mortality layer", () => {
     expect(layer.description).toMatch(/Castle Fire/);
     expect(layer.description).toMatch(/not every sequoia/);
     expect(layer.description).toMatch(/sequoia-groves/);
+  });
+
+  it("colors alive vs dead, titles each tree, has no time scrubber, and answers 'how many died' in the note (audit 2026-10-17)", () => {
+    expect(attributeProblems(layer)).toEqual([]);
+    expect(contractProblems(layer)).toEqual([]);
+    expect(legendOf(layer).items?.map((i) => i.label)).toEqual(["Dead", "Alive"]);
+    expect(timeShapeOf(layer).shape).toBe("none");
+    const tree = (kind: string, grove?: string): Feature => ({ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: { kind, ...(grove && { grove }) } });
+    const trees = [
+      ...Array.from({ length: 30 }, (_, i) => tree(i < 24 ? "dead" : "live", "Redwood Mountain")),
+      ...Array.from({ length: 40 }, (_, i) => tree(i < 10 ? "dead" : "live", "Muir")),
+      tree("dead"),
+    ];
+    expect(survivalNote(trees)).toBe("35 of 71 surveyed trees dead (49%); most lost: Redwood Mountain 80% of 30, Muir 25% of 40");
+    expect(survivalNote([])).toBeNull();
+    expect(cardTitle(layer, { properties: { kind: "dead", heading: "Dead giant sequoia, Garfield grove" } })).toBe("Dead giant sequoia, Garfield grove");
   });
 });

@@ -199,7 +199,7 @@ const CARD: CardSpec = {
   ],
   links: [{ key: "url", label: "Open on Macrostrat" }],
   // The rock line already says these; the full description, formations and coarser maps stay under Details.
-  hidden: ["age", "lithology"],
+  hidden: ["age", "lithology", "ageTopMa", "ageBottomMa"],
 };
 
 const geologicUnit = defineLayer({

@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
-import layer from "./population";
+import { scenarioTileUrl } from "@/lib/render/scenario";
+import { legendOf, timeShapeOf } from "./contract";
+import layer, { LEGEND, POPULATION_SCENARIO } from "./population";
 
 const EUROPE: [number, number, number, number] = [-10, 35, 30, 60];
 
@@ -17,7 +19,7 @@ describe("population layer", () => {
     expect(layer.license).toBe("NASA GIBS (public)");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(Number.POSITIVE_INFINITY);
-    expect(layer.input.parse({})).toEqual({});
+    expect(layer.input.parse({})).toEqual({ year: 2020 });
   });
 
   it("returns the verified GPW 2020 raster template without calling upstream", async () => {
@@ -53,5 +55,23 @@ describe("population layer", () => {
   it("accepts a whole-globe bbox through runLayer", async () => {
     const res = await runLayer("population", { bbox: [-180, -85, 180, 85], zoom: 1 });
     expect(res.status).toBe(200);
+  });
+
+  it("offers the five GPW estimates as snapshots the stepper and compare move between", async () => {
+    const r = await layer.query(ctx(vi.fn()), { year: 2005 });
+    if (!("kind" in r) || r.kind !== "tiles") throw new Error("expected tiles");
+    expect(r.data.url).toContain("/GPW_Population_Density_2005/default/default/");
+    expect(r.data.scenario).toBe(POPULATION_SCENARIO);
+    expect(POPULATION_SCENARIO.values).toEqual([2000, 2005, 2010, 2015, 2020]);
+    expect(scenarioTileUrl(POPULATION_SCENARIO, 2010)).toContain("/GPW_Population_Density_2010/");
+    expect(timeShapeOf(layer)).toEqual({ shape: "snapshots", dates: ["2000", "2005", "2010", "2015", "2020"], step: "year" });
+    expect(layer.input.safeParse({ year: 2012 }).success).toBe(false);
+  });
+
+  it("keys GIBS's classes in people per km², drawn as served", () => {
+    expect(layer.style.raster).toMatchObject({ saturation: 0 });
+    expect(legendOf(layer)).toBe(LEGEND);
+    expect(LEGEND.items?.[0]).toMatchObject({ color: "#FFF2D1" });
+    expect(LEGEND.items?.at(-1)).toMatchObject({ label: "1,000 and more (cities)", color: "#BD0026" });
   });
 });

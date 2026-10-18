@@ -1,6 +1,11 @@
 /**
  * Energy pipelines and high-voltage power lines in the United States, from the Esri Federal User Community mirror of the
- * federal (EIA / HIFLD) data. The mirror is a frozen copy (the plan records it as of 2025-08), so it lags the agencies.
+ * federal (EIA / HIFLD) data. The mirror is a frozen copy, so it lags the agencies: its own metadata (read 2026-10-18)
+ * gives the data's last edit as 2025-06-13 (crude oil, gas liquids), 2025-07-01 (natural gas, products) and 2025-08-26
+ * (transmission), so the layer says "last updated mid-2025" in its description and on every answer's note.
+ * EIA's own copies (U.S. Energy Atlas, org FGr1D95XCGALKXqM on services7.arcgis.com, e.g.
+ * NaturalGas_InterIntrastate_Pipelines_US_EIA, CrudeOil_Pipelines_US_EIA, HGL_Pipelines_US_EIA,
+ * PetroleumProduct_Pipelines_US_EIA) answered "Token Required" (499) on 2026-10-18, so the keyless mirror stays.
  * Services (verified live 2026-10-10, keyless, polylines, maxRecordCount 2000), all under
  *   https://services2.arcgis.com/FiaPA4ga0iQKduv3/ArcGIS/rest/services/<name>/FeatureServer/0
  *   Natural_Gas_Interstate_and_Intrastate_Pipelines_1   32,892 segments   TYPEPIPE (Interstate | Intrastate), Operator, Status (Operating)
@@ -23,9 +28,10 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
+import { defineLayer, type Attribute, type AttributeLevel, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
+import { nameAttribute } from "./_shared/bands";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
 
@@ -126,6 +132,38 @@ export function whereFor(source: Source, minKv: number): string | undefined {
   return parts.join(" AND ");
 }
 
+/** How fresh the mirror is, on every answer's note and in the description. */
+export const FRESHNESS_NOTE = "Last updated mid-2025 (a federal copy that misses newer lines)";
+
+/**
+ * The voltage band of a power line: from its kV when known (DC lines carry one too), else from the source's class. The
+ * source's 220-287 class is the 230 kV band.
+ */
+export function voltageBandOf(kv: number | undefined, voltClass: string | undefined): string | undefined {
+  if (kv !== undefined && kv > 0) {
+    if (kv < 100) return "under-100";
+    if (kv < 200) return "100-161";
+    if (kv < 300) return "230";
+    if (kv < 400) return "345";
+    return "500+";
+  }
+  switch (voltClass?.toUpperCase()) {
+    case "UNDER 100":
+      return "under-100";
+    case "100-161":
+      return "100-161";
+    case "220-287":
+      return "230";
+    case "345":
+      return "345";
+    case "500":
+    case "735 AND ABOVE":
+      return "500+";
+    default:
+      return undefined;
+  }
+}
+
 /** Converts one service's rows to lines with kind, name, operator and, for power lines, voltage as `v`. */
 export function normalizeLines(fc: FeatureCollection, source: Source): Feature<Geometry>[] {
   const spec = SOURCES[source];
@@ -148,6 +186,8 @@ export function normalizeLines(fc: FeatureCollection, source: Source): Feature<G
         properties.v = kv;
       }
       if (voltageClass !== undefined) properties.voltageClass = `${voltageClass} kV`;
+      const band = voltageBandOf(kv, voltageClass);
+      if (band !== undefined) properties.voltageBand = band;
       const type = str(p.TYPE);
       if (type !== undefined) properties.lineType = type.toLowerCase();
     } else if (source === "gas") {
@@ -176,6 +216,35 @@ const HELP: Record<string, FieldHelp> = {
   pipelineType: { text: "Interstate pipelines cross state lines; intrastate pipelines stay inside one state." },
 };
 
+/**
+ * The kinds, as chips and line colors. Colors run along the sage → pink → purple ramp in this order, so the two big
+ * networks (gas pipelines, power lines) take the strong pink and purple ends and the few products lines take sage.
+ */
+const KIND_LEVELS: AttributeLevel[] = [
+  { value: "petroleum products pipeline", label: "Petroleum products", help: "Refined fuels such as gasoline, diesel and jet fuel." },
+  { value: "gas liquids pipeline", label: "Gas liquids", help: "Propane, ethane, butane and other natural gas liquids." },
+  { value: "crude oil pipeline", label: "Crude oil", help: "Crude oil trunk lines." },
+  { value: "natural gas pipeline", label: "Gas pipeline", help: "Interstate and intrastate natural gas pipelines." },
+  { value: "transmission line", label: "Power line", help: "High-voltage electric transmission lines." },
+];
+
+/** Power line voltage bands, lowest first (the source's own classes, with 220 to 287 kV as the 230 kV band). */
+const VOLTAGE_LEVELS: AttributeLevel[] = [
+  { value: "under-100", label: "Under 100 kV" },
+  { value: "100-161", label: "100 to 161 kV" },
+  { value: "230", label: "230 kV", help: "220 to 287 kV." },
+  { value: "345", label: "345 kV" },
+  { value: "500+", label: "500 kV and up" },
+];
+
+const ATTRIBUTES: Attribute[] = [
+  { key: "kind", type: "category", label: "Kind", levels: KIND_LEVELS, encode: "color", primary: true },
+  { key: "voltageBand", type: "ordinal", label: "Voltage (power lines)", levels: VOLTAGE_LEVELS, scale: "HIFLD voltage class, kV" },
+  { key: "v", type: "measure", label: "Voltage", unit: "kV" },
+  { key: "pipelineType", type: "category", label: "Gas pipeline type", levels: [{ value: "interstate", label: "Interstate" }, { value: "intrastate", label: "Intrastate" }] },
+  nameAttribute(),
+];
+
 /** The line card: voltage for power lines, then what the line is and who runs it. */
 const CARD: CardSpec = {
   measure: { key: "v", label: "Voltage", unit: "kV" },
@@ -202,7 +271,14 @@ const CARD: CardSpec = {
     {
       key: "voltageClass",
       label: "Voltage class",
-      values: { "UNDER 100 kV": "Under 100 kV", "735 AND ABOVE kV": "735 kV and above", "DC kV": "Direct current", "NOT AVAILABLE kV": "Not given" },
+      values: {
+        "UNDER 100 kV": "Under 100 kV",
+        "100-161 kV": "100 to 161 kV",
+        "220-287 kV": "220 to 287 kV",
+        "735 AND ABOVE kV": "735 kV and above",
+        "DC kV": "Direct current",
+        "NOT AVAILABLE kV": "Not given",
+      },
     },
     {
       key: "lineType",
@@ -210,6 +286,8 @@ const CARD: CardSpec = {
       values: { "ac; overhead": "AC, overhead", "ac; underground": "AC, underground", "dc; overhead": "DC, overhead", "dc; underground": "DC, underground" },
     },
   ],
+  // The band repeats the voltage and its class.
+  hidden: ["voltageBand", "voltageKv"],
 };
 
 const pipelinesLines = defineLayer({
@@ -217,10 +295,12 @@ const pipelinesLines = defineLayer({
   title: "Pipelines and power lines",
   description:
     "Where the big energy networks run across the United States, drawn as lines: natural gas pipelines, crude oil pipelines, gas liquids (propane, ethane) pipelines, refined petroleum product pipelines, and high-voltage electric transmission lines. " +
-    "Each line has kind (natural gas pipeline, crude oil pipeline, gas liquids pipeline, petroleum products pipeline or transmission line, for filtering), name, operator or owner, and for power lines v and voltageKv (kilovolts), voltageClass and status. Gas pipelines also have pipelineType (interstate or intrastate). Pipelines have no size or flow in this data. " +
+    "Last updated mid-2025: the copy's data was last edited June to August 2025, so newer lines are missing. " +
+    "Lines are colored by kind, so power lines and each kind of pipeline read apart. " +
+    "Each line has kind (natural gas pipeline, crude oil pipeline, gas liquids pipeline, petroleum products pipeline or transmission line, for filtering), name, operator or owner, and for power lines v and voltageKv (kilovolts), voltageBand (under-100, 100-161, 230, 345, 500+), voltageClass and status. Gas pipelines also have pipelineType (interstate or intrastate). Pipelines have no size or flow in this data. " +
     "Set network to pick one kind: gas, crude, gas-liquids, products, transmission, pipelines (the four pipeline kinds) or all (the default). minKv (default 100) hides power lines below that voltage so the main grid stands out; use 0 for every line, 345 for the backbone. " +
     "Use it for 'where does the pipeline run', 'what power lines cross this valley', 'how close is the transmission line to the proposed solar farm' or 'is there a gas pipeline near here'. " +
-    "Caveats: the source is a frozen copy of federal data from 2025 and misses newer lines; positions are approximate (good to about a street block at best), not survey-grade, and must not be used to dig or build; gas and power lines are cut into short segments, so counting features does not count pipelines. " +
+    "Caveats: the source is a frozen copy of federal data (EIA and HIFLD, via Esri's mirror, since EIA's own services need a sign-in); positions are approximate (good to about a street block at best), not survey-grade, and must not be used to dig or build; gas and power lines are cut into short segments, so counting features does not count pipelines. " +
     "Each kind is capped at 1,500 lines per view (longest gas segments and highest voltage first), and a view of several kinds at about 3,000 in all (600 per kind for all, 750 for pipelines), and the result says when it trims; pick one network to see more of it. " +
     "United States only; elsewhere it returns nothing. Over 150,000 km² (a 390 km square) it keeps the 3,000 longest (power lines: highest kV) and the total.",
   coverage: "us",
@@ -230,13 +310,19 @@ const pipelinesLines = defineLayer({
   maxAreaKm2: 150_000,
   wide: { orderBy: "length, power lines by voltage", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "line", color: layerColor("pipelines-lines") },
+  style: { geometry: "line", color: layerColor("pipelines-lines"), encode: { color: "kind" } },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
+  // The highest-voltage power lines get their owner's name on the map.
+  labels: { field: "name", max: 5, rankBy: "v" },
+  // A copy of the network as it stood in mid-2025, not a time series.
+  time: { shape: "none" },
+  display: { units: "us", timeZone: "local" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {
-      source: "US Energy Information Administration and DHS HIFLD pipelines and electric transmission lines, via the Esri Federal User Community mirror (frozen copy, 2025)",
+      source: "US Energy Information Administration and DHS HIFLD pipelines and electric transmission lines, via the Esri Federal User Community mirror (last updated mid-2025)",
       url: "https://www.eia.gov/maps/",
       retrieved: new Date().toISOString(),
     };
@@ -273,7 +359,7 @@ const pipelinesLines = defineLayer({
     }
 
     const features = ok.flatMap((r) => normalizeLines(r.res.fc, r.source));
-    const notes: string[] = [];
+    const notes: string[] = [FRESHNESS_NOTE];
     const trimmed = ok.filter((r) => r.res.truncated).map((r) => SOURCES[r.source].kind);
     if (trimmed.length > 0 && !ctx.wide) notes.push(`Showing the first ${cap.toLocaleString("en-US")} ${trimmed.join(", ")} in view; zoom in or pick one network for the rest`);
     const failed = results.filter((r) => !r.res.ok).map((r) => SOURCES[r.source].kind);

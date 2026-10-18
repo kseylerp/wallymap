@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { normalizeLines, perServiceCap, sourcesFor, whereFor, wideOffset } from "./pipelines-lines";
+import layer, { FRESHNESS_NOTE, normalizeLines, perServiceCap, sourcesFor, voltageBandOf, whereFor, wideOffset } from "./pipelines-lines";
+import { legendOf } from "./contract";
+import { cardContent } from "@/lib/render/card";
 import gas from "./__fixtures__/pipelines-lines.gas.json";
 import crude from "./__fixtures__/pipelines-lines.crude.json";
 import hgl from "./__fixtures__/pipelines-lines.hgl.json";
@@ -46,7 +48,7 @@ describe("pipelines-lines layer", () => {
     expect(layer.maxAreaKm2).toBe(150_000);
     expect(layer.hardMaxAreaKm2).toBeUndefined();
     expect(layer.wide).toEqual({ orderBy: "length, power lines by voltage", limit: 3000 });
-    expect(layer.style).toEqual({ geometry: "line", color: "#3A3A3C" });
+    expect(layer.style).toEqual({ geometry: "line", color: "#3A3A3C", encode: { color: "kind" } });
     expect(layer.input.parse({})).toEqual({ network: "all", minKv: 100 });
     expect(layer.input.parse({ network: "gas", minKv: 345 })).toEqual({ network: "gas", minKv: 345 });
     expect(() => layer.input.parse({ network: "water" })).toThrow();
@@ -94,6 +96,7 @@ describe("pipelines-lines layer", () => {
       voltageKv: 345,
       v: 345,
       voltageClass: "345 kV",
+      voltageBand: "345",
       lineType: "ac; overhead",
     });
     const odd = normalizeLines(
@@ -140,7 +143,8 @@ describe("pipelines-lines layer", () => {
       new Set(["natural gas pipeline", "crude oil pipeline", "gas liquids pipeline", "petroleum products pipeline", "transmission line"]),
     );
     expect(r.data.features).toHaveLength(5 + 3 + 3 + 3 + 5);
-    expect(r.coverageNote).toBeUndefined();
+    expect(r.coverageNote).toBe(FRESHNESS_NOTE);
+    expect(r.citation.source).toMatch(/last updated mid-2025/);
   });
 
   it("shares about 3,000 features between the kinds of a view and allows 1,500 for a single kind", () => {
@@ -206,7 +210,7 @@ describe("pipelines-lines layer", () => {
     );
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.total).toBe(5000);
-    expect(r.coverageNote).toBeUndefined();
+    expect(r.coverageNote).toBe(FRESHNESS_NOTE);
     const data = (stub.mock.calls as unknown as Call[]).map((c) => new URL(c[0])).filter((u) => !u.searchParams.has("returnCountOnly"));
     expect(data).toHaveLength(5);
     for (const u of data) {
@@ -230,7 +234,41 @@ describe("pipelines-lines layer", () => {
     expect(r.total).toBeUndefined();
   });
 
-  it("warns that the data is a frozen copy and not for digging", () => {
+  it("colors lines by kind (the primary chips) and offers power line voltage bands", () => {
+    const kind = layer.attributes?.find((a) => a.key === "kind");
+    expect(kind).toMatchObject({ type: "category", primary: true, encode: "color" });
+    expect(kind?.levels?.map((l) => l.label).sort()).toEqual(["Crude oil", "Gas liquids", "Gas pipeline", "Petroleum products", "Power line"]);
+    const band = layer.attributes?.find((a) => a.key === "voltageBand");
+    expect(band?.type).toBe("ordinal");
+    expect(band?.levels?.map((l) => l.label)).toEqual(["Under 100 kV", "100 to 161 kV", "230 kV", "345 kV", "500 kV and up"]);
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "kind" });
+    expect(legend.items).toHaveLength(5);
+    expect(layer.time).toEqual({ shape: "none" });
+    expect(layer.labels).toEqual({ field: "name", max: 5, rankBy: "v" });
+    expect(layer.display).toEqual({ units: "us", timeZone: "local" });
+  });
+
+  it("bands power lines by kV, else by the source's class (Cheyenne holds 115 to 345 kV)", () => {
+    expect(voltageBandOf(69, undefined)).toBe("under-100");
+    expect(voltageBandOf(115, "100-161")).toBe("100-161");
+    expect(voltageBandOf(230, "220-287")).toBe("230");
+    expect(voltageBandOf(345, "345")).toBe("345");
+    expect(voltageBandOf(500, "DC")).toBe("500+");
+    expect(voltageBandOf(undefined, "220-287")).toBe("230");
+    expect(voltageBandOf(undefined, "735 AND ABOVE")).toBe("500+");
+    expect(voltageBandOf(undefined, "NOT AVAILABLE")).toBeUndefined();
+  });
+
+  it("puts the voltage first on a power line's card and keeps the band off it", () => {
+    const line = normalizeLines(fixtures.US_Electric_Power_Transmission_Lines, "transmission")[0];
+    const card = cardContent(line, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.measure).toMatchObject({ label: "Voltage", value: "345 kV" });
+    expect([...card.facts, ...card.details].map((r) => r.key)).not.toContain("voltageBand");
+  });
+
+  it("says the data was last updated in mid-2025 and is not for digging", () => {
+    expect(layer.description).toMatch(/Last updated mid-2025/);
     expect(layer.description).toMatch(/frozen copy/);
     expect(layer.description).toMatch(/must not be used to dig/);
     expect(layer.description).toMatch(/minKv/);

@@ -1,10 +1,11 @@
 import type { FeatureCollection } from "geojson";
 import type { LegendSpec } from "@/layers/types";
-import { primaryMeasure, valueKeys } from "@/lib/render/attributes";
+import { declaredGroups, encodedAttribute, primaryMeasure, valueKeys } from "@/lib/render/attributes";
+import { LINE_DASHES, UNRATED_LABEL, UNRATED_LINE } from "@/lib/render/nativeLines";
 import { categoryKey, type CategoryKey } from "@/lib/render/categories";
 import { layerKey } from "@/lib/render/contract";
 import { channelExtent, ENCODE_RAMP } from "@/lib/render/encode";
-import { areaRecipe, lineRampFor, scoreRampFor, type RampName } from "@/lib/render/palette";
+import { areaRecipe, lineRampFor, SAGE, scoreRampFor, type RampName } from "@/lib/render/palette";
 import { shortTitle } from "@/layers/contract";
 import type { LoadedLayer, RenderOp } from "@/lib/render/state";
 import { rampSamples } from "@/lib/render/wally/legend";
@@ -16,7 +17,7 @@ import { rampSamples } from "@/lib/render/wally/legend";
  * one swatch with a note for raster tiles, or the image the tile service publishes.
  */
 
-export type LegendEntry = { label: string; color?: string; count?: number; help?: string; outline?: boolean };
+export type LegendEntry = { label: string; color?: string; count?: number; help?: string; outline?: boolean; dash?: [number, number] };
 
 export type LegendBlock = {
   kind: LegendSpec["kind"];
@@ -138,6 +139,33 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, data: Fe
         blocks.push({ kind: "symbol", entries: (spec.items ?? []).map((i) => ({ label: i.label })), ...(spec.note && { note: spec.note }), ...(spec.unit && { unit: spec.unit }), shape });
       }
       break;
+  }
+  // Lines: kinds told apart by dash (pipelines), and lines the difficulty scale does not rate (a thin grey dash).
+  if (shape === "line" && data) {
+    const dashAttr = layer.attributes?.find((a) => a.encode === "dash" && (a.levels?.length ?? 0) > 1);
+    if (dashAttr) {
+      const n2 = counts(data, dashAttr.key);
+      blocks.push({
+        kind: "categories",
+        title: dashAttr.label,
+        field: `${dashAttr.key}#dash`,
+        entries: declaredGroups(dashAttr).map((g, k) => ({
+          label: g.label,
+          color: SAGE,
+          dash: LINE_DASHES[k % LINE_DASHES.length],
+          count: g.values.reduce((t, v) => t + (n2.get(v) ?? 0), 0),
+        })),
+        shape,
+      });
+    }
+    const facet = encodedAttribute(layer);
+    if (facet && !op?.color) {
+      const rated = new Set(declaredGroups(facet).filter((g) => !UNRATED_LABEL.test(g.label)).flatMap((g) => g.values));
+      const unrated = data.features.filter((f) => !valueKeys(f.properties?.[facet.key]).some((v) => rated.has(v))).length;
+      if (unrated > 0) {
+        blocks.push({ kind: "categories", field: `${facet.key}#unrated`, entries: [{ label: "Not rated", color: UNRATED_LINE.color, dash: UNRATED_LINE.dash, count: unrated }], shape });
+      }
+    }
   }
   // Symbols sized by the primary measure (encode by default) say so, with the range the data spans.
   const measure = primaryMeasure(layer);

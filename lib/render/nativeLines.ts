@@ -5,6 +5,7 @@ import { compareBId, compareSideShown, effectiveMode, isHexCollection } from "@/
 import {
   COMPARE_COLORS,
   DELTA_LINE_COLORS,
+  DARK_GREY,
   isPaletteColor,
   LINE,
   LINE_CLASSES,
@@ -19,7 +20,7 @@ import {
   type LineRecipe,
 } from "@/lib/render/palette";
 import { rampColor, rgbToHex } from "@/lib/render/ramp";
-import { colorStops, encodedAttribute, valueKey } from "@/lib/render/attributes";
+import { colorStops, declaredGroups, encodedAttribute, valueKey } from "@/lib/render/attributes";
 import { colorT, encodeColor, ENCODED_LINE, resolveEncoding, sizeT, type Channel } from "@/lib/render/encode";
 import type { MapState, RenderOp, Selection } from "@/lib/render/state";
 import { chainParts, gradientExpression } from "@/lib/render/wally/routeLine";
@@ -93,7 +94,21 @@ export type LineEntry = {
   selected: number;
   /** True on a basemap with satellite imagery: encoded lines take a wider minimum and the trails' casing there. */
   imagery?: boolean;
+  /**
+   * An attribute with `encode: "dash"` (pipelines by kind): each of its values, in declared order, takes a dash pattern
+   * (LINE_DASHES), so kinds tell apart by dash where color carries something else.
+   */
+  dashBy?: { key: string; values: string[][] };
 };
+
+/** Dash patterns (pixels, [on, off]) for the values of a dash attribute, in declared order: solid, dashed, dotted, long. */
+export const LINE_DASHES: readonly [number, number][] = [[0, 0], [8, 5], [2.5, 5], [16, 5]];
+
+/** A facet level that stands for no rating ("Not rated", "Unrated"): drawn as a thin grey dash, never as the easiest. */
+export const UNRATED_LABEL = /not rated|unrated|no grade|ungraded|unknown/i;
+
+/** How an unrated line draws: a thin dark grey dash on its casing, so it never reads as the easiest level. */
+export const UNRATED_LINE = { color: DARK_GREY, width: 1.25, dash: [2, 3] as [number, number], opacity: 0.75 } as const;
 
 /** True when an op on a layer with these hints draws as lines (lines mode; line layers have no column form). */
 export function drawsNativeLines(op: Pick<RenderOp, "mode">, style: Pick<StyleHints, "geometry">): boolean {
@@ -176,17 +191,29 @@ export function lineEntries(view: MapState): LineEntry[] {
       : pair
         ? { kind: "encoded", ...(pair.size && { size: { key: pair.size.key, extent: pair.size.extent } }), ...(pair.color && { color: pair.color }) }
         : encoded
-          ? { kind: "facet", key: encoded.key, stops: colorStops(encoded) }
+          ? { kind: "facet", key: encoded.key, stops: colorStops(encoded).filter(([v]) => !UNRATED_LABEL.test(encoded.levels?.find((l) => String(l.value) === v)?.label ?? "")) }
           : loaded.style.unit === "score"
             ? { kind: "ramp" }
             : { kind: "classes" };
-    entries.push({ id: op.layerId, layerId: op.layerId, data, look, opacity, shown: true, selected: indexOf(data, picked?.feature), ...(imagery && { imagery }) });
+    const dashAttr = loaded.attributes?.find((a) => a.encode === "dash" && (a.levels?.length ?? 0) > 1);
+    const dashBy = dashAttr ? { key: dashAttr.key, values: declaredGroups(dashAttr).map((g) => g.values) } : undefined;
+    entries.push({
+      id: op.layerId,
+      layerId: op.layerId,
+      data,
+      look,
+      opacity,
+      shown: true,
+      selected: indexOf(data, picked?.feature),
+      ...(imagery && { imagery }),
+      ...(dashBy && { dashBy }),
+    });
   }
   return entries;
 }
 
 /** Source feature properties: the index back into the entry's data, the line class, and what the paint reads. */
-export type LineProps = { i: number; cls: LineClass | "delta"; v: number | null; delta?: string; fv?: string; sz?: number; ct?: number };
+export type LineProps = { i: number; cls: LineClass | "delta"; v: number | null; delta?: string; fv?: string; sz?: number; ct?: number; dk?: number };
 
 const sourceMemo = new WeakMap<FeatureCollection, Map<string, FeatureCollection>>();
 
@@ -197,9 +224,9 @@ const sourceMemo = new WeakMap<FeatureCollection, Map<string, FeatureCollection>
  * property as before. Points are dropped; a delta keeps only its lines (deck draws its areas and points); a route's
  * ways are chained so the gradient runs along it (chainParts).
  */
-export function lineSourceData(entry: Pick<LineEntry, "data" | "layerId" | "look">): FeatureCollection {
+export function lineSourceData(entry: Pick<LineEntry, "data" | "layerId" | "look" | "dashBy">): FeatureCollection {
   const look = entry.look;
-  const key = `${entry.layerId}|${look.kind}${look.kind === "facet" ? `|${look.key}` : ""}${
+  const key = `${entry.layerId}|${entry.dashBy?.key ?? ""}|${look.kind}${look.kind === "facet" ? `|${look.key}` : ""}${
     look.kind === "encoded" ? `|${look.size?.key ?? ""}:${look.size?.extent?.join(",") ?? ""}|${look.color?.key ?? ""}:${look.color?.extent?.join(",") ?? ""}` : ""
   }`;
   let byKey = sourceMemo.get(entry.data);
@@ -220,6 +247,11 @@ export function lineSourceData(entry: Pick<LineEntry, "data" | "layerId" | "look
     const properties: LineProps = { i, cls, v: Number.isFinite(n) ? n : null };
     if (kind === "delta") properties.delta = String(f.properties?.delta ?? "both");
     if (entry.look.kind === "facet") properties.fv = valueKey(f.properties?.[entry.look.key]) ?? "";
+    if (entry.dashBy) {
+      const v = valueKey(f.properties?.[entry.dashBy.key]);
+      const k = v === undefined ? -1 : entry.dashBy.values.findIndex((vals) => vals.includes(v));
+      properties.dk = k < 0 ? 0 : k % LINE_DASHES.length;
+    }
     if (look.kind === "encoded") {
       if (look.size) properties.sz = round3(sizeT(f.properties?.[look.size.key], look.size.extent));
       if (look.color) properties.ct = round3(colorT(f.properties?.[look.color.key], look.color) ?? -1);
@@ -258,7 +290,23 @@ export function rampLineColor(layerId: string): ExpressionSpecification {
 /** The `line-color` of a facet line: a `match` on the facet value (`fv`), unnamed values sage. */
 export function facetLineColor(stops: [string, string][]): string | ExpressionSpecification {
   if (stops.length === 0) return SAGE;
-  return ["match", ["get", "fv"], ...stops.flat(), SAGE] as ExpressionSpecification;
+  // A value the scale does not rate draws as UNRATED_LINE, never as the easiest level's sage.
+  return ["match", ["get", "fv"], ...stops.flat(), UNRATED_LINE.color] as ExpressionSpecification;
+}
+
+/** True (an expression) for a facet line whose value is one of the rated levels. */
+function ratedExpr(stops: [string, string][]): ExpressionSpecification {
+  return ["in", ["get", "fv"], ["literal", stops.map(([v]) => v)]] as ExpressionSpecification;
+}
+
+/** The dash per value of a dash attribute (`dk`), as `line-dasharray`. */
+function dashByExpr(): ExpressionSpecification {
+  return [
+    "match",
+    ["get", "dk"],
+    ...LINE_DASHES.flatMap((d, k) => (k === 0 ? [] : [k, ["literal", dashInWidths(d)]])),
+    ["literal", [1, 0]],
+  ] as ExpressionSpecification;
 }
 
 /** Classes drawn in the core layer (not routes), with their colors and dashes. */
@@ -359,6 +407,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
   const sel: ExpressionSpecification = ["==", ["get", "i"], entry.selected];
   const routeCasing = LINE_CLASSES.route.casing;
   const encoded = entry.look.kind === "encoded" && entry.look.size !== undefined;
+  const facet = entry.look.kind === "facet" ? entry.look : undefined;
   const imagery = entry.imagery === true;
   const fade = encoded ? ENCODED_SIBLING_FADE : SIBLING_FADE;
   const baseCasing: number | ExpressionSpecification = encoded
@@ -375,11 +424,24 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
     layout: encoded ? { ...layout, "line-sort-key": ["to-number", ["get", "sz"], 0] } : layout,
     paint: {
       "line-color": coreColor(entry),
-      // Classes with their own width (thin forest roads); an encoded size its share; the rest at the data line width.
-      "line-width": classes ? coreWidth() : encoded ? encodedLineWidth(0, false, imagery) : LINE.width,
+      // Classes with their own width (thin forest roads); an encoded size its share; an unrated facet line thin; the
+      // rest at the data line width.
+      "line-width": classes
+        ? coreWidth()
+        : encoded
+          ? encodedLineWidth(0, false, imagery)
+          : facet && facet.stops.length > 0
+            ? (["case", ratedExpr(facet.stops), LINE.width, UNRATED_LINE.width] as ExpressionSpecification)
+            : LINE.width,
       // The selected feature draws in the highlight layer above.
       "line-opacity": faded(entry, 1, 0, fade),
-      ...(classes && { "line-dasharray": coreDash() }),
+      ...(entry.dashBy
+        ? { "line-dasharray": dashByExpr() }
+        : classes
+          ? { "line-dasharray": coreDash() }
+          : facet && facet.stops.length > 0
+            ? { "line-dasharray": ["case", ratedExpr(facet.stops), ["literal", [1, 0]], ["literal", dashInWidths(UNRATED_LINE.dash, UNRATED_LINE.width)]] as ExpressionSpecification }
+            : {}),
     },
     ...(routed && { filter: notRoute }),
   };
@@ -391,7 +453,7 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
     classes && twoTone
       ? ["==", ["get", "cls"], twoTone]
       : entry.look.kind === "facet" && twoTone
-        ? ["all", ["==", ["get", "cls"], twoTone], ["!", ["in", ["get", "fv"], ["literal", colored]]]]
+        ? ["all", ["==", ["get", "cls"], twoTone], ["!", ["in", ["get", "fv"], ["literal", colored]]], ["in", ["get", "fv"], ["literal", entry.look.stops.map(([v]) => v)]]]
         : ["==", ["get", "cls"], "none"];
   const dash: LineLayerSpecification = {
     id: lineLayerId(entry.id, "dash"),

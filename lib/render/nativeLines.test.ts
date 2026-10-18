@@ -13,6 +13,7 @@ import {
   rampLineColor,
   type LineEntry,
 } from "@/lib/render/nativeLines";
+import { UNRATED_LINE } from "@/lib/render/nativeLines";
 import { DARK_GREY, INK, PINK, PURPLE, SAGE, SIBLING_FADE, WHITE } from "@/lib/render/palette";
 import { hexToRgb, rampColor, rgbToHex } from "@/lib/render/ramp";
 import { reduce } from "@/lib/render/reducer";
@@ -465,7 +466,7 @@ describe("the encoded ordinal drives the line color (spec §12c: difficulty on t
   ];
   const trails = [line(-120, { v: 0 }), line(-119, { v: 3 }), line(-118, { v: 5 })];
 
-  it("matches each class to its ramp color on the ordinal value, and an unnamed value draws sage", () => {
+  it("matches each class to its ramp color on the ordinal value, and an unrated value draws a thin grey dash", () => {
     const [entry] = lineEntries(visibleState(stateOf("mtb-trails", trails, {}, {}, difficulty)));
     expect(entry.look.kind).toBe("facet");
     expect(lineSourceData(entry).features.map((f) => f.properties?.fv)).toEqual(["0", "3", "5"]);
@@ -473,7 +474,22 @@ describe("the encoded ordinal drives the line color (spec §12c: difficulty on t
     expect(color.slice(0, 2)).toEqual(["match", ["get", "fv"]]);
     expect(color[3]).toBe(SAGE);
     expect(color.at(-2)).toBe(PURPLE);
-    expect(color.at(-1)).toBe(SAGE);
+    // Not rated never reads as the easiest level: dark grey, thin, dashed (lines fixer, 2026-10-18).
+    expect(color.at(-1)).toBe(DARK_GREY);
+    const core = paint(byPart(lineLayerSpecs(entry), "core"));
+    expect(JSON.stringify(core["line-width"])).toContain(String(UNRATED_LINE.width));
+    expect(JSON.stringify(core["line-dasharray"])).toContain('"case"');
+  });
+
+  it("dashes lines by a dash attribute's values (pipelines by kind)", () => {
+    const kinds: LoadedLayer["attributes"] = [
+      { key: "kind", type: "category", label: "Kind", encode: "dash", levels: [{ value: "gas", label: "Gas" }, { value: "oil", label: "Oil" }, { value: "water", label: "Water" }] },
+    ];
+    const pipes = [line(-120, { kind: "gas" }), line(-119, { kind: "oil" }), line(-118, { kind: "water" })];
+    const [entry] = lineEntries(visibleState(stateOf("pipelines-lines", pipes, {}, {}, kinds)));
+    expect(lineSourceData(entry).features.map((f) => f.properties?.dk)).toEqual([0, 1, 2]);
+    const dash = paint(byPart(lineLayerSpecs(entry), "core"))["line-dasharray"] as unknown[];
+    expect(dash.slice(0, 2)).toEqual(["match", ["get", "dk"]]);
   });
 
   it("keeps the T1 dashes on the trails a facet draws sage (easy and no grade), so they show on green Topo", () => {
@@ -496,8 +512,9 @@ describe("the encoded ordinal drives the line color (spec §12c: difficulty on t
     expect(lineSourceData(entry).features.map((f) => f.properties?.cls)).toEqual(["trail", "trail", "trail"]);
     const filter = byPart(lineLayerSpecs(entry), "dash").filter as unknown[];
     expect(filter[0]).toBe("all");
-    // Dashes on every trail except the levels the ramp colors (T2 and up).
+    // Dashes on every rated trail except the levels the ramp colors (T2 and up); a trail with no grade is the unrated dash.
     expect(JSON.stringify(filter)).toContain('["literal",["mountain_hiking","alpine_hiking"]]');
+    expect(JSON.stringify(filter)).toContain('["literal",["hiking","mountain_hiking","alpine_hiking"]]');
     expect(paint(byPart(lineLayerSpecs(entry), "dash"))["line-color"]).toBe(DARK_GREY);
   });
 

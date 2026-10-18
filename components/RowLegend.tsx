@@ -4,13 +4,14 @@ import type { LegendBlock, LegendEntry } from "@/lib/render/legendView";
 import { DARK_GREY, LINE, WHITE } from "@/lib/render/palette";
 
 /** One category's swatch, drawn as the map draws the layer: a disc on a halo, a line on its casing, or a tinted square. */
-export function Swatch({ color, shape, outline = false }: { color?: string; shape: LegendBlock["shape"]; outline?: boolean }) {
+export function Swatch({ color, shape, outline = false, dash }: { color?: string; shape: LegendBlock["shape"]; outline?: boolean; dash?: [number, number] }) {
   const c = color ?? DARK_GREY;
   if (shape === "line") {
+    const dashed = dash && dash[0] > 0;
     return (
-      <svg aria-hidden viewBox="0 0 16 6" width={16} height={6} className="shrink-0">
-        <line x1={1} y1={3} x2={15} y2={3} stroke={WHITE} strokeWidth={LINE.casing} strokeLinecap="round" />
-        <line x1={1} y1={3} x2={15} y2={3} stroke={c} strokeWidth={LINE.width} strokeLinecap="round" />
+      <svg aria-hidden viewBox="0 0 22 6" width={22} height={6} className="shrink-0">
+        <line x1={1} y1={3} x2={21} y2={3} stroke={WHITE} strokeWidth={LINE.casing} strokeLinecap="round" />
+        <line x1={1} y1={3} x2={21} y2={3} stroke={c} strokeWidth={dashed && dash[0] <= 2 ? 1.25 : LINE.width} strokeLinecap="butt" strokeDasharray={dashed ? `${dash[0]} ${dash[1]}` : undefined} />
       </svg>
     );
   }
@@ -31,7 +32,7 @@ export function Swatch({ color, shape, outline = false }: { color?: string; shap
 function Entry({ entry, shape }: { entry: LegendEntry; shape: LegendBlock["shape"] }) {
   return (
     <li className="flex min-w-0 items-center gap-1.5" title={entry.help}>
-      <Swatch color={entry.color} shape={shape} outline={entry.outline} />
+      <Swatch color={entry.color} shape={shape} outline={entry.outline} dash={entry.dash} />
       <span className="min-w-0 truncate">{entry.label}</span>
       {entry.count !== undefined && <span className="shrink-0 text-ink-muted tabular-nums">{entry.count.toLocaleString("en-US")}</span>}
     </li>

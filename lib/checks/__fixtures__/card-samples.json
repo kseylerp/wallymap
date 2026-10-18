@@ -262,7 +262,7 @@
  },
  "climbing": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -84,
    37.5,
@@ -354,6 +354,35 @@
      "trad": 26,
      "boulder": 2,
      "toprope": 1
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.797789,
+      37.646631
+     ]
+    },
+    "properties": {
+     "kind": "crag",
+     "osmId": "node/7112981792",
+     "source": "osm",
+     "name": "Mount Olive Rock",
+     "v": 5,
+     "grades": "7- to 11- (uiaa)",
+     "gradeBands": [
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "disciplines": [
+      "sport",
+      "trad"
+     ],
+     "maxLengthM": 20,
+     "nameInSource": "Mt. Olive Rock"
     }
    },
    {
@@ -676,47 +705,6 @@
       "node/7231211487",
       "way/652151056"
      ]
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -83.723116,
-      37.652151
-     ]
-    },
-    "properties": {
-     "kind": "crag",
-     "osmId": "node/7193428994",
-     "source": "osm+openbeta",
-     "name": "Bob Marley Crag",
-     "v": 48,
-     "grades": "5- to 12 (uiaa)",
-     "gradeBands": [
-      "beginner",
-      "intermediate",
-      "advanced",
-      "elite"
-     ],
-     "disciplines": [
-      "sport",
-      "trad",
-      "mixed"
-     ],
-     "maxLengthM": 32,
-     "osmIds": [
-      "node/7193428994",
-      "way/652151046"
-     ],
-     "openbetaId": "65d720a4-69ac-5670-ac71-0c4f93abd89e",
-     "url": "https://openbeta.io/areas/65d720a4-69ac-5670-ac71-0c4f93abd89e",
-     "routesOsm": 48,
-     "routesOpenbeta": 35,
-     "region": "Kentucky > Red River Gorge > Pendergrass-Murray Recreational Preserve (PMRP)",
-     "sport": 32,
-     "trad": 3
     }
    }
   ]
@@ -2305,7 +2293,7 @@
  },
  "forest-roads": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -112.008,
    34.906,
@@ -2323,13 +2311,21 @@
      ]
     },
     "properties": {
-     "routeId": "09151Q",
+     "routeId": "9151Q",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9151Q",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 2.86
     }
    },
@@ -2343,15 +2339,23 @@
      ]
     },
     "properties": {
-     "routeId": "00538G",
+     "routeId": "538G",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
-     "name": "KELSEY SPRING TRAILHEAD",
+     "name": "Kelsey Spring Trailhead",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
-     "miles": 1.45
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
+     "miles": 1.45,
+     "nameInSource": "KELSEY SPRING TRAILHEAD"
     }
    },
    {
@@ -2364,13 +2368,21 @@
      ]
     },
     "properties": {
-     "routeId": "09008C",
+     "routeId": "9008C",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9008C",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 1.48
     }
    },
@@ -2384,13 +2396,21 @@
      ]
     },
     "properties": {
-     "routeId": "09132W",
+     "routeId": "9132W",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9132W",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 0.06
     }
    },
@@ -2404,13 +2424,21 @@
      ]
     },
     "properties": {
-     "routeId": "09172X",
+     "routeId": "9172X",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9172X",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 7.44
     }
    },
@@ -2424,13 +2452,21 @@
      ]
     },
     "properties": {
-     "routeId": "09180",
+     "routeId": "9180",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9180",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 3.64
     }
    },
@@ -2444,13 +2480,21 @@
      ]
     },
     "properties": {
-     "routeId": "09217N",
+     "routeId": "9217N",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9217N",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 2.23
     }
    },
@@ -2464,13 +2508,21 @@
      ]
     },
     "properties": {
-     "routeId": "09125F",
+     "routeId": "9125F",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9125F",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 1.31
     }
    },
@@ -2484,13 +2536,21 @@
      ]
     },
     "properties": {
-     "routeId": "09173",
+     "routeId": "9173",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9173",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 0.18
     }
    },
@@ -2504,13 +2564,21 @@
      ]
     },
     "properties": {
-     "routeId": "00549C",
+     "routeId": "549C",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 549C",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 6.53
     }
    },
@@ -2524,13 +2592,19 @@
      ]
     },
     "properties": {
-     "routeId": "00003Q",
+     "routeId": "3Q",
      "access": "Roads open to highway legal vehicles only, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 3Q",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 3,
      "surface": "AGG - CRUSHED AGGREGATE OR GRAVEL",
+     "surfaceKind": "gravel",
+     "carDates": "All year",
+     "motorhome": true,
      "miles": 0.05
     }
    },
@@ -2544,13 +2618,21 @@
      ]
     },
     "properties": {
-     "routeId": "00078",
+     "routeId": "78",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 78",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 1.79
     }
    }
@@ -6415,7 +6497,7 @@
  },
  "pipelines-lines": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -102.3,
    31.651,
@@ -6457,6 +6539,7 @@
      "voltageKv": 345,
      "v": 345,
      "voltageClass": "345 kV",
+     "voltageBand": "345",
      "lineType": "ac; overhead"
     }
    },
@@ -11181,7 +11264,7 @@
  },
  "surf": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -122.6,
    37.3,
@@ -11194,24 +11277,29 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -122.469922,
-      37.485211
+      -122.4699,
+      37.4852
      ]
     },
     "properties": {
      "name": "Mavericks",
      "kind": "forecast",
      "spotSource": "Wikidata",
-     "t": "2026-10-17T03:00:00.000Z",
-     "v": 1.06,
-     "waveFt": 3.5,
-     "maxNext48hM": 2.08,
-     "maxAt": "2026-10-18T23:00:00.000Z",
-     "periodS": 12.05,
-     "directionDeg": 258,
-     "directionFrom": "WSW",
-     "swellM": 0.56,
-     "swellPeriodS": 11.45
+     "t": "2026-10-18T06:00:00.000Z",
+     "v": 1.58,
+     "waveFt": 5.2,
+     "maxNext48hM": 2.06,
+     "maxNext48hFt": 6.8,
+     "maxAt": "2026-10-19T02:00:00.000Z",
+     "periodS": 10.45,
+     "directionDeg": 280,
+     "directionFrom": "W",
+     "swellFrom": "West (280°)",
+     "swellM": 0.82,
+     "swellFt": 2.7,
+     "swellPeriodS": 12.8,
+     "readAt": "11:00 pm PDT Sat",
+     "maxAtLocal": "7:00 pm PDT Sun"
     }
    }
   ]
@@ -11504,7 +11592,7 @@
  },
  "tides": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -68.657,
    44.004,
@@ -11517,24 +11605,27 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -68.20427777777778,
-      44.39219444444444
+      -68.3533,
+      44.2417
      ]
     },
     "properties": {
-     "name": "BAR HARBOR",
-     "stationId": "8413320",
-     "kind": "high",
+     "name": "Bass Harbor",
+     "stationId": "8413651",
+     "kind": "prediction",
      "nextType": "high",
-     "t": "2026-10-17T07:55:00.000Z",
-     "v": 9.087,
-     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413320",
-     "upcoming": "high 9.1 ft at 07:55 UTC 10-17; low 2.4 ft at 13:55 UTC 10-17; high 9.9 ft at 20:04 UTC 10-17; low 1.6 ft at 02:35 UTC 10-18",
+     "nextAt": "2026-10-18T08:52:00.000Z",
+     "v": 8.229,
+     "trend": "Rising toward high tide",
+     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413651",
+     "level": 6.79,
+     "tide1": "High 8.2 ft at 4:52 am EDT Sun",
+     "tide2": "Low 2.4 ft at 10:22 am EDT Sun",
+     "tide3": "High 9.0 ft at 5:03 pm EDT Sun",
+     "tide4": "Low 1.6 ft at 11:04 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T13:55:00.000Z",
-     "thenV": 2.432,
-     "observedNow": 3.72,
-     "observedAt": "2026-10-17T03:24:00.000Z",
+     "thenAt": "2026-10-18T14:22:00.000Z",
+     "thenV": 2.415,
      "state": "ME"
     }
    },
@@ -11543,23 +11634,32 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -68.3533,
-      44.2417
+      -68.20427777777778,
+      44.39219444444444
      ]
     },
     "properties": {
-     "name": "Bass Harbor",
-     "stationId": "8413651",
-     "kind": "high",
+     "name": "Bar Harbor",
+     "stationId": "8413320",
+     "kind": "live",
      "nextType": "high",
-     "t": "2026-10-17T07:59:00.000Z",
-     "v": 8.451,
-     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413651",
-     "upcoming": "high 8.5 ft at 07:59 UTC 10-17; low 2.3 ft at 13:28 UTC 10-17; high 9.2 ft at 20:08 UTC 10-17; low 1.5 ft at 02:08 UTC 10-18",
+     "nextAt": "2026-10-18T08:48:00.000Z",
+     "v": 8.849,
+     "trend": "Rising toward high tide",
+     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413320",
+     "level": 7.17,
+     "tide1": "High 8.8 ft at 4:48 am EDT Sun",
+     "tide2": "Low 2.6 ft at 10:49 am EDT Sun",
+     "tide3": "High 9.7 ft at 4:59 pm EDT Sun",
+     "tide4": "Low 1.7 ft at 11:31 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T13:28:00.000Z",
-     "thenV": 2.262,
-     "state": "ME"
+     "thenAt": "2026-10-18T14:49:00.000Z",
+     "thenV": 2.596,
+     "observedNow": 7.28,
+     "observedAt": "2026-10-18T06:42:00.000Z",
+     "observedLocal": "2:42 am EDT Sun",
+     "state": "ME",
+     "nameInSource": "BAR HARBOR"
     }
    },
    {
@@ -11574,15 +11674,20 @@
     "properties": {
      "name": "Southwest Harbor",
      "stationId": "8413564",
-     "kind": "high",
+     "kind": "prediction",
      "nextType": "high",
-     "t": "2026-10-17T07:55:00.000Z",
-     "v": 8.724,
+     "nextAt": "2026-10-18T08:48:00.000Z",
+     "v": 8.495,
+     "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413564",
-     "upcoming": "high 8.7 ft at 07:55 UTC 10-17; low 2.3 ft at 13:28 UTC 10-17; high 9.5 ft at 20:04 UTC 10-17; low 1.5 ft at 02:08 UTC 10-18",
+     "level": 7.07,
+     "tide1": "High 8.5 ft at 4:48 am EDT Sun",
+     "tide2": "Low 2.5 ft at 10:22 am EDT Sun",
+     "tide3": "High 9.3 ft at 4:59 pm EDT Sun",
+     "tide4": "Low 1.6 ft at 11:04 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T13:28:00.000Z",
-     "thenV": 2.31,
+     "thenAt": "2026-10-18T14:22:00.000Z",
+     "thenV": 2.467,
      "state": "ME"
     }
    },
@@ -11598,15 +11703,20 @@
     "properties": {
      "name": "Mackerel Cove, Swans Island",
      "stationId": "8413825",
-     "kind": "high",
+     "kind": "prediction",
      "nextType": "high",
-     "t": "2026-10-17T08:00:00.000Z",
-     "v": 8.59,
+     "nextAt": "2026-10-18T08:53:00.000Z",
+     "v": 8.338,
+     "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413825",
-     "upcoming": "high 8.6 ft at 08:00 UTC 10-17; low 2.5 ft at 13:53 UTC 10-17; high 9.4 ft at 20:04 UTC 10-17; low 1.6 ft at 02:40 UTC 10-18",
+     "level": 6.65,
+     "tide1": "High 8.3 ft at 4:53 am EDT Sun",
+     "tide2": "Low 2.8 ft at 10:47 am EDT Sun",
+     "tide3": "High 9.2 ft at 4:58 pm EDT Sun",
+     "tide4": "Low 1.8 ft at 11:36 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T13:53:00.000Z",
-     "thenV": 2.517,
+     "thenAt": "2026-10-18T14:47:00.000Z",
+     "thenV": 2.752,
      "state": "ME"
     }
    },
@@ -11622,15 +11732,20 @@
     "properties": {
      "name": "Burnt Coat Harbor, Swans Island",
      "stationId": "8413857",
-     "kind": "high",
+     "kind": "prediction",
      "nextType": "high",
-     "t": "2026-10-17T07:54:00.000Z",
-     "v": 8.088,
+     "nextAt": "2026-10-18T08:47:00.000Z",
+     "v": 7.875,
+     "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413857",
-     "upcoming": "high 8.1 ft at 07:54 UTC 10-17; low 2.1 ft at 14:01 UTC 10-17; high 8.8 ft at 20:03 UTC 10-17; low 1.4 ft at 02:41 UTC 10-18",
+     "level": 6.35,
+     "tide1": "High 7.9 ft at 4:47 am EDT Sun",
+     "tide2": "Low 2.3 ft at 10:55 am EDT Sun",
+     "tide3": "High 8.6 ft at 4:58 pm EDT Sun",
+     "tide4": "Low 1.5 ft at 11:37 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T14:01:00.000Z",
-     "thenV": 2.14,
+     "thenAt": "2026-10-18T14:55:00.000Z",
+     "thenV": 2.285,
      "state": "ME"
     }
    },
@@ -11646,15 +11761,20 @@
     "properties": {
      "name": "Center Harbor",
      "stationId": "8414168",
-     "kind": "high",
+     "kind": "prediction",
      "nextType": "high",
-     "t": "2026-10-17T08:04:00.000Z",
-     "v": 8.633,
+     "nextAt": "2026-10-18T08:57:00.000Z",
+     "v": 8.406,
+     "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414168",
-     "upcoming": "high 8.6 ft at 08:04 UTC 10-17; low 2.3 ft at 14:07 UTC 10-17; high 9.4 ft at 20:13 UTC 10-17; low 1.5 ft at 02:47 UTC 10-18",
+     "level": 6.56,
+     "tide1": "High 8.4 ft at 4:57 am EDT Sun",
+     "tide2": "Low 2.5 ft at 11:01 am EDT Sun",
+     "tide3": "High 9.2 ft at 5:08 pm EDT Sun",
+     "tide4": "Low 1.6 ft at 11:43 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T14:07:00.000Z",
-     "thenV": 2.31,
+     "thenAt": "2026-10-18T15:01:00.000Z",
+     "thenV": 2.467,
      "state": "ME"
     }
    },
@@ -11670,15 +11790,20 @@
     "properties": {
      "name": "Oceanville, Deer Isle",
      "stationId": "8414249",
-     "kind": "high",
+     "kind": "prediction",
      "nextType": "high",
-     "t": "2026-10-17T08:14:00.000Z",
-     "v": 8.81,
+     "nextAt": "2026-10-18T09:02:00.000Z",
+     "v": 8.616,
+     "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414249",
-     "upcoming": "high 8.8 ft at 08:14 UTC 10-17; low 1.8 ft at 14:10 UTC 10-17; high 9.6 ft at 20:20 UTC 10-17; low 1.1 ft at 02:47 UTC 10-18",
+     "level": 6.5,
+     "tide1": "High 8.6 ft at 5:02 am EDT Sun",
+     "tide2": "Low 1.9 ft at 10:58 am EDT Sun",
+     "tide3": "High 9.4 ft at 5:10 pm EDT Sun",
+     "tide4": "Low 1.3 ft at 11:37 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T14:10:00.000Z",
-     "thenV": 1.804,
+     "thenAt": "2026-10-18T14:58:00.000Z",
+     "thenV": 1.923,
      "state": "ME"
     }
    },
@@ -11694,15 +11819,78 @@
     "properties": {
      "name": "Blue Hill Harbor",
      "stationId": "8414112",
-     "kind": "high",
+     "kind": "prediction",
      "nextType": "high",
-     "t": "2026-10-17T08:04:00.000Z",
-     "v": 8.633,
+     "nextAt": "2026-10-18T08:57:00.000Z",
+     "v": 8.406,
+     "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414112",
-     "upcoming": "high 8.6 ft at 08:04 UTC 10-17; low 2.3 ft at 14:06 UTC 10-17; high 9.4 ft at 20:13 UTC 10-17; low 1.5 ft at 02:46 UTC 10-18",
+     "level": 6.57,
+     "tide1": "High 8.4 ft at 4:57 am EDT Sun",
+     "tide2": "Low 2.5 ft at 11:00 am EDT Sun",
+     "tide3": "High 9.2 ft at 5:08 pm EDT Sun",
+     "tide4": "Low 1.6 ft at 11:42 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T14:06:00.000Z",
-     "thenV": 2.31,
+     "thenAt": "2026-10-18T15:00:00.000Z",
+     "thenV": 2.467,
+     "state": "ME"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -68.0867,
+      44.3883
+     ]
+    },
+    "properties": {
+     "name": "Winter Harbor, Frenchman Bay",
+     "stationId": "8413079",
+     "kind": "prediction",
+     "nextType": "high",
+     "nextAt": "2026-10-18T08:47:00.000Z",
+     "v": 8.406,
+     "trend": "Rising toward high tide",
+     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413079",
+     "level": 6.75,
+     "tide1": "High 8.4 ft at 4:47 am EDT Sun",
+     "tide2": "Low 2.5 ft at 10:59 am EDT Sun",
+     "tide3": "High 9.2 ft at 4:58 pm EDT Sun",
+     "tide4": "Low 1.6 ft at 11:41 pm EDT Sun",
+     "thenType": "low",
+     "thenAt": "2026-10-18T14:59:00.000Z",
+     "thenV": 2.467,
+     "state": "ME"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -68.6367,
+      44.0733
+     ]
+    },
+    "properties": {
+     "name": "Isle Au Haut",
+     "stationId": "8414288",
+     "kind": "prediction",
+     "nextType": "high",
+     "nextAt": "2026-10-18T08:47:00.000Z",
+     "v": 7.698,
+     "trend": "Rising toward high tide",
+     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414288",
+     "level": 6.43,
+     "tide1": "High 7.7 ft at 4:47 am EDT Sun",
+     "tide2": "Low 2.3 ft at 10:22 am EDT Sun",
+     "tide3": "High 8.4 ft at 4:58 pm EDT Sun",
+     "tide4": "Low 1.5 ft at 11:04 pm EDT Sun",
+     "thenType": "low",
+     "thenAt": "2026-10-18T14:22:00.000Z",
+     "thenV": 2.285,
      "state": "ME"
     }
    }

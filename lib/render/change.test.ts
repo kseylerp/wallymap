@@ -102,7 +102,9 @@ describe("the snapshot compare (owner: 'both 0' in delta mode)", () => {
       ["b", 4, 2],
       ["c", 1, 0.5],
     ]);
-    expect(delta.features.filter((f) => f.properties?.deltaEdge === true)).toHaveLength(3);
+    // Each changed glacier keeps its earlier edge and, where it shrank, the ground it lost as its own area.
+    expect(delta.features.filter((f) => f.properties?.deltaEdge === true && f.properties?.deltaLost !== true)).toHaveLength(3);
+    expect(delta.features.filter((f) => f.properties?.deltaLost === true).length).toBeGreaterThan(0);
     // Matched by shape alone (the old way) every changed glacier was lost and new.
     expect(compareSummary(deltaFeatures(a, b)).both).toBe(0);
   });

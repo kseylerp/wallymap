@@ -228,9 +228,25 @@ describe("deltaFeatures: two outlines of one thing that share an id", () => {
     const ring = (d: number): GeoJSON.Polygon => ({ type: "Polygon", coordinates: [[[0, 0], [d, 0], [d, d], [0, d], [0, 0]]] });
     const f = (d: number, boundary: string): GeoJSON.Feature => ({ type: "Feature", geometry: ring(d), properties: { id: "Bears Ears", name: "Bears Ears", boundary } });
     const out = deltaFeatures({ type: "FeatureCollection", features: [f(2, "2021")] }, { type: "FeatureCollection", features: [f(1, "current")] }, { idKey: "name" });
-    expect(out.features.map((x) => [x.properties?.delta, x.properties?.deltaEdge ?? false])).toEqual([
-      ["a-only", true],
-      ["both", false],
+    expect(out.features.map((x) => [x.properties?.delta, x.properties?.deltaEdge ?? false, x.properties?.deltaLost ?? false])).toEqual([
+      ["a-only", true, false],
+      ["a-only", true, true],
+      ["both", false, false],
     ]);
+    // The lost ground (the 2 x 2 outline minus the 1 x 1) is filled and measured: 3 square degrees at the equator.
+    const cut = out.features[1];
+    expect(cut.geometry?.type).toBe("MultiPolygon");
+    expect(cut.properties?.lostKm2).toBeGreaterThan(36_000);
+    expect(cut.properties?.lostKm2).toBeLessThan(37_500);
+    expect(compareSummary(out).lostKm2).toBeCloseTo(cut.properties?.lostKm2 as number);
+    expect(compareSummary(out)).toMatchObject({ aOnly: 0, both: 1 });
+  });
+
+  it("measures no lost ground when the later outline only grew", () => {
+    const ring = (d: number): GeoJSON.Polygon => ({ type: "Polygon", coordinates: [[[0, 0], [d, 0], [d, d], [0, d], [0, 0]]] });
+    const f = (d: number): GeoJSON.Feature => ({ type: "Feature", geometry: ring(d), properties: { name: "X" } });
+    const out = deltaFeatures({ type: "FeatureCollection", features: [f(1)] }, { type: "FeatureCollection", features: [f(2)] }, { idKey: "name" });
+    expect(out.features.some((x) => x.properties?.deltaLost)).toBe(false);
+    expect(compareSummary(out).lostKm2).toBeUndefined();
   });
 });

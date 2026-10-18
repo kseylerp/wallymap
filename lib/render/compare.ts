@@ -1,4 +1,5 @@
-import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
+import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon, Position } from "geojson";
+import polygonClipping, { type MultiPolygon as ClipMultiPolygon } from "polygon-clipping";
 
 /**
  * Compare over time (spec §7), pure core. Splits one layer's features into two time windows (A and B), then
@@ -181,6 +182,46 @@ function isArea(g: Geometry | null | undefined): boolean {
   return g?.type === "Polygon" || g?.type === "MultiPolygon";
 }
 
+const EARTH_RADIUS_KM = 6371.0088;
+
+/** A ring's area on the sphere in km² (spherical excess of the lon/lat ring; holes subtract). */
+function ringKm2(ring: Position[]): number {
+  let sum = 0;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [x1, y1] = ring[i];
+    const [x2, y2] = ring[i + 1];
+    sum += ((x2 - x1) * Math.PI) / 180 * (2 + Math.sin((y1 * Math.PI) / 180) + Math.sin((y2 * Math.PI) / 180));
+  }
+  return Math.abs((sum * EARTH_RADIUS_KM * EARTH_RADIUS_KM) / 2);
+}
+
+/** An area geometry's area in km² (0 for anything else). */
+export function areaKm2Of(g: Geometry | null | undefined): number {
+  const polys = g?.type === "Polygon" ? [g.coordinates] : g?.type === "MultiPolygon" ? g.coordinates : [];
+  return polys.reduce((sum, rings) => sum + rings.reduce((s, ring, i) => s + (i === 0 ? 1 : -1) * ringKm2(ring), 0), 0);
+}
+
+function clipInput(g: Polygon | MultiPolygon): ClipMultiPolygon {
+  return (g.type === "Polygon" ? [g.coordinates] : g.coordinates) as ClipMultiPolygon;
+}
+
+/**
+ * The ground an area lost between its two outlines (A minus B), as one geometry with its area in km², or null when it
+ * lost none (or the outlines cannot be clipped). Specks under a thousandth of the A outline are dropped as redrawing noise.
+ */
+export function lostGround(a: Geometry | null | undefined, b: Geometry | null | undefined): { geometry: MultiPolygon; km2: number } | null {
+  if (!a || !b || !isArea(a) || !isArea(b)) return null;
+  try {
+    const out = polygonClipping.difference(clipInput(a as Polygon | MultiPolygon), clipInput(b as Polygon | MultiPolygon));
+    if (out.length === 0) return null;
+    const geometry: MultiPolygon = { type: "MultiPolygon", coordinates: out as Position[][][] };
+    const km2 = areaKm2Of(geometry);
+    return km2 > areaKm2Of(a) * 0.001 ? { geometry, km2 } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Options for deltaFeatures: the property naming one thing across both sides (a glacier's id), and the date field. */
 export type DeltaOptions = { idKey?: string; timeField?: string; measureKey?: string };
 
@@ -218,6 +259,9 @@ export function deltaFeatures(a: FeatureCollection, b: FeatureCollection, opts: 
     // By shape, not featureKey: a monument's two outlines share its id (its name) but not their shape.
     if (fa !== fb && isArea(fa.geometry) && isArea(fb.geometry) && shapeKey(fa) !== shapeKey(fb)) {
       edges.push(withProps(fa, { delta: "a-only" satisfies DeltaClass, deltaEdge: true }));
+      // The ground it lost, filled pink like an area that is gone (a monument's cut, a glacier's retreat), with its area.
+      const lost = lostGround(fa.geometry, fb.geometry);
+      if (lost) edges.push(withProps(fa, { delta: "a-only" satisfies DeltaClass, deltaEdge: true, deltaLost: true, lostKm2: lost.km2 }, lost.geometry));
     }
     both.push(withProps(fb, extra, fb.geometry ?? fa.geometry));
   }
@@ -288,10 +332,13 @@ export function hexDelta(a: FeatureCollection, b: FeatureCollection): FeatureCol
 }
 
 /** Counts per class, plus the mean `dv` over features that have one (omitted when none do). Earlier edges are not counted. */
-export function compareSummary(delta: FeatureCollection): { aOnly: number; bOnly: number; both: number; dvMean?: number } {
-  let aOnly = 0, bOnly = 0, both = 0, n = 0, sum = 0;
+export function compareSummary(delta: FeatureCollection): { aOnly: number; bOnly: number; both: number; dvMean?: number; lostKm2?: number } {
+  let aOnly = 0, bOnly = 0, both = 0, n = 0, sum = 0, lost = 0;
   for (const f of delta.features) {
     const p = propsOf(f);
+    // Ground lost: the cut from a changed area, and the whole of an area only in A.
+    if (p.deltaLost === true) lost += numeric(p.lostKm2) ?? 0;
+    else if (p.delta === "a-only" && p.deltaEdge !== true && isArea(f.geometry)) lost += areaKm2Of(f.geometry);
     if (p.deltaEdge === true) continue;
     if (p.delta === "a-only") aOnly++;
     else if (p.delta === "b-only") bOnly++;
@@ -302,7 +349,8 @@ export function compareSummary(delta: FeatureCollection): { aOnly: number; bOnly
       sum += dv;
     }
   }
-  return n > 0 ? { aOnly, bOnly, both, dvMean: sum / n } : { aOnly, bOnly, both };
+  const base = n > 0 ? { aOnly, bOnly, both, dvMean: sum / n } : { aOnly, bOnly, both };
+  return lost > 0 ? { ...base, lostKm2: lost } : base;
 }
 
 function isoDay(d: Date): string {

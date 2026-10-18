@@ -320,6 +320,12 @@ export function compareSideText(compare: CompareState, which: "a" | "b", layer: 
   return windowText(compare[which]);
 }
 
+/** "12,280 km² (4,741 mi²)" for US layers, "3.2 km²" elsewhere: the lost ground in the change key. */
+export function lostAreaText(km2: number, us: boolean): string {
+  const fmt = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: n >= 100 ? 0 : n >= 10 ? 1 : 2 });
+  return us ? `${fmt(km2 / 2.589988)} mi² (${fmt(km2)} km²)` : `${fmt(km2)} km²`;
+}
+
 /** One entry of the delta's key: the label people read, its color, whether it draws as a line, and its count. */
 export type DeltaKeyEntry = { label: string; color: string; outline?: boolean; count?: number };
 
@@ -333,7 +339,7 @@ export function deltaKey(
   layer: LoadedLayer,
   a: string,
   b: string,
-  summary: { aOnly: number; bOnly: number; both: number } | null,
+  summary: { aOnly: number; bOnly: number; both: number; lostKm2?: number } | null,
 ): DeltaKeyEntry[] {
   const count = (n: number | undefined) => (n === undefined ? {} : { count: n });
   // Only one area at two dates (snapshots: a glacier, a monument) loses or gains ground; fires in two windows do not.
@@ -342,7 +348,7 @@ export function deltaKey(
     const lower = noun.toLowerCase();
     return [
       // No counts: an area that shrank is both lost and kept, so the strip's matched sentence carries the numbers.
-      { label: `${noun} lost since ${a} (the pink line is its edge then)`, color: DELTA_COLORS["a-only"] },
+      { label: `${noun} lost since ${a}${summary?.lostKm2 ? `, ${lostAreaText(summary.lostKm2, layer.coverage === "us")}` : ""} (pink; the pink line is its edge then)`, color: DELTA_COLORS["a-only"] },
       { label: `${noun} in ${b}`, color: DELTA_COLORS.both },
       ...(summary === null || summary.bOnly > 0 ? [{ label: `New ${lower} since ${a}`, color: DELTA_COLORS["b-only"] }] : []),
     ];

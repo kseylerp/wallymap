@@ -16,9 +16,15 @@
  * Live smoke 2026-10-10: slr_3ft z 11 to 16 over Oakland airport [-122.22, 37.72] all 200 (8 to 50 KB);
  * slr_0ft z 12 tile 1015 bytes, slr_3ft 2462, slr_10ft 4332 for the same Bay tile (more water each step); Miami Beach z 13
  * tile 1.8 KB at 0 ft, 7.3 KB at 2 ft, 23.8 KB at 6 ft. runLayer over Miami with feet 2 returned the slr_2ft template in 1 ms.
+ * Colors (2026-10-18, a slr_3ft tile over Miami Beach, z12 x1136 y1743, and the MapServer legend): water depth from pale
+ *   cyan #B6EDF0 (shallow, the newly flooded land) to navy #090991 (deep: today's sea and bays), and bright green #55FF00
+ *   for "low-lying areas", land below the water level that higher ground cuts off from the sea. The renderer's default
+ *   calm filter greyed the pale cyan into the basemap; the tiles are now drawn as served and the legend names these colors.
+ *   The navy sea stays the darkest thing on the map (a paint filter cannot fade one class): the compare view, 0 ft against
+ *   the asked amount, is what isolates the new flooding.
  */
 import { z } from "zod";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type TileScenario } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type LegendSpec, type TileScenario } from "./types";
 import { registerLayer } from "./registry";
 import { bboxesDisjoint, OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
@@ -56,11 +62,24 @@ export const SLR_SCENARIO: TileScenario = {
   tokens: SLR_FEET.map(slrToken),
 };
 
+/** NOAA's own colors: depth of water at high tide, plus the cut-off low-lying land. */
+export const SLR_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Water at high tide with this rise",
+  items: [
+    { label: "Newly flooded land (shallow water)", value: "shallow", color: "#B6EDF0", symbol: "raster" },
+    { label: "Deeper water", value: "mid", color: "#2B90E1", symbol: "raster" },
+    { label: "Today's sea and bays (deepest)", value: "deep", color: "#090991", symbol: "raster" },
+    { label: "Low-lying land cut off from the sea", value: "low-lying", color: "#55FF00", symbol: "raster" },
+  ],
+  note: "Pale cyan is the answer: land under water at high tide with the chosen rise. Compare 0 ft with the chosen amount to see only the new flooding.",
+};
+
 const seaLevelRise = defineLayer({
   id: "sea-level-rise",
   title: "Sea level rise flooding (NOAA scenarios)",
   description:
-    "Map of the US coastal land that would be under water at high tide if the sea rose by a given number of feet, from the NOAA Sea Level Rise Viewer, drawn as blue water over the land. " +
+    "Map of the US coastal land that would be under water at high tide if the sea rose by a given number of feet, from the NOAA Sea Level Rise Viewer, pale cyan where land newly floods, navy for today's sea, green for low land cut off from the sea. " +
     "feet (0 to 10, default 3) is the rise above today's average highest daily tide (mean higher high water, MHHW); feet 0 shows what high tide already covers. " +
     "Choosing feet: NOAA's 2022 interagency report expects about 1 foot of rise on US coasts between 2020 and 2050 (more on the Gulf and East coasts), so use feet 1 for 'flooding by 2050' and 2 for a high 2050 case; its 2100 scenarios (global average) are 1.0 ft low, 1.6 intermediate-low, 3.3 intermediate, 4.9 intermediate-high and 6.6 high, and most US coasts get somewhat more. " +
     "For another amount call render with scenario (feet, halves allowed), for two call compare with scenario [a, b]; never re-query per amount. " +
@@ -74,7 +93,10 @@ const seaLevelRise = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("sea-level-rise") },
+  // As served: the calm filter greyed the pale cyan of the newly flooded land into the basemap.
+  style: { geometry: "polygon", color: layerColor("sea-level-rise"), raster: { saturation: 0, opacity: 0.8, swatch: "#B6EDF0" } },
+  legend: SLR_LEGEND,
+  display: { units: "us" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {
@@ -89,7 +111,7 @@ const seaLevelRise = defineLayer({
       kind: "tiles",
       data: { url: slrTileUrl(input.feet), minzoom: 0, maxzoom: 16, format: "raster", scenario: SLR_SCENARIO },
       citation,
-      coverageNote: `Land flooded at high tide with ${input.feet} ft of sea level rise above today's MHHW${touchesAlaska(ctx.bbox) ? "; Alaska has no sea level rise tiles, so nothing draws there" : ""}`,
+      coverageNote: `Land flooded at high tide with ${input.feet} ft of sea level rise above today's MHHW (pale cyan; navy is today's sea, green low-lying land cut off from it)${touchesAlaska(ctx.bbox) ? "; Alaska has no sea level rise tiles, so nothing draws there" : ""}`,
     };
   },
 });

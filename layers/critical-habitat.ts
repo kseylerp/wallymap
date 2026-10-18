@@ -163,17 +163,35 @@ const LISTING_LEVELS = [
   { value: "Proposed Threatened", label: "Proposed for listing", color: SAGE, help: "Proposed for listing as endangered or threatened; not yet listed." },
 ];
 
+/**
+ * One key entry per label: both proposed statuses share "Proposed for listing" (the attribute levels keep both values,
+ * so its chip and its fill cover both).
+ */
 export const CRITICAL_HABITAT_LEGEND: LegendSpec = {
   kind: "categories",
   title: "Species listed as",
   field: "listingStatus",
-  items: LISTING_LEVELS.map(({ value, label, color, help }) => ({ label, value, color, symbol: "polygon" as const, help })),
+  items: LISTING_LEVELS.filter((l, i) => LISTING_LEVELS.findIndex((m) => m.label === l.label) === i).map(({ value, label, color, help }) => ({
+    label,
+    value,
+    color,
+    symbol: "polygon" as const,
+    help,
+  })),
   note: "Critical habitat binds federal actions and permits; it is not a closure.",
 };
 
 const ATTRIBUTES: Attribute[] = [
-  { key: "species", type: "category", label: "Species", primary: true },
-  { key: "listingStatus", type: "category", label: "Listed as", encode: "color", levels: LISTING_LEVELS.map(({ value, label, help }) => ({ value, label, help })) },
+  // The map fills areas by the primary chip set, so listing status is primary: the fill, the key and the chips agree.
+  {
+    key: "listingStatus",
+    type: "category",
+    label: "Listed as",
+    encode: "color",
+    primary: true,
+    levels: LISTING_LEVELS.map(({ value, label, help }) => ({ value, label, help })),
+  },
+  { key: "species", type: "category", label: "Species" },
   {
     key: "status",
     type: "category",

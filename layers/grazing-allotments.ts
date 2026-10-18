@@ -185,7 +185,7 @@ export const GRAZING_LEGEND: LegendSpec = {
 const ACRES: FieldHelp = { text: "The area's size as the BLM records it (GIS acres for allotments, BLM acres for herd areas).", unit: "acres", source: "Bureau of Land Management", url: "https://gis.blm.gov/" };
 
 const ATTRIBUTES: Attribute[] = [
-  { key: "kind", type: "category", label: "Area", levels: KIND_LEVELS.map((l) => ({ ...l })), encode: "color", primary: true },
+  { key: "kind", type: "category", label: "Kind of area", levels: KIND_LEVELS.map((l) => ({ ...l })), encode: "color", primary: true },
   {
     key: "animals",
     type: "category",
@@ -218,19 +218,19 @@ const HELP: Record<string, FieldHelp> = {
   animals: { text: "Which wild animals the herd area is for, as the BLM records it (HERD_TYPE)." },
   agency: { text: "The agency that manages the herd: BLM (Bureau of Land Management) or USFS (Forest Service)." },
   allotmentNumber: { text: "The BLM's number for this grazing allotment, used on its grazing permits." },
-  herdId: { text: "The BLM's code for this herd area or herd management area." },
+  herdId: { text: "The BLM's number for this herd area or herd management area (state letters and digits, such as NV0311), used in its herd management plans and gather reports." },
   alsoDesignated: { text: "Other designations with the same name and outline, drawn once." },
 };
 
 const CARD: CardSpec = {
   measure: { key: "acres", label: "Size", unit: "acres", help: ACRES },
   facts: [
-    { key: "kind", label: "Area", values: Object.fromEntries(KIND_LEVELS.map((l) => [l.value, l.label])) },
+    { key: "kind", label: "Kind of area", values: Object.fromEntries(KIND_LEVELS.map((l) => [l.value, l.label])) },
     { key: "animals", label: "Animals" },
     { key: "agency", label: "Managed by", values: { BLM: "Bureau of Land Management", USFS: "US Forest Service" } },
     { key: "alsoDesignated", label: "Also designated" },
-    { key: "allotmentNumber", label: "Allotment number" },
-    { key: "herdId", label: "Herd area code" },
+    { key: "allotmentNumber", label: "BLM allotment number" },
+    { key: "herdId", label: "BLM herd area number" },
     { key: "state", label: "State" },
   ],
   hidden: ["v"],

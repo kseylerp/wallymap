@@ -31,7 +31,11 @@ import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
 export const PADUS_TILE_URL = "https://storage.googleapis.com/wally-tiles/padus/v1/{z}/{x}/{y}.pbf";
 export const PADUS_SOURCE_LAYER = "padus";
 
-/** Who manages the land, in six groups the approved palette can tell apart, each listing the PAD-US `agency` values it holds. */
+/**
+ * Who manages the land, in six groups the approved palette can tell apart, each listing the PAD-US `agency` values it holds.
+ * Other federal land (military, dams, energy), the least common, comes last: the phone's short key lists a tile layer's
+ * first four groups, so state land (purple) has to be among them.
+ */
 export const MANAGER_GROUPS: { label: string; color: string; help: string; agencies: Record<string, string> }[] = [
   {
     label: "National parks and wildlife refuges",
@@ -52,6 +56,18 @@ export const MANAGER_GROUPS: { label: string; color: string; help: string; agenc
     agencies: { BLM: "Bureau of Land Management" },
   },
   {
+    label: "State land and state parks",
+    color: PURPLE,
+    help: "Owned or managed by a state: state parks, forests, wildlife areas and state trust land.",
+    agencies: { State: "State agency", "State Parks": "State parks agency" },
+  },
+  {
+    label: "Local, tribal and private conservation land",
+    color: PINK,
+    help: "City and county parks, tribal land, and land held by land trusts and other nonprofits; access varies.",
+    agencies: { Local: "Local government", Tribal: "Tribal government", NGO: "Private nonprofit (land trust)" },
+  },
+  {
     label: "Other federal (military, dams, energy)",
     color: rgbToHex(interpolateStops([DARK_GREY, PURPLE], 0.5)),
     help: "Army Corps of Engineers, Bureau of Reclamation, Department of Defense, Department of Energy, Tennessee Valley Authority and other federal agencies; often closed to the public.",
@@ -64,18 +80,6 @@ export const MANAGER_GROUPS: { label: string; color: string; help: string; agenc
       ARS: "Agricultural Research Service",
       NRCS: "Natural Resources Conservation Service",
     },
-  },
-  {
-    label: "State land and state parks",
-    color: PURPLE,
-    help: "Owned or managed by a state: state parks, forests, wildlife areas and state trust land.",
-    agencies: { State: "State agency", "State Parks": "State parks agency" },
-  },
-  {
-    label: "Local, tribal and private conservation land",
-    color: PINK,
-    help: "City and county parks, tribal land, and land held by land trusts and other nonprofits; access varies.",
-    agencies: { Local: "Local government", Tribal: "Tribal government", NGO: "Private nonprofit (land trust)" },
   },
 ];
 
@@ -119,23 +123,14 @@ const ATTRIBUTES: Attribute[] = [
   },
 ];
 
-const CATEGORY_NAMES: Record<string, string> = {
-  protected_area: "Public or conservation land",
-  wilderness: "Wilderness area",
-  state_park: "State park",
-  nature_reserve: "Nature reserve",
-  managed_forest: "Managed forest",
-  national_park: "National park",
-  national_monument: "National monument",
-};
-
 const CARD: CardSpec = {
   facts: [
     { key: "agency", label: "Managed by", values: AGENCY_NAMES },
     { key: "designation", label: "Designation", values: { PUB: "Public land (no special designation)" } },
     { key: "access", label: "Public access", values: { open: "Open", restricted: "Restricted", closed: "Closed", unknown: "Not recorded" }, help: ACCESS_HELP },
-    { key: "category", label: "Kind of land", values: CATEGORY_NAMES },
   ],
+  // `category` is a coarser copy of the designation ("Wilderness area" beside "Wilderness Area"): the card shows the designation once.
+  hidden: ["category"],
 };
 
 const publicLands = defineLayer({

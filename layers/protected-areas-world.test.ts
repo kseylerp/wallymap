@@ -8,11 +8,13 @@ import layer, {
   WDPA_POLYGONS,
   WDPA_POLYGONS_FALLBACK,
   WDPA_WHERE,
+  countryName,
   mergeDesignations,
   normalizeProtectedAreas,
   simplifyOffset,
 } from "./protected-areas-world";
 import { contractProblems, legendOf } from "./contract";
+import { cardContent } from "@/lib/render/card";
 import guiana from "./__fixtures__/protected-areas-world.guiana.json";
 import type { FeatureCollection } from "geojson";
 
@@ -45,7 +47,10 @@ describe("protected-areas-world layer", () => {
     expect(legend).toMatchObject({ kind: "categories", field: "protection" });
     expect(legend.items?.map((i) => i.value)).toEqual(["strict", "park", "habitat", "sustainable", "none"]);
     expect(new Set(legend.items?.map((i) => i.color)).size).toBe(5);
-    expect(legend.items?.[1]).toMatchObject({ label: "National park (IUCN II)", color: "#9FB693" });
+    expect(legend.items?.[1]).toMatchObject({ label: "National park", color: "#9FB693", help: expect.stringMatching(/^IUCN II:/) });
+    // Chip labels fit a row; the IUCN categories each holds are in its help.
+    for (const l of PROTECTION_LEVELS) expect(l.label.length, l.label).toBeLessThanOrEqual(28);
+    expect(PROTECTION_LEVELS.find((l) => l.value === "sustainable")?.help).toMatch(/^IUCN V and VI:/);
     expect(PROTECTION_LEVELS.map((l) => l.value)).toEqual(legend.items?.map((i) => i.value));
     expect(layer.attributes?.find((a) => a.key === "protection")).toMatchObject({ encode: "color", primary: true });
     expect(contractProblems(layer)).toEqual([]);
@@ -92,10 +97,23 @@ describe("protected-areas-world named polygons for a region", () => {
       protection: "habitat",
       areaKm2: 1066,
       v: 1066,
-      country: "GUF",
+      country: "French Guiana",
     });
     expect(r.coverageNote).toMatch(/^5 national and regional protected areas in this region, largest first; international designations .*non-commercial/);
     expect(r.citation.source).toMatch(/non-commercial/i);
+  });
+
+  it("names the country on the card instead of its ISO3 code", () => {
+    expect(countryName("CRI")).toBe("Costa Rica");
+    expect(countryName("USA")).toBe("United States");
+    expect(countryName("COD")).toBe("Democratic Republic of the Congo");
+    expect(countryName("BRA;PER")).toBe("Brazil · Peru");
+    expect(countryName("ABNJ")).toBe("Areas beyond national jurisdiction");
+    expect(countryName("ZZZ")).toBe("ZZZ");
+    const nouragues = normalizeProtectedAreas(guiana as FeatureCollection).features.find((f) => f.properties?.name === "Nouragues")!;
+    const card = cardContent(nouragues, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.facts.find((r) => r.key === "country")).toMatchObject({ label: "Country", value: "French Guiana" });
+    expect(card.facts.find((r) => r.key === "protection")?.value).toBe("Monument or habitat area");
   });
 
   it("leaves out IUCN placeholders and says when the service capped the list", async () => {
@@ -132,7 +150,7 @@ describe("protected-areas-world named polygons for a region", () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(guiana), { status: 200 }));
     const summary = summarizeLayerResult(await layer.query(ctxAt(stub), {}), "protected-areas-world");
     expect(summary).toHaveProperty("top");
-    expect((summary as { top: string[] }).top[0]).toBe("Guyane (Parc Amazonien), National Park - Core Area, 20,218 km² (GUF)");
+    expect((summary as { top: string[] }).top[0]).toBe("Guyane (Parc Amazonien), National Park - Core Area, 20,218 km² (French Guiana)");
   });
 });
 

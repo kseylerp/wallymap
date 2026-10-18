@@ -22,6 +22,7 @@ import {
 import { bboxAreaKm2, defineLayer, type Attribute, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { bboxesDisjoint } from "./_shared/coverage";
+import { pointInPolygon } from "./_shared/geo";
 import { DARK_GREY, layerColor, PINK, PURPLE, SAGE, SURFACE } from "@/lib/render/palette";
 import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
 
@@ -114,6 +115,47 @@ const inputSchema = z.object({
 
 function bboxesIntersect(a: BBox, b: BBox): boolean {
   return !bboxesDisjoint(a, b);
+}
+
+/** True when the segment from `a` to `b` crosses the box (Liang-Barsky clipping). */
+function segmentTouchesBox(a: Position, b: Position, [w, s, e, n]: BBox): boolean {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  let t0 = 0;
+  let t1 = 1;
+  for (const [p, q] of [
+    [-dx, a[0] - w],
+    [dx, e - a[0]],
+    [-dy, a[1] - s],
+    [dy, n - a[1]],
+  ]) {
+    if (p === 0) {
+      if (q < 0) return false;
+      continue;
+    }
+    const t = q / p;
+    if (p < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
+/**
+ * True when the region's outline itself reaches the box, not just its bounding box. Natural Earth's Polynesia is one
+ * triangle from Hawaii to New Zealand to Easter Island whose box spans -180 to -106° and up to 26° N, so a box test put it
+ * first in every view of the southern United States. A part counts when an outline edge crosses the box or the box sits
+ * inside it (holes excluded).
+ */
+export function regionTouchesBox(geometry: Geometry, bbox: BBox): boolean {
+  const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.type === "MultiPolygon" ? geometry.coordinates : [];
+  const center: Position = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+  return polygons.some((rings) => {
+    const outer = rings[0] ?? [];
+    if (outer.length < 2) return false;
+    for (let i = 0; i + 1 < outer.length; i++) if (segmentTouchesBox(outer[i], outer[i + 1], bbox)) return true;
+    return pointInPolygon(center, { type: "Polygon", coordinates: rings });
+  });
 }
 
 function toPolygonFeature(feature: Feature, kind: RegionKind): Feature<Geometry> | undefined {
@@ -221,7 +263,7 @@ const physicalRegions = defineLayer({
     const boxes = featureBBoxes(fc);
     const matches: { feature: Feature<Geometry>; rank: number; area: number }[] = [];
     fc.features.forEach((feature, i) => {
-      if (!bboxesIntersect(boxes[i], ctx.bbox)) return;
+      if (!bboxesIntersect(boxes[i], ctx.bbox) || !feature.geometry || !regionTouchesBox(feature.geometry, ctx.bbox)) return;
       const featureClass = regionFeatureClass(feature);
       if (featureClass !== undefined && EXCLUDED_CLASSES.has(featureClass.toLowerCase())) return;
       const kind = regionKind(featureClass);

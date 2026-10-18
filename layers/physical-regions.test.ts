@@ -9,7 +9,8 @@ import type { CachedFetch } from "@/lib/fetch";
 import { resetNaturalEarthCache } from "@/lib/agent/naturalEarth";
 import { runLayer } from "@/lib/layers/run";
 import sample from "./__fixtures__/ne-regions.sample.json";
-import layer, { KIND_LEVELS, regionAreaKm2, regionKind } from "./physical-regions";
+import polynesiaSample from "./__fixtures__/physical-regions.polynesia.json";
+import layer, { KIND_LEVELS, regionAreaKm2, regionKind, regionTouchesBox } from "./physical-regions";
 import { contractProblems, legendOf } from "./contract";
 
 const fixture = sample as unknown as FeatureCollection;
@@ -174,5 +175,22 @@ describe("physical-regions layer", () => {
     const res = await runLayer("physical-regions", { bbox: [-180, -60, 180, 80], zoom: 1 });
     expect(res.status).toBe(422);
     expect(res.body).toMatchObject({ hint: "zoom_in" });
+  });
+
+  // Fixture: layers/__fixtures__/physical-regions.polynesia.json (Natural Earth 10m geography regions, fetched 2026-10-18):
+  // Polynesia (scalerank 0; one part a triangle from Hawaii to Easter Island whose box reaches -106° and 25.9° N), the
+  // Rocky Mountains and the Great Plains.
+  it("returns only regions whose outline reaches the view, so Polynesia does not lead a view of the United States", async () => {
+    const polynesia = polynesiaSample as unknown as FeatureCollection;
+    const US: [number, number, number, number] = [-125, 24, -66, 50];
+    const r = await layer.query(ctx(stubFetch(polynesia), US), {});
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features.map((f) => f.properties?.name)).toEqual(["Rocky Mountains", "Great Plains"]);
+
+    const triangle = polynesia.features.find((f) => f.properties?.NAME === "POLYNESIA")!.geometry;
+    expect(regionTouchesBox(triangle, US)).toBe(false);
+    // Over Hawaii and over French Polynesia it is still there.
+    expect(regionTouchesBox(triangle, [-160, 18, -154, 23])).toBe(true);
+    expect(regionTouchesBox(triangle, [-152, -18, -148, -16])).toBe(true);
   });
 });

@@ -4,6 +4,7 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import layer, { MEANING, federalRegisterCitation, normalizeCriticalHabitat, simplifyOffset, speciesWhere, thinGeometry } from "./critical-habitat";
 import { contractProblems, legendOf } from "./contract";
+import { categoryKey } from "@/lib/render/categories";
 import finalRaw from "./__fixtures__/critical-habitat.tahoe.json";
 import proposedRaw from "./__fixtures__/critical-habitat.proposed.json";
 
@@ -68,7 +69,8 @@ describe("critical-habitat layer", () => {
     const legend = legendOf(layer);
     expect(legend).toMatchObject({ kind: "categories", field: "listingStatus" });
     expect(legend.items?.slice(0, 2).map((i) => [i.label, i.color])).toEqual([["Endangered", "#F57272"], ["Threatened", "#6E5BFF"]]);
-    expect(layer.attributes?.find((a) => a.primary)?.key).toBe("species");
+    expect(layer.attributes?.find((a) => a.primary)?.key).toBe("listingStatus");
+    expect(layer.attributes?.find((a) => a.key === "species")).toMatchObject({ type: "category" });
     expect(layer.card?.links).toEqual([{ key: "ruleUrl", label: "Read the rule" }]);
     expect(contractProblems(layer)).toEqual([]);
   });
@@ -228,5 +230,18 @@ describe("critical-habitat layer", () => {
   it("describes habitat in the words people use and says it is not a closure", () => {
     expect(layer.description).toMatch(/endangered species habitat/i);
     expect(layer.description).toMatch(/not a closure/i);
+  });
+
+  it("keys 'Proposed for listing' once and fills both proposed statuses in its color, as the key says", () => {
+    const legend = legendOf(layer);
+    expect(legend.items?.map((i) => i.label)).toEqual(["Endangered", "Threatened", "Proposed for listing"]);
+    const data = normalizeCriticalHabitat(proposedFc);
+    const key = categoryKey(layer, data);
+    expect(key?.attr.key).toBe("listingStatus");
+    expect(key?.groups.map((g) => [g.label, g.values, g.color])).toEqual([
+      ["Endangered", ["Endangered"], "#F57272"],
+      ["Threatened", ["Threatened"], "#6E5BFF"],
+      ["Proposed for listing", ["Proposed Endangered", "Proposed Threatened"], "#9FB693"],
+    ]);
   });
 });

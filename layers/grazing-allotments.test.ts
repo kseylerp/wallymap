@@ -7,6 +7,7 @@ import allotmentsRaw from "./__fixtures__/grazing-allotments.allotments.json";
 import hmaRaw from "./__fixtures__/grazing-allotments.hma.json";
 import haRaw from "./__fixtures__/grazing-allotments.ha.json";
 import { contractProblems, legendOf } from "./contract";
+import { cardContent } from "@/lib/render/card";
 
 const allotments = allotmentsRaw as unknown as FeatureCollection;
 const hma = hmaRaw as unknown as FeatureCollection;
@@ -58,6 +59,17 @@ describe("grazing-allotments layer", () => {
       v: 849127,
       state: "NV",
     });
+  });
+
+  it("cards a herd management area with its size in acres, its kind of area and its BLM number labelled", () => {
+    const callaghan = normalizeGrazing(hma, "herd-management-area").find((f) => f.properties?.name === "Callaghan")!;
+    const card = cardContent(callaghan, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.measure).toMatchObject({ label: "Size", value: expect.stringContaining("acres") });
+    const rows = Object.fromEntries(card.facts.map((r) => [r.label, r.value]));
+    expect(rows).toMatchObject({ "Kind of area": "Wild horse and burro management area", "BLM herd area number": "NV0604" });
+    expect(Object.keys(rows)).not.toContain("Area");
+    expect(card.details.map((r) => r.key)).not.toContain("herdId");
+    expect(layer.attributes?.find((a) => a.key === "kind")?.label).toBe("Kind of area");
   });
 
   it("normalizes herd management areas and herd areas with animals, agency and acres", () => {

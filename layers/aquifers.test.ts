@@ -4,6 +4,7 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import layer, { ESRI_COPY, NEVADA_COPY, OGALLALA_NOTE, ROCK_LEVELS, normalizeAquifers, offsetFor } from "./aquifers";
 import { contractProblems, legendOf } from "./contract";
+import { cardContent } from "@/lib/render/card";
 import nebraskaRaw from "./__fixtures__/aquifers.esri-nebraska.json";
 import nevadaRaw from "./__fixtures__/aquifers.nv-basin-range.json";
 
@@ -39,6 +40,14 @@ describe("normalizeAquifers", () => {
       ogallala: true,
       waterLevels: OGALLALA_NOTE,
     });
+  });
+
+  it("leaves the USGS aquifer code off the card (an identifier, not a fact)", () => {
+    const [ogallala] = normalizeAquifers(nebraska).features;
+    const card = cardContent(ogallala, { card: layer.card, fieldHelp: layer.fieldHelp });
+    const keys = [...card.facts, ...card.details].map((r) => r.key);
+    expect(keys).not.toContain("aquiferCode");
+    expect(card.facts.map((r) => r.label)).toEqual(["Rock type", "Also called", "Water levels"]);
   });
 
   it("fills aquifers by rock type with a matching legend and offers the Ogallala as one chip", () => {

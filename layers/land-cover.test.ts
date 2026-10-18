@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
-import layer, { NLCD_CLASSES, NLCD_YEARS, WORLDCOVER_URL, nlcdEpoch, nlcdTileUrl } from "./land-cover";
+import layer, { NLCD_CLASSES, NLCD_YEARS, WORLDCOVER_CLASSES, WORLDCOVER_URL, nlcdEpoch, nlcdTileUrl } from "./land-cover";
 import { contractProblems, legendOf, timeShapeOf } from "./contract";
 
 const PNW: [number, number, number, number] = [-123, 44, -121, 46];
@@ -107,5 +107,19 @@ describe("land-cover layer", () => {
     expect(r.data.scenario?.template.replace("{value}", "2001")).toBe(nlcdTileUrl(2001));
     expect(timeShapeOf(layer)).toEqual({ shape: "single", dates: ["2021"] });
     expect(contractProblems(layer)).toEqual([]);
+  });
+
+  it("keys each answer with its own product: WorldCover's classes for WorldCover, NLCD's for NLCD, notes about only what is drawn", async () => {
+    const worldcover = await layer.query(ctx(vi.fn()), { nlcd: false });
+    if (!("kind" in worldcover) || worldcover.kind !== "tiles") throw new Error("expected tiles");
+    expect(worldcover.legend?.items?.map((i) => [i.value, i.color])).toEqual(WORLDCOVER_CLASSES.map((c) => [c.value, c.color]));
+    expect(worldcover.legend?.note).not.toMatch(/NLCD/);
+
+    const nlcd = await layer.query(ctx(vi.fn()), { nlcd: true, year: 2019 });
+    if (!("kind" in nlcd) || nlcd.kind !== "tiles") throw new Error("expected tiles");
+    expect(nlcd.legend).toMatchObject({ kind: "categories", title: "Land cover (US NLCD)" });
+    expect(nlcd.legend?.items?.map((i) => [i.value, i.label, i.color])).toEqual(NLCD_CLASSES.map((c) => [c.value, c.label, c.color]));
+    expect(nlcd.legend?.note).not.toMatch(/WorldCover/);
+    expect(legendOf(layer).note).not.toMatch(/NLCD/);
   });
 });

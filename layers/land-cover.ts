@@ -18,7 +18,8 @@
  * No upstream call is made by the layer: it only builds the URL for the map to fetch.
  * 2026-10-18: the legend is WorldCover's official class colors (WORLDCOVER_CLASSES, the colors its tiles draw), and an NLCD answer
  * publishes its nine map years as a tile scenario (`{value}` in the layer name), so the map can step and swipe between
- * NLCD years without a second call. NLCD's own class colors are in NLCD_CLASSES.
+ * NLCD years without a second call. Each answer carries its product's own key (LAND_COVER_LEGEND or NLCD_LEGEND, NLCD's
+ * class colors from NLCD_CLASSES), so the key never describes the other product.
  */
 import { z } from "zod";
 import { defineLayer, type LayerError, type LayerResult, type LegendSpec, type TileScenario } from "./types";
@@ -87,13 +88,20 @@ export const NLCD_CLASSES: { value: number; label: string; color: string }[] = [
   { value: 95, label: "Emergent herbaceous wetlands", color: "#6C9FB8" },
 ];
 
+/** WorldCover's key: the layer's own, and the one a WorldCover answer carries. */
 export const LAND_COVER_LEGEND: LegendSpec = {
   kind: "categories",
   title: "Land cover (ESA WorldCover 2021)",
   items: WORLDCOVER_CLASSES.map(({ value, label, color }) => ({ label, value, color, symbol: "raster" as const })),
-  note:
-    "With the US NLCD map on, its own key applies: " +
-    "evergreen forest dark green, deciduous light green, shrub tan, grassland pale, pasture yellow, crops brown, developed pink to dark red, water blue.",
+  note: "WorldCover's own class colors; one map year (2021), 10 m detail.",
+};
+
+/** NLCD's key, carried by an NLCD answer so the map is never keyed in WorldCover's colors. */
+export const NLCD_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Land cover (US NLCD)",
+  items: NLCD_CLASSES.map(({ value, label, color }) => ({ label, value, color, symbol: "raster" as const })),
+  note: "NLCD's own class colors; lower 48 states only, 30 m detail.",
 };
 
 /** The NLCD map years as a scenario: the map steps and swipes between them by filling `{value}` in the layer name. */
@@ -159,6 +167,7 @@ const landCover = defineLayer({
           retrieved,
         },
         coverageNote: "ESA WorldCover 2021 (global, 60 S to 83 N, one static year)",
+        legend: LAND_COVER_LEGEND,
       };
     }
 
@@ -175,6 +184,7 @@ const landCover = defineLayer({
         retrieved,
       },
       coverageNote: `NLCD ${epoch} land cover, lower 48 states only${moved}`,
+      legend: NLCD_LEGEND,
     };
   },
 });

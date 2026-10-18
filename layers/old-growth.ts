@@ -17,7 +17,7 @@
  * 2026-10-18: switched from layer 29 (the federal-land remainder of each fireshed, a checkerboard of slivers that read as a map of
  * federal land) to layer 31 "Fireshed Boundaries (Full)", the same fields (OLD_GROWTH_ACRES, MATURE_ACRES, standard errors,
  * ForestType) on the whole fireshed shape. The acres still count federal land only. Firesheds are filled by old-growth class
- * (OLD_GROWTH_CLASSES, an ordinal on the sage → pink → purple ramp) and old-growth acres is the Rank by and size measure.
+ * (OLD_GROWTH_CLASSES, an ordinal light to dark on the density ramp: sage, purple, dark grey) and old-growth acres is the Rank by and size measure.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
@@ -25,7 +25,7 @@ import { defineLayer, type Attribute, type BBox, type LayerError, type LayerResu
 import { registerLayer } from "./registry";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
-import { layerColor, PINK, PURPLE, SAGE } from "@/lib/render/palette";
+import { DARK_GREY, layerColor, PURPLE, SAGE } from "@/lib/render/palette";
 import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
 
 const SERVICE_URL =
@@ -45,12 +45,15 @@ const TRUNCATED_NOTE = "Showing the 200 firesheds with the most old growth in vi
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
-/** Old-growth acres in four classes, little to most, on the sage → pink → purple ramp. */
+/**
+ * Old-growth acres in four classes, little to most, light to dark along the density ramp (lib/render/palette.ts RAMPS.density
+ * from sage on: sage, sage-purple, purple, dark grey), so more old growth always reads darker.
+ */
 export const OLD_GROWTH_CLASSES: { value: string; label: string; min: number; color: string }[] = [
   { value: "under-5k", label: "Under 5,000 acres of old growth", min: 0, color: SAGE },
-  { value: "5k-20k", label: "5,000 to 20,000 acres", min: 5_000, color: rgbToHex(interpolateStops([SAGE, PINK], 0.5)) },
-  { value: "20k-50k", label: "20,000 to 50,000 acres", min: 20_000, color: PINK },
-  { value: "50k-up", label: "50,000 acres and up", min: 50_000, color: PURPLE },
+  { value: "5k-20k", label: "5,000 to 20,000 acres", min: 5_000, color: rgbToHex(interpolateStops([SAGE, PURPLE], 0.5)) },
+  { value: "20k-50k", label: "20,000 to 50,000 acres", min: 20_000, color: PURPLE },
+  { value: "50k-up", label: "50,000 acres and up", min: 50_000, color: DARK_GREY },
 ];
 
 /** The class of an old-growth acreage. */
@@ -138,12 +141,19 @@ const HELP: Record<string, FieldHelp> = {
   },
   matureAcres: { text: "Acres of mature forest on federal land in the fireshed that is not yet old growth, from the same plot estimate.", unit: "acres", source: FS_SOURCE, url: FS_URL },
   oldGrowthErrorPercent: {
-    text: "The survey's standard error for the old-growth acres, in percent: higher means a less certain estimate (small firesheds and rare forest types carry large error).",
+    text:
+      "How far off the old-growth acres may be: 40% means the true figure is likely within about 40% above or below it. The acres are " +
+      "estimated from sample plots, so small firesheds and rare forest types are less certain. (The survey's standard error.)",
     unit: "%",
     source: FS_SOURCE,
     url: FS_URL,
   },
-  matureErrorPercent: { text: "The survey's standard error for the mature-forest acres, in percent: higher means a less certain estimate.", unit: "%", source: FS_SOURCE, url: FS_URL },
+  matureErrorPercent: {
+    text: "How far off the mature-forest acres may be: 40% means the true figure is likely within about 40% above or below it. (The survey's standard error.)",
+    unit: "%",
+    source: FS_SOURCE,
+    url: FS_URL,
+  },
 };
 
 /** The fireshed card: old growth under its own name, mature forest, and how sure the estimates are. */
@@ -174,10 +184,10 @@ const ATTRIBUTES: Attribute[] = [
 const CARD: CardSpec = {
   measure: { key: "v", label: "Old-growth forest", unit: "acres" },
   facts: [
+    { key: "oldGrowthErrorPercent", label: "Uncertainty (±)", unit: "%", format: "int" },
     { key: "matureAcres", label: "Mature forest", unit: "acres", format: "int" },
+    { key: "matureErrorPercent", label: "Mature forest uncertainty (±)", unit: "%", format: "int" },
     { key: "forestType", label: "Forest type" },
-    { key: "oldGrowthErrorPercent", label: "Old-growth standard error", unit: "%", format: "int" },
-    { key: "matureErrorPercent", label: "Mature standard error", unit: "%", format: "int" },
   ],
   hidden: ["oldGrowthClass", "oldGrowthAcres"],
 };
@@ -190,7 +200,7 @@ const oldGrowth = defineLayer({
     "Each polygon has name (the fireshed, such as Battle Peak, Oregon), v and oldGrowthAcres (acres of old-growth forest on federal land inside it), matureAcres (acres of mature forest that is not yet old growth), forestType (the commonest forest type, for example Douglas-fir) and oldGrowthErrorPercent and matureErrorPercent (the survey's standard error, in percent). " +
     "With 3D on, firesheds rise with their old-growth acres. " +
     "Use it for 'where is old growth', 'which national forests have the most mature forest' or 'how much ancient forest is left near here'. " +
-    "The map fills each fireshed by its old-growth class (under 5,000 acres sage, up to 50,000 acres and more purple) with a legend, and Rank by lists the firesheds with the most. " +
+    "The map fills each fireshed by its old-growth class, light to dark (under 5,000 acres sage, 20,000 to 50,000 purple, 50,000 acres and more dark grey) with a legend, and Rank by lists the firesheds with the most. " +
     "Caveats: the figures are sample-based estimates (plots), so small firesheds and rare forest types carry large error, and the polygon is the whole fireshed, not the stands: old growth is not located inside it, and the acres count federal land only. " +
     "Only federal land is counted, so private, state and tribal forest are not. At most 200 firesheds are returned, those with the most old growth first, and the result says when it trims. " +
     "United States only. Over 300,000 km² (a 550 km square) it keeps the 1,000 with the most old growth.",

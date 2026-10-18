@@ -78,13 +78,16 @@ export type Protection = "strict" | "park" | "habitat" | "sustainable" | "none";
 
 const PROTECTION_OF: Record<string, Protection> = { Ia: "strict", Ib: "strict", II: "park", III: "habitat", IV: "habitat", V: "sustainable", VI: "sustainable" };
 
-/** The groups in order, strictest first, with their fills: purple, sage, a darker sage, dark grey, and a pale surface for none. */
+/**
+ * The groups in order, strictest first, with their fills: purple, sage, a darker sage, dark grey, and a pale surface for none.
+ * Labels are short enough for a chip; the IUCN categories each group holds are in its help.
+ */
 export const PROTECTION_LEVELS: { value: Protection; label: string; help: string; color: string }[] = [
-  { value: "strict", label: "Strict reserve or wilderness (IUCN Ia, Ib)", help: "Managed mainly for science or wilderness; visits limited.", color: PURPLE },
-  { value: "park", label: "National park (IUCN II)", help: "Large natural areas protecting ecosystems, open for visits and recreation.", color: SAGE },
-  { value: "habitat", label: "Natural monument or habitat area (IUCN III, IV)", help: "A landmark feature, or an area managed for particular species or habitats.", color: rgbToHex(interpolateStops([SAGE, DARK_GREY], 0.5)) },
-  { value: "sustainable", label: "Protected landscape or sustainable use (IUCN V, VI)", help: "Lived-in landscapes and areas where natural resources are used sustainably.", color: DARK_GREY },
-  { value: "none", label: "No IUCN category reported", help: "The country reported no IUCN category, or it does not apply to this designation.", color: SURFACE },
+  { value: "strict", label: "Strict reserve or wilderness", help: "IUCN Ia and Ib: managed mainly for science or wilderness; visits limited.", color: PURPLE },
+  { value: "park", label: "National park", help: "IUCN II: large natural areas protecting ecosystems, open for visits and recreation.", color: SAGE },
+  { value: "habitat", label: "Monument or habitat area", help: "IUCN III and IV: a landmark feature, or an area managed for particular species or habitats.", color: rgbToHex(interpolateStops([SAGE, DARK_GREY], 0.5)) },
+  { value: "sustainable", label: "Lived-in or sustainable use", help: "IUCN V and VI: lived-in landscapes and seascapes, and areas where natural resources are used sustainably.", color: DARK_GREY },
+  { value: "none", label: "No IUCN category", help: "The country reported no IUCN category, or it does not apply to this designation.", color: SURFACE },
 ];
 
 export const PROTECTION_LEGEND: LegendSpec = {
@@ -105,13 +108,64 @@ function cleanName(value: unknown): string | undefined {
   return name === "" ? undefined : name;
 }
 
+/** ISO 3166 three-letter codes to two-letter ones (the codes WDPA's iso3 holds; XKX is Kosovo's user-assigned code). */
+const ISO3_TO_ISO2: Record<string, string> = Object.fromEntries(
+  (
+    "ABW AW AFG AF AGO AO AIA AI ALA AX ALB AL AND AD ARE AE ARG AR ARM AM ASM AS ATA AQ ATF TF ATG AG AUS AU AUT AT AZE AZ " +
+    "BDI BI BEL BE BEN BJ BES BQ BFA BF BGD BD BGR BG BHR BH BHS BS BIH BA BLM BL BLR BY BLZ BZ BMU BM BOL BO BRA BR BRB BB " +
+    "BRN BN BTN BT BVT BV BWA BW CAF CF CAN CA CCK CC CHE CH CHL CL CHN CN CIV CI CMR CM COD CD COG CG COK CK COL CO COM KM " +
+    "CPV CV CRI CR CUB CU CUW CW CXR CX CYM KY CYP CY CZE CZ DEU DE DJI DJ DMA DM DNK DK DOM DO DZA DZ ECU EC EGY EG ERI ER " +
+    "ESH EH ESP ES EST EE ETH ET FIN FI FJI FJ FLK FK FRA FR FRO FO FSM FM GAB GA GBR GB GEO GE GGY GG GHA GH GIB GI GIN GN " +
+    "GLP GP GMB GM GNB GW GNQ GQ GRC GR GRD GD GRL GL GTM GT GUF GF GUM GU GUY GY HKG HK HMD HM HND HN HRV HR HTI HT HUN HU " +
+    "IDN ID IMN IM IND IN IOT IO IRL IE IRN IR IRQ IQ ISL IS ISR IL ITA IT JAM JM JEY JE JOR JO JPN JP KAZ KZ KEN KE KGZ KG " +
+    "KHM KH KIR KI KNA KN KOR KR KWT KW LAO LA LBN LB LBR LR LBY LY LCA LC LIE LI LKA LK LSO LS LTU LT LUX LU LVA LV MAC MO " +
+    "MAF MF MAR MA MCO MC MDA MD MDG MG MDV MV MEX MX MHL MH MKD MK MLI ML MLT MT MMR MM MNE ME MNG MN MNP MP MOZ MZ MRT MR " +
+    "MSR MS MTQ MQ MUS MU MWI MW MYS MY MYT YT NAM NA NCL NC NER NE NFK NF NGA NG NIC NI NIU NU NLD NL NOR NO NPL NP NRU NR " +
+    "NZL NZ OMN OM PAK PK PAN PA PCN PN PER PE PHL PH PLW PW PNG PG POL PL PRI PR PRK KP PRT PT PRY PY PSE PS PYF PF QAT QA " +
+    "REU RE ROU RO RUS RU RWA RW SAU SA SDN SD SEN SN SGP SG SGS GS SHN SH SJM SJ SLB SB SLE SL SLV SV SMR SM SOM SO SPM PM " +
+    "SRB RS SSD SS STP ST SUR SR SVK SK SVN SI SWE SE SWZ SZ SXM SX SYC SC SYR SY TCA TC TCD TD TGO TG THA TH TJK TJ TKL TK " +
+    "TKM TM TLS TL TON TO TTO TT TUN TN TUR TR TUV TV TWN TW TZA TZ UGA UG UKR UA UMI UM URY UY USA US UZB UZ VAT VA VCT VC " +
+    "VEN VE VGB VG VIR VI VNM VN VUT VU WLF WF WSM WS XKX XK YEM YE ZAF ZA ZMB ZM ZWE ZW"
+  )
+    .match(/[A-Z]{3} [A-Z]{2}/g)!
+    .map((pair) => pair.split(" ")),
+);
+
+/** Where the standard English short name reads oddly on a card ("Congo - Kinshasa"). */
+const COUNTRY_NAMES: Record<string, string> = {
+  CD: "Democratic Republic of the Congo",
+  CG: "Republic of the Congo",
+  HK: "Hong Kong",
+  MO: "Macao",
+  MM: "Myanmar",
+  ABNJ: "Areas beyond national jurisdiction",
+};
+
+const REGION_NAMES = new Intl.DisplayNames(["en"], { type: "region" });
+
+/**
+ * The country names behind WDPA's iso3 ("CRI" → "Costa Rica"); a site shared by several countries lists each
+ * ("BRA;PER" → "Brazil · Peru"). A code with no name stays as written.
+ */
+export function countryName(iso3: string): string {
+  return iso3
+    .split(/\s*[;,]\s*/)
+    .filter(Boolean)
+    .map((code) => {
+      const two = ISO3_TO_ISO2[code.toUpperCase()];
+      const named = COUNTRY_NAMES[two ?? code.toUpperCase()] ?? (two ? REGION_NAMES.of(two) : undefined);
+      return named && named !== two ? named : code;
+    })
+    .join(" · ");
+}
+
 function positive(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 /**
  * WDPA polygons as features: name, designation (in English), iucn (category, when one is assigned), areaKm2 and v
- * (the mapped area in km², or the reported one when there is no mapped area), country (ISO3 code), realm, statusYear and siteId. Largest first;
+ * (the mapped area in km², or the reported one when there is no mapped area), country (its name, from the ISO3 code), realm, statusYear and siteId. Largest first;
  * features with no geometry are skipped.
  */
 export function normalizeProtectedAreas(fc: FeatureCollection): FeatureCollection {
@@ -132,7 +186,7 @@ export function normalizeProtectedAreas(fc: FeatureCollection): FeatureCollectio
       properties.areaKm2 = area >= 10 ? Math.round(area) : Math.round(area * 10) / 10;
       properties.v = properties.areaKm2;
     }
-    if (typeof p.iso3 === "string" && p.iso3 !== "") properties.country = p.iso3;
+    if (typeof p.iso3 === "string" && p.iso3.trim() !== "") properties.country = countryName(p.iso3.trim());
     if (typeof p.realm === "string") properties.realm = p.realm;
     if (typeof p.status_yr === "number" && p.status_yr > 0) properties.statusYear = p.status_yr;
     if (typeof p.site_id === "number" || typeof p.site_id === "string") properties.siteId = String(p.site_id);
@@ -295,7 +349,7 @@ const HELP: Record<string, FieldHelp> = {
   designation: { text: "The legal designation in English as the country reports it (National Park, Nature Reserve and so on)." },
   statusYear: { text: "The year the area was designated or its current status was set." },
   realm: { text: "Whether the area is terrestrial, marine or coastal (both)." },
-  country: { text: "The ISO 3166 three-letter code of the country that reported the area." },
+  country: { text: "The country that reported the area to the World Database on Protected Areas." },
 };
 
 const CARD: CardSpec = {

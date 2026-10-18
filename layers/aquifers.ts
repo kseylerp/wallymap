@@ -158,16 +158,15 @@ const HELP: Record<string, FieldHelp> = {
   },
 };
 
-/** The aquifer card: the rock in words, the other name, and the USGS code with its meaning. */
+/** The aquifer card: the rock in words and the other name; the USGS code number is an identifier, so it is left off. */
 const CARD: CardSpec = {
   facts: [
     { key: "kind", label: "Rock type" },
     { key: "alias", label: "Also called" },
     { key: "waterLevels", label: "Water levels" },
-    { key: "aquiferCode", label: "USGS aquifer code", format: "int" },
   ],
-  // rockType is the numeric code behind kind; ogallala is the chip's flag.
-  hidden: ["rockType", "ogallala"],
+  // rockType is the numeric code behind kind; ogallala is the chip's flag; aquiferCode is USGS's identifier, not a fact.
+  hidden: ["rockType", "ogallala", "aquiferCode"],
 };
 
 const ATTRIBUTES: Attribute[] = [

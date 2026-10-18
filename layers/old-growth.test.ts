@@ -4,6 +4,9 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import layer, { OLD_GROWTH_CLASSES, normalizeOldGrowth, oldGrowthClass, simplifyOffset } from "./old-growth";
 import { contractProblems, legendOf } from "./contract";
+import { cardContent } from "@/lib/render/card";
+import { hexToRgb, lightness } from "@/lib/render/ramp";
+import { DARK_GREY, PURPLE, SAGE } from "@/lib/render/palette";
 import { hardMaxAreaKm2 } from "./types";
 import raw from "./__fixtures__/old-growth.cascades.json";
 
@@ -182,5 +185,22 @@ describe("old-growth layer", () => {
     expect(layer.labels).toEqual({ field: "name", max: 6, rankBy: "oldGrowthAcres" });
     expect(layer.description).toMatch(/whole fireshed/);
     expect(contractProblems(layer)).toEqual([]);
+  });
+
+  it("ramps the four classes light to dark along the density ramp, not unrelated colors", () => {
+    const colors = OLD_GROWTH_CLASSES.map((c) => c.color);
+    expect([colors[0], colors[2], colors[3]]).toEqual([SAGE, PURPLE, DARK_GREY]);
+    const l = colors.map((c) => lightness(hexToRgb(c)));
+    for (let i = 1; i < l.length; i++) expect(l[i], colors[i]).toBeLessThan(l[i - 1]);
+    expect(layer.attributes?.find((a) => a.key === "oldGrowthClass")).toMatchObject({ type: "ordinal", encode: "color", primary: true });
+  });
+
+  it("cards a fireshed's standard error as uncertainty, in plain words", () => {
+    const fireshed = normalizeOldGrowth(fixture).features.find((f) => f.properties?.oldGrowthErrorPercent !== undefined)!;
+    const card = cardContent(fireshed, { card: layer.card, fieldHelp: layer.fieldHelp });
+    const labels = card.facts.map((r) => r.label);
+    expect(labels).toContain("Uncertainty (±)");
+    expect(labels.join(" ")).not.toMatch(/standard error/i);
+    expect(card.facts.find((r) => r.label === "Uncertainty (±)")?.help?.text).toMatch(/^How far off the old-growth acres may be/);
   });
 });

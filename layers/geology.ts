@@ -65,15 +65,19 @@ const ATTRIBUTES: Attribute[] = [
   },
 ];
 
+/**
+ * The card for a tapped unit: its age in period names and its description. Tile properties reach the card as served, so
+ * rows that read badly raw are left off: `lith` is Macrostrat's coded list ("Major:{unconsolidated colluvium}"), and the
+ * youngest and oldest ages in millions of years repeat the Age row (a Quaternary unit reads "0 million years").
+ * The source map's address is a link named "Source map".
+ */
 const CARD: CardSpec = {
   facts: [
     { key: "age", label: "Age" },
-    { key: "best_age_top", label: "Youngest age", unit: "million years", format: "1dp" },
-    { key: "best_age_bottom", label: "Oldest age", unit: "million years", format: "1dp" },
-    { key: "lith", label: "Rock types" },
     { key: "descrip", label: "Description" },
   ],
-  hidden: ["map_id", "source_id", "t_int", "b_int", "color"],
+  links: [{ key: "ref_url", label: "Source map" }],
+  hidden: ["map_id", "source_id", "t_int", "b_int", "color", "lith", "best_age_top", "best_age_bottom"],
 };
 
 const geology = defineLayer({
@@ -81,7 +85,7 @@ const geology = defineLayer({
   title: "Geology",
   description:
     "The geologic map: bedrock and surface rock units from Macrostrat, a compilation of geologic maps (world coverage, most detailed in the United States). " +
-    "It draws as map tiles, each unit filled by the age of its youngest rock in five eras with a legend (Quaternary sage, Tertiary pink, Mesozoic purple, Paleozoic grey-purple, Precambrian dark grey), and tapping a unit shows its name, age, rock types and description; it carries no features you can count or list. " +
+    "It draws as map tiles, each unit filled by the age of its youngest rock in five eras with a legend (Quaternary sage, Tertiary pink, Mesozoic purple, Paleozoic grey-purple, Precambrian dark grey), and tapping a unit shows its name, age and description; it carries no features you can count or list. " +
     "Use it for 'show the geology', 'geologic map', 'rock types around here', 'where does the rock change'. " +
     "To answer 'what rock is here', 'what is this peak made of' or 'how old is the ground at this spot', call the geologic-unit layer with that place's lon and lat; it returns the unit name, age, rock type and description. " +
     "Caveats: geologic maps are drawn at the scale of their source, so edges are generalised and small outcrops are missed; units can be loose ('undivided granitic rocks'); " +

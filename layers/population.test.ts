@@ -24,7 +24,7 @@ describe("population layer", () => {
 
   it("returns the verified GPW 2020 raster template without calling upstream", async () => {
     const stub = vi.fn();
-    const r = await layer.query(ctx(stub), {});
+    const r = await layer.query(ctx(stub), layer.input.parse({}));
     expect(stub).not.toHaveBeenCalled();
     if (!("kind" in r) || r.kind !== "tiles") throw new Error("expected tiles");
     expect(r.data.format).toBe("raster");
@@ -43,7 +43,7 @@ describe("population layer", () => {
   });
 
   it("summarizes to the tile URL and format for the model", async () => {
-    const summary = summarizeLayerResult(await layer.query(ctx(vi.fn()), {}));
+    const summary = summarizeLayerResult(await layer.query(ctx(vi.fn()), layer.input.parse({})));
     expect(summary).toMatchObject({ kind: "tiles", format: "raster", url: expect.stringContaining("GPW_Population_Density_2020") });
   });
 

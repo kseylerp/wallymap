@@ -15,7 +15,17 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
+import {
+  defineLayer,
+  type Attribute,
+  type LayerError,
+  type LayerResult,
+  type CardSpec,
+  type FieldHelp,
+  type LegendSpec,
+  type MeasurePreset,
+} from "./types";
+import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { bboxesDisjoint } from "./_shared/coverage";
@@ -101,6 +111,21 @@ const CARD: CardSpec = {
   hidden: ["kind"],
 };
 
+const ACRE_CLASSES: MeasurePreset[] = [
+  { label: "Under 100 acres", max: 99.9 },
+  { label: "100 to 999 acres", min: 100, max: 999.9 },
+  { label: "1,000 acres and up", min: 1000 },
+];
+
+const ATTRIBUTES: Attribute[] = [{ key: "acres", type: "measure", label: "Area", unit: "acres", presets: ACRE_CLASSES }, nameAttribute()];
+
+/** One sage swatch: every polygon is a grove. The vintage and draft status go in the note. */
+const LEGEND: LegendSpec = {
+  kind: "symbol",
+  items: [{ label: "Giant sequoia grove", color: layerColor("sequoia-groves"), symbol: "polygon" }],
+  note: "Grove outlines from the 2024 grove map (labelled a draft by its publisher); the five largest groves in view are named.",
+};
+
 const sequoiaGroves = defineLayer({
   id: "sequoia-groves",
   title: "Giant sequoia groves",
@@ -118,9 +143,15 @@ const sequoiaGroves = defineLayer({
   maxAreaKm2: 120_000,
   wide: { orderBy: "acres", limit: WIDE_LIMIT },
   input: z.object({}),
-  style: { geometry: "polygon", color: layerColor("sequoia-groves"), unit: "acres", fillOpacity: 0.3 },
-  fieldHelp: HELP,
+  // A firmer sage fill so a grove reads on Topo without its hatching (audit 2026-10-17: thin white outlines only).
+  style: { geometry: "polygon", color: layerColor("sequoia-groves"), unit: "acres", fillOpacity: 0.4 },
+  fieldHelp: { ...HELP, acres: HELP.v },
   card: CARD,
+  attributes: ATTRIBUTES,
+  // Grove outlines from one map: time is not the question.
+  time: { shape: "none" },
+  legend: LEGEND,
+  labels: { field: "name", max: 5, rankBy: "acres" },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

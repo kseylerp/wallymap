@@ -4,6 +4,7 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import layer, { normalizeGroves } from "./sequoia-groves";
 import raw from "./__fixtures__/sequoia-groves.seki.json";
+import { contractProblems, labelsOf, legendOf, timeShapeOf } from "./contract";
 
 const fixture = raw as unknown as FeatureCollection;
 
@@ -28,7 +29,20 @@ describe("sequoia-groves layer", () => {
     expect(layer.hardMaxAreaKm2).toBeUndefined();
     expect(layer.wide).toEqual({ orderBy: "acres", limit: 1000 });
     expect(layer.input.parse({})).toEqual({});
-    expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", unit: "acres", fillOpacity: 0.3 });
+    expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", unit: "acres", fillOpacity: 0.4 });
+  });
+
+  it("has no time, a sage grove key that names the 2024 draft map, and labels the five largest groves", () => {
+    const data = normalizeGroves(fixture);
+    expect(timeShapeOf(layer, data)).toEqual({ shape: "none" });
+    const legend = legendOf(layer, data);
+    expect(legend).toMatchObject({ kind: "symbol", items: [{ label: "Giant sequoia grove", color: "#9FB693", symbol: "polygon" }] });
+    expect(legend.note).toMatch(/2024/);
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 5, rankBy: "acres" });
+    const top = [...data.features].sort((a, b) => Number(b.properties?.acres) - Number(a.properties?.acres))[0];
+    // The fixture's largest grove, the first the labels name.
+    expect(top.properties).toMatchObject({ name: "Atwell", acres: 916.4 });
+    expect(contractProblems(layer)).toEqual([]);
   });
 
   it("normalizes grove rows to polygons with name, acres, v, stewards and kind", () => {

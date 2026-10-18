@@ -146,8 +146,9 @@ describe("swipe and toggle", () => {
   it("swipe sends side A and side B to their own sets", () => {
     const sets = buildDeckLayerSets(view("swipe"), opts);
     expect(sets.main).toEqual([]);
-    expect(sets.a.map((l) => l.id)).toEqual(["fire-perimeters:polygons:casing", "fire-perimeters:polygons"]);
-    expect(sets.b.map((l) => l.id)).toEqual(["fire-perimeters~b:polygons:casing", "fire-perimeters~b:polygons"]);
+    // (The fixture's fires are under 4 px at this zoom, so each side also carries its small-area dots.)
+    expect(sets.a.map((l) => l.id)).toEqual(["fire-perimeters:polygons:casing", "fire-perimeters:polygons", "fire-perimeters:polygons:small"]);
+    expect(sets.b.map((l) => l.id)).toEqual(["fire-perimeters~b:polygons:casing", "fire-perimeters~b:polygons", "fire-perimeters~b:polygons:small"]);
     const names = (fc: unknown) => (fc as GeoJSON.FeatureCollection).features.map((f) => f.properties?.name);
     expect(names(props(sets.a[1]).data)).toEqual(["Ferguson"]);
     expect(names(props(sets.b[1]).data)).toEqual(["Washburn"]);
@@ -173,8 +174,10 @@ describe("swipe and toggle", () => {
     expect(visible(buildDeckLayers(view("toggle"), opts))).toEqual({
       "fire-perimeters:polygons:casing": true,
       "fire-perimeters:polygons": true,
+      "fire-perimeters:polygons:small": true,
       "fire-perimeters~b:polygons:casing": false,
       "fire-perimeters~b:polygons": false,
+      "fire-perimeters~b:polygons:small": false,
     });
     expect(visible(buildDeckLayers(view("toggle", { type: "compare_flip" }), opts))["fire-perimeters~b:polygons"]).toBe(true);
     expect(visible(buildDeckLayers(view("toggle", { type: "compare_flip" }), opts))["fire-perimeters:polygons"]).toBe(false);
@@ -184,7 +187,7 @@ describe("swipe and toggle", () => {
     const sets = buildDeckLayerSets(visibleState(base), opts);
     expect(sets.a).toEqual([]);
     expect(sets.b).toEqual([]);
-    expect(sets.main.map((l) => l.id)).toEqual(["fire-perimeters:polygons:casing", "fire-perimeters:polygons"]);
+    expect(sets.main.map((l) => l.id)).toEqual(["fire-perimeters:polygons:casing", "fire-perimeters:polygons", "fire-perimeters:polygons:small"]);
   });
 });
 

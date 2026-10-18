@@ -73,6 +73,8 @@ export function layerIdFromDeckId(deckId: string): string | null {
   // `:encoded:halo`, never picked); columns colored by a measure `<layerId>:columns:encoded`. Their layer is before it.
   const encoded = /:(?:columns:)?encoded(?::halo)?$/.exec(deckId);
   if (encoded) return layerIdFromDeckId(`${deckId.slice(0, encoded.index)}:points`);
+  // The dots at small areas' centers (lib/render/deck.ts `smallAreas`) pick their area: `<layerId>:polygons:small`.
+  if (deckId.endsWith(":small")) return layerIdFromDeckId(deckId.slice(0, -":small".length));
   const cut = deckId.lastIndexOf(":");
   if (cut <= 0) return null;
   const mode = deckId.slice(cut + 1);

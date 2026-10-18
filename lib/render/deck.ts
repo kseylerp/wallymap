@@ -635,6 +635,51 @@ function swipeLineLayers(op: RenderOp, ctx: OpContext): Layer[] {
  * casing. Fire perimeters are pink and hatch denser for larger fires; protected land sage; other areas dark grey. The
  * selected area turns purple. Without a 2D canvas (tests) the hatch is off and the tint alone draws.
  */
+/** A geometry's [west, south, east, north], or null when it has no coordinates. */
+function geometryExtent(g: GeoJSON.Geometry | null): [number, number, number, number] | null {
+  if (!g) return null;
+  let w = Infinity, so = Infinity, e = -Infinity, n = -Infinity;
+  const walk = (c: unknown): void => {
+    if (Array.isArray(c) && typeof c[0] === "number") {
+      const [x, y] = c as number[];
+      if (x < w) w = x;
+      if (x > e) e = x;
+      if (y < so) so = y;
+      if (y > n) n = y;
+    } else if (Array.isArray(c)) for (const d of c) walk(d);
+  };
+  if (g.type === "GeometryCollection") for (const h of g.geometries) walk("coordinates" in h ? h.coordinates : []);
+  else walk(g.coordinates);
+  return Number.isFinite(w) ? [w, so, e, n] : null;
+}
+
+/** Areas narrower than this on screen draw a marker at their center as well, so a patch too small to fill still shows. */
+const SMALL_AREA_PX = 4;
+const smallAreasMemo = new WeakMap<GeoJSON.FeatureCollection, Map<number, Feature[]>>();
+
+/** The areas of a collection that span under SMALL_AREA_PX at this zoom (made once per collection and whole zoom). */
+function smallAreas(data: GeoJSON.FeatureCollection, zoom: number, latitude: number): Feature[] {
+  const z = Math.floor(zoom);
+  let byZoom = smallAreasMemo.get(data);
+  if (!byZoom) {
+    byZoom = new Map();
+    smallAreasMemo.set(data, byZoom);
+  }
+  const hit = byZoom.get(z);
+  if (hit) return hit;
+  // Degrees of longitude per screen pixel at this zoom (512 px tiles); latitude shrinks a degree of longitude.
+  const degPerPx = 360 / (512 * 2 ** z);
+  const limit = SMALL_AREA_PX * degPerPx;
+  const cos = Math.max(0.2, Math.cos((latitude * Math.PI) / 180));
+  const out = data.features.filter((f) => {
+    if (!isArea(f)) return false;
+    const b = geometryExtent(f.geometry);
+    return b !== null && b[2] - b[0] < limit && b[3] - b[1] < limit * cos;
+  });
+  byZoom.set(z, out);
+  return out;
+}
+
 function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const { data, selected, terrain } = ctx;
   const requested = requestedColor(op.color);
@@ -719,6 +764,30 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       updateTriggers,
       ...terrainProps(terrain, "drape", [fillExtension]),
     }),
+    // Patches too small to see at this zoom (tree die-off, a sliver of habitat): a dot in the area's color at each
+    // center, picked like the area, so the map never reads empty where the data has features.
+    ...(() => {
+      const small = smallAreas(data, ctx.zoom, ctx.latitude);
+      if (small.length === 0) return [];
+      return [
+        new ScatterplotLayer<Feature>({
+          id: `${id}:small`,
+          data: small,
+          pickable: true,
+          getPosition: markerPosition,
+          getRadius: (f) => (f === selected ? 5 : 3.5),
+          radiusUnits: "pixels",
+          filled: true,
+          stroked: true,
+          getFillColor: (f) => withOpacity(hexToRgba(kindColor(f), 230), selected && f !== selected ? opacity * SIBLING_FADE : opacity),
+          getLineColor: (f) => (f === selected ? withOpacity(SELECT, opacity) : withOpacity(hexToRgba(WHITE_HEX, 230), opacity)),
+          getLineWidth: (f) => (f === selected ? 2 : 1),
+          lineWidthUnits: "pixels",
+          updateTriggers: { getFillColor: trigger, getLineColor: trigger, getLineWidth: trigger, getRadius: trigger },
+          ...terrainProps(terrain, "offset"),
+        }),
+      ];
+    })(),
   ];
 }
 

@@ -49,6 +49,8 @@ const CACHE_TTL_SECONDS = 6 * 3600;
 /** Name matches almost never change. */
 const MATCH_TTL_SECONDS = 7 * 86_400;
 const DEFAULT_YEARS_BACK = 10;
+/** GBIF's copy of iNaturalist research-grade observations: the same sightings the species layer shows. */
+const INAT_DATASET = "50c9509d-22c7-4a22-a47d-8c48425ef4a7";
 
 
 const inputSchema = z.object({
@@ -73,6 +75,7 @@ const recordSchema = z.object({
   month: z.number().nullish(),
   day: z.number().nullish(),
   basisOfRecord: z.string().nullish(),
+  datasetKey: z.string().nullish(),
   datasetName: z.string().nullish(),
   references: z.string().nullish(),
   license: z.string().nullish(),
@@ -198,6 +201,7 @@ export function normalizeOccurrences(json: unknown): { data: FeatureCollection<P
     if (basis !== undefined) properties.basisOfRecord = basis.toLowerCase().replace(/_/g, " ");
     const dataset = clean(r.datasetName);
     if (dataset !== undefined) properties.dataset = dataset;
+    properties.publisher = r.datasetKey === INAT_DATASET || /inaturalist/i.test(dataset ?? "") ? "inaturalist" : "other";
     const license = shortLicense(clean(r.license));
     if (license !== undefined) properties.license = license;
     if (typeof r.coordinateUncertaintyInMeters === "number") properties.uncertaintyM = Math.round(r.coordinateUncertaintyInMeters);
@@ -237,8 +241,22 @@ const ATTRIBUTES: Attribute[] = [
     levels: BASIS_VALUES.map((value) => ({ value, label: sentenceCase(value) })),
   },
   { key: "species", type: "category", label: "Species" },
+  {
+    key: "publisher",
+    type: "category",
+    label: "Published by",
+    levels: [
+      { value: "inaturalist", label: "iNaturalist", help: "Research-grade iNaturalist sightings, the same ones the species layer shows." },
+      { value: "other", label: "Museums, surveys and others", help: "Specimens, surveys, eBird and every other publisher." },
+    ],
+  },
   { key: "year", type: "time", label: "Year" },
 ];
+
+const PUBLISHER_WORDS: Record<string, string> = {
+  inaturalist: "iNaturalist (the same sighting is in the species layer)",
+  other: "Not iNaturalist (a museum, survey or other publisher)",
+};
 
 const YEAR: FieldHelp = { text: "The year the organism was seen or collected, as the record gives it." };
 
@@ -255,20 +273,27 @@ const HELP: Record<string, FieldHelp> = {
   uncertaintyM: { text: "How far the true position may be from the point, as the record states (records vaguer than 5 km are left out).", unit: "m" },
   dataset: { text: "The dataset that published the record to GBIF (for example iNaturalist research-grade observations or a museum collection)." },
   license: { text: "The licence the record's publisher set; cite or link the record when showing it." },
+  publisher: {
+    text:
+      "iNaturalist is GBIF's largest publisher: its research-grade sightings are the same ones the species layer shows. Drop the iNaturalist chip to " +
+      "see only specimens, surveys and other sources.",
+    source: "GBIF dataset 50c9509d (iNaturalist research-grade observations)",
+    url: "https://www.gbif.org/dataset/50c9509d-22c7-4a22-a47d-8c48425ef4a7",
+  },
 };
 
 const CARD: CardSpec = {
   facts: [
     // A record has no name: its species is the card's title (lib/render/inspect.ts), so neither it nor scientificName,
-    // the same Latin name, is repeated as a row.
-    { key: "t", label: "Date", format: "date" },
+    // the same Latin name, is repeated as a row. The date is the chip under the title, so it is not a row either.
     { key: "basisOfRecord", label: "Record type", values: Object.fromEntries(BASIS_VALUES.map((v) => [v, sentenceCase(v)])) },
+    { key: "publisher", label: "Source", values: PUBLISHER_WORDS },
     { key: "dataset", label: "Dataset" },
     { key: "uncertaintyM", label: "Position uncertainty", format: "m" },
     { key: "license", label: "Licence" },
   ],
-  /** ScientificName is the same Latin name as species. */
-  hidden: ["scientificName", "species"],
+  /** ScientificName is the same Latin name as species; year and v repeat the date chip. */
+  hidden: ["scientificName", "species", "year", "v"],
   links: [{ key: "url", label: "Source record" }],
 };
 
@@ -276,7 +301,7 @@ const gbifOccurrences = defineLayer({
   id: "gbif-occurrences",
   title: "GBIF occurrence records",
   description:
-    "Records of where species have been seen or collected, from GBIF (the Global Biodiversity Information Facility), which pools iNaturalist, eBird, museum specimens and survey data from around the world. Each point is one record with species, scientificName, basisOfRecord (human observation, preserved specimen, machine observation...), dataset, year, v (the year), t (the date), url (the source record), license and uncertaintyM (how vague the position is, in metres). " +
+    "Records of where species have been seen or collected, from GBIF (the Global Biodiversity Information Facility), which pools iNaturalist, eBird, museum specimens and survey data from around the world. Each point is one record with species, scientificName, basisOfRecord (human observation, preserved specimen, machine observation...), dataset, year, v (the year), t (the date), url (the source record), license, uncertaintyM (how vague the position is, in metres) and publisher ('inaturalist' for iNaturalist research-grade sightings, the same ones the species layer shows, or 'other' for museums, surveys and everyone else; near towns most records are iNaturalist). " +
     "Use it for where a species or group has been recorded, for example 'where have mountain lions been seen here', 'orchid records in this valley' or 'how has this species' range shown up over the years'. It works worldwide and goes back further than the species layer, so pick this one for older records, specimens, or places outside iNaturalist's reach; use species for recent photo sightings with common names. " +
     "Set scientificName to a Latin name at any level, such as 'Puma concolor', 'Pandion haliaetus' or a family like 'Felidae' (common names like 'mountain lion' do not work, so translate first), or taxonKey if you have a GBIF key. Leave both out for all species. " +
     "yearFrom and yearTo set the years (default: the last 10 years). " +
@@ -299,10 +324,26 @@ const gbifOccurrences = defineLayer({
     color: layerColor("gbif-occurrences"),
     heat: true,
     cluster: true,
+    // iNaturalist records and the rest in two colors, so specimens and surveys stand out from the species layer's sightings.
+    encode: { color: "publisher" },
   },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // Records are events over the years asked for (default the last ten); the scrubber steps a year at a time.
+  time: { shape: "continuous", step: "year" },
+  legend: {
+    kind: "categories",
+    title: "Published by",
+    field: "publisher",
+    items: [
+      { label: "iNaturalist", value: "inaturalist", symbol: "point", help: "The same sightings the species layer shows." },
+      { label: "Museums, surveys and others", value: "other", symbol: "point", help: "Specimens, surveys, eBird and every other publisher." },
+    ],
+    note: "Each dot is one record of where the species was seen or collected; records with a position vaguer than 5 km are left out.",
+  },
+  // The five newest records carry their year.
+  labels: { field: "year", max: 5, rankBy: "year" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();

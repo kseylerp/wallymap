@@ -3,7 +3,11 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
 import layer, { bboxPolygon, densityTileUrl, normalizeOccurrences, searchUrl, shortLicense, yearRange } from "./gbif-occurrences";
+import { cardContent } from "@/lib/render/card";
+import { summarizeFeature } from "@/lib/render/inspect";
+import { legendOf, labelsOf, timeShapeOf } from "./contract";
 import page from "./__fixtures__/gbif-occurrences.puma-tahoe.json";
+import boulder from "./__fixtures__/gbif-occurrences.puma-boulder.json";
 import match from "./__fixtures__/gbif-occurrences.match-puma.json";
 
 const TAHOE: [number, number, number, number] = [-120.4, 38.7, -119.8, 39.3];
@@ -83,12 +87,45 @@ describe("gbif-occurrences layer", () => {
       url: "https://www.inaturalist.org/observations/283853425",
       basisOfRecord: "human observation",
       dataset: "iNaturalist research-grade observations",
+      publisher: "inaturalist",
       license: "CC BY-NC 4.0",
       uncertaintyM: 9,
     });
     // A date-only eventDate and a time without seconds both parse to ISO.
     expect(data.features.some((f) => f.properties?.t === "2025-10-09T00:00:00.000Z")).toBe(true);
     expect(data.features.some((f) => f.properties?.t === "2024-07-03T21:44:00.000Z")).toBe(true);
+  });
+
+  it("marks iNaturalist records apart from specimens and other publishers (west of Boulder fixture)", () => {
+    const { data, vague } = normalizeOccurrences(boulder);
+    expect(vague).toBe(1);
+    expect(data.features.map((f) => [f.properties?.publisher, f.properties?.basisOfRecord])).toEqual([
+      ["inaturalist", "human observation"],
+      ["inaturalist", "human observation"],
+      ["other", "preserved specimen"],
+      ["other", "preserved specimen"],
+    ]);
+  });
+
+  it("shows the date once (the chip), not again as a row or as the year, and says iNaturalist records repeat the species layer", () => {
+    const { data } = normalizeOccurrences(boulder);
+    const content = cardContent(data.features[0], { card: layer.card, fieldHelp: layer.fieldHelp });
+    const rows = [...content.facts, ...content.details];
+    expect(rows.map((r) => r.label)).not.toContain("Date");
+    expect(rows.map((r) => r.key)).not.toContain("year");
+    expect(rows.map((r) => r.key)).not.toContain("v");
+    expect(content.facts.find((r) => r.key === "publisher")?.value).toBe("iNaturalist (the same sighting is in the species layer)");
+    expect(summarizeFeature(data.features[0]).date).not.toBeNull();
+  });
+
+  it("declares continuous yearly time, a publisher legend, two encode colors and year labels on the newest five", () => {
+    const { data } = normalizeOccurrences(boulder);
+    expect(timeShapeOf(layer, data)).toMatchObject({ shape: "continuous", step: "year", span: { start: "2023-10-14", end: "2026-06-28" } });
+    const legend = legendOf(layer, data);
+    expect(legend).toMatchObject({ kind: "categories", field: "publisher" });
+    expect(legend.items?.map((i) => i.value)).toEqual(["inaturalist", "other"]);
+    expect(layer.style.encode).toEqual({ color: "publisher" });
+    expect(labelsOf(layer)).toEqual({ field: "year", max: 5, rankBy: "year" });
   });
 
   it("falls back to year and month, uses a range's start, and skips rows with no position or date", () => {

@@ -3,6 +3,7 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
 import { tileUrlForTime } from "@/lib/time";
+import { contractProblems, legendOf, timeShapeOf } from "./contract";
 import layer, { fwiTileUrl } from "./fire-weather";
 
 const SOCAL: [number, number, number, number] = [-119, 33, -116, 35];
@@ -25,6 +26,23 @@ describe("fire-weather layer", () => {
     vi.setSystemTime(new Date("2026-10-09T01:30:00Z"));
   });
   afterEach(() => vi.useRealTimers());
+
+  it("keys GWIS's six danger classes with their FWI ranges, drawn unfiltered so the colors match (audit 2026-10-17: no key)", () => {
+    expect(contractProblems(layer)).toEqual([]);
+    const legend = legendOf(layer);
+    expect(legend.items?.map((i) => i.label)).toEqual([
+      "Low (under 11.2)",
+      "Moderate (11.2–21.3)",
+      "High (21.3–38)",
+      "Very high (38–50)",
+      "Extreme (50–70)",
+      "Very extreme (over 70)",
+    ]);
+    expect(legend.imageUrl).toMatch(/^https:\/\/maps\.wild-fire\.eu\/gwis\?.*GetLegendGraphic.*layer=ecmwf\.fwi/);
+    expect(layer.style.raster).toMatchObject({ saturation: 0 });
+    expect(timeShapeOf(layer)).toMatchObject({ shape: "continuous", step: "day" });
+    expect(layer.description).toContain("weather-alerts");
+  });
 
   it("declares global coverage, no env and no area cap", () => {
     expect(layer.id).toBe("fire-weather");

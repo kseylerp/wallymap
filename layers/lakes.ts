@@ -8,7 +8,9 @@
  * (`out ids geom` for ways, `out skel geom` for multipolygon relations), and the surface area is measured from it: rings are
  * assembled from the member ways, outer rings added and islands taken away, on a local flat projection (good to well under 1%
  * for a lake). Shorelines are heavy (a 9,000 km² Tahoe box was 3.1 MB in 6.6 s, a 16,000 km² Minnesota box 16 MB, 2026-10-18),
- * so wider views list the lakes without measuring them and say so.
+ * so wider views (up to the 20,000 km² wide threshold) ask for them in a second Overpass query of their own, alongside the
+ * first: when it fails or times out the lakes are still listed, unmeasured, with a note. Before this (audit 2026-10-18) a
+ * z9.5 Tahoe view listed 332 lakes with 2 areas (Wikidata's), so "Rank by Area" listed two and the rest drew faint.
  *
  * Wikidata: POST https://query.wikidata.org/sparql. The query finds items with coordinates (P625, `wikibase:box`) whose instance
  * of (P31, with subclasses) is lake (Q23397; reservoirs sit under it), flags reservoirs (Q131681), and reads maximum depth (P4511),
@@ -57,7 +59,7 @@ export const LIMIT = 500;
 export const WIDE_LIMIT = 1_000;
 /** Most named water bodies one Overpass answer carries (a 16,000 km² Minnesota box held 2,696, 2026-10-18). */
 export const OSM_LIMIT = 2_000;
-/** Views up to this size also fetch shorelines and measure every lake's area; wider views list the lakes unmeasured. */
+/** Views up to this size fetch shorelines in the lake query itself; wider views fetch them in a second query (osmLakeShapesQuery). */
 export const GEOMETRY_MAX_KM2 = 4_000;
 /** Extra rows a wide query asks for, so items repeated under two coordinates do not leave the result short of its limit. */
 const WIDE_SLACK = 50;
@@ -214,6 +216,16 @@ export function osmLakesQuery(bbox: BBox, opts: { name?: string; geometry: boole
     `nwr["natural"="water"]${named}["water"~"^(${LAKE_WATER.join("|")})$"]${box};)->.l;`;
   const shapes = opts.geometry ? `way.l->.w;.w out ids geom ${OSM_LIMIT};rel.l->.r;.r out skel geom ${OSM_LIMIT};` : "";
   return `[out:json][timeout:${OVERPASS_TIMEOUT_S}];${find}.l out count;.l out tags center ${OSM_LIMIT};${shapes}`;
+}
+
+/**
+ * Overpass QL for the shorelines alone (no tags, no count) of the same named lakes, for views over GEOMETRY_MAX_KM2: a
+ * separate query, so a slow or failed shoreline download never costs the lake list.
+ */
+export function osmLakeShapesQuery(bbox: BBox, name?: string): string {
+  const full = osmLakesQuery(bbox, { name, geometry: true });
+  const find = full.slice(full.indexOf("("), full.indexOf(".l out count;"));
+  return `[out:json][timeout:${OVERPASS_TIMEOUT_S}];${find}way.l->.w;.w out ids geom ${OSM_LIMIT};rel.l->.r;.r out skel geom ${OSM_LIMIT};`;
 }
 
 type LatLon = { lat: number; lon: number };
@@ -510,7 +522,7 @@ const DEPTH: FieldHelp = {
 
 const AREA: FieldHelp = {
   text:
-    "Surface area, measured from the OpenStreetMap shoreline (islands taken out) in views up to 4,000 km², else from Wikidata (P2046) " +
+    "Surface area, measured from the OpenStreetMap shoreline (islands taken out) in views up to 20,000 km², else from Wikidata (P2046) " +
     "where it has one. Reservoirs' shorelines are mapped at one water level.",
   unit: "km²",
   source: "OpenStreetMap, Wikidata",
@@ -572,7 +584,7 @@ const lakes = defineLayer({
   title: "Lakes and reservoirs",
   description:
     "Named lakes, ponds and reservoirs from OpenStreetMap, joined to Wikidata for depth, volume and elevation. Each point has name, kind " +
-    "('lake', 'reservoir', 'pond', 'oxbow' or 'lagoon'), areaKm2 (surface area in km², measured from the OpenStreetMap shoreline in views up to 4,000 km², " +
+    "('lake', 'reservoir', 'pond', 'oxbow' or 'lagoon'), areaKm2 (surface area in km², measured from the OpenStreetMap shoreline in views up to 20,000 km², " +
     "else Wikidata's figure, else null) with areaText in words, v (the same area, or null), depthM (maximum depth in metres, or absent when not recorded) with depthText " +
     "('Not recorded' when missing), elevationM and volumeKm3 with text forms (feet, acres, square miles and acre-feet first in the United States), sources ('both', 'osm' " +
     "or 'wikidata'), and links wikipedia, url (Wikidata) and osmUrl. Symbols are sized by area and the five largest are named on the map. " +
@@ -608,7 +620,7 @@ const lakes = defineLayer({
     field: "areaKm2",
     unit: "km²",
     stops: [{ label: "Smaller lake" }, { label: "Larger lake" }],
-    note: "Symbols grow with surface area; the five largest are named. Areas are measured in views up to 4,000 km²; a lake with no area is not sized.",
+    note: "Symbols grow with surface area; the five largest are named. Areas are measured from shorelines in views up to 20,000 km²; a lake with no area is not sized.",
   },
   labels: { field: "name", max: 5, rankBy: "areaKm2" },
 
@@ -619,9 +631,11 @@ const lakes = defineLayer({
     const usFirst = usUnitsFirst(ctx.bbox);
     const measure = bboxAreaKm2(ctx.bbox) <= GEOMETRY_MAX_KM2;
 
-    const [wd, osm] = await Promise.all([
+    // Over GEOMETRY_MAX_KM2 the shorelines come in their own query, so every lake can still be measured and ranked by area.
+    const [wd, osm, shapes] = await Promise.all([
       fetchWikidata(ctx, query),
       wideLimit === undefined ? overpassQuery(ctx, osmLakesQuery(ctx.bbox, { name: input.name, geometry: measure })) : Promise.resolve(null),
+      wideLimit === undefined && !measure ? overpassQuery(ctx, osmLakeShapesQuery(ctx.bbox, input.name)) : Promise.resolve(null),
     ]);
     const osmOk = osm?.ok === true;
     if ("error" in wd && !osmOk) return wd;
@@ -641,10 +655,11 @@ const lakes = defineLayer({
 
     let osmLakes: OsmLake[] = [];
     if (osm?.ok) {
-      osmLakes = parseOsmLakes(osm.json);
+      const shapeElements = shapes?.ok ? elementsOf(shapes.json) : [];
+      osmLakes = parseOsmLakes(shapeElements.length > 0 ? { elements: [...elementsOf(osm.json), ...shapeElements] } : osm.json);
       const [total] = overpassCounts(osm.json);
       if (total !== undefined && total > OSM_LIMIT) notes.push(`OpenStreetMap sent ${OSM_LIMIT.toLocaleString("en-US")} of its ${total.toLocaleString("en-US")} named lakes here; zoom in for the rest`);
-      if (!measure) notes.push(`areas are measured from shorelines only in views up to ${GEOMETRY_MAX_KM2.toLocaleString("en-US")} km²; zoom in to size every lake`);
+      if (shapes && !shapes.ok) notes.push(`the shorelines did not come back (${shapes.error}), so areas are Wikidata's only; zoom in under ${GEOMETRY_MAX_KM2.toLocaleString("en-US")} km² to size every lake`);
       sourceStatus ??= { ok: true };
     } else if (osm && !osm.ok) {
       notes.push(`OpenStreetMap did not answer (${osm.error}), so only lakes listed in Wikidata are shown`);
@@ -677,6 +692,12 @@ const lakes = defineLayer({
     };
   },
 });
+
+/** The elements array of an Overpass body, or none. */
+function elementsOf(json: unknown): unknown[] {
+  const elements = typeof json === "object" && json !== null ? (json as { elements?: unknown }).elements : undefined;
+  return Array.isArray(elements) ? elements : [];
+}
 
 /** The Wikidata half: its rows, or an error in the layer's words. */
 async function fetchWikidata(ctx: QueryContext, query: string): Promise<{ bindings: Binding[] } | LayerError> {

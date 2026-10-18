@@ -6,7 +6,7 @@ import { runLayer } from "@/lib/layers/run";
 import type { Feature } from "geojson";
 import { attributeProblems } from "./attributes";
 import { cardTitle, contractProblems, legendOf, timeShapeOf } from "./contract";
-import layer, { parseCsv, parseStems, survivalNote, utm11ToLonLat } from "./sequoia-mortality";
+import layer, { FILE_TIMEOUT_MS, parseCsv, parseStems, survivalNote, utm11ToLonLat } from "./sequoia-mortality";
 
 const CSV = readFileSync(path.join(__dirname, "__fixtures__/sequoia-mortality.stems.csv"), "utf8");
 
@@ -149,6 +149,10 @@ describe("sequoia-mortality layer", () => {
     expect(calls[0][0]).toBe("https://www.sciencebase.gov/catalog/file/get/63d40479d34e06fef150e7b4?name=Sequoia_stemdata.csv");
     expect(calls[0][1].cacheKey).toBe("sequoia-mortality:stemdata-v4");
     expect(calls[0][1].ttlSeconds).toBe(7 * 86_400);
+    // A slow ScienceBase gets 45 s, counted from the rate-limit slot (timeoutMs), not a signal whose clock ran in the queue.
+    expect((calls[0][1] as { timeoutMs?: number }).timeoutMs).toBe(FILE_TIMEOUT_MS);
+    expect(FILE_TIMEOUT_MS).toBe(45_000);
+    expect(calls[0][1].signal).toBeUndefined();
     expect(r.data.features).toHaveLength(25);
     expect(r.coverageNote).toMatch(/4 surveyed trees/);
     expect(r.citation.source).toContain("USGS");
@@ -170,6 +174,10 @@ describe("sequoia-mortality layer", () => {
       throw new Error("offline");
     });
     expect(await layer.query(ctx(down), {})).toMatchObject({ hint: "upstream" });
+    const slow = vi.fn(async () => {
+      throw Object.assign(new Error("t"), { name: "TimeoutError" });
+    });
+    expect(await layer.query(ctx(slow), {})).toEqual({ error: "ScienceBase timed out after 45 seconds", hint: "upstream" });
   });
 
   it("answers a box over 400,000 km² with every tree in it, biggest trunks first, and the count", async () => {

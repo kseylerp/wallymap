@@ -424,6 +424,7 @@ const CARD: CardSpec = {
     { key: "observedOn", label: "Seen on", format: "date" },
     { key: "tempVerdict", label: "Water temperature" },
     { key: "gaugeNote", label: "Temperature from" },
+    { key: "waterTempSite", label: "Gauge" },
     { key: "waterTempAt", label: "Temperature read", format: "date" },
     { key: "activities", label: "Activities", format: "list" },
     { key: "forest", label: "Forest" },
@@ -446,7 +447,7 @@ const CARD: CardSpec = {
     { key: "license", label: "Licence", values: LICENSE_LABELS },
   ],
   links: [{ key: "url", label: "Source page" }],
-  hidden: ["osmId", "waterTempC", "waterTempF", "waterTempSite", "waterTempStream", "waterTempKm", "tempBand", "gaugeMatch"],
+  hidden: ["osmId", "waterTempC", "waterTempF", "waterTempStream", "waterTempKm", "tempBand", "gaugeMatch"],
 };
 
 /** Kinds first (where to fish), then the water temperature band that colors each place. */
@@ -498,14 +499,50 @@ const hasOwnName = (f: Feature) => {
   return p.kind !== "sighting" && typeof p.name === "string" && !DEFAULT_NAMES.has(p.name);
 };
 
+/** An unnamed place within this distance of a named one is named after it ("Boat ramp near Rainbow Point Campground"). */
+export const NEAR_KM = 5;
+
+/**
+ * Names the places that have only their kind ("Boat ramp", "Fishing pier") after the nearest place in view with its own
+ * name within NEAR_KM, so a top-10 list does not read "Boat ramp" four times (mutates; returns how many it named).
+ */
+export function nameUnnamed(features: Feature<Point>[]): number {
+  const named = features.filter(hasOwnName);
+  let n = 0;
+  for (const f of features) {
+    const p = f.properties as Props;
+    if (p.kind === "sighting" || typeof p.name !== "string" || !DEFAULT_NAMES.has(p.name)) continue;
+    let best: { name: string; km: number } | null = null;
+    for (const other of named) {
+      const km = haversineKm(f.geometry.coordinates, other.geometry.coordinates);
+      if (km <= NEAR_KM && (best === null || km < best.km)) best = { name: String(other.properties?.name), km };
+    }
+    if (best === null) continue;
+    p.name = `${p.name} near ${best.name}`;
+    n++;
+  }
+  return n;
+}
+
+/**
+ * When every place's temperature comes from one gauge, they all read the same number, so ranking by it says nothing:
+ * waterTempF is left off (the verdict, band and gauge stay on the card) and the gauge is returned for the note.
+ */
+export function dropSingleGaugeTemps(features: Feature<Point>[]): string | undefined {
+  const gauges = new Set(features.flatMap((f) => (typeof f.properties?.waterTempSite === "string" ? [f.properties.waterTempSite] : [])));
+  if (gauges.size !== 1) return undefined;
+  for (const f of features) if (f.properties) delete f.properties.waterTempF;
+  return [...gauges][0];
+}
+
 const fishing = defineLayer({
   id: "fishing",
   title: "Fishing (access, boat ramps, recent catches, water temperature)",
   description:
     "Where to fish and launch, what fish people have seen lately, and how warm the water is. User words: fishing, where to fish, fishing spot, fishing access, boat ramp, boat launch, slipway, pier, trout, bass, what's biting, water temperature. " +
     "Points by kind: 'access' (OpenStreetMap fishing spots, US Forest Service recreation areas that list fishing, with activities such as 'Lake and Pond Fishing', forest, url and status, and in Montana the state's Fish, Wildlife & Parks fishing access sites with boatLaunch, camping and url), " +
-    "'ramp' (boat ramps / slipways from OpenStreetMap, with access and fee where tagged), 'pier' (fishing piers), and 'sighting' (fish observations on iNaturalist in the last `days` days, default 30, with species, scientificName, t = when seen, url). " +
-    "In the United States, access, ramp and pier points also get the nearest USGS gauge's live water temperature within 30 km: waterTempC (°C) and waterTempF (°F), tempBand for trout (cold under 10 °C / 50 °F, good 10 to 18 °C, warm 18 to 20 °C, too_warm above about 20 °C / 68 °F) with tempVerdict in words, waterTempSite and waterTempStream (the gauge and its stream), waterTempKm, waterTempAt, and gaugeMatch: 'different' when the spot's name names other water than the gauge's stream (say so), 'same', or 'unknown'. Give temperatures in °F first for US places. " +
+    "'ramp' (boat ramps / slipways from OpenStreetMap, with access and fee where tagged; an unnamed one is named after the nearest named place within 5 km, as 'Boat ramp near Rainbow Point Campground'), 'pier' (fishing piers), and 'sighting' (fish observations on iNaturalist in the last `days` days, default 30, with species, scientificName, t = when seen, url). " +
+    "In the United States, access, ramp and pier points also get the nearest USGS gauge's live water temperature within 30 km: waterTempC (°C) and waterTempF (°F; left out when every spot reads the same single gauge, since one reading cannot rank them), tempBand for trout (cold under 10 °C / 50 °F, good 10 to 18 °C, warm 18 to 20 °C, too_warm above about 20 °C / 68 °F) with tempVerdict in words, waterTempSite and waterTempStream (the gauge and its stream), waterTempKm, waterTempAt, and gaugeMatch: 'different' when the spot's name names other water than the gauge's stream (say so), 'same', or 'unknown'. Give temperatures in °F first for US places. " +
     "Example questions: 'What fish have people caught near here this month?', 'Is the river too warm for trout?'. " +
     "Caveats: fish stocking reports are NOT available here (each state wildlife agency publishes its own, with no common feed), so say so and point to the state agency; " +
     "this layer does not show regulations, seasons or licence rules; OSM coverage of fishing spots is patchy (many lakes only have ramps mapped); " +
@@ -615,6 +652,8 @@ const fishing = defineLayer({
       if (temps.ok) {
         const n = attachWaterTemps(features, parseIv(temps.bodies, now));
         if (n === 0) notes.push("No USGS water temperature gauge within 30 km of these spots");
+        const single = dropSingleGaugeTemps(features);
+        if (single !== undefined) notes.push(`Every water temperature here is from one gauge (${single}), so the spots are not ranked by it`);
       } else {
         failures.push(`USGS water temperature (${temps.error})`);
       }
@@ -627,8 +666,9 @@ const fishing = defineLayer({
     notes.push("Fish stocking reports are not included (state agencies publish them separately)");
     if (us) notes.push("BLM fishing sites are not included (no keyless BLM source)");
 
-    // Named places first (stable), so the top labels name real places, not "Boat ramp".
+    // Named places first (stable), so the top labels name real places, not "Boat ramp"; then unnamed ones take a near name.
     const ordered = [...features.filter(hasOwnName), ...features.filter((f) => !hasOwnName(f))];
+    nameUnnamed(ordered);
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features: ordered },

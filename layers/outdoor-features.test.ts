@@ -345,12 +345,26 @@ describe("outdoor-features kinds, card and key", () => {
     for (const f of r.data.features) expect(cardTitle(layer, f)).not.toMatch(/feature/i);
   });
 
+  it("draws features as kind symbols, not sized by elevation, and gives a saddle's card its elevation in both units", async () => {
+    // No measure: "Rank by" would default to it and size every marker by metres.
+    expect(layer.attributes?.some((a) => a.type === "measure")).toBe(false);
+    expect(layer.style.encode).toBeUndefined();
+    const r = geojson(await layer.query(ctx(stubFixture()), { kinds: ["saddle", "pass"] }));
+    const saddle = r.data.features.find((f) => f.properties?.kind === "saddle" && typeof f.properties?.ele === "number");
+    if (!saddle) throw new Error("no saddle with an elevation in the fixture");
+    const card = cardContent(saddle, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.measure).toBeNull();
+    expect(card.facts.map((row) => row.label)).toEqual(["Type", "Elevation"]);
+    expect(card.facts[0].value).toBe("Saddle");
+    expect(card.facts[1].value).toMatch(/^[\d,]+ ft \([\d,]+ m\)$/);
+  });
+
   it("shows elevation in feet first in a US view and metres first elsewhere, with no map element id on the card", async () => {
     const r = geojson(await layer.query(ctx(stubFixture()), {}));
     const echo = r.data.features.find((f) => f.properties?.name === "Echo Summit");
     if (!echo) throw new Error("Echo Summit missing");
     const card = cardContent(echo, { card: layer.card, fieldHelp: layer.fieldHelp });
-    expect(card.measure).toMatchObject({ label: "Elevation", value: "7,377 ft (2,249 m)" });
+    expect(card.facts.find((row) => row.label === "Elevation")?.value).toBe("7,377 ft (2,249 m)");
     const rows = [...card.facts, ...card.details].map((row) => row.label);
     expect(rows).not.toContain("Map element");
     expect(rows.some((l) => /osm/i.test(l))).toBe(false);

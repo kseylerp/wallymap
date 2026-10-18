@@ -14,6 +14,7 @@ import layer, {
   lakesQuery,
   mergeLakes,
   normalizeLakes,
+  osmLakeShapesQuery,
   osmLakesQuery,
   parseOsmLakes,
   ringAreaKm2,
@@ -302,14 +303,46 @@ describe("lakes layer", () => {
     expect(ql).toContain("out skel geom");
   });
 
-  it("lists lakes unmeasured in a view over 4,000 km², and says so", async () => {
-    const stub = route(tahoeWikidata, tahoeOsm);
-    // About 8,600 km², the audit's z9.5 view of Tahoe.
+  it("measures lakes in a view over 4,000 km² from shorelines fetched in a second query, so every mapped outline ranks by area", async () => {
+    // The audit's z9.5 view of Tahoe (about 8,600 km²) listed 332 lakes with 2 areas (Wikidata's): Rank by Area listed two.
+    const elements = tahoeOsm.elements as Record<string, unknown>[];
+    const tagged = { ...tahoeOsm, elements: elements.filter((e) => "tags" in e) };
+    const shorelines = { elements: elements.filter((e) => !("tags" in e)) };
+    const stub = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === SPARQL_ENDPOINT) return json(tahoeWikidata);
+      return json(decodeURIComponent(String(init?.body)).includes("out count") ? tagged : shorelines);
+    });
     const r = geojson(await layer.query(ctx(stub, undefined, [-120.6, 38.6, -119.6, 39.5]), {}));
     expect(GEOMETRY_MAX_KM2).toBe(4_000);
-    const [, opInit] = (stub.mock.calls as unknown as [string, RequestInit][]).find(([u]) => u !== SPARQL_ENDPOINT) ?? [];
-    expect(decodeURIComponent(String(opInit?.body))).not.toContain("geom");
-    expect(r.coverageNote).toContain("areas are measured from shorelines only in views up to 4,000 km²");
+    const bodies = (stub.mock.calls as unknown as [string, RequestInit][]).filter(([u]) => u !== SPARQL_ENDPOINT).map(([, i]) => decodeURIComponent(String(i?.body)));
+    expect(bodies).toHaveLength(2);
+    expect(bodies.find((b) => b.includes("out count"))).not.toContain("geom");
+    expect(bodies.find((b) => !b.includes("out count"))).toContain("out skel geom");
+    const area = (name: string) => r.data.features.find((f) => f.properties?.name === name)?.properties?.areaKm2;
+    expect(area("Lake Tahoe")).toBe(492);
+    expect(area("Cascade Lake")).toBe(0.857);
+    expect(area("Eagle Lake")).toBe(0.0739);
+    expect(r.coverageNote).not.toContain("shorelines");
+  });
+
+  it("still lists the lakes, unmeasured and with a note, when the shoreline query fails in a wide view", async () => {
+    const elements = tahoeOsm.elements as Record<string, unknown>[];
+    const tagged = { ...tahoeOsm, elements: elements.filter((e) => "tags" in e) };
+    const stub = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === SPARQL_ENDPOINT) return json(tahoeWikidata);
+      return decodeURIComponent(String(init?.body)).includes("out count") ? json(tagged) : new Response("busy", { status: 504 });
+    });
+    const r = geojson(await layer.query(ctx(stub, undefined, [-120.6, 38.6, -119.6, 39.5]), {}));
+    expect(r.data.features).toHaveLength(51);
+    expect(r.coverageNote).toContain("the shorelines did not come back");
+  });
+
+  it("asks for the same lakes' shorelines alone in the second query", () => {
+    const q = osmLakeShapesQuery(AUDIT_BOX, "tahoe");
+    expect(q).toContain('["name"~"tahoe",i]');
+    expect(q).toContain("->.l;way.l->.w;.w out ids geom 2000;rel.l->.r;.r out skel geom 2000;");
+    expect(q).not.toContain("out count");
+    expect(q).not.toContain("out tags");
   });
 
   it("the card leads with depth in feet and metres, spells out the kind, and says when the depth is not recorded", async () => {

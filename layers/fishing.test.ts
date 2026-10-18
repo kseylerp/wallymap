@@ -6,11 +6,13 @@ import layer, {
   attachWaterTemps,
   buildFishingQuery,
   buildWideFishingQuery,
+  dropSingleGaugeTemps,
   gaugeMatch,
   gaugeNote,
   gaugeStream,
   inatUrl,
   montanaFeatures,
+  nameUnnamed,
   osmFeatures,
   sightingFeatures,
   spotWater,
@@ -110,6 +112,62 @@ describe("sources", () => {
     expect(typeof withTemp.waterTempSite).toBe("string");
     expect(Number(withTemp.waterTempKm)).toBeLessThanOrEqual(30);
     expect(sightings.every((f) => f.properties?.waterTempC === undefined)).toBe(true);
+  });
+});
+
+describe("ranking and names", () => {
+  const point = (lon: number, lat: number, properties: Record<string, string | number>) => ({
+    type: "Feature" as const,
+    geometry: { type: "Point" as const, coordinates: [lon, lat] },
+    properties,
+  });
+
+  it("leaves waterTempF off when every place reads one gauge, so temperature is not offered as a rank, and keeps it with two", () => {
+    const one = [
+      point(-111.1, 44.8, { kind: "ramp", name: "Boat ramp", waterTempF: 47.1, waterTempSite: "Madison River near West Yellowstone, MT" }),
+      point(-111.2, 44.8, { kind: "access", name: "Baker's Hole", waterTempF: 47.1, waterTempSite: "Madison River near West Yellowstone, MT" }),
+      point(-111.2, 44.8, { kind: "sighting", species: "Brown Trout" }),
+    ];
+    expect(dropSingleGaugeTemps(one)).toBe("Madison River near West Yellowstone, MT");
+    expect(one.every((f) => f.properties.waterTempF === undefined)).toBe(true);
+    expect(one[0].properties.waterTempSite).toBe("Madison River near West Yellowstone, MT");
+    const two = [
+      point(-111.1, 44.8, { kind: "ramp", name: "Boat ramp", waterTempF: 52.3, waterTempSite: "Madison River bl Hebgen Lake nr Grayling MT" }),
+      point(-111.2, 44.8, { kind: "access", name: "Baker's Hole", waterTempF: 48.7, waterTempSite: "Madison River near West Yellowstone, MT" }),
+    ];
+    expect(dropSingleGaugeTemps(two)).toBeUndefined();
+    expect(two.map((f) => f.properties.waterTempF)).toEqual([52.3, 48.7]);
+  });
+
+  it("says on the card which gauge the temperature is from", () => {
+    expect(layer.card?.facts?.find((f) => f.key === "waterTempSite")?.label).toBe("Gauge");
+    expect(layer.card?.hidden).not.toContain("waterTempSite");
+  });
+
+  it("names an unnamed ramp or pier after the nearest named place within 5 km, and leaves a lone one as its kind", () => {
+    const features = [
+      point(-111.25, 44.75, { kind: "access", name: "Rainbow Point Campground" }),
+      point(-111.26, 44.76, { kind: "ramp", name: "Boat ramp" }),
+      point(-111.24, 44.74, { kind: "pier", name: "Fishing pier" }),
+      point(-110.5, 44.0, { kind: "ramp", name: "Boat ramp" }),
+      point(-111.25, 44.75, { kind: "sighting", species: "Brown Trout" }),
+    ];
+    expect(nameUnnamed(features)).toBe(2);
+    expect(features.map((f) => f.properties.name)).toEqual([
+      "Rainbow Point Campground",
+      "Boat ramp near Rainbow Point Campground",
+      "Fishing pier near Rainbow Point Campground",
+      "Boat ramp",
+      undefined,
+    ]);
+  });
+
+  it("names the Tahoe ramps near named places, after the named places in the list", async () => {
+    const r = await layer.query(ctx(routedStub()), { days: 30 });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const names = r.data.features.filter((f) => f.properties?.kind === "ramp").map((f) => String(f.properties?.name));
+    expect(names.some((n) => n.startsWith("Boat ramp near "))).toBe(true);
+    expect(r.data.features[0].properties?.name).not.toMatch(/^Boat ramp/);
   });
 });
 

@@ -9,6 +9,11 @@
  * Observation_Date (M/D/YYYY, 2022 to 2024), Diameter (cm at 1.37 m, 0 when not measured) and Fire_name (Castle or KNP).
  * The metadata XML says coordinates are NAD83 UTM zone 11 (northern hemisphere); utm11ToLonLat below converts them.
  * The file is fetched once and cached for a week under a fixed key (not the per-view key), then filtered to the view.
+ * Timeout (2026-10-18): one load said "www.sciencebase.gov did not answer in time". The file is a fixed 246 KB CSV (no
+ * fields or geometry to ask less of; it answered in 0.6 to 0.8 s when checked), but ScienceBase is sometimes slow to start,
+ * and the call used `signal: AbortSignal.timeout(25 s)`, whose clock also ran while it waited for a rate-limit slot. It
+ * now uses the fetch wrapper's `timeoutMs`, which starts after the slot, and allows FILE_TIMEOUT_MS (within the route's
+ * 60 s), since a slow answer is cached for a week and serves every later view.
  * Output properties: grove, fire, status (live or dead), kind (same), crownLivePercent, crownScorchPercent,
  * crownTorchPercent, diameterCm, observed (ISO date), t (the fire's start date). No `v`: the count is the feature count.
  * Check (2026-10-10): all 2,940 trees with a named grove land inside that grove's outline extent from sequoia-groves (0 outside).
@@ -20,7 +25,6 @@ import { z } from "zod";
 import type { Feature, Point } from "geojson";
 import { defineLayer, type Attribute, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
-import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { bboxesDisjoint } from "./_shared/coverage";
 import { textBody } from "@/lib/fetch";
 import { layerColor } from "@/lib/render/palette";
@@ -28,6 +32,8 @@ import { layerColor } from "@/lib/render/palette";
 const CSV_URL = "https://www.sciencebase.gov/catalog/file/get/63d40479d34e06fef150e7b4?name=Sequoia_stemdata.csv";
 const CSV_CACHE_KEY = "sequoia-mortality:stemdata-v4";
 const TTL_SECONDS = 7 * 86_400;
+/** How long the one file download may take: longer than the usual 25 s, inside the layer route's 60 s. */
+export const FILE_TIMEOUT_MS = 45_000;
 /**
  * Most trees a wide view carries: more than the whole survey (2,959 trees with a status), so a wide view still shows every
  * tree and counts stay right; the file is one cached download whatever the box.
@@ -325,14 +331,14 @@ const sequoiaMortality = defineLayer({
         cacheKey: CSV_CACHE_KEY,
         ttlSeconds: TTL_SECONDS,
         validate: STEM_FILE,
-        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        timeoutMs: FILE_TIMEOUT_MS,
       });
       if (!res.ok) return { error: `ScienceBase returned ${res.status}`, hint: "upstream" };
       text = await res.text();
     } catch (err) {
       return {
         error: isTimeout(err)
-          ? `ScienceBase timed out after ${UPSTREAM_TIMEOUT_MS / 1000} seconds`
+          ? `ScienceBase timed out after ${FILE_TIMEOUT_MS / 1000} seconds`
           : "ScienceBase returned no response",
         hint: "upstream",
       };

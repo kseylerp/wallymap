@@ -446,9 +446,12 @@ const KIND_LEVELS: AttributeLevel[] = [
   { value: "viewpoint", label: "Viewpoints", help: "Scenic overlooks." },
 ];
 
+/**
+ * No measure: elevation in metres sized every marker by default ("Rank by" picks the first measure), which tells someone
+ * looking for a hut or a spring nothing, so features draw as kind symbols and elevation is a card fact.
+ */
 const ATTRIBUTES: Attribute[] = [
   { key: "kind", type: "category", label: "Kind", primary: true, levels: KIND_LEVELS },
-  { key: "ele", type: "measure", label: "Elevation", unit: "m", help: ELEVATION },
   { key: "potable", type: "flag", label: "Mapped safe to drink", help: HELP.potable },
   nameAttribute(),
 ];
@@ -468,9 +471,10 @@ const LEGEND: LegendSpec = {
 };
 
 const CARD: CardSpec = {
-  measure: { key: "elevation", label: "Elevation", help: ELEVATION },
   facts: [
     { key: "kind", label: "Type", values: KIND_LABELS },
+    // Feet and metres, feet first in a US view (presentFeatures), whenever the mapper gave an elevation (a saddle too).
+    { key: "elevation", label: "Elevation", help: ELEVATION },
     { key: "fallHeight", label: "Waterfall height" },
     { key: "capacity", label: "Beds or places", format: "int" },
     {

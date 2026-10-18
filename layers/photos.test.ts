@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Feature, Point } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { resolveEncoding } from "@/lib/render/encode";
 import { cardTitle, legendOf, labelsOf, timeShapeOf } from "./contract";
 import layer, {
   commonsRetry,
@@ -140,6 +141,13 @@ describe("photos layer", () => {
     const legend = legendOf(layer);
     expect(legend).toMatchObject({ kind: "categories", field: "source" });
     expect(legend.items?.map((i) => i.label)).toEqual(["Commons photo", "Viewpoint", "Street-level image"]);
+    // Each kind keys in the color the map draws it in (the source category's encode colors), so the swatches differ.
+    const drawn = resolveEncoding(layer, undefined, {
+      type: "FeatureCollection",
+      features: ["commons", "viewpoint", "mapillary"].map((source) => ({ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: { source } })),
+    })?.color?.levels?.map((l) => l.color);
+    expect(legend.items?.map((i) => i.color)).toEqual(drawn);
+    expect(new Set(legend.items?.map((i) => i.color)).size).toBe(3);
     expect(legend.note).toMatch(/grows with the Commons photos taken within 500 m/);
     expect(legend.note).toMatch(/darker means more photos/);
     expect(labelsOf(layer)).toEqual({ field: "name", max: 5, rankBy: "nearby" });

@@ -3,7 +3,9 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { hardMaxAreaKm2 } from "./types";
 import { legendOf, labelsOf, timeShapeOf } from "./contract";
-import layer, { HISTORY_LIMIT, LIMIT, WIDE_LIMIT, addContext, levelOf, normalizeWells, parseHistory, sinceYear, waterLevelPercentile } from "./groundwater";
+import { cardContent } from "@/lib/render/card";
+import { rankableMeasures } from "@/lib/render/attributes";
+import layer, { HISTORY_LIMIT, LIMIT, WIDE_LIMIT, addContext, levelOf, nameByCounty, normalizeWells, parseHistory, sinceYear, waterLevelPercentile, wellName } from "./groundwater";
 import fixture from "./__fixtures__/groundwater.kearney.json";
 /** The same 12 wells' manual readings since 2006 (field-measurements, the Kearney box), recorded 2026-10-18. */
 import history from "./__fixtures__/groundwater.kearney-history.json";
@@ -41,7 +43,7 @@ describe("normalizeWells", () => {
     expect(wells).toHaveLength(12);
     expect(wells[0].geometry.type).toBe("Point");
     expect(wells[0].properties).toMatchObject({
-      name: expect.stringMatching(/^Well \d+$/),
+      name: "Well, water 82 ft down",
       v: 82,
       depthFt: 82,
       kind: "static",
@@ -171,7 +173,8 @@ describe("groundwater layer", () => {
       const res = await runLayer("groundwater", { bbox: [-102, 39, -98, 43], zoom: 6 });
       expect(res.status).toBe(200);
       const urls = stub.mock.calls.map((c) => new URL(String(c[0])));
-      expect(urls.find((u) => !u.searchParams.has("resulttype"))?.searchParams.get("limit")).toBe(String(WIDE_LIMIT));
+      // The county outlines (for the wells' names) are read alongside.
+      expect(urls.find((u) => u.pathname.endsWith("/latest-field-measurements/items") && !u.searchParams.has("resulttype"))?.searchParams.get("limit")).toBe(String(WIDE_LIMIT));
       const hits = urls.find((u) => u.searchParams.get("resulttype") === "hits");
       expect(hits?.searchParams.get("bbox")).toBe("-102,39,-98,43");
       expect(hits?.searchParams.get("time")).toBe("2021-01-01T00:00:00Z/..");
@@ -230,6 +233,49 @@ describe("groundwater layer", () => {
     expect(wells.map((w) => w.properties?.method)).toEqual(["Reported or estimated (no tape reading)", "Calibrated electric tape", "Steel tape", "Steel tape"]);
     expect(wells[3].properties?.check).toMatch(/probably a data entry error/);
     expect(wells[0].properties?.check).toBeUndefined();
+  });
+
+  it("leaves a flagged 2,977 ft reading out of the rank measure but lists it, with its depth and the flag on the card", () => {
+    const wells = normalizeWells({
+      features: [
+        { type: "Feature", geometry: { type: "Point", coordinates: [-100, 41] }, properties: { monitoring_location_id: "USGS-1", value: "2976.72", unit_of_measure: "ft" } },
+        { type: "Feature", geometry: { type: "Point", coordinates: [-100, 41] }, properties: { monitoring_location_id: "USGS-2", value: "120.4", unit_of_measure: "ft" } },
+      ],
+    });
+    expect(wells).toHaveLength(2);
+    expect(wells[0].properties).toMatchObject({ depthFt: 2976.72, name: "Well (reading flagged)" });
+    expect(wells[0].properties?.v).toBeUndefined();
+    expect(wells[1].properties?.v).toBe(120.4);
+    // "Rank by" offers depth (the other well holds it), and the flagged well has no value to rank.
+    expect(rankableMeasures(layer, { type: "FeatureCollection", features: wells }).map((m) => m.key)).toEqual(["v"]);
+    const card = cardContent(wells[0], { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.facts.find((r) => r.label === "Depth to water")?.value).toMatch(/^2,976\.72 ft$/);
+    expect(card.facts.find((r) => r.label === "Check")?.value).toMatch(/probably a data entry error/);
+    // A normal well says its depth once, in the measure.
+    const plain = cardContent(wells[1], { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(plain.measure?.label).toBe("Depth to water");
+    expect(plain.facts.some((r) => r.label === "Depth to water")).toBe(false);
+  });
+
+  it("names wells plainly by county and depth to water, not by their 15-digit id", async () => {
+    expect(wellName(82, false, "Dawson County, NE")).toBe("Well in Dawson County, NE, water 82 ft down");
+    expect(wellName(-3.2, false)).toBe("Well, water 3 ft above ground");
+    expect(wellName(2976.72, true, "Dawson County, NE")).toBe("Well in Dawson County, NE (reading flagged)");
+    const square = (w: number, s: number, e: number, n: number) => ({ type: "Polygon" as const, coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] });
+    const counties = {
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", geometry: square(-100.3, 40.5, -99.6, 41), properties: { NAME: "Dawson County", STATE_ABBR: "NE", COUNTY_FIPS: "047", FIPS: "31047" } },
+      ],
+    };
+    const stub = vi.fn(async (url: string) => json(url.includes("USA_Counties") ? counties : url.includes("/field-measurements/") ? history : fixture));
+    const r = geojson(await layer.query(ctx(stub), {}));
+    expect(r.data.features[0].properties).toMatchObject({ name: "Well in Dawson County, NE, water 82 ft down", county: "Dawson County, NE" });
+    expect(r.data.features.every((f) => !/\d{15}/.test(String(f.properties?.name)))).toBe(true);
+    // A failed county lookup keeps the plain names.
+    const down = vi.fn(async (url: string) => (url.includes("USA_Counties") ? json({}, 500) : json(fixture)));
+    expect(geojson(await layer.query(ctx(down), {})).data.features[0].properties?.name).toBe("Well, water 82 ft down");
+    expect(nameByCounty(normalizeWells(fixture), [])).toBe(0);
   });
 
   it("places the newest reading in the well's own record: share of earlier readings deeper than now, and its class", () => {

@@ -28,7 +28,10 @@
  * Time: one latest reading per well (`time: single`): the date is said on the card, never scrubbed. The map colors wells
  *   by depth to water (the sage → pink → purple ramp over the wells in view) and labels the three deepest.
  * Depths over 1,500 ft are kept but flagged (`check`): central Nebraska's 2,977 ft well among readings of 2 to 315 ft is a
- *   data entry error, and no US water table that deep is mapped in this collection's areas.
+ *   data entry error, and no US water table that deep is mapped in this collection's areas. A flagged well has no `v`, so
+ *   it never heads "Rank by" or takes the deep end of the color ramp; its card still says the depth (depthFt) and the flag.
+ * Names (2026-10-18): wells have only 15-digit ids, so each is named by its county (USA Counties, layers/_shared/counties.ts,
+ *   read alongside and cached a week) and its depth to water: "Well in Dawson County, NE, water 82 ft down".
  * `observing_procedure` is the method code's short form ("GW level, estim, report, observ"); the card says it in words
  *   from `observing_procedure_code` (S steel tape, T electric tape, V calibrated electric tape, O reported or estimated).
  */
@@ -39,6 +42,8 @@ import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
+import { countiesInBbox, type County } from "./_shared/counties";
+import { pointInPolygon } from "./_shared/geo";
 import { layerColor } from "@/lib/render/palette";
 
 const ENDPOINT = "https://api.waterdata.usgs.gov/ogcapi/v1/collections/latest-field-measurements/items";
@@ -124,7 +129,32 @@ export function sinceYear(now: Date, input: { sinceYear?: number }): number {
   return input.sinceYear ?? now.getUTCFullYear() - DEFAULT_YEARS_BACK;
 }
 
-/** Wells as points: v is depth to water in feet, t the measurement time; unusable rows (no point, no number, wrong unit) are dropped. */
+/** A well's name in words: where it is (its county, when known) and how far down the water stands. */
+export function wellName(depthFt: number, flagged: boolean, county?: string): string {
+  const where = county ? `Well in ${county}` : "Well";
+  if (flagged) return `${where} (reading flagged)`;
+  const ft = Math.round(Math.abs(depthFt)).toLocaleString("en-US");
+  return depthFt < 0 ? `${where}, water ${ft} ft above ground` : `${where}, water ${ft} ft down`;
+}
+
+/** Names each well by the county it stands in ("Dawson County, NE"); a well no outline holds keeps its plain name (mutates). */
+export function nameByCounty(wells: Feature<Point>[], counties: County[]): number {
+  let n = 0;
+  for (const w of wells) {
+    const p = w.properties as Record<string, string | number>;
+    const county = counties.find((c) => pointInPolygon(w.geometry.coordinates, c.geometry));
+    if (!county) continue;
+    p.county = `${county.name}, ${county.stateAbbr}`;
+    p.name = wellName(Number(p.depthFt), p.check !== undefined, p.county);
+    n++;
+  }
+  return n;
+}
+
+/**
+ * Wells as points: v is depth to water in feet (left off a flagged reading, so it is never ranked or colored as the
+ * deepest), t the measurement time; unusable rows (no point, no number, wrong unit) are dropped.
+ */
 export function normalizeWells(body: unknown): Feature<Point>[] {
   if (typeof body !== "object" || body === null || !("features" in body) || !Array.isArray(body.features)) return [];
   const seen = new Set<string>();
@@ -148,9 +178,10 @@ export function normalizeWells(body: unknown): Feature<Point>[] {
     const qualifiers = Array.isArray(p.qualifier) ? p.qualifier.filter((q): q is string => typeof q === "string") : [];
 
     const rounded = Math.round(depth * 100) / 100;
+    const flagged = rounded > IMPLAUSIBLE_FT;
     const properties: Record<string, string | number> = {
-      name: site === undefined ? "Well" : `Well ${site.replace(/^USGS-/, "")}`,
-      v: rounded,
+      name: wellName(rounded, flagged),
+      ...(!flagged && { v: rounded }),
       depthFt: rounded,
       kind: qualifiers.length === 0 ? "unspecified" : qualifiers.includes("Static") ? "static" : "other",
     };
@@ -168,7 +199,7 @@ export function normalizeWells(body: unknown): Feature<Point>[] {
     const method = (code !== undefined ? METHODS[code] : undefined) ?? str(p.observing_procedure)?.replace(/^GW level, /i, "");
     if (method !== undefined && method.toLowerCase() !== "none") properties.method = method.charAt(0).toUpperCase() + method.slice(1);
     // A flagged depth gets no map label, so the labels never name a probable error as the deepest well.
-    if (rounded > IMPLAUSIBLE_FT) properties.check = "Unusually deep for a water level; probably a data entry error";
+    if (flagged) properties.check = "Unusually deep for a water level; probably a data entry error";
     else properties.depthLabel = `${Math.round(rounded).toLocaleString("en-US")} ft`;
     const approval = str(p.approval_status);
     if (approval !== undefined) properties.approval = approval;
@@ -261,7 +292,7 @@ export function addContext(wells: Feature<Point>[], history: Map<string, { t: st
     const site = typeof p.site === "string" ? p.site : undefined;
     const record = site === undefined ? undefined : history.get(site);
     if (!record || p.check !== undefined) continue;
-    const c = waterLevelPercentile(Number(p.v), typeof p.date === "string" ? p.date : undefined, record);
+    const c = waterLevelPercentile(Number(p.depthFt), typeof p.date === "string" ? p.date : undefined, record);
     if (!c) continue;
     p.pct = c.pct;
     p.level = levelOf(c.pct);
@@ -310,6 +341,9 @@ const LEVEL_WORDS = Object.fromEntries(LEVELS.map((l) => [l.value, l.label]));
 const CARD: CardSpec = {
   measure: { key: "v", label: "Depth to water", unit: "ft" },
   facts: [
+    // A flagged well has no v: its depth shows here, beside the flag (on other wells the measure already says it).
+    { key: "depthFt", label: "Depth to water", unit: "ft" },
+    { key: "county", label: "County" },
     { key: "date", label: "Measured", format: "date" },
     { key: "level", label: "Compared with its record", values: LEVEL_WORDS },
     { key: "pct", label: "Percentile", format: "int" },
@@ -379,8 +413,8 @@ const groundwater = defineLayer({
   description:
     "How deep the water table is, from the newest manual measurement at each USGS monitoring well, colored by depth (the three deepest labelled). Each point has v and depthFt (feet below land surface; negative means water above ground, as in a flowing well), t and date, site and siteNo (the USGS well id), kind ('static' undisturbed, 'other' pumped or disturbed), method, approval and url. " +
     "In a view under 12,000 km², a well with 10 or more earlier readings over 5 or more years also has pct (0 to 100: the share of its readings over the last 20 years when the water stood deeper than now, so high means the water is high), level ('much-below', 'below', 'normal', 'above', 'much-above', USGS Groundwater Watch classes), medianFt (its typical depth) and recordSince. " +
-    "check marks a depth over 1,500 ft that is probably a data error; leave it out of any answer. sinceYear (default five years back) hides older wells. " +
-    "It is one reading per well, so it cannot show a trend over time: never say a level is rising or falling; say above or below the well's normal only from level. Values can be months old; wells have numbers, not names. At most 1,000 wells in no order (2,000 over 40,000 km², with the total).",
+    "check marks a depth over 1,500 ft that is probably a data error (such a well has depthFt but no v); leave it out of any answer. sinceYear (default five years back) hides older wells. " +
+    "It is one reading per well, so it cannot show a trend over time: never say a level is rising or falling; say above or below the well's normal only from level. Values can be months old; wells have numbers, not names, so name is the county and depth ('Well in Dawson County, NE, water 82 ft down') and county is the county. At most 1,000 wells in no order (2,000 over 40,000 km², with the total).",
   coverage: "us",
   surface: "land",
   license: "Public domain (USGS)",
@@ -440,6 +474,8 @@ const groundwater = defineLayer({
     // Each well's own record, read alongside, for a box small enough that one page holds every reading.
     const withHistory = wideLimit === undefined && bboxAreaKm2(ctx.bbox) <= HISTORY_MAX_KM2;
     const history = withHistory ? readHistory(ctx, ctx.bbox, new Date(), headers) : Promise.resolve(null);
+    // The counties the wells stand in, for their names; a failure leaves the plain names.
+    const counties = countiesInBbox(ctx, ctx.bbox).catch(() => null);
 
     let res: Response;
     try {
@@ -475,7 +511,10 @@ const groundwater = defineLayer({
 
     const features = normalizeWells(body);
     // A wide page is unordered, so show its deepest wells first.
-    if (wideLimit !== undefined) features.sort((a, b) => Number(b.properties?.v) - Number(a.properties?.v));
+    const depthOf = (f: Feature) => (typeof f.properties?.v === "number" ? f.properties.v : -Infinity);
+    if (wideLimit !== undefined) features.sort((a, b) => depthOf(b) - depthOf(a));
+    const outlines = await counties;
+    if (outlines?.ok) nameByCounty(features, outlines.counties);
     const total = await counting;
     const notes: string[] = [];
     if (wideLimit === undefined && body.features.length >= LIMIT) notes.push(`Showing ${LIMIT} wells, in no particular order; zoom in for the rest`);

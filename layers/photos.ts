@@ -40,7 +40,7 @@ import { overpassQuery } from "./_shared/overpass";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { WIKIMEDIA_USER_AGENT, rankedSparql, retryDelayMs, wikimediaFetch } from "./_shared/wikimedia";
-import { layerColor } from "@/lib/render/palette";
+import { DARK_GREY, layerColor, PINK, PURPLE } from "@/lib/render/palette";
 
 const SOURCES = ["commons", "viewpoints", "mapillary"] as const;
 type Source = (typeof SOURCES)[number];
@@ -636,9 +636,10 @@ const photos = defineLayer({
     title: "What it is",
     field: "source",
     items: [
-      { label: "Commons photo", value: "commons", symbol: "point" },
-      { label: "Viewpoint", value: "viewpoint", symbol: "point", help: `Bigger means more Commons photos taken within ${NEARBY_M} m.` },
-      { label: "Street-level image", value: "mapillary", symbol: "point", help: "Only when asked for." },
+      // The colors the map draws each kind in (encode color by source, a category: CATEGORY_COLORS in declared order).
+      { label: "Commons photo", value: "commons", color: PURPLE, symbol: "point" },
+      { label: "Viewpoint", value: "viewpoint", color: PINK, symbol: "point", help: `Bigger means more Commons photos taken within ${NEARBY_M} m.` },
+      { label: "Street-level image", value: "mapillary", color: DARK_GREY, symbol: "point", help: "Only when asked for." },
     ],
     note:
       `Each small dot is one geotagged photo; a viewpoint's symbol grows with the Commons photos taken within ${NEARBY_M} m of it. ` +

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { cardContent } from "@/lib/render/card";
+import { rowName } from "@/lib/render/attributes";
 import { cardTitle, contractProblems, labelsOf, legendOf, timeShapeOf } from "./contract";
 import layer, { buildCampsitesQuery, buildWideCampsitesQuery, normalizeCampsites, presentCampsites, wayCentroid } from "./campsites";
 import fixture from "./__fixtures__/campsites.tahoe.json";
@@ -368,6 +369,10 @@ describe("campsite kinds, fee and key", () => {
     expect(unnamed.length).toBeGreaterThan(0);
     for (const f of unnamed) expect(cardTitle(layer, f)).toMatch(/^(Camp site|Parking lot)( near .+)?$/);
     expect(unnamed.some((f) => / near /.test(cardTitle(layer, f)))).toBe(true);
+    // The top-10 rows read title: an unnamed site is listed by its kind and nearest name, never "Unnamed".
+    for (const f of unnamed) expect(rowName(f)).toBe(cardTitle(layer, f));
+    expect(fs.map(rowName)).not.toContain("Unnamed");
+    expect(cardContent(unnamed[0], { card: layer.card }).details.map((d) => d.key)).not.toContain("title");
   });
 
   it("puts single pitches after the campgrounds they belong to", () => {

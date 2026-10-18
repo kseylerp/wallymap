@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import { cardTitle, legendOf } from "./contract";
+import { categoryKey } from "@/lib/render/categories";
+import { DARK_GREY, PINK, PURPLE, SAGE } from "@/lib/render/palette";
+import { cardTitle, contractProblems, legendOf } from "./contract";
 import layer, { dropSlivers, normalizePermafrost, permafrostOffset } from "./permafrost";
 import fixture from "./__fixtures__/permafrost.fairbanks.json";
 
@@ -12,6 +14,8 @@ const FAIRBANKS: [number, number, number, number] = [-150, 63, -145, 66];
 function ctx(stub: ReturnType<typeof vi.fn>, bbox = FAIRBANKS) {
   return { bbox, zoom: 7, env: {}, fetch: stub as unknown as CachedFetch, cacheKey: "permafrost:k" };
 }
+
+const normalizePermafrostFc = (): FeatureCollection => ({ type: "FeatureCollection", features: normalizePermafrost(fixture as FeatureCollection) });
 
 const ok = (body: unknown = fixture) => vi.fn(async () => new Response(JSON.stringify(body), { status: 200 }));
 
@@ -72,13 +76,25 @@ describe("permafrost", () => {
     expect(await layer.query(ctx(down), layer.input.parse({}))).toMatchObject({ hint: "upstream" });
   });
 
-  it("colors zones on the ordinal ramp, keys the four classes and titles the card by its zone", () => {
-    expect(layer.style.encode).toEqual({ color: "kind" });
+  it("keys the four classes light to dark in the colors the map draws, none sage, and titles the card by its zone", () => {
+    // The declared legend colors the areas (categoryKey), the chips and the key alike; the ordinal ramp drew isolated sage.
+    expect(layer.style.encode).toBeUndefined();
     const key = legendOf(layer);
     expect(key).toMatchObject({ kind: "categories", field: "kind" });
     expect(key.items?.map((i) => i.value)).toEqual(["isolated", "sporadic", "discontinuous", "continuous"]);
+    expect(key.items?.map((i) => i.color)).toEqual([PINK, PINK, PURPLE, DARK_GREY]);
+    expect(key.items?.[0].symbol).toBe("line");
+    expect(key.items?.some((i) => i.color === SAGE)).toBe(false);
+    const drawn = categoryKey(layer, normalizePermafrostFc());
+    expect(drawn?.groups.map((g) => [g.values[0], g.color, g.outline ?? false])).toEqual([
+      ["isolated", PINK, true],
+      ["sporadic", PINK, false],
+      ["discontinuous", PURPLE, false],
+      ["continuous", DARK_GREY, false],
+    ]);
     const f = normalizePermafrost(fixture as FeatureCollection)[2];
     expect(cardTitle(layer, f)).toBe("Discontinuous permafrost zone");
+    expect(contractProblems(layer)).toEqual([]);
   });
 
   it("drops the triangle slivers simplification leaves, keeping real polygons and multipolygon parts", () => {

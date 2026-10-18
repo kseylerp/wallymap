@@ -19,18 +19,20 @@
  * Live smoke through runLayer 2026-10-10: Fairbanks [-150,63,-145,66] 135 polygons in 0.4 s (133 discontinuous, mostly
  * low ice on uplands, 2 continuous); all of Alaska [-170,55,-140,72] 864 polygons in 0.5 s; canada=true returned the
  * NRCan export template, whose tiles answered 200 PNG over the Northwest Territories.
- * Drawing (2026-10-18): zones are colored by class on the ordinal ramp (encode color by kind, isolated to continuous), so
- * "is there permafrost under Fairbanks" reads from the map; each zone is named ("Discontinuous permafrost zone") for the
- * card title. Simplification is finer (view / 400, was / 200) and the triangle slivers it leaves are dropped: interior
- * Alaska [-152,62,-145,65] returned 269 polygons, 187 of them slivers of a few km², drawn as spikes in the Alaska Range.
+ * Drawing (2026-10-18): zones are colored by class, light to dark from isolated to continuous (pink outline, pink, purple,
+ * dark grey; the legend declares the colors, so the map, the key and the filter chips draw the same ones and no class is
+ * sage, which sank into green Topo), so "is there permafrost under Fairbanks" reads from the map; each zone is named
+ * ("Discontinuous permafrost zone") for the card title. Simplification is finer (view / 400, was / 200) and the
+ * triangle slivers it leaves are dropped: interior Alaska [-152,62,-145,65] returned 269 polygons, 187 of them slivers of
+ * a few km², drawn as spikes in the Alaska Range.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
-import { defineLayer, type Attribute, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp } from "./types";
+import { defineLayer, type Attribute, type BBox, type LayerError, type LayerResult, type CardSpec, type FieldHelp, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { mapServerExportTileUrl } from "./_shared/arcgis-tiles";
-import { layerColor } from "@/lib/render/palette";
+import { DARK_GREY, layerColor, PINK, PURPLE } from "@/lib/render/palette";
 
 const SERVICE = "https://services.arcgis.com/6DIQcwlPy8knb6sg/arcgis/rest/services/North_Hemisphere_Permafrost_WFL1/FeatureServer/0";
 const NRCAN = "https://maps-cartes.services.geo.ca/server_serveur/rest/services/NRCan/permafrost_atlas_of_canada_en/MapServer";
@@ -130,7 +132,7 @@ const HELP: Record<string, FieldHelp> = {
   relict: { text: "Old permafrost left from colder times." },
 };
 
-/** The zones on the ordinal ramp, least frozen to most (sage → pink → purple), the map's color and its key. */
+/** The zones, least frozen to most; their colors are the legend's (LEGEND). */
 const ATTRIBUTES: Attribute[] = [
   {
     key: "kind",
@@ -156,6 +158,24 @@ const ATTRIBUTES: Attribute[] = [
     ],
   },
 ];
+
+/**
+ * The key, and the colors the map draws each zone in (lib/render/categories.ts reads a declared legend's colors), light
+ * to dark as more ground is frozen: isolated patches as a pink outline only, then pink, purple and dark grey. Every color
+ * is a hatch color that reads on green Topo; sage is left out (it vanished there).
+ */
+const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Permafrost zone",
+  field: "kind",
+  items: [
+    { label: "Isolated (0 to 10%)", value: "isolated", color: PINK, symbol: "line", help: "Frozen ground in a few small patches." },
+    { label: "Sporadic (10 to 50%)", value: "sporadic", color: PINK, symbol: "polygon", help: "Frozen ground in scattered patches." },
+    { label: "Discontinuous (50 to 90%)", value: "discontinuous", color: PURPLE, symbol: "polygon", help: "Most ground frozen, with thawed gaps." },
+    { label: "Continuous (90 to 100%)", value: "continuous", color: DARK_GREY, symbol: "polygon", help: "Nearly all ground frozen." },
+  ],
+  note: "Share of the ground frozen year-round (IPA extent classes).",
+};
 
 /** The zone card: the zone in words, its share of frozen ground, ground ice and landform. */
 const CARD: CardSpec = {
@@ -188,9 +208,11 @@ const permafrost = defineLayer({
   // All of Alaska (its box, 5,983,000 km², spans the Aleutians) answers.
   maxAreaKm2: 7_000_000,
   input: inputSchema,
-  // Color by zone on the ordinal ramp: the old single hatch made every class look the same.
-  style: { geometry: "polygon", color: layerColor("permafrost"), fillOpacity: 0.4, encode: { color: "kind" } },
+  // Colored by zone in the legend's colors (the old single hatch made every class look the same; the ordinal ramp drew
+  // isolated zones sage, lost on green Topo, and keyed them grey).
+  style: { geometry: "polygon", color: layerColor("permafrost"), fillOpacity: 0.4 },
   attributes: ATTRIBUTES,
+  legend: LEGEND,
   time: { shape: "none" },
   fieldHelp: HELP,
   card: CARD,

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { attributeProblems } from "./attributes";
+import { cardTitle, contractProblems, legendOf } from "./contract";
 import layer, { datetimeWindow, plumeFeatures, plumesUrl, sourceFeatures, sourcesUrl } from "./methane-plumes";
 import plumesFixture from "./__fixtures__/carbonmapper-plumes.bakersfield.json";
 import sourcesFixture from "./__fixtures__/carbonmapper-sources.bakersfield.json";
@@ -124,5 +126,19 @@ describe("methane-plumes", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("sizes leaks by rate with super-emitter presets, colors plume vs source, and titles them in words (audit 2026-10-17: one symbol, 'Feature')", () => {
+    expect(layer.style.encode).toEqual({ size: "v", color: "kind" });
+    expect(attributeProblems(layer)).toEqual([]);
+    expect(contractProblems(layer)).toEqual([]);
+    expect(layer.attributes?.find((a) => a.key === "v")?.presets?.map((p) => p.min)).toEqual([100, 1000]);
+    expect(legendOf(layer).items?.map((i) => i.label)).toEqual(["Recurring source", "Single plume"]);
+    const [source] = sourceFeatures((sourcesFixture as { features: unknown[] }).features);
+    expect(cardTitle(layer, source)).toMatch(/^[A-Z][a-z].* source(, .+)?$/);
+    expect(source.properties?.label).toMatch(/^[\d,]+ kg\/h$/);
+    const plume = plumeFeatures((plumesFixture as { items: unknown[] }).items).find((f) => typeof f.properties?.t === "string");
+    expect(cardTitle(layer, plume!)).toMatch(/ plume, \d{4}-\d{2}-\d{2}$/);
+    expect(layer.labels).toEqual({ field: "label", max: 5, rankBy: "v" });
   });
 });

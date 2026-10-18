@@ -29,7 +29,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
+import { defineLayer, type Attribute, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { jsonObjectBody } from "@/lib/fetch/validate";
@@ -112,6 +112,21 @@ export function sourcesUrl(bbox: BBox, days: number, now: number): string {
   return `${API}/sources.geojson?${bboxParams(bbox)}&plume_gas=CH4&datetime=${encodeURIComponent(datetimeWindow(days, now))}`;
 }
 
+const capital = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+/**
+ * The card's title and the map label: "Oil and gas source, Permian" or "Landfill plume, 2026-04-21", and "1,337 kg/h"
+ * (Carbon Mapper's source names are coordinates codes, CH4_1B2_250m_-103.85841_31.87325, so they are not the title).
+ */
+export function describeMethane(props: Record<string, string | number>): void {
+  const sector = capital(String(props.sector ?? "Methane"));
+  props.heading =
+    props.kind === "source"
+      ? `${sector} source${props.basin ? `, ${props.basin}` : ""}`
+      : `${sector} plume${typeof props.t === "string" ? `, ${props.t.slice(0, 10)}` : ""}`;
+  if (typeof props.v === "number") props.label = `${Math.round(props.v).toLocaleString("en-US")} kg/h`;
+}
+
 /** One point per plume: kind "plume", t = observation time, v = emission rate kg/h when Carbon Mapper published one. */
 export function plumeFeatures(items: unknown[]): Feature<Point>[] {
   const out: Feature<Point>[] = [];
@@ -127,6 +142,7 @@ export function plumeFeatures(items: unknown[]): Feature<Point>[] {
     }
     if (p.platform) props.platform = p.platform;
     if (typeof p.wind_speed_avg_auto === "number") props.windMs = round(p.wind_speed_avg_auto);
+    describeMethane(props);
     const [lng, lat] = p.geometry_json.coordinates;
     out.push({ type: "Feature", geometry: { type: "Point", coordinates: [lng, lat] }, properties: props });
   }
@@ -149,6 +165,7 @@ export function sourceFeatures(features: unknown[]): Feature<Point>[] {
     if (typeof p.persistence === "number") props.persistence = round(p.persistence, 2);
     if (p.source_name) props.sourceName = p.source_name.split("?")[0];
     if (p.basin_name) props.basin = p.basin_name;
+    describeMethane(props);
     const [lng, lat] = parsed.data.geometry.coordinates;
     out.push({ type: "Feature", geometry: { type: "Point", coordinates: [lng, lat] }, properties: props });
   }
@@ -207,7 +224,39 @@ const CARD: CardSpec = {
     { key: "platform", label: "Seen by" },
     { key: "windMs", label: "Wind", unit: "m/s", format: "1dp" },
   ],
+  hidden: ["heading", "label", "sourceName", "plumeId"],
 };
+
+/**
+ * What a person slices leaks by (spec §12c): the emission rate is the measure that sizes the symbols and ranks them
+ * ("the super-emitters", over 100 kg/h by the common definition); kind (a single plume or a recurring source) is the
+ * color and the chips; sector is an open category.
+ */
+export const ATTRIBUTES: Attribute[] = [
+  {
+    key: "v",
+    type: "measure",
+    label: "Emission rate",
+    unit: "kg/h",
+    encode: "size",
+    presets: [
+      { label: "Super-emitters: 100 kg/h or more", min: 100 },
+      { label: "Very large: 1,000 kg/h or more", min: 1_000 },
+    ],
+  },
+  {
+    key: "kind",
+    type: "category",
+    label: "Kind",
+    encode: "color",
+    primary: true,
+    levels: [
+      { value: "source", label: "Recurring source", help: "A place where plumes keep appearing: v is the average rate." },
+      { value: "plume", label: "Single plume", help: "One plume seen on one pass: v is the rate then." },
+    ],
+  },
+  { key: "sector", type: "category", label: "Sector" },
+];
 
 const methanePlumes = defineLayer({
   id: "methane-plumes",
@@ -228,9 +277,12 @@ const methanePlumes = defineLayer({
   maxAreaKm2: 500_000,
   wide: { orderBy: "emission rate in kg/h", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("methane-plumes"), unit: "kg/h", heat: true },
+  style: { geometry: "point", color: layerColor("methane-plumes"), unit: "kg/h", heat: true, encode: { size: "v", color: "kind" } },
   fieldHelp: FIELD_HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
+  labels: { field: "label", max: 5, rankBy: "v" },
+  time: { shape: "continuous", step: "day" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = Date.now();

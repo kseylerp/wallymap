@@ -232,16 +232,12 @@ function atlasIcon(icon: AtlasIcon): AtlasIcon {
 export const hexbinThreshold = 2000;
 
 /**
- * The H3 resolution for tiles at a zoom: 3 (about 12,000 km² a cell) up to z5, then one finer every two zooms, 7
- * (about 5 km²) from z12. A region (West Texas at z6) reads in cells of about 1,800 km², a valley (z11) in 36 km².
+ * The H3 resolution for tiles at a zoom: one finer every zoom, so a cell stays about the same size on screen and reads
+ * as density, not a slab (points fixer, 2026-10-18): about 1 km across (res 8, 0.7 km²) at z11, 2.4 km (res 7) at z10,
+ * about 45 km (res 4) at z7, never coarser than res 3 nor finer than res 9.
  */
 export function hexResolution(zoom: number): number {
-  const z = Math.floor(zoom);
-  if (z <= 5) return 3;
-  if (z <= 7) return 4;
-  if (z <= 9) return 5;
-  if (z <= 11) return 6;
-  return 7;
+  return Math.min(9, Math.max(3, Math.floor(zoom) - 3));
 }
 
 /** Where a feature sits as a symbol: a Point's coordinates, else the center of its extent. */
@@ -333,6 +329,9 @@ export function hexTileColorAt(t: number): Rgba {
   return rampRgba(HEX_TILE.ramp, u, Math.round(255 * (a0 + (a1 - a0) * u)));
 }
 
+/** Tiles over imagery keep this share of their alpha. */
+export const HEX_IMAGERY_ALPHA = 0.7;
+
 /** A count's place on the tile ramp: log scaled against the busiest tile. */
 function countT(count: number, max: number): number {
   return max > 1 ? Math.min(1, Math.max(0, Math.log(count) / Math.log(max))) : 1;
@@ -380,6 +379,8 @@ type OpContext = {
   deckId?: string;
   /** The floating panels' insets over the map canvas, so ranked labels stay in the clear part (placedLabels.ts). */
   labelInsets?: LabelInsets;
+  /** The basemap on screen: hex tiles lighten over imagery. */
+  basemap?: MapState["basemap"];
 };
 
 /** The floating panels' insets over a canvas of this size (MapCanvas reads them from the page). */
@@ -533,7 +534,25 @@ function pointsOf(data: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
   return out;
 }
 
+const areasMemo = new WeakMap<GeoJSON.FeatureCollection, GeoJSON.FeatureCollection>();
+/** The non-point features of a collection (made once per collection). */
+function areasOf(data: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
+  let out = areasMemo.get(data);
+  if (!out) {
+    out = { ...data, features: data.features.filter((f) => f.geometry?.type !== "Point" && f.geometry?.type !== "MultiPoint") };
+    areasMemo.set(data, out);
+  }
+  return out;
+}
+
 function polygonLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
+  // An area layer's own points (disaster alerts given as a point) draw as real symbols, not as bare circles.
+  const points = pointsOf(ctx.data);
+  if (points.features.length > 0 && points !== ctx.data) {
+    const areasOnly = areasOf(ctx.data);
+    return [...polygonLayers(op, { ...ctx, data: areasOnly }, opacity), ...symbolLayers({ ...op, mode: "points" }, { ...ctx, data: points }, opacity)];
+  }
+  if (points === ctx.data && points.features.length > 0) return [...symbolLayers({ ...op, mode: "points" }, ctx, opacity), ...labelLayers(op, ctx, opacity)];
   const areas = ctx.style.unit === "score" ? scoreAreaLayers(op, ctx, opacity) : areaLayers(op, ctx, opacity);
   // A ranked view labels its top areas on the map, as it labels its top symbols (lib/render/views.ts).
   return [...areas, ...labelLayers(op, ctx, opacity)];
@@ -742,7 +761,13 @@ function symbolLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       pickable: true,
       getPosition: markerPosition,
       getIcon: (f) => atlasIcon(pinIconFor(op.layerId, f, f === selected, size, encode(f))),
-      getSize: ranked ? (f: Feature) => SYMBOL_SIZE_PX * sizeScale(f.properties?.[ranked.key], ranked.extent) : SYMBOL_SIZE_PX,
+      // A symbol with no value for the measure draws smallest, never at the middle size it would otherwise claim.
+      getSize: ranked
+        ? (f: Feature) => {
+            const v = f.properties?.[ranked.key];
+            return SYMBOL_SIZE_PX * (typeof v === "number" && Number.isFinite(v) ? sizeScale(v, ranked.extent) : sizeScale(ranked.extent?.[0] ?? 0, ranked.extent));
+          }
+        : SYMBOL_SIZE_PX,
       sizeUnits: "pixels",
       getColor: colorFor(SPRITE_TINT, opacity, selected),
       updateTriggers: {
@@ -1015,9 +1040,14 @@ function hexTileLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const { data: labelled, size: labelSize } = fitLabels(all, label, cellPx);
   // A tile picked at another resolution is not among these tiles: ignore it rather than fade every tile.
   const selected = picked && hexes.includes(picked as HexFeature) ? picked : undefined;
-  const trigger = [selectionKey(selected), opacity, resolution, basis];
+  const trigger = [selectionKey(selected), opacity, resolution, basis, ctx.basemap ?? ""];
   const tOf = (f: HexFeature) => (basis === "count" ? countT(f.properties.count, max) : basisT(f.properties.value, { lo, hi: max, basis }));
-  const fill = (f: HexFeature): Rgba => (basis === "count" ? hexTileColor(f.properties.count, max) : hexTileColorAt(tOf(f)));
+  const base = (f: HexFeature): Rgba => (basis === "count" ? hexTileColor(f.properties.count, max) : hexTileColorAt(tOf(f)));
+  // Over imagery the tiles lighten (the photo shows through) and their edges turn fully white, so cells read on dark
+  // ground without hiding it.
+  const imagery = ctx.basemap === "satellite" || ctx.basemap === "outdoors-satellite";
+  const fill = imagery ? (f: HexFeature): Rgba => { const c = base(f); return [c[0], c[1], c[2], Math.round(c[3] * HEX_IMAGERY_ALPHA)]; } : base;
+  const edge = imagery ? hexToRgba(HEX_TILE.edge, 255) : HEX_EDGE;
   // A label reads on its tile: dark grey on the light end of the ramp, off-white on the dark end, each with the other's halo.
   const onDark = (f: HexFeature) => tOf(f) > HEX_LABEL_FLIP;
   const fade = (f: HexFeature, c: Rgba) => {
@@ -1036,8 +1066,8 @@ function hexTileLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       coverage: HEX_TILE.coverage,
       getFillColor: (f) => fade(f, fill(f)),
       stroked: true,
-      getLineColor: (f) => (f === selected ? withOpacity(SELECT, opacity) : fade(f, HEX_EDGE)),
-      getLineWidth: (f) => (f === selected ? SELECTED_LINE_PX : 1),
+      getLineColor: (f) => (f === selected ? withOpacity(SELECT, opacity) : fade(f, edge)),
+      getLineWidth: (f) => (f === selected ? SELECTED_LINE_PX : imagery ? 1.25 : 1),
       lineWidthUnits: "pixels",
       updateTriggers: { getFillColor: trigger, getLineColor: trigger, getLineWidth: trigger },
       ...terrainProps(terrain, "drape"),
@@ -1947,6 +1977,7 @@ export function buildDeckLayerSets(
       terrain,
       threeD: state.terrain && !state.flattened,
       labelInsets,
+      basemap: state.basemap,
     };
     if (compare?.layerId !== op.layerId || !mode) {
       main.push(...safeLayersFor(op, ctx));

@@ -67,6 +67,7 @@ function stateWith(op: Partial<RenderOp>, extra: Partial<MapState> = {}): MapSta
   const layer = layerOf();
   return {
     ...initialMapState,
+    basemap: "outdoors",
     viewport: { ...initialMapState.viewport, zoom: 7 },
     layers: { [layer.id]: layer },
     renderOps: [{ layerId: layer.id, mode: "hexbin", visible: true, ...op }],

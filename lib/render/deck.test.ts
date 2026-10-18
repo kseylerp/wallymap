@@ -75,6 +75,8 @@ function stateOf(
   const mode = op.mode ?? (geometry === "point" ? "points" : geometry === "line" ? "lines" : "polygons");
   return {
     ...initialMapState,
+    // Topographical: hex tiles keep their full ramp there (over imagery they lighten, tested on its own).
+    basemap: "outdoors",
     viewport: { ...initialMapState.viewport, zoom },
     layers: {
       [layerId]: {
@@ -314,8 +316,16 @@ describe("H3 tiles for dense points", () => {
     expect(layers[1].id).toBe("species:hexbin:labels");
   });
 
-  it("maps zoom to resolution: z≤6 → 3, 7–8 → 4, 9–10 → 5, 11–12 → 6, ≥13 → 7", () => {
-    expect([0, 5, 5.9, 6, 7.5, 8, 9.9, 10, 11.9, 12, 18].map(hexResolution)).toEqual([3, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]);
+  it("maps zoom to resolution one step a zoom, about 1 km cells at z11: z≤6 → 3, z7 → 4 … z11 → 8, ≥12 → 9", () => {
+    expect([0, 5, 5.9, 6, 7.5, 8, 9.9, 10, 11.9, 12, 18].map(hexResolution)).toEqual([3, 3, 3, 3, 4, 5, 6, 7, 8, 9, 9]);
+  });
+
+  it("lightens tiles over imagery and gives them full white edges", () => {
+    const s = { ...stateOf("species", dense(2001), {}, { zoom: 10 }), basemap: "outdoors-satellite" as const };
+    const p = props(buildDeckLayers(s)[0]);
+    const hexes = p.data as unknown[];
+    expect((p.getLineColor as Accessor)(hexes[0])).toEqual([255, 255, 255, 255]);
+    expect((p.getFillColor as Accessor)(hexes[0])[3]).toBeLessThan(204);
   });
 
   it("draws flat tiles on the gray ramp with white edges at 0.8", () => {

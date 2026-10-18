@@ -598,9 +598,21 @@ export function coverageRule(expect: CoverageExpect, calls: ToolCall[]): RuleRes
  * not passed and not failed: the reason, or undefined when the question counts. A layer that answered despite its
  * outage counts as usual (and the outage should be removed).
  */
+/** The source failure an answer reports as offline (docs/layer-contract.md sourceStatus), or undefined. */
+function offlineStatus(output: unknown): { message: string; since?: string } | undefined {
+  const status = output && typeof output === "object" ? (output as { sourceStatus?: { ok?: boolean; reason?: string; message?: string; since?: string } }).sourceStatus : undefined;
+  return status && status.ok === false && status.reason === "offline" ? { message: status.message ?? "offline", ...(status.since && { since: status.since }) } : undefined;
+}
+
 export function outageSkip(expect: CoverageExpect, calls: ToolCall[]): string | undefined {
   for (const alts of expect.layers) {
     const ids = alts.split("|");
+    // Every alternative was asked and its answer says the source is offline (mining claims near Moab): skipped, not failed.
+    const asked = calls.filter((c) => ids.some((id) => c.toolName === `query_${id}`));
+    const offline = asked.map((c) => offlineStatus(c.output));
+    if (asked.length > 0 && offline.every(Boolean) && !asked.some((c) => c.output !== undefined && !isLayerError(c.output) && !offlineStatus(c.output))) {
+      return `source offline: ${offline.map((o) => o!.message + (o!.since ? ` since ${o!.since}` : "")).join(", ")}`;
+    }
     const down = ids.map((id) => getLayer(id)).filter((l) => l?.outage !== undefined);
     if (down.length !== ids.length) continue;
     const answered = calls.some((c) => ids.some((id) => c.toolName === `query_${id}`) && c.output !== undefined && !isLayerError(c.output));

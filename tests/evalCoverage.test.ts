@@ -67,6 +67,20 @@ describe("documented outages", () => {
     expect(outageSkip(expect_!, answered)).toBeUndefined();
     expect(outageSkip(coverageFor("Where is the Ogallala aquifer?")!, [])).toBeUndefined();
   });
+
+  it("skips a question whose answer says the source is offline (sourceStatus), even without a documented outage", () => {
+    const expect_ = { layers: ["groundwater"] };
+    const offline = [
+      {
+        toolName: "query_groundwater",
+        input: {},
+        output: { error: "USGS could not be reached", sourceStatus: { ok: false, reason: "offline", message: "USGS could not be reached.", since: "2026-10-18" } },
+      },
+    ];
+    expect(outageSkip(expect_, offline)).toMatch(/source offline: USGS could not be reached\. since 2026-10-18/);
+    const failedOtherwise = [{ toolName: "query_groundwater", input: {}, output: { error: "bad input" } }];
+    expect(outageSkip(expect_, failedOtherwise)).toBeUndefined();
+  });
 });
 
 describe("note wording rules accept clear synonyms", () => {

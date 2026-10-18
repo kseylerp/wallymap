@@ -34,6 +34,7 @@ import {
   type Attribute,
   type BBox,
   type CardSpec,
+  type Citation,
   type FieldHelp,
   type LayerError,
   type LayerResult,
@@ -306,6 +307,17 @@ export function titleOf(r: Pick<FemaRow, "declarationTitle" | "incidentType">): 
     .replace(/\bCovid-19\b/i, "COVID-19");
 }
 
+/** A FEMA declaration date as people write it: "2024-10-11T00:00:00.000Z" is "Oct 11, 2024". */
+export function declarationDay(iso: string): string {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? iso.slice(0, 10) : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+/** FEMA's own page for a declaration (DR and EM numbers alike): https://www.fema.gov/disaster/4834. */
+export function declarationPage(disasterNumber: number): string {
+  return `https://www.fema.gov/disaster/${disasterNumber}`;
+}
+
 /**
  * One county polygon per county with declarations: v = number of declarations, t = the latest declaration date,
  * kind = its incident kind, declarations = the latest few as text, kinds = a count per kind.
@@ -339,12 +351,13 @@ export function femaCountyFeatures(rows: FemaRow[], counties: { fips: string; na
         t: new Date(latest.declarationDate).toISOString(),
         kind: femaKind(latest.incidentType),
         latest: `${titleOf(latest)} (${latest.femaDeclarationString ?? latest.disasterNumber})`,
+        declarationUrl: declarationPage(latest.disasterNumber),
         first: list[list.length - 1].declarationDate.slice(0, 10),
         kinds: [...counts.entries()].map(([k, n]) => `${KIND_SHORT[k] ?? k} ${n}`).join(", "),
         declarations:
           list
             .slice(0, LISTED)
-            .map((r) => `${r.declarationDate.slice(0, 10)} ${titleOf(r)}`)
+            .map((r) => `${titleOf(r)} (${declarationDay(r.declarationDate)})`)
             .join("; ") + (list.length > LISTED ? `; and ${list.length - LISTED} earlier` : ""),
       },
     });
@@ -591,9 +604,28 @@ const CARD: CardSpec = {
     { key: "declarations", label: "Recent declarations" },
     { key: "state", label: "State" },
   ],
-  links: [{ key: "url", label: "GDACS report" }],
+  // Each record links to its own source: a GDACS alert to its report, a FEMA county to the latest declaration's page.
+  links: [
+    { key: "url", label: "GDACS report" },
+    { key: "declarationUrl", label: "FEMA declaration page" },
+  ],
   hidden: ["fips", "eventId", "footprintUrl"],
 };
+
+const GDACS_SOURCE = "GDACS, Global Disaster Alert and Coordination System (European Commission JRC, UN OCHA)";
+const FEMA_SOURCE = "FEMA, OpenFEMA Disaster Declarations Summaries";
+
+/**
+ * The answer's source line names only the sources drawn: FEMA alone for county declarations (a FEMA record is never
+ * credited to GDACS), GDACS alone for alerts, both when both are on the map, linking to the one with more records.
+ */
+export function citationFor(femaCounties: number, gdacsEvents: number, now: number): Citation {
+  const retrieved = new Date(now).toISOString();
+  if (femaCounties > 0 && gdacsEvents === 0) return { source: FEMA_SOURCE, url: FEMA_URL, retrieved };
+  if (gdacsEvents > 0 && femaCounties === 0) return { source: GDACS_SOURCE, url: "https://www.gdacs.org/", retrieved };
+  const source = `${FEMA_SOURCE} (the county declarations); ${GDACS_SOURCE} (the alerts)`;
+  return { source, url: femaCounties >= gdacsEvents ? FEMA_URL : "https://www.gdacs.org/", retrieved };
+}
 
 const disasters = defineLayer({
   id: "disasters",
@@ -602,7 +634,7 @@ const disasters = defineLayer({
     "Recent disasters from two sources: GDACS alerts worldwide as points (floods, cyclones, droughts, and wildfires at orange or red alert only; small green wildfire alerts are left out) and, in the US, FEMA disaster declarations joined to county polygons by FIPS (v = declarations per county). " +
     "GDACS: GDACS alerts (the UN and European Commission disaster alert system) as points, one per event, for floods, tropical cyclones (hurricanes and typhoons), droughts and large wildfires, " +
     "with source 'GDACS', kind ('flood', 'cyclone', 'drought' or 'wildfire'), name, t (start, UTC), until (last update), alertLevel ('green' minor, 'orange' moderate, 'red' severe humanitarian impact), country, current ('yes' while ongoing), peakWindKmh and stage for cyclones (peak wind over the storm's life, and its class in the latest advisory), affectedKm2 for droughts, burnedHa for wildfires, url (the GDACS report). The most severe events in view (red, then orange, up to 8) are drawn at their affected area (a cyclone's swath of 60 km/h winds), with extent saying so; the rest are points at the centre. " +
-    "FEMA: county polygons with source 'FEMA', v (how many declarations the county had in the period), t (the latest declaration date), kind (its incident: wildfire, flood, cyclone, severe storm, winter storm, tornado and so on), latest, kinds (a count per kind) and first (the earliest date), declarations (the latest three as text). " +
+    "FEMA: county polygons with source 'FEMA', v (how many declarations the county had in the period), t (the latest declaration date), kind (its incident: wildfire, flood, cyclone, severe storm, winter storm, tornado and so on), latest, kinds (a count per kind) and first (the earliest date), declarations (the latest three as text), declarationUrl (FEMA's page for the latest). " +
     "days (1 to 730, default 90) is how far back GDACS alerts go; years (1 to 20, default 5) is how far back FEMA declarations go. " +
     "Example questions: 'What disasters hit Florida in the last five years?', 'Is there a hurricane near Mexico right now?', 'Which counties here had the most disaster declarations?'. User words: disasters, hurricane, disaster declaration. " +
     "Caveats: GDACS points are an event's centre, not its extent; small wildfires (green alerts) are left out (use fire-perimeters or fire-detections); a FEMA declaration means federal aid was approved, not how bad the damage was; tribal and statewide declarations are not drawn. " +
@@ -671,11 +703,7 @@ const disasters = defineLayer({
     return {
       kind: "geojson",
       data,
-      citation: {
-        source: "GDACS, Global Disaster Alert and Coordination System (European Commission JRC, UN OCHA); OpenFEMA Disaster Declarations Summaries (FEMA)",
-        url: "https://www.gdacs.org/",
-        retrieved: new Date(now).toISOString(),
-      },
+      citation: citationFor(countyPolygons.length, events.features.length, now),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },

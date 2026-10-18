@@ -2,13 +2,24 @@ import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
-import layer, { bboxPolygon, densityTileUrl, normalizeOccurrences, searchUrl, shortLicense, yearRange } from "./gbif-occurrences";
+import layer, {
+  MAX_NAME_LOOKUPS,
+  bboxPolygon,
+  densityTileUrl,
+  normalizeOccurrences,
+  searchUrl,
+  shortLicense,
+  speciesToName,
+  withCommonNames,
+  yearRange,
+} from "./gbif-occurrences";
 import { cardContent } from "@/lib/render/card";
 import { summarizeFeature } from "@/lib/render/inspect";
-import { legendOf, labelsOf, timeShapeOf } from "./contract";
+import { cardTitle, legendOf, labelsOf, timeShapeOf } from "./contract";
 import page from "./__fixtures__/gbif-occurrences.puma-tahoe.json";
 import boulder from "./__fixtures__/gbif-occurrences.puma-boulder.json";
 import match from "./__fixtures__/gbif-occurrences.match-puma.json";
+import pumaSpecies from "./__fixtures__/gbif-occurrences.species-puma.json";
 
 const TAHOE: [number, number, number, number] = [-120.4, 38.7, -119.8, 39.3];
 const NOW = new Date("2026-10-09T12:00:00Z");
@@ -80,7 +91,6 @@ describe("gbif-occurrences layer", () => {
     expect(first.geometry).toEqual({ type: "Point", coordinates: [-119.962988, 39.277358] });
     expect(first.properties).toEqual({
       species: "Puma concolor",
-      scientificName: "Puma concolor",
       year: 2025,
       v: 2025,
       t: "2025-05-24T17:59:34.000Z",
@@ -153,6 +163,53 @@ describe("gbif-occurrences layer", () => {
     expect(shortLicense("http://creativecommons.org/licenses/by/4.0/legalcode")).toBe("CC BY 4.0");
     expect(shortLicense("http://creativecommons.org/publicdomain/zero/1.0/legalcode")).toBe("CC0");
     expect(shortLicense(undefined)).toBeUndefined();
+  });
+
+  it("titles records by the species' common name from GBIF, with the Latin name as a row once", async () => {
+    // The Tahoe page with each record's species key, as the live search returns it.
+    const keyed = { ...page, results: page.results.map((r) => ({ ...r, speciesKey: 2435099 })) };
+    const stub = vi.fn(async (url: string) => json(url.includes("/v1/species/2435099") ? pumaSpecies : keyed));
+    const r = await layer.query(ctx(stub, TAHOE, "gbif:k"), { ...DEFAULTS, scientificName: "Puma concolor" });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const calls = stub.mock.calls as unknown as [string, { cacheKey?: string }][];
+    // One page, then one name lookup for the one species, cached without the bbox.
+    expect(calls.map(([u]) => new URL(u).pathname)).toEqual(["/v1/occurrence/search", "/v1/species/2435099"]);
+    expect(calls[1][1].cacheKey).toBe("gbif:species:2435099");
+    const f = r.data.features[0];
+    expect(f.properties).toMatchObject({ name: "Puma", species: "Puma concolor", scientificName: "Puma concolor", speciesKey: 2435099 });
+    expect(cardTitle(layer, f)).toBe("Puma");
+    const content = cardContent(f, { card: layer.card, fieldHelp: layer.fieldHelp });
+    const rows = [...content.facts, ...content.details];
+    expect(content.facts.find((x) => x.key === "scientificName")?.value).toBe("Puma concolor");
+    expect(rows.filter((x) => x.value === "Puma concolor")).toHaveLength(1);
+    expect(rows.map((x) => x.key)).not.toContain("speciesKey");
+  });
+
+  it("keeps the Latin title, with no repeat row, when GBIF has no common name or the lookup fails", async () => {
+    const keyed = { ...page, results: page.results.map((r) => ({ ...r, speciesKey: 2435099 })) };
+    const stub = vi.fn(async (url: string) => (url.includes("/v1/species/") ? new Response("busy", { status: 503 }) : json(keyed)));
+    const r = await layer.query(ctx(stub), DEFAULTS);
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const f = r.data.features[0];
+    expect(f.properties).not.toHaveProperty("name");
+    expect(cardTitle(layer, f)).toBe("Puma concolor");
+    const rows = cardContent(f, { card: layer.card, fieldHelp: layer.fieldHelp }).facts;
+    expect(rows.map((x) => x.key)).not.toContain("scientificName");
+  });
+
+  it("looks up at most the 20 most recorded species", () => {
+    const { data } = normalizeOccurrences({
+      results: Array.from({ length: 30 }, (_, i) => ({ key: i, species: `Sp ${i}`, speciesKey: i, decimalLatitude: 1, decimalLongitude: 2, year: 2020 })),
+    });
+    expect(speciesToName(data.features)).toHaveLength(MAX_NAME_LOOKUPS);
+    withCommonNames(data.features, new Map([[3, "quaking aspen"]]));
+    expect(data.features[3].properties).toMatchObject({ name: "Quaking aspen", scientificName: "Sp 3" });
+    expect(data.features[4].properties).not.toHaveProperty("name");
+  });
+
+  it("declares Published by as a category, so the map colors it by kind", () => {
+    expect(layer.attributes?.find((a) => a.key === "publisher")).toMatchObject({ type: "category", label: "Published by" });
+    expect(layer.style.encode?.color).toBe("publisher");
   });
 
   it("returns points with a vague-record note when the result fits in one page", async () => {

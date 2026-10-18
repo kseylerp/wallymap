@@ -1,3 +1,4 @@
+import { cardContent } from "@/lib/render/card";
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { getLayer } from "./registry";
@@ -55,6 +56,22 @@ describe("ports layer", () => {
     expect(lon).toBeCloseTo(-95.3925, 3);
     expect(lat).toBeCloseTo(29.8576, 3);
     expect(fc.features.some((f) => f.properties?.kind === "Internal")).toBe(true);
+  });
+
+  it("shows a river port's domestic cargo and no zero foreign, import or export rows", () => {
+    const cairo = normalizePorts(raw).features.find((f) => f.properties?.name === "Alexandria-Cairo Port, IL");
+    if (!cairo) throw new Error("expected Alexandria-Cairo in the fixture");
+    expect(cairo.properties).toMatchObject({ tons: 1009336, domesticTons: 1009336 });
+    for (const key of ["foreignTons", "importTons", "exportTons"]) expect(cairo.properties).not.toHaveProperty(key);
+    const card = cardContent(cairo, { unit: layer.style.unit, card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.measure).toMatchObject({ key: "tons", label: "Cargo in 2023" });
+    expect(card.facts.map((r) => r.label)).toContain("Domestic");
+    const rows = [...card.facts, ...card.details];
+    expect(rows.filter((r) => /^0\b/.test(r.value))).toEqual([]);
+    expect(rows.map((r) => r.label)).not.toEqual(expect.arrayContaining(["Foreign"]));
+    // Houston moved cargo every way: all four rows.
+    const houston = cardContent(normalizePorts(raw).features[0], { unit: layer.style.unit, card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(houston.facts.map((r) => r.label)).toEqual(expect.arrayContaining(["Domestic", "Foreign", "Imports", "Exports"]));
   });
 
   it("skips rows without a centroid and tolerates missing fields", () => {

@@ -48,8 +48,8 @@ export const VINTAGE = "Range as mapped by NPS in 2018; northern California rele
 
 /** Short titles for the four outlines, for the card and the map labels (the source names are long). */
 const HEADINGS: [RegExp, string][] = [
-  [/southwest/i, "Today: Arizona and Utah release area"],
-  [/baja/i, "Today: Baja California release area"],
+  [/southwest/i, "Today: Arizona and Utah experimental release area"],
+  [/baja/i, "Today: Baja California experimental release area"],
   [/california range/i, "Today: California range"],
 ];
 
@@ -83,11 +83,6 @@ export function normalizeRange(fc: FeatureCollection, historic: boolean): Featur
 const CARD: CardSpec = {
   facts: [
     {
-      key: "kind",
-      label: "Range",
-      values: { current: "Current range", experimental: "Experimental release area (current)", historic: "Historic range (early 1800s)" },
-    },
-    {
       key: "era",
       label: "When",
       values: {
@@ -96,8 +91,9 @@ const CARD: CardSpec = {
       },
     },
   ],
-  // The heading is the card's title.
-  hidden: ["heading"],
+  // The heading is the card's title, and it already says which range this is ("Early 1800s range", "Today: California
+  // range", "... experimental release area"), so kind would only repeat it as "Range: Historic range (early 1800s)".
+  hidden: ["heading", "kind"],
 };
 
 /**

@@ -142,10 +142,10 @@ describe("wolf-packs layer", () => {
     if (!dirty) throw new Error("no Dirty Shirt");
     expect(summarizeFeature(dirty).name).toBe("Dirty Shirt");
     const card = cardContent(dirty, { card: layer.card, fieldHelp: layer.fieldHelp });
-    expect(card.facts.map((f) => [f.label, f.value])).toEqual([
-      ["Year", "2023"],
-      ["Pack status", "Breeding pair"],
-    ]);
+    expect(card.facts.map((f) => [f.label, f.value])).toEqual([["Pack status", "Breeding pair"]]);
+    // The year is said once, by the date chip under the title.
+    expect(summarizeFeature(dirty).date).toBe("2023");
+    expect([...card.facts, ...card.details].filter((r) => r.value.includes("2023"))).toEqual([]);
     expect(labelsOf(layer)).toEqual({ field: "pack", max: 60 });
     const time = timeShapeOf(layer, data);
     expect(time.shape).toBe("snapshots");

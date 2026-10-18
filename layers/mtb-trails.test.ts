@@ -96,6 +96,36 @@ describe("normalizeMtb", () => {
     expect(out.features[0].properties).toMatchObject({ v: 2, mtbScale: "2+", t: "2025-06-01", name: "Rocky", kind: "mtb" });
   });
 
+  it("gives a named route its length in view, its full length and its rating when tagged, as a way gets its length", () => {
+    const a = [{ lat: 38.6, lon: -109.5 }, { lat: 38.6, lon: -109.4 }];
+    const b = [{ lat: 38.6, lon: -109.4 }, { lat: 38.65, lon: -109.3 }];
+    const out = normalizeMtb({
+      elements: [
+        { type: "way", id: 1, tags: { "mtb:scale": "2", name: "Rocky" }, geometry: a },
+        { type: "way", id: 2, tags: { highway: "track" }, geometry: a },
+        { type: "way", id: 3, tags: { highway: "track" }, geometry: b },
+        {
+          type: "relation",
+          id: 9,
+          tags: { route: "mtb", name: "Kokopelli's Trail", distance: "228", "mtb:scale": "2" },
+          members: [{ type: "way", ref: 2 }, { type: "way", ref: 3 }],
+        },
+      ],
+    });
+    const way = out.features.find((f) => f.properties?.osmId === "way/1");
+    const route = out.features.find((f) => f.properties?.osmId === "relation/9");
+    if (!way || !route) throw new Error("expected the way and the route");
+    expect(way.properties?.lengthKm).toBeCloseTo(8.7, 1);
+    expect(route.properties).toMatchObject({ kind: "route", distanceKm: 228, singletrack: 2 });
+    expect(route.properties?.inViewKm).toBeGreaterThan(17);
+    const card = cardContent(route, { card: layer.card, fieldHelp: layer.fieldHelp });
+    const facts = Object.fromEntries(card.facts.map((r) => [r.label, r.value]));
+    expect(facts).toMatchObject({ Kind: "Named route", "Singletrack Scale": "2, Moderate", "Full length": "228 km" });
+    expect(facts["Length in view"]).toMatch(/^1\d(\.\d)? km$/);
+    const wayCard = cardContent(way, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(wayCard.facts.find((r) => r.label === "Length")?.value).toMatch(/^8(\.\d)? km$/);
+  });
+
   it("draws a route from the clipped member ways and does not repeat a rated way that is also a member", () => {
     const pts = [{ lat: 39.3, lon: -120.2 }, { lat: 39.31, lon: -120.19 }];
     const out = normalizeMtb({

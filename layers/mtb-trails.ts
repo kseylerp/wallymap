@@ -42,6 +42,8 @@ import { overpassCounts, overpassQuery } from "./_shared/overpass";
 import {
   buildNamedGeometryQuery,
   buildNamedScanQuery,
+  distanceTagKm,
+  geometryKm,
   longestNamedFirst,
   pickNamedByLength,
   routeTolerance,
@@ -180,6 +182,14 @@ export function normalizeMtb(json: unknown): FeatureCollection<Line> {
     if (imba !== undefined) properties.imba = imba;
     const uphill = mtbScale(tags["mtb:scale:uphill"]);
     if (uphill !== undefined) properties.uphill = uphill;
+    // Length as drawn: a way's whole line; a route only where it crosses the box, so it says so, with the distance tag
+    // as the full length when that is at least what is drawn.
+    const km = Math.round(geometryKm(geometry) * 100) / 100;
+    if (isRoute) {
+      properties.inViewKm = km;
+      const tagged = distanceTagKm(tags.distance);
+      if (tagged !== undefined && tagged >= km) properties.distanceKm = Math.round(tagged * 10) / 10;
+    } else properties.lengthKm = km;
     if (tags.highway) properties.highway = tags.highway;
     if (tags.ref) properties.ref = tags.ref;
     if (tags.surface) properties.surface = tags.surface;
@@ -337,6 +347,13 @@ const HELP: Record<string, FieldHelp> = {
     url: "https://wiki.openstreetmap.org/wiki/Key:bicycle",
   },
   t: { text: "The date a mapper last checked the trail on the ground (check_date), when tagged." },
+  lengthKm: { text: "The trail segment's length along its mapped line, measured by this app.", unit: "km", source: "OpenStreetMap contributors" },
+  inViewKm: {
+    text: "How much of the named route is drawn inside the view, measured by this app along its member trails; the route may run on beyond it.",
+    unit: "km",
+    source: "OpenStreetMap contributors",
+  },
+  distanceKm: { text: "The whole route's length from its OpenStreetMap distance tag, when mapped.", unit: "km", source: "OpenStreetMap contributors" },
 };
 
 // The rating in words ("3, Hard"), not a bare number; v, the raw bicycle tag and the id stay off the card.
@@ -344,6 +361,9 @@ const CARD: CardSpec = {
   facts: [
     { key: "singletrack", label: "Singletrack Scale", values: SINGLETRACK_WORDS },
     { key: "imba", label: "IMBA rating", values: IMBA_WORDS },
+    { key: "lengthKm", label: "Length", format: "km" },
+    { key: "inViewKm", label: "Length in view", format: "km" },
+    { key: "distanceKm", label: "Full length", format: "km" },
     { key: "bikes", label: "Bikes", values: BIKE_WORDS },
     { key: "kind", label: "Kind", values: KIND_LABELS },
     { key: "uphill", label: "Uphill rating" },
@@ -362,7 +382,7 @@ const mtbTrails = defineLayer({
     "Each line is a rated trail segment: v is the Singletrack Scale rating from 0 (easiest, smooth and wide) to 6 (hardest, almost not rideable), or the IMBA rating 0 to 4 when only that is mapped (both read 0-1 easy, 2 moderate, 3 hard, 4 and up expert); " +
     "singletrack and imba hold each scale as mapped, and kind is 'mtb' (has a Singletrack Scale rating), 'imba' (IMBA rating only) or 'route' (a named mountain bike route or trail system made of many segments). " +
     "bikes says whether bikes are allowed, from the bicycle or access tag (yes, designated, permissive, no, private, dismount), when mapped. " +
-    "Also name, ref, surface, operator and the date it was last checked (t) when mapped. " +
+    "Also lengthKm (a segment's length), for routes inViewKm (the length drawn in view) and distanceKm (the whole route, from its distance tag), and name, ref, surface, operator and the date it was last checked (t) when mapped. " +
     "Use it for questions like: where can I go mountain biking near here, show beginner singletrack (set maxScale to 2), which trails are the hardest, or is there a flow trail or bike park nearby. " +
     "Caveats: ratings exist only where a mapper added them, so many good trails are missing or unrated (osm-trails shows every path, including ones with no mountain bike rating); " +
     "bikes may be banned on a rated trail where bikes is not mapped, so check the land manager (public-lands, forest-roads); the rating describes the trail, not its current condition or closures. " +

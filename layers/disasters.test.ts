@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
+import { cardContent } from "@/lib/render/card";
 import { parseCounties } from "./_shared/counties";
 import { labelsOf, legendOf, timeShapeOf } from "./contract";
 import layer, {
   MAX_FOOTPRINTS,
+  citationFor,
+  declarationDay,
   femaCountyFeatures,
   femaKind,
   femaUrl,
@@ -107,7 +110,8 @@ describe("FEMA", () => {
       t: "2024-07-09T00:00:00.000Z",
       latest: "Hurricane Beryl (DR-4798-TX)",
     });
-    expect(String(harris?.properties?.declarations)).toMatch(/^2024-07-09 Hurricane Beryl/);
+    expect(String(harris?.properties?.declarations)).toMatch(/^Hurricane Beryl \(Jul 9, 2024\)/);
+    expect(harris?.properties?.declarationUrl).toBe("https://www.fema.gov/disaster/4798");
     expect(f.every((x) => counties.some((c) => c.fips === x.properties?.fips))).toBe(true);
     expect(f.length).toBeGreaterThan(5);
   });
@@ -248,7 +252,29 @@ describe("plain words and the layer contract", () => {
     }));
     const [harris] = femaCountyFeatures(rows, [{ fips: "48201", name: "Harris County", stateAbbr: "TX", geometry: { type: "Point", coordinates: [-95.4, 29.8] } }]);
     expect(harris.properties).toMatchObject({ v: 5, first: "2020-06-01", kinds: "flood 5" });
-    expect(harris.properties?.declarations).toBe("2024-06-01 Flooding; 2023-06-01 Flooding; 2022-06-01 Flooding; and 2 earlier");
+    expect(harris.properties?.declarations).toBe("Flooding (Jun 1, 2024); Flooding (Jun 1, 2023); Flooding (Jun 1, 2022); and 2 earlier");
+  });
+
+  it("shows a FEMA county's dates in words and links it to FEMA, never GDACS", () => {
+    const counties = parseCounties(countiesFixture).counties;
+    const harris = femaCountyFeatures(parseFema(femaFixture), counties).find((x) => x.properties?.fips === "48201");
+    if (!harris) throw new Error("expected Harris County");
+    const card = cardContent(harris, { card: layer.card, fieldHelp: layer.fieldHelp });
+    const rows = [...card.facts, ...card.details];
+    expect(rows.filter((r) => /\b\d{4}-\d{2}-\d{2}\b/.test(r.value)).map((r) => `${r.label}: ${r.value}`)).toEqual([]);
+    expect(card.facts.find((r) => r.key === "source")?.value).toBe("FEMA disaster declarations");
+    expect(card.links.map((l) => l.label)).toEqual(["FEMA declaration page"]);
+    expect(card.links.some((l) => l.url.includes("gdacs"))).toBe(false);
+    expect(declarationDay("2024-10-11T00:00:00.000Z")).toBe("Oct 11, 2024");
+  });
+
+  it("names only the sources drawn in the answer's source line", () => {
+    const now = Date.UTC(2026, 9, 10);
+    expect(citationFor(3, 0, now)).toMatchObject({ source: expect.stringMatching(/^FEMA/), url: "https://www.fema.gov/disaster/declarations" });
+    expect(citationFor(3, 0, now).source).not.toMatch(/GDACS/);
+    expect(citationFor(0, 2, now)).toMatchObject({ source: expect.stringMatching(/^GDACS/), url: "https://www.gdacs.org/" });
+    expect(citationFor(0, 2, now).source).not.toMatch(/FEMA/);
+    expect(citationFor(5, 2, now).source).toMatch(/FEMA.*county declarations.*GDACS.*alerts/);
   });
 
   it("declares no time panel, hatch density by declarations with a legend that names both sources, and labels the busiest counties", () => {

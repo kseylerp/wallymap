@@ -11,7 +11,7 @@
  * channel (Houston, South Louisiana) is not a dock. The bbox still selects by the polygon, so a port whose centroid is
  * outside the view can be returned and is then outside the view too.
  * Output properties: name, portCode, rank, tons and v (total short tons), domesticTons, foreignTons, importTons,
- * exportTons, kind (Coastal | Internal | Great Lakes). No `t`: the figures are for calendar 2023.
+ * exportTons (each only when above 0), kind (Coastal | Internal | Great Lakes). No `t`: the figures are for calendar 2023.
  * Smoke through runLayer (2026-10-10): Gulf coast -97,27,-88,31 returned 24 ports (Houston first at 309.5 million tons) in 0.4 s;
  * the whole country -170,18,-65,72 returned 149 of the 150 (one lies outside the US extent) in 0.3 s (42 KB);
  * San Francisco Bay -123,37,-122,38.3 returned 4 (Richmond leads with 25.8 million tons).
@@ -95,14 +95,18 @@ export function normalizePorts(json: unknown): FeatureCollection {
       properties.tons = total;
       properties.v = total;
     }
-    const domestic = num(p.DOMESTIC);
-    if (domestic !== undefined) properties.domesticTons = domestic;
-    const foreign = num(p.FOREIGN_);
-    if (foreign !== undefined) properties.foreignTons = foreign;
-    const imports = num(p.IMPORTS);
-    if (imports !== undefined) properties.importTons = imports;
-    const exports = num(p.EXPORTS);
-    if (exports !== undefined) properties.exportTons = exports;
+    // The split by direction, each only when the port moved some: a river port with no foreign cargo has 0 in FOREIGN_,
+    // IMPORTS and EXPORTS, and a card of "0 short tons" rows reads as missing data (the total says it is all domestic).
+    const split: [string, unknown][] = [
+      ["domesticTons", p.DOMESTIC],
+      ["foreignTons", p.FOREIGN_],
+      ["importTons", p.IMPORTS],
+      ["exportTons", p.EXPORTS],
+    ];
+    for (const [key, value] of split) {
+      const n = num(value);
+      if (n !== undefined && n > 0) properties[key] = n;
+    }
 
     features.push({
       type: "Feature",
@@ -180,7 +184,9 @@ const LEGEND: LegendSpec = {
 
 /** The port card: 2023 cargo under its own name, its rank, and the split by direction. */
 const CARD: CardSpec = {
-  measure: { key: "v", label: "Cargo in 2023", unit: "short tons" },
+  // Under `tons`, not `v`: a port whose cargo is all domestic shows its Domestic row too (a v measure folds every
+  // property equal to it into itself).
+  measure: { key: "tons", label: "Cargo in 2023", unit: "short tons" },
   facts: [
     { key: "rank", label: "Rank among US ports", format: "int" },
     { key: "kind", label: "Port type", values: { Coastal: "Coastal", Internal: "Inland (rivers and waterways)", "Great Lakes": "Great Lakes" } },
@@ -198,7 +204,7 @@ const ports = defineLayer({
   title: "Principal US ports",
   description:
     "The 150 principal ports of the United States and how much cargo each handled in calendar year 2023, from the US Army Corps of Engineers and the Bureau of Transportation Statistics. " +
-    "Each point has name (such as Houston Port Authority, TX), kind (Coastal, Internal for river and inland ports, or Great Lakes), rank (1 = the most cargo), v and tons (total short tons moved, domestic plus foreign), domesticTons, foreignTons, importTons and exportTons (all short tons). " +
+    "Each point has name (such as Houston Port Authority, TX), kind (Coastal, Internal for river and inland ports, or Great Lakes), rank (1 = the most cargo), v and tons (total short tons moved, domestic plus foreign), domesticTons, foreignTons, importTons and exportTons (all short tons; each left out when the port moved none that way). " +
     "With 3D on, each port rises as a column with its tonnage. " +
     "Use it for 'which are the busiest ports', 'where does the cargo go in and out', 'how big is the Port of Los Angeles' or 'inland river ports on the Mississippi'. " +
     "Caveats: tonnage is weight, not value or containers, so bulk ports (oil, coal, grain) outrank container ports. A point is the middle of the port's area, not a dock, so for a port spread along a river or ship channel it can sit away from the terminals. " +

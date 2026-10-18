@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { cardContent } from "@/lib/render/card";
 import { bboxAreaKm2, hardMaxAreaKm2 } from "./types";
 import layer, {
   DOE_NAMED,
@@ -10,6 +11,7 @@ import layer, {
   EPA_AUM_URL,
   NAVAJO_NAMED,
   NAVAJO_URL,
+  chapterName,
   cleanupByMine,
   joinCleanup,
   normalizeDoe,
@@ -61,7 +63,7 @@ describe("normalizeNavajo", () => {
       kind: "abandoned mine",
       source: "Navajo Nation abandoned uranium mines (2007)",
       mineId: 397,
-      chapter: "OLJATO",
+      chapter: "Oljato",
       region: "North Central",
       hazardScore: 170,
       v: 170,
@@ -71,6 +73,17 @@ describe("normalizeNavajo", () => {
       surfaceWaterScore: 160,
     });
     expect(points[1].properties?.aliases).toBe("Tract 25");
+  });
+
+  it("writes chapter names in ordinary capitals, as the card shows them", () => {
+    expect(chapterName("COVE")).toBe("Cove");
+    expect(chapterName("OLJATO")).toBe("Oljato");
+    expect(chapterName("TEEC NOS POS")).toBe("Teec Nos Pos");
+    expect(chapterName("TO'HAJIILEE")).toBe("To'hajiilee");
+    expect(chapterName("RED")).toBe("Red");
+    expect(chapterName("Kayenta")).toBe("Kayenta");
+    const card = cardContent(normalizeNavajo(navajo)[0], { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.facts.find((r) => r.key === "chapter")?.value).toBe("Oljato");
   });
 
   it("skips non-points and tolerates missing scores", () => {

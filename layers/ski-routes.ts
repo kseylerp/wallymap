@@ -233,6 +233,8 @@ const KIND_LABELS: Record<string, string> = {
   sleigh: "Sleigh ride",
   ice_skate: "Ice skating",
   fatbike: "Fat bike",
+  // piste:type=yes says only that the line is a piste: its own chip in words, never a raw "Yes".
+  yes: "Piste, type not mapped",
 };
 const DIFFICULTY_LABELS: Record<string, string> = {
   novice: "Novice",

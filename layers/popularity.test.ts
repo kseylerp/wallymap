@@ -520,7 +520,9 @@ describe("popularity layer (trails)", () => {
     const legend = legendOf(popularity);
     expect(legend.kind).toBe("ramp");
     expect(legend.stops?.[0].color?.toUpperCase()).not.toBe(SAGE.toUpperCase());
-    expect(legend.stops?.map((s) => s.value)).toEqual([0, 50, 100]);
+    // No hard-coded 0 to 100: the stops name the ends of the range the map draws, which comes from the scores loaded.
+    expect(legend.stops?.map((s) => s.value)).toEqual([undefined, undefined, undefined]);
+    expect(legend.stops?.map((s) => s.label)).toEqual(["Quietest trail in view", "Middle", "Busiest trail in view"]);
     expect(labelsOf(popularity)).toEqual({ field: "name", max: 10, rankBy: "v" });
     expect(popularity.style.encode).toEqual({ size: "v", color: "v" });
     expect(popularity.card?.hidden).toContain("osmIds");

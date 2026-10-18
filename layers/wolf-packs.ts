@@ -146,7 +146,6 @@ const HELP: Record<string, FieldHelp> = { kind: STATUS_HELP, status: STATUS_HELP
 /** kind is the status, or "Not recorded" before 2022, so it is the one status row; status itself is not repeated. */
 const CARD: CardSpec = {
   facts: [
-    { key: "year", label: "Year" },
     {
       key: "kind",
       label: "Pack status",
@@ -158,8 +157,11 @@ const CARD: CardSpec = {
       },
     },
   ],
-  /** Status is the pack status row again (kind holds it, or "Not recorded"); the pack's name is the card title. */
-  hidden: ["status", "pack"],
+  /**
+   * Status is the pack status row again (kind holds it, or "Not recorded"); the pack's name is the card title; the year
+   * is the date chip under the title (read from year and t), so a Year row would say "2025" a second time.
+   */
+  hidden: ["status", "pack", "year"],
 };
 
 const STATUSES = [

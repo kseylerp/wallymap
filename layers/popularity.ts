@@ -918,15 +918,20 @@ const scoreAttribute = (help: FieldHelp): Attribute => ({ key: "v", type: "measu
 /** The score ramp the legend draws: it starts at a visible tone (not pale sage, which sinks into green Topo). */
 export const RAMP_START = rgbToHex(rampColor("scoreLine", 0.4));
 
+/**
+ * The key names the ends of the drawn range, not numbers: the score is a weighted sum of signals ranked within the view,
+ * so the busiest in view is rarely 100 (the top trail of the recorded Lake Tahoe sample scores 62), and the map scales its colors and widths to the scores loaded.
+ * A fixed 0 to 100 here disagreed with the ranges the map draws by.
+ */
 const legendFor = (noun: string): LegendSpec => ({
   kind: "ramp",
   title: "Popularity score",
   field: "v",
   unit: "score",
   stops: [
-    { label: `Quietest ${noun} in view`, value: 0, color: RAMP_START },
-    { label: "Middle", value: 50, color: PINK },
-    { label: `Busiest ${noun} in view`, value: 100, color: PURPLE },
+    { label: `Quietest ${noun} in view`, color: RAMP_START },
+    { label: "Middle", color: PINK },
+    { label: `Busiest ${noun} in view`, color: PURPLE },
   ],
   note: `An estimate from public signals, compared within this view; not a visitor count.${noun === "trail" ? " Wider lines are busier. Unnamed paths are left out." : ""}`,
 });

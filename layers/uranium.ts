@@ -32,6 +32,7 @@ import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp, type LegendSpec } from "./types";
 import { nameAttribute } from "./_shared/bands";
+import { titleCase } from "./_shared/names";
 import { registerLayer } from "./registry";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, bboxesDisjoint, outsideUs } from "./_shared/coverage";
@@ -69,6 +70,16 @@ function isPoint(geometry: unknown): geometry is Point {
   return typeof geometry === "object" && geometry !== null && "type" in geometry && geometry.type === "Point";
 }
 
+/**
+ * A Navajo Nation chapter name in ordinary capitals: "COVE" is "Cove", "TEEC NOS POS" is "Teec Nos Pos". titleCase
+ * leaves names under four letters alone, so a short one is cased here.
+ */
+export function chapterName(raw: string): string {
+  const cased = titleCase(raw);
+  if (cased !== raw || raw !== raw.toUpperCase() || raw === raw.toLowerCase()) return cased;
+  return raw.toLowerCase().replace(/(^|[\s-])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toUpperCase());
+}
+
 /** Navajo Nation abandoned mines as points; v is the composite hazard score. */
 export function normalizeNavajo(fc: FeatureCollection): Feature<Point>[] {
   const out: Feature<Point>[] = [];
@@ -84,8 +95,9 @@ export function normalizeNavajo(fc: FeatureCollection): Feature<Point>[] {
     if (aliases !== undefined) properties.aliases = aliases;
     const mineId = num(p.Mine_ID);
     if (mineId !== undefined) properties.mineId = mineId;
+    // The source writes chapters in capitals ("COVE", "OLJATO"): in ordinary capitals ("Cove", "Oljato").
     const chapter = str(p.Chapter);
-    if (chapter !== undefined) properties.chapter = chapter;
+    if (chapter !== undefined) properties.chapter = chapterName(chapter);
     const region = str(p.Region);
     if (region !== undefined) properties.region = region;
     const composite = num(p.Comp_Scr);

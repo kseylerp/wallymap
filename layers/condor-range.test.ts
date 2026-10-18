@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { cardContent } from "@/lib/render/card";
 import layer, { VINTAGE, normalizeRange, simplifyOffset } from "./condor-range";
 import { cardTitle, labelsOf, legendOf, timeShapeOf } from "./contract";
 import current from "./__fixtures__/condor-range.current.json";
@@ -47,12 +48,22 @@ describe("condor-range layer", () => {
     for (const f of now) expect(f.properties?.era).toBe("today");
     expect(now.map((f) => cardTitle(layer, f))).toEqual([
       "Today: California range",
-      "Today: Arizona and Utah release area",
-      "Today: Baja California release area",
+      "Today: Arizona and Utah experimental release area",
+      "Today: Baja California experimental release area",
     ]);
     const old = normalizeRange(historicFc, true);
     expect(old).toHaveLength(1);
     expect(old[0].properties).toMatchObject({ kind: "historic", era: "early 1800s", heading: "Early 1800s range" });
+  });
+
+  it("does not repeat the title as a Range row on the card", () => {
+    for (const f of [...normalizeRange(historicFc, true), ...normalizeRange(currentFc, false)]) {
+      const card = cardContent(f, { card: layer.card, fieldHelp: layer.fieldHelp });
+      const rows = [...card.facts, ...card.details];
+      expect(rows.map((r) => r.key)).not.toContain("kind");
+      expect(rows.some((r) => /range/i.test(r.value) && r.key !== "name")).toBe(false);
+      expect(card.facts.map((r) => r.key)).toEqual(["era"]);
+    }
   });
 
   it("queries both services with the bbox and returns four polygons with a citation", async () => {

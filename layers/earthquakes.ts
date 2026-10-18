@@ -137,7 +137,8 @@ export function normalizeEarthquakes(raw: unknown[]): FeatureCollection<Point> {
       properties.depthKm = depthKm;
       properties.depth = depthText(depthKm);
     }
-    if (p.magType) properties.magType = p.magType;
+    // The catalog writes the code in either case ("Ml", "ml"); the card's words are keyed in lower case.
+    if (p.magType) properties.magType = p.magType.toLowerCase();
     if (p.type) properties.kind = p.type;
     if (typeof p.felt === "number") properties.felt = p.felt;
     if (p.tsunami === 1) properties.tsunami = "possible";
@@ -187,13 +188,37 @@ const HELP: Record<string, FieldHelp> = {
   tsunami: { text: "'possible' when the USGS flagged the event for possible tsunami (it is not a tsunami warning)." },
 };
 
+/** USGS magnitude type codes in words (USGS Earthquake Hazards Program, Magnitude Types), with the code after. */
+export const MAG_TYPES: Record<string, string> = {
+  md: "Duration magnitude (md), from how long the shaking lasts",
+  ml: "Local magnitude (ml), Richter's original method",
+  mlg: "Lg-wave local magnitude (mlg)",
+  mb_lg: "Lg-wave local magnitude (mb_lg)",
+  mlr: "Local magnitude, regional network (mlr)",
+  mlv: "Local magnitude, vertical motion (mlv)",
+  mw: "Moment magnitude (mw)",
+  mww: "Moment magnitude, W-phase (mww)",
+  mwr: "Moment magnitude, regional (mwr)",
+  mwc: "Moment magnitude, centroid (mwc)",
+  mwb: "Moment magnitude, body waves (mwb)",
+  mwp: "Moment magnitude, P waves (mwp)",
+  mi: "Moment magnitude, P waves (mi)",
+  mb: "Body-wave magnitude (mb)",
+  ms: "Surface-wave magnitude (ms)",
+  ms_20: "Surface-wave magnitude, 20-second waves (ms_20)",
+  me: "Energy magnitude (me)",
+  mh: "Magnitude set by hand (mh)",
+  mc: "Coda magnitude (mc)",
+  ma: "Amplitude magnitude (ma)",
+};
+
 const CARD: CardSpec = {
   // "M 3.6", the way magnitudes are written; `v` keeps the catalog's number for sizing and ranking.
   measure: { key: "magnitude", label: "Magnitude" },
   facts: [
     { key: "t", label: "When", format: "date" },
     { key: "depth", label: "Depth" },
-    { key: "magType", label: "Magnitude type" },
+    { key: "magType", label: "Magnitude type", values: MAG_TYPES },
     { key: "felt", label: "Felt reports", format: "int" },
     { key: "kind", label: "Event type" },
     { key: "tsunami", label: "Tsunami flag" },

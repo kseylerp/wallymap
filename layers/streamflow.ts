@@ -50,6 +50,7 @@ import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { outsideUs } from "./_shared/coverage";
 import { overpassQuery } from "./_shared/overpass";
 import { fetchIv, ivStrips, parseIv, type IvSite } from "./_shared/usgs";
+import { isAllCaps } from "./_shared/names";
 import { layerColor, OFF_WHITE } from "@/lib/render/palette";
 
 const BASE = "https://api.waterdata.usgs.gov/ogcapi/v0/collections";
@@ -128,6 +129,108 @@ function latestReadings(body: unknown, now: Date): Reading[] {
   return [...newest.values()];
 }
 
+/** US state and territory codes: the last word of a USGS station name ("TRUCKEE R A FARAD CA") is often one. */
+const STATE_CODES = new Set(
+  ("AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX " +
+    "UT VT VA WA WV WI WY PR VI GU AS MP").split(" "),
+);
+
+/** USGS station-name abbreviations, spelled out ("TRUCKEE R A FARAD CA" is the Truckee River at Farad). */
+const GAUGE_WORDS: Record<string, string> = {
+  R: "River",
+  RV: "River",
+  RIV: "River",
+  C: "Creek",
+  CR: "Creek",
+  CK: "Creek",
+  CRK: "Creek",
+  FK: "Fork",
+  NF: "North Fork",
+  SF: "South Fork",
+  EF: "East Fork",
+  WF: "West Fork",
+  MF: "Middle Fork",
+  TRIB: "Tributary",
+  BR: "Branch",
+  CYN: "Canyon",
+  SPGS: "Springs",
+  SPG: "Spring",
+  LK: "Lake",
+  RES: "Reservoir",
+  SL: "Slough",
+  CNL: "Canal",
+  DIV: "Diversion",
+  MTN: "Mountain",
+  HWY: "Highway",
+  RD: "Road",
+  LN: "Lane",
+  NR: "near",
+  A: "at",
+  AB: "above",
+  ABV: "above",
+  BL: "below",
+  BLW: "below",
+  BTWN: "between",
+};
+
+/** Single letters that are a direction when a word follows ("W FK CARSON RV", "S UPPER TRUCKEE RD"). */
+const DIRECTIONS: Record<string, string> = { N: "North", S: "South", E: "East", W: "West", M: "Middle" };
+
+/** Words written in lower case inside a gauge name ("Cache Creek near Jackson"). */
+const GAUGE_SMALL = new Set(["near", "at", "above", "below", "between", "of", "the", "and", "in", "on", "to", "by", "mouth"]);
+
+/** Names that stay in capitals inside a gauge name ("Old US 395"). */
+const GAUGE_ACRONYMS = new Set(["US", "USFS", "USGS", "BLM", "NPS", "USBR", "USACE", "TVA", "NWR"]);
+
+function gaugeWordCase(word: string): string {
+  if (/\d/.test(word) || GAUGE_ACRONYMS.has(word)) return word;
+  return word
+    .toLowerCase()
+    .replace(/(^|[-/])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toUpperCase())
+    .replace(/^Mc(\p{L})/u, (_m, ch: string) => `Mc${ch.toUpperCase()}`);
+}
+
+/**
+ * A USGS station name in plain words: abbreviations spelled out (R River, C and CK Creek, NR near, A at, AB above, BL
+ * below, FK Fork, TRIB Tributary, a leading N, S, E or W a direction), ordinary capitals, and a trailing state code kept
+ * as the state after a comma: "TRUCKEE R A FARAD CA" is "Truckee River at Farad, CA". A name not in capitals is kept.
+ */
+export function gaugeName(raw: string): string {
+  const name = raw.trim().replace(/\s+/g, " ");
+  if (!isAllCaps(name)) return name;
+  const tokens = name.split(" ").map((t) => {
+    const m = /^([("]*)(.*?)([),.;:"]*)$/.exec(t);
+    return { pre: m?.[1] ?? "", core: m?.[2] ?? t, post: m?.[3] ?? "" };
+  });
+  let state: string | undefined;
+  const last = tokens[tokens.length - 1];
+  if (tokens.length > 1 && STATE_CODES.has(last.core) && last.pre === "" && last.post.replace(/[.,]/g, "") === "") {
+    state = last.core;
+    tokens.pop();
+  }
+  const words = tokens.map((t, i) => {
+    const next = tokens[i + 1]?.core;
+    const prev = tokens[i - 1]?.core;
+    let word: string;
+    if (DIRECTIONS[t.core] !== undefined && next !== undefined && (t.core !== "M" || /^(F|FK|FORK)$/.test(next))) word = DIRECTIONS[t.core];
+    else if (t.core === "F" && prev !== undefined && DIRECTIONS[prev] !== undefined) word = "Fork";
+    else if (GAUGE_WORDS[t.core] !== undefined && (t.core.length > 1 || i > 0)) word = GAUGE_WORDS[t.core];
+    else word = gaugeWordCase(t.core);
+    if (i > 0 && GAUGE_SMALL.has(word.toLowerCase())) word = word.toLowerCase();
+    // An abbreviation's point goes with it ("NR." is "near"); commas and brackets stay.
+    const post = word !== gaugeWordCase(t.core) ? t.post.replace(/\./g, "") : t.post;
+    return `${t.pre}${word}${post}`;
+  });
+  const body = words.join(" ").replace(/[,;]\s*$/, "");
+  return state === undefined ? body : `${body}, ${state}`;
+}
+
+/** A gauge's name properties: the plain name, and the station name as USGS writes it when that differs (kept off the card). */
+function gaugeNames(raw: string): { name: string; nameInSource?: string } {
+  const name = gaugeName(raw);
+  return name === raw ? { name } : { name, nameInSource: raw };
+}
+
 function namesFrom(bodies: unknown[]): Map<string, string> {
   const names = new Map<string, string>();
   for (const body of bodies) {
@@ -145,7 +248,7 @@ function toFeatures(readings: Reading[], names: Map<string, string>): FeatureCol
     type: "Feature",
     geometry: { type: "Point", coordinates: r.coordinates },
     properties: {
-      name: names.get(r.siteId) ?? r.siteId,
+      ...gaugeNames(names.get(r.siteId) ?? r.siteId),
       siteId: r.siteId,
       t: new Date(r.time).toISOString(),
       v: r.value,
@@ -368,7 +471,7 @@ export function ivFeatures(
     const temp = site.readings["00010"];
     if (reading === undefined && temp === undefined) continue;
     const properties: Record<string, string | number> = {
-      name: site.name,
+      ...gaugeNames(site.name),
       siteId: site.siteId,
       kind: "gauge",
     };
@@ -774,7 +877,8 @@ const CARD: CardSpec = {
     { key: "kind", label: "Reading", values: { gauge: "Measured at a USGS gauge", model: "Modelled by GloFAS (a rough estimate)" } },
     { key: "siteId", label: "USGS site" },
   ],
-  hidden: ["vsNormal", "tempC", "tempF"],
+  // The title is the station name in plain words; USGS's own abbreviated capitals stay off the card.
+  hidden: ["vsNormal", "tempC", "tempF", "nameInSource"],
 };
 
 /**
@@ -827,7 +931,7 @@ const streamflow = defineLayer({
   title: "Stream flow (USGS gauges, live)",
   description:
     "Live river and stream flow: how much water is running right now and whether that is high or low for the date. User words: CFS, flow, river level, running high, running low, blown out, water temperature. " +
-    "In the United States each point is a USGS gauge with name, siteId, t (UTC time of the reading, usually 15 to 60 minutes old), v and kind 'gauge'. " +
+    "In the United States each point is a USGS gauge with name (the station name with USGS abbreviations spelled out; nameInSource is USGS's own spelling), siteId, t (UTC time of the reading, usually 15 to 60 minutes old), v and kind 'gauge'. " +
     "parameter 00060 (default): v is discharge in cubic feet per second (cfs), the volume of water passing the gauge. parameter 00065: v is gage height in feet, the water level at the gauge; its zero point is arbitrary per gauge, so compare it only to the same gauge. " +
     "flowClass compares today's flow with every year on record for this calendar day in the USGS WaterWatch percentile classes: record_low (lowest on record for the date), much_below (under the 10th percentile), below (10th to 24th), normal (25th to 75th), above (76th to 90th), much_above (over the 90th), record_high; use it to say a river is running high or low. " +
     "pctOfMedian is today's flow as a percent of the median for the date (medianCfs, in cfs), normalRange the 25th to 75th percentile in cfs, recordYears the years behind them, vsNormal the coarse word (low, normal or high). Every gauge in view gets them (up to the 400 largest in a very wide box); a gauge whose record is too short has none. " +

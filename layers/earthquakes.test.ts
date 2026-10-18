@@ -3,7 +3,7 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { cardContent } from "@/lib/render/card";
 import { summarizeFeature } from "@/lib/render/inspect";
-import layer, { depthText, earthquakesCountUrl, earthquakesUrl, magnitudeText, normalizeEarthquakes, quakeHeading } from "./earthquakes";
+import layer, { MAG_TYPES, depthText, earthquakesCountUrl, earthquakesUrl, magnitudeText, normalizeEarthquakes, quakeHeading } from "./earthquakes";
 import { contractProblems, labelsOf, legendOf, timeShapeOf } from "./contract";
 import fixture from "./__fixtures__/earthquakes.tahoe.json";
 
@@ -114,6 +114,24 @@ describe("normalizeEarthquakes", () => {
     expect(quakeHeading("quarry blast", "Central California")).toBe("Quarry blast near Central California");
     expect(magnitudeText(3.58)).toBe("M 3.6");
     expect(depthText(410.3)).toBe("410 km (255 mi)");
+  });
+
+  it("spells out the magnitude type (md, ml, mw) instead of the catalog's code", () => {
+    const fc = normalizeEarthquakes(fixture.features);
+    const typeOf = (code: string) => {
+      const f = fc.features.find((x) => x.properties?.magType === code);
+      if (!f) throw new Error(`expected a fixture event with magType ${code}`);
+      return cardContent(f, { unit: layer.style.unit, card: layer.card, fieldHelp: layer.fieldHelp }).facts.find((r) => r.key === "magType")?.value;
+    };
+    expect(typeOf("mwr")).toBe("Moment magnitude, regional (mwr)");
+    expect(MAG_TYPES.md).toMatch(/^Duration magnitude/);
+    expect(MAG_TYPES.ml).toMatch(/^Local magnitude/);
+    expect(MAG_TYPES.mw).toMatch(/^Moment magnitude/);
+    expect(MAG_TYPES.mb).toMatch(/^Body-wave magnitude/);
+    expect(MAG_TYPES.ms).toMatch(/^Surface-wave magnitude/);
+    const upper = normalizeEarthquakes([{ geometry: { type: "Point", coordinates: [-120, 39] }, properties: { mag: 2.1, magType: "Ml" } }]);
+    expect(upper.features[0].properties?.magType).toBe("ml");
+    for (const code of new Set(fc.features.map((f) => String(f.properties?.magType)))) expect(MAG_TYPES[code]).toBeDefined();
   });
 });
 

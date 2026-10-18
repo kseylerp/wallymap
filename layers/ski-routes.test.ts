@@ -285,6 +285,24 @@ describe("ski-routes chips, legend and card", () => {
     expect(chips[0].levels?.map((l) => l.label).slice(0, 3)).toEqual(["Nordic", "Downhill", "Ski touring"]);
   });
 
+  it("names a piste tagged only piste:type=yes in words, on its chip and its card, never a raw Yes", () => {
+    const way = {
+      type: "way",
+      id: 1,
+      tags: { "piste:type": "yes", name: "Liaison" },
+      geometry: [
+        { lat: 45.9, lon: 6.9 },
+        { lat: 45.91, lon: 6.91 },
+      ],
+    };
+    const [f] = normalizeSki({ elements: [way] }).features;
+    expect(f.properties?.kind).toBe("yes");
+    const level = layer.attributes?.find((a) => a.key === "kind")?.levels?.find((l) => l.value === "yes");
+    expect(level?.label).toBe("Piste, type not mapped");
+    const card = cardContent(f, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.facts.find((r) => r.key === "kind")?.value).toBe("Piste, type not mapped");
+  });
+
   it("declares no time, a difficulty legend with a Not rated entry, and labels by name", () => {
     expect(contractProblems(layer)).toEqual([]);
     expect(timeShapeOf(layer, normalizeSki(fixture))).toEqual({ shape: "none" });

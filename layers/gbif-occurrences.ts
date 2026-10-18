@@ -6,12 +6,14 @@
  *     hasCoordinate=true, hasGeospatialIssue=false, occurrenceStatus=PRESENT, scientificName (any rank: "Felidae"
  *     matched 62 records near Tahoe, "Puma concolor" 16; unknown names return 0) or taxonKey, year=from,to (range),
  *     limit=300 (the maximum), offset. Response: { count, endOfRecords, results: [...] }, newest first in practice.
- *     Each record is large (about 8 KB with media extensions); fields read: key, species, scientificName,
+ *     Each record is large (about 8 KB with media extensions); fields read: key, species, scientificName, speciesKey,
  *     decimalLatitude, decimalLongitude, coordinateUncertaintyInMeters, eventDate (ISO without a zone, a date,
  *     "start/end" or partial), year, month, day, basisOfRecord ("HUMAN_OBSERVATION", "PRESERVED_SPECIMEN", ...),
  *     datasetName, references (source page), license (a creativecommons.org legalcode URL).
  *   Name lookup: https://api.gbif.org/v1/species/match?name=  -> { usageKey, canonicalName, matchType } where matchType
  *     is EXACT, FUZZY, HIGHERRANK or NONE. Density tiles need a taxonKey, so a name is resolved first.
+ *   Common names: https://api.gbif.org/v1/species/{speciesKey} -> { vernacularName } (checked 2026-10-18: 2435099 gives
+ *     "puma"; occurrence records rarely carry one themselves), for the 20 most recorded species in an answer.
  *   Density tiles: https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@1x.png?style=purpleYellow.point
  *     &taxonKey=K&year=A,B (the layer always sends the same year window as points: explicit bounds, else the last 10 years; 256 px PNG; 200 at z0 to z14; the whole world, not limited to the bbox).
  * Notes: iNaturalist is the biggest GBIF publisher, so the species layer and this one overlap. Records with a
@@ -29,7 +31,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { jsonObjectBody } from "@/lib/fetch/validate";
@@ -67,6 +69,7 @@ const recordSchema = z.object({
   key: z.number(),
   species: z.string().nullish(),
   scientificName: z.string().nullish(),
+  speciesKey: z.number().nullish(),
   decimalLatitude: z.number().nullish(),
   decimalLongitude: z.number().nullish(),
   coordinateUncertaintyInMeters: z.number().nullish(),
@@ -165,7 +168,7 @@ export function shortLicense(raw: string | undefined): string | undefined {
 }
 
 /**
- * Converts a search page into points with species, scientificName, basisOfRecord, dataset, year, `v` (the year),
+ * Converts a search page into points with species, speciesKey, basisOfRecord, dataset, year, `v` (the year),
  * `t`, url and license. Rows with no usable position or date, or an uncertainty over MAX_UNCERTAINTY_M, are left out
  * (`vague` counts the uncertain ones).
  */
@@ -196,7 +199,8 @@ export function normalizeOccurrences(json: unknown): { data: FeatureCollection<P
       t,
       url: clean(r.references) ?? `https://www.gbif.org/occurrence/${r.key}`,
     };
-    if (scientific !== undefined) properties.scientificName = scientific;
+    // The species' GBIF key, for its common name (withCommonNames); kept off the card.
+    if (typeof r.speciesKey === "number") properties.speciesKey = r.speciesKey;
     const basis = clean(r.basisOfRecord);
     if (basis !== undefined) properties.basisOfRecord = basis.toLowerCase().replace(/_/g, " ");
     const dataset = clean(r.datasetName);
@@ -209,6 +213,67 @@ export function normalizeOccurrences(json: unknown): { data: FeatureCollection<P
     features.push({ type: "Feature", geometry: { type: "Point", coordinates: [r.decimalLongitude, r.decimalLatitude] }, properties });
   }
   return { data: { type: "FeatureCollection", features }, vague };
+}
+
+/** Most species whose common name one answer looks up (the most recorded first); the rest keep the Latin title. */
+export const MAX_NAME_LOOKUPS = 20;
+
+const SPECIES_URL = "https://api.gbif.org/v1/species";
+
+const speciesSchema = z.object({ vernacularName: z.string().nullish() });
+
+/**
+ * Titles records by their species' common name where GBIF's species record gives one ("Puma concolor" is "Puma", with
+ * the Latin name as the Scientific name row); a record without one keeps its Latin species as the title, and then
+ * scientificName is not set, so the card never repeats its title.
+ */
+export function withCommonNames(features: Feature<Point>[], names: Map<number, string>): void {
+  for (const f of features) {
+    const p = f.properties;
+    const key = p?.speciesKey;
+    const name = typeof key === "number" ? names.get(key) : undefined;
+    if (!p || name === undefined) continue;
+    p.name = name.charAt(0).toUpperCase() + name.slice(1);
+    if (typeof p.species === "string" && p.species !== "Unidentified") p.scientificName = p.species;
+  }
+}
+
+/** The species keys to name, most recorded first, at most MAX_NAME_LOOKUPS. */
+export function speciesToName(features: Feature<Point>[]): number[] {
+  const counts = new Map<number, number>();
+  for (const f of features) {
+    const key = f.properties?.speciesKey;
+    if (typeof key === "number") counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, MAX_NAME_LOOKUPS)
+    .map(([key]) => key);
+}
+
+/** GBIF's common name for each species key (GET /v1/species/{key}, its vernacularName); a failed lookup is left out. */
+async function commonNames(ctx: QueryContext, keys: number[]): Promise<Map<number, string>> {
+  const names = new Map<number, string>();
+  await Promise.all(
+    keys.map(async (key) => {
+      try {
+        const res = await ctx.fetch(`${SPECIES_URL}/${key}`, {
+          // A species is named the same for every view, so the key leaves out the bbox.
+          cacheKey: ctx.cacheKey === undefined ? undefined : `gbif:species:${key}`,
+          ttlSeconds: MATCH_TTL_SECONDS,
+          validate: jsonObjectBody(),
+          signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        });
+        if (!res.ok) return;
+        const parsed = speciesSchema.safeParse(await res.json());
+        const name = parsed.success ? clean(parsed.data.vernacularName) : undefined;
+        if (name !== undefined) names.set(key, name);
+      } catch {
+        // No common name: the Latin species stays the title.
+      }
+    }),
+  );
+  return names;
 }
 
 function isTimeout(err: unknown): boolean {
@@ -284,16 +349,18 @@ const HELP: Record<string, FieldHelp> = {
 
 const CARD: CardSpec = {
   facts: [
-    // A record has no name: its species is the card's title (lib/render/inspect.ts), so neither it nor scientificName,
-    // the same Latin name, is repeated as a row. The date is the chip under the title, so it is not a row either.
+    // The title is the species' common name when GBIF gives one (name), else the Latin species (lib/render/inspect.ts);
+    // scientificName is only set under a common name, so the Latin name is a row once and never repeats the title.
+    // The date is the chip under the title, so it is not a row either.
+    { key: "scientificName", label: "Scientific name" },
     { key: "basisOfRecord", label: "Record type", values: Object.fromEntries(BASIS_VALUES.map((v) => [v, sentenceCase(v)])) },
     { key: "publisher", label: "Source", values: PUBLISHER_WORDS },
     { key: "dataset", label: "Dataset" },
     { key: "uncertaintyM", label: "Position uncertainty", format: "m" },
     { key: "license", label: "Licence" },
   ],
-  /** ScientificName is the same Latin name as species; year and v repeat the date chip. */
-  hidden: ["scientificName", "species", "year", "v"],
+  /** Species is the Latin name (the title or the Scientific name row); year and v repeat the date chip; speciesKey is GBIF's id. */
+  hidden: ["species", "year", "v", "speciesKey"],
   links: [{ key: "url", label: "Source record" }],
 };
 
@@ -301,7 +368,7 @@ const gbifOccurrences = defineLayer({
   id: "gbif-occurrences",
   title: "GBIF occurrence records",
   description:
-    "Records of where species have been seen or collected, from GBIF (the Global Biodiversity Information Facility), which pools iNaturalist, eBird, museum specimens and survey data from around the world. Each point is one record with species, scientificName, basisOfRecord (human observation, preserved specimen, machine observation...), dataset, year, v (the year), t (the date), url (the source record), license, uncertaintyM (how vague the position is, in metres) and publisher ('inaturalist' for iNaturalist research-grade sightings, the same ones the species layer shows, or 'other' for museums, surveys and everyone else; near towns most records are iNaturalist). " +
+    "Records of where species have been seen or collected, from GBIF (the Global Biodiversity Information Facility), which pools iNaturalist, eBird, museum specimens and survey data from around the world. Each point is one record with species (the Latin name), name (the species' common name from GBIF, when it has one; looked up for the 20 most recorded species) and scientificName (the Latin name again, set only alongside a common name), basisOfRecord (human observation, preserved specimen, machine observation...), dataset, year, v (the year), t (the date), url (the source record), license, uncertaintyM (how vague the position is, in metres) and publisher ('inaturalist' for iNaturalist research-grade sightings, the same ones the species layer shows, or 'other' for museums, surveys and everyone else; near towns most records are iNaturalist). " +
     "Use it for where a species or group has been recorded, for example 'where have mountain lions been seen here', 'orchid records in this valley' or 'how has this species' range shown up over the years'. It works worldwide and goes back further than the species layer, so pick this one for older records, specimens, or places outside iNaturalist's reach; use species for recent photo sightings with common names. " +
     "Set scientificName to a Latin name at any level, such as 'Puma concolor', 'Pandion haliaetus' or a family like 'Felidae' (common names like 'mountain lion' do not work, so translate first), or taxonKey if you have a GBIF key. Leave both out for all species. " +
     "yearFrom and yearTo set the years (default: the last 10 years). " +
@@ -421,6 +488,8 @@ const gbifOccurrences = defineLayer({
       if (parsed.data.endOfRecords === true || parsed.data.results.length < PAGE_SIZE) break;
       if (pageNo === MAX_PAGES) more = true;
     }
+
+    withCommonNames(features, await commonNames(ctx, speciesToName(features)));
 
     const notes: string[] = [];
     if (vague > 0) {

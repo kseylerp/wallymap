@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { cardContent } from "@/lib/render/card";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import layer, {
+  gaugeName,
   MAX_IV_STRIPS,
   WIDE_LIMIT,
   floodFeatures,
@@ -83,7 +85,8 @@ describe("joinGauges", () => {
     expect(fc.features).toHaveLength(18);
     const truckee = fc.features.find((f) => f.properties?.siteId === "USGS-10338000");
     expect(truckee?.properties).toEqual({
-      name: "TRUCKEE R NR TRUCKEE CA",
+      name: "Truckee River near Truckee, CA",
+      nameInSource: "TRUCKEE R NR TRUCKEE CA",
       siteId: "USGS-10338000",
       t: "2026-10-09T18:15:00.000Z",
       v: 70.3,
@@ -137,6 +140,34 @@ describe("joinGauges", () => {
       { type: "Feature", geometry: { type: "Point", coordinates: [-120, 39] }, properties: { ...base, monitoring_location_id: "USGS-5", value: null } },
     ];
     expect(joinGauges({ features }, { features: [] }, NOW).features).toHaveLength(0);
+  });
+});
+
+describe("gaugeName", () => {
+  it("titles USGS station names in plain words, with the state kept at the end", () => {
+    expect(gaugeName("TRUCKEE R A FARAD CA")).toBe("Truckee River at Farad, CA");
+    expect(gaugeName("GRANITE C AB GRANITE C SUPPLEMENTAL, NR MOOSE, WY")).toBe("Granite Creek above Granite Creek Supplemental, near Moose, WY");
+    expect(gaugeName("W FK CARSON RV AT MULLER LN NR MINDEN, NV")).toBe("West Fork Carson River at Muller Lane near Minden, NV");
+    expect(gaugeName("FLAT CREEK BELOW CACHE CREEK, NEAR JACKSON, WY")).toBe("Flat Creek below Cache Creek, near Jackson, WY");
+    expect(gaugeName("PILOT C AB STUMPY MEADOWS RES CA")).toBe("Pilot Creek above Stumpy Meadows Reservoir, CA");
+    expect(gaugeName("TROUT CK AT USFS RD 12N01 NR MEYERS, CA")).toBe("Trout Creek at USFS Road 12N01 near Meyers, CA");
+    expect(gaugeName("BEAR C TRIB BL DAM NR X, UT")).toBe("Bear Creek Tributary below Dam near X, UT");
+  });
+
+  it("keeps a name already in ordinary capitals and a bare site id", () => {
+    expect(gaugeName("Gros Ventre River at Kelly")).toBe("Gros Ventre River at Kelly");
+    expect(gaugeName("USGS-2")).toBe("USGS-2");
+  });
+
+  it("titles the card in plain words and keeps USGS's capitals off it", () => {
+    const fc = joinGauges(latest, locations, NOW);
+    const truckee = fc.features.find((f) => f.properties?.siteId === "USGS-10338000");
+    if (!truckee) throw new Error("expected the Truckee gauge");
+    expect(cardTitle(layer, truckee)).toBe("Truckee River near Truckee, CA");
+    const card = cardContent(truckee, { card: layer.card, fieldHelp: layer.fieldHelp });
+    const rows = [...card.facts, ...card.details];
+    expect(rows.map((r) => r.key)).not.toContain("nameInSource");
+    expect(rows.some((r) => r.value === "TRUCKEE R NR TRUCKEE CA")).toBe(false);
   });
 });
 
@@ -467,7 +498,7 @@ describe("streamflow layer", () => {
     expect(chips?.key).toBe("flowClass");
     expect(layer.attributes?.find((a) => a.key === "kind")?.levels?.map((l) => l.label)).toEqual(["USGS gauge", "Modelled river"]);
     const woodfords = r.data.features.find((f) => f.properties?.siteId === "USGS-10310000")!;
-    expect(cardTitle(layer, woodfords)).toMatch(/W FK CARSON/i);
+    expect(cardTitle(layer, woodfords)).toBe("West Fork Carson River at Woodfords, CA");
     const running = layer.card?.facts?.find((f) => f.key === "flowClass");
     expect(running?.values?.normal).toBe("Normal (25th to 75th percentile for the date)");
     expect(layer.card?.facts?.map((f) => f.key)).toContain("pctOfMedian");

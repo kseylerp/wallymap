@@ -1,5 +1,6 @@
 import { bodyHash, createCache, type Cache } from "./cache";
 import { createBucket, type Bucket } from "./bucket";
+import type { SourceFailure } from "@/layers/types";
 
 export { cacheKeyFor, createCache, type Cache } from "./cache";
 export { createBucket, type Bucket, type BucketOptions } from "./bucket";
@@ -35,7 +36,37 @@ export type LayerFetchOptions = {
   ttlSeconds?: number;
   /** Override the cache backend (defaults to createCache()). */
   cache?: Cache;
+  /**
+   * Called when an upstream call fails in a way the person should hear about (a 5xx, a 429, a timeout, an unreachable
+   * host or a body that fails `validate`); lib/layers/run.ts copies the first one onto the answer as `sourceStatus`.
+   */
+  onSourceFailure?: (failure: SourceFailure) => void;
 };
+
+/** The host a URL names, for failure messages ("waterservices.usgs.gov"); the URL itself when it does not parse. */
+function hostLabel(url: string): string {
+  return hostOf(url) ?? "The source";
+}
+
+/** The SourceFailure for an HTTP status, or null when the status is not a source failure (2xx, 3xx, a 4xx but 429). */
+export function sourceFailureForStatus(status: number, url: string, now: Date = new Date()): SourceFailure | null {
+  const since = now.toISOString();
+  if (status === 429) return { ok: false, reason: "rate-limited", message: `${hostLabel(url)} is limiting requests right now (429).`, since };
+  if (status >= 500) return { ok: false, reason: "server-error", message: `${hostLabel(url)} returned an error (${status}).`, since };
+  return null;
+}
+
+/** The SourceFailure for a fetch that threw: a timeout or abort, or a host that could not be reached. */
+export function sourceFailureForError(error: unknown, url: string, now: Date = new Date()): SourceFailure {
+  const name = error instanceof Error ? error.name : "";
+  const timedOut = name === "TimeoutError" || name === "AbortError";
+  return {
+    ok: false,
+    reason: "offline",
+    message: timedOut ? `${hostLabel(url)} did not answer in time.` : `${hostLabel(url)} could not be reached.`,
+    since: now.toISOString(),
+  };
+}
 
 const DEFAULT_CAPACITY = 5;
 const DEFAULT_REFILL_PER_SECOND = 1;
@@ -164,8 +195,18 @@ export function createLayerFetch(layerId: string, opts: LayerFetchOptions = {}):
       const timeout = AbortSignal.timeout(timeoutMs);
       requestInit.signal = requestInit.signal ? AbortSignal.any([requestInit.signal, timeout]) : timeout;
     }
-    const response = await fetch(url, requestInit);
-    if (response.status < 200 || response.status >= 300) return response;
+    let response: Response;
+    try {
+      response = await fetch(url, requestInit);
+    } catch (error) {
+      opts.onSourceFailure?.(sourceFailureForError(error, url));
+      throw error;
+    }
+    if (response.status < 200 || response.status >= 300) {
+      const failure = sourceFailureForStatus(response.status, url);
+      if (failure) opts.onSourceFailure?.(failure);
+      return response;
+    }
     // 204 and 205 have no body (`new Response("", { status: 204 })` throws). Pass an empty answer back, marked and uncached:
     // it is a signal such as "no more pages", not data.
     if (response.status === 204 || response.status === 205) {
@@ -174,6 +215,7 @@ export function createLayerFetch(layerId: string, opts: LayerFetchOptions = {}):
 
     const responseText = await response.text();
     if (validate !== undefined && !validate(responseText)) {
+      opts.onSourceFailure?.({ ok: false, reason: "server-error", message: `${hostLabel(url)} returned an unexpected answer.`, since: new Date().toISOString() });
       return new Response(responseText, {
         status: INVALID_BODY_STATUS,
         statusText: "Upstream returned an unexpected body",

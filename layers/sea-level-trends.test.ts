@@ -70,7 +70,12 @@ describe("sea-level-trends", () => {
     vi.stubGlobal("fetch", stub);
     try {
       const res = await runLayer("sea-level-trends", { bbox: [-123, 37, -121.5, 38.5] });
-      expect(res.body).toEqual({ error: "NOAA sea level trends returned only part of its station list; try again later", hint: "upstream" });
+      expect(res.body).toEqual({
+        error: "NOAA sea level trends returned only part of its station list; try again later",
+        hint: "upstream",
+        // The fetch wrapper's validate check saw the short list, so the answer says the source failed (docs/layer-contract.md).
+        sourceStatus: expect.objectContaining({ ok: false, reason: "server-error" }),
+      });
     } finally {
       vi.unstubAllGlobals();
     }

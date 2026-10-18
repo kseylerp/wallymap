@@ -105,6 +105,8 @@ export type LayerResult =
        * fewer. lib/layers/run.ts states it in the coverage note ("the 2,000 largest of 4,512").
        */
       total?: number;
+      /** Whether the layer's source answered (SourceStatus). Absent means it did. */
+      sourceStatus?: SourceStatus;
     } & Partial<Truncation>)
   | ({
       kind: "tiles";
@@ -126,6 +128,8 @@ export type LayerResult =
       };
       citation: Citation;
       coverageNote?: string;
+      /** Whether the layer's source answered (SourceStatus). Absent means it did. */
+      sourceStatus?: SourceStatus;
     } & Partial<Truncation>);
 
 export type LayerError = {
@@ -136,7 +140,28 @@ export type LayerError = {
    * fits under the layer's area cap. The chat's error card offers it as "Zoom in to N".
    */
   suggestedZoom?: number;
+  /** Why the source did not answer, when that is the reason for the error (SourceStatus). */
+  sourceStatus?: SourceStatus;
 };
+
+/**
+ * Whether a layer's source answered (docs/layer-contract.md). lib/fetch sets a failure on a 5xx, a 429, a timeout or an
+ * unreachable host (lib/layers/run.ts copies the first one onto the answer); a layer that knows better sets its own
+ * (`no-data-for-date` when the source has nothing for the asked day, `{ ok: true }` when a fallback host answered).
+ * The summary and the layer row say it, so a failed source never leaves a silent blank map.
+ */
+export type SourceStatus =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: "server-error" | "offline" | "rate-limited" | "no-data-for-date";
+      /** One plain sentence: "The USGS water service returned an error (503)." */
+      message: string;
+      /** ISO date the failure was first seen or the outage began, when known. */
+      since?: string;
+    };
+
+export type SourceFailure = Extract<SourceStatus, { ok: false }>;
 
 /**
  * How a layer answers a box wider than its maxAreaKm2 (up to its hard cap) instead of erroring: a bounded, ranked fetch.
@@ -373,7 +398,68 @@ export type Layer<I extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawSha
    * error says why, and the eval counts a question that needs it as skipped, not passed. Remove it once the source is back.
    */
   outage?: { since: string; reason: string };
+  /** What time means for this layer (TimeSpec); inferred by timeShapeOf (layers/contract.ts) when absent. */
+  time?: TimeSpec;
+  /** The layer's key (LegendSpec); derived by legendOf (layers/contract.ts) when absent. Every layer resolves to one. */
+  legend?: LegendSpec;
+  /** On-map labels for the top features (LabelSpec); inferred by labelsOf from `card.measure` and the name when absent. */
+  labels?: LabelSpec;
+  /** Units and time zone for numbers and times (DisplaySpec); displayOf fills the defaults. */
+  display?: DisplaySpec;
 };
+
+/**
+ * What time means for a layer's data (docs/layer-contract.md): `none` (no time; no time panel), `single` (one reading,
+ * or one latest reading per site: say the date, no scrubber), `snapshots` (a few dates, listed in `dates`: step between
+ * them or compare two), `continuous` (events or frames over a span: a scrubber stepping by `step`).
+ */
+export type TimeSpec = {
+  shape: "none" | "single" | "snapshots" | "continuous";
+  /** Snapshots: the dates there are (YYYY, YYYY-MM or YYYY-MM-DD), oldest first. */
+  dates?: string[];
+  /** Continuous (or snapshots): first and last date covered. */
+  span?: { start: string; end: string };
+  step?: "hour" | "day" | "month" | "year";
+};
+
+/** One entry of a categories or symbol legend: the label people read, the raw value it stands for, and its swatch. */
+export type LegendItem = {
+  label: string;
+  value?: string | number;
+  /** A palette color; absent when the renderer picks it (the ramp position of an ordinal level). */
+  color?: string;
+  symbol?: "point" | "line" | "polygon" | "raster";
+  help?: string;
+};
+
+/** One stop of a ramp or size legend, low to high. `value` is in the legend's unit; absent for "Lower"/"Higher" ends. */
+export type LegendStop = { label: string; value?: number; color?: string };
+
+/**
+ * A layer's key (docs/layer-contract.md): `categories` (one swatch per kind), `ramp` (a color ramp over a measure or
+ * ordinal), `size` (symbol size over a measure), `symbol` (one swatch for the whole layer), `image` (a legend image
+ * the tile service publishes, `imageUrl`). `field` is the feature property it reads; `unit` its unit; `note` one
+ * sentence the key cannot draw ("Gray where no data").
+ */
+export type LegendSpec = {
+  kind: "categories" | "ramp" | "size" | "symbol" | "image";
+  title?: string;
+  field?: string;
+  unit?: string;
+  items?: LegendItem[];
+  stops?: LegendStop[];
+  imageUrl?: string;
+  note?: string;
+};
+
+/**
+ * On-map labels (docs/layer-contract.md): `field` is the property printed (usually `name`), `max` how many features get
+ * one, the top by `rankBy` (a measure key; the source order without one), shown from `minZoom` up.
+ */
+export type LabelSpec = { field: string; max: number; minZoom?: number; rankBy?: string };
+
+/** Units and clock for a layer's numbers and times; displayOf (layers/contract.ts) fills the defaults. */
+export type DisplaySpec = { units?: "us" | "metric"; timeZone?: "local" | "utc" };
 
 /** How many times maxAreaKm2 a layer with a `wide` strategy answers by default before the hard zoom_in error. */
 export const DEFAULT_WIDE_FACTOR = 4;

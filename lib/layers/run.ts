@@ -8,9 +8,11 @@ import {
   type Layer,
   type LayerError,
   type LayerResult,
+  type SourceFailure,
+  type SourceStatus,
   type WideStrategy,
 } from "@/layers/types";
-import { cacheKeyFor, createLayerFetch } from "@/lib/fetch";
+import { cacheKeyFor, createLayerFetch, sourceFailureForError } from "@/lib/fetch";
 import { withDisplayName } from "@/layers/_shared/names";
 
 export type RunLayerParams = {
@@ -118,6 +120,19 @@ function naturalNames<R extends LayerResult | LayerError>(result: R, layerId: st
 }
 
 /**
+ * The answer with its `sourceStatus` (docs/layer-contract.md): the layer's own when it set one, else the first upstream
+ * failure the fetch wrapper saw during the query, else (on an error) the layer's documented outage. Unchanged when
+ * there is nothing to say.
+ */
+function withSourceStatus<R extends LayerResult | LayerError>(body: R, layer: Layer, failure: SourceFailure | undefined): R {
+  if (body.sourceStatus !== undefined) return body;
+  const outage: SourceStatus | undefined =
+    "error" in body && layer.outage ? { ok: false, reason: "offline", message: layer.outage.reason, since: layer.outage.since } : undefined;
+  const status = failure ?? outage;
+  return status === undefined ? body : { ...body, sourceStatus: status };
+}
+
+/**
  * Validates a request and runs one registered layer. Shared by the HTTP route
  * and the agent tools, so both return the same statuses. Never throws.
  */
@@ -161,13 +176,15 @@ export async function runLayer(id: string, params: RunLayerParams): Promise<RunL
     };
   }
 
+  // The first upstream failure (5xx, 429, timeout, unreachable) seen while this query runs.
+  let failure: SourceFailure | undefined;
   try {
     const result = await layer.query(
       {
         bbox: bbox.data,
         zoom: params.zoom ?? DEFAULT_ZOOM,
         env: layerEnv(layer),
-        fetch: createLayerFetch(id),
+        fetch: createLayerFetch(id, { onSourceFailure: (f) => { failure ??= f; } }),
         // A wide fetch differs from the plain one for the same box, so it gets its own cache key.
         cacheKey: `${cacheKeyFor(layer.id, bbox.data, input.data)}${wide ? ":wide" : ""}`,
         ...(wide && { wide: true, wideStrategy: wide }),
@@ -177,9 +194,9 @@ export async function runLayer(id: string, params: RunLayerParams): Promise<RunL
 
     if ("error" in result) {
       const status = result.hint === "zoom_in" ? 422 : 503;
-      return { status, body: naturalNames(result, id) };
+      return { status, body: withSourceStatus(naturalNames(result, id), layer, failure) };
     }
-    const named = naturalNames(result, id);
+    const named = withSourceStatus(naturalNames(result, id), layer, failure);
     if (!wide) return { status: 200, body: named };
     const outcome = wideOutcome(layer, wide, named);
     const body: LayerResult = {
@@ -189,6 +206,8 @@ export async function runLayer(id: string, params: RunLayerParams): Promise<RunL
     };
     return { status: 200, body };
   } catch (err) {
-    return { status: 503, body: { error: String(err), hint: "upstream" } };
+    const name = err instanceof Error ? err.name : "";
+    const thrown = failure ?? (name === "TimeoutError" || name === "AbortError" ? sourceFailureForError(err, "") : undefined);
+    return { status: 503, body: withSourceStatus({ error: String(err), hint: "upstream" }, layer, thrown) };
   }
 }

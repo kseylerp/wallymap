@@ -1,5 +1,6 @@
 export { registerLayer, getLayer, listLayers, clearRegistry } from "./registry";
 export * from "./types";
+export { cardTitle, contractProblems, displayOf, labelsOf, legendOf, sourceStatusOf, timeShapeOf } from "./contract";
 
 // Layer imports go below this line (each layer file registers itself on import).
 import "./osm-trails";

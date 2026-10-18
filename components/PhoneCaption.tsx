@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { RowLegend } from "@/components/RowLegend";
-import { TimePanel, wholeSpan } from "@/components/TimePanel";
+import { TimePanel, wholeSpan, windowText } from "@/components/TimePanel";
 import { shortTitle } from "@/layers/contract";
 import { failureLine, layerSourceStatus, timeShape } from "@/lib/render/contract";
 import { rowLegend, type LegendBlock } from "@/lib/render/legendView";
@@ -10,7 +10,7 @@ import { compareSideText, effectiveMode } from "@/lib/render/compareView";
 import { DELTA_COLORS } from "@/lib/render/palette";
 import type { LoadedLayer, MapAction, MapState } from "@/lib/render/state";
 import { layerChange } from "@/lib/render/views";
-import { periodOfUrl, windowLabel } from "@/lib/time";
+import { periodOfUrl } from "@/lib/time";
 
 const DAY: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" };
 
@@ -24,14 +24,14 @@ function dayText(iso: string): string {
  * The date a layer's map shows, in one phrase: the time window ("1963 – 2019, newest of each"), a dated image's day,
  * a single reading's day, else when the data was fetched ("As of Oct 18, 2026").
  */
-export function captionDate(layer: LoadedLayer, drawn: LoadedLayer | undefined, time: MapState["time"]): string {
+export function captionDate(layer: LoadedLayer, drawn: LoadedLayer | undefined, time: MapState["time"], at?: [number, number]): string {
   if (time && time.index.layerIds.includes(layer.id)) {
     const { index, window } = time;
     if (index.snapshots && wholeSpan(index, window)) {
       const stops = index.snapshots.stops;
-      return `${stops[0].label}–${stops[stops.length - 1].label}, newest of each`;
+      return `${stops[0].label}–${stops[stops.length - 1].label}, ${index.cadence ? "latest" : "newest of each"}`;
     }
-    return windowLabel(window, index.bucket);
+    return windowText(window, index.bucket, at);
   }
   const tiles = (drawn ?? layer).result;
   if (tiles.kind === "tiles" && tiles.data.time) {
@@ -87,7 +87,8 @@ export function PhoneCaption({ state, shown, onOpen }: { state: MapState; shown:
   if (!layer) return null;
   const count = drawn?.result.kind === "geojson" ? drawn.result.data.features.length : null;
   const failure = failureLine(layerSourceStatus(layer), count);
-  const date = compared ? `${compareSideText(compared, "a", layer)} against ${compareSideText(compared, "b", layer)}` : captionDate(layer, drawn, state.time);
+  const center: [number, number] = [state.viewport.longitude, state.viewport.latitude];
+  const date = compared ? `${compareSideText(compared, "a", layer)} against ${compareSideText(compared, "b", layer)}` : captionDate(layer, drawn, state.time, center);
   return (
     <button
       type="button"
@@ -125,7 +126,15 @@ export function PhoneTimeDock({ state, dispatch }: { state: MapState; dispatch: 
   if (!state.time?.open) return null;
   return (
     <div data-testid="phone-time-dock" className="glass-strong rise-in pointer-events-auto rounded-[12px] px-2.5 py-1.5">
-      <TimePanel time={state.time} dispatch={dispatch} layers={state.layers} renderOps={state.renderOps} compare={state.compare} compact />
+      <TimePanel
+        time={state.time}
+        dispatch={dispatch}
+        layers={state.layers}
+        renderOps={state.renderOps}
+        compare={state.compare}
+        compact
+        at={[state.viewport.longitude, state.viewport.latitude]}
+      />
     </div>
   );
 }

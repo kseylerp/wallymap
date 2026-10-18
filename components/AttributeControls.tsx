@@ -134,7 +134,9 @@ function Chips({
 /** A measure's value as the top 10 shows it: "110 routes", "1,350 MW", "72" for a score, "1985" for a year. */
 function measureText(value: unknown, attr: Attribute | undefined, key = attr?.key ?? "v"): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "";
-  const text = formatValue(key, value, attr?.unit);
+  // Whole numbers from 100 up ("97,729 acres", not "97,729.32"), one decimal from 10, two below.
+  const abs = Math.abs(value);
+  const text = formatValue(key, value, attr?.unit, abs >= 100 ? 0 : abs >= 10 ? 1 : 2);
   return attr?.unit && attr.unit !== "score" ? `${text} ${attr.unit}` : text;
 }
 

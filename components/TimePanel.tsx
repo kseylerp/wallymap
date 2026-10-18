@@ -10,6 +10,7 @@ import { layerChange } from "@/lib/render/views";
 import { timeShape } from "@/lib/render/contract";
 import type { LoadedLayer, MapAction, MapState, TimeState } from "@/lib/render/state";
 import { stepWindow, windowLabel, type SnapshotStop, type TimeIndex } from "@/lib/time";
+import { localTime } from "@/lib/render/units";
 
 type TimePanelProps = {
   time: TimeState;
@@ -22,7 +23,18 @@ type TimePanelProps = {
   curve?: LinkedCurve | null;
   /** One row (phones): the step buttons and the date only. */
   compact?: boolean;
+  /** Where the map is (its center): hourly frames read in that place's local time with its zone. */
+  at?: [number, number];
 };
+
+/** A window as people read it: an hourly frame in the place's local time ("Oct 17, 2026, 11:00 PM AKDT"). */
+export function windowText(window: TimeState["window"], bucket: TimeIndex["bucket"], at?: [number, number]): string {
+  if (bucket === "hour" && at) {
+    const a = localTime(window[0], at, { timeZone: "local" });
+    if (a && windowLabel(window, bucket) === windowLabel([window[0], window[0]], bucket)) return a;
+  }
+  return windowLabel(window, bucket);
+}
 
 const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 hover:text-ink";
 
@@ -190,12 +202,12 @@ export function TimePanel(props: TimePanelProps) {
     );
   }
   if (time.index.snapshots) return <SnapshotStepper {...props} />;
-  if (compact) return <CompactScrubber time={time} dispatch={dispatch} />;
+  if (compact) return <CompactScrubber time={time} dispatch={dispatch} at={props.at} />;
   return <TimeScrubber time={time} dispatch={dispatch} missingImage={props.missingImage} aggregate={props.aggregate} curve={props.curve} />;
 }
 
 /** The scrubber in one row (phones): play, step back, the window, step forward. */
-function CompactScrubber({ time, dispatch }: { time: TimeState; dispatch: (a: MapAction) => void }) {
+function CompactScrubber({ time, dispatch, at }: { time: TimeState; dispatch: (a: MapAction) => void; at?: [number, number] }) {
   const { index, window, playing, mode } = time;
   const step = (d: 1 | -1) => {
     if (playing) dispatch({ type: "set_time_playing", playing: false });
@@ -211,7 +223,7 @@ function CompactScrubber({ time, dispatch }: { time: TimeState; dispatch: (a: Ma
         ‹
       </button>
       <span className="min-w-0 flex-1 truncate text-center text-[13px] text-ink tabular-nums" data-testid="time-window-label">
-        {windowLabel(window, index.bucket)}
+        {windowText(window, index.bucket, at)}
       </span>
       <button type="button" onClick={() => step(1)} aria-label="Step forward" className={`${TEXT_BUTTON} hit-target px-1.5 text-[16px]`}>
         ›

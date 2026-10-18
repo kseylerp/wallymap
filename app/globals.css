@@ -421,6 +421,21 @@ textarea:focus-visible {
 :root:has([data-card-sheet]) .phone-time-dock {
   display: none;
 }
+/* The Mapbox logo and attribution rise above the time row while it shows. */
+:root:has([data-testid="phone-time-dock"]) .mapboxgl-ctrl-bottom-left {
+  bottom: calc(132px + var(--safe-bottom));
+}
+:root:has([data-chat-state="collapsed"]):has([data-testid="phone-time-dock"]) .mapboxgl-ctrl-bottom-left {
+  bottom: calc(172px + var(--safe-bottom));
+}
+:root:has([data-chat-state="open"]):has([data-testid="phone-time-dock"]) .mapboxgl-ctrl-bottom-left {
+  bottom: calc(34dvh + 64px);
+}
+@media (min-width: 768px) {
+  :root:has([data-testid="phone-time-dock"]) .mapboxgl-ctrl-bottom-left {
+    bottom: calc(72px + var(--safe-bottom));
+  }
+}
 @media (min-width: 768px) {
   .map-controls,
   :root:has([data-chat-state="open"]) .map-controls {

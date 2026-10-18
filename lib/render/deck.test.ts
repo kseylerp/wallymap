@@ -316,8 +316,8 @@ describe("H3 tiles for dense points", () => {
     expect(layers[1].id).toBe("species:hexbin:labels");
   });
 
-  it("maps zoom to resolution one step a zoom, about 1 km cells at z11: z≤6 → 3, z7 → 4 … z11 → 8, ≥12 → 9", () => {
-    expect([0, 5, 5.9, 6, 7.5, 8, 9.9, 10, 11.9, 12, 18].map(hexResolution)).toEqual([3, 3, 3, 3, 4, 5, 6, 7, 8, 9, 9]);
+  it("maps zoom to resolution three steps every four zooms, about 1 km cells at z11", () => {
+    expect([0, 5, 5.9, 6, 7.5, 8, 9.9, 10, 11, 12, 18].map(hexResolution)).toEqual([3, 3, 4, 4, 5, 6, 7, 7, 8, 9, 9]);
   });
 
   it("lightens tiles over imagery and gives them full white edges", () => {

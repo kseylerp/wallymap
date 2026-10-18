@@ -16,6 +16,7 @@ import {
   HEX_COLUMN,
   HEX_TILE,
   isPaletteColor,
+  layerColor,
   LINE,
   lineColorFor,
   DARK_GREY as DARK_GREY_HEX,
@@ -232,12 +233,12 @@ function atlasIcon(icon: AtlasIcon): AtlasIcon {
 export const hexbinThreshold = 2000;
 
 /**
- * The H3 resolution for tiles at a zoom: one finer every zoom, so a cell stays about the same size on screen and reads
- * as density, not a slab (points fixer, 2026-10-18): about 1 km across (res 8, 0.7 km²) at z11, 2.4 km (res 7) at z10,
- * about 45 km (res 4) at z7, never coarser than res 3 nor finer than res 9.
+ * The H3 resolution for tiles at a zoom: three steps every four zooms, the rate H3 cells shrink (each level √7 smaller,
+ * about 1.4 zooms), so a cell stays about 15 to 40 px across and reads as density, not a slab (points fixer,
+ * 2026-10-18): about 1 km across (res 8) at z11, 45 km (res 4) at z6, never coarser than res 3 nor finer than res 9.
  */
 export function hexResolution(zoom: number): number {
-  return Math.min(9, Math.max(3, Math.floor(zoom) - 3));
+  return Math.min(9, Math.max(3, Math.floor(0.75 * zoom)));
 }
 
 /** Where a feature sits as a symbol: a Point's coordinates, else the center of its extent. */
@@ -636,7 +637,9 @@ function swipeLineLayers(op: RenderOp, ctx: OpContext): Layer[] {
 function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const { data, selected, terrain } = ctx;
   const requested = requestedColor(op.color);
-  const recipe = areaRecipe(op.layerId, requested);
+  // The layer's own palette color, when it picked one other than its role's (glaciers in purple), else the role's.
+  const own = isPaletteColor(ctx.style.color) && ctx.style.color.toUpperCase() !== layerColor(op.layerId).toUpperCase() ? ctx.style.color : undefined;
+  const recipe = areaRecipe(op.layerId, requested ?? own);
   const { id, trigger } = opIds(op, ctx, opacity, requested);
   const widths = pixelWidths(ctx);
   const updateTriggers = {

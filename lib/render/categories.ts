@@ -53,6 +53,10 @@ export function categoryKey(layer: Keyable, data?: FeatureCollection | null): Ca
   const attrs = attributesOf(layer);
   const attr = attrs.find((a) => a.primary && isChipAttribute(a)) ?? attrs.find(isChipAttribute);
   if (!attr) return undefined;
+  // Hazards keep their pink (owner: "fire must look like fire") for a plain category (the agency) unless the layer marks
+  // it primary or its legend colors the kinds; an ordinal (drought class, alert severity) always takes the ramp.
+  const legendColored = layer.legend?.field === attr.key && (layer.legend.items ?? []).some((i) => i.color);
+  if (layerRole(layer.id) === "hazard" && attr.type === "category" && !attr.primary && !legendColored) return undefined;
   const declared = declaredGroups(attr);
   const memoKey = `${attr.key}|${declared.length > 0 ? "d" : "o"}`;
   const memoOwner = (declared.length > 0 ? layer : data) ?? layer;

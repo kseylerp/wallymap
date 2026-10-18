@@ -472,7 +472,8 @@ function LegendRow({
     // EncodingLegend keys points, lines and columns; areas (a choropleth) are keyed here.
     const encoded = new Set(op.mode === "polygons" ? [] : [layer.style.encode?.size, layer.style.encode?.color].filter(Boolean));
     return rowLegend(layer, op, shownData).filter(
-      (b) => !(b.kind === "categories" && b.field && b.field === chip?.key && b.shape !== "line" && !layer.legend && !layer.result.legend) && !(b.field && encoded.has(b.field)),
+      // The chips show the same kinds with the same colors and counts: they are the key.
+      (b) => !(b.kind === "categories" && b.field && b.field === chip?.key) && !(b.field && encoded.has(b.field)),
     );
   }, [layer, op, shownData, hexes]);
   const symbol = layerLegend(layer, op);

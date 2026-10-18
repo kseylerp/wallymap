@@ -74,6 +74,7 @@ export function RowLegend({ blocks, compact = false }: { blocks: LegendBlock[]; 
           )}
           {block.kind === "ramp" && (
             <div className="max-w-[220px]">
+              {compact && block.title && <p className="truncate text-ink-muted">{block.title}</p>}
               <div
                 aria-hidden
                 className="h-2 rounded-[2px] border border-line"
@@ -82,7 +83,7 @@ export function RowLegend({ blocks, compact = false }: { blocks: LegendBlock[]; 
               <div className="mt-0.5 flex justify-between gap-2 text-[10.5px] text-ink-muted tabular-nums">
                 {(block.entries.length > 3 ? [block.entries[0], block.entries[Math.floor(block.entries.length / 2)], block.entries[block.entries.length - 1]] : block.entries).map((e, i) => (
                   <span key={`${e.label}-${i}`} className="min-w-0 truncate">
-                    {e.label}
+                    {e.label.replace(/^Lower\b.*/, "Low").replace(/^Higher\b.*/, "High")}
                   </span>
                 ))}
               </div>

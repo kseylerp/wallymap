@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { ESRI_COPY, NEVADA_COPY, normalizeAquifers, offsetFor } from "./aquifers";
+import layer, { ESRI_COPY, NEVADA_COPY, OGALLALA_NOTE, ROCK_LEVELS, normalizeAquifers, offsetFor } from "./aquifers";
+import { contractProblems, legendOf } from "./contract";
 import nebraskaRaw from "./__fixtures__/aquifers.esri-nebraska.json";
 import nevadaRaw from "./__fixtures__/aquifers.nv-basin-range.json";
 
@@ -35,7 +36,19 @@ describe("normalizeAquifers", () => {
       rockType: 100,
       aquiferCode: 107,
       alias: "Ogallala",
+      ogallala: true,
+      waterLevels: OGALLALA_NOTE,
     });
+  });
+
+  it("fills aquifers by rock type with a matching legend and offers the Ogallala as one chip", () => {
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "rockType" });
+    expect(legend.items?.map((i) => i.value)).toEqual([100, 200, 300, 400, 500, 600]);
+    expect(new Set(ROCK_LEVELS.map((r) => r.color)).size).toBe(6);
+    expect(layer.attributes?.find((a) => a.key === "ogallala")).toMatchObject({ type: "flag" });
+    expect(OGALLALA_NOTE).toMatch(/groundwater layer/);
+    expect(contractProblems(layer)).toEqual([]);
   });
 
   it("reads the Nevada copy the same way, with its sentence-case names", () => {

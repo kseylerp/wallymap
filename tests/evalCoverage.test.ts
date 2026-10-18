@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listLayers } from "@/layers";
+import { getLayer, listLayers } from "@/layers";
 import { VIEW_KINDS } from "@/lib/render/state";
 import { COVERAGE_QUESTIONS, LAYERS_IN_OLDER_QUESTIONS, coverageFor, coverageRule, noteNames, outageSkip, readEvalSet, statesTotalArea } from "@/scripts/eval-model.mjs";
 
@@ -62,9 +62,19 @@ describe("documented outages", () => {
     const expect_ = coverageFor("Active mining claims near Moab");
     expect(expect_).toBeDefined();
     const down = [{ toolName: "query_mining-claims", input: {}, output: { error: "Mining claims are unavailable since 2026-10-14", hint: "unavailable" } }];
-    expect(outageSkip(expect_!, down)).toMatch(/documented outage: mining-claims since 2026-10-14/);
-    const answered = [{ toolName: "query_mining-claims", input: {}, output: { kind: "geojson", data: { type: "FeatureCollection", features: [] } } }];
-    expect(outageSkip(expect_!, answered)).toBeUndefined();
+    // Mining claims answer again in Alaska and Nevada (2026-10-18), so the layer has no documented outage: the question counts.
+    const claims = getLayer("mining-claims")!;
+    expect(claims.outage).toBeUndefined();
+    expect(outageSkip(expect_!, down)).toBeUndefined();
+    // The mechanism, with an outage declared for the moment.
+    claims.outage = { since: "2026-10-14", reason: "BLM took the national claim map offline" };
+    try {
+      expect(outageSkip(expect_!, down)).toMatch(/documented outage: mining-claims since 2026-10-14/);
+      const answered = [{ toolName: "query_mining-claims", input: {}, output: { kind: "geojson", data: { type: "FeatureCollection", features: [] } } }];
+      expect(outageSkip(expect_!, answered)).toBeUndefined();
+    } finally {
+      delete claims.outage;
+    }
     expect(outageSkip(coverageFor("Where is the Ogallala aquifer?")!, [])).toBeUndefined();
   });
 });

@@ -35,7 +35,7 @@ describe("condor-range layer", () => {
     expect(layer.hardMaxAreaKm2).toBeUndefined();
     expect(layer.wide).toEqual({ orderBy: "area", limit: 1000 });
     expect(layer.input.parse({})).toEqual({});
-    expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", fillOpacity: 0.25, encode: { color: "era" } });
+    expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", fillOpacity: 0.25 });
   });
 
   it("labels the three current polygons current or experimental, and the historic one historic", () => {
@@ -148,7 +148,7 @@ describe("condor-range layer", () => {
     expect(era?.levels?.map((l) => l.label)).toEqual(["Today", "Early 1800s"]);
     const legend = legendOf(layer);
     expect(legend.items).toEqual([
-      expect.objectContaining({ label: "Today", color: "#9FB693", symbol: "polygon" }),
+      expect.objectContaining({ label: "Today", color: "#6E5BFF", symbol: "polygon" }),
       expect.objectContaining({ label: "Early 1800s", color: "#3A3A3C", symbol: "line" }),
     ]);
     expect(legend.note).toBe(`${VINTAGE}.`);

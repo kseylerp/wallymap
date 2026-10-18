@@ -727,8 +727,27 @@ function smallAreaDots(op: RenderOp, ctx: OpContext, opacity: number, colorOf: (
   ];
 }
 
+const outlineSplitMemo = new WeakMap<GeoJSON.FeatureCollection, Map<string, { filled: GeoJSON.FeatureCollection; outlines: GeoJSON.FeatureCollection }>>();
+/** A collection split into the areas a category fills and those its legend draws as an outline only, made once per key. */
+function outlineSplit(data: GeoJSON.FeatureCollection, key: CategoryKey): { filled: GeoJSON.FeatureCollection; outlines: GeoJSON.FeatureCollection } | null {
+  if (!key.groups.some((g) => g.outline)) return null;
+  let byKey = outlineSplitMemo.get(data);
+  if (!byKey) {
+    byKey = new Map();
+    outlineSplitMemo.set(data, byKey);
+  }
+  const k = key.attr.key;
+  let out = byKey.get(k);
+  if (!out) {
+    const outlines = data.features.filter((f) => groupOf(key, f)?.outline === true);
+    out = { filled: { ...data, features: data.features.filter((f) => groupOf(key, f)?.outline !== true) }, outlines: { ...data, features: outlines } };
+    byKey.set(k, out);
+  }
+  return out;
+}
+
 function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
-  const { data, selected, terrain } = ctx;
+  const { selected, terrain } = ctx;
   const requested = requestedColor(op.color);
   // The layer's own palette color, when it picked one other than its role's (glaciers in purple), else the role's.
   const own = isPaletteColor(ctx.style.color) && ctx.style.color.toUpperCase() !== layerColor(op.layerId).toUpperCase() ? ctx.style.color : undefined;
@@ -754,8 +773,12 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   // The selected area keeps its own color (its category stays readable); the thick ink outline marks it.
   const colorOf = (f: Feature) => kindColor(f);
   const tintAlpha = key ? Math.max(recipe.tint, CATEGORY_AREA_TINT) : recipe.tint;
-  // A group the legend draws as a line is an outline only (no tint, no hatch), unless selected.
-  const filled = (f: Feature) => f === selected || !key || !groupOf(key, f)?.outline;
+  // A group the legend draws as a line is an outline only (no tint, no hatch, even selected), and picks only on its
+  // edge: drawn in a layer of its own with no fill, so a tap inside the condors' early-1800s range (most of the West) no
+  // longer selects it and floods the map.
+  const filled = (f: Feature) => !key || !groupOf(key, f)?.outline;
+  const split = key ? outlineSplit(ctx.data, key) : null;
+  const data = split ? split.filled : ctx.data;
   // Kinds told apart by color keep most of it while a card is open: the other areas are the comparison.
   const fade = key ? CLASS_SIBLING_FADE : SIBLING_FADE;
   const tint = perFeature((f) => hexToRgba(colorOf(f), filled(f) ? Math.round(255 * tintAlpha) : 0), opacity, selected, fade);
@@ -813,7 +836,35 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       updateTriggers,
       ...terrainProps(terrain, "drape", [fillExtension]),
     }),
-    ...smallAreaDots(op, ctx, opacity, (f) => hexToRgba(kindColor(f), 230), fade),
+    ...smallAreaDots(op, { ...ctx, data }, opacity, (f) => hexToRgba(kindColor(f), 230), fade),
+    ...(split && split.outlines.features.length > 0
+      ? [
+          new GeoJsonLayer({
+            id: `${id}:outline-only:casing`,
+            data: split.outlines,
+            pickable: false,
+            filled: false,
+            getLineColor: colorFor(WHITE, opacity, selected, undefined, AREA_OUTLINE_SIBLING_FADE),
+            getLineWidth: widthFor(casingWidth, SELECTED_AREA.outlineWidth + 2 * SELECTED_AREA.casing, selected),
+            lineWidthUnits: widths.units,
+            lineWidthScale: widths.scale,
+            updateTriggers,
+            ...terrainProps(terrain, "drape"),
+          }),
+          new GeoJsonLayer({
+            id: `${id}:outline-only`,
+            data: split.outlines,
+            pickable: true,
+            filled: false,
+            getLineColor: (f: Feature) => (f === selected ? withOpacity(SELECT, opacity) : withOpacity(outlineOf(f), selected ? opacity * AREA_OUTLINE_SIBLING_FADE : opacity)),
+            getLineWidth: widthFor(recipe.outlineWidth + 0.5, SELECTED_AREA.outlineWidth, selected),
+            lineWidthUnits: widths.units,
+            lineWidthScale: widths.scale,
+            updateTriggers,
+            ...terrainProps(terrain, "drape"),
+          }),
+        ]
+      : []),
   ];
 }
 

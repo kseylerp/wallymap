@@ -26,6 +26,7 @@ describe("layerIdFromDeckId", () => {
     expect(layerIdFromDeckId("streamflow@3d:encoded")).toBe("streamflow");
     expect(layerIdFromDeckId("streamflow:encoded:halo")).toBe("streamflow");
     expect(layerIdFromDeckId("tree-mortality@3d:polygons:small")).toBe("tree-mortality");
+    expect(layerIdFromDeckId("condor-range:polygons:outline-only")).toBe("condor-range");
     expect(layerIdFromDeckId("power-plants:columns:encoded")).toBe("power-plants");
     expect(layerIdFromDeckId("streamflow~b:encoded")).toBe("streamflow~b");
   });

@@ -13,7 +13,7 @@
  * condor critical habitat (1976) but no current range service, CEC's North American range is NatureServe's older outline, and
  * California's CWHR range covers one state. So the layer says "range as mapped by NPS in 2018; northern California releases
  * since 2022 are not in it" in the description, the note, the card and the legend.
- * Drawing: the current ranges filled in sage and the early-1800s range as an outline only. The layer declares `era` as a
+ * Drawing: the current ranges filled in purple and the early-1800s range as an outline only. The layer declares `era` as a
  * category with `encode: "color"`; the area renderer draws a legend item with symbol "line" as an outline only
  * (lib/render/categories.ts `outline`).
  * Smoke through runLayer (2026-10-10): box -125,29,-107,52 returned 4 polygons in 0.2 s (3 KB); the Sequoia box
@@ -26,7 +26,7 @@ import { defineLayer, type Attribute, type BBox, type CardSpec, type LayerError,
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { bboxesDisjoint } from "./_shared/coverage";
-import { DARK_GREY, SAGE, layerColor } from "@/lib/render/palette";
+import { DARK_GREY, PURPLE, layerColor } from "@/lib/render/palette";
 
 const BASE = "https://services1.arcgis.com/fBc8EJBxQRMcHlei/ArcGIS/rest/services";
 const CURRENT_URL = `${BASE}/Current_Range/FeatureServer/0`;
@@ -97,8 +97,8 @@ const CARD: CardSpec = {
 };
 
 /**
- * Today filled in sage, the early 1800s as an outline only. `era` encodes color (Today first, so sage on the ramp); the
- * legend's line item makes the early-1800s areas an outline (see the header).
+ * Today filled in purple (sage sank into green Topo, 2026-10-18), the early 1800s as an outline only: `era` is the
+ * category key, and the legend's line item makes the early-1800s areas an outline (see the header).
  */
 const ATTRIBUTES: Attribute[] = [
   {
@@ -129,7 +129,7 @@ const LEGEND: LegendSpec = {
   title: "California condor range",
   field: "era",
   items: [
-    { label: "Today", value: "today", color: SAGE, symbol: "polygon", help: "Filled: where condors live now (NPS, 2018)." },
+    { label: "Today", value: "today", color: PURPLE, symbol: "polygon", help: "Filled: where condors live now (NPS, 2018)." },
     { label: "Early 1800s", value: "early 1800s", color: DARK_GREY, symbol: "line", help: "Outline only: the early-1800s range." },
   ],
   note: `${VINTAGE}.`,
@@ -153,7 +153,9 @@ const condorRange = defineLayer({
   maxAreaKm2: 20_000_000,
   wide: { orderBy: "area", limit: WIDE_LIMIT },
   input: z.object({}),
-  style: { geometry: "polygon", color: layerColor("condor-range"), fillOpacity: 0.25, encode: { color: "era" } },
+  // No style.encode: the era is the layer's category key (lib/render/categories.ts), which draws the legend's line item as
+  // an outline only. Encoded as a color channel it filled the whole early-1800s range solid and flooded the map.
+  style: { geometry: "polygon", color: layerColor("condor-range"), fillOpacity: 0.25 },
   card: CARD,
   attributes: ATTRIBUTES,
   time: { shape: "none" },

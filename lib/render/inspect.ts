@@ -75,6 +75,8 @@ export function layerIdFromDeckId(deckId: string): string | null {
   if (encoded) return layerIdFromDeckId(`${deckId.slice(0, encoded.index)}:points`);
   // The dots at small areas' centers (lib/render/deck.ts `smallAreas`) pick their area: `<layerId>:polygons:small`.
   if (deckId.endsWith(":small")) return layerIdFromDeckId(deckId.slice(0, -":small".length));
+  // Areas a legend draws as an outline only (lib/render/deck.ts `areaLayers`): `<layerId>:polygons:outline-only`.
+  if (deckId.endsWith(":outline-only")) return layerIdFromDeckId(deckId.slice(0, -":outline-only".length));
   const cut = deckId.lastIndexOf(":");
   if (cut <= 0) return null;
   const mode = deckId.slice(cut + 1);

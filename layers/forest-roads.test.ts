@@ -2,12 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { mvumOffset, mvumWhere, normalizeMvum } from "./forest-roads";
+import layer, { datesOpen, maintLevelOf, mvumOffset, mvumWhere, normalizeMvum, surfaceKindOf } from "./forest-roads";
 import { hardMaxAreaKm2 } from "./types";
 import { WHOLE_US_KM2 } from "./_shared/coverage";
+import { cardTitle, legendOf } from "./contract";
+import { cardContent } from "@/lib/render/card";
 import raw from "./__fixtures__/forest-roads.tahoe.json";
+import sedonaRaw from "./__fixtures__/forest-roads.sedona.json";
 
 const fixture = raw as unknown as FeatureCollection;
+const sedona = sedonaRaw as unknown as FeatureCollection;
 const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
 
 function json(body: unknown): Response {
@@ -110,14 +114,98 @@ describe("normalizeMvum", () => {
   });
 });
 
+describe("maintenance level, surface group and dates open (Sedona, read live 2026-10-18)", () => {
+  it("reads the level from its leading digit 1 to 5 and leaves blank, 0 and other text unrated", () => {
+    expect(maintLevelOf("2 - HIGH CLEARANCE VEHICLES")).toBe(2);
+    expect(maintLevelOf("5 - HIGH DEGREE OF USER COMFORT")).toBe(5);
+    expect(maintLevelOf("2")).toBe(2);
+    expect(maintLevelOf("0 - NOT MAINTAINED")).toBeUndefined();
+    expect(maintLevelOf(" ")).toBeUndefined();
+    expect(maintLevelOf(null)).toBeUndefined();
+  });
+
+  it("groups the surface types as paved, gravel or dirt", () => {
+    expect(surfaceKindOf("AC - ASPHALT")).toBe("paved");
+    expect(surfaceKindOf("BST - BITUMINOUS SURFACE TREATMENT")).toBe("paved");
+    expect(surfaceKindOf("AGG - CRUSHED AGGREGATE OR GRAVEL")).toBe("gravel");
+    expect(surfaceKindOf("NAT - NATIVE MATERIAL")).toBe("dirt");
+    expect(surfaceKindOf("IMP - IMPROVED NATIVE MATERIAL")).toBe("dirt");
+    expect(surfaceKindOf("OTHER - OTHER")).toBeUndefined();
+  });
+
+  it("writes the dates passenger cars may use the road in words", () => {
+    expect(datesOpen("01/01-12/31")).toBe("All year");
+    expect(datesOpen("04/02-12/14")).toBe("Apr 2 to Dec 14");
+    expect(datesOpen("01/01-01/15,04/08-05/13,10/01-12/31")).toBe("Jan 1 to Jan 15, Apr 8 to May 13, Oct 1 to Dec 31");
+    expect(datesOpen("06/01 - 9/30")).toBe("Jun 1 to Sep 30");
+    expect(datesOpen("open")).toBeUndefined();
+    expect(datesOpen(null)).toBeUndefined();
+  });
+
+  it("gives each Sedona road its level, district, surface group, dates and the other vehicles it is legal for", () => {
+    const fc = normalizeMvum(sedona);
+    expect(fc.features).toHaveLength(sedona.features.length);
+    const levels = new Set(fc.features.map((f) => f.properties?.level));
+    expect([...levels].sort()).toEqual([2, 3, 4, 5]);
+    // Schnebly Hill's Red Rock segment: legal for cars, but the Forest Service maintains it for high clearance only.
+    const schnebly = fc.features.find((f) => f.properties?.routeId === "153" && f.properties?.level === 2);
+    expect(schnebly?.properties).toMatchObject({
+      name: "SCHNEBLY HILL",
+      passengerCar: true,
+      level: 2,
+      district: "Red Rock Ranger District",
+      carDates: "All year",
+      motorhome: true,
+    });
+    const seasonal = fc.features.find((f) => f.properties?.routeId === "6352");
+    expect(seasonal?.properties).toMatchObject({ seasonal: true, carDates: "Apr 2 to Dec 14", atv: true, surfaceKind: "dirt", heading: "Forest Road 6352" });
+    expect(seasonal?.properties).not.toHaveProperty("eBike");
+  });
+
+  it("puts the maintenance level first on the card and says legal, not open, for passenger cars", () => {
+    const fc = normalizeMvum(sedona);
+    const schnebly = fc.features.find((f) => f.properties?.routeId === "153" && f.properties?.level === 2);
+    if (!schnebly) throw new Error("expected Schnebly Hill");
+    const card = cardContent(schnebly, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.facts[0]).toMatchObject({ label: "Maintenance level", value: "2 High clearance" });
+    expect(card.facts[1]).toMatchObject({ label: "Legal for passenger cars", value: "Yes" });
+    expect(card.facts.map((r) => r.label)).toContain("Ranger district");
+    expect(card.facts.find((r) => r.label === "Surface")?.value).toBe("Improved dirt (native material with added rock)");
+    expect(card.facts.some((r) => /open$/i.test(r.value))).toBe(false);
+    expect(card.details.map((r) => r.key)).not.toContain("surfaceKind");
+  });
+
+  it("titles an unnamed road by its number", () => {
+    const fc = normalizeMvum(sedona);
+    const unnamed = fc.features.find((f) => f.properties?.routeId === "6352");
+    if (!unnamed) throw new Error("expected road 6352");
+    expect(cardTitle(layer, unnamed)).toBe("Forest Road 6352");
+  });
+});
+
 describe("forest-roads layer", () => {
+  it("colors the lines by maintenance level, the primary chip set, with a legend that names unrated roads", () => {
+    expect(layer.style.encode).toEqual({ color: "level" });
+    const level = layer.attributes?.find((a) => a.key === "level");
+    expect(level).toMatchObject({ type: "ordinal", primary: true, encode: "color" });
+    expect(level?.levels?.map((l) => l.label)).toEqual(["5 High comfort/paved", "4 Moderate comfort", "3 Passenger cars (rough)", "2 High clearance", "1 Closed"]);
+    expect(layer.attributes?.find((a) => a.key === "surfaceKind")?.levels?.map((l) => l.label)).toEqual(["Paved", "Gravel", "Dirt"]);
+    expect(layer.attributes?.find((a) => a.key === "seasonal")?.type).toBe("flag");
+    const legend = legendOf(layer);
+    expect(legend.kind).toBe("categories");
+    expect(legend.items?.map((i) => i.label)).toEqual([...(level?.levels ?? []).map((l) => l.label), "Not rated"]);
+    expect(layer.time).toEqual({ shape: "none" });
+    expect(layer.labels).toEqual({ field: "name", max: 5, rankBy: "miles" });
+    expect(layer.display).toEqual({ units: "us", timeZone: "local" });
+  });
+
   it("declares US coverage, no key, a 25,000 km2 cap and the longest segments up to the whole US past it", () => {
     expect(layer.coverage).toBe("us");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(25_000);
     expect(layer.wide).toEqual({ orderBy: "segment length in miles", rank: "longest", limit: 2000 });
     expect(hardMaxAreaKm2(layer)).toBe(WHOLE_US_KM2);
-    expect(layer.style).toEqual({ geometry: "line", color: "#3A3A3C" });
+    expect(layer.style).toEqual({ geometry: "line", color: "#3A3A3C", encode: { color: "level" } });
     expect(layer.license).toBe("Public domain (USDA Forest Service)");
   });
 

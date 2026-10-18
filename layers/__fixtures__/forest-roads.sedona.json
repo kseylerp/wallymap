@@ -1,0 +1,483 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -111.6123,
+      34.85776
+     ],
+     [
+      -111.62159,
+      34.85712
+     ],
+     [
+      -111.6265,
+      34.85421
+     ],
+     [
+      -111.63353,
+      34.85199
+     ],
+     [
+      -111.6388,
+      34.84528
+     ],
+     [
+      -111.63898,
+      34.84494
+     ]
+    ]
+   },
+   "properties": {
+    "id": "06352",
+    "name": null,
+    "symbol": "2",
+    "mvum_symbol_name": "Roads open to all Vehicles, Seasonal",
+    "seasonal": "seasonal",
+    "passengervehicle": "open",
+    "highclearancevehicle": "open",
+    "surfacetype": "NAT - NATIVE MATERIAL",
+    "forestname": "Coconino National Forest",
+    "gis_miles": 2.035,
+    "operationalmaintlevel": "2 - HIGH CLEARANCE VEHICLES",
+    "districtname": "Flagstaff Ranger District",
+    "passengervehicle_datesopen": "04/02-12/14",
+    "motorhome": "open",
+    "atv": "open",
+    "motorcycle": "open",
+    "e_bike_class1": null
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -111.6038,
+      34.75196
+     ],
+     [
+      -111.61605,
+      34.75247
+     ],
+     [
+      -111.62441,
+      34.74973
+     ],
+     [
+      -111.6336,
+      34.74718
+     ],
+     [
+      -111.64666,
+      34.74263
+     ],
+     [
+      -111.64731,
+      34.74267
+     ]
+    ]
+   },
+   "properties": {
+    "id": "09248D",
+    "name": null,
+    "symbol": "1",
+    "mvum_symbol_name": "Roads open to all Vehicles, Yearlong",
+    "seasonal": "yearlong",
+    "passengervehicle": "open",
+    "highclearancevehicle": "open",
+    "surfacetype": "NAT - NATIVE MATERIAL",
+    "forestname": "Coconino National Forest",
+    "gis_miles": 2.918,
+    "operationalmaintlevel": "2 - HIGH CLEARANCE VEHICLES",
+    "districtname": "Red Rock Ranger District",
+    "passengervehicle_datesopen": "01/01-12/31",
+    "motorhome": "open",
+    "atv": "open",
+    "motorcycle": "open",
+    "e_bike_class1": null
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -111.76311,
+      34.79089
+     ],
+     [
+      -111.76176,
+      34.79144
+     ],
+     [
+      -111.76216,
+      34.79245
+     ],
+     [
+      -111.76224,
+      34.79192
+     ],
+     [
+      -111.76242,
+      34.79103
+     ]
+    ]
+   },
+   "properties": {
+    "id": "09879",
+    "name": "BELL ROCK PATHWAY PARKING (S)",
+    "symbol": "3",
+    "mvum_symbol_name": "Roads open to highway legal vehicles only, Yearlong",
+    "seasonal": "yearlong",
+    "passengervehicle": "open",
+    "highclearancevehicle": "open",
+    "surfacetype": "P - PAVED",
+    "forestname": "Coconino National Forest",
+    "gis_miles": 0.324,
+    "operationalmaintlevel": "5 - HIGH DEGREE OF USER COMFORT",
+    "districtname": "Red Rock Ranger District",
+    "passengervehicle_datesopen": "01/01-12/31",
+    "motorhome": "open",
+    "atv": null,
+    "motorcycle": null,
+    "e_bike_class1": null
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -111.73343,
+      34.88873
+     ],
+     [
+      -111.73323,
+      34.88804
+     ],
+     [
+      -111.73316,
+      34.88703
+     ],
+     [
+      -111.73174,
+      34.8875
+     ],
+     [
+      -111.73152,
+      34.88785
+     ]
+    ]
+   },
+   "properties": {
+    "id": "00640",
+    "name": "GRASSHOPPER POINT",
+    "symbol": "3",
+    "mvum_symbol_name": "Roads open to highway legal vehicles only, Yearlong",
+    "seasonal": "yearlong",
+    "passengervehicle": "open",
+    "highclearancevehicle": "open",
+    "surfacetype": "AC - ASPHALT",
+    "forestname": "Coconino National Forest",
+    "gis_miles": 0.382,
+    "operationalmaintlevel": "4 - MODERATE DEGREE OF USER COMFORT",
+    "districtname": "Red Rock Ranger District",
+    "passengervehicle_datesopen": "01/01-12/31",
+    "motorhome": "open",
+    "atv": null,
+    "motorcycle": null,
+    "e_bike_class1": null
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -111.61969,
+      34.93912
+     ],
+     [
+      -111.61957,
+      34.93934
+     ],
+     [
+      -111.61941,
+      34.94006
+     ]
+    ]
+   },
+   "properties": {
+    "id": "00240E",
+    "name": "PINEWOOD TRHD",
+    "symbol": "3",
+    "mvum_symbol_name": "Roads open to highway legal vehicles only, Yearlong",
+    "seasonal": "yearlong",
+    "passengervehicle": "open",
+    "highclearancevehicle": "open",
+    "surfacetype": "AGG - CRUSHED AGGREGATE OR GRAVEL",
+    "forestname": "Coconino National Forest",
+    "gis_miles": 0.07,
+    "operationalmaintlevel": "3 - SUITABLE FOR PASSENGER CARS",
+    "districtname": "Flagstaff Ranger District",
+    "passengervehicle_datesopen": "01/01-12/31",
+    "motorhome": "open",
+    "atv": null,
+    "motorcycle": null,
+    "e_bike_class1": null
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -111.7336,
+      34.78548
+     ],
+     [
+      -111.73306,
+      34.78519
+     ],
+     [
+      -111.73224,
+      34.78492
+     ],
+     [
+      -111.7323,
+      34.78428
+     ],
+     [
+      -111.73263,
+      34.78425
+     ]
+    ]
+   },
+   "properties": {
+    "id": "00179G",
+    "name": null,
+    "symbol": "3",
+    "mvum_symbol_name": "Roads open to highway legal vehicles only, Yearlong",
+    "seasonal": "yearlong",
+    "passengervehicle": "open",
+    "highclearancevehicle": "open",
+    "surfacetype": "NAT - NATIVE MATERIAL",
+    "forestname": "Coconino National Forest",
+    "gis_miles": 0.153,
+    "operationalmaintlevel": "2 - HIGH CLEARANCE VEHICLES",
+    "districtname": "Red Rock Ranger District",
+    "passengervehicle_datesopen": "01/01-12/31",
+    "motorhome": "open",
+    "atv": null,
+    "motorcycle": null,
+    "e_bike_class1": null
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -111.64183,
+      34.91223
+     ],
+     [
+      -111.66321,
+      34.89923
+     ],
+     [
+      -111.67455,
+      34.89741
+     ],
+     [
+      -111.69284,
+      34.88456
+     ],
+     [
+      -111.70301,
+      34.88955
+     ],
+     [
+      -111.70311,
+      34.8894
+     ]
+    ]
+   },
+   "properties": {
+    "id": "00153",
+    "name": "SCHNEBLY HILL",
+    "symbol": "3",
+    "mvum_symbol_name": "Roads open to highway legal vehicles only, Yearlong",
+    "seasonal": "yearlong",
+    "passengervehicle": "open",
+    "highclearancevehicle": "open",
+    "surfacetype": "AGG - CRUSHED AGGREGATE OR GRAVEL",
+    "forestname": "Coconino National Forest",
+    "gis_miles": 5.666,
+    "operationalmaintlevel": "3 - SUITABLE FOR PASSENGER CARS",
+    "districtname": "Flagstaff Ranger District",
+    "passengervehicle_datesopen": "01/01-12/31",
+    "motorhome": "open",
+    "atv": null,
+    "motorcycle": null,
+    "e_bike_class1": null
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -111.70311,
+      34.8894
+     ],
+     [
+      -111.70977,
+      34.88057
+     ],
+     [
+      -111.7119,
+      34.87299
+     ],
+     [
+      -111.72862,
+      34.86997
+     ],
+     [
+      -111.74774,
+      34.8658
+     ]
+    ]
+   },
+   "properties": {
+    "id": "00153",
+    "name": "SCHNEBLY HILL",
+    "symbol": "3",
+    "mvum_symbol_name": "Roads open to highway legal vehicles only, Yearlong",
+    "seasonal": "yearlong",
+    "passengervehicle": "open",
+    "highclearancevehicle": "open",
+    "surfacetype": "IMP - IMPROVED NATIVE MATERIAL",
+    "forestname": "Coconino National Forest",
+    "gis_miles": 5.326,
+    "operationalmaintlevel": "2 - HIGH CLEARANCE VEHICLES",
+    "districtname": "Red Rock Ranger District",
+    "passengervehicle_datesopen": "01/01-12/31",
+    "motorhome": "open",
+    "atv": null,
+    "motorcycle": null,
+    "e_bike_class1": null
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -111.64492,
+      34.76213
+     ],
+     [
+      -111.64476,
+      34.76078
+     ],
+     [
+      -111.65219,
+      34.75919
+     ],
+     [
+      -111.6777,
+      34.74809
+     ],
+     [
+      -111.6843,
+      34.74145
+     ],
+     [
+      -111.68603,
+      34.74044
+     ]
+    ]
+   },
+   "properties": {
+    "id": "00689",
+    "name": "BLUE GRADE",
+    "symbol": "1",
+    "mvum_symbol_name": "Roads open to all Vehicles, Yearlong",
+    "seasonal": "yearlong",
+    "passengervehicle": "open",
+    "highclearancevehicle": "open",
+    "surfacetype": "AC - ASPHALT",
+    "forestname": "Coconino National Forest",
+    "gis_miles": 2.949,
+    "operationalmaintlevel": "4 - MODERATE DEGREE OF USER COMFORT",
+    "districtname": "Red Rock Ranger District",
+    "passengervehicle_datesopen": "01/01-12/31",
+    "motorhome": "open",
+    "atv": "open",
+    "motorcycle": "open",
+    "e_bike_class1": null
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -111.64044,
+      34.91226
+     ],
+     [
+      -111.60929,
+      34.89756
+     ],
+     [
+      -111.56784,
+      34.88861
+     ],
+     [
+      -111.55711,
+      34.86486
+     ],
+     [
+      -111.5553,
+      34.83649
+     ]
+    ]
+   },
+   "properties": {
+    "id": "00226",
+    "name": "FDR 226",
+    "symbol": "1",
+    "mvum_symbol_name": "Roads open to all Vehicles, Yearlong",
+    "seasonal": "yearlong",
+    "passengervehicle": "open",
+    "highclearancevehicle": "open",
+    "surfacetype": "AGG - CRUSHED AGGREGATE OR GRAVEL",
+    "forestname": "Coconino National Forest",
+    "gis_miles": 9.492,
+    "operationalmaintlevel": "3 - SUITABLE FOR PASSENGER CARS",
+    "districtname": "Flagstaff Ranger District",
+    "passengervehicle_datesopen": "01/01-12/31",
+    "motorhome": "open",
+    "atv": "open",
+    "motorcycle": "open",
+    "e_bike_class1": null
+   }
+  }
+ ]
+}

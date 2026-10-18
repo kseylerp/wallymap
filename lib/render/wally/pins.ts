@@ -13,7 +13,7 @@ import { rampColor, rgbToHex } from "@/lib/render/ramp";
  * scales with the size but the stroke, glyph stroke and halo keep their pixel widths.
  */
 
-export const PIN_SYMBOLS = ["camp", "parking", "species", "photo", "gauge", "snow", "fire", "road", "trailhead", "point"] as const;
+export const PIN_SYMBOLS = ["camp", "parking", "species", "photo", "gauge", "snow", "fire", "road", "trailhead", "point", "square", "diamond"] as const;
 
 export type PinSymbol = (typeof PIN_SYMBOLS)[number];
 
@@ -42,7 +42,14 @@ export const GLYPHS = {
   drop: "M12 4c3.3 4.2 5.5 7.1 5.5 10a5.5 5.5 0 0 1-11 0c0-2.9 2.2-5.8 5.5-10Z",
   asterisk: "M12 4v16M5.1 8l13.8 8M5.1 16l13.8-8",
   hook: "M14.5 4v10a4.5 4.5 0 0 1-9 0v-2M5.5 12l2.5 2.5",
-  tent: "M3.5 19h17L12 5Z M9 19l3-5.5 3 5.5",
+  /** A dome tent with its door (owner, 2026-10-18: the A-frame read as the basemap's peak triangle). */
+  tent: "M4 18a8 8 0 0 1 16 0ZM12 18v-4.5",
+  /** A hut: walls under a pitched roof, its eaves level, so it never reads as a peak. */
+  hut: "M5.5 19v-8L12 5.5l6.5 5.5v8ZM10 19v-4.5h4V19",
+  /** A viewpoint: an eye. */
+  eye: "M3.5 12c2.4-3.7 5.2-5.5 8.5-5.5s6.1 1.8 8.5 5.5c-2.4 3.7-5.2 5.5-8.5 5.5S5.9 15.7 3.5 12ZM12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z",
+  /** Parking: the letter P. */
+  parking: "M9 18.5v-13h3.75a3.75 3.75 0 0 1 0 7.5H9",
   leaf: "M5.5 18.5C5.5 10 10.5 5.5 19 5.5c0 8.5-4.5 13-13.5 13ZM5.5 18.5l7.5-7.5",
   camera: "M3.5 8.5h4l1.5-2.5h6l1.5 2.5h4V19h-17Z M12 10.25a3.25 3.25 0 1 0 0 6.5 3.25 3.25 0 0 0 0-6.5Z",
   info: "M12 10.5V18M12 6.5v0",
@@ -114,13 +121,14 @@ const CAMPSITE_LAYERS = new Set(["campsites", "popularity-campsites"]);
 /** The symbol for one feature of a layer: campsites are triangles (parking squares), unknown layers circles. */
 export function pinSymbolFor(layerId: string, feature: Feature): PinSymbol {
   if (CAMPSITE_LAYERS.has(layerId)) return feature.properties?.kind === "parking" ? "parking" : "camp";
-  return LAYER_SYMBOLS[layerId] ?? "point";
+  return LAYER_SYMBOLS[layerId] ?? FALLBACK_SYMBOLS[hashOf(layerId) % FALLBACK_SYMBOLS.length];
 }
 
 type Shape = { kind: "path" | "rect" | "circle" | "road"; d?: string; r?: number; hollow?: boolean; dot?: boolean };
 
 const SHAPES: Record<PinSymbol, Shape> = {
-  camp: { kind: "path", d: "M12 6.2 18.2 17H5.8Z" },
+  // A rounded house, not a triangle: a triangle reads as the basemap's peak marker.
+  camp: { kind: "path", d: "M6 17.5V11.2L12 6.4l6 4.8v6.3Z" },
   parking: { kind: "rect" },
   snow: { kind: "rect", hollow: true },
   gauge: { kind: "path", d: "M12 5.6 18.4 12 12 18.4 5.6 12Z" },
@@ -130,7 +138,42 @@ const SHAPES: Record<PinSymbol, Shape> = {
   photo: { kind: "circle", r: 3.75 },
   fire: { kind: "circle", r: 5 },
   road: { kind: "road" },
+  square: { kind: "rect" },
+  diamond: { kind: "path", d: "M12 5.6 18.4 12 12 18.4 5.6 12Z" },
 };
+
+/** Shapes a layer without its own symbol or glyph takes, by its id, so two plain point layers rarely look alike. */
+const FALLBACK_SYMBOLS: readonly PinSymbol[] = ["point", "diamond", "square", "trailhead"];
+
+function hashOf(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+/** Kinds (a layer's `kind` category) with a glyph of their own: huts, springs, viewpoints, camps, parking, peaks. */
+const KIND_GLYPHS: [RegExp, PinGlyph][] = [
+  [/hut|shelter|cabin|refuge|bothy|lodge/i, "hut"],
+  [/spring|well|water|drinking|fountain/i, "drop"],
+  [/view|lookout|overlook|vista/i, "eye"],
+  [/camp|tent|bivouac/i, "tent"],
+  [/parking|trailhead/i, "parking"],
+  [/peak|summit|mountain|volcano/i, "mountain"],
+  [/waterfall|falls|cascade|rapid/i, "waves"],
+  [/info|visitor|ranger/i, "info"],
+  [/climb|crag|boulder/i, "bolts"],
+  [/fish|angl/i, "hook"],
+];
+
+/** The glyph for one kind of feature by its value or label ("hut", "Viewpoint"), or null when the kind has none. */
+export function kindGlyph(...words: (string | undefined)[]): PinGlyph | null {
+  for (const w of words) {
+    if (!w) continue;
+    const hit = KIND_GLYPHS.find(([re]) => re.test(w));
+    if (hit) return hit[1];
+  }
+  return null;
+}
 
 /** The element for a shape with the given paint attributes. */
 function element(shape: Shape, attrs: string): string {
@@ -150,13 +193,20 @@ function element(shape: Shape, attrs: string): string {
  * A glyph's 24×24 drawing, shrunk into the disc (SYMBOL.glyphScale of its size, centered) and stroked dark grey at
  * SYMBOL.glyphStrokeWidth true pixels when the whole symbol is scaled by `k`.
  */
-function glyphSvg(glyph: PinGlyph, k: number): string {
+function glyphSvg(glyph: PinGlyph, k: number, color: string = SYMBOL.stroke): string {
   const g = SYMBOL.glyphScale;
   const width = +(SYMBOL.glyphStrokeWidth / (k * g)).toFixed(4);
   return (
     `<g transform="translate(12 12) scale(${g}) translate(-12 -12)">` +
-    `<path d="${GLYPHS[glyph]}" fill="none" stroke="${SYMBOL.stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"/></g>`
+    `<path d="${GLYPHS[glyph]}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"/></g>`
   );
+}
+
+/** True for a fill dark enough that a dark grey glyph would vanish on it (purple, dark grey): the glyph turns white. */
+function isDarkFill(fill: string | null): boolean {
+  if (!fill) return false;
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(fill.slice(i, i + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5;
 }
 
 /** The drawing's own size in sprite units: the shapes above are laid out for a 12px symbol. */
@@ -166,7 +216,7 @@ const DRAWN_SIZE = 12;
  * An SVG data URL drawing `shape` filled `fill` (none when hollow), stroked dark grey, on a white halo. `size` is the
  * symbol's size in pixels; the geometry scales to it while the stroke and halo widths stay in true pixels.
  */
-export function symbolSvg(shape: Shape, fill: string | null, fillOpacity = 1, size = DRAWN_SIZE, glyph: PinGlyph | null = null): string {
+export function symbolSvg(shape: Shape, fill: string | null, fillOpacity = 1, size = DRAWN_SIZE, glyph: PinGlyph | null = null, glyphColor?: string): string {
   const s = SYMBOL;
   const k = size / DRAWN_SIZE;
   const stroke = +(s.strokeWidth / k).toFixed(4);
@@ -183,7 +233,7 @@ export function symbolSvg(shape: Shape, fill: string | null, fillOpacity = 1, si
           `fill="${fill ?? "none"}"${fill ? ` fill-opacity="${fillOpacity}"` : ""} stroke="${s.stroke}" stroke-width="${stroke}"`,
         );
   const dot = shape.dot ? `<circle cx="12" cy="12" r="1.6" fill="${s.stroke}"/>` : "";
-  const inner = `${halo}${body}${dot}${glyph ? glyphSvg(glyph, k) : ""}`;
+  const inner = `${halo}${body}${dot}${glyph ? glyphSvg(glyph, k, glyphColor) : ""}`;
   const g = k === 1 ? inner : `<g transform="translate(12 12) scale(${+k.toFixed(4)}) translate(-12 -12)">${inner}</g>`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24">${g}</svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
@@ -211,16 +261,24 @@ function fillFor(layerId: string, feature: Feature, symbol: PinSymbol, selected:
 /** One shared icon object per sprite, so deck.gl's icon atlas sees the same definition every frame. */
 const icons = new Map<string, PinIcon>();
 
+/**
+ * How one feature's symbol is encoded beyond its layer's look (lib/render/categories.ts): its category's `fill`, and a
+ * `glyph` for its kind (a hut, a spring, a viewpoint), over the layer's own glyph.
+ */
+export type PinEncoding = { fill?: string; glyph?: PinGlyph | null };
+
 /** The symbol sprite for one feature at `size` px (the full 14px by default, as the layer panel keys draw it), anchored at its center. */
-export function pinIconFor(layerId: string, feature: Feature, selected = false, size: number = SYMBOL.sizeMax): PinIcon {
-  const glyph = pinGlyphFor(layerId, feature);
+export function pinIconFor(layerId: string, feature: Feature, selected = false, size: number = SYMBOL.sizeMax, encoding: PinEncoding = {}): PinIcon {
+  const glyph = encoding.glyph !== undefined ? encoding.glyph : pinGlyphFor(layerId, feature);
   // A glyph always sits in the plain disc; layers without one keep their family shape.
   const symbol = glyph ? "point" : pinSymbolFor(layerId, feature);
-  const { key, fill, opacity } = fillFor(layerId, feature, symbol, selected);
+  const base = fillFor(layerId, feature, symbol, selected);
+  const { key, fill, opacity } = !selected && encoding.fill ? { key: `c${encoding.fill.slice(1)}`, fill: encoding.fill, opacity: 1 } : base;
+  const glyphColor = glyph && !selected && encoding.fill && isDarkFill(fill) ? SYMBOL.halo : undefined;
   const id = `${glyph ?? symbol}-${key}-${size}`;
   let icon = icons.get(id);
   if (!icon) {
-    icon = { id, url: symbolSvg(SHAPES[symbol], fill, opacity, size, glyph), width: 24, height: 24, anchorY: 12 };
+    icon = { id, url: symbolSvg(SHAPES[symbol], fill, opacity, size, glyph, glyphColor), width: 24, height: 24, anchorY: 12 };
     icons.set(id, icon);
   }
   return icon;

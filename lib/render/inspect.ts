@@ -62,6 +62,10 @@ function isFeature(value: unknown): value is Feature {
  * line (`<layerId>:lines:casing`) and any sublayer are not inspectable, so they map to null.
  */
 export function layerIdFromDeckId(deckId: string): string | null {
+  // Discs of a two-measure layer (lib/render/deck.ts `encodedPointLayers`) are `<layerId>:encoded` (and their halo
+  // `:encoded:halo`, never picked); columns colored by a measure `<layerId>:columns:encoded`. Their layer is before it.
+  const encoded = /:(?:columns:)?encoded(?::halo)?$/.exec(deckId);
+  if (encoded) return layerIdFromDeckId(`${deckId.slice(0, encoded.index)}:points`);
   const cut = deckId.lastIndexOf(":");
   if (cut <= 0) return null;
   const mode = deckId.slice(cut + 1);

@@ -33,7 +33,8 @@ import {
 import type { FilterField, LayerFilters as Filters } from "@/lib/render/filters";
 import { isActiveEntry } from "@/lib/render/filters";
 import { featureBBox, featureCenter } from "@/lib/render/inspect";
-import { LINE, WHITE } from "@/lib/render/palette";
+import { DARK_GREY, LINE, WHITE } from "@/lib/render/palette";
+import { categoryKey } from "@/lib/render/categories";
 import type { LoadedLayer, MapAction, RenderOp } from "@/lib/render/state";
 import { RANKED_TOP_N } from "@/lib/render/views";
 
@@ -51,8 +52,22 @@ type AttributeControlsProps = {
   defaultMore?: boolean;
 };
 
-/** A chip's line key: a 14px stroke of the class's ramp color on its white casing, as the map draws it. */
-function ClassKey({ color }: { color: string }) {
+/** A chip's key as the map draws the class: a line on its casing, a disc on its halo, or a tinted square. */
+function ClassKey({ color, shape = "line" }: { color: string; shape?: "line" | "point" | "polygon" }) {
+  if (shape === "point") {
+    return (
+      <svg aria-hidden viewBox="0 0 10 10" width={10} height={10} className="shrink-0 self-center">
+        <circle cx={5} cy={5} r={4} fill={color} stroke={DARK_GREY} strokeWidth={1} />
+      </svg>
+    );
+  }
+  if (shape === "polygon") {
+    return (
+      <svg aria-hidden viewBox="0 0 12 10" width={12} height={10} className="shrink-0 self-center">
+        <rect x={1} y={1} width={10} height={8} rx={1} fill={color} fillOpacity={0.35} stroke={color} strokeWidth={1.5} />
+      </svg>
+    );
+  }
   return (
     <svg aria-hidden viewBox="0 0 14 6" width={14} height={6} className="shrink-0 self-center">
       <line x1={1} y1={3} x2={13} y2={3} stroke={WHITE} strokeWidth={LINE.casing} strokeLinecap="round" />
@@ -80,6 +95,7 @@ function Chips({
   groups,
   filters,
   keyed,
+  shape = "line",
   helpText,
   onChange,
 }: {
@@ -87,6 +103,7 @@ function Chips({
   groups: AttributeGroup[];
   filters: Filters;
   keyed: boolean;
+  shape?: "line" | "point" | "polygon";
   helpText?: string;
   onChange: (next: Filters) => void;
 }) {
@@ -106,7 +123,7 @@ function Chips({
           data-testid="attribute-chip"
           className="filter-chip"
         >
-          {keyed && group.color && <ClassKey color={group.color} />}
+          {keyed && group.color && <ClassKey color={group.color} shape={shape} />}
           {group.label} <span className="filter-chip-count tabular-nums">{formatValue("count", group.count)}</span>
         </button>
       ))}
@@ -245,12 +262,24 @@ export function AttributeControls({ layer, op, data, shown, fields, dispatch, de
   const set = (next: Filters) => dispatch({ type: "set_filters", layerId: layer.id, filters: next });
   const attributes = attributesOf(layer);
   const chip = chipAttribute(layer);
+  // Two primary chip sets show side by side (climbing: discipline and grade band); otherwise the one chip set.
+  const primaries = attributes.filter((a) => a.primary && (a.type === "category" || a.type === "ordinal")).slice(0, 2);
+  const shownChips = primaries.length > 1 ? primaries : chip ? [chip] : [];
   const encoded = encodedAttribute(layer);
   const measures = rankableMeasures(layer, data);
   const helpFor = (a: Attribute) => a.help ?? layer.fieldHelp?.[a.key];
-  const chipGroups = useMemo(() => (chip ? attributeGroups(chip, data, filters) : []), [chip, data, filters]);
-  // Everything but the default chip set, in declared order; a date's time lives on the scrubber, a place in chat.
-  const rest = attributes.filter((a) => a !== chip && a.type !== "place" && !(a.type === "time" && !holdsNumbers(data, a.key)));
+  // The category the map colors symbols and areas by (lib/render/categories.ts): its chips carry its colors, so the
+  // chips are the legend.
+  const key = useMemo(() => categoryKey(layer, data), [layer, data]);
+  const shape = layer.style.geometry;
+  const colored = (attr: Attribute, groups: AttributeGroup[]): AttributeGroup[] =>
+    key && key.attr.key === attr.key && shape !== "line"
+      ? groups.map((g) => ({ ...g, color: key.groups.find((k) => k.label === g.label)?.color ?? g.color }))
+      : groups;
+  const isKeyed = (attr: Attribute) => (attr === encoded && shape === "line") || (key?.attr.key === attr.key && shape !== "line");
+  const chipSets = shownChips.map((a) => ({ attr: a, groups: attributeGroups(a, data, filters) }));
+  // Everything but the default chip sets, in declared order; a date's time lives on the scrubber, a place in chat.
+  const rest = attributes.filter((a) => !shownChips.includes(a) && a.type !== "place" && !(a.type === "time" && !holdsNumbers(data, a.key)));
   const restKeys = new Set([...rest.map((a) => a.key), ...fields.map((f) => f.key)]);
   const hiddenActive = Object.entries(filters).filter(([k, f]) => restKeys.has(k) && isActiveEntry(f)).length;
   const blocks = rest.flatMap((attr) => {
@@ -263,7 +292,7 @@ export function AttributeControls({ layer, op, data, shown, fields, dispatch, de
         return [
           <div key={attr.key} data-attribute={attr.key}>
             <AttributeLabel attr={attr} help={help} />
-            <Chips attr={attr} groups={groups} filters={filters} keyed={attr === encoded && layer.style.geometry === "line"} helpText={helpTitle(help)} onChange={set} />
+            <Chips attr={attr} groups={colored(attr, groups)} filters={filters} keyed={isKeyed(attr)} shape={shape} helpText={helpTitle(help)} onChange={set} />
           </div>,
         ];
       }
@@ -298,22 +327,17 @@ export function AttributeControls({ layer, op, data, shown, fields, dispatch, de
     }
   });
   const hasMore = blocks.length > 0 || fields.length > 0;
-  if (!chip && measures.length === 0 && !hasMore) return null;
+  if (shownChips.length === 0 && measures.length === 0 && !hasMore) return null;
 
   return (
     <div role="group" aria-label={`Attributes for ${layer.title}`} data-testid="attribute-controls" className="space-y-1.5 pt-1.5 pl-9">
-      {chip && chipGroups.length > 1 && (
-        <div data-attribute={chip.key}>
-          <AttributeLabel attr={chip} help={helpFor(chip)} />
-          <Chips
-            attr={chip}
-            groups={chipGroups}
-            filters={filters}
-            keyed={chip === encoded && layer.style.geometry === "line"}
-            helpText={helpTitle(helpFor(chip))}
-            onChange={set}
-          />
-        </div>
+      {chipSets.map(({ attr, groups }) =>
+        groups.length > 1 ? (
+          <div key={attr.key} data-attribute={attr.key}>
+            <AttributeLabel attr={attr} help={helpFor(attr)} />
+            <Chips attr={attr} groups={colored(attr, groups)} filters={filters} keyed={isKeyed(attr)} shape={shape} helpText={helpTitle(helpFor(attr))} onChange={set} />
+          </div>
+        ) : null,
       )}
       {measures.length > 0 && <RankBy layer={layer} op={op} data={data} shown={shown} dispatch={dispatch} />}
       {hasMore && (

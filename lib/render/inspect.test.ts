@@ -21,6 +21,13 @@ const trail: Feature = {
 const known = { "osm-trails": {}, "public-lands": {}, popularity: {} };
 
 describe("layerIdFromDeckId", () => {
+  it("reads encoded discs and columns (two-measure layers: a gauge click opens its card)", () => {
+    expect(layerIdFromDeckId("streamflow:encoded")).toBe("streamflow");
+    expect(layerIdFromDeckId("streamflow@3d:encoded")).toBe("streamflow");
+    expect(layerIdFromDeckId("streamflow:encoded:halo")).toBe("streamflow");
+    expect(layerIdFromDeckId("power-plants:columns:encoded")).toBe("power-plants");
+    expect(layerIdFromDeckId("streamflow~b:encoded")).toBe("streamflow~b");
+  });
   it("strips the render mode", () => {
     expect(layerIdFromDeckId("osm-trails:lines")).toBe("osm-trails");
     expect(layerIdFromDeckId("fire-perimeters:polygons")).toBe("fire-perimeters");

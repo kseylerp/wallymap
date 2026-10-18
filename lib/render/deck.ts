@@ -28,6 +28,7 @@ import {
   AREA_OUTLINE_SIBLING_FADE,
   symbolSizePx,
   WHITE as WHITE_HEX,
+  HATCH_COLORS,
   type AreaRecipe,
   type HatchColor,
   type RampName,
@@ -37,7 +38,9 @@ import { hexToRgb, rampColor } from "@/lib/render/ramp";
 import { compareBId, compareSideShown, DELTA_FILL_ALPHA, effectiveMode, isHexCollection } from "@/lib/render/compareView";
 import { DECK_TERRAIN_ID, DECK_TERRAIN_TAG, demDecoder, demTileUrl } from "@/lib/render/wally/deckTerrain";
 import { featureBBox, featureCenter, HEX_DELTA_TAG } from "@/lib/render/inspect";
-import { pinIconFor } from "@/lib/render/wally/pins";
+import { kindGlyph, pinIconFor, type PinEncoding } from "@/lib/render/wally/pins";
+import { categoryColor, categoryKey, groupOf, type CategoryKey } from "@/lib/render/categories";
+import { layerLabels } from "@/lib/render/contract";
 import { drawsNativeLines, isLineGeometry, SELECTED_LINE } from "@/lib/render/nativeLines";
 import type { HexBasis, LoadedLayer, MapState, RenderMode, RenderOp, Viewport } from "@/lib/render/state";
 import { extentOf, hatchStepOf, primaryMeasure, sizeScale, topPlaces } from "@/lib/render/attributes";
@@ -363,8 +366,8 @@ export function deckLayerKey(layerId: string, terrain: boolean): string {
 type OpContext = {
   data: GeoJSON.FeatureCollection;
   style: StyleHints;
-  /** The layer's title and attributes (spec §12c, §12d): what ranks, sizes and colors its cells. */
-  layer?: Pick<LoadedLayer, "title" | "attributes" | "style">;
+  /** The layer's title and attributes (spec §12c, §12d): what ranks, sizes and colors its cells, and its contract (labels). */
+  layer?: Pick<LoadedLayer, "title" | "attributes" | "style"> & Partial<Pick<LoadedLayer, "id" | "legend" | "labels" | "card" | "allData" | "result">>;
   selected: Feature | undefined;
   zoom: number;
   /** The map's center latitude, to turn a pixel width into meters while a layer drapes on terrain. */
@@ -399,10 +402,51 @@ function memoExtent(data: GeoJSON.FeatureCollection, key: string): [number, numb
   return byKey.get(key) ?? null;
 }
 
+/** The category key the op's features are colored by (lib/render/categories.ts), read on every loaded feature. */
+function categoryKeyOf(op: RenderOp, ctx: Pick<OpContext, "layer" | "data">): CategoryKey | undefined {
+  if (!ctx.layer || requestedColor(op.color)) return undefined;
+  const all = ctx.layer.allData ?? (ctx.layer.result?.kind === "geojson" ? ctx.layer.result.data : ctx.data);
+  return categoryKey({ id: op.layerId, attributes: ctx.layer.attributes, style: ctx.layer.style, legend: ctx.layer.legend }, all);
+}
+
+const NO_ENCODING: PinEncoding = {};
+
+/**
+ * One point's symbol encoding (encode by default): its category's fill, and for a `kind` category its kind's own glyph
+ * (huts, springs, viewpoints), so kinds differ by shape as well as color. Nothing for a layer with no category.
+ */
+function pinEncoder(key: CategoryKey | undefined): (f: Feature) => PinEncoding {
+  if (!key) return () => NO_ENCODING;
+  const kinds = /kind|type|category|class/i.test(key.attr.key) && !key.ordinal;
+  const memo = new Map<string, PinEncoding>();
+  return (f) => {
+    const g = groupOf(key, f);
+    const id = g?.label ?? "";
+    let enc = memo.get(id);
+    if (!enc) {
+      const glyph = kinds && g ? kindGlyph(g.values[0], g.label) : null;
+      enc = { fill: categoryColor(key, f), ...(glyph && { glyph }) };
+      memo.set(id, enc);
+    }
+    return enc;
+  };
+}
+
 /** The measure that sizes features (`encode: "size"`, spec §12c): symbol size, hatch density. */
 function sizeMeasureKey(ctx: Pick<OpContext, "layer">): string | undefined {
   const measure = primaryMeasure(ctx.layer);
   return measure?.encode === "size" ? measure.key : undefined;
+}
+
+/**
+ * Encode by default: the measure a point layer's symbols are sized by when nothing else sizes them, its primary measure
+ * (when the data holds numbers for it). "Rank by: None" in the row ("") switches it off.
+ */
+function defaultSizeKey(op: RenderOp, ctx: Pick<OpContext, "layer" | "data">): string | undefined {
+  if (op.rankBy === "") return undefined;
+  const key = primaryMeasure(ctx.layer)?.key;
+  if (!key) return undefined;
+  return memoExtent(ctx.data, key) ? key : undefined;
 }
 
 /** The measure a point layer is ranked by: "Rank by" in its row, else in a ranked view its primary measure (else `v`). */
@@ -443,8 +487,8 @@ function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
       // Two measures on one mark (spec §13): proportional discs sized by one measure and colored by the other.
       // Without a color value the layer keeps its shaped symbols, sized by the size measure.
       const encoding = encodingOf(op, ctx);
-      if (encoding?.color) return [...encodedPointLayers(op, ctx, opacity, encoding), ...rankedLabelLayers(op, ctx, opacity)];
-      return [...symbolLayers(op, ctx, opacity), ...rankedLabelLayers(op, ctx, opacity)];
+      if (encoding?.color) return [...encodedPointLayers(op, ctx, opacity, encoding), ...labelLayers(op, ctx, opacity)];
+      return [...symbolLayers(op, ctx, opacity), ...labelLayers(op, ctx, opacity)];
     }
     case "hexbin":
       return hexTileLayers(op, ctx, opacity);
@@ -455,12 +499,15 @@ function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
       // into H3 columns. In 2D both draw flat.
       if (ctx.style.geometry === "line") return [];
       if (ctx.style.geometry === "polygon") {
-        return ctx.threeD ? [...extrudedAreaLayers(op, ctx, opacity), ...rankedLabelLayers(op, ctx, opacity)] : polygonLayers({ ...op, mode: "polygons" }, ctx, opacity);
+        return ctx.threeD ? [...extrudedAreaLayers(op, ctx, opacity), ...labelLayers(op, ctx, opacity)] : polygonLayers({ ...op, mode: "polygons" }, ctx, opacity);
       }
       return ctx.threeD ? columnLayers(op, ctx, opacity) : hexTileLayers(op, ctx, opacity);
-    case "lines":
+    case "lines": {
       // Native Mapbox line layers (lib/render/nativeLines.ts, synced by components/mapTiles.ts), crisp on 3D terrain.
-      return [];
+      // A line layer's own points (a paddling run's rapids and put-ins) draw here as symbols.
+      const points = pointsOf(ctx.data);
+      return points.features.length > 0 ? [...symbolLayers({ ...op, mode: "points" }, { ...ctx, data: points }, opacity), ...labelLayers(op, { ...ctx, data: points }, opacity)] : [];
+    }
     case "polygons":
       return polygonLayers(op, ctx, opacity);
     case "heat":
@@ -474,10 +521,22 @@ function geoJsonLayersFor(op: RenderOp, ctx: OpContext): Layer[] {
   }
 }
 
+const pointsMemo = new WeakMap<GeoJSON.FeatureCollection, GeoJSON.FeatureCollection>();
+/** The point features of a collection (made once per collection). */
+function pointsOf(data: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
+  let out = pointsMemo.get(data);
+  if (!out) {
+    const kept = data.features.filter((f) => f.geometry?.type === "Point" || f.geometry?.type === "MultiPoint");
+    out = kept.length === data.features.length ? data : { ...data, features: kept };
+    pointsMemo.set(data, out);
+  }
+  return out;
+}
+
 function polygonLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const areas = ctx.style.unit === "score" ? scoreAreaLayers(op, ctx, opacity) : areaLayers(op, ctx, opacity);
   // A ranked view labels its top areas on the map, as it labels its top symbols (lib/render/views.ts).
-  return [...areas, ...rankedLabelLayers(op, ctx, opacity)];
+  return [...areas, ...labelLayers(op, ctx, opacity)];
 }
 
 /**
@@ -566,10 +625,21 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
     getFillPatternBackgroundColor: trigger,
   };
   const canvas = hatchAtlasCanvas();
-  const colorOf = (f: Feature) => (f === selected ? SELECTED_AREA.color : recipe.color);
-  const tint = perFeature((f) => hexToRgba(colorOf(f), Math.round(255 * recipe.tint)), opacity, selected);
+  // Encode by default: a category colors each area (tint, hatch and outline) in its own palette color, at a tint that
+  // reads on green Topo; kinds past the fourth keep the layer's own color.
+  const key = categoryKeyOf(op, ctx);
+  const kindColor = (f: Feature): string => {
+    if (!key) return recipe.color;
+    const c = categoryColor(key, f);
+    return (HATCH_COLORS as readonly string[]).includes(c) ? c : recipe.color;
+  };
+  const colorOf = (f: Feature) => (f === selected ? SELECTED_AREA.color : kindColor(f));
+  const tintAlpha = key ? Math.max(recipe.tint, CATEGORY_AREA_TINT) : recipe.tint;
+  const tint = perFeature((f) => hexToRgba(colorOf(f), Math.round(255 * tintAlpha)), opacity, selected);
   const hatch = perFeature((f) => hexToRgba(colorOf(f), Math.round(255 * recipe.hatchAlpha)), opacity, selected);
-  const casingWidth = recipe.outlineWidth + 2 * recipe.casing;
+  const outlineOf = (f: Feature): Rgba => hexToRgba(key ? kindColor(f) : recipe.outline);
+  // The white casing is wide enough that an outline never reads as one of the basemap's own lines (contours, borders).
+  const casingWidth = recipe.outlineWidth + 2 * Math.max(recipe.casing, AREA_CASING_MIN);
   const sizeKey = sizeMeasureKey(ctx);
   const sized = sizeKey ? { key: sizeKey, extent: memoExtent(data, sizeKey) } : undefined;
   return [
@@ -594,7 +664,13 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       // which deck draws as the pattern's background. Mask mode (not the atlas's own colors): a canvas uploads its
       // transparent pixels as black, and the mipmaps the drape onto 3D terrain samples then darken the hatch to maroon.
       getFillColor: canvas ? hatch : tint,
-      getLineColor: colorFor(hexToRgba(recipe.outline), opacity, selected, SELECT, AREA_OUTLINE_SIBLING_FADE),
+      getLineColor: key
+        ? (f: Feature) => {
+            if (f === selected) return withOpacity(SELECT, opacity);
+            const c = withOpacity(outlineOf(f), opacity);
+            return selected ? withOpacity(c, AREA_OUTLINE_SIBLING_FADE) : c;
+          }
+        : colorFor(hexToRgba(recipe.outline), opacity, selected, SELECT, AREA_OUTLINE_SIBLING_FADE),
       getLineWidth: widthFor(recipe.outlineWidth, SELECTED_AREA.outlineWidth, selected),
       lineWidthUnits: widths.units,
       lineWidthScale: widths.scale,
@@ -612,6 +688,10 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
     }),
   ];
 }
+
+/** An area's tint when a category colors it (readable on green Topo and under satellite), and its least white casing. */
+export const CATEGORY_AREA_TINT = 0.22;
+export const AREA_CASING_MIN = 1.25;
 
 /** Score areas (remoteness cells): the layer's ramp on `v` with white 1px edges at 0.8; the selected cell purple-edged. */
 function scoreAreaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
@@ -650,21 +730,22 @@ function symbolLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const size = symbolSizePx(zoom);
   // Ranked (a ranked view, or "Rank by" in the row) sizes the symbols by the measure and names its top few (spec §12c);
   // otherwise the layer's size measure (spec §13) sizes them.
-  const rankKey = rankKeyOf(op, ctx) ?? encodingOf(op, ctx)?.size?.key;
+  const rankKey = rankKeyOf(op, ctx) ?? encodingOf(op, ctx)?.size?.key ?? defaultSizeKey(op, ctx);
   const ranked = rankKey ? rankedSizing(data, rankKey) : undefined;
+  const encode = pinEncoder(categoryKeyOf(op, ctx));
   return [
     new IconLayer<Feature>({
       id: `${deckLayerKey(deckId ?? op.layerId, terrain)}:points`,
-      data: data.features,
+      data: ranked ? largestFirst(data, ranked.key) : data.features,
       pickable: true,
       getPosition: markerPosition,
-      getIcon: (f) => atlasIcon(pinIconFor(op.layerId, f, f === selected, size)),
+      getIcon: (f) => atlasIcon(pinIconFor(op.layerId, f, f === selected, size, encode(f))),
       getSize: ranked ? (f: Feature) => SYMBOL_SIZE_PX * sizeScale(f.properties?.[ranked.key], ranked.extent) : SYMBOL_SIZE_PX,
       sizeUnits: "pixels",
       getColor: colorFor(SPRITE_TINT, opacity, selected),
       updateTriggers: {
         getColor: [selectionKey(selected), opacity],
-        getIcon: [op.layerId, selectionKey(selected), size],
+        getIcon: [op.layerId, selectionKey(selected), size, op.color ?? ""],
         getSize: [ranked?.key ?? "", ranked?.extent?.join(",") ?? ""],
       },
       // The overlay draws in deck's GlobeView, which flips the icon quads' winding; with back-face culling on,
@@ -807,30 +888,64 @@ export function declutterLabels(features: Feature[], zoom: number, latitude: num
   return out;
 }
 
-/** Name labels for a ranked view's top features: dark grey on a white halo, above the symbol, inside the clear map. */
-function rankedLabelLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
+/** A label's text: a placeholder name ("Unnamed glacier") says nothing on the map. */
+function labelText(f: Feature, field: string): string | null {
+  const raw = f.properties?.[field];
+  const text = typeof raw === "number" ? String(raw) : typeof raw === "string" ? raw.trim() : "";
+  return text && !/^unnamed\b/i.test(text) ? text : null;
+}
+
+/** The labelled features: the top `max` by `rankBy` (source order without it), each with text, made once per data. */
+const labelMemo = new WeakMap<GeoJSON.FeatureCollection, Map<string, Feature[]>>();
+function labelled(data: GeoJSON.FeatureCollection, field: string, max: number, rankBy?: string): Feature[] {
+  let byKey = labelMemo.get(data);
+  if (!byKey) {
+    byKey = new Map();
+    labelMemo.set(data, byKey);
+  }
+  const key = `${field}|${max}|${rankBy ?? ""}`;
+  const hit = byKey.get(key);
+  if (hit) return hit;
+  const named = data.features.filter((f) => labelText(f, field) !== null);
+  const top = rankBy && memoExtent(data, rankBy) ? topPlaces({ type: "FeatureCollection", features: named }, rankBy, max) : named.slice(0, max);
+  // The text under `name` (what declutter and the label read), the feature otherwise as it is.
+  const out = field === "name" ? top : top.map((f) => ({ ...f, properties: { ...f.properties, name: labelText(f, field) } }));
+  byKey.set(key, out);
+  return out;
+}
+
+/**
+ * Names on the map (docs/layer-contract.md `labels`): a ranked view's top features, else the top features the layer's
+ * LabelSpec names (`labelsOf`: its declared field, count and rank, or the names of the top five by the card's measure),
+ * from its minZoom up. Dark grey on a white halo, beside a symbol or at an area's center, decluttered so no two
+ * overlap, and placed inside the clear map (labelPlacement.ts).
+ */
+function labelLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const { data, terrain, deckId, style } = ctx;
+  const geometry = data.features.find((f) => f.geometry)?.geometry?.type;
+  const area = geometry === "Polygon" || geometry === "MultiPolygon";
+  const point = geometry === "Point" || geometry === "MultiPoint";
+  if (!area && !point) return [];
   const rankKey = rankKeyOf(op, ctx);
-  if (!rankKey || (style.geometry !== "point" && style.geometry !== "polygon")) return [];
-  const area = style.geometry === "polygon";
-  const { top, key, extent } = rankedSizing(data, rankKey);
-  // Placeholder names ("Unnamed glacier") say nothing on the map; the row still lists them.
-  const named = top.filter((f) => typeof f.properties?.name === "string" && f.properties.name !== "" && !/^unnamed\b/i.test(f.properties.name));
-  const labelled = declutterLabels(named, ctx.zoom, ctx.latitude);
-  if (labelled.length === 0) return [];
+  const spec = rankKey ? { field: "name", max: RANKED_LABELS, rankBy: rankKey } : ctx.layer ? layerLabels({ labels: ctx.layer.labels, card: ctx.layer.card }) : undefined;
+  if (!spec || (spec.minZoom !== undefined && ctx.zoom < spec.minZoom)) return [];
+  const sizeKey = point ? (rankKey ?? encodingOf(op, ctx)?.size?.key ?? defaultSizeKey(op, ctx)) : undefined;
+  const extent = sizeKey ? memoExtent(data, sizeKey) : null;
+  const top = labelled(data, spec.field, spec.max, spec.rankBy);
+  const shown = declutterLabels(top, ctx.zoom, ctx.latitude);
+  if (shown.length === 0) return [];
+  void style;
   const labelKey = deckLayerKey(deckId ?? op.layerId, terrain);
   const kind = area ? "polygons" : "points";
   return [
-    // Placed again as the camera moves, so a label near the edge of the clear map moves inward (labelPlacement.ts).
-    // A ranked area is labelled at its center, a ranked symbol beside it.
     new PlacedLabelLayer<Feature>({
       id: `${labelKey}:${kind}:placed`,
       textId: `${labelKey}:${kind}:labels`,
-      data: labelled,
+      data: shown,
       getPosition: markerPosition,
       getText: (f) => String(f.properties?.name),
       size: 11,
-      getGap: (f) => (area ? 4 : Math.round((SYMBOL_SIZE_PX * sizeScale(f.properties?.[key], extent)) / 2) + 8),
+      getGap: (f) => (area ? 4 : Math.round((SYMBOL_SIZE_PX * (sizeKey ? sizeScale(f.properties?.[sizeKey], extent) : 1)) / 2) + 8),
       getInsets: ctx.labelInsets,
       textProps: {
         pickable: false,

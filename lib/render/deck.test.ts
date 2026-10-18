@@ -153,10 +153,10 @@ describe("areas: tint, 45° hatch and an outline over a white casing", () => {
     stateOf(layerId, [a, b], op, { geometry: "polygon" });
   const fire = (acres: number): GeoJSON.Feature => ({ ...a, properties: { acres, v: acres } });
 
-  it("draws fire perimeters pink: 15% tint, pink hatch, a 1.5px pink outline over a 3.5px white casing", () => {
+  it("draws fire perimeters pink: 15% tint, pink hatch, a 1.5px pink outline over a 4px white casing", () => {
     const [casing, poly] = buildDeckLayers(polys("fire-perimeters"));
     expect(casing.id).toBe("fire-perimeters:polygons:casing");
-    expect(props(casing)).toMatchObject({ pickable: false, filled: false, getLineColor: WHITE, getLineWidth: 3.5 });
+    expect(props(casing)).toMatchObject({ pickable: false, filled: false, getLineColor: WHITE, getLineWidth: 4 });
     const p = props(poly);
     expect(poly.id).toBe("fire-perimeters:polygons");
     expect(p.pickable).toBe(true);

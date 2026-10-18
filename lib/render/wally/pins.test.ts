@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { DARK_GREY, OFF_WHITE, PALETTE, PINK, PURPLE, SYMBOL, symbolSizePx, WHITE } from "@/lib/render/palette";
 import { UnpremultiplySpriteExtension } from "@/lib/render/deck";
-import { GLYPHS, LAYER_GLYPHS, PIN_SYMBOLS, pinGlyphFor, pinIconFor, pinSymbolFor, routePinUrl, type PinGlyph } from "@/lib/render/wally/pins";
+import { GLYPHS, kindGlyph, LAYER_GLYPHS, PIN_SYMBOLS, pinGlyphFor, pinIconFor, pinSymbolFor, routePinUrl, type PinGlyph } from "@/lib/render/wally/pins";
 
 const point = (properties: Record<string, unknown> = {}): Feature => ({
   type: "Feature",
@@ -27,7 +27,9 @@ const layerFor: Record<string, string> = {
   fire: "fire-detections",
   road: "forest-roads",
   trailhead: "trailheads",
-  point: "something-new",
+  point: "plain-c",
+  square: "plain-a",
+  diamond: "plain-d",
 };
 
 describe("pinSymbolFor", () => {
@@ -39,15 +41,18 @@ describe("pinSymbolFor", () => {
     ["fire-detections", "fire"],
     ["forest-roads", "road"],
     ["trailheads", "trailhead"],
-    ["something-new", "point"],
+    ["plain-c", "point"],
+    ["plain-a", "square"],
+    ["plain-d", "diamond"],
+    ["plain-b", "trailhead"],
   ])("keeps %s's plain %s shape as its fallback", (layerId, symbol) => {
     expect(pinSymbolFor(layerId, point())).toBe(symbol);
   });
 
   it("draws unmapped layers (and roads) as their plain shape, with no glyph", () => {
-    expect(pinIconFor("something-new", point()).id.startsWith("point-")).toBe(true);
+    expect(pinIconFor("plain-c", point()).id.startsWith("point-")).toBe(true);
     expect(pinIconFor("forest-roads", point()).id.startsWith("road-")).toBe(true);
-    expect(svgOf(pinIconFor("something-new", point()).url)).not.toContain("stroke-linecap");
+    expect(svgOf(pinIconFor("plain-c", point()).url)).not.toContain("stroke-linecap");
   });
 
   it("tells camp sites (triangle) from parking (square) by kind", () => {
@@ -153,7 +158,29 @@ describe("symbol sprites (owner's board, points variant A)", () => {
   it("draws the plain shapes where no glyph applies", () => {
     expect(svgOf(pinIconFor("campsites", point({ kind: "parking" })).url)).toContain("<rect"); // square
     expect(svgOf(pinIconFor("forest-roads", point()).url)).toContain('stroke-dasharray="3 2"'); // dashed line
-    expect(svgOf(pinIconFor("something-new", point()).url)).toContain('<circle cx="12" cy="12" r="5.5"'); // disc
+    expect(svgOf(pinIconFor("plain-c", point()).url)).toContain('<circle cx="12" cy="12" r="5.5"'); // disc
+  });
+
+  it("gives plain layers different shapes by id, so two of them rarely look alike", () => {
+    const shapes = new Set(["plain-a", "plain-b", "plain-c", "plain-d"].map((id) => pinSymbolFor(id, point())));
+    expect(shapes.size).toBe(4);
+  });
+
+  it("never draws a bare triangle (the basemap's peak marker)", () => {
+    for (const symbol of PIN_SYMBOLS) expect(svgOf(pinIconFor(layerFor[symbol] ?? "campsites", point()).url)).not.toMatch(/d="M12 6\.2 18\.2 17H5\.8Z"/);
+  });
+
+  it("gives each kind of outdoor feature its own glyph, and a dark fill a white glyph", () => {
+    expect(kindGlyph("alpine_hut")).toBe("hut");
+    expect(kindGlyph("spring")).toBe("drop");
+    expect(kindGlyph("viewpoint")).toBe("eye");
+    expect(kindGlyph("camp_site")).toBe("tent");
+    expect(kindGlyph("parking")).toBe("parking");
+    expect(kindGlyph("peak")).toBe("mountain");
+    expect(kindGlyph("bench")).toBeNull();
+    const svg = svgOf(pinIconFor("outdoor-features", point(), false, 14, { fill: "#6E5BFF", glyph: "hut" }).url);
+    expect(svg).toContain('fill="#6E5BFF"');
+    expect(svg).toContain('stroke="#FFFFFF" stroke-width');
   });
 
   it("is a 24×24 sprite anchored at its center, shared per symbol and fill", () => {

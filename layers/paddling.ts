@@ -6,6 +6,13 @@
  * Fixtures (recorded 2026-10-09, geometry trimmed to 12 vertices): layers/__fixtures__/paddling.trentino.json
  * (Avisio valley, Trentino, Italy: graded rapids, sections, put-ins) and layers/__fixtures__/paddling.bern.json
  * (Aare near Bern, Switzerland: a route=canoe relation and whitewater access points).
+ * Rivers: the named river, stream or canal ways within RIVER_AROUND_M of the rapids and access points, clipped to the box
+ * (`out tags geom(bbox)`), give each point its river (nearest river first, else nearest stream or canal), so an unnamed
+ * rapid reads "Rapid on Gauley River". Live check, Gauley River, WV (38.1,-81.1 to 38.25,-80.8), 2026-10-18: 13 rapids,
+ * all named, none graded, every one on the Gauley River (4 river ways, 385 vertices; 0.7 s).
+ * Drawn as points (style.geometry "point"): lines mode strokes only lines, and most paddling features are points, so a
+ * line default drew nothing on a river of rapids. Sections and canoe routes keep their line geometry and show as one
+ * marker at their middle until the renderer draws a mixed answer's points and lines together.
  * Tags read: whitewater (rapid, put_in, egress, hazard, portage_way, ...), whitewater:rapid_grade,
  * whitewater:rapid_name, whitewater:section_grade, whitewater:section_name, name, distance, ref, network, check_date (becomes `t`).
  * Live smoke check: Avisio valley, Trentino, Italy (46.1,11 to 46.4,11.6), 2026-10-09: 51 features (32 rapid, 4 access, 15 section); Aare near Bern, Switzerland (46.75,7.35 to 46.98,7.65): 13 (3 access, 4 rapid, 5 section, 1 canoe route). No truncation.
@@ -21,7 +28,18 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import type { Position } from "geojson";
+import {
+  defineLayer,
+  type BBox,
+  type LayerError,
+  type LayerResult,
+  type QueryContext,
+  type CardSpec,
+  type Attribute,
+  type FieldHelp,
+  type LegendSpec,
+} from "./types";
 import { WHITEWATER_LEVELS, WHITEWATER_SCALE, nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { overpassCounts, overpassQuery } from "./_shared/overpass";
@@ -42,7 +60,7 @@ import {
   wayGeometryById,
   wayLine,
 } from "./_shared/osm-features";
-import { layerColor } from "@/lib/render/palette";
+import { OFF_WHITE, layerColor } from "@/lib/render/palette";
 
 /** Most feature ways or nodes returned for each of the two element sets (points and sections). */
 export const MAX_PER_SET = 1_500;
@@ -57,6 +75,10 @@ export const WIDE_LIMIT = 1_000;
  * whitewater region (Colorado, central Idaho) instead of a "zoom in". Measured in the header.
  */
 export const WIDE_MAX_AREA_KM2 = 100_000;
+/** How far from a rapid or access point a named river, stream or canal may be to name the feature's river. */
+export const RIVER_AROUND_M = 300;
+/** Most river ways fetched to name the points' rivers. */
+export const MAX_RIVERS = 300;
 /** Tags that name a paddling feature, for the wide answer's named filter. */
 const NAME_KEYS = ["name", "whitewater:rapid_name", "whitewater:section_name"];
 
@@ -135,6 +157,8 @@ export function buildPaddlingQuery(bbox: BBox, input: Pick<PaddlingInput, "white
     `(${SECTION_SELECTORS.map((sel) => `${sel}${a};`).join("")})->.s;` +
     `.p out count;.s out count;` +
     `.p out tags geom ${MAX_PER_SET};.s out tags geom ${MAX_PER_SET};` +
+    // The named rivers beside the points, clipped to the box, to say which river each rapid is on (no count: not features).
+    `way(around.p:${RIVER_AROUND_M})["waterway"~"^(river|stream|canal)$"]["name"]->.rv;.rv out tags geom${a} ${MAX_RIVERS};` +
     (input.whitewaterOnly
       ? ""
       : clippedRelationQuery("r", ['rel["route"="canoe"]'], bbox, { routes: MAX_ROUTES, ways: MAX_ROUTE_WAYS }))
@@ -171,12 +195,98 @@ export function paddlingKind(tags: Record<string, string>, shape: "route" | "sec
 
 type Props = Record<string, string | number | boolean>;
 
+type River = { name: string; main: boolean; lines: Position[][] };
+
+/** Named river, stream and canal ways in a body (the river lookup's answer; a graded section of river counts too). */
+function riversOf(elements: unknown[]): River[] {
+  const rivers: River[] = [];
+  for (const raw of elements) {
+    if (typeof raw !== "object" || raw === null) continue;
+    const el = raw as { type?: unknown; tags?: Record<string, string>; geometry?: unknown };
+    const tags = el.tags;
+    if (el.type !== "way" || !tags?.name || !/^(river|stream|canal)$/.test(tags.waterway ?? "")) continue;
+    if (!Array.isArray(el.geometry)) continue;
+    // A clipped way leaves the box and comes back: Overpass marks the gap with null, so it is drawn as separate runs.
+    const lines: Position[][] = [[]];
+    for (const p of el.geometry as ({ lat: number; lon: number } | null)[]) {
+      if (p && Number.isFinite(p.lat) && Number.isFinite(p.lon)) lines[lines.length - 1].push([p.lon, p.lat]);
+      else if (lines[lines.length - 1].length > 0) lines.push([]);
+    }
+    const kept = lines.filter((l) => l.length > 0);
+    if (kept.length > 0) rivers.push({ name: tags.name, main: tags.waterway === "river", lines: kept });
+  }
+  return rivers;
+}
+
+/** Metres from a point to a polyline (flat-earth near the point, fine at a few hundred metres). */
+function metresToLine([lon, lat]: Position, line: Position[]): number {
+  const kx = 111_320 * Math.cos((lat * Math.PI) / 180);
+  const ky = 110_574;
+  const xy = (q: Position) => [(q[0] - lon) * kx, (q[1] - lat) * ky];
+  let best = Infinity;
+  for (let i = 0; i < line.length; i++) {
+    const [ax, ay] = xy(line[i]);
+    if (i === line.length - 1 || line.length === 1) {
+      best = Math.min(best, Math.hypot(ax, ay));
+      continue;
+    }
+    const [bx, by] = xy(line[i + 1]);
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return best;
+}
+
+/** The river a point is on: the nearest named river within RIVER_AROUND_M, else the nearest stream or canal. */
+export function riverAt(point: Position, rivers: River[]): string | undefined {
+  let best: { name: string; main: boolean; m: number } | undefined;
+  for (const r of rivers) {
+    const m = Math.min(...r.lines.map((l) => metresToLine(point, l)));
+    if (m > RIVER_AROUND_M) continue;
+    if (!best || (r.main && !best.main) || (r.main === best.main && m < best.m)) best = { name: r.name, main: r.main, m };
+  }
+  return best?.name;
+}
+
+const ROMAN_CLASS = ["", "I", "II", "III", "IV", "V", "VI"];
+
+/**
+ * A tagged whitewater grade in plain words: "4" and "IV" read "Class IV", "III+" "Class III+", a range "III-IV" or "2-3"
+ * "Class III to IV" and "Class II to III"; anything else the tag as written ("Tagged X").
+ */
+export function classText(grade: string): string {
+  const text = grade.trim().replace(/^class\s*/i, "");
+  const steps: string[] = [];
+  const re = /(?:^|[^a-z])(vi|iv|v|iii|ii|i|[1-6])(\+|-(?![1-6ivx]))?(?![a-z0-9])/gi;
+  for (const m of text.matchAll(re)) {
+    const base = /^\d$/.test(m[1]) ? ROMAN_CLASS[Number(m[1])] : m[1].toUpperCase();
+    steps.push(`${base}${m[2] ?? ""}`);
+  }
+  if (steps.length === 0) return `Tagged ${text}`;
+  if (steps.length === 1 || steps[0] === steps[steps.length - 1]) return `Class ${steps[0]}`;
+  return `Class ${steps[0]} to ${steps[steps.length - 1]}`;
+}
+
+/** Shown on the card for a rapid or section with no grade tagged. */
+export const NO_CLASS = "No class mapped";
+
+/** Where a feature sits for the river lookup: a point itself, a line's middle vertex. */
+function anchorOf(geometry: Geometry): Position | null {
+  if (geometry.type === "Point") return geometry.coordinates;
+  if (geometry.type === "LineString") return geometry.coordinates[Math.floor(geometry.coordinates.length / 2)] ?? null;
+  return null;
+}
+
 /** Converts an Overpass response into mixed point and line features, skipping malformed elements. */
 export function normalizePaddling(json: unknown): FeatureCollection<Geometry> {
   const features: Feature<Geometry>[] = [];
   const parsed = overpassBodySchema.safeParse(json);
   if (!parsed.success) return { type: "FeatureCollection", features };
   const routeWays = wayGeometryById(parsed.data.elements);
+  const rivers = riversOf(parsed.data.elements);
   const seen = new Set<string>();
 
   for (const raw of parsed.data.elements) {
@@ -230,9 +340,19 @@ export function normalizePaddling(json: unknown): FeatureCollection<Geometry> {
     if (tags.whitewater) properties.whitewater = tags.whitewater;
     if (gradeText) {
       properties.grade = gradeText;
+      properties.classText = classText(gradeText);
       const v = gradeNumber(gradeText);
       if (v !== undefined) properties.v = v;
+    } else if (kind === "rapid" || kind === "section") {
+      properties.classText = NO_CLASS;
     }
+    if (properties.river === undefined && shape !== "route") {
+      const at = anchorOf(geometry);
+      const river = at ? riverAt(at, rivers) : undefined;
+      if (river && river !== name) properties.river = river;
+    }
+    // An unnamed feature is titled by what it is and where: "Rapid on Gauley River".
+    if (!name && typeof properties.river === "string") properties.heading = `${KIND_LABELS[kind]} on ${properties.river}`;
     if (shape === "route") {
       const km = Number(tags.distance);
       if (Number.isFinite(km) && km > 0) properties.distanceKm = km;
@@ -257,11 +377,28 @@ const KIND_LABELS: Record<PaddlingKind, string> = {
   feature: "Other feature",
 };
 
+// Kind first (rapids, put-ins, hazards): what a paddler looks for; the class colours the markers and is the second chip set.
 const ATTRIBUTES: Attribute[] = [
+  { key: "kind", type: "category", label: "Kind", primary: true, levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
   { key: "v", type: "ordinal", label: "Class", encode: "color", levels: WHITEWATER_LEVELS, scale: WHITEWATER_SCALE },
-  { key: "kind", type: "category", label: "Kind", levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
   nameAttribute(),
 ];
+
+/** The class ramp the markers are filled by, and the off-white of a feature with no class mapped. */
+const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Whitewater class",
+  field: "v",
+  items: [
+    ...WHITEWATER_LEVELS.filter((l, i) => WHITEWATER_LEVELS.findIndex((m) => m.label === l.label) === i).map((l) => ({
+      label: l.label,
+      value: l.value,
+      symbol: "point" as const,
+    })),
+    { label: NO_CLASS, color: OFF_WHITE, symbol: "point", help: "No whitewater class is tagged for this feature (most US rapids, and every put-in)." },
+  ],
+  note: "Every feature is a marker: sections and canoe routes sit at their middle; switch to lines to see their course.",
+};
 
 const SCALE_URL = "https://americanwhitewater.org/content/Wiki/safety:internation_scale_of_river_difficulty";
 
@@ -293,20 +430,30 @@ const HELP: Record<string, FieldHelp> = {
     url: "https://wiki.openstreetmap.org/wiki/Key:whitewater",
   },
   distanceKm: { text: "The canoe route's length from its OpenStreetMap distance tag.", unit: "km" },
-  river: { text: "The river's name, when the section carries its own section name." },
+  river: { text: "The river the feature is on: the section's river name, else the nearest named river, stream or canal in OpenStreetMap." },
   t: { text: "The date a mapper last checked the feature on the ground (check_date), when tagged." },
+  classText: {
+    text:
+      "The whitewater class as tagged in OpenStreetMap (whitewater:rapid_grade or whitewater:section_grade), on the International Scale of River " +
+      "Difficulty: Class I easy, II novice, III intermediate, IV advanced, V expert, VI extreme and exploratory; ratings change with water level. " +
+      "No class mapped means no mapper has tagged one, not that the water is easy.",
+    scale: "Class I (easiest) to Class VI (hardest)",
+    source: "American Whitewater, International Scale of River Difficulty",
+    url: SCALE_URL,
+  },
 };
 
+// The class in words ("Class IV", "No class mapped") leads; the number v, the raw tags and the id stay off the card.
 const CARD: CardSpec = {
-  measure: { key: "v", label: "Whitewater class" },
   facts: [
-    { key: "grade", label: "Grade as tagged" },
+    { key: "classText", label: "Whitewater class" },
     { key: "kind", label: "Kind", values: KIND_LABELS },
     { key: "river", label: "River" },
     { key: "distanceKm", label: "Length", format: "km" },
     { key: "network", label: "Network" },
     { key: "t", label: "Last checked", format: "date" },
   ],
+  hidden: ["osmId", "grade", "whitewater"],
 };
 
 const paddling = defineLayer({
@@ -315,13 +462,14 @@ const paddling = defineLayer({
   description:
     "Whitewater and paddling features from OpenStreetMap, anywhere in the world: rapids, graded river sections, put-ins and take-outs, hazards and portages, and named canoe and kayak routes. " +
     "Each feature has kind: 'rapid' (a point or short line), 'section' (a river reach drawn as a line), 'access' (a put-in or take-out, where to launch), 'hazard' (weirs, low-head dams and other dangers), 'portage', 'route' (a flatwater canoe trail or kayaking route, with distanceKm when mapped) or 'feature' (a play wave or other spot). " +
+    "river names the river it is on when OpenStreetMap maps one nearby. " +
     "v is the whitewater class on a 1 to 6 scale (3 is class III, 3.5 is III+, a range like III-IV counts as its harder end; 6 is unrunnable) with grade holding the original text; many rapids, access points and routes have no grade and so no v. " +
     "Use it for questions like: where can I go whitewater kayaking or rafting near here, find class III and harder rapids (set minGrade to 3), where are the put-ins and take-outs on this river, is there a canoe trail nearby, or show weirs and hazards on a river. " +
     "Set whitewaterOnly to true to skip flatwater canoe routes. " +
     "Caveats: coverage is uneven, strongest in the Alps and parts of Europe and thin in many whitewater regions (the US West is sparse); a river with no features here may still be a famous run, so treat it as a lead and not a guide; " +
     "grades are volunteer-entered and change with water level and year, and nothing here reports current flow, so combine with streamflow (cfs) before paddling or rafting; closures, permits and dam releases are not included. " +
     "Each of the two element sets is cut at 1,500 and canoe routes at 50 (a route is drawn only where it crosses the box) and the note gives the count; over 2,500 km² (up to 100,000 km², a whole region) only the first 1,000 named features. " +
-    "Features are a mix of points and lines; switch the display mode to points to see them all as symbols.",
+    "The map draws every feature as a marker colored by class (off-white where none is mapped), sections and canoe routes at their middle; switch the display mode to lines to see the sections and routes as lines.",
   coverage: "global",
   surface: "land",
   license: "ODbL (OpenStreetMap contributors)",
@@ -332,10 +480,15 @@ const paddling = defineLayer({
   // Rapids and access points have no length, so the wide answer keeps the named ones in OpenStreetMap id order.
   wide: { mode: "named", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "line", color: layerColor("paddling") },
+  // Points: most features are rapids and put-ins, which lines mode does not draw (see the header).
+  style: { geometry: "point", color: layerColor("paddling"), encode: { color: "v" } },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // Mapped features, not conditions: the check_date in `t` is when a mapper looked, not a time to scrub.
+  time: { shape: "none" },
+  legend: LEGEND,
+  labels: { field: "name", max: 12, rankBy: "v" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     if (ctx.wide === true) return queryWide(ctx, input);

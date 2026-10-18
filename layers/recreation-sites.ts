@@ -24,8 +24,20 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
+import {
+  defineLayer,
+  type Attribute,
+  type AttributeLevel,
+  type BBox,
+  type CardSpec,
+  type FieldHelp,
+  type LayerError,
+  type LayerResult,
+  type LegendSpec,
+  type QueryContext,
+} from "./types";
 import { registerLayer } from "./registry";
+import { nameAttribute } from "./_shared/bands";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -342,6 +354,62 @@ const KIND_LABELS: Record<string, string> = {
   "recreation area": "Recreation area",
 };
 
+/** The kind chips in the order the row shows them, which is also the order sites are listed and labelled in. */
+const KIND_LEVELS: AttributeLevel[] = [
+  { value: "campground", label: "Campgrounds" },
+  { value: "trailhead", label: "Trailheads" },
+  { value: "day use area", label: "Day use and picnic areas" },
+  { value: "water access", label: "Water access", help: "Boat ramps, launches and beaches." },
+  { value: "visitor center", label: "Visitor centers" },
+  { value: "viewpoint", label: "Viewpoints" },
+  { value: "winter sports", label: "Winter sports" },
+  { value: "OHV area", label: "Off-highway vehicle areas" },
+  { value: "trail", label: "Trails" },
+  { value: "recreation area", label: "Other recreation areas", help: "Sites whose type the agency does not give and the name does not suggest." },
+];
+
+const KIND_ORDER = new Map(KIND_LEVELS.map((l, i) => [String(l.value), i]));
+
+/** Campgrounds first, then trailheads and the rest in chip order (stable within a kind), so labels name campgrounds. */
+export function byKind<T extends Feature>(features: T[]): T[] {
+  const at = (f: Feature) => KIND_ORDER.get(String(f.properties?.kind)) ?? KIND_LEVELS.length;
+  return features
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => at(a.f) - at(b.f) || a.i - b.i)
+    .map(({ f }) => f);
+}
+
+const ATTRIBUTES: Attribute[] = [
+  { key: "kind", type: "category", label: "Kind", primary: true, levels: KIND_LEVELS },
+  {
+    key: "agency",
+    type: "category",
+    label: "Managed by",
+    levels: [
+      { value: "USFS", label: "US Forest Service" },
+      { value: "BLM", label: "Bureau of Land Management" },
+    ],
+  },
+  {
+    key: "status",
+    type: "category",
+    label: "Status",
+    levels: [
+      { value: "open", label: "Open" },
+      { value: "closed", label: "Closed" },
+    ],
+  },
+  { key: "reservable", type: "flag", label: "Reservable" },
+  nameAttribute(),
+];
+
+const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Kind",
+  field: "kind",
+  items: KIND_LEVELS.map((l) => ({ label: l.label, value: l.value, symbol: "point" as const, ...(l.help && { help: l.help }) })),
+};
+
 const CARD: CardSpec = {
   facts: [
     { key: "kind", label: "Type", values: KIND_LABELS },
@@ -379,6 +447,13 @@ const recreationSites = defineLayer({
   style: { geometry: "point", color: layerColor("recreation-sites"), cluster: true },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
+  // A listing of places; the open or closed flag is tonight's feed, not a reading to scrub.
+  time: { shape: "none" },
+  legend: LEGEND,
+  // The first sites in kind order (byKind): campgrounds, then trailheads.
+  labels: { field: "name", max: 6 },
+  display: { units: "us" },
 
   async query(ctx: QueryContext): Promise<LayerResult | LayerError> {
     const citation = {
@@ -434,13 +509,13 @@ const recreationSites = defineLayer({
     }
     if (runs.some((r) => r.res.ok && r.res.truncated)) notes.push(CAPPED_NOTE);
 
-    let features: SiteFeature[] = [
+    let features: SiteFeature[] = byKind([
       ...(usfs.ok ? normalizeUsfs(usfs.fc) : []),
       ...dedupe([
         ...(blmFacilities.ok ? normalizeBlmFacilities(blmFacilities.fc) : []),
         ...(blmSites.ok ? normalizeBlmSites(blmSites.fc) : []),
       ]),
-    ];
+    ]);
     if (features.length > MAX_POINTS) {
       notes.push(`Showing ${MAX_POINTS.toLocaleString("en-US")} of ${features.length.toLocaleString("en-US")} sites`);
       features = features.slice(0, MAX_POINTS);
@@ -499,10 +574,12 @@ async function queryWide(ctx: QueryContext, limit: number, citation: LayerResult
     return { error: first.ok ? "unknown error" : first.error, hint: "upstream" };
   }
   const notes = failed.map((r) => `${r.name} did not respond, so its sites are missing`);
-  const features = interleave(
-    usfs.res.ok ? normalizeUsfs(usfs.res.fc) : [],
-    dedupe([...(blmFacilities.ok ? normalizeBlmFacilities(blmFacilities.fc) : []), ...(blmSites.ok ? normalizeBlmSites(blmSites.fc) : [])]),
-    limit,
+  const features = byKind(
+    interleave(
+      usfs.res.ok ? normalizeUsfs(usfs.res.fc) : [],
+      dedupe([...(blmFacilities.ok ? normalizeBlmFacilities(blmFacilities.fc) : []), ...(blmSites.ok ? normalizeBlmSites(blmSites.fc) : [])]),
+      limit,
+    ),
   );
   const counts = [usfs.count, facilitiesCount, sitesCount];
   const total = failed.length === 0 && counts.every((c) => c !== null) ? counts.reduce<number>((sum, c) => sum + (c ?? 0), 0) : undefined;

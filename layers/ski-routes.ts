@@ -19,7 +19,17 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import {
+  defineLayer,
+  type BBox,
+  type LayerError,
+  type LayerResult,
+  type QueryContext,
+  type CardSpec,
+  type Attribute,
+  type FieldHelp,
+  type LegendSpec,
+} from "./types";
 import { PISTE_LEVELS, PISTE_SCALE, nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { overpassCounts, overpassQuery } from "./_shared/overpass";
@@ -45,7 +55,7 @@ import {
   wayGeometryById,
   wayLine,
 } from "./_shared/osm-features";
-import { layerColor } from "@/lib/render/palette";
+import { SAGE, layerColor } from "@/lib/render/palette";
 
 /** Most piste ways returned; a resort-dense box holds thousands, each with its full geometry. */
 export const MAX_WAYS = 2_000;
@@ -209,7 +219,21 @@ async function queryWide(ctx: QueryContext, input: SkiInput): Promise<LayerResul
   };
 }
 
-const KIND_LABELS: Record<string, string> = { downhill: "Downhill", nordic: "Nordic", skitour: "Ski touring", sled: "Sled", route: "Route" };
+/** piste:type in words: the four the input filters on, named routes, and the other types OpenStreetMap uses. */
+const KIND_LABELS: Record<string, string> = {
+  nordic: "Nordic",
+  downhill: "Downhill",
+  skitour: "Ski touring",
+  sled: "Sled",
+  route: "Named ski route",
+  hike: "Winter hiking",
+  snow_park: "Terrain park",
+  connection: "Connector",
+  playground: "Beginner area",
+  sleigh: "Sleigh ride",
+  ice_skate: "Ice skating",
+  fatbike: "Fat bike",
+};
 const DIFFICULTY_LABELS: Record<string, string> = {
   novice: "Novice",
   easy: "Easy",
@@ -232,9 +256,10 @@ const GROOMING_LABELS: Record<string, string> = {
   scooter: "Packed by snowmobile",
 };
 
+// Kind first: "nordic or downhill?" is the first question; difficulty colours the lines and is the second chip set.
 const ATTRIBUTES: Attribute[] = [
+  { key: "kind", type: "category", label: "Kind", primary: true, levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
   { key: "v", type: "ordinal", label: "Difficulty", encode: "color", levels: PISTE_LEVELS, scale: PISTE_SCALE },
-  { key: "kind", type: "category", label: "Kind", levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
   { key: "lit", type: "flag", label: "Lit at night" },
   nameAttribute(),
 ];
@@ -274,13 +299,24 @@ const HELP: Record<string, FieldHelp> = {
   t: { text: "The date a mapper last checked the piste on the ground (check_date), when tagged." },
 };
 
-const OSM_ELEMENT: FieldHelp = {
-  text: "The OpenStreetMap element this comes from: node, way or relation, then its number (open it at openstreetmap.org).",
-  url: "https://www.openstreetmap.org/",
+/** The difficulty bands the lines are coloured by, easiest first, and the lines with no difficulty mapped. */
+const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Difficulty",
+  field: "v",
+  items: [
+    ...PISTE_LEVELS.filter((l, i) => PISTE_LEVELS.findIndex((m) => m.label === l.label) === i).map((l) => ({
+      label: l.label,
+      value: l.value,
+      symbol: "line" as const,
+    })),
+    { label: "Not rated", color: SAGE, symbol: "line", help: "No difficulty is mapped for this line (common on nordic trails and ski tours)." },
+  ],
+  note: "On the ground easy is green (or blue in Europe), moderate blue (red in Europe), hard black and expert double black.",
 };
 
+// The difficulty word is the card's first row; the rank v and the OpenStreetMap id stay off the card.
 const CARD: CardSpec = {
-  measure: { key: "v", label: "Difficulty rank" },
   facts: [
     { key: "difficulty", label: "Difficulty", values: DIFFICULTY_LABELS },
     { key: "kind", label: "Kind", values: KIND_LABELS },
@@ -291,8 +327,8 @@ const CARD: CardSpec = {
     { key: "t", label: "Last checked", format: "date" },
     { key: "ref", label: "Run number" },
     { key: "route", label: "Named ski route", values: { true: "Yes" } },
-    { key: "osmId", label: "Map element", help: OSM_ELEMENT },
   ],
+  hidden: ["osmId"],
 };
 
 const skiRoutes = defineLayer({
@@ -320,6 +356,10 @@ const skiRoutes = defineLayer({
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // Mapped pistes, not conditions: the check_date in `t` is when a mapper looked, not a time to scrub.
+  time: { shape: "none" },
+  legend: LEGEND,
+  labels: { field: "name", max: 8 },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     if (ctx.wide === true) return queryWide(ctx, input);

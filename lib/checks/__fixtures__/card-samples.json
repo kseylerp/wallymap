@@ -40,7 +40,7 @@
  },
  "campsites": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -109.8,
    38.4,
@@ -63,6 +63,7 @@
      "name": "Moonflower Camping Area",
      "tents": true,
      "caravans": false,
+     "feeStatus": "unknown",
      "website": "https://www.blm.gov/ut/st/en/fo/moab/recreation/campgrounds/kane_creek_road/Moonflower_Camping_Area.html"
     }
    },
@@ -83,6 +84,7 @@
      "tents": true,
      "caravans": true,
      "fee": true,
+     "feeStatus": "fee",
      "capacity": 7,
      "website": "https://www.blm.gov/visit/cowboy-camp-campground",
      "operator": "Bureau of Land Management",
@@ -95,19 +97,40 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -109.421018,
-      38.4282305
+      -109.56853570887804,
+      38.593158144472426
      ]
     },
     "properties": {
      "kind": "camp_site",
-     "osmId": "node/5729136131",
-     "backcountry": true,
+     "osmId": "way/192315988",
+     "name": "Sun Outdoors North Moab",
      "tents": true,
      "caravans": true,
-     "fee": false,
-     "toilets": false,
-     "drinkingWater": false
+     "fee": true,
+     "feeStatus": "fee",
+     "website": "https://www.sunoutdoors.com/utah/sun-outdoors-north-moab",
+     "operator": "Sun RV Resorts",
+     "reservation": "recommended",
+     "toilets": true,
+     "drinkingWater": true
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.734377,
+      38.6160814
+     ]
+    },
+    "properties": {
+     "kind": "camp_site",
+     "osmId": "node/3444896866",
+     "backcountry": true,
+     "feeStatus": "unknown",
+     "heading": "Camp site near Large Campsite"
     }
    },
    {
@@ -122,8 +145,10 @@
     "properties": {
      "kind": "parking",
      "osmId": "way/125553587",
+     "feeStatus": "unknown",
      "capacity": 3,
-     "v": 3
+     "v": 3,
+     "heading": "Parking lot near Sun Outdoors Arches Gateway"
     }
    },
    {
@@ -139,6 +164,7 @@
      "kind": "camp_site",
      "osmId": "node/1335211222",
      "name": "Kane Springs Campground",
+     "feeStatus": "unknown",
      "website": "http://www.kanesprings.com"
     }
    },
@@ -157,6 +183,7 @@
      "name": "Up the Creek Campground",
      "tents": true,
      "caravans": false,
+     "feeStatus": "unknown",
      "website": "https://www.moabupthecreek.com/"
     }
    },
@@ -165,14 +192,18 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -109.734377,
-      38.6160814
+      -109.738135,
+      38.5842007
      ]
     },
     "properties": {
      "kind": "camp_site",
-     "osmId": "node/3444896866",
-     "backcountry": true
+     "osmId": "node/6428237602",
+     "name": "Moab Base Camp",
+     "fee": true,
+     "feeStatus": "fee",
+     "website": "https://www.utahscouts.org/high-adventure/entrada-high-adventure-base/21841",
+     "operator": "Crossroads of the West Council, BSA"
     }
    },
    {
@@ -180,14 +211,18 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -109.4263163,
-      38.4371054
+      -109.7815683,
+      38.4660486
      ]
     },
     "properties": {
      "kind": "camp_site",
-     "osmId": "node/4382507191",
-     "name": "Yellow Circle Road Dispersed Camping"
+     "osmId": "node/9008645433",
+     "name": "Shafer",
+     "fee": true,
+     "feeStatus": "fee",
+     "capacity": 15,
+     "reservation": "required"
     }
    },
    {
@@ -195,15 +230,17 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -109.457048,
-      38.6843569
+      -109.7130856,
+      38.699823
      ]
     },
     "properties": {
      "kind": "camp_site",
-     "osmId": "node/4831487277",
-     "name": "White's Rapid Camps",
-     "backcountry": true
+     "osmId": "node/11749065659",
+     "name": "Designated Campsite",
+     "backcountry": true,
+     "feeStatus": "unknown",
+     "operator": "BLM"
     }
    },
    {
@@ -211,13 +248,24 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -109.4419205,
-      38.4212538
+      -109.55802828220499,
+      38.61108864077937
      ]
     },
     "properties": {
      "kind": "camp_site",
-     "osmId": "node/5830270140"
+     "osmId": "way/489316432",
+     "name": "Goose Island Campground",
+     "backcountry": false,
+     "tents": true,
+     "caravans": true,
+     "fee": true,
+     "feeStatus": "fee",
+     "capacity": 20,
+     "website": "https://www.blm.gov/visit/goose-island-campground",
+     "operator": "BLM",
+     "toilets": true,
+     "drinkingWater": false
     }
    },
    {
@@ -225,27 +273,22 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -109.4486198,
-      38.4220024
+      -109.63377320439122,
+      38.57508857566307
      ]
     },
     "properties": {
      "kind": "camp_site",
-     "osmId": "node/5830271352"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -109.4514283,
-      38.4202065
-     ]
-    },
-    "properties": {
-     "kind": "camp_site",
-     "osmId": "node/5830271353"
+     "osmId": "way/697147041",
+     "name": "Gold Bar Camping Area",
+     "tents": true,
+     "caravans": true,
+     "feeStatus": "unknown",
+     "capacity": 9,
+     "website": "https://www.blm.gov/visit/gold-bar-recreation-site",
+     "reservation": "no",
+     "toilets": true,
+     "drinkingWater": false
     }
    }
   ]
@@ -262,7 +305,7 @@
  },
  "climbing": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -84,
    37.5,
@@ -354,6 +397,35 @@
      "trad": 26,
      "boulder": 2,
      "toprope": 1
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.797789,
+      37.646631
+     ]
+    },
+    "properties": {
+     "kind": "crag",
+     "osmId": "node/7112981792",
+     "source": "osm",
+     "name": "Mount Olive Rock",
+     "v": 5,
+     "grades": "7- to 11- (uiaa)",
+     "gradeBands": [
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "disciplines": [
+      "sport",
+      "trad"
+     ],
+     "maxLengthM": 20,
+     "nameInSource": "Mt. Olive Rock"
     }
    },
    {
@@ -676,47 +748,6 @@
       "node/7231211487",
       "way/652151056"
      ]
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -83.723116,
-      37.652151
-     ]
-    },
-    "properties": {
-     "kind": "crag",
-     "osmId": "node/7193428994",
-     "source": "osm+openbeta",
-     "name": "Bob Marley Crag",
-     "v": 48,
-     "grades": "5- to 12 (uiaa)",
-     "gradeBands": [
-      "beginner",
-      "intermediate",
-      "advanced",
-      "elite"
-     ],
-     "disciplines": [
-      "sport",
-      "trad",
-      "mixed"
-     ],
-     "maxLengthM": 32,
-     "osmIds": [
-      "node/7193428994",
-      "way/652151046"
-     ],
-     "openbetaId": "65d720a4-69ac-5670-ac71-0c4f93abd89e",
-     "url": "https://openbeta.io/areas/65d720a4-69ac-5670-ac71-0c4f93abd89e",
-     "routesOsm": 48,
-     "routesOpenbeta": 35,
-     "region": "Kentucky > Red River Gorge > Pendergrass-Murray Recreational Preserve (PMRP)",
-     "sport": 32,
-     "trad": 3
     }
    }
   ]
@@ -2045,7 +2076,7 @@
  },
  "fishing": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -111.351,
    45.457,
@@ -2053,23 +2084,6 @@
    45.915
   ],
   "features": [
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -111.271227,
-      45.8245358
-     ]
-    },
-    "properties": {
-     "kind": "access",
-     "source": "OpenStreetMap",
-     "osmId": "node/9603610958",
-     "name": "Fishing spot",
-     "access": "yes"
-    }
-   },
    {
     "type": "Feature",
     "geometry": {
@@ -2094,95 +2108,34 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -111.0210785,
-      45.6974053
+      -111.23905419668199,
+      45.76922287670165
+     ]
+    },
+    "properties": {
+     "kind": "access",
+     "source": "Montana FWP",
+     "name": "Erwin Bridge Fishing Access Site",
+     "boatLaunch": "No Boat Facilities",
+     "camping": "No",
+     "url": "https://myfwp.mt.gov/fishMT/fas/39753536"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -111.271227,
+      45.8245358
      ]
     },
     "properties": {
      "kind": "access",
      "source": "OpenStreetMap",
-     "osmId": "node/10249488879",
-     "name": "Fishing spot"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -111.0254341,
-      45.7001058
-     ]
-    },
-    "properties": {
-     "kind": "access",
-     "source": "OpenStreetMap",
-     "osmId": "node/10249488880",
-     "name": "Fishing spot"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -111.0273638,
-      45.6998912
-     ]
-    },
-    "properties": {
-     "kind": "access",
-     "source": "OpenStreetMap",
-     "osmId": "node/10249488881",
-     "name": "Fishing spot"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -110.9786803,
-      45.4852018
-     ]
-    },
-    "properties": {
-     "kind": "ramp",
-     "source": "OpenStreetMap",
-     "osmId": "node/11049992833",
-     "name": "Boat ramp"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -111.3367296,
-      45.8910903
-     ]
-    },
-    "properties": {
-     "kind": "ramp",
-     "source": "OpenStreetMap",
-     "osmId": "node/12898372030",
-     "name": "Boat ramp"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -111.3325594,
-      45.8921408
-     ]
-    },
-    "properties": {
-     "kind": "ramp",
-     "source": "OpenStreetMap",
-     "osmId": "node/13799441541",
-     "name": "Boat ramp"
+     "osmId": "node/9603610958",
+     "name": "Fishing spot",
+     "access": "yes"
     }
    },
    {
@@ -2260,6 +2213,101 @@
      "url": "https://www.fs.usda.gov/recarea/custergallatin/recarea/?recid=5586",
      "status": "none"
     }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -110.96148237855236,
+      45.90599665054001
+     ]
+    },
+    "properties": {
+     "kind": "access",
+     "source": "USFS",
+     "name": "Fairy Lake Campground",
+     "activities": "River and Stream Fishing",
+     "forest": "Custer Gallatin National Forest",
+     "url": "https://www.fs.usda.gov/recarea/custergallatin/recarea/?recid=5592",
+     "status": "none"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -110.97971230260421,
+      45.48569660840103
+     ]
+    },
+    "properties": {
+     "kind": "access",
+     "source": "USFS",
+     "name": "Blackmore Camp",
+     "activities": "Lake and Pond Fishing",
+     "forest": "Custer Gallatin National Forest",
+     "url": "https://www.fs.usda.gov/recarea/custergallatin/recarea/?recid=5580",
+     "status": "open"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -111.08827236107317,
+      45.67209661628313
+     ]
+    },
+    "properties": {
+     "kind": "access",
+     "source": "USFS",
+     "name": "Bozeman District",
+     "activities": "Lake and Pond Fishing; River and Stream Fishing",
+     "forest": "Custer Gallatin National Forest",
+     "url": "https://www.fs.usda.gov/recarea/custergallatin/recarea/?recid=5568",
+     "status": "none"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -110.97971230260609,
+      45.485706608402026
+     ]
+    },
+    "properties": {
+     "kind": "access",
+     "source": "USFS",
+     "name": "Hyalite Day Use area and Hyalite Pavilion",
+     "activities": "Lake and Pond Fishing",
+     "forest": "Custer Gallatin National Forest",
+     "url": "https://www.fs.usda.gov/recarea/custergallatin/recarea/?recid=81175",
+     "status": "none"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -111.05000232898706,
+      45.54584660769776
+     ]
+    },
+    "properties": {
+     "kind": "access",
+     "source": "USFS",
+     "name": "Lower Hyalite Group Campground",
+     "activities": "Lake and Pond Fishing",
+     "forest": "Custer Gallatin National Forest",
+     "url": "https://www.fs.usda.gov/recarea/custergallatin/recarea/?recid=30331",
+     "status": "none"
+    }
    }
   ]
  },
@@ -2305,7 +2353,7 @@
  },
  "forest-roads": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -112.008,
    34.906,
@@ -2323,13 +2371,21 @@
      ]
     },
     "properties": {
-     "routeId": "09151Q",
+     "routeId": "9151Q",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9151Q",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 2.86
     }
    },
@@ -2343,15 +2399,23 @@
      ]
     },
     "properties": {
-     "routeId": "00538G",
+     "routeId": "538G",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
-     "name": "KELSEY SPRING TRAILHEAD",
+     "name": "Kelsey Spring Trailhead",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
-     "miles": 1.45
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
+     "miles": 1.45,
+     "nameInSource": "KELSEY SPRING TRAILHEAD"
     }
    },
    {
@@ -2364,13 +2428,21 @@
      ]
     },
     "properties": {
-     "routeId": "09008C",
+     "routeId": "9008C",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9008C",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 1.48
     }
    },
@@ -2384,13 +2456,21 @@
      ]
     },
     "properties": {
-     "routeId": "09132W",
+     "routeId": "9132W",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9132W",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 0.06
     }
    },
@@ -2404,13 +2484,21 @@
      ]
     },
     "properties": {
-     "routeId": "09172X",
+     "routeId": "9172X",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9172X",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 7.44
     }
    },
@@ -2424,13 +2512,21 @@
      ]
     },
     "properties": {
-     "routeId": "09180",
+     "routeId": "9180",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9180",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 3.64
     }
    },
@@ -2444,13 +2540,21 @@
      ]
     },
     "properties": {
-     "routeId": "09217N",
+     "routeId": "9217N",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9217N",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 2.23
     }
    },
@@ -2464,13 +2568,21 @@
      ]
     },
     "properties": {
-     "routeId": "09125F",
+     "routeId": "9125F",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9125F",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 1.31
     }
    },
@@ -2484,13 +2596,21 @@
      ]
     },
     "properties": {
-     "routeId": "09173",
+     "routeId": "9173",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 9173",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 0.18
     }
    },
@@ -2504,13 +2624,21 @@
      ]
     },
     "properties": {
-     "routeId": "00549C",
+     "routeId": "549C",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 549C",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 6.53
     }
    },
@@ -2524,13 +2652,19 @@
      ]
     },
     "properties": {
-     "routeId": "00003Q",
+     "routeId": "3Q",
      "access": "Roads open to highway legal vehicles only, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 3Q",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 3,
      "surface": "AGG - CRUSHED AGGREGATE OR GRAVEL",
+     "surfaceKind": "gravel",
+     "carDates": "All year",
+     "motorhome": true,
      "miles": 0.05
     }
    },
@@ -2544,13 +2678,21 @@
      ]
     },
     "properties": {
-     "routeId": "00078",
+     "routeId": "78",
      "access": "Roads open to all Vehicles, Yearlong",
      "seasonal": false,
      "passengerCar": true,
      "highClearance": true,
+     "heading": "Forest Road 78",
      "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
      "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
      "miles": 1.79
     }
    }
@@ -4376,7 +4518,7 @@
  },
  "mtb-trails": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -109.8,
    38.4,
@@ -4396,6 +4538,8 @@
     "properties": {
      "kind": "imba",
      "osmId": "way/10106382",
+     "heading": "Unnamed track",
+     "v": 1,
      "imba": 1,
      "highway": "track"
     }
@@ -4412,6 +4556,8 @@
     "properties": {
      "kind": "imba",
      "osmId": "way/10106684",
+     "heading": "Unnamed track",
+     "v": 3,
      "imba": 3,
      "highway": "track",
      "surface": "dirt"
@@ -4430,6 +4576,7 @@
      "kind": "imba",
      "osmId": "way/10152545",
      "name": "Kane Creek Road",
+     "v": 1,
      "imba": 1,
      "highway": "tertiary",
      "ref": "CR 145",
@@ -4449,11 +4596,13 @@
      "kind": "imba",
      "osmId": "way/10154484",
      "name": "White Rim Road",
+     "v": 3,
      "imba": 3,
      "highway": "track",
      "ref": "CR 144",
      "surface": "ground",
      "bicycle": "permit",
+     "bikes": "permit",
      "operator": "National Park System"
     }
    },
@@ -4471,10 +4620,12 @@
      "osmId": "way/26187706",
      "name": "Slickrock Practice Loop",
      "v": 2,
+     "singletrack": 2,
      "imba": 2,
      "highway": "path",
      "surface": "ground",
      "bicycle": "designated",
+     "bikes": "designated",
      "operator": "Sand Flats Recreation Area"
     }
    },
@@ -4492,10 +4643,12 @@
      "osmId": "way/26187707",
      "name": "Slickrock",
      "v": 3,
+     "singletrack": 3,
      "imba": 3,
      "highway": "path",
      "surface": "ground",
      "bicycle": "designated",
+     "bikes": "designated",
      "operator": "Sand Flats Recreation Area"
     }
    },
@@ -4512,6 +4665,7 @@
      "kind": "imba",
      "osmId": "way/27231026",
      "name": "Shafer Trail",
+     "v": 1,
      "imba": 1,
      "highway": "secondary",
      "ref": "CR 134",
@@ -4531,11 +4685,13 @@
      "kind": "imba",
      "osmId": "way/27231781",
      "name": "Shafer Trail",
+     "v": 3,
      "imba": 3,
      "highway": "secondary",
      "ref": "CR 142",
      "surface": "ground",
      "bicycle": "yes",
+     "bikes": "yes",
      "operator": "National Park System"
     }
    },
@@ -4552,10 +4708,12 @@
      "kind": "imba",
      "osmId": "way/29435854",
      "name": "Cliff Hanger Trail",
+     "v": 3,
      "imba": 3,
      "highway": "track",
      "surface": "ground",
-     "bicycle": "yes"
+     "bicycle": "yes",
+     "bikes": "yes"
     }
    },
    {
@@ -4572,10 +4730,12 @@
      "osmId": "way/37223153",
      "name": "Circle-O",
      "v": 2,
+     "singletrack": 2,
      "imba": 2,
      "highway": "path",
      "surface": "ground",
-     "bicycle": "designated"
+     "bicycle": "designated",
+     "bikes": "designated"
     }
    },
    {
@@ -4591,6 +4751,7 @@
      "kind": "imba",
      "osmId": "way/37223158",
      "name": "Bar M Loop",
+     "v": 1,
      "imba": 1,
      "highway": "track",
      "surface": "dirt"
@@ -4608,11 +4769,14 @@
     "properties": {
      "kind": "mtb",
      "osmId": "way/37223253",
+     "heading": "Unnamed trail",
      "v": 1,
+     "singletrack": 1,
      "imba": 1,
      "highway": "path",
      "surface": "ground",
-     "bicycle": "designated"
+     "bicycle": "designated",
+     "bikes": "designated"
     }
    }
   ]
@@ -5097,7 +5261,7 @@
  },
  "osm-trails": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    6.814,
    45.833,
@@ -5118,7 +5282,10 @@
      "highway": "footway",
      "osmId": "way/22876838",
      "informal": false,
+     "lengthKm": 0.02,
+     "kind": "footway",
      "name": "Allée du Majestic",
+     "sac_scale": "not_rated",
      "surface": "asphalt"
     }
    },
@@ -5135,6 +5302,8 @@
      "highway": "path",
      "osmId": "way/23195112",
      "informal": false,
+     "lengthKm": 0.21,
+     "kind": "path",
      "name": "Promenade des Econtres",
      "sac_scale": "hiking",
      "trail_visibility": "excellent",
@@ -5154,7 +5323,10 @@
      "highway": "track",
      "osmId": "way/23195113",
      "informal": false,
-     "name": "Lacets du Belvédère"
+     "lengthKm": 0.4,
+     "kind": "track",
+     "name": "Lacets du Belvédère",
+     "sac_scale": "not_rated"
     }
    },
    {
@@ -5170,7 +5342,10 @@
      "highway": "footway",
      "osmId": "way/23196794",
      "informal": false,
-     "name": "Chemin des Pouvolles"
+     "lengthKm": 0.08,
+     "kind": "footway",
+     "name": "Chemin des Pouvolles",
+     "sac_scale": "not_rated"
     }
    },
    {
@@ -5186,7 +5361,10 @@
      "highway": "footway",
      "osmId": "way/23270559",
      "informal": false,
+     "lengthKm": 0.13,
+     "kind": "footway",
      "name": "Allée des Grands Mulets",
+     "sac_scale": "not_rated",
      "surface": "asphalt"
     }
    },
@@ -5203,7 +5381,10 @@
      "highway": "footway",
      "osmId": "way/23270560",
      "informal": false,
+     "lengthKm": 0.08,
+     "kind": "footway",
      "name": "Allée des Grands Mulets",
+     "sac_scale": "not_rated",
      "surface": "asphalt"
     }
    },
@@ -5220,7 +5401,10 @@
      "highway": "footway",
      "osmId": "way/23270956",
      "informal": false,
+     "lengthKm": 0.12,
+     "kind": "footway",
      "name": "Chemin Gabriel Loppé",
+     "sac_scale": "not_rated",
      "surface": "dirt"
     }
    },
@@ -5237,6 +5421,8 @@
      "highway": "track",
      "osmId": "way/25276682",
      "informal": false,
+     "lengthKm": 0.47,
+     "kind": "track",
      "name": "Le Desert Blanc",
      "sac_scale": "hiking",
      "trail_visibility": "excellent",
@@ -5256,6 +5442,8 @@
      "highway": "path",
      "osmId": "way/25285356",
      "informal": false,
+     "lengthKm": 1.5,
+     "kind": "path",
      "name": "Grand Balcon Nord",
      "sac_scale": "mountain_hiking",
      "trail_visibility": "excellent",
@@ -5275,6 +5463,8 @@
      "highway": "path",
      "osmId": "way/25285363",
      "informal": false,
+     "lengthKm": 0.88,
+     "kind": "path",
      "name": "Blaitière du Dessus-Grand Balcon Nord",
      "sac_scale": "mountain_hiking",
      "trail_visibility": "excellent",
@@ -5294,6 +5484,8 @@
      "highway": "path",
      "osmId": "way/25556964",
      "informal": false,
+     "lengthKm": 0.5,
+     "kind": "path",
      "name": "Promenade des Econtres",
      "sac_scale": "hiking",
      "trail_visibility": "excellent",
@@ -5313,6 +5505,8 @@
      "highway": "path",
      "osmId": "way/25596558",
      "informal": false,
+     "lengthKm": 0.02,
+     "kind": "path",
      "name": "Promenade des Econtres",
      "sac_scale": "hiking",
      "trail_visibility": "excellent",
@@ -5323,7 +5517,7 @@
  },
  "outdoor-features": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    7.6,
    45.9,
@@ -5345,7 +5539,8 @@
      "osmId": "node/294171060",
      "name": "Berggasthaus Trift",
      "ele": 2337,
-     "capacity": 48
+     "capacity": 48,
+     "elevation": "2,337 m (7,667 ft)"
     }
    },
    {
@@ -5364,7 +5559,8 @@
      "ele": 3036,
      "capacity": 36,
      "wikidata": "Q1118173",
-     "wikipedia": "it:Rifugio Ottorino Mezzalama"
+     "wikipedia": "it:Rifugio Ottorino Mezzalama",
+     "elevation": "3,036 m (9,961 ft)"
     }
    },
    {
@@ -5384,7 +5580,8 @@
      "capacity": 120,
      "reservation": "recommended",
      "wikidata": "Q672412",
-     "wikipedia": "de:Monte-Rosa-Hütte"
+     "wikipedia": "de:Monte-Rosa-Hütte",
+     "elevation": "2,883 m (9,459 ft)"
     }
    },
    {
@@ -5403,7 +5600,8 @@
      "ele": 3480,
      "wikidata": "Q1118193",
      "wikipedia": "it:Rifugio Guide del Cervino",
-     "t": "2024-11-15"
+     "t": "2024-11-15",
+     "elevation": "3,480 m (11,417 ft)"
     }
    },
    {
@@ -5421,7 +5619,8 @@
      "name": "Fluhalp",
      "ele": 2616,
      "capacity": 30,
-     "fee": true
+     "fee": true,
+     "elevation": "2,616 m (8,583 ft)"
     }
    },
    {
@@ -5441,7 +5640,8 @@
      "capacity": 4,
      "shelterType": "basic_hut",
      "wikidata": "Q3640576",
-     "wikipedia": "it:Bivacco Umberto Balestreri"
+     "wikipedia": "it:Bivacco Umberto Balestreri",
+     "elevation": "3,142 m (10,308 ft)"
     }
    },
    {
@@ -5449,33 +5649,30 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      7.6050349,
-      45.9699788
-     ]
-    },
-    "properties": {
-     "kind": "peak",
-     "osmId": "node/26862776",
-     "name": "Dent d'Hérens",
-     "ele": 4171,
-     "v": 4171,
-     "wikidata": "Q30459",
-     "wikipedia": "it:Dent d'Hérens"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      7.7419896,
-      46.0073579
+      7.7396992,
+      46.0910144
      ]
     },
     "properties": {
      "kind": "drinking_water",
-     "osmId": "node/1458721469",
+     "osmId": "node/1458724553",
+     "name": "Wasserfassung",
      "potable": true
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      7.8580818,
+      45.9136589
+     ]
+    },
+    "properties": {
+     "kind": "hut",
+     "osmId": "way/284449666",
+     "heading": "Hut near Bivacco Felice Giordano"
     }
    },
    {
@@ -5494,7 +5691,8 @@
      "ele": 3388,
      "capacity": 85,
      "wikidata": "Q743709",
-     "wikipedia": "it:Rifugio Guide d'Ayas"
+     "wikipedia": "it:Rifugio Guide d'Ayas",
+     "elevation": "3,388 m (11,115 ft)"
     }
    },
    {
@@ -5511,7 +5709,8 @@
      "osmId": "node/502559811",
      "name": "Col de la Dent Blanche CAS Bivouac",
      "ele": 3540,
-     "capacity": 15
+     "capacity": 15,
+     "elevation": "3,540 m (11,614 ft)"
     }
    },
    {
@@ -5527,7 +5726,8 @@
      "kind": "hut",
      "osmId": "node/502559916",
      "name": "Mischabeljochbiwak SAC",
-     "ele": 3847
+     "ele": 3847,
+     "elevation": "3,847 m (12,621 ft)"
     }
    },
    {
@@ -5546,14 +5746,15 @@
      "ele": 2701,
      "capacity": 74,
      "wikidata": "Q2463654",
-     "wikipedia": "de:Täschhütte"
+     "wikipedia": "de:Täschhütte",
+     "elevation": "2,701 m (8,862 ft)"
     }
    }
   ]
  },
  "paddling": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -115.3,
    44.6,
@@ -5573,7 +5774,8 @@
     "properties": {
      "kind": "rapid",
      "osmId": "node/358653586",
-     "name": "Ski Jump Rapid"
+     "name": "Ski Jump Rapid",
+     "classText": "No class mapped"
     }
    },
    {
@@ -5588,7 +5790,8 @@
     "properties": {
      "kind": "rapid",
      "osmId": "node/358656231",
-     "name": "Hancock Rapids"
+     "name": "Hancock Rapids",
+     "classText": "No class mapped"
     }
    },
    {
@@ -5603,7 +5806,8 @@
     "properties": {
      "kind": "rapid",
      "osmId": "node/358656645",
-     "name": "Jack Creek Rapids"
+     "name": "Jack Creek Rapids",
+     "classText": "No class mapped"
     }
    },
    {
@@ -5618,7 +5822,8 @@
     "properties": {
      "kind": "rapid",
      "osmId": "node/358657827",
-     "name": "Ouzel Rapids"
+     "name": "Ouzel Rapids",
+     "classText": "No class mapped"
     }
    },
    {
@@ -5633,7 +5838,8 @@
     "properties": {
      "kind": "rapid",
      "osmId": "node/358658063",
-     "name": "Porcupine Rapids"
+     "name": "Porcupine Rapids",
+     "classText": "No class mapped"
     }
    },
    {
@@ -5648,7 +5854,8 @@
     "properties": {
      "kind": "rapid",
      "osmId": "node/358658309",
-     "name": "Redside Rapids"
+     "name": "Redside Rapids",
+     "classText": "No class mapped"
     }
    },
    {
@@ -5663,7 +5870,8 @@
     "properties": {
      "kind": "rapid",
      "osmId": "node/358659925",
-     "name": "Cliffside Rapids"
+     "name": "Cliffside Rapids",
+     "classText": "No class mapped"
     }
    },
    {
@@ -5678,7 +5886,8 @@
     "properties": {
      "kind": "rapid",
      "osmId": "node/358659929",
-     "name": "Haystack Rapids"
+     "name": "Haystack Rapids",
+     "classText": "No class mapped"
     }
    },
    {
@@ -5693,7 +5902,8 @@
     "properties": {
      "kind": "rapid",
      "osmId": "node/358660102",
-     "name": "Pistol Creek Rapids"
+     "name": "Pistol Creek Rapids",
+     "classText": "No class mapped"
     }
    },
    {
@@ -5708,7 +5918,8 @@
     "properties": {
      "kind": "rapid",
      "osmId": "node/3167708603",
-     "name": "Pistol Creek Rapids"
+     "name": "Pistol Creek Rapids",
+     "classText": "No class mapped"
     }
    },
    {
@@ -5723,7 +5934,8 @@
     "properties": {
      "kind": "rapid",
      "osmId": "node/3167711666",
-     "name": "Canon Creek Rapids"
+     "name": "Canon Creek Rapids",
+     "classText": "No class mapped"
     }
    },
    {
@@ -5738,7 +5950,8 @@
     "properties": {
      "kind": "rapid",
      "osmId": "node/3167732348",
-     "name": "Lake Creek Rapids"
+     "name": "Lake Creek Rapids",
+     "classText": "No class mapped"
     }
    }
   ]
@@ -6415,7 +6628,7 @@
  },
  "pipelines-lines": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -102.3,
    31.651,
@@ -6457,6 +6670,7 @@
      "voltageKv": 345,
      "v": 345,
      "voltageClass": "345 kV",
+     "voltageBand": "345",
      "lineType": "ac; overhead"
     }
    },
@@ -6634,7 +6848,7 @@
  },
  "popularity": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -120.15,
    38.9,
@@ -6647,79 +6861,43 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.0862121,
-      38.9298809
+      -120.0976161,
+      38.998589
      ]
     },
     "properties": {
-     "highway": "path",
-     "osmId": "way/10314809",
-     "informal": false,
-     "name": "Mattole Road",
-     "trail_visibility": "horrible",
-     "surface": "ground",
-     "v": 10,
-     "signals": {
-      "photos": 0,
-      "parking": 0,
-      "wiki": false,
-      "informal": 0,
-      "named": true
-     },
-     "popularityNote": "estimate"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -120.104481,
-      38.9438533
-     ]
-    },
-    "properties": {
-     "highway": "path",
-     "osmId": "way/32882240",
-     "informal": false,
-     "name": "Bayview Trail",
-     "sac_scale": "mountain_hiking",
-     "trail_visibility": "excellent",
-     "surface": "ground",
-     "v": 42,
-     "signals": {
-      "photos": 112,
-      "parking": 0,
-      "wiki": false,
-      "informal": 3,
-      "named": true
-     },
-     "popularityNote": "estimate"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -120.1069639,
-      38.9551571
-     ]
-    },
-    "properties": {
-     "highway": "track",
-     "osmId": "way/10315603",
-     "informal": false,
-     "name": "Vikingsholm Trail",
-     "surface": "compacted",
+     "name": "Rubicon Trail",
      "v": 62,
-     "signals": {
-      "photos": 307,
-      "parking": 62,
-      "wiki": false,
-      "informal": 0,
-      "named": true
-     },
+     "rank": 1,
+     "lengthKm": 9.7,
+     "leadsTo": [
+      "Rubicon Point Light",
+      "Calawee Cove Beach",
+      "Eagle Falls",
+      "Inspiration Point",
+      "On Lake Tahoe"
+     ],
+     "wikipediaViews": 376,
+     "photos": 65,
+     "parkingSpaces": 62,
+     "wikipediaUrl": "https://en.wikipedia.org/wiki/Rubicon_Point_Light",
+     "osmIds": [
+      "way/252387786",
+      "way/439762371",
+      "way/439762372",
+      "way/855153529",
+      "way/855153530",
+      "way/855153531",
+      "way/855153532",
+      "way/855153533",
+      "way/855153534",
+      "way/855153535",
+      "way/855153536",
+      "way/855153537",
+      "way/855153538",
+      "way/1315533454",
+      "way/1315533455"
+     ],
      "popularityNote": "estimate"
     }
    },
@@ -6728,128 +6906,25 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.0272228,
-      38.8883259
+      -120.1443596,
+      38.9183545
      ]
     },
     "properties": {
-     "highway": "path",
-     "osmId": "way/10318517",
-     "informal": false,
-     "name": "Lake Tahoe Boulevard Bike Path",
-     "surface": "asphalt",
-     "v": 21,
-     "signals": {
-      "photos": 0,
-      "parking": 0,
-      "wiki": false,
-      "informal": 2,
-      "named": true
-     },
-     "popularityNote": "estimate"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -120.075289,
-      38.932163
-     ]
-    },
-    "properties": {
-     "highway": "track",
-     "osmId": "way/10318860",
-     "informal": false,
-     "name": "Spring Creek Road East Spur",
-     "surface": "dirt",
-     "v": 10,
-     "signals": {
-      "photos": 0,
-      "parking": 0,
-      "wiki": false,
-      "informal": 0,
-      "named": true
-     },
-     "popularityNote": "estimate"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -120.045872,
-      38.922778
-     ]
-    },
-    "properties": {
-     "highway": "track",
-     "osmId": "way/10319222",
-     "informal": false,
-     "name": "Fallen Leaf Campground",
-     "surface": "dirt",
-     "v": 10,
-     "signals": {
-      "photos": 0,
-      "parking": 0,
-      "wiki": false,
-      "informal": 0,
-      "named": true
-     },
-     "popularityNote": "estimate"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -120.038017,
-      38.92401
-     ]
-    },
-    "properties": {
-     "highway": "path",
-     "osmId": "way/10319225",
-     "informal": false,
-     "name": "Sand Harbor",
-     "surface": "dirt",
-     "v": 10,
-     "signals": {
-      "photos": 0,
-      "parking": 0,
-      "wiki": false,
-      "informal": 0,
-      "named": true
-     },
-     "popularityNote": "estimate"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -120.0540809,
-      38.9364889
-     ]
-    },
-    "properties": {
-     "highway": "path",
-     "osmId": "way/27848604",
-     "informal": false,
-     "name": "Lake of the Sky Trail",
-     "surface": "dirt",
-     "v": 28,
-     "signals": {
-      "photos": 74,
-      "parking": 0,
-      "wiki": false,
-      "informal": 0,
-      "named": true
-     },
+     "name": "Tahoe Rim Trail",
+     "v": 49,
+     "rank": 5,
+     "lengthKm": 0.8,
+     "wikipediaViews": 15,
+     "photos": 1,
+     "routes": [
+      "PCT - California Section K"
+     ],
+     "wikipediaUrl": "https://en.wikipedia.org/wiki/Tahoe_Rim_Trail",
+     "osmIds": [
+      "way/439973679",
+      "way/439973694"
+     ],
      "popularityNote": "estimate"
     }
    },
@@ -6863,19 +6938,21 @@
      ]
     },
     "properties": {
-     "highway": "path",
-     "osmId": "way/32880969",
-     "informal": false,
      "name": "Floating Island / Mount Tallac Trail",
-     "surface": "dirt",
-     "v": 38,
-     "signals": {
-      "photos": 7,
-      "parking": 0,
-      "wiki": false,
-      "informal": 5,
-      "named": true
-     },
+     "v": 56,
+     "rank": 2,
+     "lengthKm": 8.9,
+     "leadsTo": [
+      "Mount Tallac"
+     ],
+     "wikipediaViews": 1303,
+     "photos": 7,
+     "parkingSpaces": 10,
+     "wikipediaUrl": "https://en.wikipedia.org/wiki/Mount_Tallac",
+     "osmIds": [
+      "way/32880969",
+      "way/1213889953"
+     ],
      "popularityNote": "estimate"
     }
    },
@@ -6884,24 +6961,28 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.15127,
-      38.927298
+      -120.0958126,
+      38.9949458
      ]
     },
     "properties": {
-     "highway": "path",
-     "osmId": "way/125412408",
-     "informal": false,
-     "name": "Upper Velma Lakes Trail",
-     "surface": "dirt",
-     "v": 10,
-     "signals": {
-      "photos": 0,
-      "parking": 0,
-      "wiki": false,
-      "informal": 0,
-      "named": true
-     },
+     "name": "Lighthouse Trail",
+     "v": 56,
+     "rank": 3,
+     "lengthKm": 2.3,
+     "leadsTo": [
+      "Rubicon Point Light",
+      "Calawee Cove Beach",
+      "On Lake Tahoe"
+     ],
+     "wikipediaViews": 376,
+     "photos": 11,
+     "parkingSpaces": 10,
+     "wikipediaUrl": "https://en.wikipedia.org/wiki/Rubicon_Point_Light",
+     "osmIds": [
+      "way/288423412",
+      "way/976284879"
+     ],
      "popularityNote": "estimate"
     }
    },
@@ -6910,24 +6991,24 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.0544232,
-      38.9235603
+      -120.099719,
+      38.904237
      ]
     },
     "properties": {
-     "highway": "path",
-     "osmId": "way/126325797",
-     "informal": false,
-     "name": "Moraine Trail",
-     "surface": "dirt",
-     "v": 32,
-     "signals": {
-      "photos": 2,
-      "parking": 0,
-      "wiki": false,
-      "informal": 2,
-      "named": true
-     },
+     "name": "Mount Tallac Trail",
+     "v": 51,
+     "rank": 4,
+     "lengthKm": 0.4,
+     "leadsTo": [
+      "Mount Tallac"
+     ],
+     "wikipediaViews": 1303,
+     "photos": 3,
+     "wikipediaUrl": "https://en.wikipedia.org/wiki/Mount_Tallac",
+     "osmIds": [
+      "way/457800550"
+     ],
      "popularityNote": "estimate"
     }
    },
@@ -6936,24 +7017,192 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.1001202,
-      38.9435554
+      -120.1153269,
+      38.9505113
      ]
     },
     "properties": {
-     "highway": "path",
-     "osmId": "way/132186631",
-     "informal": false,
-     "name": "Cascade Falls Trails",
-     "surface": "dirt",
-     "v": 41,
-     "signals": {
-      "photos": 102,
-      "parking": 0,
-      "wiki": false,
-      "informal": 3,
-      "named": true
-     },
+     "name": "Eagle Lake Trail",
+     "v": 48,
+     "rank": 6,
+     "lengthKm": 0.6,
+     "leadsTo": [
+      "Eagle Lake",
+      "Upper Eagle Falls"
+     ],
+     "wikipediaViews": 184,
+     "photos": 13,
+     "parkingSpaces": 10,
+     "wikipediaUrl": "https://en.wikipedia.org/wiki/Eagle_Lake_(Desolation_Wilderness)",
+     "osmIds": [
+      "way/288423399",
+      "way/456504487"
+     ],
+     "popularityNote": "estimate"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.1147994,
+      38.9344724
+     ]
+    },
+    "properties": {
+     "name": "Maggies Peaks Trail",
+     "v": 37,
+     "rank": 7,
+     "lengthKm": 0.4,
+     "leadsTo": [
+      "Maggies Peaks"
+     ],
+     "wikipediaViews": 212,
+     "photos": 0,
+     "wikipediaUrl": "https://en.wikipedia.org/wiki/Maggies_Peaks",
+     "osmIds": [
+      "way/1548527775"
+     ],
+     "popularityNote": "estimate"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.1231304,
+      38.9433077
+     ]
+    },
+    "properties": {
+     "name": "Climbers Trail to Eagle Lake Buttress",
+     "v": 36,
+     "rank": 8,
+     "lengthKm": 1.2,
+     "leadsTo": [
+      "Eagle Lake"
+     ],
+     "wikipediaViews": 184,
+     "photos": 0,
+     "wikipediaUrl": "https://en.wikipedia.org/wiki/Eagle_Lake_(Desolation_Wilderness)",
+     "osmIds": [
+      "way/1098370184"
+     ],
+     "popularityNote": "estimate"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.1230177,
+      39.0104516
+     ]
+    },
+    "properties": {
+     "name": "Rubicon Peak Trail",
+     "v": 31,
+     "rank": 9,
+     "lengthKm": 2.8,
+     "leadsTo": [
+      "Rubicon Peak"
+     ],
+     "wikipediaViews": 79,
+     "photos": 0,
+     "wikipediaUrl": "https://en.wikipedia.org/wiki/Rubicon_Peak",
+     "osmIds": [
+      "way/548492031"
+     ],
+     "popularityNote": "estimate"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.11021,
+      38.9521211
+     ]
+    },
+    "properties": {
+     "name": "Lower Eagle Falls Trail",
+     "v": 23,
+     "rank": 10,
+     "lengthKm": 0.2,
+     "leadsTo": [
+      "Eagle Falls",
+      "Lower Eagle Falls",
+      "On Lower Eagle Falls"
+     ],
+     "wikipediaViews": 0,
+     "photos": 31,
+     "parkingSpaces": 62,
+     "osmIds": [
+      "way/439762370"
+     ],
+     "popularityNote": "estimate"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.113273,
+      38.9519974
+     ]
+    },
+    "properties": {
+     "name": "Eagle Trail",
+     "v": 22,
+     "rank": 11,
+     "lengthKm": 0.3,
+     "leadsTo": [
+      "Eagle Falls",
+      "Lower Eagle Falls",
+      "Upper Eagle Falls"
+     ],
+     "wikipediaViews": 0,
+     "photos": 19,
+     "parkingSpaces": 62,
+     "osmIds": [
+      "way/135174105",
+      "way/1388900806",
+      "way/1388900809"
+     ],
+     "popularityNote": "estimate"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.1145173,
+      38.9538828
+     ]
+    },
+    "properties": {
+     "name": "Climbers trail to Mayhem Cove",
+     "v": 18,
+     "rank": 12,
+     "lengthKm": 0.4,
+     "leadsTo": [
+      "Lower Eagle Falls",
+      "Upper Eagle Falls"
+     ],
+     "wikipediaViews": 0,
+     "photos": 17,
+     "parkingSpaces": 62,
+     "osmIds": [
+      "way/439775622",
+      "way/1435775007",
+      "way/1435775008"
+     ],
      "popularityNote": "estimate"
     }
    }
@@ -8108,7 +8357,7 @@
  },
  "recreation-sites": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -112.076,
    34.306,
@@ -8139,56 +8388,6 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -112.07135899999997,
-      34.31250000000006
-     ]
-    },
-    "properties": {
-     "name": "Teskey Home Site",
-     "kind": "recreation area",
-     "agency": "BLM",
-     "url": "https://www.blm.gov/visit/search-details/10326698/1"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -112.029072,
-      35.068859
-     ]
-    },
-    "properties": {
-     "name": "JD Dam",
-     "kind": "water access",
-     "agency": "USFS",
-     "forest": "Kaibab National Forest",
-     "status": "open",
-     "url": "https://www.fs.usda.gov/recarea/kaibab/recarea/?recid=11663"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -112.07491499999998,
-      34.317803000000026
-     ]
-    },
-    "properties": {
-     "name": "Riverbend Recreation Area and 1891 Schoolhouse",
-     "kind": "recreation area",
-     "agency": "BLM",
-     "url": "https://www.blm.gov/visit/search-details/10326696/1"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
       -112.0169,
       35.11845
      ]
@@ -8200,42 +8399,6 @@
      "forest": "Kaibab National Forest",
      "status": "closed",
      "url": "https://www.fs.usda.gov/recarea/kaibab/recarea/?recid=11664"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -111.85735,
-      35.413618
-     ]
-    },
-    "properties": {
-     "name": "Kendrick Mountain Wilderness",
-     "kind": "trail",
-     "agency": "USFS",
-     "forest": "Kaibab National Forest",
-     "status": "open",
-     "url": "https://www.fs.usda.gov/recarea/kaibab/recarea/?recid=11680"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -112.003184,
-      35.125292
-     ]
-    },
-    "properties": {
-     "name": "Sycamore Canyon Wilderness",
-     "kind": "trail",
-     "agency": "USFS",
-     "forest": "Kaibab National Forest",
-     "status": "open",
-     "url": "https://www.fs.usda.gov/recarea/kaibab/recarea/?recid=11681"
     }
    },
    {
@@ -8297,17 +8460,17 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -111.290326,
-      34.342512
+      -110.982325,
+      34.340122
      ]
     },
     "properties": {
-     "name": "First, Second, Third Crossings and Water Wheel",
-     "kind": "recreation area",
+     "name": "Fr 9350 Campground",
+     "kind": "campground",
      "agency": "USFS",
-     "forest": "Tonto National Forest",
+     "forest": "Apache-Sitgreaves National Forest",
      "status": "open",
-     "url": "https://www.fs.usda.gov/recarea/tonto/recarea/?recid=35587"
+     "url": "https://www.fs.usda.gov/recarea/asnf/recarea/?recid=44651"
     }
    },
    {
@@ -8315,24 +8478,114 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -111.097264,
-      34.34024
+      -111.001761,
+      34.36615
      ]
     },
     "properties": {
-     "name": "Horton",
-     "kind": "recreation area",
+     "name": "Fr 84 Camping Area",
+     "kind": "campground",
      "agency": "USFS",
-     "forest": "Tonto National Forest",
+     "forest": "Apache-Sitgreaves National Forest",
      "status": "open",
-     "url": "https://www.fs.usda.gov/recarea/tonto/recarea/?recid=35637"
+     "url": "https://www.fs.usda.gov/recarea/asnf/recarea/?recid=44661"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -110.983675,
+      34.379961
+     ]
+    },
+    "properties": {
+     "name": "Promontory Pit Road Campground",
+     "kind": "campground",
+     "agency": "USFS",
+     "forest": "Apache-Sitgreaves National Forest",
+     "status": "open",
+     "url": "https://www.fs.usda.gov/recarea/asnf/recarea/?recid=44665"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -111.004483,
+      34.405385
+     ]
+    },
+    "properties": {
+     "name": "Bear Canyon Lake and Camping Area",
+     "kind": "campground",
+     "agency": "USFS",
+     "forest": "Apache-Sitgreaves National Forest",
+     "status": "open",
+     "url": "https://www.fs.usda.gov/recarea/asnf/recarea/?recid=44681"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -111.200816,
+      34.591955
+     ]
+    },
+    "properties": {
+     "name": "Blue Ridge Campground",
+     "kind": "campground",
+     "agency": "USFS",
+     "forest": "Coconino National Forest Recreation",
+     "status": "closed",
+     "url": "https://www.fs.usda.gov/recarea/coconino/recarea/?recid=54896"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -111.31564,
+      34.55525
+     ]
+    },
+    "properties": {
+     "name": "Clints Well Campground",
+     "kind": "campground",
+     "agency": "USFS",
+     "forest": "Coconino National Forest Recreation",
+     "status": "open",
+     "url": "https://www.fs.usda.gov/recarea/coconino/recarea/?recid=54902"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -111.102599,
+      34.708967
+     ]
+    },
+    "properties": {
+     "name": "Elks Group Campground",
+     "kind": "campground",
+     "agency": "USFS",
+     "forest": "Coconino National Forest Recreation",
+     "status": "closed",
+     "url": "https://www.fs.usda.gov/recarea/coconino/recarea/?recid=54904"
     }
    }
   ]
  },
  "remoteness": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -110.178,
    42.799,
@@ -8352,9 +8605,15 @@
     "properties": {
      "h3": "8726b0152ffffff",
      "v": 95,
+     "name": "Near Bonneville Lake 10521",
+     "near": "Bonneville Lake 10521",
+     "nearKind": "lake",
+     "nearKm": 0.8,
+     "wilderness": "Bridger Wilderness",
      "signals": {
       "roadDistanceKm": 16.1,
       "inWilderness": true,
+      "inRoadlessArea": false,
       "campsitesWithin2km": 0
      }
     }
@@ -8364,35 +8623,22 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -110.09223672943617,
-      42.848338802687614
+      -109.67781016912816,
+      42.97886107435463
      ]
     },
     "properties": {
-     "h3": "8726b05adffffff",
-     "v": 25,
+     "h3": "8726b0c5affffff",
+     "v": 53,
+     "name": "Near Lower Sweeney Lake",
+     "near": "Lower Sweeney Lake",
+     "nearKind": "lake",
+     "nearKm": 0.7,
+     "roadlessArea": "West Slope Winds roadless area (Bridger-Teton National Forest)",
      "signals": {
-      "roadDistanceKm": 1,
+      "roadDistanceKm": 3.1,
       "inWilderness": false,
-      "campsitesWithin2km": 0
-     }
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -109.66189571376296,
-      42.81543922652958
-     ]
-    },
-    "properties": {
-     "h3": "8726b019bffffff",
-     "v": 15,
-     "signals": {
-      "roadDistanceKm": 0.2,
-      "inWilderness": false,
+      "inRoadlessArea": true,
       "campsitesWithin2km": 0
      }
     }
@@ -8409,66 +8655,15 @@
     "properties": {
      "h3": "8726b0c11ffffff",
      "v": 66,
+     "name": "Near Rainbow Lake",
+     "near": "Rainbow Lake",
+     "nearKind": "lake",
+     "nearKm": 0.6,
+     "wilderness": "Bridger Wilderness",
      "signals": {
       "roadDistanceKm": 3.8,
       "inWilderness": true,
-      "campsitesWithin2km": 0
-     }
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -109.67781016912816,
-      42.97886107435463
-     ]
-    },
-    "properties": {
-     "h3": "8726b0c5affffff",
-     "v": 43,
-     "signals": {
-      "roadDistanceKm": 3.1,
-      "inWilderness": false,
-      "campsitesWithin2km": 0
-     }
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -109.61270664406385,
-      43.52889271912539
-     ]
-    },
-    "properties": {
-     "h3": "8726b4631ffffff",
-     "v": 3,
-     "signals": {
-      "roadDistanceKm": 0.1,
-      "inWilderness": false,
-      "campsitesWithin2km": 3
-     }
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -110.09500028219702,
-      42.80491941558015
-     ]
-    },
-    "properties": {
-     "h3": "8726b0436ffffff",
-     "v": 14,
-     "signals": {
-      "roadDistanceKm": 0.2,
-      "inWilderness": false,
+      "inRoadlessArea": false,
       "campsitesWithin2km": 0
      }
     }
@@ -8485,48 +8680,16 @@
     "properties": {
      "h3": "8726b0024ffffff",
      "v": 92,
+     "name": "Near Halls Creek Lake #4",
+     "near": "Halls Creek Lake #4",
+     "nearKind": "lake",
+     "nearKm": 1.3,
+     "wilderness": "Bridger Wilderness",
      "signals": {
       "roadDistanceKm": 13.6,
       "inWilderness": true,
+      "inRoadlessArea": false,
       "campsitesWithin2km": 0
-     }
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -110.15609922969058,
-      43.12112949903605
-     ]
-    },
-    "properties": {
-     "h3": "8726b6341ffffff",
-     "v": 17,
-     "signals": {
-      "roadDistanceKm": 0.3,
-      "inWilderness": false,
-      "campsitesWithin2km": 0
-     }
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -109.96877093275644,
-      43.084112515160825
-     ]
-    },
-    "properties": {
-     "h3": "8726b0ca3ffffff",
-     "v": 11,
-     "signals": {
-      "roadDistanceKm": 0.6,
-      "inWilderness": false,
-      "campsitesWithin2km": 1
      }
     }
    },
@@ -8542,9 +8705,15 @@
     "properties": {
      "h3": "8726b0891ffffff",
      "v": 87,
+     "name": "Near Woody Lake",
+     "near": "Woody Lake",
+     "nearKind": "lake",
+     "nearKm": 2.1,
+     "wilderness": "Fitzpatrick Wilderness",
      "signals": {
       "roadDistanceKm": 11.1,
       "inWilderness": true,
+      "inRoadlessArea": false,
       "campsitesWithin2km": 0
      }
     }
@@ -8554,17 +8723,172 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -109.73040208120005,
-      43.00200266411026
+      -109.29940309233879,
+      42.96782216260117
      ]
     },
     "properties": {
-     "h3": "8726b0cecffffff",
-     "v": 39,
+     "h3": "8726b08daffffff",
+     "v": 66,
+     "name": "Near Movo Lake",
+     "near": "Movo Lake",
+     "nearKind": "lake",
+     "nearKm": 1.8,
      "signals": {
-      "roadDistanceKm": 1.3,
+      "roadDistanceKm": 10.6,
+      "inWilderness": false,
+      "inRoadlessArea": false,
+      "campsitesWithin2km": 0
+     }
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.59981521038812,
+      43.323368204651416
+     ]
+    },
+    "properties": {
+     "h3": "8726b46c3ffffff",
+     "v": 86,
+     "name": "Near Bomber Lake",
+     "near": "Bomber Lake",
+     "nearKind": "lake",
+     "nearKm": 1.5,
+     "wilderness": "Fitzpatrick Wilderness",
+     "signals": {
+      "roadDistanceKm": 10.3,
       "inWilderness": true,
-      "campsitesWithin2km": 1
+      "inRoadlessArea": false,
+      "campsitesWithin2km": 0
+     }
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.81683453839449,
+      43.329213584975335
+     ]
+    },
+    "properties": {
+     "h3": "8726b0d35ffffff",
+     "v": 63,
+     "name": "Near Osborn Mountain",
+     "near": "Osborn Mountain",
+     "nearKind": "peak",
+     "nearKm": 3.5,
+     "wilderness": "Bridger Wilderness",
+     "signals": {
+      "roadDistanceKm": 3.2,
+      "inWilderness": true,
+      "inRoadlessArea": false,
+      "campsitesWithin2km": 0
+     }
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.20080788412236,
+      42.83432408948794
+     ]
+    },
+    "properties": {
+     "h3": "8726b0148ffffff",
+     "v": 87,
+     "name": "Near Dutch Oven Lake",
+     "near": "Dutch Oven Lake",
+     "nearKind": "lake",
+     "nearKm": 1.2,
+     "wilderness": "Popo Agie Wilderness",
+     "signals": {
+      "roadDistanceKm": 10.8,
+      "inWilderness": true,
+      "inRoadlessArea": false,
+      "campsitesWithin2km": 0
+     }
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -110.09504336478336,
+      43.22796959661999
+     ]
+    },
+    "properties": {
+     "h3": "8726b6ac9ffffff",
+     "v": 45,
+     "name": "Near Rock Creek Buttes",
+     "near": "Rock Creek Buttes",
+     "nearKind": "peak",
+     "nearKm": 0.5,
+     "roadlessArea": "Gros Ventre Mountains roadless area (Bridger-Teton National Forest)",
+     "signals": {
+      "roadDistanceKm": 1.9,
+      "inWilderness": false,
+      "inRoadlessArea": true,
+      "campsitesWithin2km": 0
+     }
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.70115667795106,
+      43.033758158460536
+     ]
+    },
+    "properties": {
+     "h3": "8726b0c50ffffff",
+     "v": 73,
+     "name": "Near Upper Triangle Lake",
+     "near": "Upper Triangle Lake",
+     "nearKind": "lake",
+     "nearKm": 1.5,
+     "wilderness": "Bridger Wilderness",
+     "signals": {
+      "roadDistanceKm": 5.5,
+      "inWilderness": true,
+      "inRoadlessArea": false,
+      "campsitesWithin2km": 0
+     }
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.1500168536936,
+      42.78917943192552
+     ]
+    },
+    "properties": {
+     "h3": "8726b0a90ffffff",
+     "v": 87,
+     "name": "Near Mendarrin Lake",
+     "near": "Mendarrin Lake",
+     "nearKind": "lake",
+     "nearKm": 1,
+     "wilderness": "Popo Agie Wilderness",
+     "signals": {
+      "roadDistanceKm": 11.2,
+      "inWilderness": true,
+      "inRoadlessArea": false,
+      "campsitesWithin2km": 0
      }
     }
    }
@@ -9192,7 +9516,7 @@
  },
  "river-pulse": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -92,
    36,
@@ -9205,23 +9529,33 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -90.1322,
-      38.8187
+      -90.132,
+      38.819
      ]
     },
     "properties": {
      "name": "Mississippi",
+     "heading": "Mississippi near St. Louis",
      "project": "Mississippi",
      "reachId": "r0-0",
      "lengthKm": 22,
-     "q": 5983.1,
-     "pct": 108,
-     "medianQ": 5532.5,
-     "peakQ": 11141.9,
-     "peakDate": "2026-10-07",
-     "lowQ": 3403.1,
+     "length": "14 mi (22 km)",
+     "q": 10494,
+     "pct": 97,
+     "medianQ": 10813,
+     "peakQ": 19230,
+     "peakDate": "2026-08-22",
+     "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "readAt": "between"
+     "flow": "371,000 cfs (10,500 m³/s)",
+     "medianFlow": "382,000 cfs (10,800 m³/s)",
+     "peakFlow": "679,000 cfs (19,200 m³/s)",
+     "lowFlow": "206,000 cfs (5,850 m³/s)",
+     "readAt": "between",
+     "units": "us",
+     "riverQ": 10494,
+     "riverFigure": "edge",
+     "atViewEdge": "371,000 cfs (10,500 m³/s)"
     }
    },
    {
@@ -9229,23 +9563,137 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -90.1966,
+      -89.614,
+      36.142
+     ]
+    },
+    "properties": {
+     "name": "Mississippi",
+     "heading": "Mississippi near Paragould",
+     "project": "Mississippi",
+     "reachId": "r0-18",
+     "lengthKm": 16,
+     "length": "10 mi (16 km)",
+     "q": 10494,
+     "pct": 97,
+     "medianQ": 10813,
+     "peakQ": 19230,
+     "peakDate": "2026-08-22",
+     "lowQ": 5847,
+     "lowDate": "2026-09-11",
+     "flow": "371,000 cfs (10,500 m³/s)",
+     "medianFlow": "382,000 cfs (10,800 m³/s)",
+     "peakFlow": "679,000 cfs (19,200 m³/s)",
+     "lowFlow": "206,000 cfs (5,850 m³/s)",
+     "readAt": "between",
+     "units": "us",
+     "outlet": true,
+     "outletKind": "edge",
+     "riverQ": 10494,
+     "riverFigure": "edge",
+     "atViewEdge": "371,000 cfs (10,500 m³/s)"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -88.393,
+      39.903
+     ]
+    },
+    "properties": {
+     "name": "Kaskaskia",
+     "heading": "Kaskaskia near Urbana",
+     "project": "Kaskaskia",
+     "reachId": "r1-0",
+     "lengthKm": 28,
+     "length": "17 mi (28 km)",
+     "q": 8.2,
+     "pct": 41,
+     "medianQ": 20.1,
+     "peakQ": 76.3,
+     "peakDate": "2026-08-05",
+     "lowQ": 4.7,
+     "lowDate": "2026-10-16",
+     "flow": "290 cfs (8.2 m³/s)",
+     "medianFlow": "710 cfs (20 m³/s)",
+     "peakFlow": "2,690 cfs (76 m³/s)",
+     "lowFlow": "166 cfs (4.7 m³/s)",
+     "readAt": "between",
+     "units": "us",
+     "riverQ": 8.2,
+     "riverFigure": "largest",
+     "atLargest": "290 cfs (8.2 m³/s)"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -91.185,
+      36.003
+     ]
+    },
+    "properties": {
+     "name": "Black",
+     "heading": "Black near Jonesboro",
+     "project": "Black",
+     "reachId": "r2-0",
+     "lengthKm": 20,
+     "length": "12 mi (20 km)",
+     "q": 16.4,
+     "pct": 150,
+     "medianQ": 10.9,
+     "peakQ": 43.1,
+     "peakDate": "2026-07-18",
+     "lowQ": 0,
+     "lowDate": "2026-09-01",
+     "flow": "579 cfs (16 m³/s)",
+     "medianFlow": "385 cfs (11 m³/s)",
+     "peakFlow": "1,520 cfs (43 m³/s)",
+     "lowFlow": "0 cfs (0 m³/s)",
+     "readAt": "between",
+     "units": "us",
+     "riverQ": 16.4,
+     "riverFigure": "mouth",
+     "atMouth": "579 cfs (16 m³/s)"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -90.197,
       38.638
      ]
     },
     "properties": {
      "name": "Mississippi",
+     "heading": "Mississippi near St. Louis",
      "project": "Mississippi",
      "reachId": "r0-1",
-     "lengthKm": 25,
-     "q": 5983.1,
-     "pct": 108,
-     "medianQ": 5532.5,
-     "peakQ": 11141.9,
-     "peakDate": "2026-10-07",
-     "lowQ": 3403.1,
+     "lengthKm": 37,
+     "length": "23 mi (37 km)",
+     "q": 10494,
+     "pct": 97,
+     "medianQ": 10813,
+     "peakQ": 19230,
+     "peakDate": "2026-08-22",
+     "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "readAt": "between"
+     "flow": "371,000 cfs (10,500 m³/s)",
+     "medianFlow": "382,000 cfs (10,800 m³/s)",
+     "peakFlow": "679,000 cfs (19,200 m³/s)",
+     "lowFlow": "206,000 cfs (5,850 m³/s)",
+     "readAt": "between",
+     "units": "us",
+     "riverQ": 10494,
+     "riverFigure": "edge",
+     "atViewEdge": "371,000 cfs (10,500 m³/s)"
     }
    },
    {
@@ -9253,23 +9701,33 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -90.3148,
-      38.4315
+      -90.378,
+      38.337
      ]
     },
     "properties": {
      "name": "Mississippi",
+     "heading": "Mississippi near Belleville",
      "project": "Mississippi",
      "reachId": "r0-2",
-     "lengthKm": 21,
-     "q": 5983.1,
-     "pct": 108,
-     "medianQ": 5532.5,
-     "peakQ": 11141.9,
-     "peakDate": "2026-10-07",
-     "lowQ": 3403.1,
+     "lengthKm": 29,
+     "length": "18 mi (29 km)",
+     "q": 10494,
+     "pct": 97,
+     "medianQ": 10813,
+     "peakQ": 19230,
+     "peakDate": "2026-08-22",
+     "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "readAt": "between"
+     "flow": "371,000 cfs (10,500 m³/s)",
+     "medianFlow": "382,000 cfs (10,800 m³/s)",
+     "peakFlow": "679,000 cfs (19,200 m³/s)",
+     "lowFlow": "206,000 cfs (5,850 m³/s)",
+     "readAt": "between",
+     "units": "us",
+     "riverQ": 10494,
+     "riverFigure": "edge",
+     "atViewEdge": "371,000 cfs (10,500 m³/s)"
     }
    },
    {
@@ -9277,23 +9735,33 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -90.3732,
-      38.2542
+      -90.243,
+      38.113
      ]
     },
     "properties": {
      "name": "Mississippi",
+     "heading": "Mississippi near Belleville",
      "project": "Mississippi",
      "reachId": "r0-3",
-     "lengthKm": 22,
-     "q": 5983.1,
-     "pct": 108,
-     "medianQ": 5532.5,
-     "peakQ": 11141.9,
-     "peakDate": "2026-10-07",
-     "lowQ": 3403.1,
+     "lengthKm": 27,
+     "length": "17 mi (27 km)",
+     "q": 10494,
+     "pct": 97,
+     "medianQ": 10813,
+     "peakQ": 19230,
+     "peakDate": "2026-08-22",
+     "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "readAt": "between"
+     "flow": "371,000 cfs (10,500 m³/s)",
+     "medianFlow": "382,000 cfs (10,800 m³/s)",
+     "peakFlow": "679,000 cfs (19,200 m³/s)",
+     "lowFlow": "206,000 cfs (5,850 m³/s)",
+     "readAt": "between",
+     "units": "us",
+     "riverQ": 10494,
+     "riverFigure": "edge",
+     "atViewEdge": "371,000 cfs (10,500 m³/s)"
     }
    },
    {
@@ -9301,23 +9769,33 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -90.2254,
-      38.1009
+      -90.005,
+      37.962
      ]
     },
     "properties": {
      "name": "Mississippi",
+     "heading": "Mississippi near Carbondale",
      "project": "Mississippi",
      "reachId": "r0-4",
-     "lengthKm": 23,
-     "q": 5983.1,
-     "pct": 108,
-     "medianQ": 5532.5,
-     "peakQ": 11141.9,
-     "peakDate": "2026-10-07",
-     "lowQ": 3403.1,
+     "lengthKm": 29,
+     "length": "18 mi (29 km)",
+     "q": 10494,
+     "pct": 97,
+     "medianQ": 10813,
+     "peakQ": 19230,
+     "peakDate": "2026-08-22",
+     "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "readAt": "between"
+     "flow": "371,000 cfs (10,500 m³/s)",
+     "medianFlow": "382,000 cfs (10,800 m³/s)",
+     "peakFlow": "679,000 cfs (19,200 m³/s)",
+     "lowFlow": "206,000 cfs (5,850 m³/s)",
+     "readAt": "between",
+     "units": "us",
+     "riverQ": 10494,
+     "riverFigure": "edge",
+     "atViewEdge": "371,000 cfs (10,500 m³/s)"
     }
    },
    {
@@ -9325,23 +9803,33 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -90.0206,
-      37.9702
+      -89.722,
+      37.837
      ]
     },
     "properties": {
      "name": "Mississippi",
+     "heading": "Mississippi near Carbondale",
      "project": "Mississippi",
      "reachId": "r0-5",
-     "lengthKm": 20,
-     "q": 5983.1,
-     "pct": 108,
-     "medianQ": 5532.5,
-     "peakQ": 11141.9,
-     "peakDate": "2026-10-07",
-     "lowQ": 3403.1,
+     "lengthKm": 26,
+     "length": "16 mi (26 km)",
+     "q": 10494,
+     "pct": 97,
+     "medianQ": 10813,
+     "peakQ": 19230,
+     "peakDate": "2026-08-22",
+     "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "readAt": "between"
+     "flow": "371,000 cfs (10,500 m³/s)",
+     "medianFlow": "382,000 cfs (10,800 m³/s)",
+     "peakFlow": "679,000 cfs (19,200 m³/s)",
+     "lowFlow": "206,000 cfs (5,850 m³/s)",
+     "readAt": "between",
+     "units": "us",
+     "riverQ": 10494,
+     "riverFigure": "edge",
+     "atViewEdge": "371,000 cfs (10,500 m³/s)"
     }
    },
    {
@@ -9349,23 +9837,33 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -89.8319,
-      37.8842
+      -89.523,
+      37.679
      ]
     },
     "properties": {
      "name": "Mississippi",
+     "heading": "Mississippi near Cape Girardeau",
      "project": "Mississippi",
      "reachId": "r0-6",
-     "lengthKm": 21,
-     "q": 5983.1,
-     "pct": 108,
-     "medianQ": 5532.5,
-     "peakQ": 11141.9,
-     "peakDate": "2026-10-07",
-     "lowQ": 3403.1,
+     "lengthKm": 28,
+     "length": "17 mi (28 km)",
+     "q": 10494,
+     "pct": 97,
+     "medianQ": 10813,
+     "peakQ": 19230,
+     "peakDate": "2026-08-22",
+     "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "readAt": "between"
+     "flow": "371,000 cfs (10,500 m³/s)",
+     "medianFlow": "382,000 cfs (10,800 m³/s)",
+     "peakFlow": "679,000 cfs (19,200 m³/s)",
+     "lowFlow": "206,000 cfs (5,850 m³/s)",
+     "readAt": "between",
+     "units": "us",
+     "riverQ": 10494,
+     "riverFigure": "edge",
+     "atViewEdge": "371,000 cfs (10,500 m³/s)"
     }
    },
    {
@@ -9373,23 +9871,33 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -89.6691,
-      37.7543
+      -89.451,
+      37.44
      ]
     },
     "properties": {
      "name": "Mississippi",
+     "heading": "Mississippi near Cape Girardeau",
      "project": "Mississippi",
      "reachId": "r0-7",
-     "lengthKm": 21,
-     "q": 5983.1,
-     "pct": 108,
-     "medianQ": 5532.5,
-     "peakQ": 11141.9,
-     "peakDate": "2026-10-07",
-     "lowQ": 3403.1,
+     "lengthKm": 22,
+     "length": "14 mi (22 km)",
+     "q": 10494,
+     "pct": 97,
+     "medianQ": 10813,
+     "peakQ": 19230,
+     "peakDate": "2026-08-22",
+     "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "readAt": "between"
+     "flow": "371,000 cfs (10,500 m³/s)",
+     "medianFlow": "382,000 cfs (10,800 m³/s)",
+     "peakFlow": "679,000 cfs (19,200 m³/s)",
+     "lowFlow": "206,000 cfs (5,850 m³/s)",
+     "readAt": "between",
+     "units": "us",
+     "riverQ": 10494,
+     "riverFigure": "edge",
+     "atViewEdge": "371,000 cfs (10,500 m³/s)"
     }
    },
    {
@@ -9397,95 +9905,33 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -89.5205,
-      37.6319
+      -89.523,
+      37.268
      ]
     },
     "properties": {
      "name": "Mississippi",
+     "heading": "Mississippi near Cape Girardeau",
      "project": "Mississippi",
      "reachId": "r0-8",
-     "lengthKm": 23,
-     "q": 5983.1,
-     "pct": 108,
-     "medianQ": 5532.5,
-     "peakQ": 11141.9,
-     "peakDate": "2026-10-07",
-     "lowQ": 3403.1,
-     "lowDate": "2026-09-11",
-     "readAt": "between"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -89.4513,
-      37.4403
-     ]
-    },
-    "properties": {
-     "name": "Mississippi",
-     "project": "Mississippi",
-     "reachId": "r0-9",
-     "lengthKm": 22,
-     "q": 5983.1,
-     "pct": 108,
-     "medianQ": 5532.5,
-     "peakQ": 11141.9,
-     "peakDate": "2026-10-07",
-     "lowQ": 3403.1,
-     "lowDate": "2026-09-11",
-     "readAt": "between"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -89.5234,
-      37.2679
-     ]
-    },
-    "properties": {
-     "name": "Mississippi",
-     "project": "Mississippi",
-     "reachId": "r0-10",
      "lengthKm": 21,
-     "q": 5983.1,
-     "pct": 108,
-     "medianQ": 5532.5,
-     "peakQ": 11141.9,
-     "peakDate": "2026-10-07",
-     "lowQ": 3403.1,
+     "length": "13 mi (21 km)",
+     "q": 10494,
+     "pct": 97,
+     "medianQ": 10813,
+     "peakQ": 19230,
+     "peakDate": "2026-08-22",
+     "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "readAt": "between"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -89.4016,
-      37.12
-     ]
-    },
-    "properties": {
-     "name": "Mississippi",
-     "project": "Mississippi",
-     "reachId": "r0-11",
-     "lengthKm": 21,
-     "q": 5983.1,
-     "pct": 108,
-     "medianQ": 5532.5,
-     "peakQ": 11141.9,
-     "peakDate": "2026-10-07",
-     "lowQ": 3403.1,
-     "lowDate": "2026-09-11",
-     "readAt": "model"
+     "flow": "371,000 cfs (10,500 m³/s)",
+     "medianFlow": "382,000 cfs (10,800 m³/s)",
+     "peakFlow": "679,000 cfs (19,200 m³/s)",
+     "lowFlow": "206,000 cfs (5,850 m³/s)",
+     "readAt": "between",
+     "units": "us",
+     "riverQ": 10494,
+     "riverFigure": "edge",
+     "atViewEdge": "371,000 cfs (10,500 m³/s)"
     }
    }
   ]
@@ -10126,7 +10572,7 @@
  },
  "ski-routes": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    6.814,
    45.833,
@@ -11023,7 +11469,7 @@
  },
  "streamflow": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -110.886,
    43.235,
@@ -11041,15 +11487,21 @@
      ]
     },
     "properties": {
-     "name": "GROS VENTRE RIVER AT KELLY, WY",
+     "name": "Gros Ventre River at Kelly, Wy",
      "siteId": "USGS-13014500",
      "kind": "gauge",
-     "t": "2026-10-17T03:00:00.000Z",
-     "v": 368,
-     "pctOfMedian": 165,
-     "medianCfs": 223,
+     "t": "2026-10-18T06:00:00.000Z",
+     "v": 335,
+     "pctOfMedian": 150,
+     "medianCfs": 224,
+     "flowClass": "much_above",
      "vsNormal": "high",
-     "tempC": 9.4
+     "normalRange": "192 to 261 cfs",
+     "recordYears": "1945 to 2026 (32 years)",
+     "tempC": 8.7,
+     "tempF": 47.7,
+     "waterTemp": "48 °F (8.7 °C)",
+     "nameInSource": "GROS VENTRE RIVER AT KELLY, WY"
     }
    },
    {
@@ -11062,14 +11514,18 @@
      ]
     },
     "properties": {
-     "name": "GRANITE C AB GRANITE C SUPPLEMENTAL, NR MOOSE, WY",
+     "name": "Granite C Ab Granite C Supplemental, Nr Moose, Wy",
      "siteId": "USGS-13016305",
      "kind": "gauge",
-     "t": "2026-10-17T03:00:00.000Z",
-     "v": 11.9,
-     "pctOfMedian": 129,
-     "medianCfs": 9.2,
-     "vsNormal": "normal"
+     "t": "2026-10-18T06:00:00.000Z",
+     "v": 11,
+     "pctOfMedian": 121,
+     "medianCfs": 9.1,
+     "flowClass": "normal",
+     "vsNormal": "normal",
+     "normalRange": "7 to 11 cfs",
+     "recordYears": "1996 to 2026 (31 years)",
+     "nameInSource": "GRANITE C AB GRANITE C SUPPLEMENTAL, NR MOOSE, WY"
     }
    },
    {
@@ -11082,15 +11538,21 @@
      ]
     },
     "properties": {
-     "name": "FISH CREEK AT WILSON, WY",
+     "name": "Fish Creek at Wilson, Wy",
      "siteId": "USGS-13016450",
      "kind": "gauge",
-     "t": "2026-10-17T03:00:00.000Z",
-     "v": 149,
-     "pctOfMedian": 149,
-     "medianCfs": 100,
-     "vsNormal": "normal",
-     "tempC": 10.7
+     "t": "2026-10-18T06:00:00.000Z",
+     "v": 146,
+     "pctOfMedian": 154,
+     "medianCfs": 95,
+     "flowClass": "above",
+     "vsNormal": "high",
+     "normalRange": "86 to 132 cfs",
+     "recordYears": "1995 to 2025 (31 years)",
+     "tempC": 9,
+     "tempF": 48.2,
+     "waterTemp": "48 °F (9.0 °C)",
+     "nameInSource": "FISH CREEK AT WILSON, WY"
     }
    },
    {
@@ -11103,15 +11565,21 @@
      ]
     },
     "properties": {
-     "name": "CACHE CREEK NEAR JACKSON, WY",
+     "name": "Cache Creek Near Jackson, Wy",
      "siteId": "USGS-13018300",
      "kind": "gauge",
-     "t": "2026-10-17T02:45:00.000Z",
+     "t": "2026-10-18T05:45:00.000Z",
      "v": 5.32,
-     "pctOfMedian": 81,
-     "medianCfs": 6.6,
-     "vsNormal": "normal",
-     "tempC": 3.6
+     "pctOfMedian": 82,
+     "medianCfs": 6.5,
+     "flowClass": "below",
+     "vsNormal": "low",
+     "normalRange": "5.5 to 7.4 cfs",
+     "recordYears": "1963 to 2026 (64 years)",
+     "tempC": 3.3,
+     "tempF": 37.9,
+     "waterTemp": "38 °F (3.3 °C)",
+     "nameInSource": "CACHE CREEK NEAR JACKSON, WY"
     }
    },
    {
@@ -11124,15 +11592,21 @@
      ]
     },
     "properties": {
-     "name": "FLAT CREEK BELOW CACHE CREEK, NEAR JACKSON, WY",
+     "name": "Flat Creek Below Cache Creek, Near Jackson, Wy",
      "siteId": "USGS-13018350",
      "kind": "gauge",
-     "t": "2026-10-17T02:45:00.000Z",
-     "v": 77.8,
-     "pctOfMedian": 105,
-     "medianCfs": 74,
+     "t": "2026-10-18T05:45:00.000Z",
+     "v": 76.2,
+     "pctOfMedian": 104,
+     "medianCfs": 73,
+     "flowClass": "normal",
      "vsNormal": "normal",
-     "tempC": 8.5
+     "normalRange": "65 to 88 cfs",
+     "recordYears": "2000 to 2026 (27 years)",
+     "tempC": 7.7,
+     "tempF": 45.9,
+     "waterTemp": "46 °F (7.7 °C)",
+     "nameInSource": "FLAT CREEK BELOW CACHE CREEK, NEAR JACKSON, WY"
     }
    },
    {
@@ -11145,15 +11619,21 @@
      ]
     },
     "properties": {
-     "name": "SNAKE RIVER BELOW FLAT CREEK, NEAR JACKSON, WY",
+     "name": "Snake River Below Flat Creek, Near Jackson, Wy",
      "siteId": "USGS-13018750",
      "kind": "gauge",
-     "t": "2026-10-17T02:30:00.000Z",
-     "v": 1640,
+     "t": "2026-10-18T06:30:00.000Z",
+     "v": 1560,
      "pctOfMedian": 98,
-     "medianCfs": 1680,
+     "medianCfs": 1600,
+     "flowClass": "normal",
      "vsNormal": "normal",
-     "tempC": 10.5
+     "normalRange": "1,410 to 1,880 cfs",
+     "recordYears": "1977 to 2026 (50 years)",
+     "tempC": 9.2,
+     "tempF": 48.6,
+     "waterTemp": "49 °F (9.2 °C)",
+     "nameInSource": "SNAKE RIVER BELOW FLAT CREEK, NEAR JACKSON, WY"
     }
    },
    {
@@ -11166,22 +11646,28 @@
      ]
     },
     "properties": {
-     "name": "HOBACK RIVER NEAR JACKSON, WY",
+     "name": "Hoback River Near Jackson, Wy",
      "siteId": "USGS-13019500",
      "kind": "gauge",
-     "t": "2026-10-17T03:00:00.000Z",
-     "v": 259,
-     "pctOfMedian": 102,
-     "medianCfs": 255,
+     "t": "2026-10-18T06:00:00.000Z",
+     "v": 249,
+     "pctOfMedian": 95,
+     "medianCfs": 262,
+     "flowClass": "normal",
      "vsNormal": "normal",
-     "tempC": 7.2
+     "normalRange": "234 to 281 cfs",
+     "recordYears": "1945 to 2026 (18 years)",
+     "tempC": 6.8,
+     "tempF": 44.2,
+     "waterTemp": "44 °F (6.8 °C)",
+     "nameInSource": "HOBACK RIVER NEAR JACKSON, WY"
     }
    }
   ]
  },
  "surf": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -122.6,
    37.3,
@@ -11194,24 +11680,29 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -122.469922,
-      37.485211
+      -122.4699,
+      37.4852
      ]
     },
     "properties": {
      "name": "Mavericks",
      "kind": "forecast",
      "spotSource": "Wikidata",
-     "t": "2026-10-17T03:00:00.000Z",
-     "v": 1.06,
-     "waveFt": 3.5,
-     "maxNext48hM": 2.08,
-     "maxAt": "2026-10-18T23:00:00.000Z",
-     "periodS": 12.05,
-     "directionDeg": 258,
-     "directionFrom": "WSW",
-     "swellM": 0.56,
-     "swellPeriodS": 11.45
+     "t": "2026-10-18T06:00:00.000Z",
+     "v": 1.58,
+     "waveFt": 5.2,
+     "maxNext48hM": 2.06,
+     "maxNext48hFt": 6.8,
+     "maxAt": "2026-10-19T02:00:00.000Z",
+     "periodS": 10.45,
+     "directionDeg": 280,
+     "directionFrom": "W",
+     "swellFrom": "West (280°)",
+     "swellM": 0.82,
+     "swellFt": 2.7,
+     "swellPeriodS": 12.8,
+     "readAt": "11:00 pm PDT Sat",
+     "maxAtLocal": "7:00 pm PDT Sun"
     }
    }
   ]
@@ -11504,7 +11995,7 @@
  },
  "tides": {
   "kind": "geojson",
-  "recorded": "2026-10-17",
+  "recorded": "2026-10-18",
   "bbox": [
    -68.657,
    44.004,
@@ -11517,24 +12008,27 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -68.20427777777778,
-      44.39219444444444
+      -68.3533,
+      44.2417
      ]
     },
     "properties": {
-     "name": "BAR HARBOR",
-     "stationId": "8413320",
-     "kind": "high",
+     "name": "Bass Harbor",
+     "stationId": "8413651",
+     "kind": "prediction",
      "nextType": "high",
-     "t": "2026-10-17T07:55:00.000Z",
-     "v": 9.087,
-     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413320",
-     "upcoming": "high 9.1 ft at 07:55 UTC 10-17; low 2.4 ft at 13:55 UTC 10-17; high 9.9 ft at 20:04 UTC 10-17; low 1.6 ft at 02:35 UTC 10-18",
+     "nextAt": "2026-10-18T08:52:00.000Z",
+     "v": 8.229,
+     "trend": "Rising toward high tide",
+     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413651",
+     "level": 6.83,
+     "tide1": "High 8.2 ft at 4:52 am EDT Sun",
+     "tide2": "Low 2.4 ft at 10:22 am EDT Sun",
+     "tide3": "High 9.0 ft at 5:03 pm EDT Sun",
+     "tide4": "Low 1.6 ft at 11:04 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T13:55:00.000Z",
-     "thenV": 2.432,
-     "observedNow": 3.72,
-     "observedAt": "2026-10-17T03:24:00.000Z",
+     "thenAt": "2026-10-18T14:22:00.000Z",
+     "thenV": 2.415,
      "state": "ME"
     }
    },
@@ -11543,23 +12037,32 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -68.3533,
-      44.2417
+      -68.20427777777778,
+      44.39219444444444
      ]
     },
     "properties": {
-     "name": "Bass Harbor",
-     "stationId": "8413651",
-     "kind": "high",
+     "name": "Bar Harbor",
+     "stationId": "8413320",
+     "kind": "live",
      "nextType": "high",
-     "t": "2026-10-17T07:59:00.000Z",
-     "v": 8.451,
-     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413651",
-     "upcoming": "high 8.5 ft at 07:59 UTC 10-17; low 2.3 ft at 13:28 UTC 10-17; high 9.2 ft at 20:08 UTC 10-17; low 1.5 ft at 02:08 UTC 10-18",
+     "nextAt": "2026-10-18T08:48:00.000Z",
+     "v": 8.849,
+     "trend": "Rising toward high tide",
+     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413320",
+     "level": 7.21,
+     "tide1": "High 8.8 ft at 4:48 am EDT Sun",
+     "tide2": "Low 2.6 ft at 10:49 am EDT Sun",
+     "tide3": "High 9.7 ft at 4:59 pm EDT Sun",
+     "tide4": "Low 1.7 ft at 11:31 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T13:28:00.000Z",
-     "thenV": 2.262,
-     "state": "ME"
+     "thenAt": "2026-10-18T14:49:00.000Z",
+     "thenV": 2.596,
+     "observedNow": 7.28,
+     "observedAt": "2026-10-18T06:42:00.000Z",
+     "observedLocal": "2:42 am EDT Sun",
+     "state": "ME",
+     "nameInSource": "BAR HARBOR"
     }
    },
    {
@@ -11574,15 +12077,20 @@
     "properties": {
      "name": "Southwest Harbor",
      "stationId": "8413564",
-     "kind": "high",
+     "kind": "prediction",
      "nextType": "high",
-     "t": "2026-10-17T07:55:00.000Z",
-     "v": 8.724,
+     "nextAt": "2026-10-18T08:48:00.000Z",
+     "v": 8.495,
+     "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413564",
-     "upcoming": "high 8.7 ft at 07:55 UTC 10-17; low 2.3 ft at 13:28 UTC 10-17; high 9.5 ft at 20:04 UTC 10-17; low 1.5 ft at 02:08 UTC 10-18",
+     "level": 7.11,
+     "tide1": "High 8.5 ft at 4:48 am EDT Sun",
+     "tide2": "Low 2.5 ft at 10:22 am EDT Sun",
+     "tide3": "High 9.3 ft at 4:59 pm EDT Sun",
+     "tide4": "Low 1.6 ft at 11:04 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T13:28:00.000Z",
-     "thenV": 2.31,
+     "thenAt": "2026-10-18T14:22:00.000Z",
+     "thenV": 2.467,
      "state": "ME"
     }
    },
@@ -11598,15 +12106,20 @@
     "properties": {
      "name": "Mackerel Cove, Swans Island",
      "stationId": "8413825",
-     "kind": "high",
+     "kind": "prediction",
      "nextType": "high",
-     "t": "2026-10-17T08:00:00.000Z",
-     "v": 8.59,
+     "nextAt": "2026-10-18T08:53:00.000Z",
+     "v": 8.338,
+     "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413825",
-     "upcoming": "high 8.6 ft at 08:00 UTC 10-17; low 2.5 ft at 13:53 UTC 10-17; high 9.4 ft at 20:04 UTC 10-17; low 1.6 ft at 02:40 UTC 10-18",
+     "level": 6.69,
+     "tide1": "High 8.3 ft at 4:53 am EDT Sun",
+     "tide2": "Low 2.8 ft at 10:47 am EDT Sun",
+     "tide3": "High 9.2 ft at 4:58 pm EDT Sun",
+     "tide4": "Low 1.8 ft at 11:36 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T13:53:00.000Z",
-     "thenV": 2.517,
+     "thenAt": "2026-10-18T14:47:00.000Z",
+     "thenV": 2.752,
      "state": "ME"
     }
    },
@@ -11622,15 +12135,20 @@
     "properties": {
      "name": "Burnt Coat Harbor, Swans Island",
      "stationId": "8413857",
-     "kind": "high",
+     "kind": "prediction",
      "nextType": "high",
-     "t": "2026-10-17T07:54:00.000Z",
-     "v": 8.088,
+     "nextAt": "2026-10-18T08:47:00.000Z",
+     "v": 7.875,
+     "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413857",
-     "upcoming": "high 8.1 ft at 07:54 UTC 10-17; low 2.1 ft at 14:01 UTC 10-17; high 8.8 ft at 20:03 UTC 10-17; low 1.4 ft at 02:41 UTC 10-18",
+     "level": 6.39,
+     "tide1": "High 7.9 ft at 4:47 am EDT Sun",
+     "tide2": "Low 2.3 ft at 10:55 am EDT Sun",
+     "tide3": "High 8.6 ft at 4:58 pm EDT Sun",
+     "tide4": "Low 1.5 ft at 11:37 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T14:01:00.000Z",
-     "thenV": 2.14,
+     "thenAt": "2026-10-18T14:55:00.000Z",
+     "thenV": 2.285,
      "state": "ME"
     }
    },
@@ -11646,15 +12164,20 @@
     "properties": {
      "name": "Center Harbor",
      "stationId": "8414168",
-     "kind": "high",
+     "kind": "prediction",
      "nextType": "high",
-     "t": "2026-10-17T08:04:00.000Z",
-     "v": 8.633,
+     "nextAt": "2026-10-18T08:57:00.000Z",
+     "v": 8.406,
+     "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414168",
-     "upcoming": "high 8.6 ft at 08:04 UTC 10-17; low 2.3 ft at 14:07 UTC 10-17; high 9.4 ft at 20:13 UTC 10-17; low 1.5 ft at 02:47 UTC 10-18",
+     "level": 6.6,
+     "tide1": "High 8.4 ft at 4:57 am EDT Sun",
+     "tide2": "Low 2.5 ft at 11:01 am EDT Sun",
+     "tide3": "High 9.2 ft at 5:08 pm EDT Sun",
+     "tide4": "Low 1.6 ft at 11:43 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T14:07:00.000Z",
-     "thenV": 2.31,
+     "thenAt": "2026-10-18T15:01:00.000Z",
+     "thenV": 2.467,
      "state": "ME"
     }
    },
@@ -11670,15 +12193,20 @@
     "properties": {
      "name": "Oceanville, Deer Isle",
      "stationId": "8414249",
-     "kind": "high",
+     "kind": "prediction",
      "nextType": "high",
-     "t": "2026-10-17T08:14:00.000Z",
-     "v": 8.81,
+     "nextAt": "2026-10-18T09:02:00.000Z",
+     "v": 8.616,
+     "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414249",
-     "upcoming": "high 8.8 ft at 08:14 UTC 10-17; low 1.8 ft at 14:10 UTC 10-17; high 9.6 ft at 20:20 UTC 10-17; low 1.1 ft at 02:47 UTC 10-18",
+     "level": 6.55,
+     "tide1": "High 8.6 ft at 5:02 am EDT Sun",
+     "tide2": "Low 1.9 ft at 10:58 am EDT Sun",
+     "tide3": "High 9.4 ft at 5:10 pm EDT Sun",
+     "tide4": "Low 1.3 ft at 11:37 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T14:10:00.000Z",
-     "thenV": 1.804,
+     "thenAt": "2026-10-18T14:58:00.000Z",
+     "thenV": 1.923,
      "state": "ME"
     }
    },
@@ -11694,15 +12222,78 @@
     "properties": {
      "name": "Blue Hill Harbor",
      "stationId": "8414112",
-     "kind": "high",
+     "kind": "prediction",
      "nextType": "high",
-     "t": "2026-10-17T08:04:00.000Z",
-     "v": 8.633,
+     "nextAt": "2026-10-18T08:57:00.000Z",
+     "v": 8.406,
+     "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414112",
-     "upcoming": "high 8.6 ft at 08:04 UTC 10-17; low 2.3 ft at 14:06 UTC 10-17; high 9.4 ft at 20:13 UTC 10-17; low 1.5 ft at 02:46 UTC 10-18",
+     "level": 6.61,
+     "tide1": "High 8.4 ft at 4:57 am EDT Sun",
+     "tide2": "Low 2.5 ft at 11:00 am EDT Sun",
+     "tide3": "High 9.2 ft at 5:08 pm EDT Sun",
+     "tide4": "Low 1.6 ft at 11:42 pm EDT Sun",
      "thenType": "low",
-     "thenT": "2026-10-17T14:06:00.000Z",
-     "thenV": 2.31,
+     "thenAt": "2026-10-18T15:00:00.000Z",
+     "thenV": 2.467,
+     "state": "ME"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -68.0867,
+      44.3883
+     ]
+    },
+    "properties": {
+     "name": "Winter Harbor, Frenchman Bay",
+     "stationId": "8413079",
+     "kind": "prediction",
+     "nextType": "high",
+     "nextAt": "2026-10-18T08:47:00.000Z",
+     "v": 8.406,
+     "trend": "Rising toward high tide",
+     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413079",
+     "level": 6.79,
+     "tide1": "High 8.4 ft at 4:47 am EDT Sun",
+     "tide2": "Low 2.5 ft at 10:59 am EDT Sun",
+     "tide3": "High 9.2 ft at 4:58 pm EDT Sun",
+     "tide4": "Low 1.6 ft at 11:41 pm EDT Sun",
+     "thenType": "low",
+     "thenAt": "2026-10-18T14:59:00.000Z",
+     "thenV": 2.467,
+     "state": "ME"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -68.6367,
+      44.0733
+     ]
+    },
+    "properties": {
+     "name": "Isle Au Haut",
+     "stationId": "8414288",
+     "kind": "prediction",
+     "nextType": "high",
+     "nextAt": "2026-10-18T08:47:00.000Z",
+     "v": 7.698,
+     "trend": "Rising toward high tide",
+     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414288",
+     "level": 6.46,
+     "tide1": "High 7.7 ft at 4:47 am EDT Sun",
+     "tide2": "Low 2.3 ft at 10:22 am EDT Sun",
+     "tide3": "High 8.4 ft at 4:58 pm EDT Sun",
+     "tide4": "Low 1.5 ft at 11:04 pm EDT Sun",
+     "thenType": "low",
+     "thenAt": "2026-10-18T14:22:00.000Z",
+     "thenV": 2.285,
      "state": "ME"
     }
    }

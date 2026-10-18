@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { cardContent } from "@/lib/render/card";
 import { hardMaxAreaKm2 } from "./types";
+import { contractProblems, legendOf, timeShapeOf } from "./contract";
 import layer, { buildSkiQuery, difficultyRank, normalizeSki } from "./ski-routes";
 import fixture from "./__fixtures__/ski-routes.chamonix.json";
 
@@ -272,5 +274,35 @@ describe("ski-routes wide mode", () => {
     expect(r.data.features[0].properties).toMatchObject({ kind: "skitour", route: true });
     expect(r.total).toBe(7657);
     expect(r.coverageNote).toBeUndefined();
+  });
+});
+
+describe("ski-routes chips, legend and card", () => {
+  it("offers kind (nordic, downhill) as the first chip set and difficulty second", () => {
+    const chips = (layer.attributes ?? []).filter((a) => a.type === "category" || a.type === "ordinal");
+    expect(chips.map((a) => a.key)).toEqual(["kind", "v"]);
+    expect(chips[0].primary).toBe(true);
+    expect(chips[0].levels?.map((l) => l.label).slice(0, 3)).toEqual(["Nordic", "Downhill", "Ski touring"]);
+  });
+
+  it("declares no time, a difficulty legend with a Not rated entry, and labels by name", () => {
+    expect(contractProblems(layer)).toEqual([]);
+    expect(timeShapeOf(layer, normalizeSki(fixture))).toEqual({ shape: "none" });
+    const legend = legendOf(layer);
+    expect(legend.kind).toBe("categories");
+    expect(legend.items?.map((i) => i.label)).toEqual(["Easy", "Moderate", "Hard", "Expert", "Not rated"]);
+    expect(layer.labels).toEqual({ field: "name", max: 8 });
+  });
+
+  it("shows the difficulty word once and keeps the rank and the OpenStreetMap id off the card", () => {
+    const run = normalizeSki(fixture).features.find((f) => f.properties?.name === "Charlanon");
+    if (!run) throw new Error("expected Charlanon");
+    const card = cardContent(run, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.measure).toBeNull();
+    expect(card.facts.map((r) => `${r.label}: ${r.value}`)).toEqual(expect.arrayContaining(["Difficulty: Intermediate", "Kind: Downhill"]));
+    const rows = [...card.facts, ...card.details];
+    expect(rows.map((r) => r.label)).not.toContain("Map element");
+    expect(rows.map((r) => r.label)).not.toContain("Difficulty rank");
+    expect(rows.some((r) => r.value.includes("way/"))).toBe(false);
   });
 });

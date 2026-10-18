@@ -5,13 +5,17 @@
  * Primary (US): https://waterservices.usgs.gov/nwis/iv/ (see layers/_shared/usgs.ts), parameterCd=00060,00010
  * (discharge cfs + water temperature C) or 00065,00010 (gage height ft). Cached 10 minutes.
  *
- * Percent of median (US, discharge only): https://waterservices.usgs.gov/nwis/stat/?format=rdb&sites=...
- * &statReportType=daily&statTypeCd=median&parameterCd=00060. Verified live 2026-10-09: it has NO bBox (HTTP 400)
+ * Flow vs. normal (US, discharge only): https://waterservices.usgs.gov/nwis/stat/?format=rdb&sites=...
+ * &statReportType=daily&statTypeCd=all&parameterCd=00060. Verified live 2026-10-09: it has NO bBox (HTTP 400)
  * and takes at most 10 sites per call (11 gave HTTP 400 "max=[10]"); tab-separated RDB, `#` comment lines, a
  * header row, a column-width row, then rows of agency_cd, site_no, parameter_cd, ts_id, loc_web_ds, month_nu,
- * day_nu, begin_yr, end_yr, count_nu, p50_va (median of the daily means for that calendar day over count_nu
- * years). About 18 KB per site, so medians are fetched for the STAT_SITE_CAP largest-flow gauges only, 10 per
- * call, and cached for a week under a key shared across bboxes (the statistics change once a year).
+ * day_nu, begin_yr, end_yr, count_nu, max_va_yr, max_va, min_va_yr, min_va, mean_va, p05_va ... p95_va (the
+ * daily means for that calendar day over count_nu years). Checked 2026-10-18: Truckee at Farad (10346000) on
+ * Oct 18 min 43, p10 82, p25 362, p50 409, p75 463, p90 544, max 1040 cfs; about 40 KB per site; asking for a
+ * subset (min,max,p10,...,p90) returned p90_va blank, so `all` is asked. Every gauge with a discharge reading is
+ * looked up (up to STAT_SITE_CAP, largest first), 10 per call, cached for a week under a key shared across bboxes
+ * (the statistics change once a year), and classed in USGS WaterWatch's percentile classes (FLOW_CLASSES;
+ * WaterWatch was retired in 2025, the classes are hyswap's "WaterWatch" schema and the National Water Dashboard's).
  *
  * Fallback (US): when the IV service fails, the Water Data API (OGC API - Features), base
  * https://api.waterdata.usgs.gov/ogcapi/v0/collections, as before M4:
@@ -40,13 +44,13 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type Attribute, type Citation, type LayerError, type LayerResult, type QueryContext, type CardSpec, type FieldHelp } from "./types";
+import { defineLayer, type Attribute, type Citation, type LayerError, type LayerResult, type LegendSpec, type QueryContext, type CardSpec, type FieldHelp } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { outsideUs } from "./_shared/coverage";
 import { overpassQuery } from "./_shared/overpass";
 import { fetchIv, ivStrips, parseIv, type IvSite } from "./_shared/usgs";
-import { layerColor } from "@/lib/render/palette";
+import { layerColor, OFF_WHITE } from "@/lib/render/palette";
 
 const BASE = "https://api.waterdata.usgs.gov/ogcapi/v0/collections";
 
@@ -214,14 +218,53 @@ export function keepLargest(fc: FeatureCollection, limit: number): { data: Featu
 const STAT_URL = "https://waterservices.usgs.gov/nwis/stat/";
 /** The statistics service rejects more than 10 sites per call. */
 const STAT_BATCH = 10;
-/** Medians are looked up for this many gauges (largest flow first): three calls at most. */
-export const STAT_SITE_CAP = 30;
+/**
+ * Most gauges a query looks statistics up for (largest flow first), 10 per call: every gauge of any view under the
+ * area cap seen so far (Colorado's 321), and the 400 largest of a wide box. The host takes 5 calls a second, so 40
+ * calls is about 8 seconds on a cold cache; the week's cache makes the next view of the same gauges free.
+ */
+export const STAT_SITE_CAP = 400;
 const STAT_TTL_SECONDS = 7 * 86_400;
 const CFS_PER_M3S = 35.3147;
 
-/** Median daily discharge by site number and "MM-DD", from a stat-service RDB body. */
-export function parseDailyMedians(rdb: string): Map<string, Map<string, number>> {
-  const out = new Map<string, Map<string, number>>();
+/**
+ * One calendar day's statistics at a gauge, from the daily mean flows of every year on record (cfs): the record low
+ * and high, the 10th, 25th, 50th (median), 75th and 90th percentiles, and the years they cover. A field is absent
+ * when USGS leaves it blank (short records get no percentiles).
+ */
+export type DayStats = {
+  min?: number;
+  p10?: number;
+  p25?: number;
+  p50?: number;
+  p75?: number;
+  p90?: number;
+  max?: number;
+  beginYr?: number;
+  endYr?: number;
+  years?: number;
+};
+
+const STAT_COLUMNS: [keyof DayStats, string][] = [
+  ["min", "min_va"],
+  ["p10", "p10_va"],
+  ["p25", "p25_va"],
+  ["p50", "p50_va"],
+  ["p75", "p75_va"],
+  ["p90", "p90_va"],
+  ["max", "max_va"],
+  ["beginYr", "begin_yr"],
+  ["endYr", "end_yr"],
+  ["years", "count_nu"],
+];
+
+/**
+ * Daily statistics by site number and "MM-DD", from a stat-service RDB body (statTypeCd=all): `#` comment lines, a
+ * header row, a column-width row, then one row per site, time series and calendar day. Days without a median are
+ * left out.
+ */
+export function parseDailyStats(rdb: string): Map<string, Map<string, DayStats>> {
+  const out = new Map<string, Map<string, DayStats>>();
   let header: string[] | null = null;
   let skippedWidths = false;
   for (const line of rdb.split(/\r?\n/)) {
@@ -236,39 +279,88 @@ export function parseDailyMedians(rdb: string): Map<string, Map<string, number>>
       continue;
     }
     const row = Object.fromEntries(header.map((h, i) => [h, cols[i] ?? ""]));
-    const p50 = Number(row.p50_va);
     const month = Number(row.month_nu);
     const day = Number(row.day_nu);
-    if (row.parameter_cd !== "00060" || row.p50_va === "" || !Number.isFinite(p50)) continue;
-    if (!Number.isInteger(month) || !Number.isInteger(day)) continue;
+    if (row.parameter_cd !== "00060" || !Number.isInteger(month) || !Number.isInteger(day)) continue;
+    const stats: DayStats = {};
+    for (const [key, col] of STAT_COLUMNS) {
+      const raw = row[col];
+      const n = Number(raw);
+      if (raw !== undefined && raw.trim() !== "" && Number.isFinite(n)) stats[key] = n;
+    }
+    if (stats.p50 === undefined) continue;
     const key = `${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     let site = out.get(row.site_no);
     if (site === undefined) {
       site = new Map();
       out.set(row.site_no, site);
     }
-    // A site with several time series keeps the first median seen for the day.
-    if (!site.has(key)) site.set(key, p50);
+    // A site with several time series keeps the first seen for the day.
+    if (!site.has(key)) site.set(key, stats);
   }
   return out;
 }
 
-/** Rough label for the model: under half of median is low, over 1.5 times is high. */
-function vsNormal(pct: number): "low" | "normal" | "high" {
-  if (pct < 50) return "low";
-  if (pct > 150) return "high";
-  return "normal";
+/**
+ * How a flow compares with the date's record, in USGS WaterWatch's percentile classes (which the USGS National Water
+ * Dashboard still draws): under the 10th percentile of the daily mean flows for this calendar day is much below
+ * normal, 10th to 24th below, 25th to 75th normal, 76th to 90th above, over the 90th much above; below the lowest or
+ * above the highest daily mean ever recorded on the date are WaterWatch's "Low" and "High". Low to high, the ramp's order.
+ */
+export const FLOW_CLASSES = [
+  { value: "record_low", label: "Lowest on record for the date", help: "Below every daily mean flow recorded on this calendar day (USGS WaterWatch calls it Low)." },
+  { value: "much_below", label: "Much below normal", help: "Under the 10th percentile of the daily mean flows recorded on this calendar day." },
+  { value: "below", label: "Below normal", help: "From the 10th to the 24th percentile of the daily mean flows recorded on this calendar day." },
+  { value: "normal", label: "Normal", help: "From the 25th to the 75th percentile of the daily mean flows recorded on this calendar day." },
+  { value: "above", label: "Above normal", help: "From the 76th to the 90th percentile of the daily mean flows recorded on this calendar day." },
+  { value: "much_above", label: "Much above normal", help: "Over the 90th percentile of the daily mean flows recorded on this calendar day." },
+  { value: "record_high", label: "Highest on record for the date", help: "Above every daily mean flow recorded on this calendar day (USGS WaterWatch calls it High)." },
+] as const;
+
+export type FlowClass = (typeof FLOW_CLASSES)[number]["value"];
+
+/** The flow's class for the date (FLOW_CLASSES); undefined when USGS publishes no percentiles for the day. */
+export function flowClass(cfs: number, s: DayStats): FlowClass | undefined {
+  if (s.p10 === undefined || s.p25 === undefined || s.p75 === undefined || s.p90 === undefined) return undefined;
+  if (s.min !== undefined && cfs < s.min) return "record_low";
+  if (s.max !== undefined && cfs > s.max) return "record_high";
+  if (cfs < s.p10) return "much_below";
+  if (cfs < s.p25) return "below";
+  if (cfs <= s.p75) return "normal";
+  if (cfs <= s.p90) return "above";
+  return "much_above";
+}
+
+/** The coarse word the model reads: below normal or lower is low, above normal or higher is high. */
+function vsNormal(cls: FlowClass): "low" | "normal" | "high" {
+  if (cls === "record_low" || cls === "much_below" || cls === "below") return "low";
+  if (cls === "normal") return "normal";
+  return "high";
+}
+
+/** A flow in cfs as people write it: whole numbers from 10 up, two significant figures below. */
+function cfsText(n: number): string {
+  if (n >= 10) return Math.round(n).toLocaleString("en-US");
+  return String(Number(n.toPrecision(2)));
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** Water temperature with °F first and °C second ("57 °F (14.0 °C)"), for US cards. */
+export function waterTempText(c: number): string {
+  return `${Math.round((c * 9) / 5 + 32)} °F (${c.toFixed(1)} °C)`;
 }
 
 /**
- * Gauge points from parsed IV sites. `main` is the parameter that becomes `v` (00060 or 00065); sites without
- * it but with a water temperature are kept with only `tempC`. Medians (when given) add pctOfMedian,
- * medianCfs and vsNormal for the reading's local calendar day.
+ * Gauge points from parsed IV sites. `main` is the parameter that becomes `v` (00060 or 00065); sites without it but
+ * with a water temperature are kept with only the temperature. Statistics (when given) add, for the reading's local
+ * calendar day: flowClass (FLOW_CLASSES), vsNormal, pctOfMedian, medianCfs, normalRange (the 25th to 75th percentile
+ * in cfs) and recordYears.
  */
 export function ivFeatures(
   sites: IvSite[],
   main: "00060" | "00065",
-  medians: Map<string, Map<string, number>>,
+  stats: Map<string, Map<string, DayStats>>,
 ): FeatureCollection<Point> {
   const features: Feature<Point>[] = [];
   for (const site of sites) {
@@ -285,46 +377,60 @@ export function ivFeatures(
       properties.v = reading.value;
       // The published local time's date is the calendar day the statistics are keyed by.
       const monthDay = reading.local.slice(5, 10);
-      const median = main === "00060" ? medians.get(site.siteNo)?.get(monthDay) : undefined;
-      if (median !== undefined && median > 0) {
-        const pct = Math.round((reading.value / median) * 100);
-        properties.pctOfMedian = pct;
-        properties.medianCfs = median;
-        properties.vsNormal = vsNormal(pct);
+      const day = main === "00060" ? stats.get(site.siteNo)?.get(monthDay) : undefined;
+      if (day !== undefined) {
+        if (day.p50 !== undefined && day.p50 > 0) {
+          properties.pctOfMedian = Math.round((reading.value / day.p50) * 100);
+          properties.medianCfs = day.p50;
+        }
+        const cls = flowClass(reading.value, day);
+        if (cls !== undefined) {
+          properties.flowClass = cls;
+          properties.vsNormal = vsNormal(cls);
+        }
+        if (day.p25 !== undefined && day.p75 !== undefined) properties.normalRange = `${cfsText(day.p25)} to ${cfsText(day.p75)} cfs`;
+        if (day.beginYr !== undefined && day.endYr !== undefined) {
+          properties.recordYears = `${day.beginYr} to ${day.endYr}${day.years !== undefined ? ` (${day.years} years)` : ""}`;
+        }
       }
     } else if (temp !== undefined) {
       properties.t = new Date(temp.time).toISOString();
     }
-    if (temp !== undefined) properties.tempC = temp.value;
+    if (temp !== undefined) {
+      properties.tempC = temp.value;
+      properties.tempF = round1((temp.value * 9) / 5 + 32);
+      properties.waterTemp = waterTempText(temp.value);
+    }
     features.push({ type: "Feature", geometry: { type: "Point", coordinates: site.coordinates }, properties });
   }
   return { type: "FeatureCollection", features };
 }
 
-/** Site numbers that get a median lookup: the largest current discharge first, capped. */
-export function statSites(sites: IvSite[]): string[] {
+/** Site numbers that get a statistics lookup: every gauge with a discharge reading, largest flow first, capped. */
+export function statSites(sites: IvSite[], cap = STAT_SITE_CAP): string[] {
   return sites
     .filter((s) => s.readings["00060"] !== undefined)
     .sort((a, b) => (b.readings["00060"]?.value ?? 0) - (a.readings["00060"]?.value ?? 0))
-    .slice(0, STAT_SITE_CAP)
+    .slice(0, cap)
     .map((s) => s.siteNo)
     .sort();
 }
 
-async function fetchMedians(
+async function fetchStats(
   ctx: QueryContext,
   siteNos: string[],
-): Promise<{ medians: Map<string, Map<string, number>>; failedBatches: number }> {
+): Promise<{ stats: Map<string, Map<string, DayStats>>; failedBatches: number }> {
   const batches: string[][] = [];
   for (let i = 0; i < siteNos.length; i += STAT_BATCH) batches.push(siteNos.slice(i, i + STAT_BATCH));
   const bodies = await Promise.all(
     batches.map(async (batch) => {
       try {
+        // statTypeCd=all (about 40 KB a site): a shorter list (min,max,p10,...,p90) came back with p90_va blank (2026-10-18).
         const res = await ctx.fetch(
-          `${STAT_URL}?format=rdb&sites=${batch.join(",")}&statReportType=daily&statTypeCd=median&parameterCd=00060`,
+          `${STAT_URL}?format=rdb&sites=${batch.join(",")}&statReportType=daily&statTypeCd=all&parameterCd=00060`,
           {
             // Statistics do not depend on the bbox, so the key is the site list alone.
-            cacheKey: `streamflow:stat:${batch.join(",")}`,
+            cacheKey: `streamflow:stat-all:${batch.join(",")}`,
             ttlSeconds: STAT_TTL_SECONDS,
             shouldCache: (body) => body.includes("p50_va"),
             timeoutMs: UPSTREAM_TIMEOUT_MS,
@@ -332,21 +438,21 @@ async function fetchMedians(
         );
         return res.ok ? await res.text() : null;
       } catch {
-        // Medians are an extra; a failure leaves pctOfMedian out (with a note) rather than failing the layer.
+        // Statistics are an extra; a failure leaves the class out (drawn as "No reading", with a note).
         return null;
       }
     }),
   );
-  const medians = new Map<string, Map<string, number>>();
+  const stats = new Map<string, Map<string, DayStats>>();
   let failedBatches = 0;
   for (const body of bodies) {
     if (body === null || !body.includes("p50_va")) {
       failedBatches += 1;
       continue;
     }
-    for (const [site, days] of parseDailyMedians(body)) medians.set(site, days);
+    for (const [site, days] of parseDailyStats(body)) stats.set(site, days);
   }
-  return { medians, failedBatches };
+  return { stats, failedBatches };
 }
 
 // ---- Outside the US: GloFAS via Open-Meteo ----
@@ -591,6 +697,7 @@ async function queryWaterDataApi(
 }
 
 const USGS_WATER_URL = "https://waterservices.usgs.gov/";
+const USGS_STATS_URL = "https://waterservices.usgs.gov/docs/statistics/";
 
 /** What each number on a gauge card means (spec §12b), in the layer's own terms. */
 const HELP: Record<string, FieldHelp> = {
@@ -603,49 +710,117 @@ const HELP: Record<string, FieldHelp> = {
     source: "USGS; GloFAS via Open-Meteo outside the US",
     url: USGS_WATER_URL,
   },
-  pctOfMedian: {
+  flowClass: {
     text:
-      "Today's flow as a percent of the median flow for this calendar day over the gauge's record: 100% is a typical day, under 50% is low, " +
-      "over 150% is high. It compares one reading to a daily median, so dam releases and daily snowmelt swing it.",
-    unit: "%",
-    scale: "Percent of the day's median; given for the 30 largest-flow gauges in view",
+      "Today's flow against every year on record for this calendar day, in the classes USGS WaterWatch used: much below normal is under the " +
+      "10th percentile, below normal the 10th to 24th, normal the 25th to 75th, above normal the 76th to 90th, much above normal over the 90th; " +
+      "lowest or highest on record is beyond every day recorded on this date. It compares one live reading with daily means, so a dam release " +
+      "or the day's snowmelt can move it.",
+    scale: "USGS WaterWatch percentile classes for the day of the year",
     source: "USGS NWIS daily statistics",
-    url: USGS_WATER_URL,
+    url: USGS_STATS_URL,
+  },
+  pctOfMedian: {
+    text: "Today's flow as a percent of the median daily flow for this calendar day over the gauge's years of record: 100% is a typical day for the date.",
+    unit: "%",
+    source: "USGS NWIS daily statistics",
+    url: USGS_STATS_URL,
   },
   medianCfs: {
     text: "The median of the daily mean flows for this calendar day over the gauge's years of record.",
     unit: "cfs",
     source: "USGS NWIS daily statistics",
+    url: USGS_STATS_URL,
+  },
+  normalRange: {
+    text: "The middle half of the daily mean flows recorded on this calendar day (the 25th to 75th percentile): a flow in this range is normal for the date.",
+    unit: "cfs",
+    source: "USGS NWIS daily statistics",
+    url: USGS_STATS_URL,
+  },
+  recordYears: { text: "The years of daily flow the statistics for this date are computed from, and how many of them have a value for the date." },
+  waterTemp: {
+    text: "Water temperature where the gauge measures it, in °F with °C after it; trout feed best around 50 to 64 °F (10 to 18 °C) and are stressed above about 68 °F (20 °C).",
+    source: "USGS NWIS instantaneous values",
     url: USGS_WATER_URL,
   },
-  vsNormal: { text: "Today's flow against the median for the date: low is under 50%, normal 50 to 150%, high over 150%." },
+  tempF: { text: "Water temperature where the gauge measures it; trout get stressed above about 68 °F (20 °C).", unit: "°F" },
   tempC: { text: "Water temperature where the gauge measures it; trout get stressed above about 20 °C.", unit: "°C" },
   dischargeM3s: { text: "The GloFAS model's daily discharge in its own unit; a rough estimate, not a gauge reading.", unit: "cubic metres per second" },
 };
 
-/** The gauge card: the flow under its own name, then how it compares with the date's normal. */
+/** Plain words for each class on the card, with the percentile band it stands for. */
+const CLASS_WORDS: Record<FlowClass, string> = {
+  record_low: "Lowest on record for the date",
+  much_below: "Much below normal (under the 10th percentile for the date)",
+  below: "Below normal (10th to 24th percentile for the date)",
+  normal: "Normal (25th to 75th percentile for the date)",
+  above: "Above normal (76th to 90th percentile for the date)",
+  much_above: "Much above normal (over the 90th percentile for the date)",
+  record_high: "Highest on record for the date",
+};
+
+/** The gauge card: the flow under its own name, then how it compares with the date's record. */
 const CARD: CardSpec = {
   measure: { key: "v", label: "Flow", unit: "cfs" },
   facts: [
-    { key: "vsNormal", label: "Running", values: { low: "Low for the date", normal: "Normal for the date", high: "High for the date" } },
+    { key: "flowClass", label: "Running", values: CLASS_WORDS },
     { key: "pctOfMedian", label: "Flow vs. the date's median", unit: "%", format: "int" },
     { key: "medianCfs", label: "Median flow for the date", unit: "cfs" },
-    { key: "tempC", label: "Water temperature", unit: "°C", format: "1dp" },
+    { key: "normalRange", label: "Normal range for the date" },
+    { key: "recordYears", label: "Years of record" },
+    { key: "waterTemp", label: "Water temperature" },
     { key: "dischargeM3s", label: "Flow in cubic metres", unit: "m³/s", format: "1dp" },
     { key: "kind", label: "Reading", values: { gauge: "Measured at a USGS gauge", model: "Modelled by GloFAS (a rough estimate)" } },
     { key: "siteId", label: "USGS site" },
   ],
+  hidden: ["vsNormal", "tempC", "tempF"],
 };
 
 /**
- * Flow sizes each gauge and water temperature colors it (spec §13: "height is that day's flow, color is water
- * temperature"); gauges without a temperature sensor draw off-white. Percent of median ranks the gauges running high.
+ * The class for the date colors each gauge on the ordinal ramp (lowest on record at the low end, highest at the high
+ * end) and flow sizes it; a gauge without statistics for the date draws off-white ("No reading"). Water temperature
+ * is the second color a person can switch to.
  */
 const ATTRIBUTES: Attribute[] = [
+  {
+    key: "flowClass",
+    type: "ordinal",
+    label: "Flow vs. normal for the date",
+    levels: FLOW_CLASSES.map((c) => ({ value: c.value, label: c.label, help: c.help })),
+    scale: "USGS WaterWatch percentile classes for the day of the year",
+    primary: true,
+  },
   { key: "v", type: "measure", label: "Flow", unit: "cfs", encode: "size", aggregate: "sum" },
-  { key: "tempC", type: "measure", label: "Water temperature", unit: "°C" },
   { key: "pctOfMedian", type: "measure", label: "Flow vs. the date's median", unit: "%" },
+  { key: "tempF", type: "measure", label: "Water temperature", unit: "°F", aggregate: "mean" },
+  {
+    key: "kind",
+    type: "category",
+    label: "Reading",
+    levels: [
+      { value: "gauge", label: "USGS gauge", help: "Measured at a USGS stream gauge (United States)." },
+      { value: "model", label: "Modelled river", help: "GloFAS model estimate outside the United States; a rough figure, not a measurement." },
+    ],
+  },
 ];
+
+/** The key: one entry per class on the ramp, then the gauges the ramp cannot place. */
+const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Flow vs. normal for the date",
+  field: "flowClass",
+  items: [
+    ...FLOW_CLASSES.map((c) => ({ label: c.label, value: c.value, symbol: "point" as const, help: c.help })),
+    {
+      label: "No reading",
+      color: OFF_WHITE,
+      symbol: "point" as const,
+      help: "No long-term statistics for this gauge on this date (a short record, gage height asked, or a modelled river outside the US).",
+    },
+  ],
+  note: "Symbol size is the flow in cfs.",
+};
 
 const streamflow = defineLayer({
   id: "streamflow",
@@ -654,12 +829,13 @@ const streamflow = defineLayer({
     "Live river and stream flow: how much water is running right now and whether that is high or low for the date. User words: CFS, flow, river level, running high, running low, blown out, water temperature. " +
     "In the United States each point is a USGS gauge with name, siteId, t (UTC time of the reading, usually 15 to 60 minutes old), v and kind 'gauge'. " +
     "parameter 00060 (default): v is discharge in cubic feet per second (cfs), the volume of water passing the gauge. parameter 00065: v is gage height in feet, the water level at the gauge; its zero point is arbitrary per gauge, so compare it only to the same gauge. " +
-    "pctOfMedian is today's flow as a percent of the median flow for this calendar day over the gauge's record (medianCfs, in cfs), and vsNormal labels it: low (under 50%), normal (50 to 150%) or high (over 150%); use it to say a river is running high or low. It is given for the 30 largest-flow gauges in view only. " +
-    "tempC is water temperature in °C where the gauge measures it (useful for fishing: trout get stressed above about 20 °C). " +
+    "flowClass compares today's flow with every year on record for this calendar day in the USGS WaterWatch percentile classes: record_low (lowest on record for the date), much_below (under the 10th percentile), below (10th to 24th), normal (25th to 75th), above (76th to 90th), much_above (over the 90th), record_high; use it to say a river is running high or low. " +
+    "pctOfMedian is today's flow as a percent of the median for the date (medianCfs, in cfs), normalRange the 25th to 75th percentile in cfs, recordYears the years behind them, vsNormal the coarse word (low, normal or high). Every gauge in view gets them (up to the 400 largest in a very wide box); a gauge whose record is too short has none. " +
+    "tempC and tempF are water temperature where the gauge measures it (useful for fishing: trout get stressed above about 68 °F, 20 °C). " +
     "Outside the United States, points are modelled, not measured: kind 'model', one per major river, v is the GloFAS model's daily discharge converted to cfs (dischargeM3s is the original in m³/s), t is the day; treat it as a rough estimate, and a small river right beside a big one can show the big one's flow. " +
     "Example questions: 'What is the Truckee running at?', 'Which rivers near here are running high?'. " +
     "Caveats: US readings are provisional and can be revised; ice, debris or a dry channel can give 0 or odd values; gauges silent for 7 days are left out; " +
-    "the percent of median compares one instantaneous reading to a daily median, so it swings with dam releases and daily snowmelt cycles. " +
+    "the class compares one instantaneous reading to daily means, so it swings with dam releases and daily snowmelt cycles. " +
     "Over 400,000 km² it returns up to 1,000 gauges, highest flow first.",
   coverage: "global",
   surface: "land",
@@ -670,10 +846,16 @@ const streamflow = defineLayer({
   // Default hard cap (1.6 million km²): about 7 IV strips in the lower 48, fetched in parallel.
   wide: { orderBy: "current flow or gage height", limit: WIDE_LIMIT },
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("streamflow"), unit: "cfs", encode: { size: "v", color: "tempC" } },
+  style: { geometry: "point", color: layerColor("streamflow"), unit: "cfs", encode: { size: "v", color: "flowClass" } },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // One latest reading per gauge: say its time, no scrubber.
+  time: { shape: "single" },
+  legend: LEGEND,
+  labels: { field: "name", max: 5, rankBy: "v" },
+  // USGS data in cfs and feet; temperatures in °F first.
+  display: { units: "us", timeZone: "local" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();
@@ -705,22 +887,23 @@ const streamflow = defineLayer({
     }
 
     const statFor = input.parameter === "00060" ? statSites(sites) : [];
-    const stats =
-      statFor.length > 0 ? await fetchMedians(ctx, statFor) : { medians: new Map<string, Map<string, number>>(), failedBatches: 0 };
-    const all = ivFeatures(sites, input.parameter, stats.medians);
+    const looked =
+      statFor.length > 0 ? await fetchStats(ctx, statFor) : { stats: new Map<string, Map<string, DayStats>>(), failedBatches: 0 };
+    const all = ivFeatures(sites, input.parameter, looked.stats);
     const { data, total } = ctx.wide ? keepLargest(all, ctx.wideStrategy?.limit ?? WIDE_LIMIT) : { data: all, total: undefined };
     const withFlow = sites.filter((s) => s.readings[input.parameter] !== undefined).length;
     const notes: string[] = [];
-    if (stats.failedBatches > 0) {
+    if (looked.failedBatches > 0) {
       notes.push(
-        stats.medians.size === 0
-          ? "The USGS statistics service did not answer, so percent of median (running high or low) is missing"
-          : "The USGS statistics service failed for some gauges, so their percent of median is missing",
+        looked.stats.size === 0
+          ? "The USGS statistics service did not answer, so no gauge says whether it is running high or low"
+          : "The USGS statistics service failed for some gauges, so they show no reading against normal",
       );
     }
     if (input.parameter === "00060" && withFlow > STAT_SITE_CAP) {
-      notes.push(`Percent of median is given for the ${STAT_SITE_CAP} largest-flow gauges of ${withFlow}; zoom in for the rest`);
+      notes.push(`Flow against normal is given for the ${STAT_SITE_CAP} largest-flow gauges of ${withFlow}; zoom in for the rest`);
     }
+    if (input.parameter === "00065") notes.push("Gage height has no statistics for the date, so no gauge is classed against normal");
     return {
       kind: "geojson",
       data,

@@ -47,7 +47,9 @@ describe("deriveFilterFields on fixtures", () => {
     const sac = fields.find((f) => f.key === "sac_scale");
     expect(sac).toMatchObject({ kind: "category", label: "Difficulty (sac_scale)" });
     if (sac?.kind !== "category") throw new Error("expected category");
+    // Ways with no difficulty carry sac_scale "not_rated" (layers/osm-trails.ts), so "Not rated" is a chip too.
     expect(sac.values).toEqual([
+      { value: "not_rated", count: 42 },
       { value: "mountain_hiking", count: 6 },
       { value: "hiking", count: 2 },
     ]);

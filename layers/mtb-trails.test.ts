@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { attributeGroups } from "@/lib/render/attributes";
+import { cardContent } from "@/lib/render/card";
 import { hardMaxAreaKm2 } from "./types";
-import layer, { WIDE_LIMIT, buildMtbQuery, imbaScale, mtbScale, normalizeMtb } from "./mtb-trails";
+import { cardTitle, contractProblems, legendOf, timeShapeOf } from "./contract";
+import layer, { WIDE_LIMIT, bikesAllowed, buildMtbQuery, imbaScale, mtbScale, normalizeMtb } from "./mtb-trails";
 import fixture from "./__fixtures__/mtb-trails.truckee.json";
+import moab from "./__fixtures__/mtb-trails.moab.json";
 
 const TRUCKEE: [number, number, number, number] = [-120.25, 39.28, -120.1, 39.38];
 const DEFAULTS = { includeRoutes: true };
@@ -67,12 +71,12 @@ describe("normalizeMtb", () => {
     expect(route?.properties).not.toHaveProperty("v");
   });
 
-  it("carries the mtb:scale as v and kind mtb, and imba-only ways as kind imba without v", () => {
+  it("carries the mtb:scale as v and kind mtb, and an imba-only way's IMBA rating as v so it sits on the ramp", () => {
     const matt = fc.features.find((f) => f.properties?.name === "Matt's Trail");
-    expect(matt?.properties).toMatchObject({ kind: "mtb", v: 1, imba: 2, highway: "path", surface: "ground" });
+    expect(matt?.properties).toMatchObject({ kind: "mtb", v: 1, singletrack: 1, imba: 2, highway: "path", surface: "ground" });
     const imbaOnly = fc.features.find((f) => f.properties?.name === "Springboard");
-    expect(imbaOnly?.properties).toMatchObject({ kind: "imba", imba: 2 });
-    expect(imbaOnly?.properties).not.toHaveProperty("v");
+    expect(imbaOnly?.properties).toMatchObject({ kind: "imba", imba: 2, v: 2 });
+    expect(imbaOnly?.properties).not.toHaveProperty("singletrack");
   });
 
   it("puts a valid check_date in t and keeps an odd rating text as mtbScale", () => {
@@ -160,7 +164,7 @@ describe("mtb-trails layer", () => {
     expect(r.coverageNote).toBe("Returned 15 rated trail ways and routes; the box was not truncated");
   });
 
-  it("keeps trails at or under maxScale, plus unrated ones and routes", async () => {
+  it("keeps trails at or under maxScale (IMBA-only ones by their IMBA rating), plus routes", async () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
     const r = await layer.query(ctx(stub), { includeRoutes: true, maxScale: 0 });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
@@ -285,5 +289,52 @@ describe("mtb-trails wide mode", () => {
     );
     if (!("kind" in scaled) || scaled.kind !== "geojson") throw new Error("expected geojson");
     expect(scaled.coverageNote).toBe("The difficulty limit hid 1 of the named trails");
+  });
+});
+
+describe("mtb-trails near Moab: ratings in words, IMBA-only trails on the ramp, and whether bikes are allowed", () => {
+  const fc = normalizeMtb(moab);
+  const card = (name: string | undefined) => {
+    const f = fc.features.find((x) => x.properties?.name === name);
+    if (!f) throw new Error(`expected ${name}`);
+    return cardContent(f, { card: layer.card, fieldHelp: layer.fieldHelp });
+  };
+  const rows = (c: ReturnType<typeof card>) => c.facts.map((r) => `${r.label}: ${r.value}`);
+
+  it("shows Slickrock as '3, Hard' on the Singletrack Scale with no bare number, and that bikes are allowed", () => {
+    const c = card("Slickrock");
+    expect(c.measure).toBeNull();
+    expect(rows(c)).toEqual(
+      expect.arrayContaining(["Singletrack Scale: 3, Hard", "IMBA rating: 3, Hard (black diamond)", "Bikes: Allowed, signed as a bike trail"]),
+    );
+    expect([...c.facts, ...c.details].some((r) => r.value.includes("way/"))).toBe(false);
+  });
+
+  it("puts an IMBA-only trail in the difficulty chips by its IMBA band, so few lines read unrated", () => {
+    expect(fc.features.map((f) => f.properties?.v)).toEqual([3, 3, 1]);
+    const v = layer.attributes?.find((a) => a.key === "v");
+    if (!v) throw new Error("expected the difficulty attribute");
+    expect(attributeGroups(v, fc).map((g) => `${g.label} ${g.count}`)).toEqual(["Easy 1", "Hard 2"]);
+    expect(rows(card("Cliff Hanger Trail"))).toEqual(expect.arrayContaining(["IMBA rating: 3, Hard (black diamond)", "Bikes: Allowed", "Kind: IMBA rated only"]));
+  });
+
+  it("titles an unnamed segment by what it is, not by its rating", () => {
+    const unnamed = fc.features.find((f) => f.properties?.name === undefined);
+    if (!unnamed) throw new Error("expected an unnamed track");
+    expect(cardTitle(layer, unnamed)).toBe("Unnamed track");
+  });
+
+  it("reads bikes from the bicycle tag, else an access tag that closes the trail", () => {
+    expect(bikesAllowed({ bicycle: "no" })).toBe("no");
+    expect(bikesAllowed({ access: "private" })).toBe("private");
+    expect(bikesAllowed({ access: "no", bicycle: "permissive" })).toBe("permissive");
+    expect(bikesAllowed({ access: "yes" })).toBeUndefined();
+  });
+
+  it("declares no time, a difficulty legend that names the unrated routes, and labels by name", () => {
+    expect(contractProblems(layer)).toEqual([]);
+    expect(timeShapeOf(layer, fc)).toEqual({ shape: "none" });
+    expect(legendOf(layer).items?.map((i) => i.label)).toEqual(["Easy", "Moderate", "Hard", "Expert", "Named route, not rated"]);
+    expect(layer.labels).toEqual({ field: "name", max: 8, rankBy: "v" });
   });
 });

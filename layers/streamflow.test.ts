@@ -12,13 +12,17 @@ import layer, {
   joinGauges,
   namedRiverCount,
   RIVER_POINTS,
-  parseDailyMedians,
+  parseDailyStats,
+  flowClass,
+  FLOW_CLASSES,
   riverSamplePoints,
   keepLargest,
   statSites,
   STAT_SITE_CAP,
+  waterTempText,
 } from "./streamflow";
 import { hardMaxAreaKm2 } from "./types";
+import { cardTitle, displayOf, labelsOf, legendOf, timeShapeOf } from "./contract";
 import { ivStrips, parseIv } from "./_shared/usgs";
 import latestFixture from "./__fixtures__/usgs-latest.tahoe.json";
 import locationsFixture from "./__fixtures__/usgs-locations.tahoe.json";
@@ -26,8 +30,11 @@ import ivFixture from "./__fixtures__/usgs-iv.tahoe.json";
 import riversFixture from "./__fixtures__/osm-rivers.lyon.json";
 import glofasFixture from "./__fixtures__/glofas.lyon.json";
 
-/** Recorded 2026-10-10 ~02:08 UTC (Oct 9 evening Pacific) for TAHOE; the stat file is trimmed to Oct 8-10. */
-const statRdb = readFileSync(join(__dirname, "__fixtures__/usgs-stat.tahoe.rdb"), "utf8");
+/**
+ * The IV fixture was recorded 2026-10-10 ~02:08 UTC (Oct 9 evening Pacific) for TAHOE; the statistics (statTypeCd=all,
+ * recorded 2026-10-18 for the same gauges) are trimmed to Oct 8-10.
+ */
+const statRdb = readFileSync(join(__dirname, "__fixtures__/streamflow-stat.tahoe.rdb"), "utf8");
 
 const latest = latestFixture as unknown as { features: unknown[] };
 const locations = locationsFixture as unknown as { features: unknown[] };
@@ -168,52 +175,74 @@ describe("parseIv and ivStrips", () => {
   });
 });
 
-describe("percent of median", () => {
-  it("parses daily medians by site and calendar day", () => {
-    const medians = parseDailyMedians(statRdb);
-    expect(medians.get("10310000")?.get("10-09")).toBe(23);
-    expect(medians.get("10336610")?.get("10-09")).toBe(11);
-    expect(parseDailyMedians("")).toEqual(new Map());
+describe("flow vs. normal for the date", () => {
+  it("parses each day's record low, percentiles, median, record high and years by site", () => {
+    const stats = parseDailyStats(statRdb);
+    expect(stats.get("10310000")?.get("10-09")).toEqual({ min: 7.7, p10: 13, p25: 16, p50: 23, p75: 29, p90: 38, max: 82, beginYr: 1901, endYr: 2026, years: 95 });
+    expect(stats.get("10336610")?.get("10-09")?.p50).toBe(11);
+    expect(parseDailyStats("")).toEqual(new Map());
   });
 
-  it("adds pctOfMedian, medianCfs and vsNormal for the reading's local day", () => {
-    const fc = ivFeatures(parseIv([ivFixture], IV_NOW), "00060", parseDailyMedians(statRdb));
-    const woodfords = fc.features.find((f) => f.properties?.siteId === "USGS-10310000")?.properties ?? {};
-    expect(woodfords.medianCfs).toBe(23);
-    expect(woodfords.pctOfMedian).toBe(Math.round((Number(woodfords.v) / 23) * 100));
-    expect(["low", "normal", "high"]).toContain(woodfords.vsNormal);
-    expect(woodfords.kind).toBe("gauge");
-    const upper = fc.features.find((f) => f.properties?.siteId === "USGS-10336610")?.properties ?? {};
-    expect(typeof upper.tempC).toBe("number");
+  it("classes a flow in WaterWatch's percentile classes, with the record low and high beyond them", () => {
+    const day = { min: 5, p10: 10, p25: 20, p50: 30, p75: 40, p90: 50, max: 90 };
+    expect(flowClass(4, day)).toBe("record_low");
+    expect(flowClass(5, day)).toBe("much_below");
+    expect(flowClass(15, day)).toBe("below");
+    expect(flowClass(20, day)).toBe("normal");
+    expect(flowClass(40, day)).toBe("normal");
+    expect(flowClass(45, day)).toBe("above");
+    expect(flowClass(60, day)).toBe("much_above");
+    expect(flowClass(91, day)).toBe("record_high");
+    expect(flowClass(30, { p50: 30 })).toBeUndefined();
+    expect(FLOW_CLASSES.map((c) => c.value)).toEqual(["record_low", "much_below", "below", "normal", "above", "much_above", "record_high"]);
   });
 
-  it("labels low under 50% and high over 150%", () => {
-    const site = (v: number) => ({
-      siteId: "USGS-1",
-      siteNo: "1",
-      name: "A",
-      coordinates: [-120, 39] as [number, number],
-      readings: { "00060": { time: IV_NOW.getTime(), local: "2026-10-09T18:00:00.000-07:00", value: v } },
+  it("gives each gauge its class, percent of median, normal range and years for the reading's local day", () => {
+    const fc = ivFeatures(parseIv([ivFixture], IV_NOW), "00060", parseDailyStats(statRdb));
+    const at = (site: string) => fc.features.find((f) => f.properties?.siteId === `USGS-${site}`)?.properties ?? {};
+    expect(at("10310000")).toMatchObject({
+      kind: "gauge",
+      v: 19.4,
+      flowClass: "normal",
+      vsNormal: "normal",
+      pctOfMedian: 84,
+      medianCfs: 23,
+      normalRange: "16 to 29 cfs",
+      recordYears: "1901 to 2026 (95 years)",
     });
-    const medians = new Map([["1", new Map([["10-09", 100]])]]);
-    const label = (v: number) => ivFeatures([site(v)], "00060", medians).features[0].properties?.vsNormal;
-    expect(label(40)).toBe("low");
-    expect(label(100)).toBe("normal");
-    expect(label(200)).toBe("high");
+    // 0.05 cfs under the lowest Oct 9 on record (0.08), and 1.00 cfs under the 10th percentile (1.2).
+    expect(at("10336730").flowClass).toBe("record_low");
+    expect(at("10336730").vsNormal).toBe("low");
+    expect(at("10336660").flowClass).toBe("much_below");
+    expect(at("103366092").flowClass).toBe("above");
+    // No statistics for this gauge: no class, drawn as "No reading".
+    expect(at("10348505").flowClass).toBeUndefined();
+    const upper = at("10336610");
+    expect(upper.tempC).toBe(14.9);
+    expect(upper.tempF).toBe(58.8);
+    expect(upper.waterTemp).toBe("59 °F (14.9 °C)");
   });
 
-  it("looks medians up for the largest-flow gauges only, capped", () => {
-    const sites = Array.from({ length: 45 }, (_, i) => ({
-      siteId: `USGS-${i}`,
-      siteNo: String(1000 + i),
-      name: String(i),
-      coordinates: [-120, 39] as [number, number],
-      readings: { "00060": { time: 0, local: "2026-10-09T00:00:00-07:00", value: i } },
-    }));
-    const chosen = statSites(sites);
-    expect(chosen).toHaveLength(STAT_SITE_CAP);
-    expect(chosen).toContain("1044");
-    expect(chosen).not.toContain("1000");
+  it("writes water temperature in °F first", () => {
+    expect(waterTempText(8.5)).toBe("47 °F (8.5 °C)");
+    expect(waterTempText(20)).toBe("68 °F (20.0 °C)");
+  });
+
+  it("looks statistics up for every gauge with a discharge reading, largest first up to the cap", () => {
+    const sites = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        siteId: `USGS-${i}`,
+        siteNo: String(1000 + i),
+        name: String(i),
+        coordinates: [-120, 39] as [number, number],
+        readings: { "00060": { time: 0, local: "2026-10-09T00:00:00-07:00", value: i } },
+      }));
+    expect(statSites(sites(45))).toHaveLength(45);
+    expect(STAT_SITE_CAP).toBeGreaterThanOrEqual(400);
+    const capped = statSites(sites(45), 30);
+    expect(capped).toHaveLength(30);
+    expect(capped).toContain("1044");
+    expect(capped).not.toContain("1000");
   });
 });
 
@@ -277,23 +306,29 @@ describe("streamflow layer", () => {
     expect((ivInit as { ttlSeconds?: number }).ttlSeconds).toBe(600);
   });
 
-  it("fetches medians 10 sites per call under a bbox-independent cache key", async () => {
+  it("fetches every gauge's statistics, 10 sites per call, under a bbox-independent cache key", async () => {
     const stub = liveStub();
     await layer.query(ctx(stub, { cacheKey: "streamflow:k" }), FLOW);
     const stats = callsOf(stub).filter((c) => c[0].includes("/nwis/stat/"));
     expect(stats).toHaveLength(2);
+    const asked = stats.flatMap(([url]) => (param(url, "sites") ?? "").split(","));
+    expect(asked).toHaveLength(18);
     for (const [url, init] of stats) {
       expect((param(url, "sites") ?? "").split(",").length).toBeLessThanOrEqual(10);
       expect(param(url, "statReportType")).toBe("daily");
-      expect(param(url, "statTypeCd")).toBe("median");
-      expect(init.cacheKey).toMatch(/^streamflow:stat:\d/);
+      expect(param(url, "statTypeCd")).toBe("all");
+      expect(init.cacheKey).toMatch(/^streamflow:stat-all:\d/);
+      expect((init as { ttlSeconds?: number }).ttlSeconds).toBe(7 * 86_400);
     }
   });
 
-  it("returns gauges with t, v, pctOfMedian and tempC", async () => {
+  it("returns gauges with t, v, a class for the date, pctOfMedian and tempC", async () => {
     const r = await layer.query(ctx(liveStub()), FLOW);
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features.length).toBeGreaterThanOrEqual(18);
+    const withFlow = r.data.features.filter((f) => typeof f.properties?.v === "number");
+    // Every gauge with statistics is classed, not only the largest; one gauge has none.
+    expect(withFlow.filter((f) => typeof f.properties?.flowClass === "string")).toHaveLength(withFlow.length - 1);
     expect(r.data.features.some((f) => typeof f.properties?.pctOfMedian === "number")).toBe(true);
     expect(r.data.features.some((f) => typeof f.properties?.tempC === "number")).toBe(true);
     for (const f of r.data.features) {
@@ -318,7 +353,7 @@ describe("streamflow layer", () => {
     const r = await layer.query(ctx(stub), FLOW);
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features.length).toBeGreaterThan(0);
-    expect(r.data.features.every((f) => f.properties?.pctOfMedian === undefined)).toBe(true);
+    expect(r.data.features.every((f) => f.properties?.pctOfMedian === undefined && f.properties?.flowClass === undefined)).toBe(true);
     expect(r.coverageNote).toMatch(/statistics service did not answer/);
   });
 
@@ -395,16 +430,48 @@ describe("streamflow layer", () => {
     expect(layer.description).toMatch(/cubic feet per second/i);
     expect(layer.description).toMatch(/gage height/i);
     expect(layer.description).toMatch(/percent of the median|pctOfMedian/i);
+    expect(layer.description).toMatch(/flowClass/);
     expect(layer.description).toMatch(/running high/i);
     expect(layer.description).toMatch(/CFS/);
     expect(layer.description).toMatch(/provisional/i);
-    expect(layer.style).toEqual({ geometry: "point", color: "#3A3A3C", unit: "cfs", encode: { size: "v", color: "tempC" } });
+    expect(layer.description).not.toMatch(/30 largest/);
+    expect(layer.style).toEqual({ geometry: "point", color: "#3A3A3C", unit: "cfs", encode: { size: "v", color: "flowClass" } });
     expect(layer.coverage).toBe("global");
     expect(layer.license).toMatch(/Public domain \(USGS\)/);
     expect(layer.license).toMatch(/non-commercial/);
     expect(layer.maxAreaKm2).toBe(400_000);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toEqual(["USGS_API_KEY", "OVERPASS_URL"]);
+  });
+
+  it("declares one reading per gauge, a key for every class plus No reading, labels and US units", async () => {
+    const r = await layer.query(ctx(liveStub()), FLOW);
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(timeShapeOf(layer, r).shape).toBe("single");
+    const legend = legendOf(layer, r);
+    expect(legend.kind).toBe("categories");
+    expect(legend.field).toBe("flowClass");
+    expect(legend.items?.map((i) => i.label)).toEqual([
+      "Lowest on record for the date",
+      "Much below normal",
+      "Below normal",
+      "Normal",
+      "Above normal",
+      "Much above normal",
+      "Highest on record for the date",
+      "No reading",
+    ]);
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 5, rankBy: "v" });
+    expect(displayOf(layer).units).toBe("us");
+    const chips = layer.attributes?.find((a) => a.primary);
+    expect(chips?.key).toBe("flowClass");
+    expect(layer.attributes?.find((a) => a.key === "kind")?.levels?.map((l) => l.label)).toEqual(["USGS gauge", "Modelled river"]);
+    const woodfords = r.data.features.find((f) => f.properties?.siteId === "USGS-10310000")!;
+    expect(cardTitle(layer, woodfords)).toMatch(/W FK CARSON/i);
+    const running = layer.card?.facts?.find((f) => f.key === "flowClass");
+    expect(running?.values?.normal).toBe("Normal (25th to 75th percentile for the date)");
+    expect(layer.card?.facts?.map((f) => f.key)).toContain("pctOfMedian");
+    expect(layer.card?.hidden).toEqual(expect.arrayContaining(["tempC", "tempF", "vsNormal"]));
   });
 
   it("rejects a box over the hard cap and bad input through runLayer", async () => {

@@ -21,6 +21,14 @@
  * 4 highway-legal only seasonal, 11 special designation yearlong, 12 special designation seasonal.
  * Those six are the only values in the layer. The default filter drops 11 and 12.
  * gis_miles (the segment's length in miles) becomes `miles`.
+ * Added 2026-10-18 (field names read live from `?f=json` that day): operationalmaintlevel ("2 - HIGH CLEARANCE VEHICLES",
+ * "3 - SUITABLE FOR PASSENGER CARS"...; nationally 85% are level 2, and a few hundred are blank, "0 - NOT MAINTAINED"
+ * or a bare "2") becomes `level` (1 to 5) when it starts with a digit 1 to 5; districtname becomes `district`;
+ * passengervehicle_datesopen ("04/02-12/14", "01/01-01/15,04/08-05/13,10/01-12/31", "06/01 - 9/30") becomes `carDates`
+ * in words; motorhome, atv, motorcycle and e_bike_class1 ("open" or null) become `motorhome`, `atv`, `motorcycle` and
+ * `eBike` when the field is filled; surfacetype is also grouped as `surfaceKind` (paved, gravel, dirt).
+ * The maintenance level is how the Forest Service keeps the road up for traffic, so it says what can drive it; the
+ * vehicle fields say only what is legal. Sedona (-111.9,34.75,-111.6,34.95) holds levels 2 to 5.
  *
  * Wide mode (over 25,000 km², up to the whole US): the same query ordered by gis_miles, longest first, capped at the
  * wide strategy's limit and simplified to the view, with a count of every matching segment as `total`; run.ts writes
@@ -32,11 +40,23 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult } from "./types";
+import {
+  defineLayer,
+  type Attribute,
+  type AttributeLevel,
+  type BBox,
+  type CardSpec,
+  type FieldHelp,
+  type LayerError,
+  type LayerResult,
+  type LegendSpec,
+} from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
+import { nameAttribute } from "./_shared/bands";
 import { OUTSIDE_US_NOTE, WHOLE_US_KM2, outsideUs } from "./_shared/coverage";
-import { layerColor } from "@/lib/render/palette";
+import { groupColors } from "@/lib/render/attributes";
+import { SAGE, layerColor } from "@/lib/render/palette";
 
 const SERVICE_URL = "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/1";
 
@@ -51,6 +71,13 @@ const FIELDS = [
   "surfacetype",
   "forestname",
   "gis_miles",
+  "operationalmaintlevel",
+  "districtname",
+  "passengervehicle_datesopen",
+  "motorhome",
+  "atv",
+  "motorcycle",
+  "e_bike_class1",
 ];
 
 const MAX_RECORDS = 2000;
@@ -78,12 +105,54 @@ export function mvumOffset(bbox: BBox, wide: boolean): number {
   return wide ? Math.max(0.0001, (bbox[2] - bbox[0]) / 4_000) : 0.0001;
 }
 
+/** The other vehicle classes the card lists: MVUM field, then property. */
+const VEHICLE_FIELDS: [string, string][] = [
+  ["motorhome", "motorhome"],
+  ["atv", "atv"],
+  ["motorcycle", "motorcycle"],
+  ["e_bike_class1", "eBike"],
+];
+
+/** The maintenance level 1 to 5 from "3 - SUITABLE FOR PASSENGER CARS"; undefined for blank, "0 - NOT MAINTAINED" or other text. */
+export function maintLevelOf(raw: unknown): number | undefined {
+  const m = typeof raw === "string" ? /^\s*([1-5])\b/.exec(raw) : null;
+  return m ? Number(m[1]) : undefined;
+}
+
+/** The surface type's group (paved, gravel or dirt); undefined for "OTHER - OTHER" or a code not listed. */
+export function surfaceKindOf(surface: string): "paved" | "gravel" | "dirt" | undefined {
+  const code = surface.split(" - ")[0].trim().toUpperCase();
+  if (["AC", "P", "PCC", "BST"].includes(code)) return "paved";
+  if (["AGG", "PIT"].includes(code)) return "gravel";
+  if (["IMP", "CSOIL", "NAT", "FSOIL", "SOD"].includes(code)) return "dirt";
+  return undefined;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * The dates a road is open to passenger cars, in words: "01/01-12/31" is "All year", "04/02-12/14" is "Apr 2 to Dec 14",
+ * and several ranges are joined with commas. Undefined when the field holds no dates ("open", blank).
+ */
+export function datesOpen(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const ranges: string[] = [];
+  for (const m of raw.matchAll(/(\d{1,2})\/(\d{1,2})\s*-\s*(\d{1,2})\/(\d{1,2})/g)) {
+    const [a, b, c, d] = [m[1], m[2], m[3], m[4]].map(Number);
+    if (a < 1 || a > 12 || c < 1 || c > 12) continue;
+    if (a === 1 && b === 1 && c === 12 && d === 31) return "All year";
+    ranges.push(`${MONTHS[a - 1]} ${b} to ${MONTHS[c - 1]} ${d}`);
+  }
+  return ranges.length > 0 ? ranges.join(", ") : undefined;
+}
+
 /** Maps MVUM road rows to line features, skipping rows with no geometry or route id. */
 export function normalizeMvum(fc: FeatureCollection): FeatureCollection {
   const features: Feature<Geometry>[] = [];
   for (const f of fc.features) {
     const p = f.properties ?? {};
-    const routeId = str(p.id);
+    // The service pads road numbers ("00153"); the sign and the paper map read "153".
+    const routeId = str(p.id)?.replace(/^0+(?=[0-9A-Za-z])/, "");
     if (!f.geometry || routeId === undefined) continue;
 
     const symbol = str(p.symbol);
@@ -104,10 +173,26 @@ export function normalizeMvum(fc: FeatureCollection): FeatureCollection {
     };
     const name = str(p.name);
     if (name !== undefined) properties.name = name;
+    // No name: the road number is what is signed on the road and printed on the map ("Forest Road 152C").
+    else properties.heading = `Forest Road ${routeId}`;
     const forest = str(p.forestname);
     if (forest !== undefined) properties.forest = forest;
+    const district = str(p.districtname);
+    if (district !== undefined) properties.district = district;
+    const level = maintLevelOf(p.operationalmaintlevel);
+    if (level !== undefined) properties.level = level;
     const surface = str(p.surfacetype);
-    if (surface !== undefined) properties.surface = surface;
+    if (surface !== undefined) {
+      properties.surface = surface;
+      const group = surfaceKindOf(surface);
+      if (group !== undefined) properties.surfaceKind = group;
+    }
+    const carDates = datesOpen(p.passengervehicle_datesopen);
+    if (carDates !== undefined) properties.carDates = carDates;
+    for (const [field, key] of VEHICLE_FIELDS) {
+      const v = str(p[field]);
+      if (v !== undefined) properties[key] = v.toLowerCase() === "open";
+    }
     if (typeof p.gis_miles === "number" && Number.isFinite(p.gis_miles) && p.gis_miles > 0) {
       properties.miles = Math.round(p.gis_miles * 100) / 100;
     }
@@ -135,6 +220,62 @@ const HELP: Record<string, FieldHelp> = {
   },
   access: { text: "Which vehicles the Motor Vehicle Use Map opens the road to, and whether all year or only part of it.", ...MVUM_SOURCE },
   routeId: { text: "The Forest Service road number, as signed on the road and printed on the forest's Motor Vehicle Use Map.", ...MVUM_SOURCE },
+  level: {
+    text:
+      "How the Forest Service maintains the road for traffic (its operational maintenance level), which says what can actually drive it: " +
+      "level 2 is for high-clearance vehicles and is not kept up for ordinary cars, level 3 suits a careful driver in a passenger car, " +
+      "levels 4 and 5 are smoother and often paved. Level 1 roads are closed to traffic. It is not a promise of current conditions.",
+    scale: "1 (closed) to 5 (high comfort, usually paved)",
+    ...MVUM_SOURCE,
+  },
+  passengerCar: {
+    text:
+      "Whether the Motor Vehicle Use Map makes the road legal for passenger cars. Legal is not the same as drivable: read the maintenance level " +
+      "for what the road is built for.",
+    ...MVUM_SOURCE,
+  },
+  carDates: { text: "The dates the Motor Vehicle Use Map opens the road to passenger cars each year.", ...MVUM_SOURCE },
+  district: { text: "The Forest Service ranger district that manages the road; call it for current conditions, closures and camping rules.", ...MVUM_SOURCE },
+  surfaceKind: { text: "The road's surface grouped as paved (asphalt, concrete, chip seal), gravel (crushed rock) or dirt (native soil).", ...MVUM_SOURCE },
+};
+
+/** The maintenance levels, easiest first (the ramp's light end) to closed (its dark end). */
+const LEVELS: AttributeLevel[] = [
+  { value: 5, label: "5 High comfort/paved", help: "Smooth, often paved; fine for any car." },
+  { value: 4, label: "4 Moderate comfort", help: "Graded and maintained for passenger cars at moderate speed." },
+  { value: 3, label: "3 Passenger cars (rough)", help: "Passable in a passenger car driven with care; can be rough." },
+  { value: 2, label: "2 High clearance", help: "Maintained for high-clearance vehicles only; not suited to ordinary cars." },
+  { value: 1, label: "1 Closed", help: "Kept closed to vehicle traffic." },
+];
+
+const LEVEL_SCALE = "Forest Service operational maintenance level, 1 to 5";
+
+const SURFACE_KINDS: AttributeLevel[] = [
+  { value: "paved", label: "Paved" },
+  { value: "gravel", label: "Gravel" },
+  { value: "dirt", label: "Dirt" },
+];
+
+const ATTRIBUTES: Attribute[] = [
+  { key: "level", type: "ordinal", label: "Maintenance level", levels: LEVELS, scale: LEVEL_SCALE, encode: "color", primary: true },
+  { key: "surfaceKind", type: "category", label: "Surface", levels: SURFACE_KINDS },
+  { key: "seasonal", type: "flag", label: "Seasonal (closed part of the year)" },
+  { key: "miles", type: "measure", label: "Segment length", unit: "mi" },
+  { key: "district", type: "category", label: "Ranger district" },
+  nameAttribute(),
+];
+
+/** The key: one swatch per level in the colors the map draws them, and roads the Forest Service has not rated. */
+const LEVEL_COLORS = groupColors(LEVELS.length);
+const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Maintenance level",
+  field: "level",
+  items: [
+    ...LEVELS.map((l, i) => ({ label: l.label, value: l.value, color: LEVEL_COLORS[i], symbol: "line" as const, ...(l.help && { help: l.help }) })),
+    { label: "Not rated", color: SAGE, symbol: "line", help: "The Forest Service gives no maintenance level for the road." },
+  ],
+  note: "Every road drawn is legal for motor vehicles at least part of the year; the level says what it is built for.",
 };
 
 /** The six MVUM classes in plain words. */
@@ -165,17 +306,28 @@ const SURFACE_LABELS: Record<string, string> = {
   "OTHER - OTHER": "Other",
 };
 
+const LEGAL = { true: "Yes", false: "Not listed as legal" };
+
 const CARD: CardSpec = {
   facts: [
+    { key: "level", label: "Maintenance level", values: Object.fromEntries(LEVELS.map((l) => [String(l.value), l.label])) },
+    { key: "passengerCar", label: "Legal for passenger cars", values: LEGAL },
+    { key: "carDates", label: "Passenger cars allowed" },
+    { key: "highClearance", label: "Legal for high-clearance vehicles", values: LEGAL },
+    { key: "motorhome", label: "Legal for motorhomes", values: LEGAL },
+    { key: "atv", label: "Legal for ATVs", values: LEGAL },
+    { key: "motorcycle", label: "Legal for motorcycles", values: LEGAL },
+    { key: "eBike", label: "Legal for e-bikes (class 1)", values: LEGAL },
+    { key: "district", label: "Ranger district" },
     { key: "routeId", label: "Road number" },
-    { key: "access", label: "Open to", values: ACCESS_LABELS },
-    { key: "seasonal", label: "Seasonal", values: { true: "Yes, closed part of the year", false: "No, open all year" } },
-    { key: "passengerCar", label: "Passenger cars", values: { true: "Open", false: "Not listed as open" } },
-    { key: "highClearance", label: "High-clearance vehicles", values: { true: "Open", false: "Not listed as open" } },
     { key: "surface", label: "Surface", values: SURFACE_LABELS },
+    { key: "seasonal", label: "Seasonal", values: { true: "Yes, closed part of the year", false: "No, open all year" } },
+    { key: "access", label: "Open to", values: ACCESS_LABELS },
     { key: "miles", label: "Segment length", unit: "mi" },
     { key: "forest", label: "Forest" },
   ],
+  // The surface group repeats the surface row; the heading repeats the road number.
+  hidden: ["surfaceKind", "heading"],
 };
 
 const forestRoads = defineLayer({
@@ -183,14 +335,17 @@ const forestRoads = defineLayer({
   title: "Forest Service roads open to motor vehicles",
   description:
     "US Forest Service roads that are legally open to public motor vehicles (from each forest's Motor Vehicle Use Map), the roads you drive to find a dispersed (free, undeveloped) campsite in a National Forest. " +
-    "Each line has routeId, name (when it has one), forest, access (the Forest Service class, such as 'Roads open to highway legal vehicles only, Seasonal'), " +
-    "seasonal (true when closed part of the year), passengerCar (true when ordinary cars may use it) and highClearance, surface (paved, gravel, native dirt) and miles (the segment's length). " +
+    "Lines are colored by level, the Forest Service maintenance level, which says what the road is built for: 5 high comfort (often paved), 4 moderate comfort, 3 passenger cars with care (can be rough), 2 high-clearance vehicles only, 1 closed. " +
+    "Most forest roads are level 2: legal for cars but not built for them, so answer 'can I drive my car there' from level, not from passengerCar. " +
+    "Each line has routeId, name (when it has one), forest, district (the ranger district to call), level, access (the Forest Service class, such as 'Roads open to highway legal vehicles only, Seasonal'), " +
+    "seasonal (true when closed part of the year), carDates (the dates passenger cars may use it, such as 'Apr 2 to Dec 14'), passengerCar, highClearance, motorhome, atv, motorcycle and eBike (true when legal for that vehicle; legal, not a sign the road suits it), " +
+    "surface (the source's surface type), surfaceKind (paved, gravel or dirt) and miles (the segment's length). " +
     "By default it shows roads open to ordinary highway-legal vehicles; set includeAllRoads to true to also include special-designation roads that allow only certain vehicle types. " +
     "IMPORTANT CAVEAT: the Forest Service's national data does NOT say which roads allow dispersed camping, so this layer does not either. " +
     "Many forests allow camping within a set distance (often one vehicle length to 300 feet) of these roads, but rules differ by forest and ranger district and can be closed by fire or season; " +
     "tell the user to confirm with the local ranger district or the forest's MVUM before camping. " +
     "Pair it with the campsites layer to show developed sites and trailhead parking. " +
-    "United States National Forests only (nothing on other land or outside the US); dates the roads are open are not included beyond the seasonal flag. " +
+    "United States National Forests only (nothing on other land or outside the US); motorcycle and ATV trails (not roads) are not included. " +
     "Up to 25,000 km² (about a 160 km square) it returns the roads in the box, at most 2,000 segments, and says so when it trims; any wider US box, up to the whole country, returns the 2,000 longest segments, longest first, and the note gives the total.",
   coverage: "us",
   surface: "land",
@@ -201,9 +356,16 @@ const forestRoads = defineLayer({
   hardMaxAreaKm2: WHOLE_US_KM2,
   wide: { orderBy: "segment length in miles", rank: "longest", limit: MAX_RECORDS },
   input: inputSchema,
-  style: { geometry: "line", color: layerColor("forest-roads") },
+  style: { geometry: "line", color: layerColor("forest-roads"), encode: { color: "level" } },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
+  legend: LEGEND,
+  // The longest named roads get their names on the map.
+  labels: { field: "name", max: 5, rankBy: "miles" },
+  // The road network as the Motor Vehicle Use Map stands; the seasonal dates are on each road, not a time axis.
+  time: { shape: "none" },
+  display: { units: "us", timeZone: "local" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     if (outsideUs(ctx.bbox)) {

@@ -29,6 +29,11 @@ import layer, {
   setClimatologyCache,
   waveStationIds,
   WIDE_LIMIT,
+  savedSpots,
+  zoneAt,
+  localTime,
+  directionText,
+  windText,
 } from "./surf";
 import { hardMaxAreaKm2 } from "./types";
 import { haversineKm } from "./_shared/geo";
@@ -163,16 +168,24 @@ const WD_SPOTS = {
 };
 
 describe("surf spots", () => {
-  it("asks Overpass for surfing-tagged places and surf-ish beach names inside the bbox", () => {
+  it("asks Overpass only for surfing-tagged places inside the bbox (no slow name regex over every beach)", () => {
     const q = surfSpotsQuery([-122.6, 37.35, -122.35, 37.55]);
     expect(q).toContain('nwr["sport"="surfing"](37.35,-122.6,37.55,-122.35)');
     expect(q).toContain('nwr["surfing"="yes"]');
-    expect(q).toContain('["name"~"surf|point|reef",i]');
-    expect(surfSpotsSparql([-123, 36.5, -121.5, 38])).toContain('"Point(-123 36.5)"');
+    expect(q).not.toContain("name");
+    const sparql = surfSpotsSparql([-123, 36.5, -121.5, 38]);
+    expect(sparql).toContain('"Point(-123 36.5)"');
+    expect(sparql).not.toContain("P279*");
   });
 
-  it("keeps named spots only, with a rank for how surely they are surf spots, and drops shops", () => {
-    const spots = parseOsmSpots(OSM_SPOTS);
+  it("keeps named spots only, with a rank for how surely they are surf spots, and drops shops, schools and wave pools", () => {
+    const spots = parseOsmSpots({
+      elements: [
+        ...OSM_SPOTS.elements,
+        { type: "node", id: 6, lat: 40.2, lon: -74.0, tags: { name: "FlowHouse Thundering Surf", leisure: "water_park", sport: "surfing" } },
+        { type: "way", id: 7, center: { lat: 40.1, lon: -74.0 }, tags: { name: "Summertime Surf School", building: "yes", sport: "surfing" } },
+      ],
+    });
     expect(spots.map((s) => [s.name, s.rank])).toEqual([
       ["Mavericks", 1],
       ["Mavericks Beach", 1],
@@ -180,6 +193,14 @@ describe("surf spots", () => {
     ]);
     expect(spots[1]).toMatchObject({ lat: 37.4955, lon: -122.4975 });
     expect(parseOsmSpots({ nope: true })).toEqual([]);
+  });
+
+  it("reads the saved spot list inside the bbox, Wikidata first", () => {
+    expect(savedSpots([-123.2, 37.3, -122.3, 38.0])).toEqual([{ name: "Mavericks", lat: 37.4852, lon: -122.4699, source: "Wikidata", rank: 0 }]);
+    const santaCruz = savedSpots([-122.1, 36.9, -121.9, 37.0]).map((s) => s.name);
+    expect(santaCruz).toEqual(expect.arrayContaining(["Steamer Lane", "The Hook", "Trees"]));
+    const byName = savedSpots([0, 0, 1, 1], [{ name: "Surf Beach", lat: 0.5, lon: 0.5, source: "OpenStreetMap", byName: true }]);
+    expect(byName[0].rank).toBe(2);
   });
 
   it("reads Wikidata Point(lon lat) and skips unreadable coordinates", () => {
@@ -458,7 +479,8 @@ describe("surf layer", () => {
       if (url.includes("wikidata")) return text(JSON.stringify({ results: { bindings: [] } }));
       throw new Error("marine must not be asked without spots");
     });
-    const r = await layer.query(ctx(stub), { forecast: true, season: false });
+    // Both SF buoys, but not Mavericks (the saved list's one spot in the SF box).
+    const r = await layer.query(ctx(stub, [-123.2, 37.3, -122.55, 38.0]), { forecast: true, season: false });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(2);
     expect(r.data.features.every((f) => f.properties?.kind === "buoy")).toBe(true);
@@ -485,20 +507,35 @@ describe("surf layer", () => {
     const r = await layer.query(ctx(marineDown), { forecast: true, season: false });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(2);
-    expect(r.coverageNote).toMatch(/forecast failed/);
+    // The failure is the source status the layer row shows, never error text in the note.
+    expect(r.sourceStatus).toEqual({ ok: false, reason: "rate-limited", message: "The Open-Meteo wave forecast did not answer, so only the buoys are shown." });
+    expect(r.coverageNote ?? "").not.toMatch(/returned|429/);
 
     const down = vi.fn(async () => new Response("no", { status: 503 }));
     expect(await layer.query(ctx(down), { forecast: false, season: false })).toMatchObject({ hint: "upstream" });
+  });
 
+  it("forecasts the saved spots when Overpass and Wikidata both fail, and says the source is fine", async () => {
     const spotsDown = vi.fn(async (url: string) => {
       if (url.includes("latest_obs")) return text(OBS);
       if (url.includes("activestations")) return text(XML);
-      return new Response("busy", { status: 429 });
+      if (url.includes("marine-api")) return text(JSON.stringify(MARINE_ROW));
+      return new Response("not acceptable", { status: 406 });
     });
     const s = await layer.query(ctx(spotsDown), { forecast: true, season: false });
     if (!("kind" in s) || s.kind !== "geojson") throw new Error("expected geojson");
-    expect(s.data.features).toHaveLength(2);
-    expect(s.coverageNote).toMatch(/No named surf spots in view \(Overpass returned 429; Wikidata returned 429\)/);
+    const forecasts = s.data.features.filter((f) => f.properties?.kind === "forecast");
+    expect(forecasts.map((f) => f.properties?.name)).toEqual(["Mavericks"]);
+    expect(s.sourceStatus).toEqual({ ok: true });
+    expect(s.coverageNote).toMatch(/list saved with the app/);
+    expect(s.coverageNote).not.toMatch(/406|Overpass/);
+  });
+
+  it("sends OVERPASS_URL through runLayer to the spot lookup", async () => {
+    expect(layer.optionalEnv).toContain("OVERPASS_URL");
+    const stub = routedStub();
+    await layer.query({ ...ctx(stub), env: { OVERPASS_URL: "https://overpass.example.test/api/interpreter" } }, { forecast: true, season: false });
+    expect(calls(stub).some((c) => c[0] === "https://overpass.example.test/api/interpreter")).toBe(true);
   });
 
   it("describes units, freshness, licence and the user's words", () => {
@@ -507,8 +544,42 @@ describe("surf layer", () => {
     }
     expect(layer.license).toMatch(/NOAA/);
     expect(layer.license).toMatch(/non-commercial/);
-    expect(layer.style).toMatchObject({ geometry: "point", unit: "m" });
+    expect(layer.style).toMatchObject({ geometry: "point", unit: "m", encode: { size: "waveFt" } });
     expect(layer.coverage).toBe("global");
+  });
+
+  it("leads the card with feet, local time, swell direction in words and degrees, and the wind in knots and mph", () => {
+    const fc = buoyFeatures(parseLatestObs(OBS), parseStationNames(XML), SF, NOW);
+    const halfMoon = fc.features.find((f) => f.properties?.stationId === "46012")!.properties!;
+    expect(halfMoon).toMatchObject({ waveFt: 7.2, readAt: "6:00 pm PDT Fri", waterTempF: 61 });
+    expect(halfMoon.wind).toMatch(/^8 knots \(9 mph\)/);
+    const bar = fc.features.find((f) => f.properties?.stationId === "46237")!.properties!;
+    expect(bar.swellFrom).toBe("West (261°)");
+    expect(layer.card?.measure).toMatchObject({ key: "waveFt", unit: "ft" });
+    expect(layer.card?.hidden).toEqual(expect.arrayContaining(["stationId", "windMs", "waterTempC", "directionDeg"]));
+    expect(layer.card?.facts?.map((f) => f.key)).not.toContain("stationId");
+  });
+
+  it("declares kind chips, a single time, feet for size, labels and US units", () => {
+    const kind = layer.attributes?.find((a) => a.key === "kind");
+    expect(kind?.primary).toBe(true);
+    expect(kind?.levels?.slice(0, 2).map((l) => l.label)).toEqual(["Buoy", "Spot forecast"]);
+    expect(layer.attributes?.find((a) => a.key === "waveFt")).toMatchObject({ type: "measure", unit: "ft", encode: "size" });
+    expect(layer.time).toEqual({ shape: "single" });
+    expect(layer.legend).toMatchObject({ kind: "size", field: "waveFt", unit: "ft" });
+    expect(layer.labels).toMatchObject({ field: "name", rankBy: "waveFt" });
+    expect(layer.display).toEqual({ units: "us", timeZone: "local" });
+  });
+
+  it("prints local times by zone, coarse for open water", () => {
+    expect(zoneAt(-122.88, 37.36)).toBe("America/Los_Angeles");
+    expect(zoneAt(-72.7, 40.25)).toBe("America/New_York");
+    expect(zoneAt(-158.1, 21.67)).toBe("Pacific/Honolulu");
+    expect(zoneAt(-88.8, 30.1)).toBe("America/Chicago");
+    expect(zoneAt(-30, 40)).toBe("Etc/GMT+2");
+    expect(localTime(Date.parse("2026-10-18T07:24:00Z"), "America/Los_Angeles")).toBe("12:24 am PDT Sun");
+    expect(directionText(292)).toBe("West-northwest (292°)");
+    expect(windText(5, 315, 8)).toBe("10 knots (11 mph) from the northwest, gusts 16 knots");
   });
 
   it("rejects bad input and an oversized bbox through runLayer", async () => {

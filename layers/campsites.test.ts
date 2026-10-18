@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { buildCampsitesQuery, buildWideCampsitesQuery, normalizeCampsites, wayCentroid } from "./campsites";
+import { cardContent } from "@/lib/render/card";
+import { cardTitle, contractProblems, labelsOf, legendOf, timeShapeOf } from "./contract";
+import layer, { buildCampsitesQuery, buildWideCampsitesQuery, normalizeCampsites, presentCampsites, wayCentroid } from "./campsites";
 import fixture from "./__fixtures__/campsites.tahoe.json";
 
 const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
@@ -149,6 +151,7 @@ describe("normalizeCampsites", () => {
       tents: true,
       caravans: false,
       fee: false,
+      feeStatus: "free",
       capacity: 12,
     });
     expect(geo(fc)[0].properties).not.toHaveProperty("v");
@@ -292,10 +295,21 @@ describe("the campsite card", () => {
     const feature = {
       type: "Feature" as const,
       geometry: { type: "Point" as const, coordinates: [-109.3, 38.8] },
-      properties: { kind: "camp_site", name: "Dewey Bridge Campground", capacity: 17, fee: true, tents: true, website: "https://www.blm.gov/visit/dewey-bridge", osmId: "way/1" },
+      properties: {
+        kind: "camp_site",
+        name: "Dewey Bridge Campground",
+        capacity: 17,
+        fee: true,
+        feeStatus: "fee",
+        tents: true,
+        website: "https://www.blm.gov/visit/dewey-bridge",
+        osmId: "way/1",
+      },
     };
     const card = cardContent(feature, { card: layer.card, fieldHelp: layer.fieldHelp });
-    expect(card.facts.map((r) => `${r.label}: ${r.value}`)).toEqual(["Type: Campsite", "Capacity: 17", "Fee: Yes, costs money", "Tents allowed: Yes"]);
+    expect(card.facts.map((r) => `${r.label}: ${r.value}`)).toEqual(["Type: Camp site", "Capacity: 17", "Fee: Yes, costs money", "Tents allowed: Yes"]);
+    // The OpenStreetMap id is not on the card, not even under Details.
+    expect(card.details.map((r) => r.key)).not.toContain("osmId");
     expect(card.links).toEqual([{ key: "website", label: "Website", url: "https://www.blm.gov/visit/dewey-bridge" }]);
   });
 });
@@ -310,5 +324,55 @@ describe("the parking card", () => {
     expect(card.measure).toMatchObject({ label: "Parking spaces", value: "3" });
     // Capacity is the same number as the measure, so it is not repeated.
     expect(card.facts.map((r) => r.label)).toEqual(["Type"]);
+  });
+});
+
+describe("campsite kinds, fee and key", () => {
+  const stubFixture = () => vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
+
+  it("asks for RV and caravan parks too, except for backcountry only, and types them", () => {
+    expect(buildCampsitesQuery(TAHOE, DEFAULTS)).toContain('way["tourism"="caravan_site"](38.85,-120.2,39,-120)');
+    expect(buildCampsitesQuery(TAHOE, { backcountryOnly: true, includeParking: true })).not.toContain("caravan_site");
+    expect(buildWideCampsitesQuery(TAHOE, { backcountryOnly: false }, 2000)).toContain('nwr["tourism"="caravan_site"]');
+    const fc = normalizeCampsites({ elements: [{ type: "node", id: 9, lat: 38.6, lon: -109.5, tags: { tourism: "caravan_site", name: "Moab Valley RV Resort" } }] });
+    expect(fc.features[0].properties).toMatchObject({ kind: "caravan_site", feeStatus: "unknown" });
+  });
+
+  it("declares kind, fee, backcountry, tents and RVs as attributes, a legend that names camps and parking, and no time", () => {
+    const keys = layer.attributes?.map((a) => a.key);
+    expect(keys).toEqual(expect.arrayContaining(["kind", "feeStatus", "backcountry", "tents", "caravans", "capacity", "name"]));
+    expect(layer.attributes?.find((a) => a.key === "kind")).toMatchObject({ type: "category", primary: true });
+    expect(layer.attributes?.find((a) => a.key === "feeStatus")?.levels?.map((l) => l.label)).toEqual(["Free", "Fee", "Fee not mapped"]);
+    const legend = legendOf(layer);
+    expect(legend.items?.map((i) => i.label)).toEqual(["Camp sites (triangles)", "RV and caravan sites (triangles)", "Parking lots (squares)"]);
+    expect(timeShapeOf(layer).shape).toBe("none");
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 6 });
+    expect(contractProblems(layer)).toEqual([]);
+  });
+
+  it("says Fee not mapped on the card instead of leaving the row out", async () => {
+    const r = await layer.query(ctx(stubFixture()), DEFAULTS);
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const unmapped = r.data.features.find((f) => f.properties?.kind === "camp_site" && f.properties?.fee === undefined);
+    if (!unmapped) throw new Error("no camp without a fee tag");
+    const card = cardContent(unmapped, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.facts.find((row) => row.label === "Fee")?.value).toBe("Fee not mapped");
+  });
+
+  it("lists named camp sites first so labels name camps, and titles unnamed points by the nearest name", async () => {
+    const r = await layer.query(ctx(stubFixture()), DEFAULTS);
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const fs = r.data.features;
+    expect(fs.slice(0, 6).every((f) => f.properties?.kind === "camp_site" && typeof f.properties?.name === "string")).toBe(true);
+    const unnamed = fs.filter((f) => typeof f.properties?.name !== "string");
+    expect(unnamed.length).toBeGreaterThan(0);
+    for (const f of unnamed) expect(cardTitle(layer, f)).toMatch(/^(Camp site|Parking lot)( near .+)?$/);
+    expect(unnamed.some((f) => / near /.test(cardTitle(layer, f)))).toBe(true);
+  });
+
+  it("puts single pitches after the campgrounds they belong to", () => {
+    const pt = (id: number, name: string, extra: Record<string, string> = {}) => ({ type: "node", id, lat: 38.6, lon: -109.5, tags: { tourism: "camp_site", name, ...extra } });
+    const fc = normalizeCampsites({ elements: [pt(1, "Group Site A"), pt(2, "Site 12"), pt(3, "Goose Island Campground", { operator: "BLM" }), pt(4, "Lone Mesa")] });
+    expect(presentCampsites(fc.features).map((f) => f.properties?.name)).toEqual(["Goose Island Campground", "Lone Mesa", "Group Site A", "Site 12"]);
   });
 });

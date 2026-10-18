@@ -19,12 +19,13 @@ import {
   type CardSpec,
   type Attribute,
   type FieldHelp,
+  type LegendSpec,
 } from "./types";
 import { SAC_LEVELS, SAC_SCALE, nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { overpassQuery } from "./_shared/overpass";
 import { haversineKm } from "./_shared/geo";
-import { layerColor } from "@/lib/render/palette";
+import { SAGE, layerColor } from "@/lib/render/palette";
 
 export { overpassFailure } from "./_shared/overpass";
 
@@ -119,7 +120,19 @@ export function countedWays(json: unknown): number | null {
   return counted(json, "ways");
 }
 
-/** Converts an Overpass `out geom` response into LineString features, skipping malformed ways. */
+/**
+ * The sac_scale value a trail with no difficulty tag carries, so "Not rated" is a chip with a count (two thirds of the
+ * ways near Mount Rainier have none) and the legend can name those lines.
+ */
+export const NOT_RATED = "not_rated";
+
+/** What a path is, from its highway tag: kind "path", "footway" or "track" (routes are kind "route"). */
+const PATH_KINDS = new Set(["path", "footway", "track"]);
+
+/**
+ * Converts an Overpass `out geom` response into LineString features, skipping malformed ways: kind (path, footway or
+ * track), lengthKm along the way, sac_scale (NOT_RATED when untagged) and the other trail tags.
+ */
 export function normalizeOverpass(json: unknown): FeatureCollection {
   const features: Feature<LineString>[] = [];
   const parsed = responseSchema.safeParse(json);
@@ -130,23 +143,22 @@ export function normalizeOverpass(json: unknown): FeatureCollection {
     if (!el.success || el.data.geometry.length < 2) continue;
     const { id, tags = {}, geometry } = el.data;
 
-    const properties: Record<string, string | boolean> = {
+    const coordinates = geometry.map((p): Position => [p.lon, p.lat]);
+    const properties: Record<string, string | number | boolean> = {
       highway: tags.highway ?? "",
       osmId: `way/${id}`,
       informal: tags.informal === "yes",
+      lengthKm: Math.round(lineKm(coordinates) * 100) / 100,
     };
+    if (PATH_KINDS.has(tags.highway ?? "")) properties.kind = tags.highway;
     if (tags.name !== undefined) properties.name = tags.name;
-    if (tags.sac_scale !== undefined) properties.sac_scale = tags.sac_scale;
+    properties.sac_scale = tags.sac_scale ?? NOT_RATED;
     if (tags.trail_visibility !== undefined) properties.trail_visibility = tags.trail_visibility;
     if (tags.surface !== undefined) properties.surface = tags.surface;
     if (tags.wikidata !== undefined) properties.wikidata = tags.wikidata;
     if (tags.wikipedia !== undefined) properties.wikipedia = tags.wikipedia;
 
-    features.push({
-      type: "Feature",
-      geometry: { type: "LineString", coordinates: geometry.map((p) => [p.lon, p.lat]) },
-      properties,
-    });
+    features.push({ type: "Feature", geometry: { type: "LineString", coordinates }, properties });
   }
   return { type: "FeatureCollection", features };
 }
@@ -430,7 +442,7 @@ export function normalizeRoutes(json: unknown, tolerance = 0): FeatureCollection
     const full = clipped ? (tagged !== undefined && tagged >= km ? tagged : undefined) : Math.max(km, tagged ?? 0);
     if (full !== undefined) properties.distanceKm = Math.max(Math.round(full * 10) / 10, inView);
     if (tags.network !== undefined) properties.network = NETWORKS[tags.network] ?? tags.network;
-    if (tags.sac_scale !== undefined) properties.sac_scale = tags.sac_scale;
+    properties.sac_scale = tags.sac_scale ?? NOT_RATED;
     if (tags["osmc:symbol"] !== undefined) properties.osmcSymbol = tags["osmc:symbol"];
     for (const key of ["from", "to", "operator", "website", "wikidata", "wikipedia"] as const) {
       if (tags[key] !== undefined) properties[key] = tags[key];
@@ -574,14 +586,14 @@ export function simplifiedFeature<T extends Feature>(feature: T, tolerance: numb
   return feature;
 }
 
-/** True when a sac_scale value is absent, or at or below `max` in difficulty order. */
+/** True when a sac_scale value is absent or not rated, or at or below `max` in difficulty order. */
 function scaleWithin(scale: string | undefined, max: (typeof SAC_SCALES)[number]): boolean {
-  if (scale === undefined) return true;
+  if (scale === undefined || scale === NOT_RATED) return true;
   const index = SAC_SCALES.findIndex((s) => s === scale);
   return index !== -1 && index <= SAC_SCALES.indexOf(max);
 }
 
-/** Keeps trails with no sac_scale, or one at or below `max` in difficulty order. */
+/** Keeps trails with no rating, or one at or below `max` in difficulty order. */
 function withinSacScale(feature: Feature, max: (typeof SAC_SCALES)[number]): boolean {
   const scale: unknown = feature.properties?.sac_scale;
   return scaleWithin(scale === undefined ? undefined : String(scale), max);
@@ -596,13 +608,42 @@ const SAC_LABELS: Record<(typeof SAC_SCALES)[number], string> = {
   difficult_alpine_hiking: "Difficult alpine (T6)",
 };
 
-const HIGHWAY_LABELS: Record<string, string> = { path: "Path", footway: "Footway", track: "Track" };
+/** The card's difficulty words: the SAC levels and the ways with none. */
+const DIFFICULTY_LABELS: Record<string, string> = { ...SAC_LABELS, [NOT_RATED]: "Not rated" };
 
+/** What each line is, in words: an untitled footway reads "Footpath", a track (an unpaved road) "Track". */
+const KIND_LABELS: Record<string, string> = { path: "Path", footway: "Footpath", track: "Track", route: "Named route" };
+const KIND_HELP: Record<string, string> = {
+  path: "A path for walking and often bikes or horses.",
+  footway: "A path mainly for people on foot.",
+  track: "An unpaved farm or forest road, open to vehicles in many places; not a hiking trail as such.",
+  route: "A named, waymarked hiking route made of many paths (wide views only).",
+};
+
+// "Not rated" is not a level: it is not on the difficulty ramp, so its lines keep the plain trail look; the chip
+// appears from the data (NOT_RATED) after the six levels.
 const ATTRIBUTES: Attribute[] = [
   { key: "sac_scale", type: "ordinal", label: "Difficulty", encode: "color", levels: SAC_LEVELS, scale: SAC_SCALE },
-  { key: "highway", type: "category", label: "Kind", levels: Object.entries(HIGHWAY_LABELS).map(([value, label]) => ({ value, label })) },
+  {
+    key: "kind",
+    type: "category",
+    label: "Kind",
+    levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label, help: KIND_HELP[value] })),
+  },
   nameAttribute(),
 ];
+
+/** The difficulty ramp the lines are coloured by, and the unrated lines drawn in the plain trail look. */
+const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Difficulty",
+  field: "sac_scale",
+  items: [
+    ...SAC_LEVELS.map((l) => ({ label: l.label, value: l.value, symbol: "line" as const, ...(l.help && { help: l.help }) })),
+    { label: "Not rated", value: NOT_RATED, color: SAGE, symbol: "line", help: "No difficulty is mapped for this way." },
+  ],
+  note: "Not rated ways are drawn like T1, sage with grey dashes; informal use trails are sage dots.",
+};
 
 const ROUTE_KM: FieldHelp = {
   text: "Kilometres of this named hiking route drawn inside the view, measured by this app along its mapped ways (routes only).",
@@ -638,7 +679,17 @@ const HELP: Record<string, FieldHelp> = {
     url: "https://wiki.openstreetmap.org/wiki/Key:informal",
   },
   v: ROUTE_KM,
-  lengthKm: ROUTE_KM,
+  lengthKm: {
+    text:
+      "The way's length as drawn, measured by this app along its mapped line; for a named hiking route (wide views), the kilometres inside the view.",
+    unit: "km",
+    source: "OpenStreetMap contributors",
+  },
+  kind: {
+    text: "What the line is: a path, a footpath (footway), a track (an unpaved farm or forest road) or, in wide views, a named hiking route.",
+    source: "OpenStreetMap wiki, Key:highway",
+    url: "https://wiki.openstreetmap.org/wiki/Key:highway",
+  },
   distanceKm: {
     text: "The whole route's length: as drawn when it lies wholly in view, else its OpenStreetMap distance tag (never shorter than the part in view).",
     unit: "km",
@@ -656,10 +707,10 @@ const HELP: Record<string, FieldHelp> = {
 };
 
 const CARD: CardSpec = {
-  measure: { key: "lengthKm", label: "Length in view", unit: "km" },
+  measure: { key: "lengthKm", label: "Length", unit: "km" },
   facts: [
-    { key: "sac_scale", label: "Difficulty", values: SAC_LABELS },
-    { key: "highway", label: "Kind", values: HIGHWAY_LABELS },
+    { key: "sac_scale", label: "Difficulty", values: DIFFICULTY_LABELS },
+    { key: "kind", label: "Kind", values: KIND_LABELS },
     { key: "trail_visibility", label: "Visibility" },
     { key: "surface", label: "Surface" },
     { key: "distanceKm", label: "Full length", format: "km" },
@@ -668,6 +719,7 @@ const CARD: CardSpec = {
     { key: "osmName", label: "Name in OpenStreetMap" },
   ],
   links: [{ key: "website", label: "Website" }],
+  hidden: ["osmId", "highway", "route"],
 };
 
 const osmTrails = defineLayer({
@@ -675,6 +727,7 @@ const osmTrails = defineLayer({
   title: "OpenStreetMap trails",
   description:
     "Hiking paths, footways and tracks from OpenStreetMap, with difficulty (sac_scale), visibility and surface tags where mapped, plus wikidata or wikipedia when the trail has an article. " +
+    "Each way has kind ('path', 'footway' or 'track'; a track is an unpaved farm or forest road), lengthKm, and sac_scale ('not_rated' when no difficulty is mapped, often most of the ways). " +
     "Under 2,500 km² it returns the paths; up to 400,000 km² the 150 longest named hiking routes instead (the note gives the total): kind 'route', name, v = lengthKm (km inside the region), distanceKm, network and sac_scale.",
   coverage: "global",
   surface: "land",
@@ -689,6 +742,9 @@ const osmTrails = defineLayer({
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  time: { shape: "none" },
+  legend: LEGEND,
+  labels: { field: "name", max: 8, rankBy: "lengthKm" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     // run.ts enforces the hard cap; popularity calls this query directly, so it is checked here too.

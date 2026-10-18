@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { cardContent } from "@/lib/render/card";
 import { hardMaxAreaKm2 } from "./types";
-import layer, { WIDE_LIMIT, buildPaddlingQuery, buildWidePaddlingQuery, normalizePaddling, paddlingKind } from "./paddling";
+import { cardTitle, contractProblems, legendOf, timeShapeOf } from "./contract";
+import layer, { WIDE_LIMIT, buildPaddlingQuery, buildWidePaddlingQuery, classText, normalizePaddling, paddlingKind } from "./paddling";
 import trentino from "./__fixtures__/paddling.trentino.json";
 import bern from "./__fixtures__/paddling.bern.json";
+import gauley from "./__fixtures__/paddling.gauley.json";
 
 const TRENTINO: [number, number, number, number] = [11, 46.1, 11.6, 46.4];
 const BERN: [number, number, number, number] = [7.35, 46.75, 7.65, 46.98];
@@ -140,7 +143,7 @@ describe("normalizePaddling", () => {
 });
 
 describe("paddling layer", () => {
-  it("declares global ODbL coverage, a 2,500 km2 cap, line style and the activity words", () => {
+  it("declares global ODbL coverage, a 2,500 km2 cap, point style and the activity words", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toContain("ODbL");
     expect(layer.maxAreaKm2).toBe(2500);
@@ -148,7 +151,9 @@ describe("paddling layer", () => {
     expect(hardMaxAreaKm2(layer)).toBe(100_000);
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.optionalEnv).toContain("OVERPASS_URL");
-    expect(layer.style.geometry).toBe("line");
+    // Points: lines mode strokes only lines, so a line default drew nothing on a river of rapids (the Gauley).
+    expect(layer.style.geometry).toBe("point");
+    expect(layer.style.encode).toEqual({ color: "v" });
     for (const word of ["whitewater", "kayaking", "canoe"]) expect(layer.description).toContain(word);
   });
 
@@ -285,5 +290,70 @@ describe("paddling wide mode", () => {
     expect(r.data.features.map((f) => f.properties?.name)).toEqual(["Aareschlucht"]);
     expect(r.total).toBe(59);
     expect(r.coverageNote).toBe("The minimum grade hid 2 of the named features");
+  });
+});
+
+describe("paddling on a US river with no classes mapped (the Gauley)", () => {
+  const fc = normalizePaddling(gauley);
+
+  it("asks Overpass for the named rivers beside the points, clipped to the box", () => {
+    expect(buildPaddlingQuery(TRENTINO, DEFAULTS)).toContain(
+      'way(around.p:300)["waterway"~"^(river|stream|canal)$"]["name"]->.rv;.rv out tags geom(46.1,11,46.4,11.6) 300;',
+    );
+  });
+
+  it("keeps every rapid as a point on the Gauley River, with no class mapped, and the rivers are not features", () => {
+    expect(fc.features).toHaveLength(4);
+    for (const f of fc.features) {
+      expect(f.geometry.type).toBe("Point");
+      expect(f.properties).toMatchObject({ kind: "rapid", river: "Gauley River", classText: "No class mapped" });
+      expect(f.properties).not.toHaveProperty("v");
+    }
+  });
+
+  it("titles an unnamed rapid by its river and shows the class in words on the card", () => {
+    const pts = [{ lat: 38.2, lon: -81 }, { lat: 38.2, lon: -80.99 }];
+    const out = normalizePaddling({
+      elements: [
+        { type: "node", id: 1, lat: 38.2001, lon: -80.995, tags: { whitewater: "rapid", "whitewater:rapid_grade": "4" } },
+        { type: "node", id: 2, lat: 38.3, lon: -80.5, tags: { whitewater: "put_in" } },
+        { type: "way", id: 3, tags: { waterway: "stream", name: "Meadow Creek" }, geometry: pts },
+        { type: "way", id: 4, tags: { waterway: "river", name: "Gauley River" }, geometry: [{ lat: 38.2015, lon: -81 }, { lat: 38.2015, lon: -80.99 }] },
+      ],
+    });
+    expect(out.features).toHaveLength(2);
+    const [rapid, putIn] = out.features;
+    // The river within 300 m wins over a closer stream; the put-in 50 km away has no river.
+    expect(rapid.properties).toMatchObject({ river: "Gauley River", heading: "Rapid on Gauley River", classText: "Class IV", v: 4 });
+    expect(cardTitle(layer, rapid)).toBe("Rapid on Gauley River");
+    expect(putIn.properties).not.toHaveProperty("river");
+    expect(putIn.properties).not.toHaveProperty("classText");
+    const card = cardContent(rapid, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.measure).toBeNull();
+    expect(card.facts.map((r) => `${r.label}: ${r.value}`)).toEqual(["Whitewater class: Class IV", "Kind: Rapid", "River: Gauley River"]);
+    expect(card.details.map((r) => r.value).join(" ")).not.toContain("node/");
+  });
+
+  it("writes grades as classes: Roman, Arabic, plus and minus, and ranges", () => {
+    expect(classText("4")).toBe("Class IV");
+    expect(classText("III+")).toBe("Class III+");
+    expect(classText("4-")).toBe("Class IV-");
+    expect(classText("III-IV")).toBe("Class III to IV");
+    expect(classText("2-3")).toBe("Class II to III");
+    expect(classText("Class V")).toBe("Class V");
+    expect(classText("X")).toBe("Tagged X");
+  });
+
+  it("offers kind as the first chip set, class second, a class legend with No class mapped, no time and labels by name", () => {
+    const chips = (layer.attributes ?? []).filter((a) => a.type === "category" || a.type === "ordinal");
+    expect(chips.map((a) => a.key)).toEqual(["kind", "v"]);
+    expect(chips[0].primary).toBe(true);
+    expect(chips[0].levels?.map((l) => l.label)).toEqual(
+      expect.arrayContaining(["Rapid", "Put-in or take-out", "Hazard", "Portage", "Section", "Canoe route"]),
+    );
+    expect(contractProblems(layer)).toEqual([]);
+    expect(timeShapeOf(layer, normalizePaddling(bern))).toEqual({ shape: "none" });
+    expect(legendOf(layer).items?.map((i) => i.label)).toEqual(["Class I", "Class II", "Class III", "Class IV", "Class V", "Class VI", "No class mapped"]);
+    expect(layer.labels).toEqual({ field: "name", max: 12, rankBy: "v" });
   });
 });

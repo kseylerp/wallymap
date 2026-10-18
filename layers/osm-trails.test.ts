@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { attributeGroups } from "@/lib/render/attributes";
+import { cardContent } from "@/lib/render/card";
 import { hardMaxAreaKm2 } from "./types";
+import { cardTitle, contractProblems, legendOf, timeShapeOf } from "./contract";
+import rainier from "./__fixtures__/osm-trails.rainier.json";
 import layer, {
   MAX_ROUTES,
   MAX_TRAILS,
@@ -144,7 +148,7 @@ describe("osm-trails layer", () => {
     );
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     const scales = r.data.features.map((f) => f.properties?.sac_scale as string | undefined);
-    expect(scales.every((s) => s === undefined || s === "hiking")).toBe(true);
+    expect(scales.every((s) => s === "not_rated" || s === "hiking")).toBe(true);
     expect(r.data.features.length).toBeLessThan(normalizeOverpass(fixture).features.length);
   });
 
@@ -451,5 +455,47 @@ describe("named-line helpers for the other OSM layers' wide mode", () => {
     });
     const kept = longestNamedFirst([line("short", 38.21), line(undefined, 38.9), line("long", 38.5), line("mid", 38.3)], 2);
     expect(kept.map((f) => f.properties.name)).toEqual(["long", "mid"]);
+  });
+});
+
+describe("osm-trails near Mount Rainier: unrated ways, kinds and length", () => {
+  const fc = normalizeOverpass(rainier);
+  const sac = layer.attributes?.find((a) => a.key === "sac_scale");
+  const kind = layer.attributes?.find((a) => a.key === "kind");
+
+  it("marks ways with no difficulty as not_rated, so they have a Not rated chip after the six levels", () => {
+    expect(fc.features.map((f) => f.properties?.sac_scale)).toEqual(["mountain_hiking", "not_rated", "not_rated", "mountain_hiking"]);
+    if (!sac) throw new Error("expected the difficulty attribute");
+    const chips = attributeGroups(sac, fc);
+    expect(chips.map((c) => `${c.label} ${c.count}`)).toEqual(["Mountain hiking (T2) 2", "Not rated 2"]);
+    const legend = legendOf(layer, fc);
+    expect(legend.items?.at(-1)).toMatchObject({ label: "Not rated", value: "not_rated" });
+    expect(legend.items).toHaveLength(7);
+  });
+
+  it("says what each way is (Footpath, Path, Track) and titles an unnamed one by it", () => {
+    expect(fc.features.map((f) => f.properties?.kind)).toEqual(["footway", "footway", "footway", "path"]);
+    if (!kind) throw new Error("expected the kind attribute");
+    expect(kind.levels?.map((l) => l.label)).toEqual(["Path", "Footpath", "Track", "Named route"]);
+    expect(cardTitle(layer, fc.features[2])).toBe("Footpath");
+    expect(cardTitle(layer, fc.features[3])).toBe("Path");
+    const track = normalizeOverpass({ elements: [{ type: "way", id: 9, tags: { highway: "track" }, geometry: [{ lat: 46.8, lon: -121.7 }, { lat: 46.81, lon: -121.7 }] }] });
+    expect(cardTitle(layer, track.features[0])).toBe("Track");
+  });
+
+  it("shows each way's length, difficulty in words and kind on the card, without the map id", () => {
+    const unnamed = fc.features[2];
+    expect(unnamed.properties?.lengthKm).toBeGreaterThan(0);
+    const card = cardContent(unnamed, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.measure?.label).toBe("Length");
+    expect(card.measure?.value).toMatch(/km$/);
+    expect(card.facts.map((r) => `${r.label}: ${r.value}`)).toEqual(expect.arrayContaining(["Difficulty: Not rated", "Kind: Footpath"]));
+    expect([...card.facts, ...card.details].some((r) => r.value.includes("way/"))).toBe(false);
+  });
+
+  it("declares no time, labels the longest named ways and passes the contract checks", () => {
+    expect(contractProblems(layer)).toEqual([]);
+    expect(timeShapeOf(layer, fc)).toEqual({ shape: "none" });
+    expect(layer.labels).toEqual({ field: "name", max: 8, rankBy: "lengthKm" });
   });
 });

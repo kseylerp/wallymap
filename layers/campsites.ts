@@ -1,6 +1,7 @@
 /**
  * Campsites and parking lots from OpenStreetMap via one Overpass query:
  *   node/way["tourism"="camp_site"]                         (optionally ["backcountry"="yes"])
+ *   node/way["tourism"="caravan_site"]                      (RV parks; left out with backcountryOnly)
  *   node/way["amenity"="parking"]["capacity"]               (only when includeParking)
  * Fixture: layers/__fixtures__/campsites.tahoe.json (Lake Tahoe west shore, recorded 2026-10-09 with
  * `out tags geom`). Tags read: name, backcountry, tents, caravans, fee (yes/no), capacity (integer), wikidata, wikipedia (passed through for the popularity layer).
@@ -10,8 +11,19 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult } from "./types";
+import {
+  defineLayer,
+  type Attribute,
+  type AttributeLevel,
+  type BBox,
+  type CardSpec,
+  type FieldHelp,
+  type LayerError,
+  type LayerResult,
+  type LegendSpec,
+} from "./types";
 import { registerLayer } from "./registry";
+import { nameAttribute } from "./_shared/bands";
 import { namedOverpassQuery, overpassCounts, overpassQuery } from "./_shared/overpass";
 import { layerColor } from "@/lib/render/palette";
 
@@ -54,6 +66,9 @@ const centeredSchema = z.object({
 
 const responseSchema = z.object({ elements: z.array(z.unknown()) });
 
+/** RV and caravan parks (OpenStreetMap tourism=caravan_site). */
+const CARAVAN = '["tourism"="caravan_site"]';
+
 /** Overpass QL for campsites (and optionally parking with a capacity). Overpass bbox order is (south,west,north,east). */
 export function buildCampsitesQuery(
   bbox: BBox,
@@ -63,6 +78,8 @@ export function buildCampsitesQuery(
   const area = `(${south},${west},${north},${east})`;
   const camp = input.backcountryOnly ? '["tourism"="camp_site"]["backcountry"="yes"]' : '["tourism"="camp_site"]';
   const parts = [`node${camp}${area};`, `way${camp}${area};`];
+  // RV and caravan parks are never backcountry.
+  if (!input.backcountryOnly) parts.push(`node${CARAVAN}${area};`, `way${CARAVAN}${area};`);
   if (input.includeParking) {
     parts.push(`node["amenity"="parking"]["capacity"]${area};`, `way["amenity"="parking"]["capacity"]${area};`);
   }
@@ -72,7 +89,8 @@ export function buildCampsitesQuery(
 /** Overpass QL for a wide box: named camp sites only (no parking), at most `limit`, after counts of all and of the named. */
 export function buildWideCampsitesQuery(bbox: BBox, input: Pick<CampsitesInput, "backcountryOnly">, limit: number): string {
   const camp = input.backcountryOnly ? '["tourism"="camp_site"]["backcountry"="yes"]' : '["tourism"="camp_site"]';
-  return namedOverpassQuery({ selectors: [`nwr${camp}`], bbox, geometry: "point", limit });
+  const selectors = input.backcountryOnly ? [`nwr${camp}`] : [`nwr${camp}`, `nwr${CARAVAN}`];
+  return namedOverpassQuery({ selectors, bbox, geometry: "point", limit });
 }
 
 /**
@@ -159,7 +177,8 @@ export function normalizeCampsites(json: unknown): FeatureCollection<Point> {
     if (center === null) continue;
 
     const isParking = tags.amenity === "parking";
-    const isCamp = tags.tourism === "camp_site";
+    const isCaravan = tags.tourism === "caravan_site";
+    const isCamp = tags.tourism === "camp_site" || isCaravan;
     if (!isParking && !isCamp) continue;
 
     const capacity = wholeNumber(tags.capacity);
@@ -167,7 +186,7 @@ export function normalizeCampsites(json: unknown): FeatureCollection<Point> {
     if (isCamp === false && (capacity === undefined || capacity <= 0)) continue;
 
     const properties: Record<string, string | number | boolean> = {
-      kind: isCamp ? "camp_site" : "parking",
+      kind: isCaravan ? "caravan_site" : isCamp ? "camp_site" : "parking",
       osmId,
     };
     if (tags.name) properties.name = tags.name;
@@ -179,6 +198,7 @@ export function normalizeCampsites(json: unknown): FeatureCollection<Point> {
     if (caravans !== undefined) properties.caravans = caravans;
     const fee = yesNo(tags.fee);
     if (fee !== undefined) properties.fee = fee;
+    properties.feeStatus = fee === undefined ? "unknown" : fee ? "fee" : "free";
     if (capacity !== undefined && capacity > 0) properties.capacity = capacity;
     if (tags.wikidata) properties.wikidata = tags.wikidata;
     if (tags.wikipedia) properties.wikipedia = tags.wikipedia;
@@ -196,6 +216,53 @@ export function normalizeCampsites(json: unknown): FeatureCollection<Point> {
   return { type: "FeatureCollection", features };
 }
 
+/** Each kind as one thing, for card titles ("Camp site near Slickrock Trailhead"). */
+const KIND_ONE: Record<string, string> = { camp_site: "Camp site", caravan_site: "RV or caravan site", parking: "Parking lot" };
+
+const KIND_ORDER = ["camp_site", "caravan_site", "parking"];
+
+/** Unnamed points within this distance of a named one are titled after it. */
+export const NEAR_KM = 5;
+
+/**
+ * Ready for the map and the card: unnamed points get a heading from the nearest named point within NEAR_KM ("Camp site
+ * near Big Bend Campground", else "Camp site"), and the points are listed named first, camp sites before RV sites before
+ * parking, so the on-map labels name camps, not parking lots.
+ */
+export function presentCampsites(features: Feature<Point>[]): Feature<Point>[] {
+  const named = features.filter((f) => typeof f.properties?.name === "string");
+  const km = (a: Feature<Point>, b: Feature<Point>) => {
+    const [x1, y1] = a.geometry.coordinates;
+    const [x2, y2] = b.geometry.coordinates;
+    return Math.hypot((x2 - x1) * 111.32 * Math.cos((y1 * Math.PI) / 180), (y2 - y1) * 110.57);
+  };
+  const out = features.map((f) => {
+    if (typeof f.properties?.name === "string") return f;
+    let best: { name: string; d: number } | null = null;
+    for (const n of named) {
+      const d = km(f, n);
+      if (d <= NEAR_KM && (best === null || d < best.d)) best = { name: String(n.properties?.name), d };
+    }
+    const noun = KIND_ONE[String(f.properties?.kind)] ?? "Camp site";
+    return { ...f, properties: { ...f.properties, heading: best ? `${noun} near ${best.name}` : noun } };
+  });
+  const rank = (f: Feature) => (typeof f.properties?.name === "string" ? 0 : 3) + Math.max(0, KIND_ORDER.indexOf(String(f.properties?.kind)));
+  return out
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => rank(a.f) - rank(b.f) || standing(a.f) - standing(b.f) || a.i - b.i)
+    .map(({ f }) => f);
+}
+
+/** A pitch inside a campground ("Group Site A", "Site 12", "#4"), not a place to label on the map. */
+const PITCH_NAME = /^(group\s+)?(camp\s*)?site\b|^site\s*#?\d|^#?\d+[a-z]?$|\bsite\s*#?\d+[a-z]?$/i;
+
+/** Among named points of one kind: those with a website, operator, capacity or Wikidata first, single pitches last. */
+function standing(f: Feature): number {
+  const p = f.properties ?? {};
+  if (PITCH_NAME.test(String(p.name ?? ""))) return 2;
+  return p.website || p.operator || p.capacity || p.wikidata ? 0 : 1;
+}
+
 function capacityOf(feature: Feature): number {
   const v: unknown = feature.properties?.v;
   return typeof v === "number" ? v : 0;
@@ -206,18 +273,57 @@ const FIELD_HELP: Record<string, FieldHelp> = {
   capacity: { text: "How many pitches (camp sites) or spaces (parking) the mapper counted, from OpenStreetMap's capacity tag.", source: "OpenStreetMap wiki, Key:capacity", url: "https://wiki.openstreetmap.org/wiki/Key:capacity" },
   backcountry: { text: "A walk-in or wilderness site with no road to it, from OpenStreetMap's backcountry tag.", source: "OpenStreetMap wiki, Key:backcountry", url: "https://wiki.openstreetmap.org/wiki/Key:backcountry" },
   reservation: { text: "Whether pitches can or must be booked ahead, from OpenStreetMap's reservation tag.", source: "OpenStreetMap wiki, Key:reservation", url: "https://wiki.openstreetmap.org/wiki/Key:reservation" },
+  feeStatus: {
+    text: "Whether the site charges, from OpenStreetMap's fee tag; most sites have no fee tag, which says nothing either way, so check before you go.",
+    source: "OpenStreetMap wiki, Key:fee",
+    url: "https://wiki.openstreetmap.org/wiki/Key:fee",
+  },
 };
 
 const YES_NO = { true: "Yes", false: "No" };
+
+const KIND_LEVELS: AttributeLevel[] = [
+  { value: "camp_site", label: "Camp sites", help: "Campgrounds and single pitches for tents; drawn as triangles." },
+  { value: "caravan_site", label: "RV and caravan sites", help: "Sites for RVs, campervans and caravans; drawn as triangles." },
+  { value: "parking", label: "Parking lots", help: "Car parks with a mapped number of spaces; drawn as squares, bigger for more spaces." },
+];
+
+const FEE_LEVELS: AttributeLevel[] = [
+  { value: "free", label: "Free" },
+  { value: "fee", label: "Fee" },
+  { value: "unknown", label: "Fee not mapped", help: "OpenStreetMap has no fee tag for the site." },
+];
+
+const ATTRIBUTES: Attribute[] = [
+  { key: "kind", type: "category", label: "Kind", primary: true, levels: KIND_LEVELS },
+  { key: "feeStatus", type: "category", label: "Fee", levels: FEE_LEVELS, help: FIELD_HELP.feeStatus },
+  { key: "backcountry", type: "flag", label: "Backcountry (walk-in)", help: FIELD_HELP.backcountry },
+  { key: "tents", type: "flag", label: "Tents allowed" },
+  { key: "caravans", type: "flag", label: "RVs allowed" },
+  { key: "capacity", type: "measure", label: "Capacity", unit: "pitches or spaces", help: FIELD_HELP.capacity },
+  nameAttribute(),
+];
+
+/** Camp and RV sites are triangles, parking lots squares (lib/render/wally/pins.ts); the key says so. */
+const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Kind",
+  field: "kind",
+  items: [
+    { label: "Camp sites (triangles)", value: "camp_site", symbol: "point", help: KIND_LEVELS[0].help },
+    { label: "RV and caravan sites (triangles)", value: "caravan_site", symbol: "point", help: KIND_LEVELS[1].help },
+    { label: "Parking lots (squares)", value: "parking", symbol: "point", help: KIND_LEVELS[2].help },
+  ],
+};
 
 /** The inspect card (coordinator, 2026-10-16: "Kind: camp site" read as a code): kinds in words, then what OSM knows. */
 const CARD: CardSpec = {
   // Parking only: its v is the number of spaces.
   measure: { key: "v", label: "Parking spaces" },
   facts: [
-    { key: "kind", label: "Type", values: { camp_site: "Campsite", parking: "Parking" } },
+    { key: "kind", label: "Type", values: KIND_ONE },
     { key: "capacity", label: "Capacity", format: "int" },
-    { key: "fee", label: "Fee", values: { true: "Yes, costs money", false: "Free" } },
+    { key: "feeStatus", label: "Fee", values: { fee: "Yes, costs money", free: "Free", unknown: "Fee not mapped" } },
     { key: "tents", label: "Tents allowed", values: YES_NO },
     { key: "caravans", label: "RVs allowed", values: YES_NO },
     { key: "backcountry", label: "Backcountry (walk-in)", values: YES_NO },
@@ -227,17 +333,19 @@ const CARD: CardSpec = {
     { key: "operator", label: "Run by" },
   ],
   links: [{ key: "website", label: "Website" }],
+  // The OpenStreetMap id is plumbing; the fee boolean is shown as feeStatus.
+  hidden: ["osmId", "fee"],
 };
 
 const campsites = defineLayer({
   id: "campsites",
   title: "Campsites and parking lots",
   description:
-    "Campsites and parking lots from OpenStreetMap, anywhere in the world. Each point has kind ('camp_site' or 'parking'), name when mapped, and the tags that are mapped: " +
-    "backcountry (true for walk-in or wilderness sites), tents, caravans (true when tents or RVs are allowed), fee (true when it costs money) and capacity (spaces or pitches). " +
+    "Campsites, RV parks and parking lots from OpenStreetMap, anywhere in the world. Each point has kind ('camp_site', 'caravan_site' for RV and caravan parks, or 'parking'), name when mapped, and the tags that are mapped: " +
+    "backcountry (true for walk-in or wilderness sites), tents, caravans (true when tents or RVs are allowed), fee (true when it costs money), feeStatus ('free', 'fee', or 'unknown' when no fee is mapped, which is most sites) and capacity (spaces or pitches). " +
     "For parking, v is the number of spaces, so bigger lots draw bigger. Only parking lots with a stated capacity are included. " +
     "Use it to find places to camp or where to leave a car near a trail. " +
-    "Set backcountryOnly to true to keep only camp sites tagged as backcountry (it never hides parking); set includeParking to false to get camp sites alone. " +
+    "Set backcountryOnly to true to keep only camp sites tagged as backcountry (it drops RV parks and never hides parking); set includeParking to false to get camp and RV sites alone. " +
     "Caveats: OpenStreetMap is volunteer-mapped, so it misses many sites and is not a reservation or availability source; fees, seasons and rules may be out of date or missing; " +
     "free dispersed camping spots are mostly not mapped here (see forest-roads for the drivable Forest Service roads). " +
     "Over 25,000 km² (about a 160 km square) it returns up to 2,000 named camp sites (no parking) and how many there are in all. At most 5,000 points are returned (all camp sites first, then the largest parking lots) and the result says so when it trims.",
@@ -254,6 +362,11 @@ const campsites = defineLayer({
   style: { geometry: "point", color: layerColor("campsites") },
   fieldHelp: FIELD_HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
+  time: { shape: "none" },
+  legend: LEGEND,
+  // The first named points, which presentCampsites puts camp sites first in: camps are labelled, parking lots rarely.
+  labels: { field: "name", max: 6 },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {
@@ -270,7 +383,7 @@ const campsites = defineLayer({
       const [all] = overpassCounts(wide.json);
       return {
         kind: "geojson",
-        data: normalizeCampsites(wide.json),
+        data: { type: "FeatureCollection", features: presentCampsites(normalizeCampsites(wide.json).features) },
         citation,
         ...(all !== undefined && { total: all }),
         ...(input.includeParking ? { coverageNote: "Parking lots are left out at this scale" } : {}),
@@ -284,21 +397,18 @@ const campsites = defineLayer({
 
     const all = normalizeCampsites(result.json);
     const total = all.features.length;
-    let data: FeatureCollection = all;
+    let features = all.features;
     if (total > MAX_POINTS) {
-      const camps = all.features.filter((f) => f.properties?.kind === "camp_site");
+      const camps = all.features.filter((f) => f.properties?.kind !== "parking");
       const parking = all.features
-        .filter((f) => f.properties?.kind !== "camp_site")
+        .filter((f) => f.properties?.kind === "parking")
         .sort((a, b) => capacityOf(b) - capacityOf(a));
-      data = {
-        type: "FeatureCollection",
-        features: [...camps, ...parking].slice(0, MAX_POINTS),
-      };
+      features = [...camps, ...parking].slice(0, MAX_POINTS);
     }
 
     return {
       kind: "geojson",
-      data,
+      data: { type: "FeatureCollection", features: presentCampsites(features) },
       ...(total > MAX_POINTS
         ? {
             coverageNote: `Showing ${MAX_POINTS.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} sites (all camp sites, then the largest parking lots); zoom in for the rest`,

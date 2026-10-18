@@ -6,12 +6,21 @@ import layer, {
   attachWaterTemps,
   buildFishingQuery,
   buildWideFishingQuery,
+  gaugeMatch,
+  gaugeNote,
+  gaugeStream,
   inatUrl,
+  montanaFeatures,
   osmFeatures,
   sightingFeatures,
+  spotWater,
+  troutBand,
+  troutVerdict,
   usfsFeatures,
 } from "./fishing";
 import { parseIv } from "./_shared/usgs";
+import { labelsOf, legendOf, timeShapeOf } from "./contract";
+import fwpFixture from "./__fixtures__/fishing-fwp.bozeman.json";
 import osmFixture from "./__fixtures__/fishing-osm.tahoe.json";
 import usfsFixture from "./__fixtures__/fishing-usfs.tahoe.json";
 import inatFixture from "./__fixtures__/fishing-inat.tahoe.json";
@@ -104,7 +113,101 @@ describe("sources", () => {
   });
 });
 
+describe("water temperature for trout", () => {
+  it("bands the temperature and says the verdict in °F first", () => {
+    expect([9.9, 10, 18, 18.5, 20.5].map(troutBand)).toEqual(["cold", "good", "good", "warm", "too_warm"]);
+    expect(troutVerdict(8.5)).toBe("47 °F (8.5 °C): cold; trout feed best at 50 to 64 °F (10 to 18 °C)");
+    expect(troutVerdict(14)).toBe("57 °F (14.0 °C): good; trout feed best at 50 to 64 °F (10 to 18 °C)");
+    expect(troutVerdict(21)).toBe("70 °F (21.0 °C): too warm; trout are stressed above about 68 °F (20 °C)");
+  });
+
+  it("reads the stream from a USGS station name", () => {
+    expect(gaugeStream("W FK CARSON R NR WOODFORDS CA")).toBe("West Fork Carson River");
+    expect(gaugeStream("BLACKWOOD C NR TAHOE CITY CA")).toBe("Blackwood Creek");
+    expect(gaugeStream("UPPER TRUCKEE RV AT SOUTH LAKE TAHOE, CA")).toBe("Upper Truckee River");
+    expect(gaugeStream("Gallatin River near Gallatin Gateway, MT")).toBe("Gallatin River");
+  });
+
+  it("warns when the spot's name names other water than the gauge's, and says how far", () => {
+    expect(gaugeMatch("Gallatin River Access", "Gallatin River")).toBe("same");
+    expect(gaugeMatch("Moose Creek Flat Campground", "Gallatin River")).toBe("different");
+    expect(gaugeMatch("Lake Tahoe - West Shore", "Blackwood Creek")).toBe("different");
+    expect(gaugeMatch("Trout Lake Ramp", "Trout Creek")).toBe("different");
+    expect(gaugeMatch("Erwin Bridge Fishing Access Site", "Gallatin River")).toBe("unknown");
+    expect(spotWater("Lake Tahoe - West Shore")).toBe("Lake Tahoe");
+    expect(spotWater("Moose Creek Flat Campground")).toBe("Moose Creek");
+    expect(gaugeNote("different", "Gallatin River", 5, "Moose Creek Flat Campground")).toBe(
+      "A gauge on Gallatin River, 3.1 mi (5.0 km) away, not on Moose Creek; that water can run warmer or colder",
+    );
+    expect(gaugeNote("same", "Gallatin River", 1.6)).toBe("The Gallatin River gauge, 1.0 mi (1.6 km) away");
+    expect(gaugeNote("unknown", "Gallatin River", 14)).toBe("A gauge on Gallatin River, 8.7 mi (14.0 km) away; it may not be this spot's water");
+  });
+
+  it("gives each place near a gauge its band, verdict and gauge note", () => {
+    const places = [...osmFeatures(osmFixture), ...usfsFeatures(usfsFixture as unknown as FeatureCollection)];
+    attachWaterTemps(places, parseIv([tempFixture], NOW));
+    const p = places.find((f) => f.properties?.waterTempC !== undefined)!.properties!;
+    expect(p.tempBand).toBe(troutBand(p.waterTempC));
+    expect(p.tempVerdict).toMatch(/^\d+ °F \(\d+\.\d °C\): /);
+    expect(p.waterTempF).toBeCloseTo((p.waterTempC * 9) / 5 + 32, 1);
+    expect(["same", "different", "unknown"]).toContain(p.gaugeMatch);
+    expect(p.gaugeNote).toMatch(/mi \(\d+\.\d km\) away/);
+  });
+
+  it("turns Montana FWP fishing access sites into access points with the boat launch and page", () => {
+    const fs = montanaFeatures(fwpFixture as unknown as FeatureCollection);
+    expect(fs).toHaveLength(3);
+    expect(fs[1].properties).toMatchObject({
+      kind: "access",
+      source: "Montana FWP",
+      name: "Damselfly Fishing Access Site",
+      boatLaunch: "Ramp (Concrete)",
+      camping: "Yes",
+      url: "https://myfwp.mt.gov/fishMT/fas/39754720",
+    });
+  });
+
+  it("asks Montana FWP only when the box touches Montana", async () => {
+    const BOZEMAN: [number, number, number, number] = [-111.6, 45.6, -111.0, 45.9];
+    const stub = vi.fn(async (url: string, init?: { body?: string }) => {
+      if (url.includes("fwp-gis.mt.gov")) return json(fwpFixture);
+      return routedStub()(url, init);
+    });
+    const r = await layer.query(ctx(stub, BOZEMAN), { days: 30 });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const fwp = (stub.mock.calls as unknown as [string][]).filter(([u]) => u.includes("fwp-gis.mt.gov"));
+    expect(fwp).toHaveLength(1);
+    expect(new URL(fwp[0][0]).searchParams.get("outFields")).toBe("NAME,BOAT_FAC,CAMPING,WEB_PAGE");
+    expect(r.data.features.filter((f) => f.properties?.source === "Montana FWP")).toHaveLength(3);
+    const tahoe = routedStub();
+    await layer.query(ctx(tahoe), { days: 30 });
+    expect((tahoe.mock.calls as unknown as [string][]).some(([u]) => u.includes("fwp-gis"))).toBe(false);
+  });
+});
+
 describe("fishing layer", () => {
+  it("declares kind chips, a trout band key with No water temperature, labels and sightings over days", async () => {
+    const kind = layer.attributes?.find((a) => a.key === "kind");
+    expect(kind?.primary).toBe(true);
+    expect(kind?.levels?.map((l) => l.label)).toEqual(["Access", "Boat ramp", "Pier", "Fish seen"]);
+    expect(layer.style.encode).toEqual({ color: "tempBand" });
+    expect(legendOf(layer).items?.map((i) => i.label)).toEqual([
+      "Cold: under 50 °F (10 °C)",
+      "Good: 50 to 64 °F (10 to 18 °C)",
+      "Warm: 64 to 68 °F (18 to 20 °C)",
+      "Too warm: over 68 °F (20 °C)",
+      "No water temperature",
+    ]);
+    expect(timeShapeOf(layer).shape).toBe("continuous");
+    expect(labelsOf(layer)?.field).toBe("name");
+    expect(layer.card?.hidden).toContain("osmId");
+    expect(layer.card?.facts?.map((f) => f.key)).not.toContain("osmId");
+    // Named places come first, so the top labels name real places, not "Boat ramp".
+    const r = await layer.query(ctx(routedStub()), { days: 30 });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features[0].properties?.name).not.toBe("Boat ramp");
+  });
+
   it("merges all four sources and always notes that stocking reports are not included", async () => {
     const stub = routedStub();
     const r = await layer.query(ctx(stub), { days: 30 });

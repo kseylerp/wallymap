@@ -15,6 +15,8 @@ import layer, {
   osmGradeSummary,
   osmRouteCount,
 } from "./climbing";
+import { legendOf } from "./contract";
+import { cardContent } from "@/lib/render/card";
 import osmFixture from "./__fixtures__/climbing.rrg.osm.json";
 import openbetaFixture from "./__fixtures__/climbing.rrg.openbeta.json";
 
@@ -536,5 +538,33 @@ describe("one place per wall", () => {
     expect(out).toHaveLength(1);
     expect(out[0].props).toMatchObject({ v: 11, openbetaId: "a", osmId: "way/652151049" });
     expect(out[0].props.osmIds).toBeUndefined();
+  });
+});
+
+describe("climbing contract and card", () => {
+  it("declares no time axis, a size key in routes, the top crags labelled and metric display", () => {
+    expect(layer.time).toEqual({ shape: "none" });
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "size", field: "v", unit: "routes" });
+    expect(legend.stops?.map((s) => s.value)).toEqual([1, 10, 100, 1000]);
+    expect(layer.labels).toEqual({ field: "name", max: 8, rankBy: "v" });
+    expect(layer.display).toEqual({ units: "metric", timeZone: "local" });
+    expect(layer.attributes?.filter((a) => a.primary).map((a) => a.key)).toEqual(["disciplines"]);
+  });
+
+  it("keeps database ids and each source's own route count off a merged crag's card", () => {
+    const osm = { position: [-83.6698, 37.815] as [number, number], props: { kind: "crag", source: "osm", osmId: "node/7314110512", name: "Military Wall", v: 110 } };
+    const ob = {
+      position: [-83.6699, 37.815] as [number, number],
+      props: { kind: "crag", source: "openbeta", name: "Military Wall", v: 42, openbetaId: "e2", url: "https://openbeta.io/area/e2" },
+    };
+    const [merged] = mergeCrags([osm], [ob]).crags;
+    expect(merged.props).toMatchObject({ routesOsm: 110, routesOpenbeta: 42 });
+    const feature = { type: "Feature" as const, geometry: { type: "Point" as const, coordinates: merged.position }, properties: merged.props };
+    const card = cardContent(feature, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.measure).toMatchObject({ label: "Routes", value: "110" });
+    const keys = [...card.facts, ...card.details].map((r) => r.key);
+    for (const plumbing of ["osmId", "openbetaId", "routesOsm", "routesOpenbeta", "routeCounts"]) expect(keys).not.toContain(plumbing);
+    expect(card.links.map((l) => l.label)).toContain("Open on OpenBeta");
   });
 });

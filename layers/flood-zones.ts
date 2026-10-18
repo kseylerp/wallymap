@@ -11,9 +11,13 @@
  * The layer returns a raster tile template and makes no upstream call. Not every county has digital flood maps.
  * Smoke through runLayer (2026-10-09): Houston bbox returns the tile template (200); a European bbox returns an empty
  * result with the outside-the-US note. Live tiles through the produced template: Houston z14 4.9 KB, z16 8.0 KB.
+ * Legend (2026-10-18): the colors FEMA draws, read from the service's own legend swatches (MapServer/legend, layer 28): 1% annual
+ * chance #00E5FF (cyan at 30% alpha), floodway red hatch over it, 0.2% annual chance #FF8100, undetermined #F2E574, future
+ * conditions grey hatch, levee areas black hatch over orange or yellow. The tiles draw as served (`raster: null`): the default
+ * calming washed the pale cyan out on Topo.
  */
 import { z } from "zod";
-import { defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { mapServerExportTileUrl } from "./_shared/arcgis-tiles";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
@@ -23,11 +27,26 @@ const SERVICE = "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapSe
 
 export const FLOOD_ZONES_TILE_URL = mapServerExportTileUrl(SERVICE, { layers: "show:28" });
 
+/** FEMA's own key, with the colors its tiles draw. */
+export const FLOOD_ZONES_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Flood hazard zone",
+  items: [
+    { label: "1% annual chance flood (100-year; zones A, AE, AH, AO, V, VE)", color: "#00E5FF", symbol: "raster", help: "Flood insurance is usually required for buildings with a federally backed mortgage." },
+    { label: "Regulatory floodway (red hatch)", color: "#FF0000", symbol: "raster", help: "The channel and nearby land that must be kept clear to carry the 1% flood." },
+    { label: "0.2% annual chance flood (500-year; shaded zone X)", color: "#FF8100", symbol: "raster" },
+    { label: "Area of undetermined flood hazard (zone D)", color: "#F2E574", symbol: "raster" },
+    { label: "Future conditions 1% annual chance (grey hatch)", color: "#818181", symbol: "raster" },
+    { label: "Area with reduced risk due to a levee (black hatch)", color: "#000000", symbol: "raster" },
+  ],
+  note: "Drawn only from about zoom 14 (street level); zoomed out the map shows nothing.",
+};
+
 const floodZones = defineLayer({
   id: "flood-zones",
   title: "FEMA flood zones",
   description:
-    "FEMA's official flood hazard zones for the United States, from the National Flood Hazard Layer, drawn as map tiles: light blue is the 1% annual chance floodplain (the '100-year flood', zones A, AE, AH, AO, V and VE, where flood insurance is usually required), hatching marks the regulatory floodway (the channel that must stay clear), and orange is the 0.2% annual chance floodplain (the '500-year flood', zone X shaded). " +
+    "FEMA's official flood hazard zones for the United States, from the National Flood Hazard Layer, drawn as map tiles in FEMA's own colors with its key as the legend: cyan is the 1% annual chance floodplain (the '100-year flood', zones A, AE, AH, AO, V and VE, where flood insurance is usually required), hatching marks the regulatory floodway (the channel that must stay clear), and orange is the 0.2% annual chance floodplain (the '500-year flood', zone X shaded). " +
     "Use it for 'floodplain', 'is this spot in a flood zone', 'flood risk for this campsite, trailhead or property', or to see which valleys and coasts flood. " +
     "Caveats: the tiles only appear when zoomed in to street or neighbourhood level (about zoom 14 and closer); zoomed out the map shows nothing, so tell the user to zoom in. " +
     "It is mapped flood hazard for regulation and insurance, not a forecast or a record of floods: places outside the zones can still flood, mountain flash floods and small creeks are often unmapped, and not every county has digital flood maps, so a blank area can mean no study. " +
@@ -39,7 +58,11 @@ const floodZones = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: z.object({}),
-  style: { geometry: "polygon", color: layerColor("flood-zones") },
+  // FEMA's colors as served: the default raster calming made the pale 1% cyan vanish on Topo.
+  style: { geometry: "polygon", color: layerColor("flood-zones"), raster: null },
+  legend: FLOOD_ZONES_LEGEND,
+  // The current effective flood maps: no time panel.
+  time: { shape: "none" },
 
   async query(ctx): Promise<LayerResult | LayerError> {
     const citation = {

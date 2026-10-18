@@ -11,6 +11,9 @@
  * Smoke check 2026-10-10 (live, keyless, through runLayer): point (-120.0, 38.9) returned "Till" in 0.4 s. On 2026-10-09 point (-120.0, 38.9) near Lake Tahoe returned
  *   4 units, most detailed "Till" (Pleistocene, large scale) over Mesozoic granitic rocks (medium), in 0.2 s; point (-109.55, 38.57)
  *   near Moab returned "Stream alluvium" (Late Pleistocene to Holocene).
+ * Card (2026-10-18): the card leads with `rock`, the rock types in words and the age span in years ("Granite, with granodiorite,
+ *   amphibolite and quartz monzonite, and some metasedimentary rock; Archean, 2.5 to 4 billion years old" for the Grand Teton,
+ *   -110.8023, 43.7412), and `description` is the source's first sentence; the full text and the coarser maps go under Details.
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
@@ -77,6 +80,57 @@ function ageText(unit: Unit): string | undefined {
   return young || old || undefined;
 }
 
+/** "a, b and c". */
+function listText(items: string[]): string {
+  return items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+/**
+ * Macrostrat's lithology text in words: "Major:{granite}, Minor:{granodiorite,amphibolite}, Incidental:{metasedimentary}" is
+ * "Granite, with granodiorite and amphibolite, and some metasedimentary rock". Text without the braces comes back as it is.
+ */
+export function lithologyText(raw: string): string {
+  const parts: Record<string, string[]> = {};
+  for (const m of raw.matchAll(/(Major|Minor|Incidental)\s*:\s*\{([^}]*)\}/gi)) {
+    parts[m[1].toLowerCase()] = m[2].split(",").map((x) => x.trim()).filter(Boolean);
+  }
+  if (Object.keys(parts).length === 0) return raw.trim();
+  const major = parts.major ?? [];
+  const minor = parts.minor ?? [];
+  const incidental = parts.incidental ?? [];
+  const lead = major.length > 0 ? listText(major) : listText(minor);
+  let text = lead;
+  if (major.length > 0 && minor.length > 0) text += `, with ${listText(minor)}`;
+  if (incidental.length > 0) text += `, and some ${listText(incidental)}${/rock|stone|ite$/.test(incidental[incidental.length - 1]) ? "" : " rock"}`;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** Millions of years as people say them: "2.5 billion", "66 million", "12,000 years" for the youngest deposits. */
+function yearsText(ma: number): string {
+  if (ma >= 1000) return `${Math.round(ma / 100) / 10} billion`;
+  if (ma >= 1) return `${(ma >= 10 ? Math.round(ma) : Math.round(ma * 10) / 10).toLocaleString("en-US")} million`;
+  return `${Math.round(ma * 1_000_000).toLocaleString("en-US")}`;
+}
+
+/** "2.5 to 4 billion years old", "2.6 to 259 million years old", "about 66 million years old". */
+export function ageSpanText(topMa: number | undefined, bottomMa: number | undefined): string | undefined {
+  if (topMa === undefined && bottomMa === undefined) return undefined;
+  const lo = topMa ?? bottomMa ?? 0;
+  const hi = bottomMa ?? topMa ?? 0;
+  if (yearsText(lo) === yearsText(hi)) return `about ${yearsText(lo)} years old`;
+  const [a, b] = [yearsText(lo), yearsText(hi)];
+  // "2.5 to 4 billion", not "2.5 billion to 4 billion".
+  const unit = (t: string) => t.replace(/^[\d.,]+\s*/, "");
+  const shared = unit(a) === unit(b) && unit(a) !== "";
+  return `${shared ? a.replace(` ${unit(a)}`, "") : a} to ${b} years old`;
+}
+
+/** The first sentence of a long source description (at least 20 characters, so "Age 2,500 Ma." does not end it early). */
+function firstSentence(text: string): string {
+  const m = /^(.{20,}?[.;])(\s|$)/.exec(text);
+  return (m ? m[1] : text).trim();
+}
+
 /** One point feature for the most detailed unit, with the coarser maps summarised in `alsoMapped`. */
 export function identifyFeature(
   lon: number,
@@ -95,9 +149,16 @@ export function identifyFeature(
   if (typeof best.t_age === "number") properties.ageTopMa = Math.round(best.t_age * 1000) / 1000;
   if (typeof best.b_age === "number") properties.ageBottomMa = Math.round(best.b_age * 1000) / 1000;
   const lith = best.lith?.trim();
-  if (lith) properties.lithology = lith;
+  if (lith) properties.lithology = lithologyText(lith);
+  const span = ageSpanText(properties.ageTopMa as number | undefined, properties.ageBottomMa as number | undefined);
+  const rockParts = [lith ? lithologyText(lith) : undefined, [age, span].filter(Boolean).join(", ") || undefined].filter(Boolean);
+  if (rockParts.length > 0) properties.rock = rockParts.join("; ");
   const description = best.descrip?.trim();
-  if (description) properties.description = clip(description, CLIP_DESCRIPTION);
+  if (description) {
+    const full = clip(description, CLIP_DESCRIPTION);
+    properties.description = firstSentence(full);
+    if (properties.description !== full) properties.fullDescription = full;
+  }
   const formations = best.strat_name?.trim();
   if (formations) properties.formations = clip(formations, CLIP_STRAT_NAME);
   if (best.scale) properties.mapScale = best.scale;
@@ -119,27 +180,26 @@ const HELP: Record<string, FieldHelp> = {
   ageTopMa: { text: "The youngest age of the map unit, in millions of years before present.", unit: "million years ago", source: "Macrostrat", url: MACROSTRAT_URL },
   ageBottomMa: { text: "The oldest age of the map unit, in millions of years before present.", unit: "million years ago", source: "Macrostrat", url: MACROSTRAT_URL },
   mapScale: { text: "Which Macrostrat map this unit comes from: large is the most detailed, then medium, small and tiny." },
+  rock: { text: "The unit's rock types in words (major, then minor, then incidental) and its age span. The span is the unit's mapped range, not a date for any one rock.", source: "Macrostrat", url: MACROSTRAT_URL },
+  fullDescription: { text: "The source map's full description of the unit, which often covers several ranges." },
   alsoMapped: { text: "What Macrostrat's coarser maps call the same spot." },
 };
 
 /** The rock card: the unit's age span, rocks and description, and the source map. */
 const CARD: CardSpec = {
   facts: [
-    { key: "age", label: "Age" },
-    { key: "ageTopMa", label: "Youngest age", unit: "million years ago" },
-    { key: "ageBottomMa", label: "Oldest age", unit: "million years ago" },
-    { key: "lithology", label: "Rock types" },
+    { key: "rock", label: "Rock" },
     { key: "description", label: "Description" },
-    { key: "formations", label: "Formations" },
     {
       key: "mapScale",
       label: "Map detail",
       values: { large: "Large scale (most detailed)", medium: "Medium scale", small: "Small scale", tiny: "Tiny scale (least detailed)" },
     },
-    { key: "alsoMapped", label: "On coarser maps" },
     { key: "reference", label: "Source map" },
   ],
   links: [{ key: "url", label: "Open on Macrostrat" }],
+  // The rock line already says these; the full description, formations and coarser maps stay under Details.
+  hidden: ["age", "lithology"],
 };
 
 const geologicUnit = defineLayer({
@@ -148,7 +208,7 @@ const geologicUnit = defineLayer({
   description:
     "What rock lies at one place: the geologic map unit under a point (lon, lat), from Macrostrat's compilation of geologic maps (world coverage, most detailed in the United States). " +
     "Give it the lon and lat of the spot (a peak, a trailhead, a clicked point); it returns one point whose properties are name (the map unit), age (geologic period or epoch, for example Pleistocene or Triassic to Cretaceous), " +
-    "ageTopMa and ageBottomMa (youngest and oldest age in millions of years), lithology (rock types, such as 'Major:{granodiorite}'; sometimes empty, then read description), description, formations, mapScale (large is most detailed), " +
+    "ageTopMa and ageBottomMa (youngest and oldest age in millions of years), lithology (rock types in words, such as 'Granite, with granodiorite and amphibolite'; sometimes empty, then read description), rock (the rock types and age span in one line, the card's headline), description (the source's first sentence) and fullDescription, formations, mapScale (large is most detailed), " +
     "alsoMapped (what coarser maps call the same spot), reference (the source map) and url (the Macrostrat map at that place). " +
     "Use it for 'what rock is this peak made of', 'what rock is here', 'how old is the ground here', 'is this granite or limestone', 'geology of this place'. To show the geology over an area use the geology layer instead. " +
     "Caveats: geologic maps are drawn at the scale of their source, so edges are generalised and small outcrops are missed; units can be loose ('undivided granitic rocks') and the age is the unit's range, not a date for any one rock; " +
@@ -162,6 +222,9 @@ const geologicUnit = defineLayer({
   style: { geometry: "point", color: layerColor("geologic-unit") },
   fieldHelp: HELP,
   card: CARD,
+  labels: { field: "name", max: 1 },
+  // A map unit at one point, no time.
+  time: { shape: "none" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

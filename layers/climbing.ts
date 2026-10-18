@@ -28,7 +28,17 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import {
+  defineLayer,
+  type BBox,
+  type LayerError,
+  type LayerResult,
+  type QueryContext,
+  type CardSpec,
+  type Attribute,
+  type FieldHelp,
+  type LegendSpec,
+} from "./types";
 import {
   bandsBetween,
   CLIMBING_GRADE_HELP,
@@ -395,7 +405,7 @@ export function dedupeSameName(crags: Crag[]): Crag[] {
 /**
  * Merges OpenBeta crags into OSM crags: a match keeps the OSM position and name, takes the larger route count and the
  * OpenBeta link, grades and discipline totals. Each OSM crag absorbs at most one OpenBeta crag. When the two counts
- * differ, both stay (`routesOsm`, `routesOpenbeta`) so the card can say which one `v` is.
+ * differ, both stay (`routesOsm`, `routesOpenbeta`) for the model; the card hides them and shows only `v`.
  */
 export function mergeCrags(osm: Crag[], openbeta: Crag[]): { crags: Crag[]; both: number } {
   const merged = osm.map((c) => ({ ...c, props: { ...c.props } }));
@@ -720,10 +730,6 @@ const HELP: Record<string, FieldHelp> = {
   toprope: BY_DISCIPLINE,
   routesByDiscipline: BY_DISCIPLINE,
   gradeBands: CLIMBING_GRADE_HELP,
-  routeCounts: {
-    text: "The two sources count this place's routes differently; Routes shows the larger of the two, never their sum (both list the same routes).",
-    source: "OpenStreetMap contributors and OpenBeta",
-  },
   fee: { text: "Whether a fee is charged to climb here, from the OpenStreetMap fee tag." },
   disciplines: {
     text:
@@ -753,25 +759,35 @@ const CARD: CardSpec = {
         { key: "toprope", label: "top rope" },
       ],
     },
-    {
-      key: "routeCounts",
-      label: "Routes by source",
-      parts: [
-        { key: "routesOsm", label: "OpenStreetMap" },
-        { key: "routesOpenbeta", label: "OpenBeta" },
-      ],
-    },
     { key: "gradeBands", label: "Grade bands", format: "list", values: Object.fromEntries(CLIMBING_LEVELS.map((l) => [String(l.value), l.label])) },
     { key: "disciplines", label: "Disciplines", format: "list", values: DISCIPLINE_LABELS },
     { key: "maxLengthM", label: "Longest route", unit: "m", format: "m" },
     { key: "orientation", label: "Faces" },
     { key: "region", label: "Region" },
+    { key: "kind", label: "Kind", values: KIND_LABELS },
     { key: "source", label: "Source", values: SOURCE_LABELS },
   ],
   links: [
     { key: "url", label: "Open on OpenBeta" },
     { key: "website", label: "Website" },
   ],
+  // Database ids and each source's own route count are plumbing: Routes already shows the larger count.
+  hidden: ["osmId", "openbetaId", "routesOsm", "routesOpenbeta"],
+};
+
+/** What the map draws: one symbol per place, sized by its route count. */
+const LEGEND: LegendSpec = {
+  kind: "size",
+  title: "Routes",
+  field: "v",
+  unit: "routes",
+  stops: [
+    { label: "1", value: 1 },
+    { label: "10", value: 10 },
+    { label: "100", value: 100 },
+    { label: "1,000 or more", value: 1000 },
+  ],
+  note: "Places with no route count (many OpenStreetMap crags) draw at the smallest size.",
 };
 
 const climbing = defineLayer({
@@ -801,6 +817,13 @@ const climbing = defineLayer({
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  legend: LEGEND,
+  // The crags with the most routes get their names on the map.
+  labels: { field: "name", max: 8, rankBy: "v" },
+  // Places, not events: the OpenStreetMap check date (`t`) is a survey date, not a time to scrub.
+  time: { shape: "none" },
+  // Worldwide: metric first (route lengths in metres, as climbers quote them), local time.
+  display: { units: "metric", timeZone: "local" },
 
   async query(ctx, input: ClimbingInput): Promise<LayerResult | LayerError> {
     // Both sources, tile by tile, in parallel; one deadline for every attempt keeps the query inside its time budget.

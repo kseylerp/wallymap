@@ -59,7 +59,9 @@ function Title({ block }: { block: LegendBlock }) {
  */
 /** The phone's short key: the `n` kinds with the most features on the map, in the key's own order. */
 function mostDrawn(entries: LegendBlock["entries"], n: number): LegendBlock["entries"] {
-  if (entries.length <= n || !entries.some((e) => e.count !== undefined)) return entries.slice(0, n);
+  if (entries.length <= n) return entries;
+  // No counts (tiles): the ends and evenly spaced kinds between, so a 19-zone key reads 3a … 12a, not 3a to 4b.
+  if (!entries.some((e) => e.count !== undefined)) return Array.from({ length: n }, (_, i) => entries[Math.round((i * (entries.length - 1)) / (n - 1))]);
   const keep = new Set([...entries].sort((x, y) => (y.count ?? 0) - (x.count ?? 0)).slice(0, n));
   return entries.filter((e) => keep.has(e));
 }

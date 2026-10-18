@@ -75,6 +75,18 @@ export function place(
   const offscreen = anchor.x < 0 || anchor.y < 0 || anchor.x > view.width || anchor.y > view.height;
   const roomAbove = anchor.y - GAP - topSafe;
   const roomBelow = view.height - anchor.y - GAP - EDGE - insets.bottom;
+  // Neither above nor below holds the card (a point mid-map, a tall card): beside the point, so it never covers it.
+  if (roomAbove < card.height && roomBelow < card.height && !offscreen) {
+    const rightRoom = view.width - EDGE - insets.right - (anchor.x + GAP);
+    const leftRoom = anchor.x - GAP - EDGE - insets.left;
+    if (Math.max(rightRoom, leftRoom) >= card.width) {
+      // Left first: the layer panel sits on the right on desktop.
+      const left = leftRoom >= card.width ? anchor.x - GAP - card.width : anchor.x + GAP;
+      const maxTop = Math.max(topSafe, view.height - EDGE - insets.bottom - card.height);
+      const top = Math.min(maxTop, Math.max(topSafe, anchor.y - card.height / 2));
+      return { left, top, below: false, pointerX: 20, pointer: false, offscreen };
+    }
+  }
   const below = roomAbove < card.height && roomBelow > roomAbove;
   const ideal = below ? anchor.y + GAP : anchor.y - GAP - card.height;
   const maxTop = Math.max(topSafe, view.height - EDGE - insets.bottom - card.height);

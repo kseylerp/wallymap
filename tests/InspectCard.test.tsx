@@ -200,3 +200,11 @@ describe("the hex cell card (spec §12d)", () => {
     expect(onAskCell.mock.calls[0][0]).toMatch(/^In Power plants \(power-plants\) inside the hex cell bbox/);
   });
 });
+
+describe("place: a point the card fits neither above nor below", () => {
+  it("goes beside the point (left first), so the card never covers what it describes", () => {
+    const p = place({ x: 800, y: 450 }, { width: 340, height: 700 }, { width: 1440, height: 900 });
+    expect(p.left).toBe(800 - 14 - 340);
+    expect(p.pointer).toBe(false);
+  });
+});

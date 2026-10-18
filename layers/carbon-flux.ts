@@ -75,7 +75,7 @@ const carbonFlux = defineLayer({
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
   // More saturation and contrast than the tiles carry, so the pale sinks read on green Topo instead of a grey haze.
-  style: { geometry: "polygon", color: layerColor("carbon-flux"), raster: { saturation: 0.4, contrast: 0.25, opacity: 0.85, swatch: "#9EC09F" } },
+  style: { geometry: "polygon", color: layerColor("carbon-flux"), raster: { saturation: 0.4, contrast: 0.25, opacity: 0.7, swatch: "#9EC09F" } },
   legend: LEGEND,
   // One long-term average, not a series.
   time: { shape: "single", span: { start: "2001", end: "2025" } },

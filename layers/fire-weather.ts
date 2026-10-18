@@ -92,7 +92,7 @@ const fireWeather = defineLayer({
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
   // Drawn in the source's own class colors so the key matches; 75% so the relief shows through the 25 km blocks.
-  style: { geometry: "polygon", color: layerColor("fire-weather"), raster: { saturation: 0, opacity: 0.75, swatch: "#E6AC00" } },
+  style: { geometry: "polygon", color: layerColor("fire-weather"), raster: { saturation: 0, opacity: 0.6, swatch: "#E6AC00" } },
   legend: LEGEND,
   time: { shape: "continuous", step: "day" },
 

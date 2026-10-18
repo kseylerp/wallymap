@@ -1316,3 +1316,7 @@ textarea:focus-visible {
 .phone-sheet [data-testid="hex-legend"] {
   min-height: 32px;
 }
+/* The sheet's handle: a thin strip with its pill, its hit area 44px tall across the middle of the sheet. */
+.phone-sheet [data-sheet-handle]::after {
+  width: 160px;
+}

@@ -5,7 +5,8 @@ import { TimePanel, wholeSpan } from "@/components/TimePanel";
 import { frameAggregate } from "@/lib/render/series";
 import { linkedCurve } from "@/lib/render/linkedChart";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
-import { applyFilters, deriveFilterFields, filterSummary, type FilterField, type MeasureRange } from "@/lib/render/filters";
+import { applyFilters, filterSummary, type FilterField, type MeasureRange } from "@/lib/render/filters";
+import { moreFilterFields } from "@/lib/render/moreFields";
 import { AttributeControls } from "@/components/AttributeControls";
 import { PhonePanelContext, PhoneSheet, usePhonePanel, usePhoneSheetState } from "@/components/PhoneSheet";
 import { useIsPhone } from "@/components/useIsPhone";
@@ -432,8 +433,9 @@ function LegendRow({
   const attributes = attributesOf(layer);
   // The other fields the data offers go under More; the attributes have their own controls in the row.
   const fields = useMemo<FilterField[]>(
-    () => (data ? deriveFilterFields(data, { unitForV: unit }).filter((f) => !attributes.some((x) => x.key === f.key)) : []),
-    [data, unit, attributes],
+    // Never one measure twice, never a raw key (lib/render/moreFields.ts).
+    () => (data ? moreFilterFields(layer, data) : []),
+    [data, layer],
   );
   const filters = op?.filters ?? {};
   const activeCount = Object.keys(filters).length;
@@ -881,14 +883,14 @@ export function LayerStack({
           onClose={() => onOpenChange(false)}
           header={
             moreLayer ? (
-              <header className="flex items-center gap-2 px-2 pb-1">
+              <header className="flex items-center gap-2 px-2">
                 <button type="button" onClick={() => setMore(null)} className="sheet-button text-ink">
                   <span aria-hidden className="mr-1">‹</span>Back
                 </button>
                 <h2 className="min-w-0 flex-1 truncate small-caps">Filters · {moreLayer.title}</h2>
               </header>
             ) : (
-              <header className="flex items-center gap-1 px-4 pb-1">
+              <header className="flex items-center gap-1 px-4">
                 <h2 className="small-caps">
                   Layers <span className="ml-1 text-ink tabular-nums">{items.length + failed.length}</span>
                 </h2>

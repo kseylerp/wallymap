@@ -45,7 +45,7 @@ describe("deriveFilterFields on fixtures", () => {
     expect(keys).toContain("highway");
     for (const banned of ["name", "osmId", "wikidata", "wikipedia"]) expect(keys).not.toContain(banned);
     const sac = fields.find((f) => f.key === "sac_scale");
-    expect(sac).toMatchObject({ kind: "category", label: "Difficulty (sac_scale)" });
+    expect(sac).toMatchObject({ kind: "category", label: "Difficulty" });
     if (sac?.kind !== "category") throw new Error("expected category");
     // Ways with no difficulty carry sac_scale "not_rated" (layers/osm-trails.ts), so "Not rated" is a chip too.
     expect(sac.values).toEqual([
@@ -256,14 +256,14 @@ describe("review fixes: licence, long species lists, the measure key", () => {
 
 describe("filterSummary", () => {
   const fields: FilterField[] = [
-    { key: "sac_scale", label: "Difficulty (sac_scale)", kind: "category", values: [{ value: "hiking", count: 2 }] },
+    { key: "sac_scale", label: "Difficulty", kind: "category", values: [{ value: "hiking", count: 2 }] },
     { key: "acres", label: "Acres", kind: "range", min: 100, max: 9000, integer: false },
   ];
 
   it("joins categories and ranges with a middle dot", () => {
     expect(
       filterSummary(fields, { sac_scale: { include: ["hiking", "mountain_hiking"] }, acres: { range: [500, 9000] } }),
-    ).toBe("Difficulty (sac_scale): hiking, mountain_hiking · Acres ≥ 500");
+    ).toBe("Difficulty: hiking, mountain_hiking · Acres ≥ 500");
   });
 
   it("formats open lower ends, closed ranges, and skips full or empty filters", () => {
@@ -277,7 +277,7 @@ describe("filterSummary", () => {
 
 describe("labelFor", () => {
   it("maps known keys", () => {
-    expect(labelFor("sac_scale")).toBe("Difficulty (sac_scale)");
+    expect(labelFor("sac_scale")).toBe("Difficulty");
     expect(labelFor("trail_visibility")).toBe("Visibility");
     expect(labelFor("surface")).toBe("Surface");
     expect(labelFor("v")).toBe("Value");

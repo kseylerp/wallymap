@@ -459,7 +459,7 @@ describe("LayerStack filters", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(toggle);
     const panel = screen.getByTestId("layer-filters");
-    const chips = within(within(panel).getByRole("group", { name: "Difficulty (sac_scale)" })).getAllByRole("button");
+    const chips = within(within(panel).getByRole("group", { name: "Difficulty" })).getAllByRole("button");
     expect(chips.map((c) => c.textContent)).toEqual(["All", "hiking 4", "alpine hiking 2", "mountain hiking 2"]);
     expect(within(panel).getByTestId("measure-histogram").getAttribute("data-key")).toBe("length_km");
     expect(within(panel).queryByRole("slider")).toBeNull();
@@ -476,7 +476,7 @@ describe("LayerStack filters", () => {
       filters: { sac_scale: { include: ["alpine_hiking"] } },
     });
     expect(screen.getByTestId("layer-count").textContent).toBe("2 of 8");
-    expect(screen.getByTestId("filter-summary").textContent).toBe("Filtered: Difficulty (sac_scale): alpine_hiking");
+    expect(screen.getByTestId("filter-summary").textContent).toBe("Filtered: Difficulty: alpine_hiking");
     expect(screen.getByRole("button", { name: /^Fewer filters/ }).textContent).toBe("Fewer filters (1 active)");
 
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
@@ -489,7 +489,7 @@ describe("LayerStack filters", () => {
     const spy = vi.fn();
     render(<Filtered spy={spy} />);
     fireEvent.click(screen.getByRole("button", { name: "More filters" }));
-    const bars = within(screen.getByRole("group", { name: "Length km: pick a band" })).getAllByRole("button");
+    const bars = within(screen.getByRole("group", { name: "Length: pick a band" })).getAllByRole("button");
     expect(bars).toHaveLength(12);
     fireEvent.click(bars[11]);
     const range = (spy.mock.lastCall?.[0] as Extract<MapAction, { type: "set_filters" }>).filters.length_km?.range;

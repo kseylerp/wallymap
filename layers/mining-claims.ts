@@ -267,7 +267,7 @@ const ATTRIBUTES: Attribute[] = [
       { label: "20 or more", min: 20 },
     ],
   },
-  { key: "acres", type: "measure", label: "Recorded area", unit: "acres" },
+  // Recorded area is on the card, not a filter: a lode claim is 20.66 acres, so it ranked and filtered as Claims did.
   nameAttribute("Claim name"),
 ];
 

@@ -187,7 +187,8 @@ export function PhoneSheet({
           data-sheet-handle
           data-testid="sheet-handle"
           aria-label={`Resize ${label.toLowerCase()} (${snap})`}
-          className="flex h-[22px] w-full items-end justify-center"
+          // A thin strip with the pill (a 44px hit area around it, hit-target): the header under it is part of the drag zone.
+          className="hit-target flex h-[14px] w-full items-end justify-center"
         >
           <span aria-hidden className="h-[5px] w-10 rounded-full bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]" />
         </button>

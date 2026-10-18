@@ -82,7 +82,7 @@ function isSkippedKey(key: string): boolean {
 }
 
 const LABELS: Record<string, string> = {
-  sac_scale: "Difficulty (sac_scale)",
+  sac_scale: "Difficulty",
   trail_visibility: "Visibility",
   surface: "Surface",
   v: "Value",
@@ -93,6 +93,7 @@ const LABELS: Record<string, string> = {
   confidence: "Confidence",
   species: "Species",
   scientificName: "Species",
+  nameplateMw: "Nameplate capacity",
 };
 
 /** Plain-language name for a property key, used as the filter heading. */
@@ -273,7 +274,7 @@ export function formatFilterNumber(value: number, integer: boolean, key: string,
 }
 
 /**
- * One-line description of the active filters under their panel headings, e.g. "Difficulty (sac_scale): hiking,
+ * One-line description of the active filters under their panel headings, e.g. "Difficulty: hiking,
  * mountain_hiking · Acres ≥ 500".
  */
 export function filterSummary(fields: FilterField[], filters: LayerFilters): string {

@@ -1,27 +1,31 @@
 /**
- * Night lights raster tiles from NASA GIBS (VIIRS Day/Night Band, Suomi NPP satellite).
- * Verified 2026-10-09 against https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/WMTSCapabilities.xml:
- *   - Layer id VIIRS_SNPP_DayNightBand_At_Sensor_Radiance ("At Sensor Radiance (Day/Night Band, VIIRS, Suomi NPP)").
- *     It is a daily product with a Time dimension from 2020-11-18 (with small gaps) to the present.
- *     VIIRS_Black_Marble exists too but has only the two yearly dates 2012 and 2016, so it is not used.
- *   - TileMatrixSet GoogleMapsCompatible_Level8 (zoom 0 to 8), format image/png, 256 px tiles.
- *   - Live check: date 3 days ago, z=3 y=3 x=2 returned 200 image/png (33 KB); z=8 returned 200.
- * The newest day or two are often not yet processed, so the default date is 3 days before today (UTC).
+ * Night lights raster tiles from NASA GIBS (VIIRS Day/Night Band, Suomi NPP satellite), moon- and cloud-corrected.
+ * Verified 2026-10-18 against https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/WMTSCapabilities.xml:
+ *   - Layer id VIIRS_SNPP_GapFilled_BRDF_Corrected_DayNightBand_Radiance ("Gap-Filled BRDF Corrected Radiance (Day/Night
+ *     Band, VIIRS, Suomi NPP)", the Black Marble daily product): moonlight removed (BRDF corrected) and cloudy pixels
+ *     filled from the nearest clear night, daily from 2012-01-19 (a few gaps) to 2026-10-16, two days behind today.
+ *     GoogleMapsCompatible_Level8 (zoom 0 to 8), image/png.
+ *   - Until 2026-10-18 the layer drew VIIRS_SNPP_DayNightBand_At_Sensor_Radiance (raw radiance, from 2020-11-18): moonlit
+ *     cloud, per-strip capture times and a stale daytime strip showed as stripes, and two raw days were not comparable.
+ *   - Colormap VIIRS_DayNightBand_At_Sensor_Radiance.xml (shared by both): grey from black (0) to white (38 nW/(cm² sr)
+ *     and brighter), so the legend is that grey ramp in the source's unit.
+ *   - Lights change over years, not days, so the scrubber steps one month at a time (the 1st of each month's gap-filled
+ *     image), over the 14-year archive; the default stays the newest reliable day.
  * Days inside a gap in the archive return a 404 for each tile, so the map shows nothing for that date.
  * No upstream call is made by the layer: it only builds the URL for the map to fetch.
  */
 import { z } from "zod";
-import { defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { gibsTileUrl } from "./_shared/gibs";
 import { NIGHT_LIGHTS_DAYS_BACK } from "@/lib/time";
 import { layerColor } from "@/lib/render/palette";
 
-const GIBS_LAYER_ID = "VIIRS_SNPP_DayNightBand_At_Sensor_Radiance";
+export const GIBS_LAYER_ID = "VIIRS_SNPP_GapFilled_BRDF_Corrected_DayNightBand_Radiance";
 /** GoogleMapsCompatible_Level8: the finest zoom this layer is published at. */
 const GIBS_LEVEL = 8;
 /** First day the archive holds. */
-const EARLIEST_DATE = "2020-11-18";
+export const EARLIEST_DATE = "2012-01-19";
 const DEFAULT_DAYS_BACK = NIGHT_LIGHTS_DAYS_BACK;
 const DAY_MS = 86_400_000;
 
@@ -42,16 +46,31 @@ function isRealDate(day: string): boolean {
   return Number.isFinite(ms) && isoDay(ms) === day;
 }
 
+/** GIBS's grey ramp in its own unit (colormap VIIRS_DayNightBand_At_Sensor_Radiance.xml, read 2026-10-18). */
+export const LEGEND: LegendSpec = {
+  kind: "ramp",
+  title: "Night light (radiance)",
+  unit: "nW/(cm²·sr)",
+  stops: [
+    { label: "Dark, under 1", value: 0, color: "#070707" },
+    { label: "2 (villages, roads)", value: 2, color: "#515151" },
+    { label: "5", value: 5, color: "#7E7E7E" },
+    { label: "10 (towns)", value: 10, color: "#A7A7A7" },
+    { label: "20 (city suburbs)", value: 20, color: "#D4D4D4" },
+    { label: "38 and brighter (city centres)", value: 38, color: "#FFFFFF" },
+  ],
+  note: "Brighter grey means more light. Flares, fires and fishing fleets glow too.",
+};
+
 const nightLights = defineLayer({
   id: "night-lights",
   title: "Night lights",
   description:
-    "Global satellite picture of the Earth at night from NASA's VIIRS Day/Night Band, showing artificial light (cities, roads, ports, oil and gas flares, fishing fleets) and also fires, auroras and moonlit clouds. " +
-    "It is a daily image of at-sensor radiance (how much light the satellite received), shown as brightness with no unit scale, so compare brightness only, not exact numbers. " +
-    "date (YYYY-MM-DD, from 2020-11-18 on) picks the day; it defaults to 3 days ago because the newest days are often not published yet. " +
-    "Use it to show where people live and build, how bright a region is, or how lights changed between two dates, anywhere in the world. " +
-    "Caveats: a single day can be blotchy because clouds hide the ground, moonlight washes out dark areas, and each strip is captured at a different time of night; " +
-    "some days are missing from the archive and show nothing. Bright spots are not always cities: flares, wildfires and snow glare also show up. " +
+    "Global satellite picture of the Earth at night from NASA's VIIRS Day/Night Band (the Black Marble product), showing artificial light (cities, roads, ports, oil and gas flares, fishing fleets) and also fires. " +
+    "It is a daily image of light radiance with moonlight removed and cloudy nights filled from the nearest clear one, drawn in grey from black (dark) to white (38 nW/(cm²·sr) and brighter, city centres); compare brightness between places and years, not exact numbers. " +
+    "date (YYYY-MM-DD, from 2012-01-19 on) picks the day; it defaults to 3 days ago because the newest days are often not published yet. The time scrubber steps one month at a time, and compare works best with the same month in two years. " +
+    "Use it to show where people live and build, how bright a region is, or how lights changed between two years (growth, outages, war), anywhere in the world. " +
+    "Caveats: snow and bright desert can still brighten a night, a long cloudy spell is filled with an older night, and some days are missing from the archive and show nothing. Bright spots are not always cities: flares and wildfires also show up. " +
     "The result's coverageNote states the date shown. " +
     "Returns map tiles drawn on the globe, not features you can count or list, so describe what you see only in general terms.",
   coverage: "global",
@@ -60,7 +79,9 @@ const nightLights = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("night-lights"), raster: { opacity: 0.8, swatch: "#FFD27A" } },
+  // As served: the grey ramp is the key, and the dark raster replacing the basemap is the point of this layer.
+  style: { geometry: "polygon", color: layerColor("night-lights"), raster: { saturation: 0, opacity: 0.85, swatch: "#D4D4D4" } },
+  legend: LEGEND,
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     const now = Date.now();
@@ -80,17 +101,17 @@ const nightLights = defineLayer({
         format: "raster",
         time: {
           template: gibsTileUrl(GIBS_LAYER_ID, "{date}", GIBS_LEVEL),
-          cadence: "daily",
+          cadence: "monthly",
           from: EARLIEST_DATE,
           daysBack: DEFAULT_DAYS_BACK,
         },
       },
       citation: {
-        source: "NASA GIBS: VIIRS Day/Night Band at-sensor radiance, Suomi NPP (NASA / NOAA; public)",
+        source: "NASA GIBS: VIIRS Day/Night Band gap-filled, moon-corrected radiance (Black Marble), Suomi NPP (NASA / NOAA; public)",
         url: "https://earthdata.nasa.gov/gibs",
         retrieved: new Date(now).toISOString(),
       },
-      coverageNote: `Night lights for ${date}`,
+      coverageNote: `Night lights for ${date} (moonlight removed, cloudy nights filled)`,
     };
   },
 });

@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
-import layer from "./night-lights";
+import { legendOf, timeShapeOf } from "./contract";
+import layer, { LEGEND } from "./night-lights";
 
 const EUROPE: [number, number, number, number] = [-10, 35, 30, 60];
 
@@ -40,15 +41,15 @@ describe("night-lights layer", () => {
     expect(stub).not.toHaveBeenCalled();
     if (!("kind" in r) || r.kind !== "tiles") throw new Error("expected tiles");
     expect(r.data.url).toBe(
-      "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_DayNightBand_At_Sensor_Radiance/default/2026-10-06/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png",
+      "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_GapFilled_BRDF_Corrected_DayNightBand_Radiance/default/2026-10-06/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png",
     );
     expect(r.data.format).toBe("raster");
     expect(r.data).toMatchObject({ minzoom: 0, maxzoom: 8 });
-    expect(r.coverageNote).toBe("Night lights for 2026-10-06");
+    expect(r.coverageNote).toBe("Night lights for 2026-10-06 (moonlight removed, cloudy nights filled)");
     expect(r.data.time).toEqual({
       template: expect.stringContaining("/default/{date}/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png"),
-      cadence: "daily",
-      from: "2020-11-18",
+      cadence: "monthly",
+      from: "2012-01-19",
       daysBack: 3,
     });
   });
@@ -57,19 +58,19 @@ describe("night-lights layer", () => {
     vi.setSystemTime(new Date("2026-03-02T23:59:00Z"));
     const r = await layer.query(ctx(vi.fn()), {});
     if (!("kind" in r) || r.kind !== "tiles") throw new Error("expected tiles");
-    expect(r.coverageNote).toBe("Night lights for 2026-02-27");
+    expect(r.coverageNote).toBe("Night lights for 2026-02-27 (moonlight removed, cloudy nights filled)");
   });
 
   it("uses a supplied date", async () => {
     const r = await layer.query(ctx(vi.fn()), { date: "2025-12-24" });
     if (!("kind" in r) || r.kind !== "tiles") throw new Error("expected tiles");
     expect(r.data.url).toContain("/default/2025-12-24/GoogleMapsCompatible_Level8/");
-    expect(r.coverageNote).toBe("Night lights for 2025-12-24");
+    expect(r.coverageNote).toBe("Night lights for 2025-12-24 (moonlight removed, cloudy nights filled)");
   });
 
   it("rejects a future date, a date before the archive starts and an impossible date", async () => {
     expect(await layer.query(ctx(vi.fn()), { date: "2026-10-10" })).toMatchObject({ error: expect.stringContaining("future") });
-    expect(await layer.query(ctx(vi.fn()), { date: "2020-11-17" })).toMatchObject({ error: expect.stringContaining("2020-11-18") });
+    expect(await layer.query(ctx(vi.fn()), { date: "2012-01-18" })).toMatchObject({ error: expect.stringContaining("2012-01-19") });
     expect(await layer.query(ctx(vi.fn()), { date: "2026-02-31" })).toMatchObject({ error: expect.stringContaining("not a real date") });
   });
 
@@ -82,7 +83,7 @@ describe("night-lights layer", () => {
 
   it("summarizes to the tile URL and format for the model", async () => {
     const summary = summarizeLayerResult(await layer.query(ctx(vi.fn()), {}));
-    expect(summary).toMatchObject({ kind: "tiles", format: "raster", url: expect.stringContaining("VIIRS_SNPP_DayNightBand_At_Sensor_Radiance") });
+    expect(summary).toMatchObject({ kind: "tiles", format: "raster", url: expect.stringContaining("VIIRS_SNPP_GapFilled_BRDF_Corrected_DayNightBand_Radiance") });
   });
 
   it("runs through runLayer and rejects a malformed date", async () => {
@@ -93,5 +94,14 @@ describe("night-lights layer", () => {
   it("accepts a whole-globe bbox through runLayer", async () => {
     const res = await runLayer("night-lights", { bbox: [-180, -85, 180, 85], zoom: 1 });
     expect(res.status).toBe(200);
+  });
+
+  it("keys the grey ramp in its unit and steps the scrubber by month over the 14-year archive", async () => {
+    expect(legendOf(layer)).toBe(LEGEND);
+    expect(LEGEND).toMatchObject({ kind: "ramp", unit: "nW/(cm²·sr)" });
+    expect(LEGEND.stops?.map((s) => s.color)).toEqual(["#070707", "#515151", "#7E7E7E", "#A7A7A7", "#D4D4D4", "#FFFFFF"]);
+    const r = await layer.query(ctx(vi.fn()), {});
+    expect(timeShapeOf(layer, r as never)).toMatchObject({ shape: "continuous", step: "month" });
+    expect(layer.description).toMatch(/moonlight removed/);
   });
 });

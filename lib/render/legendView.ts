@@ -3,6 +3,7 @@ import type { LegendSpec } from "@/layers/types";
 import { declaredGroups, encodedAttribute, primaryMeasure, valueKeys } from "@/lib/render/attributes";
 import { LINE_DASHES, UNRATED_LABEL, UNRATED_LINE } from "@/lib/render/nativeLines";
 import { categoryKey, type CategoryKey } from "@/lib/render/categories";
+import { rasterKeyFilter } from "@/lib/render/rasterCalm";
 import { layerKey } from "@/lib/render/contract";
 import { channelExtent, ENCODE_RAMP, isDiverging, resolveEncoding } from "@/lib/render/encode";
 import { compareRampColor, rgbToHex } from "@/lib/render/ramp";
@@ -33,6 +34,8 @@ export type LegendBlock = {
   note?: string;
   /** How a category's swatch is drawn: a disc, a line or a tinted square, as the map draws the layer. */
   shape: "point" | "line" | "polygon" | "raster";
+  /** Raster tiles: the CSS filter the map's raster paint amounts to, so swatches and ramps show the drawn colors. */
+  filter?: string;
 };
 
 function shapeOf(layer: Pick<LoadedLayer, "style" | "result">): LegendBlock["shape"] {
@@ -192,6 +195,11 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, data: Fe
       const unit = measure.unit && measure.unit !== "score" ? ` ${measure.unit}` : "";
       blocks.push({ kind: "size", title: measure.label, field: measure.key, entries: [{ label: `${amount(extent[0])}${unit}` }, { label: `${amount(extent[1])}${unit}` }], shape });
     }
+  }
+  // A raster's swatches and gradients pass through the same calming the tiles do (lib/render/rasterCalm.ts).
+  if (shape === "raster") {
+    const filter = rasterKeyFilter(layer.style.raster, true);
+    if (filter) for (const b of blocks) b.filter = filter;
   }
   // Every row has a key: at least the layer's own swatch and name, in the color it draws.
   if (blocks.length === 0 || blocks.every((b) => b.kind === "size")) {

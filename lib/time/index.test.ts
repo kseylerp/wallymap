@@ -441,3 +441,30 @@ describe("dates known only to the year", () => {
     expect(timeIndex({ w: layer("w", fc("2014-01-01T00:00:00.000Z", "2016-06-14T00:00:00.000Z")) })?.bucket).toBe("month");
   });
 });
+
+describe("presets that match the data (owner: no presets that select nothing new)", () => {
+  const now = Date.parse("2026-10-18T12:00:00Z");
+  const tileLayer = (time: TileTime, url: string): LoadedLayer =>
+    ({
+      id: "t",
+      title: "t",
+      style: { geometry: "polygon", color: "#000" },
+      result: { kind: "tiles", data: { url, minzoom: 0, maxzoom: 9, format: "raster", time }, citation: { source: "s", url: "u", retrieved: "r" } },
+      receivedAt: "",
+    }) as LoadedLayer;
+
+  it("a tile layer that lists its dates steps between exactly those, as a stepper", () => {
+    const time: TileTime = { template: "https://x/{date}/{z}/{x}/{y}.png", cadence: "daily", from: "2020-01-01", dates: ["2026-09-02", "2026-09-19", "2026-10-04"] };
+    const index = timeIndex({ t: tileLayer(time, "https://x/2026-10-04/{z}/{x}/{y}.png") }, { now })!;
+    expect(index.buckets.map((b) => b.start.slice(0, 10))).toEqual(["2026-09-02", "2026-09-19", "2026-10-04"]);
+    expect(index.snapshots?.stops.map((s) => s.label)).toEqual(["2026-09-02", "2026-09-19", "2026-10-04"]);
+  });
+
+  it("a 16-day tile layer offers the same date in earlier years", () => {
+    const time: TileTime = { template: "https://x/{date}/{z}/{x}/{y}.png", cadence: "16day", from: "2015-01-01" };
+    const index = timeIndex({ t: tileLayer(time, "https://x/2026-10-08/{z}/{x}/{y}.png") }, { now })!;
+    const labels = timePresets(index, now).map((p) => p.label);
+    expect(labels).toEqual(["Same date last year", "Same date 2024"]);
+  });
+});
+

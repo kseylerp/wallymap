@@ -32,6 +32,11 @@ export type TileTime = {
   to?: string;
   /** The newest period is not reliably processed for this many days; the scrubber stays that far behind today. Negative: forecast days the scrubber may run ahead of today. */
   daysBack?: number;
+  /**
+   * The dates the source actually has an image for (YYYY-MM-DD, oldest first), when it publishes only some days (clear
+   * scenes for imagery by date): the scrubber steps between these, and a dozen or fewer show as a stepper.
+   */
+  dates?: string[];
 };
 
 /**

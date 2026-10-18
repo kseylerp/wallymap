@@ -29,10 +29,12 @@ export function Swatch({ color, shape, outline = false, dash }: { color?: string
   );
 }
 
-function Entry({ entry, shape }: { entry: LegendEntry; shape: LegendBlock["shape"] }) {
+function Entry({ entry, shape, filter }: { entry: LegendEntry; shape: LegendBlock["shape"]; filter?: string }) {
   return (
     <li className="flex min-w-0 items-center gap-1.5" title={entry.help}>
-      <Swatch color={entry.color} shape={shape} outline={entry.outline} dash={entry.dash} />
+      <span className="flex shrink-0" style={filter ? { filter } : undefined}>
+        <Swatch color={entry.color} shape={shape} outline={entry.outline} dash={entry.dash} />
+      </span>
       <span className="min-w-0 truncate">{entry.label}</span>
       {entry.count !== undefined && <span className="shrink-0 text-ink-muted tabular-nums">{entry.count.toLocaleString("en-US")}</span>}
     </li>
@@ -66,13 +68,17 @@ export function RowLegend({ blocks, compact = false }: { blocks: LegendBlock[]; 
           {block.kind === "categories" && (
             <ul className={compact ? "flex min-w-0 flex-wrap gap-x-2.5 gap-y-0.5" : "flex flex-wrap gap-x-3 gap-y-0.5"}>
               {(compact ? block.entries.slice(0, 4) : block.entries).map((e) => (
-                <Entry key={e.label} entry={e} shape={block.shape} />
+                <Entry key={e.label} entry={e} shape={block.shape} filter={block.filter} />
               ))}
             </ul>
           )}
           {block.kind === "ramp" && (
             <div className="max-w-[220px]">
-              <div aria-hidden className="h-2 rounded-[2px] border border-line" style={{ background: `linear-gradient(to right, ${(block.colors ?? []).join(", ")})` }} />
+              <div
+                aria-hidden
+                className="h-2 rounded-[2px] border border-line"
+                style={{ background: `linear-gradient(to right, ${(block.colors ?? []).join(", ")})`, ...(block.filter && { filter: block.filter }) }}
+              />
               <div className="mt-0.5 flex justify-between gap-2 text-[10.5px] text-ink-muted tabular-nums">
                 {(block.entries.length > 3 ? [block.entries[0], block.entries[Math.floor(block.entries.length / 2)], block.entries[block.entries.length - 1]] : block.entries).map((e, i) => (
                   <span key={`${e.label}-${i}`} className="min-w-0 truncate">

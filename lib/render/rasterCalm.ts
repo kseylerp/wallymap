@@ -39,11 +39,13 @@ export function rasterPaint(hint: StyleHints["raster"], opacityScale = 1): Raste
 }
 
 /** The CSS filter that approximates `rasterPaint` for a legend key, so the key and the map match. Empty when nothing is calmed. */
-export function rasterKeyFilter(hint: StyleHints["raster"]): string {
+export function rasterKeyFilter(hint: StyleHints["raster"], withOpacity = false): string {
   if (hint === null) return "";
   const paint = rasterPaint(hint);
   const parts = [`saturate(${(1 + paint["raster-saturation"]).toFixed(2)})`];
   if (paint["raster-hue-rotate"] !== 0) parts.push(`hue-rotate(${paint["raster-hue-rotate"]}deg)`);
   if (paint["raster-brightness-max"] < 1) parts.push(`brightness(${paint["raster-brightness-max"]})`);
+  // A legend swatch also takes the tiles' opacity, so its color is the one the map shows (rasters fixer, 2026-10-18).
+  if (withOpacity && paint["raster-opacity"] < 1) parts.push(`opacity(${paint["raster-opacity"]})`);
   return parts.join(" ");
 }

@@ -53,7 +53,7 @@ export function snapshotLayer(index: TimeIndex, layers: MapState["layers"]): Loa
 export function timeLine(time: TimeState): string {
   const { index, window } = time;
   if (index.snapshots) {
-    if (wholeSpan(index, window)) return `Newest of each, ${index.snapshots.stops.length} dates`;
+    if (wholeSpan(index, window)) return `${index.cadence ? "Latest" : "Newest of each"}, ${index.snapshots.stops.length} dates`;
     const k = stopIndex(index.snapshots.stops, window);
     return k >= 0 ? index.snapshots.stops[k].label : windowLabel(window, index.bucket);
   }
@@ -105,7 +105,9 @@ function SnapshotStepper({ time, dispatch, layers, renderOps, compare, compact }
     else dispatch({ type: "set_time_window", window: [stops[k].start, stops[k].end] });
   };
   const step = (d: 1 | -1) => go(Math.min(stops.length - 1, Math.max(-1, at + d)));
-  const current = at < 0 ? "Newest of each" : stops[at].label;
+  // Tiles that list their dates step between images; the whole span is the image the layer loaded (its newest).
+  const whole = index.cadence ? "Latest" : "Newest of each";
+  const current = at < 0 ? whole : stops[at].label;
   const compareButton = opening && !comparing && (
     <button type="button" className="dashed-link shrink-0 text-[12px] text-ink" data-testid="snapshot-compare" onClick={() => dispatch({ type: "set_compare", compare: opening })}>
       Compare {opening.aLabel} with {opening.bLabel}
@@ -138,13 +140,13 @@ function SnapshotStepper({ time, dispatch, layers, renderOps, compare, compact }
     <div role="group" aria-label="Time" data-testid="time-stepper" className="px-5 pt-4 pb-3">
       <Header title="Mapped" line={spanWords(index)} dispatch={dispatch} onFold={() => dispatch({ type: "set_time_open", open: false })} />
       <div role="group" aria-label="Survey dates" className="mt-2 flex flex-wrap gap-1" data-testid="snapshot-stops">
-        <button type="button" aria-pressed={at < 0} onClick={() => go(-1)} className="filter-chip" title="Each thing at its newest date">
-          Newest of each
+        <button type="button" aria-pressed={at < 0} onClick={() => go(-1)} className="filter-chip" title={index.cadence ? "The newest image" : "Each thing at its newest date"}>
+          {whole}
         </button>
         {stops.map((s, k) => (
           <button key={s.start} type="button" aria-pressed={at === k} onClick={() => go(k)} className="filter-chip tabular-nums" title={`${s.count.toLocaleString("en-US")} mapped on this date`}>
             {s.label}
-            <span className="filter-chip-count">{s.count.toLocaleString("en-US")}</span>
+            {s.count > 0 && <span className="filter-chip-count">{s.count.toLocaleString("en-US")}</span>}
           </button>
         ))}
       </div>

@@ -151,7 +151,16 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: TimeIndexO
   // A series sets the frames: dated features of other layers still filter by the frame's window.
   if (seriesSets.length > 0) return seriesIndex(seriesSets, layerIds);
   if (stamps.length === 0 && tileSets.length === 0) return null;
-  if (stamps.length === 0) return { ...tileIndex(tileSets, layerIds), ...(ranged && { ranged: true }) };
+  if (stamps.length === 0) {
+    const index = tileIndex(tileSets, layerIds);
+    // Tile layers that list a dozen or fewer dates (imagery by date) step between them, as snapshots do.
+    const listed = Object.values(layers).every((l) => l.result.kind !== "tiles" || !l.result.data.time || (l.result.data.time.dates?.length ?? 0) > 0);
+    const stops =
+      listed && index.buckets.length >= 2 && index.buckets.length <= MAX_LISTED_STOPS
+        ? index.buckets.map((b) => ({ start: b.start, end: b.end, label: windowLabel([b.start, b.start], index.bucket), count: 0 }))
+        : undefined;
+    return { ...index, ...(ranged && { ranged: true }), ...(stops && { snapshots: { stops } }) };
+  }
 
   let min = stamps[0];
   let max = stamps[0];
@@ -186,6 +195,9 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: TimeIndexO
     ...(snapshots && snapshots.length >= 2 && { snapshots: { stops: snapshots } }),
   };
 }
+
+/** Most listed tile dates shown as a stepper; more get the scrubber. */
+export const MAX_LISTED_STOPS = 12;
 
 /** A tile template that fills the window's start as well as its end. */
 function isRanged(time: TileTime): boolean {
@@ -376,6 +388,11 @@ function loadedPeriod(url: string, template: string): number | null {
  * loaded for an older date than that range reaches, the range ends at the loaded period instead, so it stays on it.
  */
 export function tileSteps(time: TileTime, url: string, now: number = Date.now(), days: number = TILE_DAYS_DEFAULT): number[] {
+  // A source that lists the dates it has (imagery by date) steps between exactly those, newest MAX_TILE_STEPS.
+  if (time.dates && time.dates.length > 0) {
+    const listed = [...new Set(time.dates.map((d) => Date.parse(d)).filter((ms) => Number.isFinite(ms)).map((ms) => periodStart(ms, time.cadence)))].sort((a, b) => a - b);
+    return listed.slice(-MAX_TILE_STEPS);
+  }
   const fromMs = boundMs(time.from);
   const toMs = boundMs(time.to);
   let latest = dayFloor(now - (time.daysBack ?? 0) * DAY_MS);
@@ -494,16 +511,50 @@ export type TimePreset = { label: string; window: TimeWindow };
 
 const MAX_PRESETS = 4;
 
+/** One frame of a series as a preset window. */
+function framePreset(index: TimeIndex, label: string, ms: number): TimePreset | null {
+  const starts = index.buckets.map((b) => Date.parse(b.start));
+  if (ms < starts[0] || ms > Date.parse(index.buckets[index.buckets.length - 1].end)) return null;
+  const k = bucketIndex(starts, ms);
+  return { label, window: [index.buckets[k].start, index.buckets[k].end] };
+}
+
+/** A forecast series' presets: the frame now, then 24 hours and 3 days ahead, when the frames reach them. */
+function forecastPresets(index: TimeIndex, now: number): TimePreset[] {
+  const s = index.series;
+  if (!s || s.forecastFrom === undefined) return [];
+  const at = Date.parse(index.buckets[Math.min(index.buckets.length - 1, s.now)].start);
+  const out = [framePreset(index, "Now", at), framePreset(index, "In 24 hours", at + DAY_MS), framePreset(index, "In 3 days", at + 3 * DAY_MS)];
+  void now;
+  return out.filter((p): p is TimePreset => p !== null);
+}
+
+/** A dated tile layer's presets: the period holding today's date one and two years back, when the steps reach it. */
+function sameDatePresets(index: TimeIndex, now: number): TimePreset[] {
+  const lastStart = Date.parse(index.buckets[index.buckets.length - 1].start);
+  const out: TimePreset[] = [];
+  for (const back of [1, 2]) {
+    const d = new Date(lastStart);
+    const ms = Date.UTC(d.getUTCFullYear() - back, d.getUTCMonth(), d.getUTCDate());
+    const p = framePreset(index, back === 1 ? "Same date last year" : `Same date ${d.getUTCFullYear() - back}`, ms);
+    if (p && Date.parse(p.window[0]) !== lastStart) out.push(p);
+  }
+  void now;
+  return out;
+}
+
 /**
  * The presets that narrow this index's span and still hold data, finest first, ending at the span's end: the last 24
  * hours, 7 and 30 days for a short span; this year for a few years; since a decade for a long one. `now` anchors the
  * relative ones (tests pass a clock).
  */
 export function timePresets(index: TimeIndex, now: number = Date.now()): TimePreset[] {
-  // A series plays frame by frame; its presets would only widen the window over many frames. Snapshots step between
-  // their dates. A tile layer that draws only the window's end shows the same image for every preset.
-  if (index.buckets.length < 2 || index.series || index.snapshots) return [];
-  if (index.cadence && !index.ranged) return [];
+  if (index.buckets.length < 2 || index.snapshots) return [];
+  // A series plays frame by frame: its presets are frames, now and ahead in the forecast ("In 24 hours", "In 3 days").
+  if (index.series) return forecastPresets(index, now);
+  // A tile layer that draws only the window's end shows the same image for every window ending today: its presets are
+  // the same date in earlier years (a season against last year's).
+  if (index.cadence && !index.ranged) return sameDatePresets(index, now);
   const lo = Date.parse(index.buckets[0].start);
   const end = index.buckets[index.buckets.length - 1].end;
   const hi = Date.parse(end);

@@ -132,7 +132,8 @@
      "osmId": "node/3444896866",
      "backcountry": true,
      "feeStatus": "unknown",
-     "heading": "Camp site near Large Campsite"
+     "heading": "Camp site near Large Campsite",
+     "title": "Camp site near Large Campsite"
     }
    },
    {
@@ -150,7 +151,8 @@
      "feeStatus": "unknown",
      "capacity": 3,
      "v": 3,
-     "heading": "Parking lot near Sun Outdoors Arches Gateway"
+     "heading": "Parking lot near Sun Outdoors Arches Gateway",
+     "title": "Parking lot near Sun Outdoors Arches Gateway"
     }
    },
    {
@@ -327,7 +329,7 @@
     "properties": {
      "kind": "crag",
      "osmId": "node/7314110512",
-     "source": "osm+openbeta",
+     "source": "osm",
      "name": "Military Wall",
      "v": 110,
      "grades": "2+ to 11- (uiaa)",
@@ -339,66 +341,13 @@
      ],
      "disciplines": [
       "sport",
-      "trad",
-      "boulder"
+      "trad"
      ],
      "maxLengthM": 54.86,
      "osmIds": [
       "node/7314110512",
       "way/364439327"
-     ],
-     "openbetaId": "e27049c2-69b8-50c5-97ad-c9a630cd69a0",
-     "url": "https://openbeta.io/areas/e27049c2-69b8-50c5-97ad-c9a630cd69a0",
-     "routesOsm": 110,
-     "routesOpenbeta": 42,
-     "region": "Kentucky > Red River Gorge > Northern Gorge",
-     "sport": 30,
-     "trad": 11,
-     "boulder": 1
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -83.6675392,
-      37.8477001
      ]
-    },
-    "properties": {
-     "kind": "crag",
-     "osmId": "node/7313037395",
-     "source": "osm+openbeta",
-     "name": "Long Wall",
-     "v": 57,
-     "grades": "4 to 10+ (uiaa)",
-     "gradeBands": [
-      "beginner",
-      "intermediate",
-      "advanced",
-      "elite"
-     ],
-     "disciplines": [
-      "sport",
-      "trad",
-      "boulder",
-      "toprope"
-     ],
-     "maxLengthM": 42.67,
-     "osmIds": [
-      "node/7313037395",
-      "way/652162148"
-     ],
-     "openbetaId": "c3c8f4ee-991d-5751-8ca3-5ad677cfd3bb",
-     "url": "https://openbeta.io/areas/c3c8f4ee-991d-5751-8ca3-5ad677cfd3bb",
-     "routesOsm": 57,
-     "routesOpenbeta": 41,
-     "region": "Kentucky > Red River Gorge > Northern Gorge",
-     "sport": 14,
-     "trad": 26,
-     "boulder": 2,
-     "toprope": 1
     }
    },
    {
@@ -452,47 +401,6 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -83.714565,
-      37.649176
-     ]
-    },
-    "properties": {
-     "kind": "crag",
-     "osmId": "node/7188671285",
-     "source": "osm+openbeta",
-     "name": "Chocolate Factory",
-     "grades": "5- to 11- (uiaa)",
-     "gradeBands": [
-      "beginner",
-      "intermediate",
-      "advanced",
-      "elite"
-     ],
-     "disciplines": [
-      "sport",
-      "trad",
-      "boulder",
-      "mixed"
-     ],
-     "maxLengthM": 37,
-     "osmIds": [
-      "node/7188671285",
-      "way/652151035"
-     ],
-     "openbetaId": "e7052656-2ed8-50c7-bbea-46d504570d52",
-     "url": "https://openbeta.io/areas/e7052656-2ed8-50c7-bbea-46d504570d52",
-     "v": 86,
-     "region": "Kentucky > Red River Gorge > Bald Rock Fork Recreational Preserve (BRRP)",
-     "sport": 75,
-     "trad": 10,
-     "boulder": 1
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
       -83.7104201,
       37.645826
      ]
@@ -500,7 +408,7 @@
     "properties": {
      "kind": "crag",
      "osmId": "node/7127202987",
-     "source": "osm+openbeta",
+     "source": "osm",
      "name": "The Motherlode",
      "v": 72,
      "grades": "5+ to 12+ (uiaa)",
@@ -519,14 +427,7 @@
      "osmIds": [
       "node/7127202987",
       "way/652151476"
-     ],
-     "openbetaId": "2496123b-7080-5b5f-8d4d-f26c6abc5c32",
-     "url": "https://openbeta.io/areas/2496123b-7080-5b5f-8d4d-f26c6abc5c32",
-     "routesOsm": 72,
-     "routesOpenbeta": 24,
-     "region": "Kentucky > Red River Gorge > Bald Rock Fork Recreational Preserve (BRRP) > Motherlode, The",
-     "sport": 23,
-     "trad": 1
+     ]
     }
    },
    {
@@ -534,16 +435,17 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -83.724355,
-      37.652903
+      -83.6675392,
+      37.8477001
      ]
     },
     "properties": {
      "kind": "crag",
-     "osmId": "node/7200615993",
-     "source": "osm+openbeta",
-     "name": "Drive-By Crag",
-     "grades": "4+ to 11 (uiaa)",
+     "osmId": "node/7313037395",
+     "source": "osm",
+     "name": "Long Wall",
+     "v": 57,
+     "grades": "4 to 10+ (uiaa)",
      "gradeBands": [
       "beginner",
       "intermediate",
@@ -553,56 +455,12 @@
      "disciplines": [
       "sport",
       "trad",
-      "boulder",
-      "mixed"
+      "boulder"
      ],
-     "maxLengthM": 30,
+     "maxLengthM": 42.67,
      "osmIds": [
-      "node/7200615993",
-      "way/652151045"
-     ],
-     "openbetaId": "41ea5479-84cc-5f6a-bce7-c298eccfcb22",
-     "url": "https://openbeta.io/areas/41ea5479-84cc-5f6a-bce7-c298eccfcb22",
-     "v": 56,
-     "region": "Kentucky > Red River Gorge > Pendergrass-Murray Recreational Preserve (PMRP)",
-     "sport": 48,
-     "trad": 8,
-     "boulder": 1
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -83.6627259,
-      37.7520674
-     ]
-    },
-    "properties": {
-     "kind": "crag",
-     "osmId": "way/652151060",
-     "source": "osm+openbeta",
-     "name": "Emerald City",
-     "openbetaId": "d486ac7c-e64b-51c0-8815-042f90fb6f33",
-     "url": "https://openbeta.io/areas/d486ac7c-e64b-51c0-8815-042f90fb6f33",
-     "v": 55,
-     "grades": "5.5 to 5.12a; V0+ to V4-5",
-     "region": "Kentucky > Red River Gorge > Natural Bridge Region",
-     "sport": 9,
-     "trad": 7,
-     "boulder": 38,
-     "toprope": 1,
-     "disciplines": [
-      "sport",
-      "trad",
-      "boulder",
-      "toprope"
-     ],
-     "gradeBands": [
-      "beginner",
-      "intermediate",
-      "advanced"
+      "node/7313037395",
+      "way/652162148"
      ]
     }
    },
@@ -618,7 +476,7 @@
     "properties": {
      "kind": "crag",
      "osmId": "node/7123582491",
-     "source": "osm+openbeta",
+     "source": "osm",
      "name": "The Bear's Den",
      "v": 52,
      "grades": "2+ to 11 (uiaa)",
@@ -632,91 +490,7 @@
       "sport",
       "trad"
      ],
-     "maxLengthM": 31,
-     "openbetaId": "dfaefd99-8fd5-574c-b8ba-f870ad066e53",
-     "url": "https://openbeta.io/areas/dfaefd99-8fd5-574c-b8ba-f870ad066e53",
-     "routesOsm": 52,
-     "routesOpenbeta": 36,
-     "region": "Kentucky > Red River Gorge > Bald Rock Fork Recreational Preserve (BRRP)",
-     "sport": 33,
-     "trad": 3
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -83.73505,
-      37.677692
-     ]
-    },
-    "properties": {
-     "kind": "crag",
-     "osmId": "node/7230418892",
-     "source": "osm+openbeta",
-     "name": "Solar Collector",
-     "v": 52,
-     "grades": "5+ to 9 (uiaa)",
-     "gradeBands": [
-      "beginner",
-      "intermediate",
-      "advanced",
-      "elite"
-     ],
-     "disciplines": [
-      "sport",
-      "trad",
-      "toprope"
-     ],
-     "maxLengthM": 28,
-     "osmIds": [
-      "node/7230418892",
-      "way/652151055"
-     ],
-     "openbetaId": "cdc92045-070b-5cef-abb2-540e90fac05e",
-     "url": "https://openbeta.io/areas/cdc92045-070b-5cef-abb2-540e90fac05e",
-     "routesOsm": 18,
-     "routesOpenbeta": 52,
-     "region": "Kentucky > Red River Gorge > Pendergrass-Murray Recreational Preserve (PMRP)",
-     "sport": 36,
-     "trad": 15,
-     "toprope": 1
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -83.6565979,
-      37.7323421
-     ]
-    },
-    "properties": {
-     "kind": "crag",
-     "osmId": "way/275859798",
-     "source": "osm+openbeta",
-     "name": "Roadside Crag",
-     "openbetaId": "8b678504-e93f-5158-9090-ef0248e02fb3",
-     "url": "https://openbeta.io/areas/8b678504-e93f-5158-9090-ef0248e02fb3",
-     "v": 51,
-     "grades": "5.3 to 5.13a; V3 to V5-",
-     "region": "Kentucky > Red River Gorge > Natural Bridge Region",
-     "sport": 35,
-     "trad": 16,
-     "boulder": 2,
-     "disciplines": [
-      "sport",
-      "trad",
-      "boulder"
-     ],
-     "gradeBands": [
-      "beginner",
-      "intermediate",
-      "advanced",
-      "elite"
-     ]
+     "maxLengthM": 31
     }
    },
    {
@@ -749,6 +523,173 @@
      "osmIds": [
       "node/7231211487",
       "way/652151056"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.723116,
+      37.652151
+     ]
+    },
+    "properties": {
+     "kind": "crag",
+     "osmId": "node/7193428994",
+     "source": "osm",
+     "name": "Bob Marley Crag",
+     "v": 48,
+     "grades": "5- to 12 (uiaa)",
+     "gradeBands": [
+      "beginner",
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "disciplines": [
+      "sport",
+      "trad",
+      "mixed"
+     ],
+     "maxLengthM": 32,
+     "osmIds": [
+      "node/7193428994",
+      "way/652151046"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.720808,
+      37.650911
+     ]
+    },
+    "properties": {
+     "kind": "crag",
+     "osmId": "node/7193214589",
+     "source": "osm",
+     "name": "Chica Bonita",
+     "v": 46,
+     "grades": "4 to 9- (uiaa)",
+     "gradeBands": [
+      "beginner",
+      "intermediate",
+      "advanced"
+     ],
+     "disciplines": [
+      "sport",
+      "trad",
+      "mixed"
+     ],
+     "maxLengthM": 34,
+     "osmIds": [
+      "node/7193214589",
+      "way/652151044"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.6652498,
+      37.8146582
+     ]
+    },
+    "properties": {
+     "kind": "crag",
+     "osmId": "node/7314110613",
+     "source": "osm",
+     "name": "Left Flank",
+     "v": 46,
+     "grades": "2- to 10 (uiaa)",
+     "gradeBands": [
+      "beginner",
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "disciplines": [
+      "sport",
+      "trad"
+     ],
+     "maxLengthM": 24.38,
+     "osmIds": [
+      "node/7314110613",
+      "way/275859873"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.717335,
+      37.653794
+     ]
+    },
+    "properties": {
+     "kind": "crag",
+     "osmId": "node/7211951591",
+     "source": "osm",
+     "name": "The Gallery",
+     "v": 43,
+     "grades": "5 to 11+ (uiaa)",
+     "gradeBands": [
+      "beginner",
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "disciplines": [
+      "sport",
+      "trad",
+      "mixed"
+     ],
+     "maxLengthM": 31,
+     "osmIds": [
+      "node/7211951591",
+      "way/652151042"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.737332,
+      37.678474
+     ]
+    },
+    "properties": {
+     "kind": "crag",
+     "osmId": "node/7269712585",
+     "source": "osm",
+     "name": "The Dark Side",
+     "v": 37,
+     "grades": "5 to 11+ (uiaa)",
+     "gradeBands": [
+      "beginner",
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "disciplines": [
+      "sport",
+      "trad"
+     ],
+     "maxLengthM": 28,
+     "osmIds": [
+      "node/7269712585",
+      "way/652151058"
      ]
     }
    }
@@ -1027,9 +968,10 @@
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
      "latest": "Hurricane Isaias (EM-3655-FL)",
+     "declarationUrl": "https://www.fema.gov/disaster/3655",
      "first": "2022-09-24",
      "kinds": "hurricane or tropical storm 13, wildfire 1",
-     "declarations": "2026-10-09 Hurricane Isaias; 2026-04-23 Cow Creek Fire; 2024-10-11 Hurricane Milton; and 11 earlier"
+     "declarations": "Hurricane Isaias (Oct 9, 2026); Cow Creek Fire (Apr 23, 2026); Hurricane Milton (Oct 11, 2024); and 11 earlier"
     }
    },
    {
@@ -1050,9 +992,10 @@
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
      "latest": "Hurricane Isaias (EM-3655-FL)",
+     "declarationUrl": "https://www.fema.gov/disaster/3655",
      "first": "2022-09-24",
      "kinds": "hurricane or tropical storm 13, severe storm 1",
-     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 11 earlier"
+     "declarations": "Hurricane Isaias (Oct 9, 2026); Hurricane Milton (Oct 11, 2024); Hurricane Milton (Oct 7, 2024); and 11 earlier"
     }
    },
    {
@@ -1073,9 +1016,10 @@
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
      "latest": "Hurricane Isaias (EM-3655-FL)",
+     "declarationUrl": "https://www.fema.gov/disaster/3655",
      "first": "2022-09-24",
      "kinds": "hurricane or tropical storm 13",
-     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
+     "declarations": "Hurricane Isaias (Oct 9, 2026); Hurricane Milton (Oct 11, 2024); Hurricane Milton (Oct 7, 2024); and 10 earlier"
     }
    },
    {
@@ -1096,9 +1040,10 @@
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
      "latest": "Hurricane Isaias (EM-3655-FL)",
+     "declarationUrl": "https://www.fema.gov/disaster/3655",
      "first": "2022-09-24",
      "kinds": "hurricane or tropical storm 12, severe storm 1",
-     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
+     "declarations": "Hurricane Isaias (Oct 9, 2026); Hurricane Milton (Oct 11, 2024); Hurricane Milton (Oct 7, 2024); and 10 earlier"
     }
    },
    {
@@ -1119,9 +1064,10 @@
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
      "latest": "Hurricane Isaias (EM-3655-FL)",
+     "declarationUrl": "https://www.fema.gov/disaster/3655",
      "first": "2022-09-24",
      "kinds": "hurricane or tropical storm 13",
-     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
+     "declarations": "Hurricane Isaias (Oct 9, 2026); Hurricane Milton (Oct 11, 2024); Hurricane Milton (Oct 7, 2024); and 10 earlier"
     }
    },
    {
@@ -1142,9 +1088,10 @@
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
      "latest": "Hurricane Isaias (EM-3655-FL)",
+     "declarationUrl": "https://www.fema.gov/disaster/3655",
      "first": "2022-09-24",
      "kinds": "hurricane or tropical storm 13",
-     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
+     "declarations": "Hurricane Isaias (Oct 9, 2026); Hurricane Milton (Oct 11, 2024); Hurricane Milton (Oct 7, 2024); and 10 earlier"
     }
    },
    {
@@ -1165,9 +1112,10 @@
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
      "latest": "Hurricane Isaias (EM-3655-FL)",
+     "declarationUrl": "https://www.fema.gov/disaster/3655",
      "first": "2022-09-24",
      "kinds": "hurricane or tropical storm 12, severe storm 1",
-     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
+     "declarations": "Hurricane Isaias (Oct 9, 2026); Hurricane Milton (Oct 11, 2024); Hurricane Milton (Oct 7, 2024); and 10 earlier"
     }
    },
    {
@@ -1188,9 +1136,10 @@
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
      "latest": "Hurricane Isaias (EM-3655-FL)",
+     "declarationUrl": "https://www.fema.gov/disaster/3655",
      "first": "2022-09-24",
      "kinds": "hurricane or tropical storm 12, severe storm 1",
-     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
+     "declarations": "Hurricane Isaias (Oct 9, 2026); Hurricane Milton (Oct 11, 2024); Hurricane Milton (Oct 7, 2024); and 10 earlier"
     }
    },
    {
@@ -1211,9 +1160,10 @@
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
      "latest": "Hurricane Isaias (EM-3655-FL)",
+     "declarationUrl": "https://www.fema.gov/disaster/3655",
      "first": "2022-09-24",
      "kinds": "hurricane or tropical storm 12, severe storm 1",
-     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
+     "declarations": "Hurricane Isaias (Oct 9, 2026); Hurricane Milton (Oct 11, 2024); Hurricane Milton (Oct 7, 2024); and 10 earlier"
     }
    },
    {
@@ -1234,9 +1184,10 @@
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
      "latest": "Hurricane Isaias (EM-3655-FL)",
+     "declarationUrl": "https://www.fema.gov/disaster/3655",
      "first": "2022-09-24",
      "kinds": "hurricane or tropical storm 12, severe storm 1",
-     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 10 earlier"
+     "declarations": "Hurricane Isaias (Oct 9, 2026); Hurricane Milton (Oct 11, 2024); Hurricane Milton (Oct 7, 2024); and 10 earlier"
     }
    },
    {
@@ -1257,9 +1208,10 @@
      "t": "2024-10-11T00:00:00.000Z",
      "kind": "cyclone",
      "latest": "Hurricane Milton (DR-4834-FL)",
+     "declarationUrl": "https://www.fema.gov/disaster/4834",
      "first": "2022-09-24",
      "kinds": "hurricane or tropical storm 12",
-     "declarations": "2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; 2024-09-28 Hurricane Helene; and 9 earlier"
+     "declarations": "Hurricane Milton (Oct 11, 2024); Hurricane Milton (Oct 7, 2024); Hurricane Helene (Sep 28, 2024); and 9 earlier"
     }
    },
    {
@@ -1280,9 +1232,10 @@
      "t": "2026-10-09T00:00:00.000Z",
      "kind": "cyclone",
      "latest": "Hurricane Isaias (EM-3655-FL)",
+     "declarationUrl": "https://www.fema.gov/disaster/3655",
      "first": "2022-09-24",
      "kinds": "hurricane or tropical storm 11, severe storm 1",
-     "declarations": "2026-10-09 Hurricane Isaias; 2024-10-11 Hurricane Milton; 2024-10-07 Hurricane Milton; and 9 earlier"
+     "declarations": "Hurricane Isaias (Oct 9, 2026); Hurricane Milton (Oct 11, 2024); Hurricane Milton (Oct 7, 2024); and 9 earlier"
     }
    }
   ]
@@ -1698,7 +1651,8 @@
      "daynight": "N",
      "heading": "Hotspot, Oct 16 09:22 UTC",
      "label": "1.2 MW",
-     "satellite": "VIIRS_SNPP_NRT"
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 16 3:22 AM MDT"
     }
    },
    {
@@ -1718,7 +1672,8 @@
      "daynight": "N",
      "heading": "Hotspot, Oct 16 09:22 UTC",
      "label": "1.5 MW",
-     "satellite": "VIIRS_SNPP_NRT"
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 16 3:22 AM MDT"
     }
    },
    {
@@ -1738,7 +1693,8 @@
      "daynight": "N",
      "heading": "Hotspot, Oct 16 09:22 UTC",
      "label": "1.3 MW",
-     "satellite": "VIIRS_SNPP_NRT"
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 16 3:22 AM MDT"
     }
    },
    {
@@ -1758,7 +1714,8 @@
      "daynight": "N",
      "heading": "Hotspot, Oct 16 09:22 UTC",
      "label": "11 MW",
-     "satellite": "VIIRS_SNPP_NRT"
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 16 3:22 AM MDT"
     }
    },
    {
@@ -1778,7 +1735,8 @@
      "daynight": "N",
      "heading": "Hotspot, Oct 16 09:22 UTC",
      "label": "11 MW",
-     "satellite": "VIIRS_SNPP_NRT"
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 16 3:22 AM MDT"
     }
    },
    {
@@ -1798,7 +1756,8 @@
      "daynight": "N",
      "heading": "Hotspot, Oct 16 09:22 UTC",
      "label": "11 MW",
-     "satellite": "VIIRS_SNPP_NRT"
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 16 3:22 AM MDT"
     }
    },
    {
@@ -1818,7 +1777,8 @@
      "daynight": "N",
      "heading": "Hotspot, Oct 16 09:22 UTC",
      "label": "3.9 MW",
-     "satellite": "VIIRS_SNPP_NRT"
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 16 2:22 AM PDT"
     }
    },
    {
@@ -1838,7 +1798,8 @@
      "daynight": "N",
      "heading": "Hotspot, Oct 16 09:22 UTC",
      "label": "3.5 MW",
-     "satellite": "VIIRS_SNPP_NRT"
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 16 2:22 AM PDT"
     }
    },
    {
@@ -1858,7 +1819,8 @@
      "daynight": "N",
      "heading": "Hotspot, Oct 16 09:22 UTC",
      "label": "3.5 MW",
-     "satellite": "VIIRS_SNPP_NRT"
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 16 2:22 AM PDT"
     }
    },
    {
@@ -1878,7 +1840,8 @@
      "daynight": "N",
      "heading": "Hotspot, Oct 16 09:22 UTC",
      "label": "0.8 MW",
-     "satellite": "VIIRS_SNPP_NRT"
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 16 2:22 AM PDT"
     }
    },
    {
@@ -1898,7 +1861,8 @@
      "daynight": "N",
      "heading": "Hotspot, Oct 16 09:22 UTC",
      "label": "0.8 MW",
-     "satellite": "VIIRS_SNPP_NRT"
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 16 2:22 AM PDT"
     }
    },
    {
@@ -1918,7 +1882,8 @@
      "daynight": "N",
      "heading": "Hotspot, Oct 16 09:22 UTC",
      "label": "0.9 MW",
-     "satellite": "VIIRS_SNPP_NRT"
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 16 2:22 AM PDT"
     }
    }
   ]
@@ -2285,7 +2250,7 @@
      "kind": "access",
      "source": "OpenStreetMap",
      "osmId": "node/9603610958",
-     "name": "Fishing spot",
+     "name": "Fishing spot near Four Corners Fishing Access Site",
      "access": "yes"
     }
    },
@@ -2874,7 +2839,7 @@
      "v": 2026,
      "t": "2026-01-24T13:22:00.000Z",
      "url": "https://www.inaturalist.org/observations/335978721",
-     "scientificName": "Puma concolor",
+     "speciesKey": 2435099,
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
      "publisher": "inaturalist",
@@ -2897,7 +2862,7 @@
      "v": 2026,
      "t": "2026-05-23T10:09:16.000Z",
      "url": "https://www.inaturalist.org/observations/364346918",
-     "scientificName": "Puma concolor",
+     "speciesKey": 2435099,
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
      "publisher": "inaturalist",
@@ -2920,7 +2885,7 @@
      "v": 2026,
      "t": "2026-05-16T10:44:11.000Z",
      "url": "https://www.inaturalist.org/observations/375598449",
-     "scientificName": "Puma concolor",
+     "speciesKey": 2435099,
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
      "publisher": "inaturalist",
@@ -2943,7 +2908,7 @@
      "v": 2026,
      "t": "2026-06-28T07:47:00.000Z",
      "url": "https://www.inaturalist.org/observations/376545624",
-     "scientificName": "Puma concolor",
+     "speciesKey": 2435099,
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
      "publisher": "inaturalist",
@@ -2966,7 +2931,7 @@
      "v": 2025,
      "t": "2025-05-05T20:45:00.000Z",
      "url": "https://www.inaturalist.org/observations/307086798",
-     "scientificName": "Puma concolor",
+     "speciesKey": 2435099,
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
      "publisher": "inaturalist",
@@ -2989,7 +2954,7 @@
      "v": 2025,
      "t": "2025-06-03T08:56:28.000Z",
      "url": "https://www.inaturalist.org/observations/286606993",
-     "scientificName": "Puma concolor",
+     "speciesKey": 2435099,
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
      "publisher": "inaturalist",
@@ -3012,7 +2977,7 @@
      "v": 2025,
      "t": "2025-06-27T22:24:00.000Z",
      "url": "https://www.inaturalist.org/observations/307082983",
-     "scientificName": "Puma concolor",
+     "speciesKey": 2435099,
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
      "publisher": "inaturalist",
@@ -3035,7 +3000,7 @@
      "v": 2024,
      "t": "2024-01-10T12:55:30.000Z",
      "url": "https://www.inaturalist.org/observations/196320282",
-     "scientificName": "Puma concolor",
+     "speciesKey": 2435099,
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
      "publisher": "inaturalist",
@@ -3058,7 +3023,7 @@
      "v": 2024,
      "t": "2024-05-24T19:56:48.000Z",
      "url": "https://www.inaturalist.org/observations/218036772",
-     "scientificName": "Puma concolor",
+     "speciesKey": 2435099,
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
      "publisher": "inaturalist",
@@ -3081,7 +3046,7 @@
      "v": 2024,
      "t": "2024-06-06T02:24:00.000Z",
      "url": "https://www.inaturalist.org/observations/222658703",
-     "scientificName": "Puma concolor",
+     "speciesKey": 2435099,
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
      "publisher": "inaturalist",
@@ -3104,7 +3069,7 @@
      "v": 2024,
      "t": "2024-09-03T03:46:00.000Z",
      "url": "https://www.inaturalist.org/observations/280691695",
-     "scientificName": "Puma concolor",
+     "speciesKey": 2435099,
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
      "publisher": "inaturalist",
@@ -3127,7 +3092,7 @@
      "v": 2023,
      "t": "2023-05-20T07:59:07.000Z",
      "url": "https://www.inaturalist.org/observations/162661715",
-     "scientificName": "Puma concolor",
+     "speciesKey": 2435099,
      "basisOfRecord": "human observation",
      "dataset": "iNaturalist research-grade observations",
      "publisher": "inaturalist",
@@ -3737,7 +3702,7 @@
      ]
     },
     "properties": {
-     "name": "Well 332313112080301",
+     "name": "Well in Maricopa County, AZ, water 77 ft down",
      "v": 76.66,
      "depthFt": 76.66,
      "kind": "static",
@@ -3750,6 +3715,7 @@
      "method": "Calibrated electric tape",
      "depthLabel": "77 ft",
      "approval": "Approved",
+     "county": "Maricopa County, AZ",
      "pct": 47,
      "level": "normal",
      "medianFt": 76.1,
@@ -3762,29 +3728,25 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -112.114888888889,
-      33.4724444444444
+      -112.165888888889,
+      33.4167777777778
      ]
     },
     "properties": {
-     "name": "Well AZ014-332821112065101",
-     "v": 126.79,
-     "depthFt": 126.79,
-     "kind": "static",
-     "site": "AZ014-332821112065101",
-     "siteNo": "AZ014-332821112065101",
-     "url": "https://waterdata.usgs.gov/monitoring-location/AZ014-332821112065101/",
-     "t": "2025-05-30T00:00:00.000Z",
-     "date": "2025-05-30",
-     "condition": "Static",
+     "name": "Well in Maricopa County, AZ, water 90 ft down",
+     "v": 89.76,
+     "depthFt": 89.76,
+     "kind": "other",
+     "site": "USGS-332500112095501",
+     "siteNo": "332500112095501",
+     "url": "https://waterdata.usgs.gov/monitoring-location/USGS-332500112095501/",
+     "t": "2025-08-28T00:00:00.000Z",
+     "date": "2025-08-28",
+     "condition": "Above, Pumping",
      "method": "Calibrated electric tape",
-     "depthLabel": "127 ft",
+     "depthLabel": "90 ft",
      "approval": "Approved",
-     "pct": 55,
-     "level": "normal",
-     "medianFt": 130,
-     "recordSince": 2006,
-     "readings": 20
+     "county": "Maricopa County, AZ"
     }
    },
    {
@@ -3797,7 +3759,7 @@
      ]
     },
     "properties": {
-     "name": "Well 332948111573201",
+     "name": "Well in Maricopa County, AZ, water 92 ft down",
      "v": 92.09,
      "depthFt": 92.09,
      "kind": "static",
@@ -3810,6 +3772,7 @@
      "method": "Calibrated electric tape",
      "depthLabel": "92 ft",
      "approval": "Approved",
+     "county": "Maricopa County, AZ",
      "pct": 14,
      "level": "below",
      "medianFt": 80,
@@ -3822,42 +3785,12 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -112.151888888889,
-      33.6102777777778
-     ]
-    },
-    "properties": {
-     "name": "Well 333637112090401",
-     "v": 299.49,
-     "depthFt": 299.49,
-     "kind": "static",
-     "site": "USGS-333637112090401",
-     "siteNo": "333637112090401",
-     "url": "https://waterdata.usgs.gov/monitoring-location/USGS-333637112090401/",
-     "t": "2025-05-29T00:00:00.000Z",
-     "date": "2025-05-29",
-     "condition": "Static",
-     "method": "Calibrated electric tape",
-     "depthLabel": "299 ft",
-     "approval": "Approved",
-     "pct": 100,
-     "level": "much-above",
-     "medianFt": 316.1,
-     "recordSince": 2008,
-     "readings": 10
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
       -112.2704611111111,
       33.38666944444444
      ]
     },
     "properties": {
-     "name": "Well 332312112161401",
+     "name": "Well in Maricopa County, AZ, water 19 ft down",
      "v": 19.39,
      "depthFt": 19.39,
      "kind": "static",
@@ -3869,32 +3802,8 @@
      "condition": "Static",
      "method": "Steel tape",
      "depthLabel": "19 ft",
-     "approval": "Provisional"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -112.124416666667,
-      33.7350277777778
-     ]
-    },
-    "properties": {
-     "name": "Well 334406112072401",
-     "v": 227.89,
-     "depthFt": 227.89,
-     "kind": "static",
-     "site": "USGS-334406112072401",
-     "siteNo": "334406112072401",
-     "url": "https://waterdata.usgs.gov/monitoring-location/USGS-334406112072401/",
-     "t": "2024-07-11T00:00:00.000Z",
-     "date": "2024-07-11",
-     "condition": "Static",
-     "method": "Calibrated electric tape",
-     "depthLabel": "228 ft",
-     "approval": "Approved"
+     "approval": "Provisional",
+     "county": "Maricopa County, AZ"
     }
    },
    {
@@ -3907,7 +3816,7 @@
      ]
     },
     "properties": {
-     "name": "Well 333330112164801",
+     "name": "Well in Maricopa County, AZ, water 190 ft down",
      "v": 189.55,
      "depthFt": 189.55,
      "kind": "static",
@@ -3919,7 +3828,8 @@
      "condition": "Static",
      "method": "Calibrated electric tape",
      "depthLabel": "190 ft",
-     "approval": "Approved"
+     "approval": "Approved",
+     "county": "Maricopa County, AZ"
     }
    },
    {
@@ -3932,7 +3842,7 @@
      ]
     },
     "properties": {
-     "name": "Well 332302112172501",
+     "name": "Well in Maricopa County, AZ, water 19 ft down",
      "v": 18.97,
      "depthFt": 18.97,
      "kind": "static",
@@ -3944,62 +3854,8 @@
      "condition": "Static",
      "method": "Steel tape",
      "depthLabel": "19 ft",
-     "approval": "Approved"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -112.24547222222222,
-      33.408249999999995
-     ]
-    },
-    "properties": {
-     "name": "Well 332428112144101",
-     "v": 55.32,
-     "depthFt": 55.32,
-     "kind": "other",
-     "site": "USGS-332428112144101",
-     "siteNo": "332428112144101",
-     "url": "https://waterdata.usgs.gov/monitoring-location/USGS-332428112144101/",
-     "t": "2025-08-15T00:00:00.000Z",
-     "date": "2025-08-15",
-     "condition": "Above, Pumping",
-     "method": "Calibrated electric tape",
-     "depthLabel": "55 ft",
      "approval": "Approved",
-     "pct": 83,
-     "level": "above",
-     "medianFt": 70.4,
-     "recordSince": 2007,
-     "readings": 12
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -112.165888888889,
-      33.4167777777778
-     ]
-    },
-    "properties": {
-     "name": "Well 332500112095501",
-     "v": 89.76,
-     "depthFt": 89.76,
-     "kind": "other",
-     "site": "USGS-332500112095501",
-     "siteNo": "332500112095501",
-     "url": "https://waterdata.usgs.gov/monitoring-location/USGS-332500112095501/",
-     "t": "2025-08-28T00:00:00.000Z",
-     "date": "2025-08-28",
-     "condition": "Above, Pumping",
-     "method": "Calibrated electric tape",
-     "depthLabel": "90 ft",
-     "approval": "Approved"
+     "county": "Maricopa County, AZ"
     }
    },
    {
@@ -4012,7 +3868,7 @@
      ]
     },
     "properties": {
-     "name": "Well AZ014-333052111595501",
+     "name": "Well in Maricopa County, AZ, water 88 ft down",
      "v": 87.96,
      "depthFt": 87.96,
      "kind": "static",
@@ -4025,11 +3881,131 @@
      "method": "Calibrated electric tape",
      "depthLabel": "88 ft",
      "approval": "Approved",
+     "county": "Maricopa County, AZ",
      "pct": 24,
      "level": "below",
      "medianFt": 78.8,
      "recordSince": 2006,
      "readings": 17
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -112.151888888889,
+      33.6102777777778
+     ]
+    },
+    "properties": {
+     "name": "Well in Maricopa County, AZ, water 299 ft down",
+     "v": 299.49,
+     "depthFt": 299.49,
+     "kind": "static",
+     "site": "USGS-333637112090401",
+     "siteNo": "333637112090401",
+     "url": "https://waterdata.usgs.gov/monitoring-location/USGS-333637112090401/",
+     "t": "2025-05-29T00:00:00.000Z",
+     "date": "2025-05-29",
+     "condition": "Static",
+     "method": "Calibrated electric tape",
+     "depthLabel": "299 ft",
+     "approval": "Approved",
+     "county": "Maricopa County, AZ",
+     "pct": 100,
+     "level": "much-above",
+     "medianFt": 316.1,
+     "recordSince": 2008,
+     "readings": 10
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -112.124416666667,
+      33.7350277777778
+     ]
+    },
+    "properties": {
+     "name": "Well in Maricopa County, AZ, water 228 ft down",
+     "v": 227.89,
+     "depthFt": 227.89,
+     "kind": "static",
+     "site": "USGS-334406112072401",
+     "siteNo": "334406112072401",
+     "url": "https://waterdata.usgs.gov/monitoring-location/USGS-334406112072401/",
+     "t": "2024-07-11T00:00:00.000Z",
+     "date": "2024-07-11",
+     "condition": "Static",
+     "method": "Calibrated electric tape",
+     "depthLabel": "228 ft",
+     "approval": "Approved",
+     "county": "Maricopa County, AZ"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -112.114888888889,
+      33.4724444444444
+     ]
+    },
+    "properties": {
+     "name": "Well in Maricopa County, AZ, water 127 ft down",
+     "v": 126.79,
+     "depthFt": 126.79,
+     "kind": "static",
+     "site": "AZ014-332821112065101",
+     "siteNo": "AZ014-332821112065101",
+     "url": "https://waterdata.usgs.gov/monitoring-location/AZ014-332821112065101/",
+     "t": "2025-05-30T00:00:00.000Z",
+     "date": "2025-05-30",
+     "condition": "Static",
+     "method": "Calibrated electric tape",
+     "depthLabel": "127 ft",
+     "approval": "Approved",
+     "county": "Maricopa County, AZ",
+     "pct": 55,
+     "level": "normal",
+     "medianFt": 130,
+     "recordSince": 2006,
+     "readings": 20
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -112.24547222222222,
+      33.408249999999995
+     ]
+    },
+    "properties": {
+     "name": "Well in Maricopa County, AZ, water 55 ft down",
+     "v": 55.32,
+     "depthFt": 55.32,
+     "kind": "other",
+     "site": "USGS-332428112144101",
+     "siteNo": "332428112144101",
+     "url": "https://waterdata.usgs.gov/monitoring-location/USGS-332428112144101/",
+     "t": "2025-08-15T00:00:00.000Z",
+     "date": "2025-08-15",
+     "condition": "Above, Pumping",
+     "method": "Calibrated electric tape",
+     "depthLabel": "55 ft",
+     "approval": "Approved",
+     "county": "Maricopa County, AZ",
+     "pct": 83,
+     "level": "above",
+     "medianFt": 70.4,
+     "recordSince": 2007,
+     "readings": 12
     }
    }
   ]
@@ -4382,7 +4358,8 @@
      "sourceName": "CH4_1B2_250m_-101.82905_32.32590",
      "basin": "Permian",
      "heading": "Oil and gas source, Permian",
-     "label": "2,453 kg/h"
+     "label": "2,453 kg/h",
+     "name": "Oil and gas source, 2,453 kg/h"
     }
    },
    {
@@ -4404,7 +4381,8 @@
      "platform": "ISS",
      "windMs": 5.6,
      "heading": "Oil and gas plume, 2025-08-08",
-     "label": "21,482 kg/h"
+     "label": "21,482 kg/h",
+     "name": "Oil and gas plume, 21,482 kg/h"
     }
    },
    {
@@ -4428,7 +4406,8 @@
      "sourceName": "CH4_1B2_250m_-103.17279_31.35006",
      "basin": "Permian",
      "heading": "Oil and gas source, Permian",
-     "label": "1,784 kg/h"
+     "label": "1,784 kg/h",
+     "name": "Oil and gas source, 1,784 kg/h"
     }
    },
    {
@@ -4452,7 +4431,8 @@
      "sourceName": "CH4_1B2_250m_-102.73750_31.90599",
      "basin": "Permian",
      "heading": "Oil and gas source, Permian",
-     "label": "1,539 kg/h"
+     "label": "1,539 kg/h",
+     "name": "Oil and gas source, 1,539 kg/h"
     }
    },
    {
@@ -4476,7 +4456,8 @@
      "sourceName": "CH4_1B2_250m_-102.45739_31.44065",
      "basin": "Permian",
      "heading": "Oil and gas source, Permian",
-     "label": "1,461 kg/h"
+     "label": "1,461 kg/h",
+     "name": "Oil and gas source, 1,461 kg/h"
     }
    },
    {
@@ -4500,7 +4481,8 @@
      "sourceName": "CH4_1B2_250m_-102.89394_31.47145",
      "basin": "Permian",
      "heading": "Oil and gas source, Permian",
-     "label": "1,437 kg/h"
+     "label": "1,437 kg/h",
+     "name": "Oil and gas source, 1,437 kg/h"
     }
    },
    {
@@ -4524,7 +4506,8 @@
      "sourceName": "CH4_1B2_250m_-102.98830_31.71917",
      "basin": "Permian",
      "heading": "Oil and gas source, Permian",
-     "label": "1,399 kg/h"
+     "label": "1,399 kg/h",
+     "name": "Oil and gas source, 1,399 kg/h"
     }
    },
    {
@@ -4548,7 +4531,8 @@
      "sourceName": "CH4_1B2_250m_-103.85841_31.87325",
      "basin": "Permian",
      "heading": "Oil and gas source, Permian",
-     "label": "1,337 kg/h"
+     "label": "1,337 kg/h",
+     "name": "Oil and gas source, 1,337 kg/h"
     }
    },
    {
@@ -4572,7 +4556,8 @@
      "sourceName": "CH4_1B2_250m_-103.93218_32.01709",
      "basin": "Permian",
      "heading": "Oil and gas source, Permian",
-     "label": "1,110 kg/h"
+     "label": "1,110 kg/h",
+     "name": "Oil and gas source, 1,110 kg/h"
     }
    },
    {
@@ -4596,7 +4581,8 @@
      "sourceName": "CH4_1B2_250m_-103.35120_31.44128",
      "basin": "Permian",
      "heading": "Oil and gas source, Permian",
-     "label": "1,026 kg/h"
+     "label": "1,026 kg/h",
+     "name": "Oil and gas source, 1,026 kg/h"
     }
    },
    {
@@ -4620,7 +4606,8 @@
      "sourceName": "CH4_1B2_250m_-103.09592_31.27431",
      "basin": "Permian",
      "heading": "Oil and gas source, Permian",
-     "label": "1,015 kg/h"
+     "label": "1,015 kg/h",
+     "name": "Oil and gas source, 1,015 kg/h"
     }
    },
    {
@@ -4644,7 +4631,8 @@
      "sourceName": "CH4_1B2_250m_-102.07619_32.43722",
      "basin": "Permian",
      "heading": "Oil and gas source, Permian",
-     "label": "919 kg/h"
+     "label": "919 kg/h",
+     "name": "Oil and gas source, 919 kg/h"
     }
    }
   ]
@@ -5277,6 +5265,7 @@
      "heading": "Unnamed track",
      "v": 1,
      "imba": 1,
+     "lengthKm": 0.33,
      "highway": "track"
     }
    },
@@ -5295,6 +5284,7 @@
      "heading": "Unnamed track",
      "v": 3,
      "imba": 3,
+     "lengthKm": 2.28,
      "highway": "track",
      "surface": "dirt"
     }
@@ -5314,6 +5304,7 @@
      "name": "Kane Creek Road",
      "v": 1,
      "imba": 1,
+     "lengthKm": 3.84,
      "highway": "tertiary",
      "ref": "CR 145",
      "surface": "dirt"
@@ -5334,6 +5325,7 @@
      "name": "White Rim Road",
      "v": 3,
      "imba": 3,
+     "lengthKm": 5,
      "highway": "track",
      "ref": "CR 144",
      "surface": "ground",
@@ -5358,11 +5350,29 @@
      "v": 2,
      "singletrack": 2,
      "imba": 2,
+     "lengthKm": 1.98,
      "highway": "path",
      "surface": "ground",
      "bicycle": "designated",
      "bikes": "designated",
      "operator": "Sand Flats Recreation Area"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.4165421,
+      38.5819267
+     ]
+    },
+    "properties": {
+     "kind": "route",
+     "osmId": "relation/2788223",
+     "name": "Kokopelli's Trail",
+     "inViewKm": 16.22,
+     "ref": "Kokapelli"
     }
    },
    {
@@ -5381,6 +5391,7 @@
      "v": 3,
      "singletrack": 3,
      "imba": 3,
+     "lengthKm": 0.48,
      "highway": "path",
      "surface": "ground",
      "bicycle": "designated",
@@ -5403,6 +5414,7 @@
      "name": "Shafer Trail",
      "v": 1,
      "imba": 1,
+     "lengthKm": 2.14,
      "highway": "secondary",
      "ref": "CR 134",
      "surface": "paved"
@@ -5423,6 +5435,7 @@
      "name": "Shafer Trail",
      "v": 3,
      "imba": 3,
+     "lengthKm": 8.46,
      "highway": "secondary",
      "ref": "CR 142",
      "surface": "ground",
@@ -5446,6 +5459,7 @@
      "name": "Cliff Hanger Trail",
      "v": 3,
      "imba": 3,
+     "lengthKm": 1.63,
      "highway": "track",
      "surface": "ground",
      "bicycle": "yes",
@@ -5468,6 +5482,7 @@
      "v": 2,
      "singletrack": 2,
      "imba": 2,
+     "lengthKm": 4.88,
      "highway": "path",
      "surface": "ground",
      "bicycle": "designated",
@@ -5489,30 +5504,9 @@
      "name": "Bar M Loop",
      "v": 1,
      "imba": 1,
+     "lengthKm": 6.55,
      "highway": "track",
      "surface": "dirt"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -109.6618085,
-      38.6580736
-     ]
-    },
-    "properties": {
-     "kind": "mtb",
-     "osmId": "way/37223253",
-     "heading": "Unnamed trail",
-     "v": 1,
-     "singletrack": 1,
-     "imba": 1,
-     "highway": "path",
-     "surface": "ground",
-     "bicycle": "designated",
-     "bikes": "designated"
     }
    }
   ]
@@ -5552,7 +5546,7 @@
      "east": 0,
      "north": 0,
      "speed": 0,
-     "sst": 8.1
+     "sst": 8
     }
    },
    {
@@ -5585,9 +5579,9 @@
     "properties": {
      "name": "58.82°N 153.31°W",
      "node": 3,
-     "east": -0.05,
-     "north": -0.19,
-     "speed": 0.19,
+     "east": -0.1,
+     "north": -0.2,
+     "speed": 0.22,
      "sst": 8.3
     }
    },
@@ -5621,9 +5615,9 @@
     "properties": {
      "name": "58.82°N 152.56°W",
      "node": 5,
-     "east": 0.05,
-     "north": -0.16,
-     "speed": 0.17,
+     "east": 0,
+     "north": -0.14,
+     "speed": 0.14,
      "sst": 7.7
     }
    },
@@ -5639,9 +5633,9 @@
     "properties": {
      "name": "58.82°N 152.19°W",
      "node": 6,
-     "east": 0.46,
-     "north": -0.26,
-     "speed": 0.53,
+     "east": 0.4,
+     "north": -0.3,
+     "speed": 0.5,
      "sst": 8.1
     }
    },
@@ -5675,9 +5669,9 @@
     "properties": {
      "name": "58.82°N 151.44°W",
      "node": 8,
-     "east": 0.35,
-     "north": -0.35,
-     "speed": 0.5,
+     "east": 0.31,
+     "north": -0.36,
+     "speed": 0.47,
      "sst": 8.2
     }
    },
@@ -5693,9 +5687,9 @@
     "properties": {
      "name": "58.82°N 151.06°W",
      "node": 9,
-     "east": 0.4,
-     "north": -0.3,
-     "speed": 0.5,
+     "east": 0.34,
+     "north": -0.24,
+     "speed": 0.42,
      "sst": 8.2
     }
    },
@@ -5729,9 +5723,9 @@
     "properties": {
      "name": "58.82°N 150.31°W",
      "node": 11,
-     "east": 0.4,
+     "east": 0.35,
      "north": -0.35,
-     "speed": 0.53,
+     "speed": 0.5,
      "sst": 8.2
     }
    },
@@ -5747,9 +5741,9 @@
     "properties": {
      "name": "58.82°N 149.94°W",
      "node": 12,
-     "east": 0.35,
-     "north": -0.35,
-     "speed": 0.5,
+     "east": 0.25,
+     "north": -0.4,
+     "speed": 0.47,
      "sst": 8.3
     }
    }
@@ -7388,23 +7382,6 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -124.565236,
-      59.710578
-     ]
-    },
-    "properties": {
-     "name": "Rocky Mountains",
-     "kind": "range",
-     "featureClass": "Range/mtn",
-     "region": "North America",
-     "areaKm2": 1080000
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
       -120.129872,
       43.683966
      ]
@@ -7415,23 +7392,6 @@
      "featureClass": "Basin",
      "region": "North America",
      "areaKm2": 546000
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -119.109731,
-      50.652472
-     ]
-    },
-    "properties": {
-     "name": "Cascade Range",
-     "kind": "range",
-     "featureClass": "Range/mtn",
-     "region": "North America",
-     "areaKm2": 140000
     }
    },
    {
@@ -8189,6 +8149,7 @@
      "backcountry": true,
      "feeStatus": "unknown",
      "heading": "Camp site near Large Campsite",
+     "title": "Camp site near Large Campsite",
      "v": 0,
      "signals": {
       "photos": 0,
@@ -9034,7 +8995,7 @@
      "protection": "sustainable",
      "areaKm2": 4758,
      "v": 4758,
-     "country": "LVA",
+     "country": "Latvia",
      "realm": "Terrestrial",
      "statusYear": 1997,
      "siteId": "172498"
@@ -9057,7 +9018,7 @@
      "protection": "park",
      "areaKm2": 511,
      "v": 511,
-     "country": "RUS",
+     "country": "Russia",
      "realm": "Terrestrial",
      "statusYear": 1996,
      "siteId": "555713888"
@@ -9080,7 +9041,7 @@
      "protection": "habitat",
      "areaKm2": 206,
      "v": 206,
-     "country": "RUS",
+     "country": "Russia",
      "realm": "Terrestrial",
      "statusYear": 1996,
      "siteId": "555708694",
@@ -9102,7 +9063,7 @@
      "protection": "none",
      "areaKm2": 2732,
      "v": 2732,
-     "country": "EST",
+     "country": "Estonia",
      "realm": "Coastal",
      "statusYear": 2004,
      "siteId": "555538098"
@@ -9123,7 +9084,7 @@
      "protection": "none",
      "areaKm2": 2727,
      "v": 2727,
-     "country": "EST",
+     "country": "Estonia",
      "realm": "Coastal",
      "statusYear": 2009,
      "siteId": "555543254"
@@ -9144,7 +9105,7 @@
      "protection": "none",
      "areaKm2": 1994,
      "v": 1994,
-     "country": "EST",
+     "country": "Estonia",
      "realm": "Marine",
      "statusYear": 2009,
      "siteId": "555543172"
@@ -9165,7 +9126,7 @@
      "protection": "none",
      "areaKm2": 1940,
      "v": 1940,
-     "country": "EST",
+     "country": "Estonia",
      "realm": "Marine",
      "statusYear": 2004,
      "siteId": "555538119"
@@ -9187,7 +9148,7 @@
      "protection": "sustainable",
      "areaKm2": 1894,
      "v": 1894,
-     "country": "EST",
+     "country": "Estonia",
      "realm": "Marine",
      "statusYear": 2007,
      "siteId": "379211"
@@ -9208,7 +9169,7 @@
      "protection": "none",
      "areaKm2": 1724,
      "v": 1724,
-     "country": "LVA",
+     "country": "Latvia",
      "realm": "Marine",
      "statusYear": 2013,
      "siteId": "555623680"
@@ -9229,7 +9190,7 @@
      "protection": "none",
      "areaKm2": 1621,
      "v": 1621,
-     "country": "FIN",
+     "country": "Finland",
      "realm": "Marine",
      "statusYear": 1998,
      "siteId": "555538815"
@@ -9250,7 +9211,7 @@
      "protection": "none",
      "areaKm2": 1620,
      "v": 1620,
-     "country": "FIN",
+     "country": "Finland",
      "realm": "Marine",
      "statusYear": 2005,
      "siteId": "555543214"
@@ -9271,7 +9232,7 @@
      "protection": "none",
      "areaKm2": 1456,
      "v": 1456,
-     "country": "POL",
+     "country": "Poland",
      "realm": "Terrestrial",
      "statusYear": 2004,
      "siteId": "555540830"
@@ -9851,252 +9812,13 @@
      "name": "Shasta Lake",
      "river": "Sacramento River",
      "source": "California DWR (CDEC)",
-     "v": 2362542,
-     "storageAf": 2362542,
-     "lastDate": "2026-10-16",
-     "t": "2026-10-16T00:00:00.000Z",
+     "v": 2356176,
+     "storageAf": 2356176,
+     "lastDate": "2026-10-17",
+     "t": "2026-10-17T00:00:00.000Z",
      "capacityAf": 4552000,
      "pctFull": 52,
-     "percentFull": "52%",
-     "series": [
-      {
-       "t": "2021-11",
-       "v": 1117000
-      },
-      {
-       "t": "2021-12",
-       "v": 1331000
-      },
-      {
-       "t": "2022-01",
-       "v": 1621000
-      },
-      {
-       "t": "2022-02",
-       "v": 1690000
-      },
-      {
-       "t": "2022-03",
-       "v": 1735000
-      },
-      {
-       "t": "2022-04",
-       "v": 1808000
-      },
-      {
-       "t": "2022-05",
-       "v": 1815000
-      },
-      {
-       "t": "2022-06",
-       "v": 1777000
-      },
-      {
-       "t": "2022-07",
-       "v": 1683000
-      },
-      {
-       "t": "2022-08",
-       "v": 1590000
-      },
-      {
-       "t": "2022-09",
-       "v": 1515000
-      },
-      {
-       "t": "2022-10",
-       "v": 1414000
-      },
-      {
-       "t": "2022-11",
-       "v": 1399000
-      },
-      {
-       "t": "2022-12",
-       "v": 1524000
-      },
-      {
-       "t": "2023-01",
-       "v": 2570000
-      },
-      {
-       "t": "2023-02",
-       "v": 2747000
-      },
-      {
-       "t": "2023-03",
-       "v": 3771000
-      },
-      {
-       "t": "2023-04",
-       "v": 4430000
-      },
-      {
-       "t": "2023-05",
-       "v": 4458000
-      },
-      {
-       "t": "2023-06",
-       "v": 4275000
-      },
-      {
-       "t": "2023-07",
-       "v": 3890000
-      },
-      {
-       "t": "2023-08",
-       "v": 3531000
-      },
-      {
-       "t": "2023-09",
-       "v": 3332000
-      },
-      {
-       "t": "2023-10",
-       "v": 3146000
-      },
-      {
-       "t": "2023-11",
-       "v": 3075000
-      },
-      {
-       "t": "2023-12",
-       "v": 3113000
-      },
-      {
-       "t": "2024-01",
-       "v": 3624000
-      },
-      {
-       "t": "2024-02",
-       "v": 3749000
-      },
-      {
-       "t": "2024-03",
-       "v": 4194000
-      },
-      {
-       "t": "2024-04",
-       "v": 4364000
-      },
-      {
-       "t": "2024-05",
-       "v": 4298000
-      },
-      {
-       "t": "2024-06",
-       "v": 4000000
-      },
-      {
-       "t": "2024-07",
-       "v": 3451000
-      },
-      {
-       "t": "2024-08",
-       "v": 3007000
-      },
-      {
-       "t": "2024-09",
-       "v": 2766000
-      },
-      {
-       "t": "2024-10",
-       "v": 2596000
-      },
-      {
-       "t": "2024-11",
-       "v": 2770000
-      },
-      {
-       "t": "2024-12",
-       "v": 3477000
-      },
-      {
-       "t": "2025-01",
-       "v": 3492000
-      },
-      {
-       "t": "2025-02",
-       "v": 3561000
-      },
-      {
-       "t": "2025-03",
-       "v": 4067000
-      },
-      {
-       "t": "2025-04",
-       "v": 4396000
-      },
-      {
-       "t": "2025-05",
-       "v": 4151000
-      },
-      {
-       "t": "2025-06",
-       "v": 3788000
-      },
-      {
-       "t": "2025-07",
-       "v": 3238000
-      },
-      {
-       "t": "2025-08",
-       "v": 2852000
-      },
-      {
-       "t": "2025-09",
-       "v": 2678000
-      },
-      {
-       "t": "2025-10",
-       "v": 2547440
-      },
-      {
-       "t": "2025-11",
-       "v": 2681432
-      },
-      {
-       "t": "2025-12",
-       "v": 3295388
-      },
-      {
-       "t": "2026-01",
-       "v": 3642626
-      },
-      {
-       "t": "2026-02",
-       "v": 3822800
-      },
-      {
-       "t": "2026-03",
-       "v": 4090291
-      },
-      {
-       "t": "2026-04",
-       "v": 4140355
-      },
-      {
-       "t": "2026-05",
-       "v": 3950012
-      },
-      {
-       "t": "2026-06",
-       "v": 3557728
-      },
-      {
-       "t": "2026-07",
-       "v": 3054369
-      },
-      {
-       "t": "2026-08",
-       "v": 2629600
-      },
-      {
-       "t": "2026-09",
-       "v": 2447894
-      }
-     ],
-     "seriesUnit": "acre-feet"
+     "percentFull": "52%"
     }
    },
    {
@@ -10112,252 +9834,13 @@
      "name": "Trinity Lake",
      "river": "Trinity River",
      "source": "California DWR (CDEC)",
-     "v": 1652722,
-     "storageAf": 1652722,
-     "lastDate": "2026-10-16",
-     "t": "2026-10-16T00:00:00.000Z",
+     "v": 1651030,
+     "storageAf": 1651030,
+     "lastDate": "2026-10-17",
+     "t": "2026-10-17T00:00:00.000Z",
      "capacityAf": 2448000,
-     "pctFull": 68,
-     "percentFull": "68%",
-     "series": [
-      {
-       "t": "2021-11",
-       "v": 707900
-      },
-      {
-       "t": "2021-12",
-       "v": 720100
-      },
-      {
-       "t": "2022-01",
-       "v": 762600
-      },
-      {
-       "t": "2022-02",
-       "v": 787700
-      },
-      {
-       "t": "2022-03",
-       "v": 807300
-      },
-      {
-       "t": "2022-04",
-       "v": 766300
-      },
-      {
-       "t": "2022-05",
-       "v": 739500
-      },
-      {
-       "t": "2022-06",
-       "v": 715700
-      },
-      {
-       "t": "2022-07",
-       "v": 663700
-      },
-      {
-       "t": "2022-08",
-       "v": 605400
-      },
-      {
-       "t": "2022-09",
-       "v": 553200
-      },
-      {
-       "t": "2022-10",
-       "v": 534700
-      },
-      {
-       "t": "2022-11",
-       "v": 527900
-      },
-      {
-       "t": "2022-12",
-       "v": 551500
-      },
-      {
-       "t": "2023-01",
-       "v": 764200
-      },
-      {
-       "t": "2023-02",
-       "v": 798700
-      },
-      {
-       "t": "2023-03",
-       "v": 910200
-      },
-      {
-       "t": "2023-04",
-       "v": 889700
-      },
-      {
-       "t": "2023-05",
-       "v": 1269000
-      },
-      {
-       "t": "2023-06",
-       "v": 1427000
-      },
-      {
-       "t": "2023-07",
-       "v": 1404000
-      },
-      {
-       "t": "2023-08",
-       "v": 1340000
-      },
-      {
-       "t": "2023-09",
-       "v": 1275000
-      },
-      {
-       "t": "2023-10",
-       "v": 1222000
-      },
-      {
-       "t": "2023-11",
-       "v": 1210000
-      },
-      {
-       "t": "2023-12",
-       "v": 1288000
-      },
-      {
-       "t": "2024-01",
-       "v": 1512000
-      },
-      {
-       "t": "2024-02",
-       "v": 1776000
-      },
-      {
-       "t": "2024-03",
-       "v": 1958000
-      },
-      {
-       "t": "2024-04",
-       "v": 2073000
-      },
-      {
-       "t": "2024-05",
-       "v": 2119000
-      },
-      {
-       "t": "2024-06",
-       "v": 2046000
-      },
-      {
-       "t": "2024-07",
-       "v": 1934000
-      },
-      {
-       "t": "2024-08",
-       "v": 1825000
-      },
-      {
-       "t": "2024-09",
-       "v": 1720000
-      },
-      {
-       "t": "2024-10",
-       "v": 1620000
-      },
-      {
-       "t": "2024-11",
-       "v": 1661000
-      },
-      {
-       "t": "2024-12",
-       "v": 1821000
-      },
-      {
-       "t": "2025-01",
-       "v": 1908000
-      },
-      {
-       "t": "2025-02",
-       "v": 2027000
-      },
-      {
-       "t": "2025-03",
-       "v": 2112000
-      },
-      {
-       "t": "2025-04",
-       "v": 2207000
-      },
-      {
-       "t": "2025-05",
-       "v": 2267000
-      },
-      {
-       "t": "2025-06",
-       "v": 2209000
-      },
-      {
-       "t": "2025-07",
-       "v": 2084000
-      },
-      {
-       "t": "2025-08",
-       "v": 1948000
-      },
-      {
-       "t": "2025-09",
-       "v": 1822000
-      },
-      {
-       "t": "2025-10",
-       "v": 1736881
-      },
-      {
-       "t": "2025-11",
-       "v": 1796829
-      },
-      {
-       "t": "2025-12",
-       "v": 1940716
-      },
-      {
-       "t": "2026-01",
-       "v": 2046730
-      },
-      {
-       "t": "2026-02",
-       "v": 2150300
-      },
-      {
-       "t": "2026-03",
-       "v": 2232083
-      },
-      {
-       "t": "2026-04",
-       "v": 2234670
-      },
-      {
-       "t": "2026-05",
-       "v": 2149730
-      },
-      {
-       "t": "2026-06",
-       "v": 2014302
-      },
-      {
-       "t": "2026-07",
-       "v": 1898176
-      },
-      {
-       "t": "2026-08",
-       "v": 1772800
-      },
-      {
-       "t": "2026-09",
-       "v": 1684476
-      }
-     ],
-     "seriesUnit": "acre-feet"
+     "pctFull": 67,
+     "percentFull": "67%"
     }
    }
   ]
@@ -10925,7 +10408,7 @@
      "v": 3.35,
      "kind": "rising",
      "ftPerCentury": 1.1,
-     "inPerDecade": 1.32,
+     "inPerDecade": 1.3189,
      "network": "US",
      "url": "https://tidesandcurrents.noaa.gov/sltrends/sltrends_station.shtml?id=9414863",
      "trendError": 1.42,
@@ -10948,7 +10431,7 @@
      "v": 2.74,
      "kind": "rising",
      "ftPerCentury": 0.9,
-     "inPerDecade": 1.08,
+     "inPerDecade": 1.0787,
      "network": "US",
      "url": "https://tidesandcurrents.noaa.gov/sltrends/sltrends_station.shtml?id=9414523",
      "trendError": 1.24,
@@ -10971,7 +10454,7 @@
      "v": 2.15,
      "kind": "rising",
      "ftPerCentury": 0.71,
-     "inPerDecade": 0.85,
+     "inPerDecade": 0.8465,
      "network": "US",
      "url": "https://tidesandcurrents.noaa.gov/sltrends/sltrends_station.shtml?id=9415020",
      "trendError": 0.68,
@@ -10994,7 +10477,7 @@
      "v": 1.99,
      "kind": "rising",
      "ftPerCentury": 0.65,
-     "inPerDecade": 0.78,
+     "inPerDecade": 0.7835,
      "network": "US",
      "url": "https://tidesandcurrents.noaa.gov/sltrends/sltrends_station.shtml?id=9414290",
      "trendError": 0.17,
@@ -11017,7 +10500,7 @@
      "v": 1.96,
      "kind": "rising",
      "ftPerCentury": 0.64,
-     "inPerDecade": 0.77,
+     "inPerDecade": 0.7717,
      "network": "US",
      "url": "https://tidesandcurrents.noaa.gov/sltrends/sltrends_station.shtml?id=9415144",
      "trendError": 1.14,
@@ -11040,7 +10523,7 @@
      "v": 0.94,
      "kind": "rising",
      "ftPerCentury": 0.31,
-     "inPerDecade": 0.37,
+     "inPerDecade": 0.3701,
      "network": "US",
      "url": "https://tidesandcurrents.noaa.gov/sltrends/sltrends_station.shtml?id=9414750",
      "trendError": 0.35,
@@ -12040,13 +11523,13 @@
      "name": "Blazed Alder",
      "stationId": "351:OR:SNTL",
      "elevationFt": 3660,
-     "t": "2026-10-18T07:00:00.000Z",
-     "readingLocal": "Oct 18, 12 AM PDT",
+     "t": "2026-10-18T08:00:00.000Z",
+     "readingLocal": "Oct 18, 1 AM PDT",
      "v": 0,
      "swe": 0.1,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 4.5,
+     "tempC": 3.9,
      "normalOnset": "Nov 17",
      "medianPeakIn": 32.4
     }
@@ -12064,12 +11547,12 @@
      "name": "Mount Hood Test Site",
      "stationId": "651:OR:SNTL",
      "elevationFt": 5380,
-     "t": "2026-10-18T07:00:00.000Z",
-     "readingLocal": "Oct 18, 12 AM PDT",
+     "t": "2026-10-18T08:00:00.000Z",
+     "readingLocal": "Oct 18, 1 AM PDT",
      "v": 1,
      "swe": 0,
      "new24h": 0,
-     "tempC": 2.1,
+     "tempC": 2.5,
      "normalOnset": "Oct 30",
      "medianPeakIn": 59.4,
      "nameInSource": "Mt Hood Test Site"
@@ -12088,12 +11571,12 @@
      "name": "Clackamas Lake",
      "stationId": "398:OR:SNTL",
      "elevationFt": 3400,
-     "t": "2026-10-18T07:00:00.000Z",
-     "readingLocal": "Oct 18, 12 AM PDT",
+     "t": "2026-10-18T08:00:00.000Z",
+     "readingLocal": "Oct 18, 1 AM PDT",
      "v": 0,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 1.5,
+     "tempC": 2.2,
      "normalOnset": "Nov 21",
      "medianPeakIn": 12.5
     }
@@ -12115,7 +11598,7 @@
      "readingLocal": "Oct 17, 9 PM PDT",
      "v": 0,
      "type": "no snow",
-     "tempC": 3.5,
+     "tempC": 2.7,
      "normalOnset": "Nov 22",
      "medianPeakIn": 12.1
     }
@@ -12133,13 +11616,13 @@
      "name": "Fifteenmile",
      "stationId": "1314:OR:SNTL",
      "elevationFt": 5970,
-     "t": "2026-10-18T07:00:00.000Z",
-     "readingLocal": "Oct 18, 12 AM PDT",
+     "t": "2026-10-18T08:00:00.000Z",
+     "readingLocal": "Oct 18, 1 AM PDT",
      "v": 0,
      "swe": 0.2,
      "type": "no snow",
      "new24h": 0,
-     "tempC": -2.2
+     "tempC": -2.1
     }
    },
    {
@@ -12155,12 +11638,12 @@
      "name": "Greenpoint",
      "stationId": "504:OR:SNTL",
      "elevationFt": 3320,
-     "t": "2026-10-18T06:00:00.000Z",
-     "readingLocal": "Oct 17, 11 PM PDT",
+     "t": "2026-10-18T07:00:00.000Z",
+     "readingLocal": "Oct 18, 12 AM PDT",
      "v": 0,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 5.3,
+     "tempC": 5,
      "normalOnset": "Nov 20",
      "medianPeakIn": 17.8
     }
@@ -12178,13 +11661,13 @@
      "name": "Mud Ridge",
      "stationId": "655:OR:SNTL",
      "elevationFt": 4070,
-     "t": "2026-10-18T07:00:00.000Z",
-     "readingLocal": "Oct 18, 12 AM PDT",
+     "t": "2026-10-18T08:00:00.000Z",
+     "readingLocal": "Oct 18, 1 AM PDT",
      "v": 0,
      "swe": 0.1,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 1.7,
+     "tempC": 1.5,
      "normalOnset": "Nov 14",
      "medianPeakIn": 24.8
     }
@@ -12202,11 +11685,11 @@
      "name": "Peavine Ridge",
      "stationId": "687:OR:SNTL",
      "elevationFt": 3420,
-     "t": "2026-10-18T06:00:00.000Z",
-     "readingLocal": "Oct 17, 11 PM PDT",
+     "t": "2026-10-18T07:00:00.000Z",
+     "readingLocal": "Oct 18, 12 AM PDT",
      "v": 1,
      "new24h": 0,
-     "tempC": 2.8,
+     "tempC": 2,
      "normalOnset": "Nov 23",
      "medianPeakIn": 13.8
     }
@@ -12224,8 +11707,8 @@
      "name": "Red Hill",
      "stationId": "712:OR:SNTL",
      "elevationFt": 4410,
-     "t": "2026-10-18T07:00:00.000Z",
-     "readingLocal": "Oct 18, 12 AM PDT",
+     "t": "2026-10-18T08:00:00.000Z",
+     "readingLocal": "Oct 18, 1 AM PDT",
      "v": 0,
      "swe": 0.4,
      "type": "no snow",
@@ -12510,10 +11993,11 @@
      ]
     },
     "properties": {
-     "name": "Gros Ventre River at Kelly, Wy",
+     "name": "Gros Ventre River at Kelly, WY",
+     "nameInSource": "GROS VENTRE RIVER AT KELLY, WY",
      "siteId": "USGS-13014500",
      "kind": "gauge",
-     "t": "2026-10-18T07:00:00.000Z",
+     "t": "2026-10-18T08:00:00.000Z",
      "v": 339,
      "pctOfMedian": 151,
      "medianCfs": 224,
@@ -12521,10 +12005,9 @@
      "vsNormal": "high",
      "normalRange": "192 to 261 cfs",
      "recordYears": "1945 to 2026 (32 years)",
-     "tempC": 8.6,
-     "tempF": 47.5,
-     "waterTemp": "47 °F (8.6 °C)",
-     "nameInSource": "GROS VENTRE RIVER AT KELLY, WY"
+     "tempC": 8.5,
+     "tempF": 47.3,
+     "waterTemp": "47 °F (8.5 °C)"
     }
    },
    {
@@ -12537,18 +12020,18 @@
      ]
     },
     "properties": {
-     "name": "Granite C Ab Granite C Supplemental, Nr Moose, Wy",
+     "name": "Granite Creek above Granite Creek Supplemental, near Moose, WY",
+     "nameInSource": "GRANITE C AB GRANITE C SUPPLEMENTAL, NR MOOSE, WY",
      "siteId": "USGS-13016305",
      "kind": "gauge",
-     "t": "2026-10-18T07:00:00.000Z",
+     "t": "2026-10-18T08:00:00.000Z",
      "v": 11,
      "pctOfMedian": 121,
      "medianCfs": 9.1,
      "flowClass": "normal",
      "vsNormal": "normal",
      "normalRange": "7 to 11 cfs",
-     "recordYears": "1996 to 2026 (31 years)",
-     "nameInSource": "GRANITE C AB GRANITE C SUPPLEMENTAL, NR MOOSE, WY"
+     "recordYears": "1996 to 2026 (31 years)"
     }
    },
    {
@@ -12561,21 +12044,21 @@
      ]
     },
     "properties": {
-     "name": "Fish Creek at Wilson, Wy",
+     "name": "Fish Creek at Wilson, WY",
+     "nameInSource": "FISH CREEK AT WILSON, WY",
      "siteId": "USGS-13016450",
      "kind": "gauge",
-     "t": "2026-10-18T07:00:00.000Z",
-     "v": 146,
-     "pctOfMedian": 154,
+     "t": "2026-10-18T08:00:00.000Z",
+     "v": 144,
+     "pctOfMedian": 152,
      "medianCfs": 95,
      "flowClass": "above",
      "vsNormal": "high",
      "normalRange": "86 to 132 cfs",
      "recordYears": "1995 to 2025 (31 years)",
-     "tempC": 8.7,
-     "tempF": 47.7,
-     "waterTemp": "48 °F (8.7 °C)",
-     "nameInSource": "FISH CREEK AT WILSON, WY"
+     "tempC": 8.5,
+     "tempF": 47.3,
+     "waterTemp": "47 °F (8.5 °C)"
     }
    },
    {
@@ -12588,10 +12071,11 @@
      ]
     },
     "properties": {
-     "name": "Cache Creek Near Jackson, Wy",
+     "name": "Cache Creek near Jackson, WY",
+     "nameInSource": "CACHE CREEK NEAR JACKSON, WY",
      "siteId": "USGS-13018300",
      "kind": "gauge",
-     "t": "2026-10-18T06:45:00.000Z",
+     "t": "2026-10-18T07:45:00.000Z",
      "v": 5.04,
      "pctOfMedian": 79,
      "medianCfs": 6.4,
@@ -12599,10 +12083,9 @@
      "vsNormal": "low",
      "normalRange": "5.5 to 7.2 cfs",
      "recordYears": "1963 to 2026 (64 years)",
-     "tempC": 3.1,
-     "tempF": 37.6,
-     "waterTemp": "38 °F (3.1 °C)",
-     "nameInSource": "CACHE CREEK NEAR JACKSON, WY"
+     "tempC": 2.9,
+     "tempF": 37.2,
+     "waterTemp": "37 °F (2.9 °C)"
     }
    },
    {
@@ -12615,10 +12098,11 @@
      ]
     },
     "properties": {
-     "name": "Flat Creek Below Cache Creek, Near Jackson, Wy",
+     "name": "Flat Creek below Cache Creek, near Jackson, WY",
+     "nameInSource": "FLAT CREEK BELOW CACHE CREEK, NEAR JACKSON, WY",
      "siteId": "USGS-13018350",
      "kind": "gauge",
-     "t": "2026-10-18T06:45:00.000Z",
+     "t": "2026-10-18T07:45:00.000Z",
      "v": 76.2,
      "pctOfMedian": 103,
      "medianCfs": 74,
@@ -12626,10 +12110,9 @@
      "vsNormal": "normal",
      "normalRange": "65 to 88 cfs",
      "recordYears": "2000 to 2026 (27 years)",
-     "tempC": 7.5,
-     "tempF": 45.5,
-     "waterTemp": "46 °F (7.5 °C)",
-     "nameInSource": "FLAT CREEK BELOW CACHE CREEK, NEAR JACKSON, WY"
+     "tempC": 7.2,
+     "tempF": 45,
+     "waterTemp": "45 °F (7.2 °C)"
     }
    },
    {
@@ -12642,10 +12125,11 @@
      ]
     },
     "properties": {
-     "name": "Snake River Below Flat Creek, Near Jackson, Wy",
+     "name": "Snake River below Flat Creek, near Jackson, WY",
+     "nameInSource": "SNAKE RIVER BELOW FLAT CREEK, NEAR JACKSON, WY",
      "siteId": "USGS-13018750",
      "kind": "gauge",
-     "t": "2026-10-18T06:30:00.000Z",
+     "t": "2026-10-18T07:30:00.000Z",
      "v": 1560,
      "pctOfMedian": 98,
      "medianCfs": 1600,
@@ -12653,10 +12137,9 @@
      "vsNormal": "normal",
      "normalRange": "1,410 to 1,880 cfs",
      "recordYears": "1977 to 2026 (50 years)",
-     "tempC": 9.2,
-     "tempF": 48.6,
-     "waterTemp": "49 °F (9.2 °C)",
-     "nameInSource": "SNAKE RIVER BELOW FLAT CREEK, NEAR JACKSON, WY"
+     "tempC": 9,
+     "tempF": 48.2,
+     "waterTemp": "48 °F (9.0 °C)"
     }
    },
    {
@@ -12669,10 +12152,11 @@
      ]
     },
     "properties": {
-     "name": "Hoback River Near Jackson, Wy",
+     "name": "Hoback River near Jackson, WY",
+     "nameInSource": "HOBACK RIVER NEAR JACKSON, WY",
      "siteId": "USGS-13019500",
      "kind": "gauge",
-     "t": "2026-10-18T07:00:00.000Z",
+     "t": "2026-10-18T08:00:00.000Z",
      "v": 249,
      "pctOfMedian": 95,
      "medianCfs": 262,
@@ -12680,10 +12164,9 @@
      "vsNormal": "normal",
      "normalRange": "234 to 281 cfs",
      "recordYears": "1945 to 2026 (18 years)",
-     "tempC": 6.7,
-     "tempF": 44.1,
-     "waterTemp": "44 °F (6.7 °C)",
-     "nameInSource": "HOBACK RIVER NEAR JACKSON, WY"
+     "tempC": 6.5,
+     "tempF": 43.7,
+     "waterTemp": "44 °F (6.5 °C)"
     }
    }
   ]
@@ -12711,20 +12194,20 @@
      "name": "Mavericks",
      "kind": "forecast",
      "spotSource": "Wikidata",
-     "t": "2026-10-18T07:00:00.000Z",
-     "v": 1.6,
-     "waveFt": 5.2,
+     "t": "2026-10-18T08:00:00.000Z",
+     "v": 1.62,
+     "waveFt": 5.3,
      "maxNext48hM": 2.06,
      "maxNext48hFt": 6.8,
      "maxAt": "2026-10-19T02:00:00.000Z",
-     "periodS": 10.5,
+     "periodS": 10.55,
      "directionDeg": 280,
      "directionFrom": "W",
      "swellFrom": "West (280°)",
-     "swellM": 0.8,
+     "swellM": 0.78,
      "swellFt": 2.6,
-     "swellPeriodS": 11.6,
-     "readAt": "12:00 am PDT Sun",
+     "swellPeriodS": 10.15,
+     "readAt": "1:00 am PDT Sun",
      "maxAtLocal": "7:00 pm PDT Sun"
     }
    }
@@ -13066,7 +12549,7 @@
      "v": 8.229,
      "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413651",
-     "level": 7.54,
+     "level": 8.19,
      "tide1": "High 8.2 ft at 4:52 am EDT Sun",
      "tide2": "Low 2.4 ft at 10:22 am EDT Sun",
      "tide3": "High 9.0 ft at 5:03 pm EDT Sun",
@@ -13095,7 +12578,7 @@
      "v": 8.849,
      "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413320",
-     "level": 8.07,
+     "level": 8.81,
      "tide1": "High 8.8 ft at 4:48 am EDT Sun",
      "tide2": "Low 2.6 ft at 10:49 am EDT Sun",
      "tide3": "High 9.7 ft at 4:59 pm EDT Sun",
@@ -13103,29 +12586,11 @@
      "thenType": "low",
      "thenAt": "2026-10-18T14:49:00.000Z",
      "thenV": 2.596,
-     "observedNow": 8.159,
-     "observedAt": "2026-10-18T07:18:00.000Z",
-     "observedLocal": "3:18 am EDT Sun",
+     "observedNow": 9.091,
+     "observedAt": "2026-10-18T08:24:00.000Z",
+     "observedLocal": "4:24 am EDT Sun",
      "state": "ME",
      "nameInSource": "BAR HARBOR"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -68.43499755859375,
-      44.16999816894531
-     ]
-    },
-    "properties": {
-     "name": "Mackerel Cove, Swans Island",
-     "stationId": "8413825",
-     "kind": "prediction",
-     "noTimes": "Not loaded for this view; zoom in nearer this station for its times",
-     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413825",
-     "state": "ME"
     }
    },
    {
@@ -13146,7 +12611,7 @@
      "v": 8.495,
      "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413564",
-     "level": 7.84,
+     "level": 8.47,
      "tide1": "High 8.5 ft at 4:48 am EDT Sun",
      "tide2": "Low 2.5 ft at 10:22 am EDT Sun",
      "tide3": "High 9.3 ft at 4:59 pm EDT Sun",
@@ -13154,6 +12619,35 @@
      "thenType": "low",
      "thenAt": "2026-10-18T14:22:00.000Z",
      "thenV": 2.467,
+     "state": "ME"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -68.43499755859375,
+      44.16999816894531
+     ]
+    },
+    "properties": {
+     "name": "Mackerel Cove, Swans Island",
+     "stationId": "8413825",
+     "kind": "prediction",
+     "nextType": "high",
+     "nextAt": "2026-10-18T08:53:00.000Z",
+     "v": 8.338,
+     "trend": "Rising toward high tide",
+     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413825",
+     "level": 8.28,
+     "tide1": "High 8.3 ft at 4:53 am EDT Sun",
+     "tide2": "Low 2.8 ft at 10:47 am EDT Sun",
+     "tide3": "High 9.2 ft at 4:58 pm EDT Sun",
+     "tide4": "Low 1.8 ft at 11:36 pm EDT Sun",
+     "thenType": "low",
+     "thenAt": "2026-10-18T14:47:00.000Z",
+     "thenV": 2.752,
      "state": "ME"
     }
    },
@@ -13175,7 +12669,7 @@
      "v": 7.875,
      "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413857",
-     "level": 7.17,
+     "level": 7.85,
      "tide1": "High 7.9 ft at 4:47 am EDT Sun",
      "tide2": "Low 2.3 ft at 10:55 am EDT Sun",
      "tide3": "High 8.6 ft at 4:58 pm EDT Sun",
@@ -13183,6 +12677,35 @@
      "thenType": "low",
      "thenAt": "2026-10-18T14:55:00.000Z",
      "thenV": 2.285,
+     "state": "ME"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -68.5867,
+      44.2633
+     ]
+    },
+    "properties": {
+     "name": "Center Harbor",
+     "stationId": "8414168",
+     "kind": "prediction",
+     "nextType": "high",
+     "nextAt": "2026-10-18T08:57:00.000Z",
+     "v": 8.406,
+     "trend": "Rising toward high tide",
+     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414168",
+     "level": 8.32,
+     "tide1": "High 8.4 ft at 4:57 am EDT Sun",
+     "tide2": "Low 2.5 ft at 11:01 am EDT Sun",
+     "tide3": "High 9.2 ft at 5:08 pm EDT Sun",
+     "tide4": "Low 1.6 ft at 11:43 pm EDT Sun",
+     "thenType": "low",
+     "thenAt": "2026-10-18T15:01:00.000Z",
+     "thenV": 2.467,
      "state": "ME"
     }
    },
@@ -13204,7 +12727,7 @@
      "v": 8.616,
      "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414249",
-     "level": 7.52,
+     "level": 8.49,
      "tide1": "High 8.6 ft at 5:02 am EDT Sun",
      "tide2": "Low 1.9 ft at 10:58 am EDT Sun",
      "tide3": "High 9.4 ft at 5:10 pm EDT Sun",
@@ -13233,7 +12756,7 @@
      "v": 8.406,
      "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414112",
-     "level": 7.48,
+     "level": 8.33,
      "tide1": "High 8.4 ft at 4:57 am EDT Sun",
      "tide2": "Low 2.5 ft at 11:00 am EDT Sun",
      "tide3": "High 9.2 ft at 5:08 pm EDT Sun",
@@ -13262,7 +12785,7 @@
      "v": 8.406,
      "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413079",
-     "level": 7.64,
+     "level": 8.37,
      "tide1": "High 8.4 ft at 4:47 am EDT Sun",
      "tide2": "Low 2.5 ft at 10:59 am EDT Sun",
      "tide3": "High 9.2 ft at 4:58 pm EDT Sun",
@@ -13291,7 +12814,7 @@
      "v": 7.698,
      "trend": "Rising toward high tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414288",
-     "level": 7.12,
+     "level": 7.67,
      "tide1": "High 7.7 ft at 4:47 am EDT Sun",
      "tide2": "Low 2.3 ft at 10:22 am EDT Sun",
      "tide3": "High 8.4 ft at 4:58 pm EDT Sun",
@@ -13299,24 +12822,6 @@
      "thenType": "low",
      "thenAt": "2026-10-18T14:22:00.000Z",
      "thenV": 2.285,
-     "state": "ME"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -68.5867,
-      44.2633
-     ]
-    },
-    "properties": {
-     "name": "Center Harbor",
-     "stationId": "8414168",
-     "kind": "prediction",
-     "noTimes": "Not loaded for this view; zoom in nearer this station for its times",
-     "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414168",
      "state": "ME"
     }
    }
@@ -13352,7 +12857,8 @@
      "percentDead": 2,
      "percentAffected": "Very Light (1-3%)",
      "acres": 176,
-     "heading": "Subalpine fir die-off: western balsam bark beetle"
+     "heading": "Subalpine fir die-off: western balsam bark beetle",
+     "name": "Subalpine fir, western balsam bark beetle (2021)"
     }
    },
    {
@@ -13375,7 +12881,8 @@
      "percentDead": 2,
      "percentAffected": "Very Light (1-3%)",
      "acres": 140,
-     "heading": "Subalpine fir die-off: western balsam bark beetle"
+     "heading": "Subalpine fir die-off: western balsam bark beetle",
+     "name": "Subalpine fir, western balsam bark beetle (2021)"
     }
    },
    {
@@ -13398,7 +12905,8 @@
      "percentDead": 2,
      "percentAffected": "Very Light (1-3%)",
      "acres": 135,
-     "heading": "Subalpine fir die-off: western balsam bark beetle"
+     "heading": "Subalpine fir die-off: western balsam bark beetle",
+     "name": "Subalpine fir, western balsam bark beetle (2021)"
     }
    },
    {
@@ -13421,7 +12929,8 @@
      "percentDead": 2,
      "percentAffected": "Very Light (1-3%)",
      "acres": 91,
-     "heading": "Subalpine fir die-off: western balsam bark beetle"
+     "heading": "Subalpine fir die-off: western balsam bark beetle",
+     "name": "Subalpine fir, western balsam bark beetle (2021)"
     }
    },
    {
@@ -13444,7 +12953,8 @@
      "percentDead": 2,
      "percentAffected": "Very Light (1-3%)",
      "acres": 86,
-     "heading": "Subalpine fir die-off: western balsam bark beetle"
+     "heading": "Subalpine fir die-off: western balsam bark beetle",
+     "name": "Subalpine fir, western balsam bark beetle (2021)"
     }
    },
    {
@@ -13467,7 +12977,8 @@
      "percentDead": 2,
      "percentAffected": "Very Light (1-3%)",
      "acres": 84,
-     "heading": "Subalpine fir die-off: western balsam bark beetle"
+     "heading": "Subalpine fir die-off: western balsam bark beetle",
+     "name": "Subalpine fir, western balsam bark beetle (2021)"
     }
    },
    {
@@ -13490,7 +13001,8 @@
      "percentDead": 2,
      "percentAffected": "Very Light (1-3%)",
      "acres": 70,
-     "heading": "Subalpine fir die-off: western balsam bark beetle"
+     "heading": "Subalpine fir die-off: western balsam bark beetle",
+     "name": "Subalpine fir, western balsam bark beetle (2021)"
     }
    },
    {
@@ -13513,7 +13025,8 @@
      "percentDead": 7,
      "percentAffected": "Light (4-10%)",
      "acres": 57,
-     "heading": "Subalpine fir die-off: western balsam bark beetle"
+     "heading": "Subalpine fir die-off: western balsam bark beetle",
+     "name": "Subalpine fir, western balsam bark beetle (2021)"
     }
    },
    {
@@ -13536,7 +13049,8 @@
      "percentDead": 2,
      "percentAffected": "Very Light (1-3%)",
      "acres": 53,
-     "heading": "Subalpine fir die-off: western balsam bark beetle"
+     "heading": "Subalpine fir die-off: western balsam bark beetle",
+     "name": "Subalpine fir, western balsam bark beetle (2021)"
     }
    },
    {
@@ -13559,7 +13073,8 @@
      "percentDead": 2,
      "percentAffected": "Very Light (1-3%)",
      "acres": 53,
-     "heading": "Subalpine fir die-off: western balsam bark beetle"
+     "heading": "Subalpine fir die-off: western balsam bark beetle",
+     "name": "Subalpine fir, western balsam bark beetle (2021)"
     }
    },
    {
@@ -13582,7 +13097,8 @@
      "percentDead": 7,
      "percentAffected": "Light (4-10%)",
      "acres": 50,
-     "heading": "Subalpine fir die-off: western balsam bark beetle"
+     "heading": "Subalpine fir die-off: western balsam bark beetle",
+     "name": "Subalpine fir, western balsam bark beetle (2021)"
     }
    },
    {
@@ -13605,7 +13121,8 @@
      "percentDead": 2,
      "percentAffected": "Very Light (1-3%)",
      "acres": 50,
-     "heading": "Subalpine fir die-off: western balsam bark beetle"
+     "heading": "Subalpine fir die-off: western balsam bark beetle",
+     "name": "Subalpine fir, western balsam bark beetle (2021)"
     }
    }
   ]
@@ -13634,7 +13151,7 @@
      "kind": "abandoned mine",
      "source": "Navajo Nation abandoned uranium mines (2007)",
      "mineId": 397,
-     "chapter": "OLJATO",
+     "chapter": "Oljato",
      "region": "North Central",
      "hazardScore": 170,
      "v": 170,
@@ -13663,7 +13180,7 @@
      "source": "Navajo Nation abandoned uranium mines (2007)",
      "aliases": "Tract 25",
      "mineId": 388,
-     "chapter": "OLJATO",
+     "chapter": "Oljato",
      "region": "North Central",
      "hazardScore": 190,
      "v": 190,
@@ -13692,7 +13209,7 @@
      "source": "Navajo Nation abandoned uranium mines (2007)",
      "aliases": "Taylor Reid 1; Taylor Reid Mine - A",
      "mineId": 708,
-     "chapter": "OLJATO",
+     "chapter": "Oljato",
      "region": "North Central",
      "hazardScore": 510,
      "v": 510,
@@ -13722,7 +13239,7 @@
      "source": "Navajo Nation abandoned uranium mines (2007)",
      "aliases": "Mitten 3; Mitten #3; Mitten 31 Mine",
      "mineId": 260,
-     "chapter": "OLJATO",
+     "chapter": "Oljato",
      "region": "North Central",
      "hazardScore": 690,
      "v": 690,
@@ -13792,7 +13309,7 @@
      "source": "Navajo Nation abandoned uranium mines (2007)",
      "aliases": "Taylor Reid 1; Taylor Reid Mine - B; Taylor Reid # 1 & 2",
      "mineId": 261,
-     "chapter": "OLJATO",
+     "chapter": "Oljato",
      "region": "North Central",
      "hazardScore": 550,
      "v": 550,
@@ -13822,7 +13339,7 @@
      "source": "Navajo Nation abandoned uranium mines (2007)",
      "aliases": "C-3 Mine",
      "mineId": 516,
-     "chapter": "OLJATO",
+     "chapter": "Oljato",
      "region": "North Central",
      "hazardScore": 540,
      "v": 540,
@@ -13852,7 +13369,7 @@
      "source": "Navajo Nation abandoned uranium mines (2007)",
      "aliases": "Monument 3; Monument #3 Mine",
      "mineId": 226,
-     "chapter": "OLJATO",
+     "chapter": "Oljato",
      "region": "North Central",
      "hazardScore": 540,
      "v": 540,
@@ -13881,7 +13398,7 @@
      "kind": "abandoned mine",
      "source": "Navajo Nation abandoned uranium mines (2007)",
      "mineId": 182,
-     "chapter": "OLJATO",
+     "chapter": "Oljato",
      "region": "North Central",
      "hazardScore": 680,
      "v": 680,
@@ -13910,7 +13427,7 @@
      "source": "Navajo Nation abandoned uranium mines (2007)",
      "aliases": "Norcross Mine - A, B, C, D",
      "mineId": 224,
-     "chapter": "OLJATO",
+     "chapter": "Oljato",
      "region": "North Central",
      "hazardScore": 1520,
      "v": 1520,
@@ -13939,7 +13456,7 @@
      "source": "Navajo Nation abandoned uranium mines (2007)",
      "aliases": "Oljeto Mesa West; Keith Mine - A; Oljeto",
      "mineId": 225,
-     "chapter": "OLJATO",
+     "chapter": "Oljato",
      "region": "North Central",
      "hazardScore": 3080,
      "v": 3080,
@@ -14005,19 +13522,19 @@
     "properties": {
      "kind": "now",
      "name": "Current conditions (model)",
-     "t": "2026-10-18T07:15:00.000Z",
-     "v": 7.2,
-     "temperatureC": 7.2,
-     "windKmh": 2.8,
-     "gustKmh": 3.6,
+     "observed": "2026-10-18T08:30:00.000Z",
+     "v": 6.6,
+     "temperatureC": 6.6,
+     "windKmh": 1.4,
+     "gustKmh": 2.5,
      "precipitationMm": 0,
      "snowfallCm": 0,
      "weatherCode": 0,
      "weather": "clear",
-     "temperatureF": 45,
-     "windMph": 2,
+     "temperatureF": 44,
+     "windMph": 1,
      "gustMph": 2,
-     "heading": "Weather now: 45 °F (7 °C), wind 2 mph, clear"
+     "heading": "Weather now: 44 °F (7 °C), wind 1 mph gusting 2, clear"
     }
    },
    {
@@ -14045,6 +13562,33 @@
      "instruction": "Remain out of the water due to hazardous swimming conditions, or stay near occupied lifeguard towers. Rock jetties can be deadly in such conditions, stay off the rocks.",
      "senderName": "NWS Los Angeles/Oxnard CA",
      "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.d6a681ade348f94fc9752ec8a6de8211940ebf14.001.1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -117.899,
+      33.608
+     ]
+    },
+    "properties": {
+     "kind": "Beach Hazards Statement",
+     "event": "Beach Hazards Statement",
+     "heading": "Beach Hazards Statement, San Diego County Coastal Areas and Orange County Coastal",
+     "severity": "Moderate",
+     "v": 2,
+     "t": "2026-10-18T16:00:00.000Z",
+     "expires": "2026-10-20T16:00:00.000Z",
+     "until": "October 20 at 9:00AM PDT",
+     "headline": "Beach Hazards Statement issued October 18 at 12:59AM PDT until October 20 at 9:00AM PDT by NWS San Diego CA",
+     "areaDesc": "San Diego County Coastal Areas; Orange County Coastal",
+     "urgency": "Expected",
+     "certainty": "Likely",
+     "instruction": "Remain out of the water to avoid hazardous swimming conditions, or stay near occupied lifeguard towers. Rock jetties can be deadly in such conditions, stay off the rocks.",
+     "senderName": "NWS San Diego CA",
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.3bf19ea6e5d9d4da0341c33779e556b0d4637b79.001.1"
     }
    }
   ]
@@ -14368,10 +13912,10 @@
     "properties": {
      "name": "37.00°N 120.50°W",
      "node": 0,
-     "east": 0.42,
-     "north": 1.56,
-     "speed": 1.61,
-     "tempC": 17.5
+     "east": -0.03,
+     "north": 1.75,
+     "speed": 1.75,
+     "tempC": 16.6
     }
    },
    {
@@ -14386,10 +13930,10 @@
     "properties": {
      "name": "37.00°N 120.38°W",
      "node": 1,
-     "east": 0.12,
-     "north": 0.75,
-     "speed": 0.76,
-     "tempC": 18.1
+     "east": -1.19,
+     "north": 0.63,
+     "speed": 1.35,
+     "tempC": 17.3
     }
    },
    {
@@ -14404,10 +13948,10 @@
     "properties": {
      "name": "37.00°N 120.26°W",
      "node": 2,
-     "east": 0.29,
-     "north": 0.89,
-     "speed": 0.94,
-     "tempC": 17.9
+     "east": -1.01,
+     "north": 0.37,
+     "speed": 1.08,
+     "tempC": 17.7
     }
    },
    {
@@ -14422,10 +13966,10 @@
     "properties": {
      "name": "37.00°N 120.15°W",
      "node": 3,
-     "east": -0.43,
-     "north": 1.33,
-     "speed": 1.4,
-     "tempC": 17.6
+     "east": -1.12,
+     "north": 0.34,
+     "speed": 1.17,
+     "tempC": 17.1
     }
    },
    {
@@ -14440,10 +13984,10 @@
     "properties": {
      "name": "37.00°N 120.03°W",
      "node": 4,
-     "east": -0.21,
-     "north": 1.7,
-     "speed": 1.71,
-     "tempC": 18.4
+     "east": -0.8,
+     "north": 0.32,
+     "speed": 0.86,
+     "tempC": 18
     }
    },
    {
@@ -14458,10 +14002,10 @@
     "properties": {
      "name": "37.00°N 119.91°W",
      "node": 5,
-     "east": -1.34,
-     "north": 0.38,
-     "speed": 1.39,
-     "tempC": 19.5
+     "east": -0.82,
+     "north": 0,
+     "speed": 0.82,
+     "tempC": 19
     }
    },
    {
@@ -14476,10 +14020,10 @@
     "properties": {
      "name": "37.00°N 119.79°W",
      "node": 6,
-     "east": -2.18,
-     "north": -1.16,
+     "east": -2.02,
+     "north": -1.42,
      "speed": 2.47,
-     "tempC": 20.7
+     "tempC": 20.5
     }
    },
    {
@@ -14494,10 +14038,10 @@
     "properties": {
      "name": "37.00°N 119.68°W",
      "node": 7,
-     "east": -1.74,
-     "north": -0.85,
-     "speed": 1.94,
-     "tempC": 23.2
+     "east": -2.29,
+     "north": -1.6,
+     "speed": 2.79,
+     "tempC": 22.3
     }
    },
    {
@@ -14512,10 +14056,10 @@
     "properties": {
      "name": "37.00°N 119.56°W",
      "node": 8,
-     "east": -0.53,
-     "north": -1.99,
+     "east": -0.87,
+     "north": -1.87,
      "speed": 2.06,
-     "tempC": 21.4
+     "tempC": 21.2
     }
    },
    {
@@ -14530,10 +14074,10 @@
     "properties": {
      "name": "37.00°N 119.44°W",
      "node": 9,
-     "east": 0.55,
-     "north": -0.59,
-     "speed": 0.81,
-     "tempC": 20.5
+     "east": -1.42,
+     "north": -1.37,
+     "speed": 1.97,
+     "tempC": 19.8
     }
    },
    {
@@ -14548,10 +14092,10 @@
     "properties": {
      "name": "37.00°N 119.32°W",
      "node": 10,
-     "east": -1.93,
-     "north": -1.4,
-     "speed": 2.38,
-     "tempC": 21.6
+     "east": -0.92,
+     "north": -2.17,
+     "speed": 2.36,
+     "tempC": 21.2
     }
    },
    {
@@ -14566,10 +14110,10 @@
     "properties": {
      "name": "37.00°N 119.21°W",
      "node": 11,
-     "east": -1.63,
-     "north": -0.5,
-     "speed": 1.7,
-     "tempC": 18.1
+     "east": -2.26,
+     "north": -0.04,
+     "speed": 2.26,
+     "tempC": 17.5
     }
    }
   ]

@@ -8,6 +8,9 @@ import type { LayerError, QueryContext } from "../types";
 import { UPSTREAM_TIMEOUT_MS } from "./constants";
 
 export type Point = { lon: number; lat: number };
+
+/** The agent name identify requests send (hazards.fema.gov refuses "node"). */
+export const IDENTIFY_AGENT = "Mozilla/5.0 (compatible; WallyMap/1.0; +https://wallymap.vercel.app)";
 export type { IdentifyPoint } from "../types";
 
 /** A card feature at the tapped point. */
@@ -17,7 +20,13 @@ export function pointFeature(at: Point, properties: Record<string, unknown>): Fe
 
 async function getJson(ctx: QueryContext, url: string): Promise<unknown | LayerError> {
   try {
-    const res = await ctx.fetch(url, { cacheKey: ctx.cacheKey ? `${ctx.cacheKey}:${url.length}` : undefined, ttlSeconds: 3600, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
+    const res = await ctx.fetch(url, {
+      cacheKey: ctx.cacheKey ? `${ctx.cacheKey}:${url.length}` : undefined,
+      ttlSeconds: 3600,
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      // FEMA's firewall resets connections from Node's default agent name ("node"); a browser-style name passes.
+      headers: { "user-agent": IDENTIFY_AGENT },
+    });
     if (!res.ok) return { error: `The source answered ${res.status}`, hint: "upstream" };
     const json: unknown = await res.json();
     if (json && typeof json === "object" && "error" in json) return { error: "The source could not identify that point", hint: "upstream" };

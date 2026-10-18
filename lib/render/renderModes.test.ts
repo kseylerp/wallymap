@@ -424,7 +424,7 @@ describe("review fixes", () => {
       catalog: { species: { title: "Species", style: species.style } },
       canvas: { width: 1000, height: 800 },
     });
-    expect(actions).toContainEqual({ type: "render", op: { layerId: "species", mode: "clusters", visible: true, filters: op.filters }, exact: true });
+    expect(actions).toContainEqual({ type: "render", op: { layerId: "species", mode: "clusters", visible: true, filters: op.filters }, exact: true, restored: true });
     expect(outcome?.filtersDropped).toBeUndefined();
     // Hundreds of category values do not fit: the link keeps what fits and says how many entries it left out.
     const many: RenderOp[] = Array.from({ length: 60 }, (_, i) => ({

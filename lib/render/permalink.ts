@@ -604,6 +604,8 @@ export async function restoreFromPermalink(
       },
       ...(layer.mode === undefined && { defaultMode: true }),
       ...(layer.view !== undefined && { exact: true }),
+      // The link's basemap stands (a choropleth answer is never moved off it on restore).
+      restored: true,
     });
     outcome.restored.push(layer.id);
   });

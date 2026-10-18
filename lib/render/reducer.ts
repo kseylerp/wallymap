@@ -551,7 +551,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       const selected = op.mode === "heat" ? dropSelectionOf(state, op.layerId) : state.selected;
       // A choropleth answer's first draw leaves satellite imagery for Topographical (or the layer's own basemap); a share
       // link (exact) keeps the basemap it carries.
-      const basemap = index === -1 && loaded && !action.exact ? (choroplethBasemap(loaded, state.basemap) ?? state.basemap) : state.basemap;
+      const basemap = index === -1 && loaded && !action.exact && !action.restored ? (choroplethBasemap(loaded, state.basemap) ?? state.basemap) : state.basemap;
       const next = withShownChange(state, { ...state, renderOps, selected, ...(basemap !== state.basemap && { basemap, playback: undefined }) }, action.op.layerId);
       // A share link's op is the sender's as drawn: its view (or none) stays, and the view's preset is not run again,
       // so it cannot move the mode, rank or compare the link carries.

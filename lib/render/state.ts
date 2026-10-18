@@ -257,9 +257,10 @@ export type MapAction =
   /**
    * Draw a layer. `defaultMode`: the op's mode was not asked for, so the layer keeps the mode it has, or a new op takes
    * the default from the layer's hints (`defaultRenderMode` in lib/render/reducer.ts). `exact`: a share link's op, set
-   * as the sender had it; its view (or none) is kept and the view's preset is not run again.
+   * as the sender had it; its view (or none) is kept and the view's preset is not run again. `restored`: drawn from a
+   * share link, whose basemap stands (a choropleth answer is otherwise moved off imagery).
    */
-  | { type: "render"; op: RenderOp; defaultMode?: boolean; exact?: boolean }
+  | { type: "render"; op: RenderOp; defaultMode?: boolean; exact?: boolean; restored?: boolean }
   | { type: "toggle_layer"; layerId: string }
   | { type: "select"; selection: Selection }
   | { type: "deselect" }

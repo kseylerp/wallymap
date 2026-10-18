@@ -76,6 +76,7 @@ describe("reduce", () => {
     expect(reduce(drawn, { type: "set_basemap", basemap: "satellite" }).basemap).toBe("satellite");
     // A share link keeps the basemap it carries; a line layer is no choropleth.
     expect(reduce(loaded, { type: "render", op: { layerId: "temperature-anomaly", mode: "polygons", visible: true }, exact: true }).basemap).toBe("satellite");
+    expect(reduce(loaded, { type: "render", op: { layerId: "temperature-anomaly", mode: "polygons", visible: true }, restored: true }).basemap).toBe("satellite");
     const trails = reduce(reduce(initialMapState, { type: "layer_loaded", layer }), { type: "render", op: { layerId: "osm-trails", mode: "lines", visible: true } });
     expect(trails.basemap).toBe("outdoors-satellite");
   });

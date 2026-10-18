@@ -70,7 +70,10 @@ export async function imageServerIdentify(ctx: QueryContext, service: string, at
 
 /** WMS 1.1.1 GetFeatureInfo as GeoServer JSON: the first feature's properties at the point, or null. */
 export async function wmsFeatureInfo(ctx: QueryContext, endpoint: string, layers: string, at: Point): Promise<Record<string, unknown> | null | LayerError> {
-  const [w, s, e, n] = ctx.bbox;
+  // A 3x3 pixel image centred on the point (pixel 1,1), as wide as the context's box.
+  const hw = Math.max(1e-5, (ctx.bbox[2] - ctx.bbox[0]) / 2);
+  const hh = Math.max(1e-5, (ctx.bbox[3] - ctx.bbox[1]) / 2);
+  const [w, s, e, n] = [at.lon - hw, at.lat - hh, at.lon + hw, at.lat + hh];
   const q = new URLSearchParams({
     service: "WMS",
     version: "1.1.1",

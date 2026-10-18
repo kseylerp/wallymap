@@ -17,6 +17,7 @@ import { initialMapState, type Basemap, type MapState, type Selection, type View
 import { missingTilesStore, noteTile, withTileFallback } from "@/lib/render/tileErrors";
 import { tileSwipeLayers } from "@/lib/render/tileSides";
 import { visibleState } from "@/lib/render/view";
+import { identifyAt, identifyRequests } from "@/lib/render/identify";
 import { animateSeriesLines, resetSeriesLines } from "@/lib/render/seriesLines";
 import { fieldAt, flowFrame, flowLayersOf, ParticleSystem, type FieldSnapshot, type ParticleView } from "@/lib/render/particles";
 import { metersPerPixel } from "@/lib/render/deck";
@@ -539,6 +540,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     });
 
     // Click to inspect: deck features first (they draw on top), then vector tiles; empty map deselects.
+    let identifyAbort: AbortController | undefined;
     map.on("click", (e) => {
       const hit = pickAt(map, overlay, stateRef.current, e.point, deckLayersRef.current);
       // A cluster blob is a group, not a feature: zoom one level in toward it so it splits (the one camera move a
@@ -554,6 +556,18 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
         return;
       }
       onPickRef.current?.(hit);
+      // Nothing to pick: a raster layer that can identify asks its source what is drawn here (lib/render/identify.ts).
+      identifyAbort?.abort();
+      if (hit) return;
+      const state = stateRef.current;
+      const { lng, lat } = map.unproject(e.point);
+      const requests = identifyRequests(state, visibleState(state).layers, [lng, lat], map.getZoom());
+      if (requests.length === 0) return;
+      const abort = new AbortController();
+      identifyAbort = abort;
+      void identifyAt(requests, { x: e.point.x, y: e.point.y }, abort.signal).then((found) => {
+        if (found && !abort.signal.aborted && identifyAbort === abort) onPickRef.current?.(found);
+      });
     });
     // A pointer cursor over anything inspectable, checked at most once per frame.
     let hoverFrame = 0;

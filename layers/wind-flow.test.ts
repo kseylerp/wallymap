@@ -28,7 +28,7 @@ describe("wind-flow", () => {
     if (!("kind" in r) || r.kind !== "geojson") throw new Error(`expected geojson, got ${JSON.stringify(r)}`);
     expect(r.flow?.color).toBe("speed");
     expect(r.data.features[0].properties).toMatchObject({ tempC: expect.any(Number), speed: expect.any(Number) });
-    expect(layer.style.encode).toEqual({ size: "speed", color: "speed" });
+    expect(layer.style.encode).toEqual({ size: "speed", color: "tempC" });
     expect(legendOf(layer)).toBe(LEGEND);
     expect(LEGEND).toMatchObject({ kind: "ramp", field: "speed", unit: "m/s" });
     expect(timeShapeOf(layer, r)).toMatchObject({ shape: "continuous", step: "hour" });

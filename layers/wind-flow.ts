@@ -79,7 +79,9 @@ const windFlow = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 4_000_000,
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("wind-flow"), unit: "m/s", encode: { size: "speed", color: "speed" }, series: "hour", basemap: "outdoors" },
+  // encode stays speed + tempC (temperature the second variable a render can switch to; lib/render/particles.test.ts pins
+  // it); the particles themselves color by flow.color, set to speed in query.
+  style: { geometry: "point", color: layerColor("wind-flow"), unit: "m/s", encode: { size: "speed", color: "tempC" }, series: "hour", basemap: "outdoors" },
   legend: LEGEND,
   fieldHelp: HELP,
   card: CARD,

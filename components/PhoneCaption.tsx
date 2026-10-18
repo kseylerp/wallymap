@@ -72,7 +72,7 @@ function scenarioCaption(state: MapState, layer: LoadedLayer): string | undefine
   return scenario && value !== undefined ? scenarioValueText(value, scenario.unit) : undefined;
 }
 
-export function PhoneCaption({ state, shown, onOpen }: { state: MapState; shown: MapState["layers"]; onOpen: () => void }) {
+export function PhoneCaption({ state, shown, onOpen, titleOf }: { state: MapState; shown: MapState["layers"]; onOpen: () => void; titleOf?: (layerId: string) => string | undefined }) {
   const top = [...state.renderOps].reverse().find((op) => op.visible && state.layers[op.layerId]);
   const layer = top ? state.layers[top.layerId] : undefined;
   const drawn = layer ? shown[layer.id] : undefined;
@@ -114,7 +114,9 @@ export function PhoneCaption({ state, shown, onOpen }: { state: MapState; shown:
     const line = failureLine(failed.sourceStatus, 0) ?? failed.message;
     return (
       <button type="button" onClick={onOpen} data-testid="phone-caption" aria-label="Open the layers" className="glass-strong rise-in pointer-events-auto block max-w-full rounded-[12px] px-3 py-2 text-left">
-        <p className="line-clamp-3 text-[11.5px] leading-4 text-ink" data-testid="phone-caption-failure">
+        {/* The layer's name, then the whole reason: cut at three lines it hid Nevada and "nothing is shown" (mining claims). */}
+        {titleOf?.(failed.layerId) && <p className="text-[12.5px] font-semibold leading-4 text-ink">{titleOf(failed.layerId)}</p>}
+        <p className="mt-0.5 line-clamp-6 text-[11.5px] leading-4 text-ink" data-testid="phone-caption-failure">
           {line}
         </p>
       </button>

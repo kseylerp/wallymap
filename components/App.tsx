@@ -301,7 +301,7 @@ export function App() {
       {isPhone && !layerPanelOpen && (Object.keys(state.layers).length > 0 || state.errors.length > 0) && (
         <>
           <div className="pointer-events-none absolute top-(--console-top,60px) left-[calc(var(--safe-left)+12px)] z-20 max-w-[calc(100vw-80px-var(--safe-left)-var(--safe-right))]">
-            <PhoneCaption state={state} shown={view.layers} onOpen={() => setLayersOpen(true)} />
+            <PhoneCaption state={state} shown={view.layers} onOpen={() => setLayersOpen(true)} titleOf={(id) => catalog?.[id]?.title} />
           </div>
           <div className="phone-time-dock pointer-events-none absolute left-[calc(var(--safe-left)+12px)] z-20 w-[calc(100vw-80px-var(--safe-left)-var(--safe-right))]">
             <PhoneTimeDock state={state} dispatch={dispatch} />

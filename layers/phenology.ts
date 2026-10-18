@@ -12,6 +12,10 @@
  *     Legend (GetLegendGraphic): red = days early, blue = days late, white = no difference, 2 to 20 days.
  *   - `time=2026-04-15` and the full `2026-04-15T07:00:00.000Z` both work; a plain date is used.
  * The current-year layer has no earlier years, so the template and `from` change with the mode.
+ * After 30 June (2026-10-18 audit: the default window was 19 Aug to 17 Sep, long after spring, and nothing moved) the
+ *   daily series ends at 30 June (`time.to`) and the default day is 30 June, the season's final map.
+ * Drawn as served with NPN's GetLegendGraphic image as the key; the renderer's default calm filter greyed the red and blue.
+ * The annual series still ends at 2024 (GetCapabilities 2026-10-18); a 2025 request returns a fallback image, not 2025.
  * No upstream call is made by the layer: it only builds the URL for the map to fetch.
  */
 import { z } from "zod";
@@ -27,6 +31,10 @@ export const DAYS_BACK = 31;
 /** First and last year of the historical annual series. */
 export const ANNUAL_FROM = 1981;
 export const ANNUAL_TO = 2024;
+/** Month and day by which first leaf and first bloom have happened across the lower 48; the daily map stops changing. */
+export const SPRING_END = "06-30";
+/** The NPN key for the anomaly maps (GetLegendGraphic, 20 days early in dark red to 20 days late in navy; read 2026-10-18). */
+export const LEGEND_URL = `${ENDPOINT}?service=WMS&version=1.1.1&request=GetLegendGraphic&format=image/png&layer=si-x:leaf_anomaly`;
 
 const inputSchema = z.object({
   stage: z.enum(["leaf", "bloom"]).default("leaf"),
@@ -49,7 +57,7 @@ const phenology = defineLayer({
     "US map of whether spring has arrived earlier or later than usual, from the USA National Phenology Network's Spring Indices (a model of when plants first leaf out or first flower, driven by daily temperature), lower 48 states only, about 4 km. " +
     "The color is the difference in days from the 30-year average: reds mean spring came that many days early (up to 20), blues mean days late, white is about normal. " +
     "stage leaf (default) is first leaf-out (new leaves on lilac and honeysuckle, a proxy for the start of the growing season); stage bloom is first bloom. " +
-    "Without year it shows the current year only (the daily maps start on 1 January of this year), one image per day, up to about a month ago; date (YYYY-MM-DD, this calendar year) picks the day and defaults to the newest, and the time scrubber steps through the days. " +
+    "Without year it shows the current year only (the daily maps start on 1 January of this year), one image per day, up to about a month ago; date (YYYY-MM-DD, this calendar year) picks the day and defaults to the newest, and the time scrubber steps through the days; after 30 June spring is over everywhere, so the scrubber runs January to June and the default is 30 June, the season's final map. " +
     "With year (1981 to 2024) it shows that whole spring's anomaly, one image per year, so use it, or compare, to ask whether spring is arriving earlier over the decades. " +
     "Use it for 'spring arrived', 'has spring come early this year', 'when do the trees leaf out', 'early or late spring', 'growing season start', 'bloom timing'. " +
     "Example questions: did spring arrive early in the Northeast this year, was 2012 a record-early spring, compare leaf-out in 1990 and 2020 for the Midwest. " +
@@ -63,7 +71,15 @@ const phenology = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("phenology") },
+  // As served: the renderer's default calm filter greyed the red and blue the key names.
+  style: { geometry: "polygon", color: layerColor("phenology"), raster: { saturation: 0, opacity: 0.8, swatch: "#E34A33" } },
+  legend: {
+    kind: "image",
+    title: "Spring arrival versus the 30-year average",
+    unit: "days",
+    imageUrl: LEGEND_URL,
+    note: "Red: spring came early (dark red 20 days early); white: about normal; blue: late (navy 20 days late).",
+  },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     const now = Date.now();
@@ -94,22 +110,29 @@ const phenology = defineLayer({
       };
     }
 
-    const from = `${new Date(now).getUTCFullYear()}-01-01`;
+    const year = new Date(now).getUTCFullYear();
+    const from = `${year}-01-01`;
     const choice = resolveTileDate(input.date, { from, latestOffsetDays: -DAYS_BACK, label: "daily spring index maps" }, now);
     if (!choice.ok) {
       return { error: input.date !== undefined && input.date < from ? `Daily spring index maps cover this year only (from ${from}); for an earlier spring use year (${ANNUAL_FROM} to ${ANNUAL_TO})` : choice.error };
     }
+    // Once spring is over everywhere (after 30 June) the daily map stops changing: the scrubber spans January to June and
+    // a later day shows 30 June, the season's final map, so playing it shows spring arriving rather than a still summer.
+    const springEnd = `${year}-${SPRING_END}`;
+    const over = choice.date > springEnd;
+    const date = over ? springEnd : choice.date;
+    const note = over ? `spring is complete by ${springEnd}, so this is the season's final map${input.date !== undefined ? ` (asked ${input.date})` : ""}` : choice.note;
     return {
       kind: "tiles",
       data: {
-        url: dailyTileUrl(input.stage, choice.date),
+        url: dailyTileUrl(input.stage, date),
         minzoom: 0,
         maxzoom: 10,
         format: "raster",
-        time: { template: dailyTileUrl(input.stage, "{date}"), cadence: "daily", from, daysBack: DAYS_BACK },
+        time: { template: dailyTileUrl(input.stage, "{date}"), cadence: "daily", from, ...(over && { to: springEnd }), daysBack: DAYS_BACK },
       },
       citation,
-      coverageNote: `${dateNote(`${stageName} spring index anomaly`, choice.date, choice.note)}, days early (red) or late (blue) versus the 30-year average, lower 48 states only`,
+      coverageNote: `${dateNote(`${stageName} spring index anomaly`, date, note)}, days early (red) or late (blue) versus the 30-year average, lower 48 states only`,
     };
   },
 });

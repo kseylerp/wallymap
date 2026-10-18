@@ -22,14 +22,15 @@ import {
 } from "@/lib/render/hybridStyle";
 import { compareBaseId, compareBId, compareSideShown, effectiveMode } from "@/lib/render/compareView";
 import { hatchImage, hatchPatternId, HATCH_SCALE } from "@/lib/render/hatch";
-import { areaRecipe, isPaletteColor, LINE, LINE_CLASSES, lineColorFor, SYMBOL, WHITE, type HatchColor } from "@/lib/render/palette";
+import { areaRecipe, HATCH_COLORS, isPaletteColor, LINE, LINE_CLASSES, lineColorFor, SYMBOL, WHITE, type HatchColor } from "@/lib/render/palette";
+import { categoryKey } from "@/lib/render/categories";
 import { lineEntries, lineLayerSpecs, LINES_PREFIX, lineSourceData, lineSourceId, type LineEntry } from "@/lib/render/nativeLines";
 import { routeBeforeId } from "@/components/routeLayers";
 import { rampColor, rgbaString } from "@/lib/render/ramp";
 import { rasterPaint } from "@/lib/render/rasterCalm";
 import { featureCenter } from "@/lib/render/inspect";
 import { isTileSwipe } from "@/lib/render/tileSides";
-import type { Basemap, MapState } from "@/lib/render/state";
+import type { Basemap, LoadedLayer, MapState } from "@/lib/render/state";
 
 const PREFIX = "tiles-";
 
@@ -61,6 +62,20 @@ export const LAND_OUTLINE = { opacity: 0.8 } as const;
 type VectorLayerSpec = FillLayerSpecification | LineLayerSpecification | CircleLayerSpecification;
 
 /** The hatch pattern a vector tile area layer draws with (its id is a Mapbox image added by `ensureHatchImages`). */
+/** A categorized tile layer's tint: strong enough that each kind's color reads on green Topo. */
+export const CATEGORY_TILE_TINT = 0.24;
+
+/** Every hatch pattern a set of specs names (a plain id, or each output of a match expression). */
+export function hatchPatternsOf(specs: { paint?: Record<string, unknown> }[]): string[] {
+  const out: string[] = [];
+  for (const spec of specs) {
+    const p = spec.paint?.["fill-pattern"];
+    if (typeof p === "string") out.push(p);
+    else if (Array.isArray(p)) for (const x of p.flat(Infinity)) if (typeof x === "string" && x.startsWith("hatch-")) out.push(x);
+  }
+  return out;
+}
+
 export function vectorHatchPattern(id: string, color?: string): string {
   const recipe = areaRecipe(id, color);
   return hatchPatternId(recipe.color as HatchColor, recipe.step);
@@ -79,6 +94,11 @@ export function vectorTileLayerSpecs(
   visible: boolean,
   /** The layer panel's color (a palette color only) and opacity (render op), when set. */
   paint: { color?: string; opacity?: number } = {},
+  /**
+   * The category the areas are colored by (the legend's `field` and its items' colors, or the layer's category key):
+   * each value's tint, hatch and outline in its color. Values not listed keep the layer's own color.
+   */
+  key?: { field: string; colors: [string, string][] },
 ): VectorLayerSpec[] {
   const layerId = `${PREFIX}${id}`;
   const requested = isPaletteColor(paint.color) ? paint.color.trim().toUpperCase() : undefined;
@@ -88,20 +108,28 @@ export function vectorTileLayerSpecs(
   if (geometry === "polygon") {
     const r = areaRecipe(id, requested);
     const lineLayout = { ...layout, "line-join": "round" as const };
+    const keyed = !requested && key && key.colors.length > 0 ? key : undefined;
+    const match = (fallback: string, of: (color: string) => string) =>
+      keyed ? (["match", ["to-string", ["get", keyed.field]], ...keyed.colors.flatMap(([v, c]) => [v, of(c)]), fallback] as unknown as string) : fallback;
+    const hatchable = (c: string) => (HATCH_COLORS as readonly string[]).includes(c);
+    const pattern = vectorHatchPattern(id, requested);
     return [
       {
         id: layerId,
         type: "fill",
         ...common,
         layout,
-        paint: { "fill-color": r.color, "fill-opacity": landFillOpacity(opacity, r.tint) },
+        paint: { "fill-color": match(r.color, (c) => c), "fill-opacity": landFillOpacity(opacity, keyed ? Math.max(r.tint, CATEGORY_TILE_TINT) : r.tint) },
       },
       {
         id: `${layerId}-hatch`,
         type: "fill",
         ...common,
         layout,
-        paint: { "fill-pattern": vectorHatchPattern(id, requested), "fill-opacity": landHatchOpacity(opacity, r.hatchAlpha) },
+        paint: {
+          "fill-pattern": match(pattern, (c) => (hatchable(c) ? hatchPatternId(c as HatchColor, r.step) : pattern)),
+          "fill-opacity": landHatchOpacity(opacity, r.hatchAlpha),
+        },
       },
       {
         id: `${layerId}-casing`,
@@ -115,7 +143,7 @@ export function vectorTileLayerSpecs(
         type: "line",
         ...common,
         layout: lineLayout,
-        paint: { "line-color": r.outline, "line-width": r.outlineWidth, "line-opacity": LAND_OUTLINE.opacity * opacity },
+        paint: { "line-color": match(r.outline, (c) => c), "line-width": r.outlineWidth, "line-opacity": LAND_OUTLINE.opacity * opacity },
       },
     ];
   }
@@ -164,6 +192,20 @@ export function ensureHatchImages(map: MapboxMap, ids: Iterable<string>): void {
     if (!match) continue;
     map.addImage(id, hatchImage(`#${match[1]}` as HatchColor, Number(match[2])), { pixelRatio: HATCH_SCALE });
   }
+}
+
+/**
+ * The category a vector tile layer's areas are colored by: its legend's field and item colors (the answer's legend over
+ * the layer's), else its category key's declared levels (lib/render/categories.ts).
+ */
+export function tileKeyOf(layer: LoadedLayer): { field: string; colors: [string, string][] } | undefined {
+  const legend = layer.result.legend ?? layer.legend;
+  if (legend?.field && legend.items?.some((i) => i.color && i.value !== undefined)) {
+    return { field: legend.field, colors: legend.items.flatMap((i) => (i.color && i.value !== undefined ? [[String(i.value), i.color] as [string, string]] : [])) };
+  }
+  const key = categoryKey(layer, null);
+  if (!key) return undefined;
+  return { field: key.attr.key, colors: key.groups.flatMap((g) => g.values.map((v) => [v, g.color] as [string, string])) };
 }
 
 /** The first label (symbol) layer, so data drawn before it sits under place names; undefined puts it on top. */
@@ -242,14 +284,8 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
       dropStaleSource(map, style, id, "vector", url);
       if (!map.getSource(id)) map.addSource(id, { type: "vector", tiles: [url], minzoom, maxzoom });
       const color = op?.color && HEX.test(op.color.trim()) ? op.color.trim() : undefined;
-      const specs = vectorTileLayerSpecs(loaded.id, loaded.style, sourceLayer, geometry ?? loaded.style.geometry, visible, {
-        color,
-        opacity,
-      });
-      ensureHatchImages(
-        map,
-        specs.flatMap((spec) => (spec.type === "fill" && typeof spec.paint?.["fill-pattern"] === "string" ? [spec.paint["fill-pattern"]] : [])),
-      );
+      const specs = vectorTileLayerSpecs(loaded.id, loaded.style, sourceLayer, geometry ?? loaded.style.geometry, visible, { color, opacity }, tileKeyOf(loaded));
+      ensureHatchImages(map, hatchPatternsOf(specs));
       for (const spec of specs) {
         wantedLayers.add(spec.id);
         order.push(spec.id);

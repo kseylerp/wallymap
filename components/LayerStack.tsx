@@ -12,9 +12,14 @@ import type { FieldHelp } from "@/layers/types";
 import { attributeFilterSummary, attributesOf, chipAttribute } from "@/lib/render/attributes";
 import { cellContext, hexCells, hexLegendSentence, levelLabel, usableBasis } from "@/lib/render/hexCells";
 import { preferredBasemap, viewCaption } from "@/lib/render/views";
+import type { LayerFailure } from "@/lib/render/state";
 import type { Feature } from "geojson";
 import { LegendKey } from "@/components/LegendKey";
 import { EncodingLegend } from "@/components/EncodingLegend";
+import { RowLegend } from "@/components/RowLegend";
+import { rowLegend } from "@/lib/render/legendView";
+import { failureLine, layerSourceStatus, timeShape } from "@/lib/render/contract";
+import { layerChange } from "@/lib/render/views";
 import { formatValue } from "@/lib/format";
 import { rasterKeyFilter } from "@/lib/render/rasterCalm";
 import { currentScenarioValue, scenarioOf, scenarioValueText } from "@/lib/render/scenario";
@@ -61,7 +66,28 @@ type LayerStackProps = {
   /** The selected feature and the map's center, for the linked curve (the selected reach, the wind at the center). */
   selected?: MapState["selected"];
   center?: [number, number];
+  /** Layers that failed to load: each gets a row saying why (docs/layer-contract.md sourceStatus). */
+  errors?: LayerFailure[];
 };
+
+/** A layer that failed to load: its title, why (the source's failure, else the error), and × to drop it. */
+function FailedRow({ failure, title, dispatch }: { failure: LayerFailure; title: string; dispatch: (action: MapAction) => void }) {
+  const line = failureLine(failure.sourceStatus, 0) ?? `${failure.message.replace(/[.;]+$/, "")}. Showing nothing for this layer.`;
+  return (
+    <li data-testid="layer-failed" data-layer-id={failure.layerId} className="legend-row relative min-w-0 py-3">
+      <div className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-start gap-x-2">
+        <span aria-hidden className="flex h-[18px] w-6 items-center justify-center text-[13px] text-ink-muted">–</span>
+        <p className="line-clamp-2 text-[13px] leading-[18px] text-ink">{title}</p>
+        <button type="button" onClick={() => dispatch({ type: "remove_layer", layerId: failure.layerId })} aria-label={`Remove ${title}`} className={`${REMOVE_BUTTON} leading-[18px]`}>
+          ×
+        </button>
+      </div>
+      <p role="status" data-testid="layer-failure" className="mt-1 pl-8 text-[11.5px] leading-4 text-ink">
+        {line}
+      </p>
+    </li>
+  );
+}
 
 /** The four ways a point layer draws, in short labels that fit the narrowest panel. Hex is flat cells, columns in 3D. */
 const SHOW_AS: { value: RenderMode; label: string }[] = [
@@ -425,6 +451,23 @@ function LegendRow({
     source: [citation.source, license && `Licence: ${license}`, citation.retrieved && `Retrieved ${citation.retrieved.slice(0, 10)}`].filter(Boolean).join(" · "),
     url: citation.url,
   };
+  // Failures are visible (docs/layer-contract.md sourceStatus): what the source did and what the map shows for it.
+  const failure = failureLine(layerSourceStatus(layer), count === null ? null : (shownCount ?? count));
+  // A snapshot layer states its change (the newest of each draws; the change is the finding).
+  const change = useMemo(
+    () => (op?.visible && timeShape(layer).shape === "snapshots" && compare?.layerId !== layer.id ? layerChange(layer, op?.filters) : null),
+    [layer, op?.visible, op?.filters, compare?.layerId],
+  );
+  // The legend from the contract and what the map draws; a category whose chips already key it is left to the chips,
+  // and two measures on one mark keep their own lines (EncodingLegend).
+  const legendBlocks = useMemo(() => {
+    if (!op?.visible || (hexes && op.mode !== "columns")) return [];
+    const chip = chipAttribute(layer);
+    const encoded = new Set([layer.style.encode?.size, layer.style.encode?.color].filter(Boolean));
+    return rowLegend(layer, op, shownData).filter(
+      (b) => !(b.kind === "categories" && b.field && b.field === chip?.key && b.shape !== "line" && !layer.legend && !layer.result.legend) && !(b.field && encoded.has(b.field)),
+    );
+  }, [layer, op, shownData, hexes]);
   const symbol = layerLegend(layer, op);
   // A raster layer's key shows the tiles' raw color through the same filter the map applies (lib/render/rasterCalm.ts).
   const isRaster = layer.result.kind === "tiles" && layer.result.data.format === "raster" && symbol.kind === "tiles";
@@ -512,11 +555,22 @@ function LegendRow({
         </span>
         <InfoMark help={sourceHelp} label={`the source of ${layer.title}`} />
       </p>
+      {failure && (
+        <p role="status" data-testid="layer-failure" className="mt-1 text-[11.5px] leading-4 text-ink">
+          {failure}
+        </p>
+      )}
+      {change && (
+        <p data-testid="row-change" className="mt-1 text-[11.5px] leading-4 text-ink">
+          {change.text}
+        </p>
+      )}
       {caption && (
         <p data-testid="view-caption" className="mt-1 text-[11.5px] leading-4 text-ink-muted">
           {caption}
         </p>
       )}
+      <RowLegend blocks={legendBlocks} />
       {/* A dense network draws the land itself (spec §13): one click lets the basemap step back. */}
       {basemap !== undefined && preferred !== undefined && basemap !== preferred && (
         <p data-testid="basemap-offer" className="mt-1 flex min-w-0 items-baseline gap-1.5 text-[11.5px] leading-4 text-ink-muted">
@@ -630,8 +684,11 @@ export function LayerStack({
   basemap,
   selected,
   center,
+  errors = [],
 }: LayerStackProps) {
   const items = stackOrder(layers, renderOps);
+  // Failed layers not loaded otherwise (a route's error is the chat's to show).
+  const failed = errors.filter((e) => !layers[e.layerId] && catalog?.[e.layerId] !== undefined);
   // A dated tile layer whose tiles all failed for the window's date (lib/render/tileErrors.ts).
   const missingTiles = useSyncExternalStore(missingTilesStore.subscribe, missingTilesStore.get, missingTilesStore.get);
   const missingImage =
@@ -664,7 +721,7 @@ export function LayerStack({
     if (next !== null) scroller.scrollTop = next;
   }, [open, idsKey, selectedLayerId]);
 
-  if (items.length === 0) return null;
+  if (items.length === 0 && failed.length === 0) return null;
 
   const moveTo = (layerId: string, targetId: string) => {
     const toIndex = renderOps.findIndex((op) => op.layerId === targetId);
@@ -711,7 +768,7 @@ export function LayerStack({
       </div>
       <header className="flex shrink-0 items-baseline gap-3 px-5 pt-4 pb-1.5">
         <h2 className="small-caps">
-          Layers <span className="ml-1 text-ink tabular-nums">{items.length}</span>
+          Layers <span className="ml-1 text-ink tabular-nums">{items.length + failed.length}</span>
         </h2>
         <span className="flex-1" />
         <button type="button" onClick={() => dispatch({ type: "clear_layers" })} className={TEXT_BUTTON}>
@@ -784,6 +841,9 @@ export function LayerStack({
             />
           );
         })}
+        {failed.map((f) => (
+          <FailedRow key={`failed-${f.layerId}`} failure={f} title={catalog?.[f.layerId]?.title ?? f.layerId} dispatch={dispatch} />
+        ))}
       </ul>
       {/* Export map…, under the rows; empty (no layer on), the slot takes no space. */}
       <div data-slot="export" className="shrink-0 px-5 pt-1 pb-3 empty:hidden">

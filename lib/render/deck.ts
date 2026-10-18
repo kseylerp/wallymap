@@ -406,7 +406,7 @@ function memoExtent(data: GeoJSON.FeatureCollection, key: string): [number, numb
 function categoryKeyOf(op: RenderOp, ctx: Pick<OpContext, "layer" | "data">): CategoryKey | undefined {
   if (!ctx.layer || requestedColor(op.color)) return undefined;
   const all = ctx.layer.allData ?? (ctx.layer.result?.kind === "geojson" ? ctx.layer.result.data : ctx.data);
-  return categoryKey({ id: op.layerId, attributes: ctx.layer.attributes, style: ctx.layer.style, legend: ctx.layer.legend }, all);
+  return categoryKey({ id: op.layerId, attributes: ctx.layer.attributes, style: ctx.layer.style, legend: ctx.layer.result?.legend ?? ctx.layer.legend }, all);
 }
 
 const NO_ENCODING: PinEncoding = {};
@@ -635,8 +635,10 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   };
   const colorOf = (f: Feature) => (f === selected ? SELECTED_AREA.color : kindColor(f));
   const tintAlpha = key ? Math.max(recipe.tint, CATEGORY_AREA_TINT) : recipe.tint;
-  const tint = perFeature((f) => hexToRgba(colorOf(f), Math.round(255 * tintAlpha)), opacity, selected);
-  const hatch = perFeature((f) => hexToRgba(colorOf(f), Math.round(255 * recipe.hatchAlpha)), opacity, selected);
+  // A group the legend draws as a line is an outline only (no tint, no hatch), unless selected.
+  const filled = (f: Feature) => f === selected || !key || !groupOf(key, f)?.outline;
+  const tint = perFeature((f) => hexToRgba(colorOf(f), filled(f) ? Math.round(255 * tintAlpha) : 0), opacity, selected);
+  const hatch = perFeature((f) => hexToRgba(colorOf(f), filled(f) ? Math.round(255 * recipe.hatchAlpha) : 0), opacity, selected);
   const outlineOf = (f: Feature): Rgba => hexToRgba(key ? kindColor(f) : recipe.outline);
   // The white casing is wide enough that an outline never reads as one of the basemap's own lines (contours, borders).
   const casingWidth = recipe.outlineWidth + 2 * Math.max(recipe.casing, AREA_CASING_MIN);

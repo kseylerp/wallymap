@@ -503,9 +503,18 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       return fitCamera(placed, placeBounds(placed) ?? (placed.place.moved ? null : placed.place.bbox));
     }
     case "layer_error":
+      // One line per layer: a retry that fails again replaces the last reason.
       return {
         ...state,
-        errors: [...state.errors, { layerId: action.layerId, message: action.message }],
+        errors: [
+          ...state.errors.filter((e) => e.layerId !== action.layerId),
+          {
+            layerId: action.layerId,
+            message: action.message,
+            ...(action.sourceStatus && { sourceStatus: action.sourceStatus }),
+            ...(action.input && { input: action.input }),
+          },
+        ],
       };
     case "render": {
       const index = state.renderOps.findIndex((op) => op.layerId === action.op.layerId);
@@ -604,7 +613,10 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       return { ...state, renderOps };
     }
     case "remove_layer": {
-      if (!state.layers[action.layerId] && !state.renderOps.some((op) => op.layerId === action.layerId)) return state;
+      if (!state.layers[action.layerId] && !state.renderOps.some((op) => op.layerId === action.layerId)) {
+        // A layer that only failed: its row goes.
+        return state.errors.some((e) => e.layerId === action.layerId) ? { ...state, errors: state.errors.filter((e) => e.layerId !== action.layerId) } : state;
+      }
       const layers = { ...state.layers };
       delete layers[action.layerId];
       return withTimeIndex(

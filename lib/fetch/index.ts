@@ -44,15 +44,48 @@ export type LayerFetchOptions = {
 };
 
 /** The host a URL names, for failure messages ("waterservices.usgs.gov"); the URL itself when it does not parse. */
+/** Who runs a host, in the words people know them by, for the failure line ("NOAA's weather service"). */
+const SOURCE_NAMES: [RegExp, string][] = [
+  [/(^|\.)weather\.gov$/, "NOAA's weather service"],
+  [/(^|\.)noaa\.gov$/, "NOAA"],
+  [/(^|\.)usgs\.gov$/, "USGS"],
+  [/(^|\.)nasa\.gov$/, "NASA"],
+  [/(^|\.)earthdata\.nasa\.gov$/, "NASA"],
+  [/(^|\.)usda\.gov$/, "USDA"],
+  [/(^|\.)fs\.fed\.us$/, "the Forest Service"],
+  [/(^|\.)nps\.gov$/, "the National Park Service"],
+  [/(^|\.)blm\.gov$/, "BLM"],
+  [/(^|\.)fws\.gov$/, "Fish and Wildlife Service"],
+  [/(^|\.)epa\.gov$/, "EPA"],
+  [/(^|\.)fema\.gov$/, "FEMA"],
+  [/(^|\.)glims\.org$/, "GLIMS"],
+  [/(^|\.)gbif\.org$/, "GBIF"],
+  [/(^|\.)wikidata\.org$/, "Wikidata"],
+  [/(^|\.)wikipedia\.org$/, "Wikipedia"],
+  [/overpass/, "OpenStreetMap's Overpass server"],
+  [/(^|\.)openstreetmap\.(org|fr)$/, "OpenStreetMap"],
+  [/(^|\.)open-meteo\.com$/, "Open-Meteo"],
+  [/(^|\.)globalforestwatch\.org$/, "Global Forest Watch"],
+  [/(^|\.)arcgis\.com$/, "Esri's ArcGIS server"],
+];
+
 function hostLabel(url: string): string {
-  return hostOf(url) ?? "The source";
+  const host = hostOf(url);
+  if (!host) return "The source";
+  return SOURCE_NAMES.find(([re]) => re.test(host))?.[1] ?? host;
+}
+
+/** "NOAA's weather service's server" reads badly: the owner of a server, possessive. */
+function serverOf(url: string): string {
+  const label = hostLabel(url);
+  return /server$|service$/.test(label) ? label : `${label}'s server`;
 }
 
 /** The SourceFailure for an HTTP status, or null when the status is not a source failure (2xx, 3xx, a 4xx but 429). */
 export function sourceFailureForStatus(status: number, url: string, now: Date = new Date()): SourceFailure | null {
   const since = now.toISOString();
   if (status === 429) return { ok: false, reason: "rate-limited", message: `${hostLabel(url)} is limiting requests right now (429).`, since };
-  if (status >= 500) return { ok: false, reason: "server-error", message: `${hostLabel(url)} returned an error (${status}).`, since };
+  if (status >= 500) return { ok: false, reason: "server-error", message: `${serverOf(url)} is returning errors (${status}).`, since };
   return null;
 }
 

@@ -18,7 +18,11 @@ export const CATEGORY_COLORS = [PURPLE, PINK, DARK_GREY, SAGE] as const;
 /** The color of every kind past the fourth, and of features with no value. */
 export const OTHER_COLOR = OFF_WHITE;
 
-export type CategoryGroup = { label: string; values: string[]; color: string };
+/**
+ * One group of the key. `outline`: its areas draw as an outline only, no tint or hatch (a legend item drawn as a line
+ * on an area layer: condor range "Early 1800s" against "Today" filled).
+ */
+export type CategoryGroup = { label: string; values: string[]; color: string; outline?: boolean };
 
 /** What colors a layer: the attribute, its groups in order with their colors, and whether past groups fold to Other. */
 export type CategoryKey = { attr: Attribute; groups: CategoryGroup[]; ordinal: boolean; other: boolean };
@@ -63,12 +67,20 @@ export function categoryKey(layer: Keyable, data?: FeatureCollection | null): Ca
   if (base.length >= 2) {
     const ordinal = attr.type === "ordinal";
     const legendColors = new Map<string, string>();
-    if (layer.legend?.field === attr.key) for (const item of layer.legend.items ?? []) if (item.color && item.value !== undefined) legendColors.set(String(item.value), item.color);
+    const outlines = new Set<string>();
+    if (layer.legend?.field === attr.key) {
+      for (const item of layer.legend.items ?? []) {
+        if (item.value === undefined) continue;
+        if (item.color) legendColors.set(String(item.value), item.color);
+        if (item.symbol === "line") outlines.add(String(item.value));
+      }
+    }
     const ramp = ordinal ? groupColors(base.length) : [];
     const groups = base.map((g, i) => ({
       label: g.label,
       values: g.values,
       color: g.values.map((v) => legendColors.get(v)).find(Boolean) ?? (ordinal ? ramp[i] : (CATEGORY_COLORS[i] ?? OTHER_COLOR)),
+      ...(g.values.some((v) => outlines.has(v)) && { outline: true }),
     }));
     out = { attr, groups, ordinal, other: !ordinal && base.length > CATEGORY_COLORS.length };
   }

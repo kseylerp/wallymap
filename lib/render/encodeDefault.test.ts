@@ -103,4 +103,19 @@ describe("encode by default (owner: 'needs to be discernible')", () => {
     expect(line(square(0, "a")).slice(0, 3)).toEqual([0x6e, 0x5b, 0xff]);
     expect(line(square(2, "b")).slice(0, 3)).toEqual([0xf5, 0x72, 0x72]);
   });
+
+  it("draws a category the legend keys as a line as an outline only (condor range: Early 1800s)", () => {
+    const square = (x: number, era: string): Feature => ({
+      type: "Feature",
+      geometry: { type: "Polygon", coordinates: [[[x, 0], [x + 1, 0], [x + 1, 1], [x, 1], [x, 0]]] },
+      properties: { era },
+    });
+    const era: Attribute = { key: "era", type: "category", label: "Range", levels: [{ value: "today", label: "Today" }, { value: "historic", label: "Early 1800s" }] };
+    const legend = { kind: "categories" as const, field: "era", items: [{ label: "Today", value: "today" }, { label: "Early 1800s", value: "historic", symbol: "line" as const }] };
+    const layers = buildDeckLayers(stateOf({ id: "condor-range", style: { geometry: "polygon", color: DARK_GREY }, attributes: [era], legend }, [square(0, "today"), square(2, "historic")], "polygons"));
+    const poly = layers.find((l) => l.id.endsWith(":polygons"))!;
+    const tint = (poly.props as Props).getFillPatternBackgroundColor as (f: Feature) => number[];
+    expect(tint(square(0, "today"))[3]).toBeGreaterThan(0);
+    expect(tint(square(2, "historic"))[3]).toBe(0);
+  });
 });

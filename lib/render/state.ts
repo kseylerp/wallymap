@@ -1,5 +1,5 @@
 import type { Feature, LineString } from "geojson";
-import type { Attribute, BBox, CardSpec, Coverage, DisplaySpec, Encoding, FieldHelp, LabelSpec, LayerResult, LegendSpec, StyleHints, TimeSpec } from "@/layers/types";
+import type { Attribute, BBox, CardSpec, Coverage, DisplaySpec, Encoding, FieldHelp, LabelSpec, LayerResult, LegendSpec, SourceStatus, StyleHints, TimeSpec } from "@/layers/types";
 import type { CompareSpec } from "@/lib/render/compare";
 import type { LayerFilters } from "@/lib/render/filters";
 import type { TimeIndex, TimeWindow } from "@/lib/time";
@@ -144,7 +144,11 @@ export type MapState = {
   /** Routes by id, drawn above the basemap's roads and under its labels (components/routeLayers.ts). */
   routes: Record<string, RouteState>;
   renderOps: RenderOp[];
-  errors: { layerId: string; message: string }[];
+  /**
+   * Layers that failed to load: the error, and why the source did not answer when it says (SourceStatus). The layer
+   * panel lists each as a row with that line, and a share link keeps it, so a restore shows the reason, not a blank map.
+   */
+  errors: LayerFailure[];
   selected?: Selection;
   /** 3D terrain wanted (on by default); drawn only while the map is not flattened. */
   terrain: boolean;
@@ -181,6 +185,9 @@ export type MapState = {
   /** A feature the pointer is over in a layer row's top 10: the map rings it (spec §12c, synced with the map). */
   hover?: { layerId: string; feature: Feature };
 };
+
+/** A layer that failed to load (MapState.errors). */
+export type LayerFailure = { layerId: string; message: string; sourceStatus?: SourceStatus; input?: Record<string, unknown> };
 
 /** The named place of this turn: its bbox, the layers loaded for it since, and whether the camera has fitted yet. */
 export type PlaceState = { bbox: BBox; layers: string[]; moved: boolean };
@@ -243,7 +250,7 @@ export type MapAction =
   | { type: "set_flattened"; flattened: boolean }
   | { type: "set_basemap"; basemap: Basemap }
   | { type: "layer_loaded"; layer: LoadedLayer }
-  | { type: "layer_error"; layerId: string; message: string }
+  | { type: "layer_error"; layerId: string; message: string; sourceStatus?: SourceStatus; input?: Record<string, unknown> }
   /**
    * Draw a layer. `defaultMode`: the op's mode was not asked for, so the layer keeps the mode it has, or a new op takes
    * the default from the layer's hints (`defaultRenderMode` in lib/render/reducer.ts). `exact`: a share link's op, set

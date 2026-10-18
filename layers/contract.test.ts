@@ -141,7 +141,9 @@ describe("sourceStatus", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("maps 5xx, 429 and other statuses", () => {
-    expect(sourceFailureForStatus(503, "https://waterservices.usgs.gov/x")).toMatchObject({ ok: false, reason: "server-error", message: expect.stringContaining("waterservices.usgs.gov") });
+    expect(sourceFailureForStatus(503, "https://waterservices.usgs.gov/x")).toMatchObject({ ok: false, reason: "server-error", message: "USGS's server is returning errors (503)." });
+    // A host without a known agency is named by its host.
+    expect(sourceFailureForStatus(500, "https://tiles.example.org/x")?.message).toBe("tiles.example.org's server is returning errors (500).");
     expect(sourceFailureForStatus(429, "https://a.test")?.reason).toBe("rate-limited");
     expect(sourceFailureForStatus(404, "https://a.test")).toBeNull();
   });

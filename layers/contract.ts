@@ -207,6 +207,8 @@ const categoryLegend = (a: Attribute, items: LegendItem[]): LegendSpec => ({ kin
  * note for a tile layer. Never empty. Colors are left to the renderer where it picks them (ramp positions).
  */
 export function legendOf(layer: Pick<Layer, "id" | "title" | "description" | "legend" | "attributes" | "style">, data?: LayerResult | FeatureCollection): LegendSpec {
+  // An answer that carries its own key (the colors it drew) wins over the layer's declaration.
+  if (data && "kind" in data && data.legend) return data.legend;
   if (layer.legend) return layer.legend;
   const attrs = layer.attributes ?? [];
   const byKey = (key: string | undefined) => (key === undefined ? undefined : attrs.find((a) => a.key === key));

@@ -183,7 +183,7 @@ describe("areas: tint, 45° hatch and an outline over a white casing", () => {
   it("tints and hatches protected land sage under a dark grey outline; other areas dark grey", () => {
     for (const id of ["wilderness", "public-lands", "physical-regions"]) {
       const p = props(buildDeckLayers(polys(id))[1]);
-      expect((p.getFillPatternBackgroundColor as Accessor)(a)).toEqual(rgba(SAGE, Math.round(255 * 0.12)));
+      expect((p.getFillPatternBackgroundColor as Accessor)(a)).toEqual(rgba(SAGE, Math.round(255 * 0.18)));
       expect((p.getFillPattern as (f: unknown) => string)(a)).toBe("hatch-9FB693-1");
       expect(p.getLineColor).toEqual(GREY);
     }

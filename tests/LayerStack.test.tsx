@@ -196,7 +196,7 @@ describe("LayerStack", () => {
     const landsKey = landsRow.querySelector("svg.legend-key")!;
     expect(landsKey.getAttribute("data-kind")).toBe("area");
     expect(landsKey.querySelector("rect")?.getAttribute("fill")).toBe("#9FB693");
-    expect(landsKey.querySelector("rect")?.getAttribute("fill-opacity")).toBe("0.12");
+    expect(landsKey.querySelector("rect")?.getAttribute("fill-opacity")).toBe("0.18");
     expect(landsKey.querySelector("pattern line")?.getAttribute("stroke")).toBe("#9FB693");
     // Every control shows: no hover-collapsing track, and no tooltips on the row's own controls.
     expect(trailsRow.querySelector(".legend-controls")).toBeNull();

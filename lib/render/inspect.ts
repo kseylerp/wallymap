@@ -237,6 +237,7 @@ const SIGNAL_LABELS: Record<string, string> = {
   named: "Named",
   roadDistanceKm: "Nearest road",
   inWilderness: "In designated wilderness",
+  inRoadlessArea: "In a Forest Service roadless area",
   campsitesWithin2km: "Campsites within 2 km",
 };
 

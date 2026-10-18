@@ -171,7 +171,7 @@ export function App() {
   }
 
   const suggestions = useSuggestionsCard();
-  const hasLayers = Object.keys(state.layers).length > 0;
+  const hasLayers = Object.keys(state.layers).length > 0 || state.errors.some((e) => catalog?.[e.layerId] !== undefined);
   const layerPanelOpen = layersOpen && hasLayers;
   const canCompare = useMemo(() => Object.values(state.layers).some(isComparable), [state.layers]);
   // The Compare pill (shown while the console is closed) opens the console, starting a compare if none is on.
@@ -251,7 +251,7 @@ export function App() {
           <MapPills
             basemap={state.basemap}
             onBasemapChange={setBasemap}
-            layerCount={Object.keys(state.layers).length}
+            layerCount={Object.keys(state.layers).length + state.errors.filter((e) => !state.layers[e.layerId] && catalog?.[e.layerId] !== undefined).length}
             layersOpen={layersOpen}
             onLayersOpenChange={setLayersOpen}
             restoreStatus={permalink.status}
@@ -290,6 +290,7 @@ export function App() {
           basemap={state.basemap}
           selected={state.selected}
           center={[state.viewport.longitude, state.viewport.latitude]}
+          errors={state.errors}
         />
       </div>
 

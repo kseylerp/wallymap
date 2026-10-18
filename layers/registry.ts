@@ -5,7 +5,9 @@ import type { Layer } from "./types";
 const layers = new Map<string, Layer>();
 
 export function registerLayer(layer: Layer): void {
-  if (layers.has(layer.id)) {
+  // The dev server's hot reload evaluates a changed layer module again against the same registry: the new version
+  // replaces the old there. Anywhere else (tests, production) two layers with one id are a bug.
+  if (layers.has(layer.id) && process.env.NODE_ENV !== "development") {
     throw new Error(`Duplicate layer id: ${layer.id}`);
   }
   // A bad attribute, help or card declaration fails at load (and in the tests), never on the map.

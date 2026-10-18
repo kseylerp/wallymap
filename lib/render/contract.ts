@@ -9,20 +9,28 @@ import type { LoadedLayer } from "@/lib/render/state";
  * made once per answer, so the row, the card, the time panel and the map read one answer the same way.
  */
 
-const timeMemo = new WeakMap<LoadedLayer["result"], TimeSpec>();
-const legendMemo = new WeakMap<LoadedLayer["result"], LegendSpec>();
+/** Per answer and per declaration (the same answer under another declaration resolves again). */
+const timeMemo = new WeakMap<LoadedLayer["result"], Map<unknown, TimeSpec>>();
+const legendMemo = new WeakMap<LoadedLayer["result"], Map<unknown, LegendSpec>>();
+
+function memoized<T>(memo: WeakMap<LoadedLayer["result"], Map<unknown, T>>, result: LoadedLayer["result"], key: unknown, make: () => T): T {
+  let byKey = memo.get(result);
+  if (!byKey) {
+    byKey = new Map();
+    memo.set(result, byKey);
+  }
+  if (!byKey.has(key)) byKey.set(key, make());
+  return byKey.get(key)!;
+}
 
 /**
  * What time means for this answer: `none` and `single` get no time panel, `snapshots` a stepper between its dates and
  * a compare, `continuous` the scrubber. The declared shape wins; otherwise inferred from the data.
  */
 export function timeShape(layer: Pick<LoadedLayer, "time" | "style" | "attributes" | "result">): TimeSpec {
-  let spec = timeMemo.get(layer.result);
-  if (!spec) {
-    spec = timeShapeOf({ time: layer.time, style: layer.style, attributes: layer.attributes }, layer.result);
-    timeMemo.set(layer.result, spec);
-  }
-  return spec;
+  return memoized(timeMemo, layer.result, layer.time ?? layer.style, () =>
+    timeShapeOf({ time: layer.time, style: layer.style, attributes: layer.attributes }, layer.result),
+  );
 }
 
 /** True when the layer's time is worth a panel: snapshots or continuous. */
@@ -33,15 +41,12 @@ export function hasTimePanel(layer: Pick<LoadedLayer, "time" | "style" | "attrib
 
 /** The layer's key (LegendSpec) for this answer: declared, else derived from its attributes, style and data. */
 export function layerKey(layer: Pick<LoadedLayer, "id" | "title" | "description" | "legend" | "attributes" | "style" | "result">): LegendSpec {
-  let spec = legendMemo.get(layer.result);
-  if (!spec) {
-    spec = legendOf(
+  return memoized(legendMemo, layer.result, layer.result.legend ?? layer.legend ?? layer.attributes ?? layer.id, () =>
+    legendOf(
       { id: layer.id, title: layer.title, description: layer.description ?? "", legend: layer.legend, attributes: layer.attributes, style: layer.style },
       layer.result,
-    );
-    legendMemo.set(layer.result, spec);
-  }
-  return spec;
+    ),
+  );
 }
 
 /** Which features get a name on the map (LabelSpec), or undefined for none. */
@@ -67,4 +72,17 @@ export function layerSourceStatus(layer: Pick<LoadedLayer, "result">): SourceSta
 /** The features of a GeoJSON answer, or null for tiles. */
 export function featuresOf(layer: Pick<LoadedLayer, "result">): FeatureCollection | null {
   return layer.result.kind === "geojson" ? layer.result.data : null;
+}
+
+/**
+ * The failure line for a layer row and the answer (docs/layer-contract.md, owner: "failures are visible"): what the
+ * source did, then what the map shows for it ("NOAA's weather service is returning errors (503). Showing nothing for
+ * this layer."). Null when the source answered.
+ */
+export function failureLine(status: SourceStatus | undefined, drawn: number | null): string | null {
+  if (!status || status.ok) return null;
+  const said = status.message.trim().replace(/[.;]+$/, "");
+  if (status.reason === "no-data-for-date") return `${said}.`;
+  const shows = drawn === null ? "Showing the latest image it gave." : drawn === 0 ? "Showing nothing for this layer." : "Showing what it returned before the error.";
+  return `${said}. ${shows}`;
 }

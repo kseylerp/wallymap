@@ -10,6 +10,7 @@ import {
   type Basemap,
   type CompareState,
   type HexBasis,
+  type LayerFailure,
   type MapAction,
   type MapState,
   type RenderMode,
@@ -73,6 +74,11 @@ export type PermalinkSource = Pick<MapState, "viewport" | "basemap" | "layers" |
     time?: PermalinkTime | (Pick<TimeState, "window"> & { mode?: TimeMode });
     /** The scenario scrubber's amount (`MapState.scenario`); written only for a layer the link loads. */
     scenario?: PermalinkScenario;
+    /**
+     * Layers that failed to load (MapState.errors): written as layers too, so opening the link asks again and, when the
+     * source still fails, shows why instead of a blank map.
+     */
+    failed?: Pick<LayerFailure, "layerId" | "input">[];
   };
 
 function timeOf(time: PermalinkSource["time"]): PermalinkTime | undefined {
@@ -300,11 +306,16 @@ export function encodeState(state: PermalinkSource, servable?: Record<string, un
     `b=${state.basemap}`,
   ];
   const shared = state.renderOps.filter((op) => state.layers[op.layerId] && (!servable || op.layerId in servable));
-  if (shared.length > 0) parts.push(`l=${shared.map(layerEntry).join(",")}`);
+  const failed = (state.failed ?? []).filter((f) => !state.layers[f.layerId] && (!servable || f.layerId in servable));
+  const entries = [...shared.map(layerEntry), ...failed.map((f) => `${encodeURIComponent(f.layerId)}::1`)];
+  if (entries.length > 0) parts.push(`l=${entries.join(",")}`);
   const { value: filters, dropped } = encodeFilters(shared);
   if (filters) parts.push(`f=${filters}`);
   if (dropped > 0) parts.push(`fx=${dropped}`);
-  const inputs = encodeInputs(shared.map((op) => state.layers[op.layerId]));
+  const inputs = encodeInputs([
+    ...shared.map((op) => state.layers[op.layerId]),
+    ...failed.flatMap((f) => (f.input ? [{ id: f.layerId, input: f.input }] : [])),
+  ]);
   if (inputs) parts.push(`i=${inputs}`);
   const time = timeOf(state.time);
   if (time) parts.push(`t=${encodeURIComponent(time.start)},${encodeURIComponent(time.end)}${time.mode === "cumulative" ? ",c" : ""}`);
@@ -551,7 +562,13 @@ export async function restoreFromPermalink(
   decoded.layers.forEach((layer, i) => {
     const result = results[i];
     if (isError(result)) {
-      dispatch({ type: "layer_error", layerId: layer.id, message: result.error });
+      dispatch({
+        type: "layer_error",
+        layerId: layer.id,
+        message: result.error,
+        ...(result.sourceStatus && !result.sourceStatus.ok && { sourceStatus: result.sourceStatus }),
+        ...(layer.input && { input: layer.input }),
+      });
       outcome.failed.push(layer.id);
       return;
     }

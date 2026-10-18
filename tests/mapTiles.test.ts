@@ -27,6 +27,13 @@ import { visibleState } from "@/lib/render/view";
 const STYLE = { geometry: "polygon" as const, color: "#B9A6FF" };
 
 describe("vectorTileLayerSpecs", () => {
+  it("colors vector tile areas by the legend's field and item colors (public lands by manager)", () => {
+    const specs = vectorTileLayerSpecs("public-lands", STYLE, "padus", "polygon", true, {}, { field: "Mang_Type", colors: [["FED", "#6E5BFF"], ["STAT", "#F57272"]] });
+    const fill = specs[0].paint as Record<string, unknown>;
+    expect(fill["fill-color"]).toEqual(["match", ["to-string", ["get", "Mang_Type"]], "FED", "#6E5BFF", "STAT", "#F57272", SAGE]);
+    expect(JSON.stringify(specs[1].paint)).toContain("hatch-6E5BFF-1");
+  });
+
   it("draws public land as the sage area recipe: tint, 45° hatch, a dark grey outline over a white casing", () => {
     const specs = vectorTileLayerSpecs("public-lands", STYLE, "padus", "polygon", true);
     expect(specs.map((s) => s.id)).toEqual(["tiles-public-lands", "tiles-public-lands-hatch", "tiles-public-lands-casing", "tiles-public-lands-line"]);
@@ -36,7 +43,7 @@ describe("vectorTileLayerSpecs", () => {
       source: "tiles-public-lands",
       "source-layer": "padus",
       layout: { visibility: "visible" },
-      paint: { "fill-color": SAGE, "fill-opacity": landFillOpacity(1, 0.12) },
+      paint: { "fill-color": SAGE, "fill-opacity": landFillOpacity(1, 0.18) },
     });
     expect(hatch).toMatchObject({
       type: "fill",
@@ -44,8 +51,8 @@ describe("vectorTileLayerSpecs", () => {
       paint: { "fill-pattern": "hatch-9FB693-1", "fill-opacity": landHatchOpacity(1, 0.9) },
     });
     expect(vectorHatchPattern("public-lands")).toBe("hatch-9FB693-1");
-    expect(casing).toMatchObject({ type: "line", paint: { "line-color": WHITE, "line-width": 2.5, "line-opacity": 0.8 } });
-    expect(line).toMatchObject({ type: "line", layout: { visibility: "visible" }, paint: { "line-color": DARK_GREY, "line-width": 1, "line-opacity": 0.8 } });
+    expect(casing).toMatchObject({ type: "line", paint: { "line-color": WHITE, "line-width": 3.25, "line-opacity": 0.8 } });
+    expect(line).toMatchObject({ type: "line", layout: { visibility: "visible" }, paint: { "line-color": DARK_GREY, "line-width": 1.25, "line-opacity": 0.8 } });
     expect(LAND_OUTLINE).toEqual({ opacity: 0.8 });
   });
 
@@ -311,7 +318,7 @@ describe("syncTileLayers with layer panel settings", () => {
     const faded = stateWith({ visible: true });
     faded.renderOps = [{ ...faded.renderOps[0], opacity: 0.5 }];
     syncTileLayers(vector.map, faded);
-    expect(vector.layers.find((l) => l.id === "tiles-public-lands")?.paint).toMatchObject({ "fill-opacity": landFillOpacity(0.5, 0.12) });
+    expect(vector.layers.find((l) => l.id === "tiles-public-lands")?.paint).toMatchObject({ "fill-opacity": landFillOpacity(0.5, 0.18) });
   });
 
   it("calms third-party rasters by default and applies a layer's raster hint to the Mapbox paint", () => {

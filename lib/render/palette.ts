@@ -66,9 +66,9 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "critical-habitat": "natural",
   "grazing-allotments": "data",
   "gbif-occurrences": "data",
-  "protected-areas-world": "raster",
+  "protected-areas-world": "natural",
   "fire-hazard": "raster",
-  "flood-zones": "raster",
+  "flood-zones": "hazard",
   drought: "hazard",
   popularity: "score",
   "popularity-campsites": "score",
@@ -88,7 +88,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   peaks: "data",
   "wikipedia-nearby": "data",
   "geologic-unit": "data",
-  geology: "raster",
+  geology: "data",
   greenness: "raster",
   "snow-cover": "raster",
   "land-cover": "raster",
@@ -284,8 +284,10 @@ export type AreaRecipe = {
 const AREA_RECIPES: Record<"hazard" | "natural" | "data", AreaRecipe> = {
   // Fire must read as fire on any basemap: pink tint, pink hatch (denser for larger fires), pink outline.
   hazard: { color: PINK, tint: 0.15, hatchAlpha: 1, step: 2, outline: PINK, outlineWidth: 1.5, casing: 1 },
-  natural: { color: SAGE, tint: 0.12, hatchAlpha: 0.9, step: 1, outline: DARK_GREY, outlineWidth: 1, casing: 0.75 },
-  data: { color: DARK_GREY, tint: 0.1, hatchAlpha: 0.7, step: 1, outline: DARK_GREY, outlineWidth: 1, casing: 0.75 },
+  // Owner, 2026-10-17 ("needs to be discernible"): tints a step stronger so areas read on green Topo, outlines on a
+  // white casing wide enough that they never pass for contours or borders.
+  natural: { color: SAGE, tint: 0.18, hatchAlpha: 0.9, step: 1, outline: DARK_GREY, outlineWidth: 1.25, casing: 1 },
+  data: { color: DARK_GREY, tint: 0.16, hatchAlpha: 0.7, step: 1, outline: DARK_GREY, outlineWidth: 1.25, casing: 1 },
 };
 
 /** Selected areas: purple tint, hatch and a 2.5px outline over the white casing. */
@@ -318,6 +320,11 @@ export const RAMPS = {
   gray: [OFF_WHITE, DARK_GREY],
   /** Score and facet lines (trail popularity, difficulty): sage → pink → purple. Never dark grey on a line. */
   scoreLine: [SAGE, PINK, PURPLE],
+  /**
+   * Score lines (trail popularity, remoteness): pink → purple, so the lowest scores still read on green Topo (pale sage
+   * vanished there, lines fixer 2026-10-18). The legend draws the same ramp.
+   */
+  scoreLineVisible: [PINK, PURPLE],
 } as const satisfies Record<string, readonly string[]>;
 export type RampName = keyof typeof RAMPS;
 
@@ -332,11 +339,12 @@ export function scoreRampFor(layerId: string): RampName {
 }
 
 /**
- * Which ramp a layer's score lines use: sage → pink → purple for every layer (owner, 2026-10-14: no dark grey line
+ * Which ramp a layer's lines use: score lines (popularity, remoteness) pink → purple so low scores read on Topo; other
+ * lines sage → pink → purple (owner, 2026-10-14: no dark grey line
  * cores), which starts at sage instead of off-white so the low end never reads as plain white on satellite.
  */
-export function lineRampFor(_layerId: string): RampName {
-  return "scoreLine";
+export function lineRampFor(layerId: string): RampName {
+  return layerRole(layerId) === "score" || layerId.startsWith("popularity") || layerId === "remoteness" ? "scoreLineVisible" : "scoreLine";
 }
 
 // ---- Symbols ----

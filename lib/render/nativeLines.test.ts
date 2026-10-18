@@ -143,17 +143,18 @@ describe("native line layers: one source and four layers per drawn layer", () =>
     expect(dashInWidths([0, 0])).toEqual([1, 0]);
   });
 
-  it("ramps score lines sage → pink → purple by v, in the legend's OKLCH colors, never dark grey", () => {
+  it("ramps score lines pink → purple by v (low scores read on Topo), in the legend's OKLCH colors, never dark grey", () => {
     const core = byPart(specs(stateOf("popularity", [a, b], {}, { unit: "score" })), "core");
     const ramp = paint(core)["line-color"] as unknown[];
     expect(ramp).toEqual(rampLineColor("popularity"));
     expect(ramp.slice(0, 3)).toEqual(["interpolate", ["linear"], ["to-number", ["get", "v"], 0]]);
     expect(ramp[3]).toBe(0);
-    expect(ramp[4]).toBe(SAGE);
+    expect(ramp[4]).toBe(PINK);
     expect(ramp[11]).toBe(50);
-    // The middle stop is pink to within OKLCH rounding, the same color the legend samples.
-    expect(ramp[12]).toBe(rgbToHex(rampColor("scoreLine", 0.5)));
-    hexToRgb(ramp[12] as string).forEach((c, k) => expect(Math.abs(c - hexToRgb(PINK)[k])).toBeLessThanOrEqual(1));
+    // The middle stop is the same color the legend samples.
+    expect(ramp[12]).toBe(rgbToHex(rampColor("scoreLineVisible", 0.5)));
+    void SAGE;
+    void hexToRgb;
     expect(ramp.at(-2)).toBe(100);
     expect(ramp.at(-1)).toBe(PURPLE);
     // Every layer's score lines share the ramp (remoteness and density lines used to end in dark grey).

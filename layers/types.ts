@@ -107,6 +107,8 @@ export type LayerResult =
       total?: number;
       /** Whether the layer's source answered (SourceStatus). Absent means it did. */
       sourceStatus?: SourceStatus;
+      /** This answer's own key, over the layer's (`legend`) and the derived one (legendOf): the colors it drew. */
+      legend?: LegendSpec;
     } & Partial<Truncation>)
   | ({
       kind: "tiles";
@@ -130,6 +132,8 @@ export type LayerResult =
       coverageNote?: string;
       /** Whether the layer's source answered (SourceStatus). Absent means it did. */
       sourceStatus?: SourceStatus;
+      /** This answer's own key, over the layer's (`legend`) and the derived one (legendOf). */
+      legend?: LegendSpec;
     } & Partial<Truncation>);
 
 export type LayerError = {

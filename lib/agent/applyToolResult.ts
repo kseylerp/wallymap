@@ -1,5 +1,5 @@
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
-import type { Attribute, BBox, CardSpec, Coverage, DisplaySpec, FieldHelp, LabelSpec, LayerResult, LegendSpec, StyleHints, TimeSpec } from "@/layers/types";
+import type { Attribute, BBox, CardSpec, Coverage, DisplaySpec, FieldHelp, LabelSpec, LayerResult, LegendSpec, SourceStatus, StyleHints, TimeSpec } from "@/layers/types";
 import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import type { LayerFilters } from "@/lib/render/filters";
 import { ROUTE_ERROR_ID } from "@/lib/render/reducer";
@@ -203,7 +203,9 @@ export function layerInputOf(input: unknown): Record<string, unknown> | undefine
 
 function queryActions(layerId: string, input: unknown, output: Obj, catalog: LayerCatalog, existingOps: RenderOp[]): MapAction[] {
   if (typeof output.error === "string") {
-    return [{ type: "layer_error", layerId, message: output.error }];
+    const status = isObject(output.sourceStatus) && output.sourceStatus.ok === false ? (output.sourceStatus as SourceStatus) : undefined;
+    const errorInput = layerInputOf(input);
+    return [{ type: "layer_error", layerId, message: output.error, ...(status && { sourceStatus: status }), ...(errorInput && { input: errorInput }) }];
   }
   if (!isLayerResult(output)) return [];
   const entry = catalog[layerId];

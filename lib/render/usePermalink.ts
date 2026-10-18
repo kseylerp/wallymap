@@ -28,6 +28,7 @@ function isInitialView(state: MapState): boolean {
   const b = initialMapState.viewport;
   return (
     Object.keys(state.layers).length === 0 &&
+    state.errors.length === 0 &&
     state.basemap === initialMapState.basemap &&
     a.longitude === b.longitude &&
     a.latitude === b.latitude &&
@@ -118,7 +119,7 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
   const start = state.time?.window[0];
   const end = state.time?.window[1];
   const timeMode = state.time?.mode;
-  const { viewport, basemap, layers, renderOps, compare, terrain, flattened } = state;
+  const { viewport, basemap, layers, renderOps, compare, terrain, flattened, errors } = state;
   // The scenario scrubber's layer and amount only, so a play/pause alone does not rewrite the hash.
   const scenarioLayer = state.scenario?.layerId;
   const scenarioValue = state.scenario?.value;
@@ -135,7 +136,7 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
         const scenario = scenarioLayer !== undefined && scenarioValue !== undefined ? { layerId: scenarioLayer, value: scenarioValue } : undefined;
         const hash = untouched
           ? ""
-          : encodeState({ viewport, basemap, layers, renderOps, time, scenario, compare, terrain, flattened }, servable);
+          : encodeState({ viewport, basemap, layers, renderOps, time, scenario, compare, terrain, flattened, failed: errors }, servable);
         const url = window.location.pathname + window.location.search + hash;
         window.history.replaceState(window.history.state, "", url);
       } catch {
@@ -143,7 +144,7 @@ export function usePermalink(state: MapState, dispatch: Dispatch<MapAction>): { 
       }
     }, WRITE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [ready, catalog, untouched, viewport, basemap, layers, renderOps, start, end, timeMode, scenarioLayer, scenarioValue, compare, terrain, flattened]);
+  }, [ready, catalog, untouched, viewport, basemap, layers, renderOps, start, end, timeMode, scenarioLayer, scenarioValue, compare, terrain, flattened, errors]);
 
   return { status };
 }

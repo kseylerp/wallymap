@@ -18,7 +18,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, LineString, Position } from "geojson";
-import { defineLayer, type Attribute, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext, type SeriesAxis } from "./types";
+import { defineLayer, type Attribute, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type LegendSpec, type QueryContext, type SeriesAxis } from "./types";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { haversineKm } from "./_shared/geo";
@@ -463,10 +463,62 @@ export function nearestTown(p: Position, towns: readonly Town[] = TOWNS): string
   return best?.name ?? null;
 }
 
+export const CFS_PER_M3S = 35.3147;
+
+/** Boxes where people read US units first: the lower 48, Alaska and Hawaii (rough; a reach in southern Ontario reads US first). */
+const US_UNIT_BOXES: BBox[] = [
+  [-125, 24.5, -66.9, 49.1],
+  [-170, 51, -141, 71.5],
+  [-161, 18.8, -154.7, 22.3],
+];
+
+/** True when `p` lies where US units are read first (US_UNIT_BOXES). */
+export function usUnitsAt(p: Position): boolean {
+  return US_UNIT_BOXES.some((b) => inBox(p, b));
+}
+
+/** A modelled number as people write it: three significant figures from 1,000 up, whole numbers from 10, else one decimal. */
+function roughly(n: number): string {
+  if (n >= 1000) return Number(n.toPrecision(3)).toLocaleString("en-US");
+  if (n >= 10) return Math.round(n).toLocaleString("en-US");
+  return String(Math.round(n * 10) / 10);
+}
+
+/** A flow in both units, the reader's first: "23,800 cfs (675 m³/s)" in the US, "675 m³/s (23,800 cfs)" elsewhere. */
+export function flowText(m3s: number, us: boolean): string {
+  const metric = `${roughly(m3s)} m³/s`;
+  const cfs = `${roughly(m3s * CFS_PER_M3S)} cfs`;
+  return us ? `${cfs} (${metric})` : `${metric} (${cfs})`;
+}
+
+/** A length in both units, the reader's first: "45 mi (72 km)" in the US. */
+function lengthText(km: number, us: boolean): string {
+  const mi = Math.round(km / 1.609344);
+  return us ? `${mi} mi (${km} km)` : `${km} km (${mi} mi)`;
+}
+
+/** An outlet end this close to an end of one of the file's whole river lines is where the river really ends. */
+const LINE_END_KM = 1;
+
+/**
+ * Where each river's figure on the card is read: `mouth` at an outlet where its line really ends (the sea, a lake, or
+ * where Natural Earth's line stops), `edge` at an outlet where the view cuts the river, `largest` its largest reach in
+ * view when it only flows into another river here.
+ */
+export type RiverFigure = "mouth" | "edge" | "largest";
+
+/** The card key that holds a river's figure for each kind (each under its own plain label). */
+export const FIGURE_KEYS: Record<RiverFigure, string> = { mouth: "atMouth", edge: "atViewEdge", largest: "atLargest" };
+
 /**
  * The reach features with their series (`series.q` flow in m³/s and `series.pct` the flow as a percent of the reach's
  * median over the past days), the plain `q` and `pct` at today's frame, and the period's low and peak with dates. A
- * reach between a run's sample points takes their flow interpolated by distance (`readAt` says so).
+ * reach between a run's sample points takes their flow interpolated by distance (`readAt` says so). Each reach also
+ * carries its flows as text in both units (`flow`, `medianFlow`, `peakFlow`, `lowFlow`, cfs first in the US) and its
+ * river's figure (`riverQ` in m³/s, `riverFigure` its kind, and the text under `atMouth`, `atViewEdge` or `atLargest`,
+ * see RiverFigure).
+ * `lineEnds` are the ends of the whole river lines the runs were clipped from: an outlet at none of them was cut by the
+ * view (without them every outlet counts as a mouth).
  */
 export function reachFeatures(
   reaches: Reach[],
@@ -474,6 +526,7 @@ export function reachFeatures(
   flows: (Flood | null)[],
   todayIso: string,
   runs?: Run[],
+  lineEnds?: Position[],
 ): { data: FeatureCollection; series: SeriesAxis } | null {
   const times = flows.find((f) => f !== null)?.time;
   if (!times || times.length === 0) return null;
@@ -488,7 +541,7 @@ export function reachFeatures(
   });
   // The reach at each run's outlet (its downstream end, where it meets no other river) carries `outlet`: their sum is
   // the flow leaving the view, all outlets combined.
-  const outletReach = new Set<Reach>();
+  const outletReach = new Map<Reach, "mouth" | "edge">();
   if (runs) {
     const flowAt = (run: number, atKm: number) => {
       const s = byRun.get(run);
@@ -499,9 +552,11 @@ export function reachFeatures(
     outletEnds(runs, flowAt).forEach((end, i) => {
       if (!end || !byRun.has(i)) return;
       const target = end === "start" ? 0 : runs[i].km;
+      const at = end === "start" ? runs[i].line[0] : runs[i].line[runs[i].line.length - 1];
+      const cut = lineEnds !== undefined && !lineEnds.some((e) => haversineKm(e, at) <= LINE_END_KM);
       let best: Reach | undefined;
       for (const r of reaches) if (r.run === i && (!best || Math.abs(r.atKm - target) < Math.abs(best.atKm - target))) best = r;
-      if (best) outletReach.add(best);
+      if (best) outletReach.set(best, cut ? "edge" : "mouth");
     });
   }
   const headingOf = (reach: Reach) => {
@@ -526,6 +581,9 @@ export function reachFeatures(
       if (low < 0 || v < (q[low] ?? Infinity)) low = k;
     });
     const read = runSamples.some((s) => Math.abs(s.atKm - reach.atKm) <= reach.lengthKm / 2);
+    const us = usUnitsAt(pointAlong(reach.line, reach.lengthKm / 2));
+    const text = (m3s: number | null | undefined) => (typeof m3s === "number" ? flowText(m3s, us) : undefined);
+    const outlet = outletReach.get(reach);
     features.push({
       type: "Feature",
       geometry: { type: "LineString", coordinates: reach.line },
@@ -537,32 +595,43 @@ export function reachFeatures(
         project: reach.name,
         reachId: reach.id,
         lengthKm: reach.lengthKm,
+        length: lengthText(reach.lengthKm, us),
         q: q[now],
         pct: pct[now],
         medianQ: round1(med),
         ...(peak >= 0 && { peakQ: q[peak], peakDate: times[peak] }),
         ...(low >= 0 && { lowQ: q[low], lowDate: times[low] }),
+        ...(text(q[now]) !== undefined && { flow: text(q[now]) }),
+        medianFlow: flowText(med, us),
+        ...(peak >= 0 && text(q[peak]) !== undefined && { peakFlow: text(q[peak]) }),
+        ...(low >= 0 && text(q[low]) !== undefined && { lowFlow: text(q[low]) }),
         readAt: read ? "model" : "between",
-        ...(outletReach.has(reach) && { outlet: true }),
+        units: us ? "us" : "metric",
+        ...(outlet && { outlet: true, outletKind: outlet }),
         series: { q, pct },
       },
     });
   }
   if (features.length === 0) return null;
-  // Each river's flow at its mouth (its outlet reach, the largest when it has several; a river that only flows into
-  // another takes its largest reach, where it joins), so a reach's card reads beside the river's number in Rank by.
-  const atOutlet = new Map<string, number>();
-  const largest = new Map<string, number>();
+  // Each river's figure, so a reach's card reads beside the river's number in Rank by: its flow at its mouth (the
+  // largest mouth outlet), else where the view cuts it, else (a river that only flows into another here) its largest
+  // reach. Each kind sits under its own key and label (FIGURE_KEYS), so the card never calls the edge of the map a mouth.
+  const best = { mouth: new Map<string, number>(), edge: new Map<string, number>(), largest: new Map<string, number>() };
   const raise = (m: Map<string, number>, k: string, q: number) => m.set(k, Math.max(q, m.get(k) ?? -Infinity));
   for (const f of features) {
-    const { name, q, outlet } = f.properties!;
+    const { name, q, outletKind } = f.properties!;
     if (typeof q !== "number") continue;
-    raise(largest, name, q);
-    if (outlet === true) raise(atOutlet, name, q);
+    raise(best.largest, name, q);
+    if (outletKind === "mouth" || outletKind === "edge") raise(best[outletKind as "mouth" | "edge"], name, q);
   }
   for (const f of features) {
-    const q = atOutlet.get(f.properties!.name) ?? largest.get(f.properties!.name);
-    if (q !== undefined) f.properties!.mouthQ = q;
+    const p = f.properties!;
+    const kind: RiverFigure | undefined = (["mouth", "edge", "largest"] as const).find((k) => best[k].has(p.name));
+    if (!kind) continue;
+    const q = best[kind].get(p.name)!;
+    p.riverQ = q;
+    p.riverFigure = kind;
+    p[FIGURE_KEYS[kind]] = flowText(q, p.units === "us");
   }
   return {
     data: { type: "FeatureCollection", features },
@@ -655,66 +724,123 @@ export function _resetRiverFlowFile(): void {
 const GLOFAS_URL = "https://open-meteo.com/en/docs/flood-api";
 
 const HELP: Record<string, FieldHelp> = {
-  q: {
+  flow: {
     text:
-      "River discharge: the water passing this reach that day, in cubic metres per second, from the GloFAS hydrological model (a 5 km grid " +
-      "driven by weather), not a gauge; read at the model cell with the most flow near the middle of the reach.",
+      "River discharge: the water passing this reach that day, in cubic feet per second (cfs) and cubic metres per second (m³/s), US units first in " +
+      "the United States. It comes from the GloFAS hydrological model (a 5 km grid driven by weather), not a gauge, read at the model cell with the " +
+      "most flow near the middle of the reach.",
+    source: "GloFAS v4 via the Open-Meteo flood API (CC BY 4.0)",
+    url: GLOFAS_URL,
+  },
+  q: {
+    text: "River discharge that day in cubic metres per second, from the GloFAS hydrological model, not a gauge.",
     unit: "m³/s",
     source: "GloFAS v4 via the Open-Meteo flood API (CC BY 4.0)",
     url: GLOFAS_URL,
   },
   pct: {
     text:
-      "Vs. normal, in full: that day's flow as a percent of this reach's median flow over the past days shown. 100% is the reach's typical " +
-      "flow in the period, 200% double it. It compares the reach with itself over these months, not with its long-term normal.",
+      "That day's flow as a percent of this reach's median flow over the days shown (about three months unless fewer were asked for). 100% is the " +
+      "reach's typical flow in that stretch of time, 200% double it. It is not the long-term normal for the season: the file holds only these months.",
     unit: "%",
     source: "Computed from GloFAS discharge",
     url: GLOFAS_URL,
   },
-  mouthQ: {
+  atMouth: {
     text:
-      "At the mouth, in full: the flow of this whole river where it leaves the view (its mouth, a lake, or the edge of the map; where it only " +
-      "joins another river, its largest reach), the number Rank by lists for the river. Flow above is this one reach.",
-    unit: "m³/s",
+      "The flow of this whole river where it ends in view: at the sea, a lake, or where the mapped river line stops. The number Rank by lists for " +
+      "the river; Flow above is this one reach.",
   },
-  medianQ: { text: "Normal flow, in full: the reach's median daily flow over the past days shown (not its long-term normal).", unit: "m³/s" },
-  peakQ: { text: "Peak, in full: the highest daily flow of the past days shown, on the date in Peak on.", unit: "m³/s" },
-  lowQ: { text: "Low, in full: the lowest daily flow of the past days shown, on the date in Low on.", unit: "m³/s" },
-  lengthKm: { text: "Length of the reach as drawn: the network is cut into reaches of equal length.", unit: "km" },
+  atViewEdge: {
+    text:
+      "The flow of this whole river where it leaves the map: the view cuts the river before its mouth, so this is the most downstream point drawn, " +
+      "not the mouth. The number Rank by lists for the river; Flow above is this one reach.",
+  },
+  atLargest: {
+    text:
+      "This river only flows into another river in view, so its figure is its largest reach, usually just above where it joins. The number Rank by " +
+      "lists for the river; Flow above is this one reach.",
+  },
+  medianFlow: { text: "The reach's median daily flow over the days shown (about three months), not its long-term normal for the season." },
+  peakFlow: { text: "The highest daily flow of the days shown, on the date in Peak on." },
+  lowFlow: { text: "The lowest daily flow of the days shown, on the date in Low on." },
+  length: { text: "Length of the reach as drawn: the network is cut into reaches of equal length." },
 };
 
-/** Short labels, so every row fits the card; the help popover gives each in full. */
+/** Short labels, so every row fits the card; the help popover gives each in full. Flows read in both units, US first in the US. */
 const CARD: CardSpec = {
-  measure: { key: "q", label: "Flow", unit: "m³/s" },
+  measure: { key: "flow", label: "Flow" },
   facts: [
-    { key: "mouthQ", label: "At the mouth", unit: "m³/s", format: "int" },
-    { key: "pct", label: "Vs. normal", unit: "%", format: "int" },
-    { key: "medianQ", label: "Normal flow", unit: "m³/s", format: "int" },
-    { key: "peakQ", label: "Peak", unit: "m³/s", format: "int" },
+    { key: "atMouth", label: "River at its mouth" },
+    { key: "atViewEdge", label: "River where it leaves the view" },
+    { key: "atLargest", label: "River at its largest reach" },
+    { key: "pct", label: "Vs. the 3-month median", unit: "%", format: "int" },
+    { key: "medianFlow", label: "3-month median" },
+    { key: "peakFlow", label: "Peak" },
     { key: "peakDate", label: "Peak on", format: "date" },
-    { key: "lowQ", label: "Low", unit: "m³/s", format: "int" },
+    { key: "lowFlow", label: "Low" },
     { key: "lowDate", label: "Low on", format: "date" },
-    { key: "lengthKm", label: "Reach length", unit: "km", format: "int" },
+    { key: "length", label: "Reach length" },
   ],
-  hidden: ["reachId", "series", "project", "readAt", "outlet", "heading"],
+  hidden: [
+    "reachId",
+    "series",
+    "project",
+    "readAt",
+    "outlet",
+    "outletKind",
+    "heading",
+    "units",
+    "q",
+    "medianQ",
+    "peakQ",
+    "lowQ",
+    "riverQ",
+    "riverFigure",
+    "mouthQ",
+    "lengthKm",
+  ],
 };
 
 const ATTRIBUTES: Attribute[] = [
-  { key: "q", type: "measure", label: "Flow", unit: "m³/s", encode: "size", aggregate: "sum", aggregateOver: "outlet", aggregateLabel: "Total flow to the sea, all outlets combined" },
-  { key: "pct", type: "measure", label: "Flow vs. the period's median", unit: "%" },
+  {
+    key: "q",
+    type: "measure",
+    label: "Flow",
+    unit: "m³/s",
+    encode: "size",
+    aggregate: "sum",
+    aggregateOver: "outlet",
+    aggregateLabel: "Total flow leaving the view, all outlets combined",
+  },
+  { key: "pct", type: "measure", label: "Flow vs. the 3-month median", unit: "%" },
   { key: "name", type: "name", label: "River" },
 ];
+
+/** Color is the day's flow against each reach's own 3-month median, low to high across the view; width is the flow. */
+const LEGEND: LegendSpec = {
+  kind: "ramp",
+  title: "Flow vs. the 3-month median",
+  field: "pct",
+  unit: "%",
+  stops: [
+    { label: "Lowest in view against its median" },
+    { label: "Highest in view against its median" },
+  ],
+  note: "Line width is the day's flow (modelled). Reaches the model has no flow for are not drawn.",
+};
 
 const riverPulse = defineLayer({
   id: "river-pulse",
   title: "River flow, daily",
   description:
     "How a region's rivers flowed day by day: the named rivers in the box that the daily file covers (Natural Earth rivers: about 250 in the contiguous United States with their tributaries, and the largest rivers worldwide, more each day), cut into reaches, with modelled daily discharge (GloFAS) for the past days (default 92, about three months) and the forecast days (default 7), played day by day on the time scrubber. " +
-    "Each reach has name, q (flow in m³/s at today's frame), pct (that day's flow as a percent of the reach's own median over the period), medianQ, peakQ with peakDate, lowQ with lowDate, outlet (true where a river leaves the view: a mouth, a lake or the edge), and a series of q and pct per day; line width is the day's flow and color is pct across that day's spread (sage the lowest, purple the highest). " +
+    "Each reach has name, q (flow in m³/s at today's frame; flow is the same as text in cfs and m³/s, cfs first in the US), pct (that day's flow as a percent of the reach's own median over the days shown, NOT a long-term normal: call it 'vs. the 3-month median'), medianQ, peakQ with peakDate, lowQ with lowDate, outlet (true where a river leaves the view), and a series of q and pct per day; line width is the day's flow and color is pct across the view (sage the lowest, purple the highest). " +
+    "riverQ is the whole river's figure in m³/s and riverFigure says where it is read: 'mouth' (where the river really ends: the sea, a lake, or where its mapped line stops), 'edge' (where the view cuts the river short of its mouth; say 'where it leaves the view', not 'at the mouth') or 'largest' (a river that only joins another here: its largest reach). " +
     "Use it for 'how has the Mississippi's flow changed', 'is the Ohio running high this month', 'show the river flow of the Danube basin'. " +
-    "The total is the flow to the sea, all outlets combined; the summary's story gives its low and peak with dates, the ratio, whether it repeats, and the rivers that swelled most (the drivers). " +
-    "Caveats: GloFAS is a 5 km model driven by weather, not gauges (dams and diversions are only roughly modelled); each river is read at one to three points and interpolated between them; small rivers are left out; past days are capped at 92, so a yearly cycle cannot be seen; the file is built once a day, and the note says which day. " +
-    "Any box up to a continent answers; use streamflow for live gauge readings.",
+    "The total is the flow leaving the view, all outlets combined (the sea, lakes and the edges of the view); the summary's story gives its low and peak with dates, the ratio, whether it repeats, and the rivers that swelled most (the drivers). " +
+    "Caveats: GloFAS is a 5 km model driven by weather, not gauges (dams and diversions are only roughly modelled); each river is read at one to three points and interpolated between them; small rivers are left out; past days are capped at 92, so a yearly cycle cannot be seen and there is no long-term normal; the file is built once a day, and the note says which day. " +
+    "Any box up to a continent answers; use streamflow for live gauge readings and flow against the long-term normal for the date.",
   coverage: "global",
   surface: "land",
   license: "GloFAS via Open-Meteo, CC BY 4.0 (free for non-commercial use); Natural Earth rivers, public domain",
@@ -725,6 +851,13 @@ const riverPulse = defineLayer({
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
+  // A daily frame for each day shown, the past months then the forecast.
+  time: { shape: "continuous", step: "day" },
+  legend: LEGEND,
+  // One label per river at most in practice: the five reaches with the most flow.
+  labels: { field: "name", max: 5, rankBy: "q" },
+  // The model's days are UTC days (the file asks for timezone GMT); a local clock would move each day back by hours.
+  display: { timeZone: "utc" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = new Date();
@@ -774,15 +907,19 @@ const riverPulse = defineLayer({
       if (asked > 0) console.info(`[river-pulse] ${asked} points missing from the file read live: about ${Math.round(asked * ((input.days + input.forecastDays) / 14))} Open-Meteo calls`);
     }
     if (flows.every((f) => f === null)) return { error: "The daily river flow file has no discharge for these rivers and the Open-Meteo flood API did not answer; try again shortly", hint: "upstream" };
-    const built = reachFeatures(reachesOf(runs), samples, flows, now.toISOString(), runs);
+    // Where each whole river line ends: an outlet at none of these was cut by the view, not a mouth.
+    const lineEnds = file.rivers.flatMap((r) => (r.line.length > 0 ? [r.line[0], r.line[r.line.length - 1]] : []));
+    const built = reachFeatures(reachesOf(runs), samples, flows, now.toISOString(), runs, lineEnds);
     if (!built) return { error: "The daily river flow file has no usable discharge here", hint: "upstream" };
     const rivers = new Set(built.data.features.map((f) => f.properties?.name)).size;
-    const outlets = built.data.features.filter((f) => f.properties?.outlet === true).length;
+    const outlets = built.data.features.filter((f) => f.properties?.outlet === true);
+    const edges = outlets.filter((f) => f.properties?.outletKind === "edge").length;
     const age = fileAgeDays(file, now);
     const notes = [
       `${rivers} rivers in ${built.data.features.length} reaches with daily GloFAS discharge (modelled, not gauged), ${times.length} days to ${times[times.length - 1]}`,
       `from the daily file built ${builtDay}` + (live > 0 ? ` (${live} points it lacked read live)` : ""),
-      `read at ${samples.length} points and interpolated along each river; ${outlets} outlets (mouths and edges of the view)`,
+      `read at ${samples.length} points and interpolated along each river; ${outlets.length} outlets (${outlets.length - edges} mouths or lakes, ${edges} at the edge of the view)`,
+      "color compares each day with the reach's own median over these days, not with a long-term normal",
     ];
     if (age > STALE_DAYS) notes.unshift(`The daily file is ${age} days old (built ${builtDay}): its newest days are forecasts made then, and the latest days may be missing`);
     return { kind: "geojson", data: built.data, series: built.series, citation, coverageNote: notes.join("; "), title: `River flow, daily (${rivers} rivers)` };

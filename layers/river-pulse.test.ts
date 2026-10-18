@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Position } from "geojson";
-import riverPulse, { _resetRiverFlowFile, nearestTown, clipLine, cutLine, fileDays, interpolateFlow, isRiverFlowFile, joinRuns, onDays, outletEnds, planPoints, reachesOf, reachFeatures, RIVER_FLOW_URL, runsIn, type RiverFlowFile, type Run } from "./river-pulse";
+import riverPulse, { _resetRiverFlowFile, nearestTown, clipLine, cutLine, fileDays, flowText, interpolateFlow, isRiverFlowFile, joinRuns, onDays, outletEnds, planPoints, reachesOf, reachFeatures, RIVER_FLOW_URL, runsIn, usUnitsAt, type RiverFlowFile, type Run } from "./river-pulse";
+import { displayOf, labelsOf, legendOf, timeShapeOf } from "./contract";
 import type { CachedFetch } from "@/lib/fetch";
 import { attributeProblems } from "./attributes";
 import { biggestSwing, ratioWords, repeatLag, seriesStory } from "@/lib/layers/story";
@@ -73,13 +74,58 @@ describe("river pulse geometry", () => {
     const built = reachFeatures(reaches, samples, [t(100), t(400), t(50)], "2026-10-15T10:00:00Z", [main, trib])!;
     const outlets = built.data.features.filter((f) => f.properties?.outlet === true);
     expect(outlets.map((f) => f.properties?.name)).toEqual(["Main"]);
-    // Every reach carries its river's flow at the mouth: Main's outlet, and the tributary (no outlet) its largest reach.
-    const mouthOf = (name: string) => new Set(built.data.features.filter((f) => f.properties?.name === name).map((f) => f.properties?.mouthQ));
-    expect([...mouthOf("Main")]).toEqual([outlets[0].properties?.q]);
-    expect([...mouthOf("Trib")]).toEqual([50]);
+    // Every reach carries its river's figure: Main's outlet (a mouth, with no line ends given), and the tributary (no
+    // outlet) its largest reach, each under its own label.
+    const figureOf = (name: string) => new Set(built.data.features.filter((f) => f.properties?.name === name).map((f) => `${f.properties?.riverFigure} ${f.properties?.riverQ}`));
+    expect([...figureOf("Main")]).toEqual([`mouth ${outlets[0].properties?.q}`]);
+    expect([...figureOf("Trib")]).toEqual(["largest 50"]);
+    expect(built.data.features.find((f) => f.properties?.name === "Trib")?.properties?.atLargest).toBe("50 m³/s (1,770 cfs)");
     const story = seriesStory(built.data.features, built.series, riverPulse.attributes)!;
-    expect(story.measure).toMatch(/^Total flow to the sea, all outlets combined/);
+    expect(story.measure).toMatch(/^Total flow leaving the view, all outlets combined/);
     expect(story.peak.value).toBe(Math.round(outlets[0].properties?.q as number));
+  });
+
+  it("says a river is cut by the view, not at its mouth, when its outlet is at none of its line's ends", () => {
+    // Main runs from 0°E to 6°E; the view keeps 0 to 4°E, so its outlet (east end) is where the view cuts it.
+    const main: Run = { name: "Main", rank: 1, line: line(0, 4), km: 340 };
+    const reaches = reachesOf([main], 4);
+    const samples = [{ run: 0, atKm: 170, at: [2, 40] }];
+    const t = { time: DAYS, q: DAYS.map(() => 675) };
+    const cut = reachFeatures(reaches, samples, [t], "2026-10-15T10:00:00Z", [main], [[0, 40], [6, 40]])!;
+    const outlet = cut.data.features.find((f) => f.properties?.outlet === true)!.properties!;
+    expect(outlet.outletKind).toBe("edge");
+    expect(cut.data.features.every((f) => f.properties?.riverFigure === "edge" && f.properties?.atViewEdge && !f.properties?.atMouth)).toBe(true);
+    // With the line ending at 4°E, the same outlet is the river's mouth.
+    const whole = reachFeatures(reaches, samples, [t], "2026-10-15T10:00:00Z", [main], [[0, 40], [4, 40]])!;
+    expect(whole.data.features[0].properties?.riverFigure).toBe("mouth");
+    expect(whole.data.features[0].properties?.atMouth).toBe("675 m³/s (23,800 cfs)");
+  });
+
+  it("writes flows in cfs first in the United States and m³/s first elsewhere", () => {
+    expect(flowText(675, true)).toBe("23,800 cfs (675 m³/s)");
+    expect(flowText(675, false)).toBe("675 m³/s (23,800 cfs)");
+    expect(flowText(4.26, true)).toBe("150 cfs (4.3 m³/s)");
+    expect(usUnitsAt([-90.1, 35.1])).toBe(true);
+    expect(usUnitsAt([4.8, 45.7])).toBe(false);
+    const run: Run = { name: "Ohio", rank: 1, line: line(-88, -86, 37.5), km: 176 };
+    const built = reachFeatures(reachesOf([run], 1), [{ run: 0, atKm: 88, at: [-87, 37.5] }], [{ time: DAYS, q: [100, 200, 400, 200, 100, 50] }], "2026-10-15T10:00:00Z")!;
+    const p = built.data.features[0].properties!;
+    expect(p.flow).toBe("7,060 cfs (200 m³/s)");
+    expect(p.medianFlow).toBe("7,060 cfs (200 m³/s)");
+    expect(p.length).toMatch(/^\d+ mi \(\d+ km\)$/);
+  });
+
+  it("declares a daily scrubber, a key for the color, labels, UTC days and honest card words", () => {
+    expect(timeShapeOf(riverPulse)).toMatchObject({ shape: "continuous", step: "day" });
+    const legend = legendOf(riverPulse);
+    expect(legend).toMatchObject({ kind: "ramp", field: "pct", unit: "%", title: "Flow vs. the 3-month median" });
+    expect(labelsOf(riverPulse)).toEqual({ field: "name", max: 5, rankBy: "q" });
+    expect(displayOf(riverPulse).timeZone).toBe("utc");
+    const labels = (riverPulse.card?.facts ?? []).map((f) => f.label);
+    expect(labels).toContain("Vs. the 3-month median");
+    expect(labels).toContain("River where it leaves the view");
+    expect(labels.join(" ")).not.toMatch(/normal|At the mouth/i);
+    expect(riverPulse.card?.measure?.key).toBe("flow");
   });
 
   it("names a reach after the nearest town within reach, else by its river alone", () => {
@@ -143,7 +189,7 @@ describe("the series story for the note", () => {
     const summary = summarizeLayerResult({ kind: "geojson", data: built.data, series: built.series, citation: { source: "s", url: "https://e.org", retrieved: "x" } }, "river-pulse", { ...riverPulse.style, attributes: riverPulse.attributes });
     expect("story" in summary && summary.story?.ratio).toBe(4);
     // The caption ends with what width and color mean.
-    expect("story" in summary && summary.story?.caption).toMatch(/Line width is Flow \(m³\/s\); color is Flow vs\. the period's median/);
+    expect("story" in summary && summary.story?.caption).toMatch(/Line width is Flow \(m³\/s\); color is Flow vs\. the 3-month median/);
     expect(JSON.stringify(summary)).not.toContain('"series":');
   });
 });

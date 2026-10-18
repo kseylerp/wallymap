@@ -38,7 +38,18 @@
  */
 import { z } from "zod";
 import type { Feature, Point } from "geojson";
-import { defineLayer, type BBox, type LayerError, type LayerResult, type QueryContext, type CardSpec, type Attribute, type FieldHelp } from "./types";
+import {
+  defineLayer,
+  type BBox,
+  type LayerError,
+  type LayerResult,
+  type QueryContext,
+  type CardSpec,
+  type Attribute,
+  type FieldHelp,
+  type LegendSpec,
+  type MeasurePreset,
+} from "./types";
 import { nameAttribute, timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
@@ -286,7 +297,10 @@ function toFeature(site: Site, reading: SiteReading): Feature<Point> | null {
   if (reading.elevation !== null) properties.elevationFt = round(reading.elevation.value, 2);
   if (site.capacityAf !== undefined) {
     properties.capacityAf = site.capacityAf;
-    properties.pctFull = Math.round((storage.value / site.capacityAf) * 100);
+    const pct = Math.round((storage.value / site.capacityAf) * 100);
+    properties.pctFull = pct;
+    // The card's line: "26%", the percent sign on the number (a unit would print "26 %").
+    properties.percentFull = `${pct}%`;
   }
   if (reading.series.length > 0) {
     properties.series = reading.series;
@@ -299,12 +313,48 @@ function inBbox([lon, lat]: [number, number], [w, s, e, n]: BBox): boolean {
   return lon >= w && lon <= e && lat >= s && lat <= n;
 }
 
+/** Storage classes for the size key and the "Rank by" presets. */
+const STORAGE_CLASSES: MeasurePreset[] = [
+  { label: "Under 500,000 acre-feet", max: 499_999 },
+  { label: "500,000 to 2 million acre-feet", min: 500_000, max: 1_999_999 },
+  { label: "2 to 10 million acre-feet", min: 2_000_000, max: 9_999_999 },
+  { label: "10 million acre-feet and up", min: 10_000_000 },
+];
+
+const FULL_CLASSES: MeasurePreset[] = [
+  { label: "Under 25% full", max: 24 },
+  { label: "25 to 49% full", min: 25, max: 49 },
+  { label: "50 to 74% full", min: 50, max: 74 },
+  { label: "75% full and more", min: 75 },
+];
+
 const ATTRIBUTES: Attribute[] = [
-  { key: "pctFull", type: "measure", label: "Percent full", unit: "%", encode: "size" },
-  { key: "storageAf", type: "measure", label: "Storage", unit: "acre-feet" },
+  { key: "storageAf", type: "measure", label: "Storage", unit: "acre-feet", encode: "size", presets: STORAGE_CLASSES },
+  { key: "pctFull", type: "measure", label: "Percent full", unit: "%", presets: FULL_CLASSES },
   timeAttribute("Reading"),
   nameAttribute(),
 ];
+
+/**
+ * Color is percent full (the point of the layer: a full lake and an empty one look different); size is storage, so Mead
+ * and Powell stand out from the small lakes. The legend keys the color; the note names the size.
+ */
+const LEGEND: LegendSpec = {
+  kind: "ramp",
+  title: "Percent full",
+  field: "pctFull",
+  unit: "%",
+  stops: [
+    { label: "0%", value: 0 },
+    { label: "25%", value: 25 },
+    { label: "50%", value: 50 },
+    { label: "75%", value: 75 },
+    { label: "100%", value: 100 },
+  ],
+  note:
+    "Percent of official capacity (live capacity for Reclamation), only where a capacity is published. Circle size is storage in acre-feet. " +
+    "Latest provisional reading, usually 1 to 2 days old.",
+};
 
 const STORAGE: FieldHelp = {
   text: "Water held in the reservoir on the reading date; for Reclamation sites live storage (the water above the lowest outlet). Provisional data.",
@@ -333,13 +383,15 @@ const HELP: Record<string, FieldHelp> = {
 const CARD: CardSpec = {
   measure: { key: "storageAf", label: "Storage", unit: "acre-feet" },
   facts: [
-    { key: "pctFull", label: "Percent full", unit: "%" },
+    { key: "percentFull", label: "Percent full" },
     { key: "capacityAf", label: "Capacity", unit: "acre-feet", format: "int" },
     { key: "elevationFt", label: "Water level", unit: "ft" },
     { key: "lastDate", label: "Reading", format: "date" },
     { key: "river", label: "River" },
     { key: "source", label: "Source" },
   ],
+  // pctFull is the number the map colors by; percentFull is its card line.
+  hidden: ["pctFull"],
 };
 
 const reservoirLevels = defineLayer({
@@ -369,10 +421,20 @@ const reservoirLevels = defineLayer({
       .optional()
       .describe("Only reservoirs whose name contains this text, case-insensitive (for example 'powell')."),
   }),
-  style: { geometry: "point", color: layerColor("reservoir-levels"), unit: "acre-feet", extrude: "v" },
-  fieldHelp: HELP,
+  style: {
+    geometry: "point",
+    color: layerColor("reservoir-levels"),
+    unit: "acre-feet",
+    extrude: "v",
+    encode: { size: "storageAf", color: "pctFull" },
+  },
+  fieldHelp: { ...HELP, percentFull: HELP.pctFull },
   card: CARD,
   attributes: ATTRIBUTES,
+  // The latest reading per reservoir: say its date, no scrubber (the 10-year history is the card's series).
+  time: { shape: "single" },
+  legend: LEGEND,
+  labels: { field: "name", max: 5, rankBy: "storageAf" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const citation = {

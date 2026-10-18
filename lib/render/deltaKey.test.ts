@@ -19,7 +19,7 @@ describe("deltaKey", () => {
     expect(key.map((e) => e.label)).toEqual(["Ice lost since the 1960s (the pink line is its edge then)", "Ice in the 2010s"]);
     expect(key.map((e) => e.color)).toEqual([DELTA_COLORS["a-only"], DELTA_COLORS.both]);
     const gained = deltaKey(layer("polygon", "Ice"), "the 1960s", "the 2010s", { aOnly: 3, bOnly: 2, both: 120 });
-    expect(gained[2]).toEqual({ label: "New ice since the 1960s", color: DELTA_COLORS["b-only"], count: 2 });
+    expect(gained[2]).toEqual({ label: "New ice since the 1960s", color: DELTA_COLORS["b-only"] });
   });
 
   it("reads Area without a noun, and Only in / In both for points", () => {

@@ -84,16 +84,20 @@ function categoryBlock(key: CategoryKey, data: FeatureCollection | null, shape: 
  */
 /**
  * One entry per label: a key that lists several raw values under one name (public lands' six "Other federal" agencies)
- * shows the name once, with the first value's swatch and the counts added.
+ * shows the name once, with the first value's swatch and the counts added; kinds not on the map are left off.
  */
-function mergeByLabel(entries: LegendEntry[]): LegendEntry[] {
+function shownEntries(entries: LegendEntry[]): LegendEntry[] {
   const out = new Map<string, LegendEntry>();
   for (const e of entries) {
     const seen = out.get(e.label);
     if (!seen) out.set(e.label, e);
     else if (e.count !== undefined) out.set(e.label, { ...seen, count: (seen.count ?? 0) + e.count });
   }
-  return [...out.values()];
+  const merged = [...out.values()];
+  // With counts from the drawn features, a kind with none on the map is left off the key (a fire with no "Out" fires
+  // keeps "Still burning" and "Contained"); with no counts at all (tiles), every item stays.
+  const counted = merged.some((e) => (e.count ?? 0) > 0);
+  return counted ? merged.filter((e) => e.count === undefined || e.count > 0) : merged;
 }
 
 export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, data: FeatureCollection | null): LegendBlock[] {
@@ -122,7 +126,7 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, data: Fe
           ...(spec.title && { title: spec.title }),
           ...(spec.field && { field: spec.field }),
           ...(spec.unit && { unit: spec.unit }),
-          entries: mergeByLabel(
+          entries: shownEntries(
             (spec.items ?? []).map((i) => ({
               label: i.label,
               ...(i.color && { color: i.color }),

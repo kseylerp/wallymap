@@ -72,6 +72,11 @@ export function featureKey(f: Feature): string {
   if (present(f.id)) return String(f.id);
   if (present(p.siteId)) return String(p.siteId);
   if (present(p.name) && present(p.year)) return `${p.name}|${p.year}`;
+  return shapeKey(f);
+}
+
+/** A hash of a feature's shape alone (type, first vertex, bounds): two outlines of one thing differ by it. */
+export function shapeKey(f: Feature): string {
   const pts: Position[] = [];
   collectPositions(f.geometry, pts);
   if (pts.length === 0) return `geo:${fnv1a(`${f.geometry?.type ?? "null"}|empty`)}`;
@@ -210,7 +215,8 @@ export function deltaFeatures(a: FeatureCollection, b: FeatureCollection, opts: 
       extra.before = va;
       extra.after = vb;
     }
-    if (fa !== fb && isArea(fa.geometry) && isArea(fb.geometry) && featureKey(fa) !== featureKey(fb)) {
+    // By shape, not featureKey: a monument's two outlines share its id (its name) but not their shape.
+    if (fa !== fb && isArea(fa.geometry) && isArea(fb.geometry) && shapeKey(fa) !== shapeKey(fb)) {
       edges.push(withProps(fa, { delta: "a-only" satisfies DeltaClass, deltaEdge: true }));
     }
     both.push(withProps(fb, extra, fb.geometry ?? fa.geometry));

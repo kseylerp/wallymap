@@ -57,6 +57,13 @@ function Title({ block }: { block: LegendBlock }) {
  * stops, a size key from small to large, one swatch with a note, or the source's legend image. `compact` (the phone's
  * mini legend) keeps the first block on one line.
  */
+/** The phone's short key: the `n` kinds with the most features on the map, in the key's own order. */
+function mostDrawn(entries: LegendBlock["entries"], n: number): LegendBlock["entries"] {
+  if (entries.length <= n || !entries.some((e) => e.count !== undefined)) return entries.slice(0, n);
+  const keep = new Set([...entries].sort((x, y) => (y.count ?? 0) - (x.count ?? 0)).slice(0, n));
+  return entries.filter((e) => keep.has(e));
+}
+
 export function RowLegend({ blocks, compact = false }: { blocks: LegendBlock[]; compact?: boolean }) {
   if (blocks.length === 0) return null;
   const shown = compact ? blocks.slice(0, 2) : blocks;
@@ -67,8 +74,8 @@ export function RowLegend({ blocks, compact = false }: { blocks: LegendBlock[]; 
           {!compact && <Title block={block} />}
           {block.kind === "categories" && (
             <ul className={compact ? "flex min-w-0 flex-wrap gap-x-2.5 gap-y-0.5" : "flex flex-wrap gap-x-3 gap-y-0.5"}>
-              {(compact ? block.entries.slice(0, 4) : block.entries).map((e) => (
-                <Entry key={e.label} entry={e} shape={block.shape} filter={block.filter} />
+              {(compact ? mostDrawn(block.entries, 4) : block.entries).map((e, i) => (
+                <Entry key={`${e.label}-${i}`} entry={e} shape={block.shape} filter={block.filter} />
               ))}
             </ul>
           )}

@@ -22,7 +22,7 @@ import {
   DARK_GREY as DARK_GREY_HEX,
   OFF_WHITE,
   PINK,
-  PURPLE,
+  SAGE as SAGE_HEX,
   scoreRampFor,
   SELECTED_AREA,
   SIBLING_FADE,
@@ -58,7 +58,8 @@ export function hexToRgba(hex: string, alpha = 255): Rgba {
 }
 
 const WHITE = hexToRgba(WHITE_HEX);
-const SELECT = hexToRgba(PURPLE);
+/** The selected feature's outline: ink, so it never reads as a legend color (purple is a category on many keys). */
+const SELECT = hexToRgba(DARK_GREY_HEX);
 /** Sprites draw their own colors; their tint only carries alpha (opacity and the selection fade). */
 const SPRITE_TINT = WHITE;
 
@@ -658,13 +659,18 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
     const c = categoryColor(key, f);
     return (HATCH_COLORS as readonly string[]).includes(c) ? c : recipe.color;
   };
-  const colorOf = (f: Feature) => (f === selected ? SELECTED_AREA.color : kindColor(f));
+  // The selected area keeps its own color (its category stays readable); the thick ink outline marks it.
+  const colorOf = (f: Feature) => kindColor(f);
   const tintAlpha = key ? Math.max(recipe.tint, CATEGORY_AREA_TINT) : recipe.tint;
   // A group the legend draws as a line is an outline only (no tint, no hatch), unless selected.
   const filled = (f: Feature) => f === selected || !key || !groupOf(key, f)?.outline;
   const tint = perFeature((f) => hexToRgba(colorOf(f), filled(f) ? Math.round(255 * tintAlpha) : 0), opacity, selected);
   const hatch = perFeature((f) => hexToRgba(colorOf(f), filled(f) ? Math.round(255 * recipe.hatchAlpha) : 0), opacity, selected);
-  const outlineOf = (f: Feature): Rgba => hexToRgba(key ? kindColor(f) : recipe.outline);
+  // A sage area's edge in dark grey: sage on green Topo vanishes (grazing land, river basins), the dark edge does not.
+  const outlineOf = (f: Feature): Rgba => {
+    const c = key ? kindColor(f) : recipe.outline;
+    return hexToRgba(c.toUpperCase() === SAGE_HEX.toUpperCase() ? DARK_GREY_HEX : c);
+  };
   // The white casing is wide enough that an outline never reads as one of the basemap's own lines (contours, borders).
   const casingWidth = recipe.outlineWidth + 2 * Math.max(recipe.casing, AREA_CASING_MIN);
   const sizeKey = sizeMeasureKey(ctx);
@@ -871,13 +877,13 @@ function encodedPointLayers(op: RenderOp, ctx: OpContext, opacity: number, encod
   const { size, color } = encoding;
   const radius = (f: Feature) => (size ? pointRadiusAt(sizeT(f.properties?.[size.key], size.extent)) : symbolSizePx(ctx.zoom) / 2 + 1);
   const fill = (f: Feature): Rgba => {
-    if (f === selected) return withOpacity(SELECT, opacity);
     const t = color ? colorT(f.properties?.[color.key], color) : null;
     const base: Rgba = t === null ? ENCODED_EMPTY : [...encodeColor(t), Math.round(255 * ENCODED_POINT.fillAlpha)];
     const c = withOpacity(base, opacity);
-    return selected ? withOpacity(c, SIBLING_FADE) : c;
+    return selected && f !== selected ? withOpacity(c, SIBLING_FADE) : c;
   };
   const stroke = (f: Feature): Rgba => {
+    if (f === selected) return withOpacity(SELECT, opacity);
     const c = withOpacity(ENCODED_STROKE, opacity);
     return selected && f !== selected ? withOpacity(c, SIBLING_FADE) : c;
   };

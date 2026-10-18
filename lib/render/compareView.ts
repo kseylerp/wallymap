@@ -341,9 +341,10 @@ export function deltaKey(
     const noun = timeShape(layer).changeNoun ?? layer.time?.changeNoun ?? "Area";
     const lower = noun.toLowerCase();
     return [
-      { label: `${noun} lost since ${a} (the pink line is its edge then)`, color: DELTA_COLORS["a-only"], ...count(summary?.aOnly) },
-      { label: `${noun} in ${b}`, color: DELTA_COLORS.both, ...count(summary?.both) },
-      ...(summary === null || summary.bOnly > 0 ? [{ label: `New ${lower} since ${a}`, color: DELTA_COLORS["b-only"], ...count(summary?.bOnly) }] : []),
+      // No counts: an area that shrank is both lost and kept, so the strip's matched sentence carries the numbers.
+      { label: `${noun} lost since ${a} (the pink line is its edge then)`, color: DELTA_COLORS["a-only"] },
+      { label: `${noun} in ${b}`, color: DELTA_COLORS.both },
+      ...(summary === null || summary.bOnly > 0 ? [{ label: `New ${lower} since ${a}`, color: DELTA_COLORS["b-only"] }] : []),
     ];
   }
   return [

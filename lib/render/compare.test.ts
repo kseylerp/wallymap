@@ -222,3 +222,15 @@ describe("presetFor", () => {
     expect(d.toISOString()).toBe("2026-03-02T00:00:00.000Z");
   });
 });
+
+describe("deltaFeatures: two outlines of one thing that share an id", () => {
+  it("keeps the earlier outline as an edge when the shapes differ (a monument whose id is its name)", () => {
+    const ring = (d: number): GeoJSON.Polygon => ({ type: "Polygon", coordinates: [[[0, 0], [d, 0], [d, d], [0, d], [0, 0]]] });
+    const f = (d: number, boundary: string): GeoJSON.Feature => ({ type: "Feature", geometry: ring(d), properties: { id: "Bears Ears", name: "Bears Ears", boundary } });
+    const out = deltaFeatures({ type: "FeatureCollection", features: [f(2, "2021")] }, { type: "FeatureCollection", features: [f(1, "current")] }, { idKey: "name" });
+    expect(out.features.map((x) => [x.properties?.delta, x.properties?.deltaEdge ?? false])).toEqual([
+      ["a-only", true],
+      ["both", false],
+    ]);
+  });
+});

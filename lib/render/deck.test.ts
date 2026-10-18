@@ -206,11 +206,11 @@ describe("areas: tint, 45° hatch and an outline over a white casing", () => {
     expect(props(casing).getLineColor).toEqual([255, 255, 255, 128]);
   });
 
-  it("turns the selected area purple with a 2.5px outline, and fades the rest", () => {
+  it("outlines the selected area in ink 2.5px, keeps its own color (its key still reads), and fades the rest", () => {
     const [casing, poly] = buildDeckLayers(select(polys("fire-perimeters"), a));
     const p = props(poly);
-    expect((p.getLineColor as Accessor)(a)).toEqual(rgba(PURPLE));
-    expect((p.getFillPattern as (f: unknown) => string)(a)).toMatch(/^hatch-6E5BFF-/);
+    expect((p.getLineColor as Accessor)(a)).toEqual(GREY);
+    expect((p.getFillPattern as (f: unknown) => string)(a)).toMatch(new RegExp(`^hatch-${PINK.slice(1)}-`));
     expect((p.getLineWidth as WidthAccessor)(a)).toBe(2.5);
     expect((p.getLineWidth as WidthAccessor)(b)).toBe(1.5);
     expect((props(casing).getLineWidth as WidthAccessor)(a)).toBe(4.5);
@@ -228,7 +228,7 @@ describe("score areas", () => {
     expect(scoreRampColor(undefined)).toEqual(scoreRampColor(0));
   });
 
-  it("shades remoteness cells by its ramp (off-white → sage → dark grey) with white 1px edges; selected purple", () => {
+  it("shades remoteness cells by its ramp (off-white → sage → dark grey) with white 1px edges; selected in ink", () => {
     const state = stateOf("remoteness", [a, b], {}, { geometry: "polygon", unit: "score" });
     const layers = buildDeckLayers(state);
     expect(layers).toHaveLength(1);
@@ -238,7 +238,7 @@ describe("score areas", () => {
     expect(p.getLineColor).toEqual(rgba(WHITE_HEX, 204));
     expect(p.getLineWidth).toBe(1);
     const [sel] = buildDeckLayers(select(state, b));
-    expect((props(sel).getLineColor as Accessor)(b)).toEqual(rgba(PURPLE));
+    expect((props(sel).getLineColor as Accessor)(b)).toEqual(GREY);
     expect((props(sel).getLineWidth as WidthAccessor)(b)).toBe(2.5);
   });
 });
@@ -420,12 +420,12 @@ describe("H3 tiles for dense points", () => {
     expect(sel?.feature.properties).toMatchObject({ count: expect.any(Number), h3: expect.any(String) });
   });
 
-  it("outlines the selected tile in 2.5px purple and fades the others and their labels", () => {
+  it("outlines the selected tile in 2.5px ink and fades the others and their labels", () => {
     const base = stateOf("species", dense(2001), {}, { zoom: 10 });
     const tiles = props(buildDeckLayers(base)[0]).data as GeoJSON.Feature[];
     const [hex, labels] = buildDeckLayers(select(base, tiles[0]));
     const p = props(hex);
-    expect((p.getLineColor as Accessor)(tiles[0])).toEqual(rgba(PURPLE));
+    expect((p.getLineColor as Accessor)(tiles[0])).toEqual(GREY);
     expect((p.getLineWidth as WidthAccessor)(tiles[0])).toBe(2.5);
     expect((p.getLineWidth as WidthAccessor)(tiles[1])).toBe(1);
     const fill = p.getFillColor as Accessor;

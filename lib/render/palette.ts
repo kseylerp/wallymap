@@ -291,7 +291,8 @@ const AREA_RECIPES: Record<"hazard" | "natural" | "data", AreaRecipe> = {
 };
 
 /** Selected areas: purple tint, hatch and a 2.5px outline over the white casing. */
-export const SELECTED_AREA = { color: PURPLE, outlineWidth: 2.5, casing: 1 } as const;
+/** The selected area: an ink outline 2.5px over a white casing; its fill keeps its own color. */
+export const SELECTED_AREA = { color: DARK_GREY, outlineWidth: 2.5, casing: 1 } as const;
 
 /** The area recipe for a layer, recolored when a palette color was asked for (a compare side, the layer panel). */
 export function areaRecipe(layerId: string, requested?: string): AreaRecipe {

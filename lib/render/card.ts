@@ -40,7 +40,9 @@ function isImageLink(link: CardLink): boolean {
 }
 
 /** Keys the card never lists as a row: the title, the date chip, internals. */
-const HIDDEN = new Set(["name", "heading", "t", "tPrecision", "signals", "popularityNote", "aggregate", "tallest", "stack"]);
+const COMPARE_KEYS = new Set(["delta", "deltaEdge", "dv", "before", "after"]);
+// The compare's bookkeeping on a delta feature (lib/render/compare.ts): the strip states the change in words and units.
+const HIDDEN = new Set(["name", "heading", "t", "tPrecision", "signals", "popularityNote", "aggregate", "tallest", "stack", "delta", "deltaEdge", "dv", "before", "after"]);
 
 /**
  * Unit suffixes in property keys: `maxLengthM` reads "Max length … m", `areaKm2` "Area … km²", `swellPeriodS` "Swell
@@ -281,7 +283,7 @@ function plainContent(
   // A unit in the key ("precipitationMm") reads as a unit on the value, as with a schema.
   const attach = (rows: Row[]): CardRow[] =>
     rows
-      .filter((r) => !(display && INTERNAL.test(r.key)))
+      .filter((r) => !(display && INTERNAL.test(r.key)) && !COMPARE_KEYS.has(r.key))
       .map((r) => {
         const { label, unit: keyUnit } = humanKey(r.key);
         const raw = props[r.key];

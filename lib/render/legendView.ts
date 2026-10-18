@@ -82,6 +82,20 @@ function categoryBlock(key: CategoryKey, data: FeatureCollection | null, shape: 
  * category the map colors by, then what legendOf derives when it says something more (a ramp, a size key, a raster
  * note), then the size key of the measure that sizes the symbols. `data` is the drawn data (counts follow filters).
  */
+/**
+ * One entry per label: a key that lists several raw values under one name (public lands' six "Other federal" agencies)
+ * shows the name once, with the first value's swatch and the counts added.
+ */
+function mergeByLabel(entries: LegendEntry[]): LegendEntry[] {
+  const out = new Map<string, LegendEntry>();
+  for (const e of entries) {
+    const seen = out.get(e.label);
+    if (!seen) out.set(e.label, e);
+    else if (e.count !== undefined) out.set(e.label, { ...seen, count: (seen.count ?? 0) + e.count });
+  }
+  return [...out.values()];
+}
+
 export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, data: FeatureCollection | null): LegendBlock[] {
   const shape = shapeOf(layer);
   // Points drawn as hex cells key as the cells: the gray ramp of features per cell.
@@ -108,13 +122,15 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, data: Fe
           ...(spec.title && { title: spec.title }),
           ...(spec.field && { field: spec.field }),
           ...(spec.unit && { unit: spec.unit }),
-          entries: (spec.items ?? []).map((i) => ({
-            label: i.label,
-            ...(i.color && { color: i.color }),
-            ...(i.symbol === "line" && shape === "polygon" && { outline: true }),
-            ...(i.help && { help: i.help }),
-            ...(data && spec.field && i.value !== undefined && { count: n.get(String(i.value)) ?? 0 }),
-          })),
+          entries: mergeByLabel(
+            (spec.items ?? []).map((i) => ({
+              label: i.label,
+              ...(i.color && { color: i.color }),
+              ...(i.symbol === "line" && shape === "polygon" && { outline: true }),
+              ...(i.help && { help: i.help }),
+              ...(data && spec.field && i.value !== undefined && { count: n.get(String(i.value)) ?? 0 }),
+            })),
+          ),
           ...(spec.note && { note: spec.note }),
           shape,
         });

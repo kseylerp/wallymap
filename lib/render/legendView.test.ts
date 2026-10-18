@@ -13,6 +13,32 @@ const KIND: Attribute = { key: "kind", type: "category", label: "Kind", levels: 
 const pt = (kind: string): Feature => ({ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: { kind } });
 
 describe("the row legend (docs/layer-contract.md legend)", () => {
+  it("lists a declared key's name once when several values share it, adding their counts (public lands' other federal)", () => {
+    const pts = ["DOD", "BOR", "DOD", "NPS"].map((agency) => ({ ...pt("x"), properties: { agency } }));
+    const layer: LoadedLayer = {
+      id: "public-lands",
+      title: "Public lands",
+      style: { geometry: "polygon", color: "#3A3A3C" },
+      legend: {
+        kind: "categories",
+        field: "agency",
+        items: [
+          { label: "Parks", value: "NPS", color: PURPLE },
+          { label: "Other federal", value: "DOD", color: PINK },
+          { label: "Other federal", value: "BOR", color: PINK },
+        ],
+      },
+      result: { kind: "geojson", data: { type: "FeatureCollection", features: pts }, citation },
+      receivedAt: "",
+    };
+    const blocks = rowLegend(layer, { layerId: layer.id, mode: "polygons", visible: true }, layer.result.kind === "geojson" ? layer.result.data : null);
+    const block = blocks.find((b) => b.field === "agency");
+    expect(block?.entries.map((e) => [e.label, e.count])).toEqual([
+      ["Parks", 1],
+      ["Other federal", 3],
+    ]);
+  });
+
   it("keys a category in the colors the map draws, with counts", () => {
     const layer: LoadedLayer = {
       id: "outdoor-features",

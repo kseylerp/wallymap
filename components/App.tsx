@@ -272,7 +272,7 @@ export function App() {
 
       {/* Phones: the console opens under the map pills (however many rows they wrap to, the top inset included, since
           it is measured) and leaves a gutter on the right for the zoom, globe and 3D buttons. */}
-      <div className="pointer-events-none absolute z-20 flex flex-col items-end max-md:top-(--console-top,60px) max-md:right-[calc(max(12px,var(--safe-right))+44px)] md:top-[calc(var(--safe-top)+1rem)] md:right-[calc(var(--safe-right)+1rem)]">
+      <div className="pointer-events-none absolute z-20 flex flex-col items-end max-md:z-40 max-md:top-(--console-top,60px) max-md:right-[calc(max(12px,var(--safe-right))+44px)] md:top-[calc(var(--safe-top)+1rem)] md:right-[calc(var(--safe-right)+1rem)]">
         <LayerStack
           layers={state.layers}
           renderOps={state.renderOps}

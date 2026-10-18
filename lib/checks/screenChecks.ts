@@ -288,6 +288,8 @@ export function collectLayout(panels: [string, string][]): LayoutMeasure {
         // Decoration (the card's pointer, a line key): hidden from readers and holding no text.
         if (el.closest('[aria-hidden="true"]') && !(el.textContent ?? "").trim()) continue;
         if (style.position === "fixed") continue;
+        // A phone's chip row scrolls sideways on purpose (components/PhoneSheet.tsx): its chips may sit past the edge.
+        if (el.closest("[data-chip-row]") && !el.hasAttribute("data-chip-row")) continue;
         // The nearest ancestor below the panel that scrolls or clips.
         let scroller: Element | null = null;
         for (let a = el.parentElement; a && a !== root.parentElement; a = a.parentElement) {
@@ -328,7 +330,7 @@ export function collectLayout(panels: [string, string][]): LayoutMeasure {
             };
           }
         }
-        if (style.overflowX === "auto" || style.overflowX === "scroll") {
+        if ((style.overflowX === "auto" || style.overflowX === "scroll") && !el.hasAttribute("data-chip-row")) {
           item.scroll = { scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, overflowX: style.overflowX };
         }
         elements.push(item);

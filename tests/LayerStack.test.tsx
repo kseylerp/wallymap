@@ -595,14 +595,22 @@ describe("layerLegend (what the map draws, for the panel and the inspect card)",
     expect(content.compareDocumentPosition(header) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("scrolls as one column on phones (scrubber, compare and layers together)", () => {
-    render(<LayerStack layers={start.layers} renderOps={start.renderOps} catalog={null} dispatch={() => {}} open onOpenChange={() => {}} />);
-    const panel = screen.getByTestId("layer-stack");
-    expect(panel.className).toContain("max-md:overflow-y-auto");
-    // On phones the list grows with its rows instead of scrolling inside a squeezed box.
-    const list = panel.querySelector("ul.legend-table");
-    expect(list?.className).toContain("max-md:overflow-visible");
-    expect(list?.className).toContain("max-md:shrink-0");
+  it("on a phone is a bottom sheet with a drag handle and one scroll container (owner: janky filter box)", () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+    try {
+      render(<LayerStack layers={start.layers} renderOps={start.renderOps} catalog={null} dispatch={() => {}} open onOpenChange={() => {}} />);
+      const sheet = screen.getByTestId("layer-stack");
+      expect(sheet.className).toContain("phone-sheet");
+      expect(sheet.getAttribute("data-sheet")).toBe("half");
+      expect(screen.getByTestId("sheet-handle")).toBeTruthy();
+      // The sheet's body is the one scroller; the list grows with its rows inside it.
+      const scrollers = sheet.querySelectorAll('[data-scroll="console"]');
+      expect(scrollers).toHaveLength(1);
+      expect(sheet.querySelector("ul.legend-table")?.className).not.toContain("overflow-y-auto");
+    } finally {
+      window.matchMedia = original;
+    }
   });
 });
 

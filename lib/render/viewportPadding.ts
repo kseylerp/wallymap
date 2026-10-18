@@ -23,7 +23,7 @@ type VisibleMapInput = {
   height: number;
   panelOpen: boolean;
   isMobile: boolean;
-  /** The layer panel drawer is open on the right (desktop only; on phones it overlays the map). */
+  /** The layer panel is open: a drawer on the right on a desktop, a sheet from the bottom on a phone. */
   layerPanelOpen?: boolean;
 };
 
@@ -40,13 +40,17 @@ function fitAxis(size: number, a: number, b: number): [number, number] {
  * The fitBounds padding that keeps a result inside the part of the map nobody has covered: on desktop, right
  * of the open chat panel, left of the open layer panel and below the header; on phones, above the bottom sheet (or the input pill).
  */
+/** The share of a phone's height the layer sheet takes at its half snap. */
+export const LAYER_SHEET_SHARE = 0.55;
+
 export function visibleMapPadding({ width, height, panelOpen, isMobile, layerPanelOpen = false }: VisibleMapInput): Padding {
   let top = MARGIN + HEADER;
   let right = MARGIN;
   let bottom = MARGIN;
   let left = MARGIN;
   if (isMobile) {
-    bottom += panelOpen ? Math.round(height * SHEET_SHARE) : INPUT_STACK;
+    // The layer sheet (components/PhoneSheet.tsx) opens at half the screen from the bottom.
+    bottom += Math.max(panelOpen ? Math.round(height * SHEET_SHARE) : INPUT_STACK, layerPanelOpen ? Math.round(height * LAYER_SHEET_SHARE) : 0);
   } else {
     // The open layer panel is wider than the zoom controls beneath it, so it sets the right edge.
     right += layerPanelOpen ? LAYER_PANEL_FOOTPRINT : CONTROLS;

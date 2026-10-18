@@ -2,6 +2,8 @@
 
 import type { Feature, FeatureCollection } from "geojson";
 import { useId, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { usePhonePanel } from "@/components/PhoneSheet";
 import type { Attribute, FieldHelp } from "@/layers/types";
 import { helpTitle, InfoMark } from "@/components/FieldHelp";
 import { LayerFilters, RangeFilter } from "@/components/LayerFilters";
@@ -108,8 +110,10 @@ function Chips({
   onChange: (next: Filters) => void;
 }) {
   const none = !isActiveEntry(filters[attr.key]);
+  // On a phone each chip set is one row that scrolls sideways (wrapped chips pushed the rest of the row down).
+  const phone = usePhonePanel() !== null;
   return (
-    <div role="group" aria-label={attr.label} className="flex flex-wrap gap-1">
+    <div role="group" aria-label={attr.label} data-chip-row={phone || undefined} className={phone ? "chip-row -mr-4 flex flex-nowrap gap-1.5 overflow-x-auto pr-4" : "flex flex-wrap gap-1"}>
       <button type="button" aria-pressed={none} onClick={() => onChange(clearAttribute(filters, attr))} className="filter-chip">
         All
       </button>
@@ -150,6 +154,10 @@ function RankBy({ layer, op, data, shown, dispatch }: { layer: LoadedLayer; op: 
   // Unset ranks by the layer's primary measure; "" is None, picked in the row (the eval's map checks read the same list).
   const { key: rankBy, measures, top } = useMemo(() => rankedTop(layer, op, data, shown, RANKED_TOP_N), [layer, op, data, shown]);
   const attr = measures.find((m) => m.key === rankBy);
+  // On a phone the list starts at its top 3, with "Show 10" for the rest (ten rows filled half the sheet).
+  const phone = usePhonePanel() !== null;
+  const [all, setAll] = useState(false);
+  const rows = phone && !all ? top.slice(0, PHONE_TOP_N) : top;
   const open = (f: Feature) => {
     const bbox = featureBBox(f);
     const at = featureCenter(f);
@@ -179,7 +187,7 @@ function RankBy({ layer, op, data, shown, dispatch }: { layer: LoadedLayer; op: 
       </div>
       {rankBy && top.length > 0 && (
         <ol aria-label={`Top ${top.length} by ${attr?.label ?? rankBy}`} data-testid="top-list" className="mt-1">
-          {top.map((f, i) => (
+          {rows.map((f, i) => (
             <li key={i}>
               <button
                 type="button"
@@ -198,19 +206,28 @@ function RankBy({ layer, op, data, shown, dispatch }: { layer: LoadedLayer; op: 
           ))}
         </ol>
       )}
+      {phone && rankBy && top.length > PHONE_TOP_N && (
+        <button type="button" onClick={() => setAll((a) => !a)} aria-expanded={all} className="row-link">
+          {all ? `Show ${PHONE_TOP_N}` : `Show ${top.length}`}
+        </button>
+      )}
     </div>
   );
 }
 
+/** Rows of Rank by's list a phone shows before "Show 10". */
+export const PHONE_TOP_N = 3;
+
 /** A measure under More: presets from the source's classes as chips, then the mini histogram. */
 function MeasureBlock({ attr, data, filters, help, onChange }: { attr: Attribute; data: FeatureCollection; filters: Filters; help?: FieldHelp; onChange: (next: Filters) => void }) {
   const extent = useMemo(() => extentOf(data, attr.key), [data, attr.key]);
+  const phone = usePhonePanel() !== null;
   if (!extent) return null;
   return (
     <div data-attribute={attr.key}>
       <AttributeLabel attr={attr} help={help} />
       {attr.presets && attr.presets.length > 0 && (
-        <div role="group" aria-label={`${attr.label} presets`} className="mb-1 flex flex-wrap gap-1">
+        <div role="group" aria-label={`${attr.label} presets`} data-chip-row={phone || undefined} className={phone ? "chip-row -mr-4 mb-1 flex flex-nowrap gap-1.5 overflow-x-auto pr-4" : "mb-1 flex flex-wrap gap-1"}>
           {attr.presets.map((preset) => {
             const count = presetCount(data, attr.key, preset);
             if (count === 0 && !isPresetPicked(filters, attr, preset, extent)) return null;
@@ -259,6 +276,8 @@ function YearBlock({ attr, data, filters, help, onChange }: { attr: Attribute; d
  */
 export function AttributeControls({ layer, op, data, shown, fields, dispatch, defaultMore = false }: AttributeControlsProps) {
   const [more, setMore] = useState(defaultMore);
+  // On a phone "More filters" opens a page of its own in the sheet, with a back control (components/PhoneSheet.tsx).
+  const panel = usePhonePanel();
   const moreId = `more-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const filters = useMemo(() => op.filters ?? {}, [op.filters]);
   const set = (next: Filters) => dispatch({ type: "set_filters", layerId: layer.id, filters: next });
@@ -319,6 +338,13 @@ export function AttributeControls({ layer, op, data, shown, fields, dispatch, de
               type="search"
               value={nameQuery(filters, attr)}
               onChange={(e) => set(withNameQuery(filters, attr, e.target.value))}
+              // On a phone the sheet grows to full and the field scrolls into sight above the keyboard.
+              onFocus={(e) => {
+                if (!panel) return;
+                panel.expand();
+                const field = e.currentTarget;
+                window.setTimeout(() => field.scrollIntoView({ block: "center", behavior: "smooth" }), 350);
+              }}
               placeholder="Type to filter"
               className="name-search min-w-0 flex-1"
             />
@@ -332,7 +358,7 @@ export function AttributeControls({ layer, op, data, shown, fields, dispatch, de
   if (shownChips.length === 0 && measures.length === 0 && !hasMore) return null;
 
   return (
-    <div role="group" aria-label={`Attributes for ${layer.title}`} data-testid="attribute-controls" className="space-y-1.5 pt-1.5 pl-9">
+    <div role="group" aria-label={`Attributes for ${layer.title}`} data-testid="attribute-controls" className={panel ? "space-y-2 pt-2" : "space-y-1.5 pt-1.5 pl-9"}>
       {chipSets.map(({ attr, groups }) =>
         groups.length > 1 ? (
           <div key={attr.key} data-attribute={attr.key}>
@@ -342,14 +368,31 @@ export function AttributeControls({ layer, op, data, shown, fields, dispatch, de
         ) : null,
       )}
       {measures.length > 0 && <RankBy layer={layer} op={op} data={data} shown={shown} dispatch={dispatch} />}
-      {hasMore && (
+      {hasMore && panel && (
+        <button type="button" onClick={() => panel.openMore(layer.id)} className="row-link">
+          More filters
+          {hiddenActive > 0 && <span className="tabular-nums"> ({hiddenActive} active)</span>}
+          <span aria-hidden className="ml-1">›</span>
+        </button>
+      )}
+      {hasMore &&
+        panel?.moreLayerId === layer.id &&
+        panel.moreTarget &&
+        createPortal(
+          <div id={moreId} data-testid="attribute-more" className="space-y-3 pb-2">
+            {blocks}
+            {fields.length > 0 && <LayerFilters id={`${moreId}-fields`} layerId={layer.id} title={layer.title} fields={fields} filters={filters} data={data} dispatch={dispatch} />}
+          </div>,
+          panel.moreTarget,
+        )}
+      {hasMore && !panel && (
         <button type="button" onClick={() => setMore((o) => !o)} aria-expanded={more} aria-controls={moreId} className="row-link">
           {more ? "Fewer filters" : "More filters"}
           {hiddenActive > 0 && <span className="tabular-nums"> ({hiddenActive} active)</span>}
         </button>
       )}
       {/* Open stays open, so a bar or a chip can be pressed again without the row folding away. */}
-      {more && hasMore && (
+      {more && hasMore && !panel && (
         <div id={moreId} data-testid="attribute-more" className="space-y-2 pt-1">
           {blocks}
           {fields.length > 0 && <LayerFilters id={`${moreId}-fields`} layerId={layer.id} title={layer.title} fields={fields} filters={filters} data={data} dispatch={dispatch} />}

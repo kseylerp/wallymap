@@ -7,6 +7,8 @@ import { linkedCurve } from "@/lib/render/linkedChart";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
 import { applyFilters, deriveFilterFields, filterSummary, type FilterField, type MeasureRange } from "@/lib/render/filters";
 import { AttributeControls } from "@/components/AttributeControls";
+import { PhonePanelContext, PhoneSheet, usePhonePanel, usePhoneSheetState } from "@/components/PhoneSheet";
+import { useIsPhone } from "@/components/useIsPhone";
 import { InfoMark } from "@/components/FieldHelp";
 import type { FieldHelp } from "@/layers/types";
 import { attributeFilterSummary, attributesOf, chipAttribute } from "@/lib/render/attributes";
@@ -80,7 +82,7 @@ function FailedRow({ failure, title, dispatch }: { failure: LayerFailure; title:
       <div className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-start gap-x-2">
         <span aria-hidden className="flex h-[18px] w-6 items-center justify-center text-[13px] text-ink-muted">–</span>
         <p className="line-clamp-2 text-[13px] leading-[18px] text-ink">{title}</p>
-        <button type="button" onClick={() => dispatch({ type: "remove_layer", layerId: failure.layerId })} aria-label={`Remove ${title}`} className={`${REMOVE_BUTTON} leading-[18px]`}>
+        <button type="button" onClick={() => dispatch({ type: "remove_layer", layerId: failure.layerId })} aria-label={`Remove ${title}`} className={`${REMOVE_BUTTON} hit-target leading-[18px]`}>
           ×
         </button>
       </div>
@@ -501,6 +503,22 @@ function LegendRow({
   const flowField = layer.result.kind === "geojson" && layer.result.flow !== undefined;
   const pointModes = op && layer.result.kind === "geojson" && layer.style.geometry === "point" && !flowField;
 
+  const phoneRow = usePhonePanel() !== null;
+  const summaryEl = summary ? (
+        <p className="mt-1 flex min-w-0 items-baseline gap-1.5 text-[11.5px] leading-4 text-ink-muted">
+          <span data-testid="filter-summary" className="min-w-0 truncate">
+            Filtered: {summary}
+          </span>
+          <button
+            type="button"
+            onClick={() => dispatch({ type: "set_filters", layerId: layer.id, filters: {} })}
+            aria-label={`Remove filters on ${layer.title}`}
+            className={REMOVE_BUTTON}
+          >
+            ×
+          </button>
+        </p>
+  ) : null;
   const gripRef = useRef<HTMLButtonElement>(null);
   const onHandleKey = (e: KeyboardEvent) => {
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
@@ -529,7 +547,7 @@ function LegendRow({
           onPointerDown={() => armDrag(true)}
           onPointerUp={() => armDrag(false)}
           onKeyDown={onHandleKey}
-          className="-my-[3px] flex h-6 w-6 cursor-grab items-center justify-center rounded-[4px] text-ink active:cursor-grabbing disabled:cursor-default"
+          className="hit-target -my-[3px] flex h-6 w-6 cursor-grab items-center justify-center rounded-[4px] text-ink active:cursor-grabbing disabled:cursor-default"
         >
           <span className="flex" style={keyFilter ? { filter: keyFilter } : undefined}>
             <LegendKey symbol={keySymbol} />
@@ -568,7 +586,7 @@ function LegendRow({
           {visible ? "Hide" : "Show"}
         </button>
         {/* Always visible (owner: "close out measures ... when I don't want them anymore"). */}
-        <button type="button" onClick={() => dispatch({ type: "remove_layer", layerId: layer.id })} aria-label={`Remove ${layer.title}`} className={`${REMOVE_BUTTON} leading-[18px]`}>
+        <button type="button" onClick={() => dispatch({ type: "remove_layer", layerId: layer.id })} aria-label={`Remove ${layer.title}`} className={`${REMOVE_BUTTON} hit-target leading-[18px]`}>
           ×
         </button>
       </div>
@@ -619,24 +637,12 @@ function LegendRow({
           {hexSentence}
         </p>
       )}
-      {summary && (
-        <p className="mt-1 flex min-w-0 items-baseline gap-1.5 text-[11.5px] leading-4 text-ink-muted">
-          <span data-testid="filter-summary" className="min-w-0 truncate">
-            Filtered: {summary}
-          </span>
-          <button
-            type="button"
-            onClick={() => dispatch({ type: "set_filters", layerId: layer.id, filters: {} })}
-            aria-label={`Remove filters on ${layer.title}`}
-            className={REMOVE_BUTTON}
-          >
-            ×
-          </button>
-        </p>
-      )}
+      {!phoneRow && summaryEl}
 
       {/* Attributes (spec §12c): one chip set and Rank by always visible, never behind a hover; the rest under More. */}
       {op && data && shownData && !flowField && <AttributeControls layer={layer} op={op} data={data} shown={shownData} fields={fields} dispatch={dispatch} defaultMore={expandAttributes} />}
+      {/* On a phone the filter line goes under the controls, so pressing a chip never moves what is above it. */}
+      {phoneRow && summaryEl}
       {pointModes && (
         <RowSection heading="Show as">
           <PointModeControl layer={layer} mode={op.mode} dispatch={dispatch} />
@@ -719,6 +725,9 @@ export function LayerStack({
   errors = [],
 }: LayerStackProps) {
   const items = stackOrder(layers, renderOps);
+  // Phones: a bottom sheet (components/PhoneSheet.tsx) with its snap and the filter page.
+  const phone = useIsPhone();
+  const { snap: sheetSnap, setSnap: setSheetSnap, moreLayerId, setMore, moreTarget, setMoreTarget, openMore, expand } = usePhoneSheetState(open);
   // Failed layers not loaded otherwise (a route's error is the chat's to show).
   const failed = errors.filter((e) => !layers[e.layerId] && catalog?.[e.layerId] !== undefined);
   // A dated tile layer whose tiles all failed for the window's date (lib/render/tileErrors.ts).
@@ -762,18 +771,8 @@ export function LayerStack({
 
   if (!open) return null;
 
-  return (
-    <section
-      ref={sectionRef}
-      aria-label="Layers"
-      data-testid="layer-stack"
-      // Phones: below the map pills instead of over them (the app positions the column at `--console-top`, measured
-      // from the pills), clear of the map buttons on the right, ending above the chat sheet, and one scrolling column
-      // (the scrubber, the compare and the layers scroll together) so a short screen never squeezes the list to nothing.
-      data-scroll="console"
-      className="glass-strong rise-in @container/panel pointer-events-auto flex max-h-[calc(100dvh-24px-var(--safe-top)-var(--safe-bottom))] max-w-[calc(100vw-24px-var(--safe-left)-var(--safe-right))] flex-col overflow-hidden rounded-panel max-md:max-h-[calc(54dvh-var(--console-top,60px)-12px)] max-md:max-w-[calc(100vw-68px-var(--safe-left)-var(--safe-right))] max-md:overflow-y-auto max-md:overscroll-contain max-md:[overflow-anchor:none] md:max-h-[calc(100dvh-260px-var(--safe-top)-var(--safe-bottom))]"
-      style={{ width: LAYER_PANEL_WIDTH }}
-    >
+  const slotsEl = (
+    <>
       {/* The time scrubber docks here while any layer has dated features; empty, the slot takes no space. */}
       <div data-slot="time-scrubber" className="shrink-0 empty:hidden">
         {time && (
@@ -799,26 +798,10 @@ export function LayerStack({
       <div data-slot="compare" className="shrink-0 empty:hidden">
         {compareSlot}
       </div>
-      <header className="flex shrink-0 items-baseline gap-3 px-5 pt-4 pb-1.5">
-        <h2 className="small-caps">
-          Layers <span className="ml-1 text-ink tabular-nums">{items.length + failed.length}</span>
-        </h2>
-        <span className="flex-1" />
-        <button type="button" onClick={() => dispatch({ type: "clear_layers" })} className={TEXT_BUTTON}>
-          Clear all
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpenChange(false)}
-          aria-expanded
-          aria-label="Close layers"
-          className={TEXT_BUTTON}
-        >
-          Close
-        </button>
-      </header>
-      <div aria-hidden className="hairline mx-5 shrink-0" />
-      <ul className="legend-table min-h-0 overflow-y-auto overscroll-contain px-5 pb-2 [overflow-anchor:none] max-md:shrink-0 max-md:overflow-visible">
+    </>
+  );
+  const listEl = (
+      <ul className={phone ? "legend-table px-4 pb-2" : "legend-table min-h-0 overflow-y-auto overscroll-contain px-5 pb-2 [overflow-anchor:none]"}>
         {items.map(({ layer, op }) => {
           const index = renderOps.findIndex((o) => o.layerId === layer.id);
           return (
@@ -879,10 +862,94 @@ export function LayerStack({
           <FailedRow key={`failed-${f.layerId}`} failure={f} title={catalog?.[f.layerId]?.title ?? f.layerId} dispatch={dispatch} />
         ))}
       </ul>
-      {/* Export map…, under the rows; empty (no layer on), the slot takes no space. */}
+  );
+  // Export map…, under the rows; empty (no layer on), the slot takes no space.
+  const exportEl = (
       <div data-slot="export" className="shrink-0 px-5 pt-1 pb-3 empty:hidden">
         {exportSlot}
       </div>
+  );
+
+  if (phone) {
+    const moreLayer = moreLayerId ? layers[moreLayerId] : undefined;
+    return (
+      <PhonePanelContext.Provider value={{ moreLayerId: moreLayer ? moreLayerId : null, openMore: openMore, moreTarget: moreTarget, expand: expand }}>
+        <PhoneSheet
+          snap={sheetSnap}
+          onSnap={setSheetSnap}
+          page={moreLayer ? (moreLayerId ?? "") : ""}
+          onClose={() => onOpenChange(false)}
+          header={
+            moreLayer ? (
+              <header className="flex items-center gap-2 px-2 pb-1">
+                <button type="button" onClick={() => setMore(null)} className="sheet-button text-ink">
+                  <span aria-hidden className="mr-1">‹</span>Back
+                </button>
+                <h2 className="min-w-0 flex-1 truncate small-caps">Filters · {moreLayer.title}</h2>
+              </header>
+            ) : (
+              <header className="flex items-center gap-1 px-4 pb-1">
+                <h2 className="small-caps">
+                  Layers <span className="ml-1 text-ink tabular-nums">{items.length + failed.length}</span>
+                </h2>
+                <span className="flex-1" />
+                <button type="button" onClick={() => dispatch({ type: "clear_layers" })} className="sheet-button">
+                  Clear all
+                </button>
+                <button type="button" onClick={() => onOpenChange(false)} aria-expanded aria-label="Close layers" className="sheet-button">
+                  Close
+                </button>
+              </header>
+            )
+          }
+        >
+          {/* More filters opens here as a page of its own; the rows stay mounted under it (hidden), keeping their state. */}
+          <div ref={setMoreTarget} data-testid="filter-page" className={moreLayer ? "px-4 pt-1" : "hidden"} />
+          <div className={moreLayer ? "hidden" : undefined}>
+            <div aria-hidden className="hairline mx-4" />
+            {slotsEl}
+            {listEl}
+            {exportEl}
+          </div>
+        </PhoneSheet>
+      </PhonePanelContext.Provider>
+    );
+  }
+
+  return (
+    <section
+      ref={sectionRef}
+      aria-label="Layers"
+      data-testid="layer-stack"
+      // Phones: below the map pills instead of over them (the app positions the column at `--console-top`, measured
+      // from the pills), clear of the map buttons on the right, ending above the chat sheet, and one scrolling column
+      // (the scrubber, the compare and the layers scroll together) so a short screen never squeezes the list to nothing.
+      data-scroll="console"
+      className="glass-strong rise-in @container/panel pointer-events-auto flex max-h-[calc(100dvh-24px-var(--safe-top)-var(--safe-bottom))] max-w-[calc(100vw-24px-var(--safe-left)-var(--safe-right))] flex-col overflow-hidden rounded-panel max-md:max-h-[calc(54dvh-var(--console-top,60px)-12px)] max-md:max-w-[calc(100vw-68px-var(--safe-left)-var(--safe-right))] max-md:overflow-y-auto max-md:overscroll-contain max-md:[overflow-anchor:none] md:max-h-[calc(100dvh-260px-var(--safe-top)-var(--safe-bottom))]"
+      style={{ width: LAYER_PANEL_WIDTH }}
+    >
+      {slotsEl}
+      <header className="flex shrink-0 items-baseline gap-3 px-5 pt-4 pb-1.5">
+        <h2 className="small-caps">
+          Layers <span className="ml-1 text-ink tabular-nums">{items.length + failed.length}</span>
+        </h2>
+        <span className="flex-1" />
+        <button type="button" onClick={() => dispatch({ type: "clear_layers" })} className={TEXT_BUTTON}>
+          Clear all
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          aria-expanded
+          aria-label="Close layers"
+          className={TEXT_BUTTON}
+        >
+          Close
+        </button>
+      </header>
+      <div aria-hidden className="hairline mx-5 shrink-0" />
+      {listEl}
+      {exportEl}
     </section>
   );
 }

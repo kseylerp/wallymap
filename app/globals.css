@@ -1226,3 +1226,93 @@ textarea:focus-visible {
   white-space: normal;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
 }
+
+/*
+ * The phone's layer sheet (components/PhoneSheet.tsx; owner, 2026-10-18: "UX on phone is a little janky with the filter
+ * box"): every control a 44px touch target, chip sets one sideways-scrolling row each, counts in fixed-width slots so a
+ * changing count never shifts a row. Small inline marks (the field help "i", the source link, Hide and ×) keep their
+ * look and take a 44px hit area around them.
+ */
+.phone-sheet .sheet-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+  justify-content: center;
+  padding: 0 10px;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+.phone-sheet .filter-chip {
+  flex-shrink: 0;
+  align-items: center;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.phone-sheet .filter-chip-count {
+  display: inline-block;
+  min-width: 2.2ch;
+  font-size: 12.5px;
+  text-align: right;
+}
+.phone-sheet .chip-row {
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 4px;
+}
+.phone-sheet .chip-row::-webkit-scrollbar {
+  display: none;
+}
+.phone-sheet .top-row {
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+}
+.phone-sheet .row-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+}
+.phone-sheet .legend-select,
+.phone-sheet .legend-select.rank-select,
+.phone-sheet .name-search,
+.phone-sheet .compare-date {
+  height: 44px;
+  max-width: none;
+}
+.phone-sheet .name-search {
+  font-size: 16px;
+}
+.phone-sheet .measure-bars {
+  height: 45px;
+}
+.phone-sheet button:not(.filter-chip, .top-row, .row-link, .sheet-button, .info-mark, .measure-bar, .hit-target) {
+  min-height: 44px;
+}
+.phone-sheet .hit-target::after,
+.phone-sheet .info-mark::after,
+.phone-sheet [data-testid="layer-source"] a::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
+.phone-sheet [data-testid="layer-source"] a {
+  position: relative;
+}
+/* The row's title keeps room for two lines, so a count that grows ("264" to "170 of 264") never moves the row under a finger. */
+.phone-sheet [data-testid="layer-title"] {
+  min-height: 36px;
+}
+/* The hex cells' sentence names the filtered kind ("more natural gas power plants"): two lines kept so it never shifts the row. */
+.phone-sheet [data-testid="hex-legend"] {
+  min-height: 32px;
+}

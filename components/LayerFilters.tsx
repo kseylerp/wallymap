@@ -2,6 +2,7 @@
 
 import type { FeatureCollection } from "geojson";
 import { MeasureHistogram } from "@/components/MeasureHistogram";
+import { usePhonePanel } from "@/components/PhoneSheet";
 import { formatValue } from "@/lib/format";
 import { formatFilterNumber, type FilterField, type LayerFilters as Filters } from "@/lib/render/filters";
 import type { MapAction } from "@/lib/render/state";
@@ -46,6 +47,8 @@ function stepFor(field: Range): number {
 }
 
 function CategoryFilter({ field, include, onChange }: { field: Category; include: string[]; onChange: (next: string[]) => void }) {
+  // On a phone each chip set is one row that scrolls sideways (components/PhoneSheet.tsx).
+  const phone = usePhonePanel() !== null;
   const all = include.length === 0;
   const toggle = (value: string) => {
     const next = include.includes(value) ? include.filter((v) => v !== value) : [...include, value];
@@ -53,7 +56,7 @@ function CategoryFilter({ field, include, onChange }: { field: Category; include
     onChange(next.length === field.values.length && !field.more ? [] : next);
   };
   return (
-    <div role="group" aria-label={field.label} className="flex flex-wrap gap-1">
+    <div role="group" aria-label={field.label} data-chip-row={phone || undefined} className={phone ? "chip-row -mr-4 flex flex-nowrap gap-1.5 overflow-x-auto pr-4" : "flex flex-wrap gap-1"}>
       <button type="button" aria-pressed={all} onClick={() => onChange([])} className="filter-chip">
         All
       </button>

@@ -9,7 +9,8 @@ import type { CachedFetch } from "@/lib/fetch";
 import { resetNaturalEarthCache } from "@/lib/agent/naturalEarth";
 import { runLayer } from "@/lib/layers/run";
 import sample from "./__fixtures__/ne-regions.sample.json";
-import layer, { regionKind } from "./physical-regions";
+import layer, { KIND_LEVELS, regionAreaKm2, regionKind } from "./physical-regions";
+import { contractProblems, legendOf } from "./contract";
 
 const fixture = sample as unknown as FeatureCollection;
 
@@ -40,7 +41,7 @@ describe("physical-regions layer", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.license).toBe("Public domain (Natural Earth)");
     expect(layer.requiredEnv).toEqual([]);
-    expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", fillOpacity: 0 });
+    expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", fillOpacity: 0.1 });
   });
 
   it("accepts an optional list of kinds and rejects unknown kinds", () => {
@@ -82,7 +83,20 @@ describe("physical-regions layer", () => {
     }
     const sierra = r.data.features.find((f) => f.properties?.name === "Sierra Nevada");
     expect(sierra?.properties).toMatchObject({ kind: "range", featureClass: "Range/mtn", region: "North America" });
+    // A rough size the name does not tell: the Sierra Nevada outline is tens of thousands of km².
+    expect(Number(sierra?.properties?.areaKm2)).toBeGreaterThan(20_000);
+    expect(Number(sierra?.properties?.areaKm2)).toBeLessThan(200_000);
     expect(r.citation.source).toContain("Natural Earth");
+  });
+
+  it("tints each kind in its own color with a matching legend and labels the names", () => {
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "kind" });
+    expect(legend.items?.map((i) => i.value)).toEqual(["range", "desert", "plain", "plateau", "basin", "peninsula", "island", "other"]);
+    expect(new Set(KIND_LEVELS.map((k) => k.color)).size).toBe(8);
+    expect(layer.labels).toEqual({ field: "name", max: 12 });
+    expect(regionAreaKm2({ type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]] })).toBe(12_300);
+    expect(contractProblems(layer)).toEqual([]);
   });
 
   it("filters by kinds", async () => {

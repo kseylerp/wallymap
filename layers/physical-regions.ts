@@ -5,10 +5,12 @@
  * download. Source file, property names and quirks are documented there. Properties returned per polygon:
  *   name (English name), kind (see KINDS), featureClass (Natural Earth's own class, e.g. "Range/mtn"),
  *   region and subregion (continent and sub-continent, when set), and altName (an alternative name, when set).
- * There is no time dimension, so features carry no `t` or `v`.
+ * There is no time dimension, so features carry no `t`; `areaKm2` is the outline's area, computed here.
+ * Drawing (2026-10-18): `kind` is the color category (REGION_LEGEND: ranges purple, deserts pink, plains sage and so on) with
+ * a light tint, and the regions' names are labelled on the map, so the Rockies read apart from the Great Plains without a click.
  */
 import { z } from "zod";
-import type { Feature, FeatureCollection, Geometry } from "geojson";
+import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import {
   featureBBoxes,
   loadNaturalEarthRegions,
@@ -17,10 +19,11 @@ import {
   regionProp,
   regionRank,
 } from "@/lib/agent/naturalEarth";
-import { bboxAreaKm2, defineLayer, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult } from "./types";
+import { bboxAreaKm2, defineLayer, type Attribute, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { bboxesDisjoint } from "./_shared/coverage";
-import { layerColor } from "@/lib/render/palette";
+import { DARK_GREY, layerColor, PINK, PURPLE, SAGE, SURFACE } from "@/lib/render/palette";
+import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
 
 const KINDS = ["range", "desert", "plain", "plateau", "basin", "peninsula", "island", "other"] as const;
 export type RegionKind = (typeof KINDS)[number];
@@ -59,6 +62,52 @@ export function regionKind(featureClass: string | undefined): RegionKind {
   }
 }
 
+const mix = (a: string, b: string) => rgbToHex(interpolateStops([a, b], 0.5));
+
+/** Each kind in words and its fill. */
+export const KIND_LEVELS: { value: RegionKind; label: string; color: string }[] = [
+  { value: "range", label: "Mountain range", color: PURPLE },
+  { value: "desert", label: "Desert", color: PINK },
+  { value: "plain", label: "Plain", color: SAGE },
+  { value: "plateau", label: "Plateau", color: mix(SAGE, DARK_GREY) },
+  { value: "basin", label: "Basin", color: mix(PURPLE, SAGE) },
+  { value: "peninsula", label: "Peninsula", color: mix(PINK, PURPLE) },
+  { value: "island", label: "Island or island group", color: DARK_GREY },
+  { value: "other", label: "Other landform (valley, lowland, delta, coast...)", color: SURFACE },
+];
+
+export const REGION_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Landform",
+  field: "kind",
+  items: KIND_LEVELS.map(({ value, label, color }) => ({ label, value, color, symbol: "polygon" as const })),
+  note: "Approximate outlines at about 1:10 million; neighbouring regions overlap.",
+};
+
+const ATTRIBUTES: Attribute[] = [
+  { key: "kind", type: "category", label: "Landform", levels: KIND_LEVELS.map(({ value, label }) => ({ value, label })), encode: "color", primary: true },
+  { key: "areaKm2", type: "measure", label: "Area", unit: "km²" },
+  { key: "name", type: "name", label: "Name" },
+];
+
+function ringKm2(ring: Position[]): number {
+  if (ring.length < 4) return 0;
+  const meanLat = ring.reduce((sum, p) => sum + p[1], 0) / ring.length;
+  const kx = 111.32 * Math.cos((meanLat * Math.PI) / 180);
+  let sum = 0;
+  for (let i = 0; i < ring.length - 1; i++) sum += ring[i][0] * kx * ring[i + 1][1] * 110.57 - ring[i + 1][0] * kx * ring[i][1] * 110.57;
+  return Math.abs(sum / 2);
+}
+
+/** A polygon's area in km² on a local flat projection (outer rings minus holes), rounded to three significant figures. */
+export function regionAreaKm2(geometry: Geometry): number {
+  const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.type === "MultiPolygon" ? geometry.coordinates : [];
+  const km2 = polygons.reduce((t, rings) => t + ringKm2(rings[0] ?? []) - rings.slice(1).reduce((h, r) => h + ringKm2(r), 0), 0);
+  if (km2 <= 0) return 0;
+  const digits = Math.max(0, Math.floor(Math.log10(km2)) - 2);
+  return Math.round(km2 / 10 ** digits) * 10 ** digits;
+}
+
 const inputSchema = z.object({
   kinds: z.array(z.enum(KINDS)).optional(),
 });
@@ -81,7 +130,8 @@ function toPolygonFeature(feature: Feature, kind: RegionKind): Feature<Geometry>
   if (subregion !== undefined) properties.subregion = subregion;
   const altName = regionProp(feature, "namealt") ?? regionProp(feature, "name_alt");
   if (altName !== undefined) properties.altName = altName;
-  return { type: "Feature", geometry: feature.geometry, properties };
+  const area = regionAreaKm2(feature.geometry);
+  return { type: "Feature", geometry: feature.geometry, properties: area > 0 ? { ...properties, areaKm2: area } : properties };
 }
 
 /** Every Natural Earth feature class the file holds (read 2026-10-16), in words; continents are never returned. */
@@ -118,6 +168,7 @@ const HELP: Record<string, FieldHelp> = {
 };
 
 const CARD: CardSpec = {
+  measure: { key: "areaKm2", label: "Area", unit: "km²", help: { text: "The area of the outline, computed by this app; the outline is approximate, so treat it as a rough size." } },
   facts: [
     { key: "featureClass", label: "Landform", values: FEATURE_CLASS_LABELS },
     { key: "altName", label: "Also called" },
@@ -133,7 +184,8 @@ const physicalRegions = defineLayer({
   title: "Named physical regions",
   description:
     "Outlines of named natural regions of the world from Natural Earth: mountain ranges (the Andes, the Alps, the Sierra Nevada), deserts, plains, plateaus, basins, peninsulas and islands. " +
-    "Each polygon has name, kind (range, desert, plain, plateau, basin, peninsula, island or other), featureClass (Natural Earth's own label), and region and subregion (the continent) when known. " +
+    "Each polygon has name, kind (range, desert, plain, plateau, basin, peninsula, island or other), featureClass (Natural Earth's own label), areaKm2 (the outline's rough area), and region and subregion (the continent) when known. " +
+    "The map tints each region by kind with a legend (ranges purple, deserts pink, plains sage) and prints the names of the most prominent. " +
     "Use it to answer 'where is the X range' or to outline a whole landscape when the user names one. Pass kinds, for example ['range'] or ['desert', 'plateau'], to show only those types; leave it out to see every kind. " +
     "Anywhere in the world. Caveats: the outlines are approximate and generalised, drawn at about 1:10 million scale, so they show roughly where a region is and have no exact edge; neighbouring regions overlap. " +
     "A range polygon covers the foothills and valleys around the peaks, not just the high ground. Only well-known regions are included, and small ranges or local landforms will be missing; whole continents are left out. " +
@@ -145,9 +197,14 @@ const physicalRegions = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 30_000_000,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("physical-regions"), fillOpacity: 0 },
+  style: { geometry: "polygon", color: layerColor("physical-regions"), fillOpacity: 0.1 },
   fieldHelp: HELP,
   card: CARD,
+  attributes: ATTRIBUTES,
+  legend: REGION_LEGEND,
+  // The answer is a name: label the most prominent regions (source order is most prominent first).
+  labels: { field: "name", max: 12 },
+  time: { shape: "none" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     let fc: FeatureCollection;

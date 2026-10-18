@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
-import layer, { HARDINESS_SOURCE_LAYER, HARDINESS_TILE_URL } from "./hardiness-zones";
+import layer, { HALF_ZONES, HARDINESS_SOURCE_LAYER, HARDINESS_TILE_URL, ZONE_COLORS, zoneLabel } from "./hardiness-zones";
+import { contractProblems, legendOf, timeShapeOf } from "./contract";
 
 const DENVER: [number, number, number, number] = [-105.2, 39.5, -104.7, 39.9];
 
@@ -57,11 +58,33 @@ describe("hardiness-zones layer", () => {
     }
   });
 
-  it("tells the model it cannot read a zone from the tiles and where to look one up", () => {
-    expect(layer.description).toMatch(/cannot read a place's zone/);
-    expect(layer.description).toMatch(/backdrop/);
-    expect(layer.description).toMatch(/one tint/);
-    expect(layer.description).not.toMatch(/Use it for 'what hardiness zone am I in'/);
+  it("fills every half-zone in its own color and keys each one with the USDA label and °F band", () => {
+    expect(HALF_ZONES).toHaveLength(19);
+    expect(new Set(ZONE_COLORS).size).toBe(19);
+    for (const c of ZONE_COLORS) expect(c).toMatch(/^#[0-9A-F]{6}$/i);
+    // Cold end purple, warm end pink (the approved palette).
+    expect(ZONE_COLORS[0].toUpperCase()).toBe("#6E5BFF");
+    expect(ZONE_COLORS[18].toUpperCase()).toBe("#F57272");
+    expect(zoneLabel("3a")).toBe("Zone 3a (−40 to −35 °F)");
+    expect(zoneLabel("7a")).toBe("Zone 7a (0 to 5 °F)");
+    expect(zoneLabel("9b")).toBe("Zone 9b (25 to 30 °F)");
+    expect(zoneLabel("12a")).toBe("Zone 12a (50 to 55 °F)");
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "_symbol", unit: "°F" });
+    expect(legend.items?.[8]).toEqual({ label: "Zone 7a (0 to 5 °F)", value: 8, color: ZONE_COLORS[8], symbol: "polygon" });
+    // The color attribute reads the tile's `_symbol` index with the same labels, and the card spells the index out.
+    const attr = layer.attributes?.find((a) => a.key === "_symbol");
+    expect(attr).toMatchObject({ type: "category", encode: "color", primary: true });
+    expect(attr?.levels?.[0]).toEqual({ value: 0, label: "Zone 3a (−40 to −35 °F)" });
+    expect(layer.card?.facts?.[0].values?.["13"]).toBe("Zone 9b (25 to 30 °F)");
+    expect(timeShapeOf(layer)).toEqual({ shape: "none" });
+    expect(contractProblems(layer)).toEqual([]);
+  });
+
+  it("tells the model the zones are colored, not to state a place's zone itself, and where to look one up", () => {
+    expect(layer.description).toMatch(/its own color/);
+    expect(layer.description).toMatch(/do not state a place's zone yourself/);
+    expect(layer.description).not.toMatch(/one tint/);
     expect(layer.description).toMatch(/planthardiness\.ars\.usda\.gov/);
     expect(layer.description).toMatch(/3a/);
     expect(layer.description).toMatch(/Lower 48/);

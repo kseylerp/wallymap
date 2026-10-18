@@ -9,12 +9,16 @@ import layer, {
   MRDS_URL,
   USMIN_NAMED,
   USMIN_URL,
+  commodityName,
   commodityWhere,
   commoditiesOf,
   dedupeMines,
   normalizeMrds,
   normalizeUsmin,
+  orderForLabels,
+  spellCodesInName,
 } from "./mines";
+import { cardTitle, labelsOf, legendOf, timeShapeOf } from "./contract";
 import mrdsRaw from "./__fixtures__/mines.mrds.json";
 import usminRaw from "./__fixtures__/mines.usmin.json";
 
@@ -52,6 +56,23 @@ describe("commodities", () => {
     expect(commoditiesOf("")).toEqual([]);
   });
 
+  it("spells out every code people saw raw, subtypes through their base", () => {
+    expect(commodityName("SDG")).toBe("sand and gravel");
+    expect(commodityName("STN_C")).toBe("crushed stone");
+    expect(commodityName("STN_C_S")).toBe("crushed stone");
+    expect(commodityName("PGE_XX")).toBe("platinum-group metals");
+    expect(commodityName("CLY_BN")).toBe("bentonite");
+    expect(commoditiesOf(" SDG STN_C")).toEqual(["sand and gravel", "crushed stone"]);
+  });
+
+  it("spells out a list of codes ending a site name, and leaves other names alone", () => {
+    expect(spellCodesInName("Lisbon Valley U,V")).toBe("Lisbon Valley (uranium, vanadium)");
+    expect(spellCodesInName("Mi Vida U-V")).toBe("Mi Vida (uranium, vanadium)");
+    expect(spellCodesInName("Cannol #2")).toBe("Cannol #2");
+    expect(spellCodesInName("Hole In The Wall")).toBe("Hole In The Wall");
+    expect(spellCodesInName("Section 26 Ab,Cd")).toBe("Section 26 Ab,Cd");
+  });
+
   it("writes the filter so U does not match AU or the end of the list", () => {
     expect(commodityWhere("U")).toBe("code_list LIKE '% U %' OR code_list LIKE '% U' OR code_list LIKE 'U %' OR code_list = 'U'");
     expect(Object.values(COMMODITY_CODES)).toContain("U");
@@ -59,7 +80,7 @@ describe("commodities", () => {
 });
 
 describe("normalizers", () => {
-  it("turns MRDS rows into points whose kind is the main commodity, with status, all commodities and a USGS link", () => {
+  it("turns MRDS rows into points whose commodity is the main one, with status in plain words, all commodities and a USGS link", () => {
     const points = normalizeMrds(mrds);
     expect(points).toHaveLength(10);
     expect(points[0].geometry.type).toBe("Point");
@@ -67,6 +88,7 @@ describe("normalizers", () => {
       name: "Discovery",
       kind: "uranium",
       source: "MRDS",
+      commodity: "uranium",
       commodities: "uranium, copper, vanadium",
       status: "Past Producer",
       grade: "D",
@@ -75,12 +97,13 @@ describe("normalizers", () => {
     });
   });
 
-  it("turns USMIN rows into points whose kind is the feature type, with the source map", () => {
+  it("turns USMIN rows into points whose feature type is the map symbol's, with the source map", () => {
     const points = normalizeUsmin(usmin);
     expect(points).toHaveLength(10);
     expect(points[0].properties).toEqual({
       name: "Mine",
       kind: "Adit",
+      featureType: "Adit",
       source: "USMIN",
       topoName: "Moab",
       topoYear: 1968,
@@ -99,7 +122,26 @@ describe("normalizers", () => {
     });
     expect(
       normalizeUsmin({ type: "FeatureCollection", features: [{ type: "Feature", geometry: point, properties: { ftr_type: "Quarry", ftr_name: "N/A", topo_date: 0 } }] })[0].properties,
-    ).toEqual({ name: "Quarry", kind: "Quarry", source: "USMIN" });
+    ).toEqual({ name: "Quarry", kind: "Quarry", featureType: "Quarry", source: "USMIN" });
+  });
+
+  it("names MRDS sites recorded as Unknown or Unnamed the same plain way", () => {
+    const point = { type: "Point" as const, coordinates: [-109.5, 38.5] };
+    const names = ["Unknown", "Unnamed Prospect", "Lisbon Valley U,V"].map(
+      (site_name) => normalizeMrds({ type: "FeatureCollection", features: [{ type: "Feature", geometry: point, properties: { site_name, code_list: " U V" } }] })[0].properties?.name,
+    );
+    expect(names).toEqual(["Unnamed site", "Unnamed site", "Lisbon Valley (uranium, vanadium)"]);
+  });
+
+  it("puts producers first and named sites before generic ones, for the map's labels", () => {
+    const points = orderForLabels([...normalizeUsmin(usmin).slice(0, 2), ...normalizeMrds(mrds)]);
+    expect(points.slice(0, 4).map((f) => [f.properties?.name, f.properties?.status])).toEqual([
+      ["Cannol #2", "Producer"],
+      ["Copper King Mine", "Producer"],
+      ["Cane Creek School Section", "Producer"],
+      ["Discovery", "Past Producer"],
+    ]);
+    expect(points.slice(-2).map((f) => f.properties?.source)).toEqual(["USMIN", "USMIN"]);
   });
 });
 
@@ -279,7 +321,31 @@ describe("mines layer", () => {
   });
 
   it("tells the model the data are historic and old workings are unsafe", () => {
-        expect(layer.description).toMatch(/around 2011/);
+        expect(layer.description).toMatch(/about 2011/);
     expect(layer.description).toMatch(/does not mean a mine is open or safe/);
+  });
+
+  it("colors by status, says the vintage in the legend and on every card, and splits commodity from feature type", () => {
+    expect(layer.style.encode).toEqual({ color: "status" });
+    const status = layer.attributes?.find((a) => a.key === "status");
+    expect(status).toMatchObject({ type: "category", encode: "color", primary: true });
+    expect([...new Set(status?.levels?.map((l) => l.label))]).toEqual(["Prospect or occurrence", "Past producer", "Producer"]);
+    expect(layer.attributes?.find((a) => a.key === "commodity")?.label).toBe("Commodity");
+    expect(layer.attributes?.find((a) => a.key === "featureType")?.label).toBe("Feature type");
+    expect(layer.attributes?.some((a) => a.key === "kind")).toBe(false);
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "status" });
+    expect(legend.items?.map((i) => i.label)).toEqual(["Producer", "Past producer", "Prospect or occurrence", "Plant, unknown, or a map symbol with no status"]);
+    expect(legend.note).toMatch(/about 2011/);
+    expect(timeShapeOf(layer)).toEqual({ shape: "none" });
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 5, minZoom: 10 });
+    expect(layer.display).toEqual({ units: "us" });
+    const record = layer.card?.facts?.find((f) => f.key === "source");
+    expect(record?.values?.MRDS).toMatch(/last updated about 2011/);
+    expect(record?.values?.USMIN).toMatch(/old topographic map/);
+    for (const f of [...normalizeMrds(mrds), ...normalizeUsmin(usmin)]) {
+      expect(record?.values?.[String(f.properties?.source)]).toBeTruthy();
+      expect(cardTitle(layer, f)).not.toMatch(/^Feature$/);
+    }
   });
 });

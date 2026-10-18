@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { normalizeWilderness } from "./wilderness";
+import layer, { RULES, normalizeWilderness, thinGeometry } from "./wilderness";
+import { contractProblems, legendOf, timeShapeOf } from "./contract";
 import raw from "./__fixtures__/wilderness.tahoe.json";
 
 const fixture = raw as unknown as FeatureCollection;
@@ -28,7 +29,7 @@ describe("wilderness layer", () => {
     expect(layer.style).toEqual({ geometry: "polygon", color: "#9FB693", fillOpacity: 0.22 });
   });
 
-  it("normalizes service rows to polygons with name, agency, acres, designated, t and v", () => {
+  it("normalizes service rows to polygons with name, agency, acres, designated, era and v, without a time axis", () => {
     const fc = normalizeWilderness(fixture);
     expect(fc.features.length).toBe(fixture.features.length);
     for (const f of fc.features) {
@@ -38,7 +39,9 @@ describe("wilderness layer", () => {
       expect(typeof p.acres).toBe("number");
       expect(typeof p.designated).toBe("number");
       expect(p.v).toBe(p.acres);
-      expect(p.t).toBe(`${p.designated}-01-01T00:00:00.000Z`);
+      expect(p).not.toHaveProperty("t");
+      expect(["before-1980", "1980-1999", "2000-on"]).toContain(p.era);
+      expect(p.rules).toBe(RULES);
     }
     const desolation = fc.features.find((f) => f.properties?.name === "Desolation Wilderness");
     expect(desolation?.properties).toMatchObject({
@@ -46,9 +49,36 @@ describe("wilderness layer", () => {
       acres: 64041,
       designated: 1969,
       state: "CA",
-      t: "1969-01-01T00:00:00.000Z",
+      era: "before-1980",
       v: 64041,
     });
+    expect(timeShapeOf(layer, fc)).toEqual({ shape: "none" });
+  });
+
+  it("thins the stair-stepped boundaries to about 100 m, keeping closed rings", () => {
+    const count = (g: unknown) => (JSON.stringify(g).match(/\[-?\d/g) ?? []).length;
+    const before = fixture.features.reduce((n, f) => n + count(f.geometry), 0);
+    const after = normalizeWilderness(fixture).features.reduce((n, f) => n + count(f.geometry), 0);
+    expect(after).toBeLessThan(before);
+    const ring: [number, number][] = [[0, 0], [0.0003, 0], [0.0006, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]];
+    expect(thinGeometry({ type: "Polygon", coordinates: [ring] })).toEqual({ type: "Polygon", coordinates: [[[0, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]]] });
+  });
+
+  it("fills by managing agency with a matching legend and says what is not allowed", () => {
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "agency" });
+    expect(legend.items?.map((i) => [i.value, i.label])).toEqual([
+      ["USFS", "US Forest Service"],
+      ["BLM", "Bureau of Land Management"],
+      ["NPS", "National Park Service"],
+      ["FWS", "US Fish and Wildlife Service"],
+    ]);
+    expect(new Set(legend.items?.map((i) => i.color)).size).toBe(4);
+    expect(RULES).toMatch(/No motor vehicles.*bicycles/);
+    expect(layer.fieldHelp?.rules?.text).toMatch(/drones/);
+    expect(layer.card?.facts?.map((f) => f.key)).toContain("rules");
+    expect(layer.labels).toEqual({ field: "name", max: 10, rankBy: "acres" });
+    expect(contractProblems(layer)).toEqual([]);
   });
 
   it("skips rows without geometry and tolerates missing fields", () => {

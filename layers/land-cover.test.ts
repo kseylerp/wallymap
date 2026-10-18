@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
-import layer, { NLCD_YEARS, WORLDCOVER_URL, nlcdEpoch, nlcdTileUrl } from "./land-cover";
+import layer, { NLCD_CLASSES, NLCD_YEARS, WORLDCOVER_URL, nlcdEpoch, nlcdTileUrl } from "./land-cover";
+import { contractProblems, legendOf, timeShapeOf } from "./contract";
 
 const PNW: [number, number, number, number] = [-123, 44, -121, 46];
 
@@ -90,5 +91,21 @@ describe("land-cover layer", () => {
   it("runs through runLayer", async () => {
     expect((await runLayer("land-cover", { bbox: PNW, zoom: 8 })).status).toBe(200);
     expect((await runLayer("land-cover", { bbox: PNW, input: { nlcd: "yes" } })).status).toBe(400);
+  });
+
+  it("keys the map with WorldCover's class colors and lets NLCD step and swipe between its nine years", async () => {
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories" });
+    expect(legend.items?.[0]).toEqual({ label: "Tree cover", value: 10, color: "#006400", symbol: "raster" });
+    expect(legend.items?.map((i) => i.label)).toContain("Cropland");
+    expect(NLCD_CLASSES.find((c) => c.value === 42)?.color).toBe("#1C5F2C");
+    const r = await layer.query({ bbox: [-123, 45.3, -122.3, 45.8], zoom: 9, env: {}, fetch: (() => Promise.reject(new Error("no call"))) as never }, { nlcd: true, year: 2016 });
+    if (!("kind" in r) || r.kind !== "tiles") throw new Error("expected tiles");
+    expect(r.data.scenario).toMatchObject({ param: "year", values: [2001, 2004, 2006, 2008, 2011, 2013, 2016, 2019, 2021] });
+    // The scenario template fills to the very URL each year's call returns.
+    expect(r.data.scenario?.template.replace("{value}", "2016")).toBe(r.data.url);
+    expect(r.data.scenario?.template.replace("{value}", "2001")).toBe(nlcdTileUrl(2001));
+    expect(timeShapeOf(layer)).toEqual({ shape: "single", dates: ["2021"] });
+    expect(contractProblems(layer)).toEqual([]);
   });
 });

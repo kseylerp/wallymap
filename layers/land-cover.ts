@@ -16,9 +16,12 @@
  *     and a `{year}` template would produce unknown layer names for years between epochs, so NLCD is not published
  *     as scrubbable: the `year` input snaps to the epoch at or before it and the model calls the layer once per year to compare.
  * No upstream call is made by the layer: it only builds the URL for the map to fetch.
+ * 2026-10-18: the legend is WorldCover's official class colors (WORLDCOVER_CLASSES, the colors its tiles draw), and an NLCD answer
+ * publishes its nine map years as a tile scenario (`{value}` in the layer name), so the map can step and swipe between
+ * NLCD years without a second call. NLCD's own class colors are in NLCD_CLASSES.
  */
 import { z } from "zod";
-import { defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type LegendSpec, type TileScenario } from "./types";
 import { registerLayer } from "./registry";
 import { wmsTileUrl } from "./_shared/wms";
 import { layerColor } from "@/lib/render/palette";
@@ -44,17 +47,71 @@ export function nlcdEpoch(year: number): (typeof NLCD_YEARS)[number] | null {
   return found;
 }
 
-export function nlcdTileUrl(epoch: number): string {
+export function nlcdTileUrl(epoch: number | string): string {
   return wmsTileUrl(NLCD_ENDPOINT, `NLCD_${epoch}_Land_Cover_L48`, { version: "1.1.1" });
 }
+
+/** ESA WorldCover 2021 classes with the colors its tiles draw (the product's own legend). */
+export const WORLDCOVER_CLASSES: { value: number; label: string; color: string }[] = [
+  { value: 10, label: "Tree cover", color: "#006400" },
+  { value: 20, label: "Shrubland", color: "#FFBB22" },
+  { value: 30, label: "Grassland", color: "#FFFF4C" },
+  { value: 40, label: "Cropland", color: "#F096FF" },
+  { value: 50, label: "Built-up", color: "#FA0000" },
+  { value: 60, label: "Bare or sparse vegetation", color: "#B4B4B4" },
+  { value: 70, label: "Snow and ice", color: "#F0F0F0" },
+  { value: 80, label: "Permanent water", color: "#0064C8" },
+  { value: 90, label: "Herbaceous wetland", color: "#0096A0" },
+  { value: 95, label: "Mangroves", color: "#00CF75" },
+  { value: 100, label: "Moss and lichen", color: "#FAE6A0" },
+];
+
+/** NLCD classes with the colors its tiles draw (the MRLC legend), for an answer with nlcd on. */
+export const NLCD_CLASSES: { value: number; label: string; color: string }[] = [
+  { value: 11, label: "Open water", color: "#466B9F" },
+  { value: 12, label: "Perennial ice and snow", color: "#D1DEF8" },
+  { value: 21, label: "Developed, open space", color: "#DEC5C5" },
+  { value: 22, label: "Developed, low intensity", color: "#D99282" },
+  { value: 23, label: "Developed, medium intensity", color: "#EB0000" },
+  { value: 24, label: "Developed, high intensity", color: "#AB0000" },
+  { value: 31, label: "Barren land", color: "#B3AC9F" },
+  { value: 41, label: "Deciduous forest", color: "#68AB5F" },
+  { value: 42, label: "Evergreen forest", color: "#1C5F2C" },
+  { value: 43, label: "Mixed forest", color: "#B5C58F" },
+  { value: 52, label: "Shrub and scrub", color: "#CCB879" },
+  { value: 71, label: "Grassland", color: "#DFDFC2" },
+  { value: 81, label: "Pasture and hay", color: "#DCD939" },
+  { value: 82, label: "Cultivated crops", color: "#AB6C28" },
+  { value: 90, label: "Woody wetlands", color: "#B8D9EB" },
+  { value: 95, label: "Emergent herbaceous wetlands", color: "#6C9FB8" },
+];
+
+export const LAND_COVER_LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Land cover (ESA WorldCover 2021)",
+  items: WORLDCOVER_CLASSES.map(({ value, label, color }) => ({ label, value, color, symbol: "raster" as const })),
+  note:
+    "With the US NLCD map on, its own key applies: " +
+    "evergreen forest dark green, deciduous light green, shrub tan, grassland pale, pasture yellow, crops brown, developed pink to dark red, water blue.",
+};
+
+/** The NLCD map years as a scenario: the map steps and swipes between them by filling `{value}` in the layer name. */
+export const NLCD_SCENARIO: TileScenario = {
+  param: "year",
+  label: "NLCD map year",
+  // The readout prints the value then the unit: "2016 NLCD".
+  unit: "NLCD",
+  values: [...NLCD_YEARS],
+  template: nlcdTileUrl("{value}"),
+};
 
 const landCover = defineLayer({
   id: "land-cover",
   title: "Land cover",
   description:
     "Map of what covers the ground: tree cover, shrubland, grassland, cropland, built-up area, bare ground, snow and ice, water, wetland, mangroves and moss. " +
-    "By default it is the ESA WorldCover 2021 map, global (60 S to 83 N), 10 m detail, one static year, drawn in the standard WorldCover colors (dark green trees, orange shrub, yellow grass, pink cropland, red built-up, grey bare, blue water, teal wetland). " +
-    "Set nlcd to true for the US National Land Cover Database (lower 48 states only, 30 m): year picks a map year and snaps to the latest available at or before it (2001, 2004, 2006, 2008, 2011, 2013, 2016, 2019 or 2021; default 2021). It is not on the time scrubber because only those nine years exist, so to show change call it twice with different years. " +
+    "By default it is the ESA WorldCover 2021 map, global (60 S to 83 N), 10 m detail, one static year, drawn in the standard WorldCover colors (dark green trees, orange shrub, yellow grass, pink cropland, red built-up, grey bare, blue water, teal wetland), which the legend names. " +
+    "Set nlcd to true for the US National Land Cover Database (lower 48 states only, 30 m): year picks a map year and snaps to the latest available at or before it (2001, 2004, 2006, 2008, 2011, 2013, 2016, 2019 or 2021; default 2021). It is not on the time scrubber because only those nine years exist; instead the map steps and swipes between the nine years (the scenario control), so for change call it once with nlcd and compare two years there. " +
     "Use it for 'land cover', 'what is the land used for', 'forest vs grassland', 'where are the croplands', 'how much of this area is built up', or what the vegetation type is under a trail or route. " +
     "Example questions: how much forest versus grassland is in this watershed, where is farmland around this town, how did land cover near Portland change between 2001 and 2021. " +
     "Caveats: it is a classified satellite map, so a pixel is a best guess (shrub, grass and cropland are the easiest to confuse); WorldCover has no year-to-year change, and NLCD classes differ slightly from WorldCover's. " +
@@ -67,6 +124,9 @@ const landCover = defineLayer({
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
   style: { geometry: "polygon", color: layerColor("land-cover"), raster: { saturation: -0.4, opacity: 0.65, swatch: "#6AA84F" } },
+  legend: LAND_COVER_LEGEND,
+  // WorldCover is one map (2021); NLCD's nine years step through the tile scenario instead of a scrubber.
+  time: { shape: "single", dates: ["2021"] },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     const retrieved = new Date().toISOString();
@@ -92,7 +152,7 @@ const landCover = defineLayer({
     const moved = epoch === requested ? "" : ` (the map nearest at or before ${requested}; NLCD maps exist for ${NLCD_YEARS.join(", ")})`;
     return {
       kind: "tiles",
-      data: { url: nlcdTileUrl(epoch), minzoom: 0, maxzoom: 13, format: "raster" },
+      data: { url: nlcdTileUrl(epoch), minzoom: 0, maxzoom: 13, format: "raster", scenario: NLCD_SCENARIO },
       citation: {
         source: "USGS Multi-Resolution Land Characteristics (MRLC) National Land Cover Database (public domain)",
         url: "https://www.mrlc.gov/",

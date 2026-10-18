@@ -1,5 +1,5 @@
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
-import type { Attribute, BBox, CardSpec, FieldHelp, LayerResult, StyleHints } from "@/layers/types";
+import type { Attribute, BBox, CardSpec, Coverage, DisplaySpec, FieldHelp, LabelSpec, LayerResult, LegendSpec, StyleHints, TimeSpec } from "@/layers/types";
 import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import type { LayerFilters } from "@/lib/render/filters";
 import { ROUTE_ERROR_ID } from "@/lib/render/reducer";
@@ -20,11 +20,45 @@ import {
   type Viewport,
 } from "@/lib/render/state";
 
+/** One layer's public entry, fetched by the browser from `GET /api/layers`. */
+export type CatalogEntry = {
+  title: string;
+  style: StyleHints;
+  license?: string;
+  description?: string;
+  coverage?: Coverage;
+  fieldHelp?: Record<string, FieldHelp>;
+  card?: CardSpec;
+  attributes?: Attribute[];
+  maxAreaKm2?: number;
+  /** The layer contract's declarations (docs/layer-contract.md); the browser infers the rest (lib/render/contract.ts). */
+  time?: TimeSpec;
+  legend?: LegendSpec;
+  labels?: LabelSpec;
+  display?: DisplaySpec;
+};
+
 /** Layer titles and styles by id, fetched by the browser from `GET /api/layers`. */
-export type LayerCatalog = Record<
-  string,
-  { title: string; style: StyleHints; license?: string; fieldHelp?: Record<string, FieldHelp>; card?: CardSpec; attributes?: Attribute[]; maxAreaKm2?: number }
->;
+export type LayerCatalog = Record<string, CatalogEntry>;
+
+/**
+ * What a loaded layer keeps from its catalog entry: field help, card, attributes, description, coverage and the
+ * contract's declarations, so the row, card, legend and time panel read one layer the same way however it arrived.
+ */
+export function catalogFields(entry: CatalogEntry | undefined) {
+  if (!entry) return {};
+  return {
+    ...(entry.fieldHelp && { fieldHelp: entry.fieldHelp }),
+    ...(entry.card && { card: entry.card }),
+    ...(entry.attributes && { attributes: entry.attributes }),
+    ...(entry.description && { description: entry.description }),
+    ...(entry.coverage && { coverage: entry.coverage }),
+    ...(entry.time && { time: entry.time }),
+    ...(entry.legend && { legend: entry.legend }),
+    ...(entry.labels && { labels: entry.labels }),
+    ...(entry.display && { display: entry.display }),
+  };
+}
 
 /** The map canvas size, and the screen area a fitted bbox must stay clear of (floating panels). */
 type Canvas = { width: number; height: number; padding?: Padding };
@@ -185,9 +219,7 @@ function queryActions(layerId: string, input: unknown, output: Obj, catalog: Lay
         style,
         result: output,
         receivedAt: new Date().toISOString(),
-        ...(entry?.fieldHelp && { fieldHelp: entry.fieldHelp }),
-        ...(entry?.card && { card: entry.card }),
-        ...(entry?.attributes && { attributes: entry.attributes }),
+        ...catalogFields(entry),
         ...(layerInput && { input: layerInput }),
       },
     },

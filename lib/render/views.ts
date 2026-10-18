@@ -1,6 +1,10 @@
 import type { Feature, FeatureCollection } from "geojson";
 import type { BBox } from "@/layers/types";
-import { defaultCompare, versionCompare } from "@/lib/render/compareView";
+import { defaultCompare, snapshotCompare, versionCompare, windowText } from "@/lib/render/compareView";
+import { changeStatement, identityKey, type ChangeStatement } from "@/lib/render/change";
+import { splitWindows } from "@/lib/render/compare";
+import { timeShape } from "@/lib/render/contract";
+import { shortTitle } from "@/layers/contract";
 import { attributeFor, measureKeyOf, primaryMeasure, topFeatures, versionSides, versionsAttribute } from "@/lib/render/attributes";
 import { applyFilters, type LayerFilters } from "@/lib/render/filters";
 import { featureBBox } from "@/lib/render/inspect";
@@ -34,12 +38,6 @@ function dates(data: FeatureCollection): Set<string> {
   return new Set(dateCounts(data).keys());
 }
 
-/** Two dates that each hold several features: one layer seen twice (two surveys, two passes), not two dated things. */
-function twoSets(data: FeatureCollection): boolean {
-  const counts = [...dateCounts(data).values()];
-  return counts.length === 2 && counts.every((n) => n >= 2);
-}
-
 /**
  * The view a layer's data asks for when the agent named none: one feature is a detail; a scenario tile layer a
  * scenario; two versions of the same features (a `versions` attribute, monument boundaries) or exactly two dates of several features each a change;
@@ -56,10 +54,46 @@ export function defaultView(layer: LoadedLayer, filters?: LayerFilters): ViewKin
   if (n === 1) return "detail";
   const versions = versionsAttribute(layer);
   if (versions && versionSides(versions, data)) return "change";
-  if (twoSets(data)) return "change";
-  if (dates(data).size >= 2) return "timeline";
+  // What time means decides the rest (docs/layer-contract.md): snapshots draw the newest of each thing, with the change
+  // stated in the row and the stepper one tap away; continuous dates are a timeline; none and single are not about time.
+  const shape = timeShape(layer).shape;
+  if (shape === "continuous" && dates(data).size >= 2) return "timeline";
   if (layer.style.geometry === "point" && n > DENSITY_MIN_POINTS) return "density";
   return undefined;
+}
+
+/** The measure a change is stated in: area when features carry `areaKm2`, else the primary measure, else `v`. */
+function changeMeasure(layer: LoadedLayer, features: readonly Feature[]): { key: string; label: string; unit?: string } | undefined {
+  const has = (key: string) => features.some((f) => typeof f.properties?.[key] === "number");
+  const measure = primaryMeasure(layer);
+  if (has("areaKm2")) return { key: "areaKm2", label: "Area", unit: "km²" };
+  if (measure && has(measure.key)) return { key: measure.key, label: measure.label, ...(measure.unit && { unit: measure.unit }) };
+  if (has("v") && layer.style.unit && layer.style.unit !== "score") return { key: "v", label: "Value", unit: layer.style.unit };
+  return undefined;
+}
+
+/**
+ * The one-line change between two sides of a layer (its compare, else its first and last snapshot epochs), computed from
+ * the data: "121 glaciers mapped in both the 1960s–70s and the 2010s lost 48% of their area (42.4 to 21.9 km²)."
+ * Null when the layer has nothing to compare.
+ */
+export function layerChange(layer: LoadedLayer, filters?: LayerFilters, compare?: CompareState): ChangeStatement | null {
+  if (layer.result.kind !== "geojson") return null;
+  const spec = compare && compare.layerId === layer.id && !compare.scenario ? compare : snapshotCompare(layer);
+  if (!spec) return null;
+  const data = filters ? applyFilters(layer.result.data, filters) : layer.result.data;
+  const { a, b } = splitWindows(data, spec);
+  const field = layer.style.timeField ?? "t";
+  const aLabel = spec.aLabel ?? windowText(spec.a);
+  const bLabel = spec.bLabel ?? windowText(spec.b);
+  return changeStatement(a.features, b.features, {
+    noun: shortTitle(layer).toLowerCase(),
+    aLabel,
+    bLabel,
+    idKey: identityKey(data.features, spec.by?.key ?? field),
+    measure: changeMeasure(layer, data.features),
+    timeField: field,
+  });
 }
 
 /** The bounding box around every feature's own box; null when none has coordinates. */
@@ -117,6 +151,8 @@ export function viewTarget(view: ViewKind | undefined, layer: LoadedLayer, filte
 export function changeCompare(layer: LoadedLayer, today: Date = new Date()): CompareState | null {
   const byVersion = versionCompare(layer);
   if (byVersion) return byVersion;
+  const bySnapshot = snapshotCompare(layer);
+  if (bySnapshot) return bySnapshot;
   if (layer.result.kind === "geojson") {
     if (dates(layer.result.data).size < 2) return null;
   } else if (!layer.result.data.time && !layer.result.data.scenario) {
@@ -171,6 +207,10 @@ export function viewCaption(view: ViewKind | undefined, layer: LoadedLayer, comp
       if (!compare || compare.layerId !== layer.id) return undefined;
       const a = compare.aLabel ?? "A";
       const b = compare.bLabel ?? "B";
+      if (layer.style.geometry === "polygon") {
+        const [la, lb] = [a, b].map((x) => (/^[A-Z][a-z]/.test(x) ? x.toLowerCase() : x));
+        return `Pink hatch: only in ${la} · pink line: ${la} edge · grey: ${lb} · purple: only in ${lb}`;
+      }
       return `Pink hatch: only ${a.toLowerCase()} · purple: ${b.toLowerCase()} · grey: both`;
     }
     case "ranked":

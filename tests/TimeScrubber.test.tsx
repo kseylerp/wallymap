@@ -138,7 +138,7 @@ describe("TimeScrubber", () => {
   it("says when a dated tile layer has no image for the window's date", () => {
     const { rerender } = render(<TimeScrubber time={start.time!} dispatch={() => {}} />);
     expect(screen.queryByTestId("time-missing-image")).toBeNull();
-    rerender(<TimeScrubber time={start.time!} dispatch={() => {}} missingImage />);
+    rerender(<TimeScrubber time={start.time!} dispatch={() => {}} missingImage="No image for 2025" />);
     expect(screen.getByTestId("time-missing-image").textContent).toBe("No image for 2025");
   });
 

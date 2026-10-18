@@ -1469,7 +1469,7 @@ const lostMemo = new WeakMap<GeoJSON.FeatureCollection, GeoJSON.FeatureCollectio
 export function lostAreas(data: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
   let out = lostMemo.get(data);
   if (!out) {
-    out = { type: "FeatureCollection", features: data.features.filter((f) => f.properties?.delta === "a-only" && isArea(f)) };
+    out = { type: "FeatureCollection", features: data.features.filter((f) => f.properties?.delta === "a-only" && f.properties?.deltaEdge !== true && isArea(f)) };
     lostMemo.set(data, out);
   }
   return out;
@@ -1519,6 +1519,21 @@ function withoutLines(data: GeoJSON.FeatureCollection): GeoJSON.FeatureCollectio
     const kept = data.features.filter((f) => !isLineGeometry(f.geometry));
     out = kept.length === data.features.length ? data : { ...data, features: kept };
     withoutLinesMemo.set(data, out);
+  }
+  return out;
+}
+
+const edgesMemo = new WeakMap<GeoJSON.FeatureCollection, { kept: GeoJSON.FeatureCollection; edges: GeoJSON.FeatureCollection }>();
+/** A delta split into its drawn features and the earlier edges of changed areas, made once per collection. */
+function splitEdges(data: GeoJSON.FeatureCollection): { kept: GeoJSON.FeatureCollection; edges: GeoJSON.FeatureCollection } {
+  let out = edgesMemo.get(data);
+  if (!out) {
+    const edges = data.features.filter((f) => f.properties?.deltaEdge === true);
+    out =
+      edges.length === 0
+        ? { kept: data, edges: { type: "FeatureCollection", features: [] } }
+        : { kept: { ...data, features: data.features.filter((f) => f.properties?.deltaEdge !== true) }, edges: { type: "FeatureCollection", features: edges } };
+    edgesMemo.set(data, out);
   }
   return out;
 }
@@ -1592,9 +1607,10 @@ function deltaLayers(op: RenderOp, { data: all, selected, terrain }: OpContext):
       }),
     ];
   }
-  // Delta lines are native Mapbox lines (lib/render/nativeLines.ts); deck keeps the areas and points.
-  const data = withoutLines(all);
-  if (data.features.length === 0) return [];
+  // Delta lines are native Mapbox lines (lib/render/nativeLines.ts); deck keeps the areas and points. The earlier edges
+  // of changed areas (a glacier's 1966 outline under its 2015 one) draw apart, as a pink line under the later outline.
+  const { kept: data, edges } = splitEdges(withoutLines(all));
+  if (data.features.length === 0 && edges.features.length === 0) return [];
   const updateTriggers = { getFillColor: trigger, getLineColor: trigger, getLineWidth: trigger };
   const strokeWidth = (f: Feature) => (isArea(f) ? DELTA_STROKE.polygon : DELTA_STROKE.line);
   // What only A had (lost) carries a pink hatch over its tint (spec §12), so it reads as gone on any basemap.
@@ -1623,8 +1639,36 @@ function deltaLayers(op: RenderOp, { data: all, selected, terrain }: OpContext):
           }),
         ]
       : [];
+  const edgeLayers: Layer[] =
+    edges.features.length > 0
+      ? [
+          new GeoJsonLayer({
+            id: `${id}:edges`,
+            data: edges,
+            pickable: false,
+            filled: false,
+            getLineColor: (f: Feature) => fade(f, hexToRgba(WHITE_HEX, 230)),
+            getLineWidth: DELTA_STROKE.polygon + 2 * DELTA_STROKE.casing,
+            lineWidthUnits: "pixels",
+            updateTriggers,
+            ...terrainProps(terrain, "drape"),
+          }),
+          new GeoJsonLayer({
+            id: `${id}:edges:line`,
+            data: edges,
+            pickable: false,
+            filled: false,
+            getLineColor: (f: Feature) => fade(f, DELTA_RGB["a-only"]),
+            getLineWidth: DELTA_STROKE.polygon,
+            lineWidthUnits: "pixels",
+            updateTriggers,
+            ...terrainProps(terrain, "drape"),
+          }),
+        ]
+      : [];
   return [
     ...hatch,
+    ...edgeLayers,
     new GeoJsonLayer({
       id: `${id}:casing`,
       data,

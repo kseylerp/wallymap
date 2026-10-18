@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
-import { TimeScrubber } from "@/components/TimeScrubber";
+import { TimePanel } from "@/components/TimePanel";
 import { frameAggregate } from "@/lib/render/series";
 import { linkedCurve } from "@/lib/render/linkedChart";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
@@ -22,7 +22,7 @@ import { compareBId, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compar
 import { columnResolution, hexbinThreshold, hexResolution } from "@/lib/render/deck";
 import { COMPARE_COLORS, DELTA_COLORS, DELTA_LINE_COLORS, isRouteProperties, LINE, WHITE } from "@/lib/render/palette";
 import { type HexBasis, type LoadedLayer, type MapAction, type MapState, type RenderMode, type RenderOp, type Selection, type TimeState } from "@/lib/render/state";
-import { hasMissingImage, missingTilesStore } from "@/lib/render/tileErrors";
+import { missingImageText, missingTilesStore } from "@/lib/render/tileErrors";
 import { rowScrollTop } from "@/lib/render/consoleScroll";
 import { LAYER_PANEL_WIDTH } from "@/lib/render/viewportPadding";
 import { hexTileLegend, legendSymbol, type LegendMode, type LegendSymbol } from "@/lib/render/wally/legend";
@@ -634,7 +634,8 @@ export function LayerStack({
   const items = stackOrder(layers, renderOps);
   // A dated tile layer whose tiles all failed for the window's date (lib/render/tileErrors.ts).
   const missingTiles = useSyncExternalStore(missingTilesStore.subscribe, missingTilesStore.get, missingTilesStore.get);
-  const missingImage = time !== undefined && hasMissingImage(shownLayers ?? layers, missingTiles);
+  const missingImage =
+    time !== undefined ? missingImageText({ layers: shownLayers ?? layers } as MapState, { layers } as MapState, missingTiles) : null;
   const [armed, setArmed] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -688,12 +689,15 @@ export function LayerStack({
       <div data-slot="time-scrubber" className="shrink-0 empty:hidden">
         {time && (
           <>
-            <TimeScrubber
+            <TimePanel
               time={time}
               dispatch={dispatch}
+              layers={layers}
+              renderOps={renderOps}
+              compare={compare}
               missingImage={missingImage}
-              aggregate={frameAggregate({ time, layers, renderOps })}
-              curve={linkedCurve({ time, layers, renderOps, selected }, center ?? null)}
+              aggregate={time.open ? frameAggregate({ time, layers, renderOps }) : null}
+              curve={time.open ? linkedCurve({ time, layers, renderOps, selected }, center ?? null) : null}
             />
             <div aria-hidden className="hairline mx-5" />
           </>

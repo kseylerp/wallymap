@@ -6,6 +6,8 @@ import { activeFilters, fullWindow } from "@/lib/render/reducer";
 import type { LoadedLayer, MapState, Selection } from "@/lib/render/state";
 import { scenarioOf, scenarioTileUrl } from "@/lib/render/scenario";
 import { filterByWindow, inWindow, tileUrlForTime, type TimeWindow } from "@/lib/time";
+import { identityKey, timeOf } from "@/lib/render/change";
+import { timeShape } from "@/lib/render/contract";
 
 /**
  * How many derived versions of one layer are kept: up to 64 (a played year-by-year span fits) for small layers, fewer
@@ -69,21 +71,56 @@ function scenarioUrl(state: MapState, layer: LoadedLayer): string | undefined {
   return scenarioTileUrl(contract, state.scenario.value);
 }
 
+const newestMemo = new WeakMap<FeatureCollection, FeatureCollection>();
+
+/**
+ * One feature per thing for a snapshot layer: the newest dated version of each (by the property naming one thing across
+ * dates, lib/render/change.ts `identityKey`), so a glacier's 1966 and 2015 outlines never draw in a tangle on top of each
+ * other. The same collection when nothing repeats.
+ */
+export function newestOfEach(data: FeatureCollection, timeField = "t"): FeatureCollection {
+  const hit = newestMemo.get(data);
+  if (hit) return hit;
+  const key = identityKey(data.features, timeField);
+  let out = data;
+  if (key) {
+    const newest = new Map<string, GeoJSON.Feature>();
+    for (const f of data.features) {
+      const raw = f.properties?.[key];
+      if (typeof raw !== "string" && typeof raw !== "number") continue;
+      const had = newest.get(String(raw));
+      if (!had || (timeOf(f, timeField) ?? -Infinity) > (timeOf(had, timeField) ?? -Infinity)) newest.set(String(raw), f);
+    }
+    const kept = new Set(newest.values());
+    const features = data.features.filter((f) => {
+      const raw = f.properties?.[key];
+      return (typeof raw !== "string" && typeof raw !== "number") || kept.has(f);
+    });
+    if (features.length < data.features.length) out = { ...data, features };
+  }
+  newestMemo.set(data, out);
+  return out;
+}
+
 function visibleLayer(
   layer: LoadedLayer,
   filters: LayerFilters | undefined,
   window: TimeWindow | undefined,
   rewriteTiles: boolean,
   scenario?: string,
+  wholeSpan = true,
 ): LoadedLayer {
   if (layer.result.kind === "geojson") {
-    if (!window && !filters) return layer;
+    // Snapshots over their whole span draw the newest version of each thing; a stepped date draws that date's.
+    const newest = wholeSpan && !layer.result.series && timeShape(layer).shape === "snapshots";
+    if (!window && !filters && !newest) return layer;
     const data = layer.result.data;
-    const key = `f:${filters ? JSON.stringify(filters) : ""}|t:${window ? `${window[0]}|${window[1]}` : ""}`;
+    const key = `f:${filters ? JSON.stringify(filters) : ""}|t:${window && !newest ? `${window[0]}|${window[1]}` : ""}|n:${newest}`;
     return remember(layer, key, () => {
       const filtered = applyFilters(data, filters);
       // applyFilters copies even when it keeps everything; the original keeps deck from re-uploading.
       const kept = filtered.features.length === data.features.length ? data : filtered;
+      if (newest) return withData(layer, newestOfEach(kept, layer.style.timeField ?? "t"));
       return withData(layer, window ? filterByWindow(kept, window) : kept);
     });
   }
@@ -120,7 +157,7 @@ export function visibleState(state: MapState): MapState {
       changed = true;
       continue;
     }
-    const next = visibleLayer(layer, filtersOf(state, id), window, rewriteTiles, scenarioUrl(state, layer));
+    const next = visibleLayer(layer, filtersOf(state, id), window, rewriteTiles, scenarioUrl(state, layer), !rewriteTiles);
     if (next !== layer) changed = true;
     layers[id] = next;
   }

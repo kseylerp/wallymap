@@ -49,8 +49,9 @@ describe("defaultView: the view the data asks for when the agent names none", ()
     expect(defaultView(layer("lakes", { geometry: "point", color: "#000" }, [point(0, 0, { v: 1 })]))).toBe("detail");
     const dated = [2019, 2020, 2021].map((y) => point(y, 0, { t: `${y}-07-01` }));
     expect(defaultView(layer("fires", { geometry: "point", color: "#000" }, dated))).toBe("timeline");
+    // Two surveys are snapshots: the newest of each draws, with the change stated, and no view is forced on them.
     const twoSurveys = [2015, 2015, 2025, 2025].map((y, i) => point(i, 0, { t: `${y}-08-01` }));
-    expect(defaultView(layer("glaciers", { geometry: "point", color: "#000" }, twoSurveys))).toBe("change");
+    expect(defaultView(layer("glaciers", { geometry: "point", color: "#000" }, twoSurveys))).toBeUndefined();
     const many = Array.from({ length: 501 }, (_, i) => point(i / 100, 0, {}));
     expect(defaultView(layer("gbif", { geometry: "point", color: "#000" }, many))).toBe("density");
     expect(defaultView(layer("x", { geometry: "point", color: "#000" }, many.slice(0, 20)))).toBeUndefined();
@@ -95,7 +96,7 @@ describe("the change view (owner, Bears Ears: 'How has Bears Ears changed since 
     const m = changeMeasures(bearsEars, a, b);
     expect(m).toMatchObject({ a: { total: 5944 }, b: { total: 487 }, difference: -5457, unit: "km²" });
     expect(changeText("2021 boundary", "Current boundary", m)).toBe("2021 boundary 5,944 km² · Current boundary 487 km² · difference −5,457 km²");
-    expect(viewCaption("change", bearsEars, s.compare)).toBe("Pink hatch: only 2021 boundary · purple: current boundary · grey: both");
+    expect(viewCaption("change", bearsEars, s.compare)).toBe("Pink hatch: only in 2021 boundary · pink line: 2021 boundary edge · grey: current boundary · purple: only in current boundary");
   });
 
   it("never moves the camera for a 'here' question (no place named this turn)", () => {

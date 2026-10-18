@@ -234,11 +234,28 @@ function withTimeIndex(state: MapState, allowCreate: boolean): MapState {
   if (!allowCreate) return state;
   const pending = state.pendingTime;
   const mode = pending?.mode ?? "slide";
+  // The panel opens by itself only for a time question (the agent set a window or play) or current continuous data.
+  const open = pending !== undefined || timeCritical(index);
   // A series opens one frame wide on its newest reading (spec §13: the date is the frame shown).
   const window = pending?.window ? clampWindow(index, pending.window) : index.series ? seriesFrame(index) : fullWindow(index);
-  let time: TimeState = { index, mode, playing: false, window: mode === "cumulative" ? [index.min, window[1]] : window };
+  let time: TimeState = { index, mode, playing: false, window: mode === "cumulative" ? [index.min, window[1]] : window, open };
   if (pending?.playing) time = startPlaying(time);
   return { ...state, time, pendingTime: undefined };
+}
+
+/** Newest date at most this old makes continuous data current (time-critical): fires, alerts, river flow. */
+export const CURRENT_DATA_DAYS = 10;
+
+/**
+ * True when the index is continuous data about now, whose time panel opens by itself: a series (river flow, currents),
+ * or dated features stepped by day or hour whose newest date is within CURRENT_DATA_DAYS (fire detections, quakes,
+ * weather alerts). Snapshots, archives and tile layers alone open folded.
+ */
+export function timeCritical(index: TimeIndex, now: number = Date.now()): boolean {
+  if (index.series) return true;
+  if (index.snapshots || index.cadence) return false;
+  if (index.bucket !== "day" && index.bucket !== "hour") return false;
+  return Date.parse(index.max) >= now - CURRENT_DATA_DAYS * 86_400_000;
 }
 
 /** One frame of a series index: the bucket at `at` (default its newest reading). */
@@ -402,12 +419,14 @@ function placeBounds(state: MapState): BBox | null {
  * selects the one feature. Then, for a named place, the camera fits what the view shows (the union of both sides for
  * change, the top N for ranked, the feature in the lower third for detail). The op remembers the view for the legend.
  */
-export function applyView(state: MapState, layerId: string, view: ViewKind): MapState {
+export function applyView(state: MapState, layerId: string, view: ViewKind, named = true): MapState {
   const layer = state.layers[layerId];
   const index = state.renderOps.findIndex((op) => op.layerId === layerId);
   if (!layer || index === -1) return state;
   let op: RenderOp = { ...state.renderOps[index], view };
   let next: MapState = state;
+  // A timeline the agent named is a question about time: the time panel opens on it.
+  if (view === "timeline" && named && next.time && !next.time.open) next = { ...next, time: { ...next.time, open: true } };
   if (view === "ranked") {
     // A measure is ranked, not filtered (spec §12c): every feature stays, sized by the measure, the top 10 listed.
     const rankBy = op.rankBy ?? rankedMeasure(layer);
@@ -527,7 +546,7 @@ function reduceAction(state: MapState, action: MapAction): MapState {
         if (index === -1 || !state.renderOps[index].view) return next;
         return { ...next, renderOps: next.renderOps.map((o) => (o.layerId === op.layerId ? { ...o, view: state.renderOps[index].view } : o)) };
       }
-      return applyView(next, action.op.layerId, view);
+      return applyView(next, action.op.layerId, view, action.op.view !== undefined);
     }
     case "toggle_layer": {
       const next = updateOp(state, action.layerId, (op) => ({ ...op, visible: !op.visible }));
@@ -679,12 +698,17 @@ function reduceAction(state: MapState, action: MapAction): MapState {
       }
       const clamped = clampWindow(state.time.index, action.window);
       const window: TimeWindow = state.time.mode === "cumulative" ? [state.time.index.min, clamped[1]] : clamped;
-      return sameWindow(window, state.time.window) ? state : { ...state, time: { ...state.time, window } };
+      // Setting a window is a time question: the panel opens to show it.
+      if (sameWindow(window, state.time.window)) return state.time.open ? state : { ...state, time: { ...state.time, open: true } };
+      return { ...state, time: { ...state.time, window, open: true } };
     }
+    case "set_time_open":
+      if (!state.time || (state.time.open ?? false) === action.open) return state;
+      return { ...state, time: { ...state.time, open: action.open } };
     case "set_time_playing": {
       if (!state.time) return state.pendingTime ? { ...state, pendingTime: { ...state.pendingTime, playing: action.playing } } : state;
       if (state.time.playing === action.playing) return state;
-      return { ...state, time: action.playing ? startPlaying(state.time) : { ...state.time, playing: false } };
+      return { ...state, time: action.playing ? { ...startPlaying(state.time), open: true } : { ...state.time, playing: false } };
     }
     case "set_time_mode": {
       // Before any dated layer, the mode waits with (or ahead of) the window the agent asks for next.

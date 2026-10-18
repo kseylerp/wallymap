@@ -1,5 +1,5 @@
 import { bboxAreaKm2, type BBox, type LayerError, type LayerResult, type StyleHints } from "@/layers/types";
-import type { LayerCatalog } from "@/lib/agent/applyToolResult";
+import { catalogFields, type LayerCatalog } from "@/lib/agent/applyToolResult";
 import type { LayerFilters } from "@/lib/render/filters";
 import { DARK_GREY } from "@/lib/render/palette";
 import type { CompareMode } from "@/lib/render/compare";
@@ -565,9 +565,7 @@ export async function restoreFromPermalink(
         style,
         result,
         receivedAt: new Date().toISOString(),
-        ...(entry?.fieldHelp && { fieldHelp: entry.fieldHelp }),
-        ...(entry?.card && { card: entry.card }),
-        ...(entry?.attributes && { attributes: entry.attributes }),
+        ...catalogFields(entry),
         ...(layer.input && { input: layer.input }),
       },
     });

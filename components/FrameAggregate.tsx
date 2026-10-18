@@ -6,7 +6,6 @@ import { playheadStore } from "@/lib/render/playhead";
 import { bucketAt } from "@/lib/render/reducer";
 import { frameDate, shareOfRange, valueAt, wantsYearDial, yearFraction, type FrameAggregate as Aggregate } from "@/lib/render/series";
 import type { TimeState } from "@/lib/render/state";
-import { windowLabel } from "@/lib/time";
 
 const MONTH_LETTERS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 
@@ -86,7 +85,8 @@ export function FrameAggregate({ time, aggregate }: { time: TimeState; aggregate
   const nextMs = Date.parse(index.buckets[Math.min(index.buckets.length - 1, j + 1)].start);
   const atMs = startMs + (nextMs - startMs) * Math.max(0, at - j);
   const forecast = index.series?.forecastFrom !== undefined && j >= index.series.forecastFrom;
-  const date = framed ? frameDate(startMs, index.bucket) : windowLabel(window, index.bucket);
+  // A window wider than one frame is already named in the scrubber's header: not printed twice.
+  const date = framed ? frameDate(startMs, index.bucket) : "";
   const share = value === null ? null : shareOfRange(value, aggregate);
   const dial = wantsYearDial(index);
   const isCount = aggregate.kind === "count";

@@ -29,10 +29,12 @@ const feat = (t?: unknown): Feature => ({
   properties: t === undefined ? {} : { t },
 });
 const fc = (...ts: unknown[]): FeatureCollection => ({ type: "FeatureCollection", features: ts.map(feat) });
-function layer(id: string, collection: FeatureCollection): LoadedLayer {
+/** A dated point layer; continuous unless another time shape is given (docs/layer-contract.md). */
+function layer(id: string, collection: FeatureCollection, time: LoadedLayer["time"] = { shape: "continuous" }): LoadedLayer {
   return {
     id,
     title: id,
+    time,
     style: { geometry: "point", color: "#000000" },
     result: { kind: "geojson", data: collection, citation: { source: "s", url: "u", retrieved: "r" } },
     receivedAt: "now",
@@ -192,13 +194,19 @@ describe("tileUrlForTime", () => {
     expect(out).toBe(night.template.replace("{date}", "2023-07-15"));
     expect(out).toContain("{z}/{y}/{x}");
   });
-  it("replaces {year} with the window end year and caps start_year", () => {
+  it("fills {year} from the window end and start_year from the window start (never past the end)", () => {
     const a = tileUrlForTime(lossUrl, loss, ["2015-01-01T00:00:00Z", "2020-12-31T23:59:59Z"]);
     expect(a).toContain("start_year=2015&end_year=2020&");
     expect(a).toContain("{z}/{x}/{y}.png");
     expect(a.endsWith("tree_cover_density_threshold=30")).toBe(true);
     const b = tileUrlForTime(lossUrl, loss, ["2001-01-01T00:00:00Z", "2010-12-31T23:59:59Z"]);
-    expect(b).toContain("start_year=2010&end_year=2010&");
+    expect(b).toContain("start_year=2001&end_year=2010&");
+    // A window before the layer's first year starts at that year.
+    expect(tileUrlForTime(lossUrl, loss, ["1990-01-01T00:00:00Z", "2005-12-31T23:59:59Z"])).toContain("start_year=2001&end_year=2005&");
+  });
+  it("fills {start} and {end} from the window's first and last day", () => {
+    const range: TileTime = { template: "https://x/{start}/{end}/{z}/{x}/{y}.png", cadence: "daily", from: "2020-01-01" };
+    expect(tileUrlForTime("https://x", range, ["2024-03-01T00:00:00Z", "2024-03-07T12:00:00Z"])).toBe("https://x/2024-03-01/2024-03-07/{z}/{x}/{y}.png");
   });
   it("leaves the url unchanged without data.time or with an unparseable window end", () => {
     expect(tileUrlForTime(nightUrl, undefined, ["2023-01-01", "2023-02-01"])).toBe(nightUrl);
@@ -207,7 +215,7 @@ describe("tileUrlForTime", () => {
   it("clamps a window that ends in the present to the latest published period", () => {
     const window: TimeWindow = ["2016-01-01T00:00:00Z", "2026-10-09T12:00:00Z"];
     expect(tileUrlForTime(nightUrl, night, window, now)).toBe(night.template.replace("{date}", "2026-10-06"));
-    expect(tileUrlForTime(lossUrl, loss, window, now)).toContain("start_year=2015&end_year=2025&");
+    expect(tileUrlForTime(lossUrl, loss, window, now)).toContain("start_year=2016&end_year=2025&");
     expect(tileUrlForTime(lossUrl, loss, ["2026-01-01T00:00:00Z", "2026-10-09T00:00:00Z"], now)).toContain("end_year=2025&");
   });
   it("clamps to from, to and daysBack", () => {
@@ -384,6 +392,7 @@ describe("timePresets (spec §12c: presets beside the scrubber)", () => {
     x: {
       id: "x",
       title: "x",
+      time: { shape: "continuous" },
       style: { geometry: "point", color: "#000" },
       result: {
         kind: "geojson",
@@ -395,7 +404,7 @@ describe("timePresets (spec §12c: presets beside the scrubber)", () => {
   });
 
   it("offers the last day, week and month for a short span, each ending at the data's end", () => {
-    const index = timeIndex(dated(["2026-09-01T00:00:00Z", "2026-10-15T06:00:00Z"]), { now })!;
+    const index = timeIndex(dated(["2026-09-01T00:00:00Z", "2026-09-20T00:00:00Z", "2026-10-10T00:00:00Z", "2026-10-15T06:00:00Z"]), { now })!;
     const presets = timePresets(index, now);
     expect(presets.map((p) => p.label)).toEqual(["Last 24 hours", "Last 7 days", "Last 30 days"]);
     expect(presets[1].window[0]).toBe("2026-10-08T12:00:00.000Z");
@@ -403,9 +412,22 @@ describe("timePresets (spec §12c: presets beside the scrubber)", () => {
   });
 
   it("offers this year and since a named year for a long span, and nothing that would not narrow it", () => {
-    const index = timeIndex(dated(["1995-06-01", "2026-03-01"]), { now })!;
-    expect(timePresets(index, now).map((p) => p.label)).toEqual(["This year", "Since 2021", "Since 2020", "Since 2010"]);
+    const index = timeIndex(dated(["1995-06-01", "2005-01-01", "2012-01-01", "2020-06-01", "2026-03-01"]), { now })!;
+    expect(timePresets(index, now).map((p) => p.label)).toEqual(["This year", "Since 2020", "Since 2010", "Since 2000"]);
     expect(timePresets(timeIndex(dated(["2026-10-15T01:00:00Z", "2026-10-15T02:00:00Z"]), { now })!, now)).toEqual([]);
+  });
+
+  it("drops presets that hold everything, nothing, or the same features as a finer one (glacier surveys)", () => {
+    // Two surveys 50 years apart: "Since 2010", "Since 2000" and "Since 1990" all held the 2015 outlines.
+    const index = timeIndex(dated(["1966-09-09", "1966-09-09", "1974-09-09", "2015-09-09", "2015-09-09", "2019-09-09"]), { now })!;
+    const labels = timePresets(index, now).map((p) => p.label);
+    expect(labels).toEqual(["Since 2010"]);
+  });
+
+  it("offers none for snapshots, a series, or tile layers that draw only the window's end", () => {
+    const snaps = timeIndex({ x: { ...dated(["1966-09-09", "1966-09-09", "2015-09-09", "2015-09-09"]).x, time: { shape: "snapshots" } } }, { now })!;
+    expect(snaps.snapshots?.stops.map((s) => s.label)).toEqual(["1966", "2015"]);
+    expect(timePresets(snaps, now)).toEqual([]);
   });
 });
 

@@ -1,5 +1,5 @@
 import type { FeatureCollection } from "geojson";
-import { deltaFeatures, hexDelta, presetFor, splitWindows, type CompareMode, type CompareSpec } from "@/lib/render/compare";
+import { deltaFeatures, hexDelta, presetFor, splitWindows, type CompareMode, type CompareSpec, type DeltaOptions } from "@/lib/render/compare";
 import { applyFilters, type LayerFilters } from "@/lib/render/filters";
 import type { CompareState, LoadedLayer, MapState } from "@/lib/render/state";
 import { createStore } from "@/lib/render/wally/playback";
@@ -7,6 +7,8 @@ import { currentScenarioValue, scenarioOf, scenarioTileUrl, scenarioValueText } 
 import type { TileTime } from "@/layers/types";
 import { tileUrlForTime, type TimeWindow } from "@/lib/time";
 import { versionSides, versionsAttribute } from "@/lib/render/attributes";
+import { epochLabel, epochWindow, identityKey, snapshotEpochs } from "@/lib/render/change";
+import { timeShape } from "@/lib/render/contract";
 
 /**
  * Compare over time, the view half (spec §7): what the map draws for the compared layer. The pure engine is
@@ -149,16 +151,28 @@ function deriveSides(layer: LoadedLayer, filters: LayerFilters | undefined, spec
   const filtered = filters ? applyFilters(data, filters) : data;
   const { a, b } = splitWindows(filtered, spec);
   const sides: Sides = { a: withData(layer, a), b: { ...withData(layer, b), id: compareBId(layer.id) } };
-  return withDelta ? withDeltaOf(layer, sides) : sides;
+  return withDelta ? withDeltaOf(layer, sides, spec) : sides;
+}
+
+/**
+ * How a delta matches one thing on both sides: by the property that names it across dates or versions (a glacier's id,
+ * a monument's name), so a glacier that shrank is "both" with its earlier edge, never "lost" and "new" at once.
+ */
+export function deltaOptions(layer: LoadedLayer, spec: Pick<CompareSpec, "by">): DeltaOptions {
+  if (layer.result.kind !== "geojson") return {};
+  const field = spec.by?.key ?? layer.style.timeField ?? "t";
+  const idKey = identityKey(layer.result.data.features, field);
+  const measureKey = layer.result.data.features.some((f) => typeof f.properties?.areaKm2 === "number") ? "areaKm2" : undefined;
+  return { ...(idKey && { idKey }), timeField: layer.style.timeField ?? "t", ...(measureKey && { measureKey }) };
 }
 
 /** `sides` plus the delta of its two collections (side A and B objects kept, so deck keeps their buffers). */
-function withDeltaOf(layer: LoadedLayer, sides: Sides): Sides {
+function withDeltaOf(layer: LoadedLayer, sides: Sides, spec: Pick<CompareSpec, "by">): Sides {
   if (sides.a.result.kind !== "geojson" || sides.b.result.kind !== "geojson") return sides;
   const a = sides.a.result.data;
   const b = sides.b.result.data;
   const hex = isHexCollection({ type: "FeatureCollection", features: [...a.features, ...b.features] });
-  return { ...sides, delta: withData(layer, hex ? hexDelta(a, b) : deltaFeatures(a, b)) };
+  return { ...sides, delta: withData(layer, hex ? hexDelta(a, b) : deltaFeatures(a, b, deltaOptions(layer, spec))) };
 }
 
 /**
@@ -182,7 +196,7 @@ export function compareSides(
   const hit = byKey.get(key);
   if (hit && (hit.delta || !withDelta || layer.result.kind === "tiles")) return hit;
   if (hit) {
-    const sides = withDeltaOf(layer, hit);
+    const sides = withDeltaOf(layer, hit, spec);
     byKey.set(key, sides);
     return sides;
   }
@@ -226,6 +240,8 @@ export function defaultCompare(layer: LoadedLayer, today: Date, state?: Pick<Map
   if (hasPreset(layer.id)) return presetFor(layer.id, today);
   const byVersion = versionCompare(layer);
   if (byVersion) return byVersion;
+  const bySnapshot = snapshotCompare(layer);
+  if (bySnapshot) return bySnapshot;
   const scenario = scenarioOf(layer);
   if (scenario) return defaultScenarioCompare(layer, scenario.values, state);
   const mode: CompareMode = layer.result.kind === "tiles" ? "toggle" : "delta";
@@ -252,6 +268,31 @@ export function defaultCompare(layer: LoadedLayer, today: Date, state?: Pick<Map
     b: [isoDay(new Date(mid + 86_400_000).toISOString()), isoDay(new Date(hi).toISOString())],
     mode,
   };
+}
+
+/** The snapshot epochs of a layer's data: survey campaigns, oldest first (lib/render/change.ts). */
+export function layerEpochs(layer: LoadedLayer): string[][] {
+  if (layer.result.kind !== "geojson") return [];
+  const field = layer.style.timeField ?? "t";
+  const days = new Set<string>();
+  for (const f of layer.result.data.features) {
+    const t = f.properties?.[field];
+    if (typeof t === "string" && !Number.isNaN(Date.parse(t))) days.add(t.slice(0, 10));
+  }
+  return snapshotEpochs([...days]);
+}
+
+/**
+ * The compare between a snapshot layer's first and last epoch (1960s–70s against the 2010s for glacier surveys), delta,
+ * labelled by epoch; null when the layer is not snapshots or has one epoch.
+ */
+export function snapshotCompare(layer: LoadedLayer): CompareState | null {
+  if (layer.result.kind !== "geojson" || timeShape(layer).shape !== "snapshots") return null;
+  const epochs = layerEpochs(layer);
+  if (epochs.length < 2) return null;
+  const first = epochs[0];
+  const last = epochs[epochs.length - 1];
+  return { layerId: layer.id, a: epochWindow(first), b: epochWindow(last), mode: "delta", aLabel: epochLabel(first), bLabel: epochLabel(last) };
 }
 
 /** The amounts a scenario compare opens on: A 1 and B 5 when listed (sea level rise in feet), else the amount shown and the last. */

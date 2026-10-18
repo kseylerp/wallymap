@@ -74,9 +74,9 @@ describe("visibleState", () => {
     expect(featureCounts(s, "forest-loss")).toBeNull();
   });
 
-  it("points a time-aware tile layer at the window's end once the window is narrowed", () => {
+  it("points a time-aware tile layer at the window's start and end once the window is narrowed", () => {
     const s = run(base, { type: "set_time_window", window: ["2014-01-01T00:00:00.000Z", "2018-12-31T23:59:59.999Z"] });
-    expect(urlOf(visibleState(s), "forest-loss")).toBe("https://tiles.test/{z}/{x}/{y}.png?start_year=2001&end_year=2018");
+    expect(urlOf(visibleState(s), "forest-loss")).toBe("https://tiles.test/{z}/{x}/{y}.png?start_year=2014&end_year=2018");
   });
 
   it("memoizes: the same state gives the same view, the same window the same data object", () => {

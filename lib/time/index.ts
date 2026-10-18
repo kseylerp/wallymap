@@ -7,6 +7,7 @@
 import type { FeatureCollection } from "geojson";
 import type { LoadedLayer } from "@/lib/render/state";
 import type { TileTime } from "@/layers/types";
+import { timeShape } from "@/lib/render/contract";
 
 export type Bucket = "hour" | "day" | "month" | "year";
 /** ISO inclusive start, inclusive end. */
@@ -28,7 +29,21 @@ export type TimeIndex = {
    * are forecast.
    */
   series?: { step: "day" | "hour"; now: number; forecastFrom?: number };
+  /**
+   * Set when every dated layer is a set of snapshots (docs/layer-contract.md: a few survey dates, glacier outlines):
+   * the time panel is a stepper between `stops` (each a date at the data's resolution with its feature count), not a
+   * scrubber, and compares the first epoch with the last.
+   */
+  snapshots?: { stops: SnapshotStop[] };
+  /**
+   * Tile layers only: every one fills the window's start as well as its end (`{start}` or `start_year=`), so a window
+   * wider than one period draws something a single period cannot (forest loss since 2015). Presets need it.
+   */
+  ranged?: boolean;
 };
+
+/** One stop of a snapshot stepper: its window (one year, month or day), its label and how many features it holds. */
+export type SnapshotStop = { start: string; end: string; label: string; count: number };
 
 export type TimeIndexOptions = {
   maxBuckets?: number;
@@ -90,6 +105,9 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: TimeIndexO
   const tileSets: { cadence: TileTime["cadence"]; starts: number[] }[] = [];
   const seriesSets: { step: "day" | "hour"; starts: number[]; now: number; forecastFrom?: number }[] = [];
   const now = opts?.now ?? Date.now();
+  // Every dated layer so far is a set of snapshots (the panel is then a stepper); a continuous one turns this off.
+  let allSnapshots = true;
+  let ranged = true;
   // Every date is January 1 at midnight: dates known only to the year (dams by year completed), stepped by year.
   let yearsOnly = true;
   for (const layer of Object.values(layers)) {
@@ -99,6 +117,7 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: TimeIndexO
       if (time && starts.length > 0) {
         tileSets.push({ cadence: time.cadence, starts });
         layerIds.push(layer.id);
+        if (!isRanged(time)) ranged = false;
       }
       continue;
     }
@@ -111,6 +130,10 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: TimeIndexO
         layerIds.push(layer.id);
       }
     }
+    // A layer whose time is not the question (dams by year built) or one reading per site gets no time panel: its dates
+    // neither open the panel nor filter its features.
+    const shape = series ? "continuous" : timeShape(layer).shape;
+    if (shape === "none" || shape === "single") continue;
     let any = false;
     for (const f of layer.result.data.features) {
       const t = (f.properties as Record<string, unknown> | null)?.t;
@@ -120,12 +143,15 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: TimeIndexO
       if (!JAN_FIRST.test(String(t))) yearsOnly = false;
       any = true;
     }
-    if (any) layerIds.push(layer.id);
+    if (any) {
+      layerIds.push(layer.id);
+      if (shape !== "snapshots") allSnapshots = false;
+    }
   }
   // A series sets the frames: dated features of other layers still filter by the frame's window.
   if (seriesSets.length > 0) return seriesIndex(seriesSets, layerIds);
   if (stamps.length === 0 && tileSets.length === 0) return null;
-  if (stamps.length === 0) return tileIndex(tileSets, layerIds);
+  if (stamps.length === 0) return { ...tileIndex(tileSets, layerIds), ...(ranged && { ranged: true }) };
 
   let min = stamps[0];
   let max = stamps[0];
@@ -150,7 +176,40 @@ export function timeIndex(layers: Record<string, LoadedLayer>, opts?: TimeIndexO
     end: new Date((i + 1 < starts.length ? starts[i + 1] : nextStart(s, bucket)) - 1).toISOString(),
     count: counts[i],
   }));
-  return { min: new Date(min).toISOString(), max: new Date(max).toISOString(), bucket, buckets, layerIds };
+  const snapshots = allSnapshots && tileSets.length === 0 ? snapshotStops(stamps, max - min) : undefined;
+  return {
+    min: new Date(min).toISOString(),
+    max: new Date(max).toISOString(),
+    bucket,
+    buckets,
+    layerIds,
+    ...(snapshots && snapshots.length >= 2 && { snapshots: { stops: snapshots } }),
+  };
+}
+
+/** A tile template that fills the window's start as well as its end. */
+function isRanged(time: TileTime): boolean {
+  return time.template.includes("{start}") || /[?&]start_year=/.test(time.template);
+}
+
+/**
+ * The stops of a snapshot stepper: the distinct dates at the resolution the span calls for (years over more than three
+ * years, months over more than 90 days, else days), each with its feature count, oldest first.
+ */
+function snapshotStops(stamps: number[], spanMs: number): SnapshotStop[] {
+  const unit: Bucket = spanMs > 3 * 365.25 * DAY_MS ? "year" : spanMs > 90 * DAY_MS ? "month" : "day";
+  const counts = new Map<number, number>();
+  for (const ms of stamps) {
+    const k = floorTo(ms, unit);
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([start, count]) => {
+      const end = new Date(nextStart(start, unit) - 1).toISOString();
+      const iso = new Date(start).toISOString();
+      return { start: iso, end, label: windowLabel([iso, iso], unit), count };
+    });
 }
 
 /** Finest first: with tile layers of several cadences, the finest one sets the steps and the others follow it. */
@@ -377,21 +436,40 @@ export function tileUrlForTime(
   const fromMs = boundMs(time.from);
   const toMs = boundMs(time.to);
 
+  const startMs = Date.parse(window[0]);
+  const fromYear = fromMs === null ? -Infinity : new Date(fromMs).getUTCFullYear();
+
   if (time.template.includes("{year}")) {
     const latest = Math.min(endMs, toMs ?? Infinity, now - (time.daysBack ?? 0) * DAY_MS);
     let year = new Date(latest).getUTCFullYear();
     if (fromMs !== null) year = Math.max(year, new Date(fromMs).getUTCFullYear());
     if (toMs !== null) year = Math.min(year, new Date(toMs).getUTCFullYear());
     const filled = time.template.replace(/\{year\}/g, String(year));
-    return filled.replace(/([?&]start_year=)(\d+)/, (_m, pre: string, v: string) => `${pre}${Math.min(Number(v), year)}`);
+    // The window's start year, when it has one: "since 2015" draws the loss from 2015 on, not the template's own start.
+    const startYear = Number.isNaN(startMs) ? undefined : Math.max(fromYear, new Date(startMs).getUTCFullYear());
+    return filled.replace(/([?&]start_year=)(\d+)/, (_m, pre: string, v: string) => `${pre}${Math.min(startYear ?? Number(v), year)}`);
   }
 
-  if (!time.template.includes("{date}")) return url;
+  if (!time.template.includes("{date}") && !time.template.includes("{end}")) return url;
   let ms = Math.min(endMs, toMs ?? Infinity, now - (time.daysBack ?? 0) * DAY_MS);
   if (fromMs !== null) ms = Math.max(ms, fromMs);
   let day = periodStart(ms, time.cadence);
   if (fromMs !== null) day = Math.max(day, dayFloor(fromMs));
-  return time.template.replace(/\{date\}/g, new Date(day).toISOString().slice(0, 10));
+  const endDay = new Date(day).toISOString().slice(0, 10);
+  // `{start}`: the window's first day (clamped to `from` and to the end), so a source that takes a range draws it all.
+  let first = Number.isNaN(startMs) ? day : Math.min(day, dayFloor(startMs));
+  if (fromMs !== null) first = Math.max(first, dayFloor(fromMs));
+  const startDay = new Date(first).toISOString().slice(0, 10);
+  return time.template.replace(/\{date\}/g, endDay).replace(/\{end\}/g, endDay).replace(/\{start\}/g, startDay);
+}
+
+/**
+ * The period a dated tile URL draws (the `{date}`, `{end}` or `{year}` it was filled with), as epoch ms; null when the
+ * URL does not follow the template. The scrubber names it when it falls back to the loaded image.
+ */
+export function periodOfUrl(url: string, time: TileTime | undefined): number | null {
+  if (!time) return null;
+  return loadedPeriod(url, time.template.replace("{end}", "{date}"));
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -422,14 +500,28 @@ const MAX_PRESETS = 4;
  * relative ones (tests pass a clock).
  */
 export function timePresets(index: TimeIndex, now: number = Date.now()): TimePreset[] {
-  // A series plays frame by frame; its presets would only widen the window over many frames.
-  if (index.buckets.length < 2 || index.series) return [];
+  // A series plays frame by frame; its presets would only widen the window over many frames. Snapshots step between
+  // their dates. A tile layer that draws only the window's end shows the same image for every preset.
+  if (index.buckets.length < 2 || index.series || index.snapshots) return [];
+  if (index.cadence && !index.ranged) return [];
   const lo = Date.parse(index.buckets[0].start);
   const end = index.buckets[index.buckets.length - 1].end;
   const hi = Date.parse(end);
   const out: TimePreset[] = [];
+  // Features each window holds: a preset that holds everything, nothing, or the same as a finer preset selects
+  // nothing new (glacier surveys: "Since 2010", "Since 2000" and "Since 1990" all held the same 141 outlines).
+  const counted = index.cadence === undefined;
+  const total = index.buckets.reduce((sum, b) => sum + b.count, 0);
+  const held = (start: number) => index.buckets.reduce((sum, b) => (Date.parse(b.end) >= start ? sum + b.count : sum), 0);
+  const seen = new Set<number>();
   const add = (label: string, start: number) => {
-    if (start > lo && start < hi && out.length < MAX_PRESETS) out.push({ label, window: [new Date(start).toISOString(), end] });
+    if (!(start > lo && start < hi) || out.length >= MAX_PRESETS) return;
+    if (counted) {
+      const n = held(start);
+      if (n === 0 || n === total || seen.has(n)) return;
+      seen.add(n);
+    }
+    out.push({ label, window: [new Date(start).toISOString(), end] });
   };
   const span = hi - lo;
   if (span <= 120 * DAY_MS) {

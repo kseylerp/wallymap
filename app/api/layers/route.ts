@@ -15,6 +15,11 @@ export async function GET(): Promise<Response> {
       ...(l.fieldHelp && { fieldHelp: l.fieldHelp }),
       ...(l.card && { card: l.card }),
       ...(l.attributes && { attributes: l.attributes }),
+      // The layer contract (docs/layer-contract.md): the browser resolves time shape, legend, labels and units from these.
+      ...(l.time && { time: l.time }),
+      ...(l.legend && { legend: l.legend }),
+      ...(l.labels && { labels: l.labels }),
+      ...(l.display && { display: l.display }),
     })),
   );
 }

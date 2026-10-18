@@ -1,4 +1,4 @@
-import type { LayerCatalog } from "@/lib/agent/applyToolResult";
+import { catalogFields, type LayerCatalog } from "@/lib/agent/applyToolResult";
 
 /**
  * The public layer catalog the browser reads once (`GET /api/layers`): each layer's title, style, licence, field help,
@@ -17,9 +17,7 @@ export async function fetchCatalog(): Promise<LayerCatalog> {
           title: e.title,
           style: e.style,
           license: e.license,
-          ...(e.fieldHelp && { fieldHelp: e.fieldHelp }),
-          ...(e.card && { card: e.card }),
-          ...(e.attributes && { attributes: e.attributes }),
+          ...catalogFields(e),
           ...(typeof e.maxAreaKm2 === "number" && { maxAreaKm2: e.maxAreaKm2 }),
         },
       ]),

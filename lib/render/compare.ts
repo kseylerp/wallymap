@@ -152,25 +152,50 @@ function withProps(f: Feature, extra: Props, geometry?: Geometry): Feature {
   return { ...f, geometry: geometry === undefined ? f.geometry : geometry, properties: { ...(f.properties ?? {}), ...extra } };
 }
 
-function indexByKey(fc: FeatureCollection): Map<string, Feature> {
+function indexByKey(fc: FeatureCollection, idKey?: string, latest = false, timeField = "t"): Map<string, Feature> {
   const m = new Map<string, Feature>();
   for (const f of fc.features) {
-    const k = featureKey(f);
-    if (!m.has(k)) m.set(k, f);
+    const own = idKey ? propsOf(f)[idKey] : undefined;
+    const k = present(own) ? `${idKey}:${String(own)}` : featureKey(f);
+    const had = m.get(k);
+    if (!had) {
+      m.set(k, f);
+      continue;
+    }
+    // One thing mapped twice on a side (a glacier outlined in 1966 and 1974): side A keeps its earliest, B its latest.
+    if (idKey && present(own)) {
+      const ta = Date.parse(String(propsOf(had)[timeField] ?? ""));
+      const tb = Date.parse(String(propsOf(f)[timeField] ?? ""));
+      if (!Number.isNaN(ta) && !Number.isNaN(tb) && (latest ? tb > ta : tb < ta)) m.set(k, f);
+    }
   }
   return m;
 }
 
+function isArea(g: Geometry | null | undefined): boolean {
+  return g?.type === "Polygon" || g?.type === "MultiPolygon";
+}
+
+/** Options for deltaFeatures: the property naming one thing across both sides (a glacier's id), and the date field. */
+export type DeltaOptions = { idKey?: string; timeField?: string; measureKey?: string };
+
 /**
- * Classify features by presence in A and B. Order: a-only, both, b-only. For "both" the geometry and properties
- * come from B, and a numeric `v` in both adds `dv = vB - vA`. Duplicate keys within one side keep the first.
+ * Classify features by presence in A and B. Order: a-only, the earlier edges of changed areas, both, b-only. For
+ * "both" the geometry and properties come from B, and a numeric `v` (or `measureKey`) in both adds `dv = B − A`, with
+ * `before` and `after`. With an `idKey`, one thing mapped at both times matches by that property, not by its shape: an
+ * area whose outline changed (a glacier that shrank) is "both", and its earlier outline comes along as a feature with
+ * `deltaEdge: true` (drawn as a pink line under the later outline, never counted). Duplicate keys within one side keep
+ * the first (with an id: A its earliest, B its latest).
  */
-export function deltaFeatures(a: FeatureCollection, b: FeatureCollection): FeatureCollection {
-  const ia = indexByKey(a);
-  const ib = indexByKey(b);
+export function deltaFeatures(a: FeatureCollection, b: FeatureCollection, opts: DeltaOptions = {}): FeatureCollection {
+  const timeField = opts.timeField ?? "t";
+  const ia = indexByKey(a, opts.idKey, false, timeField);
+  const ib = indexByKey(b, opts.idKey, true, timeField);
   const aOnly: Feature[] = [];
+  const edges: Feature[] = [];
   const both: Feature[] = [];
   const bOnly: Feature[] = [];
+  const mk = opts.measureKey ?? "v";
   for (const [k, fa] of ia) {
     const fb = ib.get(k);
     if (!fb) {
@@ -178,15 +203,27 @@ export function deltaFeatures(a: FeatureCollection, b: FeatureCollection): Featu
       continue;
     }
     const extra: Props = { delta: "both" satisfies DeltaClass };
-    const va = numeric(propsOf(fa).v);
-    const vb = numeric(propsOf(fb).v);
-    if (va !== undefined && vb !== undefined) extra.dv = vb - va;
+    const va = numeric(propsOf(fa)[mk]);
+    const vb = numeric(propsOf(fb)[mk]);
+    if (va !== undefined && vb !== undefined) {
+      extra.dv = vb - va;
+      extra.before = va;
+      extra.after = vb;
+    }
+    if (fa !== fb && isArea(fa.geometry) && isArea(fb.geometry) && featureKey(fa) !== featureKey(fb)) {
+      edges.push(withProps(fa, { delta: "a-only" satisfies DeltaClass, deltaEdge: true }));
+    }
     both.push(withProps(fb, extra, fb.geometry ?? fa.geometry));
   }
   for (const [k, fb] of ib) {
     if (!ia.has(k)) bOnly.push(withProps(fb, { delta: "b-only" satisfies DeltaClass }));
   }
-  return { type: "FeatureCollection", features: [...aOnly, ...both, ...bOnly] };
+  return { type: "FeatureCollection", features: [...aOnly, ...edges, ...both, ...bOnly] };
+}
+
+/** True for the earlier outline of a changed area in a delta (drawn as a line, never counted or picked). */
+export function isDeltaEdge(f: Feature): boolean {
+  return propsOf(f).deltaEdge === true;
 }
 
 type Cell = { geomA?: Geometry | null; geomB?: Geometry | null; propsA?: Props; propsB?: Props; nA: number; nB: number; sumA: number; sumB: number; hasV: boolean };
@@ -244,11 +281,12 @@ export function hexDelta(a: FeatureCollection, b: FeatureCollection): FeatureCol
   return { type: "FeatureCollection", features };
 }
 
-/** Counts per class, plus the mean `dv` over features that have one (omitted when none do). */
+/** Counts per class, plus the mean `dv` over features that have one (omitted when none do). Earlier edges are not counted. */
 export function compareSummary(delta: FeatureCollection): { aOnly: number; bOnly: number; both: number; dvMean?: number } {
   let aOnly = 0, bOnly = 0, both = 0, n = 0, sum = 0;
   for (const f of delta.features) {
     const p = propsOf(f);
+    if (p.deltaEdge === true) continue;
     if (p.delta === "a-only") aOnly++;
     else if (p.delta === "b-only") bOnly++;
     else if (p.delta === "both") both++;

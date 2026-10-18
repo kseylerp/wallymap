@@ -1,5 +1,5 @@
 import type { Feature, LineString } from "geojson";
-import type { Attribute, BBox, CardSpec, Encoding, FieldHelp, LayerResult, StyleHints } from "@/layers/types";
+import type { Attribute, BBox, CardSpec, Coverage, DisplaySpec, Encoding, FieldHelp, LabelSpec, LayerResult, LegendSpec, StyleHints, TimeSpec } from "@/layers/types";
 import type { CompareSpec } from "@/lib/render/compare";
 import type { LayerFilters } from "@/lib/render/filters";
 import type { TimeIndex, TimeWindow } from "@/lib/time";
@@ -103,6 +103,17 @@ export type LoadedLayer = {
   card?: CardSpec;
   /** The fields a person can slice the layer by (spec §12c), from the catalog: the row's controls. */
   attributes?: Attribute[];
+  /** The layer's description and coverage, from the catalog: the legend's raster note and the units a card prints in. */
+  description?: string;
+  coverage?: Coverage;
+  /**
+   * The layer contract's declarations (docs/layer-contract.md), from the catalog. lib/render/contract.ts resolves each
+   * (declared, else inferred from the data): what time means, the legend, the on-map labels, units and clock.
+   */
+  time?: TimeSpec;
+  legend?: LegendSpec;
+  labels?: LabelSpec;
+  display?: DisplaySpec;
   /**
    * Set on a layer narrowed by its filters or the time window (lib/render/view.ts): every loaded feature, so a measure's
    * size and color keep one range across frames and filters (lib/render/encode.ts).
@@ -199,7 +210,13 @@ export type CompareState = CompareSpec & {
 /** "slide" moves the whole window each step; "cumulative" keeps the start at the first date and grows the end. */
 export type TimeMode = "slide" | "cumulative";
 
-export type TimeState = { window: TimeWindow; playing: boolean; mode: TimeMode; index: TimeIndex };
+/**
+ * The time window and its panel. `open` is whether the panel shows its controls (the scrubber or the snapshot stepper)
+ * rather than one line: it opens by itself only when the question is about time (the agent set a time or named the
+ * timeline view) or the data is continuous and current (fire detections, alerts, river flow); otherwise the window
+ * still applies and one tap opens it.
+ */
+export type TimeState = { window: TimeWindow; playing: boolean; mode: TimeMode; index: TimeIndex; open?: boolean };
 
 /** Route preview: how far along (0 to 1), whether it is moving, and the speed as a multiple of 10 km per minute. */
 export type Playback = { routeId: string; fraction: number; playing: boolean; speed: number };
@@ -271,6 +288,8 @@ export type MapAction =
   | { type: "time_tick" }
   /** Hides the scrubber and shows every feature again. */
   | { type: "clear_time" }
+  /** Opens the time panel's controls, or folds them to one line (the window stays). */
+  | { type: "set_time_open"; open: boolean }
   /** Starts (or replaces) a compare; windows are put in order, play on the scrubber pauses, toggle shows A first. */
   | { type: "set_compare"; compare: CompareState }
   | { type: "set_compare_mode"; mode: CompareSpec["mode"] }

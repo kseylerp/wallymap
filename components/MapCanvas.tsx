@@ -14,7 +14,7 @@ import { deckLayerFilter, pickPasses, pickToSelection, pickUnderHeat, type DeckP
 import { lineLayerId, linePickToSelection, PICKABLE_PARTS } from "@/lib/render/nativeLines";
 import { viewFromCamera, type MapView } from "@/lib/agent/view";
 import { initialMapState, type Basemap, type MapState, type Selection, type Viewport } from "@/lib/render/state";
-import { noteTile } from "@/lib/render/tileErrors";
+import { missingTilesStore, noteTile, withTileFallback } from "@/lib/render/tileErrors";
 import { tileSwipeLayers } from "@/lib/render/tileSides";
 import { visibleState } from "@/lib/render/view";
 import { animateSeriesLines, resetSeriesLines } from "@/lib/render/seriesLines";
@@ -164,6 +164,11 @@ function sameViewport(a: Viewport, b: Viewport): boolean {
 
 /** Tile URLs re-request at most this often while the time window moves (spec §5). */
 const TILE_TIME_DEBOUNCE_MS = 150;
+
+/** The tile layers as drawn: the visible state, with a dated layer whose window has no image back on its loaded image. */
+function tileView(state: MapState): MapState {
+  return withTileFallback(visibleState(state), state, missingTilesStore.get());
+}
 
 /** Every tile layer's URL, so a time step that rewrites one can be told apart from other state changes. */
 function tileUrlsKey(view: MapState): string {
@@ -505,7 +510,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       syncSatelliteHybrid(map, stateRef.current.basemap);
       // After the hybrid, so its fog is already set and its imagery sits below the buildings.
       sync3D(map, wantsTerrain(stateRef.current));
-      syncTileLayers(map, visibleState(stateRef.current));
+      syncTileLayers(map, tileView(stateRef.current));
       syncHeatLayers(map, visibleState(stateRef.current));
       syncLineLayers(map, visibleState(stateRef.current));
       // A style swap dropped the line sources and their feature state: a series sets its frame again.
@@ -611,7 +616,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     sidesRef.current = syncSideOverlays(map, sidesRef.current, sets);
     const key = tileUrlsKey(view);
     if (key === appliedTilesKeyRef.current && tileTimerRef.current === null) {
-      syncTileLayers(map, view);
+      syncTileLayers(map, tileView(state));
     } else {
       if (tileTimerRef.current !== null) window.clearTimeout(tileTimerRef.current);
       tileTimerRef.current = window.setTimeout(() => {
@@ -619,7 +624,7 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
         if (mapRef.current !== map) return;
         const latest = visibleState(stateRef.current);
         appliedTilesKeyRef.current = tileUrlsKey(latest);
-        syncTileLayers(map, latest);
+        syncTileLayers(map, tileView(stateRef.current));
       }, TILE_TIME_DEBOUNCE_MS);
     }
     syncHeatLayers(map, view);
@@ -627,6 +632,16 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     animateSeriesLines(map, drawnLineEntries(map).values(), view, playheadStore.get());
     syncRouteLayers(map, state);
   }, [state, pushDeck]);
+
+  // A dated tile layer's image turning up missing points it back at its loaded image (lib/render/tileErrors.ts).
+  useEffect(
+    () =>
+      missingTilesStore.subscribe(() => {
+        const map = mapRef.current;
+        if (map) syncTileLayers(map, tileView(stateRef.current));
+      }),
+    [],
+  );
 
   // Flow layers (ocean currents, wind) animate their particles every animation frame while one is shown, outside React;
   // a hidden tab pauses them (requestAnimationFrame does not run there, and a hidden page skips the work).

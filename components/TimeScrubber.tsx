@@ -13,8 +13,8 @@ import { stepLabel, stepWindow, timePresets, windowLabel, type Bucket, type Time
 type TimeScrubberProps = {
   time: TimeState;
   dispatch: (action: MapAction) => void;
-  /** True when a dated tile layer has no image for the window's date (its tiles all failed). */
-  missingImage?: boolean;
+  /** Set when a dated tile layer has no image for the window's date: what the map shows instead ("No image for … "). */
+  missingImage?: string | null;
   /** The live aggregate (spec §13): the frame's date and total against the period's low and high. */
   aggregate?: Aggregate | null;
   /** The linked curve (spec §13a): the tide, the flow at a reach, the wind at the center, synced with the playhead. */
@@ -44,7 +44,7 @@ const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 h
  * the window's dates, and × to clear. Text only; the window and its handles are purple (palette §11). It only shows and changes state: the play timer runs in
  * the app (lib/render/useTimePlay.ts), so play goes on while the panel is closed.
  */
-export function TimeScrubber({ time, dispatch, missingImage = false, aggregate = null, curve = null }: TimeScrubberProps) {
+export function TimeScrubber({ time, dispatch, missingImage = null, aggregate = null, curve = null }: TimeScrubberProps) {
   const { index, window, playing, mode } = time;
   const n = index.buckets.length;
   const i = bucketAt(index, window[0]);
@@ -160,6 +160,9 @@ export function TimeScrubber({ time, dispatch, missingImage = false, aggregate =
         <p aria-live="polite" className="min-w-0 flex-1 truncate text-[13px] leading-[18px] text-ink tabular-nums" data-testid="time-window-label">
           {label}
         </p>
+        <button type="button" onClick={() => dispatch({ type: "set_time_open", open: false })} className="text-[12px] text-ink-muted transition-colors hover:text-ink" data-testid="time-fold" title="Fold the time panel to one line">
+          Fold
+        </button>
         <button
           type="button"
           onClick={() => dispatch({ type: "clear_time" })}
@@ -247,8 +250,8 @@ export function TimeScrubber({ time, dispatch, missingImage = false, aggregate =
       <div className="mt-1 flex items-baseline justify-between text-[11px] leading-4 text-ink-muted tabular-nums">
         <span>{bucketName(index.buckets[0].start, index.bucket)}</span>
         {missingImage ? (
-          <span role="status" data-testid="time-missing-image" className="text-ink">
-            No image for {bucketName(index.buckets[j].start, index.bucket)}
+          <span role="status" data-testid="time-missing-image" className="min-w-0 truncate px-2 text-ink">
+            {missingImage}
           </span>
         ) : (
           <span data-testid="time-step-label">{stepLabel(index)}</span>

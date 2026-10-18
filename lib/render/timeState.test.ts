@@ -169,8 +169,8 @@ describe("a single-date layer", () => {
   });
 
   it("opens the scrubber once a second date arrives", () => {
-    const one = layer("fire-perimeters", fc("2016-07-01T00:00:00.000Z"));
-    const two = layer("fire-detections", fc("2018-07-01T00:00:00.000Z"));
+    const one = { ...layer("fire-perimeters", fc("2016-07-01T00:00:00.000Z")), time: { shape: "continuous" as const } };
+    const two = { ...layer("fire-detections", fc("2018-07-01T00:00:00.000Z")), time: { shape: "continuous" as const } };
     const s = run(initialMapState, { type: "layer_loaded", layer: one }, { type: "layer_loaded", layer: two });
     expect(s.time?.index.buckets.length).toBeGreaterThanOrEqual(2);
   });

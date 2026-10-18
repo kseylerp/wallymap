@@ -102,6 +102,25 @@ function datedValues(layer: Pick<Layer, "style">, features: Feature[]): string[]
   return values;
 }
 
+/** True when some id-like property (`glacierId`, `osmId`) names one thing on two different dates: one thing surveyed twice. */
+function seenAtTwoDates(layer: Pick<Layer, "style">, features: Feature[]): boolean {
+  const field = layer.style.timeField ?? "t";
+  const keys = new Set<string>();
+  for (const f of features.slice(0, 50)) for (const k of Object.keys(f.properties ?? {})) if (/(^id$|Id$|_id$)/.test(k)) keys.add(k);
+  for (const key of keys) {
+    const first = new Map<string, string>();
+    for (const f of features) {
+      const id = f.properties?.[key];
+      const t = isoOf(f.properties?.[field]);
+      if ((typeof id !== "string" && typeof id !== "number") || t === null) continue;
+      const had = first.get(String(id));
+      if (had === undefined) first.set(String(id), t.slice(0, 10));
+      else if (had !== t.slice(0, 10)) return true;
+    }
+  }
+  return false;
+}
+
 /** Distinct dates by calendar day (or the coarser year or month the values carry), oldest first. */
 const distinctDays = (values: string[]) => [...new Set(values.map((v) => v.slice(0, 10)))].sort();
 
@@ -126,7 +145,9 @@ function inferFromData(layer: Pick<Layer, "style">, data?: LayerResult | Feature
   const days = distinctDays(values);
   const span = { start: days[0], end: days[days.length - 1] };
   if (days.length === 1) return { shape: "single", dates: days, span };
-  if (days.length <= MAX_SNAPSHOTS && values.length >= 2 * days.length) return { shape: "snapshots", dates: days, span, step: stepOf(days) };
+  if (days.length <= MAX_SNAPSHOTS && (values.length >= 2 * days.length || seenAtTwoDates(layer, features))) {
+    return { shape: "snapshots", dates: days, span, step: stepOf(days) };
+  }
   return { shape: "continuous", span, step: stepOf(values) };
 }
 

@@ -371,7 +371,8 @@ describe("LayerStack data console", () => {
 
   /** The panel as App mounts it: the scrubber from `state.time`, counts from the visible view. */
   function Console() {
-    const [state, dispatch] = useReducer(reduce, reduce(initialMapState, { type: "layer_loaded", layer: fires }));
+    // The time panel opens on a time question (here, as if the agent had set one); else it is one folded line.
+    const [state, dispatch] = useReducer(reduce, reduce(reduce(initialMapState, { type: "layer_loaded", layer: fires }), { type: "set_time_open", open: true }));
     return (
       <LayerStack
         layers={state.layers}
@@ -393,6 +394,15 @@ describe("LayerStack data console", () => {
     // The compare slot (empty here, so hidden) sits between the scrubber and the layers.
     expect(slot?.nextElementSibling?.getAttribute("data-slot")).toBe("compare");
     expect(slot?.nextElementSibling?.nextElementSibling?.textContent).toContain("Layers");
+  });
+
+  it("folds the time panel to one line, and opens it again", () => {
+    render(<Console />);
+    fireEvent.click(screen.getByTestId("time-fold"));
+    expect(screen.queryByTestId("time-scrubber")).toBeNull();
+    expect(screen.getByTestId("time-folded")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("time-open"));
+    expect(screen.getByTestId("time-scrubber")).toBeTruthy();
   });
 
   it("shows \"1 of 12\" once the window narrows a layer", () => {

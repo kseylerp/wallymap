@@ -264,7 +264,7 @@ describe("groundwater layer", () => {
     const stub = vi.fn(async (url: string) => json(url.includes("/field-measurements/") ? full : fixture));
     const r = geojson(await layer.query(ctx(stub), {}));
     expect(r.data.features.some((f) => f.properties?.pct !== undefined)).toBe(false);
-    const big = vi.fn(async () => json(fixture));
+    const big = vi.fn(async (_url: string) => json(fixture));
     const wide = geojson(await layer.query(ctx(big, { bbox: [-101, 40, -99, 41.5] }), {}));
     expect(big.mock.calls.some((c) => String(c[0]).includes("/field-measurements/"))).toBe(false);
     expect(wide.coverageNote).toContain("zoom in under 12,000 km² to compare each well with its own record");

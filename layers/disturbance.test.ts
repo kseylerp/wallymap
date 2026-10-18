@@ -3,18 +3,23 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
 import { tileUrlForTime } from "@/lib/time";
-import layer from "./disturbance";
+import { contractProblems, legendOf, timeShapeOf } from "./contract";
+import layer, { distTileUrl, newestVersionDay, VERSIONS_URL } from "./disturbance";
 
 const RONDONIA: [number, number, number, number] = [-63.5, -10.5, -62.5, -9.5];
+/** The GFW data API's dataset answer, trimmed, recorded 2026-10-18 ~06:40 UTC. */
+const DATASET = { data: { dataset: "umd_glad_dist_alerts", versions: ["v20260919", "v20260926", "v20261003", "v20261017"] } };
 
 function ctx(stub: ReturnType<typeof vi.fn>) {
   return { bbox: RONDONIA, zoom: 9, env: {}, fetch: stub as unknown as CachedFetch };
 }
 
-async function tiles(input: Record<string, unknown>) {
-  const stub = vi.fn();
+function gfw(down = false) {
+  return vi.fn(async (_url: string, _init?: unknown) => (down ? new Response("busy", { status: 503 }) : new Response(JSON.stringify(DATASET), { status: 200 })));
+}
+
+async function tiles(input: Record<string, unknown>, stub = gfw()) {
   const r = await layer.query(ctx(stub), layer.input.parse(input));
-  expect(stub).not.toHaveBeenCalled();
   if (!("kind" in r) || r.kind !== "tiles") throw new Error(`expected tiles, got ${JSON.stringify(r)}`);
   return r;
 }
@@ -22,7 +27,7 @@ async function tiles(input: Record<string, unknown>) {
 describe("disturbance layer", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-10-09T01:30:00Z"));
+    vi.setSystemTime(new Date("2026-10-18T06:40:00Z"));
   });
   afterEach(() => vi.useRealTimers());
 
@@ -33,54 +38,63 @@ describe("disturbance layer", () => {
     expect(layer.maxAreaKm2).toBe(Number.POSITIVE_INFINITY);
   });
 
-  it("defaults to 3 days back on the OPERA color index at zoom 0 to 12", async () => {
-    const r = await tiles({});
+  it("draws every alert of the last 30 days up to GFW's newest day, transparent elsewhere (audit 2026-10-17: one blank or black-squared day)", async () => {
+    const stub = gfw();
+    const r = await tiles({}, stub);
+    expect(stub.mock.calls[0][0]).toBe(VERSIONS_URL);
+    expect(stub.mock.calls[0][1]).toMatchObject({ cacheKey: "disturbance:gfw-versions", ttlSeconds: 21_600 });
     expect(r.data.url).toBe(
-      "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/OPERA_L3_DIST-ALERT-HLS_Color_Index/default/2026-10-06/GoogleMapsCompatible_Level12/{z}/{y}/{x}.png",
+      "https://tiles.globalforestwatch.org/umd_glad_dist_alerts/latest/dynamic/{z}/{x}/{y}.png?render_type=true_color&start_date=2026-09-18&end_date=2026-10-17",
     );
-    expect(r.data).toMatchObject({ minzoom: 0, maxzoom: 12, format: "raster" });
-    expect(r.coverageNote).toBe("Vegetation disturbance alerts for 2026-10-06");
+    expect(r.data).toMatchObject({ minzoom: 3, maxzoom: 12, format: "raster" });
+    expect(r.data.time).toEqual({ template: distTileUrl("2026-09-18", "{date}", "all"), cadence: "daily", from: "2026-09-18", to: "2026-10-17", daysBack: 0 });
+    expect(r.coverageNote).toBe("Vegetation loss alerts from 2026-09-18 to 2026-10-17");
+    // The scrubber moves the window's end and never past the newest day.
+    expect(tileUrlForTime(r.data.url, r.data.time, ["2026-09-18", "2026-10-01T00:00:00Z"], Date.now())).toContain("start_date=2026-09-18&end_date=2026-10-01");
+    expect(tileUrlForTime(r.data.url, r.data.time, ["2026-09-18", "2026-10-18T00:00:00Z"], Date.now())).toContain("end_date=2026-10-17");
   });
 
-  it("publishes the time block and the scrubber clamps to it", async () => {
-    const r = await tiles({});
-    expect(r.data.time).toEqual({
-      template: expect.stringContaining("/default/{date}/GoogleMapsCompatible_Level12/{z}/{y}/{x}.png"),
-      cadence: "daily",
-      from: "2023-01-01",
-      daysBack: 3,
-    });
-    expect(tileUrlForTime(r.data.url, r.data.time, ["2020-01-01", "2024-08-20T00:00:00Z"], Date.now())).toContain("/default/2024-08-20/");
-    expect(tileUrlForTime(r.data.url, r.data.time, ["2020-01-01", "2022-01-01T00:00:00Z"], Date.now())).toContain("/default/2023-01-01/");
+  it("takes a window length, a past end day and confirmed-only alerts, and clamps a day past the newest", async () => {
+    const r = await tiles({ date: "2026-08-31", days: 7, confidence: "high" });
+    expect(r.data.url).toContain("start_date=2026-08-25&end_date=2026-08-31&alert_confidence=high");
+    expect(r.coverageNote).toBe("Vegetation loss alerts from 2026-08-25 to 2026-08-31, confirmed only");
+    const late = await tiles({ date: "2026-10-18" });
+    expect(late.data.url).toContain("end_date=2026-10-17");
+    expect(late.coverageNote).toContain("showing 2026-10-17");
+    expect(await layer.query(ctx(gfw()), layer.input.parse({ date: "2023-01-01" }))).toMatchObject({ error: expect.stringContaining("2024-10-17") });
   });
 
-  it("clamps a too-new date and rejects one before 2023", async () => {
-    const r = await tiles({ date: "2026-10-09" });
-    expect(r.data.url).toContain("/default/2026-10-06/");
-    expect(r.coverageNote).toContain("showing 2026-10-06");
-    expect(await layer.query(ctx(vi.fn()), { date: "2022-12-31" })).toMatchObject({ error: expect.stringContaining("2023-01-01") });
-    expect(await layer.query(ctx(vi.fn()), { date: "2026-13-01" })).toMatchObject({ error: expect.stringContaining("not a real date") });
+  it("falls back to a week's lag, and says so, when the data API does not answer", async () => {
+    const r = await tiles({}, gfw(true));
+    expect(r.data.url).toContain("end_date=2026-10-11");
+    expect(r.coverageNote).toContain("taken as a week ago");
   });
 
-  it("rejects a malformed date at the input schema", () => {
-    expect(layer.input.safeParse({ date: "10/05/2026" }).success).toBe(false);
+  it("reads the newest version day", () => {
+    expect(newestVersionDay(DATASET)).toBe("2026-10-17");
+    expect(newestVersionDay({ data: { versions: ["latest"] } })).toBeNull();
+    expect(newestVersionDay(null)).toBeNull();
   });
 
-  it("tells the model the cadence, what an alert means and the user's words", () => {
-    for (const word of ["daily", "30 m", "forest-loss", "burn-severity", "does not prove deforestation", "new clearing"]) {
+  it("names the two shades in its key, continuous daily time, and the user's words", () => {
+    expect(contractProblems(layer)).toEqual([]);
+    expect(legendOf(layer).items?.map((i) => i.label)).toEqual(["Confirmed (high confidence)", "Possible (low confidence)"]);
+    expect(timeShapeOf(layer)).toMatchObject({ shape: "continuous", step: "day" });
+    for (const word of ["weekly", "30 m", "new clearing", "forest-loss", "does not prove deforestation", "US"]) {
       expect(layer.description).toContain(word);
     }
+    expect(layer.input.safeParse({ date: "last week" }).success).toBe(false);
+    expect(layer.input.safeParse({ days: 0 }).success).toBe(false);
   });
 
   it("summarizes to the tile URL and time range for the model", async () => {
-    expect(summarizeLayerResult(await layer.query(ctx(vi.fn()), {}))).toMatchObject({
+    expect(summarizeLayerResult(await layer.query(ctx(gfw()), layer.input.parse({})))).toMatchObject({
       kind: "tiles",
-      time: { cadence: "daily", from: "2023-01-01", daysBack: 3 },
+      time: { cadence: "daily", from: "2026-09-18", to: "2026-10-17" },
     });
   });
 
   it("runs through runLayer", async () => {
-    expect((await runLayer("disturbance", { bbox: RONDONIA, zoom: 9 })).status).toBe(200);
     expect((await runLayer("disturbance", { bbox: RONDONIA, input: { date: "x" } })).status).toBe(400);
   });
 });

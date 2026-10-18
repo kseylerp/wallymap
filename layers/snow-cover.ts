@@ -137,8 +137,14 @@ async function clearDayChoice(ctx: QueryContext, now: number): Promise<{ date: s
     const k = covers.findIndex((c) => c !== null && (hiddenShare(c) ?? 1) <= MAX_HIDDEN_SHARE && c.snow >= MIN_SNOW_PIXELS);
     if (k >= 0) last = batch[k];
   }
+  // A few pixels (a summit's glacier) are below what counts as snow in view: "little or no", never "none" over a visible speck.
+  const none = search.cover.snow === 0 ? "no snow" : "little or no snow";
   const since = last ? `; the last clear day with snow in view was ${shortDay(last)}` : `, nor on any clear day back to ${shortDay(earlier[earlier.length - 1] ?? found)}`;
-  return { date: found, note: `${lead}; no snow on the ground in view that day${since}`, view: `No snow on the ground in view${last ? `; last seen ${shortDay(last)}` : ""}` };
+  return {
+    date: found,
+    note: `${lead}; ${none} on the ground in view that day${since}`,
+    view: `${none === "no snow" ? "No" : "Little or no"} snow on the ground in view${last ? `; more on ${shortDay(last)}, the last clear day with snow` : ""}`,
+  };
 }
 
 const snowCover = defineLayer({

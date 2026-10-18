@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { normalizePlants, normalizeSolar, normalizeTurbines, plantsWhere, usgsUrl } from "./power-plants";
+import layer, { FUEL_GROUPS, fuelGroupOf, normalizePlants, normalizeSolar, normalizeTurbines, periodWords, plantsWhere, usgsUrl } from "./power-plants";
+import { labelsOf, legendOf, timeShapeOf } from "./contract";
 import eia from "./__fixtures__/power-plants.eia-bay-area.json";
 import wind from "./__fixtures__/power-plants.wind-tehachapi.json";
 import solar from "./__fixtures__/power-plants.solar-mojave.json";
@@ -49,7 +50,8 @@ describe("power-plants layer", () => {
     const kinds = new Set(fc.features.map((f) => f.properties?.kind));
     expect(kinds.has("natural gas")).toBe(true);
     expect(kinds.has("wind")).toBe(true);
-    expect(fc.features[0].properties).toMatchObject({ dataPeriod: "2025-02", state: "California" });
+    expect(fc.features[0].properties).toMatchObject({ dataPeriod: "February 2025", state: "California" });
+    for (const f of fc.features) expect(String(f.properties?.technology ?? "")).not.toMatch(/;\s*$/);
     expect(typeof fc.features[0].properties?.utility).toBe("string");
   });
 
@@ -62,7 +64,7 @@ describe("power-plants layer", () => {
       ],
     });
     expect(fc.features).toHaveLength(1);
-    expect(fc.features[0].properties).toEqual({ name: "Unnamed plant", kind: "other" });
+    expect(fc.features[0].properties).toEqual({ name: "Unnamed plant", kind: "other", fuelGroup: "Batteries and other" });
   });
 
   it("builds a fuel filter only when a fuel is set", () => {
@@ -116,7 +118,7 @@ describe("power-plants layer", () => {
   it("drops rows without coordinates and ignores silly years", () => {
     const fc = normalizeTurbines([{ p_name: "No location" }, { xlong: -118, ylat: 35, p_year: 1066 }, null]);
     expect(fc.features).toHaveLength(1);
-    expect(fc.features[0].properties).toEqual({ name: "Wind turbine", kind: "wind" });
+    expect(fc.features[0].properties).toEqual({ name: "Wind turbine", kind: "wind", fuelGroup: "Wind" });
   });
 
   it("queries the EIA mirror for plants, largest first, with the fuel filter and a week of cache", async () => {
@@ -135,7 +137,7 @@ describe("power-plants layer", () => {
     expect(calls[0][1].ttlSeconds).toBe(7 * 86_400);
     expect(r.data.features).toHaveLength(eiaFc.features.length);
     expect(r.citation.source).toMatch(/Feb 2025/);
-    expect(r.coverageNote).toBeUndefined();
+    expect(r.coverageNote).toBe("EIA plant data as of February 2025 (an Esri copy of EIA's list): plants built, retired or renamed since are missing");
   });
 
   it("says when the plants result was capped", async () => {
@@ -220,7 +222,7 @@ describe("power-plants layer", () => {
       expect(res.body).toMatchObject({
         total: 4512,
         truncated: true,
-        coverageNote: `Showing the ${eiaFc.features.length} largest of 4,512 (ranked by capacity in MW); zoom in under 250,000 km² for all`,
+        coverageNote: `Showing the ${eiaFc.features.length} largest of 4,512 (ranked by capacity in MW); zoom in under 250,000 km² for all; EIA plant data as of February 2025 (an Esri copy of EIA's list): plants built, retired or renamed since are missing`,
       });
     } finally {
       vi.unstubAllGlobals();
@@ -238,6 +240,30 @@ describe("power-plants layer", () => {
     const urls = (stub.mock.calls as unknown as Call[]).map((c) => c[0]);
     expect(urls.some((u) => new URL(u).searchParams.get("limit") === "2001")).toBe(true);
     expect(r.coverageNote).toBeUndefined();
+  });
+
+  it("colors by fuel from clean to fossil, sizes by MW, names the five largest, and says the EIA month in the legend and on the card", () => {
+    expect(layer.style.encode).toEqual({ size: "v", color: "fuelGroup" });
+    expect(fuelGroupOf("solar")).toBe("Solar");
+    expect(fuelGroupOf("natural gas")).toBe("Natural gas");
+    expect(fuelGroupOf("pumped storage")).toBe("Hydro and other renewables");
+    expect(fuelGroupOf("petroleum")).toBe("Coal and oil");
+    expect(fuelGroupOf("batteries")).toBe("Batteries and other");
+    const group = layer.attributes?.find((a) => a.key === "fuelGroup");
+    expect(group).toMatchObject({ type: "category", encode: "color" });
+    // Solar first (sage) and gas near the purple end, so the two never look alike.
+    expect(group?.levels?.map((l) => l.value)).toEqual([...FUEL_GROUPS]);
+    expect(FUEL_GROUPS.indexOf("Natural gas") - FUEL_GROUPS.indexOf("Solar")).toBeGreaterThanOrEqual(4);
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "categories", field: "fuelGroup" });
+    expect(legend.note).toMatch(/Size is capacity in MW/);
+    expect(legend.note).toMatch(/February 2025/);
+    expect(labelsOf(layer)).toEqual({ field: "name", max: 5, rankBy: "v" });
+    expect(layer.card?.facts?.some((f) => f.key === "dataPeriod")).toBe(true);
+    expect(periodWords("202502")).toBe("February 2025");
+    expect(periodWords("2025")).toBeUndefined();
+    expect(timeShapeOf(layer, normalizePlants(eiaFc))).toEqual({ shape: "none" });
+    expect(timeShapeOf(layer, normalizeSolar(solar)).shape).toBe("continuous");
   });
 
   it("says the plants mirror lags EIA and warns against double counting wind and solar", () => {

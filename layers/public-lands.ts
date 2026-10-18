@@ -33,19 +33,19 @@ export const PADUS_SOURCE_LAYER = "padus";
 
 /**
  * Who manages the land, in six groups the approved palette can tell apart, each listing the PAD-US `agency` values it holds.
- * Other federal land (military, dams, energy), the least common, comes last: the phone's short key lists a tile layer's
- * first four groups, so state land (purple) has to be among them.
+ * National parks are pink and national forests sage (2026-10-18: parks in sage faded into green Topo, and forests in
+ * dark sage looked like BLM's dark grey). Other federal land (military, dams, energy), the least common, comes last.
  */
 export const MANAGER_GROUPS: { label: string; color: string; help: string; agencies: Record<string, string> }[] = [
   {
     label: "National parks and wildlife refuges",
-    color: SAGE,
+    color: PINK,
     help: "Managed by the National Park Service or the Fish and Wildlife Service.",
     agencies: { NPS: "National Park Service", FWS: "US Fish and Wildlife Service" },
   },
   {
     label: "National forests",
-    color: rgbToHex(interpolateStops([SAGE, DARK_GREY], 0.5)),
+    color: SAGE,
     help: "Managed by the US Forest Service.",
     agencies: { USFS: "US Forest Service" },
   },
@@ -63,7 +63,7 @@ export const MANAGER_GROUPS: { label: string; color: string; help: string; agenc
   },
   {
     label: "Local, tribal and private conservation land",
-    color: PINK,
+    color: rgbToHex(interpolateStops([PINK, DARK_GREY], 0.45)),
     help: "City and county parks, tribal land, and land held by land trusts and other nonprofits; access varies.",
     agencies: { Local: "Local government", Tribal: "Tribal government", NGO: "Private nonprofit (land trust)" },
   },
@@ -138,7 +138,7 @@ const publicLands = defineLayer({
   title: "Public land ownership",
   description:
     "Who owns and manages land across the United States, from the USGS Protected Areas Database (PAD-US 4.1), drawn as tinted, hatched areas with a legend. " +
-    "Fills show the manager in six groups: national parks and wildlife refuges (National Park Service, Fish and Wildlife Service) sage; national forests (Forest Service) dark sage; Bureau of Land Management dark grey; other federal land (military, Army Corps, Reclamation, energy) grey-purple; state land and state parks purple; local, tribal and private conservation land pink. Areas with no manager recorded are outlined only. " +
+    "Fills show the manager in six groups: national parks and wildlife refuges (National Park Service, Fish and Wildlife Service) pink; national forests (Forest Service) sage; Bureau of Land Management dark grey; other federal land (military, Army Corps, Reclamation, energy) grey-purple; state land and state parks purple; local, tribal and private conservation land brick red. Areas with no manager recorded are outlined only. " +
     "PAD-US combines a Fee layer (who holds title) with Designation and Easement layers (wilderness areas, roadless areas, recreation areas, conservation easements), " +
     "so one place can carry several overlapping polygons, for example a wilderness area inside a national forest. " +
     "Each area has a name, a manager (agency), a designation and a coarse public-access flag (open, restricted, closed, unknown); tapping an area shows them in plain words. " +

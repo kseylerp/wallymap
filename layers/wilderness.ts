@@ -9,7 +9,7 @@
  * Output properties: name, agency, acres, designated, era, state, rules, v (acres).
  * Mechanic (2026-10-18): no `t`, so no time scrubber (the designation year answered no one's question, and it opened a
  * scrubber over a "where is wilderness" map); the year is a card fact and three eras are chips. `agency` is the color
- * category (Forest Service dark sage, BLM dark grey, Park Service sage, Fish and Wildlife purple) with a matching legend.
+ * category (Forest Service sage, BLM dark grey, Park Service pink, Fish and Wildlife purple) with a matching legend.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
@@ -17,8 +17,7 @@ import { bboxAreaKm2, defineLayer, type Attribute, type CardSpec, type FieldHelp
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
-import { DARK_GREY, layerColor, PURPLE, SAGE } from "@/lib/render/palette";
-import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
+import { DARK_GREY, layerColor, PINK, PURPLE, SAGE } from "@/lib/render/palette";
 
 const SERVICE_URL =
   "https://services1.arcgis.com/ERdCHt0sNM6dENSD/arcgis/rest/services/Wilderness_Areas_in_the_United_States/FeatureServer/0";
@@ -125,9 +124,10 @@ const AGENCY_NAMES: Record<string, string> = {
 
 /** The managers as the map fills them: one color per agency. */
 const AGENCY_FILLS: { value: string; color: string }[] = [
-  { value: "USFS", color: rgbToHex(interpolateStops([SAGE, DARK_GREY], 0.5)) },
+  // Four palette colors (2026-10-18: Forest Service dark sage and BLM dark grey read alike, Park Service sage faded into Topo).
+  { value: "USFS", color: SAGE },
   { value: "BLM", color: DARK_GREY },
-  { value: "NPS", color: SAGE },
+  { value: "NPS", color: PINK },
   { value: "FWS", color: PURPLE },
 ];
 

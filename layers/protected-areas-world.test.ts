@@ -47,7 +47,7 @@ describe("protected-areas-world layer", () => {
     expect(legend).toMatchObject({ kind: "categories", field: "protection" });
     expect(legend.items?.map((i) => i.value)).toEqual(["strict", "park", "habitat", "sustainable", "none"]);
     expect(new Set(legend.items?.map((i) => i.color)).size).toBe(5);
-    expect(legend.items?.[1]).toMatchObject({ label: "National park", color: "#9FB693", help: expect.stringMatching(/^IUCN II:/) });
+    expect(legend.items?.[1]).toMatchObject({ label: "National park", color: "#F57272", help: expect.stringMatching(/^IUCN II:/) });
     // Chip labels fit a row; the IUCN categories each holds are in its help.
     for (const l of PROTECTION_LEVELS) expect(l.label.length, l.label).toBeLessThanOrEqual(28);
     expect(PROTECTION_LEVELS.find((l) => l.value === "sustainable")?.help).toMatch(/^IUCN V and VI:/);

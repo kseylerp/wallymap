@@ -246,7 +246,7 @@ describe("grazing-allotments layer", () => {
     const legend = legendOf(layer);
     expect(legend).toMatchObject({ kind: "categories", field: "kind" });
     expect(legend.items?.map((i) => [i.value, i.label, i.color])).toEqual([
-      ["herd-management-area", "Wild horse and burro management area", "#9FB693"],
+      ["herd-management-area", "Wild horse and burro management area", "#6E5BFF"],
       ["herd-area", "Historic herd area (1971)", "#F57272"],
       ["allotment", "Grazing allotment", "#3A3A3C"],
     ]);

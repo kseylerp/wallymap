@@ -11,7 +11,7 @@
  *   name and outline are one area, drawn once (mergeTwins); the kept one names the other in `alsoDesignated`.
  * Smoke through runLayer (2026-10-09): central Nevada -117,39,-116,40 returned 26 allotments, 10 herd management
  * areas and 13 herd areas in 0.7 s (see the test for the recorded counts).
- * Drawing (2026-10-18): `kind` is the layer's color category (KIND_LEVELS, GRAZING_LEGEND): herd management areas sage, historic
+ * Drawing (2026-10-18): `kind` is the layer's color category (KIND_LEVELS, GRAZING_LEGEND): herd management areas purple, historic
  * herd areas pink, allotments dark grey, stacked allotments first so the horse areas draw on top.
  * Smoke wide (2026-10-14): Nevada -119,37,-114,42 (about 240,000 km²) returned 535 polygons of 1,024 (333 per service) in 1.6 s
  * (276 KB); the first, cold call took 24 s, so the BLM servers are sometimes slow to wake.
@@ -23,7 +23,7 @@ import { registerLayer } from "./registry";
 import { arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { geometryBBox } from "./_shared/geo";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
-import { DARK_GREY, layerColor, PINK, SAGE } from "@/lib/render/palette";
+import { DARK_GREY, layerColor, PINK, PURPLE } from "@/lib/render/palette";
 
 const BASE = "https://gis.blm.gov/arcgis/rest/services/range";
 const ALLOTMENTS = `${BASE}/BLM_Natl_Grazing_Allotment/MapServer/12`;
@@ -172,9 +172,10 @@ export const KIND_LEVELS = [
   },
 ] as const;
 
-const KIND_COLORS: Record<GrazingKind, string> = { "herd-management-area": SAGE, "herd-area": PINK, allotment: DARK_GREY };
+/** Wild horse areas, the answer people want, purple (sage faded into green Topo under the grey allotments, 2026-10-18). */
+const KIND_COLORS: Record<GrazingKind, string> = { "herd-management-area": PURPLE, "herd-area": PINK, allotment: DARK_GREY };
 
-/** The map's key: one fill per kind, herd management areas sage, historic herd areas pink, allotments dark grey. */
+/** The map's key: one fill per kind, herd management areas purple, historic herd areas pink, allotments dark grey. */
 export const GRAZING_LEGEND: LegendSpec = {
   kind: "categories",
   title: "Area",
@@ -252,7 +253,7 @@ const grazingAllotments = defineLayer({
   title: "BLM grazing allotments and wild horse areas",
   description:
     "Bureau of Land Management (BLM) grazing allotments, where cattle and sheep may graze on BLM public land, and the wild horse and burro areas, drawn as polygons in three distinct fills with a legend. " +
-    "kind is 'herd-management-area' (land the BLM or Forest Service manages today for a wild horse or burro herd: name, herdId, animals, agency, state, acres; drawn sage, on top), 'herd-area' (where wild horses and burros were found in 1971, many no longer managed for them; drawn pink) or 'allotment' (a livestock grazing allotment: name, allotmentNumber, state, acres; drawn dark grey, underneath). acres (and v) is the size for all three. " +
+    "kind is 'herd-management-area' (land the BLM or Forest Service manages today for a wild horse or burro herd: name, herdId, animals, agency, state, acres; drawn purple, on top), 'herd-area' (where wild horses and burros were found in 1971, many no longer managed for them; drawn pink) or 'allotment' (a livestock grazing allotment: name, allotmentNumber, state, acres; drawn dark grey, underneath). acres (and v) is the size for all three. " +
     "Use it for 'where is there grazing or cattle on public land', 'is this allotment grazed', or 'where can I see wild horses or burros'. For wild horse or burro questions set show to 'herds' so only the herd areas draw, and point to the management areas; for grazing questions set show to 'allotments'; the default draws both. " +
     "Caveats: only BLM allotments are included; Forest Service grazing allotments, a large share of federal grazing, are not in this dataset. An allotment is an administrative area where grazing is permitted, not proof that livestock are there now; allotments can include private and state land, and their gate and fence positions are not shown. " +
     "Herd areas are historic ranges, so a herd area outside a herd management area usually has no animals today, and herd management areas are the better place to look for wild horses. Animals are not located, only their ranges. " +

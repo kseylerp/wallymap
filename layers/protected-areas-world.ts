@@ -43,8 +43,7 @@ import {
 import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
-import { DARK_GREY, layerColor, PURPLE, SAGE, SURFACE } from "@/lib/render/palette";
-import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
+import { DARK_GREY, layerColor, PINK, PURPLE, SAGE, SURFACE } from "@/lib/render/palette";
 
 /** UNEP-WCMC's hosted WDPA polygons on ArcGIS Online: the primary source. */
 export const WDPA_POLYGONS = "https://services5.arcgis.com/Mj0hjvkNtV7NRhA7/arcgis/rest/services/WDPA_v0/FeatureServer/1";
@@ -79,13 +78,14 @@ export type Protection = "strict" | "park" | "habitat" | "sustainable" | "none";
 const PROTECTION_OF: Record<string, Protection> = { Ia: "strict", Ib: "strict", II: "park", III: "habitat", IV: "habitat", V: "sustainable", VI: "sustainable" };
 
 /**
- * The groups in order, strictest first, with their fills: purple, sage, a darker sage, dark grey, and a pale surface for none.
+ * The groups in order, strictest first, with their fills: purple, pink (national parks, the most asked, must not sink into
+ * green Topo as sage did, 2026-10-18), sage, dark grey, and a pale surface for none.
  * Labels are short enough for a chip; the IUCN categories each group holds are in its help.
  */
 export const PROTECTION_LEVELS: { value: Protection; label: string; help: string; color: string }[] = [
   { value: "strict", label: "Strict reserve or wilderness", help: "IUCN Ia and Ib: managed mainly for science or wilderness; visits limited.", color: PURPLE },
-  { value: "park", label: "National park", help: "IUCN II: large natural areas protecting ecosystems, open for visits and recreation.", color: SAGE },
-  { value: "habitat", label: "Monument or habitat area", help: "IUCN III and IV: a landmark feature, or an area managed for particular species or habitats.", color: rgbToHex(interpolateStops([SAGE, DARK_GREY], 0.5)) },
+  { value: "park", label: "National park", help: "IUCN II: large natural areas protecting ecosystems, open for visits and recreation.", color: PINK },
+  { value: "habitat", label: "Monument or habitat area", help: "IUCN III and IV: a landmark feature, or an area managed for particular species or habitats.", color: SAGE },
   { value: "sustainable", label: "Lived-in or sustainable use", help: "IUCN V and VI: lived-in landscapes and seascapes, and areas where natural resources are used sustainably.", color: DARK_GREY },
   { value: "none", label: "No IUCN category", help: "The country reported no IUCN category, or it does not apply to this designation.", color: SURFACE },
 ];

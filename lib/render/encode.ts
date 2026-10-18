@@ -2,6 +2,7 @@ import type { Feature, FeatureCollection } from "geojson";
 import type { Attribute, Encoding } from "@/layers/types";
 import { attributeFor, declaredGroups, groupColors, valueKey } from "@/lib/render/attributes";
 import { compareRampColor, rampColor, rgbToHex, type Rgb } from "@/lib/render/ramp";
+import { CATEGORY_COLORS, OTHER_COLOR } from "@/lib/render/categories";
 import type { LoadedLayer, RenderOp } from "@/lib/render/state";
 
 /**
@@ -33,8 +34,10 @@ export type Channel = {
   unit?: string;
   /** The smallest and largest value in the data (every frame of a series); null without two different numbers. */
   extent: [number, number] | null;
-  /** Color only: a category or ordinal's levels in order, each with its ramp color. */
+  /** Color only: a category or ordinal's levels in order, each with its color (the ramp's for an ordinal). */
   levels?: { values: string[]; label: string; color: string }[];
+  /** A category (fuel, publisher): each level draws in its own palette color, not along a ramp. */
+  categorical?: boolean;
 };
 
 export type ResolvedEncoding = { size?: Channel; color?: Channel };
@@ -106,8 +109,10 @@ function channelOf(attr: Attribute | undefined, key: string, data: FeatureCollec
   if (chips) {
     const groups = declaredGroups(attr);
     if (groups.length === 0) return undefined;
-    const colors = groupColors(groups.length);
-    return { key, label, extent: null, levels: groups.map((g, i) => ({ values: g.values, label: g.label, color: colors[i] })) };
+    // A category's kinds are not in order: each takes its own palette color (solar is not "half of" gas).
+    const categorical = attr.type === "category";
+    const colors = categorical ? groups.map((_, i) => CATEGORY_COLORS[i] ?? OTHER_COLOR) : groupColors(groups.length);
+    return { key, label, extent: null, levels: groups.map((g, i) => ({ values: g.values, label: g.label, color: colors[i] })), ...(categorical && { categorical: true }) };
   }
   return { key, label, ...(attr?.unit && { unit: attr.unit }), extent: channelExtent(data, key, kind === "color") };
 }
@@ -139,6 +144,13 @@ export function sizeT(value: unknown, extent: [number, number] | null): number {
 }
 
 /** A color channel's 0..1 place on the ramp for a value (linear over the range); null when the value is missing. */
+/** A categorical channel's color for a value (its level's own color), or null. */
+export function levelColor(value: unknown, channel: Pick<Channel, "levels" | "categorical">): string | null {
+  if (!channel.categorical || !channel.levels) return null;
+  const key = valueKey(value);
+  return key === undefined ? null : (channel.levels.find((l) => l.values.includes(key))?.color ?? null);
+}
+
 export function colorT(value: unknown, channel: Pick<Channel, "extent" | "levels">): number | null {
   if (channel.levels) {
     const key = valueKey(value);
@@ -200,6 +212,7 @@ function amount(n: number): string {
 
 /** "Flow 12–19,800 m³/s" or "Confidence: Low → High": a channel in the legend's words. */
 export function channelText(channel: Channel): string {
+  if (channel.levels && channel.categorical) return channel.label;
   if (channel.levels) return `${channel.label}: ${channel.levels[0].label} → ${channel.levels[channel.levels.length - 1].label}`;
   if (!channel.extent) return channel.label;
   const unit = channel.unit && channel.unit !== "score" ? ` ${channel.unit}` : "";

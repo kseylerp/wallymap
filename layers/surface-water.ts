@@ -129,6 +129,8 @@ const surfaceWater = defineLayer({
         retrieved: new Date().toISOString(),
       },
       coverageNote: NOTES[input.product],
+      // The key of the product drawn (the change map's red and green, not the occurrence map's blues).
+      legend: LEGENDS[input.product],
     };
   },
 });

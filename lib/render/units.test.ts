@@ -13,6 +13,9 @@ describe("units for people (display)", () => {
     expect(quantity(2.5, "km²", US)).toBe("0.97 mi² (2.5 km²)");
     expect(quantity(100, "m³/s", US)).toBe("3,531 cfs (100 m³/s)");
     expect(quantity(20, "°C", US)).toBe("68°F (20°C)");
+    // A difference converts by the degree's size only: +8.4 °F is +4.7 °C, not −13.1.
+    expect(quantity(8.4, "±°F", US)).toBe("+8.4°F (+4.67°C)");
+    expect(quantity(-3, "±°F", METRIC)).toBe("−1.67°C (−3°F)");
     expect(quantity(500, "cfs", METRIC)).toBe("14.2 m³/s (500 cfs)");
     expect(quantity(1200, "MW", US)).toBe("1,200 MW");
     // Already in the wanted system: the other second.

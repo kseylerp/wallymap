@@ -11,6 +11,7 @@ import { compareSummary } from "@/lib/render/compare";
 import type { LoadedLayer, MapAction, MapState } from "@/lib/render/state";
 import { layerChange } from "@/lib/render/views";
 import { periodOfUrl } from "@/lib/time";
+import { currentScenarioValue, scenarioOf, scenarioValueText } from "@/lib/render/scenario";
 
 const DAY: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" };
 
@@ -21,10 +22,24 @@ function dayText(iso: string): string {
 }
 
 /**
- * The date a layer's map shows, in one phrase: the time window ("1963 – 2019, newest of each"), a dated image's day,
- * a single reading's day, else when the data was fetched ("As of Oct 18, 2026").
+ * What a layer's map shows, in one phrase: the amount or year of a scenario ("3 ft", "2020 estimate"), a dated tile's
+ * period, the time window ("1963 – 2019, newest of each"), a single reading's or dataset's date, else for features when
+ * they were fetched ("As of Oct 18, 2026"). A static picture with no date says none rather than today's.
  */
-export function captionDate(layer: LoadedLayer, drawn: LoadedLayer | undefined, time: MapState["time"], at?: [number, number]): string {
+export function captionDate(
+  layer: LoadedLayer,
+  drawn: LoadedLayer | undefined,
+  time: MapState["time"],
+  at?: [number, number],
+  scenarioText?: string,
+): string {
+  if (scenarioText) return scenarioText;
+  const tiles = (drawn ?? layer).result;
+  // A dated tile draws one period, whatever window the scrubber spans: say that period.
+  if (tiles.kind === "tiles" && tiles.data.time) {
+    const ms = periodOfUrl(tiles.data.url, tiles.data.time);
+    if (ms !== null) return tiles.data.time.cadence === "yearly" ? String(new Date(ms).getUTCFullYear()) : new Date(ms).toLocaleDateString("en-US", DAY);
+  }
   if (time && time.index.layerIds.includes(layer.id)) {
     const { index, window } = time;
     if (index.snapshots && wholeSpan(index, window)) {
@@ -33,15 +48,13 @@ export function captionDate(layer: LoadedLayer, drawn: LoadedLayer | undefined, 
     }
     return windowText(window, index.bucket, at);
   }
-  const tiles = (drawn ?? layer).result;
-  if (tiles.kind === "tiles" && tiles.data.time) {
-    const ms = periodOfUrl(tiles.data.url, tiles.data.time);
-    if (ms !== null) return tiles.data.time.cadence === "yearly" ? String(new Date(ms).getUTCFullYear()) : new Date(ms).toLocaleDateString("en-US", DAY);
-  }
   const shape = timeShape(layer);
   if ((shape.shape === "single" || shape.shape === "snapshots") && shape.span) {
     return shape.span.start === shape.span.end ? dayText(shape.span.start) : `${dayText(shape.span.start)} – ${dayText(shape.span.end)}`;
   }
+  // A dataset of one declared year (wildfire hazard, 2023) says that year.
+  if (shape.dates && shape.dates.length > 0) return dayText(shape.dates[shape.dates.length - 1]);
+  if (layer.result.kind === "tiles") return "";
   const retrieved = layer.result.citation.retrieved;
   return retrieved ? `As of ${dayText(retrieved.slice(0, 10))}` : "";
 }
@@ -51,6 +64,13 @@ export function captionDate(layer: LoadedLayer, drawn: LoadedLayer | undefined, 
  * top layer's name and date, its key in one line, and for snapshots the change it shows; a failed source says so. Tap
  * opens the data console. Shown only while the console is closed.
  */
+/** The scenario amount a tile layer shows ("3 ft", "2020 NLCD"), or undefined. */
+function scenarioCaption(state: MapState, layer: LoadedLayer): string | undefined {
+  const scenario = scenarioOf(layer);
+  const value = currentScenarioValue(state, layer.id);
+  return scenario && value !== undefined ? scenarioValueText(value, scenario.unit) : undefined;
+}
+
 export function PhoneCaption({ state, shown, onOpen }: { state: MapState; shown: MapState["layers"]; onOpen: () => void }) {
   const top = [...state.renderOps].reverse().find((op) => op.visible && state.layers[op.layerId]);
   const layer = top ? state.layers[top.layerId] : undefined;
@@ -79,11 +99,24 @@ export function PhoneCaption({ state, shown, onOpen }: { state: MapState; shown:
     () => (layer && (compared || timeShape(layer).shape === "snapshots") ? layerChange(layer, top?.filters, compared) : null),
     [layer, top?.filters, compared],
   );
-  if (!layer) return null;
+  if (!layer) {
+    // Nothing drawn because the source failed (mining claims where BLM's map is offline): say so on the first screen,
+    // as the Layers row does, rather than leave a bare map.
+    const failed = state.errors[state.errors.length - 1];
+    if (!failed) return null;
+    const line = failureLine(failed.sourceStatus, 0) ?? failed.message;
+    return (
+      <button type="button" onClick={onOpen} data-testid="phone-caption" aria-label="Open the layers" className="glass-strong rise-in pointer-events-auto block max-w-full rounded-[12px] px-3 py-2 text-left">
+        <p className="line-clamp-3 text-[11.5px] leading-4 text-ink" data-testid="phone-caption-failure">
+          {line}
+        </p>
+      </button>
+    );
+  }
   const count = drawn?.result.kind === "geojson" ? drawn.result.data.features.length : null;
   const failure = failureLine(layerSourceStatus(layer), count);
   const center: [number, number] = [state.viewport.longitude, state.viewport.latitude];
-  const date = compared ? `${compareSideText(compared, "a", layer)} against ${compareSideText(compared, "b", layer)}` : captionDate(layer, drawn, state.time, center);
+  const date = compared ? `${compareSideText(compared, "a", layer)} against ${compareSideText(compared, "b", layer)}` : captionDate(layer, drawn, state.time, center, scenarioCaption(state, layer));
   return (
     <button
       type="button"

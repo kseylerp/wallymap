@@ -214,7 +214,8 @@ export const LEGEND: LegendSpec = {
 
 /** The inspect card (spec §12b): the anomaly under its own name, then the temperatures and the rank in words. */
 const CARD: CardSpec = {
-  measure: { key: "v", label: "Anomaly", unit: "°F" },
+  // "±°F": a difference, converted by the degree's size only (+8.4 °F is +4.7 °C).
+  measure: { key: "v", label: "Anomaly", unit: "±°F" },
   facts: [
     { key: "period", label: "Period" },
     { key: "averageF", label: "Average", unit: "°F", format: "1dp" },

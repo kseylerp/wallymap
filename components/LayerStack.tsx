@@ -473,7 +473,8 @@ function LegendRow({
     const encoded = new Set(op.mode === "polygons" ? [] : [layer.style.encode?.size, layer.style.encode?.color].filter(Boolean));
     return rowLegend(layer, op, shownData).filter(
       // The chips show the same kinds with the same colors and counts: they are the key.
-      (b) => !(b.kind === "categories" && b.field && b.field === chip?.key) && !(b.field && encoded.has(b.field)),
+      // Tiles have no features, so no chips: their key stays (hardiness zones, public lands by manager).
+      (b) => !(b.kind === "categories" && b.field && b.field === chip?.key && layer.result.kind === "geojson") && !(b.field && encoded.has(b.field)),
     );
   }, [layer, op, shownData, hexes]);
   const symbol = layerLegend(layer, op);

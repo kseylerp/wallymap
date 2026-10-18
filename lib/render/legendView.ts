@@ -1,6 +1,6 @@
 import type { FeatureCollection } from "geojson";
 import type { LegendSpec } from "@/layers/types";
-import { declaredGroups, encodedAttribute, primaryMeasure, valueKeys } from "@/lib/render/attributes";
+import { colorStops, declaredGroups, encodedAttribute, primaryMeasure, valueKeys } from "@/lib/render/attributes";
 import { LINE_DASHES, UNRATED_LABEL, UNRATED_LINE } from "@/lib/render/nativeLines";
 import { categoryKey, type CategoryKey } from "@/lib/render/categories";
 import { rasterKeyFilter } from "@/lib/render/rasterCalm";
@@ -118,6 +118,17 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, data: Fe
   const key = op?.color ? undefined : categoryKey(layer.result.legend ? { ...layer, legend: declared } : layer, all);
   if (!declared && key) blocks.push(categoryBlock(key, data, shape));
   const n = spec.field ? counts(data, spec.field) : new Map<string, number>();
+  // A declared item without a color takes the color the map draws it in: its group's in the category key, its class's
+  // on an encoded ramp (a whitewater class), else the layer's own (a fire's status, drawn fire-pink). Never a black dot.
+  const encodedAttr = layer.attributes?.find((a) => a.key === spec.field && a.encode === "color" && (a.levels?.length ?? 0) > 0);
+  const stops = encodedAttr ? new Map(colorStops(encodedAttr)) : undefined;
+  const drawnColor = op?.color ?? (shape === "polygon" ? areaRecipe(layer.id).color : layer.style.color);
+  const swatchFor = (i: { value?: string | number; color?: string }): string | undefined => {
+    if (i.color) return i.color;
+    const v = i.value === undefined ? undefined : String(i.value);
+    const fromKey = v !== undefined && key && key.attr.key === spec.field ? key.groups.find((g) => g.values.includes(v))?.color : undefined;
+    return fromKey ?? (v !== undefined ? stops?.get(v) : undefined) ?? (spec.field ? drawnColor : undefined);
+  };
   switch (spec.kind) {
     case "categories":
       if (!key || key.attr.key !== spec.field || declared) {
@@ -129,7 +140,7 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, data: Fe
           entries: shownEntries(
             (spec.items ?? []).map((i) => ({
               label: i.label,
-              ...(i.color && { color: i.color }),
+              ...(swatchFor(i) && { color: swatchFor(i) }),
               ...(i.symbol === "line" && shape === "polygon" && { outline: true }),
               ...(i.help && { help: i.help }),
               ...(data && spec.field && i.value !== undefined && { count: n.get(String(i.value)) ?? 0 }),

@@ -56,6 +56,31 @@ export function landHatchOpacity(opacity = 1, alpha = 0.9): ExpressionSpecificat
   return ["interpolate", ["linear"], ["zoom"], 12, at(1), 15, at(0.5)];
 }
 
+/** Fill opacity of tile areas keyed in their own colors: solid 0.55 out to zoom 11, easing to 0.3 by 15. */
+export const SOLID_TILE_FILL: [number, number][] = [
+  [9, 0.55],
+  [11, 0.55],
+  [13.5, 0.4],
+  [15, 0.3],
+];
+
+/** landFillOpacity, with the `solid` values of `field` at SOLID_TILE_FILL instead of the tint. */
+function solidFillOpacity(opacity: number, solid: string[], field: string, tint: number): ExpressionSpecification {
+  const tinted = landFillOpacity(opacity, tint).slice(3) as number[];
+  const stops = SOLID_TILE_FILL.flatMap(([z, o], i) => [
+    z,
+    ["case", ["in", ["to-string", ["get", field]], ["literal", solid]], Math.round(o * opacity * 1000) / 1000, tinted[i * 2 + 1]],
+  ]);
+  return ["interpolate", ["linear"], ["zoom"], ...stops] as unknown as ExpressionSpecification;
+}
+
+/** landHatchOpacity, with no hatch on the `solid` values of `field`. */
+function solidHatchOpacity(opacity: number, solid: string[], field: string, alpha: number): ExpressionSpecification {
+  const at = (o: number) => Math.round(o * alpha * opacity * 1000) / 1000;
+  const off = ["in", ["to-string", ["get", field]], ["literal", solid]];
+  return ["interpolate", ["linear"], ["zoom"], 12, ["case", off, 0, at(1)], 15, ["case", off, 0, at(0.5)]] as unknown as ExpressionSpecification;
+}
+
 /** Polygon outlines on vector tiles: the outline over a white casing, at 80%. */
 export const LAND_OUTLINE = { opacity: 0.8 } as const;
 
@@ -98,28 +123,45 @@ export function vectorTileLayerSpecs(
    * The category the areas are colored by (the legend's `field` and its items' colors, or the layer's category key):
    * each value's tint, hatch and outline in its color. Values not listed keep the layer's own color.
    */
-  key?: { field: string; colors: [string, string][] },
+  key?: TileKey,
 ): VectorLayerSpec[] {
   const layerId = `${PREFIX}${id}`;
   const requested = isPaletteColor(paint.color) ? paint.color.trim().toUpperCase() : undefined;
   const opacity = Math.min(1, Math.max(0, paint.opacity ?? 1));
   const common = { source: layerId, "source-layer": sourceLayer };
   const layout = { visibility: visible ? ("visible" as const) : ("none" as const) };
+  if (geometry === "polygon" && !requested && key?.steps && key.steps.length > 1) {
+    // A stepped ramp (geology by the era of its youngest rock): each unit filled solid in its step's color.
+    const r = areaRecipe(id);
+    const [first, ...rest] = key.steps;
+    const color = ["step", ["to-number", ["get", key.field], -1], first[1], ...rest.flatMap(([v, c]) => [v, c])] as unknown as string;
+    const fill = ["interpolate", ["linear"], ["zoom"], ...SOLID_TILE_FILL.flatMap(([z, o]) => [z, Math.round(o * opacity * 1000) / 1000])] as ExpressionSpecification;
+    return [
+      { id: layerId, type: "fill", ...common, layout, paint: { "fill-color": color, "fill-opacity": fill } },
+      { id: `${layerId}-hatch`, type: "fill", ...common, layout, paint: { "fill-pattern": vectorHatchPattern(id), "fill-opacity": 0 } },
+      { id: `${layerId}-casing`, type: "line", ...common, layout: { ...layout, "line-join": "round" }, paint: { "line-color": WHITE, "line-width": 1, "line-opacity": 0.5 * opacity } },
+      { id: `${layerId}-line`, type: "line", ...common, layout: { ...layout, "line-join": "round" }, paint: { "line-color": r.outline, "line-width": 0.5, "line-opacity": 0.35 * opacity } },
+    ];
+  }
   if (geometry === "polygon") {
     const r = areaRecipe(id, requested);
     const lineLayout = { ...layout, "line-join": "round" as const };
     const keyed = !requested && key && key.colors.length > 0 ? key : undefined;
     const match = (fallback: string, of: (color: string) => string) =>
       keyed ? (["match", ["to-string", ["get", keyed.field]], ...keyed.colors.flatMap(([v, c]) => [v, of(c)]), fallback] as unknown as string) : fallback;
-    const hatchable = (c: string) => (HATCH_COLORS as readonly string[]).includes(c);
+    const hatchable = (c: string) => (HATCH_COLORS as readonly string[]).includes(c.toUpperCase());
     const pattern = vectorHatchPattern(id, requested);
+    // A key in colors of its own (hardiness half-zones, geologic eras) fills solid in them, without the layer's grey
+    // hatch: there is no hatch in those colors, and a grey hatch over a pale tint made every zone look the same.
+    const solid = keyed ? keyed.colors.filter(([, c]) => !hatchable(c)).map(([v]) => v) : [];
+    const tint = landFillOpacity(opacity, keyed ? Math.max(r.tint, CATEGORY_TILE_TINT) : r.tint);
     return [
       {
         id: layerId,
         type: "fill",
         ...common,
         layout,
-        paint: { "fill-color": match(r.color, (c) => c), "fill-opacity": landFillOpacity(opacity, keyed ? Math.max(r.tint, CATEGORY_TILE_TINT) : r.tint) },
+        paint: { "fill-color": match(r.color, (c) => c), "fill-opacity": solid.length > 0 ? solidFillOpacity(opacity, solid, keyed!.field, Math.max(r.tint, CATEGORY_TILE_TINT)) : tint },
       },
       {
         id: `${layerId}-hatch`,
@@ -127,8 +169,8 @@ export function vectorTileLayerSpecs(
         ...common,
         layout,
         paint: {
-          "fill-pattern": match(pattern, (c) => (hatchable(c) ? hatchPatternId(c as HatchColor, r.step) : pattern)),
-          "fill-opacity": landHatchOpacity(opacity, r.hatchAlpha),
+          "fill-pattern": match(pattern, (c) => (hatchable(c) ? hatchPatternId(c.toUpperCase() as HatchColor, r.step) : pattern)),
+          "fill-opacity": solid.length > 0 ? solidHatchOpacity(opacity, solid, keyed!.field, r.hatchAlpha) : landHatchOpacity(opacity, r.hatchAlpha),
         },
       },
       {
@@ -136,14 +178,15 @@ export function vectorTileLayerSpecs(
         type: "line",
         ...common,
         layout: lineLayout,
-        paint: { "line-color": WHITE, "line-width": r.outlineWidth + 2 * r.casing, "line-opacity": LAND_OUTLINE.opacity * opacity },
+        paint: { "line-color": WHITE, "line-width": r.outlineWidth + 2 * r.casing, "line-opacity": (solid.length > 0 ? 0 : LAND_OUTLINE.opacity) * opacity },
       },
       {
         id: `${layerId}-line`,
         type: "line",
         ...common,
         layout: lineLayout,
-        paint: { "line-color": match(r.outline, (c) => c), "line-width": r.outlineWidth, "line-opacity": LAND_OUTLINE.opacity * opacity },
+        // Solid-keyed areas step by fill; their boundaries (fractal zone edges) stay faint so they do not read as contours.
+        paint: { "line-color": match(r.outline, (c) => c), "line-width": solid.length > 0 ? 0.5 : r.outlineWidth, "line-opacity": (solid.length > 0 ? 0.35 : LAND_OUTLINE.opacity) * opacity },
       },
     ];
   }
@@ -198,8 +241,16 @@ export function ensureHatchImages(map: MapboxMap, ids: Iterable<string>): void {
  * The category a vector tile layer's areas are colored by: its legend's field and item colors (the answer's legend over
  * the layer's), else its category key's declared levels (lib/render/categories.ts).
  */
-export function tileKeyOf(layer: LoadedLayer): { field: string; colors: [string, string][] } | undefined {
+/** What colors a tile layer's areas: a category's colors by value, or a stepped ramp's colors from each lower bound. */
+export type TileKey = { field: string; colors: [string, string][]; steps?: [number, string][] };
+
+export function tileKeyOf(layer: LoadedLayer): TileKey | undefined {
   const legend = layer.result.legend ?? layer.legend;
+  // A ramp whose every stop has a value and a color, low to high (geology's eras): a stepped fill.
+  if (legend?.kind === "ramp" && legend.field && (legend.stops?.length ?? 0) > 1 && legend.stops!.every((s) => s.color && typeof s.value === "number")) {
+    const steps = legend.stops!.map((s) => [s.value as number, s.color as string] as [number, string]).sort((a, b) => a[0] - b[0]);
+    return { field: legend.field, colors: [], steps };
+  }
   if (legend?.field && legend.items?.some((i) => i.color && i.value !== undefined)) {
     return { field: legend.field, colors: legend.items.flatMap((i) => (i.color && i.value !== undefined ? [[String(i.value), i.color] as [string, string]] : [])) };
   }

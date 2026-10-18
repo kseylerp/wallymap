@@ -80,16 +80,20 @@ export function RowLegend({ blocks, compact = false }: { blocks: LegendBlock[]; 
             </ul>
           )}
           {block.kind === "ramp" && (
-            <div className="max-w-[220px]">
+            <div className={compact ? "max-w-[260px]" : undefined}>
               {compact && block.title && <p className="truncate text-ink-muted">{block.title}</p>}
               <div
                 aria-hidden
                 className="h-2 rounded-[2px] border border-line"
                 style={{ background: `linear-gradient(to right, ${(block.colors ?? []).join(", ")})`, ...(block.filter && { filter: block.filter }) }}
               />
-              <div className="mt-0.5 flex justify-between gap-2 text-[10.5px] text-ink-muted tabular-nums">
-                {(block.entries.length > 3 ? [block.entries[0], block.entries[Math.floor(block.entries.length / 2)], block.entries[block.entries.length - 1]] : block.entries).map((e, i) => (
-                  <span key={`${e.label}-${i}`} className="min-w-0 truncate">
+              {/* End labels wrap (up to three lines) rather than cut: "Sink: takes up carbon" is the key's meaning. */}
+              <div className="mt-0.5 flex justify-between gap-2 text-[10.5px] leading-[13px] text-ink-muted tabular-nums">
+                {(block.entries.length > 3 ? [block.entries[0], block.entries[Math.floor(block.entries.length / 2)], block.entries[block.entries.length - 1]] : block.entries).map((e, i, shown) => (
+                  <span
+                    key={`${e.label}-${i}`}
+                    className={`line-clamp-3 min-w-0 flex-1 break-words ${i === 0 ? "text-left" : i === shown.length - 1 ? "text-right" : "text-center"}`}
+                  >
                     {e.label.replace(/^Lower\b.*/, "Low").replace(/^Higher\b.*/, "High")}
                   </span>
                 ))}

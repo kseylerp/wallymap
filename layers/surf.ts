@@ -997,7 +997,6 @@ const CARD: CardSpec = {
     { key: "readAt", label: "Time" },
     { key: "periodS", label: "Period", unit: "s" },
     { key: "swellFrom", label: "Swell from" },
-    { key: "v", label: "In metres", unit: "m", format: "1dp" },
     { key: "avgPeriodS", label: "Average period", unit: "s" },
     { key: "swellFt", label: "Swell part", unit: "ft" },
     { key: "swellPeriodS", label: "Swell period", unit: "s" },
@@ -1026,6 +1025,7 @@ const CARD: CardSpec = {
   // Codes and repeats of rows the card already shows in feet, knots, °F and local time.
   hidden: [
     "stationId",
+    "v",
     "t",
     "directionDeg",
     "directionFrom",

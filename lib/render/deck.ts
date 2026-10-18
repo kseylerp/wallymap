@@ -48,7 +48,7 @@ import { extentOf, hatchStepOf, primaryMeasure, sizeScale, topPlaces } from "@/l
 import { basisLabel, basisScale, basisT, cellContext, hexCells, registerCell, usableBasis, type CellContext, type HexCell } from "@/lib/render/hexCells";
 import { RANKED_LABELS } from "@/lib/render/views";
 import { PlacedLabelLayer } from "@/lib/render/placedLabels";
-import { colorT, divergingColor, encodeColor, ENCODED_POINT, isDiverging, pointRadiusAt, resolveEncoding, sizeT, valuesOf, type ResolvedEncoding } from "@/lib/render/encode";
+import { colorT, divergingColor, encodeColor, ENCODED_POINT, isDiverging, levelColor, pointRadiusAt, resolveEncoding, sizeT, valuesOf, type ResolvedEncoding } from "@/lib/render/encode";
 
 type Rgba = [number, number, number, number];
 
@@ -877,8 +877,13 @@ function encodedPointLayers(op: RenderOp, ctx: OpContext, opacity: number, encod
   const { size, color } = encoding;
   const radius = (f: Feature) => (size ? pointRadiusAt(sizeT(f.properties?.[size.key], size.extent)) : symbolSizePx(ctx.zoom) / 2 + 1);
   const fill = (f: Feature): Rgba => {
-    const t = color ? colorT(f.properties?.[color.key], color) : null;
-    const base: Rgba = t === null ? ENCODED_EMPTY : [...encodeColor(t), Math.round(255 * ENCODED_POINT.fillAlpha)];
+    const own = color ? levelColor(f.properties?.[color.key], color) : null;
+    const t = color && !own ? colorT(f.properties?.[color.key], color) : null;
+    const base: Rgba = own
+      ? [...hexToRgb(own), Math.round(255 * ENCODED_POINT.fillAlpha)]
+      : t === null
+        ? ENCODED_EMPTY
+        : [...encodeColor(t), Math.round(255 * ENCODED_POINT.fillAlpha)];
     const c = withOpacity(base, opacity);
     return selected && f !== selected ? withOpacity(c, SIBLING_FADE) : c;
   };
@@ -1033,8 +1038,8 @@ function labelLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
         fontWeight: 600,
         characterSet: "auto",
-        fontSettings: { sdf: true, buffer: 6 },
-        outlineWidth: 0.6,
+        fontSettings: { sdf: true, buffer: 10, radius: 12 },
+        outlineWidth: 1.2,
         outlineColor: hexToRgba(HEX_TILE.labelHalo, Math.round(240 * opacity)),
         billboard: true,
         parameters: { cullMode: "none", depthCompare: "always" },

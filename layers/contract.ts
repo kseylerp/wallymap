@@ -335,7 +335,10 @@ export function cardTitle(layer: Pick<Layer, "id" | "title" | "attributes">, fea
   if (name) return name.value;
   const kindProp = textProp(props, KIND_KEYS);
   const level = kindProp ? layer.attributes?.find((a) => a.key === kindProp.key)?.levels?.find((l) => String(l.value) === kindProp.value) : undefined;
-  const kind = level?.label ?? (kindProp ? humanise(kindProp.value) : null);
+  // No kind property: the layer's primary category in its own words (a hardiness tile's zone, "Zone 5b (−15 to −10 °F)").
+  const primary = kindProp ? undefined : layer.attributes?.find((a) => a.primary && a.type === "category" && props[a.key] !== undefined && props[a.key] !== null);
+  const primaryLabel = primary?.levels?.find((l) => String(l.value) === String(props[primary.key]))?.label;
+  const kind = level?.label ?? (kindProp ? humanise(kindProp.value) : (primaryLabel ?? null));
   const place = textProp(props, PLACE_KEYS)?.value;
   const noun = kind ?? shortTitle(layer);
   if (place) return /^\d.*\bof\b/i.test(place) ? `${noun} ${place}` : `${noun} near ${place}`;

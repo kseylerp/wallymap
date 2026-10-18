@@ -110,10 +110,9 @@ function RowList({ rows }: { rows: CardRow[] }) {
           </div>
         ) : (
         <div key={r.key} className="flex items-baseline justify-between gap-3 border-t border-line py-1.5" data-field={r.key}>
-          <dt className="flex min-w-0 max-w-[52%] shrink-0 items-center gap-1 text-ink-muted">
-            <span className="truncate" title={r.label}>
-              {r.label}
-            </span>
+          {/* The label wraps rather than cuts: "Legal for high-clearance vehicles" is the fact's meaning. */}
+          <dt className="flex min-w-0 max-w-[52%] shrink-0 items-baseline gap-1 text-ink-muted">
+            <span className="min-w-0 break-words">{r.label}</span>
             {r.help && <InfoMark help={r.help} label={r.label} />}
           </dt>
           <dd className="min-w-0 text-right break-words text-ink tabular-nums">{r.value}</dd>

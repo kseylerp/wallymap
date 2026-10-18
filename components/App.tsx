@@ -298,7 +298,7 @@ export function App() {
       </div>
 
       {/* Phones with the console closed: the top layer's date and key under the pills, and the time panel as one row. */}
-      {isPhone && !layerPanelOpen && Object.keys(state.layers).length > 0 && (
+      {isPhone && !layerPanelOpen && (Object.keys(state.layers).length > 0 || state.errors.length > 0) && (
         <>
           <div className="pointer-events-none absolute top-(--console-top,60px) left-[calc(var(--safe-left)+12px)] z-20 max-w-[calc(100vw-80px-var(--safe-left)-var(--safe-right))]">
             <PhoneCaption state={state} shown={view.layers} onOpen={() => setLayersOpen(true)} />

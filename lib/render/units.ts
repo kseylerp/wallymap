@@ -61,6 +61,13 @@ function text(value: number, unit: string, key = "v"): string {
  */
 export function quantity(value: number, unit: string | undefined, display: Pick<ResolvedDisplay, "units">, key = "v"): string {
   if (!unit || unit === "score") return formatValue(key, value, unit);
+  // A temperature difference ("±°F", an anomaly): converted by the degree's size only, never the 32° offset, and signed.
+  if (unit === "±°F" || unit === "±°C") {
+    const f = unit === "±°F" ? value : (value * 9) / 5;
+    const c = unit === "±°C" ? value : (value * 5) / 9;
+    const signed = (n: number, u: string) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${text(Math.abs(n), u, key)}`;
+    return display.units === "us" ? `${signed(f, "°F")} (${signed(c, "°C")})` : `${signed(c, "°C")} (${signed(f, "°F")})`;
+  }
   const u = unit === "km2" ? "km²" : unit;
   const wantUs = display.units === "us";
   if (wantUs && METRIC_UNITS.has(u)) {

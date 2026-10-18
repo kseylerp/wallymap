@@ -26,6 +26,10 @@ export function EncodingLegend({ layer, op, data, time }: { layer: LoadedLayer; 
   // A series line colors across the frame's own spread (lib/render/seriesLines.ts): the legend gives that day's range.
   const series = layer.result.kind === "geojson" ? layer.result.series : undefined;
   let colorText = color ? channelText(color) : "";
+  // Particles colored by their own speed (wind, lib/render/particles.ts `flow.color`): the color line says speed, not the
+  // declared second variable.
+  const flowColor = layer.result.kind === "geojson" ? layer.result.flow?.color : undefined;
+  if (flow && color && size && flowColor && flowColor !== color.key && flowColor === size.key) colorText = channelText(size);
   if (color && !color.levels && series && time?.index.series && layer.style.geometry === "line") {
     const k = layerFrames(layer, time.index.buckets)[frameIndex(time)] ?? series.now;
     const spread = frameSpread(data.features, color.key, Math.max(0, k));
@@ -44,7 +48,18 @@ export function EncodingLegend({ layer, op, data, time }: { layer: LoadedLayer; 
           </span>
         </p>
       )}
-      {color && (
+      {color?.categorical && color.levels && (
+        // A category's kinds each in their own color (power plants by fuel): swatches, not a ramp.
+        <ul className="flex flex-wrap gap-x-3 gap-y-0.5" data-testid="encode-color">
+          {color.levels.map((l, i) => (
+            <li key={`${l.label}-${i}`} className="flex min-w-0 items-center gap-1.5">
+              <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full border border-white" style={{ background: l.color }} />
+              <span className="min-w-0">{l.label}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {color && !color.categorical && (
         <p className="flex min-w-0 items-center gap-2" data-testid="encode-color">
           <span aria-hidden className="h-2 w-7 shrink-0 rounded-[2px]" style={{ background: `linear-gradient(to right, ${rampCss()})` }} />
           <span className="min-w-0 truncate">

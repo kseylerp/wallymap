@@ -533,3 +533,37 @@ describe("insertBeforeId", () => {
     expect(insertBeforeId([])).toBeUndefined();
   });
 });
+
+describe("tile areas keyed in colors of their own (hardiness zones)", () => {
+  it("fill solid in the key's colors with no grey hatch over them", () => {
+    const specs = vectorTileLayerSpecs("hardiness-zones", { geometry: "polygon", color: "#3A3A3C" }, "zones", "polygon", true, {}, {
+      field: "_symbol",
+      colors: [
+        ["0", "#7A63F0"],
+        ["1", "#8C79E6"],
+      ],
+    });
+    const fill = specs.find((s) => s.id === "tiles-hardiness-zones")!;
+    const hatch = specs.find((s) => s.id === "tiles-hardiness-zones-hatch")!;
+    expect(JSON.stringify(fill.paint)).toContain('"literal",["0","1"]');
+    expect(JSON.stringify(fill.paint)).toContain("0.55");
+    expect(JSON.stringify((hatch.paint as Record<string, unknown>)["fill-opacity"])).toMatch(/"case".*,0,/);
+  });
+});
+
+describe("tile areas keyed by a stepped ramp (geology by era)", () => {
+  it("fill each unit solid in its step's color", () => {
+    const specs = vectorTileLayerSpecs("geology", { geometry: "polygon", color: "#3A3A3C" }, "units", "polygon", true, {}, {
+      field: "best_age_top",
+      colors: [],
+      steps: [
+        [0, SAGE],
+        [2.58, PINK],
+        [66, PURPLE],
+      ],
+    });
+    const fill = specs.find((s) => s.id === "tiles-geology")!;
+    expect((fill.paint as Record<string, unknown>)["fill-color"]).toEqual(["step", ["to-number", ["get", "best_age_top"], -1], SAGE, 2.58, PINK, 66, PURPLE]);
+    expect((specs.find((s) => s.id === "tiles-geology-hatch")!.paint as Record<string, unknown>)["fill-opacity"]).toBe(0);
+  });
+});

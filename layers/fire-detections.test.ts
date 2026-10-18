@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { contractProblems, timeShapeOf } from "./contract";
 import layer, { parseFirmsCsv } from "./fire-detections";
 
 const CSV = readFileSync(path.join(__dirname, "__fixtures__/fire-detections.sample.csv"), "utf8");
@@ -31,6 +32,8 @@ describe("parseFirmsCsv", () => {
       brightK: 303.03,
       confidence: "n",
       daynight: "N",
+      heading: "Hotspot, Oct 5 09:30 UTC",
+      label: "0.6 MW",
     });
   });
 
@@ -212,7 +215,7 @@ describe("fire-detections layer", () => {
     const stub = vi.fn(async () => new Response(rows.join("\n"), { status: 200 }));
     vi.stubGlobal("fetch", stub);
     try {
-      const res = await runLayer("fire-detections", { bbox: [10, -15, 40, 5], input: { days: 5 } });
+      const res = await runLayer("fire-detections", { bbox: [10, -15, 40, 5], input: { days: 5, source: "VIIRS_SNPP_NRT" } });
       expect(res.status).toBe(200);
       const body = res.body as unknown as { data: { features: { properties: { t: string; v: number } }[] }; total?: number; coverageNote?: string };
       expect(body.data.features).toHaveLength(5000);
@@ -240,5 +243,38 @@ describe("fire-detections layer", () => {
     vi.stubEnv("FIRMS_MAP_KEY", KEY);
     expect((await runLayer("fire-detections", { bbox: BBOX, input: { days: 6 } })).status).toBe(400);
     expect((await runLayer("fire-detections", { bbox: BBOX, input: { source: "GOES" } })).status).toBe(400);
+  });
+
+  it("by default merges Suomi NPP, NOAA-20 and NOAA-21 (audit 2026-10-17: one satellite left 'now' 12 hours old)", async () => {
+    const stub = vi.fn(async (_url: string, _init?: unknown) => new Response(CSV, { status: 200 }));
+    const r = await layer.query(ctx(stub, "fire-detections:k"), layer.input.parse({}));
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const urls = stub.mock.calls.map(([u]) => u);
+    expect(urls.map((u) => u.split("/")[7])).toEqual(["VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT"]);
+    expect(stub.mock.calls.map(([, init]) => (init as { cacheKey: string }).cacheKey)).toEqual([
+      "fire-detections:k:firms:VIIRS_SNPP_NRT",
+      "fire-detections:k:firms:VIIRS_NOAA20_NRT",
+      "fire-detections:k:firms:VIIRS_NOAA21_NRT",
+    ]);
+    expect(r.data.features).toHaveLength(300);
+    expect(new Set(r.data.features.map((f) => f.properties?.satellite))).toEqual(new Set(["VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT"]));
+    expect(r.citation.source).toBe("NASA FIRMS VIIRS (Suomi NPP, NOAA-20, NOAA-21) (public, attribution requested)");
+  });
+
+  it("keeps the satellites that answered when one fails, and says which did not", async () => {
+    const stub = vi.fn(async (url: string, _init?: unknown) => (url.includes("NOAA21") ? new Response("busy", { status: 503 }) : new Response(CSV, { status: 200 })));
+    const r = await layer.query(ctx(stub), layer.input.parse({}));
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features).toHaveLength(200);
+    expect(r.coverageNote).toBe("NOAA-21 (VIIRS) did not answer; showing the other satellites");
+    const all = vi.fn(async () => new Response("busy", { status: 503 }));
+    expect(await layer.query(ctx(all), layer.input.parse({}))).toEqual({ error: "FIRMS returned 503", hint: "upstream" });
+  });
+
+  it("totals the strongest power per frame, not a sum, is continuous by the hour, and labels the top five by power", () => {
+    expect(layer.attributes?.find((a) => a.key === "v")).toMatchObject({ aggregate: "max" });
+    expect(contractProblems(layer)).toEqual([]);
+    expect(timeShapeOf(layer, parseFirmsCsv(CSV))).toMatchObject({ shape: "continuous", step: "hour" });
+    expect(layer.labels).toEqual({ field: "label", max: 5, rankBy: "v" });
   });
 });

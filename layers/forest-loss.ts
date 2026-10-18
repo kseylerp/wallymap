@@ -11,13 +11,23 @@
  *     Accepted values: 0, 10, 15, 20, 25, 30, 50, 75, 90. Years run 2001 to 2025; 2026 returns 422.
  *   - `latest` answers 307 to the current version (v1.13 at time of writing); fetch and Mapbox follow it.
  *   - Tiles are 512 x 512 PNG, served at z 0 to 22 (z 3 to 16 tested; loss is 30 m so z 12 is plenty).
+ *   - true_color draws loss pink (228,70,146), fainter where a pixel holds less loss at the zoom (alpha), checked 2026-10-18
+ *     over Rondonia z8; the tiles draw as served so the key's color is the map's.
  * No upstream call is made by the layer: it only builds the URL for the map to fetch.
  */
 import { z } from "zod";
-import { defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { FOREST_LOSS_LATEST_YEAR } from "@/lib/time";
 import { layerColor } from "@/lib/render/palette";
+
+/** One color: GFW's loss pink (the tiles' own). */
+export const LEGEND: LegendSpec = {
+  kind: "categories",
+  title: "Tree cover loss",
+  items: [{ label: "Tree cover lost in the years shown", color: "#E44692", symbol: "raster", help: "Canopy removed or killed, for any reason (logging, farming, fire, storms, harvest)." }],
+  note: "Paler where only part of the area was lost at this zoom; regrowth is not subtracted.",
+};
 
 const TILE_BASE = "https://tiles.globalforestwatch.org/umd_tree_cover_loss/latest/dynamic/{z}/{x}/{y}.png";
 
@@ -54,7 +64,9 @@ const forestLoss = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("forest-loss"), raster: { saturation: -0.35, swatch: "#DC6699" } },
+  style: { geometry: "polygon", color: layerColor("forest-loss"), raster: { saturation: 0, opacity: 0.9, swatch: "#E44692" } },
+  legend: LEGEND,
+  time: { shape: "continuous", step: "year" },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     if (input.startYear > input.endYear) {
@@ -82,6 +94,8 @@ const forestLoss = defineLayer({
         url: "https://www.globalforestwatch.org/",
         retrieved: new Date().toISOString(),
       },
+      // The years and canopy drawn, so the row says what the map holds (audit 2026-10-17).
+      coverageNote: `Tree cover lost ${input.startYear}–${input.endYear}, where canopy was at least ${input.canopyThreshold}% in 2000`,
     };
   },
 });

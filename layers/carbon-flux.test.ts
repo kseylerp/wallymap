@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { compactDescription } from "@/lib/agent/tools";
 import layer, { carbonTileUrl } from "./carbon-flux";
+import { contractProblems, legendOf, timeShapeOf } from "./contract";
 
 const AMAZON: [number, number, number, number] = [-64, -12, -58, -8];
 
@@ -40,5 +41,14 @@ describe("carbon-flux", () => {
     }
     expect(layer.license).toContain("CC BY 4.0");
     expect(compactDescription(layer.description, { inputs: ["product"] })).toContain("'net-flux' (default)");
+  });
+
+  it("keys source purple to sink green, one 2001-2025 average, and lifts the pale sinks (audit 2026-10-17: grey haze, no key)", () => {
+    expect(contractProblems(layer)).toEqual([]);
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "ramp", unit: "Mg CO₂e per hectare per year" });
+    expect(legend.stops?.map((s) => s.color)).toEqual(["#7B3B7F", "#E9E7DD", "#9EC09F"]);
+    expect(timeShapeOf(layer).shape).toBe("single");
+    expect(layer.style.raster).toMatchObject({ saturation: 0.4, contrast: 0.25 });
   });
 });

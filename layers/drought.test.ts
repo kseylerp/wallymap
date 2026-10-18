@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FeatureCollection, Geometry, MultiPolygon, Polygon, Position } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { attributeProblems } from "./attributes";
+import { contractProblems, legendOf } from "./contract";
 import layer, { clipGeometry, clipRing, normalizeDrought, paddedBbox, simplifyOffset, weekChunks, weekDates } from "./drought";
 import rowsRaw from "./__fixtures__/drought.fourcorners.json";
 import latestRaw from "./__fixtures__/drought.latest.json";
@@ -64,9 +66,18 @@ describe("drought layer", () => {
   it("pads the view by a tenth each side without leaving the world, and simplifies coarser for wide views", () => {
     expect(paddedBbox([-111, 36, -109, 37.5])).toEqual([-111.2, 35.85, -108.8, 37.65]);
     expect(paddedBbox([-180, -90, 180, 90])).toEqual([-180, -90, 180, 90]);
-    expect(simplifyOffset([-111, 36, -110.8, 36.2])).toBe(0.02);
-    expect(simplifyOffset([-111, 36, -109, 37.5])).toBe(0.1);
-    expect(simplifyOffset([-125, 24, -66, 50])).toBe(0.25);
+    expect(simplifyOffset([-111, 36, -110.8, 36.2])).toBe(0.005);
+    expect(simplifyOffset([-111, 36, -109, 37.5])).toBe(0.013);
+    expect(simplifyOffset([-125, 24, -66, 50])).toBe(0.12);
+    // State scale keeps the categories on the land (audit 2026-10-17: triangles spilling into Mexico and the Gulf at 0.25°).
+    expect(simplifyOffset([-106.7, 25.8, -93.5, 36.5])).toBe(0.088);
+  });
+
+  it("colors the categories D0 to D4 on the ordinal ramp, with the chips and key from the same levels (audit 2026-10-17: one hatch)", () => {
+    expect(layer.style.encode).toEqual({ color: "kind" });
+    expect(attributeProblems(layer)).toEqual([]);
+    expect(contractProblems(layer)).toEqual([]);
+    expect(legendOf(layer).items?.map((i) => i.value)).toEqual(["D0", "D1", "D2", "D3", "D4"]);
   });
 
   it("clips a ring to the bbox and rounds to three decimals", () => {
@@ -170,7 +181,7 @@ describe("drought layer", () => {
     expect(q.searchParams.get("where")).toBe("ddate >= timestamp '2026-10-06 00:00:00' AND ddate <= timestamp '2026-10-06 00:00:00'");
     expect(q.searchParams.get("geometry")).toBe(paddedBbox(FOUR_CORNERS).join(","));
     expect(q.searchParams.get("outFields")).toBe("dm,ddate");
-    expect(q.searchParams.get("maxAllowableOffset")).toBe("0.1");
+    expect(q.searchParams.get("maxAllowableOffset")).toBe("0.013");
     expect(calls[1][1].cacheKey).toBe("drought:k:usdm-2026-10-06-2026-10-06");
     expect(calls[1][1].ttlSeconds).toBe(6 * 3600);
 

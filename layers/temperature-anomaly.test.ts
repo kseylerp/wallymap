@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { countiesUrl, countyOffset, parseCounties, roundedBbox } from "./_shared/counties";
+import { contractProblems, legendOf, timeShapeOf } from "./contract";
+import { attributeProblems } from "./attributes";
 import layer, { anomalyUrl, joinAnomalies, latestCandidates, periodEnd } from "./temperature-anomaly";
 import countiesFixture from "./__fixtures__/counties.sfbay.json";
 import nceiFixture from "./__fixtures__/ncei-county-tavg.202609-1.json";
@@ -130,5 +132,30 @@ describe("temperature-anomaly", () => {
       expect(layer.description).toContain(word);
     }
     expect((await runLayer("temperature-anomaly", { bbox: [-170, 10, -50, 75] })).status).toBe(422);
+  });
+
+  it("colors every county by its anomaly on a ramp centred on normal, with a key in °F (audit 2026-10-17: one hatch for all)", () => {
+    expect(layer.style.encode).toEqual({ color: "v" });
+    expect(attributeProblems(layer)).toEqual([]);
+    expect(contractProblems(layer)).toEqual([]);
+    const legend = legendOf(layer);
+    expect(legend).toMatchObject({ kind: "ramp", field: "v", unit: "°F" });
+    expect(legend.stops?.map((s) => s.value)).toEqual([-8, 0, 8]);
+    expect(legend.stops?.[1]).toMatchObject({ label: "Normal" });
+    expect(timeShapeOf(layer).shape).toBe("single");
+  });
+
+  it("flags record warm and record cool periods for the chips", () => {
+    const counties = parseCounties(countiesFixture).counties;
+    const table = { ...nceiFixture, data: { ...nceiFixture.data } } as typeof nceiFixture;
+    const sfKey = "CA-075";
+    const marin = "CA-041";
+    (table.data as Record<string, unknown>)[sfKey] = { ...(table.data as Record<string, object>)[sfKey], rank: 132 };
+    (table.data as Record<string, unknown>)[marin] = { ...(table.data as Record<string, object>)[marin], rank: 1 };
+    const { features } = joinAnomalies(counties, table, "202609", 1);
+    const props = (fips: string) => features.find((f) => f.properties?.fips === fips)?.properties;
+    expect(props("06075")).toMatchObject({ warmestRank: 1, recordWarm: true, recordCool: false });
+    expect(props("06041")).toMatchObject({ warmestRank: 132, recordWarm: false, recordCool: true });
+    expect(props("06001")).toMatchObject({ recordWarm: false, recordCool: false });
   });
 });

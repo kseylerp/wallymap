@@ -12,12 +12,15 @@
  *   - Net flux draws sinks green and sources purple; removals green; emissions purple, transparent where none.
  *   - Units (GFW data API metadata): Mg CO2e per hectare per year, the 2001-2025 average; licence CC BY 4.0.
  * No upstream call is made by the layer: it only builds the URL for the map to fetch.
+ * Colors (sampled 2026-10-18): net flux draws sinks from pale sage (211,218,200), the usual intact-forest value, to green
+ * (158,192,159), and sources from lilac (165,125,217) to deep purple (123,59,127). The pale sinks washed into a grey haze on
+ * Topo (audit 2026-10-17), so the tiles draw with more saturation and contrast instead of the default desaturation.
  * Live smoke 2026-10-10 over Rondonia, Brazil (-60, -5): z 3, 8 and 12 tiles all 200 for all three products
  * (net flux z 8 54 KB: green forest with purple clearing along the roads); runLayer with product emissions returned the
  * gross emissions template in 2 ms.
  */
 import { z } from "zod";
-import { defineLayer, type LayerError, type LayerResult } from "./types";
+import { defineLayer, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { layerColor } from "@/lib/render/palette";
 
@@ -36,6 +39,19 @@ const LABELS = {
 const inputSchema = z.object({
   product: z.enum(["net-flux", "emissions", "removals"]).default("net-flux"),
 });
+
+/** Net flux (the default): purple sources through neutral to green sinks, in the tiles' own colors. */
+export const LEGEND: LegendSpec = {
+  kind: "ramp",
+  title: "Forest carbon, 2001–2025 average",
+  unit: "Mg CO₂e per hectare per year",
+  stops: [
+    { label: "Source: gives off more than it takes up", color: "#7B3B7F" },
+    { label: "About even", color: "#E9E7DD" },
+    { label: "Sink: takes up more than it gives off", color: "#9EC09F" },
+  ],
+  note: "Most standing forest is a mild sink and draws pale green; strong purple marks clearing, fire or logging. Product emissions draws purple only, removals green only.",
+};
 
 export function carbonTileUrl(product: keyof typeof DATASETS): string {
   return `https://tiles.globalforestwatch.org/${DATASETS[product]}/latest/dynamic/{z}/{x}/{y}.png?tree_cover_density_threshold=30`;
@@ -58,7 +74,11 @@ const carbonFlux = defineLayer({
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("carbon-flux"), raster: { saturation: -0.45, swatch: "#2E9E3E" } },
+  // More saturation and contrast than the tiles carry, so the pale sinks read on green Topo instead of a grey haze.
+  style: { geometry: "polygon", color: layerColor("carbon-flux"), raster: { saturation: 0.4, contrast: 0.25, opacity: 0.85, swatch: "#9EC09F" } },
+  legend: LEGEND,
+  // One long-term average, not a series.
+  time: { shape: "single", span: { start: "2001", end: "2025" } },
 
   async query(_ctx, input): Promise<LayerResult | LayerError> {
     return {

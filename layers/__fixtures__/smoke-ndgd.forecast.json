@@ -1,0 +1,180 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -114.16,
+       45.17
+      ],
+      [
+       -113.74,
+       45.17
+      ],
+      [
+       -113.74,
+       45.47
+      ],
+      [
+       -114.16,
+       45.47
+      ],
+      [
+       -114.16,
+       45.17
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "referencedate": 1792292400000,
+    "todate": 1792303201000,
+    "smoke_classdesc": "0 - 3"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -114.16,
+       45.17
+      ],
+      [
+       -113.74,
+       45.17
+      ],
+      [
+       -113.74,
+       45.47
+      ],
+      [
+       -114.16,
+       45.47
+      ],
+      [
+       -114.16,
+       45.17
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "referencedate": 1792292400000,
+    "todate": 1792303201000,
+    "smoke_classdesc": "3 - 25"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -119.27,
+       36.45
+      ],
+      [
+       -118.5,
+       36.45
+      ],
+      [
+       -118.5,
+       36.91
+      ],
+      [
+       -119.27,
+       36.91
+      ],
+      [
+       -119.27,
+       36.45
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "referencedate": 1792292400000,
+    "todate": 1792306801000,
+    "smoke_classdesc": "25 - 63"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -118.9,
+       36.75
+      ],
+      [
+       -118.84,
+       36.75
+      ],
+      [
+       -118.84,
+       36.79
+      ],
+      [
+       -118.9,
+       36.79
+      ],
+      [
+       -118.9,
+       36.75
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "referencedate": 1792292400000,
+    "todate": 1792310401000,
+    "smoke_classdesc": "63 - 158"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -114.16,
+       45.17
+      ],
+      [
+       -113.74,
+       45.17
+      ],
+      [
+       -113.74,
+       45.47
+      ],
+      [
+       -114.16,
+       45.47
+      ],
+      [
+       -114.16,
+       45.17
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "referencedate": 1792292400000,
+    "todate": 1792314001000,
+    "smoke_classdesc": "158 - 1000"
+   }
+  }
+ ]
+}

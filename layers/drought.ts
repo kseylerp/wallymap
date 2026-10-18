@@ -97,10 +97,14 @@ export function paddedBbox(bbox: BBox): BBox {
   return [Math.max(-180, w - dx), Math.max(-90, s - dy), Math.min(180, e + dx), Math.min(90, n + dy)];
 }
 
-/** Display simplification in degrees: the source polygons are national, so a view needs far less detail. */
+/**
+ * Display simplification in degrees: the source polygons are national, so a view needs less detail, but at state scale
+ * span/20 (0.25° over Texas) turned the categories into overlapping straight-edged triangles that spilled into Mexico and
+ * the Gulf (audit 2026-10-17). About 1/150 of the view keeps them on the land: 0.087° over Texas, 0.01° near Tahoe.
+ */
 export function simplifyOffset(bbox: BBox): number {
   const span = Math.max(bbox[2] - bbox[0], bbox[3] - bbox[1]);
-  return Math.min(0.25, Math.max(0.02, span / 20));
+  return Number(Math.min(0.12, Math.max(0.005, span / 150)).toPrecision(2));
 }
 
 /** One Sutherland-Hodgman pass: keeps the part of a closed point list on one side of an axis-aligned line. */
@@ -213,7 +217,8 @@ function isTimeout(err: unknown): boolean {
 
 const DROUGHT_URL = "https://droughtmonitor.unl.edu/About/AbouttheData/DroughtClassification.aspx";
 
-const ATTRIBUTES: Attribute[] = [{ key: "kind", type: "ordinal", label: "Category", levels: DROUGHT_LEVELS, scale: DROUGHT_SCALE }];
+/** The category is the map's color (D0 to D4 on the ordinal ramp) and the row's chips. */
+const ATTRIBUTES: Attribute[] = [{ key: "kind", type: "ordinal", label: "Category", levels: DROUGHT_LEVELS, scale: DROUGHT_SCALE, encode: "color", primary: true }];
 
 const CATEGORY: FieldHelp = {
   text:
@@ -246,7 +251,7 @@ const drought = defineLayer({
   title: "Drought",
   description:
     "How dry the United States is, from the weekly U.S. Drought Monitor, drawn as polygons: each polygon is one drought category in one week. " +
-    "kind is D0 to D4 and v is the same as a number 0 to 4: D0 abnormally dry, D1 moderate drought, D2 severe drought, D3 extreme drought, D4 exceptional drought (areas not in drought are not drawn). category is that name; t and week are the Tuesday the map is valid for. " +
+    "kind is D0 to D4 and v is the same as a number 0 to 4: D0 abnormally dry, D1 moderate drought, D2 severe drought, D3 extreme drought, D4 exceptional drought (areas not in drought are not drawn); the map colors each category on one ramp, D0 lightest to D4 darkest. category is that name; t and week are the Tuesday the map is valid for. " +
     "Use it for 'drought', 'how dry is it', 'is this area in a drought', or 'has the drought got worse' (set weeks above 1 and use the time scrubber). weeks (1 to 12, default 1) is how many weekly maps to return, newest first; 1 is the current week. " +
     "Caveats: this is a broad, regional picture drawn from rainfall, soil moisture, streamflow and local reports by expert authors, not a measurement at a point, and its edges are smoothed, so do not use it for a single field or a trailhead. " +
     "It describes dryness, not the fire danger and not the water level of a particular lake or river (streamflow and snowpack are better for those). " +
@@ -259,7 +264,8 @@ const drought = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 16_000_000,
   input: inputSchema,
-  style: { geometry: "polygon", color: layerColor("drought"), fillOpacity: 0.5 },
+  style: { geometry: "polygon", color: layerColor("drought"), fillOpacity: 0.5, encode: { color: "kind" } },
+  // Areas, not named features: no labels.
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,

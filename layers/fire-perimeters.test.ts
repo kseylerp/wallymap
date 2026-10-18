@@ -1,11 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { historyWhere, normalizeFirePerimeters, offsetFor, wfigsWhere } from "./fire-perimeters";
+import { attributeProblems } from "./attributes";
+import { contractProblems } from "./contract";
+import layer, { agencyName, historyWhere, incidentsById, joinIncidents, normalizeFirePerimeters, offsetFor, wfigsWhere } from "./fire-perimeters";
 import raw from "./__fixtures__/fire-perimeters.tahoe.json";
+/** WFIGS_Incident_Locations records for the five WFIGS fires in the Tahoe fixture, recorded 2026-10-18. */
+import incidentsRaw from "./__fixtures__/fire-perimeters-incidents.tahoe.json";
 import type { FeatureCollection } from "geojson";
 
 const fixture = raw as unknown as { history: FeatureCollection; wfigs: FeatureCollection };
+const incidents = incidentsRaw as unknown as FeatureCollection;
 
 const CALDOR_AREA: [number, number, number, number] = [-120.6, 38.6, -119.8, 39.3];
 
@@ -16,7 +21,7 @@ function json(body: unknown): Response {
 /** Answers the history service with the history fixture and the WFIGS service with the WFIGS fixture. */
 function routedStub() {
   return vi.fn(async (url: string) =>
-    json(url.includes("InterAgencyFirePerimeterHistory_All_Years_View") ? fixture.history : fixture.wfigs),
+    json(url.includes("WFIGS_Incident_Locations") ? incidents : url.includes("InterAgencyFirePerimeterHistory_All_Years_View") ? fixture.history : fixture.wfigs),
   );
 }
 
@@ -52,12 +57,13 @@ describe("fire-perimeters layer", () => {
     }
 
     const caldor = fc.features.find((f) => f.properties?.name === "Caldor");
-    expect(caldor?.properties).toMatchObject({ year: 2021, acres: 221783.9, agency: "USFS" });
+    expect(caldor?.properties).toMatchObject({ year: 2021, acres: 221783.9, agency: "US Forest Service", agencyCode: "USFS" });
     expect(caldor?.properties?.t).toBe("2021-08-15T01:54:24.000Z");
 
-    // History rows only carry a year, so t falls back to January 1.
+    // History rows only carry a year, so t sits mid-year (no January spike in the histogram) and there is no discovery date.
     const voltaire = fc.features.find((f) => f.properties?.name === "Voltaire");
-    expect(voltaire?.properties).toMatchObject({ year: 2018, t: "2018-01-01T00:00:00.000Z", agency: "USFS" });
+    expect(voltaire?.properties).toMatchObject({ year: 2018, t: "2018-07-01T00:00:00.000Z", agency: "US Forest Service" });
+    expect(voltaire?.properties?.discovered).toBeUndefined();
   });
 
   it("drops the duplicate history rows that share an IRWIN id", () => {
@@ -131,7 +137,7 @@ describe("fire-perimeters layer", () => {
     const r = await layer.query(ctx(stub), { yearsBack: 7, minAcres: 100 });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.coverageNote).toBeUndefined();
-    const calls = stub.mock.calls as unknown as [string, RequestInit & { ttlSeconds?: number }][];
+    const calls = (stub.mock.calls as unknown as [string, RequestInit & { ttlSeconds?: number }][]).filter(([u]) => !u.includes("Incident_Locations"));
     expect(calls).toHaveLength(2);
     const history = calls.find(([u]) => u.includes("InterAgencyFirePerimeterHistory_All_Years_View"));
     const wfigs = calls.find(([u]) => u.includes("WFIGS_Interagency_Perimeters"));
@@ -161,7 +167,7 @@ describe("fire-perimeters layer", () => {
   it("skips the stale history service when the window starts in 2020 or later", async () => {
     const stub = routedStub();
     await layer.query(ctx(stub), { yearsBack: 5, minAcres: 100 });
-    const urls = stub.mock.calls.map((c) => String(c[0]));
+    const urls = stub.mock.calls.map((c) => String(c[0])).filter((u) => !u.includes("Incident_Locations"));
     expect(urls).toHaveLength(1);
     expect(urls[0]).toContain("WFIGS_Interagency_Perimeters");
     expect(whereOf(urls[0])).toContain("DATE '2021-01-01'");
@@ -225,7 +231,9 @@ describe("fire-perimeters layer", () => {
     try {
       const res = await runLayer("fire-perimeters", { bbox: [-125, 32, -110, 45], zoom: 5 });
       expect(res.status).toBe(200);
-      const data = stub.mock.calls.map((c) => new URL(String(c[0]))).filter((u) => !u.searchParams.has("returnCountOnly"));
+      const data = stub.mock.calls
+        .map((c) => new URL(String(c[0])))
+        .filter((u) => !u.searchParams.has("returnCountOnly") && !u.pathname.includes("Incident_Locations"));
       expect(data).toHaveLength(2);
       for (const u of data) {
         expect(u.searchParams.get("resultRecordCount")).toBe("250");
@@ -247,11 +255,48 @@ describe("fire-perimeters layer", () => {
     expect(r.coverageNote).toBeUndefined();
     const urls = (stub.mock.calls as unknown as [string][]).map((c) => new URL(c[0]));
     expect(urls.every((u) => u.pathname.includes("WFIGS"))).toBe(true);
-    expect(urls.find((u) => !u.searchParams.has("returnCountOnly"))?.searchParams.get("resultRecordCount")).toBe("500");
+    expect(urls.find((u) => !u.searchParams.has("returnCountOnly") && u.pathname.includes("Perimeters"))?.searchParams.get("resultRecordCount")).toBe("500");
   });
 
   it("rejects out-of-range input through runLayer", async () => {
     const res = await runLayer("fire-perimeters", { bbox: CALDOR_AREA, input: { yearsBack: 99 } });
     expect(res.status).toBe(400);
+  });
+
+  it("joins each fire's incident record: out, contained or still burning, with the percent and dates (audit 2026-10-17)", async () => {
+    const stub = routedStub();
+    const r = await layer.query(ctx(stub), { yearsBack: 10, minAcres: 100 });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    const located = stub.mock.calls.map((c) => String(c[0])).find((u) => u.includes("WFIGS_Incident_Locations"));
+    expect(whereOf(located)).toBe("FireDiscoveryDateTime >= DATE '2020-01-01' AND IncidentSize >= 50");
+    const byName = (n: string) => r.data.features.find((f) => f.properties?.name === n)?.properties;
+    expect(byName("Caldor")).toMatchObject({ status: "out", contained: 100, outDate: "2023-07-31T14:07:00.000Z" });
+    // Tamarack last reported 84% but was declared out: out is 100% contained.
+    expect(byName("Tamarack")).toMatchObject({ status: "out", contained: 100, cause: "Lightning" });
+    expect(byName("Caldor")?.irwinId).toBeUndefined();
+    expect(byName("Voltaire")?.status).toBeUndefined();
+  });
+
+  it("reads an active fire's percent contained, and keeps the perimeters when the incident service fails", async () => {
+    const fc: FeatureCollection = {
+      type: "FeatureCollection",
+      features: [{ type: "Feature", geometry: null as never, properties: { name: "New", irwinId: "ABC-1" } }],
+    };
+    const map = incidentsById({ type: "FeatureCollection", features: [{ type: "Feature", geometry: null as never, properties: { IrwinID: "{abc-1}", PercentContained: 35 } }] });
+    expect(joinIncidents(fc, map)).toBe(1);
+    expect(fc.features[0].properties).toMatchObject({ status: "active", contained: 35 });
+    const down = vi.fn(async (url: string) =>
+      url.includes("Incident_Locations") ? new Response("busy", { status: 503 }) : json(url.includes("InterAgencyFirePerimeterHistory_All_Years_View") ? fixture.history : fixture.wfigs),
+    );
+    const r = await layer.query(ctx(down), { yearsBack: 10, minAcres: 100 });
+    expect(r).toMatchObject({ kind: "geojson", coverageNote: expect.stringContaining("Containment could not be loaded") });
+  });
+
+  it("names agencies in words and declares a valid contract", () => {
+    expect(agencyName("C&L")).toBe("County or local");
+    expect(agencyName("blm")).toBe("Bureau of Land Management");
+    expect(agencyName("XYZ")).toBe("XYZ");
+    expect(attributeProblems(layer)).toEqual([]);
+    expect(contractProblems(layer)).toEqual([]);
   });
 });

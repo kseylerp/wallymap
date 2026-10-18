@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
+import { attributeProblems } from "./attributes";
+import { cardTitle, contractProblems, legendOf } from "./contract";
 import layer, { cdfwWhere, idsWhere, normalizeCdfw, normalizeIds, offsetFor, planYears, surveyYears } from "./tree-mortality";
 import ids from "./__fixtures__/tree-mortality.ids-tahoe.json";
 import cdfw from "./__fixtures__/tree-mortality.cdfw-tahoe.json";
@@ -79,8 +81,10 @@ describe("tree-mortality layer", () => {
       agent: "fir engraver",
       host: "California red fir",
       v: 20,
+      percentDead: 20,
       percentAffected: "Moderate (11-29%)",
       acres: 11079,
+      heading: "California red fir die-off: fir engraver",
     });
     expect(new Set(features.map((f) => f.properties?.year))).toEqual(new Set([2022, 2023, 2025]));
   });
@@ -113,6 +117,7 @@ describe("tree-mortality layer", () => {
       year: 2016,
       t: "2016-01-01T00:00:00.000Z",
       agent: "unknown agent",
+      heading: "Tree die-off",
     });
   });
 
@@ -291,5 +296,16 @@ describe("tree-mortality layer", () => {
     expect(layer.description).toMatch(/percent of trees dead/);
     expect(layer.description).toMatch(/number of trees killed/);
     expect(layer.description).toMatch(/1,000 to 2,000 feet/);
+  });
+
+  it("puts the share dead in its own unit, colors by it, and titles by tree and cause (audit 2026-10-17: a bare '20' under 'Feature')", () => {
+    expect(layer.card?.measure).toEqual({ key: "percentDead", label: "Share of trees dead", unit: "%" });
+    expect(layer.style.encode).toEqual({ color: "percentDead" });
+    expect(attributeProblems(layer)).toEqual([]);
+    expect(contractProblems(layer)).toEqual([]);
+    expect(legendOf(layer)).toMatchObject({ kind: "ramp", field: "percentDead", unit: "%" });
+    expect(layer.attributes?.find((a) => a.key === "agent")).toMatchObject({ type: "category", label: "Cause" });
+    const [first] = normalizeIds(idsFc);
+    expect(cardTitle(layer, first)).toBe("California red fir die-off: fir engraver");
   });
 });

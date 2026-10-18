@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
-import { TimePanel } from "@/components/TimePanel";
+import { TimePanel, wholeSpan } from "@/components/TimePanel";
 import { frameAggregate } from "@/lib/render/series";
 import { linkedCurve } from "@/lib/render/linkedChart";
 import type { LayerCatalog } from "@/lib/agent/applyToolResult";
@@ -87,6 +87,10 @@ function FailedRow({ failure, title, dispatch }: { failure: LayerFailure; title:
       </p>
     </li>
   );
+}
+
+function isWholeSpan(time: TimeState): boolean {
+  return wholeSpan(time.index, time.window);
 }
 
 /** The four ways a point layer draws, in short labels that fit the narrowest panel. Hex is flat cells, columns in 3D. */
@@ -451,6 +455,8 @@ function LegendRow({
     source: [citation.source, license && `Licence: ${license}`, citation.retrieved && `Retrieved ${citation.retrieved.slice(0, 10)}`].filter(Boolean).join(" · "),
     url: citation.url,
   };
+  // Snapshots over their whole span draw the newest of each thing: the count is the things, not a filter of outlines.
+  const newestOfEach = timeShape(layer).shape === "snapshots" && (!time || time.index.snapshots === undefined || isWholeSpan(time));
   // Failures are visible (docs/layer-contract.md sourceStatus): what the source did and what the map shows for it.
   const failure = failureLine(layerSourceStatus(layer), count === null ? null : (shownCount ?? count));
   // A snapshot layer states its change (the newest of each draws; the change is the finding).
@@ -518,8 +524,14 @@ function LegendRow({
           {layer.title}
         </p>
         {count !== null ? (
-          <span data-testid="layer-count" className="text-right text-[12px] leading-[18px] whitespace-nowrap text-ink-muted tabular-nums">
-            {shownCount !== null && shownCount !== count ? (
+          <span
+            data-testid="layer-count"
+            className="text-right text-[12px] leading-[18px] whitespace-nowrap text-ink-muted tabular-nums"
+            title={newestOfEach ? `The newest of ${count.toLocaleString()} dated outlines for each of ${(shownCount ?? count).toLocaleString()}` : undefined}
+          >
+            {newestOfEach ? (
+              <span className="text-ink">{(shownCount ?? count).toLocaleString()}</span>
+            ) : shownCount !== null && shownCount !== count ? (
               <>
                 <span className="text-ink">{shownCount.toLocaleString()}</span> of {count.toLocaleString()}
               </>

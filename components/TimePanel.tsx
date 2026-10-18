@@ -53,7 +53,7 @@ export function snapshotLayer(index: TimeIndex, layers: MapState["layers"]): Loa
 export function timeLine(time: TimeState): string {
   const { index, window } = time;
   if (index.snapshots) {
-    if (wholeSpan(index, window)) return `Newest of each · ${spanWords(index)}`;
+    if (wholeSpan(index, window)) return `Newest of each, ${index.snapshots.stops.length} dates`;
     const k = stopIndex(index.snapshots.stops, window);
     return k >= 0 ? index.snapshots.stops[k].label : windowLabel(window, index.bucket);
   }

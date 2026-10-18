@@ -49,11 +49,12 @@ const opts = { mapboxToken: "" };
 
 describe("delta rendering", () => {
   const layers = buildDeckLayers(view("delta"), opts);
-  const main = layers.find((l) => l.id === "fire-perimeters:polygons")!;
+  // Delta layers carry their own tag, so the layer's own look and its delta never share a deck layer.
+  const main = layers.find((l) => l.id === "fire-perimeters@delta:polygons")!;
   const features = (props(main).data as GeoJSON.FeatureCollection).features;
 
   it("draws a white casing under a pickable class-colored layer", () => {
-    expect(layers.map((l) => l.id)).toEqual(["fire-perimeters:polygons:casing", "fire-perimeters:polygons"]);
+    expect(layers.map((l) => l.id)).toEqual(["fire-perimeters@delta:polygons:casing", "fire-perimeters@delta:polygons"]);
     expect(main).toBeInstanceOf(GeoJsonLayer);
     expect(props(main).pickable).toBe(true);
     expect(features.map((f) => f.properties?.delta)).toEqual(["a-only", "b-only"]);

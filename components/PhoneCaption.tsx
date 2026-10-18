@@ -5,7 +5,9 @@ import { RowLegend } from "@/components/RowLegend";
 import { TimePanel, wholeSpan } from "@/components/TimePanel";
 import { shortTitle } from "@/layers/contract";
 import { failureLine, layerSourceStatus, timeShape } from "@/lib/render/contract";
-import { rowLegend } from "@/lib/render/legendView";
+import { rowLegend, type LegendBlock } from "@/lib/render/legendView";
+import { compareSideText, effectiveMode } from "@/lib/render/compareView";
+import { DELTA_COLORS } from "@/lib/render/palette";
 import type { LoadedLayer, MapAction, MapState } from "@/lib/render/state";
 import { layerChange } from "@/lib/render/views";
 import { periodOfUrl, windowLabel } from "@/lib/time";
@@ -53,15 +55,39 @@ export function PhoneCaption({ state, shown, onOpen }: { state: MapState; shown:
   const top = [...state.renderOps].reverse().find((op) => op.visible && state.layers[op.layerId]);
   const layer = top ? state.layers[top.layerId] : undefined;
   const drawn = layer ? shown[layer.id] : undefined;
-  const blocks = useMemo(() => (layer && top ? rowLegend(layer, top, drawn?.result.kind === "geojson" ? drawn.result.data : null) : []), [layer, top, drawn]);
+  const compared = state.compare?.layerId === layer?.id ? state.compare : undefined;
+  const deltaMode = compared && effectiveMode(state) === "delta";
+  const blocks = useMemo((): LegendBlock[] => {
+    if (!layer || !top) return [];
+    if (compared && deltaMode) {
+      // The delta's own key (spec §12 change view): what pink, grey and purple mean on this map.
+      const a = compareSideText(compared, "a", layer);
+      const b = compareSideText(compared, "b", layer);
+      const area = layer.style.geometry === "polygon";
+      return [
+        {
+          kind: "categories",
+          shape: area ? "polygon" : layer.style.geometry,
+          entries: [
+            { label: `Only ${a}`, color: DELTA_COLORS["a-only"] },
+            ...(area ? [{ label: `${a} edge`, color: DELTA_COLORS["a-only"], outline: true }] : []),
+            { label: b.charAt(0).toUpperCase() + b.slice(1), color: DELTA_COLORS.both },
+            { label: `Only ${b}`, color: DELTA_COLORS["b-only"] },
+          ],
+        },
+      ];
+    }
+    return rowLegend(layer, top, drawn?.result.kind === "geojson" ? drawn.result.data : null);
+  }, [layer, top, drawn, compared, deltaMode]);
+  // Snapshots state their change; a compare on the layer states the compare's (the owner's glacier case on a phone).
   const change = useMemo(
-    () => (layer && timeShape(layer).shape === "snapshots" && state.compare?.layerId !== layer.id ? layerChange(layer, top?.filters) : null),
-    [layer, top?.filters, state.compare?.layerId],
+    () => (layer && (compared || timeShape(layer).shape === "snapshots") ? layerChange(layer, top?.filters, compared) : null),
+    [layer, top?.filters, compared],
   );
   if (!layer) return null;
   const count = drawn?.result.kind === "geojson" ? drawn.result.data.features.length : null;
   const failure = failureLine(layerSourceStatus(layer), count);
-  const date = captionDate(layer, drawn, state.time);
+  const date = compared ? `${compareSideText(compared, "a", layer)} against ${compareSideText(compared, "b", layer)}` : captionDate(layer, drawn, state.time);
   return (
     <button
       type="button"
@@ -78,7 +104,11 @@ export function PhoneCaption({ state, shown, onOpen }: { state: MapState; shown:
         <p className="mt-1 line-clamp-2 text-[11.5px] leading-4 text-ink">{failure}</p>
       ) : (
         <>
-          {change && <p className="mt-1 line-clamp-2 text-[11.5px] leading-4 text-ink" data-testid="phone-caption-change">{change.text.split(". ")[0]}.</p>}
+          {change && (
+            <p className="mt-1 line-clamp-3 text-[11.5px] leading-4 text-ink" data-testid="phone-caption-change">
+              {change.text.split(". ")[0].replace(/\.$/, "")}.
+            </p>
+          )}
           {blocks.length > 0 && (
             <div className="mt-1">
               <RowLegend blocks={blocks} compact />

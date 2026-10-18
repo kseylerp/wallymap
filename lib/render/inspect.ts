@@ -13,6 +13,13 @@ const COMPARE_B_SUFFIX = "~b";
  */
 export const HEX_DELTA_TAG = "@hexdelta";
 
+/**
+ * Appended to the layer id of a compare's delta layers (`<layerId>@delta:polygons`), so a layer switching between its
+ * own look and the delta is a new deck layer, never one updated in place across different extensions (deck threw
+ * "accessor getFillPattern is not a function" on glaciers).
+ */
+export const DELTA_TAG = "@delta";
+
 /** Mapbox layer and source ids for vector tile layers start with this (see components/mapTiles.ts). */
 const TILES_PREFIX = "tiles-";
 
@@ -72,7 +79,9 @@ export function layerIdFromDeckId(deckId: string): string | null {
   if (!RENDER_MODES.includes(mode as RenderMode)) return null;
   const layerId = deckId.slice(0, cut);
   // Layers draped on 3D terrain carry a tag after the layer id (see DECK_TERRAIN_TAG); hex delta columns carry theirs.
-  for (const tag of [DECK_TERRAIN_TAG, HEX_DELTA_TAG]) if (layerId.endsWith(tag)) return layerId.slice(0, -tag.length);
+  let id = layerId;
+  for (const tag of [DECK_TERRAIN_TAG, HEX_DELTA_TAG, DELTA_TAG]) if (id.endsWith(tag)) id = id.slice(0, -tag.length);
+  return id;
   return layerId;
 }
 

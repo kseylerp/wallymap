@@ -37,7 +37,7 @@ import { acresStep, HATCH_SCALE, hatchAtlas, hatchAtlasCanvas, hatchPatternId } 
 import { hexToRgb, rampColor } from "@/lib/render/ramp";
 import { compareBId, compareSideShown, DELTA_FILL_ALPHA, effectiveMode, isHexCollection } from "@/lib/render/compareView";
 import { DECK_TERRAIN_ID, DECK_TERRAIN_TAG, demDecoder, demTileUrl } from "@/lib/render/wally/deckTerrain";
-import { featureBBox, featureCenter, HEX_DELTA_TAG } from "@/lib/render/inspect";
+import { DELTA_TAG, featureBBox, featureCenter, HEX_DELTA_TAG } from "@/lib/render/inspect";
 import { kindGlyph, pinIconFor, type PinEncoding } from "@/lib/render/wally/pins";
 import { categoryColor, categoryKey, groupOf, type CategoryKey } from "@/lib/render/categories";
 import { layerLabels } from "@/lib/render/contract";
@@ -1657,7 +1657,7 @@ function splitEdges(data: GeoJSON.FeatureCollection): { kept: GeoJSON.FeatureCol
 
 function deltaLayers(op: RenderOp, { data: all, selected, terrain }: OpContext): Layer[] {
   const opacity = Math.min(1, Math.max(0, op.opacity ?? 1));
-  const id = `${deckLayerKey(op.layerId, terrain)}:${op.mode}`;
+  const id = `${deckLayerKey(`${op.layerId}${DELTA_TAG}`, terrain)}:${op.mode}`;
   const fade = (f: Feature, c: Rgba, siblingFade: number = SIBLING_FADE): Rgba => {
     const base = withOpacity(c, opacity);
     return selected && f !== selected ? withOpacity(base, siblingFade) : base;

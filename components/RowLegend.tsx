@@ -63,7 +63,7 @@ export function RowLegend({ blocks, compact = false }: { blocks: LegendBlock[]; 
         <div key={k} data-legend-kind={block.kind} className="min-w-0">
           {!compact && <Title block={block} />}
           {block.kind === "categories" && (
-            <ul className={compact ? "flex min-w-0 gap-x-2.5 overflow-hidden whitespace-nowrap" : "flex flex-wrap gap-x-3 gap-y-0.5"}>
+            <ul className={compact ? "flex min-w-0 flex-wrap gap-x-2.5 gap-y-0.5" : "flex flex-wrap gap-x-3 gap-y-0.5"}>
               {(compact ? block.entries.slice(0, 4) : block.entries).map((e) => (
                 <Entry key={e.label} entry={e} shape={block.shape} />
               ))}

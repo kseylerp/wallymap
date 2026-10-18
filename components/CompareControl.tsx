@@ -20,7 +20,7 @@ import type { CompareState, LoadedLayer, MapAction, MapState } from "@/lib/rende
 import { scenarioOf, scenarioValueText } from "@/lib/render/scenario";
 import { visibleState } from "@/lib/render/view";
 import { DELTA_COLORS } from "@/lib/render/palette";
-import { changeMeasures } from "@/lib/render/views";
+import { changeMeasures, layerChange } from "@/lib/render/views";
 import { formatValue } from "@/lib/format";
 
 /** Toggle mode flips A and B this often (spec §7: 1 Hz). */
@@ -221,6 +221,12 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
     const sides = compareSides(layer, filters, compare, false);
     if (sides.a.result.kind !== "geojson" || sides.b.result.kind !== "geojson") return null;
     return changeMeasures(layer, sides.a.result.data, sides.b.result.data);
+  }, [layer, filters, compare]);
+  // One thing on both sides (a glacier by its id): the change of the things mapped at both times, not two totals that
+  // mix in things seen once ("121 glaciers mapped in both … lost 48% of their area (43.2 to 22.3 km²)").
+  const matched = useMemo(() => {
+    const said = layerChange(layer, filters, compare);
+    return said && said.matched > 0 ? said : null;
   }, [layer, filters, compare]);
   // In delta, A only (lost) is pink and B only (gained) purple (spec §12); swipe and toggle keep A purple, B pink.
   const sideColor = (which: "a" | "b") => (mode === "delta" ? (which === "a" ? DELTA_COLORS["a-only"] : DELTA_COLORS["b-only"]) : COMPARE_COLORS[which]);
@@ -518,7 +524,13 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
               <li className="ml-auto text-[11px]">{mode === "swipe" ? "Drag the handle" : "Space pauses"}</li>
             )}
           </ul>
-          {measures && <ChangeLine compare={compare} layer={layer} measures={measures} />}
+          {matched ? (
+            <p data-testid="compare-change" className="mt-1.5 text-[11.5px] leading-4 text-ink tabular-nums">
+              {matched.text}
+            </p>
+          ) : (
+            measures && <ChangeLine compare={compare} layer={layer} measures={measures} />
+          )}
         </div>
       </div>
       <div aria-hidden className="hairline mx-5" />

@@ -7,7 +7,8 @@ import { rasterKeyFilter } from "@/lib/render/rasterCalm";
 import { layerKey } from "@/lib/render/contract";
 import { channelExtent, ENCODE_RAMP, isDiverging, resolveEncoding } from "@/lib/render/encode";
 import { compareRampColor, rgbToHex } from "@/lib/render/ramp";
-import { areaRecipe, lineRampFor, SAGE, scoreRampFor, type RampName } from "@/lib/render/palette";
+import { areaRecipe, HEX_TILE, lineRampFor, SAGE, scoreRampFor, type RampName } from "@/lib/render/palette";
+import { hexbinThreshold } from "@/lib/render/deck";
 import { shortTitle } from "@/layers/contract";
 import type { LoadedLayer, RenderOp } from "@/lib/render/state";
 import { rampSamples } from "@/lib/render/wally/legend";
@@ -83,6 +84,15 @@ function categoryBlock(key: CategoryKey, data: FeatureCollection | null, shape: 
  */
 export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, data: FeatureCollection | null): LegendBlock[] {
   const shape = shapeOf(layer);
+  // Points drawn as hex cells key as the cells: the gray ramp of features per cell.
+  const all0 = layer.result.kind === "geojson" ? layer.result.data : null;
+  const hexed =
+    layer.style.geometry === "point" &&
+    op !== undefined &&
+    (op.mode === "hexbin" || op.mode === "columns" || (op.mode === "points" && (all0?.features.length ?? 0) > hexbinThreshold && !op.rankBy && op.view !== "ranked"));
+  if (hexed) {
+    return [{ kind: "ramp", title: `${shortTitle(layer)} per cell`, entries: [{ label: "Fewer" }, { label: "More" }], colors: rampSamples(HEX_TILE.ramp), shape: "polygon" }];
+  }
   const all = layer.allData ?? (layer.result.kind === "geojson" ? layer.result.data : null);
   const spec = layerKey(layer);
   const blocks: LegendBlock[] = [];

@@ -769,6 +769,7 @@ export function LayerStack({
               missingImage={missingImage}
               aggregate={time.open ? frameAggregate({ time, layers, renderOps }) : null}
               curve={time.open ? linkedCurve({ time, layers, renderOps, selected }, center ?? null) : null}
+              at={center}
             />
             <div aria-hidden className="hairline mx-5" />
           </>

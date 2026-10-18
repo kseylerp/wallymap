@@ -1,5 +1,6 @@
 import type { ResolvedDisplay } from "@/layers/contract";
 import { formatValue } from "@/lib/format";
+import { windowLabel } from "@/lib/time";
 
 /**
  * Units and clocks for people (docs/layer-contract.md `display`): US units first with metric second for US-centred
@@ -125,4 +126,13 @@ export function localTime(iso: string, lngLat: [number, number] | null | undefin
   } catch {
     return new Date(ms).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
   }
+}
+
+/** A window as people read it: an hourly frame in the place's local time ("Oct 17, 2026, 11:00 PM AKDT"). */
+export function windowText(window: [string, string], bucket: "hour" | "day" | "month" | "year", at?: [number, number]): string {
+  if (bucket === "hour" && at) {
+    const a = localTime(window[0], at, { timeZone: "local" });
+    if (a && windowLabel(window, bucket) === windowLabel([window[0], window[0]], bucket)) return a;
+  }
+  return windowLabel(window, bucket);
 }

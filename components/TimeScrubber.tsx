@@ -2,6 +2,7 @@
 
 import { useRef, type KeyboardEvent, type PointerEvent } from "react";
 import { FrameAggregate } from "@/components/FrameAggregate";
+import { windowText } from "@/lib/render/units";
 import { LinkedChart } from "@/components/LinkedChart";
 import type { LinkedCurve } from "@/lib/render/linkedChart";
 import { formatValue } from "@/lib/format";
@@ -19,6 +20,8 @@ type TimeScrubberProps = {
   aggregate?: Aggregate | null;
   /** The linked curve (spec §13a): the tide, the flow at a reach, the wind at the center, synced with the playhead. */
   curve?: LinkedCurve | null;
+  /** The map's center: an hourly frame reads in that place's local time with its zone. */
+  at?: [number, number];
 };
 
 /** One bucket's start as the scrubber's axis shows it: "2019", "Mar 2024" or "2024-06-01". */
@@ -44,7 +47,7 @@ const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 h
  * the window's dates, and × to clear. Text only; the window and its handles are purple (palette §11). It only shows and changes state: the play timer runs in
  * the app (lib/render/useTimePlay.ts), so play goes on while the panel is closed.
  */
-export function TimeScrubber({ time, dispatch, missingImage = null, aggregate = null, curve = null }: TimeScrubberProps) {
+export function TimeScrubber({ time, dispatch, missingImage = null, aggregate = null, curve = null, at }: TimeScrubberProps) {
   const { index, window, playing, mode } = time;
   const n = index.buckets.length;
   const i = bucketAt(index, window[0]);
@@ -55,7 +58,7 @@ export function TimeScrubber({ time, dispatch, missingImage = null, aggregate = 
   const max = Math.max(1, ...counts);
   const total = counts.reduce((a, b) => a + b, 0);
   const shown = counts.slice(i, j + 1).reduce((a, b) => a + b, 0);
-  const label = windowLabel(window, index.bucket);
+  const label = windowText(window, index.bucket, at);
 
   const trackRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<Drag | null>(null);

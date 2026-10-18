@@ -10,7 +10,9 @@ import { layerChange } from "@/lib/render/views";
 import { timeShape } from "@/lib/render/contract";
 import type { LoadedLayer, MapAction, MapState, TimeState } from "@/lib/render/state";
 import { stepWindow, windowLabel, type SnapshotStop, type TimeIndex } from "@/lib/time";
-import { localTime } from "@/lib/render/units";
+import { windowText } from "@/lib/render/units";
+
+export { windowText };
 
 type TimePanelProps = {
   time: TimeState;
@@ -27,14 +29,6 @@ type TimePanelProps = {
   at?: [number, number];
 };
 
-/** A window as people read it: an hourly frame in the place's local time ("Oct 17, 2026, 11:00 PM AKDT"). */
-export function windowText(window: TimeState["window"], bucket: TimeIndex["bucket"], at?: [number, number]): string {
-  if (bucket === "hour" && at) {
-    const a = localTime(window[0], at, { timeZone: "local" });
-    if (a && windowLabel(window, bucket) === windowLabel([window[0], window[0]], bucket)) return a;
-  }
-  return windowLabel(window, bucket);
-}
 
 const TEXT_BUTTON = "text-[12px] text-ink-muted transition-colors duration-150 hover:text-ink";
 
@@ -203,7 +197,7 @@ export function TimePanel(props: TimePanelProps) {
   }
   if (time.index.snapshots) return <SnapshotStepper {...props} />;
   if (compact) return <CompactScrubber time={time} dispatch={dispatch} at={props.at} />;
-  return <TimeScrubber time={time} dispatch={dispatch} missingImage={props.missingImage} aggregate={props.aggregate} curve={props.curve} />;
+  return <TimeScrubber time={time} dispatch={dispatch} missingImage={props.missingImage} aggregate={props.aggregate} curve={props.curve} at={props.at} />;
 }
 
 /** The scrubber in one row (phones): play, step back, the window, step forward. */

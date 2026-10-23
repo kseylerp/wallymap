@@ -413,7 +413,9 @@ function separateObjects(a: Feature, b: Feature, km: number): boolean {
   const ia = osmIdsOf(a);
   const ib = osmIdsOf(b);
   const distinctOsm = ia.length > 0 && ib.length > 0 && !ia.some((id) => ib.includes(id));
-  return distinctOsm && km > DISTINCT_OSM_KM;
+  // A plural group name ("Knob Lakes", two lakes 258 m apart) names several water bodies, each its own OSM object.
+  const group = typeof a.properties?.name === "string" && /\b(?:lakes|ponds|tarns|pools)\b/i.test(a.properties.name);
+  return distinctOsm && (km > DISTINCT_OSM_KM || group);
 }
 
 /**

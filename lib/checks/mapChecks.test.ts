@@ -241,6 +241,12 @@ describe("duplicates", () => {
       point(-109.7216, 43.11, { name: "Sauerkraut Lakes", kind: "lake", osmUrl: "https://www.openstreetmap.org/way/360195689" }),
     ];
     expect(checkDuplicates(drawn(mapWith({ id: "lakes", features: lakes })))).toMatchObject({ ok: true, failures: [] });
+    // Two lakes of the Knob Lakes 258 m apart: a plural group name is several lakes, however close.
+    const knob = [
+      point(-109.44, 42.83, { name: "Knob Lakes", kind: "lake", osmUrl: "https://www.openstreetmap.org/way/1" }),
+      point(-109.4368, 42.83, { name: "Knob Lakes", kind: "lake", osmUrl: "https://www.openstreetmap.org/way/2" }),
+    ];
+    expect(checkDuplicates(drawn(mapWith({ id: "lakes", features: knob })))).toMatchObject({ ok: true, failures: [] });
   });
 
   it("fails one name within 1 km from two sources, from one source without OSM ids, or as two OSM objects under 300 m apart", () => {

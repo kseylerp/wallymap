@@ -96,6 +96,8 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "uranium", synonyms: ["uranium", "mill tailings", "radioactive"], notes: "Navajo Nation abandoned mines (v = 2007 hazard score) and DOE mill-tailings sites; other uranium mines are in mines", gist: "Navajo Nation abandoned uranium mines and mill-tailings sites" },
   { layerId: "ocean-currents", synonyms: ["currents", "tidal current", "ocean current", "slack water"], notes: "hourly surface currents as moving particles, with the tide plotted", gist: "hourly ocean and tidal currents as moving particles" },
   { layerId: "wind-flow", synonyms: ["wind", "windiest", "gusty", "wind direction"], notes: "hourly 10 m wind forecast as moving particles, today and the next days", gist: "hourly wind forecast drawn as moving particles" },
+  { layerId: "weather-forecast", synonyms: ["forecast", "will it rain", "too hot", "too cold", "this weekend", "tomorrow's weather"], notes: "7-day hourly forecast at the place: temperature, rain chance and amount, wind and gusts; saturday and sunday lines", gist: "seven-day hourly weather forecast at the asked place" },
+  { layerId: "avalanche", synonyms: ["avalanche danger", "avalanche forecast", "avy"], notes: "US avalanche centers' daily danger by zone; quote the center and link it", gist: "daily avalanche danger by US forecast zone" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

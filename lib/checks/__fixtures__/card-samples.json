@@ -30,6 +30,81 @@
    }
   ]
  },
+ "avalanche": {
+  "kind": "geojson",
+  "recorded": "2026-10-23",
+  "bbox": [
+   -121.2,
+   47.6,
+   -120.9,
+   47.85
+  ],
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -121.017556,
+      47.626484
+     ]
+    },
+    "properties": {
+     "name": "East Slopes Central",
+     "center": "Northwest Avalanche Center",
+     "centerId": "NWAC",
+     "state": "WA",
+     "v": 0,
+     "danger": 0,
+     "season": "Out of season: no daily rating",
+     "link": "https://nwac.us/forecasts/avalanche/east-slopes-central",
+     "centerLink": "https://www.nwac.us/"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.965343,
+      47.636686
+     ]
+    },
+    "properties": {
+     "name": "Stevens Pass",
+     "center": "Northwest Avalanche Center",
+     "centerId": "NWAC",
+     "state": "WA",
+     "v": 0,
+     "danger": 0,
+     "season": "Out of season: no daily rating",
+     "link": "https://nwac.us/forecasts/avalanche/stevens-pass",
+     "centerLink": "https://www.nwac.us/"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.922651,
+      48.440579
+     ]
+    },
+    "properties": {
+     "name": "West Slopes Central",
+     "center": "Northwest Avalanche Center",
+     "centerId": "NWAC",
+     "state": "WA",
+     "v": 0,
+     "danger": 0,
+     "season": "Out of season: no daily rating",
+     "link": "https://nwac.us/forecasts/avalanche/west-slopes-central",
+     "centerLink": "https://www.nwac.us/"
+    }
+   }
+  ]
+ },
  "burn-severity": {
   "kind": "tiles",
   "recorded": "2026-10-18",
@@ -12088,7 +12163,7 @@
  },
  "streamflow": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -110.886,
    43.235,
@@ -12110,122 +12185,24 @@
      "nameInSource": "GROS VENTRE RIVER AT KELLY, WY",
      "siteId": "USGS-13014500",
      "kind": "gauge",
-     "t": "2026-10-18T08:00:00.000Z",
-     "v": 339,
-     "pctOfMedian": 151,
-     "medianCfs": 224,
-     "flowClass": "much_above",
-     "vsNormal": "high",
-     "normalRange": "192 to 261 cfs",
-     "recordYears": "1945 to 2026 (32 years)",
-     "tempC": 8.5,
-     "tempF": 47.3,
-     "waterTemp": "47 °F (8.5 °C)"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -110.8058333,
-      43.60316667
-     ]
-    },
-    "properties": {
-     "name": "Granite Creek above Granite Creek Supplemental, near Moose, WY",
-     "nameInSource": "GRANITE C AB GRANITE C SUPPLEMENTAL, NR MOOSE, WY",
-     "siteId": "USGS-13016305",
-     "kind": "gauge",
-     "t": "2026-10-18T08:00:00.000Z",
-     "v": 11,
-     "pctOfMedian": 121,
-     "medianCfs": 9.1,
-     "flowClass": "normal",
-     "vsNormal": "normal",
-     "normalRange": "7 to 11 cfs",
-     "recordYears": "1996 to 2026 (31 years)"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -110.8716,
-      43.50076005
-     ]
-    },
-    "properties": {
-     "name": "Fish Creek at Wilson, WY",
-     "nameInSource": "FISH CREEK AT WILSON, WY",
-     "siteId": "USGS-13016450",
-     "kind": "gauge",
-     "t": "2026-10-18T08:00:00.000Z",
-     "v": 144,
-     "pctOfMedian": 152,
-     "medianCfs": 95,
+     "t": "2026-10-23T14:00:00.000Z",
+     "v": 283,
+     "pctOfMedian": 130,
+     "medianCfs": 217,
      "flowClass": "above",
      "vsNormal": "high",
-     "normalRange": "86 to 132 cfs",
-     "recordYears": "1995 to 2025 (31 years)",
-     "tempC": 8.5,
-     "tempF": 47.3,
-     "waterTemp": "47 °F (8.5 °C)"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -110.7041203,
-      43.45213098
-     ]
-    },
-    "properties": {
-     "name": "Cache Creek near Jackson, WY",
-     "nameInSource": "CACHE CREEK NEAR JACKSON, WY",
-     "siteId": "USGS-13018300",
-     "kind": "gauge",
-     "t": "2026-10-18T07:45:00.000Z",
-     "v": 5.04,
-     "pctOfMedian": 79,
-     "medianCfs": 6.4,
-     "flowClass": "below",
-     "vsNormal": "low",
-     "normalRange": "5.5 to 7.2 cfs",
-     "recordYears": "1963 to 2026 (64 years)",
-     "tempC": 2.9,
-     "tempF": 37.2,
-     "waterTemp": "37 °F (2.9 °C)"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -110.7970278,
-      43.4583611
-     ]
-    },
-    "properties": {
-     "name": "Flat Creek below Cache Creek, near Jackson, WY",
-     "nameInSource": "FLAT CREEK BELOW CACHE CREEK, NEAR JACKSON, WY",
-     "siteId": "USGS-13018350",
-     "kind": "gauge",
-     "t": "2026-10-18T07:45:00.000Z",
-     "v": 76.2,
-     "pctOfMedian": 103,
-     "medianCfs": 74,
-     "flowClass": "normal",
-     "vsNormal": "normal",
-     "normalRange": "65 to 88 cfs",
-     "recordYears": "2000 to 2026 (27 years)",
-     "tempC": 7.2,
-     "tempF": 45,
-     "waterTemp": "45 °F (7.2 °C)"
+     "normalRange": "192 to 247 cfs",
+     "recordYears": "1945 to 2026 (32 years)",
+     "tempC": 9.3,
+     "tempF": 48.7,
+     "waterTemp": "49 °F (9.3 °C)",
+     "nwsId": "GVKW4",
+     "nwsLink": "https://water.noaa.gov/gauges/gvkw4",
+     "stageFt": 4.09,
+     "actionStageFt": 7,
+     "floodStageFt": 8,
+     "floodCategory": "no_flooding",
+     "floodStatus": "Stage 4.1 ft; flood stage 8 ft (action 7 ft): 3.9 ft below flood stage"
     }
    },
    {
@@ -12242,17 +12219,169 @@
      "nameInSource": "SNAKE RIVER BELOW FLAT CREEK, NEAR JACKSON, WY",
      "siteId": "USGS-13018750",
      "kind": "gauge",
-     "t": "2026-10-18T07:30:00.000Z",
-     "v": 1560,
-     "pctOfMedian": 98,
+     "t": "2026-10-23T14:30:00.000Z",
+     "v": 1510,
+     "pctOfMedian": 94,
      "medianCfs": 1600,
      "flowClass": "normal",
      "vsNormal": "normal",
-     "normalRange": "1,410 to 1,880 cfs",
+     "normalRange": "1,410 to 1,820 cfs",
      "recordYears": "1977 to 2026 (50 years)",
-     "tempC": 9,
-     "tempF": 48.2,
-     "waterTemp": "48 °F (9.0 °C)"
+     "tempC": 10,
+     "tempF": 50,
+     "waterTemp": "50 °F (10.0 °C)",
+     "nwsId": "JKSW4",
+     "nwsLink": "https://water.noaa.gov/gauges/jksw4",
+     "stageFt": 1.3,
+     "actionStageFt": 9,
+     "floodStageFt": 10,
+     "moderateStageFt": 12,
+     "floodCategory": "no_flooding",
+     "floodStatus": "Stage 1.3 ft; flood stage 10 ft (action 9 ft): 8.7 ft below flood stage",
+     "forecastCategory": "no_flooding",
+     "forecastCrest": "1.3 ft, 1,570 cfs Sat, Oct 24, 12:00 AM MDT: below flood stage",
+     "forecastDays": [
+      "Fri, Oct 23: up to 1.3 ft, 1,550 cfs",
+      "Sat, Oct 24: up to 1.3 ft, 1,570 cfs",
+      "Sun, Oct 25: up to 1.2 ft, 1,500 cfs",
+      "Mon, Oct 26: up to 1.2 ft, 1,450 cfs",
+      "Tue, Oct 27: up to 1.2 ft, 1,430 cfs",
+      "Wed, Oct 28: up to 1.2 ft, 1,420 cfs",
+      "Thu, Oct 29: up to 1.2 ft, 1,410 cfs",
+      "Fri, Oct 30: up to 1.1 ft, 1,400 cfs",
+      "Sat, Oct 31: up to 1.1 ft, 1,390 cfs",
+      "Sun, Nov 1: up to 1.2 ft, 1,410 cfs"
+     ],
+     "forecastIssued": "Thu, Oct 22, 9:54 AM MDT"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -110.8058333,
+      43.60316667
+     ]
+    },
+    "properties": {
+     "name": "Granite Creek above Granite Creek Supplemental, near Moose, WY",
+     "nameInSource": "GRANITE C AB GRANITE C SUPPLEMENTAL, NR MOOSE, WY",
+     "siteId": "USGS-13016305",
+     "kind": "gauge",
+     "t": "2026-10-23T14:00:00.000Z",
+     "v": 11.5,
+     "pctOfMedian": 132,
+     "medianCfs": 8.7,
+     "flowClass": "above",
+     "vsNormal": "high",
+     "normalRange": "7.5 to 11 cfs",
+     "recordYears": "1996 to 2026 (31 years)",
+     "nwsId": "GCMW4",
+     "nwsLink": "https://water.noaa.gov/gauges/gcmw4",
+     "stageFt": 3.75,
+     "actionStageFt": 6.5,
+     "floodCategory": "no_flooding"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -110.8716,
+      43.50076005
+     ]
+    },
+    "properties": {
+     "name": "Fish Creek at Wilson, WY",
+     "nameInSource": "FISH CREEK AT WILSON, WY",
+     "siteId": "USGS-13016450",
+     "kind": "gauge",
+     "t": "2026-10-23T14:00:00.000Z",
+     "v": 142,
+     "pctOfMedian": 158,
+     "medianCfs": 90,
+     "flowClass": "above",
+     "vsNormal": "high",
+     "normalRange": "74 to 120 cfs",
+     "recordYears": "1995 to 2025 (31 years)",
+     "tempC": 10.1,
+     "tempF": 50.2,
+     "waterTemp": "50 °F (10.1 °C)",
+     "nwsId": "FCWW4",
+     "nwsLink": "https://water.noaa.gov/gauges/fcww4",
+     "stageFt": 2.37,
+     "actionStageFt": 5,
+     "floodStageFt": 6,
+     "floodCategory": "no_flooding",
+     "floodStatus": "Stage 2.4 ft; flood stage 6 ft (action 5 ft): 3.6 ft below flood stage"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -110.7041203,
+      43.45213098
+     ]
+    },
+    "properties": {
+     "name": "Cache Creek near Jackson, WY",
+     "nameInSource": "CACHE CREEK NEAR JACKSON, WY",
+     "siteId": "USGS-13018300",
+     "kind": "gauge",
+     "t": "2026-10-23T14:45:00.000Z",
+     "v": 7.55,
+     "pctOfMedian": 120,
+     "medianCfs": 6.3,
+     "flowClass": "above",
+     "vsNormal": "high",
+     "normalRange": "5.4 to 7.2 cfs",
+     "recordYears": "1963 to 2026 (64 years)",
+     "tempC": 5.9,
+     "tempF": 42.6,
+     "waterTemp": "43 °F (5.9 °C)",
+     "nwsId": "CCKW4",
+     "nwsLink": "https://water.noaa.gov/gauges/cckw4",
+     "stageFt": 3.42,
+     "actionStageFt": 4.5,
+     "floodCategory": "no_flooding"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -110.7970278,
+      43.4583611
+     ]
+    },
+    "properties": {
+     "name": "Flat Creek below Cache Creek, near Jackson, WY",
+     "nameInSource": "FLAT CREEK BELOW CACHE CREEK, NEAR JACKSON, WY",
+     "siteId": "USGS-13018350",
+     "kind": "gauge",
+     "t": "2026-10-23T13:45:00.000Z",
+     "v": 84,
+     "pctOfMedian": 115,
+     "medianCfs": 73,
+     "flowClass": "normal",
+     "vsNormal": "normal",
+     "normalRange": "68 to 86 cfs",
+     "recordYears": "2000 to 2026 (27 years)",
+     "tempC": 9.1,
+     "tempF": 48.4,
+     "waterTemp": "48 °F (9.1 °C)",
+     "nwsId": "FCKW4",
+     "nwsLink": "https://water.noaa.gov/gauges/fckw4",
+     "stageFt": 1.87,
+     "actionStageFt": 4.5,
+     "floodStageFt": 6,
+     "floodCategory": "no_flooding",
+     "floodStatus": "Stage 1.9 ft; flood stage 6 ft (action 4.5 ft): 4.1 ft below flood stage"
     }
    },
    {
@@ -12269,17 +12398,20 @@
      "nameInSource": "HOBACK RIVER NEAR JACKSON, WY",
      "siteId": "USGS-13019500",
      "kind": "gauge",
-     "t": "2026-10-18T08:00:00.000Z",
-     "v": 249,
-     "pctOfMedian": 95,
-     "medianCfs": 262,
+     "t": "2026-10-23T14:00:00.000Z",
+     "v": 233,
+     "pctOfMedian": 92,
+     "medianCfs": 254,
      "flowClass": "normal",
      "vsNormal": "normal",
-     "normalRange": "234 to 281 cfs",
+     "normalRange": "228 to 278 cfs",
      "recordYears": "1945 to 2026 (18 years)",
-     "tempC": 6.5,
-     "tempF": 43.7,
-     "waterTemp": "44 °F (6.5 °C)"
+     "tempC": 8.7,
+     "tempF": 47.7,
+     "waterTemp": "48 °F (8.7 °C)",
+     "nwsId": "HOJW4",
+     "nwsLink": "https://water.noaa.gov/gauges/hojw4",
+     "stageFt": 4.85
     }
    }
   ]
@@ -13705,6 +13837,223 @@
      "instruction": "Remain out of the water to avoid hazardous swimming conditions, or stay near occupied lifeguard towers. Rock jetties can be deadly in such conditions, stay off the rocks.",
      "senderName": "NWS San Diego CA",
      "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.3bf19ea6e5d9d4da0341c33779e556b0d4637b79.001.1"
+    }
+   }
+  ]
+ },
+ "weather-forecast": {
+  "kind": "geojson",
+  "recorded": "2026-10-23",
+  "bbox": [
+   -113.2,
+   37.1,
+   -112.85,
+   37.5
+  ],
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.025,
+      37.3
+     ]
+    },
+    "properties": {
+     "name": "Forecast at the asked place, near Springdale, UT (37.30°N 113.03°W)",
+     "kind": "here",
+     "source": "nws",
+     "t": "2026-10-23T15:00:00.000Z",
+     "v": 41,
+     "tempF": 41,
+     "precipChance": 1,
+     "precipIn": 0,
+     "windMph": 4.6,
+     "gustMph": 9.2,
+     "skyPct": 23,
+     "windFrom": "east (100°)",
+     "sky": "Mostly clear",
+     "timeZone": "America/Denver",
+     "issued": "12:31 AM MDT",
+     "days": [
+      "Fri, Oct 23: rest of day high 52 °F, low 41 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; mostly clear",
+      "Sat, Oct 24: high 52 °F, low 38 °F; 56% chance of rain or snow, 0.12 in; wind to 15 mph, gusts 18 mph; mostly cloudy, Scattered light rain showers",
+      "Sun, Oct 25: high 52 °F, low 41 °F; 26% chance of rain or snow, 0.00 in; wind to 6 mph, gusts 12 mph; partly cloudy, Scattered light rain showers",
+      "Mon, Oct 26: high 57 °F, low 39 °F; 0% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 13 mph; mostly clear",
+      "Tue, Oct 27: high 57 °F, low 41 °F; 0% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; mostly clear",
+      "Wed, Oct 28: high 55 °F, low 42 °F; 0% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 13 mph; partly cloudy",
+      "Thu, Oct 29: high 55 °F, low 43 °F; 17% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 15 mph; partly cloudy, Slight chance of light rain",
+      "Fri, Oct 30: high 45 °F, low 44 °F; 28% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 15 mph; mostly cloudy, Slight chance of light rain"
+     ],
+     "today": "Fri, Oct 23: rest of day high 52 °F, low 41 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; mostly clear",
+     "tomorrow": "Sat, Oct 24: high 52 °F, low 38 °F; 56% chance of rain or snow, 0.12 in; wind to 15 mph, gusts 18 mph; mostly cloudy, Scattered light rain showers",
+     "saturday": "Sat, Oct 24: high 52 °F, low 38 °F; 56% chance of rain or snow, 0.12 in; wind to 15 mph, gusts 18 mph; mostly cloudy, Scattered light rain showers",
+     "sunday": "Sun, Oct 25: high 52 °F, low 41 °F; 26% chance of rain or snow, 0.00 in; wind to 6 mph, gusts 12 mph; partly cloudy, Scattered light rain showers"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.1125,
+      37.2
+     ]
+    },
+    "properties": {
+     "name": "Forecast near Virgin, UT (37.20°N 113.11°W)",
+     "kind": "area",
+     "source": "nws",
+     "t": "2026-10-23T15:00:00.000Z",
+     "v": 50,
+     "tempF": 50,
+     "precipChance": 1,
+     "precipIn": 0,
+     "windMph": 5.8,
+     "gustMph": 10.4,
+     "skyPct": 10,
+     "windFrom": "east-southeast (110°)",
+     "sky": "Mostly clear",
+     "timeZone": "America/Denver",
+     "issued": "12:31 AM MDT",
+     "days": [
+      "Fri, Oct 23: rest of day high 61 °F, low 50 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; mostly clear",
+      "Sat, Oct 24: high 62 °F, low 45 °F; 46% chance of rain or snow, 0.06 in; wind to 12 mph, gusts 15 mph; mostly cloudy, Scattered light rain showers",
+      "Sun, Oct 25: high 61 °F, low 48 °F; 22% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 12 mph; partly cloudy, Isolated light rain showers",
+      "Mon, Oct 26: high 66 °F, low 46 °F; 0% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; mostly clear",
+      "Tue, Oct 27: high 67 °F, low 49 °F; 0% chance of rain or snow, 0.00 in; wind to 14 mph, gusts 17 mph; clear",
+      "Wed, Oct 28: high 65 °F, low 48 °F; 0% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; partly cloudy",
+      "Thu, Oct 29: high 65 °F, low 49 °F; 15% chance of rain or snow, 0.00 in; wind to 13 mph, gusts 17 mph; partly cloudy, Slight chance of light rain",
+      "Fri, Oct 30: high 53 °F, low 51 °F; 28% chance of rain or snow, 0.00 in; wind to 13 mph, gusts 17 mph; mostly cloudy, Slight chance of light rain"
+     ],
+     "today": "Fri, Oct 23: rest of day high 61 °F, low 50 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; mostly clear",
+     "tomorrow": "Sat, Oct 24: high 62 °F, low 45 °F; 46% chance of rain or snow, 0.06 in; wind to 12 mph, gusts 15 mph; mostly cloudy, Scattered light rain showers",
+     "saturday": "Sat, Oct 24: high 62 °F, low 45 °F; 46% chance of rain or snow, 0.06 in; wind to 12 mph, gusts 15 mph; mostly cloudy, Scattered light rain showers",
+     "sunday": "Sun, Oct 25: high 61 °F, low 48 °F; 22% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 12 mph; partly cloudy, Isolated light rain showers"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -112.9375,
+      37.2
+     ]
+    },
+    "properties": {
+     "name": "Forecast near Springdale, UT (37.20°N 112.94°W)",
+     "kind": "area",
+     "source": "nws",
+     "t": "2026-10-23T15:00:00.000Z",
+     "v": 44,
+     "tempF": 44,
+     "precipChance": 1,
+     "precipIn": 0,
+     "windMph": 5.8,
+     "gustMph": 10.4,
+     "skyPct": 15,
+     "windFrom": "east (100°)",
+     "sky": "Mostly clear",
+     "timeZone": "America/Denver",
+     "issued": "12:31 AM MDT",
+     "days": [
+      "Fri, Oct 23: rest of day high 57 °F, low 44 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 14 mph; mostly clear",
+      "Sat, Oct 24: high 57 °F, low 42 °F; 55% chance of rain or snow, 0.12 in; wind to 13 mph, gusts 16 mph; mostly cloudy, Scattered light rain showers",
+      "Sun, Oct 25: high 56 °F, low 45 °F; 26% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 12 mph; partly cloudy, Scattered light rain showers",
+      "Mon, Oct 26: high 62 °F, low 42 °F; 0% chance of rain or snow, 0.00 in; wind to 12 mph, gusts 14 mph; mostly clear",
+      "Tue, Oct 27: high 62 °F, low 43 °F; 0% chance of rain or snow, 0.00 in; wind to 15 mph, gusts 17 mph; clear",
+      "Wed, Oct 28: high 60 °F, low 44 °F; 0% chance of rain or snow, 0.00 in; wind to 12 mph, gusts 15 mph; partly cloudy",
+      "Thu, Oct 29: high 60 °F, low 44 °F; 17% chance of rain or snow, 0.00 in; wind to 14 mph, gusts 16 mph; partly cloudy, Slight chance of light rain",
+      "Fri, Oct 30: high 49 °F, low 46 °F; 29% chance of rain or snow, 0.00 in; wind to 14 mph, gusts 16 mph; mostly cloudy, Slight chance of light rain"
+     ],
+     "today": "Fri, Oct 23: rest of day high 57 °F, low 44 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 14 mph; mostly clear",
+     "tomorrow": "Sat, Oct 24: high 57 °F, low 42 °F; 55% chance of rain or snow, 0.12 in; wind to 13 mph, gusts 16 mph; mostly cloudy, Scattered light rain showers",
+     "saturday": "Sat, Oct 24: high 57 °F, low 42 °F; 55% chance of rain or snow, 0.12 in; wind to 13 mph, gusts 16 mph; mostly cloudy, Scattered light rain showers",
+     "sunday": "Sun, Oct 25: high 56 °F, low 45 °F; 26% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 12 mph; partly cloudy, Scattered light rain showers"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.1125,
+      37.4
+     ]
+    },
+    "properties": {
+     "name": "Forecast near Toquerville, UT (37.40°N 113.11°W)",
+     "kind": "area",
+     "source": "nws",
+     "t": "2026-10-23T15:00:00.000Z",
+     "v": 42,
+     "tempF": 42,
+     "precipChance": 1,
+     "precipIn": 0,
+     "windMph": 5.8,
+     "gustMph": 11.5,
+     "skyPct": 16,
+     "windFrom": "south-southeast (160°)",
+     "sky": "Mostly clear",
+     "timeZone": "America/Denver",
+     "issued": "12:31 AM MDT",
+     "days": [
+      "Fri, Oct 23: rest of day high 51 °F, low 42 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 18 mph; mostly clear",
+      "Sat, Oct 24: high 51 °F, low 39 °F; 52% chance of rain or snow, 0.12 in; wind to 18 mph, gusts 31 mph; mostly cloudy, Scattered light rain showers",
+      "Sun, Oct 25: high 51 °F, low 41 °F; 24% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 15 mph; partly cloudy, Isolated light rain showers",
+      "Mon, Oct 26: high 56 °F, low 40 °F; 0% chance of rain or snow, 0.00 in; wind to 6 mph, gusts 13 mph; mostly clear",
+      "Tue, Oct 27: high 57 °F, low 43 °F; 0% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 15 mph; clear",
+      "Wed, Oct 28: high 54 °F, low 43 °F; 0% chance of rain or snow, 0.00 in; wind to 6 mph, gusts 13 mph; partly cloudy",
+      "Thu, Oct 29: high 54 °F, low 44 °F; 17% chance of rain or snow, 0.06 in; wind to 7 mph, gusts 15 mph; partly cloudy, Slight chance of light rain",
+      "Fri, Oct 30: high 45 °F, low 45 °F; 26% chance of rain or snow, 0.06 in; wind to 6 mph, gusts 12 mph; mostly cloudy, Slight chance of light rain"
+     ],
+     "today": "Fri, Oct 23: rest of day high 51 °F, low 42 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 18 mph; mostly clear",
+     "tomorrow": "Sat, Oct 24: high 51 °F, low 39 °F; 52% chance of rain or snow, 0.12 in; wind to 18 mph, gusts 31 mph; mostly cloudy, Scattered light rain showers",
+     "saturday": "Sat, Oct 24: high 51 °F, low 39 °F; 52% chance of rain or snow, 0.12 in; wind to 18 mph, gusts 31 mph; mostly cloudy, Scattered light rain showers",
+     "sunday": "Sun, Oct 25: high 51 °F, low 41 °F; 24% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 15 mph; partly cloudy, Isolated light rain showers"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -112.9375,
+      37.4
+     ]
+    },
+    "properties": {
+     "name": "Forecast near Springdale, UT (37.40°N 112.94°W)",
+     "kind": "area",
+     "source": "nws",
+     "t": "2026-10-23T15:00:00.000Z",
+     "v": 41,
+     "tempF": 41,
+     "precipChance": 1,
+     "precipIn": 0,
+     "windMph": 2.3,
+     "gustMph": 6.9,
+     "skyPct": 29,
+     "windFrom": "east (90°)",
+     "sky": "Mostly clear",
+     "timeZone": "America/Denver",
+     "issued": "12:31 AM MDT",
+     "days": [
+      "Fri, Oct 23: rest of day high 53 °F, low 41 °F; 2% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 13 mph; mostly clear",
+      "Sat, Oct 24: high 54 °F, low 38 °F; 62% chance of rain or snow, 0.18 in; wind to 10 mph, gusts 17 mph; mostly cloudy, Numerous light rain showers",
+      "Sun, Oct 25: high 52 °F, low 40 °F; 29% chance of rain or snow, 0.00 in; wind to 4 mph, gusts 7 mph; partly cloudy, Scattered light rain showers",
+      "Mon, Oct 26: high 57 °F, low 38 °F; 0% chance of rain or snow, 0.00 in; wind to 5 mph, gusts 12 mph; mostly clear",
+      "Tue, Oct 27: high 58 °F, low 40 °F; 0% chance of rain or snow, 0.00 in; wind to 6 mph, gusts 13 mph; mostly clear",
+      "Wed, Oct 28: high 56 °F, low 41 °F; 0% chance of rain or snow, 0.00 in; wind to 4 mph, gusts 9 mph; partly cloudy",
+      "Thu, Oct 29: high 55 °F, low 42 °F; 19% chance of rain or snow, 0.00 in; wind to 5 mph, gusts 12 mph; partly cloudy, Slight chance of light rain",
+      "Fri, Oct 30: high 44 °F, low 43 °F; 27% chance of rain or snow, 0.00 in; wind to 5 mph, gusts 8 mph; mostly cloudy, Slight chance of light rain"
+     ],
+     "today": "Fri, Oct 23: rest of day high 53 °F, low 41 °F; 2% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 13 mph; mostly clear",
+     "tomorrow": "Sat, Oct 24: high 54 °F, low 38 °F; 62% chance of rain or snow, 0.18 in; wind to 10 mph, gusts 17 mph; mostly cloudy, Numerous light rain showers",
+     "saturday": "Sat, Oct 24: high 54 °F, low 38 °F; 62% chance of rain or snow, 0.18 in; wind to 10 mph, gusts 17 mph; mostly cloudy, Numerous light rain showers",
+     "sunday": "Sun, Oct 25: high 52 °F, low 40 °F; 29% chance of rain or snow, 0.00 in; wind to 4 mph, gusts 7 mph; partly cloudy, Scattered light rain showers"
     }
    }
   ]

@@ -259,7 +259,8 @@ describe("buildTools", () => {
     }
     // The 54 layer descriptions were about 88,000 characters in full; the three data-story layers (river pulse,
     // currents, wind) add about 2,400. The 2026-10-18 layer pass (legends, vintages, offline notes) adds about 1,600.
-    expect(total).toBeLessThan(71_000);
+    // The 2026-10-23 use-case pass adds two layers (weather forecast, avalanche) and flood stages on streamflow: about 3,500.
+    expect(total).toBeLessThan(75_000);
     const surf = tools["query_surf"].description ?? "";
     expect(surf).toContain("Set forecast to true");
     expect(surf).toContain("Set season to true");

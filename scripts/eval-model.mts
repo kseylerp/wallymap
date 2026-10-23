@@ -570,28 +570,28 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
  * words (a missing source or a cross-layer step). The rule checks layers, view and filter; `needs` and the use case's
  * acceptance list are checked by hand until the app can answer them.
  */
-export type UsecaseExpect = CoverageExpect & { useCase: string; filter?: { layer: string; key: string }; needs?: string[] };
+export type UsecaseExpect = CoverageExpect & { useCase: string; filter?: { layer: string; key: string }; join?: string; needs?: string[] };
 
 /** The use-case questions, keyed by the question in lower case (`--tag usecase` runs only these). */
 export const USECASE_QUESTIONS: Record<string, UsecaseExpect> = {
   // UC01 Day hiker picks a trail.
-  "good day hikes near boulder under 5 miles": { useCase: "UC01", layers: ["popularity|osm-trails"], view: "ranked", filter: { layer: "popularity|osm-trails", key: "lengthKm" }, needs: ["whole-trail length"] },
-  "easy hikes with a waterfall near asheville": { useCase: "UC01", layers: ["popularity|osm-trails", "outdoor-features"], needs: ["trail reaches a feature (join)"] },
+  "good day hikes near boulder under 5 miles": { useCase: "UC01", layers: ["popularity|osm-trails"], view: "ranked", filter: { layer: "popularity|osm-trails", key: "lengthKm" } },
+  "easy hikes with a waterfall near asheville": { useCase: "UC01", layers: ["popularity|osm-trails", "outdoor-features"], join: "near" },
   // UC02 Hiker checks snow on trails.
   "which trails at mount rainier are snow free right now?": { useCase: "UC02", layers: ["snow-cover", "osm-trails|popularity"], needs: ["snow sampled along each trail"] },
   "is there still snow on the trails around lake tahoe?": { useCase: "UC02", layers: ["snowpack", "snow-cover"] },
   // UC03 Backpacker plans water and camps.
   "backpacking in the wind rivers: where are the water sources and campsites?": { useCase: "UC03", layers: ["outdoor-features|lakes", "campsites"], filter: { layer: "campsites", key: "kind" } },
-  "where can i camp along the wonderland trail?": { useCase: "UC03", layers: ["osm-trails", "campsites"], needs: ["features along a route (join)"] },
+  "where can i camp along the wonderland trail?": { useCase: "UC03", layers: ["osm-trails", "campsites"], join: "along" },
   // UC04 Trail runner picks a long run with the right climbing.
-  "long trail runs with big climbs near chamonix": { useCase: "UC04", layers: ["popularity|osm-trails"], view: "ranked", needs: ["elevation gain"] },
-  "flat trail runs over 10 miles near portland": { useCase: "UC04", layers: ["popularity|osm-trails"], filter: { layer: "popularity|osm-trails", key: "lengthKm" }, needs: ["whole-trail length", "elevation gain"] },
+  "long trail runs with big climbs near chamonix": { useCase: "UC04", layers: ["popularity|osm-trails"], view: "ranked" },
+  "flat trail runs over 10 miles near portland": { useCase: "UC04", layers: ["popularity|osm-trails"], filter: { layer: "popularity|osm-trails", key: "lengthKm" } },
   // UC05 Mountain biker picks an intermediate ride.
   "intermediate mountain bike trails near bentonville": { useCase: "UC05", layers: ["mtb-trails"], filter: { layer: "mtb-trails", key: "v|level" } },
   "flowy blue trails in sedona": { useCase: "UC05", layers: ["mtb-trails"], filter: { layer: "mtb-trails", key: "v|level" } },
   // UC06 Sport climber picks a crag by style and sun.
-  "which crags near moab are sport and shaded in the afternoon?": { useCase: "UC06", layers: ["climbing"], view: "ranked", filter: { layer: "climbing", key: "disciplines" }, needs: ["wall aspect"] },
-  "beginner sport climbing at red rock near las vegas": { useCase: "UC06", layers: ["climbing"], filter: { layer: "climbing", key: "disciplines" }, needs: ["grade band per discipline"] },
+  "which crags near moab are sport and shaded in the afternoon?": { useCase: "UC06", layers: ["climbing"], view: "ranked", filter: { layer: "climbing", key: "disciplines" } },
+  "beginner sport climbing at red rock near las vegas": { useCase: "UC06", layers: ["climbing"], filter: { layer: "climbing", key: "disciplines|sportBands" } },
   // UC07 Boulderer checks the weekend conditions.
   "bouldering near bishop this weekend, will it be too hot?": { useCase: "UC07", layers: ["climbing", "weather-forecast"], filter: { layer: "climbing", key: "disciplines|boulderBands" } },
   "is it too windy to climb at joshua tree tomorrow?": { useCase: "UC07", layers: ["weather-forecast|wind-flow"] },
@@ -600,12 +600,12 @@ export const USECASE_QUESTIONS: Record<string, UsecaseExpect> = {
   "is the gauley running right now?": { useCase: "UC08", layers: ["streamflow"], needs: ["runnable range"] },
   "class iv runs in colorado with enough water right now": { useCase: "UC08", layers: ["paddling", "streamflow"], filter: { layer: "paddling", key: "v" }, needs: ["whitewater class", "runnable range per section"] },
   // UC09 Sea or flatwater kayaker times the tide and wind.
-  "best time to kayak tomales bay tomorrow, tide and wind": { useCase: "UC09", layers: ["tides", "wind-flow"], view: "timeline" },
+  "best time to kayak tomales bay tomorrow, tide and wind": { useCase: "UC09", layers: ["tides", "weather-forecast|wind-flow"], view: "timeline" },
   "where can i launch a kayak on lake tahoe?": { useCase: "UC09", layers: ["recreation-sites|fishing|paddling"] },
   // UC10 Backcountry skier checks avalanche danger and snow.
   "avalanche danger near stevens pass today": { useCase: "UC10", layers: ["avalanche"] },
   "where's the deepest fresh snow in utah right now?": { useCase: "UC10", layers: ["snowpack"], view: "ranked" },
-  "low-angle ski tours near teton pass": { useCase: "UC10", layers: ["ski-routes"], needs: ["slope angle"] },
+  "low-angle ski tours near teton pass": { useCase: "UC10", layers: ["ski-routes"] },
   // UC11 Angler picks a river by flow and water temperature.
   "is the madison fishing well right now?": { useCase: "UC11", layers: ["streamflow|fishing"] },
   "where can i fly fish with public access near asheville?": { useCase: "UC11", layers: ["fishing", "public-lands"], needs: ["access points on public land (join)"] },
@@ -617,7 +617,7 @@ export const USECASE_QUESTIONS: Record<string, UsecaseExpect> = {
   "free dispersed camping near sedona": { useCase: "UC13", layers: ["forest-roads", "public-lands"], needs: ["dispersed camping closures"] },
   "where can i park my van overnight on blm land near moab?": { useCase: "UC13", layers: ["public-lands", "campsites"], needs: ["designated-site rules"] },
   // UC14 Overlander plans a route with water and camps.
-  "camping and water along the mojave road": { useCase: "UC14", layers: ["campsites", "outdoor-features"], needs: ["the named route's line", "features along a route (join)"] },
+  "camping and water along the mojave road": { useCase: "UC14", layers: ["campsites", "outdoor-features"], join: "along", needs: ["the named route's line"] },
   "forest roads a subaru can drive near leadville": { useCase: "UC14", layers: ["forest-roads"], filter: { layer: "forest-roads", key: "level" } },
   // UC15 Wildlife watcher finds an animal.
   "where can i see moose near jackson hole?": { useCase: "UC15", layers: ["species|gbif-occurrences"], view: "density" },
@@ -640,14 +640,14 @@ export const USECASE_QUESTIONS: Record<string, UsecaseExpect> = {
   "how much of the deschutes national forest burned in the last 10 years and how badly?": { useCase: "UC20", layers: ["fire-perimeters", "burn-severity"], needs: ["clip to the forest boundary", "severity acres by class"] },
   "where did beetles kill trees in the medicine bow since 2020?": { useCase: "UC20", layers: ["tree-mortality"], view: "timeline" },
   // UC21 Range manager checks grazing against habitat and drought.
-  "grazing allotments overlapping desert tortoise critical habitat near st. george": { useCase: "UC21", layers: ["grazing-allotments", "critical-habitat"], needs: ["overlap acres (join)"] },
-  "wild horse areas in nevada that are in drought right now": { useCase: "UC21", layers: ["grazing-allotments", "drought"], needs: ["overlap acres (join)"] },
+  "grazing allotments overlapping desert tortoise critical habitat near st. george": { useCase: "UC21", layers: ["grazing-allotments", "critical-habitat"], join: "overlap" },
+  "wild horse areas in nevada that are in drought right now": { useCase: "UC21", layers: ["grazing-allotments", "drought"], join: "overlap" },
   // UC22 Conservation researcher measures deforestation and its drivers.
   "how much forest did pará lose since 2017 and to what?": { useCase: "UC22", layers: ["forest-loss"], needs: ["hectares lost (zonal totals)", "drivers of loss"] },
   "which protected areas in borneo lost the most forest?": { useCase: "UC22", layers: ["forest-loss", "protected-areas-world"], needs: ["loss per protected area (zonal totals)"] },
   // UC23 Conservation researcher finds species outside protection.
-  "jaguar records in costa rica outside protected areas": { useCase: "UC23", layers: ["gbif-occurrences|species", "protected-areas-world"], needs: ["inside or outside (join)"] },
-  "old-growth forest in oregon that isn't in wilderness": { useCase: "UC23", layers: ["old-growth", "wilderness"], needs: ["area outside (join)"] },
+  "jaguar records in costa rica outside protected areas": { useCase: "UC23", layers: ["gbif-occurrences|species", "protected-areas-world"], join: "outside" },
+  "old-growth forest in oregon that isn't in wilderness": { useCase: "UC23", layers: ["old-growth", "wilderness"], join: "outside" },
   // UC24 Journalist checks a water, disaster or emissions story.
   "how much has lake powell dropped since 2000?": { useCase: "UC24", layers: ["reservoir-levels"] },
   "which california counties got the most disaster declarations since 2020?": { useCase: "UC24", layers: ["disasters"], view: "ranked" },
@@ -669,12 +669,19 @@ export function usecaseFor(raw: string): UsecaseExpect | undefined {
  */
 export function usecaseRule(expect: UsecaseExpect, calls: ToolCall[]): RuleResult {
   const coverage = coverageRule(expect, calls);
-  if (!expect.filter) return { ...coverage, useCase: expect.useCase, ...(expect.needs && { needs: expect.needs }) };
+  // A question that relates two layers ("outside protected areas", "in drought") must end with combine's join.
+  const joined = expect.join === undefined || calls.some((c) => c.toolName === "combine" && (c.input as { op?: string } | undefined)?.op === expect.join && !hasError(c.output));
+  const joinPart = expect.join !== undefined ? { join: expect.join, joined } : {};
+  if (!expect.filter) return { ...coverage, ok: coverage.ok && joined, useCase: expect.useCase, ...joinPart, ...(expect.needs && { needs: expect.needs }) };
   const layers = expect.filter.layer.split("|");
   const keys = expect.filter.key.split("|");
   const ops = mapAfter(calls).renderOps.filter((o) => layers.includes(o.layerId));
   const filtered = ops.some((o) => keys.some((k) => isActiveEntry(o.filters?.[k])));
-  return { ...coverage, ok: coverage.ok && filtered, useCase: expect.useCase, filter: expect.filter, filtered, ...(expect.needs && { needs: expect.needs }) };
+  return { ...coverage, ok: coverage.ok && filtered && joined, useCase: expect.useCase, filter: expect.filter, filtered, ...joinPart, ...(expect.needs && { needs: expect.needs }) };
+}
+
+function hasError(output: unknown): boolean {
+  return !!output && typeof output === "object" && "error" in output;
 }
 
 /** Layers the older eval questions (before the coverage questions) already ask about, per their Last run tool lists. */

@@ -20,11 +20,15 @@
  *   legend lists each raw agency value with its group color, so the tile renderer can fill by `agency` with a match expression;
  *   features without an agency (private conservation land, about 7%) take the "Other or unrecorded" group.
  * No upstream call is made by the layer: it only hands the tile URL to the map.
+ * Camping rules (2026-10-23, AUDIT R14): ownership is not access, so the note names the hand-kept dispersed-camping
+ * closures whose box meets the view (layers/_data/closures.json, shared with forest-roads: Sedona, BLM Moab, the Lake
+ * Tahoe Basin, Crested Butte, each with its order, date and link), and elsewhere says to check the closure orders.
  */
 import { z } from "zod";
 import { defineLayer, type Attribute, type AttributeLevel, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type LegendSpec } from "./types";
 import { registerLayer } from "./registry";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
+import { campingRuleNote, campingRulesFor } from "./forest-roads";
 import { DARK_GREY, layerColor, PINK, PURPLE, SAGE } from "@/lib/render/palette";
 import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
 
@@ -143,7 +147,8 @@ const publicLands = defineLayer({
     "so one place can carry several overlapping polygons, for example a wilderness area inside a national forest. " +
     "Each area has a name, a manager (agency), a designation and a coarse public-access flag (open, restricted, closed, unknown); tapping an area shows them in plain words. " +
     "Use it to show public land ownership on the map so the user can see where national forest, BLM, park, or state land lies; the model itself cannot read the map. " +
-    "Caveats: this is ownership and management, not access rules. It does not say whether camping, hunting, fires, drones or vehicles are allowed, " +
+    "Caveats: this is ownership and management, not access rules. It does not say whether camping, hunting, fires, drones or vehicles are allowed " +
+    "(the note quotes the known dispersed-camping closures near Sedona, Moab, Lake Tahoe and Crested Butte with their orders), " +
     "private land outside the database is simply not drawn, and boundaries are approximate at parcel scale; check the managing agency before relying on it. " +
     "United States only. Returns map tiles drawn on the globe, not features you can count or list. You cannot see the rendered map: say the layer is shown and what each color means, but do not claim which land lies where. " +
     "Works at any size of region, from a whole state down to a single valley.",
@@ -180,7 +185,7 @@ const publicLands = defineLayer({
         url: "https://www.usgs.gov/programs/gap-analysis-project/science/pad-us-data-overview",
         retrieved: new Date().toISOString(),
       },
-      ...(outsideUs(ctx.bbox) && { coverageNote: OUTSIDE_US_NOTE }),
+      coverageNote: outsideUs(ctx.bbox) ? OUTSIDE_US_NOTE : campingRuleNote(campingRulesFor(ctx.bbox)),
     };
   },
 });

@@ -7,6 +7,7 @@ import layer, {
   buildFishingQuery,
   buildWideFishingQuery,
   dropSingleGaugeTemps,
+  gaugeFor,
   gaugeMatch,
   gaugeNote,
   gaugeStream,
@@ -20,7 +21,8 @@ import layer, {
   troutVerdict,
   usfsFeatures,
 } from "./fishing";
-import { parseIv } from "./_shared/usgs";
+import { parseIv, type IvSite } from "./_shared/usgs";
+import { cardContent } from "@/lib/render/card";
 import { labelsOf, legendOf, timeShapeOf } from "./contract";
 import fwpFixture from "./__fixtures__/fishing-fwp.bozeman.json";
 import osmFixture from "./__fixtures__/fishing-osm.tahoe.json";
@@ -103,7 +105,7 @@ describe("sources", () => {
     expect(typeof features[0].properties?.t).toBe("string");
   });
 
-  it("attaches the nearest water temperature within 30 km to places, not sightings", () => {
+  it("attaches a water temperature only from a gauge on the place's own water, never to sightings", () => {
     const places = osmFeatures(osmFixture);
     const sightings = sightingFeatures(inatFixture).features;
     const n = attachWaterTemps([...places, ...sightings], parseIv([tempFixture], NOW));
@@ -112,6 +114,56 @@ describe("sources", () => {
     expect(typeof withTemp.waterTempSite).toBe("string");
     expect(Number(withTemp.waterTempKm)).toBeLessThanOrEqual(30);
     expect(sightings.every((f) => f.properties?.waterTempC === undefined)).toBe(true);
+  });
+});
+
+describe("a gauge on the spot's own water (UC11: 27 of 27 spots near Denver read one urban gauge)", () => {
+  const gauge = (name: string, lon: number, lat: number, c: number): IvSite => ({
+    siteId: `USGS-${name}`,
+    siteNo: name,
+    name,
+    coordinates: [lon, lat],
+    readings: { "00010": { value: c, time: Date.parse("2026-10-23T15:00:00Z"), local: "2026-10-23T09:00:00-06:00" } },
+  });
+  // Denver: three South Platte gauges and South Boulder Creek, as read live 2026-10-23.
+  const DENVER = [
+    gauge("SOUTH PLATTE R AT 64TH AVE. COMMERCE CITY, CO.", -104.95, 39.81, 13.9),
+    gauge("SOUTH PLATTE RIVER AT ENGLEWOOD, CO.", -105.0, 39.66, 13.8),
+    gauge("SOUTH BOULDER CR AT FOREBAY NR ELDORADO SPRINGS CO", -105.3, 39.93, 9.8),
+  ];
+
+  it("takes the gauge on the river the spot names, within 30 km, past a nearer gauge on other water", () => {
+    const g = gaugeFor("South Boulder Creek Interpretive Site", [-105.2, 39.75], DENVER);
+    expect(g).toMatchObject({ match: "same", stream: "South Boulder Creek" });
+    expect(g!.km).toBeGreaterThan(15);
+  });
+
+  it("leaves a lake or other water without a temperature, however close a river gauge is", () => {
+    expect(gaugeFor("Chatfield Reservoir Boat Ramp", [-105.0, 39.665], DENVER)).toBeUndefined();
+    expect(gaugeFor("Clear Creek Fishing Access", [-104.96, 39.81], DENVER)).toBeUndefined();
+  });
+
+  it("gives a spot named for no water only a gauge within 3 km, marked as maybe other water", () => {
+    expect(gaugeFor("West Boat Ramp", [-104.97, 39.81], DENVER)).toMatchObject({ match: "unknown" });
+    expect(gaugeFor("West Boat Ramp", [-104.9, 39.75], DENVER)).toBeUndefined();
+  });
+
+  it("draws distinct readings: spots without a gauge on their water get no band at all", () => {
+    const pt = (name: string, lon: number, lat: number) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [lon, lat] }, properties: { kind: "access", name } });
+    const spots = [pt("Fishing is Fun #4", -105.1, 39.7), pt("Gross Reservoir Boat Ramp", -105.36, 39.95), pt("South Platte River Trail Access", -105.0, 39.67)];
+    expect(attachWaterTemps(spots, DENVER)).toBe(1);
+    expect(spots.map((f) => (f.properties as Record<string, unknown>).tempBand)).toEqual([undefined, undefined, "good"]);
+  });
+});
+
+describe("card", () => {
+  it("never prints iNaturalist's taxon id (it read 'Taxon id 49,591')", () => {
+    const first = sightingFeatures(inatFixture).features[0];
+    const sighting = { ...first, properties: { ...first.properties, taxonId: 49591 } };
+    const card = cardContent(sighting, { card: layer.card, fieldHelp: layer.fieldHelp });
+    const rows = [...card.facts, ...card.details].map((r) => `${r.label} ${r.value}`).join(" | ");
+    expect(rows).not.toMatch(/taxon/i);
+    expect(layer.card?.hidden).toContain("taxonId");
   });
 });
 

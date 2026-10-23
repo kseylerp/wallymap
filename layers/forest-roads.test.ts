@@ -2,7 +2,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { datesOpen, maintLevelOf, mvumOffset, mvumWhere, normalizeMvum, surfaceKindOf } from "./forest-roads";
+import layer, {
+  CAMPING_RULES,
+  attachCampingRules,
+  campingRuleNote,
+  campingRulesFor,
+  datesOpen,
+  maintLevelOf,
+  mvumOffset,
+  mvumWhere,
+  normalizeMvum,
+  surfaceKindOf,
+} from "./forest-roads";
+import { colorStops } from "@/lib/render/attributes";
 import { hardMaxAreaKm2 } from "./types";
 import { WHOLE_US_KM2 } from "./_shared/coverage";
 import { cardTitle, legendOf } from "./contract";
@@ -162,13 +174,13 @@ describe("maintenance level, surface group and dates open (Sedona, read live 202
     expect(seasonal?.properties).not.toHaveProperty("eBike");
   });
 
-  it("puts the maintenance level first on the card and says legal, not open, for passenger cars", () => {
+  it("puts the maintenance level first on the card and says open to passenger cars by law, not suited to them", () => {
     const fc = normalizeMvum(sedona);
     const schnebly = fc.features.find((f) => f.properties?.routeId === "153" && f.properties?.level === 2);
     if (!schnebly) throw new Error("expected Schnebly Hill");
     const card = cardContent(schnebly, { card: layer.card, fieldHelp: layer.fieldHelp });
-    expect(card.facts[0]).toMatchObject({ label: "Maintenance level", value: "2 High clearance" });
-    expect(card.facts[1]).toMatchObject({ label: "Legal for passenger cars", value: "Yes" });
+    expect(card.facts[0]).toMatchObject({ label: "Maintenance level", value: "2, high-clearance vehicles only" });
+    expect(card.facts[1]).toMatchObject({ label: "Open to passenger cars by law", value: "Yes" });
     expect(card.facts.map((r) => r.label)).toContain("Ranger district");
     expect(card.facts.find((r) => r.label === "Surface")?.value).toBe("Improved dirt (native material with added rock)");
     expect(card.facts.some((r) => /open$/i.test(r.value))).toBe(false);
@@ -188,12 +200,25 @@ describe("forest-roads layer", () => {
     expect(layer.style.encode).toEqual({ color: "level" });
     const level = layer.attributes?.find((a) => a.key === "level");
     expect(level).toMatchObject({ type: "ordinal", primary: true, encode: "color" });
-    expect(level?.levels?.map((l) => l.label)).toEqual(["5 High comfort/paved", "4 Moderate comfort", "3 Passenger cars (rough)", "2 High clearance", "1 Closed"]);
+    // Two plain chips: levels 3 to 5 are maintained for passenger cars, 1 and 2 for high clearance (UC14, Leadville).
+    expect(level?.levels?.map((l) => [l.value, l.label])).toEqual([
+      [5, "Passenger car"],
+      [4, "Passenger car"],
+      [3, "Passenger car"],
+      [2, "High clearance"],
+      [1, "High clearance"],
+    ]);
+    const stops = Object.fromEntries(colorStops(level!));
+    expect(new Set([stops["3"], stops["4"], stops["5"]]).size).toBe(1);
+    expect(stops["2"]).toBe(stops["1"]);
+    expect(stops["2"]).not.toBe(stops["3"]);
     expect(layer.attributes?.find((a) => a.key === "surfaceKind")?.levels?.map((l) => l.label)).toEqual(["Paved", "Gravel", "Dirt"]);
     expect(layer.attributes?.find((a) => a.key === "seasonal")?.type).toBe("flag");
     const legend = legendOf(layer);
     expect(legend.kind).toBe("categories");
     expect(legend.items?.map((i) => i.label)).toEqual([...(level?.levels ?? []).map((l) => l.label), "Not rated"]);
+    // Each level's swatch is its chip's color, as the map draws it.
+    for (const item of legend.items ?? []) if (item.value !== undefined) expect(item.color).toBe(stops[String(item.value)]);
     expect(layer.time).toEqual({ shape: "none" });
     expect(layer.labels).toEqual({ field: "name", max: 5, rankBy: "miles" });
     expect(layer.display).toEqual({ units: "us", timeZone: "local" });
@@ -226,7 +251,9 @@ describe("forest-roads layer", () => {
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(fixture.features.length);
     expect(r.citation.source).toContain("Forest Service");
-    expect(r.coverageNote).toBeUndefined();
+    // The Tahoe box sits in the Lake Tahoe Basin, whose order bans dispersed camping.
+    expect(r.coverageNote).toMatch(/^Camping rule here: Lake Tahoe Basin Management Unit .*Forest Order 19-24-05/);
+    expect(r.data.features.some((f) => f.properties?.campingRuleUrl === "https://fs.usda.gov/r05/laketahoebasin/alerts/camping-overnight-stay-restriction")).toBe(true);
   });
 
   it("uses the wider where clause when includeAllRoads is true", async () => {
@@ -251,7 +278,7 @@ describe("forest-roads layer", () => {
     const stub = vi.fn(async () => json({ ...fixture, exceededTransferLimit: true }));
     const r = await layer.query(ctx(stub), { includeAllRoads: false });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
-    expect(r.coverageNote).toBe("Showing the first 2,000 road segments; zoom in for the rest");
+    expect(r.coverageNote).toMatch(/^Showing the first 2,000 road segments; zoom in for the rest; Camping rule here: /);
   });
 
   it("returns an empty result with a note, without calling upstream, outside the US", async () => {
@@ -294,8 +321,10 @@ describe("forest-roads layer", () => {
       expect(res.body).toMatchObject({
         total: 2440,
         truncated: true,
-        coverageNote: "Showing the 2 longest of 2,440 (ranked by segment length in miles); zoom in under 25,000 km² for all",
       });
+      expect(res.body.coverageNote).toMatch(/^Showing the 2 longest of 2,440 \(ranked by segment length in miles\); zoom in under 25,000 km² for all/);
+      // South-east Utah takes in the Moab area.
+      expect(res.body.coverageNote).toContain("Bureau of Land Management, Moab Field Office");
     } finally {
       vi.unstubAllGlobals();
     }
@@ -305,5 +334,44 @@ describe("forest-roads layer", () => {
     const res = await runLayer("forest-roads", { bbox: [-180, -60, 180, 80] });
     expect(res.status).toBe(422);
     expect(res.body).toMatchObject({ hint: "zoom_in" });
+  });
+});
+
+describe("dispersed camping rules (AUDIT R14)", () => {
+  const SEDONA: [number, number, number, number] = [-111.95, 34.75, -111.65, 34.95];
+  const MOAB: [number, number, number, number] = [-109.75, 38.45, -109.4, 38.7];
+  const LEADVILLE: [number, number, number, number] = [-106.5, 39.1, -106.1, 39.4];
+  const NOW = new Date("2026-10-23T12:00:00Z");
+
+  it("keeps every rule with an https order link, a date and a box", () => {
+    expect(CAMPING_RULES.map((r) => r.id)).toEqual(["sedona-west", "sedona-oak-creek", "moab", "lake-tahoe-basin", "crested-butte"]);
+    for (const r of CAMPING_RULES) {
+      expect(r.url).toMatch(/^https:\/\/(www\.)?(fs\.usda\.gov|blm\.gov)\//);
+      expect(r.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(r.bbox[0]).toBeLessThan(r.bbox[2]);
+      expect(r.bbox[1]).toBeLessThan(r.bbox[3]);
+    }
+  });
+
+  it("finds Sedona's two Coconino orders, Moab's BLM rule, and none near Leadville", () => {
+    expect(campingRulesFor(SEDONA, NOW).map((r) => r.id)).toEqual(["sedona-west", "sedona-oak-creek"]);
+    expect(campingRulesFor(MOAB, NOW).map((r) => r.id)).toEqual(["moab"]);
+    expect(campingRulesFor(LEADVILLE, NOW)).toEqual([]);
+    expect(campingRuleNote([])).toMatch(/check the ranger district's \(or BLM field office's\) closure orders/);
+  });
+
+  it("drops a rule past its end date", () => {
+    expect(campingRulesFor(SEDONA, new Date("2029-01-01T00:00:00Z")).map((r) => r.id)).toEqual(["sedona-oak-creek"]);
+  });
+
+  it("puts the rule on Sedona's roads inside its box, with the order link on the card", () => {
+    const fc = normalizeMvum(sedona);
+    const n = attachCampingRules(fc, campingRulesFor(SEDONA, NOW));
+    expect(n).toBeGreaterThan(0);
+    const road = fc.features.find((f) => f.properties?.campingRule !== undefined)!;
+    expect(road.properties?.campingRule).toMatch(/^Coconino National Forest, Red Rock Ranger District, .*\(Forest Order 03-04-06-2[36]-0[34], 20\d{2}-\d{2}-\d{2}\)$/);
+    const card = cardContent(road, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.facts.map((r) => r.label)).toContain("Camping rule here");
+    expect(card.links.find((l) => l.label === "Closure order")?.url).toMatch(/^https:\/\/www\.fs\.usda\.gov\/r03\/coconino\//);
   });
 });

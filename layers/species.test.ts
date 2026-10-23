@@ -9,6 +9,7 @@ import layer, {
   countryOf,
   groupBySpecies,
   inatDensityUrl,
+  lookupName,
   normalizeObservations,
   observationsUrl,
   pickTaxon,
@@ -18,6 +19,8 @@ import raw from "./__fixtures__/species.tahoe.json";
 import elkAutocomplete from "./__fixtures__/species.elk-autocomplete.json";
 import elkPage from "./__fixtures__/species.elk-estes.json";
 import estesPlaces from "./__fixtures__/species.estes-places.json";
+import troutAutocomplete from "./__fixtures__/species.trout-autocomplete.json";
+import salmoninaeAutocomplete from "./__fixtures__/species.salmoninae-autocomplete.json";
 
 const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
 const ESTES: [number, number, number, number] = [-105.7, 40.3, -105.4, 40.45];
@@ -156,6 +159,30 @@ describe("taxon lookup", () => {
     expect(pickTaxon("x", { results: [] })).toBeNull();
   });
 
+  it("reads trout as the salmons and trouts (Salmoninae), not fawn lilies (recorded 2026-10-23)", () => {
+    // Autocomplete alone ranks Erythronium ("trout lilies") first and has no trout in its top ten.
+    expect(pickTaxon("trout", troutAutocomplete)?.name).toBe("Erythronium");
+    expect(lookupName("trout")).toBe("Salmoninae");
+    expect(lookupName(" Trout ")).toBe("Salmoninae");
+    expect(lookupName("elk")).toBe("elk");
+    expect(pickTaxon(lookupName("trout"), salmoninaeAutocomplete)).toEqual({ id: 342904, name: "Salmoninae", rank: "subfamily", commonName: "Salmons and Trouts" });
+  });
+
+  it("with no exact match prefers a name that ends in the asked word over one that only describes something else", () => {
+    const results = [
+      { id: 1, name: "Erythronium", rank: "genus", preferred_common_name: "fawn lilies", matched_term: "trout lilies" },
+      { id: 2, name: "Salvelinus namaycush", rank: "species", preferred_common_name: "Lake Trout", matched_term: "Lake Trout" },
+    ];
+    expect(pickTaxon("trout", { results })?.id).toBe(2);
+  });
+
+  it("asks for those months of every year in the window", () => {
+    const u = new URL(observationsUrl(TAHOE, { days: 3650, researchGradeOnly: true, month: "3-4" }, 1, new Date("2026-10-23T12:00:00Z")));
+    expect(u.searchParams.get("month")).toBe("3,4");
+    expect(new URL(observationsUrl(TAHOE, { days: 30, researchGradeOnly: true, season: "winter" }, 1, new Date("2026-10-23T12:00:00Z"))).searchParams.get("month")).toBe("12,1,2");
+    expect(new URL(observationsUrl(TAHOE, { days: 30, researchGradeOnly: true }, 1, new Date("2026-10-23T12:00:00Z"))).searchParams.has("month")).toBe(false);
+  });
+
   it("says in words what the name was read as", () => {
     expect(taxonWords({ id: 204114, name: "Cervus canadensis", rank: "species", commonName: "Elk" })).toBe("Elk (Cervus canadensis) and its subspecies");
     expect(taxonWords({ id: 3, name: "Aves", rank: "class", commonName: "Birds" })).toBe("Birds (Aves), the whole class");
@@ -177,6 +204,8 @@ describe("normalizeObservations", () => {
       v: 1,
       url: "https://www.inaturalist.org/observations/407038132",
       license: "cc-by-nc",
+      month: 6,
+      season: "summer",
       taxonId: 116999,
     });
     for (const f of data.features) {
@@ -258,7 +287,8 @@ describe("species layer", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.requiredEnv).toEqual([]);
     expect(layer.maxAreaKm2).toBe(50_000);
-    expect(layer.hardMaxAreaKm2).toBeUndefined();
+    // A state such as Nebraska (242,000 km²) answers: ten pages or a tile template cost the same at any size.
+    expect(layer.hardMaxAreaKm2).toBe(1_500_000);
     expect(layer.wide).toEqual({ orderBy: "date observed", rank: "most recent", limit: 2000 });
     expect(layer.style).toEqual({ geometry: "point", color: "#3A3A3C" });
     expect(layer.license).toBe("CC BY-NC / CC0 per observation (iNaturalist)");
@@ -290,6 +320,19 @@ describe("species layer", () => {
     expect(r.data.features).toHaveLength(8);
     expect(new Set(r.data.features.map((f) => f.properties?.species))).toEqual(new Set(["Elk"]));
     expect(r.coverageNote).toBe('"elk" was read as Elk (Cervus canadensis) and its subspecies');
+  });
+
+  it("looks trout up as Salmoninae and asks by its id, so no fawn lily is drawn (Denver, UC11)", async () => {
+    const stub = routed(() => json({ total_results: 0, results: [] }), { taxa: salmoninaeAutocomplete });
+    const r = await run(stub, { ...DEFAULTS, taxon: "trout", month: 3 }, ESTES);
+    const urls = (stub.mock.calls as unknown as [string][]).map((c) => c[0]);
+    expect(params(urls.find((u) => u.includes("/taxa/autocomplete"))!).get("q")).toBe("Salmoninae");
+    const obs = urls.find((u) => u.includes("/v2/observations"))!;
+    expect(params(obs).get("taxon_id")).toBe("342904");
+    expect(params(obs).get("month")).toBe("3");
+    if (!("kind" in r)) throw new Error("expected a result");
+    expect(r.coverageNote).toContain('"trout" was read as Salmons and Trouts (Salmoninae), the whole subfamily');
+    expect(r.coverageNote).toContain("sightings from March only");
   });
 
   it("errors when iNaturalist knows no such name, and matches the name as text when the lookup fails", async () => {
@@ -384,10 +427,10 @@ describe("species layer", () => {
     expect(r.coverageNote).toContain("page 2 failed");
   });
 
-  it("returns 422 zoom_in from runLayer only over the hard cap (4 x 50,000 km²)", async () => {
-    const res = await runLayer("species", { bbox: [-124, 35, -118, 42] });
+  it("returns 422 zoom_in from runLayer only over the hard cap (1,500,000 km²)", async () => {
+    const res = await runLayer("species", { bbox: [-125, 25, -95, 49] });
     expect(res.status).toBe(422);
-    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 200000 km²$/) });
+    expect(res.body).toMatchObject({ hint: "zoom_in", error: expect.stringMatching(/zoom in to under 1500000 km²$/) });
   });
 
   it("answers a wide box with no taxon as GBIF density tiles of iNaturalist research-grade observations, without calling upstream", async () => {

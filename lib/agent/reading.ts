@@ -236,7 +236,16 @@ function wordPattern(phrase: string): RegExp {
  * Phrases that name an activity or a decision rather than a layer, and what they mean on the map. `strong` phrases
  * add their layers to a step that forgot them and drop the layers in `avoid`.
  */
-const PHRASES: { re: RegExp; unless?: RegExp; layers?: string[]; avoid?: string[]; inputs?: Record<string, Record<string, unknown>>; because: string }[] = [
+const PHRASES: {
+  re: RegExp;
+  unless?: RegExp;
+  layers?: string[];
+  avoid?: string[];
+  inputs?: Record<string, Record<string, unknown>>;
+  /** Chips a phrase means on a layer ("hikes" are paths and footpaths, not tracks, which are unpaved roads). */
+  filters?: Record<string, Record<string, string[]>>;
+  because: string;
+}[] = [
   {
     re: /\b(?:green|blue|black|red|double[- ]black)(?:\s+(?:circle|square|diamond))?\s+(?:trails?|singletrack|loops?|lines?|rides?)\b|\bflowy\b|\bflow\s+trails?\b|\bjump\s+lines?\b|\bblack\s+diamonds?\b(?=[^?]*\b(?:bike|biking|mtb|ride|riding|trails?)\b)/i,
     layers: ["mtb-trails"],
@@ -246,6 +255,7 @@ const PHRASES: { re: RegExp; unless?: RegExp; layers?: string[]; avoid?: string[
   {
     re: /\b(?:day\s+hikes?|good\s+hikes?|best\s+hikes?|easy\s+hikes?|short\s+hikes?|long\s+hikes?|hikes?\b(?!\s+(?:to|up)\b)|trail\s+runs?|trail\s+running|long\s+runs?)\b/i,
     layers: ["osm-trails"],
+    filters: { "osm-trails": { kind: ["path", "footway"] } },
     because: "hikes and runs are whole named trails with length and climb",
   },
   {
@@ -471,6 +481,7 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
   const layers: LayerHint[] = [];
   const avoid: Reading["avoid"] = [];
   const inputs: InputHint[] = [];
+  const phraseFilters: FilterHint[] = [];
   const addLayer = (layerId: string, because: string, strong: boolean) => {
     if (!getLayer(layerId)) return;
     const had = layers.find((l) => l.layerId === layerId);
@@ -484,6 +495,9 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     for (const id of p.layers ?? []) addLayer(id, `"${m[0].trim()}": ${p.because}`, strong);
     for (const id of p.avoid ?? []) avoid.push({ layerId: id, because: `"${m[0].trim()}": ${p.because}` });
     for (const [layerId, input] of Object.entries(p.inputs ?? {})) inputs.push({ layerId, input, because: `"${m[0].trim()}": ${p.because}` });
+    for (const [layerId, chips] of Object.entries(p.filters ?? {})) {
+      for (const [key, include] of Object.entries(chips)) phraseFilters.push({ layerId, key, include, because: m[0].trim() });
+    }
   }
   const places = riverNames(raw);
   for (const p of places) addLayer("streamflow", `"${p.written}" is a river: its gauges`, false);
@@ -521,7 +535,7 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     if (i >= 0) layers.splice(i, 1);
   }
 
-  const filters: FilterHint[] = [];
+  const filters: FilterHint[] = [...phraseFilters];
   for (const hint of layers) {
     const layer = getLayer(hint.layerId);
     if (layer) filters.push(...chipFilters(layer, q));

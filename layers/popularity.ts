@@ -1008,7 +1008,8 @@ function photosRunFor(ctx: QueryContext): { run: Promise<ComposedResult>; common
 async function queryTrails(ctx: QueryContext): Promise<LayerResult | LayerError> {
   const { run: photosPromise, commonsOnly } = photosRunFor(ctx);
   const [trailsRun, photosRun, extrasRun] = await Promise.all([
-    runComposed("osm-trails", ctx, { namedOnly: false }, "trails"),
+    // The ways one by one: the score joins them into trails through their hiking routes itself.
+    runComposed("osm-trails", ctx, { namedOnly: false, ways: true }, "trails"),
     photosPromise,
     overpassQuery(ctx, extrasQuery(ctx.bbox), { cacheSuffix: "extras" }),
   ]);

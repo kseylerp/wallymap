@@ -95,6 +95,9 @@ describe("readQuestion: the words the audit's questions use", () => {
     expect(strong("Good day hikes near Boulder under 5 miles")).toContain("osm-trails");
     expect(r.filters).toContainEqual(expect.objectContaining({ layerId: "osm-trails", key: "lengthKm", range: [0, 8.05] }));
     expect(read("Flat trail runs over 10 miles near Portland").filters).toContainEqual(expect.objectContaining({ key: "lengthKm", range: [16.09, 100_000] }));
+    expect(read("Long trail runs with big climbs near Chamonix").rankBy).toContainEqual(expect.objectContaining({ layerId: "osm-trails", key: "gainM" }));
+    // Hikes are paths and footpaths, not tracks (Boulder's longest "trail" was Pierson Park Road).
+    expect(r.filters).toContainEqual(expect.objectContaining({ layerId: "osm-trails", key: "kind", include: ["path", "footway"] }));
     expect(lengthRange("loops less than 8 km")).toEqual({ range: [0, 8], because: "less than 8 km" });
   });
 

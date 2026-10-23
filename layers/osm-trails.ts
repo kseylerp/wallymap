@@ -25,6 +25,7 @@ import { SAC_LEVELS, SAC_SCALE, nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { overpassQuery } from "./_shared/overpass";
 import { haversineKm } from "./_shared/geo";
+import { addClimb, mergeHikes } from "./_shared/hikes";
 import { SAGE, layerColor } from "@/lib/render/palette";
 
 export { overpassFailure } from "./_shared/overpass";
@@ -66,6 +67,7 @@ export function truncatedNote(shown: number, total: number): string {
 const inputSchema = z.object({
   sacScaleMax: z.enum(SAC_SCALES).optional(),
   namedOnly: z.boolean().default(false),
+  ways: z.boolean().default(false).describe("True returns OpenStreetMap's ways one by one instead of whole hikes (for layers built on this one)"),
 });
 
 type OsmTrailsInput = z.infer<typeof inputSchema>;
@@ -125,6 +127,13 @@ export function countedWays(json: unknown): number | null {
  * ways near Mount Rainier have none) and the legend can name those lines.
  */
 export const NOT_RATED = "not_rated";
+
+/** The coverage note when ways were merged into hikes: how many hikes, from how many of the box's ways. */
+export function hikesNote(hikes: number, ways: number, total: number, truncated: boolean): string {
+  const fmt = (n: number) => n.toLocaleString("en-US");
+  const from = truncated ? `${fmt(ways)} of ${fmt(total)} trail ways in this box (named first; zoom in for the rest)` : `${fmt(ways)} trail ways`;
+  return `${fmt(hikes)} trail${hikes === 1 ? "" : "s"} (the named ways joined into whole hikes) from ${from}`;
+}
 
 /** What a path is, from its highway tag: kind "path", "footway" or "track" (routes are kind "route"). */
 const PATH_KINDS = new Set(["path", "footway", "track"]);
@@ -586,6 +595,10 @@ export function simplifiedFeature<T extends Feature>(feature: T, tolerance: numb
   return feature;
 }
 
+function osmCitation() {
+  return { source: "OpenStreetMap contributors (ODbL); climb from AWS Terrain Tiles", url: "https://www.openstreetmap.org/copyright", retrieved: new Date().toISOString() };
+}
+
 /** True when a sac_scale value is absent or not rated, or at or below `max` in difficulty order. */
 function scaleWithin(scale: string | undefined, max: (typeof SAC_SCALES)[number]): boolean {
   if (scale === undefined || scale === NOT_RATED) return true;
@@ -613,6 +626,8 @@ const DIFFICULTY_LABELS: Record<string, string> = { ...SAC_LABELS, [NOT_RATED]: 
 
 /** What each line is, in words: an untitled footway reads "Footpath", a track (an unpaved road) "Track". */
 const KIND_LABELS: Record<string, string> = { path: "Path", footway: "Footpath", track: "Track", route: "Named route" };
+/** A whole hike's shape: a loop, an out and back (walk it and return), or a network that branches. */
+const SHAPE_LABELS: Record<string, string> = { loop: "Loop", "out-and-back": "Out and back", network: "Trail network" };
 const KIND_HELP: Record<string, string> = {
   path: "A path for walking and often bikes or horses.",
   footway: "A path mainly for people on foot.",
@@ -630,6 +645,11 @@ const ATTRIBUTES: Attribute[] = [
     label: "Kind",
     levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label, help: KIND_HELP[value] })),
   },
+  { key: "lengthKm", type: "measure", label: "Length", unit: "km", presets: [{ label: "Short (under 5 km)", max: 5 }, { label: "Half day (5 to 12 km)", min: 5, max: 12 }, { label: "Long (over 12 km)", min: 12 }] },
+  { key: "roundTripKm", type: "measure", label: "Round trip", unit: "km" },
+  { key: "gainM", type: "measure", label: "Climb", unit: "m", presets: [{ label: "Flat (under 100 m)", max: 100 }, { label: "Big climb (over 600 m)", min: 600 }] },
+  { key: "gainPerKm", type: "measure", label: "Climb per km", unit: "m/km" },
+  { key: "shape", type: "category", label: "Shape", levels: Object.entries(SHAPE_LABELS).map(([value, label]) => ({ value, label })) },
   nameAttribute(),
 ];
 
@@ -681,10 +701,20 @@ const HELP: Record<string, FieldHelp> = {
   v: ROUTE_KM,
   lengthKm: {
     text:
-      "The way's length as drawn, measured by this app along its mapped line; for a named hiking route (wide views), the kilometres inside the view.",
+      "The whole hike's length in view: every touching way of its name, measured by this app along the mapped lines; for an unnamed path its own length, and for a named hiking route (wide views) the kilometres inside the view.",
     unit: "km",
     source: "OpenStreetMap contributors",
   },
+  roundTripKm: { text: "The walk there and back: twice the length for an out and back, the length for a loop.", unit: "km" },
+  gainM: {
+    text: "How much the hike climbs walking it once from one end to the other, from AWS Terrain Tiles (about 30 m in the US) sampled every 50 m; dips under 4 m are ignored.",
+    unit: "m",
+    source: "AWS Terrain Tiles (Mapzen Terrarium, open data)",
+    url: "https://registry.opendata.aws/terrain-tiles/",
+  },
+  roundTripGainM: { text: "The climb of the whole round trip: up and back down for an out and back, once round for a loop.", unit: "m" },
+  gainPerKm: { text: "Climb per kilometre of trail: under 15 is flat, over 80 steep.", unit: "m/km" },
+  shape: { text: "Loop when its ends meet; out and back when it is one line you walk and return on; trail network when it branches." },
   kind: {
     text: "What the line is: a path, a footpath (footway), a track (an unpaved farm or forest road) or, in wide views, a named hiking route.",
     source: "OpenStreetMap wiki, Key:highway",
@@ -709,6 +739,11 @@ const HELP: Record<string, FieldHelp> = {
 const CARD: CardSpec = {
   measure: { key: "lengthKm", label: "Length", unit: "km" },
   facts: [
+    { key: "shape", label: "Shape", values: SHAPE_LABELS },
+    { key: "roundTripKm", label: "Round trip", format: "km" },
+    { key: "gainM", label: "Climb, end to end", format: "m" },
+    { key: "roundTripGainM", label: "Climb, round trip", format: "m" },
+    { key: "highM", label: "Highest point", format: "m" },
     { key: "sac_scale", label: "Difficulty", values: DIFFICULTY_LABELS },
     { key: "kind", label: "Kind", values: KIND_LABELS },
     { key: "trail_visibility", label: "Visibility" },
@@ -719,7 +754,7 @@ const CARD: CardSpec = {
     { key: "osmName", label: "Name in OpenStreetMap" },
   ],
   links: [{ key: "website", label: "Website" }],
-  hidden: ["osmId", "highway", "route"],
+  hidden: ["osmId", "highway", "route", "ways", "start", "end", "lossM", "lowM", "gainPerKm"],
 };
 
 const osmTrails = defineLayer({
@@ -727,7 +762,8 @@ const osmTrails = defineLayer({
   title: "OpenStreetMap trails",
   description:
     "Hiking paths, footways and tracks from OpenStreetMap, with difficulty (sac_scale), visibility and surface tags where mapped, plus wikidata or wikipedia when the trail has an article. " +
-    "Each way has kind ('path', 'footway' or 'track'; a track is an unpaved farm or forest road), lengthKm, and sac_scale ('not_rated' when no difficulty is mapped, often most of the ways). " +
+    "Under 2,500 km² the ways of one name that touch come back as one whole hike: name, lengthKm (the whole hike in view), shape ('loop', 'out-and-back' or 'network'), roundTripKm, gainM (climb end to end, from terrain tiles), roundTripGainM, gainPerKm, highM, start and end; unnamed paths stay one per way. " +
+    "Each has kind ('path', 'footway' or 'track'; a track is an unpaved farm or forest road) and sac_scale (the hardest of its ways; 'not_rated' when none is mapped, often most). " +
     "Under 2,500 km² it returns the paths; up to 400,000 km² the 150 longest named hiking routes instead (the note gives the total): kind 'route', name, v = lengthKm (km inside the region), distanceKm, network and sac_scale.",
   coverage: "global",
   surface: "land",
@@ -777,11 +813,20 @@ const osmTrails = defineLayer({
     }
     // Capped when the box holds more ways than came back, or more came back than are kept.
     const truncated = cut || total > returned;
+    if (input.ways) {
+      return { kind: "geojson", data, ...(truncated ? { coverageNote: truncatedNote(data.features.length, total) } : {}), citation: osmCitation() };
+    }
+
+    // Whole hikes: the ways of one name that touch are one trail, with its climb from terrain tiles (tests have no network).
+    const ways = data.features.length;
+    data.features = mergeHikes(data.features, NOT_RATED);
+    if (!process.env.VITEST) await addClimb(data.features);
+    const merged = data.features.length < ways;
 
     return {
       kind: "geojson",
       data,
-      ...(truncated ? { coverageNote: truncatedNote(data.features.length, total) } : {}),
+      ...(truncated || merged ? { coverageNote: merged ? hikesNote(data.features.length, ways, total, truncated) : truncatedNote(data.features.length, total) } : {}),
       citation: {
         source: "OpenStreetMap contributors (ODbL)",
         url: "https://www.openstreetmap.org/copyright",

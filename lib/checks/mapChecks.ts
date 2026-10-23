@@ -1,4 +1,5 @@
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
+import { isCombinedId } from "@/lib/render/combined";
 import type { BBox, Layer, Surface } from "@/layers/types";
 import { cardFeatureOf, rankedTop } from "@/lib/render/attributes";
 import { cardContent, isEmptyValue, type CardRow } from "@/lib/render/card";
@@ -728,8 +729,8 @@ export function checkLayerIds(state: MapState, lookup: LayerLookup): CheckResult
   ]);
   const failures = [...ids]
     .map((id) => (id.endsWith("~b") ? id.slice(0, -2) : id))
-    // A route the route tool drew is drawn under its own id, not a layer's.
-    .filter((id) => !lookup(id) && !routes.has(id))
+    // A route the route tool drew is drawn under its own id, not a layer's; so is a layer the combine tool made.
+    .filter((id) => !lookup(id) && !routes.has(id) && !isCombinedId(id))
     .map((id) => `The map holds a layer named "${id}", which is not a registered layer (a garbled tool name?).`);
   return { check: "layerIds", ok: failures.length === 0, failures: [...new Set(failures)] };
 }

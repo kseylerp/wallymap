@@ -87,3 +87,4 @@ import "./uranium";
 import "./ocean-currents";
 import "./wind-flow";
 import "./forest-types";
+import "./terrain";

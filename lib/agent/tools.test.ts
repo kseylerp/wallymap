@@ -41,6 +41,7 @@ describe("buildTools", () => {
         "render",
         "note",
         "route",
+        "combine",
         "set_time",
         "compare",
         ...listLayers().map((layer) => `query_${layer.id}`),

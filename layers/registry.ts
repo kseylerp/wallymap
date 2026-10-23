@@ -1,10 +1,13 @@
 import { attributeProblems } from "./attributes";
 import { contractProblems } from "./contract";
 import type { Layer } from "./types";
+import { withTerrainFields } from "@/lib/terrain/enrich";
 
 const layers = new Map<string, Layer>();
 
-export function registerLayer(layer: Layer): void {
+export function registerLayer(given: Layer): void {
+  // Layers whose answers carry terrain (a crag's aspect, a trail's climb) get its card facts and attributes here.
+  const layer = withTerrainFields(given);
   // The dev server's hot reload evaluates a changed layer module again against the same registry: the new version
   // replaces the old there. Anywhere else (tests, production) two layers with one id are a bug.
   if (layers.has(layer.id) && process.env.NODE_ENV !== "development") {

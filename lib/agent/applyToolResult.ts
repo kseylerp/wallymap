@@ -4,6 +4,7 @@ import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import type { LayerFilters } from "@/lib/render/filters";
 import { ROUTE_ERROR_ID } from "@/lib/render/reducer";
 import { repairToolName } from "@/lib/agent/toolNames";
+import { combinedActions, latestCombinedId } from "@/lib/render/combined";
 import {
   isHexBasis,
   RENDER_MODES,
@@ -380,7 +381,7 @@ function geocodeActions(output: Obj): MapAction[] {
 }
 
 /** The tools that are not layer queries, for canonicalToolName. */
-export const FIXED_TOOL_NAMES = ["list_layers", "geocode", "set_view", "set_basemap", "render", "set_time", "compare", "route", "note"] as const;
+export const FIXED_TOOL_NAMES = ["list_layers", "geocode", "set_view", "set_basemap", "render", "set_time", "compare", "route", "note", "combine"] as const;
 
 /**
  * The tool a finished call really is: a name with chat-template junk on it (`query_climbing<|channel|>commentary`)
@@ -467,14 +468,21 @@ export function toolResultToActions(
       return [{ type: "place_settle" }];
     case "set_basemap":
       return BASEMAPS.includes(output.style as Basemap) ? [{ type: "set_basemap", basemap: output.style as Basemap, agent: true }] : [];
-    case "render":
-      return renderActions({ ...output, layerId: typeof output.layerId === "string" ? cleanLayerId(output.layerId) : output.layerId }, catalog);
+    case "render": {
+      const id = typeof output.layerId === "string" ? cleanLayerId(output.layerId) : output.layerId;
+      // "combine" (the tool's name) means the layer the combine tool drew last (lib/render/combined.ts).
+      const layerId = id === "combine" ? latestCombinedId(existingOps) : id;
+      return layerId === undefined ? [] : renderActions({ ...output, layerId }, catalog);
+    }
     case "route":
       return routeActions(output, canvas);
     case "set_time":
       return setTimeActions(output);
     case "compare":
       return compareActions(output);
+    case "combine":
+      // Two layers joined into a new one (lib/render/combined.ts), with the source layer's card and filters.
+      return combinedActions(output, (id) => (catalog[id] ? catalogFields(catalog[id]) : undefined), existingOps);
     default:
       return [];
   }

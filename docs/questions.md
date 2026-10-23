@@ -144,7 +144,7 @@ Beyond the six starters, these tools shape follow-up questions. They appear in t
 
 ## Coverage questions
 
-The 60 questions after "Show only sport crags at Red River Gorge" in the eval set make sure every layer and every standard view is asked about, so the map checks see each layer before the owner does. With the older questions, every registered layer appears in at least one question, and each view (change, timeline, ranked, density, detail, scenario, route) is expected at least twice. They mix regions (US West and East, Alaska, Hawaii, Canada, the Alps, Patagonia, New Zealand, Japan, Africa) and kinds: where is, which is biggest or highest, show only, what changed since, here (`@view`), plan a route, is it safe or open now, and compare two places.
+The 61 questions after "Show only sport crags at Red River Gorge" in the eval set make sure every layer and every standard view is asked about, so the map checks see each layer before the owner does. With the older questions, every registered layer appears in at least one question, and each view (change, timeline, ranked, density, detail, scenario, route) is expected at least twice. They mix regions (US West and East, Alaska, Hawaii, Canada, the Alps, Patagonia, New Zealand, Japan, Africa) and kinds: where is, which is biggest or highest, show only, what changed since, here (`@view`), plan a route, is it safe or open now, and compare two places.
 
 Each coverage question also has a pass expectation in `COVERAGE_QUESTIONS` (scripts/eval-model.mts): the layers it must query, get an answer from and draw (either of two, written `a|b`), the view the drawn layer must end in where it matters, and for two questions the Show as mode (heat, columns). A route view passes when a route is on the map; a change view also passes when the layer is open in a compare. `--tag coverage` runs only these questions:
 
@@ -301,6 +301,7 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - Compare snow depth at Mount Baker and Mount Hood
 - How has the Mississippi's flow changed over the last three months?
 - Show the currents in Cook Inlet this week
+- Where is the avalanche terrain near Teton Pass?
 - Where is the wind strongest over the Sierra tomorrow?
 - Good day hikes near Boulder under 5 miles
 - Easy hikes with a waterfall near Asheville

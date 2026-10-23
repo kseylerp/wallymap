@@ -556,6 +556,7 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   // Data stories (spec §13, §13a): a whole river network day by day, currents and wind as moving particles, hourly.
   "how has the mississippi's flow changed over the last three months?": { layers: ["river-pulse"], view: "timeline" },
   "show the currents in cook inlet this week": { layers: ["ocean-currents"], view: "timeline" },
+  "where is the avalanche terrain near teton pass?": { layers: ["terrain"] },
   "where is the wind strongest over the sierra tomorrow?": { layers: ["wind-flow"] },
 };
 

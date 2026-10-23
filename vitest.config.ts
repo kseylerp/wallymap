@@ -10,6 +10,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Terrain enrichment (lib/terrain/enrich.ts) would fetch elevation tiles on every layer answer; its own tests turn it on.
+    env: { TERRAIN_ENRICH: "off" },
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx", "layers/**/*.test.ts", "lib/**/*.test.ts"],
   },
 });

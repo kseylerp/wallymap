@@ -13,6 +13,7 @@ import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
 import { checkNote } from "./noteCheck";
 import { createTurn, inputKeyOf, isWideQuery, MAX_STEPS, placeKey, type Turn } from "./turn";
 import { canonicalLayerId, repairToolName } from "./toolNames";
+import { combineTool } from "@/lib/spatial/tool";
 import { gistFor } from "./vocabulary";
 import type { GeocodeResult } from "./geocode";
 import type { MapView } from "./view";
@@ -744,5 +745,9 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
   for (const layer of listLayers()) {
     tools[`query_${layer.id}`] = queryTool(layer, fromView, turn);
   }
+
+  // combine: two answered layers joined into a new map layer (within, outside, near, along, overlap, drive_time).
+  // Its contract lives in lib/spatial/tool.ts; keep this block separate from the tools above.
+  tools.combine = combineTool({ turn, view });
   return tools;
 }

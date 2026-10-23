@@ -14,6 +14,7 @@ import {
 } from "@/layers/types";
 import { cacheKeyFor, createLayerFetch, sourceFailureForError } from "@/lib/fetch";
 import { withDisplayName } from "@/layers/_shared/names";
+import { enrichWithTerrain, terrainEnrichEnabled } from "@/lib/terrain/enrich";
 
 export type RunLayerParams = {
   bbox: unknown;
@@ -196,7 +197,9 @@ export async function runLayer(id: string, params: RunLayerParams): Promise<RunL
       const status = result.hint === "zoom_in" ? 422 : 503;
       return { status, body: withSourceStatus(naturalNames(result, id), layer, failure) };
     }
-    const named = withSourceStatus(naturalNames(result, id), layer, failure);
+    // A crag's aspect, a trail's climb (lib/terrain/enrich.ts): only for the layers it lists, within a time budget.
+    const enriched = terrainEnrichEnabled() ? await enrichWithTerrain(id, result) : result;
+    const named = withSourceStatus(naturalNames(enriched, id), layer, failure);
     if (!wide) return { status: 200, body: named };
     const outcome = wideOutcome(layer, wide, named);
     const body: LayerResult = {

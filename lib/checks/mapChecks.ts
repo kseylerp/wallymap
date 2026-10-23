@@ -465,6 +465,18 @@ function sameNamedPlace(a: Feature, b: Feature): boolean {
   return d <= SAME_SPOT_KM || !separateObjects(a, b, d);
 }
 
+/**
+ * True for two distinct OpenStreetMap objects over 1 km apart: two places of one name (two French Broad River Greenway
+ * Access ramps 1.1 km apart, each given the river gauge's water temperature), not parts of one place.
+ */
+function distinctOsmApart(a: Feature, b: Feature): boolean {
+  const ia = osmIdsOf(a);
+  const ib = osmIdsOf(b);
+  if (ia.length === 0 || ib.length === 0 || ia.some((id) => ib.includes(id))) return false;
+  const ca = centerOf(a);
+  return ca !== null && distanceKm(ca, b) > DUPLICATE_KM;
+}
+
 export function checkDuplicates(layers: Drawn[]): CheckResult {
   const failures: string[] = [];
   for (const layer of layers) {
@@ -524,7 +536,7 @@ export function checkDuplicates(layers: Drawn[]): CheckResult {
         const si = nameStem(nameOf(top[i]) ?? "");
         if (typeof vi !== "number" || vi === 0 || si === "") continue;
         for (let j = i + 1; j < top.length; j++) {
-          if (top[j].properties?.[key] === vi && nameStem(nameOf(top[j]) ?? "") === si) {
+          if (top[j].properties?.[key] === vi && nameStem(nameOf(top[j]) ?? "") === si && !distinctOsmApart(top[i], top[j])) {
             echoes.push(`"${nameOf(top[i])}" and "${nameOf(top[j])}" (rows ${i + 1} and ${j + 1})`);
             break;
           }

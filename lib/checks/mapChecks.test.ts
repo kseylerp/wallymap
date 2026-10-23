@@ -265,6 +265,12 @@ describe("duplicates", () => {
     const folded = [...others, point(-105.867, 40.14, { name: "Granby Dam", storageAf: 539760, v: 539760, structures: "4 dikes" })];
     expect(checkDuplicates(drawn(mapWith({ id: "dams", features: folded }))).ok).toBe(true);
     expect(nameStem("Granby Dike 4")).toBe("granby");
+    // Two ramps of one name 1.1 km apart, separate OSM nodes, each with the river gauge's temperature: two places.
+    const ramps = [
+      point(-82.5813, 35.5648, { name: "French Broad River Greenway Access", osmId: "node/552314409", waterTempF: 54, v: 54 }),
+      point(-82.5692, 35.5671, { name: "French Broad River Greenway Access", osmId: "node/7445168674", waterTempF: 54, v: 54 }),
+    ];
+    expect(checkDuplicates(drawn(mapWith({ id: "fishing", features: ramps }))).ok).toBe(true);
   });
 
   it("normalises names: case, accents and punctuation", () => {

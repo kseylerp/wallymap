@@ -85,18 +85,18 @@ describe("temperature-anomaly", () => {
     expect(sf?.geometry.type).toMatch(/Polygon/);
   });
 
-  it("uses last month by default, cached a week per period, with outlines cached separately", async () => {
+  it("uses last month by default, cached a week per period, with outlines from the saved Census file", async () => {
     const stub = routed();
     const r = await layer.query(ctx(stub), layer.input.parse({}));
     if (!("kind" in r) || r.kind !== "geojson") throw new Error(`expected geojson, got ${JSON.stringify(r)}`);
-    expect(r.data.features).toHaveLength(10);
+    // The saved Census outlines (layers/_data/us-counties.json) add Sacramento County, whose delta corner is in the box.
+    expect(r.data.features).toHaveLength(11);
     expect(r.coverageNote).toContain("September 2026, °F against the 1901-2000 average");
     const c = calls(stub);
     const ncei = c.find(([u]) => u.includes("ncei"));
     expect(ncei?.[1]).toMatchObject({ cacheKey: "temperature-anomaly:202609:1", ttlSeconds: 604_800 });
-    const outline = c.find(([u]) => u.includes("USA_Counties"));
-    expect(outline?.[1].cacheKey).toBe("counties:v1:-122.70,37.20,-121.70,38.20:0");
-    expect(new URL(outline?.[0] ?? "").searchParams.get("geometry")).toBe("-122.7,37.2,-121.7,38.2");
+    // Outlines come from the saved file, never a server.
+    expect(c.some(([u]) => u.includes("USA_Counties"))).toBe(false);
   });
 
   it("falls back a month when last month is not out yet, and errors for an unpublished period", async () => {

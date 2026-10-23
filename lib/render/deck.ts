@@ -26,6 +26,7 @@ import {
   scoreRampFor,
   SELECTED_AREA,
   SIBLING_FADE,
+  STANDARD_COLOR_LAYERS,
   CLASS_SIBLING_FADE,
   AREA_OUTLINE_SIBLING_FADE,
   symbolSizePx,
@@ -768,7 +769,7 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const kindColor = (f: Feature): string => {
     if (!key) return recipe.color;
     const c = categoryColor(key, f);
-    return (HATCH_COLORS as readonly string[]).includes(c) ? c : recipe.color;
+    return (HATCH_COLORS as readonly string[]).includes(c) || STANDARD_COLOR_LAYERS.has(op.layerId) ? c : recipe.color;
   };
   // The selected area keeps its own color (its category stays readable); the thick ink outline marks it.
   const colorOf = (f: Feature) => kindColor(f);

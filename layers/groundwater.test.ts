@@ -6,6 +6,7 @@ import { legendOf, labelsOf, timeShapeOf } from "./contract";
 import { cardContent } from "@/lib/render/card";
 import { rankableMeasures } from "@/lib/render/attributes";
 import layer, { HISTORY_LIMIT, LIMIT, WIDE_LIMIT, addContext, levelOf, nameByCounty, normalizeWells, parseHistory, sinceYear, waterLevelPercentile, wellName } from "./groundwater";
+import { parseCounties } from "./_shared/counties";
 import fixture from "./__fixtures__/groundwater.kearney.json";
 /** The same 12 wells' manual readings since 2006 (field-measurements, the Kearney box), recorded 2026-10-18. */
 import history from "./__fixtures__/groundwater.kearney-history.json";
@@ -269,12 +270,14 @@ describe("groundwater layer", () => {
       ],
     };
     const stub = vi.fn(async (url: string) => json(url.includes("USA_Counties") ? counties : url.includes("/field-measurements/") ? history : fixture));
+    expect(nameByCounty(normalizeWells(fixture), parseCounties(counties).counties)).toBeGreaterThan(0);
+    // The layer reads the saved Census outlines (no server): the well at 40.68 N, 99.85 W is in Gosper County, just
+    // south of the Dawson line.
     const r = geojson(await layer.query(ctx(stub), {}));
-    expect(r.data.features[0].properties).toMatchObject({ name: "Well in Dawson County, NE, water 82 ft down", county: "Dawson County, NE" });
+    expect(r.data.features[0].properties).toMatchObject({ name: "Well in Gosper County, NE, water 82 ft down", county: "Gosper County, NE" });
     expect(r.data.features.every((f) => !/\d{15}/.test(String(f.properties?.name)))).toBe(true);
-    // A failed county lookup keeps the plain names.
-    const down = vi.fn(async (url: string) => (url.includes("USA_Counties") ? json({}, 500) : json(fixture)));
-    expect(geojson(await layer.query(ctx(down), {})).data.features[0].properties?.name).toBe("Well, water 82 ft down");
+    expect(stub.mock.calls.some(([u]) => String(u).includes("USA_Counties"))).toBe(false);
+    // No outline holds the well: it keeps its plain name.
     expect(nameByCounty(normalizeWells(fixture), [])).toBe(0);
   });
 

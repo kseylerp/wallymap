@@ -6,6 +6,8 @@ import layer, {
   MAX_NAME_LOOKUPS,
   bboxPolygon,
   densityTileUrl,
+  monthsOf,
+  monthsText,
   normalizeOccurrences,
   searchUrl,
   shortLicense,
@@ -20,6 +22,8 @@ import page from "./__fixtures__/gbif-occurrences.puma-tahoe.json";
 import boulder from "./__fixtures__/gbif-occurrences.puma-boulder.json";
 import match from "./__fixtures__/gbif-occurrences.match-puma.json";
 import pumaSpecies from "./__fixtures__/gbif-occurrences.species-puma.json";
+import cranes from "./__fixtures__/gbif-occurrences.cranes-platte-march.json";
+import antigone from "./__fixtures__/gbif-occurrences.match-antigone.json";
 
 const TAHOE: [number, number, number, number] = [-120.4, 38.7, -119.8, 39.3];
 const NOW = new Date("2026-10-09T12:00:00Z");
@@ -93,6 +97,8 @@ describe("gbif-occurrences layer", () => {
       species: "Puma concolor",
       year: 2025,
       v: 2025,
+      month: 5,
+      season: "spring",
       t: "2025-05-24T17:59:34.000Z",
       url: "https://www.inaturalist.org/observations/283853425",
       basisOfRecord: "human observation",
@@ -266,6 +272,61 @@ describe("gbif-occurrences layer", () => {
     const plain = vi.fn();
     expect(await layer.query(ctx(plain, big), { density: true })).toMatchObject({ kind: "tiles" });
     expect(plain).not.toHaveBeenCalled();
+  });
+
+  it("reads a month, a range (wrapping past December) or a northern-hemisphere season as months", () => {
+    expect(monthsOf({})).toBeUndefined();
+    expect(monthsOf({ month: 3 })).toEqual([3]);
+    expect(monthsOf({ month: "3-4" })).toEqual([3, 4]);
+    expect(monthsOf({ month: "11-2" })).toEqual([11, 12, 1, 2]);
+    expect(monthsOf({ season: "winter" })).toEqual([12, 1, 2]);
+    expect(monthsOf({ season: "spring", month: 7 })).toEqual([7]);
+    expect(monthsText({ month: 3 })).toBe("March");
+    expect(monthsText({ season: "fall" })).toBe("fall (September to November, northern-hemisphere seasons)");
+    expect(layer.input.safeParse({ month: "3-4" }).success).toBe(true);
+    expect(layer.input.safeParse({ month: 13 }).success).toBe(false);
+    expect(layer.input.safeParse({ month: "March" }).success).toBe(false);
+  });
+
+  it("asks the search for each month (GBIF ORs them; a wrapping range is a 400)", () => {
+    const march = new URL(searchUrl(TAHOE, { month: 3 }, 0, NOW));
+    expect(march.searchParams.getAll("month")).toEqual(["3"]);
+    const winter = new URL(searchUrl(TAHOE, { season: "winter" }, 0, NOW));
+    expect(winter.searchParams.getAll("month")).toEqual(["12", "1", "2"]);
+    expect(new URL(searchUrl(TAHOE, {}, 0, NOW)).searchParams.has("month")).toBe(false);
+  });
+
+  it("draws a month on the ad-hoc map in web Mercator, since the density endpoint ignores month", () => {
+    expect(densityTileUrl(2474953, { from: 2016, to: 2026 }, [3, 4])).toBe(
+      "https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=purpleYellow.point&taxonKey=2474953&year=2016,2026&month=3&month=4",
+    );
+  });
+
+  it("gives every record its month and season, so March is a filter (sandhill cranes on the Platte, March, recorded 2026-10-23)", () => {
+    const { data } = normalizeOccurrences(cranes);
+    expect(data.features.length).toBeGreaterThan(0);
+    expect(data.features.every((f) => f.properties?.month === 3 && f.properties?.season === "spring")).toBe(true);
+    const month = layer.attributes?.find((a) => a.key === "month");
+    expect(month?.levels?.find((l) => l.value === 3)?.label).toBe("March");
+    expect(layer.card?.hidden).toEqual(expect.arrayContaining(["month", "season"]));
+  });
+
+  it("reads a synonym as its accepted taxon and says the months in the note (Antigone canadensis is Grus canadensis)", async () => {
+    const stub = vi.fn(async () => json(antigone));
+    const r = await layer.query(ctx(stub, [-104.05, 40, -95.3, 43], "gbif:k"), { density: true, scientificName: "Antigone canadensis", month: 3 });
+    if (!("kind" in r) || r.kind !== "tiles") throw new Error("expected tiles");
+    expect(r.data.url).toContain("/adhoc/");
+    expect(r.data.url).toContain("taxonKey=2474953");
+    expect(r.data.url).toMatch(/&month=3$/);
+    expect(r.coverageNote).toMatch(/^Records from March of every year, \d{4} to \d{4}$/);
+  });
+
+  it("notes the months on points too", async () => {
+    const stub = vi.fn(async (url: string) => (url.includes("/occurrence/search") ? json(cranes) : json({})));
+    const r = await layer.query(ctx(stub, [-100.5, 40.4, -97.5, 41.2]), { density: false, taxonKey: 2474953, month: 3 });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected points");
+    expect(String((stub.mock.calls[0] as unknown[])[0])).toContain("month=3");
+    expect(r.coverageNote).toMatch(/^Records from March of every year/);
   });
 
   it("builds density tile URLs with the taxon and the year window", () => {

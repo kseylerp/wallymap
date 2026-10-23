@@ -39,8 +39,16 @@ describe("public-lands layer", () => {
       sourceLayer: "padus",
       geometry: "polygon",
     });
-    expect(r.coverageNote).toBeUndefined();
+    // Ownership is not access: the Tahoe box's note quotes the basin's dispersed-camping order.
+    expect(r.coverageNote).toMatch(/^Camping rule here: Lake Tahoe Basin Management Unit .*Forest Order 19-24-05, 2024-06-28\), https:\/\/fs\.usda\.gov\//);
     expect(r.citation.source).toContain("PAD-US");
+  });
+
+  it("names Moab's BLM rule near Moab, and says to check closure orders where no rule is kept (Leadville)", async () => {
+    const moab = await layer.query(ctx([-109.75, 38.45, -109.4, 38.7]), {});
+    expect("coverageNote" in moab && moab.coverageNote).toMatch(/Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab/);
+    const leadville = await layer.query(ctx([-106.5, 39.1, -106.1, 39.4]), {});
+    expect("coverageNote" in leadville && leadville.coverageNote).toMatch(/^Dispersed camping rules are not in this data; check the ranger district's/);
   });
 
   it("serves PADUS_TILES_URL instead of the default bucket when set", async () => {

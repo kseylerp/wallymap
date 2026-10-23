@@ -88,3 +88,5 @@ import "./ocean-currents";
 import "./wind-flow";
 import "./forest-types";
 import "./terrain";
+import "./weather-forecast";
+import "./avalanche";

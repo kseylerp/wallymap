@@ -88,7 +88,9 @@ describe("attribute declarations (spec §12c) are checked at registry load", () 
     const kind = chipAttribute(getLayer("monuments")!);
     expect(kind?.versions).toBe(true);
     expect(kind?.levels?.map((v) => v.value)).toEqual(["2021", "current"]);
-    expect(encodedAttribute(getLayer("mtb-trails")!)?.levels?.map((v) => v.label)).toEqual(expect.arrayContaining(["Easy", "Moderate", "Hard", "Expert"]));
+    expect(encodedAttribute(getLayer("mtb-trails")!)?.levels?.map((v) => v.label)).toEqual(
+      expect.arrayContaining(["Green", "Blue", "Black", "Double black"]),
+    );
   });
 
   it("grades climbing on the shared bands, sizes fires and quakes by their sources' classes, and has flags and name search", () => {

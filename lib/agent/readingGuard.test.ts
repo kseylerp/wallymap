@@ -5,7 +5,8 @@ import type { GeocodeResult } from "@/lib/agent/geocode";
 import { applyReading, matchingQuestion, withReading, type GuardCall } from "@/lib/agent/readingGuard";
 import { decideStep } from "@/lib/agent/stepGuard";
 import { createTurn } from "@/lib/agent/turn";
-import { combineOf } from "@/lib/agent/reading";
+import { combineOf, readingForPrompt } from "@/lib/agent/reading";
+import { buildTools } from "@/lib/agent/tools";
 
 const NOW = new Date("2026-10-23T18:00:00Z");
 const SEDONA: BBox = [-112.14, 34.71, -111.66, 35.04];
@@ -29,7 +30,10 @@ describe("applyReading", () => {
     const turn = turnFor("Jaguar records in Costa Rica outside protected areas");
     // GBIF answers for sightings; and Costa Rica is over the sightings layer's limit anyway.
     expect(applyReading([call("query_gbif-occurrences", { bbox: costaRica, scientificName: "Panthera onca" })], turn, false).calls.map((c) => c.toolName)).toEqual(["query_gbif-occurrences"]);
-    expect(applyReading([call("query_protected-areas-world", { bbox: costaRica })], turnFor("Jaguar records in Costa Rica"), false).calls.map((c) => c.toolName)).toEqual(["query_protected-areas-world"]);
+    const brazil: BBox = [-74, -34, -34, 5.3];
+    expect(applyReading([call("query_protected-areas-world", { bbox: brazil })], turnFor("Jaguar records in Brazil"), false).calls.map((c) => c.toolName)).toEqual(["query_protected-areas-world"]);
+    // Costa Rica is under the sightings layer's 1,500,000 km² cap, so the jaguar sightings are asked as points.
+    expect(applyReading([call("query_protected-areas-world", { bbox: costaRica })], turnFor("Jaguar records in Costa Rica"), false).calls.map((c) => c.toolName)).toEqual(["query_protected-areas-world", "query_species"]);
   });
 
   it("sends back a GBIF query with no species when the question names one, and gives sightings the species", () => {
@@ -86,7 +90,7 @@ describe("decideStep with the reading", () => {
   });
 });
 
-describe("the combine tool (merging from the spatial branch)", () => {
+describe("the combine tool", () => {
   it("reads the relation a question asks between two layers", () => {
     expect(combineOf("Jaguar records in Costa Rica outside protected areas")).toMatchObject({ op: "outside" });
     expect(combineOf("Old-growth forest in Oregon that isn't in wilderness")).toMatchObject({ op: "outside" });
@@ -119,6 +123,19 @@ describe("the combine tool (merging from the spatial branch)", () => {
   });
 });
 
+describe("the merged spatial, terrain and forecast tools", () => {
+  it("asks combine, terrain, weather-forecast and avalanche by their registered names", () => {
+    const horses = turnFor("Wild horse areas in Nevada that are in drought right now");
+    const tools = Object.keys(buildTools({ turn: horses }));
+    expect(tools).toEqual(expect.arrayContaining(["combine", "query_terrain", "query_weather-forecast", "query_avalanche"]));
+    expect(readingForPrompt(horses.reading, NOW, tools)).toContain('call combine with op "overlap"');
+    const words = (q: string) => turnFor(q).reading.layers.map((l) => l.layerId);
+    expect(words("Which crags near Moab are sport and shaded in the afternoon?")).toContain("terrain");
+    expect(words("Is it going to rain in Zion this weekend?")).toContain("weather-forecast");
+    expect(words("What's the avalanche danger near Stevens Pass?")).toContain("avalanche");
+  });
+});
+
 describe("matchingQuestion", () => {
   it("lists the features that pass the question's filters, top first by the measure asked", () => {
     const hike = (name: string, lengthKm: number, kind = "path") => ({ type: "Feature", geometry: null, properties: { name, lengthKm, kind, roundTripKm: lengthKm * 2 } });
@@ -147,7 +164,7 @@ describe("withReading", () => {
 
   it("adds the filters the question names that the model left out, and keeps the model's own", () => {
     const turn = turnFor("Beginner sport climbing at Red Rock near Las Vegas");
-    expect(withReading({ layerId: "climbing" }, turn)).toMatchObject({ filters: { disciplines: { include: ["sport"] }, gradeBands: { include: ["beginner"] } } });
+    expect(withReading({ layerId: "climbing" }, turn)).toMatchObject({ filters: { disciplines: { include: ["sport"] }, sportBands: { include: ["beginner"] } } });
     expect(withReading({ layerId: "climbing", filters: { disciplines: { include: ["trad"] } } }, turn)).toMatchObject({ filters: { disciplines: { include: ["trad"] } } });
   });
 

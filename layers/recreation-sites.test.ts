@@ -333,4 +333,9 @@ describe("recreation-sites kinds and key", () => {
     const pt = (name: string, kind: string) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [0, 0] }, properties: { name, kind } });
     expect(byKind([pt("a", "trail"), pt("b", "campground"), pt("c", "trail"), pt("d", "campground")]).map((f) => f.properties.name)).toEqual(["b", "d", "a", "c"]);
   });
+
+  it("ignores stray and empty keys in its input instead of failing (the Tahoe kayak run sent a \"\" key)", () => {
+    expect(layer.input.safeParse({ "": "" })).toEqual({ success: true, data: {} });
+    expect(layer.input.safeParse({ kind: "campground", "": 1 })).toEqual({ success: true, data: {} });
+  });
 });

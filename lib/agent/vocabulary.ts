@@ -97,10 +97,9 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "mines", synonyms: ["mine", "abandoned mine", "mineral deposit", "prospect", "quarry"], notes: "USGS historic mine records (about 2011) and old-map mine symbols; kind = commodity or feature type; commodity input", gist: "US mines, prospects and mineral deposits by commodity" },
   { layerId: "uranium", synonyms: ["uranium", "mill tailings", "radioactive"], notes: "Navajo Nation abandoned mines (v = 2007 hazard score) and DOE mill-tailings sites; other uranium mines are in mines", gist: "Navajo Nation abandoned uranium mines and mill-tailings sites" },
   { layerId: "ocean-currents", synonyms: ["currents", "tidal current", "ocean current", "slack water"], notes: "hourly surface currents as moving particles, with the tide plotted", gist: "hourly ocean and tidal currents as moving particles" },
-  // Layers from the forecast branch (layers/weather-forecast.ts, layers/avalanche.ts), merging alongside this table.
-  { layerId: "weather-forecast", synonyms: ["forecast", "will it rain", "too hot", "temperature", "gusts"], notes: "7-day forecast by day and hour: temperature, rain, wind, gusts", gist: "seven-day weather forecast by day and hour" },
-  { layerId: "avalanche", synonyms: ["avalanche danger", "avalanche forecast", "avalanche risk"], notes: "center danger per zone; quote it, never infer from weather", gist: "avalanche center danger ratings by forecast zone" },
   { layerId: "wind-flow", synonyms: ["wind", "windiest", "windy", "gusty", "wind direction"], notes: "hourly 10 m wind forecast as moving particles, today and the next days", gist: "hourly wind forecast drawn as moving particles" },
+  { layerId: "weather-forecast", synonyms: ["forecast", "will it rain", "too hot", "too cold", "temperature", "gusts", "tomorrow's weather"], notes: "7-day hourly forecast at the place: temperature, rain chance and amount, wind and gusts; saturday and sunday lines", gist: "seven-day hourly weather forecast at the asked place" },
+  { layerId: "avalanche", synonyms: ["avalanche danger", "avalanche forecast", "avalanche risk", "avy"], notes: "US avalanche centers' daily danger by zone; quote the center and link it, never infer from weather", gist: "daily avalanche danger by US forecast zone" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

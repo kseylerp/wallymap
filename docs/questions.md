@@ -302,6 +302,8 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - How has the Mississippi's flow changed over the last three months?
 - Show the currents in Cook Inlet this week
 - Where is the avalanche terrain near Teton Pass?
+- Will it rain in Yosemite Valley this weekend?
+- What's the avalanche danger in Little Cottonwood Canyon today?
 - Where is the wind strongest over the Sierra tomorrow?
 - Good day hikes near Boulder under 5 miles
 - Easy hikes with a waterfall near Asheville

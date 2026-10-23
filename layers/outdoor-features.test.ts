@@ -3,7 +3,7 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { cardContent } from "@/lib/render/card";
 import { cardTitle, contractProblems, labelsOf, legendOf, timeShapeOf } from "./contract";
-import layer, { bothUnits, buildFeaturesQuery, buildWideFeaturesQuery, classify, kindsFor, KINDS, normalizeFeatures, usView } from "./outdoor-features";
+import layer, { bothUnits, buildFeaturesQuery, buildWideFeaturesQuery, classify, kindsFor, KINDS, normalizeFeatures, plausibleEle, usView } from "./outdoor-features";
 import fixture from "./__fixtures__/outdoor-features.tahoe.json";
 
 const TAHOE: [number, number, number, number] = [-120.3, 38.8, -119.9, 39.1];
@@ -150,6 +150,26 @@ describe("normalizeFeatures", () => {
       ],
     });
     expect(out.features.map((f) => f.properties?.osmId)).toEqual(["node/476290146"]);
+  });
+
+  it("reads an eastern US elevation given in feet as feet, and drops impossible ones (Glassmine Falls, 5,200 m)", () => {
+    const ASHEVILLE: [number, number] = [-82.33, 35.72];
+    expect(plausibleEle("5200", ASHEVILLE)).toBe(1585);
+    expect(plausibleEle("5200 ft", ASHEVILLE)).toBe(1585);
+    expect(plausibleEle("5200'", ASHEVILLE)).toBe(1585);
+    expect(plausibleEle("2037", ASHEVILLE)).toBe(2037);
+    expect(plausibleEle("1585 m", ASHEVILLE)).toBe(1585);
+    // The Rockies, the Alps and the Andes keep their metres; nothing on Earth is above 8,850 m.
+    expect(plausibleEle("4300", [-105.04, 38.84])).toBe(4300);
+    expect(plausibleEle("4808", [6.86, 45.83])).toBe(4808);
+    expect(plausibleEle("6961", [-70.01, -32.65])).toBe(6961);
+    expect(plausibleEle("17060", [6.86, 45.83])).toBeUndefined();
+    expect(plausibleEle("-1000", [35.5, 31.5])).toBeUndefined();
+    expect(plausibleEle(undefined, ASHEVILLE)).toBeUndefined();
+    const out = normalizeFeatures({
+      elements: [{ type: "node", id: 1, lat: 35.72, lon: -82.33, tags: { waterway: "waterfall", name: "Glassmine Falls", ele: "5200" } }],
+    });
+    expect(out.features[0].properties?.ele).toBe(1585);
   });
 
   it("returns nothing for a malformed body", () => {

@@ -6,6 +6,11 @@ import { runLayer } from "@/lib/layers/run";
 import type { Cache } from "@/lib/fetch";
 import layer, {
   addHistoryYear,
+  attachDaily,
+  dailyWaves,
+  dailyWind,
+  dayText,
+  FORECAST_DAYS,
   buoyFeatures,
   climatologyFrom,
   compass,
@@ -38,6 +43,8 @@ import layer, {
 import { hardMaxAreaKm2 } from "./types";
 import { haversineKm } from "./_shared/geo";
 import marineFixture from "./__fixtures__/marine.sf.json";
+import santaCruzMarine from "./__fixtures__/surf-marine.santa-cruz.json";
+import santaCruzWind from "./__fixtures__/surf-wind.santa-cruz.json";
 
 /** Recorded 2026-10-10 ~02:11 UTC: latest_obs trimmed to 11 stations, activestations to 5, marine for SF's 4 x 4 grid. */
 const OBS = readFileSync(join(__dirname, "__fixtures__/ndbc-latest-obs.txt"), "utf8");
@@ -291,7 +298,9 @@ describe("forecast", () => {
     expect(r.dropped).toBe(1);
     expect(r.nudged).toBe(1);
     // First request has the 3 spots; then 4 bearings each for the 2 still null at 1 km, then Lake alone at 2 and 3 km.
-    const lens = calls(stub).map((c) => new URL(c[0]).searchParams.get("latitude")!.split(",").length);
+    const lens = calls(stub)
+      .filter((c) => c[0].includes("marine-api"))
+      .map((c) => new URL(c[0]).searchParams.get("latitude")!.split(",").length);
     expect(lens).toEqual([3, 8, 4, 4]);
     expect(NUDGE_STEPS_KM).toEqual([1, 2, 3]);
   });
@@ -303,6 +312,84 @@ describe("forecast", () => {
     expect(r.dropped).toBe(0);
     expect(r.error).toMatch(/429/);
     expect(down).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the week ahead at a spot (UC12: Santa Cruz this weekend, recorded Friday 2026-10-23)", () => {
+  const FRIDAY = new Date("2026-10-23T14:39:00Z");
+  const steamer = { name: "Steamer Lane", lat: 36.9513, lon: -122.0264, source: "Wikidata" as const, rank: 0 };
+
+  it("reads hourly rows in the spot's local time (timezone=auto) back to UTC for the current hour", () => {
+    const p = marineProps(santaCruzMarine, FRIDAY);
+    // 14:00 UTC is 07:00 PDT, the row's eighth hour.
+    expect(p?.t).toBe("2026-10-23T14:00:00.000Z");
+    expect(p?.v).toBe(santaCruzMarine.hourly.wave_height[7]);
+  });
+
+  it("gives the next 7 local days, today first, with the day's range and the period at its highest", () => {
+    const days = dailyWaves(santaCruzMarine, FRIDAY);
+    expect(days).toHaveLength(FORECAST_DAYS);
+    expect(days[0].date).toBe("2026-10-23");
+    expect(days.map((d) => d.date)).toEqual([...days.map((d) => d.date)].sort());
+    for (const d of days) {
+      expect(d.minM).toBeLessThanOrEqual(d.maxM);
+      expect(d.periodS).toBeGreaterThan(0);
+    }
+    expect(dailyWaves("junk", FRIDAY)).toEqual([]);
+  });
+
+  it("reads the day's top wind in mph from the forecast API", () => {
+    const wind = dailyWind(santaCruzWind);
+    expect(wind).toHaveLength(7);
+    expect(wind[0]).toMatchObject({ date: "2026-10-23", maxMph: 12 });
+    expect(dailyWind({})).toEqual([]);
+  });
+
+  it("says a day in feet, seconds and mph", () => {
+    expect(dayText({ date: "2026-10-24", minM: 1.2, maxM: 1.7, periodS: 12.4 }, { date: "2026-10-24", maxMph: 9, dirDeg: 225 })).toBe(
+      "Sat: 4-6 ft at 12 s, wind to 9 mph from the SW",
+    );
+    expect(dayText({ date: "2026-10-25", minM: 1.0, maxM: 1.05 })).toBe("Sun: 3 ft");
+  });
+
+  it("puts the days on one axis stepping by day, with Saturday and Sunday in words on the spot", () => {
+    const f = { type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [steamer.lon, steamer.lat] }, properties: { name: steamer.name } as Record<string, unknown> };
+    const axis = attachDaily([f], [dailyWaves(santaCruzMarine, FRIDAY)], [dailyWind(santaCruzWind)]);
+    expect(axis).toMatchObject({ step: "day", now: 0 });
+    expect(axis?.times).toHaveLength(7);
+    expect(axis?.times[0]).toBe("2026-10-23T00:00:00.000Z");
+    const series = f.properties.series as { waveFt: number[]; periodS: number[]; windMph: number[] };
+    expect(series.waveFt).toHaveLength(7);
+    expect(series.windMph[0]).toBe(12);
+    expect(f.properties.weekend).toMatch(/^Sat: \d+(-\d+)? ft at \d+ s, wind to \d+ mph from the [NESW]+ · Sun: /);
+    expect(String(f.properties.daily).split(" · ")).toHaveLength(7);
+    expect(f.properties.weekendMaxFt).toBe(Math.max(series.waveFt[1], series.waveFt[2]));
+  });
+
+  it("answers the forecast with a day series on the result and the weekend in the note", async () => {
+    const stub = vi.fn(async (url: string) => {
+      if (url.includes("latest_obs")) return text(OBS);
+      if (url.includes("activestations")) return text(XML);
+      if (url.includes("overpass")) return text(JSON.stringify({ elements: [{ type: "node", id: 9, lat: steamer.lat, lon: steamer.lon, tags: { name: "Steamer Lane", sport: "surfing" } }] }));
+      if (url.includes("wikidata")) return text(JSON.stringify({ results: { bindings: [] } }));
+      if (url.includes("marine-api")) return text(JSON.stringify(santaCruzMarine));
+      if (url.includes("api.open-meteo.com/v1/forecast")) return text(JSON.stringify(santaCruzWind));
+      throw new Error(`unexpected ${url}`);
+    });
+    vi.useFakeTimers({ now: FRIDAY, toFake: ["Date"] });
+    try {
+      const r = await layer.query(ctx(stub, [-122.2, 36.9, -121.9, 37.0]), { forecast: true, season: false });
+      if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+      expect(r.series).toMatchObject({ step: "day", now: 0 });
+      const spot = r.data.features.find((f) => f.properties?.name === "Steamer Lane");
+      expect(spot?.properties?.weekend).toMatch(/^Sat: /);
+      expect(r.coverageNote).toMatch(/no reporting NOAA wave buoy in view/);
+      expect(r.coverageNote).toMatch(/This weekend at Steamer Lane \(the biggest\): Sat: .* · Sun: /);
+      const wind = calls(stub).find((c) => c[0].includes("api.open-meteo.com/v1/forecast"))![0];
+      expect(new URL(wind).searchParams.get("wind_speed_unit")).toBe("mph");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -560,12 +647,12 @@ describe("surf layer", () => {
     expect(layer.card?.facts?.map((f) => f.key)).not.toContain("stationId");
   });
 
-  it("declares kind chips, a single time, feet for size, labels and US units", () => {
+  it("declares kind chips, days on the scrubber, feet for size, labels and US units", () => {
     const kind = layer.attributes?.find((a) => a.key === "kind");
     expect(kind?.primary).toBe(true);
     expect(kind?.levels?.slice(0, 2).map((l) => l.label)).toEqual(["Buoy", "Spot forecast"]);
     expect(layer.attributes?.find((a) => a.key === "waveFt")).toMatchObject({ type: "measure", unit: "ft", encode: "size" });
-    expect(layer.time).toEqual({ shape: "single" });
+    expect(layer.time).toEqual({ shape: "continuous", step: "day" });
     expect(layer.legend).toMatchObject({ kind: "size", field: "waveFt", unit: "ft" });
     expect(layer.labels).toMatchObject({ field: "name", rankBy: "waveFt" });
     expect(layer.display).toEqual({ units: "us", timeZone: "local" });

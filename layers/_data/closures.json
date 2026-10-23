@@ -1,0 +1,64 @@
+{
+  "about": "Hand-kept dispersed-camping closures and rules for the best-known places where the rule decides the answer (docs/use-cases.md UC13, AUDIT R14). No national machine-readable source exists. Each entry's url was fetched and read on `checked`; bbox is a rough box around the area the order or page describes, not its legal boundary. Recheck an entry by its `expires` date.",
+  "rules": [
+    {
+      "id": "sedona-west",
+      "place": "West of Sedona (Loy Butte Road and Boynton Canyon area)",
+      "manager": "Coconino National Forest, Red Rock Ranger District",
+      "rule": "No camping or campfires except in the designated camping areas the order lists",
+      "order": "Forest Order 03-04-06-26-04",
+      "date": "2026-08-18",
+      "expires": "2028-08-31",
+      "url": "https://www.fs.usda.gov/r03/coconino/alerts/west-sedona-camping-and-campfire-restrictions-0",
+      "bbox": [-111.98, 34.78, -111.8, 34.92],
+      "checked": "2026-10-23"
+    },
+    {
+      "id": "sedona-oak-creek",
+      "place": "South of Sedona and Oak Creek Canyon",
+      "manager": "Coconino National Forest, Red Rock Ranger District",
+      "rule": "No camping year-round except in the developed campgrounds (Pine Flat, Cave Springs, Manzanita, Chavez group)",
+      "order": "Forest Order 03-04-06-23-03",
+      "date": "2023-01-24",
+      "expires": "2033-01-24",
+      "url": "https://www.fs.usda.gov/r03/coconino/alerts/sedona-oak-creek-canyon-camping-and-campfire-restrictions",
+      "bbox": [-111.85, 34.7, -111.68, 35.0],
+      "checked": "2026-10-23"
+    },
+    {
+      "id": "moab",
+      "place": "Moab area",
+      "manager": "Bureau of Land Management, Moab Field Office",
+      "rule": "Many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones",
+      "order": "BLM Moab Visitor Guide",
+      "date": "2024-07-16",
+      "url": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
+      "bbox": [-109.95, 38.35, -109.25, 38.85],
+      "checked": "2026-10-23"
+    },
+    {
+      "id": "lake-tahoe-basin",
+      "place": "Lake Tahoe Basin",
+      "manager": "Lake Tahoe Basin Management Unit (US Forest Service)",
+      "rule": "Dispersed camping, including sleeping in a vehicle, is prohibited; camp only in the areas the order lists",
+      "order": "Forest Order 19-24-05",
+      "date": "2024-06-28",
+      "expires": "2027-12-01",
+      "url": "https://fs.usda.gov/r05/laketahoebasin/alerts/camping-overnight-stay-restriction",
+      "bbox": [-120.2, 38.7, -119.9, 39.33],
+      "checked": "2026-10-23"
+    },
+    {
+      "id": "crested-butte",
+      "place": "Crested Butte area",
+      "manager": "Grand Mesa, Uncompahgre and Gunnison National Forests, Gunnison Ranger District",
+      "rule": "Camp only in the Cement Creek, Lake Irwin or Gothic campgrounds or at a numbered designated site (a post with the site number and camping symbol)",
+      "order": "Forest Order GMUG-2022-10",
+      "date": "2022-06-14",
+      "expires": "2027-06-30",
+      "url": "https://www.fs.usda.gov/r02/gmug/alerts/crested-butte-area-camping-and-fire-prohibitions",
+      "bbox": [-107.25, 38.7, -106.8, 39.05],
+      "checked": "2026-10-23"
+    }
+  ]
+}

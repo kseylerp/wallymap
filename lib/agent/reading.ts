@@ -584,7 +584,7 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     if (!m) continue;
     const strong = !(p.unless && p.unless.test(masked));
     for (const id of p.layers ?? []) addLayer(id, `"${m[0].trim()}": ${p.because}`, strong);
-    // Avoid a layer only when the layer the phrase names exists (the forecast and avalanche layers may not yet).
+    // Avoid a layer only when the layer the phrase names exists.
     if ((p.layers ?? []).every((id) => getLayer(id))) for (const id of p.avoid ?? []) avoid.push({ layerId: id, because: `"${m[0].trim()}": ${p.because}` });
     // A phrase whose "unless" words are there names its layers only loosely and sets nothing.
     if (strong) for (const [layerId, input] of Object.entries(p.inputs ?? {})) if (!inputs.some((i) => i.layerId === layerId && JSON.stringify(i.input) === JSON.stringify(input))) inputs.push({ layerId, input, because: `"${m[0].trim()}": ${p.because}` });

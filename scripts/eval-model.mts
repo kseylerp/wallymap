@@ -558,6 +558,9 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   "show the currents in cook inlet this week": { layers: ["ocean-currents"], view: "timeline" },
   "where is the avalanche terrain near teton pass?": { layers: ["terrain"] },
   "where is the wind strongest over the sierra tomorrow?": { layers: ["wind-flow"] },
+  // The forecasts added for the use cases (audit R8, R10): a 7-day hourly weather forecast and the avalanche centers' danger.
+  "will it rain in yosemite valley this weekend?": { layers: ["weather-forecast"] },
+  "what's the avalanche danger in little cottonwood canyon today?": { layers: ["avalanche"] },
 };
 
 /**
@@ -584,31 +587,31 @@ export const USECASE_QUESTIONS: Record<string, UsecaseExpect> = {
   "long trail runs with big climbs near chamonix": { useCase: "UC04", layers: ["popularity|osm-trails"], view: "ranked", needs: ["elevation gain"] },
   "flat trail runs over 10 miles near portland": { useCase: "UC04", layers: ["popularity|osm-trails"], filter: { layer: "popularity|osm-trails", key: "lengthKm" }, needs: ["whole-trail length", "elevation gain"] },
   // UC05 Mountain biker picks an intermediate ride.
-  "intermediate mountain bike trails near bentonville": { useCase: "UC05", layers: ["mtb-trails"], filter: { layer: "mtb-trails", key: "v|imba" } },
-  "flowy blue trails in sedona": { useCase: "UC05", layers: ["mtb-trails"], filter: { layer: "mtb-trails", key: "v|imba" } },
+  "intermediate mountain bike trails near bentonville": { useCase: "UC05", layers: ["mtb-trails"], filter: { layer: "mtb-trails", key: "v|level" } },
+  "flowy blue trails in sedona": { useCase: "UC05", layers: ["mtb-trails"], filter: { layer: "mtb-trails", key: "v|level" } },
   // UC06 Sport climber picks a crag by style and sun.
   "which crags near moab are sport and shaded in the afternoon?": { useCase: "UC06", layers: ["climbing"], view: "ranked", filter: { layer: "climbing", key: "disciplines" }, needs: ["wall aspect"] },
   "beginner sport climbing at red rock near las vegas": { useCase: "UC06", layers: ["climbing"], filter: { layer: "climbing", key: "disciplines" }, needs: ["grade band per discipline"] },
   // UC07 Boulderer checks the weekend conditions.
-  "bouldering near bishop this weekend, will it be too hot?": { useCase: "UC07", layers: ["climbing"], filter: { layer: "climbing", key: "disciplines" }, needs: ["temperature forecast by day"] },
-  "is it too windy to climb at joshua tree tomorrow?": { useCase: "UC07", layers: ["wind-flow"], needs: ["gusts and mph at the climbing area"] },
+  "bouldering near bishop this weekend, will it be too hot?": { useCase: "UC07", layers: ["climbing", "weather-forecast"], filter: { layer: "climbing", key: "disciplines|boulderBands" } },
+  "is it too windy to climb at joshua tree tomorrow?": { useCase: "UC07", layers: ["weather-forecast|wind-flow"] },
   // UC08 Whitewater kayaker picks a run with water.
-  "where can i paddle class iii near asheville this weekend?": { useCase: "UC08", layers: ["paddling", "streamflow"], filter: { layer: "paddling", key: "v" }, needs: ["whitewater class", "runnable range per section", "flow forecast"] },
-  "is the gauley running right now?": { useCase: "UC08", layers: ["streamflow"], needs: ["dam release below Summersville", "runnable range"] },
+  "where can i paddle class iii near asheville this weekend?": { useCase: "UC08", layers: ["paddling", "streamflow"], filter: { layer: "paddling", key: "v" }, needs: ["whitewater class", "runnable range per section"] },
+  "is the gauley running right now?": { useCase: "UC08", layers: ["streamflow"], needs: ["runnable range"] },
   "class iv runs in colorado with enough water right now": { useCase: "UC08", layers: ["paddling", "streamflow"], filter: { layer: "paddling", key: "v" }, needs: ["whitewater class", "runnable range per section"] },
   // UC09 Sea or flatwater kayaker times the tide and wind.
   "best time to kayak tomales bay tomorrow, tide and wind": { useCase: "UC09", layers: ["tides", "wind-flow"], view: "timeline" },
   "where can i launch a kayak on lake tahoe?": { useCase: "UC09", layers: ["recreation-sites|fishing|paddling"] },
   // UC10 Backcountry skier checks avalanche danger and snow.
-  "avalanche danger near stevens pass today": { useCase: "UC10", layers: ["weather-alerts"], needs: ["avalanche center forecast"] },
+  "avalanche danger near stevens pass today": { useCase: "UC10", layers: ["avalanche"] },
   "where's the deepest fresh snow in utah right now?": { useCase: "UC10", layers: ["snowpack"], view: "ranked" },
   "low-angle ski tours near teton pass": { useCase: "UC10", layers: ["ski-routes"], needs: ["slope angle"] },
   // UC11 Angler picks a river by flow and water temperature.
   "is the madison fishing well right now?": { useCase: "UC11", layers: ["streamflow|fishing"] },
   "where can i fly fish with public access near asheville?": { useCase: "UC11", layers: ["fishing", "public-lands"], needs: ["access points on public land (join)"] },
-  "trout streams near denver that aren't too warm": { useCase: "UC11", layers: ["fishing|streamflow"], filter: { layer: "fishing|streamflow", key: "tempBand|tempF" }, needs: ["temperature from the spot's own river"] },
+  "trout streams near denver that aren't too warm": { useCase: "UC11", layers: ["fishing|streamflow"], filter: { layer: "fishing|streamflow", key: "tempBand|tempF" } },
   // UC12 Surfer picks a session.
-  "will santa cruz have good surf this weekend?": { useCase: "UC12", layers: ["surf"], needs: ["forecast by day", "wind and tide"] },
+  "will santa cruz have good surf this weekend?": { useCase: "UC12", layers: ["surf"], needs: ["tide"] },
   "where is the swell biggest on the oregon coast right now?": { useCase: "UC12", layers: ["surf"], view: "ranked" },
   // UC13 Car camper finds free dispersed camping.
   "free dispersed camping near sedona": { useCase: "UC13", layers: ["forest-roads", "public-lands"], needs: ["dispersed camping closures"] },
@@ -620,7 +623,7 @@ export const USECASE_QUESTIONS: Record<string, UsecaseExpect> = {
   "where can i see moose near jackson hole?": { useCase: "UC15", layers: ["species|gbif-occurrences"], view: "density" },
   "where are whales being seen off monterey this week?": { useCase: "UC15", layers: ["species|gbif-occurrences"] },
   // UC16 Birder plans a migration trip.
-  "best place to see sandhill cranes in nebraska in march": { useCase: "UC16", layers: ["gbif-occurrences|species"], view: "density", needs: ["month filter across years"] },
+  "best place to see sandhill cranes in nebraska in march": { useCase: "UC16", layers: ["gbif-occurrences"], view: "density" },
   "where have bald eagles been seen near seattle lately?": { useCase: "UC16", layers: ["species|gbif-occurrences"] },
   // UC17 Photographer picks a sunset or night spot.
   "where should i shoot sunset near sedona?": { useCase: "UC17", layers: ["photos|outdoor-features"], needs: ["sunset time and azimuth", "view direction"] },
@@ -630,9 +633,9 @@ export const USECASE_QUESTIONS: Record<string, UsecaseExpect> = {
   "is it smoky in bend tomorrow?": { useCase: "UC18", layers: ["smoke"] },
   "are the fires near missoula contained?": { useCase: "UC18", layers: ["fire-perimeters"] },
   // UC19 Flood and weather watcher.
-  "is the french broad going to flood in asheville?": { useCase: "UC19", layers: ["streamflow"], needs: ["stage against flood stage", "river forecast"] },
+  "is the french broad going to flood in asheville?": { useCase: "UC19", layers: ["streamflow"] },
   "any flash flood warnings in utah canyons today?": { useCase: "UC19", layers: ["weather-alerts"] },
-  "will it rain in zion this weekend?": { useCase: "UC19", layers: ["weather-alerts"], needs: ["precipitation forecast by day"] },
+  "will it rain in zion this weekend?": { useCase: "UC19", layers: ["weather-forecast"] },
   // UC20 Ranger reviews fire history and burn severity.
   "how much of the deschutes national forest burned in the last 10 years and how badly?": { useCase: "UC20", layers: ["fire-perimeters", "burn-severity"], needs: ["clip to the forest boundary", "severity acres by class"] },
   "where did beetles kill trees in the medicine bow since 2020?": { useCase: "UC20", layers: ["tree-mortality"], view: "timeline" },

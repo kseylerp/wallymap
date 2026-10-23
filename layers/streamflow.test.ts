@@ -496,7 +496,7 @@ describe("streamflow layer", () => {
     expect(displayOf(layer).units).toBe("us");
     const chips = layer.attributes?.find((a) => a.primary);
     expect(chips?.key).toBe("flowClass");
-    expect(layer.attributes?.find((a) => a.key === "kind")?.levels?.map((l) => l.label)).toEqual(["USGS gauge", "Modelled river"]);
+    expect(layer.attributes?.find((a) => a.key === "kind")?.levels?.map((l) => l.label)).toEqual(["USGS gauge", "Modelled river", "NWS river gauge", "Dam release"]);
     const woodfords = r.data.features.find((f) => f.properties?.siteId === "USGS-10310000")!;
     expect(cardTitle(layer, woodfords)).toBe("West Fork Carson River at Woodfords, CA");
     const running = layer.card?.facts?.find((f) => f.key === "flowClass");

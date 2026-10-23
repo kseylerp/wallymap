@@ -6,10 +6,13 @@
  * trimmed to 12 vertices per line and 4 relation members; the live box held 151 rated ways and 1 route).
  * Tags read: mtb:scale (Singletrack Scale 0 to 6), mtb:scale:imba (IMBA 0 to 4), mtb:scale:uphill, name, ref,
  * highway, surface, bicycle, access, operator, check_date (becomes `t`).
- * v is the Singletrack Scale, else the IMBA rating when only that is mapped: IMBA 0 to 4 fall in the same Easy (0, 1),
- * Moderate (2), Hard (3) and Expert (4) bands, so an IMBA-only trail sits on the difficulty ramp instead of reading
- * unrated. Live check, Moab (38.5,-109.65 to 38.68,-109.4), 2026-10-18: 122 features (43 Singletrack, 64 IMBA only, 15
- * routes); before this, 77 drew with no difficulty, now only the 15 routes (drawn as routes) have none.
+ * v is the IMBA trail color (UC05): the IMBA rating where it is tagged (OSM wiki: 0 white circle easiest, 1 green
+ * circle, 2 blue square, 3 black diamond, 4 double black diamond), else the Singletrack Scale converted (S0 green, S1 and S2
+ * blue, S3 black, S4 to S6 double black), so one chip set in trail-sign colors covers every rated way. level is every
+ * rider level either scale gives, so a trail tagged S3 and IMBA blue is both intermediate and advanced.
+ * Fixtures: mtb-trails.sedona.json (2026-10-23, 7 rated ways and a route) and mtb-trails.moab.json.
+ * Live check 2026-10-23: Sedona 335 lines, v 2 (blue) 166 (121 IMBA blue, the rest Singletrack S1 to S2 converted),
+ * level intermediate 187, 2 unrated routes; Bentonville 554 lines, v 2 242, level intermediate 242, 6 unrated routes.
  * Live smoke check: Truckee / Donner Lake, CA (39.28,-120.25 to 39.38,-120.1), 2026-10-09: 154 features (72 mtb, 81 imba-only, 1 route), no truncation.
  * Wide mode (over 2,500 km², up to WIDE_MAX_AREA_KM2, 100,000): a scan of the named rated ways and routes (ids and
  * bounds), then the geometry of the 1,000 longest inside the box (see buildNamedScanQuery in osm-trails), simplified to
@@ -33,10 +36,11 @@ import {
   type QueryContext,
   type CardSpec,
   type Attribute,
+  type AttributeLevel,
   type FieldHelp,
   type LegendSpec,
 } from "./types";
-import { MTB_LEVELS, MTB_SCALE, nameAttribute } from "./_shared/bands";
+import { MTB_LEVELS, nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { overpassCounts, overpassQuery } from "./_shared/overpass";
 import {
@@ -120,6 +124,41 @@ export function imbaScale(value: string | undefined): number | undefined {
 
 type Line = LineString | MultiLineString;
 
+/** The rider levels a trail is at, by either scale: what "beginner" or "intermediate" means to a rider (UC05). */
+export const RIDER_LEVELS = ["beginner", "intermediate", "advanced", "expert"] as const;
+export type RiderLevel = (typeof RIDER_LEVELS)[number];
+
+/** Singletrack S0 is beginner, S1 and S2 intermediate, S3 advanced, S4 to S6 expert. */
+function singletrackLevel(scale: number): RiderLevel {
+  return scale <= 0 ? "beginner" : scale <= 2 ? "intermediate" : scale === 3 ? "advanced" : "expert";
+}
+
+/** IMBA white and green (0, 1) are beginner, blue (2) intermediate, black (3) advanced, double black (4) expert. */
+function imbaLevel(imba: number): RiderLevel {
+  return imba <= 1 ? "beginner" : imba === 2 ? "intermediate" : imba === 3 ? "advanced" : "expert";
+}
+
+/**
+ * Every level either scale puts the trail at, easiest first, so one filter reads "IMBA blue or Singletrack 1 to 2":
+ * a trail tagged S3 and IMBA blue is both intermediate and advanced. Empty when neither scale is mapped.
+ */
+/**
+ * The IMBA trail color of a way, 0 to 4: its IMBA rating where tagged, else its Singletrack Scale converted (S0 green 1,
+ * S1 and S2 blue 2, S3 black 3, S4 to S6 double black 4); undefined when neither is mapped.
+ */
+export function imbaColor(scale: number | undefined, imba: number | undefined): number | undefined {
+  if (imba !== undefined) return imba;
+  if (scale === undefined) return undefined;
+  return scale <= 0 ? 1 : scale <= 2 ? 2 : scale === 3 ? 3 : 4;
+}
+
+export function riderLevels(scale: number | undefined, imba: number | undefined): RiderLevel[] {
+  const set = new Set<RiderLevel>();
+  if (scale !== undefined) set.add(singletrackLevel(scale));
+  if (imba !== undefined) set.add(imbaLevel(imba));
+  return RIDER_LEVELS.filter((l) => set.has(l));
+}
+
 /**
  * Whether bikes may ride the trail, from the bicycle tag, else an access tag that closes it to everyone (no, private);
  * undefined when OpenStreetMap says nothing.
@@ -166,20 +205,21 @@ export function normalizeMtb(json: unknown): FeatureCollection<Line> {
     const imba = imbaScale(tags["mtb:scale:imba"]);
     if (!isRoute && scale === undefined && imba === undefined) continue;
 
-    const properties: Record<string, string | number | boolean> = {
+    const properties: Record<string, string | number | boolean | string[]> = {
       kind: isRoute ? "route" : scale !== undefined ? "mtb" : "imba",
       osmId,
     };
     if (tags.name) properties.name = tags.name;
     // An unnamed segment is titled by what it is, not by how it is rated.
     else if (!isRoute) properties.heading = tags.highway === "track" ? "Unnamed track" : "Unnamed trail";
-    // v: the Singletrack Scale, else the IMBA rating (same bands: 0 and 1 easy, 2 moderate, 3 hard, 4 expert).
-    if (scale !== undefined) {
-      properties.v = scale;
-      properties.singletrack = scale;
-    } else if (imba !== undefined) properties.v = imba;
+    // v: the IMBA trail color, from the IMBA rating where tagged, else converted from the Singletrack Scale.
+    const color = imbaColor(scale, imba);
+    if (color !== undefined) properties.v = color;
+    if (scale !== undefined) properties.singletrack = scale;
     if (tags["mtb:scale"] && tags["mtb:scale"].trim() !== String(scale)) properties.mtbScale = tags["mtb:scale"];
     if (imba !== undefined) properties.imba = imba;
+    const levels = riderLevels(scale, imba);
+    if (levels.length > 0) properties.level = levels;
     const uphill = mtbScale(tags["mtb:scale:uphill"]);
     if (uphill !== undefined) properties.uphill = uphill;
     // Length as drawn: a way's whole line; a route only where it crosses the box, so it says so, with the distance tag
@@ -205,13 +245,26 @@ export function normalizeMtb(json: unknown): FeatureCollection<Line> {
   return { type: "FeatureCollection", features };
 }
 
-/** Keeps ways rated at or below `max` (v: Singletrack, else IMBA); routes with no rating always stay. */
+/** Keeps ways rated at or below `max` on the Singletrack Scale (an IMBA-only way by its IMBA number); unrated routes always stay. */
 function withinScale(features: Feature<Line>[], max: number | undefined): Feature<Line>[] {
   if (max === undefined) return features;
   return features.filter((f) => {
-    const v: unknown = f.properties?.v;
+    const v: unknown = f.properties?.singletrack ?? f.properties?.imba;
     return typeof v !== "number" || v <= max;
   });
+}
+
+/**
+ * How many answered lines carry no difficulty (named routes, which are made of many rated and unrated segments), so the
+ * note can say how many a difficulty filter leaves out; undefined when every line is rated.
+ */
+export function unratedNote(features: Feature<Line>[]): string | undefined {
+  const unrated = features.filter((f) => !Array.isArray(f.properties?.level)).length;
+  if (unrated === 0) return undefined;
+  const n = unrated.toLocaleString("en-US");
+  return unrated === 1
+    ? `${n} line is a named route with no difficulty of its own, which a difficulty filter (v, level) leaves out`
+    : `${n} lines are named routes with no difficulty of their own, which a difficulty filter (v, level) leaves out`;
 }
 
 /**
@@ -237,29 +290,56 @@ async function queryWide(ctx: QueryContext, input: MtbInput): Promise<LayerResul
   }
   const kept = withinScale(features, input.maxScale);
   const hidden = features.length - kept.length;
+  const notes = [hidden > 0 ? `The difficulty limit hid ${hidden.toLocaleString("en-US")} of the named trails` : undefined, unratedNote(kept)];
+  const coverageNote = notes.filter((n): n is string => n !== undefined).join("; ");
 
   return {
     kind: "geojson",
     data: { type: "FeatureCollection", features: kept },
     ...(total !== undefined && { total }),
-    ...(hidden > 0 && { coverageNote: `The difficulty limit hid ${hidden.toLocaleString("en-US")} of the named trails` }),
+    ...(coverageNote !== "" && { coverageNote }),
     citation: osmCitation(),
   };
 }
 
 const KIND_LABELS: Record<string, string> = { mtb: "Singletrack rated", imba: "IMBA rated only", route: "Named route" };
 
-/** The card's Singletrack Scale row: the number and its band ("3, Hard"). */
-const SINGLETRACK_WORDS: Record<string, string> = Object.fromEntries(MTB_LEVELS.map((l) => [String(l.value), `${l.value}, ${l.label}`]));
+/** The card's Singletrack Scale row in words: grade, band and what it means ("S3, hard: blocks, high steps..."). */
+const SINGLETRACK_WORDS: Record<string, string> = Object.fromEntries(
+  MTB_LEVELS.map((l) => [String(l.value), `S${l.value}, ${l.label.toLowerCase()}: ${(l.help ?? "").replace(/^S\d: /, "")}`]),
+);
 
-/** The card's IMBA row: the number, its band and the trail sign ("3, Hard (black diamond)"). */
+/**
+ * The IMBA trail colors v holds (mtb:scale:imba, per the OpenStreetMap wiki: 0 easiest white circle, 1 easy green
+ * circle, 2 more difficult blue square, 3 very difficult black diamond, 4 extremely difficult double black diamond), with
+ * the Singletrack Scale converted where no IMBA rating is mapped. The chips fold the white circle into Green, as US trail
+ * systems sign beginner trails.
+ */
+const IMBA_LEVELS: AttributeLevel[] = [
+  { value: 0, label: "Green", help: "Easiest. IMBA 0, white circle: wide and smooth (shown with green)." },
+  { value: 1, label: "Green", help: "Easiest. IMBA 1, green circle: few obstacles; or Singletrack S0." },
+  { value: 2, label: "Blue", help: "Intermediate. IMBA 2, blue square: roots, rocks and steeper grades; or Singletrack S1 to S2." },
+  { value: 3, label: "Black", help: "Difficult. IMBA 3, black diamond: large obstacles, steep and loose sections; or Singletrack S3." },
+  { value: 4, label: "Double black", help: "Expert. IMBA 4, double black diamond: unavoidable severe obstacles; or Singletrack S4 to S6." },
+];
+const IMBA_SCALE = "mtb:scale:imba (IMBA 0 to 4), else mtb:scale converted (S0 green, S1 to S2 blue, S3 black, S4 to S6 double black)";
+
+/** The card's IMBA row: the trail sign and what it means ("Blue square, intermediate (IMBA 2)"). */
 const IMBA_WORDS: Record<string, string> = {
-  "0": "0, Easy (white circle)",
-  "1": "1, Easy (green circle)",
-  "2": "2, Moderate (blue square)",
-  "3": "3, Hard (black diamond)",
-  "4": "4, Expert (double black diamond)",
+  "0": "White circle, easiest (IMBA 0)",
+  "1": "Green circle, easy (IMBA 1)",
+  "2": "Blue square, intermediate (IMBA 2)",
+  "3": "Black diamond, difficult (IMBA 3)",
+  "4": "Double black diamond, expert (IMBA 4)",
 };
+
+/** Rider levels, either scale: the chips "intermediate" presses. */
+const LEVEL_LEVELS: AttributeLevel[] = [
+  { value: "beginner", label: "Beginner", help: "IMBA white or green, or Singletrack S0." },
+  { value: "intermediate", label: "Intermediate", help: "IMBA blue, or Singletrack S1 to S2." },
+  { value: "advanced", label: "Advanced", help: "IMBA black, or Singletrack S3." },
+  { value: "expert", label: "Expert", help: "IMBA double black, or Singletrack S4 to S6." },
+];
 
 /** Whether bikes may ride the trail, in words, from the bicycle tag (or an access tag that closes it). */
 const BIKE_WORDS: Record<string, string> = {
@@ -274,24 +354,35 @@ const BIKE_WORDS: Record<string, string> = {
   private: "Private, not allowed",
 };
 
-/** The difficulty bands the trails are coloured by, and the named routes, drawn in the route gradient with no rating. */
+/** What each line color means: the trail sign, or the Singletrack grades converted to it. */
+const LEGEND_MEANING: Record<string, string> = {
+  Green: "Green: IMBA white or green circle, or Singletrack S0",
+  Blue: "Blue: IMBA blue square, or Singletrack S1 to S2",
+  Black: "Black: IMBA black diamond, or Singletrack S3",
+  "Double black": "Double black: IMBA double black diamond, or Singletrack S4 to S6",
+};
+
+/** The IMBA color bands the trails are colored by, and the named routes, drawn in the route gradient with no rating. */
 const LEGEND: LegendSpec = {
   kind: "categories",
-  title: "Difficulty",
+  title: "Difficulty (IMBA color)",
   field: "v",
   items: [
-    ...MTB_LEVELS.filter((l, i) => MTB_LEVELS.findIndex((m) => m.label === l.label) === i).map((l) => ({
-      label: l.label,
+    ...IMBA_LEVELS.filter((l, i) => IMBA_LEVELS.findIndex((m) => m.label === l.label) === i).map((l) => ({
+      label: LEGEND_MEANING[l.label] ?? l.label,
       value: l.value,
       symbol: "line" as const,
     })),
     { label: "Named route, not rated", color: PURPLE, symbol: "line", help: "A named mountain bike route made of many trails, drawn purple to pink." },
   ],
-  note: "Difficulty is the Singletrack Scale, or the IMBA rating where only that is mapped.",
+  note: "The color is the IMBA trail sign where one is mapped, else the Singletrack Scale converted to it; the ramp runs easy to hard, not the sign's own colors.",
 };
 
 const ATTRIBUTES: Attribute[] = [
-  { key: "v", type: "ordinal", label: "Difficulty", encode: "color", levels: MTB_LEVELS, scale: MTB_SCALE },
+  // One difficulty chip set in the trail-sign colors riders choose by (UC05), covering every rated way: IMBA where
+  // tagged, else the Singletrack Scale converted.
+  { key: "v", type: "ordinal", label: "Difficulty", primary: true, encode: "color", levels: IMBA_LEVELS, scale: IMBA_SCALE },
+  { key: "level", type: "ordinal", label: "Rider level", multi: true, levels: LEVEL_LEVELS, scale: "IMBA color or Singletrack Scale, either one" },
   { key: "kind", type: "category", label: "Kind", levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
   nameAttribute(),
 ];
@@ -307,8 +398,12 @@ const SINGLETRACK: FieldHelp = {
 
 const HELP: Record<string, FieldHelp> = {
   v: {
-    ...SINGLETRACK,
-    text: `${SINGLETRACK.text} Where only an IMBA rating is mapped, v is that rating (0 to 4), which falls in the same Easy, Moderate, Hard and Expert bands.`,
+    text:
+      "The trail's difficulty as an IMBA trail-sign color: its IMBA rating (mtb:scale:imba) where a mapper tagged one, else its Singletrack " +
+      "Scale (mtb:scale) converted: S0 green, S1 and S2 blue, S3 black, S4 to S6 double black.",
+    scale: "0 white, 1 green, 2 blue, 3 black, 4 double black",
+    source: "OpenStreetMap wiki, Key:mtb:scale:imba and Key:mtb:scale",
+    url: "https://wiki.openstreetmap.org/wiki/Key:mtb:scale:imba",
   },
   singletrack: SINGLETRACK,
   bikes: {
@@ -323,7 +418,9 @@ const HELP: Record<string, FieldHelp> = {
     text: "The Singletrack Scale rating exactly as tagged (for example 2+ or 1-2), shown when it differs from the number.",
   },
   imba: {
-    text: "The IMBA trail difficulty rating (mtb:scale:imba) as tagged in OpenStreetMap, used mostly on purpose-built and bike park trails.",
+    text:
+      "The IMBA trail difficulty rating (mtb:scale:imba) as tagged in OpenStreetMap, the colored sign at the trailhead: 0 white circle (easiest), " +
+      "1 green circle, 2 blue square, 3 black diamond, 4 double black diamond. Used mostly on purpose-built trail systems and bike parks.",
     scale: "0 (easiest) to 4 (hardest)",
     source: "OpenStreetMap wiki, Key:mtb:scale:imba",
     url: "https://wiki.openstreetmap.org/wiki/Key:mtb:scale:imba",
@@ -335,6 +432,13 @@ const HELP: Record<string, FieldHelp> = {
     scale: "0 (easiest) to 5 (push or carry)",
     source: "OpenStreetMap wiki, Key:mtb:scale",
     url: "https://wiki.openstreetmap.org/wiki/Key:mtb:scale",
+  },
+  level: {
+    text:
+      "The rider level either scale puts the trail at: beginner (IMBA white or green, or Singletrack S0), intermediate (IMBA blue, or S1 to S2), " +
+      "advanced (IMBA black, or S3), expert (IMBA double black, or S4 to S6). A trail whose two ratings disagree is at both levels.",
+    source: "This app, from OpenStreetMap's mtb:scale and mtb:scale:imba",
+    url: "https://wiki.openstreetmap.org/wiki/Key:mtb:scale:imba",
   },
   kind: {
     text:
@@ -359,8 +463,8 @@ const HELP: Record<string, FieldHelp> = {
 // The rating in words ("3, Hard"), not a bare number; v, the raw bicycle tag and the id stay off the card.
 const CARD: CardSpec = {
   facts: [
+    { key: "imba", label: "IMBA color", values: IMBA_WORDS },
     { key: "singletrack", label: "Singletrack Scale", values: SINGLETRACK_WORDS },
-    { key: "imba", label: "IMBA rating", values: IMBA_WORDS },
     { key: "lengthKm", label: "Length", format: "km" },
     { key: "inViewKm", label: "Length in view", format: "km" },
     { key: "distanceKm", label: "Full length", format: "km" },
@@ -369,9 +473,10 @@ const CARD: CardSpec = {
     { key: "uphill", label: "Uphill rating" },
     { key: "surface", label: "Surface" },
     { key: "operator", label: "Operator" },
+    { key: "ref", label: "Trail number" },
     { key: "t", label: "Last checked", format: "date" },
   ],
-  hidden: ["osmId", "bicycle"],
+  hidden: ["osmId", "bicycle", "level"],
 };
 
 const mtbTrails = defineLayer({
@@ -379,11 +484,16 @@ const mtbTrails = defineLayer({
   title: "Mountain bike trails",
   description:
     "Mountain biking trails (singletrack, flow trails, bike park lines and rated tracks) from OpenStreetMap, anywhere in the world. " +
-    "Each line is a rated trail segment: v is the Singletrack Scale rating from 0 (easiest, smooth and wide) to 6 (hardest, almost not rideable), or the IMBA rating 0 to 4 when only that is mapped (both read 0-1 easy, 2 moderate, 3 hard, 4 and up expert); " +
-    "singletrack and imba hold each scale as mapped, and kind is 'mtb' (has a Singletrack Scale rating), 'imba' (IMBA rating only) or 'route' (a named mountain bike route or trail system made of many segments). " +
+    "Each line is a rated trail segment: v is its difficulty as an IMBA trail-sign color, 0 white circle and 1 green circle (Green, easiest), 2 blue square (Blue, intermediate), 3 black diamond (Black), 4 double black diamond (Double black); " +
+    "v is the IMBA rating where one is tagged, else the Singletrack Scale converted (S0 green, S1 and S2 blue, S3 black, S4 to S6 double black). " +
+    "singletrack (0 to 6) and imba (0 to 4) hold each scale as mapped, and level is the rider level either scale gives (a list: beginner, intermediate, advanced, expert). " +
+    "Filter by how the rider asked: a trail color is render.filters v (blue = [2], green = [0, 1], black = [3], double black = [4]); " +
+    "'intermediate' is v = [2], or level = intermediate to also keep trails whose two ratings disagree (IMBA blue or Singletrack 1 to 2); 'beginner' or 'easy' is v = [0, 1]; " +
+    "the note says how many named routes carry no rating and so drop out of any difficulty filter: say that number. " +
+    "kind is 'mtb' (has a Singletrack Scale rating), 'imba' (IMBA rating only) or 'route' (a named mountain bike route or trail system made of many segments). " +
     "bikes says whether bikes are allowed, from the bicycle or access tag (yes, designated, permissive, no, private, dismount), when mapped. " +
     "Also lengthKm (a segment's length), for routes inViewKm (the length drawn in view) and distanceKm (the whole route, from its distance tag), and name, ref, surface, operator and the date it was last checked (t) when mapped. " +
-    "Use it for questions like: where can I go mountain biking near here, show beginner singletrack (set maxScale to 2), which trails are the hardest, or is there a flow trail or bike park nearby. " +
+    "Use it for questions like: where can I go mountain biking near here, show beginner singletrack (v = [0, 1]), flowy blue trails (v = [2]), which trails are the hardest, or is there a flow trail or bike park nearby. " +
     "Caveats: ratings exist only where a mapper added them, so many good trails are missing or unrated (osm-trails shows every path, including ones with no mountain bike rating); " +
     "bikes may be banned on a rated trail where bikes is not mapped, so check the land manager (public-lands, forest-roads); the rating describes the trail, not its current condition or closures. " +
     "At most 2,000 rated ways and 100 routes are returned (a route is drawn only where it crosses the box) and the note gives the count; over 2,500 km² (up to 100,000 km², a whole region) the 1,000 longest named ones.",
@@ -416,13 +526,15 @@ const mtbTrails = defineLayer({
     const total = Math.max(countedTotal(result.json) ?? fetched, fetched);
     data.features = withinScale(data.features, input.maxScale);
 
+    const unrated = unratedNote(data.features);
     return {
       kind: "geojson",
       data,
-      coverageNote: returnedNote(data.features.length, total, "rated trail ways and routes", "lowest OpenStreetMap ids first", {
-        fetched,
-        filter: "the difficulty limit",
-      }),
+      coverageNote:
+        returnedNote(data.features.length, total, "rated trail ways and routes", "lowest OpenStreetMap ids first", {
+          fetched,
+          filter: "the difficulty limit",
+        }) + (unrated ? `. ${unrated}` : ""),
       citation: osmCitation(),
     };
   },

@@ -30,6 +30,13 @@
  * The maintenance level is how the Forest Service keeps the road up for traffic, so it says what can drive it; the
  * vehicle fields say only what is legal. Sedona (-111.9,34.75,-111.6,34.95) holds levels 2 to 5.
  *
+ * Passenger cars (2026-10-23, UC14): `passengerCar` is the MVUM's legal class (the card says "Open to passenger cars by
+ * law"); what a car can drive is the maintenance level, so the level chips are two plain groups: "Passenger car" (levels
+ * 3 to 5, maintained for passenger cars) and "High clearance" (levels 1 and 2). The card keeps the level itself.
+ * Camping rules (2026-10-23, AUDIT R14): no national source says where dispersed camping is closed, so the best-known
+ * closures are kept by hand in layers/_data/closures.json (Sedona's two Coconino orders, BLM Moab, the Lake Tahoe Basin,
+ * Crested Butte), each with its order, date and link read that day. A road inside a rule's box carries it on the card
+ * (campingRule, campingRuleUrl), and the note names it; elsewhere the note says to check the district's closure orders.
  * Wide mode (over 25,000 km², up to the whole US): the same query ordered by gis_miles, longest first, capped at the
  * wide strategy's limit and simplified to the view, with a count of every matching segment as `total`; run.ts writes
  * the note. ArcGIS ranks the whole national layer in one ordered page, so no box inside the US is too wide.
@@ -54,7 +61,8 @@ import {
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { nameAttribute } from "./_shared/bands";
-import { OUTSIDE_US_NOTE, WHOLE_US_KM2, outsideUs } from "./_shared/coverage";
+import { OUTSIDE_US_NOTE, WHOLE_US_KM2, bboxesDisjoint, outsideUs } from "./_shared/coverage";
+import CLOSURES from "./_data/closures.json";
 import { groupColors } from "@/lib/render/attributes";
 import { SAGE, layerColor } from "@/lib/render/palette";
 
@@ -204,6 +212,78 @@ export function normalizeMvum(fc: FeatureCollection): FeatureCollection {
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
+/** One hand-kept dispersed-camping closure or rule (layers/_data/closures.json). */
+export type CampingRule = {
+  id: string;
+  place: string;
+  manager: string;
+  rule: string;
+  order: string;
+  /** When the order was signed or the page dated, YYYY-MM-DD. */
+  date: string;
+  /** When the order ends, YYYY-MM-DD; a rule past it is not shown. */
+  expires?: string;
+  url: string;
+  bbox: BBox;
+  checked: string;
+};
+
+export const CAMPING_RULES: CampingRule[] = (CLOSURES as unknown as { rules: CampingRule[] }).rules;
+
+/** The rules in force (not past `expires`) whose box meets the view's. */
+export function campingRulesFor(bbox: BBox, now: Date = new Date(), rules: CampingRule[] = CAMPING_RULES): CampingRule[] {
+  const today = now.toISOString().slice(0, 10);
+  return rules.filter((r) => !bboxesDisjoint(bbox, r.bbox) && (r.expires === undefined || r.expires >= today));
+}
+
+/** "Coconino National Forest, Red Rock Ranger District: no camping ... (Forest Order 03-04-06-26-04, 2026-08-18)". */
+export function campingRuleText(r: CampingRule): string {
+  return `${r.manager}, ${r.place}: ${r.rule.charAt(0).toLowerCase()}${r.rule.slice(1)} (${r.order}, ${r.date})`;
+}
+
+/** The note's sentence on camping rules: the ones that meet the view, else where to look. */
+export function campingRuleNote(rules: CampingRule[]): string {
+  if (rules.length === 0) {
+    return "Dispersed camping rules are not in this data; check the ranger district's (or BLM field office's) closure orders before camping";
+  }
+  return `Camping rule${rules.length === 1 ? "" : "s"} here: ${rules.map((r) => `${campingRuleText(r)}, ${r.url}`).join("; ")}; elsewhere, check the district's closure orders`;
+}
+
+/** The middle of a line's extent, or null without coordinates. */
+function middleOf(geometry: Geometry): [number, number] | null {
+  let w = Infinity;
+  let s = Infinity;
+  let e = -Infinity;
+  let n = -Infinity;
+  const visit = (c: unknown): void => {
+    if (!Array.isArray(c)) return;
+    if (typeof c[0] === "number" && typeof c[1] === "number") {
+      w = Math.min(w, c[0]);
+      e = Math.max(e, c[0]);
+      s = Math.min(s, c[1]);
+      n = Math.max(n, c[1]);
+    } else c.forEach(visit);
+  };
+  if (geometry.type !== "GeometryCollection") visit(geometry.coordinates);
+  return w <= e ? [(w + e) / 2, (s + n) / 2] : null;
+}
+
+/** Puts the first rule whose box holds a road's middle on the road (campingRule, campingRuleUrl; mutates); returns how many. */
+export function attachCampingRules(fc: FeatureCollection, rules: CampingRule[]): number {
+  let n = 0;
+  if (rules.length === 0) return n;
+  for (const f of fc.features) {
+    const m = f.geometry ? middleOf(f.geometry) : null;
+    if (!m || !f.properties) continue;
+    const rule = rules.find(({ bbox: [w, s, e, nn] }) => m[0] >= w && m[0] <= e && m[1] >= s && m[1] <= nn);
+    if (!rule) continue;
+    f.properties.campingRule = campingRuleText(rule);
+    f.properties.campingRuleUrl = rule.url;
+    n += 1;
+  }
+  return n;
+}
+
 const citation = () => ({
   source: "USDA Forest Service Motor Vehicle Use Map roads (public domain)",
   url: "https://data.fs.usda.gov/geodata/edw/datasets.php",
@@ -230,23 +310,48 @@ const HELP: Record<string, FieldHelp> = {
   },
   passengerCar: {
     text:
-      "Whether the Motor Vehicle Use Map makes the road legal for passenger cars. Legal is not the same as drivable: read the maintenance level " +
-      "for what the road is built for.",
+      "Whether the Motor Vehicle Use Map makes the road legal for passenger cars. Legal is not the same as drivable: a level 2 road can be open " +
+      "to cars by law and still need high clearance; read the maintenance level for what the road is built for.",
     ...MVUM_SOURCE,
+  },
+  campingRule: {
+    text:
+      "A dispersed-camping closure or rule that covers this area, from the managing agency's own order or page (kept by hand for the best-known " +
+      "places: Sedona, Moab, the Lake Tahoe Basin, Crested Butte). Elsewhere, check the ranger district's closure orders.",
   },
   carDates: { text: "The dates the Motor Vehicle Use Map opens the road to passenger cars each year.", ...MVUM_SOURCE },
   district: { text: "The Forest Service ranger district that manages the road; call it for current conditions, closures and camping rules.", ...MVUM_SOURCE },
   surfaceKind: { text: "The road's surface grouped as paved (asphalt, concrete, chip seal), gravel (crushed rock) or dirt (native soil).", ...MVUM_SOURCE },
 };
 
-/** The maintenance levels, easiest first (the ramp's light end) to closed (its dark end). */
+/**
+ * The maintenance levels as the two chips a driver chooses between, easiest first (the ramp's light end): levels 3 to
+ * 5 are maintained for passenger cars, 1 and 2 for high-clearance vehicles at best. One chip stands for its levels.
+ */
 const LEVELS: AttributeLevel[] = [
-  { value: 5, label: "5 High comfort/paved", help: "Smooth, often paved; fine for any car." },
-  { value: 4, label: "4 Moderate comfort", help: "Graded and maintained for passenger cars at moderate speed." },
-  { value: 3, label: "3 Passenger cars (rough)", help: "Passable in a passenger car driven with care; can be rough." },
-  { value: 2, label: "2 High clearance", help: "Maintained for high-clearance vehicles only; not suited to ordinary cars." },
-  { value: 1, label: "1 Closed", help: "Kept closed to vehicle traffic." },
+  {
+    value: 5,
+    label: "Passenger car",
+    help: "Levels 3 to 5: maintained for passenger cars (3 can be rough, so drive with care; 4 and 5 are smoother and often paved).",
+  },
+  { value: 4, label: "Passenger car" },
+  { value: 3, label: "Passenger car" },
+  {
+    value: 2,
+    label: "High clearance",
+    help: "Levels 1 and 2: maintained for high-clearance vehicles only, not for ordinary cars (level 1 gets basic custodial care and is often closed).",
+  },
+  { value: 1, label: "High clearance" },
 ];
+
+/** The card keeps the level itself, in words. */
+const LEVEL_WORDS: Record<string, string> = {
+  "5": "5, high comfort, often paved (passenger cars)",
+  "4": "4, moderate comfort (passenger cars)",
+  "3": "3, passenger cars driven with care (can be rough)",
+  "2": "2, high-clearance vehicles only",
+  "1": "1, basic custodial care, often closed (high clearance at best)",
+};
 
 const LEVEL_SCALE = "Forest Service operational maintenance level, 1 to 5";
 
@@ -265,14 +370,18 @@ const ATTRIBUTES: Attribute[] = [
   nameAttribute(),
 ];
 
-/** The key: one swatch per level in the colors the map draws them, and roads the Forest Service has not rated. */
-const LEVEL_COLORS = groupColors(LEVELS.length);
+/** The key: one swatch per chip in the colors the map draws them (each level keyed to its chip), and roads not rated. */
+const CHIPS = [...new Set(LEVELS.map((l) => l.label))];
+const CHIP_COLORS = groupColors(CHIPS.length);
 const LEGEND: LegendSpec = {
   kind: "categories",
   title: "Maintenance level",
   field: "level",
   items: [
-    ...LEVELS.map((l, i) => ({ label: l.label, value: l.value, color: LEVEL_COLORS[i], symbol: "line" as const, ...(l.help && { help: l.help }) })),
+    ...LEVELS.map((l) => {
+      const chip = LEVELS.find((x) => x.label === l.label)!;
+      return { label: l.label, value: l.value, color: CHIP_COLORS[CHIPS.indexOf(l.label)], symbol: "line" as const, ...(chip.help && { help: chip.help }) };
+    }),
     { label: "Not rated", color: SAGE, symbol: "line", help: "The Forest Service gives no maintenance level for the road." },
   ],
   note: "Every road drawn is legal for motor vehicles at least part of the year; the level says what it is built for.",
@@ -310,8 +419,9 @@ const LEGAL = { true: "Yes", false: "Not listed as legal" };
 
 const CARD: CardSpec = {
   facts: [
-    { key: "level", label: "Maintenance level", values: Object.fromEntries(LEVELS.map((l) => [String(l.value), l.label])) },
-    { key: "passengerCar", label: "Legal for passenger cars", values: LEGAL },
+    { key: "level", label: "Maintenance level", values: LEVEL_WORDS },
+    { key: "campingRule", label: "Camping rule here" },
+    { key: "passengerCar", label: "Open to passenger cars by law", values: LEGAL },
     { key: "carDates", label: "Passenger cars allowed" },
     { key: "highClearance", label: "Legal for high-clearance vehicles", values: LEGAL },
     { key: "motorhome", label: "Legal for motorhomes", values: LEGAL },
@@ -326,6 +436,7 @@ const CARD: CardSpec = {
     { key: "miles", label: "Segment length", unit: "mi" },
     { key: "forest", label: "Forest" },
   ],
+  links: [{ key: "campingRuleUrl", label: "Closure order" }],
   // The surface group repeats the surface row; the heading repeats the road number.
   hidden: ["surfaceKind", "heading"],
 };
@@ -336,14 +447,14 @@ const forestRoads = defineLayer({
   description:
     "US Forest Service roads that are legally open to public motor vehicles (from each forest's Motor Vehicle Use Map), the roads you drive to find a dispersed (free, undeveloped) campsite in a National Forest. " +
     "Lines are colored by level, the Forest Service maintenance level, which says what the road is built for: 5 high comfort (often paved), 4 moderate comfort, 3 passenger cars with care (can be rough), 2 high-clearance vehicles only, 1 closed. " +
-    "Most forest roads are level 2: legal for cars but not built for them, so answer 'can I drive my car there' from level, not from passengerCar. " +
+    "Most forest roads are level 2: legal for cars but not built for them, so answer 'can I drive my car there' from level (filter level 3, 4 and 5, the Passenger car chip), not from passengerCar, which is only the legal class. " +
     "Each line has routeId, name (when it has one), forest, district (the ranger district to call), level, access (the Forest Service class, such as 'Roads open to highway legal vehicles only, Seasonal'), " +
     "seasonal (true when closed part of the year), carDates (the dates passenger cars may use it, such as 'Apr 2 to Dec 14'), passengerCar, highClearance, motorhome, atv, motorcycle and eBike (true when legal for that vehicle; legal, not a sign the road suits it), " +
     "surface (the source's surface type), surfaceKind (paved, gravel or dirt) and miles (the segment's length). " +
     "By default it shows roads open to ordinary highway-legal vehicles; set includeAllRoads to true to also include special-designation roads that allow only certain vehicle types. " +
     "IMPORTANT CAVEAT: the Forest Service's national data does NOT say which roads allow dispersed camping, so this layer does not either. " +
     "Many forests allow camping within a set distance (often one vehicle length to 300 feet) of these roads, but rules differ by forest and ranger district and can be closed by fire or season; " +
-    "tell the user to confirm with the local ranger district or the forest's MVUM before camping. " +
+    "tell the user to confirm with the local ranger district or the forest's MVUM before camping. Where a known closure applies (Sedona, Moab, Lake Tahoe Basin, Crested Butte) roads carry campingRule and the note quotes the order with its link. " +
     "Pair it with the campsites layer to show developed sites and trailhead parking. " +
     "United States National Forests only (nothing on other land or outside the US); motorcycle and ATV trails (not roads) are not included. " +
     "Up to 25,000 km² (about a 160 km square) it returns the roads in the box, at most 2,000 segments, and says so when it trims; any wider US box, up to the whole country, returns the 2,000 longest segments, longest first, and the note gives the total.",
@@ -392,12 +503,19 @@ const forestRoads = defineLayer({
     });
     if (!result.ok) return { error: result.error, hint: "upstream" };
 
+    const data = normalizeMvum(result.fc);
+    const rules = campingRulesFor(ctx.bbox);
+    attachCampingRules(data, rules);
+    const notes = [
+      ...(result.truncated && !wide ? ["Showing the first 2,000 road segments; zoom in for the rest"] : []),
+      campingRuleNote(rules),
+    ];
     return {
       kind: "geojson",
-      data: normalizeMvum(result.fc),
+      data,
       citation: citation(),
       ...(result.total !== undefined && { total: result.total }),
-      ...(result.truncated && !wide ? { coverageNote: "Showing the first 2,000 road segments; zoom in for the rest" } : {}),
+      coverageNote: notes.join("; "),
     };
   },
 });

@@ -13,11 +13,14 @@
  *     needs a key), so BLM fishing sites are not included.
  *   - iNaturalist fish observations (iconic_taxa=Actinopterygii, ray-finned fish) in the last `days` days,
  *     verifiable only, 1 page of 200, newest first; obscured locations dropped (kind sighting, `t` = when seen).
- *   - USGS water temperature (NWIS instantaneous values, parameter 00010; see _shared/usgs.ts): each access,
- *     ramp and pier point gets the nearest gauge's reading within 30 km (waterTempC, waterTempSite,
- *     waterTempKm, waterTempAt), its trout band (TROUT_BANDS: cold under 10 °C, good 10 to 18, warm 18 to 20,
- *     too warm above), a verdict in °F first, and whether the gauge's stream (read from the USGS station name)
- *     is the water the spot's own name names (gaugeMatch). US only.
+ *   - USGS water temperature (NWIS instantaneous values, parameter 00010; see _shared/usgs.ts): an access, ramp or
+ *     pier point gets a gauge's reading only when the gauge is on its water (waterTempC, waterTempSite, waterTempKm,
+ *     waterTempAt), with its trout band (TROUT_BANDS: cold under 10 °C, good 10 to 18, warm 18 to 20, too warm
+ *     above) and a verdict in °F first. "On its water" (2026-10-23, UC11): when the spot's name names a river, creek or
+ *     lake, the nearest gauge within 30 km whose stream (read from the USGS station name) is that water
+ *     (gaugeMatch "same"); when the name names no water (a ramp, an access site), only a gauge within 3 km
+ *     (gaugeMatch "unknown", and the card says it may be other water); else no temperature. Before, every spot took
+ *     the nearest gauge within 30 km: near Denver all 27 spots read one urban South Platte gauge at 57 °F. US only.
  *   - Montana Fish, Wildlife & Parks fishing access sites (MT_FWP_FAS, keyless MapServer, checked live 2026-10-18:
  *     NAME, BOAT_FAC "Ramp (Concrete)", CAMPING, WEB_PAGE on myfwp.mt.gov), when the box touches Montana.
  * Wide (over 50,000 km², up to 1,500,000 km²), each source stays bounded: OpenStreetMap through the shared namedOverpassQuery (at
@@ -56,7 +59,10 @@ const DAY_MS = 86_400_000;
 /** Most OSM elements and iNaturalist sightings read per view; the result says when either cap is hit. */
 export const OSM_LIMIT = 2_000;
 export const INAT_LIMIT = 200;
-const WATER_TEMP_MAX_KM = 30;
+/** A gauge on the water the spot's name names counts this far away. */
+export const WATER_TEMP_MAX_KM = 30;
+/** A spot whose name names no water takes only a gauge this close (likely, not surely, the same water). */
+export const NEARBY_GAUGE_KM = 3;
 /** In a wide box, water temperature is fetched only when the box splits into at most this many 25 square degree strips. */
 export const WIDE_TEMP_STRIPS = 4;
 /** Recreation sites and OSM tags change slowly. */
@@ -321,9 +327,31 @@ export function gaugeNote(match: "same" | "different" | "unknown", stream: strin
 }
 
 /**
- * Adds the nearest USGS water temperature within 30 km to each non-sighting point (mutates): waterTempC, waterTempF,
- * the trout band (tempBand) and verdict (tempVerdict), the gauge's name and stream, its distance, whether it reads
- * the spot's own water (gaugeMatch) and the card's line on it (gaugeNote), and when it was read.
+ * The gauge whose temperature a spot takes, or undefined: when the spot's name names a water, the nearest gauge within
+ * WATER_TEMP_MAX_KM on that same water (gaugeMatch "same"); when it names none, the nearest gauge within
+ * NEARBY_GAUGE_KM ("unknown"). A gauge on other water is never used, however close.
+ */
+export function gaugeFor(spotName: string, at: Position, temps: IvSite[]): { site: IvSite; km: number; stream: string; match: "same" | "unknown" } | undefined {
+  const namesWater = waterKind(wordsOf(spotName)) !== undefined;
+  let best: { site: IvSite; km: number; stream: string; match: "same" | "unknown" } | undefined;
+  for (const site of temps) {
+    const km = haversineKm(at, site.coordinates);
+    if (best !== undefined && km >= best.km) continue;
+    const stream = gaugeStream(site.name);
+    if (namesWater) {
+      if (km <= WATER_TEMP_MAX_KM && gaugeMatch(spotName, stream) === "same") best = { site, km, stream, match: "same" };
+    } else if (km <= NEARBY_GAUGE_KM) {
+      best = { site, km, stream, match: "unknown" };
+    }
+  }
+  return best;
+}
+
+/**
+ * Adds a USGS water temperature to each non-sighting point whose water has a gauge (gaugeFor; mutates): waterTempC,
+ * waterTempF, the trout band (tempBand) and verdict (tempVerdict), the gauge's name and stream, its distance, whether
+ * it reads the spot's own water (gaugeMatch) and the card's line on it (gaugeNote), and when it was read. A spot with
+ * no gauge on its water gets none, rather than a reading from other water.
  */
 export function attachWaterTemps(features: Feature<Point>[], sites: IvSite[]): number {
   const temps = sites.filter((s) => s.readings["00010"] !== undefined);
@@ -331,16 +359,11 @@ export function attachWaterTemps(features: Feature<Point>[], sites: IvSite[]): n
   for (const f of features) {
     const p = f.properties as Props | null;
     if (!p || p.kind === "sighting") continue;
-    let best: { site: IvSite; km: number } | undefined;
-    for (const site of temps) {
-      const km = haversineKm(f.geometry.coordinates as Position, site.coordinates);
-      if (km <= WATER_TEMP_MAX_KM && (best === undefined || km < best.km)) best = { site, km };
-    }
+    const best = gaugeFor(String(p.name ?? ""), f.geometry.coordinates as Position, temps);
     if (best === undefined) continue;
     const reading = best.site.readings["00010"]!;
     const km = Math.round(best.km * 10) / 10;
-    const stream = gaugeStream(best.site.name);
-    const match = gaugeMatch(String(p.name ?? ""), stream);
+    const { stream, match } = best;
     p.waterTempC = reading.value;
     p.waterTempF = Math.round(((reading.value * 9) / 5 + 32) * 10) / 10;
     p.tempBand = troutBand(reading.value);
@@ -391,19 +414,20 @@ async function inatSightings(ctx: QueryContext, days: number, now: Date) {
 const HELP: Record<string, FieldHelp> = {
   tempVerdict: {
     text:
-      "The latest water temperature at the nearest USGS stream gauge within 30 km (19 mi), in °F with °C after it, and what it means for trout: " +
-      "they feed best around 50 to 64 °F (10 to 18 °C), slow down above 64 °F and are stressed above about 68 °F (20 °C). The gauge may be on " +
-      "other water; the next row says.",
+      "The latest water temperature at a USGS stream gauge on this spot's water (the river, creek or lake its name names, within 30 km or 19 mi; " +
+      "for a spot whose name names no water, a gauge within 3 km or 2 mi), in °F with °C after it, and what it means for trout: " +
+      "they feed best around 50 to 64 °F (10 to 18 °C), slow down above 64 °F and are stressed above about 68 °F (20 °C). Spots with no gauge " +
+      "on their water show none.",
     source: "USGS Water Data (instantaneous values)",
     url: "https://waterdata.usgs.gov/",
   },
   gaugeNote: {
     text:
-      "Which stream the temperature gauge is on and how far it is from this spot. When the spot's name names a different river, creek or lake, " +
-      "the card says so: that water can run warmer or colder.",
+      "Which stream the temperature gauge is on and how far it is from this spot. A gauge on a different river, creek or lake is never used; " +
+      "when the spot's name names no water, the gauge is within 3 km and may still be other water, and the card says so.",
   },
-  waterTempC: { text: "Water temperature at the nearest USGS gauge within 30 km.", unit: "°C" },
-  waterTempF: { text: "Water temperature at the nearest USGS gauge within 30 km (19 mi).", unit: "°F" },
+  waterTempC: { text: "Water temperature at a USGS gauge on this spot's water.", unit: "°C" },
+  waterTempF: { text: "Water temperature at a USGS gauge on this spot's water.", unit: "°F" },
   status: { text: "Open or closed as the Forest Service's nightly recreation feed reports it; not a live closure notice." },
   license: { text: "The licence the observer chose for the sighting; all rights reserved when none; cite or link it when showing it." },
   boatLaunch: { text: "The boat launch Montana Fish, Wildlife & Parks lists for this fishing access site." },
@@ -447,7 +471,8 @@ const CARD: CardSpec = {
     { key: "license", label: "Licence", values: LICENSE_LABELS },
   ],
   links: [{ key: "url", label: "Source page" }],
-  hidden: ["osmId", "waterTempC", "waterTempF", "waterTempStream", "waterTempKm", "tempBand", "gaugeMatch"],
+  // taxonId is iNaturalist's species id (the card printed it as "Taxon id 49,591"); the title names the species.
+  hidden: ["osmId", "waterTempC", "waterTempF", "waterTempStream", "waterTempKm", "tempBand", "gaugeMatch", "taxonId", "v", "identifiedAs"],
 };
 
 /** Kinds first (where to fish), then the water temperature band that colors each place. */
@@ -486,10 +511,10 @@ const LEGEND: LegendSpec = {
       label: "No water temperature",
       color: OFF_WHITE,
       symbol: "point" as const,
-      help: "Fish sightings, and places more than 19 mi (30 km) from a USGS gauge that reads water temperature (or outside the US).",
+      help: "Fish sightings, and places with no USGS temperature gauge on their own water (or outside the US).",
     },
   ],
-  note: "From the nearest USGS gauge, which may be on other water; the card says which.",
+  note: "From a USGS gauge on the spot's own river, creek or lake; spots with no gauge on their water have no temperature.",
 };
 
 /** A place with its own name (not the default "Boat ramp") sorts first, so the map's labels name real places. */
@@ -501,6 +526,17 @@ const hasOwnName = (f: Feature) => {
 
 /** An unnamed place within this distance of a named one is named after it ("Boat ramp near Rainbow Point Campground"). */
 export const NEAR_KM = 5;
+/** Farther out, up to this distance, it is named by distance and direction ("Boat ramp 8 km SW of Ennis Lake"). */
+export const FAR_KM = 30;
+
+const COMPASS8 = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+/** The 8-point direction from `from` to `to` ([lon, lat]). */
+function direction(from: number[], to: number[]): string {
+  const dx = (to[0] - from[0]) * Math.cos((((from[1] + to[1]) / 2) * Math.PI) / 180);
+  const dy = to[1] - from[1];
+  const deg = ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
+  return COMPASS8[Math.round(deg / 45) % 8];
+}
 
 /**
  * Names the places that have only their kind ("Boat ramp", "Fishing pier") after the nearest place in view with its own
@@ -517,11 +553,43 @@ export function nameUnnamed(features: Feature<Point>[]): number {
       const km = haversineKm(f.geometry.coordinates, other.geometry.coordinates);
       if (km <= NEAR_KM && (best === null || km < best.km)) best = { name: String(other.properties?.name), km };
     }
-    if (best === null) continue;
+    if (best === null) {
+      // Two unnamed ramps would read as one place listed twice: name the far ones by distance and direction.
+      let far: { name: string; km: number; at: number[] } | null = null;
+      for (const other of named) {
+        const km = haversineKm(f.geometry.coordinates, other.geometry.coordinates);
+        if (km <= FAR_KM && (far === null || km < far.km)) far = { name: String(other.properties?.name), km, at: other.geometry.coordinates };
+      }
+      if (far === null) continue;
+      p.name = `${p.name} ${Math.round(far.km)} km ${direction(far.at, f.geometry.coordinates)} of ${far.name}`;
+      n++;
+      continue;
+    }
     p.name = `${p.name} near ${best.name}`;
     n++;
   }
   return n;
+}
+
+/** Two places of one name this close are one place mapped twice (a ramp as a node and as a way). */
+export const TWIN_KM = 1;
+
+/** Drops the later of two non-sighting places with the same name within TWIN_KM of each other. */
+export function dropNearTwins(features: Feature<Point>[]): Feature<Point>[] {
+  const kept: Feature<Point>[] = [];
+  for (const f of features) {
+    const p = f.properties as Props;
+    const twin =
+      p.kind !== "sighting" &&
+      kept.some(
+        (k) =>
+          k.properties?.kind !== "sighting" &&
+          k.properties?.name === p.name &&
+          haversineKm(k.geometry.coordinates, f.geometry.coordinates) <= TWIN_KM,
+      );
+    if (!twin) kept.push(f);
+  }
+  return kept;
 }
 
 /**
@@ -542,11 +610,11 @@ const fishing = defineLayer({
     "Where to fish and launch, what fish people have seen lately, and how warm the water is. User words: fishing, where to fish, fishing spot, fishing access, boat ramp, boat launch, slipway, pier, trout, bass, what's biting, water temperature. " +
     "Points by kind: 'access' (OpenStreetMap fishing spots, US Forest Service recreation areas that list fishing, with activities such as 'Lake and Pond Fishing', forest, url and status, and in Montana the state's Fish, Wildlife & Parks fishing access sites with boatLaunch, camping and url), " +
     "'ramp' (boat ramps / slipways from OpenStreetMap, with access and fee where tagged; an unnamed one is named after the nearest named place within 5 km, as 'Boat ramp near Rainbow Point Campground'), 'pier' (fishing piers), and 'sighting' (fish observations on iNaturalist in the last `days` days, default 30, with species, scientificName, t = when seen, url). " +
-    "In the United States, access, ramp and pier points also get the nearest USGS gauge's live water temperature within 30 km: waterTempC (°C) and waterTempF (°F; left out when every spot reads the same single gauge, since one reading cannot rank them), tempBand for trout (cold under 10 °C / 50 °F, good 10 to 18 °C, warm 18 to 20 °C, too_warm above about 20 °C / 68 °F) with tempVerdict in words, waterTempSite and waterTempStream (the gauge and its stream), waterTempKm, waterTempAt, and gaugeMatch: 'different' when the spot's name names other water than the gauge's stream (say so), 'same', or 'unknown'. Give temperatures in °F first for US places. " +
+    "In the United States, access, ramp and pier points also get a USGS gauge's live water temperature when the gauge is on the spot's own water (the river, creek or lake its name names, within 30 km; a spot named for no water only a gauge within 3 km), else none: waterTempC (°C) and waterTempF (°F; left out when every spot reads the same single gauge, since one reading cannot rank them), tempBand for trout (cold under 10 °C / 50 °F, good 10 to 18 °C, warm 18 to 20 °C, too_warm above about 20 °C / 68 °F) with tempVerdict in words, waterTempSite and waterTempStream (the gauge and its stream), waterTempKm, waterTempAt, and gaugeMatch ('same' water by name, or 'unknown' for the 3 km case: say it may be other water). Give temperatures in °F first for US places. " +
     "Example questions: 'What fish have people caught near here this month?', 'Is the river too warm for trout?'. " +
     "Caveats: fish stocking reports are NOT available here (each state wildlife agency publishes its own, with no common feed), so say so and point to the state agency; " +
     "this layer does not show regulations, seasons or licence rules; OSM coverage of fishing spots is patchy (many lakes only have ramps mapped); " +
-    "sightings are where people photograph fish, not a catch survey, and threatened species with hidden locations are left out; the water temperature is from the nearest stream gauge, which may be a different water body. " +
+    "sightings are where people photograph fish, not a catch survey, and threatened species with hidden locations are left out; most spots have no gauge on their own water, so no temperature. " +
     "Bureau of Land Management (BLM) fishing sites are omitted: BLM publishes them only through a keyed API. " +
     "At most 2,000 OpenStreetMap places and the 200 most recent sightings are returned, and the result says when a cap is hit. " +
     "Global for OSM and iNaturalist; USFS sites and water temperature are US only, Montana access sites Montana only. Over 50,000 km² it keeps only named OSM places and says what it left out.",
@@ -651,7 +719,11 @@ const fishing = defineLayer({
     if (temps !== null) {
       if (temps.ok) {
         const n = attachWaterTemps(features, parseIv(temps.bodies, now));
-        if (n === 0) notes.push("No USGS water temperature gauge within 30 km of these spots");
+        if (n === 0) notes.push("No spot here has a USGS water temperature gauge on its own water");
+        else {
+          const spots = features.filter((f) => f.properties?.kind !== "sighting").length;
+          notes.push(`${n} of ${spots} spots have a water temperature from a gauge on their own water; the rest have none`);
+        }
         const single = dropSingleGaugeTemps(features);
         if (single !== undefined) notes.push(`Every water temperature here is from one gauge (${single}), so the spots are not ranked by it`);
       } else {
@@ -669,9 +741,10 @@ const fishing = defineLayer({
     // Named places first (stable), so the top labels name real places, not "Boat ramp"; then unnamed ones take a near name.
     const ordered = [...features.filter(hasOwnName), ...features.filter((f) => !hasOwnName(f))];
     nameUnnamed(ordered);
+    const kept = dropNearTwins(ordered);
     return {
       kind: "geojson",
-      data: { type: "FeatureCollection", features: ordered },
+      data: { type: "FeatureCollection", features: kept },
       citation: {
         source:
           "OpenStreetMap contributors (ODbL); USDA Forest Service recreation activities and USGS water data (public domain); Montana Fish, Wildlife & Parks fishing access sites; iNaturalist (CC BY-NC / CC0)",

@@ -127,7 +127,15 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "imagery-by-date": "raster",
   "mines": "data",
   "uranium": "hazard",
+  avalanche: "hazard",
+  "weather-forecast": "data",
 };
+
+/**
+ * Layers whose legend colors are a published safety standard people read by color (the North American Public Avalanche
+ * Danger Scale: green Low to black Extreme): their areas draw in the legend's own colors, not the palette.
+ */
+export const STANDARD_COLOR_LAYERS: ReadonlySet<string> = new Set(["avalanche"]);
 
 /** Layers that return raster tiles: the imagery carries its own colors. */
 export const RASTER_TILE_LAYERS: ReadonlySet<string> = new Set(

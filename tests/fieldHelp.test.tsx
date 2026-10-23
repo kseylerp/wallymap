@@ -164,10 +164,10 @@ describe("attribute chips and the legend carry the same help on hover", () => {
       receivedAt: "2026-10-14",
     };
     render(<AttributeControls layer={layer} op={{ layerId: "mtb-trails", mode: "lines", visible: true }} data={data} shown={data} fields={[]} dispatch={dispatch} />);
-    const hard = screen.getAllByTestId("attribute-chip").find((c) => c.textContent?.startsWith("Hard"))!;
+    const hard = screen.getAllByTestId("attribute-chip").find((c) => c.textContent?.startsWith("Black"))!;
     expect(hard.getAttribute("aria-pressed")).toBe("false");
     expect(hard.textContent).toContain("2");
-    expect(hard.getAttribute("title")).toMatch(/Hard: 2 · .+/);
+    expect(hard.getAttribute("title")).toMatch(/Black: 2 · .+/);
     expect(hard.querySelector("svg")).toBeTruthy();
     fireEvent.click(hard);
     expect(dispatch).toHaveBeenCalledWith({ type: "set_filters", layerId: "mtb-trails", filters: { v: { include: ["3"] } } });

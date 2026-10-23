@@ -17,7 +17,15 @@
  * layers/_data/surf-spots.json so a failed lookup never empties the forecast, deduplicated within 1 km, at most 40,
  * Wikidata first then OSM-tagged then name matches, nearest the view's centre first. Overpass goes to OVERPASS_URL first. https://marine-api.open-meteo.com/v1/marine
  * takes comma-separated latitude/longitude lists (one JSON object per point in an array, one object for a single point)
- * with hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period, forecast_days=2, timezone=GMT.
+ * with hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period, forecast_days=7, timezone=auto
+ * (hourly times are then the point's local time, and utc_offset_seconds turns them back into UTC).
+ * Days (2026-10-23, UC12 "this weekend"): each forecast spot also carries the next 7 local days, from the same hourly rows:
+ * the day's lowest and highest wave height, the period and direction at the highest, and the day's top wind from the
+ * Open-Meteo forecast API (https://api.open-meteo.com/v1/forecast, daily=wind_speed_10m_max,wind_direction_10m_dominant,
+ * wind_speed_unit=mph, the same comma lists and timezone=auto; the marine API has no wind). They are a series on the
+ * answer (SeriesAxis, step "day", `series.waveFt`, `series.periodS`, `series.windMph`), so the scrubber steps by day,
+ * plus `daily` ("Sat: 4-5 ft at 12 s, wind to 9 mph from the SW · Sun: ...") and `weekend` (Saturday and Sunday only)
+ * in words. Buoys keep one reading each and stay drawn on every day.
  * The model grid is 1/12 degree (about 9 km) and a coastal point snaps to a nearby sea cell, so neighbouring spots can
  * share a value; land-locked points return null for every hour (Lake Tahoe), and those are tried 1, 2 and 3 km away
  * on four bearings before the spot is dropped. A regular grid over the bbox is never drawn: it put 16 symbols in open
@@ -37,6 +45,7 @@ import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import {
   defineLayer,
+  type SeriesAxis,
   type BBox,
   type LayerError,
   type LayerResult,
@@ -62,6 +71,9 @@ import SAVED_SPOTS from "./_data/surf-spots.json";
 const LATEST_OBS = "https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt";
 const STATIONS_XML = "https://www.ndbc.noaa.gov/activestations.xml";
 const MARINE_API = "https://marine-api.open-meteo.com/v1/marine";
+const WEATHER_API = "https://api.open-meteo.com/v1/forecast";
+/** Days of forecast each spot carries (Open-Meteo Marine gives up to 16; a week covers "this weekend" from any day). */
+export const FORECAST_DAYS = 7;
 
 /** Buoys report hourly (some every 30 minutes); ten minutes of cache keeps the map current. */
 const OBS_TTL_SECONDS = 600;
@@ -446,6 +458,7 @@ export function offsetKm(lat: number, lon: number, bearingDeg: number, km: numbe
 }
 
 const MarineSchema = z.object({
+  utc_offset_seconds: z.number().optional(),
   hourly: z.object({
     time: z.array(z.string()),
     wave_height: z.array(z.number().nullable()),
@@ -468,13 +481,15 @@ export function marineProps(raw: unknown, now: Date): Marine | null {
   if (!parsed.success) return null;
   const { hourly } = parsed.data;
   const hourStart = Math.floor(now.getTime() / HOUR_MS) * HOUR_MS;
-  const times = hourly.time.map((t) => Date.parse(`${t}:00Z`));
+  // Times are the point's local time (timezone=auto); the offset turns them back into UTC.
+  const offsetMs = (parsed.data.utc_offset_seconds ?? 0) * 1000;
+  const times = hourly.time.map((t) => Date.parse(`${t}:00Z`) - offsetMs);
   let nowIdx = times.findIndex((t) => t >= hourStart);
   if (nowIdx < 0) nowIdx = times.length - 1;
   const height = hourly.wave_height[nowIdx];
   if (typeof height !== "number") return null;
   let maxIdx = nowIdx;
-  for (let i = nowIdx; i < times.length; i++) {
+  for (let i = nowIdx; i < times.length && times[i] < hourStart + 48 * HOUR_MS; i++) {
     const h = hourly.wave_height[i];
     if (typeof h === "number" && h > (hourly.wave_height[maxIdx] ?? -1)) maxIdx = i;
   }
@@ -502,6 +517,115 @@ export function marineProps(raw: unknown, now: Date): Marine | null {
   const swellPeriod = hourly.swell_wave_period?.[nowIdx];
   if (typeof swellPeriod === "number") p.swellPeriodS = swellPeriod;
   return p;
+}
+
+/** One local day of modelled waves at a point: the lowest and highest wave height (m), the period and direction at the highest. */
+export type DayWaves = { date: string; minM: number; maxM: number; periodS?: number; dirDeg?: number };
+
+/**
+ * The next FORECAST_DAYS local days (today first) from one marine row's hourly values (timezone=auto, so the dates are
+ * the spot's own); a day with no wave height is left out. Empty for a bad row.
+ */
+export function dailyWaves(raw: unknown, now: Date): DayWaves[] {
+  const parsed = MarineSchema.safeParse(raw);
+  if (!parsed.success) return [];
+  const { hourly } = parsed.data;
+  const today = new Date(now.getTime() + (parsed.data.utc_offset_seconds ?? 0) * 1000).toISOString().slice(0, 10);
+  const days = new Map<string, DayWaves>();
+  hourly.time.forEach((t, i) => {
+    const date = t.slice(0, 10);
+    const h = hourly.wave_height[i];
+    if (date < today || typeof h !== "number") return;
+    const day = days.get(date);
+    const period = hourly.wave_period?.[i];
+    const dir = hourly.wave_direction?.[i];
+    const atMax = { maxM: h, ...(typeof period === "number" && { periodS: period }), ...(typeof dir === "number" && { dirDeg: dir }) };
+    if (!day) days.set(date, { date, minM: h, ...atMax });
+    else {
+      day.minM = Math.min(day.minM, h);
+      if (h > day.maxM) {
+        delete day.periodS;
+        delete day.dirDeg;
+        Object.assign(day, atMax);
+      }
+    }
+  });
+  return [...days.values()].sort((a, b) => a.date.localeCompare(b.date)).slice(0, FORECAST_DAYS);
+}
+
+/** One local day's strongest wind at a point (mph) and its dominant direction. */
+export type DayWind = { date: string; maxMph: number; dirDeg?: number };
+
+const WeatherSchema = z.object({
+  daily: z.object({
+    time: z.array(z.string()),
+    wind_speed_10m_max: z.array(z.number().nullable()),
+    wind_direction_10m_dominant: z.array(z.number().nullable()).optional(),
+  }),
+});
+
+/** The daily wind rows of one forecast-API point; empty for a bad row. */
+export function dailyWind(raw: unknown): DayWind[] {
+  const parsed = WeatherSchema.safeParse(raw);
+  if (!parsed.success) return [];
+  const { daily } = parsed.data;
+  return daily.time.flatMap((date, i) => {
+    const mph = daily.wind_speed_10m_max[i];
+    if (typeof mph !== "number") return [];
+    const dir = daily.wind_direction_10m_dominant?.[i];
+    return [{ date, maxMph: Math.round(mph), ...(typeof dir === "number" && { dirDeg: dir }) }];
+  });
+}
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const weekdayOf = (date: string) => WEEKDAYS[new Date(`${date}T12:00:00Z`).getUTCDay()];
+
+/** A height range in whole feet: "4-5 ft", or "4 ft" when both ends round the same. */
+function feetRange(minM: number, maxM: number): string {
+  const lo = Math.round(minM * M_TO_FT);
+  const hi = Math.round(maxM * M_TO_FT);
+  return lo === hi ? `${hi} ft` : `${lo}-${hi} ft`;
+}
+
+/** "Sat: 4-5 ft at 12 s, wind to 9 mph from the SW": one day in words. */
+export function dayText(day: DayWaves, wind?: DayWind): string {
+  const period = day.periodS === undefined ? "" : ` at ${Math.round(day.periodS)} s`;
+  const breeze = wind === undefined ? "" : `, wind to ${wind.maxMph} mph${wind.dirDeg === undefined ? "" : ` from the ${compass(wind.dirDeg)}`}`;
+  return `${weekdayOf(day.date)}: ${feetRange(day.minM, day.maxM)}${period}${breeze}`;
+}
+
+/**
+ * Puts each forecast spot's days on one axis (mutates): `series.waveFt` (the day's highest, which sizes the symbol),
+ * `series.periodS` and `series.windMph` per day (null where a spot has no value), `daily` (every day in words) and
+ * `weekend` (the coming Saturday and Sunday in words) with `weekendMaxFt` (their highest). The axis is the spots' local dates from the first, at most
+ * FORECAST_DAYS, each as midnight UTC like the other daily series; undefined when no spot has days.
+ */
+export function attachDaily(features: Feature<Point>[], days: DayWaves[][], winds: DayWind[][]): SeriesAxis | undefined {
+  const dates = [...new Set(days.flat().map((d) => d.date))].sort().slice(0, FORECAST_DAYS);
+  if (dates.length === 0) return undefined;
+  features.forEach((f, i) => {
+    const p = f.properties;
+    const mine = days[i] ?? [];
+    if (!p || mine.length === 0) return;
+    const byDate = new Map(mine.map((d) => [d.date, d]));
+    const windBy = new Map((winds[i] ?? []).map((w) => [w.date, w]));
+    p.series = {
+      waveFt: dates.map((d) => (byDate.has(d) ? ft(byDate.get(d)!.maxM) : null)),
+      periodS: dates.map((d) => {
+        const period = byDate.get(d)?.periodS;
+        return period === undefined ? null : Math.round(period * 10) / 10;
+      }),
+      windMph: dates.map((d) => windBy.get(d)?.maxMph ?? null),
+    };
+    const shown = dates.flatMap((d) => (byDate.has(d) ? [byDate.get(d)!] : []));
+    p.daily = shown.map((d) => dayText(d, windBy.get(d.date))).join(" · ");
+    const weekend = shown.filter((d) => ["Sat", "Sun"].includes(weekdayOf(d.date))).slice(0, 2);
+    if (weekend.length > 0) {
+      p.weekend = weekend.map((d) => dayText(d, windBy.get(d.date))).join(" · ");
+      p.weekendMaxFt = ft(Math.max(...weekend.map((d) => d.maxM)));
+    }
+  });
+  return { times: dates.map((d) => new Date(`${d}T00:00:00Z`).toISOString()), step: "day", now: 0, forecastFrom: 0 };
 }
 
 /** The marine API's rows in request order: an array for several points, one object for a single point. */
@@ -581,11 +705,12 @@ async function lookupSpots(ctx: QueryContext): Promise<SpotLookup> {
   return { spots, failures };
 }
 
-type MarineBatch = { values: (Marine | null)[]; failed: boolean[]; error?: string };
+type MarineBatch = { values: (Marine | null)[]; days: DayWaves[][]; failed: boolean[]; error?: string };
 
 /** The model's sea state at each [lat, lon], in order; `failed` marks points whose request did not answer (as opposed to land, which is null). */
 async function marineBatch(ctx: QueryContext, points: [number, number][], keyPart: string, now: Date): Promise<MarineBatch> {
   const values: (Marine | null)[] = points.map(() => null);
+  const days: DayWaves[][] = points.map(() => []);
   const failed: boolean[] = points.map(() => false);
   let error: string | undefined;
   const chunks: number[] = [];
@@ -595,7 +720,7 @@ async function marineBatch(ctx: QueryContext, points: [number, number][], keyPar
       const part = points.slice(start, start + MARINE_CHUNK);
       const url =
         `${MARINE_API}?latitude=${part.map((p) => p[0]).join(",")}&longitude=${part.map((p) => p[1]).join(",")}` +
-        `&hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period&forecast_days=2&timezone=GMT`;
+        `&hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period&forecast_days=${FORECAST_DAYS}&timezone=auto`;
       const res = await fetchText(
         ctx,
         url,
@@ -618,10 +743,38 @@ async function marineBatch(ctx: QueryContext, points: [number, number][], keyPar
         part.forEach((_, i) => (failed[start + i] = true));
         return;
       }
-      part.forEach((_, i) => (values[start + i] = marineProps(rows[i], now)));
+      part.forEach((_, i) => {
+        values[start + i] = marineProps(rows[i], now);
+        days[start + i] = dailyWaves(rows[i], now);
+      });
     }),
   );
-  return { values, failed, ...(error !== undefined && { error }) };
+  return { values, days, failed, ...(error !== undefined && { error }) };
+}
+
+/** Each spot's daily top wind (Open-Meteo forecast API); a failed request leaves its spots without wind. */
+async function windBatch(ctx: QueryContext, spots: Spot[]): Promise<DayWind[][]> {
+  const winds: DayWind[][] = spots.map(() => []);
+  const chunks: number[] = [];
+  for (let i = 0; i < spots.length; i += MARINE_CHUNK) chunks.push(i);
+  await Promise.all(
+    chunks.map(async (start, c) => {
+      const part = spots.slice(start, start + MARINE_CHUNK);
+      const url =
+        `${WEATHER_API}?latitude=${part.map((s) => s.lat).join(",")}&longitude=${part.map((s) => s.lon).join(",")}` +
+        `&daily=wind_speed_10m_max,wind_direction_10m_dominant&wind_speed_unit=mph&forecast_days=${FORECAST_DAYS}&timezone=auto`;
+      const res = await fetchText(ctx, url, "Open-Meteo forecast", ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:surf-wind:${c}`, FORECAST_TTL_SECONDS);
+      if (!res.ok) return;
+      let rows: unknown[];
+      try {
+        rows = marineRows(JSON.parse(res.text));
+      } catch {
+        return;
+      }
+      part.forEach((_, i) => (winds[start + i] = dailyWind(rows[i])));
+    }),
+  );
+  return winds;
 }
 
 /**
@@ -632,9 +785,10 @@ export async function forecastAtSpots(
   ctx: QueryContext,
   spots: Spot[],
   now: Date,
-): Promise<{ features: Feature<Point>[]; dropped: number; nudged: number; error?: string }> {
+): Promise<{ features: Feature<Point>[]; dropped: number; nudged: number; series?: SeriesAxis; error?: string }> {
   const first = await marineBatch(ctx, spots.map((s) => [s.lat, s.lon]), "0", now);
   const values = [...first.values];
+  const days = [...first.days];
   const nudgedKm = spots.map(() => 0);
   const failed = first.failed;
   for (const [round, km] of NUDGE_STEPS_KM.entries()) {
@@ -647,6 +801,7 @@ export async function forecastAtSpots(
         const v = res.values[p * NUDGE_BEARINGS.length + b];
         if (v !== null) {
           values[spotIndex] = v;
+          days[spotIndex] = res.days[p * NUDGE_BEARINGS.length + b];
           nudgedKm[spotIndex] = km;
           return;
         }
@@ -654,12 +809,24 @@ export async function forecastAtSpots(
     });
   }
   const features: Feature<Point>[] = [];
+  const kept: number[] = [];
   let dropped = 0;
   values.forEach((v, i) => {
-    if (v !== null) features.push(spotFeature(spots[i], v, nudgedKm[i]));
-    else if (!failed[i]) dropped += 1;
+    if (v !== null) {
+      features.push(spotFeature(spots[i], v, nudgedKm[i]));
+      kept.push(i);
+    } else if (!failed[i]) dropped += 1;
   });
-  return { features, dropped, nudged: nudgedKm.filter((k) => k > 0).length, ...(first.error !== undefined && { error: first.error }) };
+  // The week ahead per spot, with the day's top wind at the spot itself.
+  const winds = kept.length > 0 ? await windBatch(ctx, kept.map((i) => spots[i])) : [];
+  const series = attachDaily(features, kept.map((i) => days[i]), winds);
+  return {
+    features,
+    dropped,
+    nudged: nudgedKm.filter((k) => k > 0).length,
+    ...(series !== undefined && { series }),
+    ...(first.error !== undefined && { error: first.error }),
+  };
 }
 
 // ---- Seasonal mode (season: true) ----
@@ -974,6 +1141,14 @@ const HELP: Record<string, FieldHelp> = {
   waterTempF: { text: "Sea surface temperature at the buoy.", unit: "°F" },
   swellFt: { text: "Height of the swell part of the modelled waves (not the local wind sea).", unit: "ft" },
   maxNext48hFt: { text: "The biggest modelled wave height in the next 48 hours.", unit: "ft" },
+  daily: {
+    text:
+      "Each of the next 7 days at this spot, in its local time: the day's lowest to highest modelled wave height in feet, the period in seconds at the " +
+      "highest, and the day's strongest wind with the direction it mostly blows from. Modelled, not measured.",
+    source: "Open-Meteo Marine and Open-Meteo forecast (CC BY 4.0)",
+    url: "https://open-meteo.com/",
+  },
+  weekend: { text: "The coming Saturday and Sunday at this spot, the same way as the 7 days.", source: "Open-Meteo Marine and Open-Meteo forecast (CC BY 4.0)", url: "https://open-meteo.com/" },
   p90Ft: { text: "The 90th percentile of wave height for the month at this buoy over the last 3 years: a big day.", unit: "ft" },
   periodS: {
     text: "Dominant wave period: seconds between the most energetic waves; longer means more powerful groundswell, under about 8 s is wind chop.",
@@ -1002,6 +1177,8 @@ const CARD: CardSpec = {
     { key: "swellPeriodS", label: "Swell period", unit: "s" },
     { key: "waterTempF", label: "Water temperature", unit: "°F" },
     { key: "wind", label: "Wind" },
+    { key: "weekend", label: "This weekend" },
+    { key: "daily", label: "Next 7 days" },
     { key: "maxNext48hFt", label: "Biggest in 48 hours", unit: "ft" },
     { key: "maxAtLocal", label: "Biggest at" },
     { key: "nudgedKm", label: "Read out to sea", unit: "km", format: "1dp" },
@@ -1024,6 +1201,8 @@ const CARD: CardSpec = {
   links: [{ key: "url", label: "NOAA buoy page" }],
   // Codes and repeats of rows the card already shows in feet, knots, °F and local time.
   hidden: [
+    "series",
+    "weekendMaxFt",
     "stationId",
     "v",
     "t",
@@ -1066,7 +1245,7 @@ const surf = defineLayer({
     "Live ocean wave conditions for surf, swell and boating questions. User words: surf, swell, waves, wave height, period, how big is it, is it firing, water temperature, buoy. " +
     "Default: NOAA NDBC wave buoys in view, kind 'buoy', each with name, stationId, t (UTC time of the latest observation, usually under an hour old) and readAt (the same in local time, '6:50 pm PDT Sat'), waveFt (significant wave height in feet, which sizes the symbol; v is the same in metres), " +
     "periodS (dominant wave period in seconds; longer period means more powerful groundswell, under about 8 s is short-period wind chop), avgPeriodS, swellFrom ('West-northwest (292°)', where the waves come FROM; directionDeg and directionFrom are the same as numbers and a compass code), waterTempF (°F; waterTempC in °C), wind (text: knots, mph, direction, gusts; windKt and gustKt as numbers), and url (the buoy page). " +
-    "Set forecast to true to add Open-Meteo Marine forecasts at up to 40 named surf spots in view (OpenStreetMap, Wikidata and a saved list), kind 'forecast': waveFt is the modelled height now, swellFt the swell part, maxNext48hFt and maxAtLocal the biggest in two days. " +
+    "Set forecast to true to add Open-Meteo Marine forecasts at up to 40 named surf spots in view (OpenStreetMap, Wikidata and a saved list), kind 'forecast': waveFt is the modelled height now, swellFt the swell part, maxNext48hFt and maxAtLocal the biggest in two days, and the next 7 days by day: weekend ('Sat: 4-5 ft at 12 s, wind to 9 mph from the NW') and daily in words, series per day for the scrubber. " +
     "Set season to true (optionally month 1-12, default this month) for what is typical this time of year: kind 'climatology', the 6 buoys nearest the centre, waveFt the month's mean over the last 3 years, p90Ft a big day, monthlyMeanM and monthlyP90M the 12-month curves in metres (January first). " +
     "Forecasts are modelled at named surf spots, buoys are measured; buoys are always included and the forecast spots come on top; nudgedKm says a forecast was read 1 to 3 km out to sea. The model grid is about 9 km, so neighbouring spots can share values. Use it for a named break, where there is no buoy, or to say whether swell is building. " +
     "A cold seasonal query downloads several years of buoy files and can take 10 to 20 seconds. " +
@@ -1090,8 +1269,8 @@ const surf = defineLayer({
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
-  // One latest reading per buoy (or the forecast hour now, or a typical month): say when, no scrubber.
-  time: { shape: "single" },
+  // Forecast spots carry the next 7 days (result.series), so the scrubber steps by day; buoys keep one reading each.
+  time: { shape: "continuous", step: "day" },
   legend: LEGEND,
   labels: { field: "name", max: 6, rankBy: "waveFt" },
   // NDBC is almost all US waters: feet, knots and mph first, times in the spot's local time.
@@ -1102,7 +1281,7 @@ const surf = defineLayer({
     if (input.season) return querySeason(ctx, input.month ?? now.getUTCMonth() + 1, now);
     const citation = {
       source: input.forecast
-        ? "NOAA National Data Buoy Center latest observations (public domain); Open-Meteo Marine forecast (CC BY 4.0, non-commercial)"
+        ? "NOAA National Data Buoy Center latest observations (public domain); Open-Meteo Marine and wind forecast (CC BY 4.0, non-commercial)"
         : "NOAA National Data Buoy Center latest observations (public domain)",
       url: "https://www.ndbc.noaa.gov/",
       retrieved: now.toISOString(),
@@ -1123,6 +1302,7 @@ const surf = defineLayer({
     const notes: string[] = [];
 
     let sourceStatus: SourceStatus | undefined;
+    let series: SeriesAxis | undefined;
     if (input.forecast) {
       const lookup = await lookupSpots(ctx);
       const { spots, distinct } = pickSpots([...lookup.spots, ...savedSpots(ctx.bbox)], ctx.bbox);
@@ -1142,9 +1322,20 @@ const surf = defineLayer({
           if (features.length === 0) return { error: "The Open-Meteo wave forecast did not answer and no buoy is in view.", hint: "upstream", sourceStatus };
         } else {
           features.push(...forecast.features);
+          const spotWords = `${forecast.features.length} surf spot${forecast.features.length === 1 ? "" : "s"} (modelled forecast)`;
           notes.push(
-            `${buoys.features.length} NOAA buoy${buoys.features.length === 1 ? "" : "s"} (measured) and ${forecast.features.length} surf spot${forecast.features.length === 1 ? "" : "s"} (modelled forecast)`,
+            buoys.features.length === 0
+              ? `${spotWords}; no reporting NOAA wave buoy in view`
+              : `${buoys.features.length} NOAA buoy${buoys.features.length === 1 ? "" : "s"} (measured) and ${spotWords}`,
           );
+          if (forecast.series) {
+            series = forecast.series;
+            notes.push(`Each spot carries the next ${series.times.length} days (modelled); the scrubber steps by day`);
+            const biggest = forecast.features
+              .filter((f) => typeof f.properties?.weekendMaxFt === "number")
+              .sort((a, b) => Number(b.properties?.weekendMaxFt) - Number(a.properties?.weekendMaxFt))[0];
+            if (biggest) notes.push(`This weekend at ${biggest.properties?.name} (the biggest): ${biggest.properties?.weekend}`);
+          }
           if (forecast.nudged > 0) notes.push(`${forecast.nudged} spot${forecast.nudged === 1 ? "" : "s"} read from the model up to 3 km out to sea`);
           if (forecast.dropped > 0) notes.push(`${forecast.dropped} spot${forecast.dropped === 1 ? "" : "s"} left out: the model has no waves within 3 km`);
           if (distinct > spots.length) notes.push(`Showing ${spots.length} of ${distinct} surf spots in view (nearest the centre first); zoom in for the rest`);
@@ -1160,6 +1351,7 @@ const surf = defineLayer({
       kind: "geojson",
       data: kept.features.length === 0 ? EMPTY : { type: "FeatureCollection", features: kept.features },
       citation,
+      ...(series !== undefined && kept.features.some((f) => f.properties?.series !== undefined) && { series }),
       ...(kept.total !== undefined && { total: kept.total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
       ...(sourceStatus !== undefined && { sourceStatus }),

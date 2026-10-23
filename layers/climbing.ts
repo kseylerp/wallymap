@@ -25,6 +25,12 @@
  * (67 OSM, 82 OpenBeta, 50 in both), 44 listing sport, 0.8 s; an overlapping box then answered from the cached tile in
  * 6 ms. The public Overpass server answered 406 that day (OVERPASS_URL was used); the layer still drew OpenBeta's 82
  * places and said OpenStreetMap had not answered.
+ * Grades per style (UC06, UC07): on 0.5° tiles OpenBeta also sends each route's grade and style, banded one by one into
+ * sportBands, tradBands and boulderBands (and counts per band), so "beginner sport" never passes a crag whose easy
+ * routes are trad. Fixtures: climbing.redrock.openbeta.json and climbing.bishop.openbeta.json (recorded 2026-10-23,
+ * trimmed to 6 and 4 crags). Live check 2026-10-23: Red Rock (-115.55,36.05 to -115.4,36.2) 470 places, sportBands
+ * beginner 27 (disciplines sport plus gradeBands beginner passed 63); Bishop (-118.65,37.3 to -118.35,37.45) 328 places,
+ * boulderBands beginner 216, disciplines boulder 298; Moab (-109.75,38.45 to -109.4,38.7) 216 places, sportBands beginner 6.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
@@ -36,11 +42,13 @@ import {
   type QueryContext,
   type CardSpec,
   type Attribute,
+  type AttributeLevel,
   type FieldHelp,
   type LegendSpec,
 } from "./types";
 import {
   bandsBetween,
+  CLIMBING_BANDS,
   CLIMBING_GRADE_HELP,
   CLIMBING_GRADE_SCALE,
   CLIMBING_LEVELS,
@@ -104,17 +112,38 @@ export function buildClimbingQuery(bbox: BBox): string {
   );
 }
 
-/** The OpenBeta GraphQL document: leaf crags with route counts, grades and discipline totals. */
-export const OPENBETA_QUERY =
-  "query($f: SearchWithinFilter){ cragsWithin(filter:$f){ uuid area_name totalClimbs pathTokens " +
-  "metadata{ lat lng leaf isBoulder } " +
-  "aggregate{ byGrade{ label count } byDiscipline{ sport{ total } trad{ total } bouldering{ total } tr{ total } } } } }";
+const OPENBETA_AREA_FIELDS =
+  "uuid area_name totalClimbs pathTokens metadata{ lat lng leaf isBoulder } " +
+  "aggregate{ byGrade{ label count } byDiscipline{ sport{ total } trad{ total } bouldering{ total } tr{ total } } }";
 
-export function openbetaBody(bbox: BBox): string {
-  return JSON.stringify({ query: OPENBETA_QUERY, variables: { f: { bbox, zoom: 12 } } });
+/**
+ * Each route's grade and style, so the grade bands can be told per style (a crag with easy trad and hard sport is not
+ * a beginner sport crag). Asked only for 0.5° tiles: Red Rock's tile is 0.6 MB and 5 s with them, a 2° Sierra tile 1.2
+ * MB and 28 s, past the attempt timeout (measured 2026-10-23).
+ */
+const OPENBETA_CLIMB_FIELDS = " climbs{ grades{ yds french vscale } type{ sport trad bouldering tr } }";
+
+/** The OpenBeta GraphQL document: leaf crags with route counts, grades and discipline totals, and each route when asked. */
+export function openbetaQuery(withClimbs: boolean): string {
+  return `query($f: SearchWithinFilter){ cragsWithin(filter:$f){ ${OPENBETA_AREA_FIELDS}${withClimbs ? OPENBETA_CLIMB_FIELDS : ""} } }`;
+}
+
+export const OPENBETA_QUERY = openbetaQuery(true);
+
+export function openbetaBody(bbox: BBox, withClimbs = true): string {
+  return JSON.stringify({ query: openbetaQuery(withClimbs), variables: { f: { bbox, zoom: 12 } } });
 }
 
 const total = z.object({ total: z.number() }).nullable().optional();
+const maybeText = z.string().nullable().optional();
+const maybeFlag = z.boolean().nullable().optional();
+
+const climbSchema = z.object({
+  grades: z.object({ yds: maybeText, french: maybeText, vscale: maybeText }).nullable().optional(),
+  type: z.object({ sport: maybeFlag, trad: maybeFlag, bouldering: maybeFlag, tr: maybeFlag }).nullable().optional(),
+});
+
+export type OpenbetaClimb = z.infer<typeof climbSchema>;
 
 const openbetaSchema = z.object({
   data: z.object({
@@ -140,6 +169,7 @@ const openbetaSchema = z.object({
           })
           .nullable()
           .optional(),
+        climbs: z.array(climbSchema).nullable().optional(),
       }),
     ),
   }),
@@ -231,6 +261,109 @@ function listOf(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String) : typeof value === "string" ? [value] : [];
 }
 
+// ---- grades per style ----
+
+/** The styles whose grades are told apart: sport and trad routes on YDS (else French), boulder problems on the V-scale. */
+export const STYLES = ["sport", "trad", "boulder"] as const;
+export type Style = (typeof STYLES)[number];
+
+const BAND_SUFFIX: Record<ClimbingBand, string> = { beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced", elite: "Elite" };
+
+/** The property counting a style's routes in one band: sportBeginner, tradAdvanced, boulderElite... */
+export function styleBandKey(style: Style, band: ClimbingBand): string {
+  return `${style}${BAND_SUFFIX[band]}`;
+}
+
+/** Every property the per-style grades write; a merge replaces them together, never mixes two sources. */
+export const STYLE_KEYS: string[] = STYLES.flatMap((s) => [`${s}Bands`, `${s}Grades`, ...CLIMBING_BANDS.map((b) => styleBandKey(s, b))]);
+
+function frenchRank(label: string): number | undefined {
+  const m = /^([3-9])([abc])?(\+)?$/i.exec(label.trim());
+  return m ? Number(m[1]) * 10 + (m[2] ? "abc".indexOf(m[2].toLowerCase()) * 3 : 0) + (m[3] ? 1 : 0) : undefined;
+}
+
+type Graded = { label: string; band: ClimbingBand; rank: number; system: "yds" | "french" | "v" };
+
+/** One route's grade in a style: YDS, else French, for sport and trad; the V-scale for a boulder problem. */
+function gradeIn(climb: OpenbetaClimb, style: Style): Graded | undefined {
+  const g = climb.grades ?? {};
+  if (style === "boulder") {
+    const label = g.vscale?.trim().replace(/^v/, "V");
+    const band = label ? climbingBand(label) : undefined;
+    const rank = label ? vRank(label) ?? (/^VB/i.test(label) ? -1 : undefined) : undefined;
+    return label && band && rank !== undefined ? { label, band, rank, system: "v" } : undefined;
+  }
+  const yds = g.yds?.trim();
+  const ydsBand = yds ? climbingBand(yds) : undefined;
+  const ydsR = yds ? ydsRank(yds) : undefined;
+  if (yds && ydsBand && ydsR !== undefined) return { label: yds, band: ydsBand, rank: ydsR, system: "yds" };
+  const french = g.french?.trim();
+  const frBand = french ? climbingBand(french, "french") : undefined;
+  const frR = french ? frenchRank(french) : undefined;
+  return french && frBand && frR !== undefined ? { label: french, band: frBand, rank: frR, system: "french" } : undefined;
+}
+
+function isStyle(climb: OpenbetaClimb, style: Style): boolean {
+  const t = climb.type ?? {};
+  return style === "boulder" ? t.bouldering === true : t[style] === true;
+}
+
+/** A style's routes: how many, how many in each band with the easiest and hardest grade there, and how many carry no grade we read. */
+export type StyleSummary = { total: number; ungraded: number; bands: Partial<Record<ClimbingBand, { count: number; lo: string; hi: string }>> };
+
+/**
+ * Per style, the routes OpenBeta lists at a crag, banded one by one (a route that is both sport and top rope counts as
+ * sport; one that is both sport and trad counts in each). A style with no routes is left out.
+ */
+export function styleSummaries(climbs: OpenbetaClimb[] | null | undefined): Partial<Record<Style, StyleSummary>> {
+  const out: Partial<Record<Style, StyleSummary>> = {};
+  for (const style of STYLES) {
+    const routes = (climbs ?? []).filter((c) => isStyle(c, style));
+    if (routes.length === 0) continue;
+    const graded = routes.map((c) => gradeIn(c, style)).filter((g): g is Graded => g !== undefined);
+    // A range compares grades of one system: YDS when any route has it (French otherwise).
+    const system = graded.some((g) => g.system === "yds") ? "yds" : graded.some((g) => g.system === "french") ? "french" : "v";
+    const summary: StyleSummary = { total: routes.length, ungraded: routes.length - graded.length, bands: {} };
+    for (const band of CLIMBING_BANDS) {
+      const inBand = graded.filter((g) => g.band === band);
+      if (inBand.length === 0) continue;
+      const ranged = inBand.filter((g) => g.system === system).sort((a, b) => a.rank - b.rank);
+      const pick = ranged.length > 0 ? ranged : [...inBand].sort((a, b) => a.rank - b.rank);
+      summary.bands[band] = { count: inBand.length, lo: pick[0].label, hi: pick[pick.length - 1].label };
+    }
+    out[style] = summary;
+  }
+  return out;
+}
+
+const STYLE_NOUN: Record<Style, [string, string]> = { sport: ["route", "routes"], trad: ["route", "routes"], boulder: ["problem", "problems"] };
+
+/** The card's line for one style: "12 routes: 3 beginner 5.6 to 5.7 · 7 intermediate 5.8 to 5.10d · 2 advanced 5.11a". */
+export function styleLine(style: Style, s: StyleSummary): string {
+  const [one, many] = STYLE_NOUN[style];
+  const parts = CLIMBING_BANDS.flatMap((band) => {
+    const b = s.bands[band];
+    if (!b) return [];
+    return [`${b.count} ${band} ${b.lo === b.hi ? b.lo : `${b.lo} to ${b.hi}`}`];
+  });
+  const noun = s.total === 1 ? one : many;
+  if (parts.length === 0) return `${s.total} ${noun}, none graded`;
+  if (s.ungraded > 0) parts.push(`${s.ungraded} ungraded`);
+  return `${s.total} ${noun}: ${parts.join(" · ")}`;
+}
+
+/** The per-style properties of one OpenBeta crag: sportBands and its kin, the counts per band and the card lines. */
+export function styleProps(climbs: OpenbetaClimb[] | null | undefined): Props {
+  const props: Props = {};
+  for (const [style, s] of Object.entries(styleSummaries(climbs)) as [Style, StyleSummary][]) {
+    const bands = CLIMBING_BANDS.filter((b) => s.bands[b] !== undefined);
+    if (bands.length > 0) props[`${style}Bands`] = bands;
+    for (const band of bands) props[styleBandKey(style, band)] = s.bands[band]!.count;
+    props[`${style}Grades`] = styleLine(style, s);
+  }
+  return props;
+}
+
 // ---- OpenStreetMap ----
 
 const DISCIPLINES = ["sport", "trad", "boulder", "toprope", "ice", "mixed", "via_ferrata", "deepwater"] as const;
@@ -302,6 +435,9 @@ export function osmCrags(json: unknown, includeGyms: boolean): Crag[] {
     if (bands.length > 0) props.gradeBands = bands;
     const disciplines = DISCIPLINES.filter((d) => tags[`climbing:${d}`] !== undefined && tags[`climbing:${d}`] !== "no");
     if (disciplines.length > 0) props.disciplines = disciplines;
+    // A crag mapped with one style only: its grade tags are that style's grades (OpenBeta's routes replace this on a merge).
+    const only = disciplines.length === 1 ? (STYLES as readonly string[]).find((s) => s === disciplines[0]) : undefined;
+    if (only !== undefined && bands.length > 0) props[`${only}Bands`] = bands;
     if (tags["climbing:orientation"]) props.orientation = tags["climbing:orientation"];
     const maxLength = Number(tags["climbing:length:max"]);
     if (Number.isFinite(maxLength) && maxLength > 0) props.maxLengthM = maxLength;
@@ -344,6 +480,7 @@ export function openbetaCrags(json: unknown): Crag[] | null {
     if (d?.tr?.total) props.toprope = d.tr.total;
     const disciplines = (["sport", "trad", "boulder", "toprope"] as const).filter((k) => typeof props[k] === "number");
     if (disciplines.length > 0) props.disciplines = [...disciplines];
+    Object.assign(props, styleProps(a.climbs));
     return { position: [a.metadata.lng, a.metadata.lat], props };
   });
 }
@@ -389,6 +526,7 @@ export function dedupeSameName(crags: Crag[]): Crag[] {
     const p = crag.props;
     if (typeof p.v === "number" && (typeof target.v !== "number" || p.v > target.v)) target.v = p.v;
     for (const key of ["grades", "orientation", "website", "maxLengthM", "t"] as const) if (target[key] === undefined && p[key] !== undefined) target[key] = p[key];
+    if (!STYLE_KEYS.some((k) => target[k] !== undefined)) for (const k of STYLE_KEYS) if (p[k] !== undefined) target[k] = p[k];
     const disciplines = [...new Set([...listOf(target.disciplines), ...listOf(p.disciplines)])];
     if (disciplines.length > 0) target.disciplines = DISCIPLINES.filter((d) => disciplines.includes(d));
     const bands = orderedBands([...listOf(target.gradeBands), ...listOf(p.gradeBands)] as ClimbingBand[]);
@@ -445,6 +583,11 @@ export function mergeCrags(osm: Crag[], openbeta: Crag[]): { crags: Crag[]; both
     for (const key of ["grades", "region", "sport", "trad", "boulder", "toprope"] as const) {
       if (p[key] !== undefined && (key !== "grades" || target.grades === undefined)) target[key] = p[key];
     }
+    // Grades per style: OpenBeta's route-by-route bands replace what OpenStreetMap's tags let us infer, never mixed.
+    if (STYLE_KEYS.some((k) => p[k] !== undefined)) {
+      for (const k of STYLE_KEYS) delete target[k];
+      for (const k of STYLE_KEYS) if (p[k] !== undefined) target[k] = p[k];
+    }
     // Disciplines and grade bands are lists: the merged place has every one either source names.
     const disciplines = [...new Set([...listOf(target.disciplines), ...listOf(p.disciplines)])];
     if (disciplines.length > 0) target.disciplines = DISCIPLINES.filter((d) => disciplines.includes(d));
@@ -470,7 +613,7 @@ const MAX_FINE_TILES = 6;
 /** How long a tile's answer is kept. */
 export const TILE_TTL_SECONDS = 86_400;
 /** Bump when either request changes, so stale tiles are not read back. */
-const TILE_KEY_VERSION = "v1";
+const TILE_KEY_VERSION = "v2";
 /** Requests in flight at once per source (the public Overpass server allows only a couple per caller). */
 const OVERPASS_CONCURRENCY = 2;
 const OPENBETA_CONCURRENCY = 3;
@@ -486,6 +629,11 @@ export const CLIMBING_TIMING: { retry: RetryPolicy; budgetMs: number; sleep: (ms
 };
 
 export type Tile = { key: string; bbox: BBox };
+
+/** A 0.5° tile, the only size whose OpenBeta request lists every route (for the grades per style). */
+export function isFineTile(tile: Tile): boolean {
+  return tile.bbox[2] - tile.bbox[0] <= TILE_DEG[0] + 1e-9;
+}
 
 /**
  * The fixed grid tiles covering a box: 0.5° tiles, or 2° tiles when it would take more than MAX_FINE_TILES. Each is
@@ -576,27 +724,39 @@ async function fetchOverpassTile(ctx: QueryContext, tile: Tile, deadline: number
 
 type OpenbetaArea = { uuid: string };
 
-/** One OpenBeta tile, retried on network errors, timeouts, 429 and 5xx, and on GraphQL errors or an unexpected body. */
-async function fetchOpenbetaTile(ctx: QueryContext, tile: Tile, deadline: number): Promise<RetryResult<OpenbetaArea[]>> {
-  return withRetry<OpenbetaArea[]>(
+/** One tile's OpenBeta crags, and whether they came with their route lists (the grades per style). */
+type OpenbetaTile = { areas: OpenbetaArea[]; routes: boolean };
+
+/**
+ * One OpenBeta tile, retried on network errors, timeouts, 429 and 5xx, and on GraphQL errors or an unexpected body. A
+ * 0.5° tile asks for the route lists; when that times out (OpenBeta took 27 s for the Red River Gorge tile even without
+ * them on 2026-10-23), and on the last try in any case, it asks without them, so the crags still come, with no grades
+ * per style. That answer is cached under its own key, never in place of the full one.
+ */
+async function fetchOpenbetaTile(ctx: QueryContext, tile: Tile, deadline: number): Promise<RetryResult<OpenbetaTile>> {
+  const lastAttempt = CLIMBING_TIMING.retry.delaysMs.length + 1;
+  let timedOut = false;
+  return withRetry<OpenbetaTile>(
     CLIMBING_TIMING.retry,
     deadline,
-    async (_n, timeoutMs) => {
+    async (n, timeoutMs) => {
+      const routes = isFineTile(tile) && !timedOut && n < lastAttempt;
       try {
         const res = await ctx.fetch(OPENBETA_ENDPOINT, {
-          cacheKey: `${tile.key}:openbeta`,
+          cacheKey: `${tile.key}:openbeta${routes || !isFineTile(tile) ? "" : ":plain"}`,
           ttlSeconds: TILE_TTL_SECONDS,
           shouldCache: (text) => !text.includes('"errors"') && text.includes('"cragsWithin"') && !OPENBETA_EMPTY.test(text),
           timeoutMs,
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: openbetaBody(tile.bbox),
+          body: openbetaBody(tile.bbox, routes),
         });
         if (!res.ok) return { ok: false, error: `OpenBeta returned ${res.status}`, retry: isRetryableStatus(res.status) };
         const json: unknown = await res.json();
         if (openbetaCrags(json) === null) return { ok: false, error: "OpenBeta returned an unexpected response", retry: true };
-        return { ok: true, value: (json as { data: { cragsWithin: OpenbetaArea[] } }).data.cragsWithin };
+        return { ok: true, value: { areas: (json as { data: { cragsWithin: OpenbetaArea[] } }).data.cragsWithin, routes } };
       } catch (err) {
+        if (typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError") timedOut = true;
         return { ok: false, error: failureReason(err, "OpenBeta", timeoutMs), retry: true };
       }
     },
@@ -640,6 +800,10 @@ export function climbingNote(args: {
   openbetaPartError?: string;
   /** A wide box: the run writes the ranked-of-total note, so only say when a source was cut before ranking. */
   wide?: boolean;
+  /** OpenBeta answered on 2° tiles, which carry no route list, so its crags have no grades per style. */
+  coarse?: boolean;
+  /** OpenBeta's route lists timed out for some 0.5° tiles, answered without them. */
+  routesMissing?: boolean;
 }): string {
   const fmt = (n: number) => n.toLocaleString("en-US");
   const parts = [`Returned ${fmt(args.shown)} climbing places`];
@@ -662,6 +826,11 @@ export function climbingNote(args: {
   else if (args.openbetaPartError) {
     note += `. OpenBeta did not answer for part of the area (${args.openbetaPartError}), so its crags there are missing`;
   }
+  if (args.coarse && !args.openbetaError) {
+    note += ". The view is too large for OpenBeta's route lists, so its crags carry no grades per style (sport, trad or boulder grades); zoom in to filter by them";
+  } else if (args.routesMissing && !args.openbetaError) {
+    note += ". OpenBeta's route lists did not come in time for part of the area, so some crags carry no grades per style (sport, trad or boulder grades) and a filter on them leaves those out";
+  }
   return note;
 }
 
@@ -683,6 +852,31 @@ const DISCIPLINE_LABELS: Record<string, string> = {
   deepwater: "Deep water solo",
 };
 
+/** Route bands per style, in the words of the grades climbers read (the shared band edges of layers/_shared/bands.ts). */
+const ROUTE_BAND_LEVELS: AttributeLevel[] = [
+  { value: "beginner", label: "Beginner", help: "5.0 to 5.7 YDS (French to 5b)." },
+  { value: "intermediate", label: "Intermediate", help: "5.8 to 5.10d YDS (French 5c to 6b+)." },
+  { value: "advanced", label: "Advanced", help: "5.11a to 5.12d YDS (French 6c to 7c)." },
+  { value: "elite", label: "Elite", help: "5.13a and harder YDS (French 7c+ and up)." },
+];
+
+/** Boulder bands on the V-scale, named by their grades as boulderers say them. */
+const BOULDER_BAND_LEVELS: AttributeLevel[] = [
+  { value: "beginner", label: "V0 to V2", help: "Beginner: VB to V2." },
+  { value: "intermediate", label: "V3 to V5", help: "Intermediate: V3 to V5." },
+  { value: "advanced", label: "V6 to V9", help: "Advanced: V6 to V9." },
+  { value: "elite", label: "V10 and up", help: "Elite: V10 and harder." },
+];
+
+const STYLE_BANDS_HELP = (style: string, scale: string): FieldHelp => ({
+  text:
+    `The grade bands that hold at least one ${style}, banded route by route from OpenBeta's route list (${scale}), so a crag with easy trad and ` +
+    `only hard sport is not in the sport Beginner band. For an OpenStreetMap crag mapped with this style alone, the bands its grade tags span.`,
+  scale,
+  source: "This app, from OpenBeta routes and OpenStreetMap climbing:grade tags",
+  url: "https://openbeta.io/",
+});
+
 const ATTRIBUTES: Attribute[] = [
   {
     key: "disciplines",
@@ -693,7 +887,13 @@ const ATTRIBUTES: Attribute[] = [
     levels: Object.entries(DISCIPLINE_LABELS).map(([value, label]) => ({ value, label })),
   },
   { key: "gradeBands", type: "ordinal", label: "Grade", multi: true, levels: CLIMBING_LEVELS, scale: CLIMBING_GRADE_SCALE, help: CLIMBING_GRADE_HELP },
+  { key: "sportBands", type: "ordinal", label: "Sport grade", multi: true, levels: ROUTE_BAND_LEVELS, scale: "YDS (else French) of each sport route" },
+  { key: "tradBands", type: "ordinal", label: "Trad grade", multi: true, levels: ROUTE_BAND_LEVELS, scale: "YDS (else French) of each trad route" },
+  { key: "boulderBands", type: "ordinal", label: "Boulder grade", multi: true, levels: BOULDER_BAND_LEVELS, scale: "V-scale of each boulder problem" },
   { key: "v", type: "measure", label: "Routes", unit: "routes", encode: "size" },
+  { key: "sport", type: "measure", label: "Sport routes", unit: "routes" },
+  { key: "trad", type: "measure", label: "Trad routes", unit: "routes" },
+  { key: "boulder", type: "measure", label: "Boulder problems", unit: "problems" },
   { key: "kind", type: "category", label: "Kind", levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
   { key: "fee", type: "flag", label: "Fee charged" },
   { key: "source", type: "category", label: "Listed by", levels: Object.entries(SOURCE_LABELS).map(([value, label]) => ({ value, label })) },
@@ -729,6 +929,24 @@ const HELP: Record<string, FieldHelp> = {
   boulder: BY_DISCIPLINE,
   toprope: BY_DISCIPLINE,
   routesByDiscipline: BY_DISCIPLINE,
+  sportBands: STYLE_BANDS_HELP("sport route", "YDS, else French"),
+  tradBands: STYLE_BANDS_HELP("trad route", "YDS, else French"),
+  boulderBands: STYLE_BANDS_HELP("boulder problem", "V-scale"),
+  sportGrades: {
+    text: "OpenBeta's sport routes here, how many fall in each grade band and the easiest to hardest grade in it (Beginner to 5.7, Intermediate 5.8 to 5.10d, Advanced 5.11 to 5.12, Elite 5.13 and up).",
+    source: "OpenBeta",
+    url: "https://openbeta.io/",
+  },
+  tradGrades: {
+    text: "OpenBeta's trad routes here, how many fall in each grade band and the easiest to hardest grade in it (Beginner to 5.7, Intermediate 5.8 to 5.10d, Advanced 5.11 to 5.12, Elite 5.13 and up).",
+    source: "OpenBeta",
+    url: "https://openbeta.io/",
+  },
+  boulderGrades: {
+    text: "OpenBeta's boulder problems here, how many fall in each band and the easiest to hardest V grade in it (Beginner V0 to V2, Intermediate V3 to V5, Advanced V6 to V9, Elite V10 and up).",
+    source: "OpenBeta",
+    url: "https://openbeta.io/",
+  },
   gradeBands: CLIMBING_GRADE_HELP,
   fee: { text: "Whether a fee is charged to climb here, from the OpenStreetMap fee tag." },
   disciplines: {
@@ -759,6 +977,9 @@ const CARD: CardSpec = {
         { key: "toprope", label: "top rope" },
       ],
     },
+    { key: "sportGrades", label: "Sport" },
+    { key: "tradGrades", label: "Trad" },
+    { key: "boulderGrades", label: "Boulder problems" },
     { key: "gradeBands", label: "Grade bands", format: "list", values: Object.fromEntries(CLIMBING_LEVELS.map((l) => [String(l.value), l.label])) },
     { key: "disciplines", label: "Disciplines", format: "list", values: DISCIPLINE_LABELS },
     { key: "maxLengthM", label: "Longest route", unit: "m", format: "m" },
@@ -772,7 +993,8 @@ const CARD: CardSpec = {
     { key: "website", label: "Website" },
   ],
   // Database ids and each source's own route count are plumbing: Routes already shows the larger count.
-  hidden: ["osmId", "openbetaId", "routesOsm", "routesOpenbeta"],
+  // The per-style bands and counts are the Sport, Trad and Boulder lines in words.
+  hidden: ["osmId", "openbetaId", "routesOsm", "routesOpenbeta", ...STYLE_KEYS.filter((k) => !k.endsWith("Grades"))],
 };
 
 /** What the map draws: one symbol per place, sized by its route count. */
@@ -797,11 +1019,14 @@ const climbing = defineLayer({
     "Rock climbing places worldwide: crags and cliffs, bouldering areas (boulders) and climbing areas, merged from OpenStreetMap and OpenBeta, the open climbing route database. " +
     "Each point is one place with kind ('crag', 'boulder', 'area', or 'gym' for indoor gyms when includeGyms is true), name, and v = the number of climbing routes or problems there (the bigger, the taller its column), " +
     "plus where known: grades (the grade range, for example '5.6 to 5.13b; V0 to V4'), gradeBands (the bands those grades span: beginner, intermediate, advanced, elite), disciplines (a list: sport, trad, boulder, toprope, ice...), sport, trad, boulder and toprope route counts, orientation, region, and url, a link to the OpenBeta page with the route list and topos. " +
+    "Grades per style, banded route by route from OpenBeta: sportBands, tradBands and boulderBands list the bands that hold at least one route of that style (beginner to 5.7, intermediate 5.8 to 5.10d, advanced 5.11 to 5.12d, elite 5.13 and up; boulders beginner V0 to V2, intermediate V3 to V5, advanced V6 to V9, elite V10 and up); " +
+    "sportBeginner, sportIntermediate, sportAdvanced, sportElite (and the same for trad and boulder) count them; sportGrades, tradGrades and boulderGrades say it in words ('12 routes: 3 beginner 5.6 to 5.7 · 9 intermediate 5.8 to 5.10c'). " +
+    "Filter a style at a level with these, never with disciplines plus gradeBands (those pass a crag with easy trad and only hard sport): 'beginner sport' is sportBands = beginner (add intermediate for 5.8 and 5.9), 'easy trad' tradBands = beginner, 'bouldering' disciplines = boulder ranked by boulder (the problem count, not v, which counts routes too), 'V3 to V5 problems' boulderBands = intermediate. " +
     "source says which database it came from ('osm', 'openbeta' or 'osm+openbeta'). " +
     "Use it for questions like: where can I go climbing or bouldering near here, which crag has the most routes, where is sport climbing or trad climbing, is there easy top-rope climbing nearby. " +
     "Caveats: OpenBeta is strong in the United States and thinner elsewhere; OpenStreetMap crags are volunteer-mapped and often have no route count (no v); " +
     "route counts and grades are crowd-sourced, so treat them as a guide; access, seasonal closures and bolting rules are not included, so check the land manager (public-lands) before going; " +
-    "individual routes and their line geometry are not returned. " +
+    "individual routes and their line geometry are not returned; grades per style come only for views up to about 1 by 1.5 degrees (larger views use coarse tiles without OpenBeta's route lists, and the note says so). " +
     "Over 10,000 km² it returns the 1,000 places with the most routes and how many there are in all. Each source returns at most 3,000 places (OpenStreetMap the lowest ids, OpenBeta the most routes) and the coverage note says if the box was cut or a source did not answer.",
   coverage: "global",
   surface: "land",
@@ -856,7 +1081,7 @@ const climbing = defineLayer({
     // keep only what is in it.
     const osmAll = dedupeSameName(osmCrags({ elements: [...osmElements.values()] }, input.includeGyms).filter((c) => inBox(c.position, ctx.bbox)));
     const obAreas = new Map<string, OpenbetaArea>();
-    for (const areas of obTiles.values) for (const a of areas) obAreas.set(a.uuid, a);
+    for (const tile of obTiles.values) for (const a of tile.areas) obAreas.set(a.uuid, a);
     const obAll = (openbetaCrags({ data: { cragsWithin: [...obAreas.values()] } }) ?? []).filter((c) => inBox(c.position, ctx.bbox));
     const osm = osmAll.sort(byRoutes).slice(0, MAX_PER_SOURCE);
     const ob = obAll.sort(byRoutes).slice(0, MAX_PER_SOURCE);
@@ -897,6 +1122,8 @@ const climbing = defineLayer({
         ...(!obOk && { openbetaError: obTiles.error }),
         ...(obOk && obTiles.failed > 0 && { openbetaPartError: obTiles.error }),
         ...(wideLimit !== undefined && { wide: true }),
+        ...(!tiles.every(isFineTile) && { coarse: true }),
+        ...(obTiles.values.some((t) => !t.routes) && { routesMissing: true }),
       }),
       citation: {
         ...osmCitation(),

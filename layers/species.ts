@@ -10,7 +10,8 @@
  * rights reserved), species_guess, taxon.name (scientific) and taxon.preferred_common_name.
  * Fixture: layers/__fixtures__/species.tahoe.json (50 of 200 results, Lake Tahoe west shore, trimmed to the
  * fields above). iNaturalist asks for no more than about 1 request per second; pages are spaced 600 ms apart.
- * Wide mode (over 50,000 km², up to the default hard cap of 200,000 km²):
+ * Wide mode (over 50,000 km², up to 1,500,000 km²; Nebraska, 242,000 km², was an error at the old 200,000 cap, and the
+ * cost is the same ten pages or a tile template at any size):
  *   - with a taxon, the 2,000 most recent observations (10 pages, same 600 ms spacing) and total_results as the total, so a
  *     filtered question keeps its filter;
  *   - with no taxon, a density map instead of points: GBIF density tiles of the iNaturalist Research-grade Observations
@@ -26,6 +27,13 @@
  *   endpoint, and each one is grouped under its species (`taxon.min_species_taxon_id`), so the subspecies American Elk
  *   and the species Elk are one chip. Smoke 2026-10-18 near Estes Park (-105.7,40.3,-105.4,40.45), 365 days, "elk":
  *   683 sightings, all Cervus canadensis (158 at species rank, 42 of the first 200 as the subspecies American Elk).
+ * Trout (2026-10-23): autocomplete for "trout" ranks fawn lilies (Erythronium, matched on "trout lilies") first, then
+ *   yellow trout lily, Smallmouth Bass ("Trout Bass") and trout-perches: no result is a trout. Anglers' words the
+ *   autocomplete misreads are sent as a Latin name instead (TAXON_ALIASES: "trout" is Salmoninae, the salmons and trouts,
+ *   which holds Oncorhynchus, Salmo and Salvelinus), and with no exact match the first result whose name ends in the asked
+ *   word ("Lake Trout", not "trout lily") is preferred to the first result.
+ * Months (2026-10-23): `month` takes a comma list, ORed (Platte box, birds since 2016: all 6,398, month=3 1,064, 3,4
+ *   1,801, 12,1,2 360), so a month, a range or a season (helpers shared with gbif-occurrences) is one parameter.
  * Smoke wide 2026-10-14 (through runLayer), box -123,37,-120,40 (about 88,000 km²), 365 days: taxon "birds" returned the 1,857 most recent
  *   of 26,626 in 14.4 s (591 KB; 143 obscured left out); "mule deer" all 1,655 in 7.1 s; no taxon the density tiles in 0.0 s. Before the
  *   v2 `fields` request and the overlapped pages, the "mule deer" fetch took 35.6 s (v1 pages were about 14 MB each).
@@ -37,6 +45,7 @@ import { timeAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
 import { layerColor } from "@/lib/render/palette";
+import { MONTH_NAMES, monthsOf, monthsText, seasonOf } from "./gbif-occurrences";
 
 /**
  * The v2 endpoint takes the v1 parameters plus `fields`, which cuts a 200-row page from about 14 MB to 85 KB, so every
@@ -62,11 +71,30 @@ const MS_PER_DAY = 86_400_000;
 /** Search results change slowly; six hours keeps repeat questions cheap without hiding new sightings for long. */
 const CACHE_TTL_SECONDS = 6 * 3600;
 
+/** One month 1 to 12, or a range "3-4" (wrapping past December: "11-2"). */
+const MONTH_RANGE = /^\s*(1[0-2]|0?[1-9])\s*(?:[-–,]|to)\s*(1[0-2]|0?[1-9])\s*$/;
+
 const inputSchema = z.object({
   taxon: z.string().trim().min(1).max(120).optional(),
   days: z.number().int().min(1).max(3650).default(365),
   researchGradeOnly: z.boolean().default(true),
+  month: z.union([z.number().int().min(1).max(12), z.string().regex(MONTH_RANGE)]).optional(),
+  season: z.enum(["spring", "summer", "fall", "winter"]).optional(),
 });
+
+/**
+ * Names the taxon autocomplete reads as something else, sent as the Latin name instead: "trout" ranked fawn lilies
+ * (Erythronium, "trout lily") first and no trout in its top ten (2026-10-23).
+ */
+export const TAXON_ALIASES: Record<string, string> = {
+  trout: "Salmoninae",
+  trouts: "Salmoninae",
+};
+
+/** The name to look up: an alias's Latin name, else the name as asked. */
+export function lookupName(name: string): string {
+  return TAXON_ALIASES[name.trim().toLowerCase().replace(/\s+/g, " ")] ?? name;
+}
 
 type SpeciesInput = z.infer<typeof inputSchema>;
 
@@ -106,7 +134,7 @@ export type TaxonFilter = { taxonId?: number; placeId?: number };
 /** Request URL for one page of the slim v2 endpoint; `now` is injected so the date maths is testable. */
 export function observationsUrl(
   bbox: BBox,
-  input: Pick<SpeciesInput, "days" | "taxon" | "researchGradeOnly">,
+  input: Pick<SpeciesInput, "days" | "taxon" | "researchGradeOnly"> & Partial<Pick<SpeciesInput, "month" | "season">>,
   pageNo: number,
   now: Date,
   filter: TaxonFilter = {},
@@ -126,6 +154,9 @@ export function observationsUrl(
     order: "desc",
   });
   if (input.researchGradeOnly) search.set("quality_grade", "research");
+  // Those months of every year in the window (iNaturalist ORs a comma list).
+  const months = monthsOf(input);
+  if (months) search.set("month", months.join(","));
   if (filter.taxonId !== undefined) search.set("taxon_id", String(filter.taxonId));
   else if (input.taxon !== undefined) search.set("taxon_name", input.taxon);
   // Common names as people in the box's country say them ("Elk" in the US, "Wapiti" elsewhere).
@@ -185,10 +216,15 @@ export function pickTaxon(q: string, json: unknown): ResolvedTaxon | null {
   if (!parsed.success) return null;
   const results = parsed.data.results.filter((r) => r.is_active !== false);
   const want = norm(q);
+  // "Lake Trout" ends in the asked word; "trout lily" only uses it to describe a lily.
+  const escaped = want.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const endsInWant = new RegExp(`(^|[^a-z])${escaped}(e?s)?$`);
+  const headNoun = (s: string | null | undefined) => endsInWant.test(norm(s));
   const hit =
     results.find((r) => norm(r.name) === want) ??
     results.find((r) => norm(r.preferred_common_name) === want) ??
     results.find((r) => norm(r.matched_term) === want) ??
+    results.find((r) => headNoun(r.matched_term) || headNoun(r.preferred_common_name)) ??
     results[0];
   if (!hit) return null;
   return {
@@ -261,6 +297,11 @@ export function normalizeObservations(json: unknown): { data: FeatureCollection<
       license: clean(obs.license_code) ?? "all-rights-reserved",
     };
     if (scientific !== undefined) properties.scientificName = scientific;
+    const month = Number(properties.observedOn.toString().slice(5, 7));
+    if (month >= 1 && month <= 12) {
+      properties.month = month;
+      properties.season = seasonOf(month);
+    }
     const own = obs.taxon?.id ?? undefined;
     const speciesId = obs.taxon?.min_species_taxon_id ?? own;
     if (typeof speciesId === "number") properties.taxonId = speciesId;
@@ -349,10 +390,14 @@ const CARD: CardSpec = {
   ],
   links: [{ key: "url", label: "Observation on iNaturalist" }],
   // The species is the card's title (lib/render/inspect.ts); taxonId is the grouping key, v is always 1.
-  hidden: ["species", "taxonId", "v"],
+  hidden: ["species", "taxonId", "v", "month", "season"],
 };
 
-const ATTRIBUTES: Attribute[] = [{ key: "species", type: "category", label: "Species", primary: true }, timeAttribute("Seen")];
+const ATTRIBUTES: Attribute[] = [
+  { key: "species", type: "category", label: "Species", primary: true },
+  timeAttribute("Seen"),
+  { key: "month", type: "category", label: "Month seen", levels: MONTH_NAMES.map((label, i) => ({ value: i + 1, label })) },
+];
 
 const species = defineLayer({
   id: "species",
@@ -362,8 +407,9 @@ const species = defineLayer({
     "a sighting identified as a subspecies counts under its species and keeps identifiedAs (for example 'American Elk (Cervus canadensis canadensis)'). " +
     "v is always 1 (one sighting), so density shows where people see things. Each point also has license (the photographer's licence, such as cc-by-nc or cc0; cite or link the url when showing it). " +
     "Use it to answer what lives or flowers somewhere, or where to look for a kind of animal or plant. " +
-    "Set taxon to a name to filter, for example 'elk', 'birds', 'mule deer' or 'Pandion haliaetus'. The name is resolved to one iNaturalist taxon first, using the common names of the country under the view, so 'elk' in the US means Cervus canadensis, not moose or elk thistle; a group name such as 'birds' includes every bird in it. The coverage note names the taxon used. Leave it out for all species. " +
-    "days (1 to 3650, default 365) sets how far back to look; researchGradeOnly (default true) keeps only observations the community has confirmed to species level, so turn it off to include unconfirmed ones. " +
+    "Set taxon to a name to filter, for example 'elk', 'birds', 'mule deer' or 'Pandion haliaetus'. The name is resolved to one iNaturalist taxon by the country's common names ('elk' in the US is Cervus canadensis, 'trout' the salmons and trouts); a group such as 'birds' includes every bird. The coverage note names the taxon used. Leave it out for all species. " +
+    "month (1-12 or '3-4') or season (spring, summer, fall, winter) keeps those months within days; for a month or season across many years ('cranes in March', 'where to see them in spring') use gbif-occurrences with month, which keeps that month of every year. " +
+    "days (1 to 3650, default 365) sets how far back to look; researchGradeOnly (default true) keeps only community-confirmed observations; turn it off for unconfirmed ones. " +
     "Caveats: this reflects where people go and post, not where animals are, so trails, roads and towns look busy and remote areas look empty; absence of points is not absence of the species. " +
     "Sightings of threatened species and ones whose observer hid their location are left out (the result says how many), so rare animals are under-counted. " +
     "At most 2,000 of the most recent sightings are returned (10 pages of 200), and the result says when there are more. " +
@@ -373,6 +419,8 @@ const species = defineLayer({
   license: "CC BY-NC / CC0 per observation (iNaturalist)",
   requiredEnv: [],
   maxAreaKm2: 50_000,
+  // Ten pages, or a tile template without a taxon, cost the same at any size; a state such as Nebraska (242,000 km²) fits.
+  hardMaxAreaKm2: 1_500_000,
   wide: { orderBy: "date observed", rank: "most recent", limit: WIDE_LIMIT },
   input: inputSchema,
   style: { geometry: "point", color: layerColor("species") },
@@ -397,9 +445,11 @@ const species = defineLayer({
       retrieved: now.toISOString(),
     };
 
+    const when = monthsText(input);
     // Wide with no taxon: a density map of every sighting, since 2,000 unfiltered points would be a meaningless sample.
     if (ctx.wide && input.taxon === undefined) {
       const notes = [`iNaturalist research-grade observations as shared with GBIF, whole years from ${new Date(now.getTime() - input.days * MS_PER_DAY).getUTCFullYear()}`];
+      if (when !== undefined) notes.push(`the density map is every month, not only ${when}; ask with a taxon for sightings in those months`);
       if (!input.researchGradeOnly) notes.push("unconfirmed observations are not in this map");
       return {
         kind: "tiles",
@@ -412,6 +462,7 @@ const species = defineLayer({
     const maxPages = ctx.wide ? Math.ceil(Math.min(WIDE_LIMIT, ctx.wideStrategy?.limit ?? WIDE_LIMIT) / PER_PAGE) : MAX_PAGES;
 
     const notes: string[] = [];
+    if (when !== undefined) notes.push(`sightings from ${when} only, in the last ${input.days.toLocaleString("en-US")} days`);
     // The country under the view names and ranks taxa as people there do; without it names fall back to iNaturalist's defaults.
     const placeId = await countryUnder(ctx);
     let asked: ResolvedTaxon | null = null;
@@ -422,7 +473,7 @@ const species = defineLayer({
         notes.push(`the iNaturalist name lookup failed, so "${input.taxon}" was matched as text and may include other species`);
       } else {
         asked = resolved.taxon;
-        notes.push(`"${input.taxon}" was read as ${taxonWords(asked)}`);
+        notes.push(`${input.taxon.charAt(0).toUpperCase()}${input.taxon.slice(1)} was read as ${taxonWords(asked)}`);
       }
     }
     const filter: TaxonFilter = { ...(asked && { taxonId: asked.id }), ...(placeId !== undefined && { placeId }) };
@@ -541,7 +592,7 @@ async function countryUnder(ctx: Ctx): Promise<number | undefined> {
 async function resolveTaxon(ctx: Ctx, name: string, placeId: number | undefined): Promise<{ taxon: ResolvedTaxon | null } | LayerError> {
   let body: unknown;
   try {
-    const res = await ctx.fetch(autocompleteUrl(name, placeId), {
+    const res = await ctx.fetch(autocompleteUrl(lookupName(name), placeId), {
       // A name resolves the same way for every view in a country, so the key leaves out the bbox.
       cacheKey: ctx.cacheKey === undefined ? undefined : `inat:taxon:${placeId ?? "any"}:${name.toLowerCase()}`,
       ttlSeconds: LOOKUP_TTL_SECONDS,
@@ -553,7 +604,7 @@ async function resolveTaxon(ctx: Ctx, name: string, placeId: number | undefined)
     return { taxon: null };
   }
   if (!autocompleteSchema.safeParse(body).success) return { taxon: null };
-  const taxon = pickTaxon(name, body);
+  const taxon = pickTaxon(lookupName(name), body);
   if (taxon === null) {
     return { error: `iNaturalist knows no species or group called "${name}"; try a common name (mule deer) or a Latin one (Odocoileus hemionus)` };
   }

@@ -8,16 +8,15 @@ const include = (id: string, key: string, values: string[]) =>
   (normalizeFilters({ [key]: { include: values } }, attrs(id))[key] as { include: string[] }).include;
 
 describe("render filters: labels and band names become the values the data holds (every ordinal band set)", () => {
-  it("mountain bike Singletrack Scale: Hard is S3, Expert is S4 to S6, Easy is S0 and S1; codes S3 and values pass", () => {
-    expect(include("mtb-trails", "v", ["Hard", "Expert"])).toEqual(["3", "4", "5", "6"]);
-    expect(include("mtb-trails", "v", ["easy"])).toEqual(["0", "1"]);
-    expect(include("mtb-trails", "v", ["Moderate"])).toEqual(["2"]);
-    expect(include("mtb-trails", "v", ["S3"])).toEqual(["3"]);
+  it("mountain bike difficulty in IMBA colors: Black is 3, Double black 4, Green 0 and 1; values pass", () => {
+    expect(include("mtb-trails", "v", ["Black", "Double black"])).toEqual(["3", "4"]);
+    expect(include("mtb-trails", "v", ["green"])).toEqual(["0", "1"]);
+    expect(include("mtb-trails", "v", ["Blue"])).toEqual(["2"]);
     expect(include("mtb-trails", "v", ["3", "4"])).toEqual(["3", "4"]);
   });
 
   it("a filter keyed by the attribute's label lands on its key (Difficulty is mtb-trails' v)", () => {
-    expect(normalizeFilters({ Difficulty: { include: ["Hard"] } }, attrs("mtb-trails"))).toEqual({ v: { include: ["3"] } });
+    expect(normalizeFilters({ Difficulty: { include: ["Black"] } }, attrs("mtb-trails"))).toEqual({ v: { include: ["3"] } });
   });
 
   it("SAC hiking scale: labels, T codes and spelled-out values", () => {

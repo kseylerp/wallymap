@@ -12,7 +12,7 @@
  *     A month not published yet answers 404 with an HTML page (202610 on 2026-10-10; 202609 was already out). The
  *     archive starts in 1895. Connecticut is still its 8 old counties, which do not match the 2022 planning regions in
  *     the outlines, so Connecticut is left out (noted in the result).
- *   Outlines: layers/_shared/counties.ts (Esri Living Atlas generalized counties, cached a week).
+ *   Outlines: layers/_shared/counties.ts (Census Bureau cb_2023_us_county_5m, bundled in layers/_data/us-counties.json).
  * Without a period the layer tries last month, then the month before. Published periods do not change, so they are
  * cached for a week; a 404 is not cached.
  *
@@ -249,7 +249,7 @@ const temperatureAnomaly = defineLayer({
     "Connecticut is missing (NOAA still uses its old counties). The map view must be under 16,000,000 km² (the lower 48 fit).",
   coverage: "us",
   surface: "land",
-  license: "Public domain (NOAA NCEI); county outlines Esri / US Census Bureau",
+  license: "Public domain (NOAA NCEI); county outlines US Census Bureau cartographic boundaries (public domain)",
   requiredEnv: [],
   maxAreaKm2: 16_000_000,
   input: inputSchema,
@@ -267,7 +267,7 @@ const temperatureAnomaly = defineLayer({
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const now = Date.now();
     const citation = {
-      source: "NOAA National Centers for Environmental Information, Climate at a Glance: County Mapping (public domain); county outlines Esri Living Atlas / US Census Bureau",
+      source: "NOAA National Centers for Environmental Information, Climate at a Glance: County Mapping (public domain); county outlines US Census Bureau (public domain)",
       url: "https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/county/mapping",
       retrieved: new Date(now).toISOString(),
     };

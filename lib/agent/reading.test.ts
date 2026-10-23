@@ -138,9 +138,9 @@ describe("readQuestion: the words the audit's questions use", () => {
 
   it("picks chips the question names, but not the layer's own subject or a state it asks about", () => {
     expect(read("Beginner sport climbing at Red Rock near Las Vegas").filters).toEqual(
-      expect.arrayContaining([expect.objectContaining({ key: "disciplines", include: ["sport"] }), expect.objectContaining({ key: "gradeBands", include: ["beginner"] })]),
+      expect.arrayContaining([expect.objectContaining({ key: "disciplines", include: ["sport"] }), expect.objectContaining({ key: "sportBands", include: ["beginner"] })]),
     );
-    expect(read("Intermediate mountain bike trails near Bentonville").filters).toContainEqual(expect.objectContaining({ layerId: "mtb-trails", key: "v", include: ["2"] }));
+    expect(read("Intermediate mountain bike trails near Bentonville").filters).toContainEqual(expect.objectContaining({ layerId: "mtb-trails", key: "level", include: ["intermediate"] }));
     expect(read("Show hiking trails around Lake Tahoe").filters).toEqual([]);
     expect(read("Are the fires near Missoula contained?").filters).toEqual([]);
     expect(read("Which crags near Moab are sport and shaded in the afternoon?").filters.map((f) => f.key)).toEqual(["disciplines"]);
@@ -169,10 +169,11 @@ describe("species, trout water and layers still to come", () => {
     expect(taxonOf("Climbing crags near Red River Gorge")).toBeNull();
   });
 
-  it("keeps trout water under 64 °F, and avoids no layer for a forecast or avalanche layer the app does not have yet", () => {
+  it("keeps trout water under 64 °F, and asks the avalanche center, not weather warnings, for avalanche danger", () => {
     expect(readQuestion("Trout streams near Denver that aren't too warm", NOW).filters).toContainEqual(expect.objectContaining({ layerId: "fishing", key: "tempBand", include: ["cold", "good"] }));
     const avalanche = readQuestion("Avalanche danger near Stevens Pass today", NOW);
-    expect(avalanche.avoid.map((a) => a.layerId)).not.toContain("weather-alerts");
+    expect(avalanche.layers.map((l) => l.layerId)).toContain("avalanche");
+    expect(avalanche.avoid.map((a) => a.layerId)).toContain("weather-alerts");
   });
 });
 

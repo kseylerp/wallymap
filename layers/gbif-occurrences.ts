@@ -16,6 +16,15 @@
  *     "puma"; occurrence records rarely carry one themselves), for the 20 most recorded species in an answer.
  *   Density tiles: https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@1x.png?style=purpleYellow.point
  *     &taxonKey=K&year=A,B (the layer always sends the same year window as points: explicit bounds, else the last 10 years; 256 px PNG; 200 at z0 to z14; the whole world, not limited to the bbox).
+ *   Months (2026-10-23, live): the search takes `month` repeated, one value per month, ORed (sandhill crane, taxonKey
+ *     2474953, Platte box -100.5,40.4,-97.5,41.2, 2016-2026: all months 8,537, month=3 6,457, month=3&month=4 7,852,
+ *     month=12&month=1&month=2 355); a single "3,4" is a range, but a wrapping "12,1,2" or "3-4" is a 400. The density
+ *     endpoint above IGNORES month (byte-identical tiles with and without it), so a month or season asks the ad-hoc map
+ *     instead: https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=purpleYellow.point
+ *     &taxonKey=K&year=A,B&month=3 (without srs it answers 204; with it March and July tiles differ, 9,441 vs 2,303 bytes
+ *     at z4 over Nebraska), which takes the search's filters.
+ *   Synonyms: /species/match on "Antigone canadensis" answers a SYNONYM (usageKey 9036008) with acceptedUsageKey 2474953
+ *     (Grus canadensis); the accepted key is used.
  * Notes: iNaturalist is the biggest GBIF publisher, so the species layer and this one overlap. Records with a
  * coordinate uncertainty over 5 km (usually a region centroid) are left out. GBIF limits offset+limit to 100,000;
  * this layer reads at most 2 pages (600 records), so dense places are a recent sample, and `density` gives the whole picture.
@@ -40,6 +49,8 @@ import { layerColor } from "@/lib/render/palette";
 const SEARCH_URL = "https://api.gbif.org/v1/occurrence/search";
 const MATCH_URL = "https://api.gbif.org/v1/species/match";
 const DENSITY_URL = "https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@1x.png";
+/** The ad-hoc map honours every search filter, month included (the density endpoint ignores month). */
+const ADHOC_URL = "https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png";
 const DENSITY_STYLE = "purpleYellow.point";
 
 const PAGE_SIZE = 300;
@@ -55,11 +66,16 @@ const DEFAULT_YEARS_BACK = 10;
 const INAT_DATASET = "50c9509d-22c7-4a22-a47d-8c48425ef4a7";
 
 
+/** One month 1 to 12, or a range "3-4" (a range that passes December wraps: "11-2" is November to February). */
+const MONTH_RANGE = /^\s*(1[0-2]|0?[1-9])\s*(?:[-–,]|to)\s*(1[0-2]|0?[1-9])\s*$/;
+
 const inputSchema = z.object({
   scientificName: z.string().trim().min(1).max(120).optional(),
   taxonKey: z.number().int().positive().optional(),
   yearFrom: z.number().int().min(1600).max(2100).optional(),
   yearTo: z.number().int().min(1600).max(2100).optional(),
+  month: z.union([z.number().int().min(1).max(12), z.string().regex(MONTH_RANGE)]).optional(),
+  season: z.enum(["spring", "summer", "fall", "winter"]).optional(),
   density: z.boolean().default(false),
 });
 
@@ -92,6 +108,7 @@ const pageSchema = z.object({
 
 const matchSchema = z.object({
   usageKey: z.number().optional(),
+  acceptedUsageKey: z.number().optional(),
   canonicalName: z.string().optional(),
   matchType: z.string().optional(),
 });
@@ -107,6 +124,50 @@ export function yearRange(input: Pick<GbifInput, "yearFrom" | "yearTo">, now: Da
   return { from: Math.min(from, to), to };
 }
 
+/** Northern-hemisphere seasons by month: spring March to May, summer June to August, fall September to November, winter December to February. */
+export const SEASON_MONTHS: Record<NonNullable<GbifInput["season"]>, number[]> = {
+  spring: [3, 4, 5],
+  summer: [6, 7, 8],
+  fall: [9, 10, 11],
+  winter: [12, 1, 2],
+};
+
+export const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** The season (northern hemisphere) a month falls in. */
+export function seasonOf(month: number): NonNullable<GbifInput["season"]> {
+  return month <= 2 || month === 12 ? "winter" : month <= 5 ? "spring" : month <= 8 ? "summer" : "fall";
+}
+
+/**
+ * The months asked for, in calendar order from the first: `month` (one, or a range that may wrap past December) wins
+ * over `season`; undefined when neither is set.
+ */
+export function monthsOf(input: Pick<GbifInput, "month" | "season">): number[] | undefined {
+  if (typeof input.month === "number") return [input.month];
+  if (typeof input.month === "string") {
+    const m = MONTH_RANGE.exec(input.month);
+    if (!m) return undefined;
+    const from = Number(m[1]);
+    const to = Number(m[2]);
+    const out: number[] = [];
+    for (let k = from; ; k = (k % 12) + 1) {
+      out.push(k);
+      if (k === to || out.length === 12) break;
+    }
+    return out;
+  }
+  return input.season ? SEASON_MONTHS[input.season] : undefined;
+}
+
+/** "March", "March to April", "spring (March to May, northern-hemisphere seasons)": the months in words, for the note. */
+export function monthsText(input: Pick<GbifInput, "month" | "season">): string | undefined {
+  const months = monthsOf(input);
+  if (!months) return undefined;
+  const span = months.length === 1 ? MONTH_NAMES[months[0] - 1] : `${MONTH_NAMES[months[0] - 1]} to ${MONTH_NAMES[months[months.length - 1] - 1]}`;
+  return input.month === undefined && input.season ? `${input.season} (${span}, northern-hemisphere seasons)` : span;
+}
+
 /** GBIF counter-clockwise polygon for a bbox. */
 export function bboxPolygon(bbox: BBox): string {
   const [w, s, e, n] = bbox;
@@ -116,7 +177,7 @@ export function bboxPolygon(bbox: BBox): string {
 /** Search URL for one page of records inside a bbox. */
 export function searchUrl(
   bbox: BBox,
-  input: Pick<GbifInput, "scientificName" | "taxonKey" | "yearFrom" | "yearTo">,
+  input: Pick<GbifInput, "scientificName" | "taxonKey" | "yearFrom" | "yearTo" | "month" | "season">,
   offset: number,
   now: Date = new Date(),
 ): string {
@@ -132,15 +193,22 @@ export function searchUrl(
   });
   if (input.taxonKey !== undefined) search.set("taxonKey", String(input.taxonKey));
   else if (input.scientificName !== undefined) search.set("scientificName", input.scientificName);
+  // One `month` per month: GBIF ORs repeated values, and a wrapping range ("12,1,2") is not accepted.
+  for (const m of monthsOf(input) ?? []) search.append("month", String(m));
   return `${SEARCH_URL}?${search.toString()}`;
 }
 
-/** Density tile template (`{z}/{x}/{y}` stay for the map to fill) for a taxon and a year range. */
-export function densityTileUrl(taxonKey: number | undefined, years: { from: number; to: number }): string {
-  const parts = [`style=${DENSITY_STYLE}`];
+/**
+ * Density tile template (`{z}/{x}/{y}` stay for the map to fill) for a taxon and a year range. With months it is the
+ * ad-hoc map (in web Mercator, which it needs said), since the density endpoint ignores `month`.
+ */
+export function densityTileUrl(taxonKey: number | undefined, years: { from: number; to: number }, months?: number[]): string {
+  const adhoc = months !== undefined && months.length > 0;
+  const parts = adhoc ? ["srs=EPSG:3857", `style=${DENSITY_STYLE}`] : [`style=${DENSITY_STYLE}`];
   if (taxonKey !== undefined) parts.push(`taxonKey=${taxonKey}`);
   parts.push(`year=${years.from},${years.to}`);
-  return `${DENSITY_URL}?${parts.join("&")}`;
+  for (const m of months ?? []) parts.push(`month=${m}`);
+  return `${adhoc ? ADHOC_URL : DENSITY_URL}?${parts.join("&")}`;
 }
 
 /** `t` from eventDate (zone-less times read as UTC, ranges use their start) or, failing that, year/month/day. */
@@ -191,11 +259,14 @@ export function normalizeOccurrences(json: unknown): { data: FeatureCollection<P
     if (t === null) continue;
 
     const year = r.year ?? Number(t.slice(0, 4));
+    const month = typeof r.month === "number" && r.month >= 1 && r.month <= 12 ? r.month : Number(t.slice(5, 7));
     const scientific = clean(r.species) ?? clean(r.scientificName);
     const properties: Record<string, string | number> = {
       species: scientific ?? "Unidentified",
       year,
       v: year,
+      month,
+      season: seasonOf(month),
       t,
       url: clean(r.references) ?? `https://www.gbif.org/occurrence/${r.key}`,
     };
@@ -315,6 +386,23 @@ const ATTRIBUTES: Attribute[] = [
       { value: "other", label: "Museums, surveys and others", help: "Specimens, surveys, eBird and every other publisher." },
     ],
   },
+  {
+    key: "month",
+    type: "category",
+    label: "Month seen",
+    levels: MONTH_NAMES.map((label, i) => ({ value: i + 1, label })),
+  },
+  {
+    key: "season",
+    type: "category",
+    label: "Season seen",
+    levels: [
+      { value: "spring", label: "Spring (Mar to May)" },
+      { value: "summer", label: "Summer (Jun to Aug)" },
+      { value: "fall", label: "Fall (Sep to Nov)" },
+      { value: "winter", label: "Winter (Dec to Feb)" },
+    ],
+  },
   { key: "year", type: "time", label: "Year" },
 ];
 
@@ -327,6 +415,10 @@ const YEAR: FieldHelp = { text: "The year the organism was seen or collected, as
 
 const HELP: Record<string, FieldHelp> = {
   year: YEAR,
+  month: { text: "The month the organism was seen or collected (1 is January), whatever the year: March records of every year share March." },
+  season: {
+    text: "The season of the month seen, northern-hemisphere style: spring March to May, summer June to August, fall September to November, winter December to February.",
+  },
   v: YEAR,
   basisOfRecord: {
     text:
@@ -360,7 +452,7 @@ const CARD: CardSpec = {
     { key: "license", label: "Licence" },
   ],
   /** Species is the Latin name (the title or the Scientific name row); year and v repeat the date chip; speciesKey is GBIF's id. */
-  hidden: ["species", "year", "v", "speciesKey"],
+  hidden: ["species", "year", "v", "speciesKey", "month", "season"],
   links: [{ key: "url", label: "Source record" }],
 };
 
@@ -368,10 +460,11 @@ const gbifOccurrences = defineLayer({
   id: "gbif-occurrences",
   title: "GBIF occurrence records",
   description:
-    "Records of where species have been seen or collected, from GBIF (the Global Biodiversity Information Facility), which pools iNaturalist, eBird, museum specimens and survey data from around the world. Each point is one record with species (the Latin name), name (the species' common name from GBIF, when it has one; looked up for the 20 most recorded species) and scientificName (the Latin name again, set only alongside a common name), basisOfRecord (human observation, preserved specimen, machine observation...), dataset, year, v (the year), t (the date), url (the source record), license, uncertaintyM (how vague the position is, in metres) and publisher ('inaturalist' for iNaturalist research-grade sightings, the same ones the species layer shows, or 'other' for museums, surveys and everyone else; near towns most records are iNaturalist). " +
+    "Records of where species have been seen or collected, from GBIF (the Global Biodiversity Information Facility), which pools iNaturalist, eBird, museum specimens and survey data from around the world. Each point is one record with species (the Latin name), month (1 to 12) and season, name (the species' common name from GBIF, when it has one; looked up for the 20 most recorded species) and scientificName (the Latin name again, set only alongside a common name), basisOfRecord (human observation, preserved specimen, machine observation...), dataset, year, v (the year), t (the date), url (the source record), license, uncertaintyM (how vague the position is, in metres) and publisher ('inaturalist' for iNaturalist research-grade sightings, the same ones the species layer shows, or 'other' for museums, surveys and everyone else; near towns most records are iNaturalist). " +
     "Use it for where a species or group has been recorded, for example 'where have mountain lions been seen here', 'orchid records in this valley' or 'how has this species' range shown up over the years'. It works worldwide and goes back further than the species layer, so pick this one for older records, specimens, or places outside iNaturalist's reach; use species for recent photo sightings with common names. " +
     "Set scientificName to a Latin name at any level, such as 'Puma concolor', 'Pandion haliaetus' or a family like 'Felidae' (common names like 'mountain lion' do not work, so translate first), or taxonKey if you have a GBIF key. Leave both out for all species. " +
     "yearFrom and yearTo set the years (default: the last 10 years). " +
+    "month (1 to 12, or a range like '3-4') or season (spring is Mar-May, summer, fall, winter; northern hemisphere) keeps those months of every year, for points and density: 'cranes in March' is month 3. " +
     "Set density to true to get a world-wide map of record density (map tiles, not countable points) instead of points; it works at any size of region, shows where the data is thickest, and respects scientificName, taxonKey and the year range (the same default of the last 10 years as points). " +
     "Caveats: records show where people and institutions looked, not where animals are: roads, trails, towns and parks look busy and remote land looks empty, and absence of points is not absence of the species. " +
     "The position of some records is deliberately blurred or vague; records vaguer than 5 km are left out, and threatened species are often generalised. " +
@@ -428,16 +521,19 @@ const gbifOccurrences = defineLayer({
         if ("error" in matched) return matched;
         taxonKey = matched.key;
       }
+      const when = monthsText(input);
+      const years = yearRange(input, now);
       return {
         kind: "tiles",
         data: {
-          url: densityTileUrl(taxonKey, yearRange(input, now)),
+          url: densityTileUrl(taxonKey, years, monthsOf(input)),
           minzoom: 0,
           maxzoom: 14,
           format: "raster",
           tileSize: 256,
         },
         citation,
+        ...(when !== undefined && { coverageNote: `Records from ${when} of every year, ${years.from} to ${years.to}` }),
       };
     }
 
@@ -492,6 +588,11 @@ const gbifOccurrences = defineLayer({
     withCommonNames(features, await commonNames(ctx, speciesToName(features)));
 
     const notes: string[] = [];
+    const when = monthsText(input);
+    if (when !== undefined) {
+      const years = yearRange(input, now);
+      notes.push(`Records from ${when} of every year, ${years.from} to ${years.to}`);
+    }
     if (vague > 0) {
       notes.push(`${vague} record${vague === 1 ? "" : "s"} with a position vaguer than 5 km ${vague === 1 ? "was" : "were"} left out`);
     }
@@ -528,11 +629,12 @@ async function resolveTaxon(
     if (!res.ok) return { error: `GBIF returned ${res.status}`, hint: "upstream" };
     const parsed = matchSchema.safeParse(await res.json());
     if (!parsed.success) return { error: "GBIF returned an unexpected response", hint: "upstream" };
-    const { usageKey, matchType } = parsed.data;
+    const { usageKey, acceptedUsageKey, matchType } = parsed.data;
     if (usageKey === undefined || (matchType !== "EXACT" && matchType !== "FUZZY")) {
       return { error: `GBIF does not recognise "${name}" as a scientific name; use the Latin name (for example Puma concolor)` };
     }
-    return { key: usageKey };
+    // A synonym ("Antigone canadensis") stands for its accepted name's records.
+    return { key: acceptedUsageKey ?? usageKey };
   } catch (err) {
     return {
       error: isTimeout(err) ? `GBIF timed out after ${UPSTREAM_TIMEOUT_MS / 1000} seconds` : "GBIF returned no response",

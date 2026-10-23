@@ -35,6 +35,8 @@ export type InputHint = { layerId: string; input: Record<string, unknown>; becau
 
 export type Reading = {
   layers: LayerHint[];
+  /** The species the question names in its own words ("sandhill cranes", "moose"), or null. */
+  taxon: string | null;
   /** Layers the question's words rule out (a bike trail's "flowy" is not river flow). */
   avoid: { layerId: string; because: string }[];
   filters: FilterHint[];
@@ -303,6 +305,28 @@ const PHRASES: {
     because: "launch points are federal water-access sites and mapped put-ins",
   },
   {
+    re: /\bwill\s+it\s+(?:rain|snow|storm)\b|\brain(?:fall)?\b|\btoo\s+(?:hot|cold)\b|\btemperatures?\b|\bforecast\b|\bfreez\w+\b|\bheat\b|\bwindy\b|\bgusts?\b/i,
+    unless: /\bwater\s+temp\w*|\bsea\s+surface\b|\bwarming\b|\btemperature\s+anomal\w*/i,
+    layers: ["weather-forecast"],
+    because: "weather ahead is the 7-day forecast for the place (when the app has it)",
+  },
+  {
+    re: /\bavalanche\w*\b/i,
+    layers: ["avalanche"],
+    avoid: ["weather-alerts"],
+    because: "avalanche danger is the avalanche center's forecast (when the app has it), not a weather warning",
+  },
+  {
+    re: /\bgoing\s+to\s+flood\b|\bflood\s+stage\b|\bwill\s+(?:it|the\s+\w+(?:\s+\w+)?)\s+flood\b|\bcrest\w*\b/i,
+    layers: ["streamflow"],
+    because: "a river's flood stage and forecast are on its gauges",
+  },
+  {
+    re: /\b(?:aren'?t|not|isn'?t)\s+too\s+warm\b|\b(?:cool|cold)\s+enough\b/i,
+    filters: { fishing: { tempBand: ["cold", "good"] } },
+    because: "trout water that is not too warm is under 64 °F",
+  },
+  {
     re: /\b(?:moose|elk|deer|bears?|grizzl\w*|whales?|humpbacks?|dolphins?|orcas?|seals?|sea\s+lions?|otters?|eagles?|owls?|hawks?|falcons?|cranes?|herons?|pelicans?|bison|buffalo|pronghorn|bighorn|mountain\s+goats?|jaguars?|pumas?|cougars?|mountain\s+lions?|lynx|bobcats?|coyotes?|foxes|beavers?|butterfl\w+|monarchs?|wildflowers?|puffins?|condors?|tortoises?|salamanders?|frogs?|snakes?|rattlesnakes?)\b/i,
     unless: /\bhabitat\b|\brange\s+map\b|\bherds?\b|\bwild\s+horses?\b|\bburros?\b|\bwolf\s+packs?\b/i,
     layers: ["species"],
@@ -335,6 +359,18 @@ const PHRASES: {
     because: "a dark sky is little light at night from the satellite",
   },
 ];
+
+/** Animal words, and the words before one that make it a species ("sandhill cranes", "bald eagles"). */
+const ANIMAL = /\b(?:moose|elk|deer|bears?|grizzl\w*|whales?|humpbacks?|dolphins?|orcas?|seals?|sea\s+lions?|otters?|eagles?|owls?|hawks?|falcons?|cranes?|herons?|pelicans?|bison|buffalo|pronghorn|bighorn|mountain\s+goats?|jaguars?|pumas?|cougars?|mountain\s+lions?|lynx|bobcats?|coyotes?|foxes|beavers?|butterfl\w+|monarchs?|puffins?|condors?|tortoises?|salamanders?|frogs?|snakes?|rattlesnakes?)\b/i;
+const NOT_KIND = /^(?:the|a|an|see|any|some|where|are|is|of|for|best|place|to|near|in|have|been|being|seen|recent|records?|whales?|can|i|and|or|with)$/i;
+
+/** The species a question names, with the word before it when that word says which ("sandhill cranes"); null when none. */
+export function taxonOf(text: string): string | null {
+  const m = ANIMAL.exec(text);
+  if (!m) return null;
+  const before = text.slice(0, m.index).trim().split(/\s+/).slice(-1)[0] ?? "";
+  return (/^[a-z][a-z-]{2,}$/i.test(before) && !NOT_KIND.test(before) ? `${before} ${m[0]}` : m[0]).toLowerCase();
+}
 
 /** The words that make a color mean a ski run, and a bike trail. */
 const SKI_CONTEXT = /\b(?:ski\w*|piste\w*|slopes?|snowboard\w*|resort|lifts?|groomers?)\b|\bruns?\b(?<!trail runs?)(?![^?]*\btrail)/i;
@@ -500,7 +536,8 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     if (!m) continue;
     const strong = !(p.unless && p.unless.test(masked));
     for (const id of p.layers ?? []) addLayer(id, `"${m[0].trim()}": ${p.because}`, strong);
-    for (const id of p.avoid ?? []) avoid.push({ layerId: id, because: `"${m[0].trim()}": ${p.because}` });
+    // Avoid a layer only when the layer the phrase names exists (the forecast and avalanche layers may not yet).
+    if ((p.layers ?? []).every((id) => getLayer(id))) for (const id of p.avoid ?? []) avoid.push({ layerId: id, because: `"${m[0].trim()}": ${p.because}` });
     // A phrase whose "unless" words are there names its layers only loosely and sets nothing.
     if (strong) for (const [layerId, input] of Object.entries(p.inputs ?? {})) if (!inputs.some((i) => i.layerId === layerId && JSON.stringify(i.input) === JSON.stringify(input))) inputs.push({ layerId, input, because: `"${m[0].trim()}": ${p.because}` });
     for (const [layerId, chips] of Object.entries(p.filters ?? {})) {
@@ -561,7 +598,19 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     if (!climb && !flat && /\blong(?:est)?\b/i.test(raw) && hasMeasure(layer, "lengthKm")) rankBy.push({ layerId: layer.id, key: "lengthKm", because: "long" });
   }
 
-  return { layers, avoid: kept, filters, inputs, rankBy, time: timeWindow(raw, now), places, colors, change: asksChange(raw) || /\b(?:shrunk|shrank|retreat\w*|then\s+and\s+now|changed?\s+since)\b/i.test(raw) };
+  // A grade the question gives with a style ("beginner sport") is that style's grade where the layer keeps one per
+  // style ("Sport grade"), not the crag's grade over every style: a trad-only easy crag with one hard sport line passed.
+  for (const grade of filters.filter((f) => getLayer(f.layerId)?.attributes?.find((a) => a.key === f.key)?.label === "Grade" && f.include)) {
+    const layer = getLayer(grade.layerId);
+    const styled = (layer?.attributes ?? []).filter((a) => {
+      const style = /^(\w+) grade$/i.exec(a.label)?.[1];
+      return a.type === "ordinal" && style !== undefined && wordPattern(style).test(q);
+    });
+    if (styled.length === 0) continue;
+    filters.splice(filters.indexOf(grade), 1, ...styled.map((a) => ({ ...grade, key: a.key })));
+  }
+
+  return { taxon: taxonOf(masked), layers, avoid: kept, filters, inputs, rankBy, time: timeWindow(raw, now), places, colors, change: asksChange(raw) || /\b(?:shrunk|shrank|retreat\w*|then\s+and\s+now|changed?\s+since)\b/i.test(raw) };
 }
 
 // ---- Inputs from the time window ---------------------------------------------------------------------------------
@@ -626,7 +675,7 @@ export function timeInputs(layer: Pick<Layer, "input">, w: TimeWindow, now: Date
       out.weeks = clamp(Math.max(1, Math.ceil(daysBetween(w.from, today) / 7)), bounds(schema));
     } else if (key === "year" && kind === "number" && fromYear === toYear && w.month === undefined && !w.future && w.to.slice(5) === "12-31") {
       out.year = clamp(fromYear, bounds(schema));
-    } else if (key === "month" && kind === "number" && w.month !== undefined) {
+    } else if (key === "month" && w.month !== undefined) {
       out.month = w.month;
     }
   }

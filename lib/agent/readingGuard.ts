@@ -95,6 +95,27 @@ export function applyReading(calls: GuardCall[], turn: Turn, finalSteps: boolean
     return [{ toolCallId: readingId(), toolName: `${QUERY}${layerId}`, input: { ...readingInputs(reading, layerId, turn.now), bbox: placeBox } }];
   });
 
+  // A species the question names: sightings asked for it in its words, and never an all-species GBIF density in its place
+  // (sandhill cranes in Nebraska drew every record of every species, and the note read the cranes off it).
+  if (reading.taxon) {
+    out = out.filter((c) => {
+      if (c.toolName !== `${QUERY}gbif-occurrences` || c.input.scientificName !== undefined || c.input.taxonKey !== undefined) return true;
+      rejected.push({
+        call: c,
+        reason: `Not queried: the question asks about ${reading.taxon}, and gbif-occurrences without scientificName draws every species. Query it again with scientificName set to the Latin name of ${reading.taxon}.`,
+      });
+      turn.note(`gbif-occurrences: query dropped (no species, the question asks about ${reading.taxon})`);
+      changed = true;
+      return false;
+    });
+    out = out.map((c) => {
+      if (c.toolName !== `${QUERY}species` || (typeof c.input.taxon === "string" && c.input.taxon.trim() !== "")) return c;
+      turn.note(`species: taxon set to "${reading.taxon}" as the question names it`);
+      changed = true;
+      return { ...c, input: { ...c.input, taxon: reading.taxon } };
+    });
+  }
+
   // Layers the words rule out.
   out = out.filter((c) => {
     if (!isQuery(c.toolName)) return true;

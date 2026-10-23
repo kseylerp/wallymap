@@ -31,6 +31,14 @@ describe("applyReading", () => {
     expect(applyReading([call("query_protected-areas-world", { bbox: costaRica })], turnFor("Jaguar records in Costa Rica"), false).calls.map((c) => c.toolName)).toEqual(["query_protected-areas-world"]);
   });
 
+  it("sends back a GBIF query with no species when the question names one, and gives sightings the species", () => {
+    const turn = turnFor("Best place to see sandhill cranes in Nebraska in March");
+    const out = applyReading([call("query_gbif-occurrences", { bbox: SEDONA, density: true }), call("query_species", { bbox: SEDONA })], turn, false);
+    expect(out.rejected[0].reason).toContain("scientificName set to the Latin name of sandhill cranes");
+    expect(out.calls.find((c) => c.toolName === "query_species")?.input.taxon).toBe("sandhill cranes");
+    expect(applyReading([call("query_gbif-occurrences", { bbox: SEDONA, scientificName: "Grus canadensis" })], turn, false).rejected).toEqual([]);
+  });
+
   it("sets the time inputs the question's phrase means", () => {
     const turn = turnFor("How much has Lake Powell dropped since 2000?");
     const out = applyReading([call("query_reservoir-levels", { bbox: SEDONA, years: 5, name: "Lake Powell" })], turn, false);

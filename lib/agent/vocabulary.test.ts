@@ -6,8 +6,9 @@ import { VOCABULARY, vocabularyForPrompt } from "@/lib/agent/vocabulary";
 describe("VOCABULARY", () => {
   const ids = listLayers().map((l) => l.id);
 
-  it("only names registered layers", () => {
-    for (const entry of VOCABULARY) expect(ids).toContain(entry.layerId);
+  it("only names registered layers, or the forecast branch's layers merging alongside", () => {
+    const merging = new Set(["weather-forecast", "avalanche"]);
+    for (const entry of VOCABULARY) if (!merging.has(entry.layerId)) expect(ids).toContain(entry.layerId);
   });
 
   it("has an entry for every registered layer", () => {

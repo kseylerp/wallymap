@@ -12,7 +12,7 @@ export type VocabularyEntry = {
 };
 
 export const VOCABULARY: VocabularyEntry[] = [
-  { layerId: "osm-trails", synonyms: ["trail", "hike", "path", "day hike", "trail run"], notes: "whole named hikes with lengthKm, gainM, loop or out and back, under 2,500 km²; named routes up to 400,000 km²", gist: "hiking paths, or named hiking routes over wide areas" },
+  { layerId: "osm-trails", synonyms: ["trail", "hike", "path", "day hike", "trail run"], notes: "whole hikes with lengthKm, gainM, shape under 2,500 km²; named routes up to 400,000 km²", gist: "hiking paths, or named hiking routes over wide areas" },
   { layerId: "fire-perimeters", synonyms: ["wildfire", "fire", "burn", "burned area"], notes: "fire outlines; also query fire-detections", gist: "current and past wildfire outlines with acres and year" },
   { layerId: "fire-detections", synonyms: ["active fire", "hotspot"], notes: "satellite heat sources from recent days, not smoke", gist: "satellite fire hotspots from the last few days" },
   { layerId: "forest-loss", synonyms: ["deforestation", "logging", "clearcut", "tree loss"], notes: "yearly loss; also query forest-alerts", gist: "where tree cover was lost, year by year" },
@@ -32,7 +32,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "popularity-campsites", synonyms: ["busiest campgrounds", "crowded campsites"], notes: "camp site scores", gist: "estimated popularity score for each campsite in view" },
   { layerId: "popularity", synonyms: ["crowded", "busy", "popular", "congestion", "foot traffic"], notes: "trails; see popularity-campsites", gist: "estimated popularity score for each trail in view" },
   { layerId: "remoteness", synonyms: ["remote", "untouched", "off the grid", "solitude"], notes: "estimate computed from other layers", gist: "how far each hexagon is from roads and camps" },
-  { layerId: "mtb-trails", synonyms: ["mountain biking", "mtb", "singletrack", "flow trail", "bike park", "blue trail", "green trail", "black diamond", "flowy", "jump line"], notes: "rated bike trails, v = 0-6 difficulty, imba = trail color 1 green, 2 blue, 3 black", gist: "mountain bike trails rated 0 to 6" },
+  { layerId: "mtb-trails", synonyms: ["mountain biking", "mtb", "singletrack", "flow trail", "bike park", "blue trail", "green trail", "black diamond", "flowy", "jump line"], notes: "v = 0-6 difficulty, imba = trail color (2 blue)", gist: "mountain bike trails rated 0 to 6" },
   { layerId: "ski-routes", synonyms: ["skiing", "ski touring", "nordic", "piste"], notes: "ski runs and routes, v = 1-6 difficulty", gist: "downhill runs, nordic trails and ski touring routes" },
   { layerId: "climbing", synonyms: ["climbing", "bouldering", "crag"], notes: "crags and boulders, v = route count", gist: "climbing crags, boulders and areas with route counts" },
   { layerId: "paddling", synonyms: ["whitewater", "kayaking", "canoe", "rafting", "rapids", "put-in", "paddling"], notes: "rapids and canoe routes, v = class 1-6; always with streamflow", gist: "rapids, river sections, put-ins and canoe routes" },
@@ -95,6 +95,9 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "mines", synonyms: ["mine", "abandoned mine", "mineral deposit", "prospect", "quarry"], notes: "USGS historic mine records (about 2011) and old-map mine symbols; kind = commodity or feature type; commodity input", gist: "US mines, prospects and mineral deposits by commodity" },
   { layerId: "uranium", synonyms: ["uranium", "mill tailings", "radioactive"], notes: "Navajo Nation abandoned mines (v = 2007 hazard score) and DOE mill-tailings sites; other uranium mines are in mines", gist: "Navajo Nation abandoned uranium mines and mill-tailings sites" },
   { layerId: "ocean-currents", synonyms: ["currents", "tidal current", "ocean current", "slack water"], notes: "hourly surface currents as moving particles, with the tide plotted", gist: "hourly ocean and tidal currents as moving particles" },
+  // Layers from the forecast branch (layers/weather-forecast.ts, layers/avalanche.ts), merging alongside this table.
+  { layerId: "weather-forecast", synonyms: ["forecast", "will it rain", "too hot", "temperature", "gusts"], notes: "7-day forecast by day and hour: temperature, rain, wind, gusts", gist: "seven-day weather forecast by day and hour" },
+  { layerId: "avalanche", synonyms: ["avalanche danger", "avalanche forecast", "avalanche risk"], notes: "center danger per zone; quote it, never infer from weather", gist: "avalanche center danger ratings by forecast zone" },
   { layerId: "wind-flow", synonyms: ["wind", "windiest", "windy", "gusty", "wind direction"], notes: "hourly 10 m wind forecast as moving particles, today and the next days", gist: "hourly wind forecast drawn as moving particles" },
 ];
 

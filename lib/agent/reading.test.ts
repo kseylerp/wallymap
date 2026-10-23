@@ -160,6 +160,22 @@ describe("readQuestion: the words the audit's questions use", () => {
   });
 });
 
+describe("species, trout water and layers still to come", () => {
+  it("names the species the question asks about", async () => {
+    const { taxonOf } = await import("@/lib/agent/reading");
+    expect(taxonOf("Best place to see sandhill cranes in Nebraska in March")).toBe("sandhill cranes");
+    expect(taxonOf("Where can I see moose near Jackson Hole?")).toBe("moose");
+    expect(taxonOf("Where have bald eagles been seen near Seattle lately?")).toBe("bald eagles");
+    expect(taxonOf("Climbing crags near Red River Gorge")).toBeNull();
+  });
+
+  it("keeps trout water under 64 °F, and avoids no layer for a forecast or avalanche layer the app does not have yet", () => {
+    expect(readQuestion("Trout streams near Denver that aren't too warm", NOW).filters).toContainEqual(expect.objectContaining({ layerId: "fishing", key: "tempBand", include: ["cold", "good"] }));
+    const avalanche = readQuestion("Avalanche danger near Stevens Pass today", NOW);
+    expect(avalanche.avoid.map((a) => a.layerId)).not.toContain("weather-alerts");
+  });
+});
+
 describe("readingForPrompt", () => {
   it("writes one short block with the layers, filters, inputs and time", () => {
     const text = readingForPrompt(readQuestion("How much has Lake Powell dropped since 2000?", NOW), NOW);

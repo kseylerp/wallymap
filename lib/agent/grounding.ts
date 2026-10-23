@@ -10,7 +10,17 @@
  * with the gauges' own flow classes. Numbers and names in the question count as given.
  */
 
-export type Claim = { text: string; kind: "number" | "name" | "flow" };
+export type Claim = { text: string; kind: "number" | "name" | "flow" | "measure" };
+
+/**
+ * Measures a note may name only when a result carries them: Joshua Tree's wind layer has no gusts, yet the note gave
+ * "gusts of 30 mph"; the sightings layer has no abundance, yet a note said "brook trout present".
+ */
+const MEASURE_WORDS: { re: RegExp; needs: RegExp }[] = [
+  { re: /gusts?(?:ing)?/i, needs: /gust/ },
+  { re: /waves+period/i, needs: /period/ },
+  { re: /drivers?s+of|drivens+(?:primarilys+)?by/i, needs: /driver/ },
+];
 
 type Dimension = "length" | "area" | "flow" | "speed" | "temperature" | "percent" | "mass-rate" | "power" | "volume" | "count" | "mass" | "depth";
 
@@ -297,6 +307,8 @@ export function noteFeatureNames(text: string): string[] {
     const span = m[0]
       .replace(/^(?:(?:Try|Hike|Visit|Take|See|Walk|Explore|Head|Start|From|Near|At|In|On|Both|And|Or|If|For|Then|Also|Consider|Check|Drive|Ride|Climb|Paddle|Fish|Camp|Use|Park|While|With|Via|The|A|An|Of|De|Del|La)\s+)+/i, "")
       .replace(/\s+(?:of|the|de|del|la)$/i, "")
+      // A possessive is the name itself ("Lake Tahoe's shore").
+      .replace(/['’]s$/, "")
       .trim();
     const words = span.split(/\s+/);
     if (words.length < 2 || !FEATURE_WORD.test(span)) continue;
@@ -367,6 +379,10 @@ export function ungroundedClaims(markdown: string, pool: FactPool): Claim[] {
   }
   const poolText = comparable(pool.text);
   for (const name of noteFeatureNames(markdown)) if (!named(name, pool, poolText)) claims.push({ text: name, kind: "name" });
+  for (const { re, needs } of MEASURE_WORDS) {
+    const m = re.exec(markdown);
+    if (m && !needs.test(pool.text)) claims.push({ text: m[0], kind: "measure" });
+  }
   if (pool.flowClasses.length > 0) {
     const high = HIGH_WORDS.exec(markdown);
     if (high && !pool.flowClasses.some((c) => /above|high/.test(c))) claims.push({ text: high[0], kind: "flow" });

@@ -51,6 +51,7 @@ describe("ungroundedClaims: the audit's invented numbers and names", () => {
     // The park around a place the question names is no invention.
     const rainier = factPool([answer({ featureCount: 1 })], "Which trails at Mount Rainier are snow free right now?");
     expect(ungroundedClaims("Snow lingers high in Mount Rainier National Park.", rainier)).toEqual([]);
+    expect(ungroundedClaims("Mount Rainier’s trails are drawn.", rainier)).toEqual([]);
   });
 
   it("catches a count no result holds (2,650 firesheds for 265)", () => {
@@ -69,6 +70,15 @@ describe("ungroundedClaims: the audit's invented numbers and names", () => {
   it("accepts conversions, percents and the question's own numbers", () => {
     const pool = factPool([answer({ change: { from: 32.7, to: 19, unit: "km²" }, stats: { max: 12.1, unit: "°C" } })], "Good day hikes near Boulder under 5 miles");
     expect(ungroundedClaims("Ice fell from 32.7 km² to 19 km², 42% less. Water is 54 °F. All are under 8 km (5 mi).", pool)).toEqual([]);
+  });
+});
+
+describe("measures no result carries", () => {
+  it("catches gusts from a wind layer without them, and drivers of forest loss", () => {
+    const wind = factPool([answer({ stats: { max: 13.4, unit: "m/s" } })], "Is it too windy to climb at Joshua Tree tomorrow?");
+    expect(ungroundedClaims("Tomorrow's strongest gusts reach 13.4 m/s.", wind)).toEqual([{ text: "gusts", kind: "measure" }]);
+    const loss = factPool([answer({ kind: "tiles", layer: "forest-loss" })], "How much forest did Pará lose since 2017 and to what?");
+    expect(texts(ungroundedClaims("Loss was driven primarily by cattle ranching.", loss))).toEqual(["driven primarily by"]);
   });
 });
 

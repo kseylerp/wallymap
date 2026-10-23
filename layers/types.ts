@@ -16,7 +16,13 @@ export const BBoxSchema: z.ZodType<BBox> = z
 
 export type Coverage = "global" | "us" | { bbox: BBox };
 
-export type Citation = { source: string; url: string; retrieved: string };
+export type Citation = {
+  source: string;
+  url: string;
+  retrieved: string;
+  /** What the layer row's source line says instead of the link's host ("Google DeepMind, WRI, IIASA (ForTy, CC BY 4.0)"). */
+  label?: string;
+};
 
 /**
  * How a tile layer's URL follows the time scrubber. `template` is the tile URL with `{date}` (YYYY-MM-DD) or

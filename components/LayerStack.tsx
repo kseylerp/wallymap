@@ -628,7 +628,7 @@ function LegendRow({
       <p data-testid="layer-source" className="mt-1 flex min-w-0 items-center gap-1.5 text-[11.5px] leading-4 text-ink-muted">
         <span className="min-w-0 truncate">
           <a href={citation.url} target="_blank" rel="noreferrer" className="dashed-link">
-            {host ?? citation.source}
+            {citation.label ?? host ?? citation.source}
           </a>
           {coverageNote && <> · {coverageNote}</>}
         </span>

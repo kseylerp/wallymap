@@ -1,4 +1,7 @@
+import type { JSONValue } from "ai";
+import type { FeatureCollection } from "geojson";
 import { timeShapeOf } from "@/layers/contract";
+import { applyFilters, type LayerFilters } from "@/lib/render/filters";
 import { getLayer } from "@/layers/registry";
 import { bboxAreaKm2, hardMaxAreaKm2, type BBox } from "@/layers/types";
 import { readingFilters, timeInputs, type Reading } from "./reading";
@@ -142,6 +145,38 @@ export function applyReading(calls: GuardCall[], turn: Turn, finalSteps: boolean
   });
 
   return { calls: out, rejected, changed };
+}
+
+/** Facts worth listing for a candidate, when a feature has them: length, round trip, climb, shape. */
+const CANDIDATE_KEYS = ["lengthKm", "roundTripKm", "gainM", "roundTripGainM", "shape", "sac_scale", "v", "imba", "disciplines", "gradeBands", "kind"];
+
+/**
+ * The features that match the question's own filters, as the model reads them in a query's summary: how many, and the
+ * top few by the measure it asks to rank by (else the layer's card measure), each with its name and facts. Without
+ * this the summary only covers every feature, and "good day hikes under 5 miles" came back as "the dataset does not
+ * list individual trail names" while the map held 300 of them. Null when the question names no filter on the layer.
+ */
+export function matchingQuestion(body: unknown, layerId: string, turn: Pick<Turn, "reading" | "place" | "view">): JSONValue | null {
+  const b = body as { kind?: string; data?: FeatureCollection };
+  if (b?.kind !== "geojson" || !b.data) return null;
+  const drawn = withReading({ layerId }, turn);
+  const filters = drawn.filters as LayerFilters | undefined;
+  if (!filters || Object.keys(filters).length === 0) return null;
+  const layer = getLayer(layerId);
+  const kept = applyFilters(b.data, filters).features;
+  const key = typeof drawn.rankBy === "string" ? drawn.rankBy : (layer?.card?.measure?.key ?? "v");
+  const named = kept.filter((f) => typeof f.properties?.name === "string" && typeof f.properties?.[key] === "number");
+  named.sort((x, y) => Number(y.properties?.[key]) - Number(x.properties?.[key]));
+  const seen = new Set<string>();
+  const top: JSONValue[] = [];
+  for (const f of named) {
+    const p = f.properties ?? {};
+    if (seen.has(String(p.name))) continue;
+    seen.add(String(p.name));
+    top.push(Object.fromEntries([["name", p.name], ...CANDIDATE_KEYS.filter((k) => p[k] !== undefined && p[k] !== null).map((k) => [k, p[k]])]) as JSONValue);
+    if (top.length >= 6) break;
+  }
+  return { filters: filters as unknown as JSONValue, count: kept.length, rankedBy: key, top };
 }
 
 /**

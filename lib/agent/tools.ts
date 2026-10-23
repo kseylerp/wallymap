@@ -6,7 +6,7 @@ import { runLayer } from "@/lib/layers/run";
 import { encodingSentence, highestOf, isFullLayerResult, summarizeLayerResult, type GeojsonSummary, type SummaryStyle } from "@/lib/layers/summarize";
 import { VIEW_KINDS, type Basemap, type RenderMode, type TimeMode } from "@/lib/render/state";
 import { boxAround, nearBox, nearPlace, OFF_RADIUS_KM, offPlace } from "./places";
-import { withReading } from "./readingGuard";
+import { matchingQuestion, withReading } from "./readingGuard";
 import { inUS, usSpeeds, usSpeedsDeep } from "./units";
 import { normalizeRenderInput } from "./renderInput";
 import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
@@ -423,7 +423,10 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: T
   const speedy = style.unit === "m/s";
   /** What the model reads of an answer: its summary, speeds in mph or knots first for a US place (lib/agent/units.ts). */
   const summaryFor = (body: unknown) => {
-    const summary = layerResultForModel(body, layer.id, style, layer.fieldHelp);
+    const base = layerResultForModel(body, layer.id, style, layer.fieldHelp);
+    // The features that match the question's own filters, named, so the note can list candidates (lib/agent/readingGuard.ts).
+    const matching = base && typeof base === "object" && !Array.isArray(base) ? matchingQuestion(body, layer.id, turn) : null;
+    const summary = matching ? { ...(base as Record<string, JSONValue>), matchingQuestion: matching } : base;
     return speedy && inUS(summaryBox(summary)) ? withUsSpeeds(summary, layer.id) : summary;
   };
   /** What the model reads of an answer, with the features' own values a note may quote, for the grounding check. */

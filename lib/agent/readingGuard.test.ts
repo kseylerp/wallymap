@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import "@/layers";
 import type { BBox } from "@/layers/types";
 import type { GeocodeResult } from "@/lib/agent/geocode";
-import { applyReading, withReading, type GuardCall } from "@/lib/agent/readingGuard";
+import { applyReading, matchingQuestion, withReading, type GuardCall } from "@/lib/agent/readingGuard";
 import { decideStep } from "@/lib/agent/stepGuard";
 import { createTurn } from "@/lib/agent/turn";
 
@@ -74,6 +74,24 @@ describe("decideStep with the reading", () => {
     const decision = await decideStep({ calls: [call("query_streamflow", { bbox: SEDONA }), call("note", { markdown: "Rivers." })], hasText: false }, turn, ["query_streamflow", "query_mtb-trails", "note", "render"]);
     expect(decision.calls.map((c) => c.toolName)).toEqual(["query_mtb-trails"]);
     expect(decision.dropText).toBe(true);
+  });
+});
+
+describe("matchingQuestion", () => {
+  it("lists the features that pass the question's filters, top first by the measure asked", () => {
+    const hike = (name: string, lengthKm: number, kind = "path") => ({ type: "Feature", geometry: null, properties: { name, lengthKm, kind, roundTripKm: lengthKm * 2 } });
+    const body = { kind: "geojson", data: { type: "FeatureCollection", features: [hike("Royal Arch Trail", 2.1), hike("Mesa Trail", 10.1), hike("Mount Sanitas Trail", 3.4), hike("Pierson Park Road", 4, "track")] } };
+    const turn = turnFor("Good day hikes near Boulder under 5 miles");
+    expect(matchingQuestion(body, "osm-trails", turn)).toEqual({
+      filters: { kind: { include: ["path", "footway"] }, lengthKm: { range: [0, 8.05] } },
+      count: 2,
+      rankedBy: "lengthKm",
+      top: [
+        { name: "Mount Sanitas Trail", lengthKm: 3.4, roundTripKm: 6.8, kind: "path" },
+        { name: "Royal Arch Trail", lengthKm: 2.1, roundTripKm: 4.2, kind: "path" },
+      ],
+    });
+    expect(matchingQuestion(body, "osm-trails", turnFor("Show hiking trails around Lake Tahoe"))).toBeNull();
   });
 });
 

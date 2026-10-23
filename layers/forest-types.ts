@@ -6,8 +6,9 @@
  * Served through Google Earth Engine (lib/ee): the server makes the picture with its own credentials and the map loads
  * our tile route (app/api/ee/tiles/forest-types/...), never Google's. The assets, their bands and how the classes are
  * read are in lib/ee/forestTypes.ts. Three answers:
- *   - the 2020 baseline (v1.0, the peer-reviewed map) with the confidence control as a two-step scenario
- *     ("All" or "Only confident pixels", the most likely class at least 70% sure), the default;
+ *   - the 2020 baseline (v1.0, the peer-reviewed map) with the confidence control as a plain two-option
+ *     toggle in the layer row ("All" or "Only confident pixels", the most likely class at least 70% sure), the default;
+ *     it is not time, so the time panel and compare stay out of it;
  *   - one year of the yearly beta series 2017 to 2025 (`year`), on the time scrubber;
  *   - the change view (`convertedSince`): natural forest (primary or naturally regenerating) in that year that is
  *     plantation, tree crops or other land in 2025, in the change grammar's pink with the areas stated.
@@ -15,7 +16,7 @@
  * and a tap reads the six probabilities at the point (identify).
  */
 import { z } from "zod";
-import { defineLayer, type Attribute, type FieldHelp, type LayerError, type LayerResult, type LegendSpec, type TileScenario } from "./types";
+import { defineLayer, type Attribute, type FieldHelp, type LayerError, type LayerResult, type LegendSpec, type TileScenario, type TimeSpec } from "./types";
 import { registerLayer } from "./registry";
 import { pointFeature } from "./_shared/identify";
 import { createEeClient, EeError, type EeClient } from "@/lib/ee/client";
@@ -24,8 +25,12 @@ import {
   CONFIDENT,
   FIRST_YEAR,
   LAST_YEAR,
+  OTHER_ALPHA,
+  OTHER_CODE,
   TARGETS,
+  UNCHANGED_ALPHA,
   UNCHANGED_COLOR,
+  YEARS,
   areaScale,
   conversionAreasExpression,
   pointExpression,
@@ -39,29 +44,35 @@ import {
   type TileParams,
 } from "@/lib/ee/forestTypes";
 import { eeTileTemplate } from "@/lib/ee/tiles";
-import { layerColor, SAGE } from "@/lib/render/palette";
+import { DARK_GREY, layerColor, SAGE } from "@/lib/render/palette";
+import { hexToRgb, rgbToHex } from "@/lib/render/ramp";
 
 const CITATION_SOURCE =
   "Forest Typology (ForTy) 2020 v1.0 and yearly beta 2017–2025, Google DeepMind, World Resources Institute and IIASA " +
   "(CC BY 4.0); Neumann et al., Scientific Data (2026); via Google Earth Engine";
-const CITATION_URL = "https://developers.google.com/earth-engine/datasets/publisher/nature-trace";
+// The paper as the dataset's Earth Engine page cites it (EarthArXiv, May 2026); the row's source line names the makers instead of the host.
+const CITATION_URL = "https://doi.org/10.31223/X58R27";
+const CITATION_LABEL = "Google DeepMind, WRI, IIASA (ForTy, CC BY 4.0)";
 const LICENSE = "CC BY 4.0 (Google DeepMind, WRI, IIASA; Neumann et al., Scientific Data 2026)";
 
 export const CONFIDENT_PCT = Math.round(CONFIDENT * 100);
 const BELOW_LABEL = `Not drawn: less than ${CONFIDENT_PCT}% sure`;
 
-/** The class key, one swatch per class in the colors the tiles draw (other land faint). */
+/** A color drawn at `alpha` over the key's white, as the faint pixels look on a light map (the swatch cannot be see-through). */
+const faint = (hex: string, alpha: number): string => rgbToHex(hexToRgb(hex).map((c) => 255 - (255 - c) * alpha) as [number, number, number]);
+
+/** The class key, one swatch per class in the colors the tiles draw: other land faint, so its swatch is pale, not dark. */
 export const LEGEND: LegendSpec = {
   kind: "categories",
   title: "Forest type",
   field: "class",
-  items: CLASSES.map((c) => ({ label: c.label, value: c.code, color: c.color, symbol: "raster" as const, help: c.help })),
+  items: CLASSES.map((c) => ({ label: c.label, value: c.code, color: c.code === OTHER_CODE ? faint(c.color, OTHER_ALPHA) : c.color, symbol: "raster" as const, help: c.help })),
   note: "Each 10 m pixel shows its most likely class; other land is drawn faint and water left out. Colors are WallyMap's, not ForTy's.",
 };
 
 function classesLegend(confident: boolean): LegendSpec {
   if (!confident) return LEGEND;
-  return { ...LEGEND, items: [...(LEGEND.items ?? []), { label: BELOW_LABEL, value: 0, help: `Pixels whose most likely class is less than ${CONFIDENT_PCT}% sure are left blank.` }] };
+  return { ...LEGEND, items: [...(LEGEND.items ?? []), { label: BELOW_LABEL, value: 0, color: faint(DARK_GREY, 0.1), symbol: "raster" as const, help: `Pixels whose most likely class is less than ${CONFIDENT_PCT}% sure are left blank.` }] };
 }
 
 const km2 = (n: number) => (n >= 100 ? Math.round(n).toLocaleString("en-US") : n >= 1 ? n.toFixed(0) : n.toFixed(1));
@@ -79,7 +90,7 @@ function changeLegend(since: number, areas: ConversionAreas | null): LegendSpec 
         color: t.color,
         symbol: "raster" as const,
       })),
-      { label: `Natural forest still standing in ${LAST_YEAR} (faint)`, value: 0, color: UNCHANGED_COLOR, symbol: "raster" as const },
+      { label: `Natural forest still standing in ${LAST_YEAR} (faint)`, value: 0, color: faint(UNCHANGED_COLOR, UNCHANGED_ALPHA), symbol: "raster" as const },
     ],
     note: "Natural forest is primary or naturally regenerating. Yearly beta maps; areas are for the box asked, estimated on a coarser grid.",
   };
@@ -92,6 +103,8 @@ function confidenceScenario(params: TileParams): TileScenario {
     param: "confidence",
     label: "Pixels shown",
     unit: "% sure",
+    // A setting in the layer row, not time: no scrubber, play or compare (TileScenario.control).
+    control: "toggle",
     values: [0, CONFIDENT_PCT],
     labels: ["All", "Only confident pixels"],
     tokens: ["all", "confident"],
@@ -151,6 +164,11 @@ export function sharesSentence(shares: Record<string, number>): string {
     .join(", ");
 }
 
+const SPAN = { start: String(FIRST_YEAR), end: String(LAST_YEAR) };
+const TIME_NONE: TimeSpec = { shape: "none" };
+const TIME_YEARS: TimeSpec = { shape: "continuous", step: "year", span: SPAN };
+const TIME_CHANGE: TimeSpec = { shape: "snapshots", dates: YEARS.map(String), step: "year", span: SPAN };
+
 const failure = (error: unknown): LayerError => {
   if (error instanceof EeError) {
     const unset = /not set up/.test(error.sourceStatus.message);
@@ -194,12 +212,14 @@ const forestTypes = defineLayer({
     ],
     hidden: ["class", "change"],
   },
-  time: { shape: "snapshots", dates: ["2020"] },
+  // Each answer says its own (below): the 2020 baseline has none, the yearly series is years on the scrubber, the change
+  // view is the snapshots it compares.
+  time: { shape: "none" },
   display: { units: "metric" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const retrieved = new Date().toISOString();
-    const citation = { source: CITATION_SOURCE, url: CITATION_URL, retrieved };
+    const citation = { source: CITATION_SOURCE, url: CITATION_URL, retrieved, label: CITATION_LABEL };
     const ee = client(ctx.env);
     const minConfidence = minConfidenceOf(input);
 
@@ -223,6 +243,7 @@ const forestTypes = defineLayer({
         kind: "tiles",
         data: { url: eeTileTemplate("forest-types", tileQuery(params)), minzoom: 3, maxzoom: 14, format: "raster" },
         citation,
+        time: TIME_CHANGE,
         coverageNote: `${stated}. ForTy yearly beta; areas estimated on a ${areaScale(ctx.bbox)} m grid${sure}`,
         legend: changeLegend(since, areas),
       };
@@ -258,6 +279,7 @@ const forestTypes = defineLayer({
             }),
       },
       citation,
+      time: source.kind === "baseline" ? TIME_NONE : TIME_YEARS,
       coverageNote: `${which}, ${minConfidence > 0 ? `only pixels at least ${CONFIDENT_PCT}% sure` : "every pixel"}${inBox}`,
       legend: classesLegend(minConfidence > 0),
     };

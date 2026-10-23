@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { clearMapCache } from "@/lib/ee/client";
 import { clearTokenCache } from "@/lib/ee/auth";
-import { parseTileQuery } from "@/lib/ee/forestTypes";
+import { parseTileQuery, UNCHANGED_COLOR } from "@/lib/ee/forestTypes";
 import { fakeEeFetch, functionNames, testEnv } from "@/lib/ee/__fixtures__/fakeEe";
 import recorded from "@/lib/ee/__fixtures__/forest-types.json";
 import { scenarioText, scenarioTileUrl } from "@/lib/render/scenario";
+import { hexToRgb } from "@/lib/render/ramp";
 import layer, { CONFIDENT_PCT, LEGEND, sharesSentence, sureWords } from "./forest-types";
 import { contractProblems, legendOf, timeShapeOf } from "./contract";
 import type { IdentifyPoint, LayerResult } from "./types";
@@ -43,12 +44,12 @@ describe("forest-types layer", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("declares the contract: global land, snapshots 2020, a six-class key, needs EE_PROJECT", () => {
+  it("declares the contract: global land, no time of its own, a six-class key, needs EE_PROJECT", () => {
     expect(layer.coverage).toBe("global");
     expect(layer.surface).toBe("land");
     expect(layer.requiredEnv).toEqual(["EE_PROJECT"]);
     expect(contractProblems(layer)).toEqual([]);
-    expect(timeShapeOf(layer).shape).toBe("snapshots");
+    expect(timeShapeOf(layer).shape).toBe("none");
     expect(legendOf(layer).items?.map((i) => i.label)).toEqual([
       "Primary forest",
       "Naturally regenerating forest",
@@ -67,6 +68,9 @@ describe("forest-types layer", () => {
     expect(parseTileQuery(new URLSearchParams(r.data.url.split("?")[1]))).toEqual({ view: "classes", source: { kind: "baseline" }, minConfidence: 0 });
     expect(r.data).toMatchObject({ format: "raster", minzoom: 3, maxzoom: 14 });
     const scenario = r.data.scenario!;
+    expect(scenario.control).toBe("toggle");
+    expect(timeShapeOf(layer, r).shape).toBe("none");
+    expect(r.citation).toMatchObject({ label: "Google DeepMind, WRI, IIASA (ForTy, CC BY 4.0)", url: "https://doi.org/10.31223/X58R27" });
     expect(scenario.values).toEqual([0, CONFIDENT_PCT]);
     expect(scenario.values.map((v) => scenarioText(scenario, v))).toEqual(["All", "Only confident pixels"]);
     expect(scenarioTileUrl(scenario, 70)).toBe("/api/ee/tiles/forest-types/{z}/{x}/{y}?view=classes&src=2020v1&conf=confident");
@@ -78,6 +82,13 @@ describe("forest-types layer", () => {
     expect(JSON.stringify(r)).not.toMatch(/googleapis|PRIVATE KEY|ya29/);
     const compute = fake.calls.find((c) => c.url.endsWith("value:compute"))!;
     expect(compute.headers["x-goog-user-project"]).toBe("wally-14e22");
+  });
+
+  it("keys other land and standing forest as the faint pixels they draw, clearly apart from primary forest", () => {
+    const lightness = (hex: string) => hexToRgb(hex).reduce((a, b) => a + b, 0) / 3;
+    const color = (label: string) => LEGEND.items!.find((i) => i.label === label)!.color!;
+    expect(lightness(color("Other land"))).toBeGreaterThan(170);
+    expect(lightness(color("Primary forest"))).toBeLessThan(110);
   });
 
   it("strict mode keeps only pixels at least 70% sure and keys the blank ones", async () => {
@@ -92,6 +103,7 @@ describe("forest-types layer", () => {
     const r = await tiles({ year: 2019 });
     expect(r.data.url).toContain("src=2019");
     expect(r.data.scenario).toBeUndefined();
+    expect(timeShapeOf(layer, r)).toMatchObject({ shape: "continuous", step: "year", span: { start: "2017", end: "2025" } });
     expect(r.data.time).toEqual({ template: "/api/ee/tiles/forest-types/{z}/{x}/{y}?view=classes&src={year}&conf=all", cadence: "yearly", from: "2017", to: "2025" });
     expect(r.coverageNote).toMatch(/^ForTy 2019 \(yearly beta\)/);
   });
@@ -101,12 +113,16 @@ describe("forest-types layer", () => {
     expect(r.data.url).toBe("/api/ee/tiles/forest-types/{z}/{x}/{y}?view=change&since=2017&to=2025&conf=all");
     expect(r.coverageNote).toMatch(/Natural forest in 2017 that is something else in 2025, in the box asked: about 908 km² \(9\.8% of 9,259 km² of natural forest\): plantation or planted forest 0\.2 km², tree crops and agroforestry 176 km², other land \(cleared\) 732 km²/);
     expect(r.legend?.title).toBe("Natural forest converted since 2017");
+    expect(timeShapeOf(layer, r)).toMatchObject({ shape: "snapshots", step: "year", span: { start: "2017", end: "2025" } });
+    expect(timeShapeOf(layer, r).dates).toHaveLength(9);
+    expect(r.data.scenario).toBeUndefined();
     expect(r.legend?.items?.map((i) => i.label)).toEqual([
       "To plantation or planted forest: 0.2 km²",
       "To tree crops and agroforestry: 176 km²",
       "To other land (cleared): 732 km²",
       "Natural forest still standing in 2025 (faint)",
     ]);
+    expect(r.legend?.items?.at(-1)?.color).not.toBe(UNCHANGED_COLOR);
     expect(await layer.query(ctx(), layer.input.parse({ convertedSince: 2017, year: 2020 }))).toMatchObject({ error: expect.stringMatching(/either year or convertedSince/) });
   });
 

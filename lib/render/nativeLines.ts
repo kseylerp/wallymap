@@ -20,6 +20,7 @@ import {
   type LineRecipe,
 } from "@/lib/render/palette";
 import { rampColor, rgbToHex } from "@/lib/render/ramp";
+import { isActiveEntry } from "@/lib/render/filters";
 import { colorStops, declaredGroups, encodedAttribute, valueKey } from "@/lib/render/attributes";
 import { colorT, encodeColor, ENCODED_LINE, resolveEncoding, sizeT, type Channel } from "@/lib/render/encode";
 import type { MapState, RenderOp, Selection } from "@/lib/render/state";
@@ -99,6 +100,8 @@ export type LineEntry = {
    * (LINE_DASHES), so kinds tell apart by dash where color carries something else.
    */
   dashBy?: { key: string; values: string[][] };
+  /** The layer is filtered to the answer ("Blue" trails, passenger-car roads): its other features are the answer too. */
+  filtered?: boolean;
 };
 
 /** Dash patterns (pixels, [on, off]) for the values of a dash attribute, in declared order: solid, dashed, dotted, long. */
@@ -207,6 +210,7 @@ export function lineEntries(view: MapState): LineEntry[] {
       selected: indexOf(data, picked?.feature),
       ...(imagery && { imagery }),
       ...(dashBy && { dashBy }),
+      ...(Object.values(op.filters ?? {}).some(isActiveEntry) && { filtered: true }),
     });
   }
   return entries;
@@ -409,8 +413,9 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
   const encoded = entry.look.kind === "encoded" && entry.look.size !== undefined;
   const facet = entry.look.kind === "facet" ? entry.look : undefined;
   const imagery = entry.imagery === true;
-  // A network colored by a category (trail difficulty) is the picture too: at SIBLING_FADE Sedona's trails vanished on Topo.
-  const fade = encoded || entry.look.kind === "facet" ? ENCODED_SIBLING_FADE : SIBLING_FADE;
+  // A layer filtered to the answer keeps the answer on the map too: at SIBLING_FADE Sedona's blue trails and Leadville's
+  // passenger-car roads vanished on Topo behind one open card.
+  const fade = encoded || entry.filtered ? ENCODED_SIBLING_FADE : SIBLING_FADE;
   const baseCasing: number | ExpressionSpecification = encoded
     ? encodedLineWidth(0, true, imagery)
     : routed

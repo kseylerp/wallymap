@@ -324,7 +324,10 @@ function named(name: string, pool: FactPool, poolText: string): boolean {
   if (poolText.includes(n)) return true;
   // "Royal Arch Trail" is the result's "Royal Arch": the name without its trailing feature word.
   const words = n.split(" ");
-  return words.length > 2 && poolText.includes(words.slice(0, -1).join(" "));
+  if (words.length > 2 && poolText.includes(words.slice(0, -1).join(" "))) return true;
+  // The land unit around a place the question or a lookup named: "Mount Rainier National Park" for "Mount Rainier".
+  const unit = n.replace(/\s+(?:national|state)\s+(?:park|forest|monument|recreation area|preserve|seashore|lakeshore)$|\s+wilderness(?:\s+area)?$/, "");
+  return unit !== n && unit.split(" ").length >= 2 && poolText.includes(unit);
 }
 
 const HIGH_WORDS = /\b(?:well\s+above|above)\s+(?:normal|typical|average|usual|median)\b|\bunusually\s+high\b|\brunning\s+high\b|\bhigh\s+water\b|\brecord\s+high\b|\bflood(?:ing)?\s+levels?\b/i;

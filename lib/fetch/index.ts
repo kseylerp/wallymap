@@ -116,6 +116,8 @@ export const HOST_RATES: Record<string, { capacity: number; refillPerSecond: num
   "api.weather.gov": { capacity: 5, refillPerSecond: 5 },
   "api.tidesandcurrents.noaa.gov": { capacity: 5, refillPerSecond: 5 },
   "waterservices.usgs.gov": { capacity: 5, refillPerSecond: 5 },
+  // NOAA NWPS: streamflow asks it for flood stages and forecasts gauge by gauge (layers/_shared/river-forecast.ts).
+  "api.water.noaa.gov": { capacity: 10, refillPerSecond: 10 },
 };
 
 function hostOf(url: string): string | null {

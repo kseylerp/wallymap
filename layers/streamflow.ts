@@ -51,6 +51,7 @@ import { outsideUs } from "./_shared/coverage";
 import { overpassQuery } from "./_shared/overpass";
 import { fetchIv, ivStrips, parseIv, type IvSite } from "./_shared/usgs";
 import { isAllCaps } from "./_shared/names";
+import { CATEGORY_WORDS, joinRiverForecasts, releaseFeatures } from "./_shared/river-forecast";
 import { layerColor, OFF_WHITE } from "@/lib/render/palette";
 
 const BASE = "https://api.waterdata.usgs.gov/ogcapi/v0/collections";
@@ -329,6 +330,8 @@ const STAT_BATCH = 10;
 export const STAT_SITE_CAP = 400;
 const STAT_TTL_SECONDS = 7 * 86_400;
 const CFS_PER_M3S = 35.3147;
+/** The highest percent of median shown: beyond 100 times the median the number says nothing more. */
+export const MAX_PCT_OF_MEDIAN = 10_000;
 
 /**
  * One calendar day's statistics at a gauge, from the daily mean flows of every year on record (cfs): the record low
@@ -482,8 +485,9 @@ export function ivFeatures(
       const monthDay = reading.local.slice(5, 10);
       const day = main === "00060" ? stats.get(site.siteNo)?.get(monthDay) : undefined;
       if (day !== undefined) {
-        if (day.p50 !== undefined && day.p50 > 0) {
-          properties.pctOfMedian = Math.round((reading.value / day.p50) * 100);
+        // A median under 1 cfs (a creek that is nearly dry on this date) makes the percent meaningless (19,777,778% seen).
+        if (day.p50 !== undefined && day.p50 >= 1) {
+          properties.pctOfMedian = Math.min(Math.round((reading.value / day.p50) * 100), MAX_PCT_OF_MEDIAN);
           properties.medianCfs = day.p50;
         }
         const cls = flowClass(reading.value, day);
@@ -850,6 +854,15 @@ const HELP: Record<string, FieldHelp> = {
   tempF: { text: "Water temperature where the gauge measures it; trout get stressed above about 68 °F (20 °C).", unit: "°F" },
   tempC: { text: "Water temperature where the gauge measures it; trout get stressed above about 20 °C.", unit: "°C" },
   dischargeM3s: { text: "The GloFAS model's daily discharge in its own unit; a rough estimate, not a gauge reading.", unit: "cubic metres per second" },
+  floodCategory: {
+    text: "Where the river stands against the NWS flood categories for this gauge: below flood stage, action stage (near flooding, when the NWS starts watching), minor, moderate or major flooding.",
+    source: "NOAA National Water Prediction Service",
+    url: "https://water.noaa.gov/",
+  },
+  floodStatus: { text: "The water level now (stage, in feet at this gauge's own zero) against the level where the river floods here.", source: "NOAA National Water Prediction Service", url: "https://water.noaa.gov/" },
+  forecastCrest: { text: "The highest level in the NWS river forecast for the next days, when it comes, and its flood category.", source: "NOAA National Water Prediction Service", url: "https://water.noaa.gov/" },
+  forecastDays: { text: "Each day's highest forecast level and flow, in local time.", source: "NOAA National Water Prediction Service", url: "https://water.noaa.gov/" },
+  releaseForecast: { text: "The Army Corps of Engineers' forecast release from the dam, each day's highest, in local time; schedules change.", source: "USACE Corps Water Management System", url: "https://water.usace.army.mil/" },
 };
 
 /** Plain words for each class on the card, with the percentile band it stands for. */
@@ -873,13 +886,35 @@ const CARD: CardSpec = {
     { key: "normalRange", label: "Normal range for the date" },
     { key: "recordYears", label: "Years of record" },
     { key: "waterTemp", label: "Water temperature" },
+    { key: "floodStatus", label: "Flood stage" },
+    { key: "floodCategory", label: "Flooding now", values: CATEGORY_WORDS },
+    { key: "forecastCrest", label: "Forecast high" },
+    { key: "forecastCategory", label: "Forecast flooding", values: CATEGORY_WORDS },
+    { key: "forecastDays", label: "River forecast", format: "list" },
+    { key: "forecastIssued", label: "Forecast issued" },
+    { key: "releaseForecast", label: "Release forecast", format: "list" },
+    { key: "releaseNote", label: "About the release" },
     { key: "dischargeM3s", label: "Flow in cubic metres", unit: "m³/s", format: "1dp" },
-    { key: "kind", label: "Reading", values: { gauge: "Measured at a USGS gauge", model: "Modelled by GloFAS (a rough estimate)" } },
+    { key: "kind", label: "Reading", values: { gauge: "Measured at a USGS gauge", model: "Modelled by GloFAS (a rough estimate)", nws: "Measured at an NWS river gauge", release: "Dam release, Army Corps of Engineers" } },
     { key: "siteId", label: "USGS site" },
+    { key: "nwsId", label: "NWS gauge" },
+  ],
+  links: [
+    { key: "nwsLink", label: "NWS river forecast page" },
+    { key: "cwmsLink", label: "Corps of Engineers water data" },
   ],
   // The title is the station name in plain words; USGS's own abbreviated capitals stay off the card.
-  hidden: ["vsNormal", "tempC", "tempF", "nameInSource"],
+  hidden: ["vsNormal", "tempC", "tempF", "nameInSource", "stageFt", "actionStageFt", "floodStageFt", "moderateStageFt", "majorStageFt"],
 };
+
+/** NWS flood categories, lowest first. */
+const FLOOD_LEVELS = [
+  { value: "no_flooding", label: "Below flood stage" },
+  { value: "action", label: "Action stage", help: "Near flooding: the NWS starts watching the river." },
+  { value: "minor", label: "Minor flooding" },
+  { value: "moderate", label: "Moderate flooding" },
+  { value: "major", label: "Major flooding" },
+];
 
 /**
  * The class for the date colors each gauge on the ordinal ramp (lowest on record at the low end, highest at the high
@@ -905,7 +940,23 @@ const ATTRIBUTES: Attribute[] = [
     levels: [
       { value: "gauge", label: "USGS gauge", help: "Measured at a USGS stream gauge (United States)." },
       { value: "model", label: "Modelled river", help: "GloFAS model estimate outside the United States; a rough figure, not a measurement." },
+      { value: "nws", label: "NWS river gauge", help: "A National Weather Service river gauge with no USGS gauge beside it (stage, sometimes flow)." },
+      { value: "release", label: "Dam release", help: "The Army Corps of Engineers' measured release below a dam." },
     ],
+  },
+  {
+    key: "floodCategory",
+    type: "ordinal",
+    label: "Flooding now",
+    levels: FLOOD_LEVELS,
+    scale: "NWS flood categories for the gauge",
+  },
+  {
+    key: "forecastCategory",
+    type: "ordinal",
+    label: "Forecast flooding",
+    levels: FLOOD_LEVELS,
+    scale: "NWS flood categories, the highest in the river forecast",
   },
 ];
 
@@ -937,7 +988,10 @@ const streamflow = defineLayer({
     "pctOfMedian is today's flow as a percent of the median for the date (medianCfs, in cfs), normalRange the 25th to 75th percentile in cfs, recordYears the years behind them, vsNormal the coarse word (low, normal or high). Every gauge in view gets them (up to the 400 largest in a very wide box); a gauge whose record is too short has none. " +
     "tempC and tempF are water temperature where the gauge measures it (useful for fishing: trout get stressed above about 68 °F, 20 °C). " +
     "Outside the United States, points are modelled, not measured: kind 'model', one per major river, v is the GloFAS model's daily discharge converted to cfs (dischargeM3s is the original in m³/s), t is the day; treat it as a rough estimate, and a small river right beside a big one can show the big one's flow. " +
-    "Example questions: 'What is the Truckee running at?', 'Which rivers near here are running high?'. " +
+    "Flood stage and forecasts (US, from the NOAA National Water Prediction Service): gauges the NWS watches carry nwsId, stageFt (water level now), floodStageFt and actionStageFt, floodStatus ('Stage 1.2 ft; flood stage 9.5 ft: 8.3 ft below flood stage'), floodCategory (no_flooding, action, minor, moderate, major), and where the NWS forecasts the river, forecastCrest (the highest level coming and when), forecastCategory and forecastDays (each day's highest level and flow); kind 'nws' is an NWS gauge with no USGS gauge beside it. For 'is the river going to flood' compare stage to flood stage and quote the forecast, not the percent of median. " +
+    "Dam releases: kind 'release' is the Army Corps of Engineers' measured release below a dam people paddle (the Gauley below Summersville Dam), v in cfs, releaseForecast by day; for 'is the Gauley running' quote it. " +
+    "Runnable ranges for paddling are not in the data (American Whitewater's ranges have no open licence): give the flow and say the range is not known here; never call a run runnable. " +
+    "Example questions: 'What is the Truckee running at?', 'Which rivers near here are running high?', 'Is the French Broad going to flood?', 'Is the Gauley running?'. " +
     "Caveats: US readings are provisional and can be revised; ice, debris or a dry channel can give 0 or odd values; gauges silent for 7 days are left out; " +
     "the class compares one instantaneous reading to daily means, so it swings with dam releases and daily snowmelt cycles. " +
     "Over 400,000 km² it returns up to 1,000 gauges, highest flow first.",
@@ -994,9 +1048,34 @@ const streamflow = defineLayer({
     const looked =
       statFor.length > 0 ? await fetchStats(ctx, statFor) : { stats: new Map<string, Map<string, DayStats>>(), failedBatches: 0 };
     const all = ivFeatures(sites, input.parameter, looked.stats);
+    const notes: string[] = [];
+    let citation = liveCitation;
+    if (!ctx.wide) {
+      // Dam releases first, so the NWS gauge at the dam's outlet joins the release instead of drawing twice.
+      const releases = await releaseFeatures(ctx, ctx.bbox, now);
+      all.features.push(...releases);
+      const river = await joinRiverForecasts(ctx, all.features, now);
+      all.features.push(...river.added);
+      if (river.note) notes.push(river.note);
+      const withStages = all.features.filter((f) => f.properties?.floodStatus !== undefined).length;
+      if (withStages + river.forecasts > 0) {
+        const flooding = all.features.filter((f) => ["minor", "moderate", "major"].includes(String(f.properties?.floodCategory))).length;
+        const forecastFlooding = all.features.filter((f) => ["minor", "moderate", "major"].includes(String(f.properties?.forecastCategory))).length;
+        notes.push(
+          `${withStages} gauges show stage against NWS flood stage and ${river.forecasts} carry an NWS river forecast; ` +
+            `${flooding} at or above flood stage now, ${forecastFlooding} forecast to reach it`,
+        );
+      }
+      if (releases.length > 0) {
+        notes.push(`dam release from the Corps of Engineers: ${releases.map((r) => `${r.properties?.name} ${Number(r.properties?.v).toLocaleString("en-US")} cfs`).join("; ")}`);
+      }
+      citation = {
+        ...liveCitation,
+        source: `${liveCitation.source}; NOAA National Water Prediction Service stages, flood stages and river forecasts (public domain)${releases.length > 0 ? "; USACE CWMS dam releases (public domain)" : ""}`,
+      };
+    }
     const { data, total } = ctx.wide ? keepLargest(all, ctx.wideStrategy?.limit ?? WIDE_LIMIT) : { data: all, total: undefined };
     const withFlow = sites.filter((s) => s.readings[input.parameter] !== undefined).length;
-    const notes: string[] = [];
     if (looked.failedBatches > 0) {
       notes.push(
         looked.stats.size === 0
@@ -1011,7 +1090,7 @@ const streamflow = defineLayer({
     return {
       kind: "geojson",
       data,
-      citation: liveCitation,
+      citation,
       ...(total !== undefined && { total }),
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };

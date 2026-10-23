@@ -111,7 +111,7 @@ describe("runCombine", () => {
     const out = await runCombine({ op: "outside", a: { layerId: "old-growth" }, b: { layerId: "wilderness" }, unit: "km" }, turn, null);
     if ("error" in out) throw new Error(out.error);
     expect(out.data.features[0].properties?.apportioned).toBe(37_500);
-    expect(out.combined.statement).toMatch(/^Of [\d,.]+ km² of old-growth firesheds, .* lies outside wilderness areas, in 1 of 1 areas\. Spread evenly over each area, that is about 37,500 acres of old-growth forest of the 50,000 acres in these areas\.$/);
+    expect(out.combined.statement).toBe("Of 50,000 acres of old-growth forest in 1 area, about 37,500 acres (75%) lie outside wilderness areas, in 1 of them, counting each area's amount as spread evenly over it.");
     expect(out.combined.facts.map((f) => f.key)).toContain("apportioned");
   });
 

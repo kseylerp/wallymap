@@ -262,7 +262,7 @@ async function sideOf(side: z.infer<typeof SideSchema>, turn: Turn, view: MapVie
  * outside) gets its share of the amount, assuming it is spread evenly, and the statement says so. Null when the layer's
  * measure is the polygon's own area (fire perimeter acres, allotment acres) or it has none in acres.
  */
-function apportion(features: Feature[], layer: Layer, op: CombineOp): { sentence: string; fact: CardFact } | null {
+function apportion(features: Feature[], all: Feature[], layer: Layer, op: CombineOp, relation: string, count: number): { sentence: string; fact: CardFact } | null {
   const measure = layer.card?.measure;
   if (!measure || measure.unit !== "acres" || (op !== "overlap" && op !== "within" && op !== "outside")) return null;
   const shareKey = op === "outside" ? "outsideShare" : "overlapShare";
@@ -287,8 +287,11 @@ function apportion(features: Feature[], layer: Layer, op: CombineOp): { sentence
   }
   const n = (v: number) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)} million` : Math.round(v).toLocaleString("en-US"));
   const label = lowerFirst(measure.label);
+  // Of everything A holds, not only the areas kept: an area wholly inside B still counts in "of all".
+  const total = all.reduce((sum, f) => sum + (typeof f.properties?.[measure.key] === "number" ? (f.properties[measure.key] as number) : 0), 0) || whole;
+  const where = op === "overlap" ? `in the parts ${relation}` : relation;
   return {
-    sentence: `Spread evenly over each area, that is about ${n(part)} acres of ${label} of the ${n(whole)} acres in these areas.`,
+    sentence: `Of ${n(total)} acres of ${label} in ${plural(all.length, "area")}, about ${n(part)} acres (${Math.round((part / total) * 100)}%) lie ${where}, in ${count.toLocaleString("en-US")} of them, counting each area's amount as spread evenly over it.`,
     fact: { key: "apportioned", label: `${measure.label} in this part (spread evenly)`, unit: "acres", format: "int" },
   };
 }
@@ -341,8 +344,9 @@ export async function runCombine(input: CombineInput, turn: Turn, view: MapView 
   const aTitle = sideNoun(a.layer, a.input);
   const relation = relationText(input.op, bName, input, fromName);
   const title = `${aTitle} ${relation}`;
-  const apportioned = aKind === "polygon" ? apportion(outcome.features, a.layer, input.op) : null;
-  const statement = [statementOf(relation, input.op, outcome, aTitle, aKind!), apportioned?.sentence].filter(Boolean).join(" ");
+  const apportioned = aKind === "polygon" ? apportion(outcome.features, a.features, a.layer, input.op, relation, outcome.count) : null;
+  // An amount spread over the areas (old-growth acres per fireshed) is the answer; the areas' own size would mislead.
+  const statement = apportioned?.sentence ?? statementOf(relation, input.op, outcome, aTitle, aKind!);
   const id = `${COMBINED_PREFIX}${SLUG(`${a.layer.id}-${input.op}-${input.op === "drive_time" ? `${input.minutes ?? 30}min-${fromName}` : bName}`)}`;
   const fields = joinFields(input.op, aKind!, bName);
   if (apportioned) fields.facts.push(apportioned.fact);

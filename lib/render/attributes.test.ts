@@ -297,7 +297,7 @@ describe("a measure where less is better", () => {
 describe("rowName", () => {
   it("names an unnamed trail by its high point, and anything else unnamed as Unnamed", async () => {
     const { rowName } = await import("@/lib/render/attributes");
-    const f = (properties: Record<string, unknown>): Feature => ({ type: "Feature", geometry: null, properties });
+    const f = (properties: Record<string, unknown>): Feature => ({ type: "Feature", geometry: { type: "Point", coordinates: [6.87, 45.92] }, properties });
     expect(rowName(f({ kind: "path", highM: 4181.4, gainM: 1179 }))).toBe("Unnamed path to 4,181 m");
     expect(rowName(f({ name: "Les Balcons de la Mer de Glace", highM: 2704 }))).toBe("Les Balcons de la Mer de Glace");
     expect(rowName(f({ kind: "camp_site" }))).toBe("Unnamed");

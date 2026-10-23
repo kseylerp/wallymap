@@ -319,6 +319,9 @@ export function noteFeatureNames(text: string): string[] {
   return [...new Set(out)];
 }
 
+/** Short forms station and gauge names use (SNOTEL's "Spirit Lk", "Ben Lomond Pk"), read as the words a note writes. */
+const SHORT_FORMS: Record<string, string> = { lk: "lake", mtn: "mountain", mtns: "mountains", pk: "peak", ck: "creek", cr: "creek", crk: "creek", cyn: "canyon", rdg: "ridge", mdw: "meadow", mdws: "meadows", spg: "spring", spgs: "springs", res: "reservoir", rsvr: "reservoir" };
+
 const comparable = (t: string) =>
   t
     .toLowerCase()
@@ -327,6 +330,7 @@ const comparable = (t: string) =>
     .replace(/[’`]/g, "'")
     .replace(/\bmt\.?\s/g, "mount ")
     .replace(/[^a-z0-9' ]+/g, " ")
+    .replace(/\b[a-z]+\b/g, (w) => SHORT_FORMS[w] ?? w)
     .replace(/\s+/g, " ")
     .trim();
 

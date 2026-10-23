@@ -48,6 +48,9 @@ describe("ungroundedClaims: the audit's invented numbers and names", () => {
     expect(texts(ungroundedClaims("Try Royal Arch Trail or the Flatirons Loop.", pool))).toEqual(["Flatirons Loop"]);
     expect(noteFeatureNames("Hike Mt. Sanitas Trail and Royal Arch Trail")).toEqual(["Mt. Sanitas Trail", "Royal Arch Trail"]);
     expect(ungroundedClaims("Mt. Sanitas Trail is 1.9 km.", pool)).toEqual([]);
+    // SNOTEL's short forms: "Spirit Lk" is Spirit Lake, written with a narrow no-break space.
+    const snotel = factPool([answer({ featureCount: 1 }, [{ name: "Spirit Lk", v: 12 }])], "Where's the deepest fresh snow in Utah right now?");
+    expect(ungroundedClaims("Deepest at Spirit\u202fLake.", snotel)).toEqual([]);
     // The park around a place the question names is no invention.
     const rainier = factPool([answer({ featureCount: 1 })], "Which trails at Mount Rainier are snow free right now?");
     expect(ungroundedClaims("Snow lingers high in Mount Rainier National Park.", rainier)).toEqual([]);

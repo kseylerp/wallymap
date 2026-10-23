@@ -17,9 +17,9 @@ export type Claim = { text: string; kind: "number" | "name" | "flow" | "measure"
  * "gusts of 30 mph"; the sightings layer has no abundance, yet a note said "brook trout present".
  */
 const MEASURE_WORDS: { re: RegExp; needs: RegExp }[] = [
-  { re: /gusts?(?:ing)?/i, needs: /gust/ },
-  { re: /waves+period/i, needs: /period/ },
-  { re: /drivers?s+of|drivens+(?:primarilys+)?by/i, needs: /driver/ },
+  { re: /\bgusts?(?:ing)?\b/i, needs: /\bgust/ },
+  { re: /\bwave\s+period\b/i, needs: /\bperiod\b/ },
+  { re: /\bdrivers?\s+of\b|\bdriven\s+(?:primarily\s+)?by\b/i, needs: /\bdriver/ },
 ];
 
 type Dimension = "length" | "area" | "flow" | "speed" | "temperature" | "percent" | "mass-rate" | "power" | "volume" | "count" | "mass" | "depth";

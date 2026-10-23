@@ -158,8 +158,10 @@ describe("withReading", () => {
   it("puts the trail color's filter in place of another difficulty scale on the same layer", () => {
     const turn = turnFor("Flowy blue trails in Sedona");
     turn.place = sedona;
-    expect(withReading({ layerId: "mtb-trails", filters: { v: { include: ["2"] } } }, turn)).toMatchObject({ filters: { imba: { include: ["2"] } } });
-    expect((withReading({ layerId: "mtb-trails", filters: { v: { include: ["2"] } } }, turn).filters as Record<string, unknown>).v).toBeUndefined();
+    // The Difficulty chip (v) is the IMBA color: "blue" sets it to 2 in place of the model's guess, with no raw imba filter.
+    const out = withReading({ layerId: "mtb-trails", filters: { v: { include: ["3"] } } }, turn).filters as Record<string, unknown>;
+    expect(out).toMatchObject({ v: { include: ["2"] } });
+    expect(out.imba).toBeUndefined();
   });
 
   it("adds the filters the question names that the model left out, and keeps the model's own", () => {

@@ -470,6 +470,13 @@ export function colorFilter(layer: Pick<Layer, "id" | "attributes">, word: strin
       .map((l) => String(l.value));
     if (values.length > 0) return { key: attr.key, include: [...new Set(values)] };
   }
+  // A chip labelled with the color itself (mtb-trails' Difficulty: Green, Blue, Black, Double black; white is shown with green).
+  const named = color === "white" ? "green" : color;
+  for (const attr of layer.attributes ?? []) {
+    if (attr.type !== "ordinal" && attr.type !== "category") continue;
+    const values = (attr.levels ?? []).filter((l) => norm(l.label ?? "") === named).map((l) => String(l.value));
+    if (values.length > 0) return { key: attr.key, include: [...new Set(values)] };
+  }
   if (layer.id === "mtb-trails" && IMBA_COLORS[color]) return { key: "imba", include: IMBA_COLORS[color] };
   return null;
 }

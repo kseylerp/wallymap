@@ -78,7 +78,8 @@ describe("readQuestion: the words the audit's questions use", () => {
     expect(strong("Flowy blue trails in Sedona")).toContain("mtb-trails");
     expect(r.avoid.map((a) => a.layerId)).toEqual(expect.arrayContaining(["river-pulse", "streamflow"]));
     expect(r.layers.map((l) => l.layerId)).not.toContain("osm-trails");
-    expect(readingFilters(r, "mtb-trails", [-111.76, 34.87])).toEqual([expect.objectContaining({ key: "imba", include: ["2"], color: true })]);
+    // The Difficulty chip (v) holds IMBA colors, converted from the Singletrack Scale where no IMBA rating is mapped.
+    expect(readingFilters(r, "mtb-trails", [-111.76, 34.87])).toEqual([expect.objectContaining({ key: "v", include: ["2"], color: true })]);
   });
 
   it("reads a piste color by region: blue is intermediate in North America and easy in Europe", () => {

@@ -369,9 +369,9 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 Use-case questions (57, `--tag usecase`) run live on 2026-10-23 with model `openai/gpt-oss-120b`, a 12-step cap and the
 Tier 1 map checks, after the three use-case branches (routing and geocoding, combine and terrain, layer data) were
 merged: **ok 41/57** on the first run. The 16 failures, and 4 questions that had hit bugs fixed during the run, were run
-again once on the fixed code: **10/20 passed, so 47/57 stand.** The full set (179 questions) was **not run** this time:
-free disk fell under 3 GB during the session (another session's build), and heavy steps stop there. The last full run
-(117 questions, 2026-10-18) passed 116/116 with 1 skipped. Per use case, judged by hand: **10 work, 13 weak, 2 fail**
+again once on the fixed code: **10/20 passed, so 47/57 stand.** The full set (179 questions) then ran once:
+**ok 155/177** (2 skipped: documented outages), on code loaded before the screen fixes; its 22 failures were run again
+once: 11 passed, so **166/177 stand**. Per use case, judged by hand: **10 work, 13 weak, 2 fail**
 (audit before: 1, 11, 13); see `.superpowers/m3/usecases/AFTER.md`.
 
 The checks:
@@ -394,6 +394,8 @@ What failed and was fixed, one sentence each:
 - **Flowy blue trails in Sedona.** A trail color would have filtered a raw property and dropped trails rated on the Singletrack Scale; it now sets the Difficulty chip (c75c88a).
 - **Easy hikes with a waterfall.** Now read as a join (b940e21), and its "Top 10 by distance" lists the nearest first (17a3ec8).
 - **Fly fishing near Asheville.** The note reached the person as raw JSON; that text is now the note (95aa1b9).
+- **Wild horses in drought (full-set re-run).** The model answered in plain text without the join; a text ending is now held back until combine runs, like a note (e353141).
+- **Lyell Glacier, beetles in Colorado.** "Unnamed glacier" rows and beetle-kill polygons kilometres apart were failed as one place listed twice (957012c).
 - **Backpacking in the Wind Rivers, fly fishing near Asheville.** Lake groups ("Knob Lakes") and two ramps sharing a gauge's temperature were flagged as places drawn twice; the duplicate check now tells them apart (f39b71e, d9c0a72, 8891bf4).
 
 Remaining failures: whitewater class (no free source), the Mojave Road's line (not found), jaguar points (hidden by

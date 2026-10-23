@@ -4,7 +4,7 @@ import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import type { LayerFilters } from "@/lib/render/filters";
 import { ROUTE_ERROR_ID } from "@/lib/render/reducer";
 import { repairToolName } from "@/lib/agent/toolNames";
-import { combinedActions } from "@/lib/render/combined";
+import { combinedActions, latestCombinedId } from "@/lib/render/combined";
 import {
   isHexBasis,
   RENDER_MODES,
@@ -465,8 +465,12 @@ export function toolResultToActions(
       return [{ type: "place_settle" }];
     case "set_basemap":
       return BASEMAPS.includes(output.style as Basemap) ? [{ type: "set_basemap", basemap: output.style as Basemap, agent: true }] : [];
-    case "render":
-      return renderActions({ ...output, layerId: typeof output.layerId === "string" ? cleanLayerId(output.layerId) : output.layerId }, catalog);
+    case "render": {
+      const id = typeof output.layerId === "string" ? cleanLayerId(output.layerId) : output.layerId;
+      // "combine" (the tool's name) means the layer the combine tool drew last (lib/render/combined.ts).
+      const layerId = id === "combine" ? latestCombinedId(existingOps) : id;
+      return layerId === undefined ? [] : renderActions({ ...output, layerId }, catalog);
+    }
     case "route":
       return routeActions(output, canvas);
     case "set_time":

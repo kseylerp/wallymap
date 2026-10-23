@@ -16,8 +16,14 @@
  *
  * NOAA's Operational Forecast Systems (CIOFS for Cook Inlet, SFBOFS and the others) resolve narrow inlets far better,
  * but serve NetCDF on curvilinear grids through THREDDS; reading them is a follow-up.
+ *
+ * Units (2026-10-23, audit R12): currents read in knots, the boater's unit, first: every node carries `speedKt` and the
+ * direction it flows toward in words, the card's measure is knots with km/h second, and `display: { units: "us" }`
+ * puts °F first for the water. The coverage note names the current nearest the asked place (the box's center) and the
+ * strongest one now, in knots with m/s beside. `speed`, `east` and `north` stay in m/s for the particles.
  */
 import { z } from "zod";
+import type { Feature, Point } from "geojson";
 import { defineLayer, type Attribute, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type LegendSpec, type LinkedSeries, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { readField, waterMask } from "./_shared/flowGrid";
@@ -35,6 +41,47 @@ export const MAX_NODES = 360;
 export const MIN_SPAN_KM = 350;
 /** The tide station plotted is the one nearest the field's center within this distance. */
 const TIDE_STATION_KM = 200;
+
+/** m/s to knots. */
+export const MS_TO_KT = 1.94384;
+
+const POINTS = ["north", "north-northeast", "northeast", "east-northeast", "east", "east-southeast", "southeast", "south-southeast", "south", "south-southwest", "southwest", "west-southwest", "west", "west-northwest", "northwest", "north-northwest"];
+
+/** "Flows toward the northeast (45°)" from the east and north parts; null for still water. */
+export function towardText(east: number, north: number): string | null {
+  if (east === 0 && north === 0) return null;
+  const deg = Math.round(((Math.atan2(east, north) * 180) / Math.PI + 360) % 360) % 360;
+  return `${POINTS[Math.round(deg / 22.5) % 16]} (${deg}°)`;
+}
+
+/** A current held in m/s as "1.2 knots (0.6 m/s)". */
+export function currentText(ms: number): string {
+  const kt = Math.round(ms * MS_TO_KT * 10) / 10;
+  return `${kt.toFixed(1)} knot${kt === 1 ? "" : "s"} (${(Math.round(ms * 100) / 100).toFixed(2)} m/s)`;
+}
+
+/**
+ * The current nearest the asked place (the box's center, within 25 km) and the strongest in view, at the hour of the
+ * query, in knots with m/s beside.
+ */
+export function currentNotes(nodes: Feature[], bbox: BBox): string[] {
+  const [w, s, e, n] = bbox;
+  const center: [number, number] = [(w + e) / 2, (s + n) / 2];
+  const read = (f: Feature) => {
+    const p = f.properties as Record<string, unknown>;
+    const at = (f.geometry as Point).coordinates as [number, number];
+    return { p, at, ms: typeof p.speed === "number" ? p.speed : null };
+  };
+  const rows = nodes.map(read).filter((r) => r.ms !== null);
+  if (rows.length === 0) return [];
+  const say = (r: (typeof rows)[number]) => `${currentText(r.ms as number)}${typeof r.p.toward === "string" ? ` toward the ${r.p.toward}` : ""}`;
+  const out: string[] = [];
+  const near = rows.map((r) => ({ r, d: haversineKm(center, r.at) })).sort((a, b) => a.d - b.d)[0];
+  if (near && near.d <= 25) out.push(`Current nearest the asked place now (${near.r.p.name}, ${Math.round(near.d)} km from the center): ${say(near.r)}`);
+  const top = rows.reduce((a, b) => ((b.ms as number) > (a.ms as number) ? b : a));
+  out.push(`Strongest current in view now: ${say(top)} at ${top.p.name}`);
+  return out;
+}
 
 const inputSchema = z.object({
   days: z.number().int().min(1).max(7).default(7).describe("Days of hourly currents from today, 1 to 7 (default 7, this week)"),
@@ -120,16 +167,25 @@ const HELP: Record<string, FieldHelp> = {
   east: { text: "Eastward part of the current; negative flows west.", unit: "m/s" },
   north: { text: "Northward part of the current; negative flows south.", unit: "m/s" },
   sst: { text: "Sea surface temperature at the grid node.", unit: "°C", source: "Open-Meteo Marine", url: "https://open-meteo.com/en/docs/marine-weather-api" },
+  speedKt: {
+    text:
+      "Speed of the surface current in knots (nautical miles an hour; 1 knot is 0.51 m/s), tides included, from Météo-France's SMOC model " +
+      "(about 8 km) via Open-Meteo; narrow channels run faster than an 8 km model can show.",
+    unit: "knots",
+    source: "Météo-France SMOC via Open-Meteo Marine (CC BY 4.0)",
+    url: "https://open-meteo.com/en/docs/marine-weather-api",
+  },
+  toward: { text: "The direction the water flows toward, in compass words and degrees." },
 };
 
 const CARD: CardSpec = {
-  measure: { key: "speed", label: "Current speed", unit: "m/s" },
+  measure: { key: "speedKt", label: "Current speed", unit: "knots" },
   facts: [
+    { key: "toward", label: "Flows toward" },
     { key: "sst", label: "Water temperature", unit: "°C", format: "1dp" },
-    { key: "east", label: "Eastward", unit: "m/s", format: "1dp" },
-    { key: "north", label: "Northward", unit: "m/s", format: "1dp" },
   ],
-  hidden: ["series", "node"],
+  // speed, east and north (m/s) drive the particles; the measure already gives the speed in knots and km/h.
+  hidden: ["series", "node", "speed", "east", "north"],
 };
 
 const ATTRIBUTES: Attribute[] = [
@@ -144,7 +200,7 @@ export const LEGEND: LegendSpec = {
   field: "sst",
   unit: "°C",
   stops: [{ label: "Coldest in view" }, { label: "Warmest in view" }],
-  note: "Streaks drift with the current; brighter, longer streaks are faster (1 m/s is about 2 knots). Land and model cells without water are blank.",
+  note: "Streaks drift with the current; brighter, longer streaks are faster (1 knot is about 0.5 m/s). Land and model cells without water are blank.",
 };
 
 const oceanCurrents = defineLayer({
@@ -152,7 +208,8 @@ const oceanCurrents = defineLayer({
   title: "Ocean currents (hourly, moving)",
   description:
     "Surface ocean and tidal currents hour by hour for a few days, drawn as moving particles: each particle drifts with the current, its color is the water temperature (sst, °C) and its brightness the speed (m/s). " +
-    "Features are grid nodes named by their position, with speed, east and north (m/s) and sst at the hour of the query, and a series per hour; the time scrubber steps hourly. " +
+    "Features are grid nodes named by their position, with speedKt (knots), toward (the direction the water flows), speed, east and north (m/s) and sst at the hour of the query, and a series per hour (m/s); the time scrubber steps hourly. " +
+    "The coverage note gives the current nearest the asked place (the center of the view) and the strongest now, in knots with m/s beside. Answer in knots first (1 m/s = 1.94 knots), metric second. " +
     "For a coast in the United States the tide at the nearest NOAA station is plotted under the scrubber in sync (elsewhere the model's sea level). " +
     "Use it for 'show the currents in Cook Inlet this week', 'when does the current turn in the Golden Gate', 'where does the current help a paddle trip'. " +
     "The summary's story gives the strongest current's low and peak with times, how often it repeats (tides about every 12.4 hours) and the tide's biggest swing. " +
@@ -163,6 +220,8 @@ const oceanCurrents = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 4_000_000,
   input: inputSchema,
+  // Knots first (the card's measure), °F before °C (R12); per layer, as boaters everywhere read knots.
+  display: { units: "us" },
   style: { geometry: "point", color: layerColor("ocean-currents"), unit: "m/s", encode: { size: "speed", color: "sst" }, series: "hour", basemap: "data-only" },
   legend: LEGEND,
   fieldHelp: HELP,
@@ -193,9 +252,16 @@ const oceanCurrents = defineLayer({
     // A finer water mask than the 8 km model grid, so particles stay off the land between its nodes.
     const water = await landTest().then((isLand) => (isLand ? waterMask(field.flow.bbox, isLand) : null)).catch(() => null);
     const linked = (await noaaTide(ctx, field.flow.bbox, times)) ?? (await modelTide(ctx, field.flow.bbox, times, input.days, input.pastDays));
-    const wet = field.data.features.filter((f) => typeof f.properties?.speed === "number").length;
+    const wetNodes = field.data.features.filter((f) => typeof f.properties?.speed === "number");
+    for (const f of wetNodes) {
+      const p = f.properties as Record<string, unknown>;
+      p.speedKt = Math.round((p.speed as number) * MS_TO_KT * 100) / 100;
+      const toward = typeof p.east === "number" && typeof p.north === "number" ? towardText(p.east, p.north) : null;
+      if (toward) p.toward = toward;
+    }
     const notes = [
-      `${wet} of ${field.data.features.length} grid nodes at sea, hourly for ${times.length} hours (Météo-France SMOC, about 8 km)`,
+      ...currentNotes(wetNodes, ctx.bbox),
+      `${wetNodes.length} of ${field.data.features.length} grid nodes at sea, hourly for ${times.length} hours (Météo-France SMOC, about 8 km)`,
       ...(linked ? [`${linked.label} at ${linked.place} plotted under the scrubber`] : []),
     ];
     return {

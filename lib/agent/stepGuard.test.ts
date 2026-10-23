@@ -80,6 +80,20 @@ async function run(question: string, replies: Reply[], view: MapView | null = nu
   return { turn, result, calls, prompts };
 }
 
+describe("step guard: an empty step", () => {
+  it("asks once more when the model stops with no call and no text before the answer", async () => {
+    const { calls, turn } = await run("Fires near Lake Tahoe", [
+      { calls: [{ name: "geocode", input: { place: "Lake Tahoe" } }] },
+      {},
+      { calls: [{ name: "query_fire-perimeters", input: { bbox: TAHOE } }] },
+      { calls: [{ name: "render", input: { layerId: "fire-perimeters" } }, { name: "note", input: { markdown: "One fire is drawn." } }] },
+      { text: "- Want older fires?" },
+    ]);
+    expect(calls.map((c) => c.name)).toEqual(["geocode", "query_fire-perimeters", "render", "note"]);
+    expect(turn.log.join("\n")).toMatch(/step was empty: asked again/);
+  });
+});
+
 describe("step guard: queried but never drawn", () => {
   it("renders a layer queried and never drawn before a text-only ending, and the model answers after", async () => {
     const { calls, result, turn } = await run("What fires are here?", [

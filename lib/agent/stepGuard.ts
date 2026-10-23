@@ -665,6 +665,12 @@ function answerOnlyParams(params: CallOptions): CallOptions {
 /** Most times one step is asked again after all its calls were dropped. */
 const MAX_REASKS = 1;
 
+/**
+ * A step with no tool call and no text before the answer was written: the model stopped with nothing (Bishop
+ * bouldering, 2026-10-23: a geocode, then an empty step and an empty answer). Asked once more as it was.
+ */
+const isEmptyStep = (calls: DraftCall[], text: string, turn: Turn) => calls.length === 0 && text.trim() === "" && !turn.noted;
+
 const finishFor = (calls: DraftCall[], reason: { unified: string; raw: string | undefined }) =>
   calls.length > 0 ? { unified: "tool-calls" as const, raw: reason.raw } : reason;
 
@@ -674,10 +680,18 @@ export function stepGuard(turn: Turn, toolNames: readonly string[]): Middleware 
 
   async function guardGenerate(model: Model, params: CallOptions, first: GenerateResult): Promise<GenerateResult> {
     let result = first;
+    let emptyRetried = false;
     for (let attempt = 0; ; attempt++) {
       const calls = draftCalls(result.content);
       if (!calls) return result;
       const text = result.content.map((c) => (c.type === "text" ? c.text : "")).join("");
+      if (!emptyRetried && isEmptyStep(calls, text, turn)) {
+        emptyRetried = true;
+        turn.note("the model's step was empty: asked again");
+        result = await model.doGenerate(params);
+        attempt--;
+        continue;
+      }
       const decision = await decideStep({ calls, hasText: text.trim() !== "", text }, turn, toolNames);
       if (decision.rejected.length > 0 && decision.calls.length === 0 && attempt < MAX_REASKS) {
         result = await model.doGenerate(reaskParams(params, decision.rejected));
@@ -736,11 +750,20 @@ export function stepGuard(turn: Turn, toolNames: readonly string[]): Middleware 
   async function guardStream(model: Model, params: CallOptions, first: StreamResult): Promise<StreamResult> {
     let result = first;
     let parts = await collect(result.stream);
+    let emptyRetried = false;
     for (let attempt = 0; ; attempt++) {
       if (parts.some((p) => p.type === "error")) return { ...result, stream: streamOf(parts).pipeThrough(renaming()) };
       const calls = draftCalls(parts);
       if (!calls) return { ...result, stream: streamOf(parts).pipeThrough(renaming()) };
       const text = parts.map((p) => (p.type === "text-delta" ? p.delta : "")).join("");
+      if (!emptyRetried && isEmptyStep(calls, text, turn)) {
+        emptyRetried = true;
+        turn.note("the model's step was empty: asked again");
+        result = await model.doStream(params);
+        parts = await collect(result.stream);
+        attempt--;
+        continue;
+      }
       const decision = await decideStep({ calls, hasText: text.trim() !== "", text }, turn, toolNames);
       if (decision.rejected.length > 0 && decision.calls.length === 0 && attempt < MAX_REASKS) {
         result = await model.doStream(reaskParams(params, decision.rejected));

@@ -140,8 +140,11 @@ export function seriesStory(
     .map((f) => ({ f, s: seriesOf(f, key) }))
     .filter((x): x is { f: Feature; s: (number | null)[] } => x.s !== undefined && x.s.some(num));
   if (rows.length === 0) return undefined;
+  // A forecast with nothing observed yet (now is its first frame) tells its low and peak over the frames ahead.
+  const forecastOnly = series.now === 0 && series.forecastFrom === 0;
+  const upto = forecastOnly ? series.times.length : series.now + 1;
   const meanOf = (s: (number | null)[]) => {
-    const v = s.slice(0, series.now + 1).filter(num);
+    const v = s.slice(0, upto).filter(num);
     return v.length ? v.reduce((a, b) => a + b, 0) / v.length : -Infinity;
   };
   // A measure totalled over some features (river pulse: its outlets) follows that total; otherwise the feature with the
@@ -157,9 +160,10 @@ export function seriesStory(
             return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) : null;
           }),
         }
-      : rows.reduce((best, x) => (meanOf(x.s) > meanOf(best.s) ? x : best));
+      : // The asked place, when the layer marks one (the weather forecast's "here" point), else the most of the measure.
+        (rows.find((x) => x.f.properties?.kind === "here") ?? rows.reduce((best, x) => (meanOf(x.s) > meanOf(best.s) ? x : best)));
   const totalLabel = totalled.length > 0 ? (measure.aggregateLabel ?? `Total ${measure.label.toLowerCase()}`) : undefined;
-  const observed = lead.s.slice(0, series.now + 1);
+  const observed = lead.s.slice(0, upto);
   let lo = -1;
   let hi = -1;
   observed.forEach((v, k) => {
@@ -256,8 +260,10 @@ export function seriesStory(
   const u = measure.unit ? ` ${measure.unit}` : "";
   const amount = (v: number) => `${round(v).toLocaleString("en-US")}${u}`;
   const hourly = series.step === "hour";
-  const lowWord = hourly ? "weakest" : "lowest";
-  const peakWord = hourly ? "strongest" : "peak";
+  // Wind and currents are weakest and strongest; a temperature or a chance of rain is lowest and highest.
+  const flow = hourly && /wind|gust|current|speed/i.test(measure.label);
+  const lowWord = flow ? "weakest" : "lowest";
+  const peakWord = flow ? "strongest" : hourly ? "highest" : "peak";
   const ratio = low > 0 ? peak / low : null;
   const forecastLine =
     tomorrowTop.length > 0

@@ -120,3 +120,17 @@ describe("weather-forecast layer", () => {
     expect(await layer.query(down.ctx, layer.input.parse({}))).toMatchObject({ hint: "upstream" });
   });
 });
+
+describe("weather-forecast story", () => {
+  it("tells the asked place's low and high over the forecast hours, not one hour of the hottest point", async () => {
+    const { seriesStory } = await import("@/lib/layers/story");
+    const times = Array.from({ length: 6 }, (_, i) => `2026-10-24T${String(12 + i).padStart(2, "0")}:00:00.000Z`);
+    const point = (name: string, kind: string, temps: number[]) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [-116, 34] }, properties: { name, kind, series: { tempF: temps } } });
+    const story = seriesStory(
+      [point("Forecast at the asked place", "here", [52, 55, 60, 67, 63, 58]), point("Forecast near La Quinta", "view", [65, 70, 80, 88, 84, 76])],
+      { times, step: "hour", now: 0, forecastFrom: 0 },
+      layer.attributes,
+    );
+    expect(story?.caption).toMatch(/^Temperature at Forecast at the asked place: lowest 52 °F on 2026-10-24 12:00 UTC, highest 67 °F on 2026-10-24 15:00 UTC/);
+  });
+});

@@ -18,7 +18,7 @@
 import type { BBox } from "@/layers/types";
 import { featureBBox } from "./naturalEarth";
 
-export type RegionSource = "natural-earth" | "river-basins" | "protected-areas-world" | "wilderness" | "national-forests" | "wikidata" | "world";
+export type RegionSource = "natural-earth" | "river-basins" | "protected-areas-world" | "wilderness" | "national-forests" | "wikidata" | "world" | "openstreetmap";
 
 /**
  * The polar regions, which no geocoder answers well: Mapbox gave "Arctic" as Arctic, Rhode Island and "Arctic Circle"
@@ -412,7 +412,10 @@ async function wikidataMatch(region: RegionName, proximity: [number, number] | u
   const items = found.search.flatMap((raw): { id: string; label: string }[] => {
     if (!isRecord(raw) || typeof raw.id !== "string" || typeof raw.label !== "string") return [];
     const description = typeof raw.description === "string" ? raw.description : "";
-    return normalize(raw.label) === normalize(region.full) && REGION_DESCRIPTION.test(description) ? [{ id: raw.id, label: raw.label }] : [];
+    // An item with no description still counts when its own label names the kind ("Medicine Bow National Forest").
+    return normalize(raw.label) === normalize(region.full) && (REGION_DESCRIPTION.test(description) || (description === "" && REGION_DESCRIPTION.test(raw.label)))
+      ? [{ id: raw.id, label: raw.label }]
+      : [];
   });
   if (items.length === 0) return null;
 
@@ -429,7 +432,9 @@ async function wikidataMatch(region: RegionName, proximity: [number, number] | u
     const claims = isRecord(entity) ? entity.claims : undefined;
     const at = itemCenter(claims);
     const areaKm2 = itemAreaKm2(claims);
-    if (at && areaKm2) candidates.push({ center: at, areaKm2, label: item.label });
+    // A forest or park with a coordinate but no area: a national forest's usual size (about 4,000 km²).
+    const area = areaKm2 ?? (region.kind === "forest" || region.kind === "park" || region.kind === "wilderness" ? DEFAULT_UNIT_AREA_KM2 : undefined);
+    if (at && area) candidates.push({ center: at, areaKm2: area, label: item.label });
   }
   candidates.sort((a, b) =>
     proximity ? degreesApart(proximity, a.center) - degreesApart(proximity, b.center) : b.areaKm2 - a.areaKm2,
@@ -437,6 +442,9 @@ async function wikidataMatch(region: RegionName, proximity: [number, number] | u
   const best = candidates[0];
   return best ? match("wikidata", best.label, areaBBox(best.center, best.areaKm2)) : null;
 }
+
+/** The area given a land unit Wikidata knows only by a coordinate: about a national forest's size. */
+const DEFAULT_UNIT_AREA_KM2 = 4_000;
 
 export type RegionLookupDeps = {
   /** Natural Earth (physical-regions) by the names to try, in order; supplied by the caller, which owns its download. */
@@ -516,7 +524,7 @@ export async function lookupRegion(
 
 /** What a Wikidata description of one natural feature says (a mountain, a rock, a lake), so towns and streets are left out. */
 const FEATURE_DESCRIPTION =
-  /\b(mountain|peak|summit|hill|rock|monolith|dome|butte|mesa|volcano|cliff|canyon|gorge|lake|waterfall|glacier|island|cape|headland|bay|beach|cave|arch|spring|geyser|crater|river|creek|stream|tributary)\b/i;
+  /\b(mountain|peak|summit|hill|rock|monolith|dome|butte|mesa|volcano|cliff|canyon|gorge|lake|reservoir|waterfall|glacier|island|cape|headland|bay|inlet|sound|beach|cave|arch|spring|geyser|crater|river|creek|stream|tributary|valley|pass|ridge|trail|route|road)\b/i;
 
 /**
  * One natural feature by name from Wikidata ("Table Mountain, Cape Town"): items labelled exactly the name before the
@@ -524,21 +532,21 @@ const FEATURE_DESCRIPTION =
  * first (else Wikidata's own order), boxed `halfSpanKm` around its coordinate. For names the place geocoder knows only
  * as streets and Search Box only in another country (Table Mountain Street in Cape Town; Table Mountain in California).
  */
-export async function wikidataFeature(place: string, halfSpanKm: number): Promise<RegionMatch | null> {
+export async function wikidataFeature(place: string, halfSpanKm: number, proximity?: [number, number]): Promise<RegionMatch | null> {
   const [name, ...rest] = place.split(/,|\(|\)/).map((p) => p.trim()).filter(Boolean);
   if (!name) return null;
-  if (rest.length > 0) return wikidataFeatureNamed(name, rest.join(" ").toLowerCase(), halfSpanKm);
+  if (rest.length > 0) return wikidataFeatureNamed(name, rest.join(" ").toLowerCase(), halfSpanKm, proximity);
   // "Crater Lake Oregon": the last one or two words may be where it is.
   const words = name.split(/\s+/);
   for (const cut of [0, 1, 2]) {
     if (words.length - cut < 1) break;
-    const found = await wikidataFeatureNamed(words.slice(0, words.length - cut).join(" "), words.slice(words.length - cut).join(" ").toLowerCase(), halfSpanKm);
+    const found = await wikidataFeatureNamed(words.slice(0, words.length - cut).join(" "), words.slice(words.length - cut).join(" ").toLowerCase(), halfSpanKm, proximity);
     if (found) return found;
   }
   return null;
 }
 
-async function wikidataFeatureNamed(name: string, qualifier: string, halfSpanKm: number): Promise<RegionMatch | null> {
+async function wikidataFeatureNamed(name: string, qualifier: string, halfSpanKm: number, proximity?: [number, number]): Promise<RegionMatch | null> {
   try {
     const search = new URL(WIKIDATA);
     search.searchParams.set("action", "wbsearchentities");
@@ -561,17 +569,25 @@ async function wikidataFeatureNamed(name: string, qualifier: string, halfSpanKm:
       });
     if (items.length === 0) return null;
     // With a qualifier, only an item whose description names it: Table Mountain in California is not the one in Cape Town.
-    const best = qualifier ? items.find((i) => qualifier.split(/\s+/).every((w) => i.description.toLowerCase().includes(w))) : items[0];
-    if (!best) return null;
+    const named = qualifier ? items.filter((i) => qualifier.split(/\s+/).every((w) => i.description.toLowerCase().includes(w))) : items;
+    if (named.length === 0) return null;
     const entities = new URL(WIKIDATA);
     entities.searchParams.set("action", "wbgetentities");
-    entities.searchParams.set("ids", best.id);
+    entities.searchParams.set("ids", named.slice(0, 8).map((i) => i.id).join("|"));
     entities.searchParams.set("props", "claims");
     entities.searchParams.set("format", "json");
     const got = await getJson(entities, WIKIDATA_HEADERS);
-    const entity = isRecord(got) && isRecord(got.entities) ? got.entities[best.id] : undefined;
-    const at = isRecord(entity) ? itemCenter(entity.claims) : undefined;
-    if (!at) return null;
+    // Wikidata's own order, except that one within about 500 km of the view or the question's other places comes first.
+    const placed = named
+      .map((i) => {
+        const entity = isRecord(got) && isRecord(got.entities) ? got.entities[i.id] : undefined;
+        return { i, at: isRecord(entity) ? itemCenter(entity.claims) : undefined };
+      })
+      .filter((x): x is { i: (typeof named)[number]; at: [number, number] } => x.at !== undefined);
+    const near = proximity ? placed.filter((x) => degreesApart(proximity, x.at) < 5).sort((a, b) => degreesApart(proximity, a.at) - degreesApart(proximity, b.at)) : [];
+    const chosen = near[0] ?? placed[0];
+    if (!chosen) return null;
+    const { i: best, at } = chosen;
     const dLat = halfSpanKm / 110.57;
     const dLng = halfSpanKm / (111.32 * Math.max(0.1, Math.cos((at[1] * Math.PI) / 180)));
     return { bbox: [at[0] - dLng, at[1] - dLat, at[0] + dLng, at[1] + dLat], center: at, name: `${best.label} (${best.description})`, source: "wikidata" };

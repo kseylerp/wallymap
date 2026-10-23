@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boxAround, isPointLike, nearBox, nearPlace, placeCandidates, statedRadiusKm } from "./places";
+import { boxAround, isPointLike, nearBox, nearPlace, offPlace, placeCandidates, statedRadiusKm } from "./places";
 
 describe("placeCandidates", () => {
   it.each([
@@ -68,5 +68,13 @@ describe("near", () => {
     expect(isPointLike([-112, 35, -107.5, 37.5])).toBe(false);
     expect(isPointLike([-109.2, 36.0, -108.8, 36.3], "wikidata")).toBe(false);
     expect(boxAround([0, 0], 111.32)).toEqual([-1, -1, 1, 1]);
+  });
+});
+
+describe("offPlace", () => {
+  it("reads the coastal place after off", () => {
+    expect(offPlace("Where are whales being seen off Monterey this week?")).toBe("Monterey");
+    expect(offPlace("Swell off the coast of Oregon")).toBe("Oregon");
+    expect(offPlace("Whales near Monterey")).toBeNull();
   });
 });

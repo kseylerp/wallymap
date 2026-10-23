@@ -5,6 +5,7 @@ import { bboxAreaKm2, hardMaxAreaKm2 } from "@/layers/types";
 import type { GeocodeResult } from "./geocode";
 import { placeCandidates } from "./places";
 import { NOTE_MAX_WORDS, noteWords, trimNote } from "./noteCheck";
+import { applyReading } from "./readingGuard";
 import { asksChange, normalizeRenderInput } from "./renderInput";
 import { canonicalLayerId, repairToolName } from "./toolNames";
 import { widerScaleFor, widerScaleHints } from "./tools";
@@ -259,8 +260,25 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
     return call;
   });
 
-  // 2. A smaller box inside one a wide strategy already answered for the same layer and inputs: drop it.
+  // 1b. The question's reading (lib/agent/readingGuard.ts): river names, time and phrase inputs, layers the words rule
+  // out or name, and renders of layers never queried. Queries it adds answer before the note, so a note in the same
+  // step waits for them.
   const rejected: Decision["rejected"] = [];
+  const read = applyReading(calls, turn, turn.step >= MAX_STEPS - 2 && !turn.noted);
+  rejected.push(...read.rejected);
+  let deferred = false;
+  if (read.changed) {
+    changed = true;
+    const before = new Set(calls.map((c) => c.toolCallId));
+    calls = read.calls;
+    if (calls.some((c) => !before.has(c.toolCallId) && isQuery(c.toolName)) && calls.some((c) => c.toolName === "note")) {
+      calls = calls.filter((c) => c.toolName !== "note");
+      deferred = true;
+      turn.note("note held back: the question's layers are queried first");
+    }
+  }
+
+  // 2. A smaller box inside one a wide strategy already answered for the same layer and inputs: drop it.
   calls = calls.filter((c) => {
     if (!isQuery(c.toolName) || !isBBox(c.input.bbox)) return true;
     const layerId = layerOf(c.toolName);
@@ -483,7 +501,7 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
       }
     }
   }
-  return { calls, dropText: dropText || leakedText, rejected, changed, ...(text !== undefined && { text }) };
+  return { calls, dropText: dropText || leakedText || deferred, rejected, changed, ...(text !== undefined && { text }) };
 }
 
 /** True when an answer gives a low (or weakest) and a peak (or strongest). */

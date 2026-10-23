@@ -18,6 +18,11 @@ const NE_HOST = "raw.githubusercontent.com";
 // geocode and the Natural Earth loader keep module-level caches, so every test gets fresh modules.
 let geocode: typeof import("@/lib/agent/geocode").geocode;
 
+/** The calls that went to Mapbox (a feature name such as "Lake Tahoe" asks OpenStreetMap and Wikidata first). */
+function mapboxCalls(fetchMock: { mock: { calls: unknown[][] } }): URL[] {
+  return fetchMock.mock.calls.map((c) => new URL(String(c[0]))).filter((u) => u.host === "api.mapbox.com");
+}
+
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
@@ -65,7 +70,7 @@ describe("geocode", () => {
       name: "Lake Tahoe, California, United States",
       source: "mapbox",
     });
-    const url = new URL(String(fetchMock.mock.calls[0][0]));
+    const url = mapboxCalls(fetchMock)[0];
     expect(url.origin + url.pathname).toBe("https://api.mapbox.com/search/geocode/v6/forward");
     expect(url.searchParams.get("q")).toBe("Lake Tahoe");
     expect(url.searchParams.get("limit")).toBe("5");
@@ -91,10 +96,10 @@ describe("geocode", () => {
     await geocode("Emerald Bay", { proximity: [-120.14, 39.17] });
     await geocode("Emerald Bay");
 
-    const withProximity = new URL(String(fetchMock.mock.calls[0][0]));
+    const [withProximity, without] = mapboxCalls(fetchMock).filter((u) => u.pathname.endsWith("/geocode/v6/forward"));
     expect(withProximity.searchParams.get("proximity")).toBe("-120.14,39.17");
     expect(withProximity.toString()).toContain("proximity=-120.14%2C39.17");
-    expect(new URL(String(fetchMock.mock.calls[1][0])).searchParams.has("proximity")).toBe(false);
+    expect(without.searchParams.has("proximity")).toBe(false);
   });
 
   it("builds a bbox around the center when the feature has none", async () => {
@@ -156,7 +161,7 @@ describe("geocode", () => {
     const fetchMock = vi.fn(async (_url: string | URL | Request) => jsonResponse({ features: [] }));
     globalThis.fetch = fetchMock as typeof fetch;
     await geocode("Lake Tahoe");
-    const url = new URL(String(fetchMock.mock.calls[0][0]));
+    const url = mapboxCalls(fetchMock)[0];
     expect(url.searchParams.get("access_token")).toBe("public-token");
   });
 
@@ -554,7 +559,8 @@ describe("geocode", () => {
       const urls = routed();
       const result = await geocode("Moab");
       expect(result).toMatchObject({ source: "mapbox" });
-      expect(urls.every((u) => u.host === "api.mapbox.com")).toBe(true);
+      // Mapbox, and OpenStreetMap's search to check no famous place of that name lies elsewhere; no region source.
+      expect(urls.every((u) => u.host === "api.mapbox.com" || u.host === "nominatim.openstreetmap.org")).toBe(true);
     });
 
     it("ignores a Wikidata item of the right name that is a town, not a region", async () => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { BBox } from "@/layers/types";
+import { famousPlace, featureLookup, isFeatureName } from "./featurePlaces";
 import { featureBBoxes, findRegion, loadNaturalEarthRegions, regionDisplayName } from "./naturalEarth";
 import { lookupRegion, wikidataFeature, worldRegion, type RegionMatch, type RegionSource } from "./regionNames";
 
@@ -168,7 +169,16 @@ export async function geocode(
   if (polar) return polar;
   const named = await lookupRegion(place, opts.proximity, { naturalEarth: firstRegion });
   if (named) return named;
-  // A river is its basin: "Colorado River" was a point on the Colorado of Texas, "Carson River" a street in Wyoming.
+  // A natural feature or a named route (a bay, a reservoir, a volcano, a river, a trail): OpenStreetMap's search, then
+  // Wikidata, before the place geocoder, which knows only streets and towns of those names (Lake Powell, Victoria;
+  // Tomales Bay Street, Las Vegas; Mount Rainier, Maryland). A town of that name more important than any feature stays
+  // the place geocoder's (Half Moon Bay).
+  if (isFeatureName(place)) {
+    const feature = await featureLookup(place, opts.proximity);
+    if (feature) return feature;
+  }
+  // A river OpenStreetMap does not know is its basin: "Colorado River" was a point on the Colorado of Texas, "Carson
+  // River" a street in Wyoming.
   const river = place.split(",")[0].trim();
   if (/\b(?:river|creek|fork)\b/i.test(river)) {
     // "Middle Fork Salmon" is the Middle Fork Salmon River.
@@ -210,7 +220,7 @@ export async function geocode(
     if ((feature_type === "street" || feature_type === "address") && !/\d/.test(place)) {
       // A river or a canyon runs far from the one point a search knows: boxed like a range, about 76 km across.
       const span = rangeLike || /\b(?:river|creek|stream|canyon|fork)\b/i.test(place) ? LANDFORM_HALF_SPAN_KM : FEATURE_HALF_SPAN_KM;
-      const poi = (await landformResult(place, opts.proximity, token, span)) ?? (await wikidataFeature(place, span));
+      const poi = (await landformResult(place, opts.proximity, token, span)) ?? (await wikidataFeature(place, span, opts.proximity)) ?? (await featureLookup(place, opts.proximity));
       if (poi) return poi;
     }
 
@@ -223,6 +233,13 @@ export async function geocode(
       const sameName = name !== undefined && normalize(name) === normalize(place.split(",")[0]);
       const landform = rangeLike && !sameName ? await landformResult(place, opts.proximity, token) : null;
       if (landform) return landform;
+    }
+
+    // With no view and no other place to go by, a town of that name famous elsewhere is the one meant: "Chamonix" is
+    // Chamonix-Mont-Blanc, not the suburb of Cape Town that Mapbox lists first.
+    if (!opts.proximity && (bbox === undefined || (bbox[2] - bbox[0] < 1.5 && bbox[3] - bbox[1] < 1.5))) {
+      const famous = await famousPlace(place, center);
+      if (famous) return famous;
     }
 
     return {

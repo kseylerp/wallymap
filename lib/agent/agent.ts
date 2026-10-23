@@ -1,5 +1,6 @@
 import { stepCountIs, wrapLanguageModel, type LanguageModel } from "ai";
 import { SYSTEM_PROMPT } from "./prompt";
+import { readingForPrompt } from "./reading";
 import { getModel } from "./provider";
 import { stepGuard } from "./stepGuard";
 import { buildTools, repairToolCall } from "./tools";
@@ -42,7 +43,8 @@ export function agentTurn({ question, view, model = getModel() }: { question: st
   return {
     turn,
     tools,
-    system: systemForTurn(SYSTEM_PROMPT, view),
+    // The fixed prompt, the map view, and the app's own reading of this question's words (lib/agent/reading.ts).
+    system: [systemForTurn(SYSTEM_PROMPT, view), readingForPrompt(turn.reading, turn.now)].filter(Boolean).join("\n\n"),
     model: wrapLanguageModel({ model, middleware: stepGuard(turn, Object.keys(tools)) }),
     stopWhen: stepCountIs(MAX_STEPS),
     prepareStep: prepareStepFor(turn, Object.keys(tools)),

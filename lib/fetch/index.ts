@@ -67,6 +67,8 @@ const SOURCE_NAMES: [RegExp, string][] = [
   [/(^|\.)open-meteo\.com$/, "Open-Meteo"],
   [/(^|\.)globalforestwatch\.org$/, "Global Forest Watch"],
   [/(^|\.)arcgis\.com$/, "Esri's ArcGIS server"],
+  [/^earthengine\.googleapis\.com$/, "Google Earth Engine"],
+  [/^oauth2\.googleapis\.com$/, "Google's sign-in service"],
 ];
 
 function hostLabel(url: string): string {

@@ -468,10 +468,14 @@ function sameNamedPlace(a: Feature, b: Feature): boolean {
 }
 
 /**
- * True for two distinct OpenStreetMap objects over 1 km apart: two places of one name (two French Broad River Greenway
+ * True for two areas over 1 km apart, or two distinct OpenStreetMap objects over 1 km apart: two places of one name (two French Broad River Greenway
  * Access ramps 1.1 km apart, each given the river gauge's water temperature), not parts of one place.
  */
 function distinctOsmApart(a: Feature, b: Feature): boolean {
+  // Two areas whose centres are over 1 km apart (four beetle-kill polygons named by host and agent, each 75% dead).
+  const area = (f: Feature) => f.geometry?.type === "Polygon" || f.geometry?.type === "MultiPolygon";
+  const [pa, pb] = [centerOf(a), centerOf(b)];
+  if (area(a) && area(b) && pa && pb && distanceKm(pa, b) > DUPLICATE_KM && distanceKm(pb, a) > DUPLICATE_KM) return true;
   const ia = osmIdsOf(a);
   const ib = osmIdsOf(b);
   if (ia.length === 0 || ib.length === 0 || ia.some((id) => ib.includes(id))) return false;
@@ -536,7 +540,8 @@ export function checkDuplicates(layers: Drawn[]): CheckResult {
       for (let i = 0; i < top.length && key; i++) {
         const vi = top[i].properties?.[key];
         const si = nameStem(nameOf(top[i]) ?? "");
-        if (typeof vi !== "number" || vi === 0 || si === "") continue;
+        // "Unnamed glacier" is many glaciers, not one place.
+        if (typeof vi !== "number" || vi === 0 || si === "" || isUnnamed(normalName(nameOf(top[i]) ?? ""))) continue;
         for (let j = i + 1; j < top.length; j++) {
           if (top[j].properties?.[key] === vi && nameStem(nameOf(top[j]) ?? "") === si && !distinctOsmApart(top[i], top[j])) {
             echoes.push(`"${nameOf(top[i])}" and "${nameOf(top[j])}" (rows ${i + 1} and ${j + 1})`);

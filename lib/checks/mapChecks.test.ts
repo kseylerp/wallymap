@@ -277,6 +277,12 @@ describe("duplicates", () => {
       point(-82.5692, 35.5671, { name: "French Broad River Greenway Access", osmId: "node/7445168674", waterTempF: 54, v: 54 }),
     ];
     expect(checkDuplicates(drawn(mapWith({ id: "fishing", features: ramps }))).ok).toBe(true);
+    // Beetle-kill polygons named by host and agent, each 75% dead, kilometres apart; and unnamed glaciers.
+    const box = (lon: number, name: string, v: number): Feature => ({ type: "Feature", geometry: { type: "Polygon", coordinates: [[[lon, 41], [lon + 0.01, 41], [lon + 0.01, 41.01], [lon, 41.01], [lon, 41]]] }, properties: { name, v } });
+    const kill = [box(-106.3, "Subalpine fir, western balsam bark beetle (2024)", 75), box(-106.2, "Subalpine fir, western balsam bark beetle (2024)", 75)];
+    expect(checkDuplicates(drawn(mapWith({ id: "tree-mortality", features: kill }))).ok).toBe(true);
+    const ice = [box(-113.7, "Unnamed glacier", 0.07), box(-113.6, "Unnamed glacier", 0.07)];
+    expect(checkDuplicates(drawn(mapWith({ id: "glaciers", features: ice }))).ok).toBe(true);
   });
 
   it("normalises names: case, accents and punctuation", () => {

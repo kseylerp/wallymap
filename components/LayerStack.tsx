@@ -626,7 +626,8 @@ function LegendRow({
       </div>
 
       <p data-testid="layer-source" className="mt-1 flex min-w-0 items-center gap-1.5 text-[11.5px] leading-4 text-ink-muted">
-        <span className="min-w-0 truncate">
+        {/* A named source (the makers) is shown whole, on up to two lines, not cut at the link. */}
+        <span className={citation.label ? "line-clamp-2 min-w-0" : "min-w-0 truncate"}>
           <a href={citation.url} target="_blank" rel="noreferrer" className="dashed-link">
             {citation.label ?? host ?? citation.source}
           </a>

@@ -226,12 +226,18 @@ function numberOf(f: Feature, key: string): number | undefined {
   return typeof n === "number" && Number.isFinite(n) ? n : undefined;
 }
 
-/** The features with the `n` largest numbers under `key`, largest first (ties keep data order). */
-export function topFeatures(data: FeatureCollection, key: string, n: number): Feature[] {
+/** True when a layer ranks this measure smallest first (`lowFirst`: a distance, nearest first). */
+export function isLowFirst(layer: WithAttributes, key: string | undefined): boolean {
+  return key !== undefined && layer?.attributes?.some((a) => a.key === key && a.lowFirst === true) === true;
+}
+
+/** The features with the `n` largest numbers under `key`, largest first (smallest first when `lowFirst`; ties keep data order). */
+export function topFeatures(data: FeatureCollection, key: string, n: number, lowFirst = false): Feature[] {
+  const sign = lowFirst ? -1 : 1;
   return data.features
     .map((f, i) => ({ f, i, v: numberOf(f, key) }))
     .filter((x): x is { f: Feature; i: number; v: number } => x.v !== undefined)
-    .sort((a, b) => b.v - a.v || a.i - b.i)
+    .sort((a, b) => sign * (b.v - a.v) || a.i - b.i)
     .slice(0, n)
     .map((x) => x.f);
 }
@@ -307,10 +313,10 @@ function newestOf(head: Feature, place: Feature[]): Feature {
 }
 
 /** The features of `data` that are one place: named alike, and at the same spot or of one project. */
-function placesOf(data: FeatureCollection, key: string): Feature[][] {
+function placesOf(data: FeatureCollection, key: string, lowFirst = false): Feature[][] {
   const groups: Feature[][] = [];
   const byName = new Map<string, Feature[][]>();
-  for (const f of topFeatures(data, key, data.features.length)) {
+  for (const f of topFeatures(data, key, data.features.length, lowFirst)) {
     const name = placeName(f);
     const same = name === "" ? undefined : byName.get(name)?.find((g) => nearby(g[0], f) || sameProject(g[0], f));
     if (same) {
@@ -331,11 +337,12 @@ function placesOf(data: FeatureCollection, key: string): Feature[][] {
  * shows: the newest dated one (a glacier's latest outline, so the row and the card give one area), else the largest.
  * Unnamed features are each their own.
  */
-export function topPlaces(data: FeatureCollection, key: string, n: number): Feature[] {
-  return placesOf(data, key)
+export function topPlaces(data: FeatureCollection, key: string, n: number, lowFirst = false): Feature[] {
+  const sign = lowFirst ? -1 : 1;
+  return placesOf(data, key, lowFirst)
     .map((g, i) => ({ f: newestOf(g[0], g), i }))
-    .map((x) => ({ ...x, v: numberOf(x.f, key) ?? -Infinity }))
-    .sort((a, b) => b.v - a.v || a.i - b.i)
+    .map((x) => ({ ...x, v: numberOf(x.f, key) ?? (lowFirst ? Infinity : -Infinity) }))
+    .sort((a, b) => sign * (b.v - a.v) || a.i - b.i)
     .slice(0, n)
     .map((x) => x.f);
 }
@@ -404,7 +411,7 @@ export function rankedTop(
 ): { key: string | undefined; measures: Attribute[]; top: Feature[] } {
   const measures = rankableMeasures(layer, data, op.rankBy);
   const key = effectiveRankBy(op, layer, measures);
-  return { key, measures, top: key ? topPlaces(shown, key, n) : [] };
+  return { key, measures, top: key ? topPlaces(shown, key, n, isLowFirst(layer, key)) : [] };
 }
 
 /** The smallest and largest number under `key` across the features; null without two different numbers. */

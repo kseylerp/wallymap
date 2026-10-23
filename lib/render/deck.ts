@@ -46,7 +46,7 @@ import { categoryColor, categoryKey, groupOf, type CategoryKey } from "@/lib/ren
 import { layerLabels } from "@/lib/render/contract";
 import { drawsNativeLines, isLineGeometry, SELECTED_LINE } from "@/lib/render/nativeLines";
 import type { HexBasis, LoadedLayer, MapState, RenderMode, RenderOp, Viewport } from "@/lib/render/state";
-import { extentOf, hatchStepOf, primaryMeasure, sizeScale, topPlaces } from "@/lib/render/attributes";
+import { extentOf, hatchStepOf, isLowFirst, primaryMeasure, sizeScale, topPlaces } from "@/lib/render/attributes";
 import { basisLabel, basisScale, basisT, cellContext, hexCells, registerCell, usableBasis, type CellContext, type HexCell } from "@/lib/render/hexCells";
 import { RANKED_LABELS } from "@/lib/render/views";
 import { PlacedLabelLayer } from "@/lib/render/placedLabels";
@@ -963,7 +963,7 @@ function symbolLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   // Ranked (a ranked view, or "Rank by" in the row) sizes the symbols by the measure and names its top few (spec §12c);
   // otherwise the layer's size measure (spec §13) sizes them.
   const rankKey = rankKeyOf(op, ctx) ?? encodingOf(op, ctx)?.size?.key ?? defaultSizeKey(op, ctx);
-  const ranked = rankKey ? rankedSizing(data, rankKey) : undefined;
+  const ranked = rankKey ? rankedSizing(data, rankKey, isLowFirst(ctx.layer, rankKey)) : undefined;
   const encode = pinEncoder(categoryKeyOf(op, ctx));
   return [
     new IconLayer<Feature>({
@@ -1110,8 +1110,8 @@ export function cellColorT(members: readonly Feature[], channel: NonNullable<Res
 }
 
 /** A ranked point layer's sizing: the measure key, its extent, and the top features to name. */
-function rankedSizing(data: GeoJSON.FeatureCollection, key: string): { key: string; extent: [number, number] | null; top: Feature[] } {
-  return { key, extent: memoExtent(data, key), top: topPlaces(data, key, RANKED_LABELS) };
+function rankedSizing(data: GeoJSON.FeatureCollection, key: string, lowFirst = false): { key: string; extent: [number, number] | null; top: Feature[] } {
+  return { key, extent: memoExtent(data, key), top: topPlaces(data, key, RANKED_LABELS, lowFirst) };
 }
 
 /** A ranked label's box on screen, for declutter: about this wide per character and this tall, in CSS pixels. */
@@ -1146,17 +1146,17 @@ function labelText(f: Feature, field: string): string | null {
 
 /** The labelled features: the top `max` by `rankBy` (source order without it), each with text, made once per data. */
 const labelMemo = new WeakMap<GeoJSON.FeatureCollection, Map<string, Feature[]>>();
-function labelled(data: GeoJSON.FeatureCollection, field: string, max: number, rankBy?: string): Feature[] {
+function labelled(data: GeoJSON.FeatureCollection, field: string, max: number, rankBy?: string, lowFirst = false): Feature[] {
   let byKey = labelMemo.get(data);
   if (!byKey) {
     byKey = new Map();
     labelMemo.set(data, byKey);
   }
-  const key = `${field}|${max}|${rankBy ?? ""}`;
+  const key = `${field}|${max}|${rankBy ?? ""}|${lowFirst ? "low" : ""}`;
   const hit = byKey.get(key);
   if (hit) return hit;
   const named = data.features.filter((f) => labelText(f, field) !== null);
-  const top = rankBy && memoExtent(data, rankBy) ? topPlaces({ type: "FeatureCollection", features: named }, rankBy, max) : named.slice(0, max);
+  const top = rankBy && memoExtent(data, rankBy) ? topPlaces({ type: "FeatureCollection", features: named }, rankBy, max, lowFirst) : named.slice(0, max);
   // The text under `name` (what declutter and the label read), the feature otherwise as it is.
   const out = field === "name" ? top : top.map((f) => ({ ...f, properties: { ...f.properties, name: labelText(f, field) } }));
   byKey.set(key, out);
@@ -1180,7 +1180,7 @@ function labelLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   if (!spec || (spec.minZoom !== undefined && ctx.zoom < spec.minZoom)) return [];
   const sizeKey = point ? (rankKey ?? encodingOf(op, ctx)?.size?.key ?? defaultSizeKey(op, ctx)) : undefined;
   const extent = sizeKey ? memoExtent(data, sizeKey) : null;
-  const top = labelled(data, spec.field, spec.max, spec.rankBy);
+  const top = labelled(data, spec.field, spec.max, spec.rankBy, isLowFirst(ctx.layer, spec.rankBy));
   const shown = declutterLabels(top, ctx.zoom, ctx.latitude);
   if (shown.length === 0) return [];
   void style;

@@ -210,7 +210,7 @@ function joinFields(op: CombineOp, aKind: GeometryKind, bName: string): { facts:
         { key: "distanceKm", label: `Distance to ${bName}`, format: "km" },
         { key: "nearest", label: "Nearest" },
       ],
-      attributes: [{ key: "distanceKm", type: "measure", label: `Distance to ${bName}`, unit: "km" }],
+      attributes: [{ key: "distanceKm", type: "measure", label: `Distance to ${bName}`, unit: "km", lowFirst: true }],
     };
   }
   if (aKind === "polygon" && op === "outside") {

@@ -5,7 +5,7 @@ import { changeStatement, identityKey, type ChangeStatement } from "@/lib/render
 import { splitWindows } from "@/lib/render/compare";
 import { timeShape } from "@/lib/render/contract";
 import { shortTitle } from "@/layers/contract";
-import { attributeFor, measureKeyOf, primaryMeasure, topFeatures, versionSides, versionsAttribute } from "@/lib/render/attributes";
+import { attributeFor, isLowFirst, measureKeyOf, primaryMeasure, topFeatures, versionSides, versionsAttribute } from "@/lib/render/attributes";
 import { applyFilters, type LayerFilters } from "@/lib/render/filters";
 import { featureBBox } from "@/lib/render/inspect";
 import { scenarioOf } from "@/lib/render/scenario";
@@ -138,7 +138,8 @@ export function viewTarget(view: ViewKind | undefined, layer: LoadedLayer, filte
   if (layer.result.kind !== "geojson") return null;
   const data = filters ? applyFilters(layer.result.data, filters) : layer.result.data;
   if (view === "ranked") {
-    const top = topFeatures(data, measureKeyOf(layer), RANKED_TOP_N);
+    const key = measureKeyOf(layer);
+    const top = topFeatures(data, key, RANKED_TOP_N, isLowFirst(layer, key));
     if (top.length > 0) return boundsOf(top);
   }
   return boundsOf(data.features);

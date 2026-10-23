@@ -315,6 +315,8 @@ export type Attribute = {
   aggregateOver?: string;
   /** The total's name in the scrubber and the caption ("Total flow to the sea, all outlets combined"). */
   aggregateLabel?: string;
+  /** Measure: less is better and ranks first (a distance: the nearest first, as "Top 10 by distance" means). */
+  lowFirst?: boolean;
 };
 
 /** One chip of a category or ordinal attribute: the raw value the data holds and its plain label (and what it means). */

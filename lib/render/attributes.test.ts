@@ -283,3 +283,13 @@ describe("Rank by lists one row per named place", () => {
     expect(rankedTop(layer, { rankBy: "heightFt" }, data, data, 10)).toMatchObject({ key: undefined, top: [] });
   });
 });
+
+describe("a measure where less is better", () => {
+  it("ranks the nearest first: \"Top 10 by distance to waterfalls\" starts at the closest trail", async () => {
+    const { rankedTop } = await import("@/lib/render/attributes");
+    const trail = (name: string, distanceKm: number): Feature => ({ type: "Feature", geometry: { type: "Point", coordinates: [-82.5 + distanceKm, 35.5] }, properties: { name, distanceKm } });
+    const data: FeatureCollection = { type: "FeatureCollection", features: [trail("Laurel Gap Trail", 0.48), trail("Slate Rock Creek Trail", 0.01), trail("Barnett Branch Trail", 0.03)] };
+    const layer = { attributes: [{ key: "distanceKm", type: "measure", label: "Distance to waterfalls", unit: "km", lowFirst: true }] as Attribute[] };
+    expect(rankedTop(layer, {}, data, data, 3).top.map((f) => f.properties?.name)).toEqual(["Slate Rock Creek Trail", "Barnett Branch Trail", "Laurel Gap Trail"]);
+  });
+});

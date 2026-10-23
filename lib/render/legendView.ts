@@ -1,6 +1,6 @@
 import type { FeatureCollection } from "geojson";
-import type { LegendSpec } from "@/layers/types";
-import { colorStops, declaredGroups, encodedAttribute, primaryMeasure, valueKeys } from "@/lib/render/attributes";
+import type { LegendSpec, SignShape } from "@/layers/types";
+import { colorStops, declaredGroups, encodedAttribute, groupSign, primaryMeasure, valueKeys } from "@/lib/render/attributes";
 import { LINE_DASHES, UNRATED_LABEL, UNRATED_LINE } from "@/lib/render/nativeLines";
 import { categoryKey, type CategoryKey } from "@/lib/render/categories";
 import { rasterKeyFilter } from "@/lib/render/rasterCalm";
@@ -23,7 +23,8 @@ import { rangeOf, tileRange, tileShares, type TileSample } from "@/lib/render/in
 
 /** `share`: for tiles, the class's share of the view (0..1) where features cannot be counted. */
 /** `twoTone`: a line level drawn sage with dark grey dashes over it (a facet's sage level, lib/render/nativeLines.ts). */
-export type LegendEntry = { label: string; color?: string; count?: number; share?: number; help?: string; outline?: boolean; dash?: [number, number]; twoTone?: boolean };
+/** `sign`: the trail or piste sign the level is posted with, drawn beside its swatch (attributes that use sign colors). */
+export type LegendEntry = { label: string; color?: string; count?: number; share?: number; help?: string; outline?: boolean; dash?: [number, number]; twoTone?: boolean; sign?: SignShape };
 
 /** A ramp's range in view, on its fixed scale: where it starts and ends along the bar (0..1) and in words. */
 export type LegendRange = { from: number; to: number; text: string };
@@ -165,6 +166,10 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, loadedDa
   // on an encoded ramp (a whitewater class), else the layer's own (a fire's status, drawn fire-pink). Never a black dot.
   const encodedAttr = layer.attributes?.find((a) => a.key === spec.field && a.encode === "color" && (a.levels?.length ?? 0) > 0);
   const stops = encodedAttr ? new Map(colorStops(encodedAttr)) : undefined;
+  const signFor = (i: { value?: string | number }): SignShape | undefined => {
+    const label = encodedAttr && i.value !== undefined ? encodedAttr.levels?.find((l) => String(l.value) === String(i.value))?.label : undefined;
+    return encodedAttr && label ? groupSign(encodedAttr, label) : undefined;
+  };
   const drawnColor = op?.color ?? (shape === "polygon" ? areaRecipe(layer.id).color : layer.style.color);
   const swatchFor = (i: { value?: string | number; color?: string }): string | undefined => {
     if (i.color) return i.color;
@@ -186,6 +191,7 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, loadedDa
               ...(swatchFor(i) && { color: swatchFor(i) }),
               ...(i.symbol === "line" && shape === "polygon" && { outline: true }),
               ...(shape === "line" && i.value !== undefined && stops?.has(String(i.value)) && swatchFor(i)?.toUpperCase() === SAGE && { twoTone: true }),
+              ...(signFor(i) && { sign: signFor(i) }),
               ...(i.help && { help: i.help }),
               ...(data && spec.field && i.value !== undefined && { count: n.get(String(i.value)) ?? 0 }),
               ...(!data && shares && spec.field === view?.tile?.field && i.value !== undefined && { share: shares.get(String(i.value)) ?? 0 }),

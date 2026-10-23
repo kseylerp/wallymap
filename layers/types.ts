@@ -312,6 +312,12 @@ export type Attribute = {
   versions?: boolean;
   primary?: boolean;
   /**
+   * Ordinal colored on the map (`encode: "color"`) whose levels carry a `sign` (IMBA green circle, blue square, black
+   * diamond, double black diamond): the lines, chips and legend take the signs' own colors, and the legend their shapes,
+   * instead of the sage → pink → purple ramp. Takes effect only while SIGN_COLORS_ON (lib/render/palette.ts) is true.
+   */
+  useSignColors?: boolean;
+  /**
    * Measure: how the timeline's live aggregate totals it per frame (spec §13, "a live aggregate per frame"): `sum`
    * (capacity, acres, flow to the sea), `max` (the largest reach's flow) or `mean` (a temperature). A layer with no
    * aggregate measure counts its features per frame instead.
@@ -326,7 +332,11 @@ export type Attribute = {
 };
 
 /** One chip of a category or ordinal attribute: the raw value the data holds and its plain label (and what it means). */
-export type AttributeLevel = { value: string | number; label: string; help?: string };
+/** A trail or piste sign a difficulty level is posted with (IMBA trail difficulty, North American ski runs). */
+export type SignShape = "green-circle" | "blue-square" | "black-diamond" | "double-black-diamond";
+
+/** `sign`: the sign the level is posted with, drawn in its own color when the attribute uses sign colors. */
+export type AttributeLevel = { value: string | number; label: string; help?: string; sign?: SignShape };
 
 /** A measure preset: its label in the source's words and the bounds it keeps (either may be open). */
 export type MeasurePreset = { label: string; min?: number; max?: number };

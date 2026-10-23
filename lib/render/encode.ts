@@ -1,6 +1,6 @@
 import type { Feature, FeatureCollection } from "geojson";
 import type { Attribute, Encoding, LegendSpec } from "@/layers/types";
-import { attributeFor, declaredGroups, groupColors, valueKey } from "@/lib/render/attributes";
+import { attributeFor, declaredGroups, levelColors, valueKey } from "@/lib/render/attributes";
 import { compareRampColor, hexToRgb, interpolateStops, rampColor, rgbToHex, type Rgb } from "@/lib/render/ramp";
 import { CATEGORY_COLORS, OTHER_COLOR } from "@/lib/render/categories";
 import type { LoadedLayer, RenderOp } from "@/lib/render/state";
@@ -140,7 +140,7 @@ function channelOf(attr: Attribute | undefined, key: string, data: FeatureCollec
     if (groups.length === 0) return undefined;
     // A category's kinds are not in order: each takes its own palette color (solar is not "half of" gas).
     const categorical = attr.type === "category";
-    const colors = categorical ? groups.map((_, i) => CATEGORY_COLORS[i] ?? OTHER_COLOR) : groupColors(groups.length);
+    const colors = categorical ? groups.map((_, i) => CATEGORY_COLORS[i] ?? OTHER_COLOR) : levelColors(attr);
     return { key, label, extent: null, levels: groups.map((g, i) => ({ values: g.values, label: g.label, color: colors[i] })), ...(categorical && { categorical: true }) };
   }
   return { key, label, ...(attr?.unit && { unit: attr.unit }), extent: channelExtent(data, key, kind === "color") };

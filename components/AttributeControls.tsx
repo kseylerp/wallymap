@@ -36,6 +36,7 @@ import type { FilterField, LayerFilters as Filters } from "@/lib/render/filters"
 import { isActiveEntry } from "@/lib/render/filters";
 import { featureBBox, featureCenter } from "@/lib/render/inspect";
 import { DARK_GREY, LINE, SAGE, WHITE } from "@/lib/render/palette";
+import { SignMark } from "@/components/SignMark";
 import { categoryKey } from "@/lib/render/categories";
 import type { LoadedLayer, MapAction, RenderOp } from "@/lib/render/state";
 import { RANKED_TOP_N } from "@/lib/render/views";
@@ -130,6 +131,7 @@ function Chips({
           className="filter-chip"
         >
           {keyed && group.color && <ClassKey color={group.color} shape={shape} />}
+          {keyed && group.sign && <SignMark sign={group.sign} />}
           {group.label} <span className="filter-chip-count tabular-nums">{formatValue("count", group.count)}</span>
         </button>
       ))}

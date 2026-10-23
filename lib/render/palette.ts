@@ -6,6 +6,7 @@
  * Five colors carry data: wally pink, purple, sage, off-white (ramp low ends only) and dark grey. Ink is for text.
  * White is reserved for three uses: hatch lines, casings and selected outlines, and 3D volumes and edges.
  */
+import type { SignShape } from "@/layers/types";
 
 /** Wally pink: route start, compare side B, hazards (fire perimeters and detections, forest alerts). */
 export const PINK = "#F57272";
@@ -136,6 +137,22 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
  * Danger Scale: green Low to black Extreme): their areas draw in the legend's own colors, not the palette.
  */
 export const STANDARD_COLOR_LAYERS: ReadonlySet<string> = new Set(["avalanche"]);
+
+/**
+ * Trail and piste sign colors, a standard riders and skiers read by color like the avalanche scale: IMBA trail
+ * difficulty and North American ski runs, green circle, blue square, black diamond and double black diamond. Sedona's
+ * "Blue" chip drew orange on the house ramp (2026-10-23); whether difficulty lines take the signs' colors is the
+ * owner's decision, so this one switch turns it on for every attribute that declares `useSignColors`. Off: the ramp.
+ */
+export const SIGN_COLORS_ON = false;
+
+/** The signs' colors (green, blue, black; double black is black, told apart by its two diamonds in the legend). */
+export const SIGN_COLORS: Record<SignShape, string> = {
+  "green-circle": "#2E9B4F",
+  "blue-square": "#1F6BD6",
+  "black-diamond": INK,
+  "double-black-diamond": INK,
+};
 
 /** Layers that return raster tiles: the imagery carries its own colors. */
 export const RASTER_TILE_LAYERS: ReadonlySet<string> = new Set(

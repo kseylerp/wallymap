@@ -1,8 +1,8 @@
 import type { Feature, FeatureCollection } from "geojson";
-import type { Attribute, Layer, MeasurePreset } from "@/layers/types";
+import type { Attribute, Layer, MeasurePreset, SignShape } from "@/layers/types";
 import type { LayerFilters } from "@/lib/render/filters";
 import { rampColor, rgbToHex } from "@/lib/render/ramp";
-import { lineRampFor } from "@/lib/render/palette";
+import { lineRampFor, SIGN_COLORS, SIGN_COLORS_ON } from "@/lib/render/palette";
 
 /**
  * Typed attributes (spec §12c), the pure half: what the layer row's controls show and how they write the layer's
@@ -15,7 +15,7 @@ import { lineRampFor } from "@/lib/render/palette";
 type WithAttributes = { attributes?: Attribute[] } | undefined;
 
 /** One chip: the values it stands for (several values may share a label), how many features carry them. */
-export type AttributeGroup = { label: string; values: string[]; count: number; color?: string; help?: string };
+export type AttributeGroup = { label: string; values: string[]; count: number; color?: string; help?: string; sign?: SignShape };
 
 /** A value as the filters engine compares it (a string; numbers by their decimal text). */
 export function valueKey(value: unknown): string | undefined {
@@ -98,10 +98,33 @@ export function groupColors(count: number): string[] {
   return Array.from({ length: count }, (_, i) => rgbToHex(rampColor(lineRampFor(""), i / (count - 1))));
 }
 
-/** Each declared value of an encoded attribute with its group's ramp color, for a Mapbox `match`. */
-export function colorStops(attr: Attribute): [string, string][] {
+/** True when an attribute draws in its levels' sign colors: it asks to (`useSignColors`) and the switch is on. */
+export function usesSignColors(attr: Pick<Attribute, "useSignColors">, on: boolean = SIGN_COLORS_ON): boolean {
+  return on && attr.useSignColors === true;
+}
+
+/** The sign a declared group is posted with (its first level that names one), when the attribute uses sign colors. */
+export function groupSign(attr: Attribute, label: string, on: boolean = SIGN_COLORS_ON): SignShape | undefined {
+  return usesSignColors(attr, on) ? attr.levels?.find((l) => l.label === label && l.sign)?.sign : undefined;
+}
+
+/**
+ * The color of each declared group of an ordinal: its place on the ramp, or, for an attribute that uses sign colors
+ * (`useSignColors`, while SIGN_COLORS_ON), the sign's own color where its level names one.
+ */
+export function levelColors(attr: Attribute, on: boolean = SIGN_COLORS_ON): string[] {
   const groups = declaredGroups(attr);
-  const colors = groupColors(groups.length);
+  const ramp = groupColors(groups.length);
+  return groups.map((g, i) => {
+    const sign = groupSign(attr, g.label, on);
+    return sign ? SIGN_COLORS[sign] : ramp[i];
+  });
+}
+
+/** Each declared value of an encoded attribute with its group's color (ramp or sign), for a Mapbox `match`. */
+export function colorStops(attr: Attribute, on: boolean = SIGN_COLORS_ON): [string, string][] {
+  const groups = declaredGroups(attr);
+  const colors = levelColors(attr, on);
   return groups.flatMap((g, i) => g.values.map((v): [string, string] => [v, colors[i]]));
 }
 
@@ -133,13 +156,14 @@ export function attributeGroups(attr: Attribute, data: FeatureCollection, filter
   const counts = valueCounts(data, attr.key);
   const include = filters?.[attr.key]?.include ?? [];
   const declared = declaredGroups(attr);
-  const colors = attr.type === "ordinal" || attr.encode === "color" ? groupColors(declared.length) : [];
+  const colors = attr.type === "ordinal" || attr.encode === "color" ? levelColors(attr) : [];
   const known = new Set(declared.flatMap((g) => g.values));
   const groups: AttributeGroup[] = [];
   declared.forEach((g, i) => {
     // A list counts a feature once per chip, however many of the chip's values it holds.
     const count = attr.multi ? countAny(data, attr.key, g.values) : g.values.reduce((sum, v) => sum + (counts.get(v) ?? 0), 0);
-    if (count > 0 || g.values.some((v) => include.includes(v))) groups.push({ ...g, count, ...(colors[i] && { color: colors[i] }) });
+    const sign = groupSign(attr, g.label);
+    if (count > 0 || g.values.some((v) => include.includes(v))) groups.push({ ...g, count, ...(colors[i] && { color: colors[i] }), ...(sign && { sign }) });
   });
   const extra = [...counts].filter(([value]) => !known.has(value)).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const limit = declared.length === 0 ? DATA_CHIPS : Infinity;

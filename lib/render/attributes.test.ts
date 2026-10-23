@@ -7,6 +7,8 @@ import {
   clearAttribute,
   colorStops,
   groupColors,
+  groupSign,
+  levelColors,
   hatchStepOf,
   histogram,
   isFlagOn,
@@ -27,7 +29,7 @@ import {
   withNameQuery,
 } from "@/lib/render/attributes";
 import { applyFilters } from "@/lib/render/filters";
-import { PURPLE, SAGE } from "@/lib/render/palette";
+import { PURPLE, SAGE, SIGN_COLORS, SIGN_COLORS_ON } from "@/lib/render/palette";
 
 const line = (props: Record<string, unknown>): Feature => ({
   type: "Feature",
@@ -95,6 +97,33 @@ describe("chips write the filters engine (spec §12c)", () => {
     expect(stops.get("0")).toBe(SAGE);
     expect(stops.get("6")).toBe(PURPLE);
     expect(groupColors(4)).toHaveLength(4);
+  });
+
+  it("draws difficulty in the signs' own colors only for an attribute that asks and while the switch is on", () => {
+    const imba: Attribute = {
+      key: "v",
+      label: "Difficulty",
+      type: "ordinal",
+      encode: "color",
+      useSignColors: true,
+      levels: [
+        { value: 0, label: "Green", sign: "green-circle" },
+        { value: 1, label: "Green", sign: "green-circle" },
+        { value: 2, label: "Blue", sign: "blue-square" },
+        { value: 3, label: "Black", sign: "black-diamond" },
+        { value: 4, label: "Double black", sign: "double-black-diamond" },
+      ],
+    };
+    // The switch is off until the owner decides: Sedona's "Blue" stays on the ramp.
+    expect(SIGN_COLORS_ON).toBe(false);
+    expect(levelColors(imba)).toEqual(groupColors(4));
+    expect(groupSign(imba, "Blue")).toBeUndefined();
+    // On: green, blue, black, black; each chip carries its sign for the legend's shape.
+    expect(levelColors(imba, true)).toEqual([SIGN_COLORS["green-circle"], SIGN_COLORS["blue-square"], SIGN_COLORS["black-diamond"], SIGN_COLORS["double-black-diamond"]]);
+    expect(new Map(colorStops(imba, true)).get("2")).toBe(SIGN_COLORS["blue-square"]);
+    expect(groupSign(imba, "Double black", true)).toBe("double-black-diamond");
+    // An attribute that does not ask keeps the ramp with the switch on.
+    expect(levelColors({ ...imba, useSignColors: false }, true)).toEqual(groupColors(4));
   });
 
   it("shows a value the declaration does not name as its own chip, and a category without levels takes the data's values", () => {

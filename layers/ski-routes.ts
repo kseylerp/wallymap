@@ -261,7 +261,8 @@ const GROOMING_LABELS: Record<string, string> = {
 // Kind first: "nordic or downhill?" is the first question; difficulty colours the lines and is the second chip set.
 const ATTRIBUTES: Attribute[] = [
   { key: "kind", type: "category", label: "Kind", primary: true, levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
-  { key: "v", type: "ordinal", label: "Difficulty", encode: "color", levels: PISTE_LEVELS, scale: PISTE_SCALE },
+  // North American signs (green circle to double black diamond) only while SIGN_COLORS_ON (lib/render/palette.ts).
+  { key: "v", type: "ordinal", label: "Difficulty", encode: "color", levels: PISTE_LEVELS, scale: PISTE_SCALE, useSignColors: true },
   { key: "lit", type: "flag", label: "Lit at night" },
   nameAttribute(),
 ];

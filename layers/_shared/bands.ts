@@ -148,12 +148,12 @@ export const SAC_SCALE = "sac_scale (SAC hiking scale T1 to T6)";
  * region, so each level names both.
  */
 export const PISTE_LEVELS: AttributeLevel[] = [
-  { value: 1, label: "Easy", help: "Novice: green circle (North America), green (Europe), beginner area." },
-  { value: 2, label: "Easy", help: "Easy: green circle (North America), blue (Europe)." },
-  { value: 3, label: "Moderate", help: "Intermediate: blue square (North America), red (Europe)." },
-  { value: 4, label: "Hard", help: "Advanced: black diamond (North America), black (Europe)." },
-  { value: 5, label: "Expert", help: "Expert: double black diamond (North America), black or orange (Europe)." },
-  { value: 6, label: "Expert", help: "Freeride or extreme: off-piste or ungroomed, in any region." },
+  { value: 1, label: "Easy", help: "Novice: green circle (North America), green (Europe), beginner area.", sign: "green-circle" },
+  { value: 2, label: "Easy", help: "Easy: green circle (North America), blue (Europe).", sign: "green-circle" },
+  { value: 3, label: "Moderate", help: "Intermediate: blue square (North America), red (Europe).", sign: "blue-square" },
+  { value: 4, label: "Hard", help: "Advanced: black diamond (North America), black (Europe).", sign: "black-diamond" },
+  { value: 5, label: "Expert", help: "Expert: double black diamond (North America), black or orange (Europe).", sign: "double-black-diamond" },
+  { value: 6, label: "Expert", help: "Freeride or extreme: off-piste or ungroomed, in any region.", sign: "double-black-diamond" },
 ];
 export const PISTE_SCALE = "piste:difficulty (green · blue · black in North America; green · blue · red · black in Europe)";
 

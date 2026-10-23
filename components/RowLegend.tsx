@@ -1,5 +1,6 @@
 "use client";
 
+import { SignMark } from "@/components/SignMark";
 import type { LegendBlock, LegendEntry } from "@/lib/render/legendView";
 import { DARK_GREY, LINE, WHITE } from "@/lib/render/palette";
 
@@ -37,6 +38,7 @@ function Entry({ entry, shape, filter }: { entry: LegendEntry; shape: LegendBloc
       <span className="flex shrink-0" style={filter ? { filter } : undefined}>
         <Swatch color={entry.color} shape={shape} outline={entry.outline} dash={entry.dash} twoTone={entry.twoTone} />
       </span>
+      {entry.sign && <SignMark sign={entry.sign} />}
       <span className="min-w-0 truncate">{entry.label}</span>
       {entry.count !== undefined && <span className="shrink-0 text-ink-muted tabular-nums">{entry.count.toLocaleString("en-US")}</span>}
       {entry.count === undefined && entry.share !== undefined && (

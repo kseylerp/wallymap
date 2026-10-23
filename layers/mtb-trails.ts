@@ -67,7 +67,7 @@ import {
   wayGeometryById,
   wayLine,
 } from "./_shared/osm-features";
-import { PURPLE, layerColor } from "@/lib/render/palette";
+import { PURPLE, SIGN_COLORS_ON, layerColor } from "@/lib/render/palette";
 
 /** Most rated ways returned; a dense box holds thousands, each with its full geometry. */
 export const MAX_WAYS = 2_000;
@@ -316,11 +316,11 @@ const SINGLETRACK_WORDS: Record<string, string> = Object.fromEntries(
  * systems sign beginner trails.
  */
 const IMBA_LEVELS: AttributeLevel[] = [
-  { value: 0, label: "Green", help: "Easiest. IMBA 0, white circle: wide and smooth (shown with green)." },
-  { value: 1, label: "Green", help: "Easiest. IMBA 1, green circle: few obstacles; or Singletrack S0." },
-  { value: 2, label: "Blue", help: "Intermediate. IMBA 2, blue square: roots, rocks and steeper grades; or Singletrack S1 to S2." },
-  { value: 3, label: "Black", help: "Difficult. IMBA 3, black diamond: large obstacles, steep and loose sections; or Singletrack S3." },
-  { value: 4, label: "Double black", help: "Expert. IMBA 4, double black diamond: unavoidable severe obstacles; or Singletrack S4 to S6." },
+  { value: 0, label: "Green", help: "Easiest. IMBA 0, white circle: wide and smooth (shown with green).", sign: "green-circle" },
+  { value: 1, label: "Green", help: "Easiest. IMBA 1, green circle: few obstacles; or Singletrack S0.", sign: "green-circle" },
+  { value: 2, label: "Blue", help: "Intermediate. IMBA 2, blue square: roots, rocks and steeper grades; or Singletrack S1 to S2.", sign: "blue-square" },
+  { value: 3, label: "Black", help: "Difficult. IMBA 3, black diamond: large obstacles, steep and loose sections; or Singletrack S3.", sign: "black-diamond" },
+  { value: 4, label: "Double black", help: "Expert. IMBA 4, double black diamond: unavoidable severe obstacles; or Singletrack S4 to S6.", sign: "double-black-diamond" },
 ];
 const IMBA_SCALE = "mtb:scale:imba (IMBA 0 to 4), else mtb:scale converted (S0 green, S1 to S2 blue, S3 black, S4 to S6 double black)";
 
@@ -375,13 +375,16 @@ const LEGEND: LegendSpec = {
     })),
     { label: "Named route, not rated", color: PURPLE, symbol: "line", help: "A named mountain bike route made of many trails, drawn purple to pink." },
   ],
-  note: "The color is the IMBA trail sign where one is mapped, else the Singletrack Scale converted to it; the ramp runs easy to hard, not the sign's own colors.",
+  note: SIGN_COLORS_ON
+    ? "The color is the IMBA trail sign where one is mapped, else the Singletrack Scale converted to it, in the sign's own color."
+    : "The color is the IMBA trail sign where one is mapped, else the Singletrack Scale converted to it; the ramp runs easy to hard, not the sign's own colors.",
 };
 
 const ATTRIBUTES: Attribute[] = [
   // One difficulty chip set in the trail-sign colors riders choose by (UC05), covering every rated way: IMBA where
   // tagged, else the Singletrack Scale converted.
-  { key: "v", type: "ordinal", label: "Difficulty", primary: true, encode: "color", levels: IMBA_LEVELS, scale: IMBA_SCALE },
+  // In the signs' own colors only while SIGN_COLORS_ON (lib/render/palette.ts): the owner's decision.
+  { key: "v", type: "ordinal", label: "Difficulty", primary: true, encode: "color", levels: IMBA_LEVELS, scale: IMBA_SCALE, useSignColors: true },
   { key: "level", type: "ordinal", label: "Rider level", multi: true, levels: LEVEL_LEVELS, scale: "IMBA color or Singletrack Scale, either one" },
   { key: "kind", type: "category", label: "Kind", levels: Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })) },
   nameAttribute(),

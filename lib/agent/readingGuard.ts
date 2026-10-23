@@ -1,6 +1,6 @@
 import { timeShapeOf } from "@/layers/contract";
 import { getLayer } from "@/layers/registry";
-import type { BBox } from "@/layers/types";
+import { bboxAreaKm2, hardMaxAreaKm2, type BBox } from "@/layers/types";
 import { readingFilters, timeInputs, type Reading } from "./reading";
 import type { Turn } from "./turn";
 
@@ -33,6 +33,14 @@ function isBBox(value: unknown): value is BBox {
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Layers that answer for another when the model chose them: GBIF records for sightings, scored trails for trails. */
+const ANSWERS_FOR: Record<string, string[]> = {
+  species: ["gbif-occurrences"],
+  "osm-trails": ["popularity"],
+  "recreation-sites": ["paddling", "fishing"],
+  paddling: ["recreation-sites"],
+};
 
 /** Words that already make a place a feature ("Madison River", "Lake Powell"), so a geocode is left as it is. */
 const FEATURE_WORD = /\b(?:river|creek|fork|lake|reservoir|bay|trail|road|range|mountains?|mount|mt|peak|valley|canyon|basin|forest|park|wilderness|county|city)\b/i;
@@ -105,7 +113,11 @@ export function applyReading(calls: GuardCall[], turn: Turn, finalSteps: boolean
   if (!finalSteps && isBBox(box) && (queries.length > 0 || rejected.some((r) => isQuery(r.call.toolName)))) {
     const added: GuardCall[] = [];
     for (const hint of reading.layers.filter((l) => l.strong)) {
-      if (turn.queries.some((q) => q.layerId === hint.layerId) || out.some((c) => c.toolName === `${QUERY}${hint.layerId}`)) continue;
+      // Asked already, or a layer that answers for it (GBIF for sightings over a wide box), or a box past its limit.
+      const answering = [hint.layerId, ...(ANSWERS_FOR[hint.layerId] ?? [])];
+      if (turn.queries.some((q) => answering.includes(q.layerId)) || out.some((c) => answering.includes(layerOf(c.toolName)))) continue;
+      const layer = getLayer(hint.layerId);
+      if (!layer || bboxAreaKm2(box) > hardMaxAreaKm2(layer)) continue;
       if (turn.readingAdded.has(hint.layerId)) continue;
       turn.readingAdded.add(hint.layerId);
       added.push({ toolCallId: readingId(), toolName: `${QUERY}${hint.layerId}`, input: { ...readingInputs(reading, hint.layerId, turn.now), bbox: box } });

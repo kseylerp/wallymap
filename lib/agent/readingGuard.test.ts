@@ -23,6 +23,14 @@ describe("applyReading", () => {
     expect(applyReading([call("query_streamflow", { bbox: SEDONA })], turn, false).calls).toEqual([]);
   });
 
+  it("does not add a layer the model answered with another, or one the box is too wide for", () => {
+    const costaRica: BBox = [-87.2, 5.4, -82.51, 11.22];
+    const turn = turnFor("Jaguar records in Costa Rica outside protected areas");
+    // GBIF answers for sightings; and Costa Rica is over the sightings layer's limit anyway.
+    expect(applyReading([call("query_gbif-occurrences", { bbox: costaRica, scientificName: "Panthera onca" })], turn, false).calls.map((c) => c.toolName)).toEqual(["query_gbif-occurrences"]);
+    expect(applyReading([call("query_protected-areas-world", { bbox: costaRica })], turnFor("Jaguar records in Costa Rica"), false).calls.map((c) => c.toolName)).toEqual(["query_protected-areas-world"]);
+  });
+
   it("sets the time inputs the question's phrase means", () => {
     const turn = turnFor("How much has Lake Powell dropped since 2000?");
     const out = applyReading([call("query_reservoir-levels", { bbox: SEDONA, years: 5, name: "Lake Powell" })], turn, false);

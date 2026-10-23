@@ -12521,6 +12521,16 @@
    }
   ]
  },
+ "terrain": {
+  "kind": "tiles",
+  "recorded": "2026-10-23",
+  "bbox": [
+   -110.95,
+   43.45,
+   -110.9,
+   43.5
+  ]
+ },
  "tides": {
   "kind": "geojson",
   "recorded": "2026-10-18",

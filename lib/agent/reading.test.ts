@@ -105,6 +105,9 @@ describe("readQuestion: the words the audit's questions use", () => {
     const r = read("Backpacking in the Wind Rivers: where are the water sources and campsites?");
     expect(strong("Backpacking in the Wind Rivers: where are the water sources and campsites?")).toEqual(expect.arrayContaining(["outdoor-features", "lakes"]));
     expect(r.inputs).toContainEqual(expect.objectContaining({ layerId: "campsites", input: { includeParking: false, backcountryOnly: true } }));
+    // Camping is not parking, unless the question is about parking a van.
+    expect(read("Camping and water along the Mojave Road").inputs).toContainEqual(expect.objectContaining({ layerId: "campsites", input: { includeParking: false } }));
+    expect(read("Where can I park my van overnight on BLM land near Moab?").inputs).toEqual([]);
     // "Wind Rivers" is a place, not wind.
     expect(r.layers.map((l) => l.layerId)).not.toContain("wind-flow");
   });

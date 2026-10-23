@@ -286,6 +286,13 @@ const PHRASES: {
     because: "a backpacker's camp is not a parking lot",
   },
   {
+    // Camping is not parking: Mojave Road's "campsites" were Big Bear's ski parking lots (Moonridge Lot, 1,200 spaces).
+    re: /\bcamp(?:ing|s|sites?|grounds?)?\b/i,
+    unless: /\bpark(?:ing)?\b|\bvans?\b|\brvs?\b|\bcar\s+camp\w*|\bovernight\b|\btrailheads?\b/i,
+    inputs: { campsites: { includeParking: false } },
+    because: "a place to camp is not a parking lot",
+  },
+  {
     re: /\bsnow[- ]free\b|\bstill\s+snow\b|\bsnow\s+on\s+the\b|\bany\s+snow\b|\bmelted\s+out\b|\bsnow\s+line\b/i,
     layers: ["snow-cover"],
     because: "snow on the ground is the daily satellite snow map",
@@ -494,7 +501,8 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     const strong = !(p.unless && p.unless.test(masked));
     for (const id of p.layers ?? []) addLayer(id, `"${m[0].trim()}": ${p.because}`, strong);
     for (const id of p.avoid ?? []) avoid.push({ layerId: id, because: `"${m[0].trim()}": ${p.because}` });
-    for (const [layerId, input] of Object.entries(p.inputs ?? {})) inputs.push({ layerId, input, because: `"${m[0].trim()}": ${p.because}` });
+    // A phrase whose "unless" words are there names its layers only loosely and sets nothing.
+    if (strong) for (const [layerId, input] of Object.entries(p.inputs ?? {})) if (!inputs.some((i) => i.layerId === layerId && JSON.stringify(i.input) === JSON.stringify(input))) inputs.push({ layerId, input, because: `"${m[0].trim()}": ${p.because}` });
     for (const [layerId, chips] of Object.entries(p.filters ?? {})) {
       for (const [key, include] of Object.entries(chips)) phraseFilters.push({ layerId, key, include, because: m[0].trim() });
     }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getLayer, listLayers } from "@/layers";
 import { VIEW_KINDS } from "@/lib/render/state";
-import { COVERAGE_QUESTIONS, LAYERS_IN_OLDER_QUESTIONS, coverageFor, coverageRule, noteNames, outageSkip, readEvalSet, statesTotalArea } from "@/scripts/eval-model.mjs";
+import { COVERAGE_QUESTIONS, LAYERS_IN_OLDER_QUESTIONS, USECASE_QUESTIONS, coverageFor, coverageRule, noteNames, outageSkip, readEvalSet, statesTotalArea, usecaseFor, usecaseRule } from "@/scripts/eval-model.mjs";
 
 /** The coverage questions (scripts/eval-model.mts, docs/questions.md "Coverage questions"). */
 describe("eval coverage questions", () => {
@@ -54,6 +54,39 @@ describe("eval coverage questions", () => {
     const errored = { toolName: "query_tides", input: {}, output: { error: "upstream down" } };
     expect(coverageRule({ layers: ["tides"] }, [empty]).ok).toBe(true);
     expect(coverageRule({ layers: ["tides"] }, [errored]).ok).toBe(false);
+  });
+});
+
+/** The use-case questions (docs/use-cases.md, scripts/eval-model.mts USECASE_QUESTIONS). */
+describe("eval use-case questions", () => {
+  const set = readEvalSet();
+  const expects = Object.values(USECASE_QUESTIONS);
+
+  it("every use-case question is in the eval set, and 20 to 25 use cases have two or three each", () => {
+    const tagged = set.filter((q) => usecaseFor(q) !== undefined);
+    expect(tagged.length).toBe(Object.keys(USECASE_QUESTIONS).length);
+    const perCase = new Map<string, number>();
+    for (const e of expects) perCase.set(e.useCase, (perCase.get(e.useCase) ?? 0) + 1);
+    expect(perCase.size).toBeGreaterThanOrEqual(20);
+    expect(perCase.size).toBeLessThanOrEqual(25);
+    for (const [useCase, n] of perCase) expect(n, useCase).toBeGreaterThanOrEqual(2);
+  });
+
+  it("names only registered layers, also in filters", () => {
+    const ids = new Set(listLayers().map((l) => l.id));
+    const named = expects.flatMap((e) => [...e.layers.flatMap((a) => a.split("|")), ...(e.filter ? e.filter.layer.split("|") : [])]);
+    expect(named.filter((id) => !ids.has(id))).toEqual([]);
+  });
+
+  it("fails a question whose filter the decision needs was not set", () => {
+    const drawn = [
+      { toolName: "query_mtb-trails", input: {}, output: { kind: "geojson", data: { type: "FeatureCollection", features: [{ type: "Feature", properties: { v: 2 }, geometry: { type: "LineString", coordinates: [[-94.2, 36.4], [-94.21, 36.41]] } }] } } },
+      { toolName: "render", input: { layerId: "mtb-trails" }, output: { layerId: "mtb-trails" } },
+    ];
+    const expect_ = usecaseFor("Intermediate mountain bike trails near Bentonville")!;
+    expect(usecaseRule(expect_, drawn).ok).toBe(false);
+    const filtered = [...drawn, { toolName: "render", input: { layerId: "mtb-trails", filters: { v: { include: ["2"] } } }, output: { layerId: "mtb-trails", filters: { v: { include: ["2"] } } } }];
+    expect(usecaseRule(expect_, filtered).ok).toBe(true);
   });
 });
 

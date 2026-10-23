@@ -41,6 +41,8 @@
  *   --only <text>    runs only the set's questions containing <text> (case ignored; a|b for either)
  *   --tag coverage   runs only the coverage questions (COVERAGE_QUESTIONS), each also held to its expected layers and view;
  *                    one whose layer is under a documented outage (Layer.outage) and did not answer is skipped, not passed
+ *   --tag usecase    runs only the use-case questions (USECASE_QUESTIONS, docs/use-cases.md), each held to its expected
+ *                    layers, view and filter; what the app still lacks for the full answer is listed as `needs`
  *   --screens        after the set, the screen checks (scripts/evalScreens.ts) on SCREEN_QUESTIONS: each one's final
  *                    map opened by permalink in a browser at desktop and phone size; see that file for the server.
  *                    Refuses to start with under 5 GB free disk, stops cleanly under 2 GB, and prints the disk the run
@@ -63,6 +65,7 @@ import { lineEntries } from "@/lib/render/nativeLines";
 import { boundsOf } from "@/lib/render/views";
 import { runMapChecks, type CheckResult, type LayerInfo, type PlaceRef } from "@/lib/checks/mapChecks";
 import type { BBox } from "@/layers/types";
+import { isActiveEntry } from "@/lib/render/filters";
 import { nearBox, nearPlace } from "@/lib/agent/places";
 import { freeBytes, sizeText, START_MIN_FREE, watchDisk, type DiskGuard } from "@/scripts/diskGuard";
 
@@ -553,6 +556,120 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   "where is the wind strongest over the sierra tomorrow?": { layers: ["wind-flow"] },
 };
 
+/**
+ * A use-case question's expectation (docs/use-cases.md; audit in .superpowers/m3/usecases/AUDIT.md): the coverage
+ * expectation (layers answered and drawn, view, Show as) plus the use case it belongs to, the `render.filters` key the
+ * decision needs on a layer (`layer` may be "a|b"), and `needs`: what the app lacks today for the full answer, in
+ * words (a missing source or a cross-layer step). The rule checks layers, view and filter; `needs` and the use case's
+ * acceptance list are checked by hand until the app can answer them.
+ */
+export type UsecaseExpect = CoverageExpect & { useCase: string; filter?: { layer: string; key: string }; needs?: string[] };
+
+/** The use-case questions, keyed by the question in lower case (`--tag usecase` runs only these). */
+export const USECASE_QUESTIONS: Record<string, UsecaseExpect> = {
+  // UC01 Day hiker picks a trail.
+  "good day hikes near boulder under 5 miles": { useCase: "UC01", layers: ["popularity|osm-trails"], view: "ranked", filter: { layer: "popularity|osm-trails", key: "lengthKm" }, needs: ["whole-trail length"] },
+  "easy hikes with a waterfall near asheville": { useCase: "UC01", layers: ["popularity|osm-trails", "outdoor-features"], needs: ["trail reaches a feature (join)"] },
+  // UC02 Hiker checks snow on trails.
+  "which trails at mount rainier are snow free right now?": { useCase: "UC02", layers: ["snow-cover", "osm-trails|popularity"], needs: ["snow sampled along each trail"] },
+  "is there still snow on the trails around lake tahoe?": { useCase: "UC02", layers: ["snowpack", "snow-cover"] },
+  // UC03 Backpacker plans water and camps.
+  "backpacking in the wind rivers: where are the water sources and campsites?": { useCase: "UC03", layers: ["outdoor-features|lakes", "campsites"], filter: { layer: "campsites", key: "kind" } },
+  "where can i camp along the wonderland trail?": { useCase: "UC03", layers: ["osm-trails", "campsites"], needs: ["features along a route (join)"] },
+  // UC04 Trail runner picks a long run with the right climbing.
+  "long trail runs with big climbs near chamonix": { useCase: "UC04", layers: ["popularity|osm-trails"], view: "ranked", needs: ["elevation gain"] },
+  "flat trail runs over 10 miles near portland": { useCase: "UC04", layers: ["popularity|osm-trails"], filter: { layer: "popularity|osm-trails", key: "lengthKm" }, needs: ["whole-trail length", "elevation gain"] },
+  // UC05 Mountain biker picks an intermediate ride.
+  "intermediate mountain bike trails near bentonville": { useCase: "UC05", layers: ["mtb-trails"], filter: { layer: "mtb-trails", key: "v|imba" } },
+  "flowy blue trails in sedona": { useCase: "UC05", layers: ["mtb-trails"], filter: { layer: "mtb-trails", key: "v|imba" } },
+  // UC06 Sport climber picks a crag by style and sun.
+  "which crags near moab are sport and shaded in the afternoon?": { useCase: "UC06", layers: ["climbing"], view: "ranked", filter: { layer: "climbing", key: "disciplines" }, needs: ["wall aspect"] },
+  "beginner sport climbing at red rock near las vegas": { useCase: "UC06", layers: ["climbing"], filter: { layer: "climbing", key: "disciplines" }, needs: ["grade band per discipline"] },
+  // UC07 Boulderer checks the weekend conditions.
+  "bouldering near bishop this weekend, will it be too hot?": { useCase: "UC07", layers: ["climbing"], filter: { layer: "climbing", key: "disciplines" }, needs: ["temperature forecast by day"] },
+  "is it too windy to climb at joshua tree tomorrow?": { useCase: "UC07", layers: ["wind-flow"], needs: ["gusts and mph at the climbing area"] },
+  // UC08 Whitewater kayaker picks a run with water.
+  "where can i paddle class iii near asheville this weekend?": { useCase: "UC08", layers: ["paddling", "streamflow"], filter: { layer: "paddling", key: "v" }, needs: ["whitewater class", "runnable range per section", "flow forecast"] },
+  "is the gauley running right now?": { useCase: "UC08", layers: ["streamflow"], needs: ["dam release below Summersville", "runnable range"] },
+  "class iv runs in colorado with enough water right now": { useCase: "UC08", layers: ["paddling", "streamflow"], filter: { layer: "paddling", key: "v" }, needs: ["whitewater class", "runnable range per section"] },
+  // UC09 Sea or flatwater kayaker times the tide and wind.
+  "best time to kayak tomales bay tomorrow, tide and wind": { useCase: "UC09", layers: ["tides", "wind-flow"], view: "timeline" },
+  "where can i launch a kayak on lake tahoe?": { useCase: "UC09", layers: ["recreation-sites|fishing|paddling"] },
+  // UC10 Backcountry skier checks avalanche danger and snow.
+  "avalanche danger near stevens pass today": { useCase: "UC10", layers: ["weather-alerts"], needs: ["avalanche center forecast"] },
+  "where's the deepest fresh snow in utah right now?": { useCase: "UC10", layers: ["snowpack"], view: "ranked" },
+  "low-angle ski tours near teton pass": { useCase: "UC10", layers: ["ski-routes"], needs: ["slope angle"] },
+  // UC11 Angler picks a river by flow and water temperature.
+  "is the madison fishing well right now?": { useCase: "UC11", layers: ["streamflow|fishing"] },
+  "where can i fly fish with public access near asheville?": { useCase: "UC11", layers: ["fishing", "public-lands"], needs: ["access points on public land (join)"] },
+  "trout streams near denver that aren't too warm": { useCase: "UC11", layers: ["fishing|streamflow"], filter: { layer: "fishing|streamflow", key: "tempBand|tempF" }, needs: ["temperature from the spot's own river"] },
+  // UC12 Surfer picks a session.
+  "will santa cruz have good surf this weekend?": { useCase: "UC12", layers: ["surf"], needs: ["forecast by day", "wind and tide"] },
+  "where is the swell biggest on the oregon coast right now?": { useCase: "UC12", layers: ["surf"], view: "ranked" },
+  // UC13 Car camper finds free dispersed camping.
+  "free dispersed camping near sedona": { useCase: "UC13", layers: ["forest-roads", "public-lands"], needs: ["dispersed camping closures"] },
+  "where can i park my van overnight on blm land near moab?": { useCase: "UC13", layers: ["public-lands", "campsites"], needs: ["designated-site rules"] },
+  // UC14 Overlander plans a route with water and camps.
+  "camping and water along the mojave road": { useCase: "UC14", layers: ["campsites", "outdoor-features"], needs: ["the named route's line", "features along a route (join)"] },
+  "forest roads a subaru can drive near leadville": { useCase: "UC14", layers: ["forest-roads"], filter: { layer: "forest-roads", key: "level" } },
+  // UC15 Wildlife watcher finds an animal.
+  "where can i see moose near jackson hole?": { useCase: "UC15", layers: ["species|gbif-occurrences"], view: "density" },
+  "where are whales being seen off monterey this week?": { useCase: "UC15", layers: ["species|gbif-occurrences"] },
+  // UC16 Birder plans a migration trip.
+  "best place to see sandhill cranes in nebraska in march": { useCase: "UC16", layers: ["gbif-occurrences|species"], view: "density", needs: ["month filter across years"] },
+  "where have bald eagles been seen near seattle lately?": { useCase: "UC16", layers: ["species|gbif-occurrences"] },
+  // UC17 Photographer picks a sunset or night spot.
+  "where should i shoot sunset near sedona?": { useCase: "UC17", layers: ["photos|outdoor-features"], needs: ["sunset time and azimuth", "view direction"] },
+  "darkest skies for milky way photos near moab": { useCase: "UC17", layers: ["night-lights"], needs: ["brightness values at places"] },
+  "is there fall color near asheville right now?": { useCase: "UC17", layers: ["imagery-by-date|greenness"], needs: ["a fall color source"] },
+  // UC18 Resident watches smoke and fire.
+  "is it smoky in bend tomorrow?": { useCase: "UC18", layers: ["smoke"] },
+  "are the fires near missoula contained?": { useCase: "UC18", layers: ["fire-perimeters"] },
+  // UC19 Flood and weather watcher.
+  "is the french broad going to flood in asheville?": { useCase: "UC19", layers: ["streamflow"], needs: ["stage against flood stage", "river forecast"] },
+  "any flash flood warnings in utah canyons today?": { useCase: "UC19", layers: ["weather-alerts"] },
+  "will it rain in zion this weekend?": { useCase: "UC19", layers: ["weather-alerts"], needs: ["precipitation forecast by day"] },
+  // UC20 Ranger reviews fire history and burn severity.
+  "how much of the deschutes national forest burned in the last 10 years and how badly?": { useCase: "UC20", layers: ["fire-perimeters", "burn-severity"], needs: ["clip to the forest boundary", "severity acres by class"] },
+  "where did beetles kill trees in the medicine bow since 2020?": { useCase: "UC20", layers: ["tree-mortality"], view: "timeline" },
+  // UC21 Range manager checks grazing against habitat and drought.
+  "grazing allotments overlapping desert tortoise critical habitat near st. george": { useCase: "UC21", layers: ["grazing-allotments", "critical-habitat"], needs: ["overlap acres (join)"] },
+  "wild horse areas in nevada that are in drought right now": { useCase: "UC21", layers: ["grazing-allotments", "drought"], needs: ["overlap acres (join)"] },
+  // UC22 Conservation researcher measures deforestation and its drivers.
+  "how much forest did pará lose since 2017 and to what?": { useCase: "UC22", layers: ["forest-loss"], needs: ["hectares lost (zonal totals)", "drivers of loss"] },
+  "which protected areas in borneo lost the most forest?": { useCase: "UC22", layers: ["forest-loss", "protected-areas-world"], needs: ["loss per protected area (zonal totals)"] },
+  // UC23 Conservation researcher finds species outside protection.
+  "jaguar records in costa rica outside protected areas": { useCase: "UC23", layers: ["gbif-occurrences|species", "protected-areas-world"], needs: ["inside or outside (join)"] },
+  "old-growth forest in oregon that isn't in wilderness": { useCase: "UC23", layers: ["old-growth", "wilderness"], needs: ["area outside (join)"] },
+  // UC24 Journalist checks a water, disaster or emissions story.
+  "how much has lake powell dropped since 2000?": { useCase: "UC24", layers: ["reservoir-levels"] },
+  "which california counties got the most disaster declarations since 2020?": { useCase: "UC24", layers: ["disasters"], view: "ranked" },
+  "biggest methane leaks in the permian this year": { useCase: "UC24", layers: ["methane-plumes"], view: "ranked" },
+  // UC25 Educator shows a change to a class.
+  "show my class how the glaciers in glacier national park have shrunk": { useCase: "UC25", layers: ["glaciers"], view: "change" },
+  "what rock is under denver?": { useCase: "UC25", layers: ["geologic-unit"], view: "detail" },
+  "how has arctic sea ice changed since 2012?": { useCase: "UC25", layers: ["sea-ice"], view: "change" },
+};
+
+/** The use-case expectation for a question as written in the set (its @view dropped), if it is one. */
+export function usecaseFor(raw: string): UsecaseExpect | undefined {
+  return USECASE_QUESTIONS[raw.replace(/\s*@view=.*$/, "").trim().toLowerCase()];
+}
+
+/**
+ * A use-case question's rule: the coverage rule on its layers and view, and, when it names one, a `render.filters`
+ * entry on that layer for that key (either of `a|b` for both), so "only intermediate trails" ends with the chips set.
+ */
+export function usecaseRule(expect: UsecaseExpect, calls: ToolCall[]): RuleResult {
+  const coverage = coverageRule(expect, calls);
+  if (!expect.filter) return { ...coverage, useCase: expect.useCase, ...(expect.needs && { needs: expect.needs }) };
+  const layers = expect.filter.layer.split("|");
+  const keys = expect.filter.key.split("|");
+  const ops = mapAfter(calls).renderOps.filter((o) => layers.includes(o.layerId));
+  const filtered = ops.some((o) => keys.some((k) => isActiveEntry(o.filters?.[k])));
+  return { ...coverage, ok: coverage.ok && filtered, useCase: expect.useCase, filter: expect.filter, filtered, ...(expect.needs && { needs: expect.needs }) };
+}
+
 /** Layers the older eval questions (before the coverage questions) already ask about, per their Last run tool lists. */
 export const LAYERS_IN_OLDER_QUESTIONS = [
   "osm-trails", "fire-perimeters", "fire-detections", "forest-loss", "snowpack", "snow-cover", "streamflow", "campsites",
@@ -765,10 +882,13 @@ function evaluate(run: Run): Evaluated {
   const rule = QUESTION_RULES[question.trim().toLowerCase()]?.(calls, answer, view);
   const expect = coverageFor(question);
   const coverage = expect ? coverageRule(expect, calls) : undefined;
+  const usecase = usecaseFor(question);
+  const usecaseResult = usecase ? usecaseRule(usecase, calls) : undefined;
   const rulesOk =
     brief &&
     (rule?.ok ?? true) &&
     (coverage?.ok ?? true) &&
+    (usecaseResult?.ok ?? true) &&
     (wideView
       ? wideViewOk
       : routed && !queried
@@ -779,7 +899,7 @@ function evaluate(run: Run): Evaluated {
   const checks = runMapChecks(state, { lookup: lookupLayer, place: questionPlace(calls, view, question) });
   const checksOk = checks.every((c) => c.ok);
   const ok = rulesOk && checksOk;
-  const skipped = expect ? outageSkip(expect, calls) : undefined;
+  const skipped = expect ? outageSkip(expect, calls) : usecase ? outageSkip(usecase, calls) : undefined;
 
   return {
     ok,
@@ -795,6 +915,7 @@ function evaluate(run: Run): Evaluated {
       ...(dupHeadings.length > 0 ? { dupHeadings } : {}),
       ...(rule ? { rule, answer: answer.join("\n") } : {}),
       ...(coverage ? { coverage } : {}),
+      ...(usecaseResult ? { usecase: usecaseResult } : {}),
       model,
       ok,
       rulesOk,
@@ -887,7 +1008,7 @@ if (isMain) {
   const replay = argValue(args, "--replay");
   const only = argValue(args, "--only")?.toLowerCase().split("|");
   const tag = argValue(args, "--tag");
-  if (tag !== undefined && tag !== "coverage") throw new Error(`Unknown --tag ${tag} (only "coverage")`);
+  if (tag !== undefined && tag !== "coverage" && tag !== "usecase") throw new Error(`Unknown --tag ${tag} ("coverage" or "usecase")`);
   const screens = args.includes("--screens");
   // Screens fill the disk (a dev server, Chromium, screenshots): not started short of space, stopped cleanly when low.
   let disk: DiskGuard | undefined;
@@ -902,7 +1023,8 @@ if (isMain) {
   if (args.includes("--set")) {
     const questions = readEvalSet()
       .filter((q) => !only || only.some((o) => q.toLowerCase().includes(o)))
-      .filter((q) => tag !== "coverage" || coverageFor(q) !== undefined);
+      .filter((q) => tag !== "coverage" || coverageFor(q) !== undefined)
+      .filter((q) => tag !== "usecase" || usecaseFor(q) !== undefined);
     let passed = 0;
     let skipped = 0;
     const forScreens: { raw: string; slug: string; state: MapState; failures: string[] }[] = [];

@@ -163,6 +163,14 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --tag cover
 - **Data stories** (spec §13, §13a): the Mississippi's flow over three months (`river-pulse`, timeline), Cook Inlet's currents this week (`ocean-currents`, timeline, the tide plotted under the scrubber), the Sierra's strongest wind tomorrow (`wind-flow`). Each also holds its answer to the data's shape: a low and a peak with numbers, a ratio for the river, and what size or brightness and color mean.
 - **Safe or open now, here, compare**: weather at Paradise (`weather-alerts`), forest roads near Flagstaff (`forest-roads`), huts around Zermatt on a map view (`outdoor-features`), fishing on the Kenai on a map view (`fishing`), the Gila against the Bob Marshall (`remoteness`), snow at Mount Baker against Mount Hood (`snowpack`).
 
+## Use-case questions
+
+The 57 questions after "Where is the wind strongest over the Sierra tomorrow?" in the eval set are the `usecase` tag: two or three questions for each of the 25 use cases in `docs/use-cases.md` (a hiker, backpacker, trail runner, mountain biker, climber, paddler, kayaker, ski tourer, angler, surfer, camper, overlander, wildlife watcher, birder, photographer, smoke and flood watchers, ranger, range manager, researcher, journalist and educator), each a real decision in the owner's voice. Each has an expectation in `USECASE_QUESTIONS` (scripts/eval-model.mts): the layers it must query, get an answer from and draw (`a|b` for either), the view where it matters, and for some the `render.filters` key the decision needs (difficulty, discipline, road level, water temperature); `needs` lists what the app still lacks for the full answer (a forecast, a cross-layer join, slope or aspect, whitewater class), which the rule does not check. The full acceptance checks per use case (counts, values, the note's deciding facts, the phone screen) are in `docs/use-cases.md` and are judged by hand; the first audit (2026-10-23: 1 use case works, 11 weak, 13 fail, while the pass rule above passed 47 of 57) is `.superpowers/m3/usecases/AUDIT.md`.
+
+```bash
+node --env-file=.env.local --import tsx scripts/eval-model.mts --set --tag usecase --save /tmp/usecases
+```
+
 ## Eval set
 
 `scripts/eval-model.mts --set` reads the questions below (the lines starting with `- ` between the markers), runs each one through the real agent with the model in `MODEL_NAME`, and prints one JSON line per question and a final `ok N/M`. It spends model credits and calls live data servers. The set covers trails, both fire layers, forest loss, snow, stream flow, campsites and roads, species, photos with popularity, public lands with wilderness, night lights with population, remoteness (which also looks up a named physical region), a walking route, fire year by year, a compare over time, a sources check, popular campsites, a physical-region outline, two "here" questions that carry a map view (`@view=[w,s,e,n]`, the bbox the browser would send) and pass without a geocode, one question on a view far wider than the trails layer allows (the whole Baltic, no place named), which passes only when the agent answers at that scale (at least one query succeeds and is drawn) without calling set_view or retrying a layer more than once, and twelve M4 questions, one per theme: mountain biking, ski touring, climbing, lake depth, surf today, river level, weather warnings, earthquakes, rock type at a point, glaciers, greenness compared over a year, and species records drawn as a heatmap, and ten Batch F questions: reservoir level, dams by decade, a monument then and now, uranium mines, a sea level trend, a sea level rise scenario, methane plumes, a county temperature anomaly, sequoia fire deaths, and a glacier's retreat, and the owner's two Tierra del Fuego questions on a wide view with no place named (great hikes, which must draw wider-scale layers instead of refusing; deforestation or water rise), and the owner's "good hiking in French Guiana", which passes only when a query that holds hiking candidates succeeds (trails with named routes, peaks, outdoor features or protected areas), population and night lights are not queried, and the note, within 150 words, names at least three places from the returned features, and the owner's "wind farms in West Texas" on a 392,000 km² view, which passes only when power-plants answers with at least 100 features, no power-plants query uses a box under 90% of the view (no shrinking) or errors, and the note names the largest site by MW, and "dams in the Colorado River basin", which passes when a dams query over the basin answers with features and no zoom_in error. Every question also fails when a note runs over 150 words or a heading appears twice across the notes and the closing text.
@@ -292,6 +300,63 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - How has the Mississippi's flow changed over the last three months?
 - Show the currents in Cook Inlet this week
 - Where is the wind strongest over the Sierra tomorrow?
+- Good day hikes near Boulder under 5 miles
+- Easy hikes with a waterfall near Asheville
+- Which trails at Mount Rainier are snow free right now?
+- Is there still snow on the trails around Lake Tahoe?
+- Backpacking in the Wind Rivers: where are the water sources and campsites?
+- Where can I camp along the Wonderland Trail?
+- Long trail runs with big climbs near Chamonix
+- Flat trail runs over 10 miles near Portland
+- Intermediate mountain bike trails near Bentonville
+- Flowy blue trails in Sedona
+- Which crags near Moab are sport and shaded in the afternoon?
+- Beginner sport climbing at Red Rock near Las Vegas
+- Bouldering near Bishop this weekend, will it be too hot?
+- Is it too windy to climb at Joshua Tree tomorrow?
+- Where can I paddle class III near Asheville this weekend?
+- Is the Gauley running right now?
+- Class IV runs in Colorado with enough water right now
+- Best time to kayak Tomales Bay tomorrow, tide and wind
+- Where can I launch a kayak on Lake Tahoe?
+- Avalanche danger near Stevens Pass today
+- Where's the deepest fresh snow in Utah right now?
+- Low-angle ski tours near Teton Pass
+- Is the Madison fishing well right now?
+- Where can I fly fish with public access near Asheville?
+- Trout streams near Denver that aren't too warm
+- Will Santa Cruz have good surf this weekend?
+- Where is the swell biggest on the Oregon coast right now?
+- Free dispersed camping near Sedona
+- Where can I park my van overnight on BLM land near Moab?
+- Camping and water along the Mojave Road
+- Forest roads a Subaru can drive near Leadville
+- Where can I see moose near Jackson Hole?
+- Where are whales being seen off Monterey this week?
+- Best place to see sandhill cranes in Nebraska in March
+- Where have bald eagles been seen near Seattle lately?
+- Where should I shoot sunset near Sedona?
+- Darkest skies for Milky Way photos near Moab
+- Is there fall color near Asheville right now?
+- Is it smoky in Bend tomorrow?
+- Are the fires near Missoula contained?
+- Is the French Broad going to flood in Asheville?
+- Any flash flood warnings in Utah canyons today?
+- Will it rain in Zion this weekend?
+- How much of the Deschutes National Forest burned in the last 10 years and how badly?
+- Where did beetles kill trees in the Medicine Bow since 2020?
+- Grazing allotments overlapping desert tortoise critical habitat near St. George
+- Wild horse areas in Nevada that are in drought right now
+- How much forest did Pará lose since 2017 and to what?
+- Which protected areas in Borneo lost the most forest?
+- Jaguar records in Costa Rica outside protected areas
+- Old-growth forest in Oregon that isn't in wilderness
+- How much has Lake Powell dropped since 2000?
+- Which California counties got the most disaster declarations since 2020?
+- Biggest methane leaks in the Permian this year
+- Show my class how the glaciers in Glacier National Park have shrunk
+- What rock is under Denver?
+- How has Arctic sea ice changed since 2012?
 <!-- eval:end -->
 
 ## Last run

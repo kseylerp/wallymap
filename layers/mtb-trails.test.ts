@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import { attributeGroups } from "@/lib/render/attributes";
+import { attributeGroups, chipAttribute } from "@/lib/render/attributes";
+import { applyFilters } from "@/lib/render/filters";
+import { normalizeFilters } from "@/lib/agent/renderInput";
 import { cardContent } from "@/lib/render/card";
 import { hardMaxAreaKm2 } from "./types";
 import { cardTitle, contractProblems, legendOf, timeShapeOf } from "./contract";
-import layer, { WIDE_LIMIT, bikesAllowed, buildMtbQuery, imbaScale, mtbScale, normalizeMtb } from "./mtb-trails";
+import layer, { WIDE_LIMIT, bikesAllowed, buildMtbQuery, imbaScale, mtbScale, normalizeMtb, riderLevels } from "./mtb-trails";
 import fixture from "./__fixtures__/mtb-trails.truckee.json";
 import moab from "./__fixtures__/mtb-trails.moab.json";
+import sedona from "./__fixtures__/mtb-trails.sedona.json";
 
 const TRUCKEE: [number, number, number, number] = [-120.25, 39.28, -120.1, 39.38];
 const DEFAULTS = { includeRoutes: true };
@@ -71,9 +74,9 @@ describe("normalizeMtb", () => {
     expect(route?.properties).not.toHaveProperty("v");
   });
 
-  it("carries the mtb:scale as v and kind mtb, and an imba-only way's IMBA rating as v so it sits on the ramp", () => {
+  it("makes v the IMBA color: the IMBA rating where tagged (Matt's Trail S1, IMBA 2 is blue), else Singletrack converted", () => {
     const matt = fc.features.find((f) => f.properties?.name === "Matt's Trail");
-    expect(matt?.properties).toMatchObject({ kind: "mtb", v: 1, singletrack: 1, imba: 2, highway: "path", surface: "ground" });
+    expect(matt?.properties).toMatchObject({ kind: "mtb", v: 2, singletrack: 1, imba: 2, highway: "path", surface: "ground" });
     const imbaOnly = fc.features.find((f) => f.properties?.name === "Springboard");
     expect(imbaOnly?.properties).toMatchObject({ kind: "imba", imba: 2, v: 2 });
     expect(imbaOnly?.properties).not.toHaveProperty("singletrack");
@@ -120,7 +123,7 @@ describe("normalizeMtb", () => {
     expect(route.properties?.inViewKm).toBeGreaterThan(17);
     const card = cardContent(route, { card: layer.card, fieldHelp: layer.fieldHelp });
     const facts = Object.fromEntries(card.facts.map((r) => [r.label, r.value]));
-    expect(facts).toMatchObject({ Kind: "Named route", "Singletrack Scale": "2, Moderate", "Full length": "228 km" });
+    expect(facts).toMatchObject({ Kind: "Named route", "Singletrack Scale": "S2, moderate: bigger roots and steps, tighter turns.", "Full length": "228 km" });
     expect(facts["Length in view"]).toMatch(/^1\d(\.\d)? km$/);
     const wayCard = cardContent(way, { card: layer.card, fieldHelp: layer.fieldHelp });
     expect(wayCard.facts.find((r) => r.label === "Length")?.value).toMatch(/^8(\.\d)? km$/);
@@ -182,7 +185,7 @@ describe("mtb-trails layer", () => {
     expect(r.citation.source).toContain("OpenStreetMap");
     // The fixture's count elements say 152 matched but only 15 are in the body.
     expect(r.coverageNote).toBe(
-      "Showing 15 of 152 rated trail ways and routes in this box (lowest OpenStreetMap ids first); zoom in for the rest",
+      "Showing 15 of 152 rated trail ways and routes in this box (lowest OpenStreetMap ids first); zoom in for the rest. 1 line is a named route with no difficulty of its own, which a difficulty filter (v, level) leaves out",
     );
   });
 
@@ -191,14 +194,18 @@ describe("mtb-trails layer", () => {
     const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
     const r = await layer.query(ctx(stub), DEFAULTS);
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
-    expect(r.coverageNote).toBe("Returned 15 rated trail ways and routes; the box was not truncated");
+    expect(r.coverageNote).toBe("Returned 15 rated trail ways and routes; the box was not truncated. 1 line is a named route with no difficulty of its own, which a difficulty filter (v, level) leaves out");
   });
 
   it("keeps trails at or under maxScale (IMBA-only ones by their IMBA rating), plus routes", async () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
     const r = await layer.query(ctx(stub), { includeRoutes: true, maxScale: 0 });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
-    const vs = r.data.features.flatMap((f) => (typeof f.properties?.v === "number" ? [f.properties.v] : []));
+    // maxScale reads the Singletrack Scale (an IMBA-only way by its IMBA number), not the IMBA color in v.
+    const vs = r.data.features.flatMap((f) => {
+      const x = f.properties?.singletrack ?? f.properties?.imba;
+      return typeof x === "number" ? [x] : [];
+    });
     expect(vs.length).toBeGreaterThan(0);
     expect(Math.max(...vs)).toBe(0);
     expect(r.data.features.some((f) => f.properties?.kind === "route")).toBe(true);
@@ -211,7 +218,7 @@ describe("mtb-trails layer", () => {
     const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
     const r = await layer.query(ctx(stub), { includeRoutes: true, maxScale: 0 });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
-    expect(r.coverageNote).toBe(`Returned ${r.data.features.length} rated trail ways and routes after the difficulty limit hid ${15 - r.data.features.length}; the box was not truncated`);
+    expect(r.coverageNote).toBe(`Returned ${r.data.features.length} rated trail ways and routes after the difficulty limit hid ${15 - r.data.features.length}; the box was not truncated. 1 line is a named route with no difficulty of its own, which a difficulty filter (v, level) leaves out`);
   });
 
   it("maps a failing Overpass to an upstream error after the fallback", async () => {
@@ -278,7 +285,7 @@ describe("mtb-trails wide mode", () => {
       expect(res.body).toMatchObject({
         total: 72,
         truncated: true,
-        coverageNote: "Showing the 3 named of 72 (ranked by length in km); zoom in under 2,500 km² for all",
+        coverageNote: "Showing the 3 named of 72 (ranked by length in km); zoom in under 2,500 km² for all; 1 line is a named route with no difficulty of its own, which a difficulty filter (v, level) leaves out",
       });
     } finally {
       vi.unstubAllGlobals();
@@ -311,14 +318,14 @@ describe("mtb-trails wide mode", () => {
     expect(decodeURIComponent(String((respond.mock.calls[1][1] as RequestInit).body))).toContain("way(id:12);");
     expect(r.data.features.map((f) => f.properties?.name)).toEqual(["Big Loop", "Long"]);
     expect(r.total).toBe(72);
-    expect(r.coverageNote).toBeUndefined();
+    expect(r.coverageNote).toBe("1 line is a named route with no difficulty of its own, which a difficulty filter (v, level) leaves out");
 
     const scaled = await layer.query(
       { bbox: UTAH, zoom: 8, env: {}, fetch: respond as unknown as CachedFetch, wide: true, wideStrategy: layer.wide },
       { includeRoutes: false, maxScale: 2 },
     );
     if (!("kind" in scaled) || scaled.kind !== "geojson") throw new Error("expected geojson");
-    expect(scaled.coverageNote).toBe("The difficulty limit hid 1 of the named trails");
+    expect(scaled.coverageNote).toBe("The difficulty limit hid 1 of the named trails; 1 line is a named route with no difficulty of its own, which a difficulty filter (v, level) leaves out");
   });
 });
 
@@ -331,21 +338,25 @@ describe("mtb-trails near Moab: ratings in words, IMBA-only trails on the ramp, 
   };
   const rows = (c: ReturnType<typeof card>) => c.facts.map((r) => `${r.label}: ${r.value}`);
 
-  it("shows Slickrock as '3, Hard' on the Singletrack Scale with no bare number, and that bikes are allowed", () => {
+  it("shows Slickrock's Singletrack grade and IMBA color in words with no bare number, and that bikes are allowed", () => {
     const c = card("Slickrock");
     expect(c.measure).toBeNull();
     expect(rows(c)).toEqual(
-      expect.arrayContaining(["Singletrack Scale: 3, Hard", "IMBA rating: 3, Hard (black diamond)", "Bikes: Allowed, signed as a bike trail"]),
+      expect.arrayContaining([
+        "Singletrack Scale: S3, hard: blocks, high steps, switchbacks, slippery sections.",
+        "IMBA color: Black diamond, difficult (IMBA 3)",
+        "Bikes: Allowed, signed as a bike trail",
+      ]),
     );
     expect([...c.facts, ...c.details].some((r) => r.value.includes("way/"))).toBe(false);
   });
 
-  it("puts an IMBA-only trail in the difficulty chips by its IMBA band, so few lines read unrated", () => {
+  it("puts an IMBA-only trail in the difficulty chips by its IMBA color, so few lines read unrated", () => {
     expect(fc.features.map((f) => f.properties?.v)).toEqual([3, 3, 1]);
     const v = layer.attributes?.find((a) => a.key === "v");
     if (!v) throw new Error("expected the difficulty attribute");
-    expect(attributeGroups(v, fc).map((g) => `${g.label} ${g.count}`)).toEqual(["Easy 1", "Hard 2"]);
-    expect(rows(card("Cliff Hanger Trail"))).toEqual(expect.arrayContaining(["IMBA rating: 3, Hard (black diamond)", "Bikes: Allowed", "Kind: IMBA rated only"]));
+    expect(attributeGroups(v, fc).map((g) => `${g.label} ${g.count}`)).toEqual(["Green 1", "Black 2"]);
+    expect(rows(card("Cliff Hanger Trail"))).toEqual(expect.arrayContaining(["IMBA color: Black diamond, difficult (IMBA 3)", "Bikes: Allowed", "Kind: IMBA rated only"]));
   });
 
   it("titles an unnamed segment by what it is, not by its rating", () => {
@@ -364,7 +375,80 @@ describe("mtb-trails near Moab: ratings in words, IMBA-only trails on the ramp, 
   it("declares no time, a difficulty legend that names the unrated routes, and labels by name", () => {
     expect(contractProblems(layer)).toEqual([]);
     expect(timeShapeOf(layer, fc)).toEqual({ shape: "none" });
-    expect(legendOf(layer).items?.map((i) => i.label)).toEqual(["Easy", "Moderate", "Hard", "Expert", "Named route, not rated"]);
+    expect(legendOf(layer).items?.map((i) => i.label)).toEqual([
+      "Green: IMBA white or green circle, or Singletrack S0",
+      "Blue: IMBA blue square, or Singletrack S1 to S2",
+      "Black: IMBA black diamond, or Singletrack S3",
+      "Double black: IMBA double black diamond, or Singletrack S4 to S6",
+      "Named route, not rated",
+    ]);
     expect(layer.labels).toEqual({ field: "name", max: 8, rankBy: "v" });
+  });
+});
+
+describe("mtb-trails in Sedona: IMBA colors as chips, and 'intermediate' as IMBA blue or Singletrack 1 to 2 (UC05)", () => {
+  // Recorded 2026-10-23 from Overpass (Sedona, -111.95,34.75 to -111.65,34.95), trimmed to 7 rated ways, one route and
+  // two of its member ways, 6 vertices each.
+  const fc = normalizeMtb(sedona);
+  const names = (x: { features: { properties: Record<string, unknown> | null }[] }) => x.features.map((f) => String(f.properties?.name)).sort();
+  const props = (name: string) => fc.features.find((f) => f.properties?.name === name)?.properties ?? {};
+
+  it("offers one difficulty chip set in IMBA colors (mtb:scale:imba 0 to 4, else Singletrack converted) on v, the row's chip set", () => {
+    const imba = layer.attributes?.find((a) => a.key === "v");
+    expect(imba).toMatchObject({ type: "ordinal", primary: true, encode: "color" });
+    expect(layer.attributes?.some((a) => a.key === "imba")).toBe(false);
+    expect(chipAttribute(layer)?.key).toBe("v");
+    expect(imba?.levels?.map((l) => `${l.value} ${l.label}`)).toEqual([
+      "0 Green",
+      "1 Green",
+      "2 Blue",
+      "3 Black",
+      "4 Double black",
+    ]);
+    // OK Trail (S1 only) is blue and Airport Loop (S3 only) black by conversion; the route has no color.
+    expect(attributeGroups(imba!, fc).map((g) => `${g.label} ${g.count}`)).toEqual(["Green 1", "Blue 4", "Black 2"]);
+  });
+
+  it("keeps every IMBA-blue trail on v = 2, Grand Central (Singletrack 3, IMBA blue) included, and an S1-only trail by conversion", () => {
+    expect(names(applyFilters(fc, { v: { include: ["2"] } }))).toEqual(["Andante Trail", "Grand Central Trail", "OK Trail", "Phone Trail Extension"]);
+    // The model's words land on the values: "blue" is 2, "green" 0 and 1, the label key Difficulty is v.
+    const include = (words: string[]) => (normalizeFilters({ Difficulty: { include: words } }, layer.attributes ?? []).v as { include: string[] }).include;
+    expect(include(["blue"])).toEqual(["2"]);
+    expect(include(["Green"])).toEqual(["0", "1"]);
+    expect(include(["Black", "Double black"])).toEqual(["3", "4"]);
+  });
+
+  it("puts a trail at every level either scale gives, so level = intermediate is IMBA blue or Singletrack 1 to 2", () => {
+    expect(props("Grand Central Trail").level).toEqual(["intermediate", "advanced"]);
+    expect(props("Bell Rock Pathway").level).toEqual(["beginner", "intermediate"]);
+    const kept = applyFilters(fc, { level: { include: ["intermediate"] } });
+    expect(names(kept)).toEqual(["Andante Trail", "Bell Rock Pathway", "Grand Central Trail", "OK Trail", "Phone Trail Extension"]);
+    for (const f of kept.features) {
+      const st = f.properties?.singletrack as number | undefined;
+      expect(f.properties?.imba === 2 || (st !== undefined && st >= 1 && st <= 2)).toBe(true);
+    }
+    expect(riderLevels(undefined, undefined)).toEqual([]);
+    expect(riderLevels(5, 4)).toEqual(["expert"]);
+    expect(riderLevels(0, undefined)).toEqual(["beginner"]);
+  });
+
+  it("names the IMBA color and the Singletrack grade in words on the card, and keeps the level list off it", () => {
+    const f = fc.features.find((x) => x.properties?.name === "Grand Central Trail")!;
+    const c = cardContent(f, { card: layer.card, fieldHelp: layer.fieldHelp });
+    const rows = c.facts.map((r) => `${r.label}: ${r.value}`);
+    expect(rows).toEqual(
+      expect.arrayContaining(["IMBA color: Blue square, intermediate (IMBA 2)", "Singletrack Scale: S3, hard: blocks, high steps, switchbacks, slippery sections."]),
+    );
+    expect([...c.facts, ...c.details].map((r) => r.key)).not.toContain("level");
+  });
+
+  it("says in the note how many lines a difficulty filter leaves out, and tells the model which key each word filters", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(sedona), { status: 200 }));
+    const r = await layer.query({ ...ctx(stub), bbox: [-111.95, 34.75, -111.65, 34.95] }, DEFAULTS);
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features.filter((f) => !Array.isArray(f.properties?.level)).map((f) => f.properties?.name)).toEqual(["Flagstaff Sedona MTB Trail"]);
+    expect(r.coverageNote).toContain("1 line is a named route with no difficulty of its own, which a difficulty filter (v, level) leaves out");
+    expect(layer.description).toContain("a trail color is render.filters v (blue = [2]");
+    expect(layer.description).toContain("'intermediate' is v = [2], or level = intermediate");
   });
 });

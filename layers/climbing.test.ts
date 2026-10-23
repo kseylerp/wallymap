@@ -14,9 +14,15 @@ import layer, {
   osmCrags,
   osmGradeSummary,
   osmRouteCount,
+  styleLine,
+  styleSummaries,
 } from "./climbing";
 import { legendOf } from "./contract";
 import { cardContent } from "@/lib/render/card";
+import { applyFilters } from "@/lib/render/filters";
+import { attributeGroups } from "@/lib/render/attributes";
+import redRock from "./__fixtures__/climbing.redrock.openbeta.json";
+import bishop from "./__fixtures__/climbing.bishop.openbeta.json";
 import osmFixture from "./__fixtures__/climbing.rrg.osm.json";
 import openbetaFixture from "./__fixtures__/climbing.rrg.openbeta.json";
 
@@ -63,6 +69,9 @@ describe("requests", () => {
     expect(body.variables).toEqual({ f: { bbox: [-83.7, 37.75, -83.55, 37.85], zoom: 12 } });
     expect(body.query).toContain("cragsWithin(filter:$f)");
     expect(body.query).toContain("totalClimbs");
+    // Each route's grade and style, for the grades per style.
+    expect(body.query).toContain("climbs{ grades{ yds french vscale } type{ sport trad bouldering tr } }");
+    expect(JSON.parse(openbetaBody(RRG, false)).query).not.toContain("climbs");
   });
 });
 
@@ -250,8 +259,8 @@ describe("climbing layer", () => {
     const op = calls.find(([u]) => u === "https://overpass-api.de/api/interpreter");
     expect(ob?.[1].method).toBe("POST");
     // The tile, not the box: -84 to -83.5 east, 37.5 to 38 north.
-    expect(ob?.[1].cacheKey).toBe("climbing:tile:v1:0.5:-168:75:openbeta");
-    expect(op?.[1].cacheKey).toBe("climbing:tile:v1:0.5:-168:75:osm");
+    expect(ob?.[1].cacheKey).toBe("climbing:tile:v2:0.5:-168:75:openbeta");
+    expect(op?.[1].cacheKey).toBe("climbing:tile:v2:0.5:-168:75:osm");
     expect(ob?.[1].ttlSeconds).toBe(86_400);
     expect(JSON.parse(ob![1].body).variables).toEqual({ f: { bbox: [-84, 37.5, -83.5, 38], zoom: 12 } });
     expect(decodeURIComponent(op![1].body)).toContain("(37.5,-84,38,-83.5)");
@@ -357,8 +366,12 @@ describe("climbing layer", () => {
       expect(res.body.total).toBe(1501);
       expect(res.body.truncated).toBe(true);
       expect(res.body.coverageNote).toBe(
-        "Showing the 1,000 largest of 1,501 (ranked by route count); zoom in under 10,000 km² for all; Returned 1,000 climbing places (1 from OpenStreetMap, 1,500 from OpenBeta)",
+        "Showing the 1,000 largest of 1,501 (ranked by route count); zoom in under 10,000 km² for all; Returned 1,000 climbing places (1 from OpenStreetMap, 1,500 from OpenBeta)" +
+          ". The view is too large for OpenBeta's route lists, so its crags carry no grades per style (sportBands, tradBands, boulderBands); zoom in to filter by them",
       );
+      // 2° tiles ask OpenBeta for its crags without their route lists (megabytes and past the timeout there).
+      const bodies = (stub.mock.calls as unknown as [string, { body: string }][]).filter(([u]) => u.includes("openbeta")).map(([, init]) => JSON.parse(init.body).query as string);
+      expect(bodies.every((q) => !q.includes("climbs"))).toBe(true);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -378,13 +391,13 @@ describe("climbing layer", () => {
 describe("tiles", () => {
   it("covers Red River Gorge with one 0.5° tile and a box over six fine tiles with 2° tiles", () => {
     expect(climbingTiles([-83.75, 37.73, -83.55, 37.88])).toEqual([
-      { key: "climbing:tile:v1:0.5:-168:75", bbox: [-84, 37.5, -83.5, 38] },
+      { key: "climbing:tile:v2:0.5:-168:75", bbox: [-84, 37.5, -83.5, 38] },
     ]);
     expect(climbingTiles([-83.6, 37.8, -83.4, 37.9]).map((t) => t.bbox)).toEqual([
       [-84, 37.5, -83.5, 38],
       [-83.5, 37.5, -83, 38],
     ]);
-    expect(climbingTiles([-85, 36.2, -83, 38]).map((t) => t.key)).toEqual(["climbing:tile:v1:2:-43:18", "climbing:tile:v1:2:-42:18"]);
+    expect(climbingTiles([-85, 36.2, -83, 38]).map((t) => t.key)).toEqual(["climbing:tile:v2:2:-43:18", "climbing:tile:v2:2:-42:18"]);
   });
 });
 
@@ -566,5 +579,107 @@ describe("climbing contract and card", () => {
     const keys = [...card.facts, ...card.details].map((r) => r.key);
     for (const plumbing of ["osmId", "openbetaId", "routesOsm", "routesOpenbeta", "routeCounts"]) expect(keys).not.toContain(plumbing);
     expect(card.links.map((l) => l.label)).toContain("Open on OpenBeta");
+  });
+});
+
+describe("grades per style (UC06 beginner sport at Red Rock, UC07 bouldering near Bishop)", () => {
+  // Recorded 2026-10-23 from OpenBeta's cragsWithin with each route's grade and style, trimmed to a few crags.
+  const fc = (body: unknown) => ({
+    type: "FeatureCollection" as const,
+    features: (openbetaCrags(body) ?? []).map((c) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: c.position }, properties: c.props })),
+  });
+  const names = (x: { features: { properties: Record<string, unknown> | null }[] }) => x.features.map((f) => f.properties?.name).sort();
+  const rr = fc(redRock);
+  const card = (data: ReturnType<typeof fc>, name: string) => {
+    const f = data.features.find((x) => x.properties.name === name);
+    if (!f) throw new Error(`expected ${name}`);
+    return cardContent(f, { card: layer.card, fieldHelp: layer.fieldHelp });
+  };
+
+  it("bands each route in its own style: Winter Heat Wall has easy trad but only 5.10d sport", () => {
+    const whw = rr.features.find((f) => f.properties.name === "Winter Heat Wall")!.properties;
+    expect(whw.disciplines).toEqual(["sport", "trad"]);
+    expect(whw.gradeBands).toContain("beginner");
+    expect(whw.sportBands).toEqual(["intermediate"]);
+    expect(whw.tradBands).toEqual(["beginner", "intermediate", "advanced", "elite"]);
+    expect(whw).toMatchObject({ sportIntermediate: 2, tradBeginner: 2, tradElite: 1 });
+    expect(whw.sportBeginner).toBeUndefined();
+  });
+
+  it("filters 'beginner sport' on sportBands, so every drawn crag has a beginner sport route, where disciplines plus gradeBands let the decoy through", () => {
+    const old = applyFilters(rr, { disciplines: { include: ["sport"] }, gradeBands: { include: ["beginner"] } });
+    expect(names(old)).toContain("Winter Heat Wall");
+    const kept = applyFilters(rr, { sportBands: { include: ["beginner"] } });
+    expect(names(kept)).toEqual(["Amusement Park", "Child's Play Wall", "Panty Wall"]);
+    expect(kept.features.every((f) => Number(f.properties?.sportBeginner) > 0)).toBe(true);
+  });
+
+  it("writes each style's routes per band with their grade spread on the card, and keeps the counts off it", () => {
+    const c = card(rr, "Child's Play Wall");
+    const rows = c.facts.map((r) => `${r.label}: ${r.value}`);
+    expect(rows).toEqual(expect.arrayContaining(["Sport: 6 routes: 5 beginner 5.6 to 5.7 · 1 intermediate 5.8", "Trad: 1 route: 1 beginner 5.5"]));
+    const keys = [...c.facts, ...c.details].map((r) => r.key);
+    for (const hidden of ["sportBeginner", "sportBands", "tradBands"]) expect(keys).not.toContain(hidden);
+    expect(card(rr, "Panty Wall").facts.find((r) => r.label === "Boulder problems")?.value).toBe("1 problem, none graded");
+  });
+
+  it("offers boulder bands on the V-scale and keeps sport walls out of a bouldering filter near Bishop", () => {
+    const b = fc(bishop);
+    const attr = layer.attributes?.find((a) => a.key === "boulderBands");
+    if (!attr) throw new Error("expected boulderBands");
+    expect(attributeGroups(attr, b).map((g) => `${g.label} ${g.count}`)).toEqual(["V0 to V2 2", "V3 to V5 2", "V6 to V9 1", "V10 and up 1"]);
+    expect(names(applyFilters(b, { disciplines: { include: ["boulder"] } }))).toEqual(["Ice Caves", "Top Gun Boulders"]);
+    expect(card(b, "Top Gun Boulders").facts.find((r) => r.label === "Boulder problems")?.value).toBe(
+      "15 problems: 11 beginner V0+ to V2 · 4 intermediate V3 to V4",
+    );
+    expect(layer.attributes?.find((a) => a.key === "boulder")).toMatchObject({ type: "measure", label: "Boulder problems" });
+  });
+
+  it("summarises a style from its routes: French when no YDS, the V-scale for boulders, ungraded counted apart", () => {
+    const s = styleSummaries([
+      { grades: { french: "6a" }, type: { sport: true } },
+      { grades: { french: "5b" }, type: { sport: true } },
+      { grades: null, type: { sport: true } },
+      { grades: { vscale: "v4" }, type: { bouldering: true } },
+    ]);
+    expect(s.sport && styleLine("sport", s.sport)).toBe("3 routes: 1 beginner 5b · 1 intermediate 6a · 1 ungraded");
+    expect(s.boulder && styleLine("boulder", s.boulder)).toBe("1 problem: 1 intermediate V4");
+    expect(s.trad).toBeUndefined();
+  });
+
+  it("reads an OpenStreetMap crag mapped with one style as that style's grades, and lets OpenBeta's routes replace it on a merge", () => {
+    const tags = (extra: Record<string, string>) => ({ elements: [{ type: "node", id: 1, lat: 36.15, lon: -115.43, tags: { sport: "climbing", climbing: "crag", name: "Panty Wall", "climbing:grade:yds_class:min": "5.6", "climbing:grade:yds_class:max": "5.9", ...extra } }] });
+    const [single] = osmCrags(tags({ "climbing:sport": "yes" }), false);
+    expect(single.props.sportBands).toEqual(["beginner", "intermediate"]);
+    const [mixed] = osmCrags(tags({ "climbing:sport": "yes", "climbing:trad": "yes" }), false);
+    expect(mixed.props.sportBands).toBeUndefined();
+    const ob = (openbetaCrags(redRock) ?? []).filter((c) => c.props.name === "Panty Wall");
+    const [merged] = mergeCrags([single], ob).crags;
+    expect(merged.props.sportBands).toEqual(["beginner", "intermediate", "advanced"]);
+    expect(merged.props.sportGrades).toMatch(/^16 routes: 3 beginner 5\.6 to 5\.7/);
+  });
+
+  it("answers a fine-tile query with the grades per style on the features", async () => {
+    const stub = reply({ elements: [] }, redRock);
+    const r = geojson(await layer.query({ ...ctx(stub), bbox: [-115.55, 36.05, -115.4, 36.2] }, DEFAULTS));
+    expect(r.data.features.filter((f) => (f.properties?.sportBands as string[] | undefined)?.includes("beginner")).length).toBe(3);
+    expect(r.coverageNote).not.toContain("too large");
+  });
+
+  it("asks again without the route lists when they time out, caches that apart, and says which filters lose those crags", async () => {
+    const calls: { body: string; cacheKey?: string }[] = [];
+    const stub = vi.fn(async (url: string, init: RequestInit & { cacheKey?: string }) => {
+      if (!url.includes("openbeta")) return new Response(JSON.stringify({ elements: [] }), { status: 200 });
+      calls.push({ body: String(init.body), cacheKey: init.cacheKey });
+      if (String(init.body).includes("climbs")) throw Object.assign(new Error("timed out"), { name: "TimeoutError" });
+      return new Response(JSON.stringify(openbetaFixture), { status: 200 });
+    });
+    const r = geojson(await layer.query(ctx(stub), DEFAULTS));
+    expect(calls.map((c) => [c.body.includes("climbs"), c.cacheKey])).toEqual([
+      [true, "climbing:tile:v2:0.5:-168:75:openbeta"],
+      [false, "climbing:tile:v2:0.5:-168:75:openbeta:plain"],
+    ]);
+    expect(r.data.features.some((f) => f.properties?.source === "openbeta")).toBe(true);
+    expect(r.coverageNote).toContain("OpenBeta's route lists did not come in time for part of the area");
   });
 });

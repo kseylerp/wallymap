@@ -235,6 +235,12 @@ describe("duplicates", () => {
     // Two OSM walls 680 m apart at Red River Gorge, both with route counts so Rank by lists them.
     const walls = [point(-83.68, 37.78, { name: "Board Wall", kind: "crag", source: "osm", osmId: "node/5", v: 40 }), point(-83.6723, 37.78, { name: "Board Wall", kind: "crag", source: "osm", osmId: "way/6", v: 30 })];
     expect(checkDuplicates(drawn(mapWith({ id: "climbing", features: walls })))).toMatchObject({ ok: true, failures: [] });
+    // Two lakes of one group (Sauerkraut Lakes, Wind River Range) 684 m apart, each known only by its OSM link.
+    const lakes = [
+      point(-109.73, 43.11, { name: "Sauerkraut Lakes", kind: "lake", osmUrl: "https://www.openstreetmap.org/way/360195690" }),
+      point(-109.7216, 43.11, { name: "Sauerkraut Lakes", kind: "lake", osmUrl: "https://www.openstreetmap.org/way/360195689" }),
+    ];
+    expect(checkDuplicates(drawn(mapWith({ id: "lakes", features: lakes })))).toMatchObject({ ok: true, failures: [] });
   });
 
   it("fails one name within 1 km from two sources, from one source without OSM ids, or as two OSM objects under 300 m apart", () => {

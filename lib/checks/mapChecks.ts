@@ -390,7 +390,9 @@ function sourceOf(feature: Feature): string | null {
 /** The OpenStreetMap objects a feature stands for ("node/7314110512"): its `osmId` and any merged `osmIds`. */
 function osmIdsOf(feature: Feature): string[] {
   const p = feature.properties ?? {};
-  const ids = [p.osmId, ...(Array.isArray(p.osmIds) ? p.osmIds : [])].filter((id): id is string | number => (typeof id === "string" && id !== "") || typeof id === "number");
+  // A layer that keeps only the object's link (lakes: "https://www.openstreetmap.org/way/358653308") names it there.
+  const fromUrl = typeof p.osmUrl === "string" ? /openstreetmap\.org\/((?:node|way|relation)\/\d+)/.exec(p.osmUrl)?.[1] : undefined;
+  const ids = [p.osmId, ...(Array.isArray(p.osmIds) ? p.osmIds : []), fromUrl].filter((id): id is string | number => (typeof id === "string" && id !== "") || typeof id === "number");
   return ids.map(String);
 }
 

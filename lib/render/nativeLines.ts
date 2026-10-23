@@ -409,7 +409,8 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
   const encoded = entry.look.kind === "encoded" && entry.look.size !== undefined;
   const facet = entry.look.kind === "facet" ? entry.look : undefined;
   const imagery = entry.imagery === true;
-  const fade = encoded ? ENCODED_SIBLING_FADE : SIBLING_FADE;
+  // A network colored by a category (trail difficulty) is the picture too: at SIBLING_FADE Sedona's trails vanished on Topo.
+  const fade = encoded || entry.look.kind === "facet" ? ENCODED_SIBLING_FADE : SIBLING_FADE;
   const baseCasing: number | ExpressionSpecification = encoded
     ? encodedLineWidth(0, true, imagery)
     : routed

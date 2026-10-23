@@ -518,6 +518,15 @@ describe("the encoded ordinal drives the line color (spec §12c: difficulty on t
     expect(paint(byPart(lineLayerSpecs(entry), "dash"))["line-color"]).toBe(DARK_GREY);
   });
 
+  it("fades a facet's other trails only to 75% while one is selected, so the colored network stays on Topo", () => {
+    const sac = [{ key: "sac_scale", type: "ordinal" as const, label: "Difficulty", encode: "color" as const, levels: [{ value: "hiking", label: "Hiking (T1)" }, { value: "mountain_hiking", label: "Mountain hiking (T2)" }] }];
+    const paths = [line(-120, { sac_scale: "hiking" }), line(-119, { sac_scale: "mountain_hiking" })];
+    const [entry] = lineEntries(visibleState(stateOf("osm-trails", paths, {}, {}, sac)));
+    expect(entry.look.kind).toBe("facet");
+    const opacity = paint(byPart(lineLayerSpecs({ ...entry, selected: 0 }), "core"))["line-opacity"];
+    expect(JSON.stringify(opacity)).toContain("0.75");
+  });
+
   it("draws named routes on the route gradient under a facet too (wide-scale hiking routes drew plain sage)", () => {
     const sac: LoadedLayer["attributes"] = [{ key: "sac_scale", type: "ordinal", label: "Difficulty", encode: "color", levels: [{ value: "mountain_hiking", label: "T2" }] }];
     const [entry] = lineEntries(visibleState(stateOf("osm-trails", [line(-120, { kind: "route", name: "Tahoe Rim Trail" }), line(-119, {})], {}, {}, sac)));

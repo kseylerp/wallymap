@@ -52,7 +52,6 @@ export const CombineInputSchema = z.object({
   unit: z.enum(UNITS).default("km"),
   minutes: z.number().positive().max(MAX_DRIVE_MINUTES).optional().describe("drive_time: minutes of driving"),
   from: z.union([z.string().min(1), z.tuple([z.number(), z.number()])]).optional().describe("drive_time: the start, a place name or [lon, lat]; default the place geocoded this turn"),
-  title: z.string().max(90).optional().describe("A short name for the new layer; written for you when left out"),
 });
 export type CombineInput = z.infer<typeof CombineInputSchema>;
 
@@ -128,13 +127,35 @@ function lowerFirst(text: string): string {
   return /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 }
 
-/** B's name in a sentence: "the Wonderland Trail" for a named route, else the layer's title in lower case. */
-function otherName(side: { match?: string } | undefined, layer: Layer | undefined): string {
+function pluralWord(word: string): string {
+  const w = word.replace(/_/g, " ").trim();
+  return /(s|water|habitat)$/i.test(w) ? w : `${w}s`;
+}
+
+/**
+ * A side's noun from what was asked of it: kinds waterfall are "Waterfalls", species desert tortoise is "Desert tortoise
+ * critical habitat", else the layer's own noun.
+ */
+export function sideNoun(layer: Pick<Layer, "id" | "title">, input: Record<string, unknown> = {}): string {
+  const noun = layerNoun(layer);
+  const kinds = (Array.isArray(input.kinds) ? input.kinds : typeof input.kinds === "string" ? [input.kinds] : []).filter((k): k is string => typeof k === "string");
+  if (kinds.length > 0 && kinds.length <= 3) {
+    const words = kinds.map(pluralWord);
+    const text = words.length === 1 ? words[0] : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+  const species = [input.species, input.taxon, input.commonName].find((v): v is string => typeof v === "string" && v.trim() !== "");
+  if (species) return `${species.charAt(0).toUpperCase()}${species.slice(1)} ${lowerFirst(noun)}`;
+  return noun;
+}
+
+/** B's name in a sentence: "the Wonderland Trail" for a named route, else its noun in lower case. */
+function otherName(side: { match?: string } | undefined, b: Side): string {
   if (side?.match) {
     const m = side.match.trim();
     return /^the\s/i.test(m) || !/\b(trail|road|river|creek|route|way|canyon|crest|loop|path|highway|byway)$/i.test(m) ? m : `the ${m}`;
   }
-  return layer ? lowerFirst(layerNoun(layer)) : "the second layer";
+  return lowerFirst(sideNoun(b.layer, b.input));
 }
 
 /** How A relates to B, after A's name: "within 1 km of the Wonderland Trail", "overlapping critical habitat". */
@@ -214,7 +235,7 @@ function joinFields(op: CombineOp, aKind: GeometryKind, bName: string): { facts:
   return { facts: op === "outside" ? [] : [{ key: "inside", label: "Inside" }], attributes: [] };
 }
 
-type Side = { layer: Layer; features: Feature[]; citation: Citation; bbox: BBox };
+type Side = { layer: Layer; features: Feature[]; citation: Citation; bbox: BBox; input: Record<string, unknown> };
 
 /** The features of one side: the latest successful query of its layer this turn, asked again (from the cache), filtered. */
 async function sideOf(side: z.infer<typeof SideSchema>, turn: Turn, view: MapView | null): Promise<Side | CombineError> {
@@ -233,7 +254,7 @@ async function sideOf(side: z.infer<typeof SideSchema>, turn: Turn, view: MapVie
   const filters: LayerFilters = { ...(side.filters ?? {}) };
   if (side.match) filters.name = { ...filters.name, match: side.match };
   const kept = applyFilters(body.data, filters).features;
-  return { layer, features: kept, citation: body.citation, bbox };
+  return { layer, features: kept, citation: body.citation, bbox, input };
 }
 
 /** Runs the combine tool. Never throws: problems come back as { error } for the model to read. */
@@ -271,7 +292,7 @@ export async function runCombine(input: CombineInput, turn: Turn, view: MapView 
     if ("error" in other) return other;
     b = other;
     bFeatures = other.features;
-    bName = otherName(input.b, other.layer);
+    bName = otherName(input.b, other);
     otherCitation = other.citation;
     if (input.b.match && bFeatures.length === 0) return { error: `No feature of ${other.layer.id} is named like "${input.b.match}" in the box it answered; query it where that feature is.` };
   }
@@ -281,9 +302,9 @@ export async function runCombine(input: CombineInput, turn: Turn, view: MapView 
   if (problem) return { error: problem };
   const distanceM = (input.distance ?? 1) * TO_M[input.unit ?? "km"];
   const outcome = combineFeatures({ op: input.op, a: a.features, b: bFeatures, distanceM });
-  const aTitle = layerNoun(a.layer);
+  const aTitle = sideNoun(a.layer, a.input);
   const relation = relationText(input.op, bName, input, fromName);
-  const title = input.title?.trim() || `${aTitle} ${relation}`;
+  const title = `${aTitle} ${relation}`;
   const statement = statementOf(relation, input.op, outcome, aTitle, aKind!);
   const id = `${COMBINED_PREFIX}${SLUG(`${a.layer.id}-${input.op}-${input.op === "drive_time" ? `${input.minutes ?? 30}min-${fromName}` : bName}`)}`;
   const fields = joinFields(input.op, aKind!, bName);
@@ -349,7 +370,7 @@ export function combineOutputForModel(output: unknown): JSONValue {
     totals: r.combined.totals,
     top,
     ...(r.combined.caveat && { caveat: r.combined.caveat }),
-    drawn: `Drawn as its own layer "${r.title}" (no render call needed); the source layer ${r.combined.sourceLayerId} is hidden under it. Quote the statement's numbers in the note.`,
+    drawn: `Drawn as its own layer "${r.title}", id ${r.combined.id}: no render call is needed (to restyle or filter it, render layerId "${r.combined.id}"); the source layer ${r.combined.sourceLayerId} is hidden under it. Quote the statement's numbers in the note.`,
   } as JSONValue;
 }
 

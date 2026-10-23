@@ -152,6 +152,25 @@ describe("the combine tool on the turn and the map", () => {
     expect(state.renderOps.find((o) => o.layerId === "campsites")?.visible).toBe(false);
   });
 
+  it("names a side by what was asked of it", async () => {
+    const { sideNoun } = await import("./tool");
+    const features = { id: "outdoor-features", title: "Huts, springs, peaks and other backcountry features" };
+    expect(sideNoun(features, { kinds: ["waterfall"] })).toBe("Waterfalls");
+    expect(sideNoun(features, { kinds: ["spring", "drinking_water"] })).toBe("Springs and drinking water");
+    expect(sideNoun({ id: "critical-habitat", title: "Critical habitat" }, { species: "desert tortoise" })).toBe("Desert tortoise critical habitat");
+    expect(sideNoun({ id: "campsites", title: "Campsites and parking lots" })).toBe("Campsites");
+  });
+
+  it("reads a render of \"combine\" as the combined layer drawn last", () => {
+    const ops = [
+      { layerId: "campsites", mode: "points" as const, visible: false },
+      { layerId: "combine:campsites-along-the-wonderland-trail", mode: "points" as const, visible: true },
+    ];
+    const actions = toolResultToActions("render", {}, { layerId: "combine", view: "ranked" }, { width: 1, height: 1 }, {}, ops);
+    expect(actions[0]).toMatchObject({ type: "render", op: { layerId: "combine:campsites-along-the-wonderland-trail", view: "ranked" } });
+    expect(toolResultToActions("render", {}, { layerId: "combine" }, { width: 1, height: 1 }, {}, [])).toEqual([]);
+  });
+
   it("maps an error or junk to no map actions", () => {
     expect(toolResultToActions("combine", {}, { error: "x" }, { width: 1, height: 1 }, {})).toEqual([]);
     expect(toolResultToActions("combine", {}, { kind: "geojson", data: {}, combined: { id: "not-prefixed" } }, { width: 1, height: 1 }, {})).toEqual([]);

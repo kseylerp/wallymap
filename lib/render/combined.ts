@@ -14,6 +14,11 @@ export function isCombinedId(id: string): boolean {
   return id.startsWith(COMBINED_PREFIX);
 }
 
+/** The combined layer drawn last, for a render call that names the tool ("combine") instead of the layer's id. */
+export function latestCombinedId(ops: RenderOp[]): string | undefined {
+  return ops.findLast((op) => isCombinedId(op.layerId))?.layerId;
+}
+
 /** What the browser needs of the source layer's catalog entry. */
 type SourceEntry = {
   card?: CardSpec;

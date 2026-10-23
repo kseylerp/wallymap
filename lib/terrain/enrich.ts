@@ -151,7 +151,6 @@ function enrichPoint(f: Feature, dem: Dem, path: ReturnType<typeof sunPath>): Fe
   // Under about 15° nothing nearby is steep enough to be the wall: no face is claimed (a boulder field on a bench).
   if (sa.slope >= 15 && !Number.isNaN(sa.aspect)) {
     props.aspect = compass8(sa.aspect);
-    props.aspectDeg = Math.round(sa.aspect);
     props.afternoonShade = shadedThrough(90, sa.aspect, path);
   }
   return { ...f, properties: { ...f.properties, ...props } };
@@ -164,6 +163,27 @@ function enrichLine(f: Feature, dem: Dem, slope: boolean): Feature {
     ...f,
     properties: { ...f.properties, gainM: profile.gainM, lossM: profile.lossM, highM: profile.maxM, ...(slope && { maxSlopeDeg: profile.maxSlopeDeg }) },
   };
+}
+
+/**
+ * The properties to filter or rank by and the top features by them, in the coverage note the model reads: "(gainM
+ * and lossM in metres: rank by gainM or filter its range; most climb: Saddle Rock Trail 420 m, ...)".
+ */
+function terrainHint(features: Feature[], spec: Spec): string {
+  const named = features.filter((f) => typeof f.properties?.name === "string");
+  if (spec.kind === "point") {
+    const shaded = features.filter((f) => f.properties?.afternoonShade === true).length;
+    return ` (aspect N to NW and afternoonShade true or false: filter on them; ${shaded} face away from the afternoon sun today)`;
+  }
+  const key = spec.slope ? "maxSlopeDeg" : "gainM";
+  const top = named
+    .filter((f) => typeof f.properties?.[key] === "number")
+    .sort((x, y) => (y.properties![key] as number) - (x.properties![key] as number))
+    .filter((f, i, all) => all.findIndex((g) => g.properties?.name === f.properties?.name) === i)
+    .slice(0, 3)
+    .map((f) => `${f.properties!.name} ${f.properties![key]}${spec.slope ? "°" : " m"}`);
+  const keys = spec.slope ? "gainM and lossM in metres and maxSlopeDeg in degrees" : "gainM and lossM in metres";
+  return ` (${keys}: rank by ${key} or filter its range${top.length > 0 ? `; most ${spec.slope ? "steep" : "climb"}: ${top.join(", ")}` : ""})`;
 }
 
 function withNote<R extends LayerResult>(result: R, clause: string): R {
@@ -194,7 +214,7 @@ export async function enrichWithTerrain<R extends LayerResult | LayerError>(
     const enriched = features.map((f) => (spec.kind === "point" ? enrichPoint(f, dem, path) : enrichLine(f, dem, spec.slope === true)));
     const done = enriched.filter((f, i) => f !== features[i]).length;
     const what = spec.kind === "point" ? "Aspect, slope and afternoon shade" : spec.slope ? "Climb, descent and steepest ground" : "Climb and descent";
-    const clause = `${what} for ${done} of ${features.length} from AWS Terrain Tiles at about ${Math.round(metresPerPixel(lat, z))} m`;
+    const clause = `${what} for ${done} of ${features.length} from AWS Terrain Tiles at about ${Math.round(metresPerPixel(lat, z))} m${terrainHint(enriched, spec)}`;
     return { ...withNote(result, clause), data: { ...result.data, features: enriched } } as R;
   };
   const timeout = new Promise<R>((resolve) =>

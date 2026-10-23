@@ -173,6 +173,21 @@ describe("the combine tool on the turn and the map", () => {
     expect(state.renderOps.find((o) => o.layerId === "campsites")?.visible).toBe(false);
   });
 
+  it("dims the areas tested against under a join of areas, and a later render keeps them dimmed", async () => {
+    const turn = turnWithQueries("grazing-allotments", "critical-habitat");
+    const input = { op: "overlap" as const, a: { layerId: "grazing-allotments" }, b: { layerId: "critical-habitat" }, unit: "km" as const };
+    const output = await combineTool({ turn, view: null }).execute!(input, { toolCallId: "c2", messages: [] } as never);
+    let state = initialMapState;
+    for (const id of ["grazing-allotments", "critical-habitat"]) {
+      state = reduce(state, { type: "layer_loaded", layer: { id, title: id, style: { geometry: "polygon", color: "#3A3A3C" }, result: answers.get(id)!, receivedAt: "" } });
+      state = reduce(state, { type: "render", op: { layerId: id, mode: "polygons", visible: true } });
+    }
+    for (const action of toolResultToActions("combine", input, output, { width: 1000, height: 800 }, {}, state.renderOps)) state = reduce(state, action);
+    state = reduce(state, { type: "render", op: { layerId: "critical-habitat", mode: "polygons", visible: true } });
+    expect(state.renderOps.find((o) => o.layerId === "critical-habitat")).toMatchObject({ visible: true, opacity: 0.4 });
+    expect(state.renderOps.find((o) => o.layerId === "grazing-allotments")?.visible).toBe(false);
+  });
+
   it("names a side by what was asked of it", async () => {
     const { sideNoun } = await import("./tool");
     const features = { id: "outdoor-features", title: "Huts, springs, peaks and other backcountry features" };

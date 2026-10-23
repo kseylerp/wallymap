@@ -29,6 +29,9 @@ type SourceEntry = {
   labels?: LoadedLayer["labels"];
 };
 
+/** The opacity the other side of a join is dimmed to under a combined layer of areas. */
+const OTHER_OPACITY = 0.4;
+
 const MODE: Record<StyleHints["geometry"], RenderMode> = { point: "points", line: "lines", polygon: "polygons" };
 
 type Obj = Record<string, unknown>;
@@ -71,5 +74,9 @@ export function combinedActions(output: unknown, source: (id: string) => SourceE
   // The source layer stays loaded (its row can show it again) but is hidden under the kept features.
   const shown = existingOps.find((op) => op.layerId === c.sourceLayerId && op.visible);
   if (shown) actions.push({ type: "render", op: { ...shown, visible: false } });
+  // The layer they were tested against stays as context, dimmed, so the kept areas stand out on it (wild horse herds
+  // in drought: the herds' hatching on the drought fill at full strength could not be told apart).
+  const other = typeof c.otherLayerId === "string" ? existingOps.find((op) => op.layerId === c.otherLayerId && op.visible) : undefined;
+  if (other && style.geometry === "polygon" && (other.opacity ?? 1) > OTHER_OPACITY) actions.push({ type: "render", op: { ...other, opacity: OTHER_OPACITY } });
   return actions;
 }

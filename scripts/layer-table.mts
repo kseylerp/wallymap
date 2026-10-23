@@ -21,6 +21,7 @@ const META: Record<string, { shows: string; source: string; freshness: string; c
   "fire-perimeters": { shows: "Current and past US wildfire outlines", source: "NIFC (WFIGS)", freshness: "Updated through the fire season" },
   "fire-detections": { shows: "Satellite hotspots from the last 1 to 10 days", source: "NASA FIRMS", freshness: "Near real time (hours)" },
   "forest-loss": { shows: "Where tree cover was lost, by year", source: "UMD / Global Forest Watch", freshness: "Yearly" },
+  "forest-types": { shows: "Primary, regenerating and planted forest, plantations, tree crops; natural forest converted since a year", source: "ForTy (Google DeepMind, WRI, IIASA) via Earth Engine", freshness: "2020 baseline; yearly beta 2017–2025" },
   "forest-alerts": { shows: "Recent forest clearing in the tropics", source: "Global Forest Watch (GLAD, RADD)", freshness: "Weekly", coverage: "Tropics (30°S to 30°N)" },
   snowpack: { shows: "Snow depth, water equivalent, density and snow type at mountain weather stations", source: "USDA NRCS SNOTEL", freshness: "Live (hourly readings)", coverage: "Western US" },
   "forest-roads": { shows: "Forest Service roads open to motor vehicles", source: "USDA Forest Service MVUM", freshness: "Yearly" },

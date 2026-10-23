@@ -1,0 +1,59 @@
+{
+  "recorded": "2026-10-23",
+  "note": "Live Earth Engine answers (value:compute results) recorded with scripts run once; no credentials. Boxes: Danum/Sabah [117.6,4.8,118,5.1], Central Kalimantan [113,-2,114,-1].",
+  "pointDanumBaseline": {
+    "naturallyRegenerating": 0,
+    "other": 2,
+    "plantation": 0,
+    "planted": 0,
+    "primary": 248,
+    "treeCrops": 0
+  },
+  "pointSabah2025": {
+    "naturallyRegenerating": 5,
+    "other": 3,
+    "plantation": 5,
+    "planted": 5,
+    "primary": 5,
+    "treeCrops": 222
+  },
+  "pointSabah2017": {
+    "naturallyRegenerating": 5,
+    "other": 25,
+    "plantation": 5,
+    "planted": 5,
+    "primary": 5,
+    "treeCrops": 200
+  },
+  "pointSea": {
+    "naturallyRegenerating": null,
+    "other": null,
+    "plantation": null,
+    "planted": null,
+    "primary": null,
+    "treeCrops": null
+  },
+  "sharesSabahAll": {
+    "class": {
+      "1": 63202.054901960495,
+      "2": 3208.6980392156825,
+      "5": 1163.694117647059,
+      "6": 307.26666666666665
+    }
+  },
+  "sharesSabahConfident": {
+    "class": {
+      "0": 1826.9058823529413,
+      "1": 62256.745098038955,
+      "2": 2458.7333333333313,
+      "5": 1101.2470588235296,
+      "6": 238.08235294117645
+    }
+  },
+  "areasKalimantanSince2017": {
+    "standing": 8350.197368958978,
+    "toOther": 732.2762923573086,
+    "toPlantation": 0.16732471249997616,
+    "toTreeCrops": 175.9473577357244
+  }
+}

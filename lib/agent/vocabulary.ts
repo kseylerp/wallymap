@@ -16,6 +16,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "fire-perimeters", synonyms: ["wildfire", "fire", "burn", "burned area"], notes: "fire outlines; also query fire-detections", gist: "current and past wildfire outlines with acres and year" },
   { layerId: "fire-detections", synonyms: ["active fire", "hotspot"], notes: "satellite heat sources from recent days, not smoke", gist: "satellite fire hotspots from the last few days" },
   { layerId: "forest-loss", synonyms: ["deforestation", "logging", "clearcut", "tree loss"], notes: "yearly loss; also query forest-alerts", gist: "where tree cover was lost, year by year" },
+  { layerId: "forest-types", synonyms: ["primary forest", "plantation", "oil palm", "natural forest", "forest type"], notes: "ForTy classes 2020; convertedSince for natural forest converted since 2017", gist: "primary or regenerating forest, plantations and tree crops" },
   { layerId: "forest-alerts", synonyms: ["recent clearing", "new deforestation"], notes: "recent weekly alerts", gist: "weekly alerts of new forest clearing in the tropics" },
   { layerId: "snowpack", synonyms: ["snow", "snowpack", "SWE", "powder"], notes: "station snow depth v, SWE, density and type; not avalanche danger", gist: "live snow depth and new snow at mountain stations" },
   { layerId: "river-pulse", synonyms: ["river pulse", "flow changed", "discharge over", "river network"], notes: "a whole network's daily modelled flow, past 3 months and the forecast; for live gauge readings use streamflow", gist: "daily flow of a whole river network, played" },

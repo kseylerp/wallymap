@@ -42,6 +42,8 @@ const TEN_MINUTES_MS = 10 * MINUTE_MS;
 export const DEFAULT_CHAT_LIMIT = 20;
 export const DEFAULT_LAYER_LIMIT = 120;
 export const DEFAULT_CHAT_DAILY_LIMIT = 500;
+/** Earth Engine tiles per caller per 10 minutes: a full-screen map at one zoom is 20 to 40 tiles, and the CDN serves repeats. */
+export const DEFAULT_EE_TILE_LIMIT = 1500;
 
 /** A non-negative integer from the env, or the fallback when unset or not a valid count. */
 function envCount(name: string, fallback: number): number {
@@ -62,6 +64,11 @@ export function chatRules(): RateLimitRule[] {
 /** RATE_LIMIT_LAYER per caller per 10 minutes. */
 export function layerRules(): RateLimitRule[] {
   return [{ name: "layer", limit: envCount("RATE_LIMIT_LAYER", DEFAULT_LAYER_LIMIT), scope: "client", windowMs: TEN_MINUTES_MS }];
+}
+
+/** RATE_LIMIT_EE_TILES Earth Engine tiles per caller per 10 minutes (only CDN misses reach the function). */
+export function eeTileRules(): RateLimitRule[] {
+  return [{ name: "ee-tiles", limit: envCount("RATE_LIMIT_EE_TILES", DEFAULT_EE_TILE_LIMIT), scope: "client", windowMs: TEN_MINUTES_MS }];
 }
 
 /**

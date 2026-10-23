@@ -74,6 +74,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "popularity-campsites": "score",
   remoteness: "score",
   "forest-loss": "raster",
+  "forest-types": "raster",
   population: "raster",
   "night-lights": "raster",
   surf: "data",

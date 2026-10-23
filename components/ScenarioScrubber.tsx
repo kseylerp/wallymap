@@ -128,7 +128,7 @@ export function ScenarioScrubber({ layerId, scenario, value, playing, moved, dis
   };
   /** Space plays or pauses from anywhere in the scrubber (a focused button handles its own space). */
   const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key !== " " || (e.target as HTMLElement).closest("button")) return;
+    if (e.key !== " " || scenario.labels || (e.target as HTMLElement).closest("button")) return;
     e.preventDefault();
     dispatch({ type: "set_scenario_playing", layerId, playing: !playing });
   };
@@ -201,15 +201,18 @@ export function ScenarioScrubber({ layerId, scenario, value, playing, moved, dis
       </div>
 
       <div className="mt-2.5 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => dispatch({ type: "set_scenario_playing", layerId, playing: !playing })}
-          aria-pressed={playing}
-          className="time-play"
-          data-testid="scenario-play"
-        >
-          {playing ? "Pause" : "Play"}
-        </button>
+        {/* Named choices (all pixels or only confident ones) are picked, not played. */}
+        {!scenario.labels && (
+          <button
+            type="button"
+            onClick={() => dispatch({ type: "set_scenario_playing", layerId, playing: !playing })}
+            aria-pressed={playing}
+            className="time-play"
+            data-testid="scenario-play"
+          >
+            {playing ? "Pause" : "Play"}
+          </button>
+        )}
         <button type="button" onClick={() => step(-1)} aria-label="Step down" title="Step down" className={`${TEXT_BUTTON} px-1`}>
           ‹
         </button>

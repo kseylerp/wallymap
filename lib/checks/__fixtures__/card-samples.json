@@ -2814,6 +2814,16 @@
    }
   ]
  },
+ "forest-types": {
+  "kind": "tiles",
+  "recorded": "2026-10-23",
+  "bbox": [
+   117.6,
+   4.8,
+   118,
+   5.1
+  ]
+ },
  "gbif-occurrences": {
   "kind": "geojson",
   "recorded": "2026-10-18",

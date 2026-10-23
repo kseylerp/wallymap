@@ -259,7 +259,8 @@ describe("buildTools", () => {
     }
     // The 54 layer descriptions were about 88,000 characters in full; the three data-story layers (river pulse,
     // currents, wind) add about 2,400. The 2026-10-18 layer pass (legends, vintages, offline notes) adds about 1,600.
-    expect(total).toBeLessThan(71_000);
+    // Forest types (Earth Engine, 2026-10-23) adds about 900.
+    expect(total).toBeLessThan(72_000);
     const surf = tools["query_surf"].description ?? "";
     expect(surf).toContain("Set forecast to true");
     expect(surf).toContain("Set season to true");

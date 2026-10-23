@@ -1,7 +1,7 @@
 {
  "aquifers": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -101.845,
    40.93,
@@ -107,7 +107,7 @@
  },
  "burn-severity": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -122.6,
    44.5,
@@ -117,7 +117,7 @@
  },
  "campsites": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -109.8,
    38.4,
@@ -374,7 +374,7 @@
  },
  "carbon-flux": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -139.854,
    54.662,
@@ -404,7 +404,7 @@
     "properties": {
      "kind": "crag",
      "osmId": "node/7314110512",
-     "source": "osm",
+     "source": "osm+openbeta",
      "name": "Military Wall",
      "v": 110,
      "grades": "5.2 to 5.13d (yds_class)",
@@ -416,49 +416,48 @@
      ],
      "disciplines": [
       "sport",
-      "trad"
+      "trad",
+      "boulder"
      ],
      "maxLengthM": 54.86,
      "osmIds": [
       "node/7314110512",
       "way/364439327"
-     ]
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -83.6470107,
-      37.8372762
-     ]
-    },
-    "properties": {
-     "kind": "crag",
-     "osmId": "node/7313102690",
-     "source": "osm",
-     "name": "Fortress Wall",
-     "v": 32,
-     "grades": "5.2 to 5.12d (yds_class)",
-     "gradeBands": [
-      "beginner",
+     ],
+     "openbetaId": "e27049c2-69b8-50c5-97ad-c9a630cd69a0",
+     "url": "https://openbeta.io/areas/e27049c2-69b8-50c5-97ad-c9a630cd69a0",
+     "routesOsm": 110,
+     "routesOpenbeta": 42,
+     "region": "Kentucky > Red River Gorge > Northern Gorge",
+     "sport": 30,
+     "trad": 11,
+     "boulder": 1,
+     "sportBands": [
       "intermediate",
-      "advanced"
+      "advanced",
+      "elite"
      ],
-     "disciplines": [
-      "trad"
-     ],
+     "sportGrades": "30 routes: 7 intermediate 5.9 to 5.10d · 21 advanced 5.11- to 5.12c · 2 elite 5.13b to 5.13d",
+     "sportIntermediate": 7,
+     "sportAdvanced": 21,
+     "sportElite": 2,
      "tradBands": [
       "beginner",
       "intermediate",
       "advanced"
      ],
-     "maxLengthM": 45.72,
-     "osmIds": [
-      "node/7313102690",
-      "way/275859874"
-     ]
+     "tradGrades": "11 routes: 3 beginner 5.7 to 5.7+ · 7 intermediate 5.9+ to 5.10d · 1 advanced 5.11b",
+     "tradBeginner": 3,
+     "tradIntermediate": 7,
+     "tradAdvanced": 1,
+     "boulderBands": [
+      "beginner"
+     ],
+     "boulderGrades": "1 problem: 1 beginner V1",
+     "boulderBeginner": 1,
+     "slopeDeg": 43,
+     "aspect": "SE",
+     "afternoonShade": false
     }
    },
    {
@@ -466,33 +465,307 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -83.718778,
-      37.65107
+      -83.714565,
+      37.649176
      ]
     },
     "properties": {
      "kind": "crag",
-     "osmId": "node/7188734185",
-     "source": "osm",
-     "name": "Curbside",
-     "v": 17,
-     "grades": "5.10a to 5.12c (yds_class)",
+     "osmId": "node/7188671285",
+     "source": "osm+openbeta",
+     "name": "Chocolate Factory",
+     "grades": "5.7 to 5.13d (yds_class)",
      "gradeBands": [
+      "beginner",
       "intermediate",
-      "advanced"
+      "advanced",
+      "elite"
      ],
      "disciplines": [
-      "sport"
+      "sport",
+      "trad",
+      "boulder",
+      "mixed"
      ],
+     "maxLengthM": 37,
+     "osmIds": [
+      "node/7188671285",
+      "way/652151035"
+     ],
+     "openbetaId": "e7052656-2ed8-50c7-bbea-46d504570d52",
+     "url": "https://openbeta.io/areas/e7052656-2ed8-50c7-bbea-46d504570d52",
+     "v": 86,
+     "region": "Kentucky > Red River Gorge > Bald Rock Fork Recreational Preserve (BRRP)",
+     "sport": 75,
+     "trad": 10,
+     "boulder": 1,
+     "sportBands": [
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "sportGrades": "75 routes: 19 intermediate 5.9 to 5.10d · 43 advanced 5.11a to 5.12d · 13 elite 5.13a to 5.14c",
+     "sportIntermediate": 19,
+     "sportAdvanced": 43,
+     "sportElite": 13,
+     "tradBands": [
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "tradGrades": "10 routes: 7 intermediate 5.8 to 5.10d · 2 advanced 5.11 to 5.12- · 1 elite 5.13b",
+     "tradIntermediate": 7,
+     "tradAdvanced": 2,
+     "tradElite": 1,
+     "boulderBands": [
+      "beginner"
+     ],
+     "boulderGrades": "1 problem: 1 beginner V2",
+     "boulderBeginner": 1,
+     "slopeDeg": 44,
+     "aspect": "SE",
+     "afternoonShade": false
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.6675392,
+      37.8477001
+     ]
+    },
+    "properties": {
+     "kind": "crag",
+     "osmId": "node/7313037395",
+     "source": "osm+openbeta",
+     "name": "Long Wall",
+     "v": 57,
+     "grades": "5.5 to 5.13c (yds_class)",
+     "gradeBands": [
+      "beginner",
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "disciplines": [
+      "sport",
+      "trad",
+      "boulder",
+      "toprope"
+     ],
+     "maxLengthM": 42.67,
+     "osmIds": [
+      "node/7313037395",
+      "way/652162148"
+     ],
+     "openbetaId": "c3c8f4ee-991d-5751-8ca3-5ad677cfd3bb",
+     "url": "https://openbeta.io/areas/c3c8f4ee-991d-5751-8ca3-5ad677cfd3bb",
+     "routesOsm": 57,
+     "routesOpenbeta": 41,
+     "region": "Kentucky > Red River Gorge > Northern Gorge",
+     "sport": 14,
+     "trad": 26,
+     "boulder": 2,
+     "toprope": 1,
      "sportBands": [
       "intermediate",
       "advanced"
      ],
-     "maxLengthM": 26,
-     "osmIds": [
-      "node/7188734185",
-      "way/652151043"
+     "sportGrades": "14 routes: 3 intermediate 5.10a to 5.10c · 11 advanced 5.11a to 5.12b",
+     "sportIntermediate": 3,
+     "sportAdvanced": 11,
+     "tradBands": [
+      "beginner",
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "tradGrades": "26 routes: 5 beginner 5.5 to 5.8- · 13 intermediate 5.8 to 5.10b/c · 7 advanced 5.11 to 5.12+ · 1 elite 5.13",
+     "tradBeginner": 5,
+     "tradIntermediate": 13,
+     "tradAdvanced": 7,
+     "tradElite": 1,
+     "boulderBands": [
+      "beginner"
+     ],
+     "boulderGrades": "2 problems: 1 beginner V1 · 1 ungraded",
+     "boulderBeginner": 1,
+     "slopeDeg": 49,
+     "aspect": "S",
+     "afternoonShade": false
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.6627259,
+      37.7520674
      ]
+    },
+    "properties": {
+     "kind": "crag",
+     "osmId": "way/652151060",
+     "source": "osm+openbeta",
+     "name": "Emerald City",
+     "openbetaId": "d486ac7c-e64b-51c0-8815-042f90fb6f33",
+     "url": "https://openbeta.io/areas/d486ac7c-e64b-51c0-8815-042f90fb6f33",
+     "v": 55,
+     "grades": "5.5 to 5.12a; V0+ to V4-5",
+     "region": "Kentucky > Red River Gorge > Natural Bridge Region",
+     "sport": 9,
+     "trad": 7,
+     "boulder": 38,
+     "toprope": 1,
+     "sportBands": [
+      "intermediate",
+      "advanced"
+     ],
+     "sportGrades": "9 routes: 3 intermediate 5.8 to 5.10d · 6 advanced 5.11b to 5.12a",
+     "sportIntermediate": 3,
+     "sportAdvanced": 6,
+     "tradBands": [
+      "beginner",
+      "intermediate",
+      "advanced"
+     ],
+     "tradGrades": "7 routes: 1 beginner 5.5 · 5 intermediate 5.8 to 5.10b · 1 advanced 5.11b",
+     "tradBeginner": 1,
+     "tradIntermediate": 5,
+     "tradAdvanced": 1,
+     "boulderBands": [
+      "beginner",
+      "intermediate"
+     ],
+     "boulderGrades": "38 problems: 31 beginner V0- to V2 · 7 intermediate V3 to V4",
+     "boulderBeginner": 31,
+     "boulderIntermediate": 7,
+     "disciplines": [
+      "sport",
+      "trad",
+      "boulder",
+      "toprope"
+     ],
+     "gradeBands": [
+      "beginner",
+      "intermediate",
+      "advanced"
+     ],
+     "slopeDeg": 43,
+     "aspect": "S",
+     "afternoonShade": false
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.73505,
+      37.677692
+     ]
+    },
+    "properties": {
+     "kind": "crag",
+     "osmId": "node/7230418892",
+     "source": "osm+openbeta",
+     "name": "Solar Collector",
+     "v": 52,
+     "grades": "5.9 to 5.12c (yds_class)",
+     "gradeBands": [
+      "beginner",
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "disciplines": [
+      "sport",
+      "trad",
+      "toprope"
+     ],
+     "maxLengthM": 28,
+     "osmIds": [
+      "node/7230418892",
+      "way/652151055"
+     ],
+     "openbetaId": "cdc92045-070b-5cef-abb2-540e90fac05e",
+     "url": "https://openbeta.io/areas/cdc92045-070b-5cef-abb2-540e90fac05e",
+     "routesOsm": 18,
+     "routesOpenbeta": 52,
+     "region": "Kentucky > Red River Gorge > Pendergrass-Murray Recreational Preserve (PMRP)",
+     "sport": 36,
+     "trad": 15,
+     "toprope": 1,
+     "sportBands": [
+      "beginner",
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "sportGrades": "36 routes: 1 beginner 5.5 · 8 intermediate 5.8 to 5.10d · 22 advanced 5.11a to 5.12c · 5 elite 5.13a to 5.14a",
+     "sportBeginner": 1,
+     "sportIntermediate": 8,
+     "sportAdvanced": 22,
+     "sportElite": 5,
+     "tradBands": [
+      "beginner",
+      "intermediate",
+      "advanced"
+     ],
+     "tradGrades": "15 routes: 4 beginner 5.4 to 5.7 · 10 intermediate 5.8 to 5.10c · 1 advanced 5.11a",
+     "tradBeginner": 4,
+     "tradIntermediate": 10,
+     "tradAdvanced": 1,
+     "slopeDeg": 39,
+     "aspect": "W",
+     "afternoonShade": false
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.67414,
+      37.81801
+     ]
+    },
+    "properties": {
+     "kind": "crag",
+     "name": "The Cove",
+     "source": "openbeta",
+     "openbetaId": "dfdf8027-355a-5765-9e8c-8bcbcdcd4dd6",
+     "url": "https://openbeta.io/areas/dfdf8027-355a-5765-9e8c-8bcbcdcd4dd6",
+     "v": 13,
+     "region": "Kentucky > Red River Gorge > Northern Gorge",
+     "grades": "V1 to V10",
+     "gradeBands": [
+      "beginner",
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "boulder": 13,
+     "disciplines": [
+      "boulder"
+     ],
+     "boulderBands": [
+      "beginner",
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "boulderBeginner": 1,
+     "boulderIntermediate": 3,
+     "boulderAdvanced": 6,
+     "boulderElite": 3,
+     "boulderGrades": "13 problems: 1 beginner V1 · 3 intermediate V4 to V5 · 6 advanced V6 to V7 · 3 elite V10-11 to V10",
+     "slopeDeg": 47,
+     "aspect": "SE",
+     "afternoonShade": false
     }
    },
    {
@@ -521,42 +794,10 @@
       "trad"
      ],
      "maxLengthM": 20,
+     "slopeDeg": 33,
+     "aspect": "NE",
+     "afternoonShade": true,
      "nameInSource": "Mt. Olive Rock"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -83.49257,
-      37.99237
-     ]
-    },
-    "properties": {
-     "kind": "crag",
-     "name": "Murder Branch",
-     "source": "openbeta",
-     "openbetaId": "af6a0b72-6c89-53b6-8985-d4b9a374a63d",
-     "url": "https://openbeta.io/areas/af6a0b72-6c89-53b6-8985-d4b9a374a63d",
-     "v": 3,
-     "region": "Kentucky",
-     "grades": "5.8- to 5.9+",
-     "gradeBands": [
-      "beginner",
-      "intermediate"
-     ],
-     "sport": 2,
-     "toprope": 3,
-     "disciplines": [
-      "sport",
-      "toprope"
-     ],
-     "sportBands": [
-      "intermediate"
-     ],
-     "sportIntermediate": 2,
-     "sportGrades": "2 routes: 2 intermediate 5.8+ to 5.9+"
     }
    },
    {
@@ -573,7 +814,10 @@
      "osmId": "way/1308298888",
      "source": "osm",
      "name": "Woody’s Wall",
-     "fee": false
+     "fee": false,
+     "slopeDeg": 48,
+     "aspect": "SE",
+     "afternoonShade": false
     }
    },
    {
@@ -588,7 +832,7 @@
     "properties": {
      "kind": "crag",
      "osmId": "node/7127202987",
-     "source": "osm",
+     "source": "osm+openbeta",
      "name": "The Motherlode",
      "v": 72,
      "grades": "5.9 to 5.14c (yds_class)",
@@ -606,7 +850,29 @@
      "osmIds": [
       "node/7127202987",
       "way/652151476"
-     ]
+     ],
+     "openbetaId": "2496123b-7080-5b5f-8d4d-f26c6abc5c32",
+     "url": "https://openbeta.io/areas/2496123b-7080-5b5f-8d4d-f26c6abc5c32",
+     "routesOsm": 72,
+     "routesOpenbeta": 24,
+     "region": "Kentucky > Red River Gorge > Bald Rock Fork Recreational Preserve (BRRP) > Motherlode, The",
+     "sport": 23,
+     "trad": 1,
+     "sportBands": [
+      "advanced",
+      "elite"
+     ],
+     "sportGrades": "23 routes: 19 advanced 5.11a to 5.12d · 4 elite 5.13a",
+     "sportAdvanced": 19,
+     "sportElite": 4,
+     "tradBands": [
+      "intermediate"
+     ],
+     "tradGrades": "1 route: 1 intermediate 5.10a",
+     "tradIntermediate": 1,
+     "slopeDeg": 39,
+     "aspect": "S",
+     "afternoonShade": false
     }
    },
    {
@@ -614,17 +880,16 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -83.6675392,
-      37.8477001
+      -83.724355,
+      37.652903
      ]
     },
     "properties": {
      "kind": "crag",
-     "osmId": "node/7313037395",
-     "source": "osm",
-     "name": "Long Wall",
-     "v": 57,
-     "grades": "5.5 to 5.13c (yds_class)",
+     "osmId": "node/7200615993",
+     "source": "osm+openbeta",
+     "name": "Drive-By Crag",
+     "grades": "5.6 to 5.14a (yds_class)",
      "gradeBands": [
       "beginner",
       "intermediate",
@@ -634,13 +899,43 @@
      "disciplines": [
       "sport",
       "trad",
-      "boulder"
+      "boulder",
+      "mixed"
      ],
-     "maxLengthM": 42.67,
+     "maxLengthM": 30,
      "osmIds": [
-      "node/7313037395",
-      "way/652162148"
-     ]
+      "node/7200615993",
+      "way/652151045"
+     ],
+     "openbetaId": "41ea5479-84cc-5f6a-bce7-c298eccfcb22",
+     "url": "https://openbeta.io/areas/41ea5479-84cc-5f6a-bce7-c298eccfcb22",
+     "v": 56,
+     "region": "Kentucky > Red River Gorge > Pendergrass-Murray Recreational Preserve (PMRP)",
+     "sport": 48,
+     "trad": 8,
+     "boulder": 1,
+     "sportBands": [
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "sportGrades": "48 routes: 12 intermediate 5.10+ to 5.10d · 25 advanced 5.11a to 5.12d · 11 elite 5.13a to 5.14a",
+     "sportIntermediate": 12,
+     "sportAdvanced": 25,
+     "sportElite": 11,
+     "tradBands": [
+      "beginner",
+      "intermediate",
+      "advanced"
+     ],
+     "tradGrades": "8 routes: 1 beginner 5.6 · 6 intermediate 5.8+ to 5.10a · 1 advanced 5.11",
+     "tradBeginner": 1,
+     "tradIntermediate": 6,
+     "tradAdvanced": 1,
+     "boulderGrades": "1 problem, none graded",
+     "slopeDeg": 39,
+     "aspect": "S",
+     "afternoonShade": false
     }
    },
    {
@@ -655,7 +950,7 @@
     "properties": {
      "kind": "crag",
      "osmId": "node/7123582491",
-     "source": "osm",
+     "source": "osm+openbeta",
      "name": "The Bear's Den",
      "v": 52,
      "grades": "5.2 to 5.14a (yds_class)",
@@ -669,7 +964,33 @@
       "sport",
       "trad"
      ],
-     "maxLengthM": 31
+     "maxLengthM": 31,
+     "openbetaId": "dfaefd99-8fd5-574c-b8ba-f870ad066e53",
+     "url": "https://openbeta.io/areas/dfaefd99-8fd5-574c-b8ba-f870ad066e53",
+     "routesOsm": 52,
+     "routesOpenbeta": 36,
+     "region": "Kentucky > Red River Gorge > Bald Rock Fork Recreational Preserve (BRRP)",
+     "sport": 33,
+     "trad": 3,
+     "sportBands": [
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "sportGrades": "33 routes: 9 intermediate 5.8 to 5.10d · 21 advanced 5.11+ to 5.12c · 3 elite 5.13a/b to 5.13a",
+     "sportIntermediate": 9,
+     "sportAdvanced": 21,
+     "sportElite": 3,
+     "tradBands": [
+      "beginner",
+      "intermediate"
+     ],
+     "tradGrades": "3 routes: 2 beginner 5.6 · 1 intermediate 5.9+",
+     "tradBeginner": 2,
+     "tradIntermediate": 1,
+     "slopeDeg": 39,
+     "aspect": "S",
+     "afternoonShade": false
     }
    },
    {
@@ -677,106 +998,69 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -83.734761,
-      37.676605
+      -83.6565979,
+      37.7323421
      ]
     },
     "properties": {
      "kind": "crag",
-     "osmId": "node/7231211487",
-     "source": "osm",
-     "name": "Gold Coast",
-     "v": 49,
-     "grades": "5.4 to 5.14c (yds_class)",
-     "gradeBands": [
+     "osmId": "way/275859798",
+     "source": "osm+openbeta",
+     "name": "Roadside Crag",
+     "openbetaId": "8b678504-e93f-5158-9090-ef0248e02fb3",
+     "url": "https://openbeta.io/areas/8b678504-e93f-5158-9090-ef0248e02fb3",
+     "v": 51,
+     "grades": "5.3 to 5.13a; V3 to V5-",
+     "region": "Kentucky > Red River Gorge > Natural Bridge Region",
+     "sport": 35,
+     "trad": 16,
+     "boulder": 2,
+     "sportBands": [
       "beginner",
       "intermediate",
       "advanced",
       "elite"
      ],
-     "disciplines": [
-      "sport",
-      "trad"
-     ],
-     "maxLengthM": 26,
-     "osmIds": [
-      "node/7231211487",
-      "way/652151056"
-     ]
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -83.723116,
-      37.652151
-     ]
-    },
-    "properties": {
-     "kind": "crag",
-     "osmId": "node/7193428994",
-     "source": "osm",
-     "name": "Bob Marley Crag",
-     "v": 48,
-     "grades": "5.7 to 5.14d (yds_class)",
-     "gradeBands": [
-      "beginner",
-      "intermediate",
-      "advanced",
-      "elite"
-     ],
-     "disciplines": [
-      "sport",
-      "trad",
-      "mixed"
-     ],
-     "maxLengthM": 32,
-     "osmIds": [
-      "node/7193428994",
-      "way/652151046"
-     ]
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -83.720808,
-      37.650911
-     ]
-    },
-    "properties": {
-     "kind": "crag",
-     "osmId": "node/7193214589",
-     "source": "osm",
-     "name": "Chica Bonita",
-     "v": 46,
-     "grades": "5.5 to 5.12b (yds_class)",
-     "gradeBands": [
+     "sportGrades": "35 routes: 2 beginner 5.7 · 14 intermediate 5.8 to 5.10d · 18 advanced 5.11b to 5.12d · 1 elite 5.13a",
+     "sportBeginner": 2,
+     "sportIntermediate": 14,
+     "sportAdvanced": 18,
+     "sportElite": 1,
+     "tradBands": [
       "beginner",
       "intermediate",
       "advanced"
      ],
+     "tradGrades": "16 routes: 5 beginner 5.3 to 5.7 · 7 intermediate 5.8 to 5.10c · 4 advanced 5.11a to 5.12a",
+     "tradBeginner": 5,
+     "tradIntermediate": 7,
+     "tradAdvanced": 4,
+     "boulderBands": [
+      "intermediate"
+     ],
+     "boulderGrades": "2 problems: 2 intermediate V3 to V5-",
+     "boulderIntermediate": 2,
      "disciplines": [
       "sport",
       "trad",
-      "mixed"
+      "boulder"
      ],
-     "maxLengthM": 34,
-     "osmIds": [
-      "node/7193214589",
-      "way/652151044"
-     ]
+     "gradeBands": [
+      "beginner",
+      "intermediate",
+      "advanced",
+      "elite"
+     ],
+     "slopeDeg": 45,
+     "aspect": "SW",
+     "afternoonShade": false
     }
    }
   ]
  },
  "condor-range": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -121.93,
    35.774,
@@ -820,7 +1104,7 @@
  },
  "critical-habitat": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -113.85,
    37,
@@ -853,7 +1137,7 @@
  },
  "dams": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -112,
    35.5,
@@ -1021,7 +1305,7 @@
  },
  "disasters": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -87.635,
    24.43,
@@ -1034,8 +1318,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -82.405,
-      29.485
+      -83.166,
+      29.289
      ]
     },
     "properties": {
@@ -1058,8 +1342,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -83.308,
-      29.828
+      -83.992,
+      30.096
      ]
     },
     "properties": {
@@ -1082,8 +1366,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -82.265,
-      28.662
+      -82.755,
+      29.002
      ]
     },
     "properties": {
@@ -1106,8 +1390,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -82.787,
-      30.33
+      -82.791,
+      29.942
      ]
     },
     "properties": {
@@ -1130,8 +1414,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -82.936,
-      29.6
+      -83.412,
+      29.667
      ]
     },
     "properties": {
@@ -1154,8 +1438,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -82.922,
-      29.823
+      -82.973,
+      29.624
      ]
     },
     "properties": {
@@ -1178,8 +1462,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -83.178,
-      30.395
+      -83.272,
+      30.632
      ]
     },
     "properties": {
@@ -1202,8 +1486,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -82.878,
-      29.891
+      -83.368,
+      30.129
      ]
     },
     "properties": {
@@ -1226,8 +1510,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -83.363,
-      30.264
+      -83.821,
+      30.313
      ]
     },
     "properties": {
@@ -1250,8 +1534,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -82.878,
-      29.891
+      -83.247,
+      30.261
      ]
     },
     "properties": {
@@ -1274,8 +1558,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -82.405,
-      29.485
+      -82.659,
+      29.83
      ]
     },
     "properties": {
@@ -1298,8 +1582,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -82.046,
-      30.14
+      -82.46,
+      30.584
      ]
     },
     "properties": {
@@ -1321,7 +1605,7 @@
  },
  "disturbance": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -125,
    49,
@@ -1331,7 +1615,7 @@
  },
  "drought": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -109.06,
    36.992,
@@ -1344,16 +1628,16 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -107.479,
-      37.286
+      -108.622,
+      38.71
      ]
     },
     "properties": {
      "kind": "D0",
      "category": "Abnormally dry",
      "v": 0,
-     "t": "2026-10-13T00:00:00.000Z",
-     "week": "2026-10-13"
+     "t": "2026-10-20T00:00:00.000Z",
+     "week": "2026-10-20"
     }
    },
    {
@@ -1361,16 +1645,16 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -108.573,
-      38.701
+      -101.34,
+      36.591
      ]
     },
     "properties": {
      "kind": "D1",
      "category": "Moderate drought",
      "v": 1,
-     "t": "2026-10-13T00:00:00.000Z",
-     "week": "2026-10-13"
+     "t": "2026-10-20T00:00:00.000Z",
+     "week": "2026-10-20"
     }
    },
    {
@@ -1386,8 +1670,8 @@
      "kind": "D2",
      "category": "Severe drought",
      "v": 2,
-     "t": "2026-10-13T00:00:00.000Z",
-     "week": "2026-10-13"
+     "t": "2026-10-20T00:00:00.000Z",
+     "week": "2026-10-20"
     }
    },
    {
@@ -1403,8 +1687,8 @@
      "kind": "D3",
      "category": "Extreme drought",
      "v": 3,
-     "t": "2026-10-13T00:00:00.000Z",
-     "week": "2026-10-13"
+     "t": "2026-10-20T00:00:00.000Z",
+     "week": "2026-10-20"
     }
    },
    {
@@ -1420,15 +1704,15 @@
      "kind": "D4",
      "category": "Exceptional drought",
      "v": 4,
-     "t": "2026-10-13T00:00:00.000Z",
-     "week": "2026-10-13"
+     "t": "2026-10-20T00:00:00.000Z",
+     "week": "2026-10-20"
     }
    }
   ]
  },
  "earthquakes": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -119.089,
    37.549,
@@ -1508,18 +1792,18 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -118.882835388184,
-      37.5789985656738
+      -118.885166666667,
+      37.5778333333333
      ]
     },
     "properties": {
      "heading": "Earthquake 11 km SE of Mammoth Lakes, CA",
-     "v": 2.19,
+     "v": 2.22,
      "magnitude": "M 2.2",
      "place": "11 km SE of Mammoth Lakes, CA",
-     "t": "2026-10-07T04:56:04.760Z",
-     "depthKm": 3,
-     "depth": "3 km (1.9 mi)",
+     "t": "2026-10-07T04:56:04.740Z",
+     "depthKm": 3.2,
+     "depth": "3.2 km (2 mi)",
      "magType": "md",
      "kind": "earthquake",
      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75445791"
@@ -1705,7 +1989,7 @@
  },
  "fire-detections": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -125,
    32,
@@ -1718,20 +2002,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -105.02243,
-      40.863
+      -102.40134,
+      48.63388
      ]
     },
     "properties": {
-     "t": "2026-10-16T09:22:00Z",
-     "v": 1.18,
-     "brightK": 301.4,
+     "t": "2026-10-21T07:46:00Z",
+     "v": 0.83,
+     "brightK": 297.01,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 16 09:22 UTC",
-     "label": "1.2 MW",
+     "heading": "Hotspot, Oct 21 07:46 UTC",
+     "label": "0.8 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 16 3:22 AM MDT"
+     "name": "Suomi NPP, Oct 21 1:46 AM MDT"
     }
    },
    {
@@ -1739,41 +2023,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -105.60261,
-      41.26899
+      -102.39638,
+      48.63536
      ]
     },
     "properties": {
-     "t": "2026-10-16T09:22:00Z",
-     "v": 1.49,
-     "brightK": 304.66,
+     "t": "2026-10-21T07:46:00Z",
+     "v": 1.25,
+     "brightK": 297.36,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 16 09:22 UTC",
-     "label": "1.5 MW",
-     "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 16 3:22 AM MDT"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -106.48057,
-      41.29678
-     ]
-    },
-    "properties": {
-     "t": "2026-10-16T09:22:00Z",
-     "v": 1.34,
-     "brightK": 311.53,
-     "confidence": "n",
-     "daynight": "N",
-     "heading": "Hotspot, Oct 16 09:22 UTC",
+     "heading": "Hotspot, Oct 21 07:46 UTC",
      "label": "1.3 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 16 3:22 AM MDT"
+     "name": "Suomi NPP, Oct 21 1:46 AM MDT"
     }
    },
    {
@@ -1781,20 +2044,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -111.59383,
-      42.68323
+      -101.28455,
+      32.40827
      ]
     },
     "properties": {
-     "t": "2026-10-16T09:22:00Z",
-     "v": 11.23,
-     "brightK": 303.25,
+     "t": "2026-10-21T07:50:00Z",
+     "v": 0.38,
+     "brightK": 298.99,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 16 09:22 UTC",
-     "label": "11 MW",
+     "heading": "Hotspot, Oct 21 07:50 UTC",
+     "label": "0.4 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 16 3:22 AM MDT"
+     "name": "Suomi NPP, Oct 21 2:50 AM CDT"
     }
    },
    {
@@ -1802,20 +2065,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -111.58761,
-      42.68605
+      -101.67381,
+      32.53601
      ]
     },
     "properties": {
-     "t": "2026-10-16T09:22:00Z",
-     "v": 11.23,
-     "brightK": 302.18,
+     "t": "2026-10-21T07:50:00Z",
+     "v": 1.66,
+     "brightK": 312.46,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 16 09:22 UTC",
-     "label": "11 MW",
+     "heading": "Hotspot, Oct 21 07:50 UTC",
+     "label": "1.7 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 16 3:22 AM MDT"
+     "name": "Suomi NPP, Oct 21 2:50 AM CDT"
     }
    },
    {
@@ -1823,20 +2086,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -111.59298,
-      42.68674
+      -100.45419,
+      32.75262
      ]
     },
     "properties": {
-     "t": "2026-10-16T09:22:00Z",
-     "v": 11.23,
-     "brightK": 329.85,
+     "t": "2026-10-21T07:50:00Z",
+     "v": 0.18,
+     "brightK": 295.75,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 16 09:22 UTC",
-     "label": "11 MW",
+     "heading": "Hotspot, Oct 21 07:50 UTC",
+     "label": "0.2 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 16 3:22 AM MDT"
+     "name": "Suomi NPP, Oct 21 2:50 AM CDT"
     }
    },
    {
@@ -1844,20 +2107,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -118.50249,
-      42.77775
+      -102.88508,
+      33.07302
      ]
     },
     "properties": {
-     "t": "2026-10-16T09:22:00Z",
-     "v": 3.92,
-     "brightK": 298.07,
+     "t": "2026-10-21T07:50:00Z",
+     "v": 0.65,
+     "brightK": 298.2,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 16 09:22 UTC",
-     "label": "3.9 MW",
+     "heading": "Hotspot, Oct 21 07:50 UTC",
+     "label": "0.7 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 16 2:22 AM PDT"
+     "name": "Suomi NPP, Oct 21 1:50 AM MDT"
     }
    },
    {
@@ -1865,20 +2128,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -118.50869,
-      42.77816
+      -103.01869,
+      33.08242
      ]
     },
     "properties": {
-     "t": "2026-10-16T09:22:00Z",
-     "v": 3.52,
-     "brightK": 334.81,
+     "t": "2026-10-21T07:50:00Z",
+     "v": 0.64,
+     "brightK": 295.54,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 16 09:22 UTC",
-     "label": "3.5 MW",
+     "heading": "Hotspot, Oct 21 07:50 UTC",
+     "label": "0.6 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 16 2:22 AM PDT"
+     "name": "Suomi NPP, Oct 21 1:50 AM MDT"
     }
    },
    {
@@ -1886,20 +2149,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -118.50783,
-      42.78305
+      -101.99774,
+      35.35696
      ]
     },
     "properties": {
-     "t": "2026-10-16T09:22:00Z",
-     "v": 3.52,
-     "brightK": 303.48,
+     "t": "2026-10-21T07:50:00Z",
+     "v": 0.65,
+     "brightK": 299.38,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 16 09:22 UTC",
-     "label": "3.5 MW",
+     "heading": "Hotspot, Oct 21 07:50 UTC",
+     "label": "0.7 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 16 2:22 AM PDT"
+     "name": "Suomi NPP, Oct 21 2:50 AM CDT"
     }
    },
    {
@@ -1907,20 +2170,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -121.14293,
-      42.8749
+      -101.36542,
+      35.69951
      ]
     },
     "properties": {
-     "t": "2026-10-16T09:22:00Z",
-     "v": 0.76,
-     "brightK": 296.18,
+     "t": "2026-10-21T07:50:00Z",
+     "v": 1.41,
+     "brightK": 296.94,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 16 09:22 UTC",
-     "label": "0.8 MW",
+     "heading": "Hotspot, Oct 21 07:50 UTC",
+     "label": "1.4 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 16 2:22 AM PDT"
+     "name": "Suomi NPP, Oct 21 2:50 AM CDT"
     }
    },
    {
@@ -1928,20 +2191,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -121.14783,
-      42.8751
+      -100.68767,
+      32.04918
      ]
     },
     "properties": {
-     "t": "2026-10-16T09:22:00Z",
-     "v": 0.76,
-     "brightK": 299.72,
+     "t": "2026-10-21T07:52:00Z",
+     "v": 0.56,
+     "brightK": 296.59,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 16 09:22 UTC",
-     "label": "0.8 MW",
+     "heading": "Hotspot, Oct 21 07:52 UTC",
+     "label": "0.6 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 16 2:22 AM PDT"
+     "name": "Suomi NPP, Oct 21 2:52 AM CDT"
     }
    },
    {
@@ -1949,27 +2212,48 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -115.66708,
-      43.14577
+      -102.10406,
+      32.14651
      ]
     },
     "properties": {
-     "t": "2026-10-16T09:22:00Z",
-     "v": 0.87,
-     "brightK": 305.45,
+     "t": "2026-10-21T07:52:00Z",
+     "v": 1.78,
+     "brightK": 312.76,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 16 09:22 UTC",
-     "label": "0.9 MW",
+     "heading": "Hotspot, Oct 21 07:52 UTC",
+     "label": "1.8 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 16 2:22 AM PDT"
+     "name": "Suomi NPP, Oct 21 1:52 AM MDT"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -101.92992,
+      32.15229
+     ]
+    },
+    "properties": {
+     "t": "2026-10-21T07:52:00Z",
+     "v": 0.99,
+     "brightK": 299.4,
+     "confidence": "n",
+     "daynight": "N",
+     "heading": "Hotspot, Oct 21 07:52 UTC",
+     "label": "1.0 MW",
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 21 2:52 AM CDT"
     }
    }
   ]
  },
  "fire-hazard": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -121.4,
    43.9,
@@ -1979,7 +2263,7 @@
  },
  "fire-perimeters": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -122.6,
    44.5,
@@ -2261,7 +2545,7 @@
  },
  "fire-weather": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -121.293,
    32.575,
@@ -2508,7 +2792,7 @@
  },
  "flood-extent": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    22.5,
    -18.501,
@@ -2518,7 +2802,7 @@
  },
  "flood-zones": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -82.564,
    35.588,
@@ -2528,7 +2812,7 @@
  },
  "forest-alerts": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    20,
    -3,
@@ -2538,7 +2822,7 @@
  },
  "forest-loss": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -66.81,
    -13.692,
@@ -3218,7 +3502,7 @@
  },
  "geologic-unit": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -119.795,
    37.495,
@@ -3253,7 +3537,7 @@
  },
  "geology": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -112.941,
    35.763,
@@ -3263,7 +3547,7 @@
  },
  "glaciers": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -110.178,
    42.799,
@@ -3545,7 +3829,7 @@
  },
  "grazing-allotments": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -117.5,
    37.5,
@@ -3788,7 +4072,7 @@
  },
  "greenness": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -121,
    36,
@@ -3798,7 +4082,7 @@
  },
  "groundwater": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -112.313,
    33.29,
@@ -4126,7 +4410,7 @@
  },
  "hardiness-zones": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -73.438,
    42.727,
@@ -4136,7 +4420,7 @@
  },
  "imagery-by-date": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -156.724,
    20.757,
@@ -4146,7 +4430,7 @@
  },
  "lakes": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -120.25,
    38.93,
@@ -4433,7 +4717,7 @@
  },
  "land-cover": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -73.495,
    -51.58,
@@ -4443,7 +4727,7 @@
  },
  "methane-plumes": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -104.5,
    31,
@@ -4457,7 +4741,7 @@
      "type": "Point",
      "coordinates": [
       -101.82904661170025,
-      32.32589924775929
+      32.32589924775928
      ]
     },
     "properties": {
@@ -4753,7 +5037,7 @@
  },
  "mines": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -117.542,
    39.997,
@@ -5017,7 +5301,7 @@
  },
  "mining-claims": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -116.5,
    40.6,
@@ -5301,7 +5585,7 @@
  },
  "monuments": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -110.5,
    36.8,
@@ -5336,8 +5620,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -109.5485,
-      38.0469
+      -109.6394,
+      37.2629
      ]
     },
     "properties": {
@@ -5346,9 +5630,10 @@
      "source": "BLM National Conservation Lands",
      "designation": "National Monument",
      "state": "UT",
-     "areaKm2": 488,
-     "v": 488,
+     "areaKm2": 487,
+     "v": 487,
      "id": "Bears Ears",
+     "parts": 16,
      "boundary": "current"
     }
    }
@@ -5383,7 +5668,10 @@
       "beginner"
      ],
      "lengthKm": 0.33,
-     "highway": "track"
+     "highway": "track",
+     "gainM": 17,
+     "lossM": 0,
+     "highM": 1230
     }
    },
    {
@@ -5406,7 +5694,10 @@
      ],
      "lengthKm": 2.28,
      "highway": "track",
-     "surface": "dirt"
+     "surface": "dirt",
+     "gainM": 7,
+     "lossM": 54,
+     "highM": 1612
     }
    },
    {
@@ -5430,7 +5721,10 @@
      "lengthKm": 3.84,
      "highway": "tertiary",
      "ref": "CR 145",
-     "surface": "dirt"
+     "surface": "dirt",
+     "gainM": 63,
+     "lossM": 37,
+     "highM": 1298
     }
    },
    {
@@ -5457,7 +5751,10 @@
      "surface": "ground",
      "bicycle": "permit",
      "bikes": "permit",
-     "operator": "National Park System"
+     "operator": "National Park System",
+     "gainM": 82,
+     "lossM": 147,
+     "highM": 1450
     }
    },
    {
@@ -5484,7 +5781,10 @@
      "surface": "ground",
      "bicycle": "designated",
      "bikes": "designated",
-     "operator": "Sand Flats Recreation Area"
+     "operator": "Sand Flats Recreation Area",
+     "gainM": 61,
+     "lossM": 37,
+     "highM": 1422
     }
    },
    {
@@ -5501,7 +5801,10 @@
      "osmId": "relation/2788223",
      "name": "Kokopelli's Trail",
      "inViewKm": 16.22,
-     "ref": "Kokapelli"
+     "ref": "Kokapelli",
+     "gainM": 833,
+     "lossM": 41,
+     "highM": 2203
     }
    },
    {
@@ -5528,7 +5831,10 @@
      "surface": "ground",
      "bicycle": "designated",
      "bikes": "designated",
-     "operator": "Sand Flats Recreation Area"
+     "operator": "Sand Flats Recreation Area",
+     "gainM": 10,
+     "lossM": 0,
+     "highM": 1420
     }
    },
    {
@@ -5552,7 +5858,10 @@
      "lengthKm": 2.14,
      "highway": "secondary",
      "ref": "CR 134",
-     "surface": "paved"
+     "surface": "paved",
+     "gainM": 4,
+     "lossM": 3,
+     "highM": 1212
     }
    },
    {
@@ -5579,7 +5888,10 @@
      "surface": "ground",
      "bicycle": "yes",
      "bikes": "yes",
-     "operator": "National Park System"
+     "operator": "National Park System",
+     "gainM": 120,
+     "lossM": 558,
+     "highM": 1801
     }
    },
    {
@@ -5604,7 +5916,10 @@
      "highway": "track",
      "surface": "ground",
      "bicycle": "yes",
-     "bikes": "yes"
+     "bikes": "yes",
+     "gainM": 116,
+     "lossM": 69,
+     "highM": 1312
     }
    },
    {
@@ -5630,7 +5945,10 @@
      "highway": "path",
      "surface": "ground",
      "bicycle": "designated",
-     "bikes": "designated"
+     "bikes": "designated",
+     "gainM": 70,
+     "lossM": 85,
+     "highM": 1429
     }
    },
    {
@@ -5653,14 +5971,17 @@
      ],
      "lengthKm": 6.55,
      "highway": "track",
-     "surface": "dirt"
+     "surface": "dirt",
+     "gainM": 48,
+     "lossM": 81,
+     "highM": 1434
     }
    }
   ]
  },
  "night-lights": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -114.356,
    38.818,
@@ -5693,7 +6014,7 @@
      "east": 0,
      "north": 0,
      "speed": 0,
-     "sst": 6.9,
+     "sst": 6.8,
      "speedKt": 0
     }
    },
@@ -5709,12 +6030,12 @@
     "properties": {
      "name": "58.82°N 153.68°W",
      "node": 2,
-     "east": -0.09,
-     "north": -0.14,
-     "speed": 0.17,
+     "east": -0.16,
+     "north": -0.16,
+     "speed": 0.22,
      "sst": 7.6,
-     "speedKt": 0.33,
-     "toward": "south-southwest (213°)"
+     "speedKt": 0.43,
+     "toward": "southwest (225°)"
     }
    },
    {
@@ -5729,12 +6050,12 @@
     "properties": {
      "name": "58.82°N 153.31°W",
      "node": 3,
-     "east": -0.2,
-     "north": -0.1,
-     "speed": 0.22,
+     "east": -0.14,
+     "north": -0.09,
+     "speed": 0.17,
      "sst": 7.1,
-     "speedKt": 0.43,
-     "toward": "west-southwest (243°)"
+     "speedKt": 0.33,
+     "toward": "west-southwest (237°)"
     }
    },
    {
@@ -5749,12 +6070,12 @@
     "properties": {
      "name": "58.82°N 152.93°W",
      "node": 4,
-     "east": 0.1,
-     "north": -0.55,
-     "speed": 0.56,
+     "east": 0.05,
+     "north": -0.5,
+     "speed": 0.5,
      "sst": 7.9,
-     "speedKt": 1.09,
-     "toward": "south (170°)"
+     "speedKt": 0.97,
+     "toward": "south (174°)"
     }
    },
    {
@@ -5769,12 +6090,11 @@
     "properties": {
      "name": "58.82°N 152.56°W",
      "node": 5,
-     "east": 0.3,
-     "north": -0.05,
-     "speed": 0.31,
+     "east": 0,
+     "north": 0,
+     "speed": 0,
      "sst": 7.6,
-     "speedKt": 0.6,
-     "toward": "east (99°)"
+     "speedKt": 0
     }
    },
    {
@@ -5789,12 +6109,12 @@
     "properties": {
      "name": "58.82°N 152.19°W",
      "node": 6,
-     "east": 0.2,
-     "north": -0.3,
+     "east": -0.36,
+     "north": 0,
      "speed": 0.36,
-     "sst": 7.7,
+     "sst": 7.8,
      "speedKt": 0.7,
-     "toward": "southeast (146°)"
+     "toward": "west (270°)"
     }
    },
    {
@@ -5809,12 +6129,12 @@
     "properties": {
      "name": "58.82°N 151.81°W",
      "node": 7,
-     "east": 0.1,
-     "north": -0.1,
-     "speed": 0.14,
+     "east": -0.3,
+     "north": 0.05,
+     "speed": 0.31,
      "sst": 7.8,
-     "speedKt": 0.27,
-     "toward": "southeast (135°)"
+     "speedKt": 0.6,
+     "toward": "west (279°)"
     }
    },
    {
@@ -5829,12 +6149,12 @@
     "properties": {
      "name": "58.82°N 151.44°W",
      "node": 8,
-     "east": 0.09,
-     "north": -0.14,
-     "speed": 0.17,
+     "east": -0.25,
+     "north": -0.05,
+     "speed": 0.25,
      "sst": 7.8,
-     "speedKt": 0.33,
-     "toward": "south-southeast (147°)"
+     "speedKt": 0.49,
+     "toward": "west (259°)"
     }
    },
    {
@@ -5849,12 +6169,12 @@
     "properties": {
      "name": "58.82°N 151.06°W",
      "node": 9,
-     "east": 0.14,
-     "north": -0.09,
+     "east": -0.16,
+     "north": -0.05,
      "speed": 0.17,
      "sst": 7.7,
      "speedKt": 0.33,
-     "toward": "east-southeast (123°)"
+     "toward": "west-southwest (253°)"
     }
    },
    {
@@ -5869,12 +6189,12 @@
     "properties": {
      "name": "58.82°N 150.69°W",
      "node": 10,
-     "east": 0.14,
+     "east": -0.11,
      "north": 0,
-     "speed": 0.14,
-     "sst": 7.7,
-     "speedKt": 0.27,
-     "toward": "east (90°)"
+     "speed": 0.11,
+     "sst": 7.6,
+     "speedKt": 0.21,
+     "toward": "west (270°)"
     }
    },
    {
@@ -5889,12 +6209,12 @@
     "properties": {
      "name": "58.82°N 150.31°W",
      "node": 11,
-     "east": 0.1,
-     "north": 0.05,
-     "speed": 0.11,
+     "east": -0.14,
+     "north": 0,
+     "speed": 0.14,
      "sst": 7.7,
-     "speedKt": 0.21,
-     "toward": "east-northeast (63°)"
+     "speedKt": 0.27,
+     "toward": "west (270°)"
     }
    },
    {
@@ -5909,19 +6229,19 @@
     "properties": {
      "name": "58.82°N 149.94°W",
      "node": 12,
-     "east": 0,
-     "north": 0.06,
-     "speed": 0.06,
-     "sst": 7.8,
-     "speedKt": 0.12,
-     "toward": "north (0°)"
+     "east": -0.11,
+     "north": 0,
+     "speed": 0.11,
+     "sst": 7.7,
+     "speedKt": 0.21,
+     "toward": "west (270°)"
     }
    }
   ]
  },
  "old-growth": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -122.5,
    43.5,
@@ -6173,7 +6493,7 @@
  },
  "osm-trails": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    6.814,
    45.833,
@@ -6186,159 +6506,27 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      6.8674336,
-      45.9225734
+      6.9065638,
+      45.9824582
      ]
     },
     "properties": {
-     "highway": "footway",
-     "osmId": "way/22876838",
-     "informal": false,
-     "lengthKm": 0.02,
-     "kind": "footway",
-     "name": "Allée du Majestic",
-     "sac_scale": "not_rated",
-     "surface": "asphalt"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      6.8735749,
-      45.9312907
-     ]
-    },
-    "properties": {
-     "highway": "path",
-     "osmId": "way/23195112",
-     "informal": false,
-     "lengthKm": 0.21,
+     "name": "Grand Balcon Sud",
      "kind": "path",
-     "name": "Promenade des Econtres",
-     "sac_scale": "hiking",
+     "sac_scale": "mountain_hiking",
+     "lengthKm": 8.97,
+     "shape": "network",
+     "ways": 42,
+     "start": "45.98246, 6.90656",
+     "end": "45.93621, 6.85341",
+     "osmId": "way/217481421",
      "trail_visibility": "excellent",
-     "surface": "compacted"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      6.872604,
-      45.9307425
-     ]
-    },
-    "properties": {
-     "highway": "track",
-     "osmId": "way/23195113",
-     "informal": false,
-     "lengthKm": 0.4,
-     "kind": "track",
-     "name": "Lacets du Belvédère",
-     "sac_scale": "not_rated"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      6.868085,
-      45.9199519
-     ]
-    },
-    "properties": {
-     "highway": "footway",
-     "osmId": "way/23196794",
-     "informal": false,
-     "lengthKm": 0.08,
-     "kind": "footway",
-     "name": "Chemin des Pouvolles",
-     "sac_scale": "not_rated"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      6.8666027,
-      45.9179552
-     ]
-    },
-    "properties": {
-     "highway": "footway",
-     "osmId": "way/23270559",
-     "informal": false,
-     "lengthKm": 0.13,
-     "kind": "footway",
-     "name": "Allée des Grands Mulets",
-     "sac_scale": "not_rated",
-     "surface": "asphalt"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      6.8666823,
-      45.9180304
-     ]
-    },
-    "properties": {
-     "highway": "footway",
-     "osmId": "way/23270560",
-     "informal": false,
-     "lengthKm": 0.08,
-     "kind": "footway",
-     "name": "Allée des Grands Mulets",
-     "sac_scale": "not_rated",
-     "surface": "asphalt"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      6.8728636,
-      45.9228018
-     ]
-    },
-    "properties": {
-     "highway": "footway",
-     "osmId": "way/23270956",
-     "informal": false,
-     "lengthKm": 0.12,
-     "kind": "footway",
-     "name": "Chemin Gabriel Loppé",
-     "sac_scale": "not_rated",
-     "surface": "dirt"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      6.895836,
-      45.9383888
-     ]
-    },
-    "properties": {
-     "highway": "track",
-     "osmId": "way/25276682",
-     "informal": false,
-     "lengthKm": 0.47,
-     "kind": "track",
-     "name": "Le Desert Blanc",
-     "sac_scale": "hiking",
-     "trail_visibility": "excellent",
-     "surface": "fine_gravel"
+     "surface": "ground",
+     "gainM": 548,
+     "lossM": 684,
+     "gainPerKm": 50.7,
+     "highM": 2129,
+     "lowM": 1818
     }
    },
    {
@@ -6351,36 +6539,24 @@
      ]
     },
     "properties": {
-     "highway": "path",
-     "osmId": "way/25285356",
-     "informal": false,
-     "lengthKm": 1.5,
-     "kind": "path",
      "name": "Grand Balcon Nord",
-     "sac_scale": "mountain_hiking",
-     "trail_visibility": "excellent",
-     "surface": "ground"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      6.8981615,
-      45.9142108
-     ]
-    },
-    "properties": {
-     "highway": "path",
-     "osmId": "way/25285363",
-     "informal": false,
-     "lengthKm": 0.88,
      "kind": "path",
-     "name": "Blaitière du Dessus-Grand Balcon Nord",
      "sac_scale": "mountain_hiking",
+     "lengthKm": 5.86,
+     "shape": "out-and-back",
+     "ways": 6,
+     "start": "45.93309, 6.91662",
+     "end": "45.90582, 6.88292",
+     "osmId": "way/25285356",
+     "roundTripKm": 11.72,
      "trail_visibility": "excellent",
-     "surface": "ground"
+     "surface": "ground",
+     "gainM": 558,
+     "lossM": 281,
+     "gainPerKm": 80.4,
+     "highM": 2201,
+     "lowM": 1904,
+     "roundTripGainM": 664
     }
    },
    {
@@ -6388,41 +6564,281 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      6.8814498,
-      45.9398659
+      6.8664328,
+      45.9178396
      ]
     },
     "properties": {
-     "highway": "path",
-     "osmId": "way/25556964",
-     "informal": false,
-     "lengthKm": 0.5,
-     "kind": "path",
-     "name": "Promenade des Econtres",
-     "sac_scale": "hiking",
-     "trail_visibility": "excellent",
-     "surface": "gravel"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      6.8737245,
-      45.9309937
-     ]
-    },
-    "properties": {
-     "highway": "path",
-     "osmId": "way/25596558",
+     "highway": "footway",
+     "osmId": "way/22886799",
      "informal": false,
      "lengthKm": 0.02,
+     "kind": "footway",
+     "sac_scale": "not_rated",
+     "surface": "asphalt",
+     "gainM": 0,
+     "lossM": 0,
+     "highM": 1031
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      6.8609575,
+      45.8661224
+     ]
+    },
+    "properties": {
+     "name": "Accès aux Grand Mulets",
      "kind": "path",
-     "name": "Promenade des Econtres",
-     "sac_scale": "hiking",
+     "sac_scale": "demanding_alpine_hiking",
+     "lengthKm": 5.34,
+     "shape": "out-and-back",
+     "ways": 1,
+     "start": "45.86612, 6.86096",
+     "end": "45.89754, 6.88915",
+     "osmId": "way/117544137",
+     "roundTripKm": 10.68,
+     "surface": "ground",
+     "gainM": 99,
+     "lossM": 743,
+     "gainPerKm": 15.6,
+     "highM": 3008,
+     "lowM": 2364,
+     "roundTripGainM": 810
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      6.9345932,
+      45.9831357
+     ]
+    },
+    "properties": {
+     "name": "Petit Balcon Nord",
+     "kind": "path",
+     "sac_scale": "mountain_hiking",
+     "lengthKm": 5.25,
+     "shape": "network",
+     "ways": 13,
+     "start": "45.98314, 6.93459",
+     "end": "45.99997, 6.9497",
+     "osmId": "way/33554865",
      "trail_visibility": "excellent",
-     "surface": "wood"
+     "surface": "ground",
+     "gainM": 385,
+     "lossM": 155,
+     "gainPerKm": 78.1,
+     "highM": 1516,
+     "lowM": 1292
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      6.9280185,
+      45.9251065
+     ]
+    },
+    "properties": {
+     "name": "Les Balcons de la Mer de Glace",
+     "kind": "path",
+     "sac_scale": "demanding_alpine_hiking",
+     "lengthKm": 5.12,
+     "shape": "out-and-back",
+     "ways": 1,
+     "start": "45.92511, 6.92802",
+     "end": "45.91015, 6.96537",
+     "osmId": "way/128225415",
+     "roundTripKm": 10.23,
+     "trail_visibility": "intermediate",
+     "gainM": 1075,
+     "lossM": 243,
+     "gainPerKm": 203.2,
+     "highM": 2704,
+     "lowM": 1844,
+     "roundTripGainM": 1246
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      6.9170223,
+      45.9332032
+     ]
+    },
+    "properties": {
+     "name": "Chemin du Montenvers",
+     "kind": "path",
+     "sac_scale": "mountain_hiking",
+     "lengthKm": 4.15,
+     "shape": "out-and-back",
+     "ways": 4,
+     "start": "45.9332, 6.91702",
+     "end": "45.92745, 6.88834",
+     "osmId": "way/74204985",
+     "roundTripKm": 8.31,
+     "trail_visibility": "excellent",
+     "surface": "ground",
+     "gainM": 69,
+     "lossM": 754,
+     "gainPerKm": 7.7,
+     "highM": 1901,
+     "lowM": 1212,
+     "roundTripGainM": 750
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      6.9265946,
+      45.9835286
+     ]
+    },
+    "properties": {
+     "name": "Chemin des Grands Bois",
+     "kind": "path",
+     "sac_scale": "mountain_hiking",
+     "lengthKm": 3.96,
+     "shape": "network",
+     "ways": 6,
+     "start": "45.98353, 6.92659",
+     "end": "45.97877, 6.90289",
+     "osmId": "way/32845662",
+     "trail_visibility": "excellent",
+     "surface": "ground",
+     "gainM": 768,
+     "lossM": 43,
+     "gainPerKm": 189.1,
+     "highM": 2001,
+     "lowM": 1271
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      6.9168324,
+      45.9397529
+     ]
+    },
+    "properties": {
+     "name": "Sortie Vallée Blanche",
+     "kind": "path",
+     "sac_scale": "hiking",
+     "lengthKm": 3.87,
+     "shape": "network",
+     "ways": 8,
+     "start": "45.93975, 6.91683",
+     "end": "45.92875, 6.88754",
+     "osmId": "way/205100128",
+     "trail_visibility": "excellent",
+     "surface": "rock",
+     "gainM": 33,
+     "lossM": 468,
+     "gainPerKm": 3.1,
+     "highM": 1616,
+     "lowM": 1181
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      6.984691,
+      45.8320839
+     ]
+    },
+    "properties": {
+     "name": "Sentiero per Rifugio Boccalatte-Piolti",
+     "kind": "path",
+     "sac_scale": "alpine_hiking",
+     "lengthKm": 3.58,
+     "shape": "out-and-back",
+     "ways": 5,
+     "start": "45.83208, 6.98469",
+     "end": "45.85304, 6.97737",
+     "osmId": "way/75641885",
+     "roundTripKm": 7.16,
+     "trail_visibility": "intermediate",
+     "surface": "rocky",
+     "gainM": 1190,
+     "lossM": 22,
+     "gainPerKm": 324.2,
+     "highM": 2771,
+     "lowM": 1603,
+     "roundTripGainM": 1162
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      6.9880181,
+      45.8688108
+     ]
+    },
+    "properties": {
+     "name": "Grandes Jorasses",
+     "kind": "path",
+     "sac_scale": "difficult_alpine_hiking",
+     "lengthKm": 2.98,
+     "shape": "out-and-back",
+     "ways": 2,
+     "start": "45.86881, 6.98802",
+     "end": "45.85304, 6.97737",
+     "osmId": "way/615361746",
+     "roundTripKm": 5.96,
+     "trail_visibility": "intermediate",
+     "surface": "rocky",
+     "gainM": 126,
+     "lossM": 1432,
+     "gainPerKm": 37.4,
+     "highM": 4103,
+     "lowM": 2771,
+     "roundTripGainM": 1530
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      6.9189607,
+      45.9748107
+     ]
+    },
+    "properties": {
+     "name": "Promenade de Lioutraz",
+     "kind": "path",
+     "sac_scale": "hiking",
+     "lengthKm": 2.76,
+     "shape": "network",
+     "ways": 18,
+     "start": "45.97481, 6.91896",
+     "end": "45.96702, 6.91167",
+     "osmId": "way/65708274",
+     "trail_visibility": "excellent",
+     "surface": "ground",
+     "gainM": 31,
+     "lossM": 89,
+     "gainPerKm": 7.7,
+     "highM": 1218,
+     "lowM": 1186
     }
    }
   ]
@@ -6666,7 +7082,7 @@
  },
  "paddling": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -115.3,
    44.6,
@@ -7167,7 +7583,7 @@
  },
  "permafrost": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -150,
    64,
@@ -7305,7 +7721,7 @@
  },
  "phenology": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -83.675,
    36.541,
@@ -7542,7 +7958,7 @@
  },
  "physical-regions": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -121,
    35.3,
@@ -7622,7 +8038,7 @@
  },
  "pipelines-lines": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -102.3,
    31.651,
@@ -7658,8 +8074,8 @@
     },
     "properties": {
      "kind": "transmission line",
-     "name": "ONCOR ELECTRIC DELIVERY CO. transmission line",
-     "owner": "ONCOR ELECTRIC DELIVERY CO.",
+     "name": "Oncor Electric Delivery Co. 345 kV line",
+     "owner": "Oncor Electric Delivery Co.",
      "status": "in service",
      "voltageKv": 345,
      "v": 345,
@@ -7724,76 +8140,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -102.2889,
-      31.7114
-     ]
-    },
-    "properties": {
-     "kind": "natural gas pipeline",
-     "name": "El Paso Natural Gas Co",
-     "operator": "El Paso Natural Gas Co",
-     "pipelineType": "interstate",
-     "status": "operating"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
       -101.8288,
       31.8556
-     ]
-    },
-    "properties": {
-     "kind": "natural gas pipeline",
-     "name": "El Paso Texas Pipeline Co",
-     "operator": "El Paso Texas Pipeline Co",
-     "pipelineType": "intrastate",
-     "status": "operating"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -102.2209,
-      31.6456
-     ]
-    },
-    "properties": {
-     "kind": "natural gas pipeline",
-     "name": "El Paso Natural Gas Co",
-     "operator": "El Paso Natural Gas Co",
-     "pipelineType": "interstate",
-     "status": "operating"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -102.4863,
-      32.0806
-     ]
-    },
-    "properties": {
-     "kind": "natural gas pipeline",
-     "name": "ONEOK Westex Pipeline",
-     "operator": "ONEOK Westex Pipeline",
-     "pipelineType": "intrastate",
-     "status": "operating"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -102.2283,
-      31.6647
      ]
     },
     "properties": {
@@ -7826,23 +8174,81 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -102.3155,
-      31.6233
+      -103.1571,
+      32.6692
      ]
     },
     "properties": {
-     "kind": "natural gas pipeline",
-     "name": "Atmos Pipeline - Texas",
-     "operator": "Atmos Pipeline - Texas",
-     "pipelineType": "intrastate",
-     "status": "operating"
+     "kind": "crude oil pipeline",
+     "name": "Basin",
+     "operator": "PLAINS ALL AMERICAN PIPELINE"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -94.0025,
+      29.9889
+     ]
+    },
+    "properties": {
+     "kind": "crude oil pipeline",
+     "name": "Amdel",
+     "operator": "SUNOCO"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -102.0156,
+      32.0204
+     ]
+    },
+    "properties": {
+     "kind": "crude oil pipeline",
+     "name": "Midland to Sealy",
+     "operator": "ENTERPRISE PRODUCTS PARTNERS"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -96.462,
+      32.0689
+     ]
+    },
+    "properties": {
+     "kind": "crude oil pipeline",
+     "name": "Midland, TX - Corsicana, TX",
+     "operator": "PERMIAN EXPRESS PARTNERS"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -101.8416,
+      31.6272
+     ]
+    },
+    "properties": {
+     "kind": "crude oil pipeline",
+     "name": "Centurion Pipeline",
+     "operator": "CENTURION PIPELINE"
     }
    }
   ]
  },
  "popularity": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -120.15,
    38.9,
@@ -7871,7 +8277,7 @@
       "Inspiration Point",
       "On Lake Tahoe"
      ],
-     "wikipediaViews": 376,
+     "wikipediaViews": 362,
      "photos": 85,
      "parkingSpaces": 62,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Rubicon_Point_Light",
@@ -7892,7 +8298,10 @@
       "way/1315533454",
       "way/1315533455"
      ],
-     "popularityNote": "estimate"
+     "popularityNote": "estimate",
+     "gainM": 257,
+     "lossM": 175,
+     "highM": 2014
     }
    },
    {
@@ -7919,7 +8328,10 @@
       "way/439973679",
       "way/439973694"
      ],
-     "popularityNote": "estimate"
+     "popularityNote": "estimate",
+     "gainM": 0,
+     "lossM": 32,
+     "highM": 2586
     }
    },
    {
@@ -7939,7 +8351,7 @@
      "leadsTo": [
       "Mount Tallac"
      ],
-     "wikipediaViews": 1303,
+     "wikipediaViews": 1268,
      "photos": 9,
      "parkingSpaces": 10,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Mount_Tallac",
@@ -7947,7 +8359,10 @@
       "way/32880969",
       "way/1213889953"
      ],
-     "popularityNote": "estimate"
+     "popularityNote": "estimate",
+     "gainM": 762,
+     "lossM": 371,
+     "highM": 2897
     }
    },
    {
@@ -7969,7 +8384,7 @@
       "Calawee Cove Beach",
       "On Lake Tahoe"
      ],
-     "wikipediaViews": 376,
+     "wikipediaViews": 362,
      "photos": 16,
      "parkingSpaces": 10,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Rubicon_Point_Light",
@@ -7977,7 +8392,10 @@
       "way/288423412",
       "way/976284879"
      ],
-     "popularityNote": "estimate"
+     "popularityNote": "estimate",
+     "gainM": 88,
+     "lossM": 123,
+     "highM": 2068
     }
    },
    {
@@ -7997,13 +8415,16 @@
      "leadsTo": [
       "Mount Tallac"
      ],
-     "wikipediaViews": 1303,
+     "wikipediaViews": 1268,
      "photos": 4,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Mount_Tallac",
      "osmIds": [
       "way/457800550"
      ],
-     "popularityNote": "estimate"
+     "popularityNote": "estimate",
+     "gainM": 61,
+     "lossM": 3,
+     "highM": 2959
     }
    },
    {
@@ -8024,7 +8445,7 @@
       "Eagle Lake",
       "Upper Eagle Falls"
      ],
-     "wikipediaViews": 184,
+     "wikipediaViews": 194,
      "photos": 17,
      "parkingSpaces": 10,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Eagle_Lake_(Desolation_Wilderness)",
@@ -8032,7 +8453,10 @@
       "way/288423399",
       "way/456504487"
      ],
-     "popularityNote": "estimate"
+     "popularityNote": "estimate",
+     "gainM": 17,
+     "lossM": 7,
+     "highM": 2143
     }
    },
    {
@@ -8052,13 +8476,16 @@
      "leadsTo": [
       "Maggies Peaks"
      ],
-     "wikipediaViews": 212,
+     "wikipediaViews": 205,
      "photos": 0,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Maggies_Peaks",
      "osmIds": [
       "way/1548527775"
      ],
-     "popularityNote": "estimate"
+     "popularityNote": "estimate",
+     "gainM": 90,
+     "lossM": 0,
+     "highM": 2635
     }
    },
    {
@@ -8072,19 +8499,22 @@
     },
     "properties": {
      "name": "Climbers Trail to Eagle Lake Buttress",
-     "v": 36,
+     "v": 37,
      "rank": 8,
      "lengthKm": 1.2,
      "leadsTo": [
       "Eagle Lake"
      ],
-     "wikipediaViews": 184,
+     "wikipediaViews": 194,
      "photos": 0,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Eagle_Lake_(Desolation_Wilderness)",
      "osmIds": [
       "way/1098370184"
      ],
-     "popularityNote": "estimate"
+     "popularityNote": "estimate",
+     "gainM": 356,
+     "lossM": 3,
+     "highM": 2489
     }
    },
    {
@@ -8104,13 +8534,16 @@
      "leadsTo": [
       "Rubicon Peak"
      ],
-     "wikipediaViews": 79,
+     "wikipediaViews": 84,
      "photos": 0,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Rubicon_Peak",
      "osmIds": [
       "way/548492031"
      ],
-     "popularityNote": "estimate"
+     "popularityNote": "estimate",
+     "gainM": 667,
+     "lossM": 3,
+     "highM": 2776
     }
    },
    {
@@ -8138,7 +8571,10 @@
      "osmIds": [
       "way/439762370"
      ],
-     "popularityNote": "estimate"
+     "popularityNote": "estimate",
+     "gainM": 0,
+     "lossM": 31,
+     "highM": 1945
     }
    },
    {
@@ -8168,7 +8604,10 @@
       "way/1388900806",
       "way/1388900809"
      ],
-     "popularityNote": "estimate"
+     "popularityNote": "estimate",
+     "gainM": 12,
+     "lossM": 3,
+     "highM": 2030
     }
    },
    {
@@ -8197,14 +8636,17 @@
       "way/1435775007",
       "way/1435775008"
      ],
-     "popularityNote": "estimate"
+     "popularityNote": "estimate",
+     "gainM": 8,
+     "lossM": 89,
+     "highM": 2092
     }
    }
   ]
  },
  "popularity-campsites": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -109.8,
    38.4,
@@ -8379,7 +8821,7 @@
      "website": "https://www.moabupthecreek.com/",
      "v": 45,
      "signals": {
-      "photos": 16,
+      "photos": 17,
       "parking": 0,
       "wiki": false,
       "informal": 0,
@@ -8526,9 +8968,9 @@
      "reservation": "no",
      "toilets": true,
      "drinkingWater": false,
-     "v": 38,
+     "v": 41,
      "signals": {
-      "photos": 7,
+      "photos": 9,
       "parking": 0,
       "wiki": false,
       "informal": 0,
@@ -8569,7 +9011,7 @@
  },
  "population": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -114.356,
    38.818,
@@ -8579,7 +9021,7 @@
  },
  "ports": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -97.4,
    25.8,
@@ -8855,7 +9297,7 @@
  },
  "power-plants": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -114.816,
    31.332,
@@ -9144,7 +9586,7 @@
  },
  "protected-areas-world": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    20,
    54,
@@ -9425,7 +9867,7 @@
  },
  "recreation-sites": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -112.076,
    34.306,
@@ -9653,7 +10095,7 @@
  },
  "remoteness": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -110.178,
    42.799,
@@ -9964,7 +10406,7 @@
  },
  "reservoir-levels": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -123,
    40.4,
@@ -9985,13 +10427,252 @@
      "name": "Shasta Lake",
      "river": "Sacramento River",
      "source": "California DWR (CDEC)",
-     "v": 2356176,
-     "storageAf": 2356176,
-     "lastDate": "2026-10-17",
-     "t": "2026-10-17T00:00:00.000Z",
+     "v": 2325643,
+     "storageAf": 2325643,
+     "lastDate": "2026-10-22",
+     "t": "2026-10-22T00:00:00.000Z",
      "capacityAf": 4552000,
-     "pctFull": 52,
-     "percentFull": "52%"
+     "pctFull": 51,
+     "percentFull": "51%",
+     "series": [
+      {
+       "t": "2021-11",
+       "v": 1117000
+      },
+      {
+       "t": "2021-12",
+       "v": 1331000
+      },
+      {
+       "t": "2022-01",
+       "v": 1621000
+      },
+      {
+       "t": "2022-02",
+       "v": 1690000
+      },
+      {
+       "t": "2022-03",
+       "v": 1735000
+      },
+      {
+       "t": "2022-04",
+       "v": 1808000
+      },
+      {
+       "t": "2022-05",
+       "v": 1815000
+      },
+      {
+       "t": "2022-06",
+       "v": 1777000
+      },
+      {
+       "t": "2022-07",
+       "v": 1683000
+      },
+      {
+       "t": "2022-08",
+       "v": 1590000
+      },
+      {
+       "t": "2022-09",
+       "v": 1515000
+      },
+      {
+       "t": "2022-10",
+       "v": 1414000
+      },
+      {
+       "t": "2022-11",
+       "v": 1399000
+      },
+      {
+       "t": "2022-12",
+       "v": 1524000
+      },
+      {
+       "t": "2023-01",
+       "v": 2570000
+      },
+      {
+       "t": "2023-02",
+       "v": 2747000
+      },
+      {
+       "t": "2023-03",
+       "v": 3771000
+      },
+      {
+       "t": "2023-04",
+       "v": 4430000
+      },
+      {
+       "t": "2023-05",
+       "v": 4458000
+      },
+      {
+       "t": "2023-06",
+       "v": 4275000
+      },
+      {
+       "t": "2023-07",
+       "v": 3890000
+      },
+      {
+       "t": "2023-08",
+       "v": 3531000
+      },
+      {
+       "t": "2023-09",
+       "v": 3332000
+      },
+      {
+       "t": "2023-10",
+       "v": 3146000
+      },
+      {
+       "t": "2023-11",
+       "v": 3075000
+      },
+      {
+       "t": "2023-12",
+       "v": 3113000
+      },
+      {
+       "t": "2024-01",
+       "v": 3624000
+      },
+      {
+       "t": "2024-02",
+       "v": 3749000
+      },
+      {
+       "t": "2024-03",
+       "v": 4194000
+      },
+      {
+       "t": "2024-04",
+       "v": 4364000
+      },
+      {
+       "t": "2024-05",
+       "v": 4298000
+      },
+      {
+       "t": "2024-06",
+       "v": 4000000
+      },
+      {
+       "t": "2024-07",
+       "v": 3451000
+      },
+      {
+       "t": "2024-08",
+       "v": 3007000
+      },
+      {
+       "t": "2024-09",
+       "v": 2766000
+      },
+      {
+       "t": "2024-10",
+       "v": 2596000
+      },
+      {
+       "t": "2024-11",
+       "v": 2770000
+      },
+      {
+       "t": "2024-12",
+       "v": 3477000
+      },
+      {
+       "t": "2025-01",
+       "v": 3492000
+      },
+      {
+       "t": "2025-02",
+       "v": 3561000
+      },
+      {
+       "t": "2025-03",
+       "v": 4067000
+      },
+      {
+       "t": "2025-04",
+       "v": 4396000
+      },
+      {
+       "t": "2025-05",
+       "v": 4151000
+      },
+      {
+       "t": "2025-06",
+       "v": 3788000
+      },
+      {
+       "t": "2025-07",
+       "v": 3238000
+      },
+      {
+       "t": "2025-08",
+       "v": 2852000
+      },
+      {
+       "t": "2025-09",
+       "v": 2678000
+      },
+      {
+       "t": "2025-10",
+       "v": 2547440
+      },
+      {
+       "t": "2025-11",
+       "v": 2681432
+      },
+      {
+       "t": "2025-12",
+       "v": 3295388
+      },
+      {
+       "t": "2026-01",
+       "v": 3642626
+      },
+      {
+       "t": "2026-02",
+       "v": 3822800
+      },
+      {
+       "t": "2026-03",
+       "v": 4090291
+      },
+      {
+       "t": "2026-04",
+       "v": 4140355
+      },
+      {
+       "t": "2026-05",
+       "v": 3950012
+      },
+      {
+       "t": "2026-06",
+       "v": 3557728
+      },
+      {
+       "t": "2026-07",
+       "v": 3054369
+      },
+      {
+       "t": "2026-08",
+       "v": 2629600
+      },
+      {
+       "t": "2026-09",
+       "v": 2447894
+      }
+     ],
+     "seriesUnit": "acre-feet"
     }
    },
    {
@@ -10007,20 +10688,259 @@
      "name": "Trinity Lake",
      "river": "Trinity River",
      "source": "California DWR (CDEC)",
-     "v": 1651030,
-     "storageAf": 1651030,
-     "lastDate": "2026-10-17",
-     "t": "2026-10-17T00:00:00.000Z",
+     "v": 1645322,
+     "storageAf": 1645322,
+     "lastDate": "2026-10-22",
+     "t": "2026-10-22T00:00:00.000Z",
      "capacityAf": 2448000,
      "pctFull": 67,
-     "percentFull": "67%"
+     "percentFull": "67%",
+     "series": [
+      {
+       "t": "2021-11",
+       "v": 707900
+      },
+      {
+       "t": "2021-12",
+       "v": 720100
+      },
+      {
+       "t": "2022-01",
+       "v": 762600
+      },
+      {
+       "t": "2022-02",
+       "v": 787700
+      },
+      {
+       "t": "2022-03",
+       "v": 807300
+      },
+      {
+       "t": "2022-04",
+       "v": 766300
+      },
+      {
+       "t": "2022-05",
+       "v": 739500
+      },
+      {
+       "t": "2022-06",
+       "v": 715700
+      },
+      {
+       "t": "2022-07",
+       "v": 663700
+      },
+      {
+       "t": "2022-08",
+       "v": 605400
+      },
+      {
+       "t": "2022-09",
+       "v": 553200
+      },
+      {
+       "t": "2022-10",
+       "v": 534700
+      },
+      {
+       "t": "2022-11",
+       "v": 527900
+      },
+      {
+       "t": "2022-12",
+       "v": 551500
+      },
+      {
+       "t": "2023-01",
+       "v": 764200
+      },
+      {
+       "t": "2023-02",
+       "v": 798700
+      },
+      {
+       "t": "2023-03",
+       "v": 910200
+      },
+      {
+       "t": "2023-04",
+       "v": 889700
+      },
+      {
+       "t": "2023-05",
+       "v": 1269000
+      },
+      {
+       "t": "2023-06",
+       "v": 1427000
+      },
+      {
+       "t": "2023-07",
+       "v": 1404000
+      },
+      {
+       "t": "2023-08",
+       "v": 1340000
+      },
+      {
+       "t": "2023-09",
+       "v": 1275000
+      },
+      {
+       "t": "2023-10",
+       "v": 1222000
+      },
+      {
+       "t": "2023-11",
+       "v": 1210000
+      },
+      {
+       "t": "2023-12",
+       "v": 1288000
+      },
+      {
+       "t": "2024-01",
+       "v": 1512000
+      },
+      {
+       "t": "2024-02",
+       "v": 1776000
+      },
+      {
+       "t": "2024-03",
+       "v": 1958000
+      },
+      {
+       "t": "2024-04",
+       "v": 2073000
+      },
+      {
+       "t": "2024-05",
+       "v": 2119000
+      },
+      {
+       "t": "2024-06",
+       "v": 2046000
+      },
+      {
+       "t": "2024-07",
+       "v": 1934000
+      },
+      {
+       "t": "2024-08",
+       "v": 1825000
+      },
+      {
+       "t": "2024-09",
+       "v": 1720000
+      },
+      {
+       "t": "2024-10",
+       "v": 1620000
+      },
+      {
+       "t": "2024-11",
+       "v": 1661000
+      },
+      {
+       "t": "2024-12",
+       "v": 1821000
+      },
+      {
+       "t": "2025-01",
+       "v": 1908000
+      },
+      {
+       "t": "2025-02",
+       "v": 2027000
+      },
+      {
+       "t": "2025-03",
+       "v": 2112000
+      },
+      {
+       "t": "2025-04",
+       "v": 2207000
+      },
+      {
+       "t": "2025-05",
+       "v": 2267000
+      },
+      {
+       "t": "2025-06",
+       "v": 2209000
+      },
+      {
+       "t": "2025-07",
+       "v": 2084000
+      },
+      {
+       "t": "2025-08",
+       "v": 1948000
+      },
+      {
+       "t": "2025-09",
+       "v": 1822000
+      },
+      {
+       "t": "2025-10",
+       "v": 1736881
+      },
+      {
+       "t": "2025-11",
+       "v": 1796829
+      },
+      {
+       "t": "2025-12",
+       "v": 1940716
+      },
+      {
+       "t": "2026-01",
+       "v": 2046730
+      },
+      {
+       "t": "2026-02",
+       "v": 2150300
+      },
+      {
+       "t": "2026-03",
+       "v": 2232083
+      },
+      {
+       "t": "2026-04",
+       "v": 2234670
+      },
+      {
+       "t": "2026-05",
+       "v": 2149730
+      },
+      {
+       "t": "2026-06",
+       "v": 2014302
+      },
+      {
+       "t": "2026-07",
+       "v": 1898176
+      },
+      {
+       "t": "2026-08",
+       "v": 1772800
+      },
+      {
+       "t": "2026-09",
+       "v": 1684476
+      }
+     ],
+     "seriesUnit": "acre-feet"
     }
    }
   ]
  },
  "river-basins": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -105.11,
    39.618,
@@ -10116,7 +11036,7 @@
  },
  "river-pulse": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -92,
    36,
@@ -10140,22 +11060,22 @@
      "reachId": "r0-0",
      "lengthKm": 22,
      "length": "14 mi (22 km)",
-     "q": 10494,
-     "pct": 97,
+     "q": 12049,
+     "pct": 111,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "371,000 cfs (10,500 m³/s)",
+     "flow": "426,000 cfs (12,000 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 10494,
+     "riverQ": 12049,
      "riverFigure": "edge",
-     "atViewEdge": "371,000 cfs (10,500 m³/s)"
+     "atViewEdge": "426,000 cfs (12,000 m³/s)"
     }
    },
    {
@@ -10174,14 +11094,14 @@
      "reachId": "r0-18",
      "lengthKm": 16,
      "length": "10 mi (16 km)",
-     "q": 10494,
-     "pct": 97,
+     "q": 12049,
+     "pct": 111,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "371,000 cfs (10,500 m³/s)",
+     "flow": "426,000 cfs (12,000 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
@@ -10189,9 +11109,9 @@
      "units": "us",
      "outlet": true,
      "outletKind": "edge",
-     "riverQ": 10494,
+     "riverQ": 12049,
      "riverFigure": "edge",
-     "atViewEdge": "371,000 cfs (10,500 m³/s)"
+     "atViewEdge": "426,000 cfs (12,000 m³/s)"
     }
    },
    {
@@ -10210,22 +11130,22 @@
      "reachId": "r1-0",
      "lengthKm": 28,
      "length": "17 mi (28 km)",
-     "q": 8.2,
-     "pct": 41,
-     "medianQ": 20.1,
+     "q": 6.5,
+     "pct": 40,
+     "medianQ": 16.2,
      "peakQ": 76.3,
      "peakDate": "2026-08-05",
      "lowQ": 4.7,
      "lowDate": "2026-10-16",
-     "flow": "290 cfs (8.2 m³/s)",
-     "medianFlow": "710 cfs (20 m³/s)",
+     "flow": "230 cfs (6.5 m³/s)",
+     "medianFlow": "572 cfs (16 m³/s)",
      "peakFlow": "2,690 cfs (76 m³/s)",
      "lowFlow": "166 cfs (4.7 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 8.2,
+     "riverQ": 6.5,
      "riverFigure": "largest",
-     "atLargest": "290 cfs (8.2 m³/s)"
+     "atLargest": "230 cfs (6.5 m³/s)"
     }
    },
    {
@@ -10244,22 +11164,22 @@
      "reachId": "r2-0",
      "lengthKm": 20,
      "length": "12 mi (20 km)",
-     "q": 16.4,
-     "pct": 150,
-     "medianQ": 10.9,
-     "peakQ": 43.1,
-     "peakDate": "2026-07-18",
+     "q": 5.1,
+     "pct": 53,
+     "medianQ": 9.7,
+     "peakQ": 34.2,
+     "peakDate": "2026-07-23",
      "lowQ": 0,
      "lowDate": "2026-09-01",
-     "flow": "579 cfs (16 m³/s)",
-     "medianFlow": "385 cfs (11 m³/s)",
-     "peakFlow": "1,520 cfs (43 m³/s)",
+     "flow": "180 cfs (5.1 m³/s)",
+     "medianFlow": "342 cfs (9.7 m³/s)",
+     "peakFlow": "1,210 cfs (34 m³/s)",
      "lowFlow": "0 cfs (0 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 16.4,
+     "riverQ": 5.1,
      "riverFigure": "mouth",
-     "atMouth": "579 cfs (16 m³/s)"
+     "atMouth": "180 cfs (5.1 m³/s)"
     }
    },
    {
@@ -10278,22 +11198,22 @@
      "reachId": "r0-1",
      "lengthKm": 37,
      "length": "23 mi (37 km)",
-     "q": 10494,
-     "pct": 97,
+     "q": 12049,
+     "pct": 111,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "371,000 cfs (10,500 m³/s)",
+     "flow": "426,000 cfs (12,000 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 10494,
+     "riverQ": 12049,
      "riverFigure": "edge",
-     "atViewEdge": "371,000 cfs (10,500 m³/s)"
+     "atViewEdge": "426,000 cfs (12,000 m³/s)"
     }
    },
    {
@@ -10312,22 +11232,22 @@
      "reachId": "r0-2",
      "lengthKm": 29,
      "length": "18 mi (29 km)",
-     "q": 10494,
-     "pct": 97,
+     "q": 12049,
+     "pct": 111,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "371,000 cfs (10,500 m³/s)",
+     "flow": "426,000 cfs (12,000 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 10494,
+     "riverQ": 12049,
      "riverFigure": "edge",
-     "atViewEdge": "371,000 cfs (10,500 m³/s)"
+     "atViewEdge": "426,000 cfs (12,000 m³/s)"
     }
    },
    {
@@ -10346,22 +11266,22 @@
      "reachId": "r0-3",
      "lengthKm": 27,
      "length": "17 mi (27 km)",
-     "q": 10494,
-     "pct": 97,
+     "q": 12049,
+     "pct": 111,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "371,000 cfs (10,500 m³/s)",
+     "flow": "426,000 cfs (12,000 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 10494,
+     "riverQ": 12049,
      "riverFigure": "edge",
-     "atViewEdge": "371,000 cfs (10,500 m³/s)"
+     "atViewEdge": "426,000 cfs (12,000 m³/s)"
     }
    },
    {
@@ -10380,22 +11300,22 @@
      "reachId": "r0-4",
      "lengthKm": 29,
      "length": "18 mi (29 km)",
-     "q": 10494,
-     "pct": 97,
+     "q": 12049,
+     "pct": 111,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "371,000 cfs (10,500 m³/s)",
+     "flow": "426,000 cfs (12,000 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 10494,
+     "riverQ": 12049,
      "riverFigure": "edge",
-     "atViewEdge": "371,000 cfs (10,500 m³/s)"
+     "atViewEdge": "426,000 cfs (12,000 m³/s)"
     }
    },
    {
@@ -10414,22 +11334,22 @@
      "reachId": "r0-5",
      "lengthKm": 26,
      "length": "16 mi (26 km)",
-     "q": 10494,
-     "pct": 97,
+     "q": 12049,
+     "pct": 111,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "371,000 cfs (10,500 m³/s)",
+     "flow": "426,000 cfs (12,000 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 10494,
+     "riverQ": 12049,
      "riverFigure": "edge",
-     "atViewEdge": "371,000 cfs (10,500 m³/s)"
+     "atViewEdge": "426,000 cfs (12,000 m³/s)"
     }
    },
    {
@@ -10448,22 +11368,22 @@
      "reachId": "r0-6",
      "lengthKm": 28,
      "length": "17 mi (28 km)",
-     "q": 10494,
-     "pct": 97,
+     "q": 12049,
+     "pct": 111,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "371,000 cfs (10,500 m³/s)",
+     "flow": "426,000 cfs (12,000 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 10494,
+     "riverQ": 12049,
      "riverFigure": "edge",
-     "atViewEdge": "371,000 cfs (10,500 m³/s)"
+     "atViewEdge": "426,000 cfs (12,000 m³/s)"
     }
    },
    {
@@ -10482,22 +11402,22 @@
      "reachId": "r0-7",
      "lengthKm": 22,
      "length": "14 mi (22 km)",
-     "q": 10494,
-     "pct": 97,
+     "q": 12049,
+     "pct": 111,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "371,000 cfs (10,500 m³/s)",
+     "flow": "426,000 cfs (12,000 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 10494,
+     "riverQ": 12049,
      "riverFigure": "edge",
-     "atViewEdge": "371,000 cfs (10,500 m³/s)"
+     "atViewEdge": "426,000 cfs (12,000 m³/s)"
     }
    },
    {
@@ -10516,29 +11436,29 @@
      "reachId": "r0-8",
      "lengthKm": 21,
      "length": "13 mi (21 km)",
-     "q": 10494,
-     "pct": 97,
+     "q": 12049,
+     "pct": 111,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "371,000 cfs (10,500 m³/s)",
+     "flow": "426,000 cfs (12,000 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 10494,
+     "riverQ": 12049,
      "riverFigure": "edge",
-     "atViewEdge": "371,000 cfs (10,500 m³/s)"
+     "atViewEdge": "426,000 cfs (12,000 m³/s)"
     }
    }
   ]
  },
  "sea-ice": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -180,
    66,
@@ -10548,7 +11468,7 @@
  },
  "sea-level-rise": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -80.187,
    32.632,
@@ -10558,7 +11478,7 @@
  },
  "sea-level-trends": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -123,
    37,
@@ -10571,12 +11491,12 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -122.4,
-      37.9283
+      -122.400002,
+      37.928299
      ]
     },
     "properties": {
-     "name": "Richmond, CA",
+     "name": "Richmond",
      "stationId": "9414863",
      "v": 3.35,
      "kind": "rising",
@@ -10584,7 +11504,7 @@
      "inPerDecade": 1.3189,
      "network": "US",
      "url": "https://tidesandcurrents.noaa.gov/sltrends/sltrends_station.shtml?id=9414863",
-     "trendError": 1.42,
+     "trendError": 1.44,
      "startYear": 1979,
      "endYear": 2025
     }
@@ -10594,12 +11514,36 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -122.2119,
-      37.5068
+      -122.465889,
+      37.806306
      ]
     },
     "properties": {
-     "name": "Redwood City, CA",
+     "name": "San Francisco",
+     "stationId": "9414290",
+     "v": 1.98,
+     "kind": "rising",
+     "ftPerCentury": 0.65,
+     "inPerDecade": 0.7795,
+     "network": "US",
+     "url": "https://tidesandcurrents.noaa.gov/sltrends/sltrends_station.shtml?id=9414290",
+     "trendError": 0.15,
+     "startYear": 1897,
+     "endYear": 2025,
+     "annotation": "Possible datum shift"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -122.211906,
+      37.506814
+     ]
+    },
+    "properties": {
+     "name": "Redwood City",
      "stationId": "9414523",
      "v": 2.74,
      "kind": "rising",
@@ -10617,44 +11561,21 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -122.9736,
-      37.9942
+      -122.9736111,
+      37.9941667
      ]
     },
     "properties": {
-     "name": "Point Reyes, CA",
+     "name": "Point Reyes",
      "stationId": "9415020",
-     "v": 2.15,
+     "v": 2.16,
      "kind": "rising",
      "ftPerCentury": 0.71,
-     "inPerDecade": 0.8465,
+     "inPerDecade": 0.8504,
      "network": "US",
      "url": "https://tidesandcurrents.noaa.gov/sltrends/sltrends_station.shtml?id=9415020",
-     "trendError": 0.68,
+     "trendError": 0.7,
      "startYear": 1975,
-     "endYear": 2025
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -122.4659,
-      37.8063
-     ]
-    },
-    "properties": {
-     "name": "San Francisco, CA",
-     "stationId": "9414290",
-     "v": 1.99,
-     "kind": "rising",
-     "ftPerCentury": 0.65,
-     "inPerDecade": 0.7835,
-     "network": "US",
-     "url": "https://tidesandcurrents.noaa.gov/sltrends/sltrends_station.shtml?id=9414290",
-     "trendError": 0.17,
-     "startYear": 1897,
      "endYear": 2025
     }
    },
@@ -10668,7 +11589,7 @@
      ]
     },
     "properties": {
-     "name": "Port Chicago, CA",
+     "name": "Port Chicago",
      "stationId": "9415144",
      "v": 1.96,
      "kind": "rising",
@@ -10676,7 +11597,7 @@
      "inPerDecade": 0.7717,
      "network": "US",
      "url": "https://tidesandcurrents.noaa.gov/sltrends/sltrends_station.shtml?id=9415144",
-     "trendError": 1.14,
+     "trendError": 1.15,
      "startYear": 1976,
      "endYear": 2025
     }
@@ -10686,12 +11607,12 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -122.3003,
-      37.772
+      -122.300261,
+      37.771953
      ]
     },
     "properties": {
-     "name": "Alameda, CA",
+     "name": "Alameda",
      "stationId": "9414750",
      "v": 0.94,
      "kind": "rising",
@@ -10708,7 +11629,7 @@
  },
  "sequoia-groves": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -119.5,
    35.8,
@@ -10924,7 +11845,7 @@
  },
  "sequoia-mortality": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -119.5,
    35.8,
@@ -11189,7 +12110,7 @@
  },
  "ski-routes": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    6.814,
    45.833,
@@ -11212,7 +12133,11 @@
      "name": "Charlanon",
      "difficulty": "intermediate",
      "v": 3,
-     "grooming": "classic"
+     "grooming": "classic",
+     "gainM": 13,
+     "lossM": 354,
+     "highM": 2331,
+     "maxSlopeDeg": 39
     }
    },
    {
@@ -11230,7 +12155,11 @@
      "difficulty": "easy",
      "v": 2,
      "grooming": "classic+skating",
-     "lit": false
+     "lit": false,
+     "gainM": 0,
+     "lossM": 28,
+     "highM": 1618,
+     "maxSlopeDeg": 12
     }
    },
    {
@@ -11250,7 +12179,11 @@
      "difficulty": "easy",
      "v": 2,
      "grooming": "classic+skating",
-     "lit": false
+     "lit": false,
+     "gainM": 14,
+     "lossM": 0,
+     "highM": 1645,
+     "maxSlopeDeg": 12
     }
    },
    {
@@ -11266,7 +12199,11 @@
      "kind": "skitour",
      "osmId": "relation/2055263",
      "route": true,
-     "name": "skitour: Trient - Pointe des Grands"
+     "name": "skitour: Trient - Pointe des Grands",
+     "gainM": 1380,
+     "lossM": 56,
+     "highM": 3052,
+     "maxSlopeDeg": 31
     }
    },
    {
@@ -11284,7 +12221,11 @@
      "name": "Combe Vioz",
      "difficulty": "easy",
      "v": 2,
-     "grooming": "classic"
+     "grooming": "classic",
+     "gainM": 5,
+     "lossM": 28,
+     "highM": 2010,
+     "maxSlopeDeg": 36
     }
    },
    {
@@ -11301,7 +12242,11 @@
      "osmId": "way/23186071",
      "name": "Coqs",
      "difficulty": "easy",
-     "v": 2
+     "v": 2,
+     "gainM": 0,
+     "lossM": 46,
+     "highM": 2186,
+     "maxSlopeDeg": 25
     }
    },
    {
@@ -11318,7 +12263,11 @@
      "osmId": "way/23186072",
      "name": "Marmottons",
      "difficulty": "easy",
-     "v": 2
+     "v": 2,
+     "gainM": 3,
+     "lossM": 177,
+     "highM": 2141,
+     "maxSlopeDeg": 19
     }
    },
    {
@@ -11336,7 +12285,11 @@
      "name": "Pierre à Ric",
      "difficulty": "intermediate",
      "v": 3,
-     "grooming": "classic"
+     "grooming": "classic",
+     "gainM": 0,
+     "lossM": 716,
+     "highM": 1961,
+     "maxSlopeDeg": 29
     }
    },
    {
@@ -11354,7 +12307,11 @@
      "name": "Arve",
      "difficulty": "easy",
      "v": 2,
-     "grooming": "classic"
+     "grooming": "classic",
+     "gainM": 4,
+     "lossM": 87,
+     "highM": 1936,
+     "maxSlopeDeg": 23
     }
    },
    {
@@ -11371,7 +12328,11 @@
      "osmId": "way/23186407",
      "name": "Solonges Bas",
      "difficulty": "intermediate",
-     "v": 3
+     "v": 3,
+     "gainM": 0,
+     "lossM": 174,
+     "highM": 2089,
+     "maxSlopeDeg": 19
     }
    },
    {
@@ -11388,7 +12349,11 @@
      "osmId": "way/23186408",
      "name": "Belle Place Haut",
      "difficulty": "intermediate",
-     "v": 3
+     "v": 3,
+     "gainM": 0,
+     "lossM": 605,
+     "highM": 2250,
+     "maxSlopeDeg": 29
     }
    },
    {
@@ -11406,7 +12371,11 @@
      "name": "Ecuries",
      "difficulty": "intermediate",
      "v": 3,
-     "grooming": "classic"
+     "grooming": "classic",
+     "gainM": 0,
+     "lossM": 307,
+     "highM": 2188,
+     "maxSlopeDeg": 20
     }
    }
   ]
@@ -11665,7 +12634,7 @@
  },
  "snow-cover": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -121.8,
    45.2,
@@ -11675,7 +12644,7 @@
  },
  "snowpack": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -122,
    45,
@@ -11696,13 +12665,13 @@
      "name": "Blazed Alder",
      "stationId": "351:OR:SNTL",
      "elevationFt": 3660,
-     "t": "2026-10-18T08:00:00.000Z",
-     "readingLocal": "Oct 18, 1 AM PDT",
+     "t": "2026-10-23T15:00:00.000Z",
+     "readingLocal": "Oct 23, 8 AM PDT",
      "v": 0,
-     "swe": 0.1,
+     "swe": 0,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 3.9,
+     "tempC": 2.5,
      "normalOnset": "Nov 17",
      "medianPeakIn": 32.4
     }
@@ -11720,12 +12689,14 @@
      "name": "Mount Hood Test Site",
      "stationId": "651:OR:SNTL",
      "elevationFt": 5380,
-     "t": "2026-10-18T08:00:00.000Z",
-     "readingLocal": "Oct 18, 1 AM PDT",
-     "v": 1,
+     "t": "2026-10-23T15:00:00.000Z",
+     "readingLocal": "Oct 23, 8 AM PDT",
+     "v": 2,
      "swe": 0,
-     "new24h": 0,
-     "tempC": 2.5,
+     "density": 0,
+     "type": "powder",
+     "new24h": 1,
+     "tempC": -2.5,
      "normalOnset": "Oct 30",
      "medianPeakIn": 59.4,
      "nameInSource": "Mt Hood Test Site"
@@ -11744,12 +12715,12 @@
      "name": "Clackamas Lake",
      "stationId": "398:OR:SNTL",
      "elevationFt": 3400,
-     "t": "2026-10-18T08:00:00.000Z",
-     "readingLocal": "Oct 18, 1 AM PDT",
+     "t": "2026-10-23T15:00:00.000Z",
+     "readingLocal": "Oct 23, 8 AM PDT",
      "v": 0,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 2.2,
+     "tempC": 1.5,
      "normalOnset": "Nov 21",
      "medianPeakIn": 12.5
     }
@@ -11767,11 +12738,11 @@
      "name": "Clear Lake",
      "stationId": "401:OR:SNTL",
      "elevationFt": 3810,
-     "t": "2026-10-18T04:00:00.000Z",
-     "readingLocal": "Oct 17, 9 PM PDT",
+     "t": "2026-10-23T08:00:00.000Z",
+     "readingLocal": "Oct 23, 1 AM PDT",
      "v": 0,
      "type": "no snow",
-     "tempC": 2.7,
+     "tempC": 1.6,
      "normalOnset": "Nov 22",
      "medianPeakIn": 12.1
     }
@@ -11789,13 +12760,13 @@
      "name": "Fifteenmile",
      "stationId": "1314:OR:SNTL",
      "elevationFt": 5970,
-     "t": "2026-10-18T08:00:00.000Z",
-     "readingLocal": "Oct 18, 1 AM PDT",
+     "t": "2026-10-23T15:00:00.000Z",
+     "readingLocal": "Oct 23, 8 AM PDT",
      "v": 0,
      "swe": 0.2,
      "type": "no snow",
      "new24h": 0,
-     "tempC": -2.1
+     "tempC": -2.3
     }
    },
    {
@@ -11811,12 +12782,12 @@
      "name": "Greenpoint",
      "stationId": "504:OR:SNTL",
      "elevationFt": 3320,
-     "t": "2026-10-18T07:00:00.000Z",
-     "readingLocal": "Oct 18, 12 AM PDT",
+     "t": "2026-10-23T15:00:00.000Z",
+     "readingLocal": "Oct 23, 8 AM PDT",
      "v": 0,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 5,
+     "tempC": 2.5,
      "normalOnset": "Nov 20",
      "medianPeakIn": 17.8
     }
@@ -11834,13 +12805,13 @@
      "name": "Mud Ridge",
      "stationId": "655:OR:SNTL",
      "elevationFt": 4070,
-     "t": "2026-10-18T08:00:00.000Z",
-     "readingLocal": "Oct 18, 1 AM PDT",
+     "t": "2026-10-23T15:00:00.000Z",
+     "readingLocal": "Oct 23, 8 AM PDT",
      "v": 0,
-     "swe": 0.1,
+     "swe": 0.2,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 1.5,
+     "tempC": 0.6,
      "normalOnset": "Nov 14",
      "medianPeakIn": 24.8
     }
@@ -11858,11 +12829,12 @@
      "name": "Peavine Ridge",
      "stationId": "687:OR:SNTL",
      "elevationFt": 3420,
-     "t": "2026-10-18T07:00:00.000Z",
-     "readingLocal": "Oct 18, 12 AM PDT",
-     "v": 1,
+     "t": "2026-10-23T15:00:00.000Z",
+     "readingLocal": "Oct 23, 8 AM PDT",
+     "v": 0,
+     "type": "no snow",
      "new24h": 0,
-     "tempC": 2,
+     "tempC": 1.7,
      "normalOnset": "Nov 23",
      "medianPeakIn": 13.8
     }
@@ -11880,13 +12852,13 @@
      "name": "Red Hill",
      "stationId": "712:OR:SNTL",
      "elevationFt": 4410,
-     "t": "2026-10-18T08:00:00.000Z",
-     "readingLocal": "Oct 18, 1 AM PDT",
+     "t": "2026-10-23T15:00:00.000Z",
+     "readingLocal": "Oct 23, 8 AM PDT",
      "v": 0,
-     "swe": 0.4,
+     "swe": 0.5,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 2.3,
+     "tempC": -0.2,
      "normalOnset": "Nov 11",
      "medianPeakIn": 48.4
     }
@@ -12195,9 +13167,9 @@
      "nameInSource": "GROS VENTRE RIVER AT KELLY, WY",
      "siteId": "USGS-13014500",
      "kind": "gauge",
-     "t": "2026-10-23T14:00:00.000Z",
-     "v": 283,
-     "pctOfMedian": 130,
+     "t": "2026-10-23T15:00:00.000Z",
+     "v": 280,
+     "pctOfMedian": 129,
      "medianCfs": 217,
      "flowClass": "above",
      "vsNormal": "high",
@@ -12208,7 +13180,7 @@
      "waterTemp": "49 °F (9.3 °C)",
      "nwsId": "GVKW4",
      "nwsLink": "https://water.noaa.gov/gauges/gvkw4",
-     "stageFt": 4.09,
+     "stageFt": 4.08,
      "actionStageFt": 7,
      "floodStageFt": 8,
      "floodCategory": "no_flooding",
@@ -12229,9 +13201,9 @@
      "nameInSource": "SNAKE RIVER BELOW FLAT CREEK, NEAR JACKSON, WY",
      "siteId": "USGS-13018750",
      "kind": "gauge",
-     "t": "2026-10-23T14:30:00.000Z",
-     "v": 1510,
-     "pctOfMedian": 94,
+     "t": "2026-10-23T15:30:00.000Z",
+     "v": 1520,
+     "pctOfMedian": 95,
      "medianCfs": 1600,
      "flowClass": "normal",
      "vsNormal": "normal",
@@ -12242,27 +13214,28 @@
      "waterTemp": "50 °F (10.0 °C)",
      "nwsId": "JKSW4",
      "nwsLink": "https://water.noaa.gov/gauges/jksw4",
-     "stageFt": 1.3,
+     "stageFt": 1.31,
      "actionStageFt": 9,
      "floodStageFt": 10,
      "moderateStageFt": 12,
      "floodCategory": "no_flooding",
      "floodStatus": "Stage 1.3 ft; flood stage 10 ft (action 9 ft): 8.7 ft below flood stage",
      "forecastCategory": "no_flooding",
-     "forecastCrest": "1.3 ft, 1,570 cfs Sat, Oct 24, 12:00 AM MDT: below flood stage",
+     "forecastCrest": "1.5 ft, 1,750 cfs Sat, Oct 24, 12:00 AM MDT: below flood stage",
      "forecastDays": [
-      "Fri, Oct 23: up to 1.3 ft, 1,550 cfs",
-      "Sat, Oct 24: up to 1.3 ft, 1,570 cfs",
-      "Sun, Oct 25: up to 1.2 ft, 1,500 cfs",
-      "Mon, Oct 26: up to 1.2 ft, 1,450 cfs",
-      "Tue, Oct 27: up to 1.2 ft, 1,430 cfs",
-      "Wed, Oct 28: up to 1.2 ft, 1,420 cfs",
-      "Thu, Oct 29: up to 1.2 ft, 1,410 cfs",
-      "Fri, Oct 30: up to 1.1 ft, 1,400 cfs",
-      "Sat, Oct 31: up to 1.1 ft, 1,390 cfs",
-      "Sun, Nov 1: up to 1.2 ft, 1,410 cfs"
+      "Fri, Oct 23: up to 1.5 ft, 1,730 cfs",
+      "Sat, Oct 24: up to 1.5 ft, 1,750 cfs",
+      "Sun, Oct 25: up to 1.4 ft, 1,620 cfs",
+      "Mon, Oct 26: up to 1.3 ft, 1,530 cfs",
+      "Tue, Oct 27: up to 1.3 ft, 1,530 cfs",
+      "Wed, Oct 28: up to 1.3 ft, 1,560 cfs",
+      "Thu, Oct 29: up to 1.3 ft, 1,520 cfs",
+      "Fri, Oct 30: up to 1.2 ft, 1,490 cfs",
+      "Sat, Oct 31: up to 1.2 ft, 1,480 cfs",
+      "Sun, Nov 1: up to 1.2 ft, 1,470 cfs",
+      "Mon, Nov 2: up to 1.2 ft, 1,470 cfs"
      ],
-     "forecastIssued": "Thu, Oct 22, 9:54 AM MDT"
+     "forecastIssued": "Fri, Oct 23, 9:06 AM MDT"
     }
    },
    {
@@ -12279,17 +13252,17 @@
      "nameInSource": "GRANITE C AB GRANITE C SUPPLEMENTAL, NR MOOSE, WY",
      "siteId": "USGS-13016305",
      "kind": "gauge",
-     "t": "2026-10-23T14:00:00.000Z",
-     "v": 11.5,
-     "pctOfMedian": 132,
+     "t": "2026-10-23T15:00:00.000Z",
+     "v": 11,
+     "pctOfMedian": 126,
      "medianCfs": 8.7,
-     "flowClass": "above",
-     "vsNormal": "high",
+     "flowClass": "normal",
+     "vsNormal": "normal",
      "normalRange": "7.5 to 11 cfs",
      "recordYears": "1996 to 2026 (31 years)",
      "nwsId": "GCMW4",
      "nwsLink": "https://water.noaa.gov/gauges/gcmw4",
-     "stageFt": 3.75,
+     "stageFt": 3.74,
      "actionStageFt": 6.5,
      "floodCategory": "no_flooding"
     }
@@ -12308,7 +13281,7 @@
      "nameInSource": "FISH CREEK AT WILSON, WY",
      "siteId": "USGS-13016450",
      "kind": "gauge",
-     "t": "2026-10-23T14:00:00.000Z",
+     "t": "2026-10-23T15:00:00.000Z",
      "v": 142,
      "pctOfMedian": 158,
      "medianCfs": 90,
@@ -12316,9 +13289,9 @@
      "vsNormal": "high",
      "normalRange": "74 to 120 cfs",
      "recordYears": "1995 to 2025 (31 years)",
-     "tempC": 10.1,
-     "tempF": 50.2,
-     "waterTemp": "50 °F (10.1 °C)",
+     "tempC": 10,
+     "tempF": 50,
+     "waterTemp": "50 °F (10.0 °C)",
      "nwsId": "FCWW4",
      "nwsLink": "https://water.noaa.gov/gauges/fcww4",
      "stageFt": 2.37,
@@ -12342,17 +13315,17 @@
      "nameInSource": "CACHE CREEK NEAR JACKSON, WY",
      "siteId": "USGS-13018300",
      "kind": "gauge",
-     "t": "2026-10-23T14:45:00.000Z",
-     "v": 7.55,
-     "pctOfMedian": 120,
+     "t": "2026-10-23T15:45:00.000Z",
+     "v": 7.21,
+     "pctOfMedian": 114,
      "medianCfs": 6.3,
      "flowClass": "above",
      "vsNormal": "high",
      "normalRange": "5.4 to 7.2 cfs",
      "recordYears": "1963 to 2026 (64 years)",
-     "tempC": 5.9,
-     "tempF": 42.6,
-     "waterTemp": "43 °F (5.9 °C)",
+     "tempC": 5.8,
+     "tempF": 42.4,
+     "waterTemp": "42 °F (5.8 °C)",
      "nwsId": "CCKW4",
      "nwsLink": "https://water.noaa.gov/gauges/cckw4",
      "stageFt": 3.42,
@@ -12374,24 +13347,24 @@
      "nameInSource": "FLAT CREEK BELOW CACHE CREEK, NEAR JACKSON, WY",
      "siteId": "USGS-13018350",
      "kind": "gauge",
-     "t": "2026-10-23T13:45:00.000Z",
-     "v": 84,
-     "pctOfMedian": 115,
+     "t": "2026-10-23T15:45:00.000Z",
+     "v": 80.9,
+     "pctOfMedian": 111,
      "medianCfs": 73,
      "flowClass": "normal",
      "vsNormal": "normal",
      "normalRange": "68 to 86 cfs",
      "recordYears": "2000 to 2026 (27 years)",
-     "tempC": 9.1,
-     "tempF": 48.4,
-     "waterTemp": "48 °F (9.1 °C)",
+     "tempC": 8.7,
+     "tempF": 47.7,
+     "waterTemp": "48 °F (8.7 °C)",
      "nwsId": "FCKW4",
      "nwsLink": "https://water.noaa.gov/gauges/fckw4",
-     "stageFt": 1.87,
+     "stageFt": 1.85,
      "actionStageFt": 4.5,
      "floodStageFt": 6,
      "floodCategory": "no_flooding",
-     "floodStatus": "Stage 1.9 ft; flood stage 6 ft (action 4.5 ft): 4.1 ft below flood stage"
+     "floodStatus": "Stage 1.9 ft; flood stage 6 ft (action 4.5 ft): 4.2 ft below flood stage"
     }
    },
    {
@@ -12408,20 +13381,20 @@
      "nameInSource": "HOBACK RIVER NEAR JACKSON, WY",
      "siteId": "USGS-13019500",
      "kind": "gauge",
-     "t": "2026-10-23T14:00:00.000Z",
-     "v": 233,
-     "pctOfMedian": 92,
+     "t": "2026-10-23T15:00:00.000Z",
+     "v": 238,
+     "pctOfMedian": 94,
      "medianCfs": 254,
      "flowClass": "normal",
      "vsNormal": "normal",
      "normalRange": "228 to 278 cfs",
      "recordYears": "1945 to 2026 (18 years)",
-     "tempC": 8.7,
-     "tempF": 47.7,
-     "waterTemp": "48 °F (8.7 °C)",
+     "tempC": 8.5,
+     "tempF": 47.3,
+     "waterTemp": "47 °F (8.5 °C)",
      "nwsId": "HOJW4",
      "nwsLink": "https://water.noaa.gov/gauges/hojw4",
-     "stageFt": 4.85
+     "stageFt": 4.86
     }
    }
   ]
@@ -12449,22 +13422,22 @@
      "name": "Mavericks",
      "kind": "forecast",
      "spotSource": "Wikidata",
-     "t": "2026-10-23T14:00:00.000Z",
+     "t": "2026-10-23T16:00:00.000Z",
      "v": 2.06,
      "waveFt": 6.8,
-     "maxNext48hM": 2.08,
+     "maxNext48hM": 2.06,
      "maxNext48hFt": 6.8,
-     "maxAt": "2026-10-23T15:00:00.000Z",
-     "periodS": 8.5,
-     "directionDeg": 295,
+     "maxAt": "2026-10-23T16:00:00.000Z",
+     "periodS": 8.7,
+     "directionDeg": 296,
      "directionFrom": "WNW",
-     "swellFrom": "West-northwest (295°)",
-     "swellM": 1.92,
-     "swellFt": 6.3,
-     "swellPeriodS": 6.5,
-     "readAt": "7:00 am PDT Fri",
-     "maxAtLocal": "8:00 am PDT Fri",
-     "daily": "Fri: 6-7 ft at 9 s, wind to 8 mph from the NW · Sat: 4-6 ft at 9 s, wind to 7 mph from the WNW · Sun: 3-4 ft at 9 s, wind to 6 mph from the SW · Mon: 3-4 ft at 10 s, wind to 7 mph from the SW · Tue: 4-5 ft at 9 s, wind to 10 mph from the WSW · Wed: 3-4 ft at 10 s, wind to 8 mph from the NW · Thu: 3 ft at 13 s, wind to 5 mph from the NW",
+     "swellFrom": "West-northwest (296°)",
+     "swellM": 1.94,
+     "swellFt": 6.4,
+     "swellPeriodS": 6.7,
+     "readAt": "9:00 am PDT Fri",
+     "maxAtLocal": "9:00 am PDT Fri",
+     "daily": "Fri: 6-7 ft at 9 s, wind to 9 mph from the NW · Sat: 4-6 ft at 9 s, wind to 7 mph from the WNW · Sun: 3-4 ft at 9 s, wind to 6 mph from the SW · Mon: 3-4 ft at 10 s, wind to 7 mph from the SW · Tue: 4-5 ft at 9 s, wind to 10 mph from the WSW · Wed: 3-4 ft at 10 s, wind to 8 mph from the NW · Thu: 3 ft at 13 s, wind to 5 mph from the NW",
      "weekend": "Sat: 4-6 ft at 9 s, wind to 7 mph from the WNW · Sun: 3-4 ft at 9 s, wind to 6 mph from the SW",
      "weekendMaxFt": 6.3
     }
@@ -12473,7 +13446,7 @@
  },
  "surface-water": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -115.5,
    35.5,
@@ -12483,7 +13456,7 @@
  },
  "temperature-anomaly": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -120.919,
    35.907,
@@ -12496,8 +13469,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.664,
-      36.279
+      -120.919,
+      36.74
      ]
     },
     "properties": {
@@ -12522,8 +13495,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -118.008,
-      35.798
+      -118.78,
+      37.422
      ]
     },
     "properties": {
@@ -12548,8 +13521,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -119.53,
-      35.793
+      -120.315,
+      35.907
      ]
     },
     "properties": {
@@ -12574,8 +13547,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.527,
-      37.041
+      -120.542,
+      37.045
      ]
     },
     "properties": {
@@ -12600,8 +13573,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.033,
-      37.182
+      -120.392,
+      37.684
      ]
     },
     "properties": {
@@ -12626,8 +13599,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -121.206,
-      36.955
+      -121.246,
+      37.026
      ]
     },
     "properties": {
@@ -12652,8 +13625,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -117.839,
-      37.457
+      -119.639,
+      38.327
      ]
     },
     "properties": {
@@ -12678,8 +13651,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.199,
-      35.793
+      -121.979,
+      36.58
      ]
     },
     "properties": {
@@ -12704,8 +13677,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -120.664,
-      36.279
+      -121.644,
+      36.894
      ]
     },
     "properties": {
@@ -12730,8 +13703,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -121.472,
-      37.478
+      -121.473,
+      37.482
      ]
     },
     "properties": {
@@ -12756,8 +13729,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -119.53,
-      35.793
+      -119.554,
+      36.503
      ]
     },
     "properties": {
@@ -12791,7 +13764,7 @@
  },
  "tides": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -68.657,
    44.004,
@@ -12812,19 +13785,19 @@
      "name": "Bass Harbor",
      "stationId": "8413651",
      "kind": "prediction",
-     "nextType": "high",
-     "nextAt": "2026-10-18T08:52:00.000Z",
-     "v": 8.229,
-     "trend": "Rising toward high tide",
+     "nextType": "low",
+     "nextAt": "2026-10-23T18:48:00.000Z",
+     "v": 0.642,
+     "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413651",
-     "level": 8.19,
-     "tide1": "High 8.2 ft at 4:52 am EDT Sun",
-     "tide2": "Low 2.4 ft at 10:22 am EDT Sun",
-     "tide3": "High 9.0 ft at 5:03 pm EDT Sun",
-     "tide4": "Low 1.6 ft at 11:04 pm EDT Sun",
-     "thenType": "low",
-     "thenAt": "2026-10-18T14:22:00.000Z",
-     "thenV": 2.415,
+     "level": 4.82,
+     "tide1": "Low 0.6 ft at 2:48 pm EDT Fri",
+     "tide2": "High 10.0 ft at 9:27 pm EDT Fri",
+     "tide3": "Low 0.4 ft at 3:06 am EDT Sat",
+     "tide4": "High 10.5 ft at 9:47 am EDT Sat",
+     "thenType": "high",
+     "thenAt": "2026-10-24T01:27:00.000Z",
+     "thenV": 10.019,
      "state": "ME"
     }
    },
@@ -12841,22 +13814,22 @@
      "name": "Bar Harbor",
      "stationId": "8413320",
      "kind": "live",
-     "nextType": "high",
-     "nextAt": "2026-10-18T08:48:00.000Z",
-     "v": 8.849,
-     "trend": "Rising toward high tide",
+     "nextType": "low",
+     "nextAt": "2026-10-23T19:15:00.000Z",
+     "v": 0.69,
+     "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413320",
-     "level": 8.81,
-     "tide1": "High 8.8 ft at 4:48 am EDT Sun",
-     "tide2": "Low 2.6 ft at 10:49 am EDT Sun",
-     "tide3": "High 9.7 ft at 4:59 pm EDT Sun",
-     "tide4": "Low 1.7 ft at 11:31 pm EDT Sun",
-     "thenType": "low",
-     "thenAt": "2026-10-18T14:49:00.000Z",
-     "thenV": 2.596,
-     "observedNow": 9.091,
-     "observedAt": "2026-10-18T08:24:00.000Z",
-     "observedLocal": "4:24 am EDT Sun",
+     "level": 5.7,
+     "tide1": "Low 0.7 ft at 3:15 pm EDT Fri",
+     "tide2": "High 10.8 ft at 9:23 pm EDT Fri",
+     "tide3": "Low 0.4 ft at 3:33 am EDT Sat",
+     "tide4": "High 11.3 ft at 9:43 am EDT Sat",
+     "thenType": "high",
+     "thenAt": "2026-10-24T01:23:00.000Z",
+     "thenV": 10.773,
+     "observedNow": 7.08,
+     "observedAt": "2026-10-23T16:00:00.000Z",
+     "observedLocal": "12:00 pm EDT Fri",
      "state": "ME",
      "nameInSource": "BAR HARBOR"
     }
@@ -12874,19 +13847,19 @@
      "name": "Southwest Harbor",
      "stationId": "8413564",
      "kind": "prediction",
-     "nextType": "high",
-     "nextAt": "2026-10-18T08:48:00.000Z",
-     "v": 8.495,
-     "trend": "Rising toward high tide",
+     "nextType": "low",
+     "nextAt": "2026-10-23T18:48:00.000Z",
+     "v": 0.655,
+     "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413564",
-     "level": 8.47,
-     "tide1": "High 8.5 ft at 4:48 am EDT Sun",
-     "tide2": "Low 2.5 ft at 10:22 am EDT Sun",
-     "tide3": "High 9.3 ft at 4:59 pm EDT Sun",
-     "tide4": "Low 1.6 ft at 11:04 pm EDT Sun",
-     "thenType": "low",
-     "thenAt": "2026-10-18T14:22:00.000Z",
-     "thenV": 2.467,
+     "level": 4.89,
+     "tide1": "Low 0.7 ft at 2:48 pm EDT Fri",
+     "tide2": "High 10.3 ft at 9:23 pm EDT Fri",
+     "tide3": "Low 0.4 ft at 3:06 am EDT Sat",
+     "tide4": "High 10.8 ft at 9:43 am EDT Sat",
+     "thenType": "high",
+     "thenAt": "2026-10-24T01:23:00.000Z",
+     "thenV": 10.342,
      "state": "ME"
     }
    },
@@ -12903,19 +13876,19 @@
      "name": "Mackerel Cove, Swans Island",
      "stationId": "8413825",
      "kind": "prediction",
-     "nextType": "high",
-     "nextAt": "2026-10-18T08:53:00.000Z",
-     "v": 8.338,
-     "trend": "Rising toward high tide",
+     "nextType": "low",
+     "nextAt": "2026-10-23T19:21:00.000Z",
+     "v": 0.745,
+     "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413825",
-     "level": 8.28,
-     "tide1": "High 8.3 ft at 4:53 am EDT Sun",
-     "tide2": "Low 2.8 ft at 10:47 am EDT Sun",
-     "tide3": "High 9.2 ft at 4:58 pm EDT Sun",
-     "tide4": "Low 1.8 ft at 11:36 pm EDT Sun",
-     "thenType": "low",
-     "thenAt": "2026-10-18T14:47:00.000Z",
-     "thenV": 2.752,
+     "level": 5.79,
+     "tide1": "Low 0.7 ft at 3:21 pm EDT Fri",
+     "tide2": "High 10.3 ft at 9:28 pm EDT Fri",
+     "tide3": "Low 0.4 ft at 3:38 am EDT Sat",
+     "tide4": "High 11.0 ft at 9:51 am EDT Sat",
+     "thenType": "high",
+     "thenAt": "2026-10-24T01:28:00.000Z",
+     "thenV": 10.313,
      "state": "ME"
     }
    },
@@ -12932,19 +13905,19 @@
      "name": "Burnt Coat Harbor, Swans Island",
      "stationId": "8413857",
      "kind": "prediction",
-     "nextType": "high",
-     "nextAt": "2026-10-18T08:47:00.000Z",
-     "v": 7.875,
-     "trend": "Rising toward high tide",
+     "nextType": "low",
+     "nextAt": "2026-10-23T19:21:00.000Z",
+     "v": 0.607,
+     "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413857",
-     "level": 7.85,
-     "tide1": "High 7.9 ft at 4:47 am EDT Sun",
-     "tide2": "Low 2.3 ft at 10:55 am EDT Sun",
-     "tide3": "High 8.6 ft at 4:58 pm EDT Sun",
-     "tide4": "Low 1.5 ft at 11:37 pm EDT Sun",
-     "thenType": "low",
-     "thenAt": "2026-10-18T14:55:00.000Z",
-     "thenV": 2.285,
+     "level": 5.16,
+     "tide1": "Low 0.6 ft at 3:21 pm EDT Fri",
+     "tide2": "High 9.6 ft at 9:22 pm EDT Fri",
+     "tide3": "Low 0.4 ft at 3:39 am EDT Sat",
+     "tide4": "High 10.0 ft at 9:42 am EDT Sat",
+     "thenType": "high",
+     "thenAt": "2026-10-24T01:22:00.000Z",
+     "thenV": 9.588,
      "state": "ME"
     }
    },
@@ -12961,19 +13934,19 @@
      "name": "Center Harbor",
      "stationId": "8414168",
      "kind": "prediction",
-     "nextType": "high",
-     "nextAt": "2026-10-18T08:57:00.000Z",
-     "v": 8.406,
-     "trend": "Rising toward high tide",
+     "nextType": "low",
+     "nextAt": "2026-10-23T19:27:00.000Z",
+     "v": 0.655,
+     "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414168",
-     "level": 8.32,
-     "tide1": "High 8.4 ft at 4:57 am EDT Sun",
-     "tide2": "Low 2.5 ft at 11:01 am EDT Sun",
-     "tide3": "High 9.2 ft at 5:08 pm EDT Sun",
-     "tide4": "Low 1.6 ft at 11:43 pm EDT Sun",
-     "thenType": "low",
-     "thenAt": "2026-10-18T15:01:00.000Z",
-     "thenV": 2.467,
+     "level": 5.83,
+     "tide1": "Low 0.7 ft at 3:27 pm EDT Fri",
+     "tide2": "High 10.2 ft at 9:32 pm EDT Fri",
+     "tide3": "Low 0.4 ft at 3:45 am EDT Sat",
+     "tide4": "High 10.7 ft at 9:52 am EDT Sat",
+     "thenType": "high",
+     "thenAt": "2026-10-24T01:32:00.000Z",
+     "thenV": 10.234,
      "state": "ME"
     }
    },
@@ -12990,19 +13963,19 @@
      "name": "Oceanville, Deer Isle",
      "stationId": "8414249",
      "kind": "prediction",
-     "nextType": "high",
-     "nextAt": "2026-10-18T09:02:00.000Z",
-     "v": 8.616,
-     "trend": "Rising toward high tide",
+     "nextType": "low",
+     "nextAt": "2026-10-23T19:11:00.000Z",
+     "v": 0.595,
+     "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414249",
-     "level": 8.49,
-     "tide1": "High 8.6 ft at 5:02 am EDT Sun",
-     "tide2": "Low 1.9 ft at 10:58 am EDT Sun",
-     "tide3": "High 9.4 ft at 5:10 pm EDT Sun",
-     "tide4": "Low 1.3 ft at 11:37 pm EDT Sun",
-     "thenType": "low",
-     "thenAt": "2026-10-18T14:58:00.000Z",
-     "thenV": 1.923,
+     "level": 5.12,
+     "tide1": "Low 0.6 ft at 3:11 pm EDT Fri",
+     "tide2": "High 10.0 ft at 9:26 pm EDT Fri",
+     "tide3": "Low 0.6 ft at 3:31 am EDT Sat",
+     "tide4": "High 10.3 ft at 9:43 am EDT Sat",
+     "thenType": "high",
+     "thenAt": "2026-10-24T01:26:00.000Z",
+     "thenV": 10.008,
      "state": "ME"
     }
    },
@@ -13019,19 +13992,19 @@
      "name": "Blue Hill Harbor",
      "stationId": "8414112",
      "kind": "prediction",
-     "nextType": "high",
-     "nextAt": "2026-10-18T08:57:00.000Z",
-     "v": 8.406,
-     "trend": "Rising toward high tide",
+     "nextType": "low",
+     "nextAt": "2026-10-23T19:26:00.000Z",
+     "v": 0.655,
+     "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414112",
-     "level": 8.33,
-     "tide1": "High 8.4 ft at 4:57 am EDT Sun",
-     "tide2": "Low 2.5 ft at 11:00 am EDT Sun",
-     "tide3": "High 9.2 ft at 5:08 pm EDT Sun",
-     "tide4": "Low 1.6 ft at 11:42 pm EDT Sun",
-     "thenType": "low",
-     "thenAt": "2026-10-18T15:00:00.000Z",
-     "thenV": 2.467,
+     "level": 5.81,
+     "tide1": "Low 0.7 ft at 3:26 pm EDT Fri",
+     "tide2": "High 10.2 ft at 9:32 pm EDT Fri",
+     "tide3": "Low 0.4 ft at 3:44 am EDT Sat",
+     "tide4": "High 10.7 ft at 9:52 am EDT Sat",
+     "thenType": "high",
+     "thenAt": "2026-10-24T01:32:00.000Z",
+     "thenV": 10.234,
      "state": "ME"
     }
    },
@@ -13048,19 +14021,19 @@
      "name": "Winter Harbor, Frenchman Bay",
      "stationId": "8413079",
      "kind": "prediction",
-     "nextType": "high",
-     "nextAt": "2026-10-18T08:47:00.000Z",
-     "v": 8.406,
-     "trend": "Rising toward high tide",
+     "nextType": "low",
+     "nextAt": "2026-10-23T19:25:00.000Z",
+     "v": 0.655,
+     "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413079",
-     "level": 8.37,
-     "tide1": "High 8.4 ft at 4:47 am EDT Sun",
-     "tide2": "Low 2.5 ft at 10:59 am EDT Sun",
-     "tide3": "High 9.2 ft at 4:58 pm EDT Sun",
-     "tide4": "Low 1.6 ft at 11:41 pm EDT Sun",
-     "thenType": "low",
-     "thenAt": "2026-10-18T14:59:00.000Z",
-     "thenV": 2.467,
+     "level": 5.59,
+     "tide1": "Low 0.7 ft at 3:25 pm EDT Fri",
+     "tide2": "High 10.2 ft at 9:22 pm EDT Fri",
+     "tide3": "Low 0.4 ft at 3:43 am EDT Sat",
+     "tide4": "High 10.7 ft at 9:42 am EDT Sat",
+     "thenType": "high",
+     "thenAt": "2026-10-24T01:22:00.000Z",
+     "thenV": 10.234,
      "state": "ME"
     }
    },
@@ -13077,19 +14050,19 @@
      "name": "Isle Au Haut",
      "stationId": "8414288",
      "kind": "prediction",
-     "nextType": "high",
-     "nextAt": "2026-10-18T08:47:00.000Z",
-     "v": 7.698,
-     "trend": "Rising toward high tide",
+     "nextType": "low",
+     "nextAt": "2026-10-23T18:48:00.000Z",
+     "v": 0.607,
+     "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414288",
-     "level": 7.67,
-     "tide1": "High 7.7 ft at 4:47 am EDT Sun",
-     "tide2": "Low 2.3 ft at 10:22 am EDT Sun",
-     "tide3": "High 8.4 ft at 4:58 pm EDT Sun",
-     "tide4": "Low 1.5 ft at 11:04 pm EDT Sun",
-     "thenType": "low",
-     "thenAt": "2026-10-18T14:22:00.000Z",
-     "thenV": 2.285,
+     "level": 4.42,
+     "tide1": "Low 0.6 ft at 2:48 pm EDT Fri",
+     "tide2": "High 9.4 ft at 9:22 pm EDT Fri",
+     "tide3": "Low 0.4 ft at 3:06 am EDT Sat",
+     "tide4": "High 9.8 ft at 9:42 am EDT Sat",
+     "thenType": "high",
+     "thenAt": "2026-10-24T01:22:00.000Z",
+     "thenV": 9.372,
      "state": "ME"
     }
    }
@@ -13097,7 +14070,7 @@
  },
  "tree-mortality": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -106.5,
    39.3,
@@ -13397,7 +14370,7 @@
  },
  "uranium": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -110.963,
    35.058,
@@ -13743,7 +14716,7 @@
  },
  "weather-alerts": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -124,
    32,
@@ -13756,26 +14729,26 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -121.453,
-      35.875
+      -112.47,
+      37
      ]
     },
     "properties": {
-     "kind": "Beach Hazards Statement",
-     "event": "Beach Hazards Statement",
-     "heading": "Beach Hazards Statement, San Francisco, Coastal North Bay Including Point Reyes National Seashore and 3 more",
-     "severity": "Moderate",
-     "v": 2,
-     "t": "2026-10-17T13:02:00.000Z",
-     "expires": "2026-10-19T04:00:00.000Z",
-     "until": "October 18 at 9:00PM PDT",
-     "headline": "Beach Hazards Statement issued October 17 at 6:02AM PDT until October 18 at 9:00PM PDT by NWS San Francisco CA",
-     "areaDesc": "San Francisco; Coastal North Bay Including Point Reyes National Seashore; San Francisco Peninsula Coast; Northern Monterey Bay; Southern Monterey Bay and Big Sur Coast",
+     "kind": "Flood Warning",
+     "event": "Flood Warning",
+     "heading": "Flood Warning, Garfield, UT, Kane, UT and 1 more",
+     "severity": "Severe",
+     "v": 3,
+     "t": "2026-10-22T18:07:00.000Z",
+     "expires": "2026-10-23T18:15:00.000Z",
+     "until": "October 23 at 12:15PM MDT",
+     "headline": "Flood Warning issued October 22 at 12:07PM MDT until October 23 at 12:15PM MDT by NWS Salt Lake City UT",
+     "areaDesc": "Garfield, UT; Kane, UT; San Juan, UT",
      "urgency": "Expected",
      "certainty": "Likely",
-     "instruction": "Stay off of jetties, piers, rocks, and other waterside infrastructure. Remain out of the water to avoid hazardous surf and NEVER turn your back on the ocean. Monitor local weather, surf and tide forecasts at www.weather.gov/mtr.",
-     "senderName": "NWS San Francisco CA",
-     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.3e729c64a2992a0579198f22c9a177b5319636aa.001.1"
+     "instruction": "Turn around, don't drown when encountering flooded roads. Most flood deaths occur in vehicles.\n\nBe aware of your surroundings and do not drive on flooded roads.\n\nStay away or be swept away. River banks and culverts can become unstable and unsafe.",
+     "senderName": "NWS Salt Lake City UT",
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.d516725eba3d389ea12139adf0c5f8b16575f582.001.1"
     }
    },
    {
@@ -13790,19 +14763,19 @@
     "properties": {
      "kind": "now",
      "name": "Current conditions (model)",
-     "observed": "2026-10-18T08:30:00.000Z",
-     "v": 6.6,
-     "temperatureC": 6.6,
-     "windKmh": 1.4,
-     "gustKmh": 2.5,
+     "observed": "2026-10-23T16:00:00.000Z",
+     "v": 2.7,
+     "temperatureC": 2.7,
+     "windKmh": 2.6,
+     "gustKmh": 10.4,
      "precipitationMm": 0,
      "snowfallCm": 0,
      "weatherCode": 0,
      "weather": "clear",
-     "temperatureF": 44,
-     "windMph": 1,
-     "gustMph": 2,
-     "heading": "Weather now: 44 °F (7 °C), wind 1 mph gusting 2, clear"
+     "temperatureF": 37,
+     "windMph": 2,
+     "gustMph": 6,
+     "heading": "Weather now: 37 °F (3 °C), wind 2 mph gusting 6, clear"
     }
    },
    {
@@ -13810,26 +14783,26 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -118.181,
-      33.76
+      -122.542,
+      41.35
      ]
     },
     "properties": {
-     "kind": "Beach Hazards Statement",
-     "event": "Beach Hazards Statement",
-     "heading": "Beach Hazards Statement, Ventura County Beaches, Malibu Coast and 1 more",
-     "severity": "Moderate",
-     "v": 2,
-     "t": "2026-10-18T16:00:00.000Z",
-     "expires": "2026-10-20T16:00:00.000Z",
-     "until": "October 20 at 9:00AM PDT",
-     "headline": "Beach Hazards Statement issued October 17 at 7:32PM PDT until October 20 at 9:00AM PDT by NWS Los Angeles/Oxnard CA",
-     "areaDesc": "Ventura County Beaches; Malibu Coast; Los Angeles County Beaches",
-     "urgency": "Expected",
-     "certainty": "Likely",
-     "instruction": "Remain out of the water due to hazardous swimming conditions, or stay near occupied lifeguard towers. Rock jetties can be deadly in such conditions, stay off the rocks.",
-     "senderName": "NWS Los Angeles/Oxnard CA",
-     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.d6a681ade348f94fc9752ec8a6de8211940ebf14.001.1"
+     "kind": "Freeze Watch",
+     "event": "Freeze Watch",
+     "heading": "Freeze Watch, Southern Trinity, Northwestern Interior Mendocino and 4 more",
+     "severity": "Severe",
+     "v": 3,
+     "t": "2026-10-24T08:00:00.000Z",
+     "expires": "2026-10-24T16:00:00.000Z",
+     "until": "October 24 at 9:00AM PDT",
+     "headline": "Freeze Watch issued October 22 at 9:12PM PDT until October 24 at 9:00AM PDT by NWS Eureka CA",
+     "areaDesc": "Southern Trinity; Northwestern Interior Mendocino; Northeastern Interior Mendocino; Northern Lake; Northwestern and Central Trinity; Northeastern Trinity",
+     "urgency": "Future",
+     "certainty": "Possible",
+     "instruction": "Take steps now to protect tender plants from the cold.",
+     "senderName": "NWS Eureka CA",
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.0f9ee61b9e1808bd57e06f035ab2ee7a23ce1066.001.1"
     }
    },
    {
@@ -13837,26 +14810,26 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -117.899,
-      33.608
+      -119.878,
+      39.494
      ]
     },
     "properties": {
-     "kind": "Beach Hazards Statement",
-     "event": "Beach Hazards Statement",
-     "heading": "Beach Hazards Statement, San Diego County Coastal Areas and Orange County Coastal",
+     "kind": "Lake Wind Advisory",
+     "event": "Lake Wind Advisory",
+     "heading": "Lake Wind Advisory, Greater Lake Tahoe Area and Greater Lake Tahoe Area",
      "severity": "Moderate",
      "v": 2,
-     "t": "2026-10-18T16:00:00.000Z",
-     "expires": "2026-10-20T16:00:00.000Z",
-     "until": "October 20 at 9:00AM PDT",
-     "headline": "Beach Hazards Statement issued October 18 at 12:59AM PDT until October 20 at 9:00AM PDT by NWS San Diego CA",
-     "areaDesc": "San Diego County Coastal Areas; Orange County Coastal",
+     "t": "2026-10-24T03:00:00.000Z",
+     "expires": "2026-10-24T15:00:00.000Z",
+     "until": "October 24 at 8:00AM PDT",
+     "headline": "Lake Wind Advisory issued October 22 at 1:58PM PDT until October 24 at 8:00AM PDT by NWS Reno NV",
+     "areaDesc": "Greater Lake Tahoe Area; Greater Lake Tahoe Area",
      "urgency": "Expected",
      "certainty": "Likely",
-     "instruction": "Remain out of the water to avoid hazardous swimming conditions, or stay near occupied lifeguard towers. Rock jetties can be deadly in such conditions, stay off the rocks.",
-     "senderName": "NWS San Diego CA",
-     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.3bf19ea6e5d9d4da0341c33779e556b0d4637b79.001.1"
+     "instruction": "Check lake conditions before heading out and be prepared for a sudden increase in winds and wave heights. Consider postponing boating activities on the lake until a day with less wind.",
+     "senderName": "NWS Reno NV",
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.142c149b5e03df590c0ae4718cb9fdb09d11b3fe.001.1"
     }
    }
   ]
@@ -13884,9 +14857,9 @@
      "name": "Forecast at the asked place, near Springdale, UT (37.30°N 113.03°W)",
      "kind": "here",
      "source": "nws",
-     "t": "2026-10-23T15:00:00.000Z",
-     "v": 41,
-     "tempF": 41,
+     "t": "2026-10-23T16:00:00.000Z",
+     "v": 43,
+     "tempF": 43,
      "precipChance": 1,
      "precipIn": 0,
      "windMph": 4.6,
@@ -13925,9 +14898,9 @@
      "name": "Forecast near Virgin, UT (37.20°N 113.11°W)",
      "kind": "area",
      "source": "nws",
-     "t": "2026-10-23T15:00:00.000Z",
-     "v": 50,
-     "tempF": 50,
+     "t": "2026-10-23T16:00:00.000Z",
+     "v": 52,
+     "tempF": 52,
      "precipChance": 1,
      "precipIn": 0,
      "windMph": 5.8,
@@ -13966,9 +14939,9 @@
      "name": "Forecast near Springdale, UT (37.20°N 112.94°W)",
      "kind": "area",
      "source": "nws",
-     "t": "2026-10-23T15:00:00.000Z",
-     "v": 44,
-     "tempF": 44,
+     "t": "2026-10-23T16:00:00.000Z",
+     "v": 45,
+     "tempF": 45,
      "precipChance": 1,
      "precipIn": 0,
      "windMph": 5.8,
@@ -13979,7 +14952,7 @@
      "timeZone": "America/Denver",
      "issued": "12:31 AM MDT",
      "days": [
-      "Fri, Oct 23: rest of day high 57 °F, low 44 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 14 mph; mostly clear",
+      "Fri, Oct 23: rest of day high 57 °F, low 45 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 14 mph; mostly clear",
       "Sat, Oct 24: high 57 °F, low 42 °F; 55% chance of rain or snow, 0.12 in; wind to 13 mph, gusts 16 mph; mostly cloudy, Scattered light rain showers",
       "Sun, Oct 25: high 56 °F, low 45 °F; 26% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 12 mph; partly cloudy, Scattered light rain showers",
       "Mon, Oct 26: high 62 °F, low 42 °F; 0% chance of rain or snow, 0.00 in; wind to 12 mph, gusts 14 mph; mostly clear",
@@ -13988,7 +14961,7 @@
       "Thu, Oct 29: high 60 °F, low 44 °F; 17% chance of rain or snow, 0.00 in; wind to 14 mph, gusts 16 mph; partly cloudy, Slight chance of light rain",
       "Fri, Oct 30: high 49 °F, low 46 °F; 29% chance of rain or snow, 0.00 in; wind to 14 mph, gusts 16 mph; mostly cloudy, Slight chance of light rain"
      ],
-     "today": "Fri, Oct 23: rest of day high 57 °F, low 44 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 14 mph; mostly clear",
+     "today": "Fri, Oct 23: rest of day high 57 °F, low 45 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 14 mph; mostly clear",
      "tomorrow": "Sat, Oct 24: high 57 °F, low 42 °F; 55% chance of rain or snow, 0.12 in; wind to 13 mph, gusts 16 mph; mostly cloudy, Scattered light rain showers",
      "saturday": "Sat, Oct 24: high 57 °F, low 42 °F; 55% chance of rain or snow, 0.12 in; wind to 13 mph, gusts 16 mph; mostly cloudy, Scattered light rain showers",
      "sunday": "Sun, Oct 25: high 56 °F, low 45 °F; 26% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 12 mph; partly cloudy, Scattered light rain showers"
@@ -14007,9 +14980,9 @@
      "name": "Forecast near Toquerville, UT (37.40°N 113.11°W)",
      "kind": "area",
      "source": "nws",
-     "t": "2026-10-23T15:00:00.000Z",
-     "v": 42,
-     "tempF": 42,
+     "t": "2026-10-23T16:00:00.000Z",
+     "v": 43,
+     "tempF": 43,
      "precipChance": 1,
      "precipIn": 0,
      "windMph": 5.8,
@@ -14048,9 +15021,9 @@
      "name": "Forecast near Springdale, UT (37.40°N 112.94°W)",
      "kind": "area",
      "source": "nws",
-     "t": "2026-10-23T15:00:00.000Z",
-     "v": 41,
-     "tempF": 41,
+     "t": "2026-10-23T16:00:00.000Z",
+     "v": 45,
+     "tempF": 45,
      "precipChance": 1,
      "precipIn": 0,
      "windMph": 2.3,
@@ -14068,7 +15041,7 @@
       "Tue, Oct 27: high 58 °F, low 40 °F; 0% chance of rain or snow, 0.00 in; wind to 6 mph, gusts 13 mph; mostly clear",
       "Wed, Oct 28: high 56 °F, low 41 °F; 0% chance of rain or snow, 0.00 in; wind to 4 mph, gusts 9 mph; partly cloudy",
       "Thu, Oct 29: high 55 °F, low 42 °F; 19% chance of rain or snow, 0.00 in; wind to 5 mph, gusts 12 mph; partly cloudy, Slight chance of light rain",
-      "Fri, Oct 30: high 44 °F, low 43 °F; 27% chance of rain or snow, 0.00 in; wind to 5 mph, gusts 8 mph; mostly cloudy, Slight chance of light rain"
+      "Fri, Oct 30: high 45 °F, low 43 °F; 27% chance of rain or snow, 0.00 in; wind to 5 mph, gusts 8 mph; mostly cloudy, Slight chance of light rain"
      ],
      "today": "Fri, Oct 23: rest of day high 53 °F, low 41 °F; 2% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 13 mph; mostly clear",
      "tomorrow": "Sat, Oct 24: high 54 °F, low 38 °F; 62% chance of rain or snow, 0.18 in; wind to 10 mph, gusts 17 mph; mostly cloudy, Numerous light rain showers",
@@ -14080,7 +15053,7 @@
  },
  "wikipedia-nearby": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    18.4,
    -34,
@@ -14305,7 +15278,7 @@
  },
  "wilderness": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -110,
    42.7,
@@ -14397,12 +15370,12 @@
     "properties": {
      "name": "37.00°N 120.50°W",
      "node": 0,
-     "east": 0.46,
-     "north": -1.43,
-     "speed": 1.5,
-     "tempC": 14.1,
-     "speedMph": 3.4,
-     "from": "north-northwest (342°)"
+     "east": 1.04,
+     "north": -1.29,
+     "speed": 1.66,
+     "tempC": 15.3,
+     "speedMph": 3.7,
+     "from": "northwest (321°)"
     }
    },
    {
@@ -14417,12 +15390,12 @@
     "properties": {
      "name": "37.00°N 120.38°W",
      "node": 1,
-     "east": 1.46,
-     "north": -0.45,
-     "speed": 1.53,
-     "tempC": 15.5,
-     "speedMph": 3.4,
-     "from": "west-northwest (287°)"
+     "east": 2.7,
+     "north": -1.69,
+     "speed": 3.18,
+     "tempC": 16.3,
+     "speedMph": 7.1,
+     "from": "west-northwest (302°)"
     }
    },
    {
@@ -14437,12 +15410,12 @@
     "properties": {
      "name": "37.00°N 120.26°W",
      "node": 2,
-     "east": 2.31,
-     "north": -0.53,
-     "speed": 2.37,
-     "tempC": 15.4,
-     "speedMph": 5.3,
-     "from": "west-northwest (283°)"
+     "east": 3.07,
+     "north": -2.31,
+     "speed": 3.84,
+     "tempC": 16.4,
+     "speedMph": 8.6,
+     "from": "northwest (307°)"
     }
    },
    {
@@ -14457,12 +15430,12 @@
     "properties": {
      "name": "37.00°N 120.15°W",
      "node": 3,
-     "east": 2.48,
-     "north": -0.39,
-     "speed": 2.51,
-     "tempC": 14.5,
-     "speedMph": 5.6,
-     "from": "west (279°)"
+     "east": 1.5,
+     "north": -1.78,
+     "speed": 2.33,
+     "tempC": 16.1,
+     "speedMph": 5.2,
+     "from": "northwest (320°)"
     }
    },
    {
@@ -14477,12 +15450,12 @@
     "properties": {
      "name": "37.00°N 120.03°W",
      "node": 4,
-     "east": 2.5,
-     "north": -0.09,
-     "speed": 2.5,
-     "tempC": 15.2,
-     "speedMph": 5.6,
-     "from": "west (272°)"
+     "east": 1.78,
+     "north": -2.12,
+     "speed": 2.77,
+     "tempC": 15.8,
+     "speedMph": 6.2,
+     "from": "northwest (320°)"
     }
    },
    {
@@ -14497,12 +15470,12 @@
     "properties": {
      "name": "37.00°N 119.91°W",
      "node": 5,
-     "east": 2.16,
-     "north": 0.04,
-     "speed": 2.16,
-     "tempC": 14.4,
-     "speedMph": 4.8,
-     "from": "west (269°)"
+     "east": 2.08,
+     "north": -1.75,
+     "speed": 2.72,
+     "tempC": 15.7,
+     "speedMph": 6.1,
+     "from": "northwest (310°)"
     }
    },
    {
@@ -14517,12 +15490,12 @@
     "properties": {
      "name": "37.00°N 119.79°W",
      "node": 6,
-     "east": 1.94,
-     "north": 0.07,
-     "speed": 1.94,
-     "tempC": 13.6,
-     "speedMph": 4.3,
-     "from": "west (268°)"
+     "east": 2.38,
+     "north": -1.67,
+     "speed": 2.91,
+     "tempC": 15.6,
+     "speedMph": 6.5,
+     "from": "northwest (305°)"
     }
    },
    {
@@ -14537,12 +15510,12 @@
     "properties": {
      "name": "37.00°N 119.68°W",
      "node": 7,
-     "east": 0.49,
-     "north": 0.53,
-     "speed": 0.72,
-     "tempC": 13.5,
-     "speedMph": 1.6,
-     "from": "southwest (223°)"
+     "east": 1.67,
+     "north": -0.93,
+     "speed": 1.91,
+     "tempC": 15,
+     "speedMph": 4.3,
+     "from": "west-northwest (299°)"
     }
    },
    {
@@ -14557,12 +15530,12 @@
     "properties": {
      "name": "37.00°N 119.56°W",
      "node": 8,
-     "east": 1.33,
-     "north": 0.02,
-     "speed": 1.33,
-     "tempC": 11.8,
-     "speedMph": 3,
-     "from": "west (269°)"
+     "east": 2.76,
+     "north": -1.17,
+     "speed": 3,
+     "tempC": 14,
+     "speedMph": 6.7,
+     "from": "west-northwest (293°)"
     }
    },
    {
@@ -14577,12 +15550,12 @@
     "properties": {
      "name": "37.00°N 119.44°W",
      "node": 9,
-     "east": 1.72,
-     "north": 0.53,
-     "speed": 1.8,
-     "tempC": 9.8,
-     "speedMph": 4,
-     "from": "west-southwest (253°)"
+     "east": 1.95,
+     "north": -0.87,
+     "speed": 2.14,
+     "tempC": 12.2,
+     "speedMph": 4.8,
+     "from": "west-northwest (294°)"
     }
    },
    {
@@ -14597,12 +15570,12 @@
     "properties": {
      "name": "37.00°N 119.32°W",
      "node": 10,
-     "east": 0.07,
-     "north": -0.29,
-     "speed": 0.3,
-     "tempC": 10.7,
-     "speedMph": 0.7,
-     "from": "north-northwest (346°)"
+     "east": 1.36,
+     "north": 0.34,
+     "speed": 1.4,
+     "tempC": 13.2,
+     "speedMph": 3.1,
+     "from": "west-southwest (256°)"
     }
    },
    {
@@ -14617,19 +15590,19 @@
     "properties": {
      "name": "37.00°N 119.21°W",
      "node": 11,
-     "east": 1.07,
-     "north": -0.15,
-     "speed": 1.08,
-     "tempC": 7.7,
-     "speedMph": 2.4,
-     "from": "west (278°)"
+     "east": 0.98,
+     "north": 1.05,
+     "speed": 1.44,
+     "tempC": 9.3,
+     "speedMph": 3.2,
+     "from": "southwest (223°)"
     }
    }
   ]
  },
  "wolf-packs": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -124.862,
    45.544,

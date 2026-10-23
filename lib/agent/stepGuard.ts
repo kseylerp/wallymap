@@ -4,7 +4,7 @@ import type { BBox } from "@/layers/types";
 import { bboxAreaKm2, hardMaxAreaKm2 } from "@/layers/types";
 import type { GeocodeResult } from "./geocode";
 import { placeCandidates } from "./places";
-import { NOTE_MAX_WORDS, noteWords, trimNote } from "./noteCheck";
+import { groundedNote, NOTE_MAX_WORDS, noteWords, trimNote } from "./noteCheck";
 import { applyReading } from "./readingGuard";
 import { asksChange, normalizeRenderInput } from "./renderInput";
 import { canonicalLayerId, repairToolName } from "./toolNames";
@@ -466,9 +466,17 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
   }
   // 5. A text-only answer (no note this turn) is the answer, held to the note's word limit like a note.
   let text: string | undefined;
-  if (!hasNote && calls.length === 0 && rejected.length === 0 && !dropText && !leakedText && !turn.noted && draft.text && noteWords(draft.text) > NOTE_MAX_WORDS) {
-    text = trimNote(draft.text);
-    turn.note(`closing text with no note cut from ${noteWords(draft.text)} to ${noteWords(text)} words`);
+  const closing = !hasNote && calls.length === 0 && rejected.length === 0 && !dropText && !leakedText && !turn.noted && !!draft.text;
+  // Its numbers and names are held to the results like a note's: what no result holds is cut (no step to rewrite it).
+  const grounded = closing && draft.text ? groundedNote(draft.text, turn) : null;
+  if (grounded !== null) {
+    text = grounded;
+    changed = true;
+  }
+  if (closing && noteWords(text ?? draft.text ?? "") > NOTE_MAX_WORDS) {
+    const before = text ?? draft.text ?? "";
+    text = trimNote(before);
+    turn.note(`closing text with no note cut from ${noteWords(before)} to ${noteWords(text)} words`);
     changed = true;
   }
   // 6. A data story's answer has the data's shape (spec §13): the low and the peak with numbers and dates, and what size

@@ -7,6 +7,7 @@ import { encodingSentence, highestOf, isFullLayerResult, summarizeLayerResult, t
 import { VIEW_KINDS, type Basemap, type RenderMode, type TimeMode } from "@/lib/render/state";
 import { boxAround, nearBox, nearPlace, OFF_RADIUS_KM, offPlace } from "./places";
 import { withReading } from "./readingGuard";
+import { inUS, usSpeeds, usSpeedsDeep } from "./units";
 import { normalizeRenderInput } from "./renderInput";
 import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
 import { checkNote } from "./noteCheck";
@@ -419,8 +420,14 @@ function drawable(body: unknown): boolean {
 
 function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: Turn = createTurn()) {
   const style = { ...layer.style, ...(layer.attributes && { attributes: layer.attributes }), ...(layer.time && { time: layer.time }), title: layer.title };
-  /** What the model reads of an answer: the summary (and the features' own values, which a note may quote). */
-  const modelView = (body: unknown) => ({ summary: layerResultForModel(body, layer.id, style, layer.fieldHelp), body });
+  const speedy = style.unit === "m/s";
+  /** What the model reads of an answer: its summary, speeds in mph or knots first for a US place (lib/agent/units.ts). */
+  const summaryFor = (body: unknown) => {
+    const summary = layerResultForModel(body, layer.id, style, layer.fieldHelp);
+    return speedy && inUS(summaryBox(summary)) ? withUsSpeeds(summary, layer.id) : summary;
+  };
+  /** What the model reads of an answer, with the features' own values a note may quote, for the grounding check. */
+  const modelView = (body: unknown) => ({ summary: summaryFor(body), body });
   // The registry erases each layer's input shape, so zod cannot infer bbox and
   // zoom through extend(); the cast restores the two fields this tool adds.
   const inputSchema = layer.input.extend({
@@ -440,8 +447,11 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: T
       const top = highest?.top[0] && { ...highest.top[0], by: highest.by, ...(highest.unit !== undefined && { unit: highest.unit }) };
       const zoomIn = "error" in body && body.hint === "zoom_in";
       const story = "kind" in body && body.kind === "geojson" && body.series ? body : undefined;
-      const caption = story ? storyCaption(story, layer) : undefined;
-      const meaning = story ? encodingSentence({ ...layer.style, ...(layer.attributes && { attributes: layer.attributes }) }, story.flow !== undefined) : undefined;
+      const us = speedy && inUS(bbox);
+      const rawCaption = story ? storyCaption(story, layer) : undefined;
+      const rawMeaning = story ? encodingSentence({ ...layer.style, ...(layer.attributes && { attributes: layer.attributes }) }, story.flow !== undefined) : undefined;
+      const caption = rawCaption && us ? usSpeeds(rawCaption, layer.id) : rawCaption;
+      const meaning = rawMeaning && us ? usSpeeds(rawMeaning, layer.id) : rawMeaning;
       turn.queries.push({
         layerId: layer.id,
         bbox,
@@ -465,16 +475,26 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: T
       return body;
     },
     // The UI part keeps the full body for the map; the model gets a summary with v's statistics in the layer's unit.
-    toModelOutput: ({ output }) => ({
-      type: "json",
-      value: layerResultForModel(
-        output,
-        layer.id,
-        { ...layer.style, ...(layer.attributes && { attributes: layer.attributes }), ...(layer.time && { time: layer.time }), title: layer.title },
-        layer.fieldHelp,
-      ),
-    }),
+    toModelOutput: ({ output }) => ({ type: "json", value: summaryFor(output) }),
   });
+}
+
+/** The extent a summary reports, if any. */
+function summaryBox(summary: JSONValue): BBox | null {
+  const box = summary && typeof summary === "object" && !Array.isArray(summary) ? (summary as Record<string, JSONValue>).bbox : null;
+  return Array.isArray(box) && box.length === 4 && box.every((n) => typeof n === "number") ? (box as unknown as BBox) : null;
+}
+
+/** A summary with its speeds in US units first, and its m/s statistics also in mph (or knots for water). */
+function withUsSpeeds(summary: JSONValue, layerId: string): JSONValue {
+  const out = usSpeedsDeep(summary, layerId);
+  if (!out || typeof out !== "object" || Array.isArray(out)) return out;
+  const stats = (out as Record<string, JSONValue>).stats as Record<string, JSONValue> | null | undefined;
+  if (!stats || typeof stats !== "object" || Array.isArray(stats) || stats.unit !== "m/s") return out;
+  const water = layerId === "ocean-currents";
+  const k = water ? 1.943844 : 2.236936;
+  const conv = (v: JSONValue | undefined) => (typeof v === "number" ? Math.round(v * k * 10) / 10 : null);
+  return { ...out, statsUS: { unit: water ? "knots" : "mph", min: conv(stats.min), max: conv(stats.max), mean: conv(stats.mean) } };
 }
 
 /** Tool names already repaired and logged, so each is logged once per server process. */

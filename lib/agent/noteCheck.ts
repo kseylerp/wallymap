@@ -1,3 +1,4 @@
+import { factPool, ungroundedClaims, withoutClaims, type Claim } from "./grounding";
 import type { Turn } from "./turn";
 
 /**
@@ -46,6 +47,19 @@ const fmt = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 
  * The reason to send a note back, or null to show it. Each reason is used once per turn, so a second note always shows.
  */
 export function noteProblem(markdown: string, turn: Turn): { reason: string; error: string } | null {
+  // Numbers and names no result holds (lib/agent/grounding.ts): sent back once with each one named.
+  if (!turn.noteRewrites.has("grounding")) {
+    const claims = claimsOf(markdown, turn);
+    if (claims.length > 0) {
+      return {
+        reason: "grounding",
+        error:
+          `These are not in any result this turn: ${claims.map((c) => c.text).join("; ")}. Call note again with only numbers and names from the results ` +
+          "(the summaries' stats, top lists, totals, dates and features), converted between units if you like, or leave them out; " +
+          "say in one clause what the app cannot show instead of filling it in.",
+      };
+    }
+  }
   const words = noteWords(markdown);
   if (words > NOTE_MAX_WORDS && !turn.noteRewrites.has("long")) {
     return {
@@ -81,6 +95,21 @@ export function noteProblem(markdown: string, turn: Turn): { reason: string; err
     };
   }
   return null;
+}
+
+/** What a note claims that this turn's results do not hold. */
+export function claimsOf(markdown: string, turn: Pick<Turn, "outputs" | "question">): Claim[] {
+  if (turn.outputs.length === 0) return [];
+  return ungroundedClaims(markdown, factPool(turn.outputs, turn.question));
+}
+
+/** The note with its ungrounded sentences cut (logged on the turn), or null when it holds none. */
+export function groundedNote(markdown: string, turn: Pick<Turn, "outputs" | "question" | "note">): string | null {
+  const claims = claimsOf(markdown, turn);
+  if (claims.length === 0) return null;
+  const kept = withoutClaims(markdown, claims);
+  turn.note(`cut from the note, not in any result: ${claims.map((c) => c.text).join("; ")}`);
+  return kept;
 }
 
 /** True when a note has a story's shape: two numbers or more, a peak, and what size or brightness and color mean. */
@@ -135,9 +164,11 @@ export function checkNote(markdown: string, turn: Turn, opts: { lastStep?: boole
     return { error: problem.error };
   }
   turn.noted = true;
-  if (noteWords(markdown) > NOTE_MAX_WORDS) {
-    turn.note(`note cut from ${noteWords(markdown)} to ${NOTE_MAX_WORDS} words or fewer`);
-    return { markdown: trimNote(markdown) };
+  // What is still not in any result after the rewrite (or with no step left to rewrite) is cut, never shown.
+  const grounded = groundedNote(markdown, turn) ?? markdown;
+  if (noteWords(grounded) > NOTE_MAX_WORDS) {
+    turn.note(`note cut from ${noteWords(grounded)} to ${NOTE_MAX_WORDS} words or fewer`);
+    return { markdown: trimNote(grounded) };
   }
-  return null;
+  return grounded === markdown ? null : { markdown: grounded };
 }

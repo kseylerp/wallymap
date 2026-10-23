@@ -571,6 +571,27 @@ export function nameUnnamed(features: Feature<Point>[]): number {
   return n;
 }
 
+/** Two places of one name this close are one place mapped twice (a ramp as a node and as a way). */
+export const TWIN_KM = 1;
+
+/** Drops the later of two non-sighting places with the same name within TWIN_KM of each other. */
+export function dropNearTwins(features: Feature<Point>[]): Feature<Point>[] {
+  const kept: Feature<Point>[] = [];
+  for (const f of features) {
+    const p = f.properties as Props;
+    const twin =
+      p.kind !== "sighting" &&
+      kept.some(
+        (k) =>
+          k.properties?.kind !== "sighting" &&
+          k.properties?.name === p.name &&
+          haversineKm(k.geometry.coordinates, f.geometry.coordinates) <= TWIN_KM,
+      );
+    if (!twin) kept.push(f);
+  }
+  return kept;
+}
+
 /**
  * When every place's temperature comes from one gauge, they all read the same number, so ranking by it says nothing:
  * waterTempF is left off (the verdict, band and gauge stay on the card) and the gauge is returned for the note.
@@ -720,9 +741,10 @@ const fishing = defineLayer({
     // Named places first (stable), so the top labels name real places, not "Boat ramp"; then unnamed ones take a near name.
     const ordered = [...features.filter(hasOwnName), ...features.filter((f) => !hasOwnName(f))];
     nameUnnamed(ordered);
+    const kept = dropNearTwins(ordered);
     return {
       kind: "geojson",
-      data: { type: "FeatureCollection", features: ordered },
+      data: { type: "FeatureCollection", features: kept },
       citation: {
         source:
           "OpenStreetMap contributors (ODbL); USDA Forest Service recreation activities and USGS water data (public domain); Montana Fish, Wildlife & Parks fishing access sites; iNaturalist (CC BY-NC / CC0)",

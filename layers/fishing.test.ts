@@ -432,3 +432,12 @@ describe("fishing layer", () => {
     expect((stub.mock.calls as unknown as [string][]).filter(([u]) => u.includes("waterservices"))).toHaveLength(3);
   });
 });
+
+describe("fishing twins", () => {
+  it("drops a place of the same name within 1 km (a ramp mapped as a node and a way), keeps sightings and far ones", async () => {
+    const { dropNearTwins } = await import("./fishing");
+    const pt = (name: string, lon: number, kind = "ramp") => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [lon, 45] }, properties: { name, kind } });
+    const kept = dropNearTwins([pt("Boat ramp 9 km W of Law Park", -111.7), pt("Boat ramp 9 km W of Law Park", -111.701), pt("Boat ramp 9 km W of Law Park", -111.5), pt("Brown trout", -111.7, "sighting"), pt("Brown trout", -111.7, "sighting")]);
+    expect(kept).toHaveLength(4);
+  });
+});

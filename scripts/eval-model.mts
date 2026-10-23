@@ -532,6 +532,9 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   "what's the land cover around torres del paine?": { layers: ["land-cover"] },
   "active mining claims near moab": { layers: ["mining-claims"] },
   "where is the old-growth forest in oregon?": { layers: ["old-growth"] },
+  // Forest types (ForTy via Earth Engine): the class here, and natural forest converted since a year (its change view).
+  "is this primary forest or plantation?": { layers: ["forest-types"] },
+  "where has natural forest been converted to plantations in borneo since 2017?": { layers: ["forest-types"] },
   "rapids on the middle fork salmon": { layers: ["paddling"] },
   "kayaking rivers near queenstown": { layers: ["paddling"] },
   "where is the permafrost in alaska?": { layers: ["permafrost"] },

@@ -717,6 +717,8 @@ export function timeInputs(layer: Pick<Layer, "input">, w: TimeWindow, now: Date
     if (key === "days" && kind === "number") {
       if (w.future && ahead) out.days = clamp(daysBetween(today, w.to) + 1, bounds(schema));
       else if (!w.future && !ahead && w.month === undefined && w.to === today) out.days = clamp(daysBetween(w.from, today) + 1, bounds(schema));
+      // "In March" on a layer that takes a month: every March in its longest window, not the one March of the last year.
+      else if (!w.future && !ahead && w.month !== undefined && shape.month !== undefined && Number.isFinite(bounds(schema).max)) out.days = bounds(schema).max;
     } else if ((key === "years" || key === "yearsBack") && kind === "number" && !w.future && w.month === undefined && toYear === thisYear) {
       // "since 2000" in October 2026 is 26.8 years: 27, so the year 2000 itself is in.
       out[key] = clamp(Math.max(1, Math.ceil(daysBetween(w.from, today) / 365.25 - 0.01)), bounds(schema));

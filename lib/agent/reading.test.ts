@@ -28,6 +28,8 @@ describe("timeWindow: the time phrases people use", () => {
 
   it("reads a month with no year as that month of every year", () => {
     expect(timeWindow("Best place to see sandhill cranes in Nebraska in March", NOW)).toMatchObject({ month: 3, from: "2026-03-01", to: "2026-03-31" });
+    // Every March the sightings layer holds (its ten-year window), not the one March of the last 365 days.
+    expect(timeInputs(getLayer("species")!, timeWindow("Best place to see sandhill cranes in Nebraska in March", NOW)!, NOW)).toEqual({ month: 3, days: 3650 });
     expect(timeWindow("Wildflowers in May near Bishop", NOW)).toMatchObject({ month: 5 });
     expect(timeWindow("What may be blooming near Bishop", NOW)).toBeNull();
   });

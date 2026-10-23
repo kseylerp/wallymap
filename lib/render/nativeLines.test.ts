@@ -518,6 +518,16 @@ describe("the encoded ordinal drives the line color (spec §12c: difficulty on t
     expect(paint(byPart(lineLayerSpecs(entry), "dash"))["line-color"]).toBe(DARK_GREY);
   });
 
+  it("dashes a facet's sage level on any line class, so passenger-car roads show on green Topo", () => {
+    const level = [{ key: "level", type: "ordinal" as const, label: "Maintenance level", encode: "color" as const, levels: [{ value: "car", label: "Passenger car" }, { value: "high", label: "High clearance" }] }];
+    const roads = [line(-106.3, { level: "car" }), line(-106.2, { level: "high" })];
+    const [entry] = lineEntries(visibleState(stateOf("forest-roads", roads, {}, {}, level)));
+    expect(entry.look.kind).toBe("facet");
+    const filter = JSON.stringify(byPart(lineLayerSpecs(entry), "dash").filter);
+    expect(filter).not.toContain('["==",["get","cls"]');
+    expect(filter).toContain('["!=",["get","cls"],"route"]');
+  });
+
   it("fades a filtered layer's other lines only to 75% while one is selected, so the answer stays on Topo", () => {
     const sac = [{ key: "sac_scale", type: "ordinal" as const, label: "Difficulty", encode: "color" as const, levels: [{ value: "hiking", label: "Hiking (T1)" }, { value: "mountain_hiking", label: "Mountain hiking (T2)" }] }];
     const paths = [line(-120, { sac_scale: "hiking" }), line(-119, { sac_scale: "mountain_hiking" })];

@@ -459,7 +459,8 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
     classes && twoTone
       ? ["==", ["get", "cls"], twoTone]
       : entry.look.kind === "facet" && twoTone
-        ? ["all", ["==", ["get", "cls"], twoTone], ["!", ["in", ["get", "fv"], ["literal", colored]]], ["in", ["get", "fv"], ["literal", entry.look.stops.map(([v]) => v)]]]
+        ? // Any class, not only T1 trails: Leadville's passenger-car roads drew plain sage and vanished on Topo (2026-10-23).
+          ["all", ["!=", ["get", "cls"], "route"], ["!", ["in", ["get", "fv"], ["literal", colored]]], ["in", ["get", "fv"], ["literal", entry.look.stops.map(([v]) => v)]]]
         : ["==", ["get", "cls"], "none"];
   const dash: LineLayerSpecification = {
     id: lineLayerId(entry.id, "dash"),

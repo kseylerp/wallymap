@@ -50,7 +50,50 @@ export type Reading = {
   colors: ColorWord[];
   /** The question asks what changed ("since 2012", "shrunk", "then and now"). */
   change: boolean;
+  /** How the question relates two layers ("outside protected areas", "along the Wonderland Trail"): the combine tool's op. */
+  combine: CombineAsk | null;
 };
+
+export type CombineAsk = {
+  op: "within" | "outside" | "near" | "along" | "overlap" | "drive_time";
+  because: string;
+  minutes?: number;
+  distance?: number;
+  unit?: "km" | "mi" | "m" | "ft";
+  /** The named line a question goes along ("Wonderland Trail"), for combine's b.match. */
+  match?: string;
+};
+
+/** Things a question asks to be near: water, trails, roads, camps (not a town: "near Boulder" is a place). */
+const NEAR_THINGS = String.raw`(?:water|waterfalls?|lakes?|springs?|streams?|rivers?|creeks?|trailheads?|trails?|roads?|campsites?|camps?|campgrounds?|parking|huts?|peaks?|viewpoints?|fires?|wilderness|beaches?)`;
+
+/**
+ * The spatial relation between two layers a question asks for, or null: inside or within an area, outside it, overlapping
+ * it, near or along something, or within some minutes' drive. "within 20 km" and "near <town>" are places, not relations.
+ */
+export function combineOf(question: string): CombineAsk | null {
+  const q = question.replace(/@view=\S+/g, " ");
+  let m: RegExpExecArray | null;
+  if ((m = /\bwithin\s+(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)(?:['’]s?)?\s+(?:drive|driving)\b|\b(\d+(?:\.\d+)?)[- ](minute|min|hour)\s+drive\b/i.exec(q))) {
+    const n = Number(m[1] ?? m[3]);
+    const unit = (m[2] ?? m[4]).toLowerCase();
+    return { op: "drive_time", minutes: /^h/.test(unit) ? n * 60 : n, because: m[0] };
+  }
+  if ((m = /\boutside\b|\bnot\s+(?:in|inside|within)\b|\b(?:isn['’]?t|aren['’]?t)\s+(?:in|inside|within)\b|\bunprotected\b/i.exec(q))) return { op: "outside", because: m[0] };
+  if ((m = /\boverlap\w*|\bintersect\w*|\bin\s+(?:the\s+)?drought\b|\bthat\s+(?:are|is)\s+in\s+(?:a\s+|the\s+)?(?:drought|habitat|burn\w*|fire\w*)/i.exec(q))) return { op: "overlap", because: m[0] };
+  // Along a named line (a trail, a road, a river), not "flooding along the Zambezi", one layer about one place.
+  if ((m = /\balong\s+(?:the\s+)?(?:(?:[A-Z][\w'-]*\s+){1,4}(?:Trail|Road|Route|Way|Path|Loop|Highway|River|Creek|Coast)\b|(?:trail|road|route|river|creek|coast|shore)\b)/.exec(q))) {
+    const name = m[0].replace(/^along\s+(?:the\s+)?/i, "").trim();
+    return { op: "along", because: m[0].trim(), distance: 1, unit: "km", ...(/^[A-Z]/.test(name) && { match: name }) };
+  }
+  const near = new RegExp(String.raw`\b(?:near|close\s+to|next\s+to|by)\s+(?:a\s+|the\s+|any\s+)?${NEAR_THINGS}\b|\bwithin\s+(\d+(?:\.\d+)?)\s*(km|mi|miles?|m|ft|feet)\s+of\s+(?:a\s+|the\s+)?${NEAR_THINGS}\b`, "i").exec(q);
+  if (near) {
+    const unit = near[2] ? (/^mi/i.test(near[2]) ? "mi" : /^f/i.test(near[2]) ? "ft" : near[2].toLowerCase() === "m" ? "m" : "km") : "km";
+    return { op: "near", because: near[0], distance: near[1] ? Number(near[1]) : 1, unit };
+  }
+  if ((m = /\b(?:inside|within)\s+(?:a\s+|the\s+)?(?![\d])(?:[A-Za-z][\w'-]*\s+){0,3}(?:national\s+forest|forest|park|wilderness|protected\s+areas?|habitat|burn\s+scars?|fire\s+perimeters?|reserve|monument|allotments?)\b/i.exec(q))) return { op: "within", because: m[0] };
+  return null;
+}
 
 type ColorWord = { word: string; activity: "bike" | "ski" };
 
@@ -303,6 +346,11 @@ const PHRASES: {
     re: /\blaunch\s+(?:a\s+|my\s+)?(?:kayak|canoe|boat|paddle\s*board|sup|raft)\b|\bput[- ]ins?\b|\bboat\s+(?:ramp|launch)\b/i,
     layers: ["recreation-sites", "paddling"],
     because: "launch points are federal water-access sites and mapped put-ins",
+  },
+  {
+    re: /\bshade[ds]?\b|\bshady\b|\b(?:north|south|east|west)[- ]facing\b|\bfaces?\s+(?:north|south|east|west)\b|\baspect\b|\bslope\s+angle\b|\bslopes?\s+(?:over|above|under|below)\s+\d+|\b\d+\s*°|\blow[- ]angle\b|\bavalanche\s+terrain\b|\bsteepness\b/i,
+    layers: ["terrain"],
+    because: "slope, aspect and shade come from the terrain layer (when the app has it)",
   },
   {
     re: /\bwill\s+it\s+(?:rain|snow|storm)\b|\brain(?:fall)?\b|\btoo\s+(?:hot|cold)\b|\btemperatures?\b|\bforecast\b|\bfreez\w+\b|\bheat\b|\bwindy\b|\bgusts?\b/i,
@@ -610,7 +658,7 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     filters.splice(filters.indexOf(grade), 1, ...styled.map((a) => ({ ...grade, key: a.key })));
   }
 
-  return { taxon: taxonOf(masked), layers, avoid: kept, filters, inputs, rankBy, time: timeWindow(raw, now), places, colors, change: asksChange(raw) || /\b(?:shrunk|shrank|retreat\w*|then\s+and\s+now|changed?\s+since)\b/i.test(raw) };
+  return { combine: combineOf(raw), taxon: taxonOf(masked), layers, avoid: kept, filters, inputs, rankBy, time: timeWindow(raw, now), places, colors, change: asksChange(raw) || /\b(?:shrunk|shrank|retreat\w*|then\s+and\s+now|changed?\s+since)\b/i.test(raw) };
 }
 
 // ---- Inputs from the time window ---------------------------------------------------------------------------------
@@ -706,8 +754,13 @@ export function readingFilters(reading: Reading, layerId: string, center?: [numb
 }
 
 /** The reading as a short block for the system prompt, or "" when the question's words name nothing the app maps. */
-export function readingForPrompt(reading: Reading, now: Date = new Date()): string {
+export function readingForPrompt(reading: Reading, now: Date = new Date(), tools: readonly string[] = []): string {
   const lines: string[] = [];
+  if (reading.combine && tools.includes("combine")) {
+    const c = reading.combine;
+    const how = c.op === "drive_time" ? `, minutes ${c.minutes}` : c.distance !== undefined ? `, distance ${c.distance} ${c.unit ?? "km"}` : "";
+    lines.push(`- "${c.because}" relates two layers: once both have answered, call combine with op "${c.op}"${how}${c.match ? `, b.match "${c.match}"` : ""} (a = the things asked about, b = the area, line or layer they are tested against), and answer from its counts.`);
+  }
   const strong = reading.layers.filter((l) => l.strong);
   const plain = reading.layers.filter((l) => !l.strong).slice(0, 4);
   if (strong.length > 0) lines.push(`- Query ${strong.map((l) => l.layerId).join(" and ")} (${[...new Set(strong.map((l) => l.because))].join("; ")}).`);

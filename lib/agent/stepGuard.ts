@@ -442,6 +442,28 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
     }
   }
 
+  // 3c. A question that relates two layers ("outside protected areas", "in drought") ends with the combine tool's join,
+  // not two layers to compare by eye: a note before it is held back once, naming the layers to join.
+  if (calls.some((c) => c.toolName === "combine")) turn.readingAdded.add("combine");
+  const joinAsk = turn.reading.combine;
+  if (joinAsk && toolNames.includes("combine") && !turn.readingAdded.has("combine") && calls.some((c) => c.toolName === "note")) {
+    const answered = [...new Set(turn.queries.filter((q) => q.ok && q.drawable).map((q) => q.layerId))].filter((id) => getLayer(id)?.style.geometry !== undefined);
+    if (joinAsk.op === "drive_time" ? answered.length >= 1 : answered.length >= 2) {
+      const [a, b] = combineSides(answered, joinAsk.op);
+      const note = calls.find((c) => c.toolName === "note") as DraftCall;
+      rejected.push({
+        call: note,
+        reason:
+          `Not shown yet: the question asks "${joinAsk.because}", which the combine tool answers. Call combine with op "${joinAsk.op}", a ${a}${b ? `, b ${b}${joinAsk.match ? ` (match "${joinAsk.match}")` : ""}` : ""}` +
+          `${joinAsk.minutes ? `, minutes ${joinAsk.minutes}` : ""}${joinAsk.distance ? `, distance ${joinAsk.distance} ${joinAsk.unit ?? "km"}` : ""}, then write the note from its counts.`,
+      });
+      calls = calls.filter((c) => c.toolName !== "note");
+      turn.readingAdded.add("combine");
+      turn.note(`note held back: the question asks "${joinAsk.because}" and combine was not called`);
+      changed = true;
+    }
+  }
+
   // 4. Ending the turn with queries never drawn: render them first, in the layer's default view.
   const hasNote = calls.some((c) => c.toolName === "note");
   // A step whose calls were all dropped is asked again, not ended.
@@ -510,6 +532,20 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
     }
   }
   return { calls, dropText: dropText || leakedText || deferred, rejected, changed, ...(text !== undefined && { text }) };
+}
+
+/**
+ * Which answered layer is a (the things kept) and which b (what they are tested against): an area layer is b for
+ * within, outside and overlap (the first answered of two areas is a), a line layer for along; otherwise the order the
+ * question was answered in.
+ */
+export function combineSides(answered: string[], op: string): [string, string | undefined] {
+  if (op === "drive_time") return [answered[0], undefined];
+  const geometry = (id: string) => getLayer(id)?.style.geometry;
+  const want = op === "along" ? "line" : op === "near" ? undefined : "polygon";
+  const b = want ? (answered.slice().reverse().find((id) => geometry(id) === want && answered.some((x) => x !== id)) ?? answered[1]) : answered[answered.length - 1];
+  const a = answered.find((id) => id !== b) ?? answered[0];
+  return [a, b];
 }
 
 /** True when an answer gives a low (or weakest) and a peak (or strongest). */

@@ -5,6 +5,7 @@ import type { GeocodeResult } from "@/lib/agent/geocode";
 import { applyReading, matchingQuestion, withReading, type GuardCall } from "@/lib/agent/readingGuard";
 import { decideStep } from "@/lib/agent/stepGuard";
 import { createTurn } from "@/lib/agent/turn";
+import { combineOf } from "@/lib/agent/reading";
 
 const NOW = new Date("2026-10-23T18:00:00Z");
 const SEDONA: BBox = [-112.14, 34.71, -111.66, 35.04];
@@ -82,6 +83,39 @@ describe("decideStep with the reading", () => {
     const decision = await decideStep({ calls: [call("query_streamflow", { bbox: SEDONA }), call("note", { markdown: "Rivers." })], hasText: false }, turn, ["query_streamflow", "query_mtb-trails", "note", "render"]);
     expect(decision.calls.map((c) => c.toolName)).toEqual(["query_mtb-trails"]);
     expect(decision.dropText).toBe(true);
+  });
+});
+
+describe("the combine tool (merging from the spatial branch)", () => {
+  it("reads the relation a question asks between two layers", () => {
+    expect(combineOf("Jaguar records in Costa Rica outside protected areas")).toMatchObject({ op: "outside" });
+    expect(combineOf("Old-growth forest in Oregon that isn't in wilderness")).toMatchObject({ op: "outside" });
+    expect(combineOf("Wild horse areas in Nevada that are in drought right now")).toMatchObject({ op: "overlap" });
+    expect(combineOf("Where can I camp along the Wonderland Trail?")).toMatchObject({ op: "along", match: "Wonderland Trail" });
+    expect(combineOf("Campsites within 2 miles of a lake near Bishop")).toMatchObject({ op: "near", distance: 2, unit: "mi" });
+    expect(combineOf("Trailheads within 30 minutes' drive of Bend")).toMatchObject({ op: "drive_time", minutes: 30 });
+    expect(combineOf("Trails near Boulder")).toBeNull();
+    expect(combineOf("Is there flooding along the Zambezi right now?")).toBeNull();
+  });
+
+  it("holds the note back once until combine is called, when the tool exists", async () => {
+    const turn = turnFor("Wild horse areas in Nevada that are in drought right now");
+    turn.place = sedona;
+    turn.queries.push(
+      { layerId: "grazing-allotments", bbox: SEDONA, inputKey: "[]", ok: true, drawable: true, wide: false },
+      { layerId: "drought", bbox: SEDONA, inputKey: "[]", ok: true, drawable: true, wide: false },
+    );
+    turn.drawn.add("grazing-allotments").add("drought");
+    const tools = ["note", "render", "combine", "query_grazing-allotments", "query_drought"];
+    const held = await decideStep({ calls: [call("note", { markdown: "Herds and drought are drawn." })], hasText: false }, turn, tools);
+    expect(held.calls).toEqual([]);
+    expect(held.rejected[0].reason).toContain('Call combine with op "overlap", a grazing-allotments, b drought');
+    // Once only; and never without the tool.
+    expect((await decideStep({ calls: [call("note", { markdown: "Herds and drought are drawn." })], hasText: false }, turn, tools)).calls.map((c) => c.toolName)).toEqual(["note"]);
+    const without = turnFor("Wild horse areas in Nevada that are in drought right now");
+    without.queries.push(...turn.queries);
+    without.drawn.add("grazing-allotments").add("drought");
+    expect((await decideStep({ calls: [call("note", { markdown: "x" })], hasText: false }, without, ["note", "render"])).calls.map((c) => c.toolName)).toEqual(["note"]);
   });
 });
 

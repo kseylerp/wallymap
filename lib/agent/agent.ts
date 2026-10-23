@@ -44,7 +44,7 @@ export function agentTurn({ question, view, model = getModel() }: { question: st
     turn,
     tools,
     // The fixed prompt, the map view, and the app's own reading of this question's words (lib/agent/reading.ts).
-    system: [systemForTurn(SYSTEM_PROMPT, view), readingForPrompt(turn.reading, turn.now)].filter(Boolean).join("\n\n"),
+    system: [systemForTurn(SYSTEM_PROMPT, view), readingForPrompt(turn.reading, turn.now, Object.keys(tools))].filter(Boolean).join("\n\n"),
     model: wrapLanguageModel({ model, middleware: stepGuard(turn, Object.keys(tools)) }),
     stopWhen: stepCountIs(MAX_STEPS),
     prepareStep: prepareStepFor(turn, Object.keys(tools)),

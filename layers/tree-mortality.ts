@@ -303,7 +303,7 @@ const CARD: CardSpec = {
 
 const treeMortality = defineLayer({
   id: "tree-mortality",
-  title: "Tree death (beetles, drought, disease)",
+  title: "Dead-tree patches (beetles, drought, disease)",
   description:
     "Areas where trees died, found by Forest Service aircraft crews mapping dead and dying forest each summer, drawn as polygons. " +
     "Each polygon has year and t (January 1 of the survey year, so the time scrubber steps through the years), agent (the cause, such as mountain pine beetle, fir engraver, western pine beetle, sudden oak death or drought), host (the tree species), acres, and v with measure saying what v counts: " +
@@ -341,7 +341,7 @@ const treeMortality = defineLayer({
 
     const plan = planYears(input.years);
     const notes: string[] = [];
-    if (plan.includes2020) notes.push("2020 was never flown, so there is no tree death data for that year");
+    if (plan.includes2020) notes.push("2020 was never flown, so there are no dead-tree patches mapped for that year");
 
     const inCalifornia = !bboxesDisjoint(ctx.bbox, CALIFORNIA);
     if (plan.cdfw !== null && !inCalifornia) notes.push("Tree death before 2020 is mapped for California only");

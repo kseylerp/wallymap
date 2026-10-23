@@ -73,7 +73,8 @@ function featuresOf(data: LayerResult | FeatureCollection | undefined): Feature[
  * (groundwater wells) should declare `time: { shape: "single" }`: the data alone cannot tell it from events.
  */
 export function timeShapeOf(layer: Pick<Layer, "time" | "style" | "attributes">, data?: LayerResult | FeatureCollection): TimeSpec {
-  const declared = layer.time;
+  // A tiles answer can say what time means for its own view (a baseline map has none, a change view compares years).
+  const declared = (data && "kind" in data && data.kind === "tiles" ? data.time : undefined) ?? layer.time;
   const fromData = inferFromData(layer, data);
   if (declared) {
     if (!fromData) return declared;

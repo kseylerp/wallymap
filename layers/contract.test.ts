@@ -24,6 +24,13 @@ const fc = (props: Record<string, unknown>[]): FeatureCollection => ({ type: "Fe
 const citation = { source: "Fake", url: "https://example.test", retrieved: "2026-10-18T00:00:00Z" };
 
 describe("timeShapeOf", () => {
+  it("lets a tiles answer say what time means for its own view, over the layer's declaration", () => {
+    const tiles = (time?: Parameters<typeof timeShapeOf>[0]["time"]): LayerResult => ({ kind: "tiles", data: { url: "/t/{z}/{x}/{y}", minzoom: 0, maxzoom: 10, format: "raster" }, citation, ...(time && { time }) });
+    const declared = layer({ time: { shape: "none" } });
+    expect(timeShapeOf(declared, tiles()).shape).toBe("none");
+    expect(timeShapeOf(declared, tiles({ shape: "snapshots", dates: ["2017", "2025"], step: "year" }))).toMatchObject({ shape: "snapshots", dates: ["2017", "2025"] });
+  });
+
   it("is none for undated features and for a layer with no time at all", () => {
     expect(timeShapeOf(base, fc([{ name: "a" }, { name: "b" }])).shape).toBe("none");
     expect(timeShapeOf(base).shape).toBe("none");

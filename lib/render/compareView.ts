@@ -72,7 +72,8 @@ export function versionCompare(layer: LoadedLayer): CompareState | null {
  * layer that publishes `data.time` or `data.scenario`.
  */
 export function isComparable(layer: LoadedLayer): boolean {
-  if (layer.result.kind === "tiles") return layer.result.data.time !== undefined || layer.result.data.scenario !== undefined;
+  // A toggle (forest types' confidence) is a setting in the layer row, not an amount to compare.
+  if (layer.result.kind === "tiles") return layer.result.data.time !== undefined || (layer.result.data.scenario !== undefined && layer.result.data.scenario.control !== "toggle");
   if (versionCompare(layer)) return true;
   return layer.result.data.features.some((f) => {
     const t = f.properties?.t;

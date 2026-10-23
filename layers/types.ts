@@ -145,6 +145,11 @@ export type LayerResult =
       sourceStatus?: SourceStatus;
       /** This answer's own key, over the layer's (`legend`) and the derived one (legendOf). */
       legend?: LegendSpec;
+      /**
+       * What time means for this answer, over the layer's own `time` (timeShapeOf), for a layer whose views differ: a
+       * baseline map has none, a change view is the snapshots it compares.
+       */
+      time?: TimeSpec;
     } & Partial<Truncation>);
 
 export type LayerError = {
@@ -546,4 +551,10 @@ export type TileScenario = {
    * pixels"): the control shows these instead of the number and unit.
    */
   labels?: string[];
+  /**
+   * How the control looks. Unset: the scenario scrubber in the time panel (a slider over the amounts, with play and
+   * compare). `"toggle"`: a plain toggle between two choices in the layer row only, for a setting that is not time
+   * (forest types' "All" or "Only confident pixels"): no scrubber, no play, no compare.
+   */
+  control?: "toggle";
 };

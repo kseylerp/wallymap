@@ -69,7 +69,8 @@ export function captionDate(
 function scenarioCaption(state: MapState, layer: LoadedLayer): string | undefined {
   const scenario = scenarioOf(layer);
   const value = currentScenarioValue(state, layer.id);
-  return scenario && value !== undefined ? scenarioText(scenario, value) : undefined;
+  // A toggle ("All", "Only confident pixels") is a setting, not a date.
+  return scenario && scenario.control !== "toggle" && value !== undefined ? scenarioText(scenario, value) : undefined;
 }
 
 export function PhoneCaption({ state, shown, onOpen, titleOf }: { state: MapState; shown: MapState["layers"]; onOpen: () => void; titleOf?: (layerId: string) => string | undefined }) {

@@ -156,7 +156,7 @@ export function changeCompare(layer: LoadedLayer, today: Date = new Date()): Com
   if (bySnapshot) return bySnapshot;
   if (layer.result.kind === "geojson") {
     if (dates(layer.result.data).size < 2) return null;
-  } else if (!layer.result.data.time && !layer.result.data.scenario) {
+  } else if (!layer.result.data.time && (!layer.result.data.scenario || layer.result.data.scenario.control === "toggle")) {
     return null;
   }
   const compare = defaultCompare(layer, today);

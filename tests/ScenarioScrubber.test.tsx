@@ -4,6 +4,7 @@ import { useEffect, useReducer } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScenarioScrubbers, useScenarioPlay } from "@/components/ScenarioScrubber";
 import { SLR_SCENARIO, slrTileUrl } from "@/layers/sea-level-rise";
+import { isComparable } from "@/lib/render/compareView";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type LoadedLayer, type MapState } from "@/lib/render/state";
 import { PLAY_STEP_MS } from "@/lib/render/useTimePlay";
@@ -38,6 +39,19 @@ function Harness() {
 }
 
 describe("ScenarioScrubber", () => {
+  it("leaves a toggle scenario to the layer row: no scrubber, not comparable", () => {
+    const toggled: LoadedLayer = {
+      ...slr,
+      id: "forest-types",
+      result: { ...slr.result, data: { ...(slr.result as { data: object }).data, scenario: { param: "c", label: "Pixels shown", unit: "% sure", values: [0, 70], labels: ["All", "Only confident pixels"], template: "/t?c={value}", control: "toggle" } } } as LoadedLayer["result"],
+    };
+    const state = reduce(initialMapState, { type: "layer_loaded", layer: toggled });
+    const { container } = render(<ScenarioScrubbers state={state} dispatch={() => {}} />);
+    expect(container.textContent).toBe("");
+    expect(isComparable(toggled)).toBe(false);
+    expect(isComparable(slr)).toBe(true);
+  });
+
   it("titles the strip by the label and reads out the queried amount with conversions", () => {
     render(<Harness />);
     expect(screen.getByRole("group", { name: "Sea level rise" })).toBeTruthy();

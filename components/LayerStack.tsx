@@ -357,12 +357,33 @@ function SliderRow({ label, srLabel, readout, children }: { label: string; srLab
 
 /**
  * A scenario layer's amount (sea level rise) as a labelled slider row over the scrubber's amounts, with the one shown
- * ("3 ft") inline.
+ * ("3 ft") inline; a toggle scenario (`control: "toggle"`) is two plain segments under its label.
  */
 function ScenarioRowSlider({ layer, value, dispatch }: { layer: LoadedLayer; value: number; dispatch: (action: MapAction) => void }) {
   const scenario = scenarioOf(layer);
   if (!scenario) return null;
   const { values, label } = scenario;
+  if (scenario.control === "toggle") {
+    return (
+      <div className="min-w-0">
+        <h3 className="small-caps mb-1.5">{label}</h3>
+        <div role="group" aria-label={`${label} for ${layer.title}`} data-testid="scenario-toggle" className="mode-segments two-way">
+          {values.map((v) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={v === value}
+              title={scenarioText(scenario, v)}
+              onClick={() => v !== value && dispatch({ type: "set_scenario", layerId: layer.id, value: v })}
+              className="mode-segment"
+            >
+              {scenarioText(scenario, v)}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
   const at = Math.max(0, values.indexOf(value));
   const fill = values.length > 1 ? (at / (values.length - 1)) * 100 : 100;
   return (

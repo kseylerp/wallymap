@@ -20,10 +20,10 @@ export function useScenarioPlay(playing: boolean, dispatch: (action: MapAction) 
   }, [playing, dispatch]);
 }
 
-/** The loaded layers that publish a scenario (sea level rise), oldest first. */
+/** The loaded layers whose scenario is a scrubber (sea level rise), oldest first; a toggle lives in the layer row only. */
 export function scenarioLayers(layers: MapState["layers"]): LoadedLayer[] {
   return Object.values(layers)
-    .filter((l) => scenarioOf(l) !== undefined)
+    .filter((l) => scenarioOf(l) !== undefined && scenarioOf(l)?.control !== "toggle")
     .sort((a, b) => Date.parse(a.receivedAt) - Date.parse(b.receivedAt));
 }
 

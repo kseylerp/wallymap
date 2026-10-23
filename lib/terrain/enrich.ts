@@ -113,7 +113,11 @@ export function withTerrainFields<L extends Layer>(layer: L): L {
     card: { ...own, facts: [...(own.facts ?? []).filter((f) => !keys.has(f.key)), ...facts] },
     attributes: [...(layer.attributes ?? []).filter((a) => !keys.has(a.key)), ...attributes],
     fieldHelp: { ...layer.fieldHelp, ...help },
-    description: `${layer.description} ${spec.kind === "point" ? "Each crag also carries aspect (the way it faces), slopeDeg and afternoonShade (true when it faces away from the afternoon sun today) from an elevation model." : `Each line also carries gainM, lossM and highM (climb, descent and high point in metres from an elevation model)${spec.slope ? " and maxSlopeDeg (the steepest ground it crosses)" : ""}.`}`,
+    description: `${layer.description} ${
+      spec.kind === "point"
+        ? "Each crag also carries aspect (N to NW, the way its wall faces), slopeDeg and afternoonShade (true when it faces away from the afternoon sun today) from an elevation model: for shade, pass render.filters afternoonShade include [\"true\"]."
+        : `Each line also carries gainM, lossM and highM (climb, descent and high point in metres from an elevation model)${spec.slope ? " and maxSlopeDeg (the steepest ground it crosses; low-angle is under 30)" : ""}: rank with render.rankBy ${spec.slope ? "maxSlopeDeg" : "gainM"} or filter with render.filters ${spec.slope ? "maxSlopeDeg" : "gainM"} range.`
+    }`,
   };
 }
 
@@ -166,24 +170,23 @@ function enrichLine(f: Feature, dem: Dem, slope: boolean): Feature {
 }
 
 /**
- * The properties to filter or rank by and the top features by them, in the coverage note the model reads: "(gainM
- * and lossM in metres: rank by gainM or filter its range; most climb: Saddle Rock Trail 420 m, ...)".
+ * The top features by the new numbers, in words the coverage note can show a person (it is also what the model reads):
+ * "; most climb: Saddle Rock Trail 420 m, ..." or "; 9 face away from the afternoon sun today". Property names stay
+ * out of it: the layer's description and the summary's samples name them for the model.
  */
 function terrainHint(features: Feature[], spec: Spec): string {
-  const named = features.filter((f) => typeof f.properties?.name === "string");
   if (spec.kind === "point") {
     const shaded = features.filter((f) => f.properties?.afternoonShade === true).length;
-    return ` (aspect N to NW and afternoonShade true or false: filter on them; ${shaded} face away from the afternoon sun today)`;
+    return `; ${shaded} of them face away from the afternoon sun today`;
   }
   const key = spec.slope ? "maxSlopeDeg" : "gainM";
-  const top = named
-    .filter((f) => typeof f.properties?.[key] === "number")
+  const top = features
+    .filter((f) => typeof f.properties?.name === "string" && typeof f.properties?.[key] === "number")
     .sort((x, y) => (y.properties![key] as number) - (x.properties![key] as number))
     .filter((f, i, all) => all.findIndex((g) => g.properties?.name === f.properties?.name) === i)
     .slice(0, 3)
     .map((f) => `${f.properties!.name} ${f.properties![key]}${spec.slope ? "°" : " m"}`);
-  const keys = spec.slope ? "gainM and lossM in metres and maxSlopeDeg in degrees" : "gainM and lossM in metres";
-  return ` (${keys}: rank by ${key} or filter its range${top.length > 0 ? `; most ${spec.slope ? "steep" : "climb"}: ${top.join(", ")}` : ""})`;
+  return top.length > 0 ? `; ${spec.slope ? "steepest ground crossed" : "most climb"}: ${top.join(", ")}` : "";
 }
 
 function withNote<R extends LayerResult>(result: R, clause: string): R {

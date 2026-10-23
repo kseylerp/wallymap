@@ -109,7 +109,7 @@ const NOUNS: Record<string, string> = {
   "ski-routes": "Ski routes",
   climbing: "Climbing areas",
   paddling: "Paddling spots",
-  "old-growth": "Old-growth forest",
+  "old-growth": "Old-growth firesheds",
   "flood-extent": "Flood water",
   "gbif-occurrences": "Occurrence records",
   "protected-areas-world": "Protected areas",
@@ -257,6 +257,42 @@ async function sideOf(side: z.infer<typeof SideSchema>, turn: Turn, view: MapVie
   return { layer, features: kept, citation: body.citation, bbox, input };
 }
 
+/**
+ * A layer whose areas carry an amount that is not their own size (old-growth acres in a fireshed): the part inside (or
+ * outside) gets its share of the amount, assuming it is spread evenly, and the statement says so. Null when the layer's
+ * measure is the polygon's own area (fire perimeter acres, allotment acres) or it has none in acres.
+ */
+function apportion(features: Feature[], layer: Layer, op: CombineOp): { sentence: string; fact: CardFact } | null {
+  const measure = layer.card?.measure;
+  if (!measure || measure.unit !== "acres" || (op !== "overlap" && op !== "within" && op !== "outside")) return null;
+  const shareKey = op === "outside" ? "outsideShare" : "overlapShare";
+  let part = 0;
+  let whole = 0;
+  let wholeArea = 0;
+  for (const f of features) {
+    const p = f.properties ?? {};
+    const value = p[measure.key];
+    const share = p[shareKey];
+    if (typeof value !== "number" || typeof share !== "number" || share <= 0) continue;
+    whole += value;
+    wholeArea += (op === "outside" ? (p.outsideAcres as number) : (p.overlapAcres as number)) / share;
+    const inPart = Math.round(value * share);
+    part += inPart;
+    f.properties = { ...p, apportioned: inPart };
+  }
+  // The measure is the polygon's own size when the two agree within a quarter: nothing to add.
+  if (whole <= 0 || Math.abs(whole - wholeArea) / wholeArea < 0.25) {
+    for (const f of features) if (f.properties) delete f.properties.apportioned;
+    return null;
+  }
+  const n = (v: number) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)} million` : Math.round(v).toLocaleString("en-US"));
+  const label = lowerFirst(measure.label);
+  return {
+    sentence: `Spread evenly over each area, that is about ${n(part)} acres of ${label} of the ${n(whole)} acres in these areas.`,
+    fact: { key: "apportioned", label: `${measure.label} in this part (spread evenly)`, unit: "acres", format: "int" },
+  };
+}
+
 /** Runs the combine tool. Never throws: problems come back as { error } for the model to read. */
 export async function runCombine(input: CombineInput, turn: Turn, view: MapView | null): Promise<CombinedResult | CombineError> {
   const a = await sideOf(input.a, turn, view);
@@ -305,9 +341,11 @@ export async function runCombine(input: CombineInput, turn: Turn, view: MapView 
   const aTitle = sideNoun(a.layer, a.input);
   const relation = relationText(input.op, bName, input, fromName);
   const title = `${aTitle} ${relation}`;
-  const statement = statementOf(relation, input.op, outcome, aTitle, aKind!);
+  const apportioned = aKind === "polygon" ? apportion(outcome.features, a.layer, input.op) : null;
+  const statement = [statementOf(relation, input.op, outcome, aTitle, aKind!), apportioned?.sentence].filter(Boolean).join(" ");
   const id = `${COMBINED_PREFIX}${SLUG(`${a.layer.id}-${input.op}-${input.op === "drive_time" ? `${input.minutes ?? 30}min-${fromName}` : bName}`)}`;
   const fields = joinFields(input.op, aKind!, bName);
+  if (apportioned) fields.facts.push(apportioned.fact);
   const skippedNote = outcome.skipped > 0 ? `${plural(outcome.skipped, "feature")} with broken outlines could not be clipped and are left out` : undefined;
   const geometry: StyleHints["geometry"] = aKind === "polygon" ? "polygon" : aKind === "line" ? "line" : "point";
   const style: StyleHints = { ...a.layer.style, geometry };

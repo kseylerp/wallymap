@@ -104,6 +104,17 @@ describe("runCombine", () => {
     expect(out.combined.style.geometry).toBe("polygon");
   });
 
+  it("outside on areas that carry an amount: shares the amount by area, and says it is spread evenly", async () => {
+    answers.set("old-growth", geojson([{ ...square(0, 0, 1, "Battle Peak"), properties: { name: "Battle Peak", v: 50_000 } }]));
+    answers.set("wilderness", geojson([square(0, 0, 0.5, "Kalmiopsis Wilderness")]));
+    const turn = turnWithQueries("old-growth", "wilderness");
+    const out = await runCombine({ op: "outside", a: { layerId: "old-growth" }, b: { layerId: "wilderness" }, unit: "km" }, turn, null);
+    if ("error" in out) throw new Error(out.error);
+    expect(out.data.features[0].properties?.apportioned).toBe(37_500);
+    expect(out.combined.statement).toMatch(/^Of [\d,.]+ km² of old-growth firesheds, .* lies outside wilderness areas, in 1 of 1 areas\. Spread evenly over each area, that is about 37,500 acres of old-growth forest of the 50,000 acres in these areas\.$/);
+    expect(out.combined.facts.map((f) => f.key)).toContain("apportioned");
+  });
+
   it("drive_time: from the place geocoded this turn, with the router's caveat", async () => {
     const turn = turnWithQueries("campsites");
     turn.place = { bbox: BOX, center: [-121.75, 46.86], name: "Paradise, Washington", source: "mapbox" } as never;

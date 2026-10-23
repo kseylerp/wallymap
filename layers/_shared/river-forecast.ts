@@ -61,8 +61,15 @@ const GaugeSchema = z.object({
 export type Reading = { stageFt?: number; flowCfs?: number; category?: string; time: string };
 export type NwpsGauge = { lid: string; name: string; coordinates: [number, number]; observed?: Reading; forecastNow?: Reading; hasForecast: boolean };
 
+/**
+ * Above this a "stage" is a reservoir's pool elevation, not a river's depth at a gauge: NWPS reports Lake Granby as
+ * 8,234.91 ft with its storage, 261 thousand acre-feet, labelled "261 kcfs" (2026-10-23), which read as 261,000 cfs.
+ */
+const POOL_ELEVATION_FT = 300;
+
 function reading(s: z.infer<typeof StatusSchema> | undefined): Reading | undefined {
   if (!s?.validTime || s.validTime.startsWith("0001")) return undefined;
+  if (s.primaryUnit === "ft" && (num(s.primary) ?? 0) > POOL_ELEVATION_FT) return undefined;
   const stage = s.primaryUnit === "ft" ? num(s.primary) : undefined;
   const sec = num(s.secondary);
   const flow = sec === undefined ? undefined : s.secondaryUnit === "kcfs" ? Math.round(sec * 1000) : s.secondaryUnit === "cfs" ? Math.round(sec) : undefined;

@@ -394,6 +394,11 @@ export function rowName(f: Feature): string {
     const v = p[key];
     if (typeof v === "string" && v.trim()) return v.trim();
   }
+  // An unnamed trail with a climb (terrain on trail layers): told apart by where it goes up to (Chamonix's top climbs).
+  if (typeof p.highM === "number" && Number.isFinite(p.highM)) {
+    const kind = typeof p.kind === "string" && /^[a-z_ ]+$/.test(p.kind) ? p.kind.replace(/_/g, " ") : "trail";
+    return `Unnamed ${kind} to ${Math.round(p.highM).toLocaleString("en-US")} m`;
+  }
   return "Unnamed";
 }
 

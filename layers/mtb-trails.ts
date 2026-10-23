@@ -473,6 +473,7 @@ const CARD: CardSpec = {
     { key: "uphill", label: "Uphill rating" },
     { key: "surface", label: "Surface" },
     { key: "operator", label: "Operator" },
+    { key: "ref", label: "Trail number" },
     { key: "t", label: "Last checked", format: "date" },
   ],
   hidden: ["osmId", "bicycle", "level"],

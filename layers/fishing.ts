@@ -526,6 +526,17 @@ const hasOwnName = (f: Feature) => {
 
 /** An unnamed place within this distance of a named one is named after it ("Boat ramp near Rainbow Point Campground"). */
 export const NEAR_KM = 5;
+/** Farther out, up to this distance, it is named by distance and direction ("Boat ramp 8 km SW of Ennis Lake"). */
+export const FAR_KM = 30;
+
+const COMPASS8 = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+/** The 8-point direction from `from` to `to` ([lon, lat]). */
+function direction(from: number[], to: number[]): string {
+  const dx = (to[0] - from[0]) * Math.cos((((from[1] + to[1]) / 2) * Math.PI) / 180);
+  const dy = to[1] - from[1];
+  const deg = ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
+  return COMPASS8[Math.round(deg / 45) % 8];
+}
 
 /**
  * Names the places that have only their kind ("Boat ramp", "Fishing pier") after the nearest place in view with its own
@@ -542,7 +553,18 @@ export function nameUnnamed(features: Feature<Point>[]): number {
       const km = haversineKm(f.geometry.coordinates, other.geometry.coordinates);
       if (km <= NEAR_KM && (best === null || km < best.km)) best = { name: String(other.properties?.name), km };
     }
-    if (best === null) continue;
+    if (best === null) {
+      // Two unnamed ramps would read as one place listed twice: name the far ones by distance and direction.
+      let far: { name: string; km: number; at: number[] } | null = null;
+      for (const other of named) {
+        const km = haversineKm(f.geometry.coordinates, other.geometry.coordinates);
+        if (km <= FAR_KM && (far === null || km < far.km)) far = { name: String(other.properties?.name), km, at: other.geometry.coordinates };
+      }
+      if (far === null) continue;
+      p.name = `${p.name} ${Math.round(far.km)} km ${direction(far.at, f.geometry.coordinates)} of ${far.name}`;
+      n++;
+      continue;
+    }
     p.name = `${p.name} near ${best.name}`;
     n++;
   }

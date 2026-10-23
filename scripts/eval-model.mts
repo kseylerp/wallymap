@@ -583,8 +583,8 @@ export const USECASE_QUESTIONS: Record<string, UsecaseExpect> = {
   "long trail runs with big climbs near chamonix": { useCase: "UC04", layers: ["popularity|osm-trails"], view: "ranked", needs: ["elevation gain"] },
   "flat trail runs over 10 miles near portland": { useCase: "UC04", layers: ["popularity|osm-trails"], filter: { layer: "popularity|osm-trails", key: "lengthKm" }, needs: ["whole-trail length", "elevation gain"] },
   // UC05 Mountain biker picks an intermediate ride.
-  "intermediate mountain bike trails near bentonville": { useCase: "UC05", layers: ["mtb-trails"], filter: { layer: "mtb-trails", key: "v|imba" } },
-  "flowy blue trails in sedona": { useCase: "UC05", layers: ["mtb-trails"], filter: { layer: "mtb-trails", key: "v|imba" } },
+  "intermediate mountain bike trails near bentonville": { useCase: "UC05", layers: ["mtb-trails"], filter: { layer: "mtb-trails", key: "v|level" } },
+  "flowy blue trails in sedona": { useCase: "UC05", layers: ["mtb-trails"], filter: { layer: "mtb-trails", key: "v|level" } },
   // UC06 Sport climber picks a crag by style and sun.
   "which crags near moab are sport and shaded in the afternoon?": { useCase: "UC06", layers: ["climbing"], view: "ranked", filter: { layer: "climbing", key: "disciplines" }, needs: ["wall aspect"] },
   "beginner sport climbing at red rock near las vegas": { useCase: "UC06", layers: ["climbing"], filter: { layer: "climbing", key: "disciplines" }, needs: ["grade band per discipline"] },

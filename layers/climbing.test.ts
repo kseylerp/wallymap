@@ -367,7 +367,7 @@ describe("climbing layer", () => {
       expect(res.body.truncated).toBe(true);
       expect(res.body.coverageNote).toBe(
         "Showing the 1,000 largest of 1,501 (ranked by route count); zoom in under 10,000 km² for all; Returned 1,000 climbing places (1 from OpenStreetMap, 1,500 from OpenBeta)" +
-          ". The view is too large for OpenBeta's route lists, so its crags carry no grades per style (sportBands, tradBands, boulderBands); zoom in to filter by them",
+          ". The view is too large for OpenBeta's route lists, so its crags carry no grades per style (sport, trad or boulder grades); zoom in to filter by them",
       );
       // 2° tiles ask OpenBeta for its crags without their route lists (megabytes and past the timeout there).
       const bodies = (stub.mock.calls as unknown as [string, { body: string }][]).filter(([u]) => u.includes("openbeta")).map(([, init]) => JSON.parse(init.body).query as string);

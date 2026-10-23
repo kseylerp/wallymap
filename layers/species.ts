@@ -408,7 +408,7 @@ const species = defineLayer({
     "v is always 1 (one sighting), so density shows where people see things. Each point also has license (the photographer's licence, such as cc-by-nc or cc0; cite or link the url when showing it). " +
     "Use it to answer what lives or flowers somewhere, or where to look for a kind of animal or plant. " +
     "Set taxon to a name to filter, for example 'elk', 'birds', 'mule deer' or 'Pandion haliaetus'. The name is resolved to one iNaturalist taxon by the country's common names ('elk' in the US is Cervus canadensis, 'trout' the salmons and trouts); a group such as 'birds' includes every bird. The coverage note names the taxon used. Leave it out for all species. " +
-    "month (1-12 or '3-4') or season (spring, summer, fall, winter) keeps those months within days. " +
+    "month (1-12 or '3-4') or season (spring, summer, fall, winter) keeps those months within days; for a month or season across many years ('cranes in March', 'where to see them in spring') use gbif-occurrences with month, which keeps that month of every year. " +
     "days (1 to 3650, default 365) sets how far back to look; researchGradeOnly (default true) keeps only community-confirmed observations; turn it off for unconfirmed ones. " +
     "Caveats: this reflects where people go and post, not where animals are, so trails, roads and towns look busy and remote areas look empty; absence of points is not absence of the species. " +
     "Sightings of threatened species and ones whose observer hid their location are left out (the result says how many), so rare animals are under-counted. " +
@@ -473,7 +473,7 @@ const species = defineLayer({
         notes.push(`the iNaturalist name lookup failed, so "${input.taxon}" was matched as text and may include other species`);
       } else {
         asked = resolved.taxon;
-        notes.push(`"${input.taxon}" was read as ${taxonWords(asked)}`);
+        notes.push(`${input.taxon.charAt(0).toUpperCase()}${input.taxon.slice(1)} was read as ${taxonWords(asked)}`);
       }
     }
     const filter: TaxonFilter = { ...(asked && { taxonId: asked.id }), ...(placeId !== undefined && { placeId }) };

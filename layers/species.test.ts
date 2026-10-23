@@ -319,7 +319,7 @@ describe("species layer", () => {
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(8);
     expect(new Set(r.data.features.map((f) => f.properties?.species))).toEqual(new Set(["Elk"]));
-    expect(r.coverageNote).toBe('"elk" was read as Elk (Cervus canadensis) and its subspecies');
+    expect(r.coverageNote).toBe('Elk was read as Elk (Cervus canadensis) and its subspecies');
   });
 
   it("looks trout up as Salmoninae and asks by its id, so no fawn lily is drawn (Denver, UC11)", async () => {
@@ -331,7 +331,7 @@ describe("species layer", () => {
     expect(params(obs).get("taxon_id")).toBe("342904");
     expect(params(obs).get("month")).toBe("3");
     if (!("kind" in r)) throw new Error("expected a result");
-    expect(r.coverageNote).toContain('"trout" was read as Salmons and Trouts (Salmoninae), the whole subfamily');
+    expect(r.coverageNote).toContain('Trout was read as Salmons and Trouts (Salmoninae), the whole subfamily');
     expect(r.coverageNote).toContain("sightings from March only");
   });
 
@@ -476,7 +476,7 @@ describe("species layer", () => {
     expect(urls.map((u) => u.searchParams.get("page"))).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
     expect(r.data.features).toHaveLength(2000);
     expect(r.total).toBe(26626);
-    expect(r.coverageNote).toBe('"birds" was read as Birds (Aves), the whole class');
+    expect(r.coverageNote).toBe('Birds was read as Birds (Aves), the whole class');
   });
 
   it("in wide mode quotes no total when every page was fetched", async () => {

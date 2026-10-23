@@ -827,9 +827,9 @@ export function climbingNote(args: {
     note += `. OpenBeta did not answer for part of the area (${args.openbetaPartError}), so its crags there are missing`;
   }
   if (args.coarse && !args.openbetaError) {
-    note += ". The view is too large for OpenBeta's route lists, so its crags carry no grades per style (sportBands, tradBands, boulderBands); zoom in to filter by them";
+    note += ". The view is too large for OpenBeta's route lists, so its crags carry no grades per style (sport, trad or boulder grades); zoom in to filter by them";
   } else if (args.routesMissing && !args.openbetaError) {
-    note += ". OpenBeta's route lists did not come in time for part of the area, so some crags carry no grades per style (sportBands, tradBands, boulderBands) and a filter on them leaves those out";
+    note += ". OpenBeta's route lists did not come in time for part of the area, so some crags carry no grades per style (sport, trad or boulder grades) and a filter on them leaves those out";
   }
   return note;
 }

@@ -398,3 +398,12 @@ describe("summarizeLayerResult highest", () => {
     expect(summary).toMatchObject({ highest: { top: [{ name: "Pio XI", value: 1245 }, { name: "Viedma", value: 960 }] } });
   });
 });
+
+describe("seriesSpan", () => {
+  it("gives a feature's series as its first, last, low and high points", async () => {
+    const { seriesSpan } = await import("@/lib/layers/summarize");
+    const series = [{ t: "1999", v: 3685.32 }, { t: "2000", v: 3678.11 }, { t: "2023", v: 3520 }, { t: "2026", v: 3526.1 }];
+    expect(seriesSpan(series)).toEqual({ first: { t: "1999", v: 3685.32 }, last: { t: "2026", v: 3526.1 }, low: { t: "2023", v: 3520 }, high: { t: "1999", v: 3685.32 }, points: 4 });
+    expect(seriesSpan("not a series")).toBeNull();
+  });
+});

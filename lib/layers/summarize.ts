@@ -150,6 +150,18 @@ function clip(text: string): string {
   return text.length > SAMPLE_VALUE_MAX_CHARS ? `${text.slice(0, SAMPLE_VALUE_MAX_CHARS - 1)}…` : text;
 }
 
+/** A series of { t, v } points as its first and last points, its low and high, and how many points: null otherwise. */
+export function seriesSpan(value: unknown): { first: { t: string; v: number }; last: { t: string; v: number }; low: { t: string; v: number }; high: { t: string; v: number }; points: number } | null {
+  if (!Array.isArray(value)) return null;
+  const points = value.flatMap((p): { t: string; v: number }[] =>
+    p && typeof p === "object" && typeof (p as { v?: unknown }).v === "number" && Number.isFinite((p as { v: number }).v) ? [{ t: String((p as { t?: unknown }).t ?? ""), v: (p as { v: number }).v }] : [],
+  );
+  if (points.length === 0) return null;
+  const low = points.reduce((a, b) => (b.v < a.v ? b : a));
+  const high = points.reduce((a, b) => (b.v > a.v ? b : a));
+  return { first: points[0], last: points[points.length - 1], low, high, points: points.length };
+}
+
 /**
  * A sample feature's properties with every string clipped and nested values flattened to clipped JSON.
  * Properties come from upstream users (OSM names, Commons titles), so this bounds both token cost and
@@ -159,8 +171,13 @@ function sampleProperties(properties: GeoJsonProperties): GeoJsonProperties {
   if (properties === null) return null;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(properties).slice(0, SAMPLE_MAX_KEYS)) {
-    // A feature's series (one value per frame) is the story's to summarise, not a sample's.
-    if (key === "series") continue;
+    // A feature's series (one value per frame) goes in as its span: first and last points, low and high. Lake Powell's
+    // yearly levels ran from 1999, but the note said the series "only goes back about a decade": it never saw it.
+    if (key === "series") {
+      const span = seriesSpan(value);
+      if (span) out.seriesSpan = span;
+      continue;
+    }
     const name = clip(key);
     if (typeof value === "string") out[name] = clip(value);
     else if (value === null || typeof value === "number" || typeof value === "boolean") out[name] = value;

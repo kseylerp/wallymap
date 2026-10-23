@@ -329,7 +329,9 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
   for (const loaded of layersInRenderOrder(state)) {
     if (loaded.result.kind !== "tiles") continue;
     const id = `${PREFIX}${loaded.id}`;
-    const { url, minzoom, maxzoom, format, tileSize, sourceLayer, geometry } = loaded.result.data;
+    const { url: given, minzoom, maxzoom, format, tileSize, sourceLayer, geometry } = loaded.result.data;
+    // Tiles this app serves itself (the terrain layer's /api/terrain/...) come as a path; Mapbox wants a full URL.
+    const url = given.startsWith("/") && typeof location !== "undefined" ? `${location.origin}${given}` : given;
     // Honor a hide toggle if the agent has issued a render op for this layer (a compare's side B follows its layer's op).
     const op = state.renderOps.find((o) => o.layerId === compareBaseId(loaded.id));
     const visible = !(op && !op.visible);

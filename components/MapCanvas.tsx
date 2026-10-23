@@ -5,7 +5,7 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import mapboxgl from "mapbox-gl";
 import { useCallback, useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { MapSetupNotice } from "@/components/MapSetupNotice";
-import { drawnLineEntries, syncHeatLayers, syncLineLayers, syncSatelliteHybrid, syncTileLayers, tileKeyOf } from "@/components/mapTiles";
+import { drawnLineEntries, sitePath, syncHeatLayers, syncLineLayers, syncSatelliteHybrid, syncTileLayers, tileKeyOf } from "@/components/mapTiles";
 import { setInView, type InView, type TileSample } from "@/lib/render/inView";
 import { ensureRouteImages, setRouteProgress, syncRouteLayers } from "@/components/routeLayers";
 import { basemapStyle, basemapStyleUrl } from "@/lib/render/basemaps";
@@ -19,6 +19,7 @@ import { missingTilesStore, noteTile, withTileFallback } from "@/lib/render/tile
 import { tileSwipeLayers } from "@/lib/render/tileSides";
 import { visibleState } from "@/lib/render/view";
 import { identifyAt, identifyRequests } from "@/lib/render/identify";
+import { refreshViewShares, sharesRequests } from "@/lib/render/viewShares";
 import { animateSeriesLines, resetSeriesLines } from "@/lib/render/seriesLines";
 import { fieldAt, flowFrame, flowLayersOf, ParticleSystem, type FieldSnapshot, type ParticleView } from "@/lib/render/particles";
 import { metersPerPixel } from "@/lib/render/deck";
@@ -547,6 +548,10 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
       } catch {
         // A style mid-swap has no layers to query; the next idle reports.
       }
+      // Raster layers colored by class ask their source how much of the view each class covers (lib/render/viewShares.ts).
+      const b = map.getBounds();
+      const bounds: [number, number, number, number] | null = b ? [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()] : null;
+      refreshViewShares(sharesRequests(stateRef.current, visibleState(stateRef.current).layers, bounds, map.getZoom()));
     });
     map.on("moveend", () => {
       if (followingRef.current) return;
@@ -574,7 +579,9 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
     // other error is logged here, and a tile 404 is not logged once per tile.
     const tileTemplate = (sourceId: unknown): string | undefined => {
       if (typeof sourceId !== "string" || !sourceId.startsWith("tiles-")) return undefined;
-      return (map.getSource(sourceId) as { tiles?: string[] } | undefined)?.tiles?.[0];
+      const template = (map.getSource(sourceId) as { tiles?: string[] } | undefined)?.tiles?.[0];
+      // Our own tile routes are handed to Mapbox with the site's origin; the layers know them by path (siteTileUrl).
+      return template === undefined ? undefined : sitePath(template);
     };
     map.on("error", (e: { error?: unknown; sourceId?: unknown; tile?: unknown }) => {
       const template = e.tile ? tileTemplate(e.sourceId) : undefined;

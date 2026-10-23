@@ -250,3 +250,36 @@ export async function identifyLayer(id: string, params: IdentifyParams): Promise
     return { status: 503, body: { error: String(err), hint: "upstream" } };
   }
 }
+
+export type SharesParams = { bbox: unknown; zoom?: number; input?: unknown; time?: unknown; scenario?: unknown };
+export type SharesResponse = { status: number; body: { field: string; shares: Record<string, number> } | { shares: null } | LayerError };
+
+/**
+ * How much of a box each class of a raster tile layer covers (Layer.viewShares), for the legend's classes in view.
+ * 404 for a layer without viewShares; `{ shares: null }` when the answer has no classes to share out.
+ */
+export async function sharesLayer(id: string, params: SharesParams): Promise<SharesResponse> {
+  const layer = getLayer(id);
+  if (!layer?.viewShares) return { status: 404, body: { error: `Layer ${id} cannot count its classes`, hint: "unavailable" } };
+  const bbox = BBoxSchema.safeParse(params.bbox);
+  if (!bbox.success) return { status: 400, body: { error: `Invalid bbox: ${z.prettifyError(bbox.error)}` } };
+  const at = z
+    .object({ time: z.string().max(40).optional(), scenario: z.union([z.number(), z.string().max(40)]).optional() })
+    .safeParse({ time: params.time ?? undefined, scenario: params.scenario ?? undefined });
+  if (!at.success) return { status: 400, body: { error: `Invalid view: ${z.prettifyError(at.error)}` } };
+  const input = layer.input.safeParse(params.input ?? {});
+  if (!input.success) return { status: 400, body: { error: `Invalid input: ${z.prettifyError(input.error)}` } };
+  const missing = layer.requiredEnv.find((name) => !process.env[name]);
+  if (missing !== undefined) return { status: 503, body: { error: `Layer ${id} needs ${missing}`, hint: "unavailable" } };
+  try {
+    const result = await layer.viewShares(
+      { bbox: bbox.data, zoom: params.zoom ?? DEFAULT_ZOOM, env: layerEnv(layer), fetch: createLayerFetch(id), cacheKey: `${cacheKeyFor(layer.id, bbox.data, input.data)}:shares` },
+      at.data,
+      input.data,
+    );
+    if (result && "error" in result) return { status: 503, body: result };
+    return { status: 200, body: result ?? { shares: null } };
+  } catch (err) {
+    return { status: 503, body: { error: String(err), hint: "upstream" } };
+  }
+}

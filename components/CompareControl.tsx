@@ -18,7 +18,7 @@ import {
   type PresetLayer,
 } from "@/lib/render/compareView";
 import type { CompareState, LoadedLayer, MapAction, MapState } from "@/lib/render/state";
-import { scenarioOf, scenarioValueText } from "@/lib/render/scenario";
+import { scenarioOf, scenarioText } from "@/lib/render/scenario";
 import { visibleState } from "@/lib/render/view";
 import { DELTA_COLORS } from "@/lib/render/palette";
 import { changeMeasures, layerChange } from "@/lib/render/views";
@@ -323,7 +323,7 @@ function CompareStrip({ compare, layer, comparable, state, dispatch }: StripProp
       >
         {contract.values.map((v) => (
           <option key={v} value={String(v)}>
-            {scenarioValueText(v, contract.unit)}
+            {scenarioText(contract, v)}
           </option>
         ))}
       </select>

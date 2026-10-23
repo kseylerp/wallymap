@@ -11,16 +11,36 @@ import { valuesOf } from "@/lib/render/encode";
  * no features to count). The legend reads it: categories keep only the classes in view with their counts (or their
  * share of the view for tiles), ramps mark the view's range on their fixed scale.
  */
-export type TileSample = { field: string; values: string[] };
+/**
+ * `values`: the key field read at a grid of points (vector tiles). `shares`: each value's share of the view as the
+ * source counted it (a raster layer's Layer.viewShares), used instead of `values` when present.
+ */
+export type TileSample = { field: string; values: string[]; shares?: Record<string, number> };
 export type InView = { bounds: BBox | null; tiles: Record<string, TileSample> };
 
 const EMPTY: InView = { bounds: null, tiles: {} };
+let base: InView = EMPTY;
 let current: InView = EMPTY;
+/** Raster layers' class shares (lib/render/viewShares.ts), kept apart so the map's own reports do not drop them. */
+const counted: Record<string, TileSample> = {};
 const listeners = new Set<() => void>();
 
-export function setInView(next: InView): void {
-  current = next;
+function publish(): void {
+  current = Object.keys(counted).length > 0 ? { ...base, tiles: { ...base.tiles, ...counted } } : base;
   for (const l of listeners) l();
+}
+
+export function setInView(next: InView): void {
+  base = next;
+  publish();
+}
+
+/** Sets (or with undefined, drops) one raster layer's class shares in view. */
+export function setCountedShares(layerId: string, sample: TileSample | undefined): void {
+  if (sample) counted[layerId] = sample;
+  else if (layerId in counted) delete counted[layerId];
+  else return;
+  publish();
 }
 
 function subscribe(listener: () => void): () => void {
@@ -81,6 +101,7 @@ export function rangeOf(data: FeatureCollection, key: string): [number, number] 
 
 /** Each sampled value's share of the sampled points (0..1). */
 export function tileShares(sample: TileSample | undefined): Map<string, number> | undefined {
+  if (sample?.shares) return Object.keys(sample.shares).length > 0 ? new Map(Object.entries(sample.shares)) : undefined;
   if (!sample || sample.values.length === 0) return undefined;
   const out = new Map<string, number>();
   for (const v of sample.values) out.set(v, (out.get(v) ?? 0) + 1);

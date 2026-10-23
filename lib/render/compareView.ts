@@ -3,7 +3,7 @@ import { deltaFeatures, hexDelta, presetFor, splitWindows, type CompareMode, typ
 import { applyFilters, type LayerFilters } from "@/lib/render/filters";
 import type { CompareState, LoadedLayer, MapState } from "@/lib/render/state";
 import { createStore } from "@/lib/render/wally/playback";
-import { currentScenarioValue, scenarioOf, scenarioTileUrl, scenarioValueText } from "@/lib/render/scenario";
+import { currentScenarioValue, scenarioOf, scenarioText, scenarioTileUrl } from "@/lib/render/scenario";
 import type { TileTime } from "@/layers/types";
 import { tileUrlForTime, type TimeWindow } from "@/lib/time";
 import { versionSides, versionsAttribute } from "@/lib/render/attributes";
@@ -315,8 +315,8 @@ function defaultScenarioCompare(layer: LoadedLayer, values: number[], state?: Pi
 export function compareSideText(compare: CompareState, which: "a" | "b", layer: LoadedLayer | undefined): string {
   const label = which === "a" ? compare.aLabel : compare.bLabel;
   if (label) return label;
-  const unit = scenarioOf(layer)?.unit;
-  if (compare.scenario && unit !== undefined) return scenarioValueText(compare.scenario[which], unit);
+  const contract = scenarioOf(layer);
+  if (compare.scenario && contract) return scenarioText(contract, compare.scenario[which]);
   return windowText(compare[which]);
 }
 

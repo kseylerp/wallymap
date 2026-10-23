@@ -410,6 +410,13 @@ export type Layer<I extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawSha
    * dated, `at.scenario` the scenario value shown. Null where the source has nothing there (outside coverage, no data).
    */
   identify?(ctx: QueryContext, at: IdentifyPoint, input: z.infer<I>): Promise<Feature | null | LayerError>;
+  /**
+   * Raster tiles colored by class only: how much of a box (`ctx.bbox`, the map's view) each class covers, asked of the
+   * source, so the legend lists the classes in view with their share (the browser cannot count a picture's pixels).
+   * `field` is the legend's field; `shares` maps each class value to its share (0..1). `at` carries the tile period
+   * and scenario value on screen, as for identify. Null when the answer has no classes to share out.
+   */
+  viewShares?(ctx: QueryContext, at: Omit<IdentifyPoint, "lon" | "lat">, input: z.infer<I>): Promise<{ field: string; shares: Record<string, number> } | null | LayerError>;
   style: StyleHints;
   /** Help for the properties the inspect card shows, by property key (`v` included): the card's serif "i" (spec §12b). */
   fieldHelp?: Record<string, FieldHelp>;
@@ -534,4 +541,9 @@ export type TileScenario = {
   values: number[];
   template: string;
   tokens?: string[];
+  /**
+   * Words for each entry of `values`, when the amounts are choices rather than measures ("All", "Only confident
+   * pixels"): the control shows these instead of the number and unit.
+   */
+  labels?: string[];
 };

@@ -65,6 +65,16 @@ const M_PER_FT = 0.3048;
 const M_PER_IN = 0.0254;
 
 /**
+ * One value as the controls say it: its word when the contract names its values (`labels`: "All", "Only confident
+ * pixels"), else the amount with its unit ("3 ft").
+ */
+export function scenarioText(scenario: Pick<TileScenario, "values" | "unit" | "labels">, value: number): string {
+  const at = scenario.values.indexOf(value);
+  const word = at >= 0 ? scenario.labels?.[at] : undefined;
+  return word ?? scenarioValueText(value, scenario.unit);
+}
+
+/**
  * The scrubber's readout: the value in its own unit, then the other two of feet, metres and inches ("3 ft · 0.9 m ·
  * 36 in", "1 m · 3.3 ft · 39 in", "36 in · 3 ft · 0.9 m"). Metres and feet to one decimal, inches whole. Any other
  * unit reads as the value alone.

@@ -38,6 +38,8 @@ export type CatalogEntry = {
   display?: DisplaySpec;
   /** True when a tap on the layer's raster tiles can ask its source what is there (Layer.identify). */
   identify?: boolean;
+  /** True when the legend can ask the source how much of the view each class covers (Layer.viewShares). */
+  shares?: boolean;
 };
 
 /** Layer titles and styles by id, fetched by the browser from `GET /api/layers`. */
@@ -60,6 +62,7 @@ export function catalogFields(entry: CatalogEntry | undefined) {
     ...(entry.labels && { labels: entry.labels }),
     ...(entry.display && { display: entry.display }),
     ...(entry.identify && { identify: true }),
+    ...(entry.shares && { shares: true }),
   };
 }
 

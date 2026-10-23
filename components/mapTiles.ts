@@ -298,6 +298,19 @@ function loadedStyle(map: MapboxMap): StyleSpecification | undefined {
   }
 }
 
+/**
+ * A tile URL Mapbox can load: our own tile routes (`/api/ee/tiles/...`, Earth Engine pictures drawn by the server) get
+ * the site's origin, since Mapbox may load tiles where a path means nothing. Other URLs pass unchanged.
+ */
+export function siteTileUrl(url: string, origin: string | undefined = globalThis.location?.origin): string {
+  return url.startsWith("/") && !url.startsWith("//") && origin ? `${origin}${url}` : url;
+}
+
+/** The path a layer knows a tile URL by: `siteTileUrl` undone. */
+export function sitePath(url: string, origin: string | undefined = globalThis.location?.origin): string {
+  return origin && url.startsWith(`${origin}/`) ? url.slice(origin.length) : url;
+}
+
 /** Drops a tiles source (and every layer drawing from it) when its type or tile URL no longer matches. */
 function dropStaleSource(map: MapboxMap, style: StyleSpecification, id: string, type: "raster" | "vector", url: string) {
   const existing = style.sources[id];
@@ -329,7 +342,8 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
   for (const loaded of layersInRenderOrder(state)) {
     if (loaded.result.kind !== "tiles") continue;
     const id = `${PREFIX}${loaded.id}`;
-    const { url, minzoom, maxzoom, format, tileSize, sourceLayer, geometry } = loaded.result.data;
+    const { minzoom, maxzoom, format, tileSize, sourceLayer, geometry } = loaded.result.data;
+    const url = siteTileUrl(loaded.result.data.url);
     // Honor a hide toggle if the agent has issued a render op for this layer (a compare's side B follows its layer's op).
     const op = state.renderOps.find((o) => o.layerId === compareBaseId(loaded.id));
     const visible = !(op && !op.visible);

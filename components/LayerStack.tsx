@@ -27,7 +27,7 @@ import { failureLine, layerSourceStatus, timeShape } from "@/lib/render/contract
 import { layerChange } from "@/lib/render/views";
 import { formatValue } from "@/lib/format";
 import { rasterKeyFilter } from "@/lib/render/rasterCalm";
-import { currentScenarioValue, scenarioOf, scenarioValueText } from "@/lib/render/scenario";
+import { currentScenarioValue, scenarioOf, scenarioText } from "@/lib/render/scenario";
 import { compareBId, DELTA_FILL_ALPHA, effectiveMode } from "@/lib/render/compareView";
 import { columnResolution, hexbinThreshold, hexResolution } from "@/lib/render/deck";
 import { COMPARE_COLORS, DELTA_COLORS, DELTA_LINE_COLORS, isRouteProperties, LINE, WHITE } from "@/lib/render/palette";
@@ -362,11 +362,11 @@ function SliderRow({ label, srLabel, readout, children }: { label: string; srLab
 function ScenarioRowSlider({ layer, value, dispatch }: { layer: LoadedLayer; value: number; dispatch: (action: MapAction) => void }) {
   const scenario = scenarioOf(layer);
   if (!scenario) return null;
-  const { values, unit, label } = scenario;
+  const { values, label } = scenario;
   const at = Math.max(0, values.indexOf(value));
   const fill = values.length > 1 ? (at / (values.length - 1)) * 100 : 100;
   return (
-    <SliderRow label={label} srLabel={`for ${layer.title}`} readout={scenarioValueText(value, unit)}>
+    <SliderRow label={label} srLabel={`for ${layer.title}`} readout={scenarioText(scenario, value)}>
       {(id) => (
         <input
           id={id}
@@ -375,7 +375,7 @@ function ScenarioRowSlider({ layer, value, dispatch }: { layer: LoadedLayer; val
           max={values.length - 1}
           step={1}
           value={at}
-          aria-valuetext={scenarioValueText(value, unit)}
+          aria-valuetext={scenarioText(scenario, value)}
           onChange={(e) => dispatch({ type: "set_scenario", layerId: layer.id, value: values[Number(e.target.value)] })}
           data-testid="scenario-row-slider"
           className="layer-opacity min-w-0 flex-1"

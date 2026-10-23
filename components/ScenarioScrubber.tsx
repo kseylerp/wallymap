@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from "react";
 import type { TileScenario } from "@/layers/types";
-import { currentScenarioValue, scenarioOf, scenarioReadout, scenarioValueText } from "@/lib/render/scenario";
+import { currentScenarioValue, scenarioOf, scenarioReadout, scenarioText } from "@/lib/render/scenario";
 import type { LoadedLayer, MapAction, MapState } from "@/lib/render/state";
 import { PLAY_STEP_MS } from "@/lib/render/useTimePlay";
 
@@ -133,7 +133,8 @@ export function ScenarioScrubber({ layerId, scenario, value, playing, moved, dis
     dispatch({ type: "set_scenario_playing", layerId, playing: !playing });
   };
 
-  const readout = scenarioReadout(value, unit);
+  // Named choices read as their words ("Only confident pixels"); amounts with their conversions ("3 ft · 0.9 m").
+  const readout = scenario.labels ? scenarioText(scenario, value) : scenarioReadout(value, unit);
   // The handle sits in the middle of its amount's bar.
   const left = ((at + 0.5) / n) * 100;
 
@@ -170,7 +171,7 @@ export function ScenarioScrubber({ layerId, scenario, value, playing, moved, dis
           {values.map((v, k) => (
             <div
               key={v}
-              title={scenarioValueText(v, unit)}
+              title={scenarioText(scenario, v)}
               data-in-window={k <= at || undefined}
               className="time-bar flex-1"
               // Taller with the amount, so the track reads as rising water.
@@ -194,9 +195,9 @@ export function ScenarioScrubber({ layerId, scenario, value, playing, moved, dis
         />
       </div>
       <div className="mt-1 flex items-baseline justify-between text-[11px] leading-4 text-ink-muted tabular-nums">
-        <span>{scenarioValueText(values[0], unit)}</span>
-        <span>{n} scenarios</span>
-        <span>{scenarioValueText(values[n - 1], unit)}</span>
+        <span>{scenarioText(scenario, values[0])}</span>
+        <span>{n} {scenario.labels ? "choices" : "scenarios"}</span>
+        <span>{scenarioText(scenario, values[n - 1])}</span>
       </div>
 
       <div className="mt-2.5 flex items-center gap-2">

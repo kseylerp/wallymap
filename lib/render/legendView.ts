@@ -22,7 +22,8 @@ import { rangeOf, tileRange, tileShares, type TileSample } from "@/lib/render/in
  */
 
 /** `share`: for tiles, the class's share of the view (0..1) where features cannot be counted. */
-export type LegendEntry = { label: string; color?: string; count?: number; share?: number; help?: string; outline?: boolean; dash?: [number, number] };
+/** `twoTone`: a line level drawn sage with dark grey dashes over it (a facet's sage level, lib/render/nativeLines.ts). */
+export type LegendEntry = { label: string; color?: string; count?: number; share?: number; help?: string; outline?: boolean; dash?: [number, number]; twoTone?: boolean };
 
 /** A ramp's range in view, on its fixed scale: where it starts and ends along the bar (0..1) and in words. */
 export type LegendRange = { from: number; to: number; text: string };
@@ -184,6 +185,7 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, loadedDa
               label: i.label,
               ...(swatchFor(i) && { color: swatchFor(i) }),
               ...(i.symbol === "line" && shape === "polygon" && { outline: true }),
+              ...(shape === "line" && i.value !== undefined && stops?.has(String(i.value)) && swatchFor(i)?.toUpperCase() === SAGE && { twoTone: true }),
               ...(i.help && { help: i.help }),
               ...(data && spec.field && i.value !== undefined && { count: n.get(String(i.value)) ?? 0 }),
               ...(!data && shares && spec.field === view?.tile?.field && i.value !== undefined && { share: shares.get(String(i.value)) ?? 0 }),

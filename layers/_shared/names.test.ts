@@ -65,3 +65,20 @@ describe("displayName", () => {
     expect(isAcronymName("PIO XI")).toBe(false);
   });
 });
+
+describe("placeholder names and short forms", () => {
+  it("reads a name that says there is none as an unnamed road or trail, with no name in source", () => {
+    expect(withDisplayName({ name: "No Name", routeId: "104" }, "forest-roads")).toEqual({ name: "Unnamed road", routeId: "104" });
+    expect(withDisplayName({ name: "NO NAME" }, "forest-roads")).toEqual({ name: "Unnamed road" });
+    expect(withDisplayName({ name: "noname", highway: "track" }, "mtb-trails")).toEqual({ name: "Unnamed road", highway: "track" });
+    expect(withDisplayName({ name: "Unnamed Road", highway: "path" }, "osm-trails")).toEqual({ name: "Unnamed trail", highway: "path" });
+    expect(withDisplayName({ name: "No Name Creek" }, "lakes")).toEqual({ name: "No Name Creek" });
+  });
+
+  it("keeps a source's two-letter short form ending a name in capitals, as given", () => {
+    expect(displayName("TABOR BOAT RAMP PA", "forest-roads")).toBe("Tabor Boat Ramp PA");
+    expect(displayName("LAKEVIEW CG LOOP A", "forest-roads")).toBe("Lakeview CG Loop A");
+    expect(displayName("LAKE OF THE WOODS")).toBe("Lake of the Woods");
+    expect(displayName("ROUTE TO")).toBe("Route To");
+  });
+});

@@ -4,7 +4,7 @@ import type { LegendBlock, LegendEntry } from "@/lib/render/legendView";
 import { DARK_GREY, LINE, WHITE } from "@/lib/render/palette";
 
 /** One category's swatch, drawn as the map draws the layer: a disc on a halo, a line on its casing, or a tinted square. */
-export function Swatch({ color, shape, outline = false, dash }: { color?: string; shape: LegendBlock["shape"]; outline?: boolean; dash?: [number, number] }) {
+export function Swatch({ color, shape, outline = false, dash, twoTone = false }: { color?: string; shape: LegendBlock["shape"]; outline?: boolean; dash?: [number, number]; twoTone?: boolean }) {
   const c = color ?? DARK_GREY;
   if (shape === "line") {
     const dashed = dash && dash[0] > 0;
@@ -12,6 +12,8 @@ export function Swatch({ color, shape, outline = false, dash }: { color?: string
       <svg aria-hidden viewBox="0 0 22 6" width={22} height={6} className="shrink-0">
         <line x1={1} y1={3} x2={21} y2={3} stroke={WHITE} strokeWidth={LINE.casing} strokeLinecap="round" />
         <line x1={1} y1={3} x2={21} y2={3} stroke={c} strokeWidth={dashed && dash[0] <= 2 ? 1.25 : LINE.width} strokeLinecap="butt" strokeDasharray={dashed ? `${dash[0]} ${dash[1]}` : undefined} />
+        {/* A sage level draws with dark grey dashes over it on the map (lib/render/nativeLines.ts), so its key does too. */}
+        {twoTone && !dashed && <line x1={1} y1={3} x2={21} y2={3} stroke={DARK_GREY} strokeWidth={LINE.width} strokeLinecap="butt" strokeDasharray="4 4" />}
       </svg>
     );
   }
@@ -33,7 +35,7 @@ function Entry({ entry, shape, filter }: { entry: LegendEntry; shape: LegendBloc
   return (
     <li className="flex min-w-0 items-center gap-1.5" title={entry.help}>
       <span className="flex shrink-0" style={filter ? { filter } : undefined}>
-        <Swatch color={entry.color} shape={shape} outline={entry.outline} dash={entry.dash} />
+        <Swatch color={entry.color} shape={shape} outline={entry.outline} dash={entry.dash} twoTone={entry.twoTone} />
       </span>
       <span className="min-w-0 truncate">{entry.label}</span>
       {entry.count !== undefined && <span className="shrink-0 text-ink-muted tabular-nums">{entry.count.toLocaleString("en-US")}</span>}

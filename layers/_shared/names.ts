@@ -34,13 +34,18 @@ const NOT_INITIALS = new Set(["mt", "st", "pk", "cr", "fk", "rd", "dr", "jr", "s
 
 const hasVowel = (word: string) => /[aeiouyàáâãäåèéêëìíîïòóôõöùúûüýæœ]/i.test(word);
 
-/** One word of a name in capitals, in ordinary capitals. `first` is the name's first word. */
-function caseWord(word: string, first: boolean): string {
+/** Two-letter English words: any other two letters ending a name in capitals are the source's abbreviation. */
+const TWO_LETTER_WORDS = new Set(["am", "an", "as", "at", "be", "by", "do", "go", "he", "hi", "if", "in", "is", "it", "me", "my", "no", "of", "oh", "ok", "on", "or", "ox", "so", "to", "up", "us", "we"]);
+
+/** One word of a name in capitals, in ordinary capitals. `first` and `last` place the word in the name. */
+function caseWord(word: string, first: boolean, last = false): string {
   if (!/\p{L}/u.test(word)) return word;
   const letters = word.replace(/[^\p{L}&]/gu, "");
   // "MT." and "ST." are Mount and Saint, not acronyms: "Mt." and "St.".
   if (NOT_INITIALS.has(letters.toLowerCase())) return word.charAt(0) + word.slice(1).toLowerCase();
   if (ROMAN.test(letters) || ACRONYMS.has(letters) || (letters.length >= 2 && !hasVowel(letters))) return word;
+  // "TABOR BOAT RAMP PA": the source's own short form (parking area), kept as given; "Pa" read as a name cut short.
+  if (last && !first && letters.length === 2 && !TWO_LETTER_WORDS.has(letters.toLowerCase()) && !SMALL_WORDS.has(letters.toLowerCase())) return word;
   const lower = word.toLowerCase();
   if (!first && SMALL_WORDS.has(lower)) return lower;
   // Each part after a hyphen or a point starts a word ("SAN-JUAN" → "San-Juan", "ST.PAUL" → "St.Paul").
@@ -67,10 +72,8 @@ export function isAcronymName(name: string): boolean {
 /** A name in capitals in ordinary capitals; any other name as it is. */
 export function titleCase(name: string): string {
   if (!isAllCaps(name) || isAcronymName(name)) return name;
-  return name
-    .split(/(\s+)/)
-    .map((part, i) => (/^\s+$/.test(part) ? part : caseWord(part, i === 0)))
-    .join("");
+  const parts = name.split(/(\s+)/);
+  return parts.map((part, i) => (/^\s+$/.test(part) ? part : caseWord(part, i === 0, i === parts.length - 1))).join("");
 }
 
 type Abbreviation = { pattern: RegExp; replace: string | ((...m: string[]) => string); layers?: string[] };
@@ -115,12 +118,34 @@ export function displayName(raw: string, layerId?: string): string {
   return name;
 }
 
+/** A name that says there is none ("No Name", "NONAME", "Unnamed Road"), as forest and OpenStreetMap editors fill the field. */
+const PLACEHOLDER_NAME = /^(?:no[\s_-]*name|un-?named|none|null|n\/a)(?:\s+(?:road|rd|trail|track|street|st))?$/i;
+
+/** OpenStreetMap highway values that are roads (an unnamed one is "Unnamed road"); paths and tracks for feet and bikes are trails. */
+const ROAD_HIGHWAYS = new Set(["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "service", "track", "road", "living_street"]);
+const TRAIL_HIGHWAYS = new Set(["path", "footway", "bridleway", "cycleway", "steps"]);
+
+/** True for a placeholder name that names nothing ("No Name"). */
+export function isPlaceholderName(name: string): boolean {
+  return PLACEHOLDER_NAME.test(name.trim());
+}
+
+/** What a placeholder name reads as: "Unnamed road" on a road (forest roads, an OpenStreetMap road), "Unnamed trail" on a path. */
+export function unnamedFor(properties: Record<string, unknown>, layerId?: string): string {
+  const highway = typeof properties.highway === "string" ? properties.highway : undefined;
+  if (layerId === "forest-roads" || (highway !== undefined && ROAD_HIGHWAYS.has(highway))) return "Unnamed road";
+  if (highway !== undefined && TRAIL_HIGHWAYS.has(highway)) return "Unnamed trail";
+  return "Unnamed";
+}
+
 /**
  * A feature's `name` read through displayName, with the source's spelling kept as `nameInSource` when it changed; other
- * properties untouched.
+ * properties untouched. A placeholder ("No Name") reads "Unnamed road" (card, lists, labels and notes alike), with no
+ * "Name in source" row: the source named nothing.
  */
 export function withDisplayName<P extends Record<string, unknown> | null>(properties: P, layerId?: string): P {
   if (!properties || typeof properties.name !== "string") return properties;
+  if (isPlaceholderName(properties.name)) return { ...properties, name: unnamedFor(properties, layerId) } as P;
   const name = displayName(properties.name, layerId);
   if (name === properties.name) return properties;
   if (name === properties.name.trim()) return { ...properties, name } as P;

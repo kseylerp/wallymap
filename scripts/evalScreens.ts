@@ -3,7 +3,8 @@
  * question in Chromium by its permalink, at 1440×900 and 375×812, opens the first feature's card, and checks the page
  * (lib/checks/screenChecks.ts): panels and their contents inside the panel and the screen, no text cut without an
  * ellipsis, the chat placeholder whole and uncovered, hex and symbol labels not clipped, and each line layer visible on
- * Topo and on Topo + Satellite (the pixels along its lines change when it is hidden). Screenshots and a contact sheet
+ * Topo and on Topo + Satellite (the pixels along its lines change when it is hidden); a line layer colored by levels
+ * (difficulty, maintenance level) level by level, on Satellite too. Screenshots and a contact sheet
  * (index.html) go to .superpowers/m3/checks/.
  *
  * The app runs from a clean copy of HEAD: unless CHECKS_BASE_URL (default http://localhost:5600) already answers, ONE git
@@ -37,12 +38,14 @@ import {
   isOceanDemTile404,
   labelProblems,
   layoutProblems,
+  levelVisibilityProblems,
   lineVisibilityProblem,
   visibleShare,
   PANELS,
   pixelDiffs,
   placeholderProblems,
 } from "@/lib/checks/screenChecks";
+import { declaredGroups, encodedAttribute } from "@/lib/render/attributes";
 import { bboxToViewport } from "@/lib/render/deck";
 import { encodeState } from "@/lib/render/permalink";
 import { sizeText, watchDisk, type DiskGuard } from "@/scripts/diskGuard";
@@ -295,6 +298,14 @@ async function openCard(page: Page, state: MapState): Promise<string | null> {
 
 type RenderOps = MapState["renderOps"];
 
+/** A line layer's levels by drawn value (its color facet's values to their chip's label), or undefined without one. */
+function levelLabels(layer: MapState["layers"][string] | undefined): Map<string, string> | undefined {
+  const facet = layer ? encodedAttribute(layer) : undefined;
+  if (!facet) return undefined;
+  const labels = new Map(declaredGroups(facet).flatMap((g) => g.values.map((v) => [v, g.label] as const)));
+  return labels.size > 1 ? labels : undefined;
+}
+
 /** The pixel change at `points` between the map as it stands and with the layer's row at opacity 0 (as measureOps does). */
 async function shownHiddenDiffs(page: Page, layerId: string, title: string, points: { x: number; y: number }[]): Promise<number[]> {
   const shown = (await page.screenshot()).toString("base64");
@@ -340,9 +351,11 @@ async function measureOps(page: Page, state: MapState, ops: RenderOps, on: strin
     }
     const what = op.mode === "points" ? "symbols" : op.mode === "lines" ? "lines" : "outlines";
     const areas = what === "outlines" ? await page.evaluate(collectAreaSamples, { layerId: op.layerId, max: 400 }) : null;
+    // Lines colored by levels (difficulty, maintenance level): each level must show, not only the layer on average.
+    const levels = what === "lines" ? levelLabels(state.layers[op.layerId]) : undefined;
     const points =
       what === "lines"
-        ? await page.evaluate(collectLineSamples, { layerId: op.layerId, max: 400 })
+        ? await page.evaluate(collectLineSamples, { layerId: op.layerId, max: levels ? 800 : 400, ...(levels && { group: "fv" }) })
         : what === "symbols"
           ? await page.evaluate(collectPointSamples, { layerId: op.layerId, max: 400 })
           : (areas?.outline ?? []);
@@ -378,6 +391,11 @@ async function measureOps(page: Page, state: MapState, ops: RenderOps, on: strin
     // A choropleth's edges are thin white lines that part its classes by design (owner, 2026-10-18); its fill is the check.
     const problem = choropleth && what === "outlines" ? null : lineVisibilityProblem(title, on, diffs, what);
     if (problem) problems.push(problem);
+    if (levels) {
+      const each = levelVisibilityProblems(title, on, points, diffs, levels);
+      readings.push(...each.readings);
+      problems.push(...each.problems);
+    }
     if (withFill && areas && areas.inside.length >= 5) {
       const fill = await page.evaluate(pixelDiffs, { a: `data:image/png;base64,${shown}`, b: `data:image/png;base64,${hidden}`, points: areas.inside });
       const fillMean = fill.reduce((s, d) => s + d, 0) / fill.length;
@@ -425,12 +443,14 @@ async function lineChecks(page: Page, state: MapState, slug: string): Promise<{ 
     shots.push(lineShot);
     await measureOps(page, state, lines, `${basemap.label}`, { readings, problems });
   }
-  // Areas (their fills) on Satellite too: a choropleth must read on all three basemaps (owner, 2026-10-18).
+  // Areas (their fills) on Satellite too: a choropleth must read on all three basemaps (owner, 2026-10-18). So must
+  // every level of a line layer colored by levels (Leadville's roads by maintenance level, 2026-10-23).
   const areaOps = lines.filter((o) => o.mode === "polygons" || o.mode === "columns");
-  if (areaOps.length > 0) {
+  const leveled = lines.filter((o) => o.mode === "lines" && levelLabels(state.layers[o.layerId]) !== undefined);
+  if (areaOps.length + leveled.length > 0) {
     await pickBasemap(page, SATELLITE.button);
     await settle(page, 1500);
-    await measureOps(page, state, areaOps, SATELLITE.label, { readings, problems });
+    await measureOps(page, state, [...areaOps, ...leveled], SATELLITE.label, { readings, problems });
   }
   // Areas again on 3D terrain, draped as people see them.
   if (wasOn && areaOps.length > 0) {

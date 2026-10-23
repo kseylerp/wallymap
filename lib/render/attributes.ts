@@ -245,7 +245,8 @@ export function topFeatures(data: FeatureCollection, key: string, n: number, low
 /** A name as two rows compare it: lower case, accents and punctuation dropped; empty for none. */
 function placeName(f: Feature): string {
   const n = f.properties?.name;
-  return typeof n === "string" ? n.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim() : "";
+  // "Unnamed road" is many roads, not one place: each stays its own.
+  return typeof n === "string" && !/^unnamed\b/i.test(n.trim()) ? n.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim() : "";
 }
 
 /** The feature's bounding box, or null without coordinates. */

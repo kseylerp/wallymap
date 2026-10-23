@@ -188,7 +188,12 @@ export function lineEntries(view: MapState): LineEntry[] {
     }
     const requested = isPaletteColor(op.color) ? lineColorFor(op.color) : undefined;
     const encoded = encodedAttribute(loaded);
-    const pair = requested ? null : resolveEncoding(loaded, op, data);
+    const resolved = requested ? null : resolveEncoding(loaded, op, data);
+    // A color channel that is only the layer's own ordinal (forest roads by maintenance level) draws as that facet: its
+    // sage level keeps the dark grey dashes and a road with no level the thin grey dash. As an encoding it drew plain
+    // sage, and Leadville's passenger-car roads vanished on Topo (2026-10-23).
+    const asFacet = resolved && !resolved.size && resolved.color?.levels && !resolved.color.categorical && encoded?.key === resolved.color.key;
+    const pair = asFacet ? null : resolved;
     const look: LineLook = requested
       ? { kind: "solid", color: requested }
       : pair
@@ -459,8 +464,10 @@ export function lineLayerSpecs(entry: LineEntry): LineLayerSpecification[] {
     classes && twoTone
       ? ["==", ["get", "cls"], twoTone]
       : entry.look.kind === "facet" && twoTone
-        ? // Any class, not only T1 trails: Leadville's passenger-car roads drew plain sage and vanished on Topo (2026-10-23).
-          ["all", ["!=", ["get", "cls"], "route"], ["!", ["in", ["get", "fv"], ["literal", colored]]], ["in", ["get", "fv"], ["literal", entry.look.stops.map(([v]) => v)]]]
+        ? // Any class on Topo, not only T1 trails: Leadville's passenger-car roads drew plain sage and vanished there
+          // (2026-10-23). On imagery only T1 trails keep them: dark grey dashes on dark forest left half of each road
+          // unseen on Satellite, where its plain sage reads.
+          ["all", imagery ? ["==", ["get", "cls"], twoTone] : ["!=", ["get", "cls"], "route"], ["!", ["in", ["get", "fv"], ["literal", colored]]], ["in", ["get", "fv"], ["literal", entry.look.stops.map(([v]) => v)]]]
         : ["==", ["get", "cls"], "none"];
   const dash: LineLayerSpecification = {
     id: lineLayerId(entry.id, "dash"),

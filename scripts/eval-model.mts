@@ -979,6 +979,10 @@ export const SCREEN_QUESTIONS = [
   "How has the Mississippi's flow changed over the last three months?",
   "Show the currents in Cook Inlet this week",
   "Where is the wind strongest over the Sierra tomorrow?",
+  // Use-case screens (2026-10-23): roads by maintenance level, each level on Topo, Topo + Satellite and Satellite; and
+  // boulders with a forecast point on the same map.
+  "Forest roads a Subaru can drive near Leadville",
+  "Bouldering near Bishop this weekend, will it be too hot?",
 ];
 
 function argValue(args: string[], flag: string): string | undefined {

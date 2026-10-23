@@ -64,7 +64,7 @@ import { nameAttribute } from "./_shared/bands";
 import { OUTSIDE_US_NOTE, WHOLE_US_KM2, bboxesDisjoint, outsideUs } from "./_shared/coverage";
 import CLOSURES from "./_data/closures.json";
 import { groupColors } from "@/lib/render/attributes";
-import { SAGE, layerColor } from "@/lib/render/palette";
+import { layerColor } from "@/lib/render/palette";
 
 const SERVICE_URL = "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/1";
 
@@ -370,7 +370,7 @@ const ATTRIBUTES: Attribute[] = [
   nameAttribute(),
 ];
 
-/** The key: one swatch per chip in the colors the map draws them (each level keyed to its chip), and roads not rated. */
+/** The key: one swatch per chip in the colors the map draws them (each level keyed to its chip). */
 const CHIPS = [...new Set(LEVELS.map((l) => l.label))];
 const CHIP_COLORS = groupColors(CHIPS.length);
 const LEGEND: LegendSpec = {
@@ -382,7 +382,7 @@ const LEGEND: LegendSpec = {
       const chip = LEVELS.find((x) => x.label === l.label)!;
       return { label: l.label, value: l.value, color: CHIP_COLORS[CHIPS.indexOf(l.label)], symbol: "line" as const, ...(chip.help && { help: chip.help }) };
     }),
-    { label: "Not rated", color: SAGE, symbol: "line", help: "The Forest Service gives no maintenance level for the road." },
+    // A road with no level draws as the thin grey dash, keyed "Not rated" with the lines the scale does not rate.
   ],
   note: "Every road drawn is legal for motor vehicles at least part of the year; the level says what it is built for.",
 };

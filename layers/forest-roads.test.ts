@@ -216,7 +216,8 @@ describe("forest-roads layer", () => {
     expect(layer.attributes?.find((a) => a.key === "seasonal")?.type).toBe("flag");
     const legend = legendOf(layer);
     expect(legend.kind).toBe("categories");
-    expect(legend.items?.map((i) => i.label)).toEqual([...(level?.levels ?? []).map((l) => l.label), "Not rated"]);
+    // A road with no level is keyed by the shared "Not rated" thin grey dash (lib/render/legendView.ts), not a sage line.
+    expect(legend.items?.map((i) => i.label)).toEqual((level?.levels ?? []).map((l) => l.label));
     // Each level's swatch is its chip's color, as the map draws it.
     for (const item of legend.items ?? []) if (item.value !== undefined) expect(item.color).toBe(stops[String(item.value)]);
     expect(layer.time).toEqual({ shape: "none" });

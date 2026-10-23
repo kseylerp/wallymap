@@ -521,11 +521,31 @@ describe("the encoded ordinal drives the line color (spec §12c: difficulty on t
   it("dashes a facet's sage level on any line class, so passenger-car roads show on green Topo", () => {
     const level = [{ key: "level", type: "ordinal" as const, label: "Maintenance level", encode: "color" as const, levels: [{ value: "car", label: "Passenger car" }, { value: "high", label: "High clearance" }] }];
     const roads = [line(-106.3, { level: "car" }), line(-106.2, { level: "high" })];
-    const [entry] = lineEntries(visibleState(stateOf("forest-roads", roads, {}, {}, level)));
+    const [entry] = lineEntries(visibleState({ ...stateOf("forest-roads", roads, {}, {}, level), basemap: "outdoors" }));
     expect(entry.look.kind).toBe("facet");
     const filter = JSON.stringify(byPart(lineLayerSpecs(entry), "dash").filter);
     expect(filter).not.toContain('["==",["get","cls"]');
     expect(filter).toContain('["!=",["get","cls"],"route"]');
+  });
+
+  it("draws a color encoding that is the layer's own ordinal as that facet: the sage level dashed, a road with no level the thin grey dash", () => {
+    const level = [{ key: "level", type: "ordinal" as const, label: "Maintenance level", encode: "color" as const, levels: [{ value: 3, label: "Passenger car" }, { value: 2, label: "High clearance" }] }];
+    const roads = [line(-106.3, { level: 3 }), line(-106.2, { level: 2 }), line(-106.1, {})];
+    // As forest-roads declares it: the encoding pair names the same ordinal (Leadville, 2026-10-23: plain sage on Topo).
+    const [entry] = lineEntries(visibleState({ ...stateOf("forest-roads", roads, {}, { encode: { color: "level" } }, level), basemap: "outdoors" }));
+    expect(entry.look.kind).toBe("facet");
+    const all = lineLayerSpecs(entry);
+    const dash = byPart(all, "dash");
+    expect(paint(dash)["line-color"]).toBe(DARK_GREY);
+    expect(JSON.stringify(dash.filter)).toContain('"3"');
+    expect(JSON.stringify(paint(byPart(all, "core"))["line-dasharray"])).toContain("case");
+    // On imagery the sage level stays solid: dark grey dashes vanished on dark forest (Satellite, 2026-10-23).
+    const [onImagery] = lineEntries(visibleState({ ...stateOf("forest-roads", roads, {}, { encode: { color: "level" } }, level), basemap: "satellite" }));
+    expect(JSON.stringify(byPart(lineLayerSpecs(onImagery), "dash").filter)).toContain('["==",["get","cls"],"trail"]');
+    // A measure the layer colors by (not its ordinal) stays an encoding.
+    const flows = [line(-106.3, { flow: 1 }), line(-106.2, { flow: 9 })];
+    const measure = [{ key: "flow", type: "measure" as const, label: "Flow" }];
+    expect(lineEntries(visibleState(stateOf("river-pulse", flows, {}, { encode: { color: "flow" } }, measure)))[0].look.kind).toBe("encoded");
   });
 
   it("fades a filtered layer's other lines only to 75% while one is selected, so the answer stays on Topo", () => {

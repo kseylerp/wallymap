@@ -35,7 +35,7 @@ import {
 import type { FilterField, LayerFilters as Filters } from "@/lib/render/filters";
 import { isActiveEntry } from "@/lib/render/filters";
 import { featureBBox, featureCenter } from "@/lib/render/inspect";
-import { DARK_GREY, LINE, WHITE } from "@/lib/render/palette";
+import { DARK_GREY, LINE, SAGE, WHITE } from "@/lib/render/palette";
 import { categoryKey } from "@/lib/render/categories";
 import type { LoadedLayer, MapAction, RenderOp } from "@/lib/render/state";
 import { RANKED_TOP_N } from "@/lib/render/views";
@@ -74,6 +74,8 @@ function ClassKey({ color, shape = "line" }: { color: string; shape?: "line" | "
     <svg aria-hidden viewBox="0 0 14 6" width={14} height={6} className="shrink-0 self-center">
       <line x1={1} y1={3} x2={13} y2={3} stroke={WHITE} strokeWidth={LINE.casing} strokeLinecap="round" />
       <line x1={1} y1={3} x2={13} y2={3} stroke={color} strokeWidth={LINE.width} strokeLinecap="round" />
+      {/* The sage level draws with dark grey dashes over it (lib/render/nativeLines.ts): so does its chip. */}
+      {color.toUpperCase() === SAGE && <line x1={1} y1={3} x2={13} y2={3} stroke={DARK_GREY} strokeWidth={LINE.width} strokeLinecap="butt" strokeDasharray="3 3" />}
     </svg>
   );
 }

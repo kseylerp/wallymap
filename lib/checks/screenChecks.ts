@@ -8,7 +8,7 @@
  * - placeholder: the chat input's placeholder fits its box and nothing covers it;
  * - labels: hex counts fit inside their cell, ranked symbol labels are not cut by the map's edge;
  * - lines: a line layer shows against the basemap (the pixels along its lines change when it is hidden, on average and
- *   at most of the points along them), also with a card open (its siblings fade).
+ *   at most of the points along them), also with a card open (its siblings fade); one colored by levels, each level.
  * - rows: the console shows each layer row from its header, never scrolled mid-row.
  */
 
@@ -454,11 +454,15 @@ export function collectLabels(edges: number[]): { labels: MeasuredLabel[]; canva
   return { labels, canvas: { x: cr.x, y: cr.y, width: cr.width, height: cr.height } };
 }
 
-/** Runs in the page (development build): screen points along a native line layer's rendered lines, not under a panel. */
-export function collectLineSamples({ layerId, max }: { layerId: string; max: number }): { x: number; y: number }[] {
+/**
+ * Runs in the page (development build): screen points along a native line layer's rendered lines, not under a panel.
+ * With `group` (a drawn line's property: `fv`, the value a difficulty or maintenance level colors it by) each point
+ * carries that value as `g`, so every level is measured on its own.
+ */
+export function collectLineSamples({ layerId, max, group }: { layerId: string; max: number; group?: string }): { x: number; y: number; g?: string }[] {
   type MapLike = {
     getStyle: () => { layers: { id: string }[] };
-    queryRenderedFeatures: (q: undefined, o: { layers: string[] }) => { geometry: { type: string; coordinates: unknown } }[];
+    queryRenderedFeatures: (q: undefined, o: { layers: string[] }) => { geometry: { type: string; coordinates: unknown }; properties?: Record<string, unknown> | null }[];
     project: (p: [number, number]) => { x: number; y: number };
     getCanvas: () => HTMLCanvasElement;
   };
@@ -472,8 +476,10 @@ export function collectLineSamples({ layerId, max }: { layerId: string; max: num
     .layers.map((l) => l.id)
     .filter((id) => id.startsWith(`lines-${layerId}:`) && /:(core|route)$/.test(id));
   if (ids.length === 0) return [];
-  const points: { x: number; y: number }[] = [];
+  const points: { x: number; y: number; g?: string }[] = [];
   for (const f of map.queryRenderedFeatures(undefined, { layers: ids })) {
+    const raw = group ? f.properties?.[group] : undefined;
+    const g = raw === undefined || raw === null ? undefined : String(raw);
     const lines = (f.geometry.type === "LineString" ? [f.geometry.coordinates] : f.geometry.type === "MultiLineString" ? f.geometry.coordinates : []) as number[][][];
     for (const line of lines) {
       for (let i = 0; i + 1 < line.length; i++) {
@@ -483,12 +489,37 @@ export function collectLineSamples({ layerId, max }: { layerId: string; max: num
         const y = Math.round(q.y + cr.y);
         if (x < cr.x + 2 || y < cr.y + 2 || x > cr.x + cr.width - 3 || y > cr.y + cr.height - 3) continue;
         if (document.elementFromPoint(x, y) !== canvas) continue;
-        points.push({ x, y });
+        points.push(g === undefined ? { x, y } : { x, y, g });
       }
     }
   }
   if (points.length <= max) return points;
   return Array.from({ length: max }, (_, i) => points[Math.floor((i * points.length) / max)]);
+}
+
+/**
+ * Each level of a line layer colored by levels, measured on its own (Leadville's passenger-car roads vanished on Topo
+ * while the high-clearance ones carried the layer's average): `samples` are the sampled points' levels (`g`) and
+ * `diffs` their pixel changes, in the same order; `labels` names each level's values. A level with fewer than five
+ * points on screen is not judged.
+ */
+export function levelVisibilityProblems(layerTitle: string, basemap: string, samples: { x?: number; y?: number; g?: string }[], diffs: number[], labels: Map<string, string>): { problems: string[]; readings: string[] } {
+  const byLevel = new Map<string, number[]>();
+  samples.forEach((p, i) => {
+    const label = p.g === undefined ? undefined : labels.get(p.g);
+    if (label === undefined || diffs[i] === undefined) return;
+    byLevel.set(label, [...(byLevel.get(label) ?? []), diffs[i]]);
+  });
+  const problems: string[] = [];
+  const readings: string[] = [];
+  for (const [label, d] of byLevel) {
+    if (d.length < 5) continue;
+    const mean = d.reduce((a, b) => a + b, 0) / d.length;
+    readings.push(`${layerTitle} (${label}) lines on ${basemap}: ${mean.toFixed(1)} mean pixel change over ${d.length} points, ${Math.round(visibleShare(d) * 100)}% of them showing`);
+    const problem = lineVisibilityProblem(`${layerTitle} (${label})`, basemap, d);
+    if (problem) problems.push(problem);
+  }
+  return { problems, readings };
 }
 
 /** Runs in the page: the mean channel difference (0 to 255) at each point between two screenshots (PNG data URLs). */

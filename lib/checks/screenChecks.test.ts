@@ -5,6 +5,7 @@ import {
   isOceanDemTile404,
   labelProblems,
   layoutProblems,
+  levelVisibilityProblems,
   lineVisibilityProblem,
   placeholderProblems,
   type LayoutMeasure,
@@ -107,6 +108,19 @@ describe("map labels", () => {
 });
 
 describe("line visibility", () => {
+  it("judges each level of a line layer colored by levels on its own (Leadville's passenger-car roads on Topo)", () => {
+    const labels = new Map([["5", "Passenger car"], ["4", "Passenger car"], ["3", "Passenger car"], ["2", "High clearance"]]);
+    // High-clearance roads show and carry the layer's average; the passenger-car ones do not.
+    const samples = [..."3333344".split("").map((g) => ({ g })), ..."222222222222".split("").map((g) => ({ g })), {}];
+    const diffs = [8, 9, 12, 10, 8, 6, 7, 90, 95, 88, 92, 99, 85, 91, 94, 90, 87, 93, 96, 50];
+    expect(lineVisibilityProblem("Forest roads", "Topo", diffs)).toBeNull();
+    const { problems, readings } = levelVisibilityProblems("Forest roads", "Topo", samples, diffs, labels);
+    expect(problems).toEqual(["Forest roads (Passenger car) lines barely show on Topo: hiding them changes the pixels along them by 8.6 of 255 on average (needs 32)."]);
+    expect(readings).toHaveLength(2);
+    // A level with under five points on screen is not judged.
+    expect(levelVisibilityProblems("Forest roads", "Topo", [{ g: "3" }, { g: "3" }], [1, 2], labels).problems).toEqual([]);
+  });
+
   it("fails the owner's sage trails on green Topo, passes dark trails", () => {
     expect(lineVisibilityProblem("OpenStreetMap trails", "Topo", [6, 9, 12, 10, 8])).toBe(
       "OpenStreetMap trails lines barely show on Topo: hiding them changes the pixels along them by 9.0 of 255 on average (needs 32).",

@@ -357,6 +357,58 @@ export function mergePeaks(wikidata: Feature<Point>[], osm: OsmPeak[], units: Un
   return out.sort((a, b) => height(b) - height(a) || prom(b) - prom(a));
 }
 
+/** Two peaks closer than this draw on one spot: one is kept (a Tier 1 duplicate otherwise). */
+export const SAME_SPOT_KM = 0.04;
+/** Two peaks of one name closer than this are one summit listed twice. */
+export const SAME_NAME_KM = 0.2;
+
+/** How much a peak carries: listed in both sources, elevation, prominence, a Wikidata item, an OSM node. */
+function richness(f: Feature): number {
+  const p = (f.properties ?? {}) as Record<string, unknown>;
+  return (
+    (p.sources === "both" ? 2 : 0) +
+    (typeof p.elevation === "number" ? 1 : 0) +
+    (typeof p.prominence === "number" ? 1 : 0) +
+    (p.wikidata !== undefined ? 1 : 0) +
+    (p.osmId !== undefined ? 1 : 0)
+  );
+}
+
+/**
+ * One peak per spot (audit 2026-10-23: seven Chamonix summits drew twice within 40 m, a Wikidata item and the OSM node
+ * of its summit under another name, as Grandes Jorasses and Pointe Walker 10 m apart): of two peaks within SAME_SPOT_KM,
+ * or of one name within SAME_NAME_KM, the one carrying more data stays (the higher on a tie, then the first) and lists
+ * the other's name under `alsoNamed`. The order of the input is kept.
+ */
+export function dedupePeaks(features: Feature<Point>[]): Feature<Point>[] {
+  const order = features
+    .map((f, i) => ({ f, i, r: richness(f), h: typeof f.properties?.elevation === "number" ? f.properties.elevation : -Infinity }))
+    .sort((a, b) => b.r - a.r || b.h - a.h || a.i - b.i);
+  const kept: { f: Feature<Point>; i: number }[] = [];
+  // About SAME_NAME_KM in degrees of latitude: a cheap test before the distance.
+  const near = SAME_NAME_KM / 111;
+  for (const c of order) {
+    const [x, y] = c.f.geometry.coordinates;
+    const name = String(c.f.properties?.name ?? "");
+    const twin = kept.find(({ f }) => {
+      const [kx, ky] = f.geometry.coordinates;
+      if (Math.abs(ky - y) > near || Math.abs(kx - x) > near * 3) return false;
+      const d = haversineKm(f.geometry.coordinates, c.f.geometry.coordinates);
+      return d < SAME_SPOT_KM || (d < SAME_NAME_KM && matchName(String(f.properties?.name ?? "")) === matchName(name));
+    });
+    if (!twin) {
+      kept.push({ f: c.f, i: c.i });
+      continue;
+    }
+    const tp = twin.f.properties as Record<string, string | number>;
+    if (name && name !== tp.name) {
+      const also = typeof tp.alsoNamed === "string" ? tp.alsoNamed.split(" · ") : [];
+      if (!also.includes(name)) tp.alsoNamed = [...also, name].join(" · ");
+    }
+  }
+  return kept.sort((a, b) => a.i - b.i).map(({ f }) => f);
+}
+
 /* ---------- Layer ---------- */
 
 const KIND_LEVELS = [
@@ -395,6 +447,7 @@ const HELP: Record<string, FieldHelp> = {
   v: ELEVATION,
   prominence: PROMINENCE,
   prominenceText: PROMINENCE,
+  alsoNamed: { text: "Other names listed for a summit on the same spot (within 40 m, or 200 m under one name), drawn once." },
 };
 
 const SOURCES: Record<string, string> = { both: "OpenStreetMap and Wikidata", osm: "OpenStreetMap", wikidata: "Wikidata" };
@@ -406,6 +459,7 @@ const CARD: CardSpec = {
     { key: "kind", label: "Kind", values: { peak: "Peak", volcano: "Volcano" } },
     { key: "elevationSource", label: "Elevation from", values: { osm: "OpenStreetMap", wikidata: "Wikidata" } },
     { key: "sources", label: "Listed in", values: SOURCES },
+    { key: "alsoNamed", label: "Also listed as" },
   ],
   links: [
     { key: "url", label: "Wikidata" },
@@ -431,7 +485,7 @@ const peaks = defineLayer({
     "Each point has name, kind ('peak' or 'volcano'), elevation (metres above sea level, from the OpenStreetMap ele tag, else Wikidata), elevationFt, " +
     "elevationText (the elevation in words with both units, feet first in the United States, or 'Not recorded'), prominence and prominenceFt (how far the peak " +
     "rises above the saddle that links it to a higher peak, the standard measure of how independent a summit is; mostly from Wikidata) with prominenceText, " +
-    "v (the elevation in metres, so the value filter and 3D columns follow height), sources ('both', 'osm' or 'wikidata'), and links: url (Wikidata) and osmUrl. " +
+    "v (the elevation in metres, so the value filter and 3D columns follow height), sources ('both', 'osm' or 'wikidata'), alsoNamed (other names for a summit drawn once, as 'Grandes Jorasses' on Pointe Walker), and links: url (Wikidata) and osmUrl. " +
     "Peaks with no elevation recorded have no v and sort last. Symbols are sized by elevation and the five highest are named on the map. " +
     "Use it for 'tallest peaks here', 'highest mountains in this range', 'peaks with the most prominence' (sort on prominence yourself), 'what is that mountain called', " +
     "or 'peak bagging' lists; with 3D on, columns rise with elevation. " +
@@ -505,7 +559,7 @@ const peaks = defineLayer({
       sourceStatus = sourceFailure(osm.error, `OpenStreetMap (Overpass) did not answer (${osm.error}); peaks are from Wikidata only, most without an elevation.`, osm.status);
     }
 
-    const merged = mergePeaks(wikidataPeaks, osmPeaks, units);
+    const merged = dedupePeaks(mergePeaks(wikidataPeaks, osmPeaks, units));
     const features = merged.slice(0, wideLimit ?? MAX_FEATURES);
     // In wide mode run.ts writes the "showing the N most prominent" note.
     if (wideLimit === undefined && merged.length > MAX_FEATURES) {

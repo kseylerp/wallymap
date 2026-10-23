@@ -309,7 +309,7 @@
  },
  "climbing": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -84,
    37.5,
@@ -332,7 +332,7 @@
      "source": "osm",
      "name": "Military Wall",
      "v": 110,
-     "grades": "2+ to 11- (uiaa)",
+     "grades": "5.2 to 5.13d (yds_class)",
      "gradeBands": [
       "beginner",
       "intermediate",
@@ -355,6 +355,76 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
+      -83.6470107,
+      37.8372762
+     ]
+    },
+    "properties": {
+     "kind": "crag",
+     "osmId": "node/7313102690",
+     "source": "osm",
+     "name": "Fortress Wall",
+     "v": 32,
+     "grades": "5.2 to 5.12d (yds_class)",
+     "gradeBands": [
+      "beginner",
+      "intermediate",
+      "advanced"
+     ],
+     "disciplines": [
+      "trad"
+     ],
+     "tradBands": [
+      "beginner",
+      "intermediate",
+      "advanced"
+     ],
+     "maxLengthM": 45.72,
+     "osmIds": [
+      "node/7313102690",
+      "way/275859874"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.718778,
+      37.65107
+     ]
+    },
+    "properties": {
+     "kind": "crag",
+     "osmId": "node/7188734185",
+     "source": "osm",
+     "name": "Curbside",
+     "v": 17,
+     "grades": "5.10a to 5.12c (yds_class)",
+     "gradeBands": [
+      "intermediate",
+      "advanced"
+     ],
+     "disciplines": [
+      "sport"
+     ],
+     "sportBands": [
+      "intermediate",
+      "advanced"
+     ],
+     "maxLengthM": 26,
+     "osmIds": [
+      "node/7188734185",
+      "way/652151043"
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
       -83.797789,
       37.646631
      ]
@@ -365,7 +435,7 @@
      "source": "osm",
      "name": "Mount Olive Rock",
      "v": 5,
-     "grades": "7- to 11- (uiaa)",
+     "grades": "5.10d to 5.13d (yds_class)",
      "gradeBands": [
       "intermediate",
       "advanced",
@@ -377,6 +447,41 @@
      ],
      "maxLengthM": 20,
      "nameInSource": "Mt. Olive Rock"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.49257,
+      37.99237
+     ]
+    },
+    "properties": {
+     "kind": "crag",
+     "name": "Murder Branch",
+     "source": "openbeta",
+     "openbetaId": "af6a0b72-6c89-53b6-8985-d4b9a374a63d",
+     "url": "https://openbeta.io/areas/af6a0b72-6c89-53b6-8985-d4b9a374a63d",
+     "v": 3,
+     "region": "Kentucky",
+     "grades": "5.8- to 5.9+",
+     "gradeBands": [
+      "beginner",
+      "intermediate"
+     ],
+     "sport": 2,
+     "toprope": 3,
+     "disciplines": [
+      "sport",
+      "toprope"
+     ],
+     "sportBands": [
+      "intermediate"
+     ],
+     "sportIntermediate": 2,
+     "sportGrades": "2 routes: 2 intermediate 5.8+ to 5.9+"
     }
    },
    {
@@ -411,9 +516,8 @@
      "source": "osm",
      "name": "The Motherlode",
      "v": 72,
-     "grades": "5+ to 12+ (uiaa)",
+     "grades": "5.9 to 5.14c (yds_class)",
      "gradeBands": [
-      "beginner",
       "intermediate",
       "advanced",
       "elite"
@@ -445,7 +549,7 @@
      "source": "osm",
      "name": "Long Wall",
      "v": 57,
-     "grades": "4 to 10+ (uiaa)",
+     "grades": "5.5 to 5.13c (yds_class)",
      "gradeBands": [
       "beginner",
       "intermediate",
@@ -479,7 +583,7 @@
      "source": "osm",
      "name": "The Bear's Den",
      "v": 52,
-     "grades": "2+ to 11 (uiaa)",
+     "grades": "5.2 to 5.14a (yds_class)",
      "gradeBands": [
       "beginner",
       "intermediate",
@@ -508,7 +612,7 @@
      "source": "osm",
      "name": "Gold Coast",
      "v": 49,
-     "grades": "4- to 12+ (uiaa)",
+     "grades": "5.4 to 5.14c (yds_class)",
      "gradeBands": [
       "beginner",
       "intermediate",
@@ -541,7 +645,7 @@
      "source": "osm",
      "name": "Bob Marley Crag",
      "v": 48,
-     "grades": "5- to 12 (uiaa)",
+     "grades": "5.7 to 5.14d (yds_class)",
      "gradeBands": [
       "beginner",
       "intermediate",
@@ -575,7 +679,7 @@
      "source": "osm",
      "name": "Chica Bonita",
      "v": 46,
-     "grades": "4 to 9- (uiaa)",
+     "grades": "5.5 to 5.12b (yds_class)",
      "gradeBands": [
       "beginner",
       "intermediate",
@@ -590,106 +694,6 @@
      "osmIds": [
       "node/7193214589",
       "way/652151044"
-     ]
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -83.6652498,
-      37.8146582
-     ]
-    },
-    "properties": {
-     "kind": "crag",
-     "osmId": "node/7314110613",
-     "source": "osm",
-     "name": "Left Flank",
-     "v": 46,
-     "grades": "2- to 10 (uiaa)",
-     "gradeBands": [
-      "beginner",
-      "intermediate",
-      "advanced",
-      "elite"
-     ],
-     "disciplines": [
-      "sport",
-      "trad"
-     ],
-     "maxLengthM": 24.38,
-     "osmIds": [
-      "node/7314110613",
-      "way/275859873"
-     ]
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -83.717335,
-      37.653794
-     ]
-    },
-    "properties": {
-     "kind": "crag",
-     "osmId": "node/7211951591",
-     "source": "osm",
-     "name": "The Gallery",
-     "v": 43,
-     "grades": "5 to 11+ (uiaa)",
-     "gradeBands": [
-      "beginner",
-      "intermediate",
-      "advanced",
-      "elite"
-     ],
-     "disciplines": [
-      "sport",
-      "trad",
-      "mixed"
-     ],
-     "maxLengthM": 31,
-     "osmIds": [
-      "node/7211951591",
-      "way/652151042"
-     ]
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -83.737332,
-      37.678474
-     ]
-    },
-    "properties": {
-     "kind": "crag",
-     "osmId": "node/7269712585",
-     "source": "osm",
-     "name": "The Dark Side",
-     "v": 37,
-     "grades": "5 to 11+ (uiaa)",
-     "gradeBands": [
-      "beginner",
-      "intermediate",
-      "advanced",
-      "elite"
-     ],
-     "disciplines": [
-      "sport",
-      "trad"
-     ],
-     "maxLengthM": 28,
-     "osmIds": [
-      "node/7269712585",
-      "way/652151058"
      ]
     }
    }
@@ -2192,7 +2196,7 @@
  },
  "fishing": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -111.351,
    45.457,
@@ -2469,7 +2473,7 @@
  },
  "forest-roads": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -112.008,
    34.906,
@@ -2532,6 +2536,35 @@
      "motorcycle": true,
      "miles": 1.45,
      "nameInSource": "KELSEY SPRING TRAILHEAD"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -111.75039,
+      34.97037
+     ]
+    },
+    "properties": {
+     "routeId": "89H",
+     "access": "Roads open to highway legal vehicles only, Yearlong",
+     "seasonal": false,
+     "passengerCar": true,
+     "highClearance": true,
+     "name": "Bootlegger Campground",
+     "forest": "Coconino National Forest",
+     "district": "Red Rock Ranger District",
+     "level": 3,
+     "surface": "AGG - CRUSHED AGGREGATE OR GRAVEL",
+     "surfaceKind": "gravel",
+     "carDates": "All year",
+     "motorhome": true,
+     "miles": 0.11,
+     "campingRule": "Coconino National Forest, Red Rock Ranger District, South of Sedona and Oak Creek Canyon: no camping year-round except in the developed campgrounds (Pine Flat, Cave Springs, Manzanita, Chavez group) (Forest Order 03-04-06-23-03, 2023-01-24)",
+     "campingRuleUrl": "https://www.fs.usda.gov/r03/coconino/alerts/sedona-oak-creek-canyon-camping-and-campfire-restrictions",
+     "nameInSource": "BOOTLEGGER CAMPGROUND"
     }
    },
    {
@@ -2783,40 +2816,12 @@
      "motorhome": true,
      "miles": 0.05
     }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -111.6846,
-      35.01185
-     ]
-    },
-    "properties": {
-     "routeId": "78",
-     "access": "Roads open to all Vehicles, Yearlong",
-     "seasonal": false,
-     "passengerCar": true,
-     "highClearance": true,
-     "heading": "Forest Road 78",
-     "forest": "Coconino National Forest",
-     "district": "Flagstaff Ranger District",
-     "level": 2,
-     "surface": "NAT - NATIVE MATERIAL",
-     "surfaceKind": "dirt",
-     "carDates": "All year",
-     "motorhome": true,
-     "atv": true,
-     "motorcycle": true,
-     "miles": 1.79
-    }
    }
   ]
  },
  "gbif-occurrences": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -105.6,
    39.5,
@@ -2837,6 +2842,8 @@
      "species": "Puma concolor",
      "year": 2026,
      "v": 2026,
+     "month": 1,
+     "season": "winter",
      "t": "2026-01-24T13:22:00.000Z",
      "url": "https://www.inaturalist.org/observations/335978721",
      "speciesKey": 2435099,
@@ -2860,6 +2867,8 @@
      "species": "Puma concolor",
      "year": 2026,
      "v": 2026,
+     "month": 5,
+     "season": "spring",
      "t": "2026-05-23T10:09:16.000Z",
      "url": "https://www.inaturalist.org/observations/364346918",
      "speciesKey": 2435099,
@@ -2883,6 +2892,8 @@
      "species": "Puma concolor",
      "year": 2026,
      "v": 2026,
+     "month": 5,
+     "season": "spring",
      "t": "2026-05-16T10:44:11.000Z",
      "url": "https://www.inaturalist.org/observations/375598449",
      "speciesKey": 2435099,
@@ -2906,6 +2917,8 @@
      "species": "Puma concolor",
      "year": 2026,
      "v": 2026,
+     "month": 6,
+     "season": "summer",
      "t": "2026-06-28T07:47:00.000Z",
      "url": "https://www.inaturalist.org/observations/376545624",
      "speciesKey": 2435099,
@@ -2929,6 +2942,8 @@
      "species": "Puma concolor",
      "year": 2025,
      "v": 2025,
+     "month": 5,
+     "season": "spring",
      "t": "2025-05-05T20:45:00.000Z",
      "url": "https://www.inaturalist.org/observations/307086798",
      "speciesKey": 2435099,
@@ -2952,6 +2967,8 @@
      "species": "Puma concolor",
      "year": 2025,
      "v": 2025,
+     "month": 6,
+     "season": "summer",
      "t": "2025-06-03T08:56:28.000Z",
      "url": "https://www.inaturalist.org/observations/286606993",
      "speciesKey": 2435099,
@@ -2975,6 +2992,8 @@
      "species": "Puma concolor",
      "year": 2025,
      "v": 2025,
+     "month": 6,
+     "season": "summer",
      "t": "2025-06-27T22:24:00.000Z",
      "url": "https://www.inaturalist.org/observations/307082983",
      "speciesKey": 2435099,
@@ -2998,6 +3017,8 @@
      "species": "Puma concolor",
      "year": 2024,
      "v": 2024,
+     "month": 1,
+     "season": "winter",
      "t": "2024-01-10T12:55:30.000Z",
      "url": "https://www.inaturalist.org/observations/196320282",
      "speciesKey": 2435099,
@@ -3021,6 +3042,8 @@
      "species": "Puma concolor",
      "year": 2024,
      "v": 2024,
+     "month": 5,
+     "season": "spring",
      "t": "2024-05-24T19:56:48.000Z",
      "url": "https://www.inaturalist.org/observations/218036772",
      "speciesKey": 2435099,
@@ -3044,6 +3067,8 @@
      "species": "Puma concolor",
      "year": 2024,
      "v": 2024,
+     "month": 6,
+     "season": "summer",
      "t": "2024-06-06T02:24:00.000Z",
      "url": "https://www.inaturalist.org/observations/222658703",
      "speciesKey": 2435099,
@@ -3067,6 +3092,8 @@
      "species": "Puma concolor",
      "year": 2024,
      "v": 2024,
+     "month": 9,
+     "season": "fall",
      "t": "2024-09-03T03:46:00.000Z",
      "url": "https://www.inaturalist.org/observations/280691695",
      "speciesKey": 2435099,
@@ -3090,6 +3117,8 @@
      "species": "Puma concolor",
      "year": 2023,
      "v": 2023,
+     "month": 5,
+     "season": "spring",
      "t": "2023-05-20T07:59:07.000Z",
      "url": "https://www.inaturalist.org/observations/162661715",
      "speciesKey": 2435099,
@@ -5242,7 +5271,7 @@
  },
  "mtb-trails": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -109.8,
    38.4,
@@ -5265,6 +5294,9 @@
      "heading": "Unnamed track",
      "v": 1,
      "imba": 1,
+     "level": [
+      "beginner"
+     ],
      "lengthKm": 0.33,
      "highway": "track"
     }
@@ -5284,6 +5316,9 @@
      "heading": "Unnamed track",
      "v": 3,
      "imba": 3,
+     "level": [
+      "advanced"
+     ],
      "lengthKm": 2.28,
      "highway": "track",
      "surface": "dirt"
@@ -5304,6 +5339,9 @@
      "name": "Kane Creek Road",
      "v": 1,
      "imba": 1,
+     "level": [
+      "beginner"
+     ],
      "lengthKm": 3.84,
      "highway": "tertiary",
      "ref": "CR 145",
@@ -5325,6 +5363,9 @@
      "name": "White Rim Road",
      "v": 3,
      "imba": 3,
+     "level": [
+      "advanced"
+     ],
      "lengthKm": 5,
      "highway": "track",
      "ref": "CR 144",
@@ -5350,6 +5391,9 @@
      "v": 2,
      "singletrack": 2,
      "imba": 2,
+     "level": [
+      "intermediate"
+     ],
      "lengthKm": 1.98,
      "highway": "path",
      "surface": "ground",
@@ -5391,6 +5435,9 @@
      "v": 3,
      "singletrack": 3,
      "imba": 3,
+     "level": [
+      "advanced"
+     ],
      "lengthKm": 0.48,
      "highway": "path",
      "surface": "ground",
@@ -5414,6 +5461,9 @@
      "name": "Shafer Trail",
      "v": 1,
      "imba": 1,
+     "level": [
+      "beginner"
+     ],
      "lengthKm": 2.14,
      "highway": "secondary",
      "ref": "CR 134",
@@ -5435,6 +5485,9 @@
      "name": "Shafer Trail",
      "v": 3,
      "imba": 3,
+     "level": [
+      "advanced"
+     ],
      "lengthKm": 8.46,
      "highway": "secondary",
      "ref": "CR 142",
@@ -5459,6 +5512,9 @@
      "name": "Cliff Hanger Trail",
      "v": 3,
      "imba": 3,
+     "level": [
+      "advanced"
+     ],
      "lengthKm": 1.63,
      "highway": "track",
      "surface": "ground",
@@ -5482,6 +5538,9 @@
      "v": 2,
      "singletrack": 2,
      "imba": 2,
+     "level": [
+      "intermediate"
+     ],
      "lengthKm": 4.88,
      "highway": "path",
      "surface": "ground",
@@ -5504,6 +5563,9 @@
      "name": "Bar M Loop",
      "v": 1,
      "imba": 1,
+     "level": [
+      "beginner"
+     ],
      "lengthKm": 6.55,
      "highway": "track",
      "surface": "dirt"
@@ -5523,7 +5585,7 @@
  },
  "ocean-currents": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -152.5,
    59.5,
@@ -5546,7 +5608,8 @@
      "east": 0,
      "north": 0,
      "speed": 0,
-     "sst": 8
+     "sst": 6.9,
+     "speedKt": 0
     }
    },
    {
@@ -5561,10 +5624,12 @@
     "properties": {
      "name": "58.82°N 153.68°W",
      "node": 2,
-     "east": 0,
-     "north": -0.06,
-     "speed": 0.06,
-     "sst": 8.1
+     "east": -0.09,
+     "north": -0.14,
+     "speed": 0.17,
+     "sst": 7.6,
+     "speedKt": 0.33,
+     "toward": "south-southwest (213°)"
     }
    },
    {
@@ -5579,10 +5644,12 @@
     "properties": {
      "name": "58.82°N 153.31°W",
      "node": 3,
-     "east": -0.1,
-     "north": -0.2,
+     "east": -0.2,
+     "north": -0.1,
      "speed": 0.22,
-     "sst": 8.3
+     "sst": 7.1,
+     "speedKt": 0.43,
+     "toward": "west-southwest (243°)"
     }
    },
    {
@@ -5597,10 +5664,12 @@
     "properties": {
      "name": "58.82°N 152.93°W",
      "node": 4,
-     "east": -0.1,
-     "north": -0.4,
-     "speed": 0.42,
-     "sst": 8
+     "east": 0.1,
+     "north": -0.55,
+     "speed": 0.56,
+     "sst": 7.9,
+     "speedKt": 1.09,
+     "toward": "south (170°)"
     }
    },
    {
@@ -5615,10 +5684,12 @@
     "properties": {
      "name": "58.82°N 152.56°W",
      "node": 5,
-     "east": 0,
-     "north": -0.14,
-     "speed": 0.14,
-     "sst": 7.7
+     "east": 0.3,
+     "north": -0.05,
+     "speed": 0.31,
+     "sst": 7.6,
+     "speedKt": 0.6,
+     "toward": "east (99°)"
     }
    },
    {
@@ -5633,10 +5704,12 @@
     "properties": {
      "name": "58.82°N 152.19°W",
      "node": 6,
-     "east": 0.4,
+     "east": 0.2,
      "north": -0.3,
-     "speed": 0.5,
-     "sst": 8.1
+     "speed": 0.36,
+     "sst": 7.7,
+     "speedKt": 0.7,
+     "toward": "southeast (146°)"
     }
    },
    {
@@ -5651,10 +5724,12 @@
     "properties": {
      "name": "58.82°N 151.81°W",
      "node": 7,
-     "east": 0.46,
-     "north": -0.36,
-     "speed": 0.58,
-     "sst": 7.9
+     "east": 0.1,
+     "north": -0.1,
+     "speed": 0.14,
+     "sst": 7.8,
+     "speedKt": 0.27,
+     "toward": "southeast (135°)"
     }
    },
    {
@@ -5669,10 +5744,12 @@
     "properties": {
      "name": "58.82°N 151.44°W",
      "node": 8,
-     "east": 0.31,
-     "north": -0.36,
-     "speed": 0.47,
-     "sst": 8.2
+     "east": 0.09,
+     "north": -0.14,
+     "speed": 0.17,
+     "sst": 7.8,
+     "speedKt": 0.33,
+     "toward": "south-southeast (147°)"
     }
    },
    {
@@ -5687,10 +5764,12 @@
     "properties": {
      "name": "58.82°N 151.06°W",
      "node": 9,
-     "east": 0.34,
-     "north": -0.24,
-     "speed": 0.42,
-     "sst": 8.2
+     "east": 0.14,
+     "north": -0.09,
+     "speed": 0.17,
+     "sst": 7.7,
+     "speedKt": 0.33,
+     "toward": "east-southeast (123°)"
     }
    },
    {
@@ -5705,10 +5784,12 @@
     "properties": {
      "name": "58.82°N 150.69°W",
      "node": 10,
-     "east": 0.4,
-     "north": -0.2,
-     "speed": 0.44,
-     "sst": 7.8
+     "east": 0.14,
+     "north": 0,
+     "speed": 0.14,
+     "sst": 7.7,
+     "speedKt": 0.27,
+     "toward": "east (90°)"
     }
    },
    {
@@ -5723,10 +5804,12 @@
     "properties": {
      "name": "58.82°N 150.31°W",
      "node": 11,
-     "east": 0.35,
-     "north": -0.35,
-     "speed": 0.5,
-     "sst": 8.2
+     "east": 0.1,
+     "north": 0.05,
+     "speed": 0.11,
+     "sst": 7.7,
+     "speedKt": 0.21,
+     "toward": "east-northeast (63°)"
     }
    },
    {
@@ -5741,10 +5824,12 @@
     "properties": {
      "name": "58.82°N 149.94°W",
      "node": 12,
-     "east": 0.25,
-     "north": -0.4,
-     "speed": 0.47,
-     "sst": 8.3
+     "east": 0,
+     "north": 0.06,
+     "speed": 0.06,
+     "sst": 7.8,
+     "speedKt": 0.12,
+     "toward": "north (0°)"
     }
    }
   ]
@@ -6259,7 +6344,7 @@
  },
  "outdoor-features": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    7.6,
    45.9,
@@ -6700,7 +6785,7 @@
  },
  "peaks": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    18,
    -34.5,
@@ -6777,6 +6862,29 @@
      "elevationText": "1,516 m (4,974 ft)",
      "prominenceFt": 381,
      "prominenceText": "116 m (381 ft)"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      18.9854287,
+      -33.9371887
+     ]
+    },
+    "properties": {
+     "name": "Bullerskop",
+     "kind": "peak",
+     "elevation": 1425,
+     "elevationSource": "osm",
+     "sources": "osm",
+     "osmId": 1391154108,
+     "osmUrl": "https://www.openstreetmap.org/node/1391154108",
+     "v": 1425,
+     "elevationFt": 4675,
+     "elevationText": "1,425 m (4,675 ft)",
+     "alsoNamed": "Buller's Kop"
     }
    },
    {
@@ -6969,28 +7077,6 @@
      "elevationFt": 4708,
      "elevationText": "1,435 m (4,708 ft)"
     }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      18.9854287,
-      -33.9371887
-     ]
-    },
-    "properties": {
-     "name": "Bullerskop",
-     "kind": "peak",
-     "elevation": 1425,
-     "elevationSource": "osm",
-     "sources": "osm",
-     "osmId": 1391154108,
-     "osmUrl": "https://www.openstreetmap.org/node/1391154108",
-     "v": 1425,
-     "elevationFt": 4675,
-     "elevationText": "1,425 m (4,675 ft)"
-    }
    }
   ]
  },
@@ -7144,7 +7230,7 @@
  },
  "photos": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    138.65,
    35.3,
@@ -7163,11 +7249,11 @@
     },
     "properties": {
      "source": "commons",
-     "name": "Mount Fuji - panoramio",
-     "title": "Mt. Fuji - panoramio.jpg",
+     "name": "Mount Fuji",
+     "file": "Mt. Fuji - panoramio.jpg",
      "v": 1,
      "url": "https://commons.wikimedia.org/wiki/File:Mt._Fuji_-_panoramio.jpg",
-     "nameInSource": "Mt. Fuji - panoramio"
+     "nameInSource": "Mt. Fuji"
     }
    },
    {
@@ -7185,6 +7271,7 @@
      "v": 1,
      "osm": "https://www.openstreetmap.org/node/1402646535",
      "name": "砂払い五合目「下り」",
+     "label": "砂払い五合目「下り」",
      "nearby": 0
     }
    },
@@ -7203,6 +7290,7 @@
      "v": 1,
      "osm": "https://www.openstreetmap.org/node/6091839586",
      "name": "日の出展望台",
+     "label": "日の出展望台",
      "direction": "75",
      "nearby": 30
     }
@@ -7218,8 +7306,8 @@
     },
     "properties": {
      "source": "commons",
-     "name": "富士山 (30450386)",
-     "title": "富士山 (30450386).jpg",
+     "name": "富士山",
+     "file": "富士山 (30450386).jpg",
      "v": 1,
      "url": "https://commons.wikimedia.org/wiki/File:%E5%AF%8C%E5%A3%AB%E5%B1%B1_(30450386).jpg"
     }
@@ -7235,8 +7323,8 @@
     },
     "properties": {
      "source": "commons",
-     "name": "富士山衛生センター下 - panoramio",
-     "title": "富士山衛生センター下 - panoramio.jpg",
+     "name": "富士山衛生センター下",
+     "file": "富士山衛生センター下 - panoramio.jpg",
      "v": 1,
      "url": "https://commons.wikimedia.org/wiki/File:%E5%AF%8C%E5%A3%AB%E5%B1%B1%E8%A1%9B%E7%94%9F%E3%82%BB%E3%83%B3%E3%82%BF%E3%83%BC%E4%B8%8B_-_panoramio.jpg"
     }
@@ -7253,7 +7341,7 @@
     "properties": {
      "source": "commons",
      "name": "Mount Fuji, Japan",
-     "title": "Mt. Fuji, Japan.jpg",
+     "file": "Mt. Fuji, Japan.jpg",
      "v": 1,
      "url": "https://commons.wikimedia.org/wiki/File:Mt._Fuji%2C_Japan.jpg",
      "nameInSource": "Mt. Fuji, Japan"
@@ -7270,8 +7358,8 @@
     },
     "properties": {
      "source": "commons",
-     "name": "元祖七合目 - panoramio",
-     "title": "元祖七合目 - panoramio.jpg",
+     "name": "元祖七合目",
+     "file": "元祖七合目 - panoramio.jpg",
      "v": 1,
      "url": "https://commons.wikimedia.org/wiki/File:%E5%85%83%E7%A5%96%E4%B8%83%E5%90%88%E7%9B%AE_-_panoramio.jpg"
     }
@@ -7287,11 +7375,11 @@
     },
     "properties": {
      "source": "commons",
-     "name": "Mount Fuji, Fujinomiya side in July - panoramio",
-     "title": "Mt. Fuji, Fujinomiya side in July - panoramio.jpg",
+     "name": "Mount Fuji, Fujinomiya side in July",
+     "file": "Mt. Fuji, Fujinomiya side in July - panoramio.jpg",
      "v": 1,
      "url": "https://commons.wikimedia.org/wiki/File:Mt._Fuji%2C_Fujinomiya_side_in_July_-_panoramio.jpg",
-     "nameInSource": "Mt. Fuji, Fujinomiya side in July - panoramio"
+     "nameInSource": "Mt. Fuji, Fujinomiya side in July"
     }
    },
    {
@@ -7305,11 +7393,11 @@
     },
     "properties": {
      "source": "commons",
-     "name": "Mount Fuji - panoramio (2)",
-     "title": "Mt Fuji - panoramio (2).jpg",
+     "name": "Mount Fuji",
+     "file": "Mt Fuji - panoramio (2).jpg",
      "v": 1,
      "url": "https://commons.wikimedia.org/wiki/File:Mt_Fuji_-_panoramio_(2).jpg",
-     "nameInSource": "Mt Fuji - panoramio (2)"
+     "nameInSource": "Mt Fuji"
     }
    },
    {
@@ -7323,11 +7411,11 @@
     },
     "properties": {
      "source": "commons",
-     "name": "Mount Fuji Early Morning - panoramio",
-     "title": "Mt. Fuji Early Morning - panoramio.jpg",
+     "name": "Mount Fuji Early Morning",
+     "file": "Mt. Fuji Early Morning - panoramio.jpg",
      "v": 1,
      "url": "https://commons.wikimedia.org/wiki/File:Mt._Fuji_Early_Morning_-_panoramio.jpg",
-     "nameInSource": "Mt. Fuji Early Morning - panoramio"
+     "nameInSource": "Mt. Fuji Early Morning"
     }
    },
    {
@@ -7341,11 +7429,11 @@
     },
     "properties": {
      "source": "commons",
-     "name": "Mount Fuji - panoramio (1)",
-     "title": "Mt Fuji - panoramio (1).jpg",
+     "name": "Mount Fuji",
+     "file": "Mt Fuji - panoramio (1).jpg",
      "v": 1,
      "url": "https://commons.wikimedia.org/wiki/File:Mt_Fuji_-_panoramio_(1).jpg",
-     "nameInSource": "Mt Fuji - panoramio (1)"
+     "nameInSource": "Mt Fuji"
     }
    },
    {
@@ -7359,8 +7447,8 @@
     },
     "properties": {
      "source": "commons",
-     "name": "剣ヶ峰-馬の背から日の出。御殿場口方面（東向） - panoramio",
-     "title": "剣ヶ峰-馬の背から日の出。御殿場口方面（東向） - panoramio.jpg",
+     "name": "剣ヶ峰-馬の背から日の出。御殿場口方面（東向）",
+     "file": "剣ヶ峰-馬の背から日の出。御殿場口方面（東向） - panoramio.jpg",
      "v": 1,
      "url": "https://commons.wikimedia.org/wiki/File:%E5%89%A3%E3%83%B6%E5%B3%B0-%E9%A6%AC%E3%81%AE%E8%83%8C%E3%81%8B%E3%82%89%E6%97%A5%E3%81%AE%E5%87%BA%E3%80%82%E5%BE%A1%E6%AE%BF%E5%A0%B4%E5%8F%A3%E6%96%B9%E9%9D%A2%EF%BC%88%E6%9D%B1%E5%90%91%EF%BC%89_-_panoramio.jpg"
     }
@@ -9242,7 +9330,7 @@
  },
  "public-lands": {
   "kind": "tiles",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -112.182,
    37.655,
@@ -11722,7 +11810,7 @@
  },
  "species": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -115.585,
    51.161,
@@ -11730,6 +11818,74 @@
    51.194
   ],
   "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -115.5705001,
+      51.1698104
+     ]
+    },
+    "properties": {
+     "species": "Mule Deer",
+     "observedOn": "2026-10-19",
+     "t": "2026-10-19T16:07:48.000Z",
+     "v": 1,
+     "url": "https://www.inaturalist.org/observations/409493080",
+     "license": "cc-by-nc",
+     "scientificName": "Odocoileus hemionus",
+     "month": 10,
+     "season": "fall",
+     "taxonId": 42220,
+     "identifiedAs": "Rocky Mountain Mule Deer (Odocoileus hemionus hemionus)"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -115.5653401,
+      51.1791218997
+     ]
+    },
+    "properties": {
+     "species": "Mule Deer",
+     "observedOn": "2026-10-19",
+     "t": "2026-10-19T15:40:39.000Z",
+     "v": 1,
+     "url": "https://www.inaturalist.org/observations/409466202",
+     "license": "cc-by-nc",
+     "scientificName": "Odocoileus hemionus",
+     "month": 10,
+     "season": "fall",
+     "taxonId": 42220,
+     "identifiedAs": "Rocky Mountain Mule Deer (Odocoileus hemionus hemionus)"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -115.5707903,
+      51.1784304
+     ]
+    },
+    "properties": {
+     "species": "Green Comma",
+     "observedOn": "2026-10-16",
+     "t": "2026-10-16T19:56:00.000Z",
+     "v": 1,
+     "url": "https://www.inaturalist.org/observations/409562009",
+     "license": "cc-by-nd",
+     "scientificName": "Polygonia faunus",
+     "month": 10,
+     "season": "fall",
+     "taxonId": 68262
+    }
+   },
    {
     "type": "Feature",
     "geometry": {
@@ -11747,28 +11903,9 @@
      "url": "https://www.inaturalist.org/observations/408935542",
      "license": "cc-by-nc",
      "scientificName": "Odocoileus hemionus",
+     "month": 10,
+     "season": "fall",
      "taxonId": 42220
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -115.5630134997,
-      51.1719544997
-     ]
-    },
-    "properties": {
-     "species": "Mule Deer",
-     "observedOn": "2026-10-13",
-     "t": "2026-10-13T14:00:41.000Z",
-     "v": 1,
-     "url": "https://www.inaturalist.org/observations/408059293",
-     "license": "cc-by-nc",
-     "scientificName": "Odocoileus hemionus",
-     "taxonId": 42220,
-     "identifiedAs": "Rocky Mountain Mule Deer (Odocoileus hemionus hemionus)"
     }
    },
    {
@@ -11788,7 +11925,31 @@
      "url": "https://www.inaturalist.org/observations/408619334",
      "license": "all-rights-reserved",
      "scientificName": "Symphoricarpos albus",
+     "month": 10,
+     "season": "fall",
      "taxonId": 48523
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -115.5831666667,
+      51.182495
+     ]
+    },
+    "properties": {
+     "species": "bog wintergreen",
+     "observedOn": "2026-10-14",
+     "t": "2026-10-14T16:22:25.000Z",
+     "v": 1,
+     "url": "https://www.inaturalist.org/observations/408998723",
+     "license": "cc-by-nc",
+     "scientificName": "Pyrola asarifolia",
+     "month": 10,
+     "season": "fall",
+     "taxonId": 78793
     }
    },
    {
@@ -11808,6 +11969,8 @@
      "url": "https://www.inaturalist.org/observations/408421167",
      "license": "cc-by",
      "scientificName": "Pyrola asarifolia",
+     "month": 10,
+     "season": "fall",
      "taxonId": 78793
     }
    },
@@ -11828,6 +11991,8 @@
      "url": "https://www.inaturalist.org/observations/408421158",
      "license": "cc-by",
      "scientificName": "Pyrola asarifolia",
+     "month": 10,
+     "season": "fall",
      "taxonId": 78793
     }
    },
@@ -11848,6 +12013,8 @@
      "url": "https://www.inaturalist.org/observations/408397224",
      "license": "cc-by",
      "scientificName": "Rubus idaeus",
+     "month": 10,
+     "season": "fall",
      "taxonId": 54436
     }
    },
@@ -11868,7 +12035,31 @@
      "url": "https://www.inaturalist.org/observations/408998184",
      "license": "cc-by-nc",
      "scientificName": "Petasites frigidus",
+     "month": 10,
+     "season": "fall",
      "taxonId": 55780
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -115.5841916667,
+      51.1839666667
+     ]
+    },
+    "properties": {
+     "species": "red raspberry",
+     "observedOn": "2026-10-14",
+     "t": "2026-10-14T15:29:19.000Z",
+     "v": 1,
+     "url": "https://www.inaturalist.org/observations/408998090",
+     "license": "cc-by-nc",
+     "scientificName": "Rubus idaeus",
+     "month": 10,
+     "season": "fall",
+     "taxonId": 54436
     }
    },
    {
@@ -11888,87 +12079,9 @@
      "url": "https://www.inaturalist.org/observations/408419912",
      "license": "cc-by",
      "scientificName": "Rubus idaeus",
+     "month": 10,
+     "season": "fall",
      "taxonId": 54436
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -115.5840533333,
-      51.1839216667
-     ]
-    },
-    "properties": {
-     "species": "Arctic Butterbur",
-     "observedOn": "2026-10-14",
-     "t": "2026-10-14T15:28:42.000Z",
-     "v": 1,
-     "url": "https://www.inaturalist.org/observations/408998070",
-     "license": "cc-by-nc",
-     "scientificName": "Petasites frigidus",
-     "taxonId": 55780
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -115.5839944444,
-      51.1838916667
-     ]
-    },
-    "properties": {
-     "species": "Arctic Butterbur",
-     "observedOn": "2026-10-14",
-     "t": "2026-10-14T15:28:32.000Z",
-     "v": 1,
-     "url": "https://www.inaturalist.org/observations/408419903",
-     "license": "cc-by",
-     "scientificName": "Petasites frigidus",
-     "taxonId": 55780
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -115.583875,
-      51.1838777778
-     ]
-    },
-    "properties": {
-     "species": "Arctic Butterbur",
-     "observedOn": "2026-10-14",
-     "t": "2026-10-14T15:28:10.000Z",
-     "v": 1,
-     "url": "https://www.inaturalist.org/observations/408419878",
-     "license": "cc-by",
-     "scientificName": "Petasites frigidus",
-     "taxonId": 55780
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -115.5837805556,
-      51.1838666667
-     ]
-    },
-    "properties": {
-     "species": "Lindley's Aster",
-     "observedOn": "2026-10-14",
-     "t": "2026-10-14T15:27:54.000Z",
-     "v": 1,
-     "url": "https://www.inaturalist.org/observations/408419824",
-     "license": "cc-by",
-     "scientificName": "Symphyotrichum ciliolatum",
-     "taxonId": 169455
     }
    }
   ]
@@ -12173,7 +12286,7 @@
  },
  "surf": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -122.6,
    37.3,
@@ -12194,21 +12307,24 @@
      "name": "Mavericks",
      "kind": "forecast",
      "spotSource": "Wikidata",
-     "t": "2026-10-18T08:00:00.000Z",
-     "v": 1.62,
-     "waveFt": 5.3,
-     "maxNext48hM": 2.06,
+     "t": "2026-10-23T14:00:00.000Z",
+     "v": 2.06,
+     "waveFt": 6.8,
+     "maxNext48hM": 2.08,
      "maxNext48hFt": 6.8,
-     "maxAt": "2026-10-19T02:00:00.000Z",
-     "periodS": 10.55,
-     "directionDeg": 280,
-     "directionFrom": "W",
-     "swellFrom": "West (280°)",
-     "swellM": 0.78,
-     "swellFt": 2.6,
-     "swellPeriodS": 10.15,
-     "readAt": "1:00 am PDT Sun",
-     "maxAtLocal": "7:00 pm PDT Sun"
+     "maxAt": "2026-10-23T15:00:00.000Z",
+     "periodS": 8.5,
+     "directionDeg": 295,
+     "directionFrom": "WNW",
+     "swellFrom": "West-northwest (295°)",
+     "swellM": 1.92,
+     "swellFt": 6.3,
+     "swellPeriodS": 6.5,
+     "readAt": "7:00 am PDT Fri",
+     "maxAtLocal": "8:00 am PDT Fri",
+     "daily": "Fri: 6-7 ft at 9 s, wind to 8 mph from the NW · Sat: 4-6 ft at 9 s, wind to 7 mph from the WNW · Sun: 3-4 ft at 9 s, wind to 6 mph from the SW · Mon: 3-4 ft at 10 s, wind to 7 mph from the SW · Tue: 4-5 ft at 9 s, wind to 10 mph from the WSW · Wed: 3-4 ft at 10 s, wind to 8 mph from the NW · Thu: 3 ft at 13 s, wind to 5 mph from the NW",
+     "weekend": "Sat: 4-6 ft at 9 s, wind to 7 mph from the WNW · Sun: 3-4 ft at 9 s, wind to 6 mph from the SW",
+     "weekendMaxFt": 6.3
     }
    }
   ]
@@ -13892,7 +14008,7 @@
  },
  "wind-flow": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-23",
   "bbox": [
    -120.5,
    37,
@@ -13912,10 +14028,12 @@
     "properties": {
      "name": "37.00°N 120.50°W",
      "node": 0,
-     "east": -0.03,
-     "north": 1.75,
-     "speed": 1.75,
-     "tempC": 16.6
+     "east": 0.46,
+     "north": -1.43,
+     "speed": 1.5,
+     "tempC": 14.1,
+     "speedMph": 3.4,
+     "from": "north-northwest (342°)"
     }
    },
    {
@@ -13930,10 +14048,12 @@
     "properties": {
      "name": "37.00°N 120.38°W",
      "node": 1,
-     "east": -1.19,
-     "north": 0.63,
-     "speed": 1.35,
-     "tempC": 17.3
+     "east": 1.46,
+     "north": -0.45,
+     "speed": 1.53,
+     "tempC": 15.5,
+     "speedMph": 3.4,
+     "from": "west-northwest (287°)"
     }
    },
    {
@@ -13948,10 +14068,12 @@
     "properties": {
      "name": "37.00°N 120.26°W",
      "node": 2,
-     "east": -1.01,
-     "north": 0.37,
-     "speed": 1.08,
-     "tempC": 17.7
+     "east": 2.31,
+     "north": -0.53,
+     "speed": 2.37,
+     "tempC": 15.4,
+     "speedMph": 5.3,
+     "from": "west-northwest (283°)"
     }
    },
    {
@@ -13966,10 +14088,12 @@
     "properties": {
      "name": "37.00°N 120.15°W",
      "node": 3,
-     "east": -1.12,
-     "north": 0.34,
-     "speed": 1.17,
-     "tempC": 17.1
+     "east": 2.48,
+     "north": -0.39,
+     "speed": 2.51,
+     "tempC": 14.5,
+     "speedMph": 5.6,
+     "from": "west (279°)"
     }
    },
    {
@@ -13984,10 +14108,12 @@
     "properties": {
      "name": "37.00°N 120.03°W",
      "node": 4,
-     "east": -0.8,
-     "north": 0.32,
-     "speed": 0.86,
-     "tempC": 18
+     "east": 2.5,
+     "north": -0.09,
+     "speed": 2.5,
+     "tempC": 15.2,
+     "speedMph": 5.6,
+     "from": "west (272°)"
     }
    },
    {
@@ -14002,10 +14128,12 @@
     "properties": {
      "name": "37.00°N 119.91°W",
      "node": 5,
-     "east": -0.82,
-     "north": 0,
-     "speed": 0.82,
-     "tempC": 19
+     "east": 2.16,
+     "north": 0.04,
+     "speed": 2.16,
+     "tempC": 14.4,
+     "speedMph": 4.8,
+     "from": "west (269°)"
     }
    },
    {
@@ -14020,10 +14148,12 @@
     "properties": {
      "name": "37.00°N 119.79°W",
      "node": 6,
-     "east": -2.02,
-     "north": -1.42,
-     "speed": 2.47,
-     "tempC": 20.5
+     "east": 1.94,
+     "north": 0.07,
+     "speed": 1.94,
+     "tempC": 13.6,
+     "speedMph": 4.3,
+     "from": "west (268°)"
     }
    },
    {
@@ -14038,10 +14168,12 @@
     "properties": {
      "name": "37.00°N 119.68°W",
      "node": 7,
-     "east": -2.29,
-     "north": -1.6,
-     "speed": 2.79,
-     "tempC": 22.3
+     "east": 0.49,
+     "north": 0.53,
+     "speed": 0.72,
+     "tempC": 13.5,
+     "speedMph": 1.6,
+     "from": "southwest (223°)"
     }
    },
    {
@@ -14056,10 +14188,12 @@
     "properties": {
      "name": "37.00°N 119.56°W",
      "node": 8,
-     "east": -0.87,
-     "north": -1.87,
-     "speed": 2.06,
-     "tempC": 21.2
+     "east": 1.33,
+     "north": 0.02,
+     "speed": 1.33,
+     "tempC": 11.8,
+     "speedMph": 3,
+     "from": "west (269°)"
     }
    },
    {
@@ -14074,10 +14208,12 @@
     "properties": {
      "name": "37.00°N 119.44°W",
      "node": 9,
-     "east": -1.42,
-     "north": -1.37,
-     "speed": 1.97,
-     "tempC": 19.8
+     "east": 1.72,
+     "north": 0.53,
+     "speed": 1.8,
+     "tempC": 9.8,
+     "speedMph": 4,
+     "from": "west-southwest (253°)"
     }
    },
    {
@@ -14092,10 +14228,12 @@
     "properties": {
      "name": "37.00°N 119.32°W",
      "node": 10,
-     "east": -0.92,
-     "north": -2.17,
-     "speed": 2.36,
-     "tempC": 21.2
+     "east": 0.07,
+     "north": -0.29,
+     "speed": 0.3,
+     "tempC": 10.7,
+     "speedMph": 0.7,
+     "from": "north-northwest (346°)"
     }
    },
    {
@@ -14110,10 +14248,12 @@
     "properties": {
      "name": "37.00°N 119.21°W",
      "node": 11,
-     "east": -2.26,
-     "north": -0.04,
-     "speed": 2.26,
-     "tempC": 17.5
+     "east": 1.07,
+     "north": -0.15,
+     "speed": 1.08,
+     "tempC": 7.7,
+     "speedMph": 2.4,
+     "from": "west (278°)"
     }
    }
   ]

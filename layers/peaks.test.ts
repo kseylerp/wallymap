@@ -6,6 +6,7 @@ import { contractProblems, labelsOf, legendOf, timeShapeOf } from "./contract";
 import layer, {
   MAX_FEATURES,
   SPARQL_ENDPOINT,
+  dedupePeaks,
   mergePeaks,
   normalizePeaks,
   osmPeaksQuery,
@@ -356,7 +357,8 @@ describe("peaks layer", () => {
   });
 
   it("keeps at most the 2,000 highest", async () => {
-    const node = (i: number) => ({ type: "node", id: i, lat: 39 + i / 1e4, lon: -106, tags: { natural: "peak", name: `P${i}`, ele: String(1000 + i) } });
+    // 110 m apart: distinct summits, not one drawn twice (dedupePeaks).
+    const node = (i: number) => ({ type: "node", id: i, lat: 39 + i / 1e3, lon: -106, tags: { natural: "peak", name: `P${i}`, ele: String(1000 + i) } });
     const r = geojson(await layer.query(ctx(route({ results: { bindings: [] } }, { elements: Array.from({ length: 2100 }, (_, i) => node(i)) })), {}));
     expect(r.data.features).toHaveLength(MAX_FEATURES);
     expect(r.data.features[0].properties?.name).toBe("P2099");
@@ -422,7 +424,8 @@ describe("peaks layer", () => {
     const item = (i: number) => ({
       item: { value: `http://www.wikidata.org/entity/Q${i}` },
       itemLabel: { value: `Peak ${i}` },
-      coord: { value: "Point(-106 39)" },
+      // 110 m apart: distinct summits, not one drawn twice (dedupePeaks).
+      coord: { value: `Point(-106 ${39 + i / 1e3})` },
       prom: { value: String(3000 - i) },
     });
     const stub = vi.fn(async () => json({ results: { bindings: Array.from({ length: 1050 }, (_, i) => item(i)) } }));
@@ -431,5 +434,32 @@ describe("peaks layer", () => {
     expect(r.data.features).toHaveLength(1000);
     expect(r.data.features[0].properties).toMatchObject({ name: "Peak 0", prominence: 3000 });
     expect(r.coverageNote).toContain("only Wikidata peaks with a recorded prominence are listed at this scale");
+  });
+});
+
+describe("dedupePeaks", () => {
+  const peak = (name: string, lon: number, lat: number, props: Record<string, string | number> = {}) => ({
+    type: "Feature" as const,
+    geometry: { type: "Point" as const, coordinates: [lon, lat] },
+    properties: { name, ...props } as Record<string, string | number>,
+  });
+
+  it("draws one peak per spot: within 40 m, or 200 m under one name, the one with more data stays and names the other", () => {
+    const out = dedupePeaks([
+      // Chamonix, live 2026-10-23: a Wikidata item and its summit's OSM node 10 m apart under two names.
+      peak("Grandes Jorasses", 6.98822, 45.86889, { sources: "wikidata", elevation: 4208, wikidata: "Q30453" }),
+      peak("Pointe Walker", 6.98834, 45.86885, { sources: "both", elevation: 4208, wikidata: "Q2403858", osmId: 1 }),
+      // One name 86 m apart.
+      peak("La Vierge", 6.9, 45.9, { sources: "wikidata", elevation: 3244, wikidata: "Q31640409" }),
+      peak("La Vierge", 6.9011, 45.9, { sources: "osm", elevation: 3244, osmId: 2, wikidata: "Q136377138" }),
+      // Two names 120 m apart: two summits.
+      peak("Aiguille A", 6.8, 45.95, { sources: "osm", elevation: 3000, osmId: 3 }),
+      peak("Aiguille B", 6.8015, 45.95, { sources: "osm", elevation: 2990, osmId: 4 }),
+    ]);
+    expect(out.map((f) => f.properties?.name)).toEqual(["Pointe Walker", "La Vierge", "Aiguille A", "Aiguille B"]);
+    expect(out[0].properties).toMatchObject({ alsoNamed: "Grandes Jorasses" });
+    expect(out[1].properties).not.toHaveProperty("alsoNamed");
+    const card = cardContent(out[0], { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.facts.find((f) => f.label === "Also listed as")?.value).toBe("Grandes Jorasses");
   });
 });

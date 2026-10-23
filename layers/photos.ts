@@ -235,7 +235,7 @@ const wideSchema = z.object({
 });
 
 /**
- * Wide points: one per place, at its coordinate, with source "commons", title (the photo's file name), name (the place),
+ * Wide points: one per place, at its coordinate, with source "commons", file (the photo's file name), name and label (the place; without one, the file name in words and no label),
  * url (the file page), languages (Wikipedia editions covering the place), wikidata and v 1. Null when the answer is malformed.
  */
 export function widePhotoFeatures(json: unknown): PhotoFeature[] | null {
@@ -256,12 +256,19 @@ export function widePhotoFeatures(json: unknown): PhotoFeature[] | null {
     const label = b.itemLabel?.value.trim();
     const properties: Record<string, string | number> = {
       source: "commons",
-      title: file,
+      file,
       v: 1,
       url: `https://commons.wikimedia.org/wiki/${encodeURIComponent(`File:${file}`.replace(/ /g, "_")).replace(/%3A/g, ":")}`,
       wikidata: id,
     };
-    if (label && label !== id) properties.name = label;
+    // The place's own name labels the map; without one, the photo's file name in words names it but never labels it.
+    if (label && label !== id) {
+      properties.name = label;
+      properties.label = label;
+    } else {
+      const named = photoName(file);
+      if (named !== null) properties.name = named;
+    }
     const links = Number(b.links?.value);
     if (Number.isFinite(links)) properties.languages = links;
     features.push({ type: "Feature", geometry: { type: "Point", coordinates: [Number(m[1]), Number(m[2])] }, properties });
@@ -269,27 +276,40 @@ export function widePhotoFeatures(json: unknown): PhotoFeature[] | null {
   return features;
 }
 
-/** A Commons file name as a card title: "Half_Dome_from_Glacier_Point.JPG" → "Half Dome from Glacier Point". */
-export function photoName(fileTitle: string): string {
+/** Camera and phone default file names ("DSC_1234", "IMG_20190704_101112", "P1010001", "DJI_0042"): no words in them. */
+const CAMERA_NAME = /^(?:img|dsc[nf]?|dcim|pict?|p|photo|image|gopr|gp|dji|sam|cimg|imgp|mvc|hpim|mg|wp|pxl|mvimg|vid|dcp|sdc[0-9]?|pano)[\s_-]*\d[\d\s_-]*$/i;
+
+/**
+ * A Commons file name as words for a card and a ranked list, or null when it says nothing about the place:
+ * "Half_Dome_from_Glacier_Point.JPG" → "Half Dome from Glacier Point"; the Flickr id a bulk upload appends goes
+ * ("Pile o' Radiators (30467258416)" → "Pile o' Radiators"), as does a Panoramio tag; a camera's default name
+ * ("DSC_1234") or one with no word of three letters is null, so the photo stays unnamed (its card reads "Commons photo").
+ */
+export function photoName(fileTitle: string): string | null {
   const plain = fileTitle
     .replace(/^File:/, "")
-    .replace(/\.(jpe?g|png|tiff?|gif|webp|svg|heic|ogv|webm)$/i, "")
+    .replace(/\.(jpe?g|png|tiff?|gif|webp|svg|heic|ogv|webm|mp4|pdf)$/i, "")
     .replace(/_/g, " ")
+    .replace(/\s*(?:\(\d{6,}\)|-\s*\d{6,})\s*$/, "")
+    .replace(/\s*-?\s*panoramio(?:\s*\(\d+\))?\s*$/i, "")
     .replace(/\s+/g, " ")
-    .trim();
-  return plain || fileTitle;
+    .trim()
+    .replace(/[\s,;:.-]+$/, "");
+  if (plain === "" || CAMERA_NAME.test(plain) || !/\p{L}{3,}/u.test(plain)) return null;
+  return plain;
 }
 
 function commonsFeature(hit: { pageid: number; title: string; lat: number; lon: number }): PhotoFeature {
-  const title = hit.title.replace(/^File:/, "");
+  const file = hit.title.replace(/^File:/, "");
   const wikiTitle = encodeURIComponent(hit.title.replace(/ /g, "_")).replace(/%3A/g, ":");
+  const name = photoName(file);
   return {
     type: "Feature",
     geometry: { type: "Point", coordinates: [hit.lon, hit.lat] },
     properties: {
       source: "commons",
-      name: photoName(title),
-      title,
+      ...(name !== null && { name }),
+      file,
       v: 1,
       url: `https://commons.wikimedia.org/wiki/${wikiTitle}`,
     },
@@ -345,7 +365,11 @@ export function viewpointFeatures(json: unknown): PhotoFeature[] {
     const tags = el.tags ?? {};
     const properties: Record<string, string | number> = { source: "viewpoint", kind: "viewpoint", v: 1, osm: `https://www.openstreetmap.org/${el.type}/${el.id}` };
     const name = tags.name?.trim();
-    if (name) properties.name = name;
+    if (name) {
+      properties.name = name;
+      // Map labels go to named viewpoints and places only, never to a photo's file name (labels.field).
+      properties.label = name;
+    }
     const direction = tags.direction?.trim();
     if (direction) properties.direction = direction;
     features.push({ type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] }, properties });
@@ -589,7 +613,7 @@ const CARD: CardSpec = {
     { key: "source", label: "What it is", values: SOURCE_NAMES },
     { key: "direction", label: "Faces" },
     { key: "taken", label: "Taken", format: "date" },
-    { key: "title", label: "File name" },
+    { key: "file", label: "File name" },
     { key: "languages", label: "Wikipedia languages", format: "int" },
     { key: "wikidata", label: "Wikidata item" },
   ],
@@ -597,7 +621,7 @@ const CARD: CardSpec = {
     { key: "url", label: "Open the photo" },
     { key: "osm", label: "Open on OpenStreetMap" },
   ],
-  hidden: ["v", "kind"],
+  hidden: ["v", "kind", "label"],
 };
 
 const photos = defineLayer({
@@ -605,9 +629,9 @@ const photos = defineLayer({
   title: "Photo density",
   description:
     "Where people take and share photos: geotagged Wikimedia Commons photos and the named viewpoints mapped on OpenStreetMap (tourism=viewpoint). " +
-    "Each point has source ('commons' a photo, 'viewpoint' a mapped viewpoint, 'mapillary' a street-level image), name (the place for a viewpoint, the file name in words for a photo), url (the photo page) or osm (the viewpoint's OpenStreetMap page), and v (always 1). " +
+    "Each point has source ('commons' a photo, 'viewpoint' a mapped viewpoint, 'mapillary' a street-level image), name (the place for a viewpoint; for a photo its file name in words without the Flickr number, absent when the file name is a camera default), url (the photo page) or osm (the viewpoint's OpenStreetMap page), and v (always 1). " +
     "A viewpoint also has nearby (how many Commons photos in the view were taken within 500 m of it; the map sizes viewpoints by it and names the top five) and sometimes direction (the way it faces). " +
-    "Photos have title (the file name); street-level images have taken (the capture date). Commons gives no dates here, so this layer has no timeline. " +
+    "Photos have file (the file name); street-level images have taken (the capture date). Commons gives no dates here, so this layer has no timeline. " +
     "Use it for 'where do people photograph', scenic spots and popular viewpoints, or to judge how well-documented a place is. " +
     "sources picks what to show: the default ['commons', 'viewpoints']; add 'mapillary' for street-level images (needs a free token; mostly dashcam frames along roads, so it is left out unless asked for). " +
     "Caveats: this shows where people photograph, not what is there; Commons geotags include anything photographed (cars, buildings), and remote trails often have none. " +
@@ -645,7 +669,8 @@ const photos = defineLayer({
       `Each small dot is one geotagged photo; a viewpoint's symbol grows with the Commons photos taken within ${NEARBY_M} m of it. ` +
       "With more than 2,000 points in view the map groups them into cells shaded by how many photos each holds: darker means more photos.",
   },
-  labels: { field: "name", max: 5, rankBy: "nearby" },
+  // Labels name viewpoints and places (label), never a photo by its file name ("Pile o' Radiators" topped them, audit 2026-10-23).
+  labels: { field: "label", max: 5, rankBy: "nearby" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const wanted = new Set<Source>(input.sources);

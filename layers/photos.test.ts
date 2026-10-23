@@ -150,7 +150,8 @@ describe("photos layer", () => {
     expect(new Set(legend.items?.map((i) => i.color)).size).toBe(3);
     expect(legend.note).toMatch(/grows with the Commons photos taken within 500 m/);
     expect(legend.note).toMatch(/darker means more photos/);
-    expect(labelsOf(layer)).toEqual({ field: "name", max: 5, rankBy: "nearby" });
+    // label: viewpoints and places only, so a photo's file name never tops the labels.
+    expect(labelsOf(layer)).toEqual({ field: "label", max: 5, rankBy: "nearby" });
     expect(layer.attributes?.find((a) => a.key === "nearby")).toMatchObject({ type: "measure", encode: "size", unit: "photos" });
     expect(layer.attributes?.some((a) => a.type === "time")).toBe(false);
   });
@@ -173,7 +174,7 @@ describe("photos layer", () => {
     expect(r.coverageNote).toContain("Mapillary was skipped");
   });
 
-  it("normalizes Commons hits to points with title, url and no t", async () => {
+  it("normalizes Commons hits to points with the file name, a name without the Flickr id, a url and no t", async () => {
     const stub = routed({});
     const r = geojson(await layer.query(ctx(stub), { sources: ["commons"] }));
     const hit = commonsFixture.query.geosearch[0];
@@ -181,8 +182,8 @@ describe("photos layer", () => {
     expect(first.geometry).toEqual({ type: "Point", coordinates: [hit.lon, hit.lat] });
     expect(first.properties).toEqual({
       source: "commons",
-      name: "South Lake Tahoe, From Heavenly Gondolas 9-2010 (5758856325)",
-      title: hit.title.replace(/^File:/, ""),
+      name: "South Lake Tahoe, From Heavenly Gondolas 9-2010",
+      file: hit.title.replace(/^File:/, ""),
       v: 1,
       url: `https://commons.wikimedia.org/wiki/${encodeURIComponent(hit.title.replace(/ /g, "_")).replace(/%3A/g, ":")}`,
     });
@@ -438,6 +439,23 @@ describe("viewpoints and photo names", () => {
   it("turns a Commons file name into words", () => {
     expect(photoName("Half_Dome_from_Glacier_Point.JPG")).toBe("Half Dome from Glacier Point");
     expect(photoName("File:Yosemite Falls 2019.jpeg")).toBe("Yosemite Falls 2019");
+    // The Flickr id a bulk upload appends, and a Panoramio tag, are not part of the name.
+    expect(photoName("File:Pile o' Radiators (30467258416).jpg")).toBe("Pile o' Radiators");
+    expect(photoName("Mount Tallac - panoramio (3).jpg")).toBe("Mount Tallac");
+    expect(photoName("Hot air balloons over Angel Valley - 33691900511.jpg")).toBe("Hot air balloons over Angel Valley");
+    // Camera defaults and numbers say nothing: no name, so the card reads "Commons photo" and no label shows it.
+    expect(photoName("File:DSC_1234.JPG")).toBeNull();
+    expect(photoName("IMG_20190704_101112.jpg")).toBeNull();
+    expect(photoName("P1010001.JPG")).toBeNull();
+    expect(photoName("DJI 0042 (48123456789).jpg")).toBeNull();
+    expect(photoName("2019-07-04 10.11.12.jpg")).toBeNull();
+    expect(cardTitle(layer, { properties: { source: "commons", file: "DSC_1234.JPG", v: 1 } })).toBe("Commons photo");
+  });
+
+  it("labels named viewpoints and places, never a photo's file name", () => {
+    const vps = viewpointFeatures(viewpointFixture);
+    expect(vps.filter((f) => f.properties?.label !== undefined).every((f) => f.properties?.label === f.properties?.name)).toBe(true);
+    expect(vps.some((f) => f.properties?.label !== undefined)).toBe(true);
   });
 
   it("asks Overpass for tourism=viewpoint in the box, south-west-north-east", () => {
@@ -549,14 +567,16 @@ describe("wide mode (over 2,500 km²)", () => {
     expect(features?.map((f) => f.properties)).toEqual([
       {
         source: "commons",
-        title: "Half Dome from Glacier Point.jpg",
+        file: "Half Dome from Glacier Point.jpg",
         name: "Half Dome",
+        label: "Half Dome",
         v: 1,
         url: "https://commons.wikimedia.org/wiki/File:Half_Dome_from_Glacier_Point.jpg",
         wikidata: "Q1",
         languages: 40,
       },
-      { source: "commons", title: "Some Lake.jpg", v: 1, url: "https://commons.wikimedia.org/wiki/File:Some_Lake.jpg", wikidata: "Q2", languages: 3 },
+      // No place name: the file name in words names it, but it gets no map label.
+      { source: "commons", file: "Some Lake.jpg", name: "Some Lake", v: 1, url: "https://commons.wikimedia.org/wiki/File:Some_Lake.jpg", wikidata: "Q2", languages: 3 },
     ]);
     expect(widePhotoFeatures({ nope: 1 })).toBeNull();
   });

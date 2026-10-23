@@ -214,6 +214,34 @@ function yesNo(value: string | undefined): boolean | undefined {
   return undefined;
 }
 
+/** Higher than Everest (8,849 m) or lower than the Dead Sea shore (-430 m): not an elevation on Earth's surface. */
+const ELE_MAX_M = 8_850;
+const ELE_MIN_M = -440;
+/**
+ * Eastern North America (east of 100° W, 26° N to 60° N; south of 26° N the Sierra Madre Oriental tops 3,500 m) has no
+ * ground above Mount Mitchell's 2,037 m. A unitless `ele` above 2,100 m there was typed in feet (Glassmine Falls near
+ * Asheville carried "5200", read as 5,200 m), so it is read as feet.
+ */
+const EAST_NA: BBox = [-100, 26, -52, 60];
+const EAST_NA_MAX_M = 2_100;
+
+/**
+ * An OSM `ele` in metres, made plausible: unit suffixes are read ("5200 ft", "5200'", "1585 m"); a unitless value
+ * above 2,100 m in eastern North America is taken as feet; anything above 8,850 m or below -440 m is dropped.
+ */
+export function plausibleEle(tag: string | undefined, at: [number, number] | number[] | null): number | undefined {
+  const m = metres(tag);
+  if (m === undefined) return undefined;
+  const unitless = tag !== undefined && /^\s*-?[\d.,]+\s*$/.test(tag);
+  let ele = m;
+  if (unitless && at && m > EAST_NA_MAX_M) {
+    const [lon, lat] = at;
+    const [w, s, e, n] = EAST_NA;
+    if (lon >= w && lon <= e && lat >= s && lat <= n) ele = Math.round(m * 0.3048 * 10) / 10;
+  }
+  return ele > ELE_MAX_M || ele < ELE_MIN_M ? undefined : ele;
+}
+
 /** Converts an Overpass `out tags center` response into points, one per OSM element, skipping anything unusable. */
 export function normalizeFeatures(json: unknown, allowed: readonly Kind[] = KINDS): FeatureCollection<Point> {
   const features: Feature<Point>[] = [];
@@ -237,7 +265,7 @@ export function normalizeFeatures(json: unknown, allowed: readonly Kind[] = KIND
 
     const properties: Props = { kind, osmId };
     if (tags.name) properties.name = tags.name;
-    const ele = metres(tags.ele);
+    const ele = plausibleEle(tags.ele, center);
     if (ele !== undefined) properties.ele = ele;
     if (kind === "peak" && ele !== undefined) properties.v = ele;
     const capacity = wholeNumber(tags.capacity) ?? wholeNumber(tags.beds);

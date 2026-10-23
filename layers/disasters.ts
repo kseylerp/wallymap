@@ -641,7 +641,7 @@ const disasters = defineLayer({
     "FEMA counties are added only when the view is under 3,000,000 km²; GDACS works at any size, up to 500 events per kind.",
   coverage: "global",
   surface: "any",
-  license: "GDACS (European Commission JRC and UN OCHA): free use with credit, no formal licence; FEMA data public domain; county outlines Esri / US Census Bureau",
+  license: "GDACS (European Commission JRC and UN OCHA): free use with credit, no formal licence; FEMA data public domain; county outlines US Census Bureau cartographic boundaries (public domain)",
   requiredEnv: [],
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,

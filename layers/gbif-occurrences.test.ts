@@ -298,7 +298,7 @@ describe("gbif-occurrences layer", () => {
 
   it("draws a month on the ad-hoc map in web Mercator, since the density endpoint ignores month", () => {
     expect(densityTileUrl(2474953, { from: 2016, to: 2026 }, [3, 4])).toBe(
-      "https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=purpleYellow.point&taxonKey=2474953&year=2016,2026&month=3&month=4",
+      "https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=purpleYellow.poly&bin=hex&hexPerTile=40&taxonKey=2474953&year=2016,2026&month=3&month=4",
     );
   });
 

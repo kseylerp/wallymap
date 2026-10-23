@@ -20,7 +20,7 @@
  *     2474953, Platte box -100.5,40.4,-97.5,41.2, 2016-2026: all months 8,537, month=3 6,457, month=3&month=4 7,852,
  *     month=12&month=1&month=2 355); a single "3,4" is a range, but a wrapping "12,1,2" or "3-4" is a 400. The density
  *     endpoint above IGNORES month (byte-identical tiles with and without it), so a month or season asks the ad-hoc map
- *     instead: https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=purpleYellow.point
+ *     instead: https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=purpleYellow.poly&bin=hex
  *     &taxonKey=K&year=A,B&month=3 (without srs it answers 204; with it March and July tiles differ, 9,441 vs 2,303 bytes
  *     at z4 over Nebraska), which takes the search's filters.
  *   Synonyms: /species/match on "Antigone canadensis" answers a SYNONYM (usageKey 9036008) with acceptedUsageKey 2474953
@@ -52,6 +52,9 @@ const DENSITY_URL = "https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@
 /** The ad-hoc map honours every search filter, month included (the density endpoint ignores month). */
 const ADHOC_URL = "https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png";
 const DENSITY_STYLE = "purpleYellow.point";
+/** The month map's hexagon style and size (GBIF's polygon style for binned maps). */
+const ADHOC_STYLE = "purpleYellow.poly";
+const ADHOC_HEX_PER_TILE = 40;
 
 const PAGE_SIZE = 300;
 const MAX_PAGES = 2;
@@ -204,7 +207,9 @@ export function searchUrl(
  */
 export function densityTileUrl(taxonKey: number | undefined, years: { from: number; to: number }, months?: number[]): string {
   const adhoc = months !== undefined && months.length > 0;
-  const parts = adhoc ? ["srs=EPSG:3857", `style=${DENSITY_STYLE}`] : [`style=${DENSITY_STYLE}`];
+  // The month map draws each record as one pixel, unreadable at a state's scale (Nebraska's March cranes on the Platte,
+  // 2026-10-23): it is binned into hexagons, about 13 px across, instead.
+  const parts = adhoc ? ["srs=EPSG:3857", `style=${ADHOC_STYLE}`, "bin=hex", `hexPerTile=${ADHOC_HEX_PER_TILE}`] : [`style=${DENSITY_STYLE}`];
   if (taxonKey !== undefined) parts.push(`taxonKey=${taxonKey}`);
   parts.push(`year=${years.from},${years.to}`);
   for (const m of months ?? []) parts.push(`month=${m}`);

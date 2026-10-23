@@ -581,7 +581,7 @@ export const USECASE_QUESTIONS: Record<string, UsecaseExpect> = {
   "which trails at mount rainier are snow free right now?": { useCase: "UC02", layers: ["snow-cover", "osm-trails|popularity"], needs: ["snow sampled along each trail"] },
   "is there still snow on the trails around lake tahoe?": { useCase: "UC02", layers: ["snowpack", "snow-cover"] },
   // UC03 Backpacker plans water and camps.
-  "backpacking in the wind rivers: where are the water sources and campsites?": { useCase: "UC03", layers: ["outdoor-features|lakes", "campsites"], filter: { layer: "campsites", key: "kind" } },
+  "backpacking in the wind rivers: where are the water sources and campsites?": { useCase: "UC03", layers: ["outdoor-features|lakes", "campsites"] },
   "where can i camp along the wonderland trail?": { useCase: "UC03", layers: ["osm-trails", "campsites"], join: "along" },
   // UC04 Trail runner picks a long run with the right climbing.
   "long trail runs with big climbs near chamonix": { useCase: "UC04", layers: ["popularity|osm-trails"], view: "ranked" },

@@ -607,7 +607,7 @@ const weatherForecast = defineLayer({
   requiredEnv: [],
   maxAreaKm2: 2_000_000,
   input: inputSchema,
-  style: { geometry: "point", color: layerColor("weather-forecast"), unit: "°F", encode: { color: "tempF" }, series: "hour", basemap: "outdoors" },
+  style: { geometry: "point", color: layerColor("weather-forecast"), unit: "°F", encode: { color: "tempF" }, series: "hour", basemap: "outdoors", samplesView: true },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,

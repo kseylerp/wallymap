@@ -5,7 +5,7 @@ import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type LoadedLayer, type MapAction, type MapState } from "@/lib/render/state";
 import { visibleState } from "@/lib/render/view";
 import { boundsOf, changeMeasures, defaultView, rankedMeasure, viewCaption, viewTarget } from "@/lib/render/views";
-import { buildDeckLayers, lostAreas } from "@/lib/render/deck";
+import { buildDeckLayers, buildDeckLayerSets, lostAreas } from "@/lib/render/deck";
 import { changeText } from "@/components/CompareControl";
 
 const square = (w: number, s: number, size: number): Polygon => ({
@@ -114,6 +114,35 @@ describe("a named place's answer fits the returned features (spec §12)", () => 
     expect(settled.camera?.bbox).toEqual([-111, 38, -109, 39]);
     const framed = run(s0, { type: "place_framed" }, { type: "layer_loaded", layer: layer("peaks", { geometry: "point", color: "#000" }, [point(-110, 38.5, {})]) });
     expect(framed.camera).toBeUndefined();
+  });
+});
+
+describe("a forecast beside the answer (Bishop boulders, 2026-10-23)", () => {
+  it("keeps the camera on the boulders when the forecast's timeline comes after them, and draws the forecast under them", () => {
+    const boulders = layer(
+      "climbing",
+      { geometry: "point", color: "#000" },
+      Array.from({ length: 12 }, (_, i) => point(-118.6 + i / 200, 37.33, { name: `Problem ${i}`, v: i + 1 })),
+      [{ key: "v", label: "Routes", type: "measure", encode: "size" }],
+    );
+    const forecast = layer("weather-forecast", { geometry: "point", color: "#000", samplesView: true }, [point(-118.31, 37.47, { name: "Forecast at the asked place", t: "2026-10-23T17:00:00Z" })]);
+    const ranked = run(
+      initialMapState,
+      { type: "place_named", bbox: [-118.79, 37.11, -117.83, 37.83] },
+      { type: "layer_loaded", layer: boulders },
+      { type: "layer_loaded", layer: forecast },
+      { type: "render", op: { layerId: "climbing", mode: "points", visible: true, view: "ranked" } },
+    );
+    const after = run(ranked, { type: "render", op: { layerId: "weather-forecast", mode: "points", visible: true, view: "timeline" } });
+    expect(after.camera).toEqual(ranked.camera);
+    expect(after.camera?.bbox[2]).toBeLessThan(-118.4);
+    // Alone, a forecast still frames its place.
+    const alone = run(initialMapState, { type: "place_named", bbox: [-118.79, 37.11, -117.83, 37.83] }, { type: "layer_loaded", layer: forecast }, { type: "render", op: { layerId: "weather-forecast", mode: "points", visible: true, view: "timeline" } });
+    expect(alone.camera).toBeDefined();
+    const ids = buildDeckLayerSets(visibleState(after), { mapboxToken: "" }).main.map((l) => l.id);
+    expect(ids.findIndex((id) => id.startsWith("weather-forecast"))).toBeLessThan(ids.findIndex((id) => id.startsWith("climbing")));
+    // The boulders are named on the map; the forecast point beside them is not (its long name ran off a phone's edge).
+    expect(ids.some((id) => id.startsWith("weather-forecast") && id.includes("labels"))).toBe(false);
   });
 });
 

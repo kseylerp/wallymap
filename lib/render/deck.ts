@@ -385,6 +385,8 @@ type OpContext = {
   labelInsets?: LabelInsets;
   /** The basemap on screen: hex tiles lighten over imagery. */
   basemap?: MapState["basemap"];
+  /** Points that sample the view beside a layer that answers (the forecast beside Bishop's boulders): no names on the map. */
+  beside?: boolean;
 };
 
 /** The floating panels' insets over a canvas of this size (MapCanvas reads them from the page). */
@@ -1175,6 +1177,8 @@ function labelLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   const area = geometry === "Polygon" || geometry === "MultiPolygon";
   const point = geometry === "Point" || geometry === "MultiPoint";
   if (!area && !point) return [];
+  // The answer's names are the map's: a forecast point beside them is named in its card and the time panel.
+  if (ctx.beside) return [];
   const rankKey = rankKeyOf(op, ctx);
   const spec = rankKey ? { field: "name", max: RANKED_LABELS, rankBy: rankKey } : ctx.layer ? layerLabels({ labels: ctx.layer.labels, card: ctx.layer.card }) : undefined;
   if (!spec || (spec.minZoom !== undefined && ctx.zoom < spec.minZoom)) return [];
@@ -2218,7 +2222,10 @@ export function buildDeckLayerSets(
   if (terrain) main.push(terrainSourceLayer(mapboxToken));
   const compare = state.compare;
   const mode = effectiveMode(state);
-  for (const op of state.renderOps) {
+  // Points that sample the view (the forecast) draw first, under the layers that answer (layers/types.ts samplesView).
+  const samples = (op: MapState["renderOps"][number]) => state.layers[op.layerId]?.style.samplesView === true;
+  const answered = state.renderOps.some((o) => o.visible && !samples(o) && state.layers[o.layerId]?.result.kind === "geojson");
+  for (const op of [...state.renderOps.filter(samples), ...state.renderOps.filter((o) => !samples(o))]) {
     if (!op.visible) continue;
     const loaded = state.layers[op.layerId];
     if (!loaded) continue;
@@ -2240,6 +2247,7 @@ export function buildDeckLayerSets(
       threeD: state.terrain && !state.flattened,
       labelInsets,
       basemap: state.basemap,
+      ...(answered && samples(op) && { beside: true }),
     };
     if (compare?.layerId !== op.layerId || !mode) {
       main.push(...safeLayersFor(op, ctx));

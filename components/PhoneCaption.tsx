@@ -74,7 +74,9 @@ function scenarioCaption(state: MapState, layer: LoadedLayer): string | undefine
 }
 
 export function PhoneCaption({ state, shown, onOpen, titleOf }: { state: MapState; shown: MapState["layers"]; onOpen: () => void; titleOf?: (layerId: string) => string | undefined }) {
-  const top = [...state.renderOps].reverse().find((op) => op.visible && state.layers[op.layerId]);
+  // The top layer that answers; a forecast beside it (samplesView) is captioned only alone.
+  const drawnOps = [...state.renderOps].reverse().filter((op) => op.visible && state.layers[op.layerId]);
+  const top = drawnOps.find((op) => !state.layers[op.layerId].style.samplesView) ?? drawnOps[0];
   const layer = top ? state.layers[top.layerId] : undefined;
   const drawn = layer ? shown[layer.id] : undefined;
   const compared = state.compare?.layerId === layer?.id ? state.compare : undefined;

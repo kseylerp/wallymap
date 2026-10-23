@@ -262,6 +262,12 @@ export type StyleHints = {
    * currents), `outdoors` (Topographical, with relief and place names) when the ground matters (wind over mountains).
    */
   basemap?: "data-only" | "outdoors";
+  /**
+   * The points sample the view rather than answer it (the weather forecast at the asked place and across it): when
+   * another layer answers the same question they never frame the camera and draw under its symbols, so the answer stays
+   * the primary visual (Bishop's boulders, 2026-10-23, were framed out of the view for the forecast point at Chalfant).
+   */
+  samplesView?: boolean;
 };
 
 /** Which attribute sizes a mark and which colors it (spec §13: "height is that day's flow, color is water temperature"). */

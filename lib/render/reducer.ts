@@ -453,7 +453,14 @@ export function applyView(state: MapState, layerId: string, view: ViewKind, name
     if (feature && at) next = { ...next, selected: { layerId, feature, lngLat: at } };
     lowerThird = true;
   }
+  // Points that sample the view (the forecast) never frame it while another layer answers there: the answer keeps it.
+  if (layer.style.samplesView && answersBeside(next, layerId)) return next;
   return fitCamera(next, viewTarget(view, layer, op.filters) ?? (next.place && !next.place.moved ? next.place.bbox : null), lowerThird);
+}
+
+/** True when a visible layer other than `layerId` draws features of its own (not a sampling of the view). */
+function answersBeside(state: MapState, layerId: string): boolean {
+  return state.renderOps.some((o) => o.layerId !== layerId && o.visible && state.layers[o.layerId]?.result.kind === "geojson" && !state.layers[o.layerId]?.style.samplesView);
 }
 
 /**

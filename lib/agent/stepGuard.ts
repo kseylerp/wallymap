@@ -212,7 +212,11 @@ async function placeForStep(calls: DraftCall[], turn: Turn): Promise<{ text: str
  * Nation"}<|call|>"), parsed back into calls; empty when the text holds none.
  */
 export function leakedCalls(text: string): { toolName: string; input: Record<string, unknown> }[] {
-  if (!text.includes("to=functions.")) return [];
+  if (!text.includes("to=functions.")) {
+    // The note's input written as the answer ('{ "markdown": "Map shows…" }', fly fishing near Asheville, 2026-10-23).
+    const note = leadingObject(text);
+    return note && typeof note.markdown === "string" && note.markdown.trim() !== "" ? [{ toolName: "note", input: { markdown: note.markdown } }] : [];
+  }
   const out: { toolName: string; input: Record<string, unknown> }[] = [];
   for (const segment of text.split("<|call|>")) {
     const m = /to=functions\.([\w-]+)[\s\S]*?(\{[\s\S]*\})\s*$/.exec(segment.replace(/<\|(?:end|return)\|>\s*$/, "").trim());
@@ -225,6 +229,31 @@ export function leakedCalls(text: string): { toolName: string; input: Record<str
     }
   }
   return out;
+}
+
+/** The JSON object a text opens with, when it opens with one; null otherwise. */
+function leadingObject(text: string): Record<string, unknown> | null {
+  const t = text.trimStart();
+  if (!t.startsWith("{")) return null;
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (inString) {
+      if (ch === "\\") i++;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}" && --depth === 0) {
+      try {
+        const value: unknown = JSON.parse(t.slice(0, i + 1));
+        return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
 }
 
 /** The guard's rules on one proposed step. Pure apart from place lookups (shared with the geocode tool through `turn`). */

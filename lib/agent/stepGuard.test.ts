@@ -259,6 +259,11 @@ describe("step guard: a tool call written as text", () => {
       { toolName: "query_uranium", input: { bbox: [-112, 35, -107, 38] } },
     ]);
     expect(leakedCalls("Lake Tahoe is 501 m deep.")).toEqual([]);
+    // The note's input written out as the answer, followed by a copy of its lines.
+    expect(leakedCalls('{\n  "markdown": "Map shows public lands.\\n- **French Broad River Greenway Access**: 54 °F {good}."\n}- French Broad River Greenway Access')).toEqual([
+      { toolName: "note", input: { markdown: "Map shows public lands.\n- **French Broad River Greenway Access**: 54 °F {good}." } },
+    ]);
+    expect(leakedCalls('{"place": "Moab"}')).toEqual([]);
   });
 
   it("runs it as the call, and the turn goes on", async () => {

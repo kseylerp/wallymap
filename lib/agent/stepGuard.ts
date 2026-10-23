@@ -4,7 +4,8 @@ import type { BBox } from "@/layers/types";
 import { bboxAreaKm2, hardMaxAreaKm2 } from "@/layers/types";
 import type { GeocodeResult } from "./geocode";
 import { placeCandidates } from "./places";
-import { NOTE_MAX_WORDS, noteWords, trimNote } from "./noteCheck";
+import { groundedNote, NOTE_MAX_WORDS, noteWords, trimNote } from "./noteCheck";
+import { applyReading } from "./readingGuard";
 import { asksChange, normalizeRenderInput } from "./renderInput";
 import { canonicalLayerId, repairToolName } from "./toolNames";
 import { widerScaleFor, widerScaleHints } from "./tools";
@@ -259,8 +260,25 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
     return call;
   });
 
-  // 2. A smaller box inside one a wide strategy already answered for the same layer and inputs: drop it.
+  // 1b. The question's reading (lib/agent/readingGuard.ts): river names, time and phrase inputs, layers the words rule
+  // out or name, and renders of layers never queried. Queries it adds answer before the note, so a note in the same
+  // step waits for them.
   const rejected: Decision["rejected"] = [];
+  const read = applyReading(calls, turn, turn.step >= MAX_STEPS - 2 && !turn.noted);
+  rejected.push(...read.rejected);
+  let deferred = false;
+  if (read.changed) {
+    changed = true;
+    const before = new Set(calls.map((c) => c.toolCallId));
+    calls = read.calls;
+    if (calls.some((c) => !before.has(c.toolCallId) && isQuery(c.toolName)) && calls.some((c) => c.toolName === "note")) {
+      calls = calls.filter((c) => c.toolName !== "note");
+      deferred = true;
+      turn.note("note held back: the question's layers are queried first");
+    }
+  }
+
+  // 2. A smaller box inside one a wide strategy already answered for the same layer and inputs: drop it.
   calls = calls.filter((c) => {
     if (!isQuery(c.toolName) || !isBBox(c.input.bbox)) return true;
     const layerId = layerOf(c.toolName);
@@ -424,6 +442,28 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
     }
   }
 
+  // 3c. A question that relates two layers ("outside protected areas", "in drought") ends with the combine tool's join,
+  // not two layers to compare by eye: a note before it is held back once, naming the layers to join.
+  if (calls.some((c) => c.toolName === "combine")) turn.readingAdded.add("combine");
+  const joinAsk = turn.reading.combine;
+  if (joinAsk && toolNames.includes("combine") && !turn.readingAdded.has("combine") && calls.some((c) => c.toolName === "note")) {
+    const answered = [...new Set(turn.queries.filter((q) => q.ok && q.drawable).map((q) => q.layerId))].filter((id) => getLayer(id)?.style.geometry !== undefined);
+    if (joinAsk.op === "drive_time" ? answered.length >= 1 : answered.length >= 2) {
+      const [a, b] = combineSides(answered, joinAsk.op);
+      const note = calls.find((c) => c.toolName === "note") as DraftCall;
+      rejected.push({
+        call: note,
+        reason:
+          `Not shown yet: the question asks "${joinAsk.because}", which the combine tool answers. Call combine with op "${joinAsk.op}", a ${a}${b ? `, b ${b}${joinAsk.match ? ` (match "${joinAsk.match}")` : ""}` : ""}` +
+          `${joinAsk.minutes ? `, minutes ${joinAsk.minutes}` : ""}${joinAsk.distance ? `, distance ${joinAsk.distance} ${joinAsk.unit ?? "km"}` : ""}, then write the note from its counts.`,
+      });
+      calls = calls.filter((c) => c.toolName !== "note");
+      turn.readingAdded.add("combine");
+      turn.note(`note held back: the question asks "${joinAsk.because}" and combine was not called`);
+      changed = true;
+    }
+  }
+
   // 4. Ending the turn with queries never drawn: render them first, in the layer's default view.
   const hasNote = calls.some((c) => c.toolName === "note");
   // A step whose calls were all dropped is asked again, not ended.
@@ -448,9 +488,17 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
   }
   // 5. A text-only answer (no note this turn) is the answer, held to the note's word limit like a note.
   let text: string | undefined;
-  if (!hasNote && calls.length === 0 && rejected.length === 0 && !dropText && !leakedText && !turn.noted && draft.text && noteWords(draft.text) > NOTE_MAX_WORDS) {
-    text = trimNote(draft.text);
-    turn.note(`closing text with no note cut from ${noteWords(draft.text)} to ${noteWords(text)} words`);
+  const closing = !hasNote && calls.length === 0 && rejected.length === 0 && !dropText && !leakedText && !turn.noted && !!draft.text;
+  // Its numbers and names are held to the results like a note's: what no result holds is cut (no step to rewrite it).
+  const grounded = closing && draft.text ? groundedNote(draft.text, turn) : null;
+  if (grounded !== null) {
+    text = grounded;
+    changed = true;
+  }
+  if (closing && noteWords(text ?? draft.text ?? "") > NOTE_MAX_WORDS) {
+    const before = text ?? draft.text ?? "";
+    text = trimNote(before);
+    turn.note(`closing text with no note cut from ${noteWords(before)} to ${noteWords(text)} words`);
     changed = true;
   }
   // 6. A data story's answer has the data's shape (spec §13): the low and the peak with numbers and dates, and what size
@@ -483,7 +531,21 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
       }
     }
   }
-  return { calls, dropText: dropText || leakedText, rejected, changed, ...(text !== undefined && { text }) };
+  return { calls, dropText: dropText || leakedText || deferred, rejected, changed, ...(text !== undefined && { text }) };
+}
+
+/**
+ * Which answered layer is a (the things kept) and which b (what they are tested against): an area layer is b for
+ * within, outside and overlap (the first answered of two areas is a), a line layer for along; otherwise the order the
+ * question was answered in.
+ */
+export function combineSides(answered: string[], op: string): [string, string | undefined] {
+  if (op === "drive_time") return [answered[0], undefined];
+  const geometry = (id: string) => getLayer(id)?.style.geometry;
+  const want = op === "along" ? "line" : op === "near" ? undefined : "polygon";
+  const b = want ? (answered.slice().reverse().find((id) => geometry(id) === want && answered.some((x) => x !== id)) ?? answered[1]) : answered[answered.length - 1];
+  const a = answered.find((id) => id !== b) ?? answered[0];
+  return [a, b];
 }
 
 /** True when an answer gives a low (or weakest) and a peak (or strongest). */

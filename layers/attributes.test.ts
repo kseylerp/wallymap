@@ -54,7 +54,7 @@ describe("attribute declarations (spec §12c) are checked at registry load", () 
 
   it.each([
     ["climbing", "disciplines", "v"],
-    ["osm-trails", "sac_scale", undefined],
+    ["osm-trails", "sac_scale", "lengthKm"],
     ["mtb-trails", "v", undefined],
     ["ski-routes", "kind", undefined],
     ["paddling", "kind", undefined],

@@ -135,6 +135,21 @@ export function nearPlace(question: string): string | null {
   return candidate ?? null;
 }
 
+/** The place after "off" in a question ("whales off Monterey" → "Monterey"): the sea next to it, or null. */
+export function offPlace(question: string): string | null {
+  const m = /\boff\s+(?:the\s+(?:coast\s+of\s+)?)?(.+)$/i.exec(question.replace(/@view=\S+/g, "").trim());
+  if (!m) return null;
+  const rest = m[1];
+  return placeCandidates(question).find((p) => rest.toLowerCase().startsWith(p.toLowerCase())) ?? null;
+}
+
+/**
+ * How far "off <coastal town>" reaches, in km: a town's own box is land, and the whales, swell or currents asked about
+ * are at sea beyond it (whales off Monterey were in the bay, outside the city's box). A box this wide around the town
+ * holds the water next to it on any side.
+ */
+export const OFF_RADIUS_KM = 40;
+
 /** A radius the user gave ("within 80 km", "within 20 miles"), in km, or null. */
 export function statedRadiusKm(question: string): number | null {
   const m = /\bwithin\s+(\d+(?:\.\d+)?)\s*(km|kilomet(?:er|re)s?|mi|miles?)\b/i.exec(question);

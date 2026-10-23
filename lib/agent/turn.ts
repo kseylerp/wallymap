@@ -1,6 +1,12 @@
 import type { UIMessage } from "ai";
 import { bboxAreaKm2, type BBox, type Layer } from "@/layers/types";
 import { geocode as mapboxGeocode, type GeocodeError, type GeocodeResult } from "./geocode";
+import { placeCandidates } from "./places";
+import { readQuestion, type Reading } from "./reading";
+import { lookupRegion } from "./regionNames";
+
+/** Words that make a question about land and what grows on it, where a bare name may be a national forest. */
+const LAND_WORDS = /\b(?:forests?|trees?|beetles?|timber|logging|burn\w*|fires?|wildfires?|wilderness|old[- ]growth|die-?off|mortality)\b/i;
 import type { MapView } from "./view";
 
 /**
@@ -38,6 +44,14 @@ export type Geocoder = (place: string, opts?: { proximity?: [number, number] }) 
 
 export type Turn = {
   question: string;
+  /** The app's own reading of the question (lib/agent/reading.ts): layers, filters, inputs and the time window its words name. */
+  reading: Reading;
+  /** When the turn started: "today" for the time window and the note's dates. */
+  now: Date;
+  /** Every tool result the model saw this turn (query summaries, geocodes, routes), for the note's grounding check. */
+  outputs: unknown[];
+  /** Layers the step guard queried because the question's words name them (each once per turn). */
+  readingAdded: Set<string>;
   view: MapView | null;
   queries: QueryRecord[];
   /** Layers rendered or compared this turn. */
@@ -73,10 +87,56 @@ export function placeKey(place: string): string {
   return place.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
-export function createTurn({ question = "", view = null, geocoder = mapboxGeocode }: { question?: string; view?: MapView | null; geocoder?: Geocoder } = {}): Turn {
+export function createTurn({
+  question = "",
+  view = null,
+  geocoder = mapboxGeocode,
+  now = new Date(),
+  regions = geocoder === mapboxGeocode ? lookupRegion : undefined,
+}: { question?: string; view?: MapView | null; geocoder?: Geocoder; now?: Date; regions?: typeof lookupRegion } = {}): Turn {
   const lookups = new Map<string, Promise<GeocodeResult | GeocodeError>>();
-  return {
+  const context = new Map<string, Promise<GeocodeResult | GeocodeError>>();
+
+  /** Where the question is about, besides `place`: the last place found this turn, else another place it names. */
+  async function contextPoint(place: string): Promise<[number, number] | undefined> {
+    // The turn itself (built below): the places it found so far bias the next lookup.
+    const found = self.places;
+    if (found.length > 0) return found[found.length - 1].center;
+    const asked = place.toLowerCase();
+    const others = placeCandidates(question).filter((p) => !asked.includes(p.toLowerCase()) && !p.toLowerCase().includes(asked.split(",")[0].trim()));
+    for (const other of others.slice(0, 2)) {
+      let answer = context.get(other.toLowerCase());
+      if (!answer) {
+        answer = geocoder(other, {});
+        context.set(other.toLowerCase(), answer);
+      }
+      const r = await answer;
+      if (!("error" in r)) return r.center;
+    }
+    return undefined;
+  }
+
+  /**
+   * The public-land unit a bare name means when the question is about land (trees, fire, trails, camping): "beetle kill
+   * in the Medicine Bow" is the Medicine Bow National Forest, not the town of Medicine Bow, Wyoming.
+   */
+  async function landUnit(place: string, result: GeocodeResult | GeocodeError): Promise<GeocodeResult | null> {
+    if (!regions || "error" in result || result.source !== "mapbox" || !LAND_WORDS.test(question)) return null;
+    const [w, s, e, n] = result.bbox;
+    const name = place.split(",")[0].trim();
+    if (e - w > 1.5 || n - s > 1.5 || /\b(?:national|forest|park|wilderness|county|city|town|lake|river|mountains?|range)\b/i.test(name)) return null;
+    const unit = await regions(`${name} National Forest`, result.center, { naturalEarth: async () => null });
+    // The forest of that name, close to the town that shares it.
+    if (!unit || Math.hypot(unit.center[0] - result.center[0], unit.center[1] - result.center[1]) > 2) return null;
+    return unit;
+  }
+
+  const self: Turn = {
     question,
+    reading: readQuestion(question, now),
+    now,
+    outputs: [],
+    readingAdded: new Set(),
     view,
     queries: [],
     drawn: new Set(),
@@ -94,8 +154,13 @@ export function createTurn({ question = "", view = null, geocoder = mapboxGeocod
       const key = placeKey(place);
       let found = lookups.get(key);
       if (!found) {
-        // Bias toward what the user is looking at, when they are looking at somewhere (not the whole globe).
-        found = geocoder(place, view?.bbox ? { proximity: view.center } : {});
+        found = (async () => {
+          // Bias toward what the user is looking at, when they are looking at somewhere (not the whole globe); else
+          // toward the places this turn already found or the question's other places ("Red Rock near Las Vegas").
+          const proximity = view?.bbox ? view.center : await contextPoint(place);
+          const result = await geocoder(place, proximity ? { proximity } : {});
+          return (await landUnit(place, result)) ?? result;
+        })();
         lookups.set(key, found);
       }
       return found;
@@ -105,6 +170,7 @@ export function createTurn({ question = "", view = null, geocoder = mapboxGeocod
       console.info(`[turn] ${line}`);
     },
   };
+  return self;
 }
 
 /** The text of the last user message: the question this turn answers. */

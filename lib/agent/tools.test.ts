@@ -128,12 +128,16 @@ describe("buildTools", () => {
       const first = await run(tools.geocode, { place: "Lake Tahoe" });
       expect(first).not.toHaveProperty("repeated");
       expect(await run(tools.geocode, { place: "lake  tahoe." })).toEqual({ ...(first as object), repeated: true });
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      // Lake Tahoe is a feature name, so OpenStreetMap and Wikidata are asked before Mapbox; each once.
+      const mapbox = () => fetchMock.mock.calls.map((c) => new URL(String((c as unknown[])[0]))).filter((u) => u.host === "api.mapbox.com");
+      const asked = fetchMock.mock.calls.length;
+      expect(mapbox()).toHaveLength(1);
       // The lookup leans toward the place on screen.
-      expect(new URL(String((fetchMock.mock.calls[0] as unknown[])[0])).searchParams.get("proximity")).toBe("-120,39");
-      // A new turn (new tools) asks Mapbox again.
+      expect(mapbox()[0].searchParams.get("proximity")).toBe("-120,39");
+      // A new turn (new tools) asks again.
       await run(buildTools().geocode, { place: "Lake Tahoe" });
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(mapbox()).toHaveLength(2);
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(asked);
     } finally {
       vi.unstubAllGlobals();
     }

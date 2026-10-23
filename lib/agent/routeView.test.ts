@@ -65,11 +65,19 @@ describe("POST /api/chat with a map view", () => {
   ])("ignores a malformed view (%s) and answers anyway", async (_label, view) => {
     const res = await POST(post({ messages: [userMessage], view }));
     expect(res.status).toBe(200);
-    expect(captured.system).toEqual([SYSTEM_PROMPT]);
+    // The plain prompt, with no view line; the question's reading follows it (lib/agent/reading.ts).
+    const [system] = captured.system as string[];
+    expect(system.startsWith(SYSTEM_PROMPT)).toBe(true);
+    expect(system).not.toContain("Current map view: ");
+    expect(system).toContain("Reading of this question");
   });
 
   it("sends the plain prompt when no view is given", async () => {
     await POST(post({ messages: [userMessage] }));
-    expect(captured.system).toEqual([SYSTEM_PROMPT]);
+    // The plain prompt, with no view line; the question's reading follows it (lib/agent/reading.ts).
+    const [system] = captured.system as string[];
+    expect(system.startsWith(SYSTEM_PROMPT)).toBe(true);
+    expect(system).not.toContain("Current map view: ");
+    expect(system).toContain("Reading of this question");
   });
 });

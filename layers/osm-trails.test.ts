@@ -74,7 +74,7 @@ describe("osm-trails layer", () => {
     const stub = vi.fn();
     const r = await layer.query(
       { bbox: [-125, 30, -110, 45], zoom: 5, env: {}, fetch: stub as unknown as CachedFetch },
-      { namedOnly: false },
+      { namedOnly: false, ways: false },
     );
     expect(r).toMatchObject({ hint: "zoom_in" });
     expect((r as { error: string }).error).toContain("under 400000 km²");
@@ -85,7 +85,7 @@ describe("osm-trails layer", () => {
     const stub = vi.fn(async () => new Response("slow down", { status: 429 }));
     const r = await layer.query(
       { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch },
-      { namedOnly: false },
+      { namedOnly: false, ways: false },
     );
     expect(r).toMatchObject({ hint: "upstream", error: "Overpass returned 429" });
     expect(stub).toHaveBeenCalledTimes(2);
@@ -95,7 +95,7 @@ describe("osm-trails layer", () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
     const r = await layer.query(
       { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch },
-      { namedOnly: false },
+      { namedOnly: false, ways: false },
     );
     expect(stub).toHaveBeenCalledTimes(1);
     expect(r).toMatchObject({ kind: "geojson" });
@@ -108,7 +108,7 @@ describe("osm-trails layer", () => {
     const stub = vi.fn(async () => new Response("slow down", { status: 429 }));
     await layer.query(
       { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch, cacheKey: "osm-trails:k" },
-      { namedOnly: false },
+      { namedOnly: false, ways: false },
     );
     const keys = stub.mock.calls.map((call: unknown[]) => (call[1] as { cacheKey?: string }).cacheKey);
     expect(keys[0]).toMatch(/^osm-trails:k:overpass:[0-9a-f]+$/);
@@ -119,7 +119,7 @@ describe("osm-trails layer", () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
     await layer.query(
       { bbox: TAHOE, zoom: 11, env: { OVERPASS_URL: "" }, fetch: stub as unknown as CachedFetch },
-      { namedOnly: false },
+      { namedOnly: false, ways: false },
     );
     expect(stub.mock.calls.map((call: unknown[]) => call[0])).toEqual(["https://overpass-api.de/api/interpreter"]);
   });
@@ -130,7 +130,7 @@ describe("osm-trails layer", () => {
     });
     const r = await layer.query(
       { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch },
-      { namedOnly: false },
+      { namedOnly: false, ways: false },
     );
     expect(r).toMatchObject({ hint: "upstream" });
     expect((r as { error: string }).error).toContain("timed out");
@@ -144,7 +144,7 @@ describe("osm-trails layer", () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
     const r = await layer.query(
       { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch },
-      { namedOnly: false, sacScaleMax: "hiking" },
+      { namedOnly: false, ways: false, sacScaleMax: "hiking" },
     );
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     const scales = r.data.features.map((f) => f.properties?.sac_scale as string | undefined);
@@ -160,7 +160,7 @@ describe("osm-trails layer", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(fixture), { status: 200 }));
     const r = await layer.query(
       { bbox: TAHOE, zoom: 11, env, fetch: stub as unknown as CachedFetch },
-      { namedOnly: false },
+      { namedOnly: false, ways: false },
     );
     expect(r).toMatchObject({ kind: "geojson" });
     expect(stub.mock.calls.map((c) => c[0])).toEqual([
@@ -176,7 +176,7 @@ describe("osm-trails layer", () => {
     );
     const r = await layer.query(
       { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch },
-      { namedOnly: false },
+      { namedOnly: false, ways: false },
     );
     expect(r).toMatchObject({ hint: "upstream" });
     expect((r as { error: string }).error).toContain("Query timed out");
@@ -187,7 +187,7 @@ describe("osm-trails layer", () => {
     const stub = vi.fn(async () => new Response(JSON.stringify({ version: 0.6 }), { status: 200 }));
     const r = await layer.query(
       { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch },
-      { namedOnly: false },
+      { namedOnly: false, ways: false },
     );
     expect(r).toMatchObject({ hint: "upstream" });
     expect(stub).toHaveBeenCalledTimes(2);
@@ -219,7 +219,7 @@ describe("osm-trails layer", () => {
       ...Array.from({ length: 100 }, (_, i) => way(100_000 + i, true)),
     ];
     const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
-    const r = await layer.query({ bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch }, { namedOnly: false });
+    const r = await layer.query({ bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch }, { namedOnly: false, ways: false });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(MAX_TRAILS);
     expect(r.data.features.slice(0, 100).every((f) => typeof f.properties?.name === "string")).toBe(true);
@@ -229,14 +229,37 @@ describe("osm-trails layer", () => {
   it("notes a cut made upstream even when fewer than MAX_TRAILS came back", async () => {
     const elements = [{ type: "count", id: 0, tags: { ways: "5000" } }, ...fixture.elements];
     const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
-    const r = await layer.query({ bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch }, { namedOnly: true });
+    const r = await layer.query({ bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch }, { namedOnly: true, ways: false });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.coverageNote).toMatch(/^Showing \d[\d,]* of 5,000 trail ways in this box/);
   });
 
+  it("answers whole hikes: the ways of one name that touch are one trail, and ways: true keeps them apart", async () => {
+    const piece = (id: number, from: [number, number], to: [number, number]) => ({
+      type: "way",
+      id,
+      tags: { highway: "path", name: "Rubicon Trail", sac_scale: "hiking" },
+      geometry: [
+        { lat: from[1], lon: from[0] },
+        { lat: to[1], lon: to[0] },
+      ],
+    });
+    const elements = [piece(1, [-120.1, 38.95], [-120.09, 38.96]), piece(2, [-120.09, 38.96], [-120.08, 38.97])];
+    const stub = vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 }));
+    const ctx = { bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch };
+    const r = await layer.query(ctx, { namedOnly: false, ways: false });
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.data.features).toHaveLength(1);
+    expect(r.data.features[0].properties).toMatchObject({ name: "Rubicon Trail", ways: 2, shape: "out-and-back", sac_scale: "hiking" });
+    expect(r.coverageNote).toBe("1 trail (the named ways joined into whole hikes) from 2 trail ways");
+    const raw = await layer.query(ctx, { namedOnly: false, ways: true });
+    if (!("kind" in raw) || raw.kind !== "geojson") throw new Error("expected geojson");
+    expect(raw.data.features).toHaveLength(2);
+  });
+
   it("adds no coverage note when nothing was cut", async () => {
     const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
-    const r = await layer.query({ bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch }, { namedOnly: false });
+    const r = await layer.query({ bbox: TAHOE, zoom: 11, env: {}, fetch: stub as unknown as CachedFetch }, { namedOnly: false, ways: false });
     expect(r).not.toHaveProperty("coverageNote");
   });
 });
@@ -345,7 +368,7 @@ describe("osm-trails named routes over a wide box", () => {
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(routeScan), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(routeGeometry), { status: 200 }));
-    const r = await layer.query(ctx(stub), { namedOnly: false });
+    const r = await layer.query(ctx(stub), { namedOnly: false, ways: false });
     expect(stub).toHaveBeenCalledTimes(2);
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features[0].properties?.name).toBe("Piste de Bélizon");
@@ -356,7 +379,7 @@ describe("osm-trails named routes over a wide box", () => {
 
   it("says so when the box holds no named routes, without a second call", async () => {
     const stub = vi.fn(async () => new Response(JSON.stringify({ elements: [{ type: "count", id: 0, tags: { relations: "0" } }] }), { status: 200 }));
-    const r = await layer.query(ctx(stub), { namedOnly: false });
+    const r = await layer.query(ctx(stub), { namedOnly: false, ways: false });
     expect(stub).toHaveBeenCalledTimes(1);
     expect(r).toMatchObject({ kind: "geojson", coverageNote: routesNote(0, 0) });
     expect(routesNote(0, 0)).toContain("No named hiking routes");
@@ -365,7 +388,7 @@ describe("osm-trails named routes over a wide box", () => {
 
   it("maps a failing scan to an upstream error", async () => {
     const stub = vi.fn(async () => new Response("busy", { status: 429 }));
-    expect(await layer.query(ctx(stub), { namedOnly: false })).toMatchObject({ hint: "upstream" });
+    expect(await layer.query(ctx(stub), { namedOnly: false, ways: false })).toMatchObject({ hint: "upstream" });
   });
 
   it("describes both scales for the model", () => {
@@ -403,7 +426,7 @@ describe("osm-trails named routes over a wide box", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(routeScan), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(routeGeometry), { status: 200 }));
     const wide = { mode: "named" as const, orderBy: "length in km", limit: 2 };
-    const r = await layer.query({ ...ctx(stub), wide: true, wideStrategy: wide }, { namedOnly: false });
+    const r = await layer.query({ ...ctx(stub), wide: true, wideStrategy: wide }, { namedOnly: false, ways: false });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.total).toBe(17);
     expect(r.coverageNote).toBeUndefined();

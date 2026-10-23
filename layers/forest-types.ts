@@ -51,7 +51,7 @@ const CITATION_SOURCE =
   "Forest Typology (ForTy) 2020 v1.0 and yearly beta 2017–2025, Google DeepMind, World Resources Institute and IIASA " +
   "(CC BY 4.0); Neumann et al., Scientific Data (2026); via Google Earth Engine";
 // The paper as the dataset's Earth Engine page cites it (EarthArXiv, May 2026); the row's source line names the makers instead of the host.
-const CITATION_URL = "https://doi.org/10.31223/X58R27";
+const CITATION_URL = "https://www.nature.com/articles/s41597-026-08299-5";
 const CITATION_LABEL = "Google DeepMind, WRI, IIASA (ForTy, CC BY 4.0)";
 const LICENSE = "CC BY 4.0 (Google DeepMind, WRI, IIASA; Neumann et al., Scientific Data 2026)";
 

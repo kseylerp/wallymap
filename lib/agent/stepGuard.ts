@@ -475,11 +475,13 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
   // not two layers to compare by eye: a note before it is held back once, naming the layers to join.
   if (calls.some((c) => c.toolName === "combine")) turn.readingAdded.add("combine");
   const joinAsk = turn.reading.combine;
-  if (joinAsk && toolNames.includes("combine") && !turn.readingAdded.has("combine") && calls.some((c) => c.toolName === "note")) {
+  // An answer written as plain text, with no note, is held back the same way (wild horses in drought, 2026-10-23 full run).
+  const textEnding = calls.length === 0 && rejected.length === 0 && draft.hasText && !turn.noted;
+  if (joinAsk && toolNames.includes("combine") && !turn.readingAdded.has("combine") && (calls.some((c) => c.toolName === "note") || textEnding)) {
     const answered = [...new Set(turn.queries.filter((q) => q.ok && q.drawable).map((q) => q.layerId))].filter((id) => getLayer(id)?.style.geometry !== undefined);
     if (joinAsk.op === "drive_time" ? answered.length >= 1 : answered.length >= 2) {
       const [a, b] = combineSides(answered, joinAsk.op);
-      const note = calls.find((c) => c.toolName === "note") as DraftCall;
+      const note = (calls.find((c) => c.toolName === "note") as DraftCall | undefined) ?? { toolCallId: guardId(), toolName: "note", input: { markdown: draft.text ?? "" } };
       rejected.push({
         call: note,
         reason:

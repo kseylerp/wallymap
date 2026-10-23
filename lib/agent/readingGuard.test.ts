@@ -117,6 +117,12 @@ describe("the combine tool", () => {
     const held = await decideStep({ calls: [call("note", { markdown: "Herds and drought are drawn." })], hasText: false }, turn, tools);
     expect(held.calls).toEqual([]);
     expect(held.rejected[0].reason).toContain('Call combine with op "overlap", a grazing-allotments, b drought');
+    // An answer written as plain text is held back the same way.
+    const texted = turnFor("Wild horse areas in Nevada that are in drought right now");
+    texted.queries.push(...turn.queries);
+    texted.drawn.add("grazing-allotments").add("drought");
+    const heldText = await decideStep({ calls: [], hasText: true, text: "Herds and drought are drawn." }, texted, tools);
+    expect(heldText.rejected[0].reason).toContain('Call combine with op "overlap"');
     // Once only; and never without the tool.
     expect((await decideStep({ calls: [call("note", { markdown: "Herds and drought are drawn." })], hasText: false }, turn, tools)).calls.map((c) => c.toolName)).toEqual(["note"]);
     const without = turnFor("Wild horse areas in Nevada that are in drought right now");

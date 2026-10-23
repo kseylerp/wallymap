@@ -445,6 +445,9 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: T
     execute: async ({ bbox: asked, zoom, ...input }) => {
       const bbox = queryBox(turn, layer.id, asked);
       const view = fromView(bbox);
+      // A layer that reads one point (the weather forecast's asked place) gets the place found this turn, when in the box.
+      const c = turn.place?.center;
+      if (c && "at" in layer.input.shape && input.at === undefined && c[0] >= bbox[0] && c[0] <= bbox[2] && c[1] >= bbox[1] && c[1] <= bbox[3]) input.at = c;
       const body = (await runLayer(layer.id, { bbox, zoom, input, fromView: view })).body;
       const ok = !("error" in body);
       const highest = "kind" in body && body.kind === "geojson" ? highestOf(body.data.features, { ...layer.style, attributes: layer.attributes }) : undefined;

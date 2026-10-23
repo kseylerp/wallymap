@@ -49,6 +49,7 @@ const HOUR_MS = 3_600_000;
 
 const inputSchema = z.object({
   days: z.number().int().min(1).max(7).default(7).describe("Days of forecast from today, 1 to 7 (default 7)"),
+  at: z.tuple([z.number(), z.number()]).optional().describe("The asked place as [lon, lat]; set by the app from the place found"),
 });
 
 /** One hour at one point, in the units people read in the US. */
@@ -465,9 +466,11 @@ function coordText([lon, lat]: [number, number]): string {
 }
 
 /** The asked place and, for a wide view, four points halfway from it to the corners. */
-export function forecastPoints(bbox: [number, number, number, number]): { at: [number, number]; kind: "here" | "area" }[] {
+export function forecastPoints(bbox: [number, number, number, number], at?: [number, number]): { at: [number, number]; kind: "here" | "area" }[] {
   const [w, s, e, n] = bbox;
-  const c: [number, number] = [(w + e) / 2, (s + n) / 2];
+  // The asked place (the town or park found, not the middle of its box: Bishop's box centred on Chalfant), else the middle.
+  const inside = at !== undefined && at[0] >= w && at[0] <= e && at[1] >= s && at[1] <= n;
+  const c: [number, number] = inside ? at : [(w + e) / 2, (s + n) / 2];
   const out: { at: [number, number]; kind: "here" | "area" }[] = [{ at: c, kind: "here" }];
   const widthKm = (e - w) * 111.32 * Math.cos((c[1] * Math.PI) / 180);
   const heightKm = (n - s) * 110.57;
@@ -616,7 +619,7 @@ const weatherForecast = defineLayer({
   async query(ctx, input): Promise<LayerResult | LayerError> {
     const nowDate = new Date();
     const times = hourAxis(nowDate, input.days);
-    const points = forecastPoints(ctx.bbox);
+    const points = forecastPoints(ctx.bbox, input.at);
     const here = points[0].at;
     const us = inUs(here);
     let forecasts: (PointForecast | null)[] = us

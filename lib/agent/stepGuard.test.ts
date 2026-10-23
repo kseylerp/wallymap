@@ -598,3 +598,14 @@ describe("step guard: a data story says what size and color mean", () => {
     expect(out).toContain(meaning);
   });
 });
+
+describe("query tools: the asked place", () => {
+  it("gives the weather forecast the place found this turn as its point", async () => {
+    const turn = createTurn({ question: "Will it rain at Lake Tahoe this weekend?", geocoder });
+    const tools = buildTools({ turn });
+    await tools.geocode.execute!({ place: "Lake Tahoe" }, { toolCallId: "g", messages: [] } as never);
+    await tools["query_weather-forecast"].execute!({ bbox: TAHOE }, { toolCallId: "q", messages: [] } as never);
+    const call = runLayer.mock.calls.find((c) => c[0] === "weather-forecast");
+    expect(call?.[1].input).toMatchObject({ at: [-120.04, 39.1] });
+  });
+});

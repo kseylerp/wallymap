@@ -134,3 +134,12 @@ describe("weather-forecast story", () => {
     expect(story?.caption).toMatch(/^Temperature at Forecast at the asked place: lowest 52 °F on 2026-10-24 12:00 UTC, highest 67 °F on 2026-10-24 15:00 UTC/);
   });
 });
+
+describe("the asked place", () => {
+  it("is the place found, not the middle of its box, when it lies in the box", () => {
+    const bishopBox: [number, number, number, number] = [-118.790033, 37.11082, -117.832725, 37.8308];
+    expect(forecastPoints(bishopBox, [-118.395259, 37.361439])[0]).toEqual({ at: [-118.395259, 37.361439], kind: "here" });
+    expect(forecastPoints(bishopBox)[0].at).toEqual([(-118.790033 + -117.832725) / 2, (37.11082 + 37.8308) / 2]);
+    expect(forecastPoints(bishopBox, [-100, 40])[0].at[0]).toBeCloseTo(-118.31, 2);
+  });
+});

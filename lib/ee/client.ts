@@ -25,6 +25,8 @@ export const MAP_TTL_MS = 6 * 3600_000;
 export const MAP_REFRESH_MARGIN_MS = 30 * 60_000;
 
 export const TIMEOUTS = { map: 15_000, tile: 25_000, compute: 25_000 } as const;
+/** The pause before a tile that failed in passing is asked again. */
+export const RETRY_DELAY_MS = 250;
 
 export class EeError extends Error {
   override name = "EeError";
@@ -177,18 +179,23 @@ export function createEeClient(opts: EeClientOptions = {}): EeClient {
   }
 
   async function tile(key: string, image: EeNode, z: number, x: number, y: number) {
-    for (const fresh of [false, true]) {
+    let fresh = false;
+    for (let attempt = 1; ; attempt++) {
       const name = await mapName(key, image, fresh);
       try {
         const res = await request(`${EE_API}/${name}/tiles/${z}/${x}/${y}`, { method: "GET" }, TIMEOUTS.tile);
         return { body: await res.arrayBuffer(), contentType: res.headers.get("content-type") ?? "image/png" };
       } catch (error) {
+        if (!(error instanceof EeError) || attempt >= 3) throw error;
         // A map id Earth Engine no longer knows answers 404 (or 400): make a new one once.
-        const gone = error instanceof EeError && (error.status === 404 || error.status === 400);
-        if (!gone || fresh) throw error;
+        const gone = (error.status === 404 || error.status === 400) && !fresh;
+        // Earth Engine drops the odd tile under load (a 5xx, or no answer); one more try usually draws it.
+        const transient = (error.status !== undefined && error.status >= 500) || (error.status === undefined && error.sourceStatus.reason === "offline" && !/not set up/.test(error.message));
+        if (!gone && !(transient && attempt === 1)) throw error;
+        if (gone) fresh = true;
+        else await new Promise((done) => setTimeout(done, RETRY_DELAY_MS));
       }
     }
-    throw new Error("unreachable");
   }
 
   async function compute<T>(value: EeNode, timeoutMs: number = TIMEOUTS.compute): Promise<T> {

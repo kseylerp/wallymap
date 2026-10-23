@@ -62,6 +62,19 @@ describe("Earth Engine client", () => {
     ]);
   });
 
+  it("asks again once for a tile Earth Engine dropped in passing, and gives up after that", async () => {
+    let fails = 1;
+    const flaky = fakeEeFetch({ tile: () => (fails-- > 0 ? Response.json({ error: { message: "Internal error" } }, { status: 500 }) : new Response(new Uint8Array([9]), { headers: { "content-type": "image/png" } })) });
+    const ee = createEeClient({ env: testEnv(), fetch: flaky.fetch });
+    expect(new Uint8Array((await ee.tile("k", image, 3, 1, 1)).body)).toEqual(new Uint8Array([9]));
+    expect(flaky.calls.filter((c) => c.url.includes("/tiles/"))).toHaveLength(2);
+
+    clearMapCache();
+    const down = fakeEeFetch({ tile: () => Response.json({ error: { message: "Internal error" } }, { status: 500 }) });
+    await expect(createEeClient({ env: testEnv(), fetch: down.fetch }).tile("k", image, 3, 1, 1)).rejects.toBeInstanceOf(EeError);
+    expect(down.calls.filter((c) => c.url.includes("/tiles/"))).toHaveLength(2);
+  });
+
   it("turns failures into a sourceStatus the row can say", async () => {
     const busy = createEeClient({ env: testEnv(), fetch: fakeEeFetch({ compute: () => new Response("slow down", { status: 429 }) }).fetch });
     const e1 = await busy.compute(constant(1)).catch((e: unknown) => e);

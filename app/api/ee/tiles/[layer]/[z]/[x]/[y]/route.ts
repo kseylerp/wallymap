@@ -30,6 +30,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ layer: string; 
     const tile = await createEeClient().tile(picture.key, picture.image, z, x, yi);
     return new Response(tile.body, { status: 200, headers: { "content-type": tile.contentType, "cache-control": TILE_CACHE_CONTROL } });
   } catch (error) {
+    // The server log names the tile and Earth Engine's own message (never a credential), for diagnosis.
+    console.warn(`Earth Engine tile ${layerId}/${z}/${x}/${yi} failed: ${error instanceof Error ? error.message : String(error)}`);
     const status = error instanceof EeError && error.sourceStatus.reason === "rate-limited" ? 503 : 502;
     const message = error instanceof EeError ? error.sourceStatus.message : "Earth Engine tile failed.";
     return Response.json({ error: message }, { status, headers: { "cache-control": "no-store" } });

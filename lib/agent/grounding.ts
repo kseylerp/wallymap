@@ -8,9 +8,15 @@
  * of them (Lake Powell dropped 152 ft), or a ratio as a percent (42% less). Feature names with a feature word ("Royal
  * Arch Trail", "Johnny Tiller Falls") must appear in the results. Flow words (above normal, record high) must agree
  * with the gauges' own flow classes. Numbers and names in the question count as given.
+ *
+ * Categorical claims about a named feature (2026-10-23): Moab's note called Wall Street "south-west facing and shaded"
+ * when the result says it faces east. A sentence that names features and gives one of them an aspect ("faces
+ * south-west"), shade ("shaded", "sunny"), or a class or status the results use (a discipline, a difficulty, open or
+ * closed) must agree with at least one of the features it names.
  */
 
-export type Claim = { text: string; kind: "number" | "name" | "flow" | "measure" };
+/** `why`, for a categorical claim, says what the results hold instead; `text` is then the sentence that claims it. */
+export type Claim = { text: string; kind: "number" | "name" | "flow" | "measure" | "category"; why?: string };
 
 /**
  * Measures a note may name only when a result carries them: Joshua Tree's wind layer has no gusts, yet the note gave
@@ -158,15 +164,44 @@ export type FactPool = {
   aggregates: number[];
   text: string;
   flowClasses: string[];
+  /** Each named feature's categorical values (aspect, shade, discipline, status ...), by its name as compared, then key. */
+  facts: Map<string, Map<string, Set<string>>>;
+  /** Every categorical value each key takes over the named features: what a sentence could claim. */
+  vocab: Map<string, Set<string>>;
 };
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
+/** Keys whose values are names, ids, links or free text, never a class a note claims. */
+const NOT_CATEGORICAL = /name|heading|title|url|^id$|Id$|source|region|forest|district|country|county|state|place|note|help|text|^t$|date/i;
+
+/** A categorical value as compared: a short word or phrase in lower case, or a flag's "true" / "false". */
+function categoryValues(v: unknown): string[] {
+  if (typeof v === "boolean") return [String(v)];
+  if (typeof v === "string") return /^\p{L}[\p{L} '+_-]{0,29}$/u.test(v.trim()) && v.trim().split(/\s+/).length <= 3 ? [v.trim().toLowerCase()] : [];
+  if (Array.isArray(v) && v.length <= 12) return v.flatMap((x) => (typeof x === "string" ? categoryValues(x) : []));
+  return [];
+}
+
+/** A named feature's categorical values, added to its facts. */
+function collectFacts(props: Record<string, unknown>, key: string, facts: Map<string, Map<string, Set<string>>>): void {
+  const mine = facts.get(key) ?? new Map<string, Set<string>>();
+  for (const [k, v] of Object.entries(props)) {
+    if (NOT_CATEGORICAL.test(k)) continue;
+    const values = categoryValues(v);
+    if (values.length === 0) continue;
+    const set = mine.get(k) ?? new Set<string>();
+    for (const x of values) set.add(x);
+    mine.set(k, set);
+  }
+  if (mine.size > 0) facts.set(key, mine);
+}
+
 /** Named things in a result with their own values: GeoJSON features, and top lists ({ name, v }). */
-function collectNamed(value: unknown, into: Map<string, Set<number>>, flow: Set<string>, depth = 0): void {
+function collectNamed(value: unknown, into: Map<string, Set<number>>, flow: Set<string>, depth = 0, facts?: Map<string, Map<string, Set<string>>>): void {
   if (depth > 10) return;
   if (Array.isArray(value)) {
-    for (const v of value.slice(0, 5000)) collectNamed(v, into, flow, depth + 1);
+    for (const v of value.slice(0, 5000)) collectNamed(v, into, flow, depth + 1, facts);
     return;
   }
   if (!isRecord(value)) return;
@@ -180,8 +215,9 @@ function collectNamed(value: unknown, into: Map<string, Set<number>>, flow: Set<
     const texts: string[] = [];
     collectNumbers(props, nums, texts);
     if (key.length >= 4) into.set(key, nums);
+    if (facts && key.length >= 4) collectFacts(props, key, facts);
   }
-  for (const [k, v] of Object.entries(value)) if (k !== "geometry" && typeof v === "object") collectNamed(v, into, flow, depth + 1);
+  for (const [k, v] of Object.entries(value)) if (k !== "geometry" && typeof v === "object") collectNamed(v, into, flow, depth + 1, facts);
 }
 
 /** Keys under which a summary gives a whole-answer figure. */
@@ -212,14 +248,17 @@ export function factPool(outputs: unknown[], question: string): FactPool {
   const texts: string[] = [question];
   const named = new Map<string, Set<number>>();
   const flow = new Set<string>();
+  const facts = new Map<string, Map<string, Set<string>>>();
   for (const o of outputs) {
     // A query's answer: what the model read (the summary) and the features drawn (the body).
     const parts = isRecord(o) && "summary" in o && "body" in o ? { summary: o.summary, body: o.body } : { summary: o, body: undefined };
     collectNumbers(parts.summary, headline, texts);
     collectNumbers(parts.body, all, texts);
     collectNamed(parts.summary, named, flow);
-    collectNamed(parts.body, named, flow);
+    collectNamed(parts.body, named, flow, 0, facts);
   }
+  const vocab = new Map<string, Set<string>>();
+  for (const byKey of facts.values()) for (const [k, values] of byKey) for (const v of values) vocab.set(k, (vocab.get(k) ?? new Set<string>()).add(v));
   const aggregates = new Set<number>();
   for (const o of outputs) collectAggregates(isRecord(o) && "summary" in o ? o.summary : o, aggregates);
   const given = new Set<number>();
@@ -238,6 +277,8 @@ export function factPool(outputs: unknown[], question: string): FactPool {
     aggregates: sorted(aggregates),
     text: texts.join("\n").toLowerCase(),
     flowClasses: [...flow],
+    facts,
+    vocab,
   };
 }
 
@@ -357,6 +398,92 @@ function segments(markdown: string): string[] {
   return markdown.split("\n").flatMap((line) => line.split(/(?<=[.!?;])\s+(?=[A-Z*(])/)).filter((s) => s.trim() !== "");
 }
 
+/** Compass points by their degrees, as results write aspects (8 points) and as notes write them in words. */
+const COMPASS: Record<string, number> = { n: 0, ne: 45, e: 90, se: 135, s: 180, sw: 225, w: 270, nw: 315, nne: 22.5, ene: 67.5, ese: 112.5, sse: 157.5, ssw: 202.5, wsw: 247.5, wnw: 292.5, nnw: 337.5 };
+const COMPASS_WORDS = "(?:north|south)(?:[\\s\u2010-\u2015-]?(?:east|west))?|east|west|NE|NW|SE|SW|NNE|ENE|ESE|SSE|SSW|WSW|WNW|NNW";
+/** "faces south-west", "aspect is SW", "south-west-facing", "a west aspect": an aspect claimed, not a place's direction. */
+const FACING = [
+  new RegExp(`\\b(?:fac(?:e|es|ing)|aspect(?:\\s+(?:of|is))?|oriented|orientated)\\s+(?:the\\s+|due\\s+)?(${COMPASS_WORDS})\\b`, "gi"),
+  new RegExp(`\\b(${COMPASS_WORDS})[\\s\u2010-\u2015-]*(?:facing|aspect)\\b`, "gi"),
+];
+
+/** A compass word or abbreviation in degrees, or undefined. */
+function compassDegrees(word: string): number | undefined {
+  const w = word.toLowerCase().replace(/[\s\u2010-\u2015-]+/g, "");
+  const full: Record<string, string> = { north: "n", south: "s", east: "e", west: "w", northeast: "ne", northwest: "nw", southeast: "se", southwest: "sw" };
+  return COMPASS[full[w] ?? w];
+}
+
+/** The angle between two compass bearings, 0 to 180. */
+const bearingGap = (a: number, b: number) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b));
+
+/** Shade said of a place: "shaded", "in the shade", "gets afternoon shade"; and its opposite, "sunny", "in full sun". */
+const SHADE_NO = /\b(?:not\s+shaded|unshaded|no\s+(?:afternoon\s+)?shade|sunny|sun[\s-]?(?:baked|exposed)|in\s+(?:the\s+)?(?:full\s+)?sun)\b/i;
+const SHADE_YES = /\b(?:shaded|shady|in\s+(?:the\s+)?shade|(?:gets?|has|have|offers?|keeps?)\s+(?:afternoon\s+|some\s+)?shade)\b/i;
+
+/** A status that holds another: a fire that is out is contained. */
+const IMPLIES: Record<string, string[]> = { out: ["contained"] };
+
+/** Keys a sentence can give a class or status by name (a discipline, a difficulty, open or closed). */
+const CLASS_KEY = /status|class|difficulty|danger|discipline|surface|severity|condition|rating|containment/i;
+
+/**
+ * Categorical claims in one sentence about the features it names (`about`): an aspect, shade, or a class or status
+ * word from the results' own values that none of those features holds. A feature with no value for the key does not
+ * count either way; a value the question gives ("sport and shaded") is still checked, since the note says it of a
+ * named feature.
+ */
+function categoryClaims(segment: string, named: string[], pool: FactPool): Claim[] {
+  const out: Claim[] = [];
+  const text = segment.trim();
+  // A one-word name that is a common noun ("Trail", a way OpenStreetMap names only by its kind) names no one feature.
+  const about = named.filter((n) => !/^unnamed\b/.test(n) && !/^(?:trail|path|road|track|route|way|crag|wall|boulders?|area|lake|river|creek|peak|falls?|springs?|camp|campground|parking|trailhead)$/.test(n));
+  const factsOf = (key: (k: string) => boolean) =>
+    about.flatMap((n) => [...(pool.facts.get(n) ?? new Map<string, Set<string>>())].filter(([k]) => key(k)).map(([k, v]) => ({ name: n, key: k, values: v })));
+  const nameOf = (n: string) => n.replace(/\b\w/g, (c) => c.toUpperCase());
+  // Aspect: a facing direction against each named feature's compass value.
+  const compassKeys = [...pool.vocab].filter(([, vs]) => [...vs].every((v) => COMPASS[v] !== undefined)).map(([k]) => k);
+  const aspects = factsOf((k) => compassKeys.includes(k));
+  if (aspects.length > 0) {
+    for (const re of FACING) {
+      for (const m of segment.matchAll(re)) {
+        const said = compassDegrees(m[1]);
+        if (said === undefined) continue;
+        const near = aspects.some((a) => [...a.values].some((v) => bearingGap(COMPASS[v], said) <= 45));
+        if (!near) {
+          const held = aspects.map((a) => `${nameOf(a.name)} faces ${[...a.values].map((v) => v.toUpperCase()).join(" or ")}`).join("; ");
+          out.push({ text, kind: "category", why: `"${m[0].trim()}": in the results ${held}` });
+        }
+      }
+    }
+  }
+  // Shade: a flag on the feature (afternoonShade) against the sentence's shaded or sunny.
+  const shade = factsOf((k) => /shade/i.test(k) && [...(pool.vocab.get(k) ?? [])].every((v) => v === "true" || v === "false"));
+  if (shade.length > 0) {
+    const no = SHADE_NO.exec(segment);
+    const yes = SHADE_YES.exec(segment.replace(SHADE_NO, " "));
+    const held = (v: string) => shade.some((f) => f.values.has(v));
+    const words = (v: string) => shade.map((f) => `${nameOf(f.name)} ${f.values.has(v) ? "is" : "is not"} shaded`).join("; ");
+    if (yes && !held("true")) out.push({ text, kind: "category", why: `"${yes[0]}": in the results ${words("true")}` });
+    if (no && !held("false")) out.push({ text, kind: "category", why: `"${no[0]}": in the results ${words("true")}` });
+  }
+  // A class or status by the results' own words ("boulder", "closed", "paved"), outside the names themselves.
+  const unnamed = ` ${comparable(segment)} `.replace(new RegExp(` (?:${about.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")}) `, "g"), " | ");
+  for (const [k, vocab] of pool.vocab) {
+    if (!CLASS_KEY.test(k) || /shade/i.test(k) || compassKeys.includes(k) || vocab.size < 2 || vocab.size > 12) continue;
+    const facts = factsOf((x) => x === k);
+    if (facts.length === 0) continue;
+    for (const v of vocab) {
+      if (v === "true" || v === "false" || v.length < 3) continue;
+      const word = comparable(v);
+      if (!new RegExp(` ${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}s? `).test(unnamed)) continue;
+      if (facts.some((f) => f.values.has(v) || [...f.values].some((held) => IMPLIES[held]?.includes(v)))) continue;
+      out.push({ text, kind: "category", why: `"${v}": in the results ${facts.map((f) => `${nameOf(f.name)} is ${[...f.values].join(", ")}`).join("; ")}` });
+    }
+  }
+  return out;
+}
+
 /**
  * What a note claims that the turn's results do not hold: numbers, feature names, and flow words against flow classes.
  * A sentence about a named feature ("Johnny Tiller Falls: an easy loop of about 0.5 km") is held to that feature's own
@@ -372,6 +499,7 @@ export function ungroundedClaims(markdown: string, pool: FactPool): Claim[] {
     const own = [...new Set([...featureOwn, ...pool.aggregates])].sort((a, b) => a - b);
     const nums = about.length > 0 ? [...new Set([...pool.headline, ...own])].sort((a, b) => a - b) : pool.all;
     const derived = about.length > 0 ? nums : pool.headline;
+    if (about.length > 0) for (const c of categoryClaims(segment, about, pool)) if (!claims.some((x) => x.text === c.text)) claims.push(c);
     for (const n of noteNumbers(segment)) {
       // A measure said of a named feature (its length, height, flow) is that feature's own value, not any figure read.
       // A precise figure (three significant digits, not hedged) found anywhere is not a coincidence: the model may have

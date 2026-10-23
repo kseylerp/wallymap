@@ -110,3 +110,49 @@ describe("checkNote with grounding", () => {
     expect(checkNote("3 fires burned 12,450 acres.", turn)).toBeNull();
   });
 });
+
+describe("ungroundedClaims: categorical facts said of a named feature (Moab crags, 2026-10-23)", () => {
+  const crags = [
+    { name: "Wall Street", v: 136, aspect: "E", afternoonShade: true, disciplines: ["sport", "trad", "toprope"] },
+    { name: "Ice Cream Parlor", v: 41, aspect: "NW", afternoonShade: true, disciplines: ["sport", "trad", "toprope"] },
+    { name: "Maverick Buttress", v: 26, aspect: "SW", afternoonShade: false, disciplines: ["sport", "trad"] },
+    { name: "Big Bend Boulders", v: 80, aspect: "S", afternoonShade: false, disciplines: ["boulder"] },
+    { name: "Gold Bar Rim", v: 12, aspect: "N", afternoonShade: true, disciplines: ["trad"], status: "closed" },
+    { name: "Long Canyon", v: 9, aspect: "W", afternoonShade: false, disciplines: ["trad"], status: "open" },
+  ];
+  const pool = factPool([answer({ featureCount: crags.length }, crags)], "Which crags near Moab are sport and shaded in the afternoon?");
+  const why = (note: string) => ungroundedClaims(note, pool).filter((c) => c.kind === "category").map((c) => c.why);
+
+  it("catches an aspect the feature does not face, and passes one within a compass point", () => {
+    expect(why("- **Wall Street** – 136 routes – shaded wall faces south‑west.")).toEqual(['"faces south‑west": in the results Wall Street faces E']);
+    expect(why("Ice Cream Parlor is a south-facing wall with 41 routes.")).toEqual(['"south-facing": in the results Ice Cream Parlor faces NW']);
+    expect(why("Wall Street faces east and gets afternoon shade.")).toEqual([]);
+    expect(why("Maverick Buttress faces south.")).toEqual([]);
+    // A place's direction from town is not an aspect.
+    expect(why("Wall Street is south-west of Moab along Potash Road.")).toEqual([]);
+  });
+
+  it("catches shade the feature does not have, either way", () => {
+    expect(why("Maverick Buttress (26 routes) stays shaded in the afternoon.")).toEqual(['"shaded": in the results Maverick Buttress is not shaded']);
+    expect(why("Wall Street is sunny all afternoon.")).toEqual(['"sunny": in the results Wall Street is shaded']);
+    expect(why("Maverick Buttress is not shaded after noon.")).toEqual([]);
+  });
+
+  it("catches a class or status none of the named features holds, never a word inside a name", () => {
+    expect(why("Top boulders: Wall Street (136) and Maverick Buttress (26).")).toEqual(['"boulder": in the results Maverick Buttress is sport, trad; Wall Street is sport, trad, toprope']);
+    expect(why("Big Bend Boulders has 80 boulder problems.")).toEqual([]);
+    expect(why("Gold Bar Rim is open to climbing.")).toEqual(['"open": in the results Gold Bar Rim is closed']);
+    expect(why("Gold Bar Rim is closed and Long Canyon is open.")).toEqual([]);
+    // A sentence that names no feature claims nothing about one.
+    expect(why("Sport crags near Moab that face south-west and are open.")).toEqual([]);
+  });
+
+  it("cuts the sentence that holds the claim and sends the note back with what the results say", () => {
+    const note = "- **Wall Street** – 136 routes – shaded wall faces south‑west.\n- **Ice Cream Parlor** – 41 routes – shaded wall faces north-west.";
+    expect(withoutClaims(note, ungroundedClaims(note, pool))).toBe("- **Ice Cream Parlor** – 41 routes – shaded wall faces north-west.");
+    const turn = createTurn({ question: "Which crags near Moab are sport and shaded in the afternoon?" });
+    turn.outputs.push(answer({ featureCount: crags.length }, crags));
+    const back = checkNote(note, turn);
+    expect(back && "error" in back && back.error).toContain("Wall Street faces E");
+  });
+});

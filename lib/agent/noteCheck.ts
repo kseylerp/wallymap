@@ -54,8 +54,8 @@ export function noteProblem(markdown: string, turn: Turn): { reason: string; err
       return {
         reason: "grounding",
         error:
-          `These are not in any result this turn: ${claims.map((c) => c.text).join("; ")}. Call note again with only numbers and names from the results ` +
-          "(the summaries' stats, top lists, totals, dates and features), converted between units if you like, or leave them out; " +
+          `These are not in any result this turn: ${claims.map((c) => c.why ?? c.text).join("; ")}. Call note again with only numbers, names and facts from the results ` +
+          "(the summaries' stats, top lists, totals, dates and features, and each feature's own aspect, shade, class or status), converted between units if you like, or leave them out; " +
           "say in one clause what the app cannot show instead of filling it in.",
       };
     }
@@ -108,7 +108,7 @@ export function groundedNote(markdown: string, turn: Pick<Turn, "outputs" | "que
   const claims = claimsOf(markdown, turn);
   if (claims.length === 0) return null;
   const kept = withoutClaims(markdown, claims);
-  turn.note(`cut from the note, not in any result: ${claims.map((c) => c.text).join("; ")}`);
+  turn.note(`cut from the note, not in any result: ${claims.map((c) => c.why ?? c.text).join("; ")}`);
   return kept;
 }
 

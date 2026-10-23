@@ -15,6 +15,8 @@ import { haversineKm } from "./geo";
 
 /** How far apart two way ends may be and still join (a mapped junction is the same node; a bridge leaves a small gap). */
 const JOIN_M = 40;
+/** Pieces of one name this close at their ends are one trail with a way missing between them. */
+const GAP_M = 1_000;
 /** A hike whose two ends lie this close together is a loop. */
 const LOOP_M = 150;
 
@@ -74,6 +76,13 @@ function connected(ways: Feature[]): Feature[][] {
       // Ends meet, or one way's end lies on a vertex of the other (a trail that joins mid-way).
       const meet = ends[i].some((a) => ends[j].some((b) => close(a, b, JOIN_M))) || ends[i].some((a) => all[j].some((b) => close(a, b, JOIN_M / 4))) || ends[j].some((a) => all[i].some((b) => close(a, b, JOIN_M / 4)));
       if (meet) parent[find(i)] = find(j);
+    }
+  }
+  // Pieces of one name whose ends lie within GAP_M are one trail with a way missing between them (the box held more
+  // ways than came back, or a junction is mapped apart): Portland's Wildwood Trail came back as four pieces.
+  for (let i = 0; i < ways.length; i++) {
+    for (let j = i + 1; j < ways.length; j++) {
+      if (find(i) !== find(j) && ends[i].some((a) => ends[j].some((b) => close(a, b, GAP_M)))) parent[find(i)] = find(j);
     }
   }
   const groups = new Map<number, Feature[]>();
@@ -303,16 +312,24 @@ export async function addClimb(hikes: Feature[], opts: ClimbOptions = {}): Promi
     const heights = cells.map((c) => {
       const data = tiles.get(`${c.x}/${c.y}`);
       if (!data) return null;
-      const px = Math.min(TILE_SIZE - 1, Math.max(0, Math.floor(c.px)));
-      const py = Math.min(TILE_SIZE - 1, Math.max(0, Math.floor(c.py)));
-      const v = data[py * TILE_SIZE + px];
+      // Bilinear between the four pixel centres around the point (clamped at the tile edge).
+      const fx = Math.min(TILE_SIZE - 1.001, Math.max(0, c.px - 0.5));
+      const fy = Math.min(TILE_SIZE - 1.001, Math.max(0, c.py - 0.5));
+      const x0 = Math.floor(fx);
+      const y0 = Math.floor(fy);
+      const tx = fx - x0;
+      const ty = fy - y0;
+      const at = (x: number, y: number) => data[y * TILE_SIZE + x];
+      const v = at(x0, y0) * (1 - tx) * (1 - ty) + at(x0 + 1, y0) * tx * (1 - ty) + at(x0, y0 + 1) * (1 - tx) * ty + at(x0 + 1, y0 + 1) * tx * ty;
       return Number.isFinite(v) && v > -500 ? v : null;
     });
     const known = heights.filter((h): h is number => h !== null);
     if (known.length < Math.max(2, heights.length * 0.8)) continue;
-    const { gain, loss } = gainLoss(heights, 4);
+    // A trail cut across a slope reads the pixel beside it now and then: wiggles under 8 m are noise, not climb.
+    const { gain, loss } = gainLoss(heights, 8);
     const props = hike.properties ?? {};
-    const lengthKm = Number(props.lengthKm) || lineKm(main);
+    // The climb is along the longest stretch, so is its rate (a trail network's other branches are not walked here).
+    const lengthKm = lineKm(main);
     props.gainM = Math.round(gain);
     props.lossM = Math.round(loss);
     props.gainPerKm = lengthKm > 0 ? round(gain / lengthKm, 1) : 0;

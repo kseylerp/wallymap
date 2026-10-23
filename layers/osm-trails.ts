@@ -707,7 +707,7 @@ const HELP: Record<string, FieldHelp> = {
   },
   roundTripKm: { text: "The walk there and back: twice the length for an out and back, the length for a loop.", unit: "km" },
   gainM: {
-    text: "How much the hike climbs walking it once from one end to the other, from AWS Terrain Tiles (about 30 m in the US) sampled every 50 m; dips under 4 m are ignored.",
+    text: "How much the hike climbs walking it once from one end to the other (for a trail network, along its longest stretch), from AWS Terrain Tiles (about 30 m in the US) sampled every 50 m; rises and dips under 8 m are ignored.",
     unit: "m",
     source: "AWS Terrain Tiles (Mapzen Terrarium, open data)",
     url: "https://registry.opendata.aws/terrain-tiles/",

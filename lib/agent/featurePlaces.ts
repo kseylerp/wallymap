@@ -80,7 +80,7 @@ export function boxAround([lng, lat]: [number, number], halfKm: number): BBox {
 /** How far around a feature known only as a point the question's area reaches: a peak's slopes, a valley, a bay. */
 function halfSpanKm(p: Pick<OsmPlace, "type" | "category">): number {
   if (["peak", "volcano"].includes(p.type)) return 12;
-  if (["valley", "saddle", "mountain_pass", "yes"].includes(p.type) || p.category === "mountain_pass") return 10;
+  if (["valley", "gorge", "canyon", "saddle", "mountain_pass", "yes"].includes(p.type) || p.category === "mountain_pass") return 10;
   if (["bay", "strait", "water", "lake", "reservoir"].includes(p.type)) return 8;
   return 5;
 }
@@ -116,8 +116,10 @@ export function pickFeature(place: string, found: OsmPlace[], proximity?: [numbe
   const town = exact.filter(isSettlement).sort((a, b) => b.importance - a.importance)[0];
   const near = (p: OsmPlace) => (proximity ? km(proximity, p.center) <= 300 : false);
   const ranked = features
-    .map((p) => ({ p, near: near(p) ? 1 : 0, way: p.category === "highway" ? 1 : 0 }))
-    .sort((a, b) => b.near - a.near || a.way - b.way || b.p.importance - a.p.importance);
+    .map((p) => ({ p, near: near(p) ? 1 : 0, way: p.category === "highway" ? 1 : 0, km: proximity ? km(proximity, p.center) : 0 }))
+    // Near the view or the question's other places, the closest wins (Red Rock Canyon near Las Vegas is the Clark County
+    // one, not Nye County's 250 km north); with nothing to go by, the most important.
+    .sort((a, b) => b.near - a.near || (a.near && b.near ? a.km - b.km : 0) || a.way - b.way || b.p.importance - a.p.importance);
   const best = ranked[0].p;
   if (!near(best)) {
     if (town && town.importance >= best.importance) return null;

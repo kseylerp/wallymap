@@ -75,6 +75,18 @@ describe("pickFeature", () => {
   });
 });
 
+describe("pickFeature near the question's other places", () => {
+  it("takes the closest of several features of one name (Red Rock Canyon near Las Vegas)", () => {
+    const found = [
+      osm("Red Rock Canyon", "waterway", "stream", 0.107, [-116.408, 38.323, -116.314, 38.344], "Red Rock Canyon, Nye County, Nevada"),
+      osm("Red Rock Canyon", "natural", "gorge", 0.107, [-115.527, 36.144, -115.508, 36.163], "Red Rock Canyon, Clark County, Nevada"),
+    ];
+    const best = pickFeature("Red Rock Canyon, Nevada", found, [-115.14, 36.17]);
+    expect(best?.name).toContain("Clark County");
+    expect(best!.bbox[2] - best!.bbox[0]).toBeGreaterThan(0.2);
+  });
+});
+
 describe("isFeatureName", () => {
   it.each(["Tomales Bay", "Lake Powell", "Mount Rainier", "Wonderland Trail", "Mojave Road", "Madison River", "Jackson Hole", "Teton Pass", "Red Rock Canyon National Conservation Area"])(
     "%s is a feature",

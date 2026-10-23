@@ -514,6 +514,13 @@ function LegendRow({
       (b) => !(b.kind === "categories" && b.field && b.field === chip?.key && layer.result.kind === "geojson") && !(b.field && encoded.has(b.field)),
     );
   }, [layer, op, shownData, hexes, inView]);
+  // A class layer on tiles (shares counted by the source) has no feature count: its header says how much of the view the
+  // leading class covers, or nothing until the shares arrive; other tile layers keep "tiles".
+  const leading = useMemo(() => {
+    if (!layer.shares) return null;
+    const entries = legendBlocks.flatMap((b) => (b.kind === "categories" ? b.entries : [])).filter((e) => e.share !== undefined);
+    return entries.reduce<(typeof entries)[number] | null>((best, e) => (!best || (e.share ?? 0) > (best.share ?? 0) ? e : best), null);
+  }, [layer.shares, legendBlocks]);
   const symbol = layerLegend(layer, op);
   // A raster layer's key shows the tiles' raw color through the same filter the map applies (lib/render/rasterCalm.ts).
   const isRaster = layer.result.kind === "tiles" && layer.result.data.format === "raster" && symbol.kind === "tiles";
@@ -594,6 +601,10 @@ function LegendRow({
             ) : (
               <span className="text-ink">{count.toLocaleString()}</span>
             )}
+          </span>
+        ) : layer.shares ? (
+          <span data-testid="layer-lead-share" className="text-right text-[12px] leading-[18px] whitespace-nowrap text-ink tabular-nums" title={leading ? `${leading.label}: the most of the view` : undefined}>
+            {leading?.share !== undefined ? (leading.share < 0.01 ? "<1%" : `${Math.round(leading.share * 100)}%`) : ""}
           </span>
         ) : (
           <span className="small-caps text-right leading-[18px]">tiles</span>

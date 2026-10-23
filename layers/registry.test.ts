@@ -78,7 +78,7 @@ describe("palette roles per layer", () => {
     expect([...RASTER_TILE_LAYERS].sort()).toEqual([
       "burn-severity", "carbon-flux", "disturbance", "fire-hazard", "flood-extent", "forest-alerts",
       "forest-loss", "greenness", "imagery-by-date", "land-cover", "night-lights", "phenology", "population",
-      "sea-ice", "sea-level-rise", "snow-cover", "surface-water",
+      "sea-ice", "sea-level-rise", "snow-cover", "surface-water", "terrain",
     ]);
   });
 });

@@ -98,6 +98,9 @@ describe("the combine tool", () => {
     expect(combineOf("Where can I camp along the Wonderland Trail?")).toMatchObject({ op: "along", match: "Wonderland Trail" });
     expect(combineOf("Campsites within 2 miles of a lake near Bishop")).toMatchObject({ op: "near", distance: 2, unit: "mi" });
     expect(combineOf("Trailheads within 30 minutes' drive of Bend")).toMatchObject({ op: "drive_time", minutes: 30 });
+    expect(combineOf("Easy hikes with a waterfall near Asheville")).toMatchObject({ op: "near", distance: 0.5, unit: "km" });
+    expect(combineOf("Trails to a lake near Bishop")).toMatchObject({ op: "near" });
+    expect(combineOf("Hikes with a view near Boulder")).toBeNull();
     expect(combineOf("Trails near Boulder")).toBeNull();
     expect(combineOf("Is there flooding along the Zambezi right now?")).toBeNull();
   });

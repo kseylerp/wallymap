@@ -91,6 +91,10 @@ export function combineOf(question: string): CombineAsk | null {
     const unit = near[2] ? (/^mi/i.test(near[2]) ? "mi" : /^f/i.test(near[2]) ? "ft" : near[2].toLowerCase() === "m" ? "m" : "km") : "km";
     return { op: "near", because: near[0], distance: near[1] ? Number(near[1]) : 1, unit };
   }
+  // A hike that reaches a feature ("hikes with a waterfall", "trails to a lake"): the trail passes within half a km of it.
+  if ((m = /\b(?:hikes?|hiking\s+trails?|trails?|walks?|runs?)\s+(?:with|to|past|that\s+(?:reach|pass)\w*)\s+(?:a\s+|the\s+)?(?:waterfalls?|lakes?|hot\s+springs?|springs?|swimming\s+holes?)\b/i.exec(q))) {
+    return { op: "near", because: m[0], distance: 0.5, unit: "km" };
+  }
   if ((m = /\b(?:inside|within)\s+(?:a\s+|the\s+)?(?![\d])(?:[A-Za-z][\w'-]*\s+){0,3}(?:national\s+forest|forest|park|wilderness|protected\s+areas?|habitat|burn\s+scars?|fire\s+perimeters?|reserve|monument|allotments?)\b/i.exec(q))) return { op: "within", because: m[0] };
   return null;
 }

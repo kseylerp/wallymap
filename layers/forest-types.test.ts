@@ -70,7 +70,7 @@ describe("forest-types layer", () => {
     const scenario = r.data.scenario!;
     expect(scenario.control).toBe("toggle");
     expect(timeShapeOf(layer, r).shape).toBe("none");
-    expect(r.citation).toMatchObject({ label: "Google DeepMind, WRI, IIASA (ForTy, CC BY 4.0)", url: "https://doi.org/10.31223/X58R27" });
+    expect(r.citation).toMatchObject({ label: "Google DeepMind, WRI, IIASA (ForTy, CC BY 4.0)", url: "https://www.nature.com/articles/s41597-026-08299-5" });
     expect(scenario.values).toEqual([0, CONFIDENT_PCT]);
     expect(scenario.values.map((v) => scenarioText(scenario, v))).toEqual(["All", "Only confident pixels"]);
     expect(scenarioTileUrl(scenario, 70)).toBe("/api/ee/tiles/forest-types/{z}/{x}/{y}?view=classes&src=2020v1&conf=confident");

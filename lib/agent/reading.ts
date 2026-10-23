@@ -374,6 +374,13 @@ const PHRASES: {
     because: "a river's flood stage and forecast are on its gauges",
   },
   {
+    // D0 is "abnormally dry", the watch before drought: "in drought" is D1 (moderate) to D4 (exceptional).
+    re: /\bin\s+(?:a\s+|the\s+)?drought\b|\bdrought[- ]stricken\b|\baffected\s+by\s+drought\b/i,
+    layers: ["drought"],
+    filters: { drought: { kind: ["D1", "D2", "D3", "D4"] } },
+    because: "drought is D1 to D4 on the US Drought Monitor; D0 is abnormally dry",
+  },
+  {
     re: /\b(?:aren'?t|not|isn'?t)\s+too\s+warm\b|\b(?:cool|cold)\s+enough\b/i,
     filters: { fishing: { tempBand: ["cold", "good"] } },
     because: "trout water that is not too warm is under 64 °F",

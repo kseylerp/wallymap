@@ -5,6 +5,7 @@ import { getLayer, listLayers } from "@/layers/registry";
 import { type BBox, type CardFact, type Attribute, type Citation, type Layer, type LegendSpec, type StyleHints } from "@/layers/types";
 import { runLayer } from "@/lib/layers/run";
 import { applyFilters, type LayerFilters } from "@/lib/render/filters";
+import { readingFilters } from "@/lib/agent/reading";
 import type { Turn } from "@/lib/agent/turn";
 import type { MapView } from "@/lib/agent/view";
 import { canonicalLayerId } from "@/lib/agent/toolNames";
@@ -251,7 +252,9 @@ async function sideOf(side: z.infer<typeof SideSchema>, turn: Turn, view: MapVie
   const body = (await runLayer(id, { bbox, input })).body;
   if ("error" in body) return { error: `${id} did not answer: ${body.error}` };
   if (body.kind !== "geojson") return { error: `${id} answers with map tiles, not features, so it cannot be combined.` };
-  const filters: LayerFilters = { ...(side.filters ?? {}) };
+  // The model's filters, else the ones the question's words set on this layer ("in drought" is D1 to D4).
+  const fromQuestion = Object.fromEntries(readingFilters(turn.reading, id).filter((f) => f.include).map((f) => [f.key, { include: f.include }]));
+  const filters: LayerFilters = { ...(side.filters ?? fromQuestion) } as LayerFilters;
   if (side.match) filters.name = { ...filters.name, match: side.match };
   const kept = applyFilters(body.data, filters).features;
   return { layer, features: kept, citation: body.citation, bbox, input };

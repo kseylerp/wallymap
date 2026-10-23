@@ -104,6 +104,16 @@ describe("runCombine", () => {
     expect(out.combined.style.geometry).toBe("polygon");
   });
 
+  it("keeps a side to the question's own filters when the model sets none: \"in drought\" is D1 to D4, not D0", async () => {
+    const turn = createTurn({ question: "Wild horse areas in Nevada that are in drought right now" });
+    for (const id of ["grazing-allotments", "drought"]) turn.queries.push({ layerId: id, bbox: BOX, inputKey: "[]", ok: true, drawable: true, wide: false });
+    answers.set("grazing-allotments", geojson([square(0, 0, 1, "Beaver Dam Slope"), square(3, 0, 1, "Far Allotment")].map((x) => ({ ...x, properties: { ...x.properties, animals: ["horses"] } }))));
+    answers.set("drought", geojson([{ ...square(0, 0, 1), properties: { kind: "D0" } }, { ...square(3, 0, 1), properties: { kind: "D2" } }]));
+    const out = await runCombine({ op: "overlap", a: { layerId: "grazing-allotments" }, b: { layerId: "drought" }, unit: "km" }, turn, null);
+    if ("error" in out) throw new Error(out.error);
+    expect(out.data.features.map((x) => x.properties?.name)).toEqual(["Far Allotment"]);
+  });
+
   it("outside on areas that carry an amount: shares the amount by area, and says it is spread evenly", async () => {
     answers.set("old-growth", geojson([{ ...square(0, 0, 1, "Battle Peak"), properties: { name: "Battle Peak", v: 50_000 } }]));
     answers.set("wilderness", geojson([square(0, 0, 0.5, "Kalmiopsis Wilderness")]));

@@ -393,7 +393,7 @@ function featureName(f: Feature): string {
   return "unnamed";
 }
 
-const TOP_KEYS = ["distanceKm", "nearest", "overlapAcres", "overlapShare", "overlapWith", "outsideAcres", "outsideShare", "inside", "shareInside"];
+const TOP_KEYS = ["apportioned", "distanceKm", "nearest", "overlapAcres", "overlapShare", "overlapWith", "outsideAcres", "outsideShare", "inside", "shareInside"];
 
 /** What the model reads: the statement, counts, totals and the first ten kept features with the join's numbers. */
 export function combineOutputForModel(output: unknown): JSONValue {

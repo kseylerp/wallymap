@@ -93,3 +93,6 @@ import "./avalanche";
 import "./faults";
 import "./soils";
 import "./elevation-profile";
+import "./vegetation-types";
+import "./ecoregions";
+import "./canopy-height";

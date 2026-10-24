@@ -108,6 +108,9 @@ const META: Record<string, { shows: string; source: string; freshness: string; c
   uranium: { shows: "Navajo Nation abandoned uranium mines and DOE mill-tailings sites", source: "Navajo Nation AUM program, DOE Legacy Management", freshness: "Static (2007 hazard scores)", coverage: "Western US" },
   faults: { shows: "Faults that moved in the last 1.6 million years, by age, slip rate and how well located", source: "USGS Quaternary Fault and Fold Database", freshness: "Static (2020 release)" },
   soils: { shows: "Soil map units by surface texture, with drainage, depth to bedrock and hydrologic group", source: "USDA NRCS SSURGO (Soil Data Access)", freshness: "Static (yearly survey updates)" },
+  "vegetation-types": { shows: "849 named vegetation types (ecological systems) in eight groups, with their shares of the view", source: "LANDFIRE EVT (USGS, US Forest Service) via Earth Engine", freshness: "Static (about 2014)" },
+  ecoregions: { shows: "Named ecoregion outlines with their share of the view: EPA Level III and IV, RESOLVE outside the US", source: "US EPA; RESOLVE Ecoregions 2017, via Earth Engine", freshness: "Static (2013, 2017)" },
+  "canopy-height": { shows: "Height of the tree canopy at about 1 m, with the median and tallest trees in view", source: "Meta and WRI canopy height via Earth Engine", freshness: "Static (imagery 2018–2020)" },
 };
 
 function coverageText(l: Layer): string {

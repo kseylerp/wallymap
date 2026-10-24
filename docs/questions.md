@@ -284,6 +284,9 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - Where is the old-growth forest in Oregon?
 - Is this primary forest or plantation? @view=[117.6,4.8,118,5.1]
 - Where has natural forest been converted to plantations in Borneo since 2017?
+- What vegetation types grow around Sedona?
+- Which ecoregions does Yellowstone span?
+- How tall are the trees in Redwood National Park?
 - Rapids on the Middle Fork Salmon
 - Kayaking rivers near Queenstown
 - Where is the permafrost in Alaska?

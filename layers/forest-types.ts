@@ -37,7 +37,9 @@ import {
   readConversionAreas,
   readPoint,
   readShares,
+  sharesByPoints,
   sharesExpression,
+  SHARE_POINTS,
   tileQuery,
   type ConversionAreas,
   type Source,
@@ -116,6 +118,8 @@ const inputSchema = z.object({
   confidence: z.enum(["all", "confident"]).default("all"),
   year: z.number().int().min(FIRST_YEAR).max(LAST_YEAR).optional(),
   convertedSince: z.number().int().min(FIRST_YEAR).max(LAST_YEAR - 1).optional(),
+  /** The place the box stands for, as the question names it; the note repeats it so two places' numbers never mix. */
+  place: z.string().max(80).optional(),
 });
 
 const help = (text: string): FieldHelp => ({ text, unit: "share of 1", source: "ForTy (Neumann et al., Scientific Data 2026)", url: CITATION_URL });
@@ -188,7 +192,7 @@ const forestTypes = defineLayer({
     "By default it is the 2020 baseline map (FAO definitions, about 90% accurate); confidence 'confident' draws only pixels at least 70% sure (strict, for regulation such as the EU deforestation rule), 'all' every pixel (extent). " +
     "year (2017–2025) shows that year of the early yearly series instead. " +
     "convertedSince (2017–2024) draws the change view: natural forest (primary or naturally regenerating) in that year that is plantation, tree crops or other land in 2025, in pink, with the areas in km² for the box in the coverage note; use it for 'where has natural forest been converted to plantations since 2017'. " +
-    "The coverage note gives each class's share of the box asked (or the converted areas): quote those numbers. " +
+    "The coverage note gives each class's share of the box asked (or the converted areas): quote those numbers. place: the place the box stands for, named in the note. " +
     "Caveats: a model's classification, not a survey; the yearly series is a beta. " +
     "Returns map tiles drawn on the globe, not features you can count or list.",
   coverage: "global",
@@ -258,7 +262,9 @@ const forestTypes = defineLayer({
       return failure(error);
     }
     const which = source.kind === "baseline" ? "ForTy 2020 baseline (v1.0)" : `ForTy ${source.year} (yearly beta)`;
-    const inBox = Object.keys(shares).length > 0 ? `; share of the land in the box asked: ${sharesSentence(shares)}` : "; no ForTy data in the box asked (sea or outside the map)";
+    const box = input.place ? `the box asked for ${input.place}` : "the box asked";
+    const how = sharesByPoints(ctx.bbox) ? ` (estimated from ${SHARE_POINTS.toLocaleString("en-US")} random points)` : "";
+    const inBox = Object.keys(shares).length > 0 ? `; share of the land in ${box}${how}: ${sharesSentence(shares)}` : `; no ForTy data in ${box} (sea or outside the map)`;
     const url = eeTileTemplate("forest-types", tileQuery(params));
     return {
       kind: "tiles",

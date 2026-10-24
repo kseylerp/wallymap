@@ -133,6 +133,9 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   faults: "data",
   soils: "natural",
   "elevation-profile": "data",
+  "vegetation-types": "raster",
+  ecoregions: "data",
+  "canopy-height": "raster",
 };
 
 /**

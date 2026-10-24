@@ -72,7 +72,7 @@ confirm step; nothing downloads without a click). The card never moves the camer
 the answer is readable without scrolling (at most 40 words), the top three features are labelled by name on the
 map, and they are in frame. *Asserted as `phone`: first sentence ≤ 40 words with a number, at least 3 labels drawn (or
 all of them when fewer, or as many as the layer labels when it labels fewer: a forecast names only the asked place),
-top features in frame.* The pixel check (labels legible, lines visible on each basemap) is
+top features in frame (an area larger than the view, such as an avalanche zone, when it covers the view's centre).* The pixel check (labels legible, lines visible on each basemap) is
 `--screens` (`scripts/evalScreens.ts`).
 
 **Basemaps.** Topo + Satellite by default. Topographical (relief and names) for forecasts, paddling, snow, slope and

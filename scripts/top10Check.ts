@@ -373,7 +373,20 @@ export function top10Rule(e: Top10Expect, run: { calls: ToolCall[]; text: string
   const middles = ranked.top.map((f) => boundsOf([f])).filter((b): b is BBox => b !== null).map((b) => [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2, (b[0] + b[2]) / 2, (b[1] + b[3]) / 2] as BBox);
   const topBox = middles.length > 0 ? ([Math.min(...middles.map((b) => b[0])), Math.min(...middles.map((b) => b[1])), Math.max(...middles.map((b) => b[2])), Math.max(...middles.map((b) => b[3]))] as BBox) : null;
   const cameraBox = (state.camera?.bbox ?? run.hereView ?? undefined) as BBox | undefined;
-  const framed = topBox === null ? !!cameraBox : contains(cameraBox, topBox);
+  // An area larger than the view (an avalanche zone around Teton Pass) is in frame when it covers the view's centre.
+  const covers = (f: Feature) => {
+    const b = boundsOf([f]);
+    if (!b || !cameraBox) return false;
+    const cx = (cameraBox[0] + cameraBox[2]) / 2;
+    const cy = (cameraBox[1] + cameraBox[3]) / 2;
+    return b[0] <= cx && b[2] >= cx && b[1] <= cy && b[3] >= cy && (b[2] - b[0]) * (b[3] - b[1]) > (cameraBox[2] - cameraBox[0]) * (cameraBox[3] - cameraBox[1]);
+  };
+  const inside = ranked.top.filter((f) => !covers(f));
+  const insideBox = inside.length === 0 ? null : (() => {
+    const ms = inside.map((f) => boundsOf([f])).filter((b): b is BBox => b !== null).map((b) => [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]);
+    return ms.length === 0 ? null : ([Math.min(...ms.map((m) => m[0])), Math.min(...ms.map((m) => m[1])), Math.max(...ms.map((m) => m[0])), Math.max(...ms.map((m) => m[1]))] as BBox);
+  })();
+  const framed = topBox === null ? !!cameraBox : inside.length === 0 ? !!cameraBox : contains(cameraBox, insideBox);
   asserts.push({ id: "camera", ok: framed, detail: topBox === null ? (cameraBox ? "camera set (no features to frame)" : "camera never moved") : framed ? "top features in frame" : `top features outside the camera ${JSON.stringify(cameraBox)}` });
 
   // Phone first screen: the first sentence fits the folded sheet, the top features are named on the map and in frame.

@@ -422,6 +422,13 @@ const PHRASES: {
     because: "slope, aspect and shade come from the terrain layer (when the app has it)",
   },
   {
+    // "Conditions here this weekend?" is the forecast and any alert in force (Bishop's answer never asked the alerts).
+    re: /\bconditions?\b(?![^?]*\b(?:road|trail|snow|river|surf|water)\b)/i,
+    unless: /\btypical\w*|\busual\w*|\baverage\b|\bby\s+month\b/i,
+    layers: ["weather-forecast", "weather-alerts"],
+    because: "conditions are the forecast and the alerts in force",
+  },
+  {
     re: /\bwill\s+it\s+(?:rain|snow|storm)\b|\brain(?:fall)?\b|\btoo\s+(?:hot|cold)\b|\btemperatures?\b|\bforecast\b|\bfreez\w+\b|\bheat\b|\bwindy\b|\bgusts?\b/i,
     // "Typical temperature by month" is the climate normals, not the next 7 days.
     unless: /\bwater\s+temp\w*|\bsea\s+surface\b|\bwarming\b|\btemperature\s+anomal\w*|\btypical\w*|\busual\w*|\baverage\b|\bnormals?\b|\bby\s+month\b|\beach\s+month\b|\bclimate\b/i,

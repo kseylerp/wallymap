@@ -56,6 +56,10 @@ describe("plans read before the model chooses", () => {
     expect(easy.filters).toContainEqual(expect.objectContaining({ layerId: "mtb-trails", key: "level", include: ["beginner"] }));
   });
 
+  it("reads conditions as the forecast and the alerts", () => {
+    expect(strongIds("Conditions here this weekend?")).toEqual(expect.arrayContaining(["weather-forecast", "weather-alerts"]));
+  });
+
   it("names only registered layers", () => {
     expect(planLayerIds().filter((id) => !getLayer(id))).toEqual([]);
   });

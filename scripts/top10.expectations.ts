@@ -432,7 +432,7 @@ export const TOP10: Top10Expect[] = [
   {
     id: "T08.2", useCase: "T08",
     question: "Elevation cross-section from Yosemite Valley to the top of Half Dome",
-    layers: ["terrain|peaks"], main: "terrain|peaks", basemap: TOPO,
+    layers: ["terrain|peaks|elevation-profile"], main: "terrain|peaks|elevation-profile", basemap: TOPO,
     facts: [{ what: "start and top elevation", re: ELEV }, { what: "total climb", re: /climb|gain|rises?|relief/i }, { what: "steepest part", re: /steep|\d+\s*°|cliff/i }],
     needs: ["a cross-section chart along a drawn line (elevation profile without a route)"],
   },

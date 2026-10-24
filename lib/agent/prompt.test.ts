@@ -41,7 +41,7 @@ const REQUIRED = [
   "For now, today or currently questions (is the river running high, surf today, next low tide, fresh snow, any warnings), query the live layers streamflow, surf, tides, snowpack or weather-alerts, and say how old the newest reading is.",
   "For a route along a named trail, pass the trail name in route.via; if the route result carries notes (a stop that could not be placed), tell the user.",
   "Activity words have their own layers: mountain biking goes to mtb-trails, skiing and ski touring to ski-routes, climbing and bouldering to climbing, kayaking, rafting and canoeing to paddling.",
-  "For 'what rock is this' or 'what is this peak made of', geocode the place and call query_geologic-unit with the lon and lat of its center; geology only draws the map.",
+  "For 'what rock is this' or 'what is this peak made of', geocode the place and call query_geologic-unit with the lon and lat of its center.",
   "For 'how deep is this lake', call query_lakes with name set to the lake's name; v is the maximum depth in metres.",
   "Satellite layers that change over time (greenness, snow-cover, sea-ice, flood-extent, disturbance, fire-weather, phenology, burn-severity, night-lights, forest-loss) take a date or year input; to show change, query and render once, then use set_time or compare on that layer instead of querying each date.",
   "render.mode sets how a layer draws: symbols, clusters, heat or columns for point layers, lines for lines, polygons (or columns to extrude them by value in 3D) for areas.",

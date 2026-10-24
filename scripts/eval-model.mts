@@ -292,7 +292,11 @@ function questionPlace(calls: ToolCall[], view: MapView | null, question?: strin
   return view?.bbox ? { bbox: view.bbox as BBox, name: "the map view" } : null;
 }
 
-/** The map the browser would end on: every tool result through the client's mapping and the reducer, in order. */
+/**
+ * The map the browser would end on: every tool result through the client's mapping and the reducer, in order. The
+ * catalog carries what GET /api/layers sends (app/api/layers/route.ts), the layer contract included: without the
+ * declared legend, labels, time and display, a tile layer's row had no key and a declared legend read as derived.
+ */
 export function mapAfter(calls: ToolCall[]): MapState {
   // The catalog the browser gets (GET /api/layers), so the legend, labels, time and units match the real map's.
   const catalog: LayerCatalog = Object.fromEntries(listLayers().map((l) => [l.id, catalogEntry(l)]));
@@ -530,6 +534,8 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   "is downtown asheville in a flood zone?": { layers: ["flood-zones"] },
   "new deforestation alerts in the congo this month": { layers: ["forest-alerts"] },
   "show the geology of the grand canyon": { layers: ["geology"] },
+  "are there active faults near salt lake city?": { layers: ["faults"] },
+  "what kind of soil is around fort collins?": { layers: ["soils"] },
   "where are the wild horses in nevada?": { layers: ["grazing-allotments"] },
   "show plant hardiness zones in vermont": { layers: ["hardiness-zones"] },
   "what's the land cover around torres del paine?": { layers: ["land-cover"] },
@@ -539,6 +545,10 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   // Forest types (ForTy via Earth Engine): the class here, and natural forest converted since a year (its change view).
   "is this primary forest or plantation?": { layers: ["forest-types"] },
   "where has natural forest been converted to plantations in borneo since 2017?": { layers: ["forest-types"] },
+  // Living cover (T09): LANDFIRE vegetation types, EPA and RESOLVE ecoregions, Meta and WRI canopy height.
+  "what vegetation types grow around sedona?": { layers: ["vegetation-types"] },
+  "which ecoregions does yellowstone span?": { layers: ["ecoregions"] },
+  "how tall are the trees in redwood national park?": { layers: ["canopy-height"] },
   "rapids on the middle fork salmon": { layers: ["paddling"] },
   "kayaking rivers near queenstown": { layers: ["paddling"] },
   "where is the permafrost in alaska?": { layers: ["permafrost"] },
@@ -567,6 +577,13 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   "what's the avalanche danger in little cottonwood canyon today?": { layers: ["avalanche"] },
   // Air quality at the place (top 10 T02: smoke now and this weekend, Open-Meteo).
   "how is the air quality in yosemite valley this weekend?": { layers: ["air-quality"] },
+  // A cross-section along a straight line between two places (top 10 use case T08).
+  "elevation profile from glacier point to half dome": { layers: ["elevation-profile"] },
+  // A place through the year (T10): monthly climate normals and a river's flow by month.
+  "what is the weather usually like in july in bozeman?": { layers: ["climate-normals"] },
+  "which month does the truckee river run highest?": { layers: ["flow-by-month"] },
+  // Bathymetry (top-10 T10): NOAA's depth ramp, contours and the deepest point.
+  "how deep is puget sound off seattle?": { layers: ["water-depth"] },
 };
 
 /**

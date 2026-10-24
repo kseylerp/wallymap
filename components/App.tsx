@@ -10,6 +10,7 @@ import { ScenarioScrubbers, useScenarioPlay } from "@/components/ScenarioScrubbe
 import { MapCanvas, type MapHandle } from "@/components/MapCanvas";
 import { MapControls } from "@/components/MapControls";
 import { MapPills } from "@/components/MapPills";
+import { MonthlyStripSlot, PhoneMonthDock } from "@/components/MonthlyStrip";
 import { PhoneCaption, PhoneTimeDock } from "@/components/PhoneCaption";
 import { useIsPhone } from "@/components/useIsPhone";
 import { useSuggestionsCard } from "@/components/useSuggestionsCard";
@@ -285,6 +286,7 @@ export function App() {
           shownLayers={view.layers}
           compareSlot={<CompareControl state={state} dispatch={dispatch} />}
           scenarioSlot={<ScenarioScrubbers state={state} dispatch={dispatch} />}
+          monthsSlot={<MonthlyStripSlot state={view} />}
           exportSlot={<ExportControl mapState={state} catalog={catalog} dispatch={dispatch} />}
           scenario={state.scenario}
           compare={state.compare}
@@ -306,6 +308,12 @@ export function App() {
           <div className="phone-time-dock pointer-events-none absolute left-[calc(var(--safe-left)+12px)] z-20 w-[calc(100vw-80px-var(--safe-left)-var(--safe-right))]">
             <PhoneTimeDock state={state} dispatch={dispatch} />
           </div>
+          {/* A year at one place (climate normals, flow by month, green-up): the monthly strip, while no time row shows. */}
+          {!state.time?.open && (
+            <div className="phone-time-dock pointer-events-none absolute left-[calc(var(--safe-left)+12px)] z-20 w-[calc(100vw-80px-var(--safe-left)-var(--safe-right))]">
+              <PhoneMonthDock state={view} />
+            </div>
+          )}
         </>
       )}
 

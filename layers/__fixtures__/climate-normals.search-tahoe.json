@@ -1,0 +1,416 @@
+{
+ "count": 15,
+ "results": [
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -120.1428,
+      39.1678
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USC00048758",
+     "name": "TAHOE CITY, CA US",
+     "dataTypes": [
+      {
+       "id": "MLY-PRCP-NORMAL"
+      },
+      {
+       "id": "MLY-SNWD-AVGNDS-GE001WI"
+      },
+      {
+       "id": "MLY-SNOW-NORMAL"
+      },
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -120.5031,
+      38.7583
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USC00046597",
+     "name": "PACIFIC HOUSE, CA US",
+     "dataTypes": [
+      {
+       "id": "MLY-PRCP-NORMAL"
+      },
+      {
+       "id": "MLY-SNWD-AVGNDS-GE001WI"
+      },
+      {
+       "id": "MLY-SNOW-NORMAL"
+      },
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -120.0936,
+      39.3886
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USC00040931",
+     "name": "BOCA, CA US",
+     "dataTypes": [
+      {
+       "id": "MLY-PRCP-NORMAL"
+      },
+      {
+       "id": "MLY-SNWD-AVGNDS-GE001WI"
+      },
+      {
+       "id": "MLY-SNOW-NORMAL"
+      },
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -120.173,
+      39.3331
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USC00049043",
+     "name": "TRUCKEE RS, CA US",
+     "dataTypes": [
+      {
+       "id": "MLY-PRCP-NORMAL"
+      },
+      {
+       "id": "MLY-SNWD-AVGNDS-GE001WI"
+      },
+      {
+       "id": "MLY-SNOW-NORMAL"
+      },
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -119.6483,
+      39.3128
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USC00268761",
+     "name": "VIRGINIA CITY, NV US",
+     "dataTypes": [
+      {
+       "id": "MLY-PRCP-NORMAL"
+      },
+      {
+       "id": "MLY-SNWD-AVGNDS-GE001WI"
+      },
+      {
+       "id": "MLY-SNOW-NORMAL"
+      },
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -119.7678,
+      39.1253
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USC00261485",
+     "name": "CARSON CITY, NV US",
+     "dataTypes": [
+      {
+       "id": "MLY-PRCP-NORMAL"
+      },
+      {
+       "id": "MLY-SNWD-AVGNDS-GE001WI"
+      },
+      {
+       "id": "MLY-SNOW-NORMAL"
+      },
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -120.2331,
+      39.3239
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USC00042467",
+     "name": "DONNER MEM SP, CA US",
+     "dataTypes": [
+      {
+       "id": "MLY-PRCP-NORMAL"
+      },
+      {
+       "id": "MLY-SNOW-NORMAL"
+      },
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -119.7758,
+      38.9547
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USC00265191",
+     "name": "MINDEN, NV US",
+     "dataTypes": [
+      {
+       "id": "MLY-PRCP-NORMAL"
+      },
+      {
+       "id": "MLY-SNOW-NORMAL"
+      },
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -119.8914,
+      38.9783
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USC00262119",
+     "name": "DAGGET PASS, NV US",
+     "dataTypes": [
+      {
+       "id": "MLY-PRCP-NORMAL"
+      },
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -119.9411,
+      39.0753
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USC00263205",
+     "name": "GLENBROOK, NV US",
+     "dataTypes": [
+      {
+       "id": "MLY-PRCP-NORMAL"
+      },
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -119.9947,
+      38.8983
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USW00093230",
+     "name": "SOUTH LAKE TAHOE AP, CA US",
+     "dataTypes": [
+      {
+       "id": "MLY-PRCP-NORMAL"
+      },
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -120.145,
+      39.3181
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USC00049040",
+     "name": "TRUCKEE-TAHOE AP, CA US",
+     "dataTypes": [
+      {
+       "id": "MLY-PRCP-NORMAL"
+      },
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -120.2406,
+      39.4317
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USC00047641",
+     "name": "SAGEHEN CREEK, CA US",
+     "dataTypes": [
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -120.1292,
+      39.06
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USC00048760",
+     "name": "TAHOMA, CA US",
+     "dataTypes": [
+      {
+       "id": "MLY-PRCP-NORMAL"
+      },
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundingPoints": [
+    {
+     "coordinates": [
+      -119.9419,
+      39.2472
+     ],
+     "type": "point"
+    }
+   ],
+   "stations": [
+    {
+     "id": "USC00263960",
+     "name": "INCLINE VILLAGE, NV US",
+     "dataTypes": [
+      {
+       "id": "MLY-TMAX-NORMAL"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

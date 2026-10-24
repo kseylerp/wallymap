@@ -13,8 +13,9 @@
  * z9.5 Tahoe view listed 332 lakes with 2 areas (Wikidata's), so "Rank by Area" listed two and the rest drew faint.
  *
  * Wikidata: POST https://query.wikidata.org/sparql. The query finds items with coordinates (P625, `wikibase:box`) whose instance
- * of (P31, with subclasses) is lake (Q23397; reservoirs sit under it), flags reservoirs (Q131681), and reads maximum depth (P4511),
- * area (P2046), elevation (P2044) and volume (P2234) through the normalised path `p:Pxxx/psn:Pxxx/wikibase:quantityAmount`
+ * of (P31, with subclasses) is lake (Q23397; reservoirs sit under it), flags reservoirs (Q131681), and reads maximum depth (P4511,
+ * statements not qualified as an average, median or minimum), mean depth (P4511 qualified as an average: Crater Lake holds 594 m
+ * and 350 m), area (P2046), elevation (P2044) and volume (P2234) through the normalised path `p:Pxxx/psn:Pxxx/wikibase:quantityAmount`
  * (metres, square metres, cubic metres), the English label and the English Wikipedia article. Ordered by area then depth, at most
  * 500. Requests go through `wikimediaFetch` (shared User-Agent, one retry after the advised wait). In the Tahoe box
  * (-120.25,38.93,-119.95,39.23) Wikidata held 5 lakes, 1 with a depth, where OSM held 51 named water bodies (audit 2026-10-17).
@@ -25,6 +26,11 @@
  * either side are kept. When one source fails the other's lakes come back with a note and sourceStatus; when both fail, an error.
  * Live 2026-10-18 (through runLayer): Tahoe box 51 lakes in 2.0 s, all 5 Wikidata lakes joined, Lake Tahoe first at 191 mi² (495 km²),
  *   depth 1,644 ft; the audit's z9.5 view (-120.6,38.6,-119.6,39.5) 368 lakes in 2.5 s, unmeasured, 2 with a depth.
+ *
+ * A name asked in a box where Wikidata knows no lake of that name may be a namesake: the layer then asks Wikidata for lakes
+ * of that exact label anywhere (lakesByNameQuery) and, when a larger one with a depth exists, its note says where it is. In
+ * the 2026-10-23 eval "Lake Tahoe" geocoded to a 2-acre pond in Tillamook County, Oregon, and the answer said Tahoe had no
+ * recorded depth; the layer was right about the pond, the box was wrong.
  *
  * Wide mode (over 20,000 km², up to 80,000 km²) runs wideLakesQuery on Wikidata alone: the 1,000 largest by area, no count.
  * Smoke wide 2026-10-14: Minnesota -94.4,45.4,-91,48 (about 70,000 km²) returned 1,000 lakes in 4.5 s (7 with depth).
@@ -78,12 +84,34 @@ function sparqlString(text: string): string {
     .replace(/"/g, '\\"');
 }
 
+/**
+ * Wikidata's qualifiers (P1013, criterion used) that make a depth statement (P4511) an average rather than the maximum:
+ * "average" (Q202785, about 1,260 statements in 2026-10), "mean" (Q2796622), the other "average" (Q54835811) and
+ * "arithmetic mean" (Q19033). Crater Lake carries both 594 m (maximum) and 350 m (average).
+ */
+export const MEAN_DEPTH_CRITERIA = ["wd:Q202785", "wd:Q2796622", "wd:Q54835811", "wd:Q19033"] as const;
+/** Criteria that make a depth statement neither the maximum nor the mean: median and minimum. */
+const OTHER_DEPTH_CRITERIA = ["wd:Q226995", "wd:Q10585806"] as const;
+
+/** The measures every lake query reads: maximum and mean depth, area, elevation, volume, the article; deprecated depths left out. */
+const MEASURES = `  BIND(IF(EXISTS { ?item wdt:P31/wdt:P279* wd:Q131681 }, 1, 0) AS ?res)
+  OPTIONAL { ?item p:P4511 ?ds . ?ds psn:P4511/wikibase:quantityAmount ?depthM ; wikibase:rank ?dr . FILTER(?dr != wikibase:DeprecatedRank)
+    FILTER NOT EXISTS { ?ds pq:P1013 ?dc . FILTER(?dc IN (${[...MEAN_DEPTH_CRITERIA, ...OTHER_DEPTH_CRITERIA].join(", ")})) } }
+  OPTIONAL { ?item p:P4511 ?ms . ?ms pq:P1013 ?mc ; psn:P4511/wikibase:quantityAmount ?meanM . FILTER(?mc IN (${MEAN_DEPTH_CRITERIA.join(", ")})) }
+  OPTIONAL { ?item p:P2046/psn:P2046/wikibase:quantityAmount ?areaM2 . }
+  OPTIONAL { ?item p:P2044/psn:P2044/wikibase:quantityAmount ?elevM . }
+  OPTIONAL { ?item p:P2234/psn:P2234/wikibase:quantityAmount ?volM3 . }
+  OPTIONAL { ?article schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> . }`;
+
+const SELECT =
+  "SELECT ?item ?label ?coord (MAX(?depthM) AS ?depth) (MAX(?meanM) AS ?mean) (MAX(?areaM2) AS ?area) (MAX(?elevM) AS ?elev) (MAX(?volM3) AS ?vol) (SAMPLE(?article) AS ?wp) (MAX(?res) AS ?isRes)";
+
 /** The SPARQL text for a bbox and an optional case-insensitive name filter; `Point(lon lat)` corners are south-west then north-east. */
 export function lakesQuery(bbox: BBox, name?: string): string {
   const [west, south, east, north] = bbox;
   const needle = name?.trim().toLowerCase();
   const nameFilter = needle ? `\n  FILTER(CONTAINS(LCASE(STR(?label)), "${sparqlString(needle)}"))` : "";
-  return `SELECT ?item ?label ?coord (MAX(?depthM) AS ?depth) (MAX(?areaM2) AS ?area) (MAX(?elevM) AS ?elev) (MAX(?volM3) AS ?vol) (SAMPLE(?article) AS ?wp) (MAX(?res) AS ?isRes) WHERE {
+  return `${SELECT} WHERE {
   SERVICE wikibase:box {
     ?item wdt:P625 ?coord .
     bd:serviceParam wikibase:cornerSouthWest "Point(${west} ${south})"^^geo:wktLiteral .
@@ -91,16 +119,42 @@ export function lakesQuery(bbox: BBox, name?: string): string {
   }
   ?item wdt:P31/wdt:P279* wd:Q23397 .
   ?item rdfs:label ?label . FILTER(LANG(?label) = "en")${nameFilter}
-  BIND(IF(EXISTS { ?item wdt:P31/wdt:P279* wd:Q131681 }, 1, 0) AS ?res)
-  OPTIONAL { ?item p:P4511/psn:P4511/wikibase:quantityAmount ?depthM . }
-  OPTIONAL { ?item p:P2046/psn:P2046/wikibase:quantityAmount ?areaM2 . }
-  OPTIONAL { ?item p:P2044/psn:P2044/wikibase:quantityAmount ?elevM . }
-  OPTIONAL { ?item p:P2234/psn:P2234/wikibase:quantityAmount ?volM3 . }
-  OPTIONAL { ?article schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> . }
+${MEASURES}
 }
 GROUP BY ?item ?label ?coord
 ORDER BY DESC(?area) DESC(?depth)
 LIMIT ${LIMIT}`;
+}
+
+/** The ways a lake's name may be written as a Wikidata label: as typed, in title case, and with or without "Lake". */
+export function nameVariants(name: string): string[] {
+  const typed = name.trim().replace(/\s+/g, " ");
+  if (!typed) return [];
+  const title = typed.toLowerCase().replace(/(^|[\s-])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase());
+  const bare = title.replace(/^lake\s+|\s+lake$/i, "");
+  const more = bare === title ? [`Lake ${title}`, `${title} Lake`] : [bare];
+  return [...new Set([typed, title, ...more])];
+}
+
+/**
+ * Lakes anywhere whose English label is the asked name (nameVariants), largest first. When a named box holds no
+ * Wikidata lake of that name, the one meant may be elsewhere: a geocoder sent "Lake Tahoe" to a 2-acre pond of that
+ * name in Tillamook County, Oregon (2026-10-23), and the answer said Tahoe had no recorded depth.
+ */
+export function lakesByNameQuery(name: string): string {
+  const labels = nameVariants(name)
+    .map((n) => `"${sparqlString(n)}"@en`)
+    .join(" ");
+  return `${SELECT} WHERE {
+  VALUES ?label { ${labels} }
+  ?item rdfs:label ?label .
+  ?item wdt:P31/wdt:P279* wd:Q23397 .
+  ?item wdt:P625 ?coord .
+${MEASURES}
+}
+GROUP BY ?item ?label ?coord
+ORDER BY DESC(?area) DESC(?depth)
+LIMIT 5`;
 }
 
 /**
@@ -121,6 +175,7 @@ const responseSchema = z.object({
         label: valueSchema.optional(),
         coord: valueSchema,
         depth: valueSchema.optional(),
+        mean: valueSchema.optional(),
         area: valueSchema.optional(),
         elev: valueSchema.optional(),
         vol: valueSchema.optional(),
@@ -177,10 +232,13 @@ export function normalizeLakes(bindings: Binding[]): Feature<Point>[] {
       kind: b.isRes?.value === "1" || b.isRes?.value === "true" ? "reservoir" : "lake",
     };
     const depth = positive(b.depth?.value, 1, 1);
+    const mean = positive(b.mean?.value, 1, 1);
     const area = positive(b.area?.value, 1_000_000, 3);
     const elevation = positive(b.elev?.value, 1, 1);
     const volume = positive(b.vol?.value, 1_000_000_000, 6);
     if (depth !== undefined) properties.depthM = depth;
+    // A mean as deep as the maximum is a data-entry slip; it is left out rather than printed.
+    if (mean !== undefined && (depth === undefined || mean < depth)) properties.meanDepthM = mean;
     if (area !== undefined) properties.areaKm2 = area;
     if (elevation !== undefined) properties.elevationM = elevation;
     if (volume !== undefined) properties.volumeKm3 = volume;
@@ -402,6 +460,14 @@ export const JOIN_KM = 2;
 
 const lakeKey = (name: string) => matchName(plainName(name));
 
+/** Added to a depth in `labelRank`, so lakes with a depth are named before any lake ranked only by area (no lake is 10 million km²). */
+export const LABEL_DEPTH_FIRST = 10_000_000;
+
+/** A depth for a map label: "1,644 ft" in the US, "501 m" elsewhere. */
+function depthWords(m: number, usFirst: boolean): string {
+  return usFirst ? `${Math.round(m * 3.28084).toLocaleString("en-US")} ft` : `${Math.round(m).toLocaleString("en-US")} m`;
+}
+
 /** The plain-word fields every lake carries, in the view's units. */
 function finish(p: Record<string, string | number | null>, usFirst: boolean): Record<string, string | number | null> {
   const num = (k: string) => (typeof p[k] === "number" ? (p[k] as number) : undefined);
@@ -409,9 +475,15 @@ function finish(p: Record<string, string | number | null>, usFirst: boolean): Re
   const depth = num("depthM");
   const elevation = num("elevationM");
   const volume = num("volumeKm3");
+  const mean = num("meanDepthM");
   p.v = area ?? null;
   if (area !== undefined) p.areaText = areaText(area, usFirst);
   p.depthText = depth !== undefined ? heightText(depth, usFirst) : "Not recorded";
+  if (mean !== undefined) p.meanDepthText = heightText(mean, usFirst);
+  // The map names the deepest lakes with their depth first, then the largest (LABEL_DEPTH_FIRST keeps every depth above any area).
+  const name = typeof p.name === "string" ? p.name : undefined;
+  if (name) p.label = depth !== undefined ? `${name}, ${depthWords(depth, usFirst)} deep` : name;
+  p.labelRank = depth !== undefined ? LABEL_DEPTH_FIRST + depth : (area ?? 0);
   if (elevation !== undefined) p.elevationText = heightText(elevation, usFirst);
   if (volume !== undefined) p.volumeText = volumeText(volume, usFirst);
   return p;
@@ -509,12 +581,20 @@ const KIND_WORDS: Record<string, string> = {
 const ATTRIBUTES: Attribute[] = [
   { key: "areaKm2", type: "measure", label: "Area", unit: "km²", encode: "size" },
   { key: "depthM", type: "measure", label: "Maximum depth", unit: "m" },
+  { key: "meanDepthM", type: "measure", label: "Mean depth", unit: "m" },
   { key: "kind", type: "category", label: "Kind", levels: KIND_LEVELS },
   nameAttribute(),
 ];
 
 const DEPTH: FieldHelp = {
   text: "The lake's maximum depth as entered in Wikidata (property P4511); not survey-checked. Most lakes have none recorded, which means unknown, not shallow.",
+  unit: "m",
+  source: "Wikidata",
+  url: "https://www.wikidata.org/wiki/Property:P4511",
+};
+
+const MEAN_DEPTH: FieldHelp = {
+  text: "The lake's average depth as entered in Wikidata (property P4511 marked as an average); few lakes have one.",
   unit: "m",
   source: "Wikidata",
   url: "https://www.wikidata.org/wiki/Property:P4511",
@@ -540,6 +620,8 @@ const VOLUME: FieldHelp = { text: "Volume of water from Wikidata (P2234).", unit
 const HELP: Record<string, FieldHelp> = {
   depthM: DEPTH,
   depthText: DEPTH,
+  meanDepthM: MEAN_DEPTH,
+  meanDepthText: MEAN_DEPTH,
   areaKm2: AREA,
   areaText: AREA,
   v: AREA,
@@ -557,6 +639,7 @@ const CARD: CardSpec = {
   facts: [
     { key: "kind", label: "Kind", values: KIND_WORDS },
     { key: "areaText", label: "Area" },
+    { key: "meanDepthText", label: "Mean depth" },
     { key: "elevationText", label: "Surface elevation" },
     { key: "volumeText", label: "Volume" },
     { key: "areaSource", label: "Area from", values: { osm: "OpenStreetMap shoreline", wikidata: "Wikidata" } },
@@ -567,7 +650,7 @@ const CARD: CardSpec = {
     { key: "url", label: "Wikidata" },
     { key: "osmUrl", label: "OpenStreetMap" },
   ],
-  hidden: ["areaKm2", "depthM", "elevationM", "volumeKm3", "v", "wikidata"],
+  hidden: ["areaKm2", "depthM", "meanDepthM", "elevationM", "volumeKm3", "v", "wikidata", "label", "labelRank"],
 };
 
 /** One source's failure as a SourceStatus, so the row says which source did not answer and what the map holds instead. */
@@ -586,10 +669,14 @@ const lakes = defineLayer({
     "Named lakes, ponds and reservoirs from OpenStreetMap, joined to Wikidata for depth, volume and elevation. Each point has name, kind " +
     "('lake', 'reservoir', 'pond', 'oxbow' or 'lagoon'), areaKm2 (surface area in km², measured from the OpenStreetMap shoreline in views up to 20,000 km², " +
     "else Wikidata's figure, else null) with areaText in words, v (the same area, or null), depthM (maximum depth in metres, or absent when not recorded) with depthText " +
-    "('Not recorded' when missing), elevationM and volumeKm3 with text forms (feet, acres, square miles and acre-feet first in the United States), sources ('both', 'osm' " +
-    "or 'wikidata'), and links wikipedia, url (Wikidata) and osmUrl. Symbols are sized by area and the five largest are named on the map. " +
-    "Use it for 'how deep is Lake Tahoe', 'biggest lakes here', 'deepest lakes here', 'what is that lake called', 'is this a reservoir', or 'highest alpine lakes'. " +
+    "('Not recorded' when missing), meanDepthM (average depth, where Wikidata has one) with meanDepthText, elevationM (surface elevation) and volumeKm3 with text forms " +
+    "(feet, acres, square miles and acre-feet first in the United States), sources ('both', 'osm' or 'wikidata'), and links wikipedia, url (Wikidata) and osmUrl. " +
+    "Symbols are sized by area; up to five are named on the map, the deepest first with their depth. " +
+    "Use it for 'how deep is Lake Tahoe', 'compare the depth of two lakes', 'biggest lakes here', 'deepest lakes here', 'what is that lake called', 'is this a reservoir', or 'highest alpine lakes'. " +
+    "To compare two lakes, query each in its own geocoded box with the name input and quote both maximum depths. " +
     "Set the name input (case-insensitive, part of the name) to find one lake in a big view, for example name 'tahoe'. " +
+    "If the coverageNote says Wikidata lists a larger lake of that name elsewhere, the box is the wrong place: geocode the lake again with its state or country (\"Lake Tahoe, California\") and query again; never report that lake's depth as not recorded. " +
+    "For the shape of the lake bed (bathymetry, contours, the deepest point) use water-depth where it has coverage (US coasts, the Great Lakes, oceans). " +
     "Caveats: depth is missing for most lakes, so a missing depth means 'not recorded', not 'shallow'; say so when the lake asked about has none, and check before ranking by depth. " +
     "Depth is the maximum, not the average, as entered by Wikidata editors. Unnamed water is left out. " +
     "Works worldwide. Over 20,000 km² (about a 140 km square) it returns only Wikidata lakes, the 1,000 largest by area.",
@@ -620,9 +707,9 @@ const lakes = defineLayer({
     field: "areaKm2",
     unit: "km²",
     stops: [{ label: "Smaller lake" }, { label: "Larger lake" }],
-    note: "Symbols grow with surface area; the five largest are named. Areas are measured from shorelines in views up to 20,000 km²; a lake with no area is not sized.",
+    note: "Symbols grow with surface area. Up to five lakes are named: the deepest first, with their maximum depth, then the largest. Areas are measured from shorelines in views up to 20,000 km²; a lake with no area is not sized.",
   },
-  labels: { field: "name", max: 5, rankBy: "areaKm2" },
+  labels: { field: "label", max: 5, rankBy: "labelRank" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
     // Wide (over 20,000 km², up to the hard cap): the largest lakes from Wikidata alone, capped at the strategy's limit.
@@ -674,6 +761,14 @@ const lakes = defineLayer({
       const withDepth = features.filter((f) => typeof f.properties?.depthM === "number").length;
       notes.push(`${withDepth} of ${features.length} lakes have a recorded maximum depth`);
     }
+    // A named lake Wikidata does not know here may be a namesake: say where the well-known one is.
+    if (input.name && wideLimit === undefined && "bindings" in wd && wikidataLakes.length === 0) {
+      const elsewhere = await lakeElsewhere(ctx, input.name, features);
+      if (elsewhere) {
+        const [lon, lat] = elsewhere.geometry.coordinates;
+        notes.push(elsewhereNote(elsewhere, usUnitsFirst([lon, lat, lon, lat])));
+      }
+    }
 
     const cited = [
       ...(osm?.ok ? ["OpenStreetMap contributors (ODbL), named natural=water lakes, ponds and reservoirs"] : []),
@@ -693,6 +788,40 @@ const lakes = defineLayer({
   },
 });
 
+/**
+ * The largest Wikidata lake named `name` outside this box, when it is larger than every lake found here (or none here
+ * has an area) and has a depth or an area worth pointing to; else null. A failed lookup is null: the answer stands.
+ */
+export async function lakeElsewhere(ctx: QueryContext, name: string, found: Feature<Point>[]): Promise<Feature<Point> | null> {
+  // Its own cache entry: the box query's key would hand back the box's answer.
+  const res = await fetchWikidata(ctx, lakesByNameQuery(name), ctx.cacheKey && `${ctx.cacheKey}:by-name`);
+  if (!("bindings" in res)) return null;
+  const [w, s, e, n] = ctx.bbox;
+  const inBox = ([lon, lat]: Position) => lon >= w && lon <= e && lat >= s && lat <= n;
+  const largestHere = Math.max(0, ...found.map((f) => (typeof f.properties?.areaKm2 === "number" ? f.properties.areaKm2 : 0)));
+  const far = normalizeLakes(res.bindings).filter((f) => !inBox(f.geometry.coordinates));
+  // Worth pointing to: a recorded depth or at least a square kilometre of water.
+  const best = far.find((f) => typeof f.properties?.depthM === "number" || (typeof f.properties?.areaKm2 === "number" && f.properties.areaKm2 >= 1));
+  if (!best) return null;
+  const area = typeof best.properties?.areaKm2 === "number" ? best.properties.areaKm2 : undefined;
+  if (area !== undefined && area <= largestHere) return null;
+  return best;
+}
+
+/** "Wikidata lists a larger Lake Tahoe elsewhere, at 39.083, -120.033: maximum depth 1,644 ft (501 m), area ...". */
+export function elsewhereNote(lake: Feature<Point>, usFirst: boolean): string {
+  const p = (lake.properties ?? {}) as Record<string, string | number>;
+  const [lon, lat] = lake.geometry.coordinates;
+  const facts = [
+    typeof p.depthM === "number" ? `maximum depth ${heightText(p.depthM, usFirst)}` : "no recorded depth",
+    ...(typeof p.areaKm2 === "number" ? [`area ${areaText(p.areaKm2, usFirst)}`] : []),
+  ];
+  return (
+    `Wikidata lists a larger ${p.name} elsewhere, at ${lat.toFixed(3)}, ${lon.toFixed(3)}: ${facts.join(", ")}. ` +
+    `This box is not where that lake is: geocode ${p.name} again with its state or country and query it there`
+  );
+}
+
 /** The elements array of an Overpass body, or none. */
 function elementsOf(json: unknown): unknown[] {
   const elements = typeof json === "object" && json !== null ? (json as { elements?: unknown }).elements : undefined;
@@ -700,7 +829,7 @@ function elementsOf(json: unknown): unknown[] {
 }
 
 /** The Wikidata half: its rows, or an error in the layer's words. */
-async function fetchWikidata(ctx: QueryContext, query: string): Promise<{ bindings: Binding[] } | LayerError> {
+async function fetchWikidata(ctx: QueryContext, query: string, cacheKey = ctx.cacheKey): Promise<{ bindings: Binding[] } | LayerError> {
   let res: Response;
   try {
     res = await wikimediaFetch(ctx.fetch, SPARQL_ENDPOINT, {
@@ -710,7 +839,7 @@ async function fetchWikidata(ctx: QueryContext, query: string): Promise<{ bindin
         "content-type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({ query }).toString(),
-      cacheKey: ctx.cacheKey,
+      cacheKey,
       ttlSeconds: TTL_SECONDS,
     });
   } catch (err) {

@@ -46,6 +46,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "grazing-allotments", synonyms: ["cattle", "grazing", "ranching", "wild horses", "burros", "allotment"], notes: "BLM grazing areas and wild horse and burro herds", gist: "BLM grazing allotments and wild horse and burro areas" },
   { layerId: "protected-areas-world", synonyms: ["protected area", "nature reserve", "marine reserve", "national park boundary"], notes: "named parks and reserves at every size up to a continent; non-commercial licence", gist: "named parks and reserves worldwide, with designation and area" },
   { layerId: "terrain", synonyms: ["slope angle", "avalanche terrain", "steepness", "aspect", "north-facing", "shade"], notes: "mode slope (minSlope), aspect or shade (date, period); not an avalanche forecast; crags and trails already carry aspect and climb", gist: "slope angle, aspect and afternoon shade from elevation" },
+  { layerId: "elevation-profile", synonyms: ["cross-section", "elevation profile"], notes: "straight line A to B; geocode both, pass from and to", gist: "ground's elevation along a straight line from A to B" },
   { layerId: "fire-hazard", synonyms: ["fire risk", "fire hazard", "fire-prone"], notes: "US long-run hazard ranking, not a forecast; see fire-perimeters", gist: "long-run wildfire hazard potential in five classes" },
   { layerId: "flood-zones", synonyms: ["floodplain", "flood zone", "flood risk", "FEMA"], notes: "FEMA zones, drawn only at zoom 14 or closer; streamflow is live", gist: "FEMA flood hazard zones, drawn when zoomed in" },
   { layerId: "drought", synonyms: ["drought", "dry spell", "water shortage"], notes: "weekly US categories D0-D4, weeks input", gist: "weekly US drought categories D0 to D4" },
@@ -53,8 +54,10 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "peaks", synonyms: ["peaks", "highest peak", "tallest mountain", "prominence", "volcano", "elevation"], notes: "named peaks, v = elevation m; prominence property", gist: "named peaks and volcanoes with elevation and prominence" },
   { layerId: "recreation-sites", synonyms: ["trailhead", "recreation area", "picnic area", "day use", "visitor center", "OHV"], notes: "USFS and BLM developed sites, filter by kind", gist: "developed federal sites: trailheads, campgrounds, ramps, day use" },
   { layerId: "wikipedia-nearby", synonyms: ["history of this place", "tell me about", "what is that", "landmark", "points of interest", "Wikipedia"], notes: "articles in view; quote extract, link url", gist: "Wikipedia articles about places in the view" },
-  { layerId: "geology", synonyms: ["geology", "geologic map", "rock types", "bedrock"], notes: "map tiles only; for one spot use geologic-unit", gist: "geologic map of rock units, drawn as tiles" },
+  { layerId: "geology", synonyms: ["geology", "geologic map", "rock types", "bedrock"], notes: "an area's rock units with ages and shares; one spot: geologic-unit", gist: "geologic map of rock units, drawn as tiles" },
   { layerId: "geologic-unit", synonyms: ["what rock", "made of", "rock age", "how old is the rock"], notes: "the unit under one point; pass lon and lat", gist: "the rock unit, age and type at one point" },
+  { layerId: "faults", synonyms: ["fault", "fault line", "active fault"], notes: "USGS Quaternary faults; US only", gist: "young US faults with age, slip rate and sense" },
+  { layerId: "soils", synonyms: ["soil", "soil type", "clay soil"], notes: "USDA SSURGO map units; US only, under 600 km²", gist: "soil texture, drainage and depth to bedrock" },
   { layerId: "surf", synonyms: ["surf", "swell", "waves", "wave height", "buoy"], notes: "live NOAA buoys, v = wave height m; forecast true for days ahead, season for typical months", gist: "live wave height and period at ocean buoys" },
   { layerId: "tides", synonyms: ["tide", "high tide", "low tide", "tide chart", "tide pools"], notes: "live next highs and lows at US NOAA stations", gist: "next high and low tides at US stations" },
   { layerId: "fishing", synonyms: ["fishing", "fish", "boat ramp", "boat launch", "what's biting", "trout", "fly fishing"], notes: "access, ramps, piers, recent fish sightings, water temperature", gist: "fishing access, boat ramps, recent catches, water temperature" },
@@ -104,6 +107,12 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "wind-flow", synonyms: ["wind", "windiest", "windy", "gusty", "wind direction"], notes: "hourly 10 m wind forecast as moving particles, today and the next days", gist: "hourly wind forecast drawn as moving particles" },
   { layerId: "weather-forecast", synonyms: ["forecast", "will it rain", "too hot", "too cold", "temperature", "gusts", "tomorrow's weather"], notes: "7-day hourly forecast at the place: temperature, rain chance and amount, wind and gusts; saturday and sunday lines", gist: "seven-day hourly weather forecast at the asked place" },
   { layerId: "avalanche", synonyms: ["avalanche danger", "avalanche forecast", "avalanche risk", "avy"], notes: "US avalanche centers' daily danger by zone; quote the center and link it, never infer from weather", gist: "daily avalanche danger by US forecast zone" },
+  { layerId: "vegetation-types", synonyms: ["vegetation type", "what grows", "ecosystems"], notes: "LANDFIRE named types with shares, lower 48", gist: "named vegetation types and their shares" },
+  { layerId: "ecoregions", synonyms: ["ecoregion", "biome", "ecological region"], notes: "EPA Level III/IV, RESOLVE outside US; shares", gist: "named ecoregion outlines with their shares" },
+  { layerId: "canopy-height", synonyms: ["tree height", "how tall", "canopy height"], notes: "1 m canopy height; median, p90, tallest in box", gist: "how tall the trees are, worldwide" },
+  { layerId: "climate-normals", synonyms: ["climate", "typical weather", "normals"], notes: "1991-2020 monthly normals at a place; lon, lat, name", gist: "typical temperature, rain and snow for each month" },
+  { layerId: "flow-by-month", synonyms: ["peak flow", "river highest", "snowmelt peak"], notes: "median gauge flow per month; peak and low month", gist: "the months a river runs highest and lowest" },
+  { layerId: "water-depth", synonyms: ["water depth", "bathymetry", "seafloor"], notes: "depth ramp, contours; note gives deepest and median", gist: "how deep the sea, bays and surveyed lakes are" },
 ];
 
 /**

@@ -1,0 +1,202 @@
+{
+ "samples": [
+  {
+   "location": {
+    "x": -122.37,
+    "y": 47.6,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "-81.468925476",
+   "rasterId": 3805,
+   "resolution": 0.000030864196252466116,
+   "attributes": {
+    "Name": "ncei19_n47x75_w122x50_2023v1",
+    "CellsizeArcseconds": 0.111111112
+   }
+  },
+  {
+   "location": {
+    "x": -122.37,
+    "y": 47.6,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "-88.626792908",
+   "rasterId": 2527,
+   "resolution": 0.004166666666666667,
+   "attributes": {
+    "Name": "ETOPO_2022_v1_15s_surface_elev",
+    "CellsizeArcseconds": 15
+   }
+  },
+  {
+   "location": {
+    "x": -122.37,
+    "y": 47.6,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "-88.626792908",
+   "rasterId": 2530,
+   "resolution": 0.004166666666666667,
+   "attributes": {
+    "Name": "ETOPO_2022_v1_15s_bed_elev",
+    "CellsizeArcseconds": 15
+   }
+  },
+  {
+   "location": {
+    "x": -122.37,
+    "y": 47.6,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "-104.267593384",
+   "rasterId": 2531,
+   "resolution": 0.008333333333333333,
+   "attributes": {
+    "Name": "ETOPO_2022_v1_30s_bed",
+    "CellsizeArcseconds": 30
+   }
+  },
+  {
+   "location": {
+    "x": -122.37,
+    "y": 47.6,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "-104.267593384",
+   "rasterId": 2532,
+   "resolution": 0.008333333333333333,
+   "attributes": {
+    "Name": "ETOPO_2022_v1_30s_surface",
+    "CellsizeArcseconds": 30
+   }
+  },
+  {
+   "location": {
+    "x": -122.37,
+    "y": 47.6,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "-121.047775269",
+   "rasterId": 2533,
+   "resolution": 0.016666666666666666,
+   "attributes": {
+    "Name": "ETOPO_2022_v1_60s_bed",
+    "CellsizeArcseconds": 60
+   }
+  },
+  {
+   "location": {
+    "x": -122.37,
+    "y": 47.6,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "-121.047775269",
+   "rasterId": 2534,
+   "resolution": 0.016666666666666666,
+   "attributes": {
+    "Name": "ETOPO_2022_v1_60s_surface",
+    "CellsizeArcseconds": 60
+   }
+  },
+  {
+   "location": {
+    "x": -122.37,
+    "y": 47.6,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "-84.363395691",
+   "rasterId": 115,
+   "resolution": 0.00009259259028859895,
+   "attributes": {
+    "Name": "pugetsound_mhw_",
+    "CellsizeArcseconds": 0.333332986
+   }
+  },
+  {
+   "location": {
+    "x": -122.37,
+    "y": 47.6,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "-81.884796143",
+   "rasterId": 172,
+   "resolution": 0.00009259259028859895,
+   "attributes": {
+    "Name": "pugetsound_navd88",
+    "CellsizeArcseconds": 0.333332986
+   }
+  },
+  {
+   "location": {
+    "x": -122.37,
+    "y": 47.6,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "-113.479202271",
+   "rasterId": 193,
+   "resolution": 0.01,
+   "attributes": {
+    "Name": "northern_california_36_msl_2005",
+    "CellsizeArcseconds": 36
+   }
+  },
+  {
+   "location": {
+    "x": -122.37,
+    "y": 47.6,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "-103.088302612",
+   "rasterId": 135,
+   "resolution": 0.009999999999999997,
+   "attributes": {
+    "Name": "strait_of_juan_de_fuca_36_mhw_2002",
+    "CellsizeArcseconds": 36
+   }
+  }
+ ]
+}

@@ -132,6 +132,15 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   avalanche: "hazard",
   "weather-forecast": "data",
   "air-quality": "hazard",
+  faults: "data",
+  soils: "natural",
+  "elevation-profile": "data",
+  "vegetation-types": "raster",
+  ecoregions: "data",
+  "canopy-height": "raster",
+  "climate-normals": "data",
+  "flow-by-month": "data",
+  "water-depth": "raster",
 };
 
 /**
@@ -355,6 +364,8 @@ export const RAMPS = {
   remoteness: [OFF_WHITE, SAGE, DARK_GREY],
   /** Owner's board, hex tiles variant A: a plain gray ramp. */
   gray: [OFF_WHITE, DARK_GREY],
+  /** Water depth (bathymetry, docs/top-10-use-cases.md T10): shallow off-white, through purple, to dark grey at the deepest. */
+  depth: [OFF_WHITE, PURPLE, DARK_GREY],
   /** Score and facet lines (trail popularity, difficulty): sage → pink → purple. Never dark grey on a line. */
   scoreLine: [SAGE, PINK, PURPLE],
   /**

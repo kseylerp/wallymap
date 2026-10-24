@@ -1,7 +1,9 @@
 import type { BBox } from "@/layers/types";
-import { DARK_GREY, PINK, PURPLE, SAGE } from "@/lib/render/palette";
+import { DARK_GREY, OFF_WHITE, PINK, PURPLE, SAGE } from "@/lib/render/palette";
 import { compass4, hornSlopeAspect, type Period, shadedThrough, SLOPE_CLASSES, slopeClass, sunPath } from "./analysis";
 import { type Dem, latToY, loadDem, lonToX, metresPerPixel, TILE_SIZE, type TileSource, xToLon, yToLat } from "./dem";
+import { bandOf } from "./extremes";
+import { hexToRgb } from "@/lib/render/ramp";
 
 /**
  * What the terrain layer draws and counts: slope classes (avalanche terrain), the way slopes face, or the ground in
@@ -9,7 +11,7 @@ import { type Dem, latToY, loadDem, lonToX, metresPerPixel, TILE_SIZE, type Tile
  * numbers the query returns over a box, so the picture and the note always agree.
  */
 
-export const TERRAIN_MODES = ["slope", "aspect", "shade"] as const;
+export const TERRAIN_MODES = ["slope", "aspect", "shade", "elevation"] as const;
 export type TerrainMode = (typeof TERRAIN_MODES)[number];
 export const FACES = ["N", "E", "S", "W"] as const;
 export type Face = (typeof FACES)[number];
@@ -23,6 +25,13 @@ export type TerrainOptions = {
   /** shade: the day (YYYY-MM-DD) and the part of it. */
   date?: string;
   period?: Period;
+  /**
+   * elevation: the band step in metres (1,000 ft is 304.8) and the lowest and highest band in the view (band k spans k
+   * to k+1 steps above sea level); the tints run off-white (lowest band) to dark grey (highest).
+   */
+  bandStepM?: number;
+  bandLo?: number;
+  bandHi?: number;
 };
 
 /** Ground flatter than this has no meaningful aspect, and is left undrawn in the aspect view. */
@@ -90,8 +99,77 @@ function cellAt(dem: Dem, px: number, py: number, spacing: number) {
   return hornSlopeAspect(w, spacing);
 }
 
+/** Band tints over the hillshade: see-through enough for the relief to show. */
+const TINT_ALPHA = 0.5;
+/** Contour lines at the band edges: dark grey, half strength. */
+export const CONTOUR_COLOR: Rgba = hex(DARK_GREY, 0.5);
+
+/**
+ * Hypsometric tints (spec T08): off-white low, sage, purple, dark grey high, mixed in sRGB between the palette colors.
+ * (The OKLCH ramps rotate hue on the way from sage to purple and passed through teal and blue, which are not ours.)
+ */
+const HYPSO = [OFF_WHITE, SAGE, PURPLE, DARK_GREY].map(hexToRgb);
+
+export function hypsoColor(t: number): [number, number, number] {
+  const x = Math.min(1, Math.max(0, t)) * (HYPSO.length - 1);
+  const i = Math.min(HYPSO.length - 2, Math.floor(x));
+  const f = x - i;
+  const [a, b] = [HYPSO[i], HYPSO[i + 1]];
+  return [0, 1, 2].map((c) => Math.round(a[c] + (b[c] - a[c]) * f)) as [number, number, number];
+}
+
+/** The tint of band `k` of the bands lo..hi: off-white at the lowest, through sage and purple, toward dark grey. */
+export function bandTint(k: number, lo: number, hi: number): Rgba {
+  const n = Math.max(1, hi - lo);
+  const t = 0.05 + (0.85 * Math.min(n, Math.max(0, k - lo))) / n;
+  const [r, g, b] = hypsoColor(t);
+  return [r, g, b, Math.round(TINT_ALPHA * 255)];
+}
+
+/** The band set a tile URL without one draws: 1,000 ft bands from sea level to 14,000 ft. */
+const DEFAULT_BANDS = { stepM: 304.8, lo: 0, hi: 14 };
+
+/**
+ * One tile of hypsometric tints: each pixel colored by its elevation band, with a contour line where the band changes
+ * between a pixel and its right or lower neighbour. The elevation is read at the tile's own zoom (one elevation pixel
+ * per map pixel), so it draws from zoom 5, unlike slope.
+ */
+export async function renderElevationTile(z: number, x: number, y: number, opts: TerrainOptions, source?: TileSource): Promise<Uint8Array> {
+  const box: BBox = [xToLon(x, z), yToLat(y + 1, z), xToLon(x + 1, z), yToLat(y, z)];
+  const dem = await loadDem(box, { zoom: Math.min(15, z), maxTiles: 9, source });
+  const out = new Uint8Array(TILE_SIZE * TILE_SIZE * 4);
+  if (dem.tileCount === 0) return out;
+  const stepM = opts.bandStepM && opts.bandStepM > 0 ? opts.bandStepM : DEFAULT_BANDS.stepM;
+  const lo = opts.bandLo ?? DEFAULT_BANDS.lo;
+  const hi = opts.bandHi ?? DEFAULT_BANDS.hi;
+  const scale = 2 ** (dem.z - z);
+  const band = (i: number, j: number) => {
+    const m = dem.atPixel((x * TILE_SIZE + i + 0.5) * scale, (y * TILE_SIZE + j + 0.5) * scale);
+    return Number.isNaN(m) ? NaN : bandOf(m, stepM);
+  };
+  // One row of bands ahead, so each pixel compares with its lower neighbour without reading it twice.
+  let row = Array.from({ length: TILE_SIZE + 1 }, (_, i) => band(i, 0));
+  for (let j = 0; j < TILE_SIZE; j++) {
+    const next = Array.from({ length: TILE_SIZE + 1 }, (_, i) => band(i, j + 1));
+    for (let i = 0; i < TILE_SIZE; i++) {
+      const k = row[i];
+      if (Number.isNaN(k)) continue;
+      const edge = (!Number.isNaN(row[i + 1]) && row[i + 1] !== k) || (!Number.isNaN(next[i]) && next[i] !== k);
+      const c = edge ? CONTOUR_COLOR : bandTint(k, lo, hi);
+      const o = (j * TILE_SIZE + i) * 4;
+      out[o] = c[0];
+      out[o + 1] = c[1];
+      out[o + 2] = c[2];
+      out[o + 3] = c[3];
+    }
+    row = next;
+  }
+  return out;
+}
+
 /** One 256-pixel map tile of the terrain view, as RGBA. Transparent where nothing is drawn or no elevation loaded. */
 export async function renderTile(z: number, x: number, y: number, opts: TerrainOptions, source?: TileSource): Promise<Uint8Array> {
+  if (opts.mode === "elevation") return renderElevationTile(z, x, y, opts, source);
   const zd = demZoomFor(z);
   const box: BBox = [xToLon(x, z), yToLat(y + 1, z), xToLon(x + 1, z), yToLat(y, z)];
   const dem = await loadDem(box, { zoom: zd, maxTiles: 36, source });

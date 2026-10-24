@@ -10,13 +10,16 @@ import {
   LAND_OUTLINE,
   landFillOpacity,
   landHatchOpacity,
+  hatchPatternsOf,
   syncHeatLayers,
+  tileKeyOf,
   syncTileLayers,
   vectorHatchPattern,
   vectorTileLayerSpecs,
 } from "@/components/mapTiles";
 import { DARK_GREY, OFF_WHITE, PINK, PURPLE, SAGE, WHITE } from "@/lib/render/palette";
 import { hexToRgb, lightness } from "@/lib/render/ramp";
+import { ROCK_FAMILY_FIELD, ROCK_FAMILY_LEGEND, rockFamilyFillExpression } from "@/lib/render/rockFamily";
 import type { LayerResult, StyleHints } from "@/layers/types";
 import { buildDeckLayerSets } from "@/lib/render/deck";
 import { pickUnderHeat } from "@/lib/render/inspect";
@@ -565,5 +568,40 @@ describe("tile areas keyed by a stepped ramp (geology by era)", () => {
     const fill = specs.find((s) => s.id === "tiles-geology")!;
     expect((fill.paint as Record<string, unknown>)["fill-color"]).toEqual(["step", ["to-number", ["get", "best_age_top"], -1], SAGE, 2.58, PINK, 66, PURPLE]);
     expect((specs.find((s) => s.id === "tiles-geology-hatch")!.paint as Record<string, unknown>)["fill-opacity"]).toBe(0);
+  });
+});
+
+describe("the geologic map by rock family", () => {
+  const style: StyleHints = { geometry: "polygon", color: "#3A3A3C" };
+
+  it("keys a legend on the derived rock family to the rock family paint", () => {
+    const loaded = { id: "geology", style, legend: ROCK_FAMILY_LEGEND, result: { kind: "tiles", data: { url: "u", minzoom: 0, maxzoom: 16, format: "vector", sourceLayer: "units" } } };
+    expect(tileKeyOf(loaded as never)).toEqual({ field: ROCK_FAMILY_FIELD, colors: [], paint: "rock-family" });
+  });
+
+  it("fills each unit by its family and age, hatches metamorphic, stipples loose sediments, with dark grey contacts and unit names", () => {
+    const specs = vectorTileLayerSpecs("geology", style, "units", "polygon", true, {}, { field: ROCK_FAMILY_FIELD, colors: [], paint: "rock-family" });
+    expect(specs.map((s) => s.id)).toEqual(["tiles-geology", "tiles-geology-hatch", "tiles-geology-casing", "tiles-geology-line", "tiles-geology-label"]);
+    const fill = specs[0].paint as Record<string, unknown>;
+    expect(fill["fill-color"]).toEqual(rockFamilyFillExpression());
+    expect([...new Set(hatchPatternsOf(specs))].sort()).toEqual(["hatch-3A3A3C-2", "stipple-3A3A3C"]);
+    expect((specs[3].paint as Record<string, unknown>)["line-color"]).toBe(DARK_GREY);
+    expect(specs[4]).toMatchObject({ type: "symbol", minzoom: 10, paint: { "text-color": DARK_GREY, "text-halo-color": WHITE } });
+    // A color picked in the panel draws the plain recipe instead.
+    const recolored = vectorTileLayerSpecs("geology", style, "units", "polygon", true, { color: PURPLE }, { field: ROCK_FAMILY_FIELD, colors: [], paint: "rock-family" });
+    expect((recolored[0].paint as Record<string, unknown>)["fill-color"]).toBe(PURPLE);
+  });
+
+  it("adds the stipple image once, at 2x", () => {
+    const added: string[] = [];
+    const map = {
+      hasImage: (id: string) => added.includes(id),
+      addImage: (id: string, _img: unknown, opts: { pixelRatio: number }) => {
+        expect(opts.pixelRatio).toBe(2);
+        added.push(id);
+      },
+    };
+    ensureHatchImages(map as unknown as MapboxMap, ["stipple-3A3A3C", "stipple-3A3A3C", "hatch-3A3A3C-2"]);
+    expect(added).toEqual(["stipple-3A3A3C", "hatch-3A3A3C-2"]);
   });
 });

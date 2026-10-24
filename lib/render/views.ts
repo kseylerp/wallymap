@@ -246,6 +246,8 @@ export function viewCaption(view: ViewKind | undefined, layer: LoadedLayer, comp
       if (measure && measure.type !== "measure") return undefined;
       return layer.style.geometry === "point" ? `Symbol size: ${measureWord}; the top ${RANKED_TOP_N} named` : `Top ${RANKED_TOP_N} by ${measureWord}`;
     case "density":
+      // A picture from map tiles has no features to cluster (vegetation types read "Clusters count the features...").
+      if (layer.result.kind === "tiles") return undefined;
       // Hex cells say what their color means and how big they are (spec §12d).
       return hexes ?? "Clusters count the features near each other; zoom in to split them";
     case "timeline":

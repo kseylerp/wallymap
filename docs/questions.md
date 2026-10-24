@@ -276,6 +276,8 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - Is downtown Asheville in a flood zone?
 - New deforestation alerts in the Congo this month
 - Show the geology of the Grand Canyon
+- Are there active faults near Salt Lake City?
+- What kind of soil is around Fort Collins?
 - Where are the wild horses in Nevada?
 - Show plant hardiness zones in Vermont
 - What's the land cover around Torres del Paine?
@@ -284,6 +286,9 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - Where is the old-growth forest in Oregon?
 - Is this primary forest or plantation? @view=[117.6,4.8,118,5.1]
 - Where has natural forest been converted to plantations in Borneo since 2017?
+- What vegetation types grow around Sedona?
+- Which ecoregions does Yellowstone span?
+- How tall are the trees in Redwood National Park?
 - Rapids on the Middle Fork Salmon
 - Kayaking rivers near Queenstown
 - Where is the permafrost in Alaska?
@@ -307,6 +312,8 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - Will it rain in Yosemite Valley this weekend?
 - What's the avalanche danger in Little Cottonwood Canyon today?
 - How is the air quality in Yosemite Valley this weekend?
+- Elevation profile from Glacier Point to Half Dome
+- How deep is Puget Sound off Seattle?
 - Where is the wind strongest over the Sierra tomorrow?
 - Good day hikes near Boulder under 5 miles
 - Easy hikes with a waterfall near Asheville
@@ -365,6 +372,8 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - Show my class how the glaciers in Glacier National Park have shrunk
 - What rock is under Denver?
 - How has Arctic sea ice changed since 2012?
+- What is the weather usually like in July in Bozeman?
+- Which month does the Truckee River run highest?
 <!-- eval:end -->
 
 ## Last run

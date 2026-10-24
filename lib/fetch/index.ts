@@ -120,6 +120,8 @@ export const HOST_RATES: Record<string, { capacity: number; refillPerSecond: num
   "waterservices.usgs.gov": { capacity: 5, refillPerSecond: 5 },
   // NOAA NWPS: streamflow asks it for flood stages and forecasts gauge by gauge (layers/_shared/river-forecast.ts).
   "api.water.noaa.gov": { capacity: 10, refillPerSecond: 10 },
+  // Macrostrat: geology samples the box's units point by point (36 points; about 0.2 s each, 12 at once answered fine).
+  "macrostrat.org": { capacity: 12, refillPerSecond: 12 },
 };
 
 function hostOf(url: string): string | null {

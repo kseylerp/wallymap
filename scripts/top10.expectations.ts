@@ -78,6 +78,8 @@ const SUN = /\bsun(?:day)?\b/i;
 const COUNT = /\b\d[\d,]*\s+(?:\w+\s+){0,2}(?:sightings|records|observations|sites|claims|mines|campsites|campgrounds|sites|crags|trails|fires|plumes|stations|gauges)\b/i;
 const MONTH = /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i;
 const YEAR = /\b(?:19|20)\d\d\b/;
+/** A rock's age: in years, or any named period or epoch of the geologic time scale. */
+const GEO_AGE = /million years|thousand years|\bma\b|\b(?:holocene|pleistocene|pliocene|miocene|oligocene|eocene|paleocene|quaternary|tertiary|neogene|paleogene|cretaceous|jurassic|triassic|permian|pennsylvanian|mississippian|carboniferous|devonian|silurian|ordovician|cambrian|precambrian|proterozoic|archean)\b/i;
 
 const TRAIL_CARD = ["Length", "Shape", "Round trip", "Climb, round trip", "Difficulty"];
 const OUTDOOR = ["outdoors-satellite", "outdoors"] as Basemap[];
@@ -424,14 +426,13 @@ export const TOP10: Top10Expect[] = [
     id: "T08.1", useCase: "T08",
     question: "What rock types and ages make up Zion Canyon, and are there faults?",
     layers: ["geology", "geologic-unit"], main: "geologic-unit|geology", basemap: DATA_GROUND,
-    legend: ["Age of the youngest rock|Geologic unit"], card: ["Rock", "Description"],
+    legend: ["Rock family|Age of the youngest rock|Geologic unit"], card: ["Rock", "Description"],
     facts: [{ what: "rock names (Navajo Sandstone, Kayenta)", re: /sandstone|navajo|kayenta|moenave|chinle/i }, { what: "age in million years or period", re: /million years|jurassic|triassic|\bma\b/i }, { what: "faults (or that the app has none)", re: /fault/i }],
-    needs: ["faults (USGS Quaternary Fault and Fold Database)", "formation names in view as a legend of rock families"],
   },
   {
     id: "T08.2", useCase: "T08",
     question: "Elevation cross-section from Yosemite Valley to the top of Half Dome",
-    layers: ["terrain|peaks"], main: "terrain|peaks", basemap: TOPO,
+    layers: ["terrain|peaks|elevation-profile"], main: "terrain|peaks|elevation-profile", basemap: TOPO,
     facts: [{ what: "start and top elevation", re: ELEV }, { what: "total climb", re: /climb|gain|rises?|relief/i }, { what: "steepest part", re: /steep|\d+\s*°|cliff/i }],
     needs: ["a cross-section chart along a drawn line (elevation profile without a route)"],
   },
@@ -447,39 +448,41 @@ export const TOP10: Top10Expect[] = [
   {
     id: "T08.4", useCase: "T08",
     question: "What's the soil like around Boulder?",
-    layers: ["geology|land-cover|geologic-unit"], main: "geology|land-cover|geologic-unit", basemap: DATA_GROUND,
+    layers: ["soils|geology|land-cover|geologic-unit"], main: "soils|geology|land-cover|geologic-unit", basemap: DATA_GROUND,
     facts: [{ what: "soil texture or type", re: /loam|clay|sand|silt|soil/i }, { what: "a share or depth", re: /\d+\s*(?:%|percent|in|inches|cm)\b/i }],
-    needs: ["soils (USDA SSURGO through Soil Data Access; SoilGrids outside the US)"],
+    needs: ["soils outside the US (SoilGrids or OpenLandMap)"],
   },
   {
     id: "T08.5", useCase: "T08",
     question: "What's under my feet here? @view=[-109.65,38.68,-109.5,38.78]",
     layers: ["geologic-unit|geology"], main: "geologic-unit|geology", basemap: DATA_GROUND,
     card: ["Rock", "Description"],
-    facts: [{ what: "rock name", re: /sandstone|entrada|navajo|shale|limestone|rock/i }, { what: "age", re: /million years|jurassic|triassic|permian|\bma\b/i }],
+    // The point under the view's centre can be a surface deposit (alluvial gravel near Arches): its name and its epoch
+    // (Pleistocene, Holocene) answer the question as well as a bedrock formation and a period do.
+    facts: [{ what: "rock or deposit name", re: /sandstone|entrada|navajo|shale|limestone|rock|gravel|alluvi|sediment/i }, { what: "age", re: GEO_AGE }],
   },
 
   // T09. What grows and lives here.
   {
     id: "T09.1", useCase: "T09",
     question: "What ecosystems cover the Great Smoky Mountains, with the share of each?",
-    layers: ["land-cover|forest-types"], main: "land-cover|forest-types", basemap: DATA_GROUND,
-    legend: ["Land cover|Forest type"],
+    layers: ["vegetation-types|ecoregions|land-cover|forest-types"], main: "vegetation-types|land-cover|forest-types|ecoregions", basemap: DATA_GROUND,
+    legend: ["Vegetation type|Land cover|Forest type|Ecoregions"],
     facts: [{ what: "shares", re: PCT }, { what: "named ecosystem", re: /forest|hardwood|spruce|fir|oak|cove|heath/i }],
     needs: ["ecoregions (EPA Level III/IV, RESOLVE)", "vegetation types (LANDFIRE EVT)", "shares of the view per class from the source"],
   },
   {
     id: "T09.2", useCase: "T09",
     question: "Is the forest around Mount Hood natural or planted, and how tall are the trees?",
-    layers: ["forest-types"], main: "forest-types|old-growth", basemap: DATA_GROUND,
-    legend: ["Forest type"],
+    layers: ["forest-types", "canopy-height"], main: "forest-types|old-growth|canopy-height", basemap: DATA_GROUND,
+    legend: ["Forest type|Canopy height"],
     facts: [{ what: "natural vs planted share", re: /natural|planted|plantation|primary|regenerating/i }, { what: "tree height", re: /\b\d+\s*(?:m|ft|feet|metres)\b[^.]*(?:tall|height)|(?:tall|height)[^.]*\b\d+\s*(?:m|ft|feet)/i }],
     needs: ["canopy height (Meta and WRI 1 m through Earth Engine)"],
   },
   {
     id: "T09.3", useCase: "T09",
     question: "How do the vegetation types of the Sierra Nevada compare with the Colorado Rockies?",
-    layers: ["land-cover|forest-types"], main: "land-cover|forest-types", basemap: DATA_GROUND,
+    layers: ["vegetation-types|land-cover|forest-types"], main: "vegetation-types|land-cover|forest-types", basemap: DATA_GROUND,
     places: ["Sierra", "Rockies"],
     facts: [{ what: "shares on both sides", re: PCT }, { what: "named vegetation", re: /conifer|pine|fir|spruce|aspen|shrub|grass|forest/i }],
     needs: ["two places side by side (one map per place, one table of shares)", "vegetation types (LANDFIRE EVT)"],
@@ -487,14 +490,14 @@ export const TOP10: Top10Expect[] = [
   {
     id: "T09.4", useCase: "T09",
     question: "What grows around Bend?",
-    layers: ["land-cover|forest-types|old-growth"], main: "land-cover|forest-types|old-growth", basemap: DATA_GROUND,
+    layers: ["vegetation-types|land-cover|forest-types|old-growth"], main: "vegetation-types|land-cover|forest-types|old-growth", basemap: DATA_GROUND,
     facts: [{ what: "named vegetation", re: /ponderosa|juniper|sagebrush|pine|shrub|forest|grass/i }, { what: "a share or area", re: new RegExp(`${PCT.source}|${AREA.source}`, "i") }],
     needs: ["vegetation types (LANDFIRE EVT)", "shares of the view per class"],
   },
   {
     id: "T09.5", useCase: "T09",
     question: "What's growing here? @view=[-124.0,47.8,-123.8,47.9]",
-    layers: ["land-cover|forest-types|old-growth"], main: "land-cover|forest-types|old-growth", basemap: DATA_GROUND,
+    layers: ["vegetation-types|canopy-height|land-cover|forest-types|old-growth"], main: "vegetation-types|land-cover|forest-types|old-growth|canopy-height", basemap: DATA_GROUND,
     facts: [{ what: "named ecosystem", re: /rain ?forest|spruce|hemlock|cedar|fir|forest/i }, { what: "a share or height", re: new RegExp(`${PCT.source}|\\b\\d+\\s*(?:m|ft)\\b`, "i") }],
     needs: ["canopy height", "ecoregion name"],
   },
@@ -503,14 +506,14 @@ export const TOP10: Top10Expect[] = [
   {
     id: "T10.1", useCase: "T10",
     question: "Typical temperature and precipitation by month at Lake Tahoe, and when the snow usually arrives",
-    layers: ["snowpack|weather-forecast"], main: "snowpack|weather-forecast", basemap: TOPO,
+    layers: ["climate-normals|snowpack|weather-forecast"], main: "climate-normals|snowpack|weather-forecast", basemap: TOPO,
     facts: [{ what: "monthly temperatures in °F", re: DEG_F }, { what: "precipitation by month", re: /\b\d+(?:\.\d+)?\s*(?:in|inches|mm)\b/i }, { what: "when snow arrives", re: /snow[^.]*(?:oct|nov|dec)|(?:oct|nov|dec)[^.]*snow/i }],
     needs: ["climate normals by month (Open-Meteo history or ERA5-Land through Earth Engine, or NOAA 1991-2020 station normals)", "a monthly climate strip"],
   },
   {
     id: "T10.2", useCase: "T10",
     question: "When in the year is the Merced River highest in Yosemite Valley?",
-    layers: ["streamflow|river-pulse"], main: "streamflow|river-pulse", basemap: TOPO,
+    layers: ["flow-by-month|streamflow|river-pulse"], main: "flow-by-month|streamflow|river-pulse", basemap: TOPO,
     facts: [{ what: "peak month", re: /\b(?:may|june|apr(?:il)?)\b/i }, { what: "flow in cfs", re: CFS }],
     needs: ["flow by month of the year (USGS daily statistics) as a monthly strip"],
   },
@@ -534,7 +537,7 @@ export const TOP10: Top10Expect[] = [
   {
     id: "T10.5", useCase: "T10",
     question: "How deep is the water here? @view=[-122.55,47.55,-122.35,47.7]",
-    layers: ["lakes|tides"], main: "lakes|tides", basemap: DATA_GROUND,
+    layers: ["lakes|tides|water-depth"], main: "lakes|tides|water-depth", basemap: DATA_GROUND,
     facts: [{ what: "a depth", re: /\b\d[\d,]*\s*(?:ft|feet|m|fathoms)\b[^.]*deep|depth[^.]*\b\d[\d,]*\s*(?:ft|feet|m)\b/i }],
     needs: ["bathymetry (NOAA NCEI DEM mosaic and GEBCO) with a depth ramp and contours"],
   },

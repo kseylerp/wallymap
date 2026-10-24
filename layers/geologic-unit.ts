@@ -53,27 +53,27 @@ const unitSchema = z.object({
   scale: z.string().nullable().optional(),
 });
 
-const identifySchema = z.object({
+export const identifySchema = z.object({
   success: z.object({
     data: z.array(unitSchema),
     refs: z.record(z.string(), z.string()).optional(),
   }),
 });
 
-type Unit = z.infer<typeof unitSchema>;
+export type Unit = z.infer<typeof unitSchema>;
 
 function clip(text: string, max: number): string {
   const t = text.replace(/\s+/g, " ").trim();
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
-function scaleRank(unit: Unit): number {
+export function scaleRank(unit: Unit): number {
   const i = SCALE_ORDER.indexOf(unit.scale ?? "");
   return i === -1 ? SCALE_ORDER.length : i;
 }
 
 /** "Pleistocene", or "Triassic to Cretaceous" (oldest to youngest) when the unit spans intervals. */
-function ageText(unit: Unit): string | undefined {
+export function ageText(unit: Unit): string | undefined {
   const young = unit.t_int_name?.trim();
   const old = unit.b_int_name?.trim();
   if (young && old) return young === old ? young : `${old} to ${young}`;
@@ -206,11 +206,12 @@ const geologicUnit = defineLayer({
   id: "geologic-unit",
   title: "Geologic unit at a point",
   description:
-    "What rock lies at one place: the geologic map unit under a point (lon, lat), from Macrostrat's compilation of geologic maps (world coverage, most detailed in the United States). " +
+    "What rock lies at ONE spot: the geologic map unit under a point (lon, lat), from Macrostrat's compilation of geologic maps (world coverage, most detailed in the United States); for what an area is made of (a canyon, a park, a range, the map view) also query geology, whose note names the area's main units with ages and shares. " +
     "Give it the lon and lat of the spot (a peak, a trailhead, a clicked point); it returns one point whose properties are name (the map unit), age (geologic period or epoch, for example Pleistocene or Triassic to Cretaceous), " +
     "ageTopMa and ageBottomMa (youngest and oldest age in millions of years), lithology (rock types in words, such as 'Granite, with granodiorite and amphibolite'; sometimes empty, then read description), rock (the rock types and age span in one line, the card's headline), description (the source's first sentence) and fullDescription, formations, mapScale (large is most detailed), " +
     "alsoMapped (what coarser maps call the same spot), reference (the source map) and url (the Macrostrat map at that place). " +
-    "Use it for 'what rock is this peak made of', 'what rock is here', 'how old is the ground here', 'is this granite or limestone', 'geology of this place'. To show the geology over an area use the geology layer instead. " +
+    "Use it for 'what rock is this peak made of', 'what rock is here', 'how old is the ground here', 'is this granite or limestone'. " +
+      "One point cannot say what an AREA is made of: for a canyon, a park, a range or a map view ('what rocks make up Zion Canyon', 'what's under my feet here') ALSO query the geology layer, whose note lists the area's main units by name with ages and shares, and quote it; a point alone can land on a gravel bar and miss the canyon walls. " +
     "Caveats: geologic maps are drawn at the scale of their source, so edges are generalised and small outcrops are missed; units can be loose ('undivided granitic rocks') and the age is the unit's range, not a date for any one rock; " +
     "surface deposits like glacial till or alluvium can hide the bedrock below. One point per call: ask once per place.",
   coverage: "global",

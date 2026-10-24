@@ -78,6 +78,42 @@ export type SeriesAxis = {
 export type LinkedSeries = { label: string; unit: string; place: string; times: string[]; values: (number | null)[]; source?: Citation };
 
 /**
+ * One row of the monthly strip (MonthlyStrip): twelve values, January first, null where the source has none. `band`
+ * draws a range per month (the normal high and low temperature), `bars` an amount per month (precipitation, river
+ * flow), `cells` a shade per month (the share of days with snow on the ground, years greening up that month). `legend`
+ * says in words what the marks are ("Bars: normal monthly precipitation, 1991–2020").
+ */
+export type MonthlyRow =
+  | { kind: "band"; key: string; label: string; unit: string; high: (number | null)[]; low: (number | null)[]; legend: string }
+  | { kind: "bars"; key: string; label: string; unit: string; values: (number | null)[]; legend: string }
+  | {
+      kind: "cells";
+      key: string;
+      label: string;
+      unit: string;
+      values: (number | null)[];
+      legend: string;
+      /** The value drawn darkest (default the row's largest); a share of days is 1. */
+      max?: number;
+    };
+
+/**
+ * How a place changes through the year (spec T10 "Monthly climate strip"): rows of twelve monthly values, drawn under
+ * the map in the linked chart's slot (components/MonthlyStrip.tsx) with the current month marked by the pink playhead.
+ * Any result whose answer is a year at one place carries it: climate normals at a station, a river's flow by month,
+ * the months spring greens up. `place` names where the values were read ("Tahoe City, CA"), `period` the years
+ * averaged ("1991–2020"); `mark` pins one moment inside a month (the usual green-up date: month 2, fraction 0.9 is
+ * late March) with its words.
+ */
+export type MonthlyStrip = {
+  place: string;
+  period: string;
+  rows: MonthlyRow[];
+  mark?: { month: number; fraction: number; label: string };
+  source?: string;
+};
+
+/**
  * A vector field drawn as moving particles (spec §13a): the features are nodes of a regular grid (`nx` across and `ny`
  * up, `bbox` their outer nodes), each with its index in the grid under `node` (row by row from the south-west corner;
  * nodes without data, such as land for currents, may be left out) and `u` (east) and `v` (north) in m/s and an
@@ -107,6 +143,8 @@ export type LayerResult =
       series?: SeriesAxis;
       /** A curve to plot under the scrubber, synced with the playhead (the tide for currents). */
       linked?: LinkedSeries;
+      /** Twelve monthly values per variable at one place, drawn as the monthly strip under the map (MonthlyStrip). */
+      months?: MonthlyStrip;
       /** Present when the features are the nodes of a vector field drawn as particles (ocean currents, wind). */
       flow?: FlowField;
       /** A title that says what this answer holds ("River flow, daily (142 rivers)"), over the layer's own. */
@@ -151,6 +189,8 @@ export type LayerResult =
       sourceStatus?: SourceStatus;
       /** This answer's own key, over the layer's (`legend`) and the derived one (legendOf). */
       legend?: LegendSpec;
+      /** Twelve monthly values at the asked place, drawn as the monthly strip under the map (MonthlyStrip). */
+      months?: MonthlyStrip;
       /**
        * What time means for this answer, over the layer's own `time` (timeShapeOf), for a layer whose views differ: a
        * baseline map has none, a change view is the snapshots it compares.

@@ -220,11 +220,22 @@ function clearChecks(): void {
 
 /* ---------- Permalinks ---------- */
 
-/** The camera the map would end on at this size: the reducer's last fit (else every drawn feature) with the panels' padding. */
-function permalinkFor(state: MapState, size: Size): string {
+/** The map view a phone "here" question carries (`@view=[w,s,e,n]`), if any. */
+export function questionView(raw: string): BBox | undefined {
+  const m = /@view=\[([^\]]+)\]/.exec(raw);
+  const v = m?.[1].split(",").map(Number);
+  return v && v.length === 4 && v.every(Number.isFinite) ? (v as BBox) : undefined;
+}
+
+/**
+ * The camera the map would end on at this size: the reducer's last fit, else every drawn feature, else the view the
+ * question was asked on (a "here" answer drawn as tiles moves no camera: Elliott Bay's depth opened on the whole US),
+ * with the panels' padding.
+ */
+function permalinkFor(state: MapState, size: Size, view?: BBox): string {
   const visible = visibleState(state);
   const features = Object.values(visible.layers).flatMap((l) => (l.result.kind === "geojson" ? l.result.data.features : []));
-  const bbox = state.camera?.bbox ?? boundsOf(features) ?? ([-125, 24, -66, 50] as BBox);
+  const bbox = state.camera?.bbox ?? boundsOf(features) ?? view ?? ([-125, 24, -66, 50] as BBox);
   const isMobile = size.width < 768;
   const padding = visibleMapPadding({ width: size.width, height: size.height, panelOpen: false, isMobile, layerPanelOpen: !isMobile });
   const viewport = bboxToViewport(bbox, size.width, size.height, padding);
@@ -504,7 +515,7 @@ async function checkOne(browser: Browser, item: ScreenItem, size: Size): Promise
   const shot = `${item.slug}-${size.name}.png`;
   const lineShots: string[] = [];
   try {
-    await page.goto(`${BASE_URL}/${permalinkFor(item.state, size)}`, { waitUntil: "domcontentloaded", timeout: 120_000 });
+    await page.goto(`${BASE_URL}/${permalinkFor(item.state, size, questionView(item.raw))}`, { waitUntil: "domcontentloaded", timeout: 120_000 });
     await page.waitForFunction(() => "__wallyMap" in window, undefined, { timeout: 120_000 });
     await settle(page, 2000);
     const failed = await page.locator("text=/Could not restore/").count();

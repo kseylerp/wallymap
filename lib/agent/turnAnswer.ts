@@ -34,7 +34,7 @@ export function answerForTurn(turn: Turn): AnswerTemplate | null {
 export function composeForTurn(markdown: string, turn: Turn): string {
   const template = answerForTurn(turn);
   turn.followUps = template?.followUps ?? [];
-  const composed = withEmptyLayers(composeNote(markdown, template), turn);
+  const composed = withLandManagers(withEmptyLayers(composeNote(markdown, template), turn), turn);
   if (composed !== markdown) turn.note(template?.lead ? "answer built on the template: lead, top options, then the model's caveats" : "answer put first: the note's first sentence now answers with a number");
   return composed;
 }
@@ -77,3 +77,20 @@ export async function settle(turn: Turn): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.allSettled([...turn.inflight]);
 }
+
+/**
+ * Where to camp depends on who manages the land: when public-lands answered a camping or land question and the note
+ * names no manager, it ends with the two largest units ("Land here: San Isabel National Forest (US Forest Service) and
+ * Royal Gorge Field Office (Bureau of Land Management).").
+ */
+export function withLandManagers(markdown: string, turn: Pick<Turn, "question" | "calls">): string {
+  if (!/\bcamp\w*|\bdispersed\b|\bwho\s+(?:manages|owns)\b|\bpublic\s+land|\bwhose\s+land/i.test(turn.question)) return markdown;
+  if (/national\s+forest|\bBLM\b|bureau\s+of\s+land|forest\s+service|state\s+trust|national\s+park|tribal|reservation|wilderness/i.test(markdown)) return markdown;
+  const out = turn.calls.findLast((c) => c.toolName === "query_public-lands")?.output as { coverageNote?: unknown } | undefined;
+  const note = typeof out?.coverageNote === "string" ? out.coverageNote : "";
+  const m = /^Land here, largest units first:\s*([^;]+)/.exec(note);
+  if (!m) return markdown;
+  const units = m[1].split(/\),\s+/).map((u) => (u.endsWith(")") ? u : `${u})`)).slice(0, 2);
+  return `${markdown.trimEnd()}\n\nLand here: ${units.join(" and ")}.`;
+}
+

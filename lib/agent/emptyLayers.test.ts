@@ -17,3 +17,15 @@ describe("layers that answered with nothing", () => {
     expect(withEmptyLayers("A.", { queries: [q("faults", false, false)] })).toBe("A.");
   });
 });
+
+describe("who manages the land, for a camping answer", () => {
+  it("ends the note with the two largest units when the note names no manager", async () => {
+    const { withLandManagers } = await import("@/lib/agent/turnAnswer");
+    const calls = [{ toolName: "query_public-lands", input: {}, output: { coverageNote: "Land here, largest units first: San Isabel National Forest (US Forest Service), Royal Gorge Field Office (Bureau of Land Management), Leadville National Fish Hatchery (US Fish and Wildlife Service); camping in general: national forest land allows dispersed camping" } }];
+    expect(withLandManagers("62 campsites in this view.", { question: "Where can I camp around here?", calls })).toBe(
+      "62 campsites in this view.\n\nLand here: San Isabel National Forest (US Forest Service) and Royal Gorge Field Office (Bureau of Land Management).",
+    );
+    expect(withLandManagers("62 campsites on San Isabel National Forest.", { question: "Where can I camp around here?", calls })).toBe("62 campsites on San Isabel National Forest.");
+    expect(withLandManagers("12 hikes.", { question: "Good hikes here?", calls })).toBe("12 hikes.");
+  });
+});

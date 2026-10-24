@@ -138,8 +138,14 @@ export function composeNote(markdown: string, template: AnswerTemplate | null): 
     if (map.length > 0) mapLines.push(map.join(" "));
   }
   rest.push(...mapLines);
-  // The template's list replaces the model's: the same top features, with the deciding facts in the person's units.
-  const list = optionLines.length > 0 ? optionLines : modelBullets;
+  // The template's list replaces the model's: the same top features, with the deciding facts in the person's units. A
+  // model line with a number the template's list does not hold is another fact (St. George's "all 96 recent observations
+  // are hidden" beside the habitat's list) and stays after it; two at most.
+  const numbers = (text: string) => (text.replace(/[\u202f\u00a0]/g, " ").match(/\d[\d,.]*/g) ?? []).map((n) => n.replace(/[,.]$/, "").replace(/,/g, ""));
+  const held = new Set(numbers([lead ?? "", ...optionLines].join(" ")));
+  // An option of the model's own (a bold name: "**Swamp Wells Trail** – 26.9 km") is what the list replaces, never kept.
+  const extra = optionLines.length > 0 ? modelBullets.filter((b) => !/^\s*(?:[-*+]|\d+\.)\s+(?:\*\*|__)/.test(b) && numbers(b).some((n) => !held.has(n))).slice(0, 2) : [];
+  const list = optionLines.length > 0 ? [...optionLines, ...extra] : modelBullets;
   // Without the template's lead, the model's first line leads, then the list.
   const parts = [lead ?? "", rest.length > 0 && !lead ? rest.shift()! : "", list.join("\n"), rest.join("\n\n")].filter((p) => p.trim() !== "");
   return finished(parts.join("\n\n"));

@@ -87,3 +87,13 @@ describe("a long first sentence", () => {
     expect(out).toContain("52 ft");
   });
 });
+
+describe("the model's own facts beside the template's list", () => {
+  it("keeps a model line whose number the list does not hold, after the list", () => {
+    const template = { lead: "One critical habitat designation covers 26,606 km² near St. George.", lines: ["- Desert tortoise (Threatened): 26,606 km²."], allLines: ["- Desert tortoise (Threatened): 26,606 km²."], followUps: [], modelFirst: false } as unknown as AnswerTemplate;
+    const note = "Habitat near St. George.\n\n- Critical habitat: 26,606 km².\n- Sightings: 0 visible points (all 96 recent observations are hidden).";
+    const out = composeNote(note, template);
+    expect(out).toContain("all 96 recent observations are hidden");
+    expect(out.match(/26,606/g)?.length).toBe(2);
+  });
+});

@@ -56,10 +56,10 @@ export function withEmptyLayers(markdown: string, turn: Pick<Turn, "queries"> & 
     // What the source said of the empty answer: "All 67 sightings of California Condor … have hidden (obscured) locations".
     const note = emptyNoteOf(turn.calls ?? [], q.layerId);
     if (note) {
-      const numbers = note.match(/\d[\d,]*/g) ?? [];
+      const count = note.match(/\d[\d,]*/)?.[0];
       // Already said: the note holds its count (the first number).
-      if (numbers.length > 0 && new RegExp(`\\b${numbers[0].replace(/,/g, ",?")}\\b`).test(text)) continue;
-      if (numbers.length === 0 && mentionsNone(text, q.layerId)) continue;
+      if (count !== undefined && new RegExp(`\\b${count.replace(/,/g, ",?")}\\b`).test(text)) continue;
+      if (count === undefined && mentionsNone(text, q.layerId)) continue;
       // Each layer once.
       if (lines.some((l) => l.startsWith(note.slice(0, 20)))) continue;
       lines.push(`${note}.`);

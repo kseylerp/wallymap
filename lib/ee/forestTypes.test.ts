@@ -9,6 +9,8 @@ import {
   readConversionAreas,
   readPoint,
   readShares,
+  sharesByPoints,
+  sharesExpression,
   sharesScale,
   TARGETS,
   tileKey,
@@ -42,6 +44,18 @@ describe("ForTy readings", () => {
     const confident = readShares(recorded.sharesSabahConfident);
     expect(confident["0"]).toBeGreaterThan(0.02);
     expect(readShares({ class: {} })).toEqual({});
+    // Random points over the sea come back under "null" and are not counted.
+    expect(readShares({ class: { "1": 3, "6": 1, null: 4 } })).toEqual({ "1": 0.75, "6": 0.25 });
+  });
+
+  it("counts a range-sized box from 2,000 random points instead of a histogram, which timed out", () => {
+    const rockies: [number, number, number, number] = [-125, 35, -104, 60];
+    expect(sharesByPoints(rockies)).toBe(true);
+    expect(sharesByPoints([117.6, 4.8, 118.0, 5.1])).toBe(false);
+    const text = JSON.stringify(sharesExpression({ kind: "baseline" }, 0, rockies));
+    expect(text).toContain("FeatureCollection.randomPoints");
+    expect(text).not.toContain("frequencyHistogram");
+    expect(JSON.stringify(sharesExpression({ kind: "baseline" }, 0, [117.6, 4.8, 118.0, 5.1]))).toContain("frequencyHistogram");
   });
 
   it("adds up converted natural forest by target", () => {

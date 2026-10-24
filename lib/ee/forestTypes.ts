@@ -25,6 +25,7 @@ import {
   add,
   addBands,
   and,
+  call,
   constantImage,
   divide,
   eq,
@@ -208,23 +209,43 @@ export function sharesScale(bbox: BBox): number {
 }
 
 /**
+ * Above this area a box's shares come from random points, not a histogram: over a whole mountain range (the Colorado
+ * Rockies asked as the Rocky Mountains, 4 million km²) the histogram took 40 s or never answered, so a compare of two
+ * ranges lost its second place (T09.3, 2026-10-23); 2,000 points answer in about 10 s.
+ */
+export const POINTS_KM2 = 250_000;
+export const SHARE_POINTS = 2000;
+
+/** True when the box's shares are estimated from SHARE_POINTS random points. */
+export const sharesByPoints = (bbox: BBox) => bboxAreaKm2(bbox) > POINTS_KM2;
+
+/**
  * How much of a box each class covers: a histogram of the class (0 where the pixel is below `minConfidence`) over the
- * box, sampled about 300 across. Sea and no-data are not counted.
+ * box, sampled about 300 across, or over a box wider than POINTS_KM2 the classes at 2,000 random points. Sea and
+ * no-data are not counted. Both answer `{ class: { "<code>": count } }`.
  */
 export function sharesExpression(source: Source, minConfidence: number, bbox: BBox): EeNode {
   const cls = unmask(classes(source, minConfidence), 0);
   // unmask also fills the sea with 0; mask it back to the land where ForTy has data.
   const land = updateMask(updateMask(cls, gte(topProbability(probabilities(source)), 0)), notWater());
+  if (sharesByPoints(bbox)) {
+    const points = call("FeatureCollection.randomPoints", { region: rectangle(bbox), points: SHARE_POINTS, seed: 7 });
+    const read = call("Image.reduceRegions", { image: land, collection: points, reducer: call("Reducer.first"), scale: 10 });
+    const hist = call("AggregateFeatureCollection.histogram", { collection: read, property: "first" });
+    return call("Dictionary.fromLists", { keys: ["class"], values: { arrayValue: { values: [hist] } } });
+  }
   return reduceRegion(land, rectangle(bbox), "frequencyHistogram", { scale: sharesScale(bbox), maxPixels: 4e5, bestEffort: true });
 }
 
 /** Shares (0..1, summing to 1) by class code ("0" = below the confidence asked) from the histogram result. */
 export function readShares(result: Record<string, unknown> | null | undefined): Record<string, number> {
   const hist = (result?.class ?? {}) as Record<string, unknown>;
-  const total = Object.values(hist).reduce<number>((s, v) => s + (typeof v === "number" ? v : 0), 0);
+  // Points over the sea or masked land come back under "null": not counted.
+  const entries = Object.entries(hist).filter((e): e is [string, number] => typeof e[1] === "number" && e[1] > 0 && Number.isFinite(Number(e[0])));
+  const total = entries.reduce((s, [, v]) => s + v, 0);
   const out: Record<string, number> = {};
   if (total <= 0) return out;
-  for (const [k, v] of Object.entries(hist)) if (typeof v === "number" && v > 0) out[String(Math.round(Number(k)))] = (out[String(Math.round(Number(k)))] ?? 0) + v / total;
+  for (const [k, v] of entries) out[String(Math.round(Number(k)))] = (out[String(Math.round(Number(k)))] ?? 0) + v / total;
   return out;
 }
 

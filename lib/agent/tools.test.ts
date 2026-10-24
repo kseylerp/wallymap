@@ -240,8 +240,10 @@ describe("buildTools", () => {
   it("list_layers stays short: about 9,500 characters for every layer", async () => {
     const result = await run(buildTools().list_layers, {});
     // With synonyms repeated from the system prompt the rows were 13,475 characters for 81 layers. Forest types,
-    // terrain, the weather forecast and avalanche (2026-10-23) bring it to about 9,200.
-    expect(JSON.stringify(result).length).toBeLessThan(9_500);
+    // terrain, the weather forecast and avalanche (2026-10-23) bring it to about 9,200; the ten place layers of the top 10
+    // pass (faults, soils, elevation profile, vegetation types, ecoregions, canopy height, climate normals, flow by
+    // month, water depth) to about 10,100.
+    expect(JSON.stringify(result).length).toBeLessThan(10_500);
   });
 
   it("list_layers with ids returns those layers' full descriptions and licences", async () => {
@@ -266,8 +268,8 @@ describe("buildTools", () => {
     // The 54 layer descriptions were about 88,000 characters in full; the three data-story layers (river pulse,
     // currents, wind) add about 2,400. The 2026-10-18 layer pass (legends, vintages, offline notes) adds about 1,600.
     // Forest types (Earth Engine) adds about 900; the 2026-10-23 use-case pass adds the weather forecast, avalanche,
-    // flood stages on streamflow and terrain.
-    expect(total).toBeLessThan(76_000);
+    // flood stages on streamflow and terrain. The top 10 place layers (nine new, 2026-10-23) bring it to about 80,200.
+    expect(total).toBeLessThan(82_000);
     const surf = tools["query_surf"].description ?? "";
     expect(surf).toContain("Set forecast to true");
     expect(surf).toContain("Set season to true");

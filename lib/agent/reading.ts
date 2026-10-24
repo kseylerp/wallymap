@@ -335,6 +335,8 @@ const PHRASES: {
     inputs: { "outdoor-features": { kinds: ["viewpoint"] } },
     // Where the trails carry their payoff, the chip says it too (kept only on a layer that declares the attribute).
     filters: { "osm-trails": { payoff: ["viewpoint"] } },
+    // "Hikes to a viewpoint" is still a choice among hikes: ranked like any (the hike phrase leaves "hikes to" out).
+    views: { "osm-trails": "ranked", popularity: "ranked" },
     because: "a view is a mapped viewpoint the hike reaches",
   },
   {

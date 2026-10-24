@@ -549,6 +549,13 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
         toolName: "render",
         input: normalizeRenderInput({ layerId }, getLayer(layerId), turn.question),
       }));
+      // The answer's ranked layer is drawn again after them, so the camera ends on its top features, not on the context
+      // layer drawn last (Asheville's waterfall loops were framed off screen by the waterfalls' own render).
+      const ranked = [...turn.calls].reverse().find((c) => c.toolName === "render" && (c.output as { view?: unknown } | undefined)?.view === "ranked");
+      const rankedId = (ranked?.output as { layerId?: unknown } | undefined)?.layerId;
+      if (ranked && typeof rankedId === "string" && !pending.includes(rankedId) && !drawnHere.has(rankedId)) {
+        renders.push({ toolCallId: guardId(), toolName: "render", input: { ...(ranked.output as Record<string, unknown>), layerId: /^combine\b/.test(rankedId) ? "combine" : rankedId } });
+      }
       const at = calls.findIndex((c) => c.toolName === "note");
       calls = at === -1 ? renders : [...calls.slice(0, at), ...renders, ...calls.slice(at)];
       // A text-only ending is written again after the renders, from the drawn map (unless it becomes the note below).

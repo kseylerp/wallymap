@@ -435,6 +435,8 @@ const PHRASES: {
   },
   {
     re: /\bsunsets?\b|\bsunrises?\b|\bgolden\s+hour\b|\bviewpoints?\b|\boverlooks?\b|\bvistas?\b/i,
+    // A hike to a viewpoint is the hike's answer (the phrase above): no photo layer drawn over the trails.
+    unless: /\b(?:hikes?|hiking|trails?|walks?)\b/i,
     layers: ["outdoor-features", "photos"],
     inputs: { "outdoor-features": { kinds: ["viewpoint"] } },
     because: "a view is a mapped viewpoint, and photos show where people shoot",
@@ -511,6 +513,31 @@ const PHRASES: {
     re: /\b(?:elevation\s+)?cross[- ]sections?\b|\belevation\s+profile\b|\bprofile\s+from\b/i,
     layers: ["elevation-profile", "cross-section", "elevation"],
     because: "a cross-section is the elevation along a line",
+  },
+  {
+    // Oil and gas near a place: its pipelines, the methane plumes seen over its wells, and the leases where they exist.
+    re: /\boil\s+(?:and|&)\s+gas\b|\bfracking\b|\bdrilling\b|\bgas\s+wells?\b|\boil\s+wells?\b|\bpipelines?\b/i,
+    layers: ["pipelines-lines", "methane-plumes", "oil-gas-leases"],
+    because: "oil and gas is the pipelines, the methane plumes over the wells and the federal leases",
+  },
+  {
+    // Burn scars since a year are the fires' outlines (acres, year) on a timeline, with the burn severity inside them.
+    re: /\bburn\s+scars?\b|\bburned\s+areas?\b|\b(?:wild)?fires?\s+since\b|\bwhere\s+(?:has|did)\s+(?:it|the\s+land)\s+burn/i,
+    layers: ["fire-perimeters", "burn-severity"],
+    views: { "fire-perimeters": "timeline" },
+    because: "burn scars are the fires' outlines with their acres and year, and the severity inside them",
+  },
+  {
+    // "By month" is a question about time: the sightings drawn on the timeline, with the time panel open on them.
+    re: /\bby\s+month\b|\bmonth\s+by\s+month\b|\beach\s+month\b/i,
+    views: { species: "timeline", "gbif-occurrences": "timeline" },
+    because: "by month is the sightings over time",
+  },
+  {
+    // Fires, smoke and alerts right now are live data: the timeline, so the time panel shows how fresh each one is.
+    re: /\b(?:fires?|smoke|alerts?|warnings?)\b[^?]*\b(?:right\s+now|now|today|currently)\b|\b(?:right\s+now|currently)\b[^?]*\b(?:fires?|smoke|alerts?)\b/i,
+    views: { "fire-detections": "timeline", "fire-perimeters": "timeline", "weather-alerts": "timeline" },
+    because: "fires and alerts now are the newest live data",
   },
 ];
 

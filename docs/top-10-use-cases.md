@@ -62,7 +62,7 @@ point (a forecast spot, a gauge, a dam) never shrinks the camera to a 1 km box; 
 
 **What a follow-up must reuse.** The current place (no new geocode unless a new place is named), the layers on the
 map, and the filters and Rank by the person sees; it changes only what it asks about ("only the black ones" changes
-the difficulty chip and keeps the place and the other chips). Not machine-checked yet (the eval runs one turn).
+the difficulty chip and keeps the place and the other chips). Held in code (`lib/agent/context.ts`: a question that names no place after an answer re-asks its layers on the same place and keeps the filters it does not change; `lib/agent/context.test.ts`); not in the live eval yet (it runs one turn).
 
 **Card actions** (every card): *Ask about this* (asks about the feature with the current layers and filters),
 *Preview route* (lines and routes only: trails, roads, rivers), *Copy GeoJSON*, and the map's *Export* (with its

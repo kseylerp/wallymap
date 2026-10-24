@@ -234,6 +234,13 @@ export function withReading(input: Record<string, unknown>, turn: Pick<Turn, "re
   }
   const view = reading.views.find((v) => v.layerId === layerId);
   if (view && out.view === undefined) out.view = view.view;
+  // A question about the view ("any good hikes around here?") is about the lines whose middle is in it: a long trail
+  // that only crosses the view is not ranked first and framed off screen (the Columbia Gorge's Pacific Crest Trail).
+  const box = turn.view?.bbox;
+  if (!turn.place && box && layer.style.geometry === "line" && out.view === "ranked") {
+    const filters = (typeof out.filters === "object" && out.filters !== null && !Array.isArray(out.filters) ? out.filters : {}) as Record<string, Record<string, unknown>>;
+    if (!Object.values(filters).some((f) => f && typeof f === "object" && "within" in f)) out.filters = { ...filters, name: { ...(filters.name ?? {}), within: { bbox: box, name: "this view" } } };
+  }
   const rank = reading.rankBy.find((r) => r.layerId === layerId);
   if (rank && out.rankBy === undefined) {
     out.rankBy = rank.key;

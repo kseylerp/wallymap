@@ -560,9 +560,10 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
   // 4b. A join drawn in its source's view (hikes near a waterfall ranked like the hikes), so its top features are
   // listed, sized and framed like the source's were; the join draws with no view of its own.
   if (ending) {
-    const joins = turn.calls.filter((c) => c.toolName === "combine" && typeof (c.output as { combined?: { id?: unknown } } | undefined)?.combined?.id === "string");
-    const last = joins[joins.length - 1]?.output as { combined: { id: string; sourceLayerId?: string } } | undefined;
-    const drawnAlready = [...turn.calls, ...calls.map((c) => ({ toolName: c.toolName, input: c.input }))].some(
+    const joinAt = turn.calls.findLastIndex((c) => c.toolName === "combine" && typeof (c.output as { combined?: { id?: unknown } } | undefined)?.combined?.id === "string");
+    const last = joinAt >= 0 ? (turn.calls[joinAt].output as { combined: { id: string; sourceLayerId?: string } }) : undefined;
+    // Drawn in a view after the last join (a second join is a new layer with no view of its own).
+    const drawnAlready = [...turn.calls.slice(joinAt + 1), ...calls.map((c) => ({ toolName: c.toolName, input: c.input }))].some(
       (c) => c.toolName === "render" && typeof (c.input as { layerId?: unknown })?.layerId === "string" && /^combine\b/.test((c.input as { layerId: string }).layerId) && (c.input as { view?: unknown }).view !== undefined,
     );
     if (last && !drawnAlready && last.combined.sourceLayerId) {

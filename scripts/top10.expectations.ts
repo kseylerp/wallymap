@@ -308,7 +308,7 @@ export const TOP10: Top10Expect[] = [
     question: "How has Bears Ears changed since 2021?",
     layers: ["monuments"], main: "monuments", view: ["change"], basemap: OUTDOOR, compare: true,
     card: ["Area", "Boundary", "Designation"], legend: ["Boundary|2021|lost"],
-    facts: [{ what: "area then and now", re: /km²|km2|acres|square/i }, { what: "the difference", re: /\b(?:lost|smaller|cut|reduc|shrank|difference|less)\b/i }, { what: "2021", re: /2021/ }],
+    facts: [{ what: "area then and now", re: /km²|km2|acres|square/i }, { what: "the difference", re: /\b(?:lost|los(?:e|es|ing)|smaller|cut|reduc\w*|shr[iau]nk\w*|difference|less)\b/i }, { what: "2021", re: /2021/ }],
     names: 1,
   },
   {

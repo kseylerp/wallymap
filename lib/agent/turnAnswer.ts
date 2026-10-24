@@ -20,6 +20,7 @@ export function answerForTurn(turn: Turn): AnswerTemplate | null {
       prefer: turn.reading.layers.map((l) => l.layerId),
       window: turn.reading.time,
       taxon: turn.reading.taxon,
+      change: turn.reading.change,
     });
   } catch (err) {
     // The answer still shows as the model wrote it.

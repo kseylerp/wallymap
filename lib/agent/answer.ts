@@ -69,6 +69,14 @@ type Kind = {
   rows: string[];
   /** Follow-up questions; {A} and {B} are the top two names, {place} where, {noun} the plural. */
   followUps: string[];
+  /**
+   * "pick" (the default): the question picks among options, so the template's lead names the top one with its facts.
+   * "total": the answer is a total or a change (how much ice was lost, when a river peaks), so the model's own first
+   * sentence leads when it answers with a number, and the template's lead stands in only when it does not.
+   */
+  answer?: "pick" | "total";
+  /** False when the features are not options worth listing (single sightings, a monument's two outlines). */
+  list?: boolean;
 };
 
 const HIKE: Kind = {
@@ -106,6 +114,7 @@ const KINDS: Record<string, Kind> = {
     followUps: ["Is {A} running this weekend?", "How does {A} compare with {B}?", "Where are the put-ins near {place}?"],
   },
   streamflow: {
+    answer: "total",
     one: "gauge",
     many: "gauges",
     rows: ["Flow", "Running", "Flow vs. the date's median", "Forecast high"],
@@ -148,54 +157,66 @@ const KINDS: Record<string, Kind> = {
     followUps: ["Any weather alerts near {place} this weekend?", "What are good hikes near {place} for Saturday?", "Is there snow on the ground near {place}?"],
   },
   glaciers: {
+    answer: "total",
     one: "glacier",
     many: "glaciers",
     rows: ["Area", "Ice lost since the first survey", "Area in the first survey", "Survey"],
     followUps: ["How has {A} changed since the first survey?", "Which glaciers in {place} lost the most ice?", "How does {A} compare with {B}?"],
   },
   monuments: {
+    answer: "total",
+    list: false,
     one: "boundary",
     many: "boundaries",
     rows: ["Area", "Boundary", "Designation"],
     followUps: ["Are there mining claims inside {A}?", "What did {A} lose since 2021?", "Who manages the land around {A}?"],
   },
   "fire-perimeters": {
+    answer: "total",
     one: "fire",
     many: "fires",
     rows: ["Acres burned", "Year", "Status"],
     followUps: ["How severe was the burn in {A}?", "How has the land regrown since {A}?", "Which fires near {place} were largest?"],
   },
   mines: {
+    answer: "total",
     one: "mine site",
     many: "mine sites",
     rows: ["Status when last recorded", "Commodities", "Development status"],
     followUps: ["Is {A} still producing?", "Which protected areas are near {A}?", "Are there mining claims near {place}?"],
   },
   "mining-claims": {
+    answer: "total",
     one: "claim",
     many: "claims",
     rows: ["Case", "Status", "Commodity"],
     followUps: ["Who holds {A}?", "Which protected areas are near {place}?", "Are there active mines near {place}?"],
   },
   "methane-plumes": {
+    answer: "total",
     one: "methane plume",
     many: "methane plumes",
     rows: ["Emission rate", "Sector", "Seen on"],
     followUps: ["Which plumes near {place} are largest?", "Where are the pipelines near {place}?", "How has methane near {place} changed since last year?"],
   },
   species: {
+    answer: "total",
+    list: false,
     one: "sighting",
     many: "sightings",
     rows: ["Seen on", "Scientific name", "Quality"],
     followUps: ["Which months had the most sightings near {place}?", "Where is protected habitat near {place}?", "What else has been seen near {place}?"],
   },
   "gbif-occurrences": {
+    answer: "total",
+    list: false,
     one: "record",
     many: "records",
     rows: ["Seen on", "Scientific name"],
     followUps: ["Which months had the most records near {place}?", "Where is protected habitat near {place}?", "What else has been seen near {place}?"],
   },
   "critical-habitat": {
+    answer: "total",
     one: "habitat unit",
     many: "habitat units",
     rows: ["Listed as", "Area", "Designation"],
@@ -214,12 +235,14 @@ const KINDS: Record<string, Kind> = {
     followUps: ["How does {A} compare with {B}?", "Where can I launch a kayak on {A}?", "What is the water temperature at {A}?"],
   },
   "geologic-unit": {
+    answer: "total",
     one: "rock unit",
     many: "rock units",
     rows: ["Rock", "Age", "Description"],
     followUps: ["How old is {A}?", "Are there faults near {place}?", "What is the soil like near {place}?"],
   },
   wilderness: {
+    answer: "total",
     one: "wilderness",
     many: "wilderness areas",
     rows: ["Area", "Managed by", "Designated"],
@@ -318,6 +341,8 @@ export type AnswerTemplate = {
   lines: string[];
   /** Every option's line, the lead's own too: under a first sentence the model wrote. */
   allLines: string[];
+  /** The model's first sentence leads when it answers (a total or a change); the template's lead only stands in. */
+  modelFirst: boolean;
   followUps: string[];
 };
 
@@ -457,6 +482,8 @@ export type AnswerInput = {
   window?: { from: string; to: string } | null;
   /** A species the question names, for its follow-ups. */
   taxon?: string | null;
+  /** The question asks what changed: its answer is a change, not a pick. */
+  change?: boolean;
 };
 
 const middleOf = (f: Feature): [number, number] | null => {
@@ -541,7 +568,7 @@ export function answerTemplate(input: AnswerInput, state: MapState = mapOf(input
     lead = counted ? `${opening}; the top is ${first.name}${tail}.` : `${opening} is ${first.name}${tail}.`;
     if (words(lead) > FIRST_WORDS) lead = counted ? `${opening}; the top is ${first.name}.` : null;
     if (lead && !/\d/.test(lead)) lead = null;
-    lines = options.map((o) => `- **${o.name}**${o.facts.length > 0 ? `: ${o.facts.join(", ")}` : ""}.`);
+    lines = kind.list === false ? [] : options.map((o) => `- **${o.name}**${o.facts.length > 0 ? `: ${o.facts.join(", ")}` : ""}.`);
     allLines = lines;
   }
 
@@ -551,7 +578,8 @@ export function answerTemplate(input: AnswerInput, state: MapState = mapOf(input
   const unique = [...new Set(filled)];
   const anchored = unique.filter((q) => (slots.A && q.includes(slots.A)) || (slots.B && q.includes(slots.B)) || (placeName && q.includes(placeName)));
   const followUps = [...anchored, ...unique.filter((q) => !anchored.includes(q))].slice(0, 3);
-  return { layerId: op.layerId, where, place: placeName, count, countGrounded, noun, options, lead, lines, allLines, followUps };
+  const modelFirst = kind?.answer === "total" || input.change === true;
+  return { layerId: op.layerId, where, place: placeName, count, countGrounded, noun, options, lead, lines, allLines, modelFirst, followUps };
 }
 
 /** True when a follow-up names one of the anchors (a feature or the place), as the answer's rule asks. */

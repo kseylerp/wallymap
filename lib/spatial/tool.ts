@@ -2,7 +2,7 @@ import { tool, type JSONValue } from "ai";
 import type { Feature, FeatureCollection, Position } from "geojson";
 import { z } from "zod";
 import { getLayer, listLayers } from "@/layers/registry";
-import { type BBox, type CardFact, type Attribute, type Citation, type Layer, type LegendSpec, type StyleHints } from "@/layers/types";
+import { type BBox, type CardFact, type Attribute, type Citation, type Layer, type LayerResult, type LegendSpec, type StyleHints } from "@/layers/types";
 import { runLayer } from "@/lib/layers/run";
 import { applyFilters, type LayerFilters } from "@/lib/render/filters";
 import { readingFilters } from "@/lib/agent/reading";
@@ -238,6 +238,11 @@ function joinFields(op: CombineOp, aKind: GeometryKind, bName: string): { facts:
 
 type Side = { layer: Layer; features: Feature[]; citation: Citation; bbox: BBox; input: Record<string, unknown> };
 
+/** True for a layer answer with features (not tiles, not an error). */
+function isGeojson(output: unknown): boolean {
+  return typeof output === "object" && output !== null && (output as { kind?: unknown }).kind === "geojson" && typeof (output as { data?: unknown }).data === "object";
+}
+
 /** The features of one side: the latest successful query of its layer this turn, asked again (from the cache), filtered. */
 async function sideOf(side: z.infer<typeof SideSchema>, turn: Turn, view: MapView | null): Promise<Side | CombineError> {
   const ids = listLayers().map((l) => l.id);
@@ -249,7 +254,10 @@ async function sideOf(side: z.infer<typeof SideSchema>, turn: Turn, view: MapVie
   if (!bbox) return { error: `Query ${id} first: combine joins layers answered this turn.` };
   const input = asked ? (Object.fromEntries(JSON.parse(asked.inputKey) as [string, unknown][]) as Record<string, unknown>) : {};
   if (!asked) turn.note(`combine: ${id} was not queried this turn; asked it over [${bbox.join(", ")}] with its default inputs`);
-  const body = (await runLayer(id, { bbox, input })).body;
+  // The answer this turn already drew, as drawn: asked again, a trail's climb (computed within a time budget) could come
+  // back for fewer trails, and the joined hikes' cards lost their round-trip climb.
+  const drawn = asked ? turn.calls.findLast((c) => c.toolName === `query_${id}` && isGeojson(c.output))?.output : undefined;
+  const body = (drawn as LayerResult | undefined) ?? (await runLayer(id, { bbox, input })).body;
   if ("error" in body) return { error: `${id} did not answer: ${body.error}` };
   if (body.kind !== "geojson") return { error: `${id} answers with map tiles, not features, so it cannot be combined.` };
   // The model's filters, else the ones the question's words set on this layer ("in drought" is D1 to D4).

@@ -110,24 +110,33 @@ export function answerFirst(markdown: string): string {
  * sentences (caveats, what the app cannot show). Without a template, the model's note with its answer moved first.
  */
 export function composeNote(markdown: string, template: AnswerTemplate | null): string {
-  const base = finished(answerFirst(markdown));
-  if (!template || (!template.lead && template.allLines.length === 0)) return base;
-  const lines = base.split("\n");
+  if (!template || (!template.lead && template.allLines.length === 0)) return finished(answerFirst(markdown));
+  // The template's lead answers first (or, without one, the model's answer moved first), so the model's list stays a list.
+  const lines = (template.lead ? finished(markdown) : finished(answerFirst(markdown))).split("\n");
   // The model's prose: every line that is not a list item or a title.
   const proseLines = lines.filter((l) => l.trim() !== "" && !isBullet(l) && !isTitle(l));
-  // The template's lead comes first; the model's own first sentence follows it (it may hold a total the lead does not).
-  const lead = template.lead;
+  // The template's lead comes first, and the model's own first sentence follows it (it may hold a total the lead does
+  // not); for a total or a change, the model's first sentence leads when it answers, and the template's stands in.
+  const modelLead = proseLines.length > 0 ? (sentences(prose(proseLines[0]))[0] ?? "") : "";
+  const lead = template.modelFirst && answersFirst(modelLead) ? null : template.lead;
   const optionLines = lead ? template.lines : template.allLines;
   const modelBullets = lines.filter((l) => isBullet(l));
   const rest: string[] = [];
   // Composing twice changes nothing: the lead is not kept again as the model's own sentence.
   const same = (a: string, b: string) => a.replace(/[^\p{L}\p{N}]+/gu, " ").trim().toLowerCase() === b.replace(/[^\p{L}\p{N}]+/gu, " ").trim().toLowerCase();
+  const mapLines: string[] = [];
   for (const line of proseLines) {
     const ss = sentences(prose(line)).filter((s) => !(lead && same(s, lead)));
-    if (ss.length > 0) rest.push(ss.join(" "));
+    // Under the template's lead, what only describes the map comes last.
+    const map = lead ? ss.filter((s) => describesMap(s)) : [];
+    const said = ss.filter((s) => !map.includes(s));
+    if (said.length > 0) rest.push(said.join(" "));
+    if (map.length > 0) mapLines.push(map.join(" "));
   }
+  rest.push(...mapLines);
   // The template's list replaces the model's: the same top features, with the deciding facts in the person's units.
   const list = optionLines.length > 0 ? optionLines : modelBullets;
+  // Without the template's lead, the model's first line leads, then the list.
   const parts = [lead ?? "", rest.length > 0 && !lead ? rest.shift()! : "", list.join("\n"), rest.join("\n\n")].filter((p) => p.trim() !== "");
   return finished(parts.join("\n\n"));
 }

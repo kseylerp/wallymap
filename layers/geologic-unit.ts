@@ -53,27 +53,27 @@ const unitSchema = z.object({
   scale: z.string().nullable().optional(),
 });
 
-const identifySchema = z.object({
+export const identifySchema = z.object({
   success: z.object({
     data: z.array(unitSchema),
     refs: z.record(z.string(), z.string()).optional(),
   }),
 });
 
-type Unit = z.infer<typeof unitSchema>;
+export type Unit = z.infer<typeof unitSchema>;
 
 function clip(text: string, max: number): string {
   const t = text.replace(/\s+/g, " ").trim();
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
-function scaleRank(unit: Unit): number {
+export function scaleRank(unit: Unit): number {
   const i = SCALE_ORDER.indexOf(unit.scale ?? "");
   return i === -1 ? SCALE_ORDER.length : i;
 }
 
 /** "Pleistocene", or "Triassic to Cretaceous" (oldest to youngest) when the unit spans intervals. */
-function ageText(unit: Unit): string | undefined {
+export function ageText(unit: Unit): string | undefined {
   const young = unit.t_int_name?.trim();
   const old = unit.b_int_name?.trim();
   if (young && old) return young === old ? young : `${old} to ${young}`;

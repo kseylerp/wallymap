@@ -21,8 +21,9 @@ import {
   type StyleLayerLike,
 } from "@/lib/render/hybridStyle";
 import { compareBaseId, compareBId, compareSideShown, effectiveMode } from "@/lib/render/compareView";
-import { hatchImage, hatchPatternId, HATCH_SCALE } from "@/lib/render/hatch";
-import { areaRecipe, HATCH_COLORS, isPaletteColor, LINE, LINE_CLASSES, lineColorFor, SYMBOL, WHITE, type HatchColor } from "@/lib/render/palette";
+import { hatchImage, hatchPatternId, HATCH_SCALE, stippleImage } from "@/lib/render/hatch";
+import { FAMILY_PATTERNS, ROCK_FAMILY_FIELD, rockFamilyExpression, rockFamilyFillExpression, stipplePatternId } from "@/lib/render/rockFamily";
+import { areaRecipe, DARK_GREY, HATCH_COLORS, isPaletteColor, LINE, LINE_CLASSES, lineColorFor, SYMBOL, WHITE, type HatchColor } from "@/lib/render/palette";
 import { categoryKey } from "@/lib/render/categories";
 import { lineEntries, lineLayerSpecs, LINES_PREFIX, lineSourceData, lineSourceId, type LineEntry } from "@/lib/render/nativeLines";
 import { routeBeforeId } from "@/components/routeLayers";
@@ -103,7 +104,7 @@ export function hatchPatternsOf(specs: { paint?: Record<string, unknown> }[]): s
   for (const spec of specs) {
     const p = spec.paint?.["fill-pattern"];
     if (typeof p === "string") out.push(p);
-    else if (Array.isArray(p)) for (const x of p.flat(Infinity)) if (typeof x === "string" && x.startsWith("hatch-")) out.push(x);
+    else if (Array.isArray(p)) for (const x of p.flat(Infinity)) if (typeof x === "string" && (x.startsWith("hatch-") || x.startsWith("stipple-"))) out.push(x);
   }
   return out;
 }
@@ -137,6 +138,7 @@ export function vectorTileLayerSpecs(
   const opacity = Math.min(1, Math.max(0, paint.opacity ?? 1));
   const common = { source: layerId, "source-layer": sourceLayer };
   const layout = { visibility: visible ? ("visible" as const) : ("none" as const) };
+  if (geometry === "polygon" && !requested && key?.paint === "rock-family") return rockFamilyLayerSpecs(layerId, common, layout, opacity);
   if (geometry === "polygon" && !requested && key?.steps && key.steps.length > 1) {
     // A stepped ramp (geology by the era of its youngest rock): each unit filled solid in its step's color.
     const [first, ...rest] = key.steps;
@@ -237,10 +239,46 @@ export function vectorTileLayerSpecs(
   ];
 }
 
-/** Adds every hatch pattern the style needs as a Mapbox image (once per style: a style swap drops images). */
+/** The hatch density over metamorphic units on the geologic map (an index into HATCH_SPACINGS). */
+export const ROCK_PATTERN_STEP = 2;
+
+/**
+ * The geologic map by rock family (spec T08): each unit filled in its family's color, darker with the age of its
+ * youngest rock (lib/render/rockFamily.ts derives both from the tile's lith, name, description and ages), metamorphic
+ * units hatched and loose sediments stippled in dark grey, thin white edges between units. The fill fades with zoom as
+ * the other solid-keyed tiles do (SOLID_TILE_FILL), so trails and labels read at trailhead zooms.
+ */
+export function rockFamilyLayerSpecs(
+  layerId: string,
+  common: { source: string; "source-layer": string },
+  layout: { visibility: "visible" | "none" },
+  opacity: number,
+): VectorLayerSpec[] {
+  const family = rockFamilyExpression();
+  const patterned = Object.keys(FAMILY_PATTERNS);
+  const hatch = hatchPatternId(DARK_GREY as HatchColor, ROCK_PATTERN_STEP);
+  const pattern = ["match", family, ...Object.entries(FAMILY_PATTERNS).flatMap(([f, kind]) => [f, kind === "stipple" ? stipplePatternId(DARK_GREY) : hatch]), hatch] as unknown as string;
+  const fill = ["interpolate", ["linear"], ["zoom"], ...SOLID_TILE_FILL.flatMap(([z, o]) => [z, Math.round(o * opacity * 1000) / 1000])] as ExpressionSpecification;
+  const at = (o: number) => Math.round(o * 0.75 * opacity * 1000) / 1000;
+  const on = ["in", family, ["literal", patterned]];
+  const patternOpacity = ["interpolate", ["linear"], ["zoom"], 12, ["case", on, at(1), 0], 15, ["case", on, at(0.6), 0]] as unknown as ExpressionSpecification;
+  return [
+    { id: layerId, type: "fill", ...common, layout, paint: { "fill-color": rockFamilyFillExpression() as unknown as string, "fill-opacity": fill } },
+    { id: `${layerId}-hatch`, type: "fill", ...common, layout, paint: { "fill-pattern": pattern, "fill-opacity": patternOpacity } },
+    { id: `${layerId}-casing`, type: "line", ...common, layout: { ...layout, "line-join": "round" }, paint: { "line-color": WHITE, "line-width": 0, "line-opacity": 0 } },
+    { id: `${layerId}-line`, type: "line", ...common, layout: { ...layout, "line-join": "round" }, paint: { "line-color": WHITE, "line-width": SOLID_TILE_EDGE.width, "line-opacity": SOLID_TILE_EDGE.opacity * opacity } },
+  ];
+}
+
+/** Adds every hatch and stipple pattern the style needs as a Mapbox image (once per style: a style swap drops images). */
 export function ensureHatchImages(map: MapboxMap, ids: Iterable<string>): void {
   for (const id of ids) {
     if (map.hasImage(id)) continue;
+    const stipple = /^stipple-([0-9A-F]{6})$/.exec(id);
+    if (stipple) {
+      map.addImage(id, stippleImage(`#${stipple[1]}` as HatchColor), { pixelRatio: HATCH_SCALE });
+      continue;
+    }
     const match = /^hatch-([0-9A-F]{6})-(\d)$/.exec(id);
     if (!match) continue;
     map.addImage(id, hatchImage(`#${match[1]}` as HatchColor, Number(match[2])), { pixelRatio: HATCH_SCALE });
@@ -252,10 +290,12 @@ export function ensureHatchImages(map: MapboxMap, ids: Iterable<string>): void {
  * the layer's), else its category key's declared levels (lib/render/categories.ts).
  */
 /** What colors a tile layer's areas: a category's colors by value, or a stepped ramp's colors from each lower bound. */
-export type TileKey = { field: string; colors: [string, string][]; steps?: [number, string][] };
+/** `paint: "rock-family"`: the geologic map's derived rock family and age (rockFamilyLayerSpecs), not a served field. */
+export type TileKey = { field: string; colors: [string, string][]; steps?: [number, string][]; paint?: "rock-family" };
 
 export function tileKeyOf(layer: LoadedLayer): TileKey | undefined {
   const legend = layer.result.legend ?? layer.legend;
+  if (legend?.field === ROCK_FAMILY_FIELD) return { field: ROCK_FAMILY_FIELD, colors: [], paint: "rock-family" };
   // A ramp whose every stop has a value and a color, low to high (geology's eras): a stepped fill.
   if (legend?.kind === "ramp" && legend.field && (legend.stops?.length ?? 0) > 1 && legend.stops!.every((s) => s.color && typeof s.value === "number")) {
     const steps = legend.stops!.map((s) => [s.value as number, s.color as string] as [number, string]).sort((a, b) => a[0] - b[0]);

@@ -152,3 +152,42 @@ export function stepFor(value: unknown, bounds: readonly number[]): number {
 export function acresStep(acres: unknown): number {
   return stepFor(acres, FIRE_ACRE_STEPS);
 }
+
+/** Stipple dot spacing in CSS pixels (divides HATCH_TILE_PX, so the tile repeats seamlessly) and dot radius. */
+export const STIPPLE_SPACING_PX = 9;
+export const STIPPLE_RADIUS_PX = 0.9;
+
+const stipples = new Map<string, HatchImage>();
+
+/**
+ * A stipple tile (loose sediments on the geologic map, lib/render/rockFamily.ts): round dots of `color` every
+ * STIPPLE_SPACING_PX, alternate rows offset by half a step, anti-aliased by distance; one HATCH_FRAME square for Mapbox
+ * `addImage` at pixelRatio HATCH_SCALE. Memoized by color.
+ */
+export function stippleImage(color: HatchColor): HatchImage {
+  const key = color.toUpperCase();
+  let image = stipples.get(key);
+  if (!image) {
+    const [r, g, b] = hexToRgb(color);
+    const data = new Uint8ClampedArray(HATCH_FRAME * HATCH_FRAME * 4);
+    const step = STIPPLE_SPACING_PX * HATCH_SCALE;
+    const radius = STIPPLE_RADIUS_PX * HATCH_SCALE;
+    for (let y = 0; y < HATCH_FRAME; y++) {
+      for (let x = 0; x < HATCH_FRAME; x++) {
+        const row = Math.floor((y + 0.5) / step);
+        const shift = row % 2 === 0 ? 0 : step / 2;
+        const cx = Math.round((x + 0.5 - shift - step / 2) / step) * step + shift + step / 2;
+        const cy = row * step + step / 2;
+        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+        const i = (y * HATCH_FRAME + x) * 4;
+        data[i] = r;
+        data[i + 1] = g;
+        data[i + 2] = b;
+        data[i + 3] = Math.round(255 * Math.min(1, Math.max(0, radius + 0.5 - d)));
+      }
+    }
+    image = { width: HATCH_FRAME, height: HATCH_FRAME, data };
+    stipples.set(key, image);
+  }
+  return image;
+}

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useImperativeHandle, useRef, type Ref } from "r
 import { MapSetupNotice } from "@/components/MapSetupNotice";
 import { drawnLineEntries, sitePath, syncHeatLayers, syncLineLayers, syncSatelliteHybrid, syncTileLayers, tileKeyOf } from "@/components/mapTiles";
 import { setInView, type InView, type TileSample } from "@/lib/render/inView";
+import { tileFieldValue } from "@/lib/render/rockFamily";
 import { ensureRouteImages, setRouteProgress, syncRouteLayers } from "@/components/routeLayers";
 import { basemapStyle, basemapStyleUrl } from "@/lib/render/basemaps";
 import { swipeStore } from "@/lib/render/compareView";
@@ -439,7 +440,8 @@ function reportInView(map: mapboxgl.Map, state: MapState): void {
       for (let c = 0; c < IN_VIEW_GRID.columns; c++) {
         const point: [number, number] = [((c + 0.5) * width) / IN_VIEW_GRID.columns, ((r + 0.5) * height) / IN_VIEW_GRID.rows];
         const hit = map.queryRenderedFeatures(point, { layers: [id] })[0];
-        const v = hit?.properties?.[field];
+        // A derived field (the geologic map's rock family) is classed from the unit's own properties.
+        const v = tileFieldValue(field, hit?.properties);
         if (v !== undefined && v !== null) values.push(String(v));
       }
     }

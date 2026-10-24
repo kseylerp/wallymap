@@ -3,7 +3,9 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { contractProblems, legendOf } from "./contract";
 import { cardContent } from "@/lib/render/card";
-import layer, { ERAS, GEOLOGY_SOURCE_LAYER, GEOLOGY_TILE_URL } from "./geology";
+import { ROCK_FAMILY_FIELD } from "@/lib/render/rockFamily";
+import layer, { GEOLOGY_SOURCE_LAYER, GEOLOGY_TILE_URL, gridPoints, unitsNote, type SampledUnit } from "./geology";
+import fixture from "./__fixtures__/geologic-unit.tahoe.json";
 
 const BBOX: [number, number, number, number] = [-120.2, 38.8, -119.8, 39.0];
 
@@ -19,8 +21,8 @@ describe("geology layer", () => {
     expect(layer.style).not.toHaveProperty("fillOpacity");
   });
 
-  it("hands the map the vector tiles and makes no upstream call", async () => {
-    const stub = vi.fn();
+  it("hands the map the vector tiles and samples the box's units on a 6 by 6 grid of points", async () => {
+    const stub = vi.fn(async () => new Response(JSON.stringify(fixture), { status: 200 }));
     const r = await layer.query({ bbox: BBOX, zoom: 12, env: {}, fetch: stub as unknown as CachedFetch }, {});
     expect(r).toMatchObject({
       kind: "tiles",
@@ -35,12 +37,72 @@ describe("geology layer", () => {
     });
     expect(GEOLOGY_TILE_URL).toContain("{z}/{x}/{y}");
     expect(GEOLOGY_SOURCE_LAYER).toBe("units");
-    expect(stub).not.toHaveBeenCalled();
+    expect(stub).toHaveBeenCalledTimes(36);
+    const [url, init] = stub.mock.calls[0] as unknown as [string, { cacheKey?: string; headers?: Record<string, string> }];
+    expect(url).toBe("https://macrostrat.org/api/v2/geologic_units/map?lat=38.81667&lng=-120.16667");
+    expect(init.cacheKey).toBe("geology:point:38.81667,-120.16667");
+    expect(init.headers?.["user-agent"]).toContain("WallyMap");
+    if (!("kind" in r)) throw new Error("expected a result");
+    // Every point answers the Tahoe fixture: its most detailed unit is Till.
+    expect(r.coverageNote).toContain("Till: ");
+    expect(r.coverageNote).toContain("Pleistocene, 11,700 to 2.6 million years; about 100% of sampled points");
+    expect(r.coverageNote).toContain("By rock family: loose sediment about 100%");
   });
 
-  it("points 'what rock is here' questions at geologic-unit and does not claim per-unit colours", () => {
+  it("spreads the grid's points over the box, south-west first", () => {
+    const pts = gridPoints([0, 0, 6, 3]);
+    expect(pts).toHaveLength(36);
+    expect(pts[0]).toEqual([0.5, 0.25]);
+    expect(pts[35]).toEqual([5.5, 2.75]);
+  });
+
+  it("notes the main units by name with rocks, ages, formations and shares, and the rock families", () => {
+    const navajo: SampledUnit = {
+      name: "Navajo Sandstone",
+      strat_name: "Navajo Sandstone",
+      lith: "",
+      descrip: "White, pink, and brown sandstone; forms cliffs",
+      t_int_name: "Early Jurassic",
+      b_int_name: "Early Jurassic",
+      t_age: 166.65,
+      b_age: 180.55,
+      scale: "large",
+      family: "sedimentary",
+    };
+    const kayenta: SampledUnit = {
+      name: "Navajo Sandstone, Kayenta and Moenave Formations",
+      strat_name: "Navajo Sandstone; Kayenta Formation; Moenave Formation",
+      lith: "Major:{arenite,sandstone mudstone}, Incidental:{limestone}",
+      t_int_name: "Middle Jurassic",
+      b_int_name: "Early Jurassic",
+      t_age: 166.65,
+      b_age: 201.3,
+      scale: "medium",
+      family: "sedimentary",
+    };
+    const alluvium: SampledUnit = { name: "Alluvium", lith: "alluvium", t_int_name: "Holocene", b_int_name: "Holocene", t_age: 0, b_age: 0.0117, scale: "large", family: "unconsolidated" };
+    const note = unitsNote([navajo, navajo, navajo, kayenta, alluvium, null], 6);
+    expect(note).toContain("from 5 points sampled on a 6 by 6 grid (1 of 6 points did not answer)");
+    expect(note).toContain("Navajo Sandstone: white, pink, and brown sandstone; Early Jurassic, 167 to 181 million years; about 60% of sampled points");
+    expect(note).toContain("(formations: Navajo Sandstone, Kayenta Formation, Moenave Formation): ");
+    expect(note).toContain("Early Jurassic to Middle Jurassic, 167 to 201 million years; about 20%");
+    expect(note).toContain("By rock family: sedimentary about 80% and loose sediment about 20%");
+    expect(note).toContain("faults");
+    expect(unitsNote([null], 1)).toMatch(/no geologic map unit/);
+  });
+
+  it("does not sample a continent-sized box", async () => {
+    const stub = vi.fn();
+    const r = await layer.query({ bbox: [-170, -60, 170, 70], zoom: 2, env: {}, fetch: stub as unknown as CachedFetch }, {});
+    expect(stub).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ kind: "tiles" });
+  });
+
+  it("points one-spot questions at geologic-unit, areas here, and faults at the faults layer", () => {
     expect(layer.description).toContain("geologic-unit");
     expect(layer.description).toContain("lon and lat");
+    expect(layer.description).toContain("faults layer");
+    expect(layer.description).toMatch(/AREA/);
     expect(layer.description).not.toMatch(/colou?red by|per-unit colou?r|each polygon/i);
   });
 
@@ -50,15 +112,13 @@ describe("geology layer", () => {
     expect(r.body).toMatchObject({ kind: "tiles" });
   });
 
-  it("fills units by the era of their youngest rock with a stepped legend and a card for a tapped unit", () => {
+  it("keys units by rock family, darker for older rock, with a card for a tapped unit", () => {
     const legend = legendOf(layer);
-    expect(legend).toMatchObject({ kind: "ramp", field: "best_age_top", unit: "million years" });
-    expect(legend.stops?.map((st) => st.value)).toEqual([0, 2.58, 66, 252, 541]);
-    expect(new Set(legend.stops?.map((st) => st.color)).size).toBe(5);
-    expect(ERAS[4].color).toBe("#3A3A3C");
-    expect(layer.style.encode).toEqual({ color: "best_age_top" });
+    expect(legend).toMatchObject({ kind: "categories", title: "Rock family", field: ROCK_FAMILY_FIELD });
+    expect(legend.items).toHaveLength(5);
+    expect(legend.note).toMatch(/^Darker = older/);
+    expect(layer.style.encode).toBeUndefined();
     expect(layer.card?.facts?.map((f) => f.key)).toEqual(["age", "descrip"]);
-    expect(layer.description).not.toMatch(/does not colour rock types/);
     expect(contractProblems(layer)).toEqual([]);
   });
 
@@ -70,6 +130,7 @@ describe("geology layer", () => {
       properties: {
         map_id: 1234,
         source_id: 7,
+        legend_id: 44707,
         name: "Colluvium",
         age: "Holocene",
         lith: "Major:{unconsolidated colluvium}",

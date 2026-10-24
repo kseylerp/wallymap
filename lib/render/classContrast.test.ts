@@ -6,7 +6,7 @@ import { groupColors } from "@/lib/render/attributes";
 import { stopsColor } from "@/lib/render/encode";
 import { SOLID_TILE_FILL } from "@/components/mapTiles";
 import { HALF_ZONES, ZONE_COLORS } from "@/layers/hardiness-zones";
-import { ERAS } from "@/layers/geology";
+import { FAMILY_COLORS } from "@/lib/render/rockFamily";
 import { LEGEND as TEMPERATURE_LEGEND } from "@/layers/temperature-anomaly";
 
 /**
@@ -43,12 +43,20 @@ describe("neighbouring classes differ visibly over every basemap", () => {
     expect(w.dE, `${w.pair} on ${w.ground}`).toBeGreaterThanOrEqual(MIN_NEIGHBOUR_DELTA_E);
   });
 
-  it("geologic eras at the tile fill", () => {
-    const w = weakestPair(
-      ERAS.map((e) => e.color),
-      SOLID_TILE_FILL[0][1],
-    );
-    expect(w.dE, `${w.pair} on ${w.ground}`).toBeGreaterThanOrEqual(MIN_NEIGHBOUR_DELTA_E);
+  it("geologic rock families at the tile fill: each family's age steps, and the families at the same age", () => {
+    for (const [family, colors] of Object.entries(FAMILY_COLORS)) {
+      // Loose sediments keep one shade (young, almost all Quaternary).
+      if (family === "unconsolidated") continue;
+      const w = weakestPair(colors, SOLID_TILE_FILL[0][1]);
+      expect(w.dE, `${family} ${w.pair} on ${w.ground}`).toBeGreaterThanOrEqual(MIN_NEIGHBOUR_DELTA_E);
+    }
+    for (let step = 0; step < 5; step++) {
+      const w = weakestPair(
+        Object.values(FAMILY_COLORS).map((c) => c[step]),
+        SOLID_TILE_FILL[0][1],
+      );
+      expect(w.dE, `age step ${step}: ${w.pair} on ${w.ground}`).toBeGreaterThanOrEqual(MIN_NEIGHBOUR_DELTA_E);
+    }
   });
 
   it("ordinal classes (drought, alert severity) at the choropleth alpha, for 3 to 6 classes", () => {

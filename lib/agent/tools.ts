@@ -480,7 +480,8 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: T
         const widerScale = widerScaleFor(layer.id, view?.bbox ?? bbox);
         return widerScale.length > 0 || view ? ({ ...body, widerScale } satisfies ZoomInError) : body;
       }
-      return body;
+      // The box the server asked (a "near" radius, a region's part), so a share link asks the same box again.
+      return ok ? ({ ...body, queryBox: bbox } as unknown as typeof body) : body;
     },
     // The UI part keeps the full body for the map; the model gets a summary with v's statistics in the layer's unit.
     toModelOutput: ({ output }) => ({ type: "json", value: summaryFor(output) }),

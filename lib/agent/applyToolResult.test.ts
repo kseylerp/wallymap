@@ -160,6 +160,8 @@ describe("toolResultToActions", () => {
           style: { geometry: "line", color: "#D97757" },
           result,
           receivedAt: expect.any(String),
+          // The box asked, so a share link asks it again.
+          queryBox: [0, 0, 1, 1],
         },
       },
       { type: "render", op: { layerId: "osm-trails", mode: "lines", visible: true }, defaultMode: true },

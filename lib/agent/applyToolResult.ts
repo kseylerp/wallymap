@@ -219,6 +219,9 @@ function queryActions(layerId: string, input: unknown, output: Obj, catalog: Lay
   const style = entry?.style ?? FALLBACK_STYLE;
   // Kept on the layer so a share link asks for the same data (the forecast on, the same date).
   const layerInput = layerInputOf(input);
+  const isBox = (v: unknown): v is [number, number, number, number] => Array.isArray(v) && v.length === 4 && v.every((n) => typeof n === "number" && Number.isFinite(n));
+  const asked = isObject(input) ? input.bbox : undefined;
+  const queryBox = isBox(output.queryBox) ? output.queryBox : isBox(asked) ? asked : undefined;
   const actions: MapAction[] = [
     {
       type: "layer_loaded",
@@ -230,6 +233,7 @@ function queryActions(layerId: string, input: unknown, output: Obj, catalog: Lay
         receivedAt: new Date().toISOString(),
         ...catalogFields(entry),
         ...(layerInput && { input: layerInput }),
+        ...(queryBox && { queryBox }),
       },
     },
   ];

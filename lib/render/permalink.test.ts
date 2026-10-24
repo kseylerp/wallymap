@@ -120,6 +120,18 @@ describe("restoreFromPermalink", () => {
   };
   const canvas = { width: 1000, height: 800 };
 
+  it("asks each layer over the box the sender's answer asked, not the opener's screen (Bend's hikes)", async () => {
+    const box: [number, number, number, number] = [-121.6, 43.9, -121.1, 44.3];
+    const withBox = { ...source, layers: { ...source.layers, "osm-trails": { ...source.layers["osm-trails"], queryBox: box } } };
+    const hash = encodeState(withBox);
+    expect(hash).toContain("q=osm-trails:-121.6,43.9,-121.1,44.3");
+    expect(decodeState(hash)?.layers.find((l) => l.id === "osm-trails")?.queryBox).toEqual(box);
+    const fetchLayer = vi.fn(async () => result);
+    await restoreFromPermalink(hash, () => undefined, fetchLayer, { catalog, canvas });
+    const calls = fetchLayer.mock.calls as unknown as unknown[][];
+    expect(calls.find((c) => c[0] === "osm-trails")?.[1]).toEqual(box);
+  });
+
   it("sets the camera, then dispatches layer_loaded and render for each layer in order", async () => {
     const actions: MapAction[] = [];
     const fetchLayer = vi.fn(async () => result);

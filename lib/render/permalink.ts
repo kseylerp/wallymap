@@ -42,6 +42,8 @@ export type PermalinkLayer = {
   /** Two measures on one mark (`<size>|<color>`, "" for a channel switched off). */
   encode?: { size?: string; color?: string };
   input?: Record<string, unknown>;
+  /** The box the layer was asked over (`q=`), asked again on restore instead of the opener's screen. */
+  queryBox?: BBox;
 };
 
 /** A scenario layer's amount on the scenario scrubber (`s=<layer>:<value>`). */
@@ -317,6 +319,12 @@ export function encodeState(state: PermalinkSource, servable?: Record<string, un
     ...failed.flatMap((f) => (f.input ? [{ id: f.layerId, input: f.input }] : [])),
   ]);
   if (inputs) parts.push(`i=${inputs}`);
+  // Each layer's query box (`q=<layer>:w,s,e,n`), so the link asks what the sender asked, not the opener's screen.
+  const boxes = shared.flatMap((op) => {
+    const box = state.layers[op.layerId]?.queryBox;
+    return box ? [`${encodeURIComponent(op.layerId)}:${box.map((n) => round(n, 4)).join(",")}`] : [];
+  });
+  if (boxes.length > 0) parts.push(`q=${boxes.join(";")}`);
   const time = timeOf(state.time);
   if (time) parts.push(`t=${encodeURIComponent(time.start)},${encodeURIComponent(time.end)}${time.mode === "cumulative" ? ",c" : ""}`);
   const scenario = state.scenario;
@@ -413,6 +421,7 @@ export function decodeState(hash: string): PermalinkState | null {
   let found = false;
   let filtersByLayer: Record<string, LayerFilters> = {};
   let inputsByLayer: Record<string, Record<string, unknown>> = {};
+  const boxesByLayer: Record<string, BBox> = {};
   for (const pair of body.split("&")) {
     const eq = pair.indexOf("=");
     if (eq <= 0) continue;
@@ -436,6 +445,12 @@ export function decodeState(hash: string): PermalinkState | null {
       if (Number.isInteger(n) && n > 0) out.filtersDropped = n;
     } else if (key === "i") {
       inputsByLayer = decodeInputs(value);
+    } else if (key === "q") {
+      for (const entry of value.split(";")) {
+        const at = entry.lastIndexOf(":");
+        const box = entry.slice(at + 1).split(",").map(Number);
+        if (at > 0 && box.length === 4 && box.every(Number.isFinite) && box[0] < box[2] && box[1] < box[3]) boxesByLayer[decodeURIComponent(entry.slice(0, at))] = box as BBox;
+      }
     } else if (key === "s") {
       const scenario = parseScenario(value);
       if (scenario) out.scenario = scenario;
@@ -459,6 +474,7 @@ export function decodeState(hash: string): PermalinkState | null {
     ...layer,
     ...(filtersByLayer[layer.id] && { filters: filtersByLayer[layer.id] }),
     ...(inputsByLayer[layer.id] && { input: inputsByLayer[layer.id] }),
+    ...(boxesByLayer[layer.id] && { queryBox: boxesByLayer[layer.id] }),
   }));
   if (out.compare && !out.layers.some((layer) => layer.id === out.compare?.layerId)) delete out.compare;
   return found ? out : null;
@@ -552,7 +568,7 @@ export async function restoreFromPermalink(
   const bbox = viewportBBox(view, options.canvas.width, options.canvas.height);
   const results = await Promise.all(
     decoded.layers.map((layer) =>
-      fetchWithRetry(fetchLayer, layer.id, capBox(bbox, options.catalog[layer.id]?.maxAreaKm2), view.zoom, layer.input).catch(
+      fetchWithRetry(fetchLayer, layer.id, layer.queryBox ?? capBox(bbox, options.catalog[layer.id]?.maxAreaKm2), view.zoom, layer.input).catch(
         (err): LayerError => ({ error: String(err), hint: "upstream" }),
       ),
     ),
@@ -584,6 +600,7 @@ export async function restoreFromPermalink(
         receivedAt: new Date().toISOString(),
         ...catalogFields(entry),
         ...(layer.input && { input: layer.input }),
+        ...(layer.queryBox && { queryBox: layer.queryBox }),
       },
     });
     // A link without a mode takes the layer's default from its hints, as a fresh query would. A link that records the

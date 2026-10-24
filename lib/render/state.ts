@@ -128,6 +128,12 @@ export type LoadedLayer = {
    * zoom; unset for the default input. A share link carries it, so opening the link asks for the same data.
    */
   input?: Record<string, unknown>;
+  /**
+   * The box the layer was asked over (the server's, after a "near" radius): a share link asks it again, so the opened
+   * link draws what the sender saw rather than what a wider screen's box returns (Bend's hikes came back as 15 named
+   * routes, all filtered out).
+   */
+  queryBox?: [number, number, number, number];
 };
 
 /** A route drawn Wally-style (gradient line, darts, mile markers, waypoint pins): a `route` result, a GPX, a trail. */

@@ -71,7 +71,8 @@ confirm step; nothing downloads without a click). The card never moves the camer
 **Phone first screen** (390 × 844, the chat sheet folded at 34% of the screen, no panel opened): the first sentence of
 the answer is readable without scrolling (at most 40 words), the top three features are labelled by name on the
 map, and they are in frame. *Asserted as `phone`: first sentence ≤ 40 words with a number, at least 3 labels drawn (or
-all of them when fewer), top features in frame.* The pixel check (labels legible, lines visible on each basemap) is
+all of them when fewer, or as many as the layer labels when it labels fewer: a forecast names only the asked place),
+top features in frame.* The pixel check (labels legible, lines visible on each basemap) is
 `--screens` (`scripts/evalScreens.ts`).
 
 **Basemaps.** Topo + Satellite by default. Topographical (relief and names) for forecasts, paddling, snow, slope and
@@ -321,7 +322,8 @@ index) as fire nearby; `snow-cover` on a cloudy day presented as snow-free; `gre
 **Acceptance tests.**
 - T02.1: `weather-forecast` answered and drawn; Topographical; 1 label; card Temperature, Chance of rain or snow,
   Wind, Saturday, Sunday in order; note says Saturday and Sunday with °F, a percent and mph.
-- T02.2: `weather-alerts`, `smoke`, and `fire-perimeters` or `fire-detections` answered; time panel open; note
+- T02.2: `weather-alerts`, `smoke`, and `fire-perimeters` or `fire-detections` answered; time panel open when anything
+  dated is drawn (with no fire or alert there is nothing to open it on); note
   speaks to alerts, smoke and fire (each a fact or "none").
 - T02.3: snow (`snowpack` or `snow-cover`), `snowpack` and `avalanche` answered; ≥ 3 labels; card Snow depth, Snow
   water equivalent, Percent of normal, Reading; legend "Compared with normal"; note gives inches, the reading date and

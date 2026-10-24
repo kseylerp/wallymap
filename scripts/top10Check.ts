@@ -302,7 +302,10 @@ export function top10Rule(e: Top10Expect, run: { calls: ToolCall[]; text: string
   const ranked = m ? topOf(m, 3) : { top: [] as Feature[] };
   if (e.rankBy) asserts.push({ id: "rankBy", ok: !!ranked.key && e.rankBy.includes(ranked.key), detail: `ranked by ${ranked.key ?? "nothing"} (wanted ${e.rankBy.join(" or ")})` });
   if (e.compare) asserts.push({ id: "compare", ok: !!state.compare && !!m && state.compare.layerId === m.op.layerId, detail: state.compare ? `compare on ${state.compare.layerId}` : "no compare open" });
-  if (e.timePanel) asserts.push({ id: "time", ok: !!state.time?.open || !!state.compare, detail: state.time ? `time panel ${state.time.open ? "open" : "closed"}` : "no time panel" });
+  // A time panel needs something dated to show: with no dated feature drawn (no fires near Yosemite right now) there is
+  // nothing to open it on, and the answer's "none" is the finding.
+  const dated = Object.values(state.layers).some((l) => l.result.kind === "geojson" && l.result.data.features.some((f) => f.properties?.t !== undefined && f.properties?.t !== null));
+  if (e.timePanel) asserts.push({ id: "time", ok: !!state.time?.open || !!state.compare || !dated, detail: state.time ? `time panel ${state.time.open ? "open" : "closed"}` : dated ? "no time panel" : "nothing dated drawn" });
   if (e.places) {
     const sentences = note.split(/(?<=[.!?])\s+|\n+/);
     const missing = e.places.filter((p) => !sentences.some((s) => lower(s).includes(lower(p)) && /\d/.test(s)));
@@ -375,7 +378,8 @@ export function top10Rule(e: Top10Expect, run: { calls: ToolCall[]; text: string
 
   // Phone first screen: the first sentence fits the folded sheet, the top features are named on the map and in frame.
   const short = first.length > 0 && words(first) <= PHONE_FIRST_SENTENCE_WORDS && /\d/.test(first);
-  const labelsOk = shownFeatures.length === 0 || labelled >= Math.min(3, shownFeatures.length);
+  // A layer that labels fewer by design (a forecast names only the asked place, T02 "the place labelled") needs only those.
+  const labelsOk = shownFeatures.length === 0 || labelled >= Math.min(3, shownFeatures.length, spec?.max ?? 3);
   asserts.push({ id: "phone", ok: short && labelsOk && framed, detail: `first sentence ${words(first)} words${/\d/.test(first) ? "" : " with no number"}, ${labelled} labels, ${framed ? "in frame" : "out of frame"}` });
 
   const assertions = asserts.filter((a): a is Assertion => a !== null);

@@ -115,6 +115,9 @@ function shownEntries(entries: LegendEntry[]): LegendEntry[] {
   // With counts from the drawn features, a kind with none on the map is left off the key (a fire with no "Out" fires
   // keeps "Still burning" and "Contained"); with no counts at all (tiles), every item stays.
   const counted = merged.some((e) => (e.count ?? 0) > 0);
+  // Every kind counted and none drawn (Tahoe's snow stations, too early in the season to compare with normal): one line,
+  // not four rows of zeros.
+  if (!counted && merged.length > 0 && merged.every((e) => e.count === 0)) return [{ label: "None in view" }];
   return counted ? merged.filter((e) => e.count === undefined || e.count > 0) : merged;
 }
 

@@ -152,3 +152,19 @@ describe("legends list what is in view (owner, 2026-10-18)", () => {
     expect(ramp.range?.to).toBe(1);
   });
 });
+
+describe("a declared key with none of its kinds drawn (Tahoe's snow stations, too early to compare)", () => {
+  it("reads one line, not a row of zeros per kind", () => {
+    const stations = [1, 2, 3].map((i) => ({ ...pt("x"), properties: { name: `Station ${i}` } }));
+    const layer: LoadedLayer = {
+      id: "snowpack",
+      title: "Snowpack",
+      style: { geometry: "point", color: "#3A3A3C" },
+      legend: { kind: "categories", title: "Compared with normal", field: "normalClass", items: [{ label: "Below normal", value: "below" }, { label: "Above normal", value: "above" }] },
+      result: { kind: "geojson", data: { type: "FeatureCollection", features: stations }, citation },
+      receivedAt: "",
+    };
+    const blocks = rowLegend(layer, { layerId: layer.id, mode: "points", visible: true }, layer.result.kind === "geojson" ? layer.result.data : null);
+    expect(blocks.find((b) => b.field === "normalClass")?.entries.map((e) => e.label)).toEqual(["None in view"]);
+  });
+});

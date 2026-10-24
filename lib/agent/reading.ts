@@ -39,7 +39,7 @@ export type Reading = {
   /** The species the question names in its own words ("sandhill cranes", "moose"), or null. */
   taxon: string | null;
   /** Layers the question's words rule out (a bike trail's "flowy" is not river flow). */
-  avoid: { layerId: string; because: string }[];
+  avoid: { layerId: string; because: string; firm?: boolean }[];
   filters: FilterHint[];
   inputs: InputHint[];
   /** A measure to rank by ("big climbs": elevation gain). */
@@ -293,6 +293,8 @@ const PHRASES: {
   unless?: RegExp;
   layers?: string[];
   avoid?: string[];
+  /** The avoided layers stay out even when the question's own words name them (a typical month is not the forecast). */
+  firm?: boolean;
   inputs?: Record<string, Record<string, unknown>>;
   /** Chips a phrase means on a layer ("hikes" are paths and footpaths, not tracks, which are unpaved roads), or a measure's range. */
   filters?: Record<string, Record<string, string[] | { range: [number, number] }>>;
@@ -408,7 +410,8 @@ const PHRASES: {
   },
   {
     re: /\bwill\s+it\s+(?:rain|snow|storm)\b|\brain(?:fall)?\b|\btoo\s+(?:hot|cold)\b|\btemperatures?\b|\bforecast\b|\bfreez\w+\b|\bheat\b|\bwindy\b|\bgusts?\b/i,
-    unless: /\bwater\s+temp\w*|\bsea\s+surface\b|\bwarming\b|\btemperature\s+anomal\w*/i,
+    // "Typical temperature by month" is the climate normals, not the next 7 days.
+    unless: /\bwater\s+temp\w*|\bsea\s+surface\b|\bwarming\b|\btemperature\s+anomal\w*|\btypical\w*|\busual\w*|\baverage\b|\bnormals?\b|\bby\s+month\b|\beach\s+month\b|\bclimate\b/i,
     layers: ["weather-forecast"],
     because: "weather ahead is the 7-day forecast for the place (when the app has it)",
   },
@@ -470,7 +473,7 @@ const PHRASES: {
     because: "a dark sky is little light at night from the satellite",
   },
   // The top 10 use cases' plans (docs/top-10-use-cases.md): the layers a decision is read from, resolved before the model
-  // chooses. A layer another part of the app has not added yet is skipped (addLayer keeps only registered layers).
+  // chooses. Every id here is a registered layer (plans.test.ts checks it).
   {
     re: /\bwhat\s+protects\b|\bis\s+(?:it|this|that|the\s+[\w-]+)\s+protected\b|\bprotections?\b|\bhow\s+(?:is|are)\b[^?]*\bprotected\b/i,
     layers: ["monuments", "wilderness"],
@@ -489,18 +492,23 @@ const PHRASES: {
   },
   {
     re: /\bfaults?\b|\bfault\s+lines?\b/i,
-    layers: ["faults", "quaternary-faults"],
+    layers: ["faults"],
     because: "faults are the USGS Quaternary fault database",
   },
   {
     re: /\bsoils?\b|\bloam\w*|\bclay\s+(?:soil|content)\b/i,
-    layers: ["soils", "soil"],
+    layers: ["soils"],
     because: "soil is the USDA soil survey (SSURGO)",
   },
   {
     re: /\becosystems?\b|\bvegetation(?:\s+types?)?\b|\bwhat\s+grows\b|\bwhat(?:'s|\s+is)\s+growing\b|\bplant\s+communit\w*/i,
-    layers: ["ecoregions", "vegetation", "land-cover"],
-    because: "what grows is the ecoregions and vegetation types, with land cover's shares",
+    layers: ["vegetation-types", "ecoregions"],
+    because: "what grows is the vegetation types (LANDFIRE) with their shares, inside the ecoregions",
+  },
+  {
+    re: /\bnatural\s+or\s+planted\b|\bplanted\s+or\s+natural\b|\b(?:tree\s+)?plantations?\b|\bplanted\s+(?:forests?|trees?)\b/i,
+    layers: ["forest-types"],
+    because: "natural or planted forest is the forest types map (naturally regrown, planted, primary)",
   },
   {
     re: /\bhow\s+tall\s+(?:are|is)\s+the\s+trees?\b|\btree\s+heights?\b|\bcanopy\s+heights?\b/i,
@@ -509,24 +517,27 @@ const PHRASES: {
   },
   {
     re: /\b(?:temperature|precipitation|rain|snowfall|climate)\b[^?]*\bby\s+month\b|\btypical\s+(?:temperature|weather|climate|precipitation)\b|\bclimate\s+normals?\b|\bwhen\b[^?]*\bsnow\s+usually\b/i,
-    layers: ["climate-normals", "climate", "seasonality"],
+    layers: ["climate-normals"],
+    // The 7-day forecast is not what a place is usually like.
+    avoid: ["weather-forecast"],
+    firm: true,
     because: "typical weather by month is the climate normals",
   },
   {
     re: /\bhow\s+deep\s+is\s+the\s+(?:water|ocean|sea|bay|sound)\b|\bwater\s+depth\b|\bbathymetr\w*|\bdepth\s+of\s+the\s+(?:water|bay|sound|ocean)\b/i,
-    layers: ["bathymetry", "water-depth"],
+    layers: ["water-depth"],
     because: "depth under water is the bathymetry",
   },
   {
     re: /\b(?:elevation\s+)?cross[- ]sections?\b|\belevation\s+profile\b|\bprofile\s+from\b/i,
-    layers: ["elevation-profile", "cross-section", "elevation"],
+    layers: ["elevation-profile"],
     because: "a cross-section is the elevation along a line",
   },
   {
-    // Oil and gas near a place: its pipelines, the methane plumes seen over its wells, and the leases where they exist.
+    // Oil and gas near a place: the federal leases (producing or not), its pipelines and the methane plumes over its wells.
     re: /\boil\s+(?:and|&)\s+gas\b|\bfracking\b|\bdrilling\b|\bgas\s+wells?\b|\boil\s+wells?\b|\bpipelines?\b/i,
-    layers: ["pipelines-lines", "methane-plumes", "oil-gas-leases"],
-    because: "oil and gas is the pipelines, the methane plumes over the wells and the federal leases",
+    layers: ["mineral-leases", "pipelines-lines", "methane-plumes"],
+    because: "oil and gas is the federal leases, the pipelines and the methane plumes over the wells",
   },
   {
     // Burn scars since a year are the fires' outlines (acres, year) on a timeline, with the burn severity inside them.
@@ -562,6 +573,15 @@ const PHRASES: {
     because: "fires and alerts now are the newest live data",
   },
 ];
+
+/** Every layer id the phrase plans name (layers, avoided layers, filters, inputs and views), for the registry check. */
+export function planLayerIds(): string[] {
+  const ids = new Set<string>();
+  for (const p of PHRASES) {
+    for (const id of [...(p.layers ?? []), ...(p.avoid ?? []), ...Object.keys(p.filters ?? {}), ...Object.keys(p.inputs ?? {}), ...Object.keys(p.views ?? {})]) ids.add(id);
+  }
+  return [...ids];
+}
 
 /** Animal words, and the words before one that make it a species ("sandhill cranes", "bald eagles"). */
 const ANIMAL = /\b(?:moose|elk|deer|bears?|grizzl\w*|whales?|humpbacks?|dolphins?|orcas?|seals?|sea\s+lions?|otters?|eagles?|owls?|hawks?|falcons?|cranes?|herons?|pelicans?|bison|buffalo|pronghorn|bighorn|mountain\s+goats?|jaguars?|pumas?|cougars?|mountain\s+lions?|lynx|bobcats?|coyotes?|foxes|beavers?|butterfl\w+|monarchs?|puffins?|condors?|tortoises?|salamanders?|frogs?|snakes?|rattlesnakes?)\b/i;
@@ -763,7 +783,7 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     const strong = !(p.unless && p.unless.test(masked));
     for (const id of p.layers ?? []) addLayer(id, `"${m[0].trim()}": ${p.because}`, strong);
     // Avoid a layer only when the layer the phrase names exists.
-    if ((p.layers ?? []).every((id) => getLayer(id))) for (const id of p.avoid ?? []) avoid.push({ layerId: id, because: `"${m[0].trim()}": ${p.because}` });
+    if ((p.layers ?? []).every((id) => getLayer(id))) for (const id of p.avoid ?? []) avoid.push({ layerId: id, because: `"${m[0].trim()}": ${p.because}`, ...(p.firm && { firm: true }) });
     // A phrase whose "unless" words are there names its layers only loosely and sets nothing.
     if (strong) for (const [layerId, input] of Object.entries(p.inputs ?? {})) if (!inputs.some((i) => i.layerId === layerId && JSON.stringify(i.input) === JSON.stringify(input))) inputs.push({ layerId, input, because: `"${m[0].trim()}": ${p.because}` });
     // A phrase whose "unless" words are there (the question gives its own length) sets no range of its own.
@@ -788,7 +808,7 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     if (hit) addLayer(entry.layerId, `"${hit}"`, false);
   }
   // A layer the words rule out stays out unless the question also names it in its own words.
-  const kept = avoid.filter((a) => !layers.some((l) => l.layerId === a.layerId && !l.strong && !/^"(?:flow|run)/.test(l.because)));
+  const kept = avoid.filter((a) => a.firm || !layers.some((l) => l.layerId === a.layerId && !l.strong && !/^"(?:flow|run)/.test(l.because)));
   for (const a of kept) {
     const i = layers.findIndex((l) => l.layerId === a.layerId && !l.strong);
     if (i >= 0) layers.splice(i, 1);

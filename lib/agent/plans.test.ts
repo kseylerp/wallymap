@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import "@/layers";
-import { readQuestion, ydsBands } from "@/lib/agent/reading";
+import { getLayer } from "@/layers";
+import { planLayerIds, readQuestion, ydsBands } from "@/lib/agent/reading";
 
 /** The top 10 use cases' plans (docs/top-10-use-cases.md): the layers, filters and views a decision is read from. */
 const NOW = new Date("2026-10-23T12:00:00Z");
@@ -32,9 +33,30 @@ describe("plans read before the model chooses", () => {
     expect(strongIds("Jaguar records outside protected areas")).not.toContain("monuments");
     expect(strongIds("What rock types and ages make up Zion Canyon?")).toEqual(expect.arrayContaining(["geology", "geologic-unit"]));
     expect(views("Burn scars around Paradise, California since 2018")["fire-perimeters"]).toBe("timeline");
-    expect(strongIds("Is Chaco Canyon threatened by oil and gas?")).toEqual(expect.arrayContaining(["pipelines-lines", "methane-plumes"]));
+    expect(strongIds("Is Chaco Canyon threatened by oil and gas?")).toEqual(expect.arrayContaining(["mineral-leases", "pipelines-lines", "methane-plumes"]));
     expect(views("What wildlife has been seen around here?").species).toBe("density");
     expect(views("Research-grade moose sightings near Jackson Hole in the last year, by month").species).toBe("timeline");
+  });
+
+  it("names only registered layers", () => {
+    expect(planLayerIds().filter((id) => !getLayer(id))).toEqual([]);
+  });
+
+  it("reads the place layers: faults, soils, what grows, natural or planted, tree height, by month, depth, cross-section", () => {
+    expect(strongIds("What rock types and ages make up Zion Canyon, and are there faults?")).toContain("faults");
+    expect(strongIds("What's the soil like around Boulder?")).toContain("soils");
+    expect(strongIds("What ecosystems cover the Great Smoky Mountains, with the share of each?")).toContain("vegetation-types");
+    expect(strongIds("Is the forest around Mount Hood natural or planted, and how tall are the trees?")).toEqual(expect.arrayContaining(["forest-types", "canopy-height"]));
+    expect(strongIds("How deep is the water here?")).toContain("water-depth");
+    expect(strongIds("Elevation cross-section from Yosemite Valley to the top of Half Dome")).toContain("elevation-profile");
+  });
+
+  it("answers a typical month from the climate normals, never the 7-day forecast", () => {
+    const typical = readQuestion("Typical temperature and precipitation by month at Lake Tahoe, and when the snow usually melts", NOW);
+    expect(typical.layers.filter((l) => l.strong).map((l) => l.layerId)).toContain("climate-normals");
+    expect(typical.layers.map((l) => l.layerId)).not.toContain("weather-forecast");
+    expect(typical.avoid.map((a) => a.layerId)).toContain("weather-forecast");
+    expect(strongIds("Forecast for Paradise on Mount Rainier this Saturday and Sunday")).toContain("weather-forecast");
   });
 
   it("reads route grades as their bands", () => {

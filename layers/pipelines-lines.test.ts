@@ -144,7 +144,7 @@ describe("pipelines-lines layer", () => {
     );
     // Two fixture segments share one name and kind, so they join as one line.
     expect(r.data.features).toHaveLength(5 + 3 + 3 + 3 + 5 - 1);
-    expect(r.coverageNote).toBe(FRESHNESS_NOTE);
+    expect(r.coverageNote).toBe(`14 pipelines and 4 power lines here; ${FRESHNESS_NOTE}`);
     expect(r.citation.source).toMatch(/last updated mid-2025/);
   });
 
@@ -211,7 +211,7 @@ describe("pipelines-lines layer", () => {
     );
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.total).toBe(5000);
-    expect(r.coverageNote).toBe(FRESHNESS_NOTE);
+    expect(r.coverageNote).toBe(`14 pipelines and 4 power lines here; ${FRESHNESS_NOTE}`);
     const data = (stub.mock.calls as unknown as Call[]).map((c) => new URL(c[0])).filter((u) => !u.searchParams.has("returnCountOnly"));
     expect(data).toHaveLength(5);
     for (const u of data) {

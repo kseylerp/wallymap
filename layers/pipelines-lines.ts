@@ -409,7 +409,15 @@ const pipelinesLines = defineLayer({
     }
 
     const features = mergeByName(ok.flatMap((r) => normalizeLines(r.res.fc, r.source)));
-    const notes: string[] = [FRESHNESS_NOTE];
+    const notes: string[] = [];
+    // What kinds are here, pipelines apart from power lines: Grand Staircase's nine lines were all power lines, and the
+    // answer called them pipelines' corridors.
+    if (input.network === "all") {
+      const pipes = features.filter((f) => /pipeline/.test(String(f.properties?.kind ?? ""))).length;
+      const power = features.length - pipes;
+      notes.push(features.length === 0 ? "No pipelines or power lines mapped here" : `${pipes === 0 ? "No pipelines" : `${pipes.toLocaleString("en-US")} pipeline${pipes === 1 ? "" : "s"}`} and ${power.toLocaleString("en-US")} power line${power === 1 ? "" : "s"} here`);
+    }
+    notes.push(FRESHNESS_NOTE);
     const trimmed = ok.filter((r) => r.res.truncated).map((r) => SOURCES[r.source].kind);
     if (trimmed.length > 0 && !ctx.wide) notes.push(`Showing the first ${cap.toLocaleString("en-US")} ${trimmed.join(", ")} in view; zoom in or pick one network for the rest`);
     const failed = results.filter((r) => !r.res.ok).map((r) => SOURCES[r.source].kind);

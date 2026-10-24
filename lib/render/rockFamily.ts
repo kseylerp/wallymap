@@ -266,6 +266,7 @@ export function tileFieldValue(field: string, properties: Record<string, unknown
  */
 export type RockType =
   | "sandstone"
+  | "red-sandstone"
   | "siltstone"
   | "shale"
   | "limestone"
@@ -327,8 +328,8 @@ export const ROCK_TYPES: { id: RockType; label: string; family: RockFamily; colo
     label: "Siltstone and mudstone",
     family: "sedimentary",
     color: ROCK_TYPE_COLORS.siltstone,
-    help: "Siltstone, mudstone and red beds: fine sediment, often red-brown (orange-brown).",
-    words: ["siltstone", "mudstone", "red bed", "redbed"],
+    help: "Siltstone and mudstone: fine sediment (brown).",
+    words: ["siltstone", "mudstone"],
   },
   {
     id: "conglomerate",
@@ -337,6 +338,19 @@ export const ROCK_TYPES: { id: RockType; label: string; family: RockFamily; colo
     color: ROCK_TYPE_COLORS.conglomerate,
     help: "Conglomerate and breccia: rounded or broken pebbles cemented together (ochre).",
     words: ["conglomerate", "breccia"],
+  },
+  {
+    // Red beds read orange beside pale sandstone, as on geologic maps: the Kayenta's "red to red-brown sandstone" under
+    // the Navajo's white and pink cliffs. Only a red word with a sedimentary rock, never "red basalt".
+    id: "red-sandstone",
+    label: "Red sandstone and red beds",
+    family: "sedimentary",
+    color: ROCK_TYPE_COLORS.redSandstone,
+    help: "Red and red-brown sandstone, siltstone and mudstone (red beds) (orange).",
+    words: [
+      "red sandstone", "red-brown sandstone", "reddish sandstone", "reddish-brown sandstone", "red-brown siltstone", "red siltstone",
+      "reddish-brown siltstone", "red mudstone", "red-brown mudstone", "red beds", "red bed", "redbed",
+    ],
   },
   {
     id: "sandstone",
@@ -420,7 +434,8 @@ function typeScore(type: (typeof ROCK_TYPES)[number]): unknown[] {
 }
 
 function typeInSource(source: string): unknown[] {
-  const names = ROCK_TYPES.map((r) => `r_${r.id}`);
+  // Mapbox variable names are letters, digits and "_" only ("red-sandstone" is not one).
+  const names = ROCK_TYPES.map((_, i) => `r_${i}`);
   const decide: unknown[] = ["case"];
   ROCK_TYPES.forEach((type, i) => {
     const mine = ["var", names[i]];

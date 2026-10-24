@@ -208,7 +208,10 @@ describe("rock types in geologic-map colors", () => {
   /** Zion's units as Macrostrat's carto tiles serve them (2026-10-23), and the type each is. */
   const TYPES: [RockProps, RockType][] = [
     [{ name: "Navajo Sandstone", lith: "", descrip: "Cross-bedded quartz sandstone", best_age_top: 170.3, best_age_bottom: 180.55 }, "sandstone"],
-    [{ name: "Kayenta Formation, main body", lith: "", descrip: "Red-brown siltstone, mudstone and sandstone", best_age_top: 180.55 }, "siltstone"],
+    [{ name: "Kayenta Formation, main body", lith: "", descrip: "Red to red-brown sandstone, siltstone, and claystone", best_age_top: 180.55 }, "red-sandstone"],
+    [{ name: "Navajo Sandstone, upper", lith: "", descrip: "White, pink, and brown sandstone", best_age_top: 170 }, "sandstone"],
+    [{ name: "Moenave Formation", lith: "", descrip: "Grey-green siltstone and mudstone", best_age_top: 195 }, "siltstone"],
+    [{ name: "Red basalt flows", lith: "", descrip: "", best_age_top: 1 }, "volcanic"],
     [{ name: "Kaibab Formation", lith: "", descrip: "Cherty limestone and dolomite", best_age_top: 270 }, "limestone"],
     [{ name: "Moenkopi Formation", lith: "", descrip: "Shale, siltstone and gypsum", best_age_top: 247 }, "shale"],
     [{ name: "Shinarump Conglomerate", lith: "", best_age_top: 227 }, "conglomerate"],
@@ -226,6 +229,12 @@ describe("rock types in geologic-map colors", () => {
     expect(evaluate(rockTypeExpression(), props as Record<string, unknown>)).toBe(type);
     expect(ROCK_TYPES.find((t) => t.id === type)?.family).toBe(rockFamilyOf(props));
     expect(evaluate(rockTypeFillExpression(), props as Record<string, unknown>)).toBe(ROCK_TYPES.find((t) => t.id === type)?.color);
+  });
+
+  it("binds only variable names Mapbox accepts", () => {
+    const names = [...JSON.stringify(rockTypeFillExpression()).matchAll(/\["(?:let|var)","([^"]+)"/g)].map((m) => m[1]);
+    expect(names.length).toBeGreaterThan(0);
+    expect(names.filter((n) => !/^[A-Za-z0-9_]+$/.test(n))).toEqual([]);
   });
 
   it("tells the Navajo from the Kayenta and samples the type for the legend", () => {

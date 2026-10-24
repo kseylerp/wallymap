@@ -20,17 +20,17 @@
     },
     "properties": {
      "name": "Air quality at the asked place, 37.74°N 119.59°W",
-     "t": "2026-10-24T02:00:00.000Z",
-     "v": 37,
-     "usAqi": 37,
+     "t": "2026-10-24T03:00:00.000Z",
+     "v": 36,
+     "usAqi": 36,
      "category": "Good",
-     "pm25": 3.6,
-     "today": "Fri Oct 23: air quality good, worst hour left US AQI 37, PM2.5 up to 3.6 µg/m³",
+     "pm25": 3.3,
+     "today": "Fri Oct 23: air quality good, worst hour left US AQI 36, PM2.5 up to 3.3 µg/m³",
      "tomorrow": "Sat Oct 24: air quality good, worst hour US AQI 43, PM2.5 up to 4.8 µg/m³",
      "saturday": "Sat Oct 24: air quality good, worst hour US AQI 43, PM2.5 up to 4.8 µg/m³",
      "sunday": "Sun Oct 25: air quality moderate, worst hour US AQI 53, PM2.5 up to 20.7 µg/m³",
      "days": [
-      "Fri Oct 23: air quality good, worst hour left US AQI 37, PM2.5 up to 3.6 µg/m³",
+      "Fri Oct 23: air quality good, worst hour left US AQI 36, PM2.5 up to 3.3 µg/m³",
       "Sat Oct 24: air quality good, worst hour US AQI 43, PM2.5 up to 4.8 µg/m³",
       "Sun Oct 25: air quality moderate, worst hour US AQI 53, PM2.5 up to 20.7 µg/m³",
       "Mon Oct 26: air quality moderate, worst hour US AQI 66, PM2.5 up to 20.4 µg/m³",
@@ -42,7 +42,7 @@
  },
  "aquifers": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -101.845,
    40.93,
@@ -73,7 +73,7 @@
  },
  "avalanche": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -121.2,
    47.6,
@@ -148,7 +148,7 @@
  },
  "burn-severity": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -122.6,
    44.5,
@@ -470,7 +470,7 @@
  },
  "carbon-flux": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -139.854,
    54.662,
@@ -588,7 +588,7 @@
  },
  "climbing": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -84,
    37.5,
@@ -1264,7 +1264,7 @@
  },
  "condor-range": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -121.93,
    35.774,
@@ -1343,7 +1343,7 @@
  },
  "dams": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -112,
    35.5,
@@ -1511,7 +1511,7 @@
  },
  "disasters": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -87.635,
    24.43,
@@ -1811,7 +1811,7 @@
  },
  "disturbance": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -125,
    49,
@@ -1821,7 +1821,7 @@
  },
  "drought": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -109.06,
    36.992,
@@ -1918,7 +1918,7 @@
  },
  "earthquakes": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -119.089,
    37.549,
@@ -3814,7 +3814,7 @@
  },
  "fire-detections": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -125,
    32,
@@ -3827,146 +3827,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -102.40134,
-      48.63388
+      -101.83538,
+      47.35565
      ]
     },
     "properties": {
-     "t": "2026-10-21T07:46:00Z",
-     "v": 0.83,
-     "brightK": 297.01,
-     "confidence": "n",
-     "daynight": "N",
-     "heading": "Hotspot, Oct 21 07:46 UTC",
-     "label": "0.8 MW",
-     "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 21 1:46 AM MDT"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -102.39638,
-      48.63536
-     ]
-    },
-    "properties": {
-     "t": "2026-10-21T07:46:00Z",
-     "v": 1.25,
-     "brightK": 297.36,
-     "confidence": "n",
-     "daynight": "N",
-     "heading": "Hotspot, Oct 21 07:46 UTC",
-     "label": "1.3 MW",
-     "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 21 1:46 AM MDT"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -101.28455,
-      32.40827
-     ]
-    },
-    "properties": {
-     "t": "2026-10-21T07:50:00Z",
-     "v": 0.38,
-     "brightK": 298.99,
-     "confidence": "n",
-     "daynight": "N",
-     "heading": "Hotspot, Oct 21 07:50 UTC",
-     "label": "0.4 MW",
-     "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 21 2:50 AM CDT"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -101.67381,
-      32.53601
-     ]
-    },
-    "properties": {
-     "t": "2026-10-21T07:50:00Z",
-     "v": 1.66,
-     "brightK": 312.46,
-     "confidence": "n",
-     "daynight": "N",
-     "heading": "Hotspot, Oct 21 07:50 UTC",
-     "label": "1.7 MW",
-     "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 21 2:50 AM CDT"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -100.45419,
-      32.75262
-     ]
-    },
-    "properties": {
-     "t": "2026-10-21T07:50:00Z",
-     "v": 0.18,
-     "brightK": 295.75,
-     "confidence": "n",
-     "daynight": "N",
-     "heading": "Hotspot, Oct 21 07:50 UTC",
-     "label": "0.2 MW",
-     "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 21 2:50 AM CDT"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -102.88508,
-      33.07302
-     ]
-    },
-    "properties": {
-     "t": "2026-10-21T07:50:00Z",
-     "v": 0.65,
+     "t": "2026-10-22T09:07:00Z",
+     "v": 0.56,
      "brightK": 298.2,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 21 07:50 UTC",
-     "label": "0.7 MW",
-     "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 21 1:50 AM MDT"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -103.01869,
-      33.08242
-     ]
-    },
-    "properties": {
-     "t": "2026-10-21T07:50:00Z",
-     "v": 0.64,
-     "brightK": 295.54,
-     "confidence": "n",
-     "daynight": "N",
-     "heading": "Hotspot, Oct 21 07:50 UTC",
+     "heading": "Hotspot, Oct 22 09:07 UTC",
      "label": "0.6 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 21 1:50 AM MDT"
+     "name": "Suomi NPP, Oct 22 4:07 AM CDT"
     }
    },
    {
@@ -3974,20 +3848,62 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -101.99774,
-      35.35696
+      -103.21435,
+      47.47124
      ]
     },
     "properties": {
-     "t": "2026-10-21T07:50:00Z",
-     "v": 0.65,
-     "brightK": 299.38,
+     "t": "2026-10-22T09:07:00Z",
+     "v": 0.53,
+     "brightK": 305,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 21 07:50 UTC",
+     "heading": "Hotspot, Oct 22 09:07 UTC",
+     "label": "0.5 MW",
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 22 3:07 AM MDT"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -102.98344,
+      47.47483
+     ]
+    },
+    "properties": {
+     "t": "2026-10-22T09:07:00Z",
+     "v": 0.3,
+     "brightK": 295.33,
+     "confidence": "n",
+     "daynight": "N",
+     "heading": "Hotspot, Oct 22 09:07 UTC",
+     "label": "0.3 MW",
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 22 3:07 AM MDT"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -103.0948,
+      47.50628
+     ]
+    },
+    "properties": {
+     "t": "2026-10-22T09:07:00Z",
+     "v": 0.74,
+     "brightK": 301.21,
+     "confidence": "n",
+     "daynight": "N",
+     "heading": "Hotspot, Oct 22 09:07 UTC",
      "label": "0.7 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 21 2:50 AM CDT"
+     "name": "Suomi NPP, Oct 22 3:07 AM MDT"
     }
    },
    {
@@ -3995,20 +3911,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -101.36542,
-      35.69951
+      -103.04938,
+      47.53015
      ]
     },
     "properties": {
-     "t": "2026-10-21T07:50:00Z",
-     "v": 1.41,
-     "brightK": 296.94,
+     "t": "2026-10-22T09:07:00Z",
+     "v": 0.42,
+     "brightK": 299.93,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 21 07:50 UTC",
-     "label": "1.4 MW",
+     "heading": "Hotspot, Oct 22 09:07 UTC",
+     "label": "0.4 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 21 2:50 AM CDT"
+     "name": "Suomi NPP, Oct 22 3:07 AM MDT"
     }
    },
    {
@@ -4016,20 +3932,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -100.68767,
-      32.04918
+      -103.04826,
+      47.53342
      ]
     },
     "properties": {
-     "t": "2026-10-21T07:52:00Z",
-     "v": 0.56,
-     "brightK": 296.59,
+     "t": "2026-10-22T09:07:00Z",
+     "v": 0.61,
+     "brightK": 309,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 21 07:52 UTC",
+     "heading": "Hotspot, Oct 22 09:07 UTC",
      "label": "0.6 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 21 2:52 AM CDT"
+     "name": "Suomi NPP, Oct 22 3:07 AM MDT"
     }
    },
    {
@@ -4037,20 +3953,20 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -102.10406,
-      32.14651
+      -103.14641,
+      47.57301
      ]
     },
     "properties": {
-     "t": "2026-10-21T07:52:00Z",
-     "v": 1.78,
-     "brightK": 312.76,
+     "t": "2026-10-22T09:07:00Z",
+     "v": 0.62,
+     "brightK": 302.1,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 21 07:52 UTC",
-     "label": "1.8 MW",
+     "heading": "Hotspot, Oct 22 09:07 UTC",
+     "label": "0.6 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 21 1:52 AM MDT"
+     "name": "Suomi NPP, Oct 22 3:07 AM MDT"
     }
    },
    {
@@ -4058,27 +3974,111 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -101.92992,
-      32.15229
+      -103.14529,
+      47.57628
      ]
     },
     "properties": {
-     "t": "2026-10-21T07:52:00Z",
-     "v": 0.99,
-     "brightK": 299.4,
+     "t": "2026-10-22T09:07:00Z",
+     "v": 0.35,
+     "brightK": 298.47,
      "confidence": "n",
      "daynight": "N",
-     "heading": "Hotspot, Oct 21 07:52 UTC",
-     "label": "1.0 MW",
+     "heading": "Hotspot, Oct 22 09:07 UTC",
+     "label": "0.3 MW",
      "satellite": "VIIRS_SNPP_NRT",
-     "name": "Suomi NPP, Oct 21 2:52 AM CDT"
+     "name": "Suomi NPP, Oct 22 3:07 AM MDT"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -103.11093,
+      47.62519
+     ]
+    },
+    "properties": {
+     "t": "2026-10-22T09:07:00Z",
+     "v": 0.86,
+     "brightK": 307.72,
+     "confidence": "n",
+     "daynight": "N",
+     "heading": "Hotspot, Oct 22 09:07 UTC",
+     "label": "0.9 MW",
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 22 3:07 AM MDT"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -102.64993,
+      47.67141
+     ]
+    },
+    "properties": {
+     "t": "2026-10-22T09:07:00Z",
+     "v": 0.4,
+     "brightK": 301.63,
+     "confidence": "n",
+     "daynight": "N",
+     "heading": "Hotspot, Oct 22 09:07 UTC",
+     "label": "0.4 MW",
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 22 3:07 AM MDT"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -103.79195,
+      47.7297
+     ]
+    },
+    "properties": {
+     "t": "2026-10-22T09:07:00Z",
+     "v": 0.38,
+     "brightK": 296.14,
+     "confidence": "n",
+     "daynight": "N",
+     "heading": "Hotspot, Oct 22 09:07 UTC",
+     "label": "0.4 MW",
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 22 3:07 AM MDT"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -104.35931,
+      47.74941
+     ]
+    },
+    "properties": {
+     "t": "2026-10-22T09:07:00Z",
+     "v": 0.49,
+     "brightK": 295.55,
+     "confidence": "n",
+     "daynight": "N",
+     "heading": "Hotspot, Oct 22 09:07 UTC",
+     "label": "0.5 MW",
+     "satellite": "VIIRS_SNPP_NRT",
+     "name": "Suomi NPP, Oct 22 3:07 AM MDT"
     }
    }
   ]
  },
  "fire-hazard": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -121.4,
    43.9,
@@ -4088,7 +4088,7 @@
  },
  "fire-perimeters": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -122.6,
    44.5,
@@ -4232,7 +4232,8 @@
      "t": "2017-07-01T00:00:00.000Z",
      "v": 11513.05,
      "agency": "US Forest Service",
-     "agencyCode": "USFS"
+     "agencyCode": "USFS",
+     "status": "out"
     }
    },
    {
@@ -4251,7 +4252,8 @@
      "t": "2017-07-01T00:00:00.000Z",
      "v": 2171.41,
      "agency": "US Forest Service",
-     "agencyCode": "USFS"
+     "agencyCode": "USFS",
+     "status": "out"
     }
    },
    {
@@ -4294,7 +4296,8 @@
      "t": "2017-07-01T00:00:00.000Z",
      "v": 695.24,
      "agency": "US Forest Service",
-     "agencyCode": "USFS"
+     "agencyCode": "USFS",
+     "status": "out"
     }
    },
    {
@@ -4370,7 +4373,7 @@
  },
  "fire-weather": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -121.293,
    32.575,
@@ -4380,7 +4383,7 @@
  },
  "fishing": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -111.351,
    45.457,
@@ -4617,7 +4620,7 @@
  },
  "flood-extent": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    22.5,
    -18.501,
@@ -4627,7 +4630,7 @@
  },
  "flood-zones": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -82.564,
    35.588,
@@ -4663,7 +4666,7 @@
      "peakMonth": "May",
      "low": "October: 36 cfs",
      "lowMonth": "October",
-     "nowCfs": 18.8,
+     "nowCfs": 19.2,
      "period": "1916–2025 (110 years)",
      "medianCfs": [
       136,
@@ -4714,7 +4717,7 @@
      "peakMonth": "May",
      "low": "October: 17 cfs",
      "lowMonth": "October",
-     "nowCfs": 8.49,
+     "nowCfs": 8.21,
      "period": "1915–2026 (112 years)",
      "medianCfs": [
       68.2,
@@ -4751,7 +4754,7 @@
  },
  "forest-alerts": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    20,
    -3,
@@ -4761,7 +4764,7 @@
  },
  "forest-loss": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -66.81,
    -13.692,
@@ -5142,7 +5145,7 @@
  },
  "forest-types": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    117.6,
    4.8,
@@ -5152,7 +5155,7 @@
  },
  "gbif-occurrences": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -105.6,
    39.5,
@@ -5464,7 +5467,7 @@
  },
  "geologic-unit": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -119.795,
    37.495,
@@ -5509,7 +5512,7 @@
  },
  "glaciers": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -110.178,
    42.799,
@@ -5791,7 +5794,7 @@
  },
  "grazing-allotments": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -117.5,
    37.5,
@@ -6034,7 +6037,7 @@
  },
  "greenness": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -121,
    36,
@@ -6044,7 +6047,7 @@
  },
  "groundwater": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -112.313,
    33.29,
@@ -6372,7 +6375,7 @@
  },
  "hardiness-zones": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -73.438,
    42.727,
@@ -6382,7 +6385,7 @@
  },
  "imagery-by-date": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -156.724,
    20.757,
@@ -6703,7 +6706,7 @@
  },
  "land-cover": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -73.495,
    -51.58,
@@ -6713,7 +6716,7 @@
  },
  "methane-plumes": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -104.5,
    31,
@@ -6899,8 +6902,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -103.8584110555252,
-      31.873250149071175
+      -103.85841105552517,
+      31.873250149071172
      ]
     },
     "properties": {
@@ -6924,8 +6927,8 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -103.93217640221377,
-      32.01708917985603
+      -103.93217754426524,
+      32.01709073392198
      ]
     },
     "properties": {
@@ -7312,7 +7315,7 @@
  },
  "mines": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -117.542,
    39.997,
@@ -7868,7 +7871,7 @@
  },
  "monuments": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -110.5,
    36.8,
@@ -8288,7 +8291,7 @@
  },
  "night-lights": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -114.356,
    38.818,
@@ -8298,7 +8301,7 @@
  },
  "ocean-currents": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -152.5,
    59.5,
@@ -8321,7 +8324,7 @@
      "east": 0,
      "north": 0,
      "speed": 0,
-     "sst": 6.8,
+     "sst": 6.9,
      "speedKt": 0
     }
    },
@@ -8337,12 +8340,12 @@
     "properties": {
      "name": "58.82°N 153.68°W",
      "node": 2,
-     "east": -0.16,
-     "north": -0.16,
-     "speed": 0.22,
+     "east": -0.14,
+     "north": -0.09,
+     "speed": 0.17,
      "sst": 7.6,
-     "speedKt": 0.43,
-     "toward": "southwest (225°)"
+     "speedKt": 0.33,
+     "toward": "west-southwest (237°)"
     }
    },
    {
@@ -8357,12 +8360,12 @@
     "properties": {
      "name": "58.82°N 153.31°W",
      "node": 3,
-     "east": -0.14,
-     "north": -0.09,
-     "speed": 0.17,
+     "east": -0.11,
+     "north": 0,
+     "speed": 0.11,
      "sst": 7.1,
-     "speedKt": 0.33,
-     "toward": "west-southwest (237°)"
+     "speedKt": 0.21,
+     "toward": "west (270°)"
     }
    },
    {
@@ -8377,12 +8380,12 @@
     "properties": {
      "name": "58.82°N 152.93°W",
      "node": 4,
-     "east": 0.05,
+     "east": 0.25,
      "north": -0.5,
-     "speed": 0.5,
-     "sst": 7.9,
-     "speedKt": 0.97,
-     "toward": "south (174°)"
+     "speed": 0.56,
+     "sst": 7.5,
+     "speedKt": 1.09,
+     "toward": "south-southeast (153°)"
     }
    },
    {
@@ -8397,11 +8400,12 @@
     "properties": {
      "name": "58.82°N 152.56°W",
      "node": 5,
-     "east": 0,
-     "north": 0,
-     "speed": 0,
-     "sst": 7.6,
-     "speedKt": 0
+     "east": 0.16,
+     "north": 0.16,
+     "speed": 0.22,
+     "sst": 7.8,
+     "speedKt": 0.43,
+     "toward": "northeast (45°)"
     }
    },
    {
@@ -8416,12 +8420,12 @@
     "properties": {
      "name": "58.82°N 152.19°W",
      "node": 6,
-     "east": -0.36,
-     "north": 0,
-     "speed": 0.36,
-     "sst": 7.8,
-     "speedKt": 0.7,
-     "toward": "west (270°)"
+     "east": 0.14,
+     "north": -0.09,
+     "speed": 0.17,
+     "sst": 7.9,
+     "speedKt": 0.33,
+     "toward": "east-southeast (123°)"
     }
    },
    {
@@ -8436,12 +8440,12 @@
     "properties": {
      "name": "58.82°N 151.81°W",
      "node": 7,
-     "east": -0.3,
-     "north": 0.05,
-     "speed": 0.31,
-     "sst": 7.8,
-     "speedKt": 0.6,
-     "toward": "west (279°)"
+     "east": 0.06,
+     "north": 0.06,
+     "speed": 0.08,
+     "sst": 7.9,
+     "speedKt": 0.16,
+     "toward": "northeast (45°)"
     }
    },
    {
@@ -8456,12 +8460,12 @@
     "properties": {
      "name": "58.82°N 151.44°W",
      "node": 8,
-     "east": -0.25,
-     "north": -0.05,
-     "speed": 0.25,
+     "east": 0.06,
+     "north": 0.06,
+     "speed": 0.08,
      "sst": 7.8,
-     "speedKt": 0.49,
-     "toward": "west (259°)"
+     "speedKt": 0.16,
+     "toward": "northeast (45°)"
     }
    },
    {
@@ -8476,12 +8480,12 @@
     "properties": {
      "name": "58.82°N 151.06°W",
      "node": 9,
-     "east": -0.16,
-     "north": -0.05,
-     "speed": 0.17,
+     "east": 0.1,
+     "north": 0.05,
+     "speed": 0.11,
      "sst": 7.7,
-     "speedKt": 0.33,
-     "toward": "west-southwest (253°)"
+     "speedKt": 0.21,
+     "toward": "east-northeast (63°)"
     }
    },
    {
@@ -8496,12 +8500,12 @@
     "properties": {
      "name": "58.82°N 150.69°W",
      "node": 10,
-     "east": -0.11,
-     "north": 0,
-     "speed": 0.11,
-     "sst": 7.6,
-     "speedKt": 0.21,
-     "toward": "west (270°)"
+     "east": 0.1,
+     "north": 0.1,
+     "speed": 0.14,
+     "sst": 7.7,
+     "speedKt": 0.27,
+     "toward": "northeast (45°)"
     }
    },
    {
@@ -8516,12 +8520,12 @@
     "properties": {
      "name": "58.82°N 150.31°W",
      "node": 11,
-     "east": -0.14,
-     "north": 0,
-     "speed": 0.14,
+     "east": 0,
+     "north": 0.06,
+     "speed": 0.06,
      "sst": 7.7,
-     "speedKt": 0.27,
-     "toward": "west (270°)"
+     "speedKt": 0.12,
+     "toward": "north (0°)"
     }
    },
    {
@@ -8536,19 +8540,19 @@
     "properties": {
      "name": "58.82°N 149.94°W",
      "node": 12,
-     "east": -0.11,
-     "north": 0,
+     "east": -0.05,
+     "north": 0.1,
      "speed": 0.11,
-     "sst": 7.7,
+     "sst": 7.8,
      "speedKt": 0.21,
-     "toward": "west (270°)"
+     "toward": "north-northwest (333°)"
     }
    }
   ]
  },
  "old-growth": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -122.5,
    43.5,
@@ -9234,7 +9238,7 @@
  },
  "outdoor-features": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    7.6,
    45.9,
@@ -9471,7 +9475,7 @@
  },
  "paddling": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -115.3,
    44.6,
@@ -9675,7 +9679,7 @@
  },
  "peaks": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    18,
    -34.5,
@@ -9972,7 +9976,7 @@
  },
  "permafrost": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -150,
    64,
@@ -10110,7 +10114,7 @@
  },
  "phenology": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -83.675,
    36.541,
@@ -10120,7 +10124,7 @@
  },
  "photos": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    138.65,
    35.3,
@@ -10347,7 +10351,7 @@
  },
  "physical-regions": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -121,
    35.3,
@@ -10427,7 +10431,7 @@
  },
  "pipelines-lines": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -102.3,
    31.651,
@@ -11059,7 +11063,7 @@
  },
  "popularity-campsites": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -109.8,
    38.4,
@@ -11084,7 +11088,12 @@
      "caravans": false,
      "feeStatus": "unknown",
      "website": "https://www.blm.gov/ut/st/en/fo/moab/recreation/campgrounds/kane_creek_road/Moonflower_Camping_Area.html",
-     "v": 30,
+     "nearWater": true,
+     "waterM": 17,
+     "water": "Moonflower Canyon (stream) · a stream · Colorado River (river)",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
+     "v": 31,
      "signals": {
       "photos": 4,
       "parking": 0,
@@ -11118,6 +11127,11 @@
      "operator": "Bureau of Land Management",
      "reservation": "no",
      "toilets": true,
+     "nearWater": true,
+     "waterM": 133,
+     "water": "a stream",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
      "v": 10,
      "signals": {
       "photos": 0,
@@ -11151,6 +11165,8 @@
      "reservation": "recommended",
      "toilets": true,
      "drinkingWater": true,
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
      "v": 14,
      "signals": {
       "photos": 1,
@@ -11176,6 +11192,8 @@
      "osmId": "node/3444896866",
      "backcountry": true,
      "feeStatus": "unknown",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
      "heading": "Camp site near Large Campsite",
      "title": "Camp site near Large Campsite",
      "v": 0,
@@ -11204,6 +11222,8 @@
      "name": "Kane Springs Campground",
      "feeStatus": "unknown",
      "website": "http://www.kanesprings.com",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
      "v": 44,
      "signals": {
       "photos": 10,
@@ -11232,6 +11252,11 @@
      "caravans": false,
      "feeStatus": "unknown",
      "website": "https://www.moabupthecreek.com/",
+     "nearWater": true,
+     "waterM": 20,
+     "water": "Mill Creek (stream)",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
      "v": 45,
      "signals": {
       "photos": 17,
@@ -11260,6 +11285,11 @@
      "feeStatus": "fee",
      "website": "https://www.utahscouts.org/high-adventure/entrada-high-adventure-base/21841",
      "operator": "Crossroads of the West Council, BSA",
+     "nearWater": true,
+     "waterM": 162,
+     "water": "a stream",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
      "v": 10,
      "signals": {
       "photos": 0,
@@ -11288,7 +11318,12 @@
      "feeStatus": "fee",
      "capacity": 15,
      "reservation": "required",
-     "v": 19,
+     "nearWater": true,
+     "waterM": 47,
+     "water": "South Fork Shafer Canyon (stream)",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
+     "v": 20,
      "signals": {
       "photos": 2,
       "parking": 0,
@@ -11315,6 +11350,8 @@
      "backcountry": true,
      "feeStatus": "unknown",
      "operator": "BLM",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
      "v": 10,
      "signals": {
       "photos": 0,
@@ -11349,12 +11386,17 @@
      "operator": "BLM",
      "toilets": true,
      "drinkingWater": false,
-     "v": 37,
+     "nearWater": true,
+     "waterM": 106,
+     "water": "Colorado River (river)",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
+     "v": 26,
      "signals": {
       "photos": 3,
       "parking": 0,
       "wiki": false,
-      "informal": 1,
+      "informal": 0,
       "named": true
      },
      "popularityNote": "estimate"
@@ -11381,6 +11423,11 @@
      "reservation": "no",
      "toilets": true,
      "drinkingWater": false,
+     "nearWater": true,
+     "waterM": 51,
+     "water": "Colorado River (river)",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
      "v": 41,
      "signals": {
       "photos": 9,
@@ -11409,7 +11456,12 @@
      "feeStatus": "fee",
      "capacity": 11,
      "operator": "BLM",
-     "v": 40,
+     "nearWater": true,
+     "waterM": 86,
+     "water": "Colorado River (river)",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
+     "v": 41,
      "signals": {
       "photos": 3,
       "parking": 0,
@@ -11424,7 +11476,7 @@
  },
  "population": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -114.356,
    38.818,
@@ -11434,7 +11486,7 @@
  },
  "ports": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -97.4,
    25.8,
@@ -11710,7 +11762,7 @@
  },
  "power-plants": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -114.816,
    31.332,
@@ -11999,7 +12051,7 @@
  },
  "protected-areas-world": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    20,
    54,
@@ -12270,7 +12322,7 @@
  },
  "public-lands": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -112.182,
    37.655,
@@ -12520,7 +12572,7 @@
  },
  "remoteness": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -110.178,
    42.799,
@@ -12831,7 +12883,7 @@
  },
  "reservoir-levels": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -123,
    40.4,
@@ -13365,7 +13417,7 @@
  },
  "river-basins": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -105.11,
    39.618,
@@ -13461,7 +13513,7 @@
  },
  "river-pulse": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -92,
    36,
@@ -13485,22 +13537,22 @@
      "reachId": "r0-0",
      "lengthKm": 22,
      "length": "14 mi (22 km)",
-     "q": 12049,
-     "pct": 111,
+     "q": 11219,
+     "pct": 104,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "426,000 cfs (12,000 m³/s)",
+     "flow": "396,000 cfs (11,200 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 12049,
+     "riverQ": 11219,
      "riverFigure": "edge",
-     "atViewEdge": "426,000 cfs (12,000 m³/s)"
+     "atViewEdge": "396,000 cfs (11,200 m³/s)"
     }
    },
    {
@@ -13519,14 +13571,14 @@
      "reachId": "r0-18",
      "lengthKm": 16,
      "length": "10 mi (16 km)",
-     "q": 12049,
-     "pct": 111,
+     "q": 11219,
+     "pct": 104,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "426,000 cfs (12,000 m³/s)",
+     "flow": "396,000 cfs (11,200 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
@@ -13534,9 +13586,9 @@
      "units": "us",
      "outlet": true,
      "outletKind": "edge",
-     "riverQ": 12049,
+     "riverQ": 11219,
      "riverFigure": "edge",
-     "atViewEdge": "426,000 cfs (12,000 m³/s)"
+     "atViewEdge": "396,000 cfs (11,200 m³/s)"
     }
    },
    {
@@ -13555,22 +13607,22 @@
      "reachId": "r1-0",
      "lengthKm": 28,
      "length": "17 mi (28 km)",
-     "q": 6.5,
-     "pct": 40,
-     "medianQ": 16.2,
+     "q": 6.2,
+     "pct": 42,
+     "medianQ": 14.9,
      "peakQ": 76.3,
      "peakDate": "2026-08-05",
      "lowQ": 4.7,
      "lowDate": "2026-10-16",
-     "flow": "230 cfs (6.5 m³/s)",
-     "medianFlow": "572 cfs (16 m³/s)",
+     "flow": "219 cfs (6.2 m³/s)",
+     "medianFlow": "526 cfs (15 m³/s)",
      "peakFlow": "2,690 cfs (76 m³/s)",
      "lowFlow": "166 cfs (4.7 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 6.5,
+     "riverQ": 6.2,
      "riverFigure": "largest",
-     "atLargest": "230 cfs (6.5 m³/s)"
+     "atLargest": "219 cfs (6.2 m³/s)"
     }
    },
    {
@@ -13589,22 +13641,22 @@
      "reachId": "r2-0",
      "lengthKm": 20,
      "length": "12 mi (20 km)",
-     "q": 5.1,
-     "pct": 53,
+     "q": 4,
+     "pct": 41,
      "medianQ": 9.7,
-     "peakQ": 34.2,
-     "peakDate": "2026-07-23",
+     "peakQ": 31.6,
+     "peakDate": "2026-07-24",
      "lowQ": 0,
      "lowDate": "2026-09-01",
-     "flow": "180 cfs (5.1 m³/s)",
-     "medianFlow": "342 cfs (9.7 m³/s)",
-     "peakFlow": "1,210 cfs (34 m³/s)",
+     "flow": "141 cfs (4 m³/s)",
+     "medianFlow": "341 cfs (9.7 m³/s)",
+     "peakFlow": "1,120 cfs (32 m³/s)",
      "lowFlow": "0 cfs (0 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 5.1,
+     "riverQ": 4,
      "riverFigure": "mouth",
-     "atMouth": "180 cfs (5.1 m³/s)"
+     "atMouth": "141 cfs (4 m³/s)"
     }
    },
    {
@@ -13623,22 +13675,22 @@
      "reachId": "r0-1",
      "lengthKm": 37,
      "length": "23 mi (37 km)",
-     "q": 12049,
-     "pct": 111,
+     "q": 11219,
+     "pct": 104,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "426,000 cfs (12,000 m³/s)",
+     "flow": "396,000 cfs (11,200 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 12049,
+     "riverQ": 11219,
      "riverFigure": "edge",
-     "atViewEdge": "426,000 cfs (12,000 m³/s)"
+     "atViewEdge": "396,000 cfs (11,200 m³/s)"
     }
    },
    {
@@ -13657,22 +13709,22 @@
      "reachId": "r0-2",
      "lengthKm": 29,
      "length": "18 mi (29 km)",
-     "q": 12049,
-     "pct": 111,
+     "q": 11219,
+     "pct": 104,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "426,000 cfs (12,000 m³/s)",
+     "flow": "396,000 cfs (11,200 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 12049,
+     "riverQ": 11219,
      "riverFigure": "edge",
-     "atViewEdge": "426,000 cfs (12,000 m³/s)"
+     "atViewEdge": "396,000 cfs (11,200 m³/s)"
     }
    },
    {
@@ -13691,22 +13743,22 @@
      "reachId": "r0-3",
      "lengthKm": 27,
      "length": "17 mi (27 km)",
-     "q": 12049,
-     "pct": 111,
+     "q": 11219,
+     "pct": 104,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "426,000 cfs (12,000 m³/s)",
+     "flow": "396,000 cfs (11,200 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 12049,
+     "riverQ": 11219,
      "riverFigure": "edge",
-     "atViewEdge": "426,000 cfs (12,000 m³/s)"
+     "atViewEdge": "396,000 cfs (11,200 m³/s)"
     }
    },
    {
@@ -13725,22 +13777,22 @@
      "reachId": "r0-4",
      "lengthKm": 29,
      "length": "18 mi (29 km)",
-     "q": 12049,
-     "pct": 111,
+     "q": 11219,
+     "pct": 104,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "426,000 cfs (12,000 m³/s)",
+     "flow": "396,000 cfs (11,200 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 12049,
+     "riverQ": 11219,
      "riverFigure": "edge",
-     "atViewEdge": "426,000 cfs (12,000 m³/s)"
+     "atViewEdge": "396,000 cfs (11,200 m³/s)"
     }
    },
    {
@@ -13759,22 +13811,22 @@
      "reachId": "r0-5",
      "lengthKm": 26,
      "length": "16 mi (26 km)",
-     "q": 12049,
-     "pct": 111,
+     "q": 11219,
+     "pct": 104,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "426,000 cfs (12,000 m³/s)",
+     "flow": "396,000 cfs (11,200 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 12049,
+     "riverQ": 11219,
      "riverFigure": "edge",
-     "atViewEdge": "426,000 cfs (12,000 m³/s)"
+     "atViewEdge": "396,000 cfs (11,200 m³/s)"
     }
    },
    {
@@ -13793,22 +13845,22 @@
      "reachId": "r0-6",
      "lengthKm": 28,
      "length": "17 mi (28 km)",
-     "q": 12049,
-     "pct": 111,
+     "q": 11219,
+     "pct": 104,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "426,000 cfs (12,000 m³/s)",
+     "flow": "396,000 cfs (11,200 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 12049,
+     "riverQ": 11219,
      "riverFigure": "edge",
-     "atViewEdge": "426,000 cfs (12,000 m³/s)"
+     "atViewEdge": "396,000 cfs (11,200 m³/s)"
     }
    },
    {
@@ -13827,22 +13879,22 @@
      "reachId": "r0-7",
      "lengthKm": 22,
      "length": "14 mi (22 km)",
-     "q": 12049,
-     "pct": 111,
+     "q": 11219,
+     "pct": 104,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "426,000 cfs (12,000 m³/s)",
+     "flow": "396,000 cfs (11,200 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 12049,
+     "riverQ": 11219,
      "riverFigure": "edge",
-     "atViewEdge": "426,000 cfs (12,000 m³/s)"
+     "atViewEdge": "396,000 cfs (11,200 m³/s)"
     }
    },
    {
@@ -13861,29 +13913,29 @@
      "reachId": "r0-8",
      "lengthKm": 21,
      "length": "13 mi (21 km)",
-     "q": 12049,
-     "pct": 111,
+     "q": 11219,
+     "pct": 104,
      "medianQ": 10813,
      "peakQ": 19230,
      "peakDate": "2026-08-22",
      "lowQ": 5847,
      "lowDate": "2026-09-11",
-     "flow": "426,000 cfs (12,000 m³/s)",
+     "flow": "396,000 cfs (11,200 m³/s)",
      "medianFlow": "382,000 cfs (10,800 m³/s)",
      "peakFlow": "679,000 cfs (19,200 m³/s)",
      "lowFlow": "206,000 cfs (5,850 m³/s)",
      "readAt": "between",
      "units": "us",
-     "riverQ": 12049,
+     "riverQ": 11219,
      "riverFigure": "edge",
-     "atViewEdge": "426,000 cfs (12,000 m³/s)"
+     "atViewEdge": "396,000 cfs (11,200 m³/s)"
     }
    }
   ]
  },
  "sea-ice": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -180,
    66,
@@ -13893,7 +13945,7 @@
  },
  "sea-level-rise": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -80.187,
    32.632,
@@ -13903,7 +13955,7 @@
  },
  "sea-level-trends": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -123,
    37,
@@ -14054,7 +14106,7 @@
  },
  "sequoia-groves": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -119.5,
    35.8,
@@ -14270,7 +14322,7 @@
  },
  "sequoia-mortality": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -119.5,
    35.8,
@@ -14535,7 +14587,7 @@
  },
  "ski-routes": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    6.814,
    45.833,
@@ -14562,7 +14614,8 @@
      "gainM": 13,
      "lossM": 354,
      "highM": 2331,
-     "maxSlopeDeg": 39
+     "maxSlopeDeg": 39,
+     "gainFt": 43
     }
    },
    {
@@ -14584,7 +14637,8 @@
      "gainM": 0,
      "lossM": 28,
      "highM": 1618,
-     "maxSlopeDeg": 12
+     "maxSlopeDeg": 12,
+     "gainFt": 0
     }
    },
    {
@@ -14608,7 +14662,8 @@
      "gainM": 14,
      "lossM": 0,
      "highM": 1645,
-     "maxSlopeDeg": 12
+     "maxSlopeDeg": 12,
+     "gainFt": 46
     }
    },
    {
@@ -14628,7 +14683,8 @@
      "gainM": 1380,
      "lossM": 56,
      "highM": 3052,
-     "maxSlopeDeg": 31
+     "maxSlopeDeg": 31,
+     "gainFt": 4528
     }
    },
    {
@@ -14650,7 +14706,8 @@
      "gainM": 5,
      "lossM": 28,
      "highM": 2010,
-     "maxSlopeDeg": 36
+     "maxSlopeDeg": 36,
+     "gainFt": 16
     }
    },
    {
@@ -14671,7 +14728,8 @@
      "gainM": 0,
      "lossM": 46,
      "highM": 2186,
-     "maxSlopeDeg": 25
+     "maxSlopeDeg": 25,
+     "gainFt": 0
     }
    },
    {
@@ -14692,7 +14750,8 @@
      "gainM": 3,
      "lossM": 177,
      "highM": 2141,
-     "maxSlopeDeg": 19
+     "maxSlopeDeg": 19,
+     "gainFt": 10
     }
    },
    {
@@ -14714,7 +14773,8 @@
      "gainM": 0,
      "lossM": 716,
      "highM": 1961,
-     "maxSlopeDeg": 29
+     "maxSlopeDeg": 29,
+     "gainFt": 0
     }
    },
    {
@@ -14736,7 +14796,8 @@
      "gainM": 4,
      "lossM": 87,
      "highM": 1936,
-     "maxSlopeDeg": 23
+     "maxSlopeDeg": 23,
+     "gainFt": 13
     }
    },
    {
@@ -14757,7 +14818,8 @@
      "gainM": 0,
      "lossM": 174,
      "highM": 2089,
-     "maxSlopeDeg": 19
+     "maxSlopeDeg": 19,
+     "gainFt": 0
     }
    },
    {
@@ -14778,7 +14840,8 @@
      "gainM": 0,
      "lossM": 605,
      "highM": 2250,
-     "maxSlopeDeg": 29
+     "maxSlopeDeg": 29,
+     "gainFt": 0
     }
    },
    {
@@ -14800,14 +14863,15 @@
      "gainM": 0,
      "lossM": 307,
      "highM": 2188,
-     "maxSlopeDeg": 20
+     "maxSlopeDeg": 20,
+     "gainFt": 0
     }
    }
   ]
  },
  "smoke": {
   "kind": "geojson",
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-24",
   "bbox": [
    -125,
    32,
@@ -14820,246 +14884,26 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -118.783564,
-      44.016761
+      -92.621179,
+      55.564199
      ]
     },
     "properties": {
-     "t": "2026-10-17T15:00:00.000Z",
+     "t": "2026-10-23T12:00:00.000Z",
      "v": 1,
      "density": "Light",
      "satellite": "GOES-EAST",
-     "start": "2026-10-17T15:00:00.000Z",
-     "end": "2026-10-17T17:00:00.000Z",
-     "seen": "2026-10-17, 15:00–17:00 UTC",
-     "heading": "Light smoke overhead, seen 15:00–17:00 UTC"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -118.82801,
-      44.128539
-     ]
-    },
-    "properties": {
-     "t": "2026-10-17T15:00:00.000Z",
-     "v": 1,
-     "density": "Light",
-     "satellite": "GOES-EAST",
-     "start": "2026-10-17T15:00:00.000Z",
-     "end": "2026-10-17T17:00:00.000Z",
-     "seen": "2026-10-17, 15:00–17:00 UTC",
-     "heading": "Light smoke overhead, seen 15:00–17:00 UTC"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -118.933611,
-      43.776791
-     ]
-    },
-    "properties": {
-     "t": "2026-10-17T15:00:00.000Z",
-     "v": 1,
-     "density": "Light",
-     "satellite": "GOES-EAST",
-     "start": "2026-10-17T15:00:00.000Z",
-     "end": "2026-10-17T17:00:00.000Z",
-     "seen": "2026-10-17, 15:00–17:00 UTC",
-     "heading": "Light smoke overhead, seen 15:00–17:00 UTC"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -123.203101,
-      41.771763
-     ]
-    },
-    "properties": {
-     "t": "2026-10-17T15:00:00.000Z",
-     "v": 1,
-     "density": "Light",
-     "satellite": "GOES-EAST",
-     "start": "2026-10-17T15:00:00.000Z",
-     "end": "2026-10-17T17:00:00.000Z",
-     "seen": "2026-10-17, 15:00–17:00 UTC",
-     "heading": "Light smoke overhead, seen 15:00–17:00 UTC"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -123.228348,
-      38.881867
-     ]
-    },
-    "properties": {
-     "t": "2026-10-17T15:00:00.000Z",
-     "v": 1,
-     "density": "Light",
-     "satellite": "GOES-EAST",
-     "start": "2026-10-17T15:00:00.000Z",
-     "end": "2026-10-17T17:00:00.000Z",
-     "seen": "2026-10-17, 15:00–17:00 UTC",
-     "heading": "Light smoke overhead, seen 15:00–17:00 UTC"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -122.272281,
-      39.546443
-     ]
-    },
-    "properties": {
-     "t": "2026-10-17T15:00:00.000Z",
-     "v": 1,
-     "density": "Light",
-     "satellite": "GOES-EAST",
-     "start": "2026-10-17T15:00:00.000Z",
-     "end": "2026-10-17T17:00:00.000Z",
-     "seen": "2026-10-17, 15:00–17:00 UTC",
-     "heading": "Light smoke overhead, seen 15:00–17:00 UTC"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -121.761963,
-      42.658498
-     ]
-    },
-    "properties": {
-     "t": "2026-10-17T15:00:00.000Z",
-     "v": 1,
-     "density": "Light",
-     "satellite": "GOES-EAST",
-     "start": "2026-10-17T15:00:00.000Z",
-     "end": "2026-10-17T17:00:00.000Z",
-     "seen": "2026-10-17, 15:00–17:00 UTC",
-     "heading": "Light smoke overhead, seen 15:00–17:00 UTC"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -105.735771,
-      33.50623
-     ]
-    },
-    "properties": {
-     "t": "2026-10-17T15:00:00.000Z",
-     "v": 1,
-     "density": "Light",
-     "satellite": "GOES-EAST",
-     "start": "2026-10-17T15:00:00.000Z",
-     "end": "2026-10-17T17:00:00.000Z",
-     "seen": "2026-10-17, 15:00–17:00 UTC",
-     "heading": "Light smoke overhead, seen 15:00–17:00 UTC"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -116.375916,
-      45.268543
-     ]
-    },
-    "properties": {
-     "t": "2026-10-17T15:00:00.000Z",
-     "v": 1,
-     "density": "Light",
-     "satellite": "GOES-EAST",
-     "start": "2026-10-17T15:00:00.000Z",
-     "end": "2026-10-17T17:00:00.000Z",
-     "seen": "2026-10-17, 15:00–17:00 UTC",
-     "heading": "Light smoke overhead, seen 15:00–17:00 UTC"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -123.053246,
-      42.631684
-     ]
-    },
-    "properties": {
-     "t": "2026-10-17T15:00:00.000Z",
-     "v": 1,
-     "density": "Light",
-     "satellite": "GOES-EAST",
-     "start": "2026-10-17T15:00:00.000Z",
-     "end": "2026-10-17T17:00:00.000Z",
-     "seen": "2026-10-17, 15:00–17:00 UTC",
-     "heading": "Light smoke overhead, seen 15:00–17:00 UTC"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -121.434951,
-      39.461176
-     ]
-    },
-    "properties": {
-     "t": "2026-10-17T15:00:00.000Z",
-     "v": 1,
-     "density": "Light",
-     "satellite": "GOES-EAST",
-     "start": "2026-10-17T15:00:00.000Z",
-     "end": "2026-10-17T17:00:00.000Z",
-     "seen": "2026-10-17, 15:00–17:00 UTC",
-     "heading": "Light smoke overhead, seen 15:00–17:00 UTC"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -115.077574,
-      47.173472
-     ]
-    },
-    "properties": {
-     "t": "2026-10-17T17:00:00.000Z",
-     "v": 1,
-     "density": "Light",
-     "satellite": "GOES-EAST",
-     "start": "2026-10-17T17:00:00.000Z",
-     "end": "2026-10-17T20:00:00.000Z",
-     "seen": "2026-10-17, 17:00–20:00 UTC",
-     "heading": "Light smoke overhead, seen 17:00–20:00 UTC"
+     "start": "2026-10-23T12:00:00.000Z",
+     "end": "2026-10-23T15:00:00.000Z",
+     "seen": "2026-10-23, 12:00–15:00 UTC",
+     "heading": "Light smoke overhead, seen 12:00–15:00 UTC"
     }
    }
   ]
  },
  "snow-cover": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -121.8,
    45.2,
@@ -15090,13 +14934,13 @@
      "name": "Blazed Alder",
      "stationId": "351:OR:SNTL",
      "elevationFt": 3660,
-     "t": "2026-10-24T02:00:00.000Z",
-     "readingLocal": "Oct 23, 7 PM PDT",
+     "t": "2026-10-24T03:00:00.000Z",
+     "readingLocal": "Oct 23, 8 PM PDT",
      "v": 0,
      "swe": 0.1,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 3.9,
+     "tempC": 3.6,
      "normalNote": "Too early in the season to compare: the normal for today is 0 in of snow water, and snow normally arrives Nov 17",
      "normalOnset": "Nov 17",
      "medianPeakIn": 32.4
@@ -15115,14 +14959,14 @@
      "name": "Mount Hood Test Site",
      "stationId": "651:OR:SNTL",
      "elevationFt": 5380,
-     "t": "2026-10-24T02:00:00.000Z",
-     "readingLocal": "Oct 23, 7 PM PDT",
+     "t": "2026-10-24T03:00:00.000Z",
+     "readingLocal": "Oct 23, 8 PM PDT",
      "v": 2,
      "swe": 0,
      "density": 0,
      "type": "powder",
      "new24h": 0,
-     "tempC": -1.1,
+     "tempC": -1.6,
      "normalNote": "Too early in the season to compare: the normal for today is 0.2 in of snow water, and snow normally arrives Oct 30",
      "normalOnset": "Oct 30",
      "medianPeakIn": 59.4,
@@ -15142,12 +14986,12 @@
      "name": "Clackamas Lake",
      "stationId": "398:OR:SNTL",
      "elevationFt": 3400,
-     "t": "2026-10-24T02:00:00.000Z",
-     "readingLocal": "Oct 23, 7 PM PDT",
+     "t": "2026-10-24T03:00:00.000Z",
+     "readingLocal": "Oct 23, 8 PM PDT",
      "v": 0,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 0.7,
+     "tempC": -1.2,
      "normalNote": "Too early in the season to compare: the normal for today is 0 in of snow water, and snow normally arrives Nov 21",
      "normalOnset": "Nov 21",
      "medianPeakIn": 12.5
@@ -15171,7 +15015,7 @@
      "v": 0,
      "swe": 0,
      "type": "no snow",
-     "tempC": 1.5,
+     "tempC": 0.6,
      "normalNote": "Too early in the season to compare: the normal for today is 0 in of snow water, and snow normally arrives Nov 22",
      "normalOnset": "Nov 22",
      "medianPeakIn": 12.1
@@ -15190,13 +15034,13 @@
      "name": "Fifteenmile",
      "stationId": "1314:OR:SNTL",
      "elevationFt": 5970,
-     "t": "2026-10-24T02:00:00.000Z",
-     "readingLocal": "Oct 23, 7 PM PDT",
+     "t": "2026-10-24T03:00:00.000Z",
+     "readingLocal": "Oct 23, 8 PM PDT",
      "v": 0,
      "swe": 0.2,
      "type": "no snow",
      "new24h": 0,
-     "tempC": -1.3
+     "tempC": -0.9
     }
    },
    {
@@ -15212,13 +15056,12 @@
      "name": "Greenpoint",
      "stationId": "504:OR:SNTL",
      "elevationFt": 3320,
-     "t": "2026-10-24T01:00:00.000Z",
-     "readingLocal": "Oct 23, 6 PM PDT",
+     "t": "2026-10-24T03:00:00.000Z",
+     "readingLocal": "Oct 23, 8 PM PDT",
      "v": 0,
-     "swe": 0,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 4.4,
+     "tempC": 3.1,
      "normalNote": "Too early in the season to compare: the normal for today is 0 in of snow water, and snow normally arrives Nov 20",
      "normalOnset": "Nov 20",
      "medianPeakIn": 17.8
@@ -15237,12 +15080,13 @@
      "name": "Mud Ridge",
      "stationId": "655:OR:SNTL",
      "elevationFt": 4070,
-     "t": "2026-10-23T21:00:00.000Z",
-     "readingLocal": "Oct 23, 2 PM PDT",
+     "t": "2026-10-24T03:00:00.000Z",
+     "readingLocal": "Oct 23, 8 PM PDT",
      "v": 0,
-     "swe": 0.2,
+     "swe": 0.1,
      "type": "no snow",
-     "tempC": 0.1,
+     "new24h": 0,
+     "tempC": -0.5,
      "normalNote": "Too early in the season to compare: the normal for today is 0 in of snow water, and snow normally arrives Nov 14",
      "normalOnset": "Nov 14",
      "medianPeakIn": 24.8
@@ -15261,12 +15105,12 @@
      "name": "Peavine Ridge",
      "stationId": "687:OR:SNTL",
      "elevationFt": 3420,
-     "t": "2026-10-24T01:00:00.000Z",
-     "readingLocal": "Oct 23, 6 PM PDT",
+     "t": "2026-10-24T03:00:00.000Z",
+     "readingLocal": "Oct 23, 8 PM PDT",
      "v": 0,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 3.7,
+     "tempC": -0.5,
      "normalNote": "Too early in the season to compare: the normal for today is 0 in of snow water, and snow normally arrives Nov 23",
      "normalOnset": "Nov 23",
      "medianPeakIn": 13.8
@@ -15285,12 +15129,13 @@
      "name": "Red Hill",
      "stationId": "712:OR:SNTL",
      "elevationFt": 4410,
-     "t": "2026-10-24T02:00:00.000Z",
-     "readingLocal": "Oct 23, 7 PM PDT",
-     "v": 1,
+     "t": "2026-10-24T03:00:00.000Z",
+     "readingLocal": "Oct 23, 8 PM PDT",
+     "v": 0,
      "swe": 0.4,
-     "new24h": 1,
-     "tempC": 0.3,
+     "type": "no snow",
+     "new24h": 0,
+     "tempC": 1.3,
      "normalNote": "Too early in the season to compare: the normal for today is 0 in of snow water, and snow normally arrives Nov 11",
      "normalOnset": "Nov 11",
      "medianPeakIn": 48.4
@@ -15599,7 +15444,7 @@
  },
  "species": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -115.585,
    51.161,
@@ -15877,7 +15722,7 @@
  },
  "streamflow": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -110.886,
    43.235,
@@ -15899,20 +15744,20 @@
      "nameInSource": "GROS VENTRE RIVER AT KELLY, WY",
      "siteId": "USGS-13014500",
      "kind": "gauge",
-     "t": "2026-10-23T15:00:00.000Z",
-     "v": 280,
-     "pctOfMedian": 129,
+     "t": "2026-10-24T03:00:00.000Z",
+     "v": 287,
+     "pctOfMedian": 132,
      "medianCfs": 217,
-     "flowClass": "above",
+     "flowClass": "much_above",
      "vsNormal": "high",
      "normalRange": "192 to 247 cfs",
      "recordYears": "1945 to 2026 (32 years)",
-     "tempC": 9.3,
-     "tempF": 48.7,
-     "waterTemp": "49 °F (9.3 °C)",
+     "tempC": 8.9,
+     "tempF": 48,
+     "waterTemp": "48 °F (8.9 °C)",
      "nwsId": "GVKW4",
      "nwsLink": "https://water.noaa.gov/gauges/gvkw4",
-     "stageFt": 4.08,
+     "stageFt": 4.1,
      "actionStageFt": 7,
      "floodStageFt": 8,
      "floodCategory": "no_flooding",
@@ -15933,7 +15778,7 @@
      "nameInSource": "SNAKE RIVER BELOW FLAT CREEK, NEAR JACKSON, WY",
      "siteId": "USGS-13018750",
      "kind": "gauge",
-     "t": "2026-10-23T15:30:00.000Z",
+     "t": "2026-10-24T03:30:00.000Z",
      "v": 1520,
      "pctOfMedian": 95,
      "medianCfs": 1600,
@@ -15941,12 +15786,12 @@
      "vsNormal": "normal",
      "normalRange": "1,410 to 1,820 cfs",
      "recordYears": "1977 to 2026 (50 years)",
-     "tempC": 10,
-     "tempF": 50,
-     "waterTemp": "50 °F (10.0 °C)",
+     "tempC": 9.7,
+     "tempF": 49.5,
+     "waterTemp": "49 °F (9.7 °C)",
      "nwsId": "JKSW4",
      "nwsLink": "https://water.noaa.gov/gauges/jksw4",
-     "stageFt": 1.31,
+     "stageFt": 1.3,
      "actionStageFt": 9,
      "floodStageFt": 10,
      "moderateStageFt": 12,
@@ -15955,7 +15800,6 @@
      "forecastCategory": "no_flooding",
      "forecastCrest": "1.5 ft, 1,750 cfs Sat, Oct 24, 12:00 AM MDT: below flood stage",
      "forecastDays": [
-      "Fri, Oct 23: up to 1.5 ft, 1,730 cfs",
       "Sat, Oct 24: up to 1.5 ft, 1,750 cfs",
       "Sun, Oct 25: up to 1.4 ft, 1,620 cfs",
       "Mon, Oct 26: up to 1.3 ft, 1,530 cfs",
@@ -15984,17 +15828,17 @@
      "nameInSource": "GRANITE C AB GRANITE C SUPPLEMENTAL, NR MOOSE, WY",
      "siteId": "USGS-13016305",
      "kind": "gauge",
-     "t": "2026-10-23T15:00:00.000Z",
-     "v": 11,
-     "pctOfMedian": 126,
+     "t": "2026-10-24T03:00:00.000Z",
+     "v": 13.3,
+     "pctOfMedian": 153,
      "medianCfs": 8.7,
-     "flowClass": "normal",
-     "vsNormal": "normal",
+     "flowClass": "above",
+     "vsNormal": "high",
      "normalRange": "7.5 to 11 cfs",
      "recordYears": "1996 to 2026 (31 years)",
      "nwsId": "GCMW4",
      "nwsLink": "https://water.noaa.gov/gauges/gcmw4",
-     "stageFt": 3.74,
+     "stageFt": 3.79,
      "actionStageFt": 6.5,
      "floodCategory": "no_flooding"
     }
@@ -16013,20 +15857,20 @@
      "nameInSource": "FISH CREEK AT WILSON, WY",
      "siteId": "USGS-13016450",
      "kind": "gauge",
-     "t": "2026-10-23T15:00:00.000Z",
-     "v": 142,
-     "pctOfMedian": 158,
+     "t": "2026-10-24T03:00:00.000Z",
+     "v": 144,
+     "pctOfMedian": 160,
      "medianCfs": 90,
      "flowClass": "above",
      "vsNormal": "high",
      "normalRange": "74 to 120 cfs",
      "recordYears": "1995 to 2025 (31 years)",
-     "tempC": 10,
-     "tempF": 50,
-     "waterTemp": "50 °F (10.0 °C)",
+     "tempC": 9.9,
+     "tempF": 49.8,
+     "waterTemp": "50 °F (9.9 °C)",
      "nwsId": "FCWW4",
      "nwsLink": "https://water.noaa.gov/gauges/fcww4",
-     "stageFt": 2.37,
+     "stageFt": 2.38,
      "actionStageFt": 5,
      "floodStageFt": 6,
      "floodCategory": "no_flooding",
@@ -16047,20 +15891,20 @@
      "nameInSource": "CACHE CREEK NEAR JACKSON, WY",
      "siteId": "USGS-13018300",
      "kind": "gauge",
-     "t": "2026-10-23T15:45:00.000Z",
-     "v": 7.21,
-     "pctOfMedian": 114,
+     "t": "2026-10-24T02:45:00.000Z",
+     "v": 6.89,
+     "pctOfMedian": 109,
      "medianCfs": 6.3,
-     "flowClass": "above",
-     "vsNormal": "high",
+     "flowClass": "normal",
+     "vsNormal": "normal",
      "normalRange": "5.4 to 7.2 cfs",
      "recordYears": "1963 to 2026 (64 years)",
-     "tempC": 5.8,
-     "tempF": 42.4,
-     "waterTemp": "42 °F (5.8 °C)",
+     "tempC": 5.3,
+     "tempF": 41.5,
+     "waterTemp": "42 °F (5.3 °C)",
      "nwsId": "CCKW4",
      "nwsLink": "https://water.noaa.gov/gauges/cckw4",
-     "stageFt": 3.42,
+     "stageFt": 3.4,
      "actionStageFt": 4.5,
      "floodCategory": "no_flooding"
     }
@@ -16079,24 +15923,24 @@
      "nameInSource": "FLAT CREEK BELOW CACHE CREEK, NEAR JACKSON, WY",
      "siteId": "USGS-13018350",
      "kind": "gauge",
-     "t": "2026-10-23T15:45:00.000Z",
-     "v": 80.9,
-     "pctOfMedian": 111,
+     "t": "2026-10-24T02:45:00.000Z",
+     "v": 82.5,
+     "pctOfMedian": 113,
      "medianCfs": 73,
      "flowClass": "normal",
      "vsNormal": "normal",
      "normalRange": "68 to 86 cfs",
      "recordYears": "2000 to 2026 (27 years)",
-     "tempC": 8.7,
-     "tempF": 47.7,
-     "waterTemp": "48 °F (8.7 °C)",
+     "tempC": 8.5,
+     "tempF": 47.3,
+     "waterTemp": "47 °F (8.5 °C)",
      "nwsId": "FCKW4",
      "nwsLink": "https://water.noaa.gov/gauges/fckw4",
-     "stageFt": 1.85,
+     "stageFt": 1.86,
      "actionStageFt": 4.5,
      "floodStageFt": 6,
      "floodCategory": "no_flooding",
-     "floodStatus": "Stage 1.9 ft; flood stage 6 ft (action 4.5 ft): 4.2 ft below flood stage"
+     "floodStatus": "Stage 1.9 ft; flood stage 6 ft (action 4.5 ft): 4.1 ft below flood stage"
     }
    },
    {
@@ -16113,27 +15957,27 @@
      "nameInSource": "HOBACK RIVER NEAR JACKSON, WY",
      "siteId": "USGS-13019500",
      "kind": "gauge",
-     "t": "2026-10-23T15:00:00.000Z",
-     "v": 238,
-     "pctOfMedian": 94,
+     "t": "2026-10-24T03:00:00.000Z",
+     "v": 292,
+     "pctOfMedian": 115,
      "medianCfs": 254,
-     "flowClass": "normal",
-     "vsNormal": "normal",
+     "flowClass": "above",
+     "vsNormal": "high",
      "normalRange": "228 to 278 cfs",
      "recordYears": "1945 to 2026 (18 years)",
-     "tempC": 8.5,
-     "tempF": 47.3,
-     "waterTemp": "47 °F (8.5 °C)",
+     "tempC": 8.3,
+     "tempF": 46.9,
+     "waterTemp": "47 °F (8.3 °C)",
      "nwsId": "HOJW4",
      "nwsLink": "https://water.noaa.gov/gauges/hojw4",
-     "stageFt": 4.86
+     "stageFt": 4.96
     }
    }
   ]
  },
  "surf": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -122.6,
    37.3,
@@ -16154,31 +15998,31 @@
      "name": "Mavericks",
      "kind": "forecast",
      "spotSource": "Wikidata",
-     "t": "2026-10-23T16:00:00.000Z",
-     "v": 2.06,
-     "waveFt": 6.8,
-     "maxNext48hM": 2.06,
-     "maxNext48hFt": 6.8,
-     "maxAt": "2026-10-23T16:00:00.000Z",
-     "periodS": 8.7,
-     "directionDeg": 296,
+     "t": "2026-10-24T03:00:00.000Z",
+     "v": 2.04,
+     "waveFt": 6.7,
+     "maxNext48hM": 2.04,
+     "maxNext48hFt": 6.7,
+     "maxAt": "2026-10-24T03:00:00.000Z",
+     "periodS": 9,
+     "directionDeg": 299,
      "directionFrom": "WNW",
-     "swellFrom": "West-northwest (296°)",
-     "swellM": 1.94,
-     "swellFt": 6.4,
-     "swellPeriodS": 6.7,
-     "readAt": "9:00 am PDT Fri",
-     "maxAtLocal": "9:00 am PDT Fri",
-     "daily": "Fri: 6-7 ft at 9 s, wind to 9 mph from the NW · Sat: 4-6 ft at 9 s, wind to 7 mph from the WNW · Sun: 3-4 ft at 9 s, wind to 6 mph from the SW · Mon: 3-4 ft at 10 s, wind to 7 mph from the SW · Tue: 4-5 ft at 9 s, wind to 10 mph from the WSW · Wed: 3-4 ft at 10 s, wind to 8 mph from the NW · Thu: 3 ft at 13 s, wind to 5 mph from the NW",
-     "weekend": "Sat: 4-6 ft at 9 s, wind to 7 mph from the WNW · Sun: 3-4 ft at 9 s, wind to 6 mph from the SW",
-     "weekendMaxFt": 6.3
+     "swellFrom": "West-northwest (299°)",
+     "swellM": 1.92,
+     "swellFt": 6.3,
+     "swellPeriodS": 7.1,
+     "readAt": "8:00 pm PDT Fri",
+     "maxAtLocal": "8:00 pm PDT Fri",
+     "daily": "Fri: 6-7 ft at 9 s, wind to 9 mph from the NW · Sat: 4-6 ft at 9 s, wind to 9 mph from the WNW · Sun: 3-4 ft at 10 s, wind to 7 mph from the W · Mon: 3-5 ft at 9 s, wind to 10 mph from the W · Tue: 4-5 ft at 8 s, wind to 9 mph from the WNW · Wed: 4 ft at 10 s, wind to 11 mph from the NW · Thu: 4 ft at 10 s, wind to 10 mph from the NW",
+     "weekend": "Sat: 4-6 ft at 9 s, wind to 9 mph from the WNW · Sun: 3-4 ft at 10 s, wind to 7 mph from the W",
+     "weekendMaxFt": 6.4
     }
    }
   ]
  },
  "surface-water": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -115.5,
    35.5,
@@ -16188,7 +16032,7 @@
  },
  "temperature-anomaly": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -120.919,
    35.907,
@@ -16486,7 +16330,7 @@
  },
  "terrain": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -110.95,
    43.45,
@@ -16496,7 +16340,7 @@
  },
  "tides": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -68.657,
    44.004,
@@ -16518,18 +16362,18 @@
      "stationId": "8413651",
      "kind": "prediction",
      "nextType": "low",
-     "nextAt": "2026-10-23T18:48:00.000Z",
-     "v": 0.642,
+     "nextAt": "2026-10-24T07:06:00.000Z",
+     "v": 0.398,
      "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413651",
-     "level": 4.82,
-     "tide1": "Low 0.6 ft at 2:48 pm EDT Fri",
-     "tide2": "High 10.0 ft at 9:27 pm EDT Fri",
-     "tide3": "Low 0.4 ft at 3:06 am EDT Sat",
-     "tide4": "High 10.5 ft at 9:47 am EDT Sat",
+     "level": 6.12,
+     "tide1": "Low 0.4 ft at 3:06 am EDT Sat",
+     "tide2": "High 10.5 ft at 9:47 am EDT Sat",
+     "tide3": "Low 0.0 ft at 3:33 pm EDT Sat",
+     "tide4": "High 10.3 ft at 10:12 pm EDT Sat",
      "thenType": "high",
-     "thenAt": "2026-10-24T01:27:00.000Z",
-     "thenV": 10.019,
+     "thenAt": "2026-10-24T13:47:00.000Z",
+     "thenV": 10.491,
      "state": "ME"
     }
    },
@@ -16547,21 +16391,21 @@
      "stationId": "8413320",
      "kind": "live",
      "nextType": "low",
-     "nextAt": "2026-10-23T19:15:00.000Z",
-     "v": 0.69,
+     "nextAt": "2026-10-24T07:33:00.000Z",
+     "v": 0.428,
      "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413320",
-     "level": 5.7,
-     "tide1": "Low 0.7 ft at 3:15 pm EDT Fri",
-     "tide2": "High 10.8 ft at 9:23 pm EDT Fri",
-     "tide3": "Low 0.4 ft at 3:33 am EDT Sat",
-     "tide4": "High 11.3 ft at 9:43 am EDT Sat",
+     "level": 6.99,
+     "tide1": "Low 0.4 ft at 3:33 am EDT Sat",
+     "tide2": "High 11.3 ft at 9:43 am EDT Sat",
+     "tide3": "Low 0.0 ft at 4:00 pm EDT Sat",
+     "tide4": "High 11.1 ft at 10:08 pm EDT Sat",
      "thenType": "high",
-     "thenAt": "2026-10-24T01:23:00.000Z",
-     "thenV": 10.773,
-     "observedNow": 7.08,
-     "observedAt": "2026-10-23T16:00:00.000Z",
-     "observedLocal": "12:00 pm EDT Fri",
+     "thenAt": "2026-10-24T13:43:00.000Z",
+     "thenV": 11.28,
+     "observedNow": 8.527,
+     "observedAt": "2026-10-24T03:48:00.000Z",
+     "observedLocal": "11:48 pm EDT Fri",
      "state": "ME",
      "nameInSource": "BAR HARBOR"
     }
@@ -16580,18 +16424,18 @@
      "stationId": "8413564",
      "kind": "prediction",
      "nextType": "low",
-     "nextAt": "2026-10-23T18:48:00.000Z",
-     "v": 0.655,
+     "nextAt": "2026-10-24T07:06:00.000Z",
+     "v": 0.406,
      "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413564",
-     "level": 4.89,
-     "tide1": "Low 0.7 ft at 2:48 pm EDT Fri",
-     "tide2": "High 10.3 ft at 9:23 pm EDT Fri",
-     "tide3": "Low 0.4 ft at 3:06 am EDT Sat",
-     "tide4": "High 10.8 ft at 9:43 am EDT Sat",
+     "level": 6.22,
+     "tide1": "Low 0.4 ft at 3:06 am EDT Sat",
+     "tide2": "High 10.8 ft at 9:43 am EDT Sat",
+     "tide3": "Low 0.0 ft at 3:33 pm EDT Sat",
+     "tide4": "High 10.7 ft at 10:08 pm EDT Sat",
      "thenType": "high",
-     "thenAt": "2026-10-24T01:23:00.000Z",
-     "thenV": 10.342,
+     "thenAt": "2026-10-24T13:43:00.000Z",
+     "thenV": 10.829,
      "state": "ME"
     }
    },
@@ -16609,18 +16453,18 @@
      "stationId": "8413825",
      "kind": "prediction",
      "nextType": "low",
-     "nextAt": "2026-10-23T19:21:00.000Z",
-     "v": 0.745,
+     "nextAt": "2026-10-24T07:38:00.000Z",
+     "v": 0.408,
      "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413825",
-     "level": 5.79,
-     "tide1": "Low 0.7 ft at 3:21 pm EDT Fri",
-     "tide2": "High 10.3 ft at 9:28 pm EDT Fri",
-     "tide3": "Low 0.4 ft at 3:38 am EDT Sat",
-     "tide4": "High 11.0 ft at 9:51 am EDT Sat",
+     "level": 6.89,
+     "tide1": "Low 0.4 ft at 3:38 am EDT Sat",
+     "tide2": "High 11.0 ft at 9:51 am EDT Sat",
+     "tide3": "Low 0.0 ft at 4:07 pm EDT Sat",
+     "tide4": "High 10.7 ft at 10:15 pm EDT Sat",
      "thenType": "high",
-     "thenAt": "2026-10-24T01:28:00.000Z",
-     "thenV": 10.313,
+     "thenAt": "2026-10-24T13:51:00.000Z",
+     "thenV": 10.962,
      "state": "ME"
     }
    },
@@ -16638,18 +16482,18 @@
      "stationId": "8413857",
      "kind": "prediction",
      "nextType": "low",
-     "nextAt": "2026-10-23T19:21:00.000Z",
-     "v": 0.607,
+     "nextAt": "2026-10-24T07:39:00.000Z",
+     "v": 0.376,
      "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413857",
-     "level": 5.16,
-     "tide1": "Low 0.6 ft at 3:21 pm EDT Fri",
-     "tide2": "High 9.6 ft at 9:22 pm EDT Fri",
-     "tide3": "Low 0.4 ft at 3:39 am EDT Sat",
-     "tide4": "High 10.0 ft at 9:42 am EDT Sat",
+     "level": 6.29,
+     "tide1": "Low 0.4 ft at 3:39 am EDT Sat",
+     "tide2": "High 10.0 ft at 9:42 am EDT Sat",
+     "tide3": "Low 0.0 ft at 4:06 pm EDT Sat",
+     "tide4": "High 9.9 ft at 10:07 pm EDT Sat",
      "thenType": "high",
-     "thenAt": "2026-10-24T01:22:00.000Z",
-     "thenV": 9.588,
+     "thenAt": "2026-10-24T13:42:00.000Z",
+     "thenV": 10.039,
      "state": "ME"
     }
    },
@@ -16667,18 +16511,18 @@
      "stationId": "8414168",
      "kind": "prediction",
      "nextType": "low",
-     "nextAt": "2026-10-23T19:27:00.000Z",
-     "v": 0.655,
+     "nextAt": "2026-10-24T07:45:00.000Z",
+     "v": 0.406,
      "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414168",
-     "level": 5.83,
-     "tide1": "Low 0.7 ft at 3:27 pm EDT Fri",
-     "tide2": "High 10.2 ft at 9:32 pm EDT Fri",
-     "tide3": "Low 0.4 ft at 3:45 am EDT Sat",
-     "tide4": "High 10.7 ft at 9:52 am EDT Sat",
+     "level": 7.05,
+     "tide1": "Low 0.4 ft at 3:45 am EDT Sat",
+     "tide2": "High 10.7 ft at 9:52 am EDT Sat",
+     "tide3": "Low 0.0 ft at 4:12 pm EDT Sat",
+     "tide4": "High 10.6 ft at 10:17 pm EDT Sat",
      "thenType": "high",
-     "thenAt": "2026-10-24T01:32:00.000Z",
-     "thenV": 10.234,
+     "thenAt": "2026-10-24T13:52:00.000Z",
+     "thenV": 10.716,
      "state": "ME"
     }
    },
@@ -16696,18 +16540,18 @@
      "stationId": "8414249",
      "kind": "prediction",
      "nextType": "low",
-     "nextAt": "2026-10-23T19:11:00.000Z",
-     "v": 0.595,
+     "nextAt": "2026-10-24T07:31:00.000Z",
+     "v": 0.586,
      "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414249",
-     "level": 5.12,
-     "tide1": "Low 0.6 ft at 3:11 pm EDT Fri",
-     "tide2": "High 10.0 ft at 9:26 pm EDT Fri",
-     "tide3": "Low 0.6 ft at 3:31 am EDT Sat",
-     "tide4": "High 10.3 ft at 9:43 am EDT Sat",
+     "level": 6.6,
+     "tide1": "Low 0.6 ft at 3:31 am EDT Sat",
+     "tide2": "High 10.3 ft at 9:43 am EDT Sat",
+     "tide3": "Low 0.0 ft at 3:58 pm EDT Sat",
+     "tide4": "High 10.3 ft at 10:12 pm EDT Sat",
      "thenType": "high",
-     "thenAt": "2026-10-24T01:26:00.000Z",
-     "thenV": 10.008,
+     "thenAt": "2026-10-24T13:43:00.000Z",
+     "thenV": 10.326,
      "state": "ME"
     }
    },
@@ -16725,18 +16569,18 @@
      "stationId": "8414112",
      "kind": "prediction",
      "nextType": "low",
-     "nextAt": "2026-10-23T19:26:00.000Z",
-     "v": 0.655,
+     "nextAt": "2026-10-24T07:44:00.000Z",
+     "v": 0.406,
      "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414112",
-     "level": 5.81,
-     "tide1": "Low 0.7 ft at 3:26 pm EDT Fri",
-     "tide2": "High 10.2 ft at 9:32 pm EDT Fri",
-     "tide3": "Low 0.4 ft at 3:44 am EDT Sat",
-     "tide4": "High 10.7 ft at 9:52 am EDT Sat",
+     "level": 7.03,
+     "tide1": "Low 0.4 ft at 3:44 am EDT Sat",
+     "tide2": "High 10.7 ft at 9:52 am EDT Sat",
+     "tide3": "Low 0.0 ft at 4:11 pm EDT Sat",
+     "tide4": "High 10.6 ft at 10:17 pm EDT Sat",
      "thenType": "high",
-     "thenAt": "2026-10-24T01:32:00.000Z",
-     "thenV": 10.234,
+     "thenAt": "2026-10-24T13:52:00.000Z",
+     "thenV": 10.716,
      "state": "ME"
     }
    },
@@ -16754,18 +16598,18 @@
      "stationId": "8413079",
      "kind": "prediction",
      "nextType": "low",
-     "nextAt": "2026-10-23T19:25:00.000Z",
-     "v": 0.655,
+     "nextAt": "2026-10-24T07:43:00.000Z",
+     "v": 0.406,
      "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8413079",
-     "level": 5.59,
-     "tide1": "Low 0.7 ft at 3:25 pm EDT Fri",
-     "tide2": "High 10.2 ft at 9:22 pm EDT Fri",
-     "tide3": "Low 0.4 ft at 3:43 am EDT Sat",
-     "tide4": "High 10.7 ft at 9:42 am EDT Sat",
+     "level": 6.78,
+     "tide1": "Low 0.4 ft at 3:43 am EDT Sat",
+     "tide2": "High 10.7 ft at 9:42 am EDT Sat",
+     "tide3": "Low 0.0 ft at 4:10 pm EDT Sat",
+     "tide4": "High 10.6 ft at 10:07 pm EDT Sat",
      "thenType": "high",
-     "thenAt": "2026-10-24T01:22:00.000Z",
-     "thenV": 10.234,
+     "thenAt": "2026-10-24T13:42:00.000Z",
+     "thenV": 10.716,
      "state": "ME"
     }
    },
@@ -16783,18 +16627,18 @@
      "stationId": "8414288",
      "kind": "prediction",
      "nextType": "low",
-     "nextAt": "2026-10-23T18:48:00.000Z",
-     "v": 0.607,
+     "nextAt": "2026-10-24T07:06:00.000Z",
+     "v": 0.376,
      "trend": "Falling toward low tide",
      "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=8414288",
-     "level": 4.42,
-     "tide1": "Low 0.6 ft at 2:48 pm EDT Fri",
-     "tide2": "High 9.4 ft at 9:22 pm EDT Fri",
-     "tide3": "Low 0.4 ft at 3:06 am EDT Sat",
-     "tide4": "High 9.8 ft at 9:42 am EDT Sat",
+     "level": 5.61,
+     "tide1": "Low 0.4 ft at 3:06 am EDT Sat",
+     "tide2": "High 9.8 ft at 9:42 am EDT Sat",
+     "tide3": "Low 0.0 ft at 3:33 pm EDT Sat",
+     "tide4": "High 9.7 ft at 10:07 pm EDT Sat",
      "thenType": "high",
-     "thenAt": "2026-10-24T01:22:00.000Z",
-     "thenV": 9.372,
+     "thenAt": "2026-10-24T13:42:00.000Z",
+     "thenV": 9.814,
      "state": "ME"
     }
    }
@@ -16802,7 +16646,7 @@
  },
  "tree-mortality": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -106.5,
    39.3,
@@ -17102,7 +16946,7 @@
  },
  "uranium": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -110.963,
    35.058,
@@ -17468,7 +17312,7 @@
  },
  "weather-alerts": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -124,
    32,
@@ -17481,26 +17325,26 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -112.47,
-      37
+      -122.542,
+      41.35
      ]
     },
     "properties": {
-     "kind": "Flood Warning",
-     "event": "Flood Warning",
-     "heading": "Flood Warning, Garfield, UT, Kane, UT and 1 more",
+     "kind": "Freeze Warning",
+     "event": "Freeze Warning",
+     "heading": "Freeze Warning, Southern Trinity, Northwestern Interior Mendocino and 4 more",
      "severity": "Severe",
      "v": 3,
-     "t": "2026-10-22T18:07:00.000Z",
-     "expires": "2026-10-23T18:15:00.000Z",
-     "until": "October 23 at 12:15PM MDT",
-     "headline": "Flood Warning issued October 22 at 12:07PM MDT until October 23 at 12:15PM MDT by NWS Salt Lake City UT",
-     "areaDesc": "Garfield, UT; Kane, UT; San Juan, UT",
+     "t": "2026-10-24T08:00:00.000Z",
+     "expires": "2026-10-24T16:00:00.000Z",
+     "until": "October 24 at 9:00AM PDT",
+     "headline": "Freeze Warning issued October 23 at 6:16PM PDT until October 24 at 9:00AM PDT by NWS Eureka CA",
+     "areaDesc": "Southern Trinity; Northwestern Interior Mendocino; Northeastern Interior Mendocino; Northern Lake; Northwestern and Central Trinity; Northeastern Trinity",
      "urgency": "Expected",
      "certainty": "Likely",
-     "instruction": "Turn around, don't drown when encountering flooded roads. Most flood deaths occur in vehicles.\n\nBe aware of your surroundings and do not drive on flooded roads.\n\nStay away or be swept away. River banks and culverts can become unstable and unsafe.",
-     "senderName": "NWS Salt Lake City UT",
-     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.d516725eba3d389ea12139adf0c5f8b16575f582.001.1"
+     "instruction": "Take steps now to protect tender plants from the cold.",
+     "senderName": "NWS Eureka CA",
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.2a24f382f751542a4aab0ce60a9e0c46355730e3.001.1"
     }
    },
    {
@@ -17515,19 +17359,19 @@
     "properties": {
      "kind": "now",
      "name": "Current conditions (model)",
-     "observed": "2026-10-23T16:00:00.000Z",
-     "v": 2.7,
-     "temperatureC": 2.7,
-     "windKmh": 2.6,
-     "gustKmh": 10.4,
+     "observed": "2026-10-24T03:45:00.000Z",
+     "v": 1.3,
+     "temperatureC": 1.3,
+     "windKmh": 17.5,
+     "gustKmh": 25.9,
      "precipitationMm": 0,
      "snowfallCm": 0,
      "weatherCode": 0,
      "weather": "clear",
-     "temperatureF": 37,
-     "windMph": 2,
-     "gustMph": 6,
-     "heading": "Weather now: 37 °F (3 °C), wind 2 mph gusting 6, clear"
+     "temperatureF": 34,
+     "windMph": 11,
+     "gustMph": 16,
+     "heading": "Weather now: 34 °F (1 °C), wind 11 mph gusting 16, clear"
     }
    },
    {
@@ -17535,26 +17379,26 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -122.542,
-      41.35
+      -117.899,
+      33.608
      ]
     },
     "properties": {
-     "kind": "Freeze Watch",
-     "event": "Freeze Watch",
-     "heading": "Freeze Watch, Southern Trinity, Northwestern Interior Mendocino and 4 more",
+     "kind": "Coastal Flood Warning",
+     "event": "Coastal Flood Warning",
+     "heading": "Coastal Flood Warning, San Diego County Coastal Areas and Orange County Coastal",
      "severity": "Severe",
      "v": 3,
-     "t": "2026-10-24T08:00:00.000Z",
-     "expires": "2026-10-24T16:00:00.000Z",
-     "until": "October 24 at 9:00AM PDT",
-     "headline": "Freeze Watch issued October 22 at 9:12PM PDT until October 24 at 9:00AM PDT by NWS Eureka CA",
-     "areaDesc": "Southern Trinity; Northwestern Interior Mendocino; Northeastern Interior Mendocino; Northern Lake; Northwestern and Central Trinity; Northeastern Trinity",
-     "urgency": "Future",
-     "certainty": "Possible",
-     "instruction": "Take steps now to protect tender plants from the cold.",
-     "senderName": "NWS Eureka CA",
-     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.0f9ee61b9e1808bd57e06f035ab2ee7a23ce1066.001.1"
+     "t": "2026-10-25T12:00:00.000Z",
+     "expires": "2026-10-29T20:00:00.000Z",
+     "until": "October 29 at 1:00PM PDT",
+     "headline": "Coastal Flood Warning issued October 23 at 11:03AM PDT until October 29 at 1:00PM PDT by NWS San Diego CA",
+     "areaDesc": "San Diego County Coastal Areas; Orange County Coastal",
+     "urgency": "Expected",
+     "certainty": "Likely",
+     "instruction": "Take the necessary actions to protect flood-prone property. If travel is required, do not drive around barricades or through water of unknown depth.",
+     "senderName": "NWS San Diego CA",
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.93e62e512da3b44f42078b65a2b48598e0ef00f2.001.1"
     }
    },
    {
@@ -17575,13 +17419,229 @@
      "t": "2026-10-24T03:00:00.000Z",
      "expires": "2026-10-24T15:00:00.000Z",
      "until": "October 24 at 8:00AM PDT",
-     "headline": "Lake Wind Advisory issued October 22 at 1:58PM PDT until October 24 at 8:00AM PDT by NWS Reno NV",
+     "headline": "Lake Wind Advisory issued October 23 at 11:49AM PDT until October 24 at 8:00AM PDT by NWS Reno NV",
      "areaDesc": "Greater Lake Tahoe Area; Greater Lake Tahoe Area",
      "urgency": "Expected",
      "certainty": "Likely",
      "instruction": "Check lake conditions before heading out and be prepared for a sudden increase in winds and wave heights. Consider postponing boating activities on the lake until a day with less wind.",
      "senderName": "NWS Reno NV",
-     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.142c149b5e03df590c0ae4718cb9fdb09d11b3fe.001.1"
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.65d35071bfd1ce0c98cfb293015e70743ddfa8fe.001.1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -115.735,
+      35.809
+     ]
+    },
+    "properties": {
+     "kind": "Wind Advisory",
+     "event": "Wind Advisory",
+     "heading": "Wind Advisory, Death Valley National Park",
+     "severity": "Moderate",
+     "v": 2,
+     "t": "2026-10-24T06:00:00.000Z",
+     "expires": "2026-10-24T18:00:00.000Z",
+     "until": "October 24 at 11:00AM PDT",
+     "headline": "Wind Advisory issued October 23 at 10:51AM PDT until October 24 at 11:00AM PDT by NWS Las Vegas NV",
+     "areaDesc": "Death Valley National Park",
+     "urgency": "Expected",
+     "certainty": "Likely",
+     "instruction": "Winds this strong can make driving difficult, especially for high profile vehicles. Use extra caution.\n\nSecure outdoor objects.",
+     "senderName": "NWS Las Vegas NV",
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.f1a838e1c5caef3d2dfbe6048f1dea2e61ed63ef.001.1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -117.73,
+      33.48
+     ]
+    },
+    "properties": {
+     "kind": "Flood Advisory",
+     "event": "Flood Advisory",
+     "heading": "Flood Advisory, Orange, CA",
+     "severity": "Minor",
+     "v": 1,
+     "t": "2026-10-24T02:28:00.000Z",
+     "expires": "2026-10-24T04:30:00.000Z",
+     "until": "October 23 at 9:30PM PDT",
+     "headline": "Flood Advisory issued October 23 at 7:28PM PDT until October 23 at 9:30PM PDT by NWS San Diego CA",
+     "areaDesc": "Orange, CA",
+     "urgency": "Expected",
+     "certainty": "Likely",
+     "instruction": "Turn around, don't drown when encountering flooded roads. Most flood deaths occur in vehicles.\n\nBe especially cautious at night when it is harder to recognize the dangers of flooding.",
+     "senderName": "NWS San Diego CA",
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.1f15692958eba9a2a8cf830c05c9c9749620ea83.001.1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -124.22,
+      40.688
+     ]
+    },
+    "properties": {
+     "kind": "Frost Advisory",
+     "event": "Frost Advisory",
+     "heading": "Frost Advisory, Coastal Del Norte and Northern Coastal Humboldt",
+     "severity": "Minor",
+     "v": 1,
+     "t": "2026-10-24T08:00:00.000Z",
+     "expires": "2026-10-24T16:00:00.000Z",
+     "until": "October 24 at 9:00AM PDT",
+     "headline": "Frost Advisory issued October 23 at 6:16PM PDT until October 24 at 9:00AM PDT by NWS Eureka CA",
+     "areaDesc": "Coastal Del Norte; Northern Coastal Humboldt",
+     "urgency": "Expected",
+     "certainty": "Likely",
+     "instruction": "Take steps now to protect tender plants from the cold.",
+     "senderName": "NWS Eureka CA",
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.2a24f382f751542a4aab0ce60a9e0c46355730e3.002.1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -123.403,
+      41.174
+     ]
+    },
+    "properties": {
+     "kind": "Frost Advisory",
+     "event": "Frost Advisory",
+     "heading": "Frost Advisory, Interior Del Norte, Southwestern Humboldt and 2 more",
+     "severity": "Minor",
+     "v": 1,
+     "t": "2026-10-24T08:00:00.000Z",
+     "expires": "2026-10-24T16:00:00.000Z",
+     "until": "October 24 at 9:00AM PDT",
+     "headline": "Frost Advisory issued October 23 at 6:16PM PDT until October 24 at 9:00AM PDT by NWS Eureka CA",
+     "areaDesc": "Interior Del Norte; Southwestern Humboldt; Northeastern Interior Humboldt; Southeastern Interior Humboldt",
+     "urgency": "Expected",
+     "certainty": "Likely",
+     "instruction": "Take steps now to protect tender plants from the cold.",
+     "senderName": "NWS Eureka CA",
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.2a24f382f751542a4aab0ce60a9e0c46355730e3.003.1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -123.643,
+      38.844
+     ]
+    },
+    "properties": {
+     "kind": "Frost Advisory",
+     "event": "Frost Advisory",
+     "heading": "Frost Advisory, Coastal Mendocino and Southwestern Interior Mendocino",
+     "severity": "Minor",
+     "v": 1,
+     "t": "2026-10-24T08:00:00.000Z",
+     "expires": "2026-10-24T16:00:00.000Z",
+     "until": "October 24 at 9:00AM PDT",
+     "headline": "Frost Advisory issued October 23 at 6:16PM PDT until October 24 at 9:00AM PDT by NWS Eureka CA",
+     "areaDesc": "Coastal Mendocino; Southwestern Interior Mendocino",
+     "urgency": "Expected",
+     "certainty": "Likely",
+     "instruction": "Take steps now to protect tender plants from the cold.",
+     "senderName": "NWS Eureka CA",
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.2a24f382f751542a4aab0ce60a9e0c46355730e3.004.1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -121.453,
+      35.875
+     ]
+    },
+    "properties": {
+     "kind": "Coastal Flood Advisory",
+     "event": "Coastal Flood Advisory",
+     "heading": "Coastal Flood Advisory, San Francisco, North Bay Interior Valleys and 3 more",
+     "severity": "Minor",
+     "v": 1,
+     "t": "2026-10-24T15:00:00.000Z",
+     "expires": "2026-10-29T22:00:00.000Z",
+     "until": "October 29 at 3:00PM PDT",
+     "headline": "Coastal Flood Advisory issued October 23 at 12:45PM PDT until October 29 at 3:00PM PDT by NWS San Francisco CA",
+     "areaDesc": "San Francisco; North Bay Interior Valleys; San Francisco Bay Shoreline; Northern Monterey Bay; Southern Monterey Bay and Big Sur Coast",
+     "urgency": "Expected",
+     "certainty": "Likely",
+     "instruction": "If travel is required, allow extra time as some roads may be closed. Do not drive around barricades or through water of unknown depth. Take the necessary actions to protect flood-prone property.",
+     "senderName": "NWS San Francisco CA",
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.c9f54b250a8067122e1e777ced22b42550c82a6f.001.1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -118.181,
+      33.76
+     ]
+    },
+    "properties": {
+     "kind": "Coastal Flood Advisory",
+     "event": "Coastal Flood Advisory",
+     "heading": "Coastal Flood Advisory, San Luis Obispo County Beaches, Santa Barbara County Central Coast Beaches and 5 more",
+     "severity": "Minor",
+     "v": 1,
+     "t": "2026-10-25T12:00:00.000Z",
+     "expires": "2026-10-29T20:00:00.000Z",
+     "until": "October 29 at 1:00PM PDT",
+     "headline": "Coastal Flood Advisory issued October 23 at 12:25PM PDT until October 29 at 1:00PM PDT by NWS Los Angeles/Oxnard CA",
+     "areaDesc": "San Luis Obispo County Beaches; Santa Barbara County Central Coast Beaches; Santa Barbara County Southwestern Coast; Santa Barbara County Southeastern Coast; Ventura County Beaches; Malibu Coast; Los Angeles County Beaches",
+     "urgency": "Expected",
+     "certainty": "Likely",
+     "instruction": "Take the necessary actions to protect flood-prone property. Do NOT drive around barricades or through water of unknown depth.",
+     "senderName": "NWS Los Angeles/Oxnard CA",
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.4ee98ae8dafa735d3ccd8da78675ab20eed54ae0.001.1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -122.337,
+      37.109
+     ]
+    },
+    "properties": {
+     "kind": "Coastal Flood Advisory",
+     "event": "Coastal Flood Advisory",
+     "heading": "Coastal Flood Advisory, Coastal North Bay Including Point Reyes National Seashore and San Francisco Peninsula Coast",
+     "severity": "Minor",
+     "v": 1,
+     "t": "2026-10-26T16:00:00.000Z",
+     "expires": "2026-10-29T22:00:00.000Z",
+     "until": "October 29 at 3:00PM PDT",
+     "headline": "Coastal Flood Advisory issued October 23 at 12:45PM PDT until October 29 at 3:00PM PDT by NWS San Francisco CA",
+     "areaDesc": "Coastal North Bay Including Point Reyes National Seashore; San Francisco Peninsula Coast",
+     "urgency": "Expected",
+     "certainty": "Likely",
+     "instruction": "If travel is required, allow extra time as some roads may be closed. Do not drive around barricades or through water of unknown depth. Take the necessary actions to protect flood-prone property.",
+     "senderName": "NWS San Francisco CA",
+     "url": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.c9f54b250a8067122e1e777ced22b42550c82a6f.002.1"
     }
    }
   ]
@@ -17609,20 +17669,20 @@
      "name": "Forecast at the asked place, near Springdale, UT (37.30°N 113.03°W)",
      "kind": "here",
      "source": "nws",
-     "t": "2026-10-24T02:00:00.000Z",
-     "v": 45,
-     "tempF": 45,
+     "t": "2026-10-24T03:00:00.000Z",
+     "v": 43,
+     "tempF": 43,
      "precipChance": 1,
      "precipIn": 0,
-     "windMph": 3.5,
-     "gustMph": 8.1,
+     "windMph": 9.2,
+     "gustMph": 15,
      "skyPct": 4,
-     "windFrom": "north-northeast (20°)",
+     "windFrom": "north-northeast (30°)",
      "sky": "Clear",
      "timeZone": "America/Denver",
      "issued": "12:31 PM MDT",
      "days": [
-      "Fri, Oct 23: rest of day high 45 °F, low 41 °F; 1% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 15 mph; clear",
+      "Fri, Oct 23: rest of day high 43 °F, low 41 °F; 1% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 15 mph; clear",
       "Sat, Oct 24: high 52 °F, low 37 °F; 49% chance of rain or snow, 0.18 in; wind to 15 mph, gusts 17 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
       "Sun, Oct 25: high 53 °F, low 40 °F; 13% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 12 mph; partly cloudy",
       "Mon, Oct 26: high 58 °F, low 39 °F; 0% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 15 mph; mostly clear",
@@ -17631,7 +17691,7 @@
       "Thu, Oct 29: high 57 °F, low 44 °F; 23% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 15 mph; partly cloudy, Slight chance of light rain",
       "Fri, Oct 30: high 54 °F, low 45 °F; 31% chance of rain or snow, 0.24 in; wind to 9 mph, gusts 15 mph; partly cloudy, Chance of light rain"
      ],
-     "today": "Fri, Oct 23: rest of day high 45 °F, low 41 °F; 1% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 15 mph; clear",
+     "today": "Fri, Oct 23: rest of day high 43 °F, low 41 °F; 1% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 15 mph; clear",
      "tomorrow": "Sat, Oct 24: high 52 °F, low 37 °F; 49% chance of rain or snow, 0.18 in; wind to 15 mph, gusts 17 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
      "saturday": "Sat, Oct 24: high 52 °F, low 37 °F; 49% chance of rain or snow, 0.18 in; wind to 15 mph, gusts 17 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
      "sunday": "Sun, Oct 25: high 53 °F, low 40 °F; 13% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 12 mph; partly cloudy",
@@ -17657,20 +17717,20 @@
      "name": "Forecast near Virgin, UT (37.20°N 113.11°W)",
      "kind": "area",
      "source": "nws",
-     "t": "2026-10-24T02:00:00.000Z",
-     "v": 56,
-     "tempF": 56,
+     "t": "2026-10-24T03:00:00.000Z",
+     "v": 54,
+     "tempF": 54,
      "precipChance": 1,
      "precipIn": 0,
-     "windMph": 3.5,
-     "gustMph": 6.9,
-     "skyPct": 3,
-     "windFrom": "north (0°)",
+     "windMph": 10.4,
+     "gustMph": 13.8,
+     "skyPct": 4,
+     "windFrom": "northeast (50°)",
      "sky": "Clear",
      "timeZone": "America/Denver",
      "issued": "12:31 PM MDT",
      "days": [
-      "Fri, Oct 23: rest of day high 56 °F, low 51 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 14 mph; clear",
+      "Fri, Oct 23: rest of day high 54 °F, low 51 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 14 mph; clear",
       "Sat, Oct 24: high 62 °F, low 45 °F; 35% chance of rain or snow, 0.06 in; wind to 10 mph, gusts 15 mph; partly cloudy, Chance of light rain showers; Slight chance of thunderstorms",
       "Sun, Oct 25: high 63 °F, low 46 °F; 9% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 12 mph; mostly clear",
       "Mon, Oct 26: high 67 °F, low 46 °F; 0% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 17 mph; mostly clear",
@@ -17679,7 +17739,7 @@
       "Thu, Oct 29: high 67 °F, low 50 °F; 19% chance of rain or snow, 0.00 in; wind to 13 mph, gusts 16 mph; partly cloudy, Slight chance of light rain",
       "Fri, Oct 30: high 64 °F, low 52 °F; 31% chance of rain or snow, 0.24 in; wind to 13 mph, gusts 18 mph; partly cloudy, Chance of light rain"
      ],
-     "today": "Fri, Oct 23: rest of day high 56 °F, low 51 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 14 mph; clear",
+     "today": "Fri, Oct 23: rest of day high 54 °F, low 51 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 14 mph; clear",
      "tomorrow": "Sat, Oct 24: high 62 °F, low 45 °F; 35% chance of rain or snow, 0.06 in; wind to 10 mph, gusts 15 mph; partly cloudy, Chance of light rain showers; Slight chance of thunderstorms",
      "saturday": "Sat, Oct 24: high 62 °F, low 45 °F; 35% chance of rain or snow, 0.06 in; wind to 10 mph, gusts 15 mph; partly cloudy, Chance of light rain showers; Slight chance of thunderstorms",
      "sunday": "Sun, Oct 25: high 63 °F, low 46 °F; 9% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 12 mph; mostly clear"
@@ -17698,20 +17758,20 @@
      "name": "Forecast near Springdale, UT (37.20°N 112.94°W)",
      "kind": "area",
      "source": "nws",
-     "t": "2026-10-24T02:00:00.000Z",
-     "v": 50,
-     "tempF": 50,
+     "t": "2026-10-24T03:00:00.000Z",
+     "v": 48,
+     "tempF": 48,
      "precipChance": 1,
      "precipIn": 0,
-     "windMph": 2.3,
-     "gustMph": 6.9,
-     "skyPct": 3,
-     "windFrom": "north (10°)",
+     "windMph": 10.4,
+     "gustMph": 15,
+     "skyPct": 4,
+     "windFrom": "northeast (40°)",
      "sky": "Clear",
      "timeZone": "America/Denver",
      "issued": "12:31 PM MDT",
      "days": [
-      "Fri, Oct 23: rest of day high 50 °F, low 46 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; clear",
+      "Fri, Oct 23: rest of day high 48 °F, low 46 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; clear",
       "Sat, Oct 24: high 57 °F, low 41 °F; 47% chance of rain or snow, 0.30 in; wind to 13 mph, gusts 16 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
       "Sun, Oct 25: high 58 °F, low 43 °F; 13% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 12 mph; partly cloudy",
       "Mon, Oct 26: high 63 °F, low 42 °F; 0% chance of rain or snow, 0.00 in; wind to 14 mph, gusts 16 mph; mostly clear",
@@ -17720,7 +17780,7 @@
       "Thu, Oct 29: high 62 °F, low 46 °F; 26% chance of rain or snow, 0.00 in; wind to 14 mph, gusts 16 mph; partly cloudy, Chance of light rain",
       "Fri, Oct 30: high 59 °F, low 48 °F; 34% chance of rain or snow, 0.24 in; wind to 14 mph, gusts 17 mph; partly cloudy, Chance of light rain"
      ],
-     "today": "Fri, Oct 23: rest of day high 50 °F, low 46 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; clear",
+     "today": "Fri, Oct 23: rest of day high 48 °F, low 46 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; clear",
      "tomorrow": "Sat, Oct 24: high 57 °F, low 41 °F; 47% chance of rain or snow, 0.30 in; wind to 13 mph, gusts 16 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
      "saturday": "Sat, Oct 24: high 57 °F, low 41 °F; 47% chance of rain or snow, 0.30 in; wind to 13 mph, gusts 16 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
      "sunday": "Sun, Oct 25: high 58 °F, low 43 °F; 13% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 12 mph; partly cloudy"
@@ -17739,14 +17799,14 @@
      "name": "Forecast near Toquerville, UT (37.40°N 113.11°W)",
      "kind": "area",
      "source": "nws",
-     "t": "2026-10-24T02:00:00.000Z",
+     "t": "2026-10-24T03:00:00.000Z",
      "v": 43,
      "tempF": 43,
      "precipChance": 1,
      "precipIn": 0,
-     "windMph": 3.5,
-     "gustMph": 10.4,
-     "skyPct": 7,
+     "windMph": 10.4,
+     "gustMph": 18.4,
+     "skyPct": 5,
      "windFrom": "northeast (50°)",
      "sky": "Clear",
      "timeZone": "America/Denver",
@@ -17780,20 +17840,20 @@
      "name": "Forecast near Springdale, UT (37.40°N 112.94°W)",
      "kind": "area",
      "source": "nws",
-     "t": "2026-10-24T02:00:00.000Z",
-     "v": 43,
-     "tempF": 43,
+     "t": "2026-10-24T03:00:00.000Z",
+     "v": 41,
+     "tempF": 41,
      "precipChance": 1,
      "precipIn": 0,
-     "windMph": 2.3,
-     "gustMph": 6.9,
-     "skyPct": 8,
-     "windFrom": "north (10°)",
+     "windMph": 6.9,
+     "gustMph": 12.7,
+     "skyPct": 5,
+     "windFrom": "north (0°)",
      "sky": "Clear",
      "timeZone": "America/Denver",
      "issued": "12:31 PM MDT",
      "days": [
-      "Fri, Oct 23: rest of day high 43 °F, low 40 °F; 1% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 13 mph; clear",
+      "Fri, Oct 23: rest of day high 41 °F, low 40 °F; 1% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 13 mph; clear",
       "Sat, Oct 24: high 54 °F, low 37 °F; 56% chance of rain or snow, 0.18 in; wind to 9 mph, gusts 17 mph; mostly cloudy, Chance of light rain",
       "Sun, Oct 25: high 54 °F, low 38 °F; 20% chance of rain or snow, 0.00 in; wind to 4 mph, gusts 8 mph; partly cloudy, Slight chance of light rain",
       "Mon, Oct 26: high 58 °F, low 37 °F; 0% chance of rain or snow, 0.00 in; wind to 5 mph, gusts 12 mph; mostly clear",
@@ -17802,7 +17862,7 @@
       "Thu, Oct 29: high 57 °F, low 43 °F; 23% chance of rain or snow, 0.00 in; wind to 5 mph, gusts 13 mph; mostly cloudy, Slight chance of light rain",
       "Fri, Oct 30: high 54 °F, low 44 °F; 32% chance of rain or snow, 0.24 in; wind to 4 mph, gusts 10 mph; partly cloudy, Chance of light rain"
      ],
-     "today": "Fri, Oct 23: rest of day high 43 °F, low 40 °F; 1% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 13 mph; clear",
+     "today": "Fri, Oct 23: rest of day high 41 °F, low 40 °F; 1% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 13 mph; clear",
      "tomorrow": "Sat, Oct 24: high 54 °F, low 37 °F; 56% chance of rain or snow, 0.18 in; wind to 9 mph, gusts 17 mph; mostly cloudy, Chance of light rain",
      "saturday": "Sat, Oct 24: high 54 °F, low 37 °F; 56% chance of rain or snow, 0.18 in; wind to 9 mph, gusts 17 mph; mostly cloudy, Chance of light rain",
      "sunday": "Sun, Oct 25: high 54 °F, low 38 °F; 20% chance of rain or snow, 0.00 in; wind to 4 mph, gusts 8 mph; partly cloudy, Slight chance of light rain"
@@ -17812,7 +17872,7 @@
  },
  "wikipedia-nearby": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    18.4,
    -34,
@@ -18037,7 +18097,7 @@
  },
  "wilderness": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -110,
    42.7,
@@ -18109,7 +18169,7 @@
  },
  "wind-flow": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -120.5,
    37,
@@ -18129,12 +18189,12 @@
     "properties": {
      "name": "37.00°N 120.50°W",
      "node": 0,
-     "east": 1.04,
-     "north": -1.29,
-     "speed": 1.66,
-     "tempC": 15.3,
-     "speedMph": 3.7,
-     "from": "northwest (321°)"
+     "east": 2.69,
+     "north": -0.05,
+     "speed": 2.69,
+     "tempC": 15.2,
+     "speedMph": 6,
+     "from": "west (271°)"
     }
    },
    {
@@ -18149,12 +18209,12 @@
     "properties": {
      "name": "37.00°N 120.38°W",
      "node": 1,
-     "east": 2.7,
-     "north": -1.69,
-     "speed": 3.18,
-     "tempC": 16.3,
-     "speedMph": 7.1,
-     "from": "west-northwest (302°)"
+     "east": 2.4,
+     "north": 0.29,
+     "speed": 2.42,
+     "tempC": 15.3,
+     "speedMph": 5.4,
+     "from": "west (263°)"
     }
    },
    {
@@ -18169,12 +18229,12 @@
     "properties": {
      "name": "37.00°N 120.26°W",
      "node": 2,
-     "east": 3.07,
-     "north": -2.31,
-     "speed": 3.84,
-     "tempC": 16.4,
-     "speedMph": 8.6,
-     "from": "northwest (307°)"
+     "east": 2.52,
+     "north": 0.63,
+     "speed": 2.6,
+     "tempC": 14.9,
+     "speedMph": 5.8,
+     "from": "west-southwest (256°)"
     }
    },
    {
@@ -18189,12 +18249,12 @@
     "properties": {
      "name": "37.00°N 120.15°W",
      "node": 3,
-     "east": 1.5,
-     "north": -1.78,
-     "speed": 2.33,
-     "tempC": 16.1,
-     "speedMph": 5.2,
-     "from": "northwest (320°)"
+     "east": 2.67,
+     "north": 0.87,
+     "speed": 2.81,
+     "tempC": 14.7,
+     "speedMph": 6.3,
+     "from": "west-southwest (252°)"
     }
    },
    {
@@ -18209,12 +18269,12 @@
     "properties": {
      "name": "37.00°N 120.03°W",
      "node": 4,
-     "east": 1.78,
-     "north": -2.12,
-     "speed": 2.77,
-     "tempC": 15.8,
-     "speedMph": 6.2,
-     "from": "northwest (320°)"
+     "east": 2.56,
+     "north": 0.93,
+     "speed": 2.72,
+     "tempC": 15.4,
+     "speedMph": 6.1,
+     "from": "west-southwest (250°)"
     }
    },
    {
@@ -18229,12 +18289,12 @@
     "properties": {
      "name": "37.00°N 119.91°W",
      "node": 5,
-     "east": 2.08,
-     "north": -1.75,
-     "speed": 2.72,
+     "east": 2.51,
+     "north": 1.12,
+     "speed": 2.75,
      "tempC": 15.7,
-     "speedMph": 6.1,
-     "from": "northwest (310°)"
+     "speedMph": 6.2,
+     "from": "west-southwest (246°)"
     }
    },
    {
@@ -18249,12 +18309,12 @@
     "properties": {
      "name": "37.00°N 119.79°W",
      "node": 6,
-     "east": 2.38,
-     "north": -1.67,
-     "speed": 2.91,
-     "tempC": 15.6,
-     "speedMph": 6.5,
-     "from": "northwest (305°)"
+     "east": 1.92,
+     "north": 0.98,
+     "speed": 2.16,
+     "tempC": 15.8,
+     "speedMph": 4.8,
+     "from": "west-southwest (243°)"
     }
    },
    {
@@ -18269,12 +18329,12 @@
     "properties": {
      "name": "37.00°N 119.68°W",
      "node": 7,
-     "east": 1.67,
-     "north": -0.93,
-     "speed": 1.91,
-     "tempC": 15,
-     "speedMph": 4.3,
-     "from": "west-northwest (299°)"
+     "east": 0.24,
+     "north": -0.14,
+     "speed": 0.28,
+     "tempC": 15.7,
+     "speedMph": 0.6,
+     "from": "west-northwest (300°)"
     }
    },
    {
@@ -18289,12 +18349,12 @@
     "properties": {
      "name": "37.00°N 119.56°W",
      "node": 8,
-     "east": 2.76,
-     "north": -1.17,
-     "speed": 3,
-     "tempC": 14,
-     "speedMph": 6.7,
-     "from": "west-northwest (293°)"
+     "east": 1.67,
+     "north": -0.93,
+     "speed": 1.91,
+     "tempC": 13.9,
+     "speedMph": 4.3,
+     "from": "west-northwest (299°)"
     }
    },
    {
@@ -18309,12 +18369,12 @@
     "properties": {
      "name": "37.00°N 119.44°W",
      "node": 9,
-     "east": 1.95,
-     "north": -0.87,
-     "speed": 2.14,
-     "tempC": 12.2,
-     "speedMph": 4.8,
-     "from": "west-northwest (294°)"
+     "east": 2.08,
+     "north": -1.35,
+     "speed": 2.48,
+     "tempC": 11.5,
+     "speedMph": 5.5,
+     "from": "west-northwest (303°)"
     }
    },
    {
@@ -18329,12 +18389,12 @@
     "properties": {
      "name": "37.00°N 119.32°W",
      "node": 10,
-     "east": 1.36,
-     "north": 0.34,
-     "speed": 1.4,
-     "tempC": 13.2,
-     "speedMph": 3.1,
-     "from": "west-southwest (256°)"
+     "east": -1.26,
+     "north": 1.45,
+     "speed": 1.92,
+     "tempC": 12.1,
+     "speedMph": 4.3,
+     "from": "southeast (139°)"
     }
    },
    {
@@ -18349,19 +18409,19 @@
     "properties": {
      "name": "37.00°N 119.21°W",
      "node": 11,
-     "east": 0.98,
-     "north": 1.05,
-     "speed": 1.44,
-     "tempC": 9.3,
-     "speedMph": 3.2,
-     "from": "southwest (223°)"
+     "east": -1.32,
+     "north": 1.23,
+     "speed": 1.8,
+     "tempC": 8.6,
+     "speedMph": 4,
+     "from": "southeast (133°)"
     }
    }
   ]
  },
  "wolf-packs": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -124.862,
    45.544,

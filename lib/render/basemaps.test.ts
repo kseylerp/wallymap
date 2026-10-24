@@ -80,3 +80,19 @@ describe("the data-only basemap (spec §13)", () => {
     expect(preferredBasemap(layer(200), { visible: true, mode: "lines" })).toBe("data-only");
   });
 });
+
+describe("a colored map's basemap", () => {
+  it("leaves imagery for Topographical, unless the layer is read on imagery (burn severity in burn scars)", async () => {
+    const { choroplethBasemap } = await import("@/lib/render/views");
+    const severity = {
+      id: "burn-severity",
+      title: "Burn severity",
+      style: { geometry: "polygon", color: "#F57272" },
+      legend: { kind: "categories", title: "Severity", items: [{ label: "Low", color: "#9FB693" }, { label: "Moderate", color: "#F57272" }, { label: "High", color: "#6E5BFF" }] },
+      result: { kind: "tiles", data: { url: "u", minzoom: 0, maxzoom: 12, format: "raster" }, citation: { source: "s", url: "u", retrieved: "r" } },
+      receivedAt: "now",
+    } as unknown as LoadedLayer;
+    expect(choroplethBasemap(severity, "outdoors-satellite")).toBe("outdoors");
+    expect(choroplethBasemap({ ...severity, style: { ...severity.style, keepImagery: true } }, "outdoors-satellite")).toBeUndefined();
+  });
+});

@@ -224,6 +224,7 @@ export function isChoropleth(layer: LoadedLayer): boolean {
 /** The basemap a choropleth answer opens on when the map is on imagery: its own preference, else Topographical. */
 export function choroplethBasemap(layer: LoadedLayer, current: Basemap): Basemap | undefined {
   if (current !== "satellite" && current !== "outdoors-satellite") return undefined;
+  if (layer.style.keepImagery) return undefined;
   return isChoropleth(layer) ? (layer.style.basemap ?? "outdoors") : undefined;
 }
 

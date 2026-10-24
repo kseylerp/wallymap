@@ -303,6 +303,11 @@ export type StyleHints = {
    */
   basemap?: "data-only" | "outdoors";
   /**
+   * A class map read on satellite imagery (burn severity inside burn scars, spec T05: "Satellite imagery for change,
+   * burn scars and crags"): its first draw does not move the map off imagery the way other colored maps do.
+   */
+  keepImagery?: boolean;
+  /**
    * The points sample the view rather than answer it (the weather forecast at the asked place and across it): when
    * another layer answers the same question they never frame the camera and draw under its symbols, so the answer stays
    * the primary visual (Bishop's boulders, 2026-10-23, were framed out of the view for the forecast point at Chalfant).

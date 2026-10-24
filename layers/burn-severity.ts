@@ -105,7 +105,8 @@ const burnSeverity = defineLayer({
   maxAreaKm2: Number.POSITIVE_INFINITY,
   input: inputSchema,
   // Colored by the rendering rule in the palette's own ramp: drawn as served, slightly see-through over the relief.
-  style: { geometry: "polygon", color: layerColor("burn-severity"), raster: { saturation: 0, opacity: 0.85, swatch: PINK } },
+  // Burn scars read on satellite imagery (spec T05), so the severity classes keep it under them.
+  style: { geometry: "polygon", color: layerColor("burn-severity"), raster: { saturation: 0, opacity: 0.85, swatch: PINK }, keepImagery: true },
   legend: LEGEND,
   time: { shape: "continuous", step: "year" },
   card: { facts: [{ key: "severity", label: "Burn severity" }, { key: "meaning", label: "What it means" }, { key: "year", label: "Fire year" }] },

@@ -380,7 +380,8 @@ export const TOP10: Top10Expect[] = [
     question: "Research-grade moose sightings near Jackson Hole in the last year, by month",
     layers: ["species|gbif-occurrences"], main: "species|gbif-occurrences", view: ["density", "timeline"], basemap: OUTDOOR,
     inputs: [{ layer: "species", key: "taxon", match: "moose|alces" }],
-    filters: [{ layer: "species|gbif-occurrences", key: "month", labels: [] }],
+    // "By month" is the sightings over the months (timeline view, time panel), not a filter: keeping some months would
+    // hide sightings the question asks for, and keeping all twelve filters nothing.
     timePanel: true, legend: ["per cell|sighting"], card: ["Scientific name", "Seen on"],
     facts: [{ what: "how many sightings", re: /\b\d[\d,]*\s+(?:research[- ]grade\s+)?(?:moose\s+)?(?:sightings|observations|records)/i }, { what: "busiest months", re: MONTH }, { what: "where most were seen", re: /near|around|valley|river|park|creek/i }],
     needs: ["a month chart (sightings per month) beside the map"],

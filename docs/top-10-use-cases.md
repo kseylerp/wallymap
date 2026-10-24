@@ -723,7 +723,8 @@ grade".
   this week?", "How many tortoise records fall inside the habitat?".
 
 **Acceptance tests.**
-- T07.1: `species` (taxon moose) or GBIF; a Month filter; density or timeline view; time panel open; legend per
+- T07.1: `species` (taxon moose) or GBIF; density or timeline view; time panel open (no Month filter: "by month" asks
+  for every month, so a filter would hide sightings or filter nothing); legend per
   cell or sighting; card Scientific name, Seen on; note gives the count, months and where.
 - T07.2: sightings with days ≤ 31; card Scientific name, Seen on; note gives a count and dates.
 - T07.3: `critical-habitat` and sightings; card Species, Listed as, Designation; legend "Listed as"; note

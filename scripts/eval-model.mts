@@ -1016,7 +1016,7 @@ function loadRun(dir: string, raw: string): Run | undefined {
 }
 
 /** Runs (or replays) one question and evaluates it; a thrown run is a failure line. */
-async function question(raw: string, opts: { save?: string; replay?: string }): Promise<Evaluated | Outcome> {
+export async function question(raw: string, opts: { save?: string; replay?: string }): Promise<Evaluated | Outcome> {
   const started = Date.now();
   try {
     const saved = opts.replay ? loadRun(opts.replay, raw) : undefined;

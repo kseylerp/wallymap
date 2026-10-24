@@ -338,14 +338,40 @@ const monuments = defineLayer({
         : null,
     ]);
 
+    // A monument is answered whole, never the pieces a small box touches: "Bears Ears" geocoded to the buttes' 10 km box
+    // returned 4 of the current outline's 16 parts (251 km² of 488). The pieces of each monument found are asked again by
+    // name over a box 2° wider each way.
+    const whole = async (result: typeof current, url: string, field: string, extra: string | undefined, suffix: string) => {
+      if (result === null || !result.ok || wide) return result;
+      const names = [...new Set(result.fc.features.map((f) => str(f.properties?.[field])).filter((n): n is string => n !== undefined))];
+      if (names.length === 0 || names.length > 20) return result;
+      const list = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(",");
+      const [w, s, e, n] = ctx.bbox;
+      const again = await arcgisQuery(ctx, url, {
+        outFields: field === "NAME" ? ["NAME", "NLCS_TYPE", "ADMIN_ST"] : ["NCA_NAME", "Label", "sma_code", "STATE_ADMN", "STATE_GEOG", "NLCS_ID"],
+        where: `${field} IN (${list})${extra ? ` AND ${extra}` : ""}`,
+        bbox: [Math.max(-180, w - 2), Math.max(-90, s - 2), Math.min(180, e + 2), Math.min(90, n + 2)],
+        maxAllowableOffset: offset,
+        ttlSeconds: TTL_SECONDS,
+        cacheSuffix: `${suffix}:whole:${names.join("|")}`,
+      });
+      return again.ok && again.fc.features.length >= result.fc.features.length ? again : result;
+    };
+    const [currentWhole, historicWhole] = await Promise.all([
+      whole(current, CURRENT_URL, "NCA_NAME", undefined, "monuments:current"),
+      whole(historic, HISTORIC_URL, "NAME", "NLCS_TYPE = 'National Monument'", "monuments:2021"),
+    ]);
+
     const features: Feature<Geometry>[] = [];
     const notes: string[] = [];
     const failures: string[] = [];
-    if (current !== null) {
+    if (currentWhole !== null) {
+      const current = currentWhole;
       if (current.ok) features.push(...normalizeCurrent(current.fc));
       else failures.push(`current boundaries (${current.error})`);
     }
-    if (historic !== null) {
+    if (historicWhole !== null) {
+      const historic = historicWhole;
       if (historic.ok) features.push(...normalizeHistoric(historic.fc));
       else failures.push(`2021 boundaries (${historic.error})`);
     }

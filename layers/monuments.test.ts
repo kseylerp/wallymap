@@ -136,7 +136,11 @@ describe("monuments layer", () => {
     expect(r.coverageNote).toBe("Two outlines: the 2021 boundary of the Utah monuments and the current BLM boundary");
 
     const calls = stub.mock.calls as unknown as [string, { cacheKey?: string; ttlSeconds?: number }][];
-    expect(calls).toHaveLength(2);
+    // Each service once on the box, then once more for the whole of each monument found, by name.
+    expect(calls).toHaveLength(4);
+    const byName = calls.filter((c) => /\bIN \(/.test(new URL(c[0]).searchParams.get("where") ?? ""));
+    expect(byName).toHaveLength(2);
+    expect(new URL(byName.find((c) => c[0].startsWith(CURRENT_URL))?.[0] ?? "").searchParams.get("where")).toMatch(/^NCA_NAME IN \('/);
     const historicCall = calls.find((c) => c[0].startsWith(HISTORIC_URL));
     expect(new URL(historicCall?.[0] ?? "").searchParams.get("where")).toBe("NLCS_TYPE = 'National Monument'");
     expect(new URL(historicCall?.[0] ?? "").searchParams.get("maxAllowableOffset")).toBe("0.007");
@@ -149,7 +153,7 @@ describe("monuments layer", () => {
     const onlyNow = upstream();
     const now = geojson(await layer.query(ctx(onlyNow), { version: "current" }));
     expect(now.data.features.every((f) => f.properties?.kind === "current")).toBe(true);
-    expect(onlyNow).toHaveBeenCalledTimes(1);
+    expect(onlyNow).toHaveBeenCalledTimes(2);
     expect(now.coverageNote).toBeUndefined();
 
     const onlyThen = upstream();

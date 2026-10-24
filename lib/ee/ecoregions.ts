@@ -50,8 +50,10 @@ export function regionsExpression(scheme: Scheme, bbox: BBox): EeNode {
   const t = TABLES[scheme];
   const rect = rectangle(bbox);
   const [w, s, e, n] = bbox;
-  const dx = (e - w) / 4;
-  const dy = (n - s) / 4;
+  // A box's own width past each side: the camera adds padding and a screen is wider than the box, and a quarter still
+  // left the clip's edges on screen.
+  const dx = e - w;
+  const dy = n - s;
   const wideRect = rectangle([Math.max(-180, w - dx), Math.max(-85, s - dy), Math.min(180, e + dx), Math.min(85, n + dy)]);
   const tol = tolerance(bbox);
   const touching = call("Collection.filter", {
@@ -62,7 +64,7 @@ export function regionsExpression(scheme: Scheme, bbox: BBox): EeNode {
     collection: touching,
     baseAlgorithm: lambda((f) => {
       const clipped = call("Geometry.intersection", { left: call("Feature.geometry", { feature: f }), right: rect, maxError: margin(tol) });
-      // Drawn past the box (a quarter of it each way), so the outlines never trace the box's own edges as a thick frame
+      // Drawn past the box (its own width each way), so the outlines never trace the box's own edges as a thick frame
       // around the view (the Smokies' answer was boxed in black); the share is still measured inside the box.
       const drawn = call("Geometry.intersection", { left: call("Feature.geometry", { feature: f }), right: wideRect, maxError: margin(tol) });
       let out = call("Feature", { geometry: call("Geometry.simplify", { geometry: drawn, maxError: margin(tol) }) });

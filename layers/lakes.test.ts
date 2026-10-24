@@ -526,7 +526,7 @@ describe("mean depth, depth labels and a namesake elsewhere", () => {
     expect(r.data.features).toHaveLength(1);
     expect(r.coverageNote).toBe(
       "0 of 1 lakes have a recorded maximum depth; Wikidata lists a larger Lake Tahoe elsewhere, at 39.083, -120.033: maximum depth 1,644 ft (501 m), " +
-        "area 194 mi² (502 km²). The lakes here may be a namesake: geocode that lake again with its state or country and ask again",
+        "area 194 mi² (502 km²). This box is not where that lake is: geocode Lake Tahoe again with its state or country and query it there",
     );
     // Its own cache entry, so the box's cached answer is not handed back.
     const calls = stub.mock.calls as unknown as [string, { cacheKey?: string }][];

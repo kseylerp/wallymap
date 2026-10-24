@@ -818,7 +818,7 @@ export function elsewhereNote(lake: Feature<Point>, usFirst: boolean): string {
   ];
   return (
     `Wikidata lists a larger ${p.name} elsewhere, at ${lat.toFixed(3)}, ${lon.toFixed(3)}: ${facts.join(", ")}. ` +
-    `The lakes here may be a namesake: geocode that lake again with its state or country and ask again`
+    `This box is not where that lake is: geocode ${p.name} again with its state or country and query it there`
   );
 }
 

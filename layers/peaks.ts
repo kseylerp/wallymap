@@ -25,6 +25,13 @@
  * Wide mode (over 40,000 km², up to 600,000 km²) runs widePeaksQuery on Wikidata alone: the 1,000 most prominent peaks, ranked by
  * prominence, with no count (a second WDQS query would risk 429s, and OSM has no prominence to rank by).
  * Smoke wide 2026-10-14: Colorado -108.5,37,-104.5,41 returned all 176 peaks with a prominence in 2.8 s, Mount Elbert first.
+ *
+ * Lowest point (input `lowest`, for "highest and lowest points around Death Valley"): the box's lowest ground from the elevation
+ * model (lib/terrain/extremes.ts, a block median so pits that are not ground do not count), named after the Wikidata place
+ * recorded lowest in the box when its height is within 15 m of that floor and the model reads its spot within 30 m of it
+ * (lowestSparql); else "Lowest point in view". It joins the peaks as a feature of kind "lowest".
+ * Live 2026-10-23 over Death Valley (7,770 km², 43 peaks): Telescope Peak 11,043 ft (3,366 m) highest; Badwater Basin
+ * -282 ft (-86 m) lowest, where the model's floor read -84 m.
  */
 import { z } from "zod";
 import type { Feature, Point, Position } from "geojson";
@@ -36,9 +43,11 @@ import {
   type CardSpec,
   type Attribute,
   type FieldHelp,
+  type LegendSpec,
   type SourceStatus,
   type QueryContext,
 } from "./types";
+import { boxExtremes, type Extremes } from "@/lib/terrain/extremes";
 import { nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
@@ -190,6 +199,83 @@ export function normalizePeaks(bindings: Binding[]): Feature<Point>[] {
     features.push({ type: "Feature", geometry: { type: "Point", coordinates: coords }, properties });
   }
   return features;
+}
+
+/* ---------- The lowest point ---------- */
+
+/** The Wikidata places recorded lowest in a box (any kind: a basin, a lake shore, a sign), lowest first. */
+export function lowestSparql(bbox: BBox): string {
+  const [west, south, east, north] = bbox;
+  return `SELECT ?item ?itemLabel ?coord (MIN(?elevM) AS ?elev) WHERE {
+  SERVICE wikibase:box {
+    ?item wdt:P625 ?coord .
+    bd:serviceParam wikibase:cornerSouthWest "Point(${west} ${south})"^^geo:wktLiteral .
+    bd:serviceParam wikibase:cornerNorthEast "Point(${east} ${north})"^^geo:wktLiteral .
+  }
+  ?item p:P2044/psn:P2044/wikibase:quantityAmount ?elevM .
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul". }
+}
+GROUP BY ?item ?itemLabel ?coord
+ORDER BY ASC(?elev)
+LIMIT 10`;
+}
+
+/** A named place's recorded height may sit this far under the model's floor and still be the lowest point (Badwater -86 m, floor -84 m). */
+const LOW_NAME_ABOVE_M = 15;
+/** And the model must read the place's own spot within this of its recorded height, or the record is off. */
+const LOW_SPOT_M = 30;
+
+/**
+ * The box's lowest point as a feature: the lowest named Wikidata place that agrees with the elevation model's floor, else the floor
+ * itself as "Lowest point in view". Elevation in metres (negative below sea level).
+ */
+export function lowestFeature(ext: Pick<Extremes, "low" | "groundAt">, named: Binding[], units: Units): Feature<Point> {
+  for (const b of named) {
+    const elev = Number(b.elev?.value);
+    const coords = parseWkt(b.coord.value);
+    const id = b.item.value.split("/").pop() ?? "";
+    const name = b.itemLabel?.value.trim();
+    if (!Number.isFinite(elev) || !coords || !name || name === id) continue;
+    if (elev > ext.low.m + LOW_NAME_ABOVE_M) break;
+    const ground = ext.groundAt(coords[0], coords[1]);
+    if (Number.isNaN(ground) || Math.abs(ground - elev) > LOW_SPOT_M) continue;
+    const properties: Record<string, string | number> = {
+      name,
+      kind: "lowest",
+      elevation: Math.round(elev * 10) / 10,
+      elevationSource: "wikidata",
+      groundM: ext.low.m,
+      groundText: heightText(ext.low.m, units.usFirst),
+      wikidata: id,
+      url: `https://www.wikidata.org/wiki/${id}`,
+      sources: "wikidata",
+    };
+    return { type: "Feature", geometry: { type: "Point", coordinates: coords }, properties: finish(properties, units) };
+  }
+  const properties: Record<string, string | number> = { name: "Lowest point in view", kind: "lowest", elevation: ext.low.m, elevationSource: "dem", groundM: ext.low.m };
+  return { type: "Feature", geometry: { type: "Point", coordinates: [ext.low.lon, ext.low.lat] }, properties: finish(properties, units) };
+}
+
+/** "−282 ft (−86 m), 282 ft below sea level": a height, saying how far below sea level when it is. */
+function heightWords(m: number, usFirst: boolean): string {
+  const text = heightText(m, usFirst);
+  if (m >= 0) return text;
+  const below = usFirst ? `${Math.round(-m * FT_PER_M).toLocaleString("en-US")} ft` : `${Math.round(-m).toLocaleString("en-US")} m`;
+  return `${text}, ${below} below sea level`;
+}
+
+/** The note's lead: the highest summit and the lowest point, by name with both units. */
+export function extremesNote(highest: Feature | undefined, lowest: Feature | undefined, usFirst: boolean): string | undefined {
+  const parts: string[] = [];
+  const hp = highest?.properties;
+  if (hp && typeof hp.elevation === "number") parts.push(`Highest: ${hp.name}, ${heightWords(hp.elevation, usFirst)}`);
+  const lp = lowest?.properties;
+  if (lp && typeof lp.elevation === "number") {
+    const [lon, lat] = (lowest!.geometry as Point).coordinates;
+    const model = lp.elevationSource === "wikidata" && typeof lp.groundM === "number" ? `; the elevation model's lowest ground here reads ${heightText(lp.groundM, usFirst)}` : "";
+    parts.push(`lowest: ${lp.name}, ${heightWords(lp.elevation, usFirst)} at ${lon.toFixed(4)}, ${lat.toFixed(4)}${model}`);
+  }
+  return parts.length > 0 ? parts.join("; ") : undefined;
 }
 
 /* ---------- OpenStreetMap ---------- */
@@ -414,6 +500,7 @@ export function dedupePeaks(features: Feature<Point>[]): Feature<Point>[] {
 const KIND_LEVELS = [
   { value: "peak", label: "Peak", help: "A summit: the highest point of a mountain or hill." },
   { value: "volcano", label: "Volcano", help: "A summit that is a volcano, active or not." },
+  { value: "lowest", label: "Lowest point", help: "The lowest ground in the box, from the elevation model, named after the place recorded there when one agrees." },
 ];
 
 const ATTRIBUTES: Attribute[] = [
@@ -456,8 +543,9 @@ const CARD: CardSpec = {
   measure: { key: "elevationText", label: "Elevation" },
   facts: [
     { key: "prominenceText", label: "Prominence" },
-    { key: "kind", label: "Kind", values: { peak: "Peak", volcano: "Volcano" } },
-    { key: "elevationSource", label: "Elevation from", values: { osm: "OpenStreetMap", wikidata: "Wikidata" } },
+    { key: "kind", label: "Kind", values: { peak: "Peak", volcano: "Volcano", lowest: "Lowest point" } },
+    { key: "elevationSource", label: "Elevation from", values: { osm: "OpenStreetMap", wikidata: "Wikidata", dem: "Elevation model (AWS Terrain Tiles)" } },
+    { key: "groundText", label: "Elevation model reads" },
     { key: "sources", label: "Listed in", values: SOURCES },
     { key: "alsoNamed", label: "Also listed as" },
   ],
@@ -465,7 +553,20 @@ const CARD: CardSpec = {
     { key: "url", label: "Wikidata" },
     { key: "osmUrl", label: "OpenStreetMap" },
   ],
-  hidden: ["elevation", "elevationFt", "prominence", "prominenceFt", "v", "wikidata", "osmId"],
+  hidden: ["elevation", "elevationFt", "prominence", "prominenceFt", "v", "wikidata", "osmId", "groundM"],
+};
+
+/**
+ * The key: symbols sized by elevation. Every answer carries it too (result.legend), so the row keys Elevation even where
+ * the catalog's declaration is not loaded, rather than falling back to the Kind chips.
+ */
+export const PEAKS_LEGEND: LegendSpec = {
+  kind: "size",
+  title: "Elevation",
+  field: "elevation",
+  unit: "m",
+  stops: [{ label: "Lower summit" }, { label: "Higher summit" }],
+  note: "Symbols grow with elevation; the five highest are named. A peak with no elevation recorded is not sized and says so on its card; a lowest point below sea level is the smallest.",
 };
 
 /** One source's failure as a SourceStatus, so the row says which source did not answer and what the map holds instead. */
@@ -491,7 +592,10 @@ const peaks = defineLayer({
     "or 'peak bagging' lists; with 3D on, columns rise with elevation. " +
     "Caveats: elevations are mappers' and editors' figures, not survey-checked; for exact figures use USGS or the summit register. Prominence is missing for most minor summits. " +
     "Names are English when tagged, otherwise the peak's own-language name. At most 2,000 peaks, highest first. " +
-    "Works worldwide. Over 40,000 km² (about a 200 km square) it returns only Wikidata peaks with a recorded prominence, the 1,000 most prominent.",
+    "Works worldwide. Over 40,000 km² (about a 200 km square) it returns only Wikidata peaks with a recorded prominence, the 1,000 most prominent. " +
+    "For 'highest and lowest points', 'lowest point', 'below sea level' set lowest: true: the result then also holds the box's lowest point (kind 'lowest', named after the place recorded there, e.g. Badwater Basin, " +
+    "else 'Lowest point in view'; elevation negative below sea level) and its coverageNote starts with the highest summit and the lowest point by name with feet and metres: quote both. " +
+    "The legend is Elevation; rank by elevation.",
   coverage: "global",
   surface: "land",
   license: "ODbL (OpenStreetMap contributors); CC0 (Wikidata)",
@@ -501,31 +605,30 @@ const peaks = defineLayer({
   // A whole range ("the Southern Alps of New Zealand", 268,000 km²) answers with its most prominent peaks.
   hardMaxAreaKm2: 600_000,
   wide: { orderBy: "prominence", rank: "most prominent", limit: LIMIT },
-  input: z.object({}),
+  input: z.object({
+    lowest: z
+      .boolean()
+      .optional()
+      .describe("true for 'highest and lowest points', 'lowest point', 'below sea level': also return the box's lowest point (kind 'lowest') from the elevation model, named when a recorded place agrees"),
+  }),
   style: { geometry: "point", color: layerColor("peaks"), unit: "m", extrude: "v", encode: { size: "elevation" } },
   fieldHelp: HELP,
   card: CARD,
   attributes: ATTRIBUTES,
   time: { shape: "none" },
-  legend: {
-    kind: "size",
-    title: "Elevation",
-    field: "elevation",
-    unit: "m",
-    stops: [{ label: "Lower summit" }, { label: "Higher summit" }],
-    note: "Symbols grow with summit elevation; the five highest are named. A peak with no elevation recorded is not sized and says so on its card.",
-  },
+  legend: PEAKS_LEGEND,
   labels: { field: "name", max: 5, rankBy: "elevation" },
 
-  async query(ctx): Promise<LayerResult | LayerError> {
+  async query(ctx, { lowest }): Promise<LayerResult | LayerError> {
     // Wide (over 40,000 km², up to the hard cap): the most prominent peaks from Wikidata alone, capped at the strategy's limit.
     const wideLimit = ctx.wide ? Math.min(LIMIT, ctx.wideStrategy?.limit ?? LIMIT) : undefined;
     const query = wideLimit === undefined ? peaksQuery(ctx.bbox) : widePeaksQuery(ctx.bbox, wideLimit);
     const units = { usFirst: usUnitsFirst(ctx.bbox) };
 
-    const [wd, osm] = await Promise.all([
+    const [wd, osm, low] = await Promise.all([
       fetchWikidata(ctx, query),
       wideLimit === undefined ? overpassQuery(ctx, osmPeaksQuery(ctx.bbox)) : Promise.resolve(null),
+      lowest ? lowestPoint(ctx, units) : Promise.resolve(null),
     ]);
     const osmOk = osm?.ok === true;
     if ("error" in wd && !osmOk) return wd;
@@ -574,9 +677,24 @@ const peaks = defineLayer({
       if (missing > 0) notes.push(`${missing} of ${features.length} peaks have no elevation recorded`);
     }
 
+    // The lowest point joins the list after the last peak with an elevation (peaks without one stay last), and the note
+    // leads with the highest and the lowest by name.
+    if (lowest) {
+      if (low) {
+        const at = features.findIndex((f) => typeof f.properties?.elevation !== "number");
+        features.splice(at < 0 ? features.length : at, 0, low);
+      } else {
+        notes.push("the elevation tiles did not answer, so the lowest point is missing");
+      }
+      const highest = features.find((f) => typeof f.properties?.elevation === "number" && f.properties.kind !== "lowest");
+      const lead = extremesNote(highest, low ?? undefined, units.usFirst);
+      if (lead) notes.unshift(lead);
+    }
+
     const cited = [
       ...(osm?.ok ? ["OpenStreetMap contributors (ODbL), named natural=peak and natural=volcano nodes with ele"] : []),
       ...("bindings" in wd ? ["Wikidata (CC0), peaks with elevation (P2044) and topographic prominence (P2660)"] : []),
+      ...(low ? ["lowest ground from AWS Terrain Tiles (USGS 3DEP, SRTM; open data)"] : []),
     ];
     return {
       kind: "geojson",
@@ -588,9 +706,23 @@ const peaks = defineLayer({
       },
       ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
       ...(sourceStatus ? { sourceStatus } : {}),
+      legend: PEAKS_LEGEND,
     };
   },
 });
+
+/**
+ * The box's lowest point (lowestFeature): the elevation model's floor and the Wikidata places recorded lowest, read in parallel.
+ * Null when the elevation tiles did not answer; a Wikidata failure only leaves the point unnamed.
+ */
+async function lowestPoint(ctx: QueryContext, units: Units): Promise<Feature<Point> | null> {
+  const [ext, named] = await Promise.all([
+    boxExtremes(ctx.bbox).catch(() => null),
+    fetchWikidata({ ...ctx, cacheKey: ctx.cacheKey ? `${ctx.cacheKey}:lowest` : undefined }, lowestSparql(ctx.bbox)),
+  ]);
+  if (!ext) return null;
+  return lowestFeature(ext, "bindings" in named ? named.bindings : [], units);
+}
 
 /** The Wikidata half: its rows, or an error in the layer's words. */
 async function fetchWikidata(

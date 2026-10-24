@@ -53,6 +53,8 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "wikipedia-nearby", synonyms: ["history of this place", "tell me about", "what is that", "landmark", "points of interest", "Wikipedia"], notes: "articles in view; quote extract, link url", gist: "Wikipedia articles about places in the view" },
   { layerId: "geology", synonyms: ["geology", "geologic map", "rock types", "bedrock"], notes: "map tiles only; for one spot use geologic-unit", gist: "geologic map of rock units, drawn as tiles" },
   { layerId: "geologic-unit", synonyms: ["what rock", "made of", "rock age", "how old is the rock"], notes: "the unit under one point; pass lon and lat", gist: "the rock unit, age and type at one point" },
+  { layerId: "faults", synonyms: ["fault", "fault line", "active fault"], notes: "USGS Quaternary faults; US only", gist: "young US faults with age, slip rate and sense" },
+  { layerId: "soils", synonyms: ["soil", "soil type", "clay soil"], notes: "USDA SSURGO map units; US only, under 600 km²", gist: "soil texture, drainage and depth to bedrock" },
   { layerId: "surf", synonyms: ["surf", "swell", "waves", "wave height", "buoy"], notes: "live NOAA buoys, v = wave height m; forecast true for days ahead, season for typical months", gist: "live wave height and period at ocean buoys" },
   { layerId: "tides", synonyms: ["tide", "high tide", "low tide", "tide chart", "tide pools"], notes: "live next highs and lows at US NOAA stations", gist: "next high and low tides at US stations" },
   { layerId: "fishing", synonyms: ["fishing", "fish", "boat ramp", "boat launch", "what's biting", "trout", "fly fishing"], notes: "access, ramps, piers, recent fish sightings, water temperature", gist: "fishing access, boat ramps, recent catches, water temperature" },

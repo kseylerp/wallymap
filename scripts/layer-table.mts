@@ -45,7 +45,7 @@ const META: Record<string, { shows: string; source: string; freshness: string; c
   "ski-routes": { shows: "Downhill runs, nordic trails and ski touring routes", source: "OpenStreetMap", freshness: "Live (cached up to a day)" },
   "recreation-sites": { shows: "Developed recreation sites: campgrounds, trailheads, boat ramps, day use", source: "USDA Forest Service, BLM", freshness: "Nightly feeds" },
   glaciers: { shows: "Glacier and ice cap outlines with area", source: "GLIMS (NSIDC)", freshness: "Static (survey dates per glacier)" },
-  geology: { shows: "Geologic map units as map tiles", source: "Macrostrat", freshness: "Static" },
+  geology: { shows: "Geologic map units by rock family, darker for older rock; the main units in the view by name, age and share", source: "Macrostrat", freshness: "Static" },
   climbing: { shows: "Climbing crags, boulders and areas with route counts", source: "OpenStreetMap, OpenBeta", freshness: "Live (cached up to a day)" },
   "critical-habitat": { shows: "Designated critical habitat for threatened and endangered species", source: "US Fish and Wildlife Service", freshness: "Updated as designated" },
   "grazing-allotments": { shows: "Livestock grazing allotments and wild horse and burro areas", source: "Bureau of Land Management", freshness: "Updated occasionally" },
@@ -102,6 +102,11 @@ const META: Record<string, { shows: string; source: string; freshness: string; c
   "imagery-by-date": { shows: "True-colour 30 m satellite picture on a chosen day", source: "NASA HLS (Landsat, Sentinel-2) via GIBS", freshness: "Every few days, about 2 days behind" },
   mines: { shows: "Mines, prospects and mineral deposits by commodity", source: "USGS MRDS, USMIN", freshness: "Static (about 2011)" },
   uranium: { shows: "Navajo Nation abandoned uranium mines and DOE mill-tailings sites", source: "Navajo Nation AUM program, DOE Legacy Management", freshness: "Static (2007 hazard scores)", coverage: "Western US" },
+  terrain: { shows: "Slope angle, the way slopes face, and shade, computed from elevation", source: "AWS Terrain Tiles (USGS 3DEP, SRTM)", freshness: "Static" },
+  "weather-forecast": { shows: "Hour-by-hour weather forecast at the asked place and across the view", source: "NOAA NWS, Open-Meteo", freshness: "Hourly forecast" },
+  avalanche: { shows: "Avalanche danger by forecast zone on the North American scale", source: "US avalanche centers via avalanche.org", freshness: "Daily in season" },
+  faults: { shows: "Faults that moved in the last 1.6 million years, by age, slip rate and how well located", source: "USGS Quaternary Fault and Fold Database", freshness: "Static (2020 release)" },
+  soils: { shows: "Soil map units by surface texture, with drainage, depth to bedrock and hydrologic group", source: "USDA NRCS SSURGO (Soil Data Access)", freshness: "Static (yearly survey updates)" },
 };
 
 function coverageText(l: Layer): string {

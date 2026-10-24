@@ -1987,6 +1987,325 @@
    }
   ]
  },
+ "faults": {
+  "kind": "geojson",
+  "recorded": "2026-10-24",
+  "bbox": [
+   -113.6,
+   36.9,
+   -112.6,
+   37.6
+  ],
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.3382,
+      36.9438
+     ]
+    },
+    "properties": {
+     "heading": "Hurricane fault zone, Anderson Junction section",
+     "fault": "Hurricane fault zone",
+     "section": "Anderson Junction section",
+     "ageClass": "latest",
+     "recency": 4,
+     "location": "well",
+     "slipRate": "0.2 to 1 mm a year",
+     "slipRank": 2,
+     "slipSense": "Normal",
+     "dip": "NW",
+     "mappedScale": "1:62,500",
+     "url": "https://earthquake.usgs.gov/cfusion/qfault/show_report_AB_archive.cfm?fault_id=998&section_id=c",
+     "lengthKm": 50.8,
+     "name": "Hurricane fault zone, Anderson Junction section"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.3091,
+      37.0419
+     ]
+    },
+    "properties": {
+     "heading": "Hurricane fault zone, Anderson Junction section",
+     "fault": "Hurricane fault zone",
+     "section": "Anderson Junction section",
+     "ageClass": "latest",
+     "recency": 4,
+     "location": "inferred",
+     "slipRate": "0.2 to 1 mm a year",
+     "slipRank": 2,
+     "slipSense": "Normal",
+     "dip": "W",
+     "mappedScale": "1:250,000",
+     "url": "https://earthquake.usgs.gov/cfusion/qfault/show_report_AB_archive.cfm?fault_id=998&section_id=c",
+     "lengthKm": 5.3
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.4979,
+      37.122
+     ]
+    },
+    "properties": {
+     "heading": "Washington fault zone, northern section",
+     "fault": "Washington fault zone",
+     "section": "northern section",
+     "ageClass": "latest",
+     "recency": 4,
+     "location": "well",
+     "slipRate": "Under 0.2 mm a year",
+     "slipRank": 1,
+     "slipSense": "Normal",
+     "dip": "NE",
+     "mappedScale": "1:100,000",
+     "url": "https://earthquake.usgs.gov/cfusion/qfault/show_report_AB_archive.cfm?fault_id=1004&section_id=a",
+     "lengthKm": 20.1
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.5037,
+      37.1571
+     ]
+    },
+    "properties": {
+     "heading": "Washington fault zone, northern section",
+     "fault": "Washington fault zone",
+     "section": "northern section",
+     "ageClass": "latest",
+     "recency": 4,
+     "location": "inferred",
+     "slipRate": "Under 0.2 mm a year",
+     "slipRank": 1,
+     "slipSense": "Normal",
+     "dip": "NW",
+     "mappedScale": "1:100,000",
+     "url": "https://earthquake.usgs.gov/cfusion/qfault/show_report_AB_archive.cfm?fault_id=1004&section_id=a",
+     "lengthKm": 20.4
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.0924,
+      37.6156
+     ]
+    },
+    "properties": {
+     "heading": "Hurricane fault zone, Cedar City section",
+     "fault": "Hurricane fault zone",
+     "section": "Cedar City section",
+     "ageClass": "latest",
+     "recency": 4,
+     "location": "well",
+     "slipRate": "Under 0.2 mm a year",
+     "slipRank": 1,
+     "slipSense": "Normal",
+     "dip": "NW",
+     "mappedScale": "1:250,000",
+     "url": "https://earthquake.usgs.gov/cfusion/qfault/show_report_AB_archive.cfm?fault_id=998&section_id=a",
+     "lengthKm": 48.7,
+     "name": "Hurricane fault zone, Cedar City section"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.1471,
+      37.5646
+     ]
+    },
+    "properties": {
+     "heading": "Hurricane fault zone, Ash Creek section",
+     "fault": "Hurricane fault zone",
+     "section": "Ash Creek section",
+     "ageClass": "latest",
+     "recency": 4,
+     "location": "well",
+     "slipRate": "Under 0.2 mm a year",
+     "slipRank": 1,
+     "slipSense": "Normal",
+     "dip": "NW",
+     "mappedScale": "1:250,000",
+     "url": "https://earthquake.usgs.gov/cfusion/qfault/show_report_AB_archive.cfm?fault_id=998&section_id=b",
+     "lengthKm": 32.9,
+     "name": "Hurricane fault zone, Ash Creek section"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.3099,
+      37.3014
+     ]
+    },
+    "properties": {
+     "heading": "Hurricane fault zone, Anderson Junction section",
+     "fault": "Hurricane fault zone",
+     "section": "Anderson Junction section",
+     "ageClass": "late",
+     "recency": 3,
+     "location": "well",
+     "slipRate": "0.2 to 1 mm a year",
+     "slipRank": 2,
+     "slipSense": "Normal",
+     "dip": "NW",
+     "mappedScale": "1:250,000",
+     "url": "https://earthquake.usgs.gov/cfusion/qfault/show_report_AB_archive.cfm?fault_id=998&section_id=c",
+     "lengthKm": 3.6
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.3617,
+      36.9081
+     ]
+    },
+    "properties": {
+     "heading": "Hurricane fault zone, Shivwitz section",
+     "fault": "Hurricane fault zone",
+     "section": "Shivwitz section",
+     "ageClass": "late",
+     "recency": 3,
+     "location": "well",
+     "slipRate": "0.2 to 1 mm a year",
+     "slipRank": 2,
+     "slipSense": "Normal",
+     "dip": "SW",
+     "mappedScale": "1:62,500",
+     "url": "https://earthquake.usgs.gov/cfusion/qfault/show_report_AB_archive.cfm?fault_id=998&section_id=d",
+     "lengthKm": 5.3,
+     "name": "Hurricane fault zone, Shivwitz section"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.4799,
+      36.9334
+     ]
+    },
+    "properties": {
+     "heading": "Dutchman Draw fault",
+     "fault": "Dutchman Draw fault",
+     "ageClass": "late",
+     "recency": 3,
+     "location": "well",
+     "slipRate": "Under 0.2 mm a year",
+     "slipRank": 1,
+     "slipSense": "Normal",
+     "dip": "NW",
+     "mappedScale": "1:62,500",
+     "url": "https://earthquake.usgs.gov/cfusion/qfault/show_report_AB_archive.cfm?fault_id=1003&section_id=",
+     "lengthKm": 16.7,
+     "name": "Dutchman Draw fault"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.488,
+      36.9249
+     ]
+    },
+    "properties": {
+     "heading": "Washington fault zone, northern section",
+     "fault": "Washington fault zone",
+     "section": "northern section",
+     "ageClass": "late",
+     "recency": 3,
+     "location": "well",
+     "slipRate": "Under 0.2 mm a year",
+     "slipRank": 1,
+     "slipSense": "Normal",
+     "dip": "NW",
+     "mappedScale": "1:62,500",
+     "url": "https://earthquake.usgs.gov/cfusion/qfault/show_report_AB_archive.cfm?fault_id=1004&section_id=a",
+     "lengthKm": 23.3,
+     "name": "Washington fault zone, northern section"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -113.5019,
+      36.9525
+     ]
+    },
+    "properties": {
+     "heading": "Washington fault zone, Mokaac section",
+     "fault": "Washington fault zone",
+     "section": "Mokaac section",
+     "ageClass": "late",
+     "recency": 3,
+     "location": "well",
+     "slipRate": "Under 0.2 mm a year",
+     "slipRank": 1,
+     "slipSense": "Normal",
+     "dip": "N",
+     "mappedScale": "1:62,500",
+     "url": "https://earthquake.usgs.gov/cfusion/qfault/show_report_AB_archive.cfm?fault_id=1004&section_id=b",
+     "lengthKm": 12.3,
+     "name": "Washington fault zone, Mokaac section"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -112.5877,
+      37.3174
+     ]
+    },
+    "properties": {
+     "heading": "Sevier/Toroweap fault zone, Sevier section",
+     "fault": "Sevier/Toroweap fault zone",
+     "section": "Sevier section",
+     "ageClass": "late",
+     "recency": 3,
+     "location": "well",
+     "slipRate": "Under 0.2 mm a year",
+     "slipRank": 1,
+     "slipSense": "Normal",
+     "dip": "NW",
+     "mappedScale": "1:250,000",
+     "url": "https://earthquake.usgs.gov/cfusion/qfault/show_report_AB_archive.cfm?fault_id=997&section_id=a",
+     "lengthKm": 21.5,
+     "name": "Sevier/Toroweap fault zone, Sevier section"
+    }
+   }
+  ]
+ },
  "fire-detections": {
   "kind": "geojson",
   "recorded": "2026-10-23",
@@ -3537,7 +3856,7 @@
  },
  "geology": {
   "kind": "tiles",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -112.941,
    35.763,
@@ -12861,6 +13180,293 @@
      "tempC": -0.2,
      "normalOnset": "Nov 11",
      "medianPeakIn": 48.4
+    }
+   }
+  ]
+ },
+ "soils": {
+  "kind": "geojson",
+  "recorded": "2026-10-24",
+  "bbox": [
+   -105.35,
+   39.95,
+   -105.15,
+   40.1
+  ],
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -105.261012403688,
+      40.0886983773713
+     ]
+    },
+    "properties": {
+     "heading": "Water",
+     "soil": "Water",
+     "texture": "Water",
+     "mukey": "497612",
+     "component": "Water, about 95% of the map unit"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -105.249716155815,
+      40.0882655576879
+     ]
+    },
+    "properties": {
+     "heading": "Nunn clay loam, 1 to 3 percent slopes",
+     "soil": "Nunn clay loam, 1 to 3 percent slopes",
+     "texture": "Clay loam",
+     "mukey": "497593",
+     "textureRank": 3,
+     "textureDetail": "Clay loam",
+     "drainage": "Well drained",
+     "bedrock": "None within the soil profile (about 5 to 6.5 ft)",
+     "hydGroup": "C: moderately high runoff, water soaks in slowly",
+     "component": "Nunn, about 85% of the map unit"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -105.33202023737,
+      40.0829312315016
+     ]
+    },
+    "properties": {
+     "heading": "Sanitas, very stony-Betasso, extremely bouldery complex 20 to 50 percent slopes",
+     "soil": "Sanitas, very stony-Betasso, extremely bouldery complex 20 to 50 percent slopes",
+     "texture": "Sandy loam",
+     "mukey": "3365662",
+     "textureRank": 1,
+     "textureDetail": "Gravelly sandy loam",
+     "drainage": "Somewhat excessively drained",
+     "bedrockCm": 49,
+     "bedrockIn": 19,
+     "bedrock": "19 in (49 cm)",
+     "hydGroup": "B: moderately low runoff",
+     "component": "Sanitas, about 55% of the map unit"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -105.344598803609,
+      40.0835742230022
+     ]
+    },
+    "properties": {
+     "heading": "Littlejames, extremely bouldery-Lefthand, extremely bouldery-Rock outcrop complex, 10 to 25 percent slopes",
+     "soil": "Littlejames, extremely bouldery-Lefthand, extremely bouldery-Rock outcrop complex, 10 to 25 percent slopes",
+     "texture": "Sandy loam",
+     "mukey": "3365632",
+     "textureRank": 1,
+     "textureDetail": "Very gravelly coarse sandy loam",
+     "drainage": "Excessively drained",
+     "bedrockCm": 40,
+     "bedrockIn": 16,
+     "bedrock": "16 in (40 cm)",
+     "hydGroup": "D: high runoff, water soaks in very slowly",
+     "component": "Littlejames, about 55% of the map unit"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -105.349112617609,
+      40.0802830742676
+     ]
+    },
+    "properties": {
+     "heading": "Littlejames, extremely bouldery-Lefthand, very stony complex, 7 to 25 percent slopes",
+     "soil": "Littlejames, extremely bouldery-Lefthand, very stony complex, 7 to 25 percent slopes",
+     "texture": "Sandy loam",
+     "mukey": "3365633",
+     "textureRank": 1,
+     "textureDetail": "Very gravelly coarse sandy loam",
+     "drainage": "Excessively drained",
+     "bedrockCm": 40,
+     "bedrockIn": 16,
+     "bedrock": "16 in (40 cm)",
+     "hydGroup": "D: high runoff, water soaks in very slowly",
+     "component": "Littlejames, about 55% of the map unit"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -105.236687720426,
+      40.0896414684692
+     ]
+    },
+    "properties": {
+     "heading": "Renohill silty clay loam, 1 to 3 percent slopes",
+     "soil": "Renohill silty clay loam, 1 to 3 percent slopes",
+     "texture": "Clay loam",
+     "mukey": "497600",
+     "textureRank": 3,
+     "textureDetail": "Silty clay loam",
+     "drainage": "Well drained",
+     "bedrockCm": 81,
+     "bedrockIn": 32,
+     "bedrock": "32 in (81 cm)",
+     "hydGroup": "D: high runoff, water soaks in very slowly",
+     "component": "Renohill, about 85% of the map unit"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -105.162531958282,
+      40.0948823155453
+     ]
+    },
+    "properties": {
+     "heading": "Hargreave fine sandy loam, 3 to 9 percent slopes",
+     "soil": "Hargreave fine sandy loam, 3 to 9 percent slopes",
+     "texture": "Sandy loam",
+     "mukey": "497574",
+     "textureRank": 1,
+     "textureDetail": "Fine sandy loam",
+     "drainage": "Well drained",
+     "bedrockCm": 69,
+     "bedrockIn": 27,
+     "bedrock": "27 in (69 cm)",
+     "hydGroup": "C: moderately high runoff, water soaks in slowly",
+     "component": "Hargreave, about 85% of the map unit"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -105.152593926009,
+      40.0978826767377
+     ]
+    },
+    "properties": {
+     "heading": "Colby silty clay loam, 3 to 5 percent slopes",
+     "soil": "Colby silty clay loam, 3 to 5 percent slopes",
+     "texture": "Clay loam",
+     "mukey": "497563",
+     "textureRank": 3,
+     "textureDetail": "Silty clay loam",
+     "drainage": "Well drained",
+     "bedrock": "None within the soil profile (about 5 to 6.5 ft)",
+     "hydGroup": "C: moderately high runoff, water soaks in slowly",
+     "component": "Colby, about 90% of the map unit"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -105.166152948893,
+      40.0960770376787
+     ]
+    },
+    "properties": {
+     "heading": "Colby silty clay loam, 3 to 5 percent slopes",
+     "soil": "Colby silty clay loam, 3 to 5 percent slopes",
+     "texture": "Clay loam",
+     "mukey": "497563",
+     "textureRank": 3,
+     "textureDetail": "Silty clay loam",
+     "drainage": "Well drained",
+     "bedrock": "None within the soil profile (about 5 to 6.5 ft)",
+     "hydGroup": "C: moderately high runoff, water soaks in slowly",
+     "component": "Colby, about 90% of the map unit"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -105.342206555825,
+      40.0840356359097
+     ]
+    },
+    "properties": {
+     "heading": "Littlejames, extremely bouldery-Lefthand, extremely bouldery-Rock outcrop complex, 10 to 25 percent slopes",
+     "soil": "Littlejames, extremely bouldery-Lefthand, extremely bouldery-Rock outcrop complex, 10 to 25 percent slopes",
+     "texture": "Sandy loam",
+     "mukey": "3365632",
+     "textureRank": 1,
+     "textureDetail": "Very gravelly coarse sandy loam",
+     "drainage": "Excessively drained",
+     "bedrockCm": 40,
+     "bedrockIn": 16,
+     "bedrock": "16 in (40 cm)",
+     "hydGroup": "D: high runoff, water soaks in very slowly",
+     "component": "Littlejames, about 55% of the map unit"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -105.345485062545,
+      40.0832149927394
+     ]
+    },
+    "properties": {
+     "heading": "Pearlstreet-Sanitas complex, 25 to 55 percent slopes, very stony",
+     "soil": "Pearlstreet-Sanitas complex, 25 to 55 percent slopes, very stony",
+     "texture": "Sandy loam",
+     "mukey": "3365661",
+     "textureRank": 1,
+     "textureDetail": "Gravelly sandy loam",
+     "drainage": "Well drained",
+     "bedrockCm": 68,
+     "bedrockIn": 27,
+     "bedrock": "27 in (68 cm)",
+     "hydGroup": "C: moderately high runoff, water soaks in slowly",
+     "component": "Pearlstreet, about 50% of the map unit"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -105.343176346214,
+      40.0846334298254
+     ]
+    },
+    "properties": {
+     "heading": "Sanitas, very stony-Betasso, extremely bouldery complex 20 to 50 percent slopes",
+     "soil": "Sanitas, very stony-Betasso, extremely bouldery complex 20 to 50 percent slopes",
+     "texture": "Sandy loam",
+     "mukey": "3365662",
+     "textureRank": 1,
+     "textureDetail": "Gravelly sandy loam",
+     "drainage": "Somewhat excessively drained",
+     "bedrockCm": 49,
+     "bedrockIn": 19,
+     "bedrock": "19 in (49 cm)",
+     "hydGroup": "B: moderately low runoff",
+     "component": "Sanitas, about 55% of the map unit"
     }
    }
   ]

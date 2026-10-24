@@ -533,6 +533,8 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   "is downtown asheville in a flood zone?": { layers: ["flood-zones"] },
   "new deforestation alerts in the congo this month": { layers: ["forest-alerts"] },
   "show the geology of the grand canyon": { layers: ["geology"] },
+  "are there active faults near salt lake city?": { layers: ["faults"] },
+  "what kind of soil is around fort collins?": { layers: ["soils"] },
   "where are the wild horses in nevada?": { layers: ["grazing-allotments"] },
   "show plant hardiness zones in vermont": { layers: ["hardiness-zones"] },
   "what's the land cover around torres del paine?": { layers: ["land-cover"] },

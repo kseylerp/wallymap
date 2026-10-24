@@ -275,6 +275,8 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - Is downtown Asheville in a flood zone?
 - New deforestation alerts in the Congo this month
 - Show the geology of the Grand Canyon
+- Are there active faults near Salt Lake City?
+- What kind of soil is around Fort Collins?
 - Where are the wild horses in Nevada?
 - Show plant hardiness zones in Vermont
 - What's the land cover around Torres del Paine?

@@ -521,30 +521,39 @@ export async function geocodeWaypoint(
 
 const REVERSE_ENDPOINT = "https://api.mapbox.com/search/geocode/v6/reverse";
 
+/** The first name Mapbox gives a point for one feature type, or null (none, or the request failed). */
+async function reverseName([lng, lat]: [number, number], types: string, token: string, timeoutMs: number): Promise<string | null> {
+  const url = new URL(REVERSE_ENDPOINT);
+  url.searchParams.set("longitude", String(lng));
+  url.searchParams.set("latitude", String(lat));
+  url.searchParams.set("types", types);
+  url.searchParams.set("access_token", token);
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+    if (!res.ok) return null;
+    const body = responseSchema.safeParse(await res.json());
+    const first = body.success ? body.data.features.map((f) => featureSchema.safeParse(f)).find((f) => f.success) : undefined;
+    const name = first?.success ? first.data.properties.name?.trim() : undefined;
+    return name && name.length >= 3 ? name : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * The named place at a point (the middle of a "here" view), for follow-ups that name where ("What changed near Detroit
- * since 2015?" rather than "here"): the town, else the locality, else the county; null when nothing answers. Never
- * moves the camera or counts as the question's place.
+ * The named place of a "here" view, for follow-ups that name where ("What changed near Gates since 2015?" rather than
+ * "here"): the town at the view's middle, else at a point halfway to each corner (the middle of a view over Puget Sound
+ * is water), else the county at the middle; null when nothing answers. Never moves the camera or counts as the
+ * question's place.
  */
-export async function reverseGeocode([lng, lat]: [number, number], timeoutMs = 4000): Promise<string | null> {
+export async function reverseGeocode([lng, lat]: [number, number], bbox?: BBox | null, timeoutMs = 4000): Promise<string | null> {
   const token = process.env.MAPBOX_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   if (!token) return null;
-  for (const types of ["place", "locality", "district"]) {
-    const url = new URL(REVERSE_ENDPOINT);
-    url.searchParams.set("longitude", String(lng));
-    url.searchParams.set("latitude", String(lat));
-    url.searchParams.set("types", types);
-    url.searchParams.set("access_token", token);
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-      if (!res.ok) return null;
-      const body = responseSchema.safeParse(await res.json());
-      const first = body.success ? body.data.features.map((f) => featureSchema.safeParse(f)).find((f) => f.success) : undefined;
-      const name = first?.success ? first.data.properties.name?.trim() : undefined;
-      if (name && name.length >= 3) return name;
-    } catch {
-      return null;
-    }
+  const points: [number, number][] = [[lng, lat]];
+  if (bbox) for (const [x, y] of [[bbox[0], bbox[3]], [bbox[2], bbox[3]], [bbox[0], bbox[1]], [bbox[2], bbox[1]]]) points.push([(lng + x) / 2, (lat + y) / 2]);
+  for (const p of points) {
+    const name = await reverseName(p, "place,locality", token, timeoutMs);
+    if (name) return name;
   }
-  return null;
+  return reverseName([lng, lat], "district", token, timeoutMs);
 }

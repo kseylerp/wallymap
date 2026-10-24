@@ -3,6 +3,7 @@ import { composeNote } from "./compose";
 import { followsUp } from "./context";
 import type { Turn } from "./turn";
 import { getLayer } from "@/layers";
+import { THREAT_LAYERS } from "./fromPlace";
 
 /**
  * The answer template for a turn (lib/agent/answer.ts) from what the turn recorded: its tool calls, the results the
@@ -136,7 +137,8 @@ export function withAskedPictures(markdown: string, turn: Pick<Turn, "reading" |
   for (const hint of turn.reading.layers.filter((l) => l.strong)) {
     const out = turn.calls.findLast((c) => c.toolName === `query_${hint.layerId}`)?.output as { kind?: unknown; coverageNote?: unknown } | undefined;
     if (typeof out?.coverageNote !== "string" || out.coverageNote.trim() === "") continue;
-    const counted = out.kind === "geojson" && /^(?:no|none|\d[\d,]*)\b/i.test(out.coverageNote.trim());
+    // Only a threat the question names (pipelines, mines, leases): a gauge or trail count added nothing but words.
+    const counted = out.kind === "geojson" && THREAT_LAYERS.has(hint.layerId) && /^(?:no|none|\d[\d,]*)\b/i.test(out.coverageNote.trim());
     if (out.kind !== "tiles" && !counted) continue;
     const title = getLayer(hint.layerId)?.title.replace(/\s*\([^)]*\)\s*/g, " ").trim() ?? hint.layerId;
     // Mentioned already: the title's longest word ("severity", "cover") is in the note.

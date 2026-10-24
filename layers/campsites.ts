@@ -443,7 +443,7 @@ const campsites = defineLayer({
       total > MAX_POINTS
         ? `Showing ${MAX_POINTS.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} sites (all camp sites, then the largest parking lots); zoom in for the rest`
         : "",
-      camps === 0 ? "" : water ? `${watered} of ${camps} camp and RV sites have mapped water within ${WATER_M} m (nearWater, water)` : auxLookups() && bboxAreaKm2(ctx.bbox) <= WATER_NEAR_MAX_KM2 ? "Water near the camps could not be read this time" : "",
+      camps === 0 ? "" : water ? `${watered} of ${camps} camp and RV sites have mapped water within ${WATER_M} m` : auxLookups() && bboxAreaKm2(ctx.bbox) <= WATER_NEAR_MAX_KM2 ? "Water near the camps could not be read this time" : "",
       ruled > 0 ? `Rule${rules.length === 1 ? "" : "s"} for ${ruled} site${ruled === 1 ? "" : "s"}: ${rules.map((r) => `${campingRuleText(r)}, ${r.url}`).join("; ")}` : "",
     ].filter(Boolean);
     return {

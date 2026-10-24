@@ -203,7 +203,7 @@ describe("outdoor-features layer", () => {
     expect(init.cacheKey).toBe(`outdoor-features:k:outdoor-features:${KINDS.join(",")}`);
     expect(r.data.features).toHaveLength(normalizeFeatures(fixture).features.length);
     expect(r.citation.source).toContain("OpenStreetMap");
-    expect(r.coverageNote).toMatch(/^Returned 30 outdoor features \(4 hut, 1 shelter, 4 spring, 4 waterfall, 4 pass, 1 saddle, 4 peak, 4 viewpoint, 4 drinking_water\); the box was truncated /);
+    expect(r.coverageNote).toMatch(/^Returned 30 outdoor features \(4 hut, 1 shelter, 4 spring, 4 waterfall, 4 pass, 1 saddle, 4 peak, 4 viewpoint, 4 drinking water\); the box was truncated /);
     expect(r.coverageNote).toContain("holds 141 matches");
   });
 

@@ -136,7 +136,8 @@ function names(text: string, name: string): boolean {
 function placeNames(calls: ToolCall[]): string[] {
   return calls
     .filter((c) => c.toolName === "geocode" && ok(c) && isObject(c.output) && typeof c.output.name === "string")
-    .map((c) => String((c.output as { name: string }).name).split(",")[0].trim())
+    // "Chaco Canyon (valley in San Juan County, New Mexico)" is "Chaco Canyon", as the answer says it (lib/agent/fromPlace.ts).
+    .map((c) => String((c.output as { name: string }).name).replace(/\s*\([^)]*\)/g, "").split(",")[0].trim())
     .filter((n) => n.length >= 3);
 }
 

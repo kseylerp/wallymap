@@ -347,7 +347,8 @@ export function featuresNote(features: Feature[], matched: number, rawElements: 
     counts.set(kind, (counts.get(kind) ?? 0) + 1);
   }
   const breakdown = KINDS.filter((k) => counts.has(k))
-    .map((k) => `${counts.get(k)} ${k}`)
+    // "17 drinking water", not the tag value "drinking_water" (the layer panel shows this note).
+    .map((k) => `${counts.get(k)} ${k.replace(/_/g, " ")}`)
     .join(", ");
   const fmt = (n: number) => n.toLocaleString("en-US");
   if (wide) return `By kind: ${breakdown || "none"}`;

@@ -160,6 +160,13 @@ function questionWords(question: string): string[] {
 }
 
 /**
+ * Sentences the server adds because the answer is wrong without them (lib/agent/answer.ts, turnAnswer.ts): a rule the
+ * person must follow, how close the nearest threat comes, what is closed, and what no free source can say. Kept
+ * right after the lead when a long note is cut (Mount Rainier's permit and the whitewater data gap were cut last).
+ */
+const KEEP = /^(?:Camping rule here:|Closest to |Closed now:|No free source\b)/;
+
+/**
  * The note cut within `max` words by what matters: the lead line and the option list first, then the sentences that
  * answer another part of the question (Lake Tahoe's "no avalanche danger rating today" was cut as the note's last line
  * while sentences about the map stayed), then the rest; sentences that only say what the map or its colors show go
@@ -185,7 +192,7 @@ export function trimNoteFor(markdown: string, question: string, max = NOTE_MAX_W
       const t = text.toLowerCase();
       const mapOnly = /\b(?:colou?r(?:ed)?\s+is|the\s+map\s+(?:shows|draws)|legend|sage\s+low|darker\s+(?:means|=))/.test(t);
       const answers = asked.some((w) => t.includes(w));
-      const rank = i === lead ? 0 : mapOnly ? 3 : bullet || answers ? 1 : 2;
+      const rank = i === lead ? 0 : KEEP.test(text) ? 0.5 : mapOnly ? 3 : bullet || answers ? 1 : 2;
       units.push({ line: i, text, rank, words: noteWords(text) });
     }
   });

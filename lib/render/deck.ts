@@ -802,10 +802,13 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   // Thin lines (context areas, outline-only groups such as ecoregions) widen at most THIN_DRAPE_BOOST on 3D terrain: the
   // full boost drew the Smokies' ecoregion edge as a thick black-and-white band across the map.
   const thinBoost = terrain ? THIN_DRAPE_BOOST : 1;
-  const outlineWidth = context ? CONTEXT_AREA.outlineWidth * thinBoost : recipe.outlineWidth * boost;
+  // A recipe with a light edge of its own (fire perimeters) widens like a thin line on terrain: at the full boost
+  // Paradise's perimeters drew a 4px pink band in an 8px white one.
+  const light = recipe.casingMin !== undefined;
+  const outlineWidth = context ? CONTEXT_AREA.outlineWidth * thinBoost : recipe.outlineWidth * (light ? thinBoost : boost);
   const casingWidth = context
     ? outlineWidth + 2 * CONTEXT_AREA.casing * thinBoost
-    : outlineWidth + 2 * Math.max(recipe.casing, recipe.casingMin ?? AREA_CASING_MIN) * (terrain ? AREA_DRAPE_CASING_BOOST : 1);
+    : outlineWidth + 2 * Math.max(recipe.casing, recipe.casingMin ?? AREA_CASING_MIN) * (light ? thinBoost : terrain ? AREA_DRAPE_CASING_BOOST : 1);
   const thinWidth = THIN_OUTLINE.width * thinBoost;
   const thinCasing = thinWidth + 2 * THIN_OUTLINE.casing * thinBoost;
   const sizeKey = sizeMeasureKey(ctx);

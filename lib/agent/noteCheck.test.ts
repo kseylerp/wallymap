@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asksForTop, checkNote, followsStory, NOTE_MAX_WORDS, noteWords, trimNote } from "./noteCheck";
+import { asksForTop, checkNote, followsStory, NOTE_MAX_WORDS, noteWords, trimNote, trimNoteFor } from "./noteCheck";
 import { createTurn } from "./turn";
 
 const uraniumTurn = () => {
@@ -114,5 +114,14 @@ describe("trimNoteFor and the parts of a question", () => {
     ].join("\n");
     const cut = trimNoteFor(note, "Is there snow on the ground at Lake Tahoe right now, and any avalanche danger?", 40);
     expect(cut).toContain("avalanche centers have not issued a rating");
+  });
+});
+
+describe("trimNoteFor keeps the server's must-say sentences", () => {
+  it("keeps a camping rule past the model's prose when a long note is cut", () => {
+    const filler = Array.from({ length: 12 }, (_, i) => `Sentence ${i} says a dozen more words about nothing in particular at all here.`).join(" ");
+    const note = `25 campsites near Wonderland Trail; the top is Maple Creek Camp.\n\n${filler}\n\nCamping rule here: A wilderness permit is required year-round for every overnight stay in the backcountry.`;
+    const cut = trimNoteFor(note, "Campsites near water along the Wonderland Trail", 60);
+    expect(cut).toMatch(/Camping rule here: A wilderness permit/);
   });
 });

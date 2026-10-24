@@ -667,8 +667,8 @@ export function rankedValueProblems(row: Feature, card: Feature, key: string): s
   return [`the Rank by list gives ${a.toLocaleString("en-US")} but its card shows ${b.toLocaleString("en-US")}`];
 }
 
-/** Lower-case-first names that are not code: brands the notes may name. */
-const CAMEL_WORDS = new Set(["iNaturalist", "eBird", "iOS", "iPhone", "iPad", "eDNA"]);
+/** Lower-case-first names that are not code: brands the notes may name, and units ("345 kV"). */
+const CAMEL_WORDS = new Set(["iNaturalist", "eBird", "iOS", "iPhone", "iPad", "eDNA", "kV", "kWh", "mW"]);
 
 /**
  * What is wrong with a coverage note the user reads (the layer panel and the card show it): a quoted code value ("kind

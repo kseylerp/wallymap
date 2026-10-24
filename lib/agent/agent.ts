@@ -55,7 +55,7 @@ export function agentTurn({ question, view, model = getModel(), history = [] }: 
   // A "here" question's view, named (a town or county at its middle), so the follow-ups can say where; it runs beside
   // the model's first steps and the answer waits for it (lib/agent/turnAnswer.ts settle).
   if (view?.center && placeCandidates(question).length === 0) {
-    turn.viewPlaceReady = reverseGeocode(view.center as [number, number])
+    turn.viewPlaceReady = reverseGeocode(view.center as [number, number], view.bbox ?? null)
       .then((name) => {
         if (!name) return;
         turn.viewPlace = name;

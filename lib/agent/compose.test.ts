@@ -76,3 +76,14 @@ describe("withFollowUps", () => {
     expect(read.body).toBe(body);
   });
 });
+
+describe("a long first sentence", () => {
+  it("is cut at its latest clause break that still answers in 40 words", () => {
+    const note = "The forest around Mount Hood is overwhelmingly natural—about 75 % of the land is primary or naturally regenerating forest, with only ≈8 % planted forest—while trees cover roughly 72 % of the area and have a median canopy height of 52 ft (≈16 m), a 90th-percentile height of 79 ft and the tallest recorded canopy at 138 ft.";
+    const out = answerFirst(note);
+    const first = leadSentence(out);
+    expect(first).toMatch(/^The forest around Mount Hood is overwhelmingly natural—about 75 %/);
+    expect(first.split(/\s+/).length).toBeLessThanOrEqual(40);
+    expect(out).toContain("52 ft");
+  });
+});

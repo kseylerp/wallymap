@@ -57,10 +57,14 @@ export function leadSentence(markdown: string): string {
 
 /** A long first sentence cut at its first clause break, when that part still answers. */
 function shortened(sentence: string): string | null {
-  for (const sep of [";", " – ", " — ", ": ", ", which", ", and"]) {
-    const at = sentence.indexOf(sep);
-    if (at <= 0) continue;
-    const head = `${sentence.slice(0, at).trim().replace(/[,:;]$/, "")}.`;
+  // Every clause break, latest first, so the head keeps as much of the answer as fits ("…is overwhelmingly natural—about
+  // 75 % of the land…, with only ≈8 % planted forest—while trees cover…" kept the share and cut the heights).
+  const cuts: number[] = [];
+  for (const sep of [";", " – ", " — ", "—", ": ", ", which", ", while", ", and", ", with", ", but"]) {
+    for (let at = sentence.indexOf(sep); at > 0; at = sentence.indexOf(sep, at + 1)) cuts.push(at);
+  }
+  for (const at of [...new Set(cuts)].sort((x, y) => y - x)) {
+    const head = `${sentence.slice(0, at).trim().replace(/[,:;—–-]$/, "").trim()}.`;
     if (answersFirst(head)) return head;
   }
   return null;

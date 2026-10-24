@@ -12,6 +12,11 @@ import type { Series } from "@/lib/render/wally/sample";
 
 export type Units = "mi" | "km";
 
+/** A stretch of the line drawn in pink with its label (the cross-section's steepest 100 m: "80° · 544%"). */
+export type ProfileHighlight = { fromM: number; toM: number; label: string };
+/** A labelled point on the line (the start and the top with their elevations). */
+export type ProfileMark = { distanceM: number; label: string };
+
 type ElevationProfileProps = {
   distancesM: number[];
   /** Meters, aligned with `distancesM`; null where terrain has not loaded yet. */
@@ -21,7 +26,28 @@ type ElevationProfileProps = {
   units: Units;
   height?: number;
   onScrub?: (fraction: number) => void;
+  /**
+   * The cross-section's options (components/CrossSection.tsx): a pointer moving over the chart scrubs without a press
+   * (`hover`), and `onLeave` says when it left; `cursor` false hides the cursor; `progress` false draws the whole line
+   * bright (no part "already ridden"); `solid` draws the line purple instead of the route gradient, so the pink
+   * highlight reads; `highlight` and `marks` label it; `exaggeration` states the vertical exaggeration it is drawn at.
+   */
+  hover?: boolean;
+  onLeave?: () => void;
+  cursor?: boolean;
+  progress?: boolean;
+  solid?: boolean;
+  highlight?: ProfileHighlight;
+  marks?: ProfileMark[];
+  exaggeration?: boolean;
 };
+
+/** How many times steeper the chart draws the ground than it is: plot height per metre over plot width per metre. */
+export function chartExaggeration(totalM: number, spanM: number, plotW: number, plotH: number): number {
+  if (!(totalM > 0) || !(spanM > 0) || !(plotW > 0)) return 1;
+  const ve = plotH / spanM / (plotW / totalM);
+  return ve >= 2 ? Math.round(ve) : Math.round(ve * 10) / 10;
+}
 
 const M_PER_MI = 1609.344;
 const FT_PER_M = 3.28084;
@@ -83,6 +109,14 @@ export function ElevationProfile({
   units,
   height = 180,
   onScrub,
+  hover = false,
+  onLeave,
+  cursor = true,
+  progress = true,
+  solid = false,
+  highlight,
+  marks = [],
+  exaggeration = false,
 }: ElevationProfileProps) {
   const id = useId().replace(/:/g, "");
   const boxRef = useRef<HTMLDivElement>(null);
@@ -148,11 +182,24 @@ export function ElevationProfile({
       const sy = (v: number) => PAD.top + plotH * (0.85 - (sHi > sLo ? ((v - sLo) / (sHi - sLo)) * 0.7 : 0.35));
       return pathFor(xs, s.values.map((v) => (v === null ? null : sy(v))));
     });
-    return { hasData, y, x, line, area, yTicks, xTicks, seriesPaths };
-  }, [distancesM, elevations, series, elevScale, units, plotH, plotW, total, toUnit]);
+    // The highlighted stretch, drawn over the line; the exaggeration, from the axis span in metres.
+    const inStretch = highlight ? ys.map((v, i) => (distancesM[i] >= highlight.fromM && distancesM[i] <= highlight.toM ? v : null)) : null;
+    const stretch = inStretch ? pathFor(xs, inStretch) : "";
+    const ve = chartExaggeration(total, (yMax - yMin) / elevScale, plotW, plotH);
+    return { hasData, y, x, line, area, yTicks, xTicks, seriesPaths, stretch, ve };
+  }, [distancesM, elevations, series, elevScale, units, plotH, plotW, total, toUnit, highlight]);
 
   const f = Math.min(1, Math.max(0, fraction));
   const cursorX = PAD.left + f * plotW;
+  const doneX = progress ? cursorX : width;
+  const lineStroke = solid ? "var(--accent)" : `url(#${id}-line)`;
+  /** A labelled point's position, its label kept inside the plot. */
+  const markAt = (distanceM: number) => {
+    const v = valueAt(distancesM, elevations, distanceM);
+    if (v === null) return null;
+    return { x: chart.x(distanceM), y: chart.y(v * elevScale) };
+  };
+  const highlightAt = highlight ? markAt((highlight.fromM + highlight.toM) / 2) : null;
   const here = valueAt(distancesM, elevations, f * total);
   const cursorY = here === null ? null : chart.y(here * elevScale);
   const readout = here === null ? null : `${fmt(here * elevScale)} ${elevUnit}`;
@@ -182,8 +229,9 @@ export function ElevationProfile({
           scrubFrom(e);
         }}
         onPointerMove={(e) => {
-          if (e.buttons & 1) scrubFrom(e);
+          if (e.buttons & 1 || hover) scrubFrom(e);
         }}
+        onPointerLeave={() => onLeave?.()}
       >
         <defs>
           <linearGradient id={`${id}-line`} gradientUnits="userSpaceOnUse" x1={PAD.left} x2={PAD.left + plotW} y1="0" y2="0">
@@ -195,7 +243,7 @@ export function ElevationProfile({
             <stop offset="1" style={{ stopColor: "var(--accent)", stopOpacity: 0 }} />
           </linearGradient>
           <clipPath id={`${id}-done`}>
-            <rect x="0" y="0" width={cursorX} height={height} />
+            <rect x="0" y="0" width={doneX} height={height} />
           </clipPath>
         </defs>
 
@@ -244,16 +292,53 @@ export function ElevationProfile({
         {chart.hasData ? (
           <>
             <path d={chart.area} fill={`url(#${id}-area)`} clipPath={`url(#${id}-done)`} />
-            <path d={chart.line} fill="none" stroke={`url(#${id}-line)`} strokeOpacity="0.35" strokeWidth="2" strokeLinejoin="round" />
+            <path d={chart.line} fill="none" stroke={lineStroke} strokeOpacity="0.35" strokeWidth="2" strokeLinejoin="round" />
             <path
               d={chart.line}
               fill="none"
-              stroke={`url(#${id}-line)`}
+              stroke={lineStroke}
               strokeWidth="2"
               strokeLinejoin="round"
               strokeLinecap="round"
               clipPath={`url(#${id}-done)`}
             />
+            {chart.stretch && (
+              <path data-testid="profile-highlight" d={chart.stretch} fill="none" stroke="var(--coral)" strokeWidth="3.5" strokeLinejoin="round" strokeLinecap="round" />
+            )}
+            {highlight && highlightAt && (
+              <text
+                x={Math.min(PAD.left + plotW, Math.max(PAD.left, highlightAt.x - 6))}
+                y={Math.max(PAD.top + 9, highlightAt.y + 4)}
+                textAnchor="end"
+                fill="var(--coral)"
+                fontSize="10.5"
+                fontWeight="600"
+                style={{ fontVariantNumeric: "tabular-nums", paintOrder: "stroke", stroke: "var(--paper)", strokeWidth: 3 }}
+              >
+                {highlight.label}
+              </text>
+            )}
+            {marks.map((m) => {
+              const p = markAt(m.distanceM);
+              if (!p) return null;
+              const nearEnd = p.x > PAD.left + plotW * 0.6;
+              return (
+                <g key={`${m.distanceM}:${m.label}`} data-testid="profile-mark">
+                  <circle cx={p.x} cy={p.y} r="3" fill="var(--paper)" stroke="var(--ink)" strokeWidth="1.5" />
+                  <text
+                    x={p.x + (nearEnd ? -6 : 6)}
+                    y={Math.max(PAD.top + 8, p.y - 6)}
+                    textAnchor={nearEnd ? "end" : "start"}
+                    fill="var(--ink)"
+                    fontSize="10.5"
+                    fontWeight="600"
+                    style={{ fontVariantNumeric: "tabular-nums", paintOrder: "stroke", stroke: "var(--paper)", strokeWidth: 3 }}
+                  >
+                    {m.label}
+                  </text>
+                </g>
+              );
+            })}
           </>
         ) : (
           <text
@@ -267,16 +352,22 @@ export function ElevationProfile({
           </text>
         )}
 
+        {exaggeration && chart.hasData && (
+          <text data-testid="profile-exaggeration" x={PAD.left + plotW} y={PAD.top - 4} textAnchor="end" fill="var(--ink-muted)" fontSize="10">
+            {`×${fmt(chart.ve, 1)} vertical`}
+          </text>
+        )}
+
         {/* The cursor: a hairline, the position on the line, and its height. */}
-        <line x1={cursorX} x2={cursorX} y1={PAD.top - 4} y2={PAD.top + plotH} stroke="var(--ink)" strokeOpacity="0.45" strokeWidth="1" />
-        {cursorY !== null && (
+        {cursor && <line x1={cursorX} x2={cursorX} y1={PAD.top - 4} y2={PAD.top + plotH} stroke="var(--ink)" strokeOpacity="0.45" strokeWidth="1" />}
+        {cursor && cursorY !== null && (
           <>
             <circle cx={cursorX} cy={cursorY} r="7" fill="var(--coral)" fillOpacity="0.2" />
             <circle cx={cursorX} cy={cursorY} r="3.5" fill="var(--paper)" stroke="var(--coral)" strokeWidth="2" />
           </>
         )}
       </svg>
-      {readout && (
+      {cursor && readout && (
         <span
           aria-hidden
           data-testid="profile-readout"

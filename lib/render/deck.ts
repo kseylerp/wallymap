@@ -2296,6 +2296,33 @@ export function buildDeckLayerSets(
 /** The ring around a feature the pointer is over in a layer row's top 10 (spec §12c: the list is synced with the map). */
 export const HOVER_RING = { radiusPx: 15, widthPx: 2.5 } as const;
 
+/** The cross-section chart's cursor on the map (lib/render/crossSection.ts): a pink dot on a white ring. */
+export const PROFILE_CURSOR = { radiusPx: 6, ringPx: 2.5 } as const;
+
+/** The dot where the cross-section chart's cursor stands, while a pointer is over the chart; nothing otherwise. */
+export function profileCursorLayers(at: [number, number] | null, terrain: boolean): Layer[] {
+  if (!at) return [];
+  return [
+    new ScatterplotLayer<{ position: [number, number] }>({
+      id: "elevation-profile:cursor",
+      data: [{ position: at }],
+      pickable: false,
+      stroked: true,
+      filled: true,
+      getPosition: (d) => d.position,
+      getRadius: PROFILE_CURSOR.radiusPx,
+      radiusUnits: "pixels",
+      getFillColor: hexToRgba(PINK, 255),
+      getLineColor: hexToRgba(WHITE_HEX, 255),
+      getLineWidth: PROFILE_CURSOR.ringPx,
+      lineWidthUnits: "pixels",
+      billboard: true,
+      parameters: { cullMode: "none", depthCompare: "always" },
+      ...terrainProps(terrain, "offset"),
+    }),
+  ];
+}
+
 function hoverLayers(state: MapState, terrain: boolean): Layer[] {
   const hover = state.hover;
   if (!hover) return [];

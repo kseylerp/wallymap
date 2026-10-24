@@ -101,7 +101,7 @@ export function place(
 }
 
 /** Line layers a person travels (trails, routes, rivers): only they offer "Preview route" (never a pipeline). */
-const TRAVELLED = /trail|route|ski|mtb|paddl|road|river|path|hike|bike|walk|canoe|climb|track|stream/i;
+const TRAVELLED = /trail|route|ski|mtb|paddl|road|river|path|hike|bike|walk|canoe|climb|track|stream|profile/i;
 
 /** Characters past which a value reads as a paragraph rather than a right-aligned figure. */
 const LONG_VALUE = 60;

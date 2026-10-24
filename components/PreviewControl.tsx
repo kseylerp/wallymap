@@ -6,6 +6,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalS
 import { createPortal } from "react-dom";
 import { Mountain, Pause, Play, X } from "lucide-react";
 import { ElevationProfile, SeriesLegend, type Units } from "@/components/ElevationProfile";
+import { CrossSection } from "@/components/CrossSection";
+import { crossSectionOnMap } from "@/lib/render/crossSection";
 import type { MapAction, MapState, RouteState } from "@/lib/render/state";
 import {
   dockCompactStore,
@@ -48,11 +50,20 @@ export function PreviewControl({ onActions }: PreviewControlProps) {
   const state = useMapState();
   const playback = state?.playback;
   const route = playback ? state?.routes[playback.routeId] : undefined;
+  // The cross-section the person closed (by its answer's time), so a new answer opens again.
+  const [closedSection, setClosedSection] = useState<string | null>(null);
+  const section = useMemo(() => (state ? crossSectionOnMap(state) : null), [state]);
 
   if (!state) return null;
   if (playback && route) return <Dock state={state} route={route} onActions={onActions} />;
   const newest = Object.values(state.routes).at(-1);
-  return newest ? <StartPill route={newest} onStart={() => onActions([{ type: "preview_start", routeId: newest.id }])} /> : null;
+  const showSection = section !== null && section.receivedAt !== closedSection;
+  return (
+    <>
+      {showSection && <CrossSection key={section.receivedAt} view={section} onClose={() => setClosedSection(section.receivedAt)} />}
+      {newest ? <StartPill route={newest} onStart={() => onActions([{ type: "preview_start", routeId: newest.id }])} /> : null}
+    </>
+  );
 }
 
 function distanceLabel(meters: number, units: Units): string {

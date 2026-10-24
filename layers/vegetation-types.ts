@@ -24,7 +24,12 @@ import {
   readShares,
   sharesExpression,
   sharesScale,
-  TILE_QUERY,
+  OTHER_TYPES_ALPHA,
+  topTypes,
+  typeColors,
+  typesTileQuery,
+  faintOver,
+  type EvtClass,
   type EvtShares,
 } from "@/lib/ee/vegetation";
 import { eeTileTemplate } from "@/lib/ee/tiles";
@@ -47,6 +52,24 @@ export const LEGEND: LegendSpec = {
   items: GROUPS.map((g) => ({ label: g.label, value: g.code, color: g.alpha < 1 ? faint(g.color, g.alpha) : g.color, symbol: "raster" as const, help: g.help })),
   note: "LANDFIRE's 849 vegetation types in eight colors; tap the map for the type's own name. Lower 48 only, as mapped about 2014.",
 };
+
+/**
+ * An answer's key: its largest named types (LANDFIRE's own names), each in the color the map draws it, then the rest
+ * under one faint entry. The shares in view come from viewShares by type (field `evt`).
+ */
+export function typesLegend(classes: EvtClass[]): LegendSpec {
+  const colors = typeColors(classes);
+  return {
+    kind: "categories",
+    title: "Vegetation type",
+    field: "evt",
+    items: [
+      ...classes.map((cls, i) => ({ label: cls.name, value: cls.value, color: colors[i], symbol: "raster" as const, help: `${groupByKey(cls.group)!.label}; ${cls.physiognomy.toLowerCase()}.` })),
+      { label: "Other types (drawn faint in their group's color)", value: 0, color: faintOver(SAGE, OTHER_TYPES_ALPHA), symbol: "raster" as const },
+    ],
+    note: "The largest LANDFIRE vegetation types in the box asked, each in its own color; tap the map for any type's name. Lower 48 only, as mapped about 2014.",
+  };
+}
 
 const inputSchema = z.object({
   /** The place the box stands for, as the question names it; the note repeats it so two places' numbers never mix. */
@@ -146,14 +169,15 @@ const vegetationTypes = defineLayer({
     if (!shares) return { error: `No LANDFIRE vegetation in the box asked${input.place ? ` (${input.place})` : ""}: ${OUTSIDE}` };
     const where = input.place ? `in the box asked for ${input.place}` : "in the box asked";
     const km2 = Math.round(bboxAreaKm2(ctx.bbox)).toLocaleString("en-US");
+    const top = topTypes(shares);
     return {
       kind: "tiles",
-      data: { url: eeTileTemplate("vegetation-types", TILE_QUERY), minzoom: 4, maxzoom: 15, format: "raster" },
+      data: { url: eeTileTemplate("vegetation-types", typesTileQuery(top.map((c) => c.value))), minzoom: 4, maxzoom: 15, format: "raster" },
       citation,
       coverageNote:
         `${MAP}, share of the mapped land ${where} (${km2} km²): largest vegetation types ${classesSentence(shares)}; ` +
-        `by group ${groupsSentence(shares)}. Counted on a ${sharesScale(ctx.bbox)} m grid`,
-      legend: LEGEND,
+        `by group ${groupsSentence(shares)}. Counted on a ${sharesScale(ctx.bbox)} m grid; the map colors the ${top.length} largest types, the rest faint`,
+      legend: top.length > 0 ? typesLegend(top) : LEGEND,
     };
   },
 
@@ -162,7 +186,8 @@ const vegetationTypes = defineLayer({
     try {
       const shares = readShares(await client(ctx.env).compute(sharesExpression(ctx.bbox)));
       if (!shares) return null;
-      return { field: "group", shares: Object.fromEntries(Object.entries(shares.groups).filter(([, s]) => s > 0).map(([k, s]) => [String(groupByKey(k)!.code), s])) };
+      // By type (the answer's key names types); the layer's group key, when it is shown, reads `group`.
+      return { field: "evt", shares: Object.fromEntries(shares.classes.map((c) => [String(c.cls.value), c.share])) };
     } catch (error) {
       return failure(error);
     }

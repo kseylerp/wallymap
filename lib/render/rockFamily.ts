@@ -9,11 +9,14 @@ import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
  * the rock words in them. One table drives both the Mapbox expression the map fills with and `rockFamilyOf`, which the
  * layer's coverage note and the legend's in-view shares use, so the map, the note and the key always agree.
  *
- * How a unit is classed: the first text among lith, name and description that holds any family's word decides, the
- * families checked in FAMILY_ORDER (metamorphic before plutonic, since "granite gneiss" is metamorphic; volcanic before
- * sedimentary, so a Quaternary lava flow is volcanic; sedimentary before loose sediments, so "gravelly sandstone" is
- * rock). No word anywhere: a unit whose oldest rock is Quaternary is loose sediment, anything older sedimentary (most
- * of the mapped surface is). Texts are lowercased and a space put in front, so " till" matches a word start only.
+ * How a unit is classed: the first text among lith, name and description that holds any family's word decides, and in
+ * it the family whose word comes FIRST (a description leads with its main rock: the Kayenta's Tenney Canyon Tongue is
+ * "red-brown siltstone, mudstone and sandstone" and only names "basalt lava flows" in a last aside, which made it
+ * volcanic when families were checked in a fixed order). Two nudges keep compound names right: a metamorphic word counts
+ * as if it came FAMILY_BIAS characters earlier ("granite gneiss" is metamorphic) and a loose-sediment word as if later
+ * ("gravelly sandstone" is rock); ties go to the family listed first. No word anywhere: a unit whose oldest rock is
+ * Quaternary is loose sediment, anything older sedimentary (most of the mapped surface is). Texts are lowercased and a
+ * space put in front, so " till" matches a word start only.
  */
 
 export type RockFamily = "sedimentary" | "volcanic" | "plutonic" | "metamorphic" | "unconsolidated";
@@ -76,6 +79,29 @@ export const FAMILY_WORDS: { id: RockFamily; words: string[] }[] = [
 /** The text sources checked in turn. */
 export const FAMILY_SOURCES = ["lith", "name", "descrip"] as const;
 
+/** Characters a family's first word is moved by when the families' first words are compared (see the header). */
+export const FAMILY_BIAS: Record<RockFamily, number> = { metamorphic: -24, plutonic: 0, volcanic: 0, sedimentary: 0, unconsolidated: 24 };
+
+/** The family whose word comes first in `t` (with FAMILY_BIAS; ties to the family listed first), or undefined. */
+function familyInText(t: string): RockFamily | undefined {
+  let best: RockFamily | undefined;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const fam of FAMILY_WORDS) {
+    let first = Number.POSITIVE_INFINITY;
+    for (const w of fam.words) {
+      const i = t.indexOf(w);
+      if (i >= 0 && i < first) first = i;
+    }
+    if (first === Number.POSITIVE_INFINITY) continue;
+    const score = first + FAMILY_BIAS[fam.id];
+    if (score < bestScore) {
+      best = fam.id;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
 /** Quaternary: the oldest rock is younger than this (million years), so a unit with no rock word is loose sediment. */
 const QUATERNARY_MA = 2.6;
 
@@ -93,8 +119,8 @@ function num(v: unknown): number | undefined {
 /** A unit's rock family from its lith, name and description (the same rule the map's expression applies). */
 export function rockFamilyOf(p: RockProps | null | undefined): RockFamily {
   for (const source of FAMILY_SOURCES) {
-    const t = text(p?.[source]);
-    for (const fam of FAMILY_WORDS) if (fam.words.some((w) => t.includes(w))) return fam.id;
+    const found = familyInText(text(p?.[source]));
+    if (found) return found;
   }
   const oldest = num(p?.best_age_bottom) ?? num(p?.best_age_top);
   return oldest !== undefined && oldest <= QUATERNARY_MA ? "unconsolidated" : "sedimentary";
@@ -157,15 +183,42 @@ function sourceText(key: string): unknown[] {
   return ["concat", " ", ["downcase", ["to-string", ["coalesce", ["get", key], ""]]]];
 }
 
-/** The family of a tile feature, as a Mapbox expression returning one of the RockFamily ids. */
+/** A score no word reaches: the family has no word in the text. */
+const ABSENT = 1_000_000;
+
+/**
+ * One family's score in the text bound to `t`: where its first word starts, moved by FAMILY_BIAS, or ABSENT. Each word
+ * is looked for in the text followed by "|" and the word itself, so it is always found and a word missing from the text
+ * lands past the text's end (no "-1" to filter out of the minimum).
+ */
+function familyScore(fam: { id: RockFamily; words: string[] }): unknown[] {
+  const t = ["var", "t"];
+  const first = ["min", ...fam.words.map((w) => ["index-of", w, ["concat", t, "|", w]])];
+  return ["let", "first", first, ["case", [">", ["var", "first"], ["length", t]], ABSENT, ["+", ["var", "first"], FAMILY_BIAS[fam.id]]]];
+}
+
+/** The family whose word comes first in one source's text (familyInText as an expression), or "none". */
+function familyInSource(source: string): unknown[] {
+  const names = FAMILY_WORDS.map((f) => `s_${f.id}`);
+  const decide: unknown[] = ["case"];
+  FAMILY_WORDS.forEach((fam, i) => {
+    const mine = ["var", names[i]];
+    decide.push(["all", ["<", mine, ABSENT], ...names.filter((_, j) => j !== i).map((other) => ["<=", mine, ["var", other]])], fam.id);
+  });
+  decide.push("none");
+  const bindings = FAMILY_WORDS.flatMap((fam, i) => [names[i], familyScore(fam)]);
+  return ["let", "t", sourceText(source), ["let", ...bindings, decide]];
+}
+
+/** The family of a tile feature, as a Mapbox expression returning one of the RockFamily ids (rockFamilyOf's rule). */
 export function rockFamilyExpression(): ExpressionSpecification {
-  const branches: unknown[] = [];
-  for (const source of FAMILY_SOURCES) {
-    const t = sourceText(source);
-    for (const fam of FAMILY_WORDS) branches.push(["any", ...fam.words.map((w) => ["in", w, t])], fam.id);
-  }
   const oldest = ["to-number", ["coalesce", ["get", "best_age_bottom"], ["get", "best_age_top"], 999]];
-  return ["case", ...branches, ["<=", oldest, QUATERNARY_MA], "unconsolidated", "sedimentary"] as unknown as ExpressionSpecification;
+  let expr: unknown[] = ["case", ["<=", oldest, QUATERNARY_MA], "unconsolidated", "sedimentary"];
+  for (const source of [...FAMILY_SOURCES].reverse()) {
+    const v = `f_${source}`;
+    expr = ["let", v, familyInSource(source), ["case", ["!=", ["var", v], "none"], ["var", v], expr]];
+  }
+  return expr as unknown as ExpressionSpecification;
 }
 
 /** The fill color of a tile feature: its family's step by the age of its youngest rock. */

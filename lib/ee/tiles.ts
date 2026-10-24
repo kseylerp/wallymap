@@ -26,7 +26,12 @@ export const EE_TILE_LAYERS: Record<string, EeTileLayer> = {
     maxzoom: 14,
   },
   "vegetation-types": {
-    picture: (query) => (vegetation.parseTileQuery(query) ? { key: vegetation.TILE_KEY, image: vegetation.groupTiles() } : null),
+    picture(query) {
+      if (vegetation.parseTileQuery(query)) return { key: vegetation.TILE_KEY, image: vegetation.groupTiles() };
+      // An answer's own picture: its largest named types, each in its own color (the codes are checked against the table).
+      const codes = vegetation.parseTypesQuery(query);
+      return codes ? { key: vegetation.typesTileKey(codes), image: vegetation.typeTiles(codes) } : null;
+    },
     minzoom: 4,
     maxzoom: 15,
   },

@@ -7,7 +7,7 @@ import { useTileSource } from "@/lib/terrain/dem";
 import { crossSection, pathLengthM, steepestStretch, stepFor } from "@/lib/terrain/profile";
 import { plane, syntheticTiles } from "@/lib/terrain/__fixtures__/synthetic";
 import { contractProblems } from "./contract";
-import layer, { pathOf } from "./elevation-profile";
+import layer, { checkEnds, pathOf } from "./elevation-profile";
 
 /** Offline: the elevation comes from formulas (lib/terrain/__fixtures__/synthetic.ts), never from S3. */
 afterEach(() => useTileSource());
@@ -135,5 +135,29 @@ describe("cross-section chart helpers", () => {
     const at = pointAlong([ORIGIN, EAST], pathLengthM([ORIGIN, EAST]) / 2)!;
     expect(at[0]).toBeCloseTo((ORIGIN[0] + EAST[0]) / 2, 6);
     expect(pointAlong([ORIGIN, EAST], 1e9)).toEqual(EAST);
+  });
+});
+
+describe("the line's ends against their names", () => {
+  const valley = { bbox: [-119.676, 37.717, -119.547, 37.746] as [number, number, number, number], center: [-119.6057, 37.7327] as [number, number], name: "Yosemite Valley", source: "mapbox" as const };
+  const dome = { bbox: [-119.5342, 37.7449, -119.5322, 37.7469] as [number, number, number, number], center: [-119.5332, 37.7459] as [number, number], name: "Half Dome", source: "mapbox" as const };
+  const locate = async (name: string) => (name === "Yosemite Valley" ? valley : name === "Half Dome" ? dome : { error: "not found" });
+
+  it("moves an end the model placed away from its named place, and says so", async () => {
+    // 2026-10-23: "Yosemite Valley" was passed on Half Dome's shoulder, 0.3 mi from the summit.
+    const given = { from: { lon: -119.5383, lat: 37.7459, name: "Yosemite Valley" }, to: { lon: -119.5332, lat: 37.7459, name: "Half Dome" } };
+    const { input, moved } = await checkEnds(given, locate);
+    expect(input.from).toMatchObject({ lon: -119.6057, lat: 37.7327 });
+    expect(input.to).toEqual(given.to);
+    expect(moved).toEqual([expect.stringMatching(/^Yosemite Valley placed at its geocoded centre/)]);
+  });
+
+  it("keeps ends inside their place, unnamed ends, unknown names and point lists", async () => {
+    const inside = { from: { lon: -119.59, lat: 37.74, name: "Yosemite Valley" }, to: { lon: -119.5332, lat: 37.7459, name: "Half Dome" } };
+    expect((await checkEnds(inside, locate)).moved).toEqual([]);
+    const unnamed = { from: { lon: -119.5383, lat: 37.7459 }, to: { lon: -119.5332, lat: 37.7459, name: "Somewhere" } };
+    expect(await checkEnds(unnamed, locate)).toEqual({ input: unnamed, moved: [] });
+    const points = { points: [[-119.6, 37.73], [-119.53, 37.746]] as [number, number][] };
+    expect(await checkEnds(points, locate)).toEqual({ input: points, moved: [] });
   });
 });

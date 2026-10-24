@@ -20,6 +20,7 @@ import { crossSection, pathLengthM, type CrossSection } from "@/lib/terrain/prof
 import { TERRAIN_CITATION_SOURCE, TERRAIN_CITATION_URL } from "@/lib/terrain/dem";
 import { verticalExaggeration } from "@/lib/render/crossSection";
 import { layerColor } from "@/lib/render/palette";
+import { geocode, type GeocodeError, type GeocodeResult } from "@/lib/agent/geocode";
 
 /** The longest line profiled: past this the samples thin out to the coarse tiles and a cross-section stops meaning much. */
 export const MAX_LENGTH_KM = 200;
@@ -130,6 +131,45 @@ export function pathOf(input: Input): { path: Position[]; start?: string; end?: 
   return null;
 }
 
+/** How far an end may sit from its named place (outside the place's box) before the name's own location replaces it. */
+export const END_TOLERANCE_M = 1_500;
+
+function metresBetween([lon1, lat1]: Position, [lon2, lat2]: Position): number {
+  const k = Math.PI / 180;
+  const x = (lon2 - lon1) * k * Math.cos(((lat1 + lat2) / 2) * k);
+  const y = (lat2 - lat1) * k;
+  return Math.sqrt(x * x + y * y) * 6_371_000;
+}
+
+function inBox([lon, lat]: Position, [w, s, e, n]: BBox, padDeg = 0.005): boolean {
+  return lon >= w - padDeg && lon <= e + padDeg && lat >= s - padDeg && lat <= n + padDeg;
+}
+
+type Locate = (name: string, near: [number, number]) => Promise<GeocodeResult | GeocodeError>;
+
+/**
+ * The line's ends checked against their names: an end whose name the geocoder places somewhere else (more than
+ * END_TOLERANCE_M from the coordinate and the coordinate outside the place's box) moves to the place. The model passed
+ * "Yosemite Valley" at a point on Half Dome's shoulder, 6,044 ft and 0.3 mi from the summit, while the valley floor is
+ * near 4,000 ft (2026-10-23). Returns the ends to use and one clause per moved end for the note.
+ */
+export async function checkEnds(input: Input, locate: Locate = (name, near) => geocode(name, { proximity: near })): Promise<{ input: Input; moved: string[] }> {
+  if (input.points || !input.from || !input.to) return { input, moved: [] };
+  const moved: string[] = [];
+  const fix = async (end: NonNullable<Input["from"]>, other: NonNullable<Input["from"]>) => {
+    if (!end.name) return end;
+    const found = await locate(end.name, [other.lon, other.lat]).catch(() => ({ error: "geocoder failed" }) as GeocodeError);
+    if ("error" in found) return end;
+    const given: Position = [end.lon, end.lat];
+    if (inBox(given, found.bbox) || metresBetween(given, found.center) <= END_TOLERANCE_M) return end;
+    moved.push(`${end.name} placed at its geocoded centre (${found.center[1].toFixed(4)}, ${found.center[0].toFixed(4)}), not at the point given`);
+    return { ...end, lon: found.center[0], lat: found.center[1] };
+  };
+  const from = await fix(input.from, input.to);
+  const to = await fix(input.to, from);
+  return { input: { ...input, from, to }, moved };
+}
+
 const elevationProfile = defineLayer({
   id: "elevation-profile",
   title: "Elevation profile (cross-section)",
@@ -180,7 +220,8 @@ const elevationProfile = defineLayer({
     highestText: { text: "The highest ground along the line and how far from the start it is.", source: TERRAIN_CITATION_SOURCE, url: TERRAIN_CITATION_URL },
   },
 
-  async query(ctx, raw): Promise<LayerResult | LayerError> {
+  async query(ctx, given): Promise<LayerResult | LayerError> {
+    const { input: raw, moved } = await checkEnds(given);
     const line = pathOf(raw);
     if (!line) return { error: "Give the line's two ends (from and to, each a lon and lat from geocode) or at least two points" };
     const lengthM = pathLengthM(line.path);
@@ -208,7 +249,7 @@ const elevationProfile = defineLayer({
         features: [{ type: "Feature", geometry: { type: "LineString", coordinates: line.path }, properties: profileProperties(cs, names, usFirst) }],
       },
       citation,
-      coverageNote: profileNote(cs, names, usFirst),
+      coverageNote: profileNote(cs, names, usFirst) + (moved.length > 0 ? `; ${moved.join("; ")}` : ""),
       title: names.start && names.end ? `Elevation profile: ${names.start} to ${names.end}` : "Elevation profile",
     };
   },

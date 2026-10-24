@@ -51,8 +51,24 @@ function evaluate(expr: unknown, props: Record<string, unknown>, vars: Record<st
       return args[0];
     case "any":
       return args.some((a) => ev(a) === true);
+    case "all":
+      return args.every((a) => ev(a) === true);
     case "<=":
       return (ev(args[0]) as number) <= (ev(args[1]) as number);
+    case "<":
+      return (ev(args[0]) as number) < (ev(args[1]) as number);
+    case ">":
+      return (ev(args[0]) as number) > (ev(args[1]) as number);
+    case "!=":
+      return ev(args[0]) !== ev(args[1]);
+    case "+":
+      return args.reduce<number>((sum, a) => sum + (ev(a) as number), 0);
+    case "min":
+      return Math.min(...args.map((a) => ev(a) as number));
+    case "length":
+      return String(ev(args[0])).length;
+    case "index-of":
+      return String(ev(args[1])).indexOf(String(ev(args[0])));
     case "case":
       for (let i = 0; i + 1 < args.length; i += 2) if (ev(args[i]) === true) return ev(args[i + 1]);
       return ev(args[args.length - 1]);
@@ -67,8 +83,12 @@ function evaluate(expr: unknown, props: Record<string, unknown>, vars: Record<st
       for (let i = 2; i + 1 < args.length; i += 2) if (v >= (args[i] as number)) out = ev(args[i + 1]);
       return out;
     }
-    case "let":
-      return evaluate(args[2], props, { ...vars, [args[0] as string]: ev(args[1]) });
+    case "let": {
+      // Bindings are evaluated in the enclosing scope, as Mapbox does; the last argument is the body.
+      const bound: Record<string, unknown> = {};
+      for (let i = 0; i + 1 < args.length; i += 2) bound[args[i] as string] = ev(args[i + 1]);
+      return evaluate(args[args.length - 1], props, { ...vars, ...bound });
+    }
     case "var":
       return vars[args[0] as string];
     default:
@@ -93,6 +113,18 @@ const UNITS: [RockProps, RockFamily][] = [
   [{ name: "Unit B", lith: "", descrip: "", best_age_top: 300, best_age_bottom: 350 }, "sedimentary"],
   [{ name: "Conejos Formation", lith: "", descrip: "Andesitic lava flows and breccias", best_age_top: 29 }, "volcanic"],
   [{ name: "Gravelly sandstone", lith: "", best_age_top: 5 }, "sedimentary"],
+  // Zion, 2026-10-23: the description leads with its rocks and names basalt only in a last aside about another unit.
+  [
+    {
+      name: "Kayenta Formation, Tenney Canyon Tongue",
+      lith: "",
+      descrip: "(Mapped as single line where thin.) Red-brown siltstone, mudstone, and fine- grained sandstone; 0 to 98 m thick. (This \"Tenney\" differs from spelling of Tenny Creek in basalt lava flows unit description).",
+      best_age_top: 180.55,
+    },
+    "sedimentary",
+  ],
+  [{ name: "Unit C", lith: "", descrip: "Sandstone with thin interbeds of volcanic ash", best_age_top: 30 }, "sedimentary"],
+  [{ name: "Unit D", lith: "", descrip: "Basalt flows over older sandstone", best_age_top: 3 }, "volcanic"],
 ];
 
 describe("rock family classifier", () => {

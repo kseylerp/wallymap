@@ -243,10 +243,22 @@ export function vectorTileLayerSpecs(
 export const ROCK_PATTERN_STEP = 2;
 
 /**
+ * Fill opacity of the geologic map by zoom: the rock is the answer, so it stays fuller than other solid-keyed tiles at
+ * canyon zooms. At SOLID_TILE_FILL's 0.45 to 0.6 the Navajo Sandstone's grey sage barely showed over Zion on Topo (the
+ * screen check measured 18.6 of the 24 it needs, 2026-10-23).
+ */
+export const ROCK_TILE_FILL: [number, number][] = [
+  [9, 0.85],
+  [11, 0.84],
+  [13.5, 0.76],
+  [15, 0.68],
+];
+
+/**
  * The geologic map by rock family (spec T08): each unit filled in its family's color, darker with the age of its
  * youngest rock (lib/render/rockFamily.ts derives both from the tile's lith, name, description and ages), metamorphic
- * units hatched and loose sediments stippled in dark grey, thin white edges between units. The fill fades with zoom as
- * the other solid-keyed tiles do (SOLID_TILE_FILL), so trails and labels read at trailhead zooms.
+ * units hatched and loose sediments stippled in dark grey, thin white edges between units. The fill fades a little with
+ * zoom (ROCK_TILE_FILL), less than other solid-keyed tiles, so the rock still reads at canyon zooms.
  */
 export function rockFamilyLayerSpecs(
   layerId: string,
@@ -258,7 +270,7 @@ export function rockFamilyLayerSpecs(
   const patterned = Object.keys(FAMILY_PATTERNS);
   const hatch = hatchPatternId(DARK_GREY as HatchColor, ROCK_PATTERN_STEP);
   const pattern = ["match", family, ...Object.entries(FAMILY_PATTERNS).flatMap(([f, kind]) => [f, kind === "stipple" ? stipplePatternId(DARK_GREY) : hatch]), hatch] as unknown as string;
-  const fill = ["interpolate", ["linear"], ["zoom"], ...SOLID_TILE_FILL.flatMap(([z, o]) => [z, Math.round(o * opacity * 1000) / 1000])] as ExpressionSpecification;
+  const fill = ["interpolate", ["linear"], ["zoom"], ...ROCK_TILE_FILL.flatMap(([z, o]) => [z, Math.round(o * opacity * 1000) / 1000])] as ExpressionSpecification;
   const at = (o: number) => Math.round(o * 0.75 * opacity * 1000) / 1000;
   const on = ["in", family, ["literal", patterned]];
   const patternOpacity = ["interpolate", ["linear"], ["zoom"], 12, ["case", on, at(1), 0], 15, ["case", on, at(0.6), 0]] as unknown as ExpressionSpecification;

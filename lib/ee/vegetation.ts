@@ -17,7 +17,7 @@
  * swamp, riparian, floodplain: wetland; and so on). The shares and the card always keep LANDFIRE's own class names.
  */
 import { call, eq, gte, multiply, point, rectangle, reduceRegion, select, subtract, updateMask, visualize, type EeNode } from "./expr";
-import { DARK_GREY, OFF_WHITE, PURPLE, SAGE, SURFACE } from "@/lib/render/palette";
+import { DARK_GREY, OFF_WHITE, PINK, PURPLE, SAGE, SURFACE } from "@/lib/render/palette";
 import { hexToRgb, interpolateStops, oklchToRgb, rgbToHex, rgbToOklch } from "@/lib/render/ramp";
 import type { BBox } from "@/layers/types";
 import table from "@/layers/_data/landfire-evt.json";
@@ -129,11 +129,110 @@ export function readPoint(result: Record<string, unknown> | null | undefined): E
   return typeof v === "number" ? (EVT_CLASSES.get(Math.round(v)) ?? null) : null;
 }
 
-/** The tile route's picture: there is one (the eight groups), so the query only names it. */
+/** The tile route's group picture (the eight groups), named by its query. */
 export const TILE_QUERY = "view=groups&v=1";
 export const TILE_KEY = "vegetation-types:groups:v1";
 
 export function parseTileQuery(q: URLSearchParams): true | null {
   return q.get("view") === "groups" && q.get("v") === "1" ? true : null;
 }
+
+// ---- The answer's own picture: the largest named types in the box, each in its own color ----
+
+/** Most named types drawn in their own color (spec T09: at most 8 colors, the rest under Other). */
+export const TYPE_SLOTS = 7;
+/** A type smaller than this share of the box is not given its own color. */
+export const TYPE_MIN_SHARE = 0.01;
+/** How opaque the other types are drawn (in their group's color), so the named ones stand out and the land still reads. */
+export const OTHER_TYPES_ALPHA = 0.3;
+
+/** A color drawn at `alpha` over white (the key's swatch for a see-through fill). */
+export const faintOver = (hex: string, alpha: number): string => rgbToHex(hexToRgb(hex).map((c) => 255 - (255 - c) * alpha) as [number, number, number]);
+
+/**
+ * Colors the named types take, in turn, after conifer, water and farmland types have taken theirs: sage, light sage,
+ * a sage-purple grey, lavender, darker sage, a pale pink and off-white sage, all from the palette, each far enough from
+ * its neighbours to be told apart at a glance (Smokies: oak, cove, montane oak, northern hardwood and mesophytic forest).
+ */
+const TYPE_SEQUENCE = [
+  SAGE,
+  mix(SAGE, OFF_WHITE, 0.55),
+  mix(SAGE, PURPLE, 0.45),
+  mix(PURPLE, OFF_WHITE, 0.55),
+  deepen(SAGE, -0.16, 1.1),
+  mix(PINK, OFF_WHITE, 0.6),
+  mix(SAGE, OFF_WHITE, 0.82),
+];
+/** Conifer types: the deep sage of the group, then a lighter and a bluer one. */
+const CONIFER_SEQUENCE = [deepen(SAGE, -0.33, 1.25), deepen(SAGE, -0.24, 1), mix(deepen(SAGE, -0.3, 1.1), PURPLE, 0.3)];
+
+/**
+ * One color per named type, in the order given (largest first): conifer types take the deep sages, water purple,
+ * farmland and developed types dark grey drawn faint (as a solid swatch), sparse ground its group's grey, and every
+ * other type the next of TYPE_SEQUENCE. No two types share a color.
+ */
+export function typeColors(classes: EvtClass[]): string[] {
+  const own: Partial<Record<GroupKey, string[]>> = {
+    conifer: CONIFER_SEQUENCE,
+    water: [PURPLE, mix(PURPLE, OFF_WHITE, 0.3)],
+    developed: [faintOver(DARK_GREY, 0.35), faintOver(DARK_GREY, 0.55), faintOver(DARK_GREY, 0.2)],
+    sparse: [groupByKey("sparse")!.color, mix(groupByKey("sparse")!.color, DARK_GREY, 0.15)],
+  };
+  const taken: Partial<Record<GroupKey, number>> = {};
+  let next = 0;
+  const used = new Set<string>();
+  return classes.map((cls) => {
+    const list = own[cls.group];
+    const i = taken[cls.group] ?? 0;
+    let color: string | undefined;
+    if (list && i < list.length) {
+      taken[cls.group] = i + 1;
+      color = list[i];
+    } else {
+      while (next < TYPE_SEQUENCE.length && used.has(TYPE_SEQUENCE[next])) next++;
+      color = next < TYPE_SEQUENCE.length ? TYPE_SEQUENCE[next++] : mix(groupByKey(cls.group)!.color, OFF_WHITE, 0.3);
+    }
+    used.add(color);
+    return color;
+  });
+}
+
+/** The named types an answer colors: the largest at least TYPE_MIN_SHARE of the box, up to TYPE_SLOTS. */
+export function topTypes(shares: EvtShares): EvtClass[] {
+  return shares.classes.filter((c) => c.share >= TYPE_MIN_SHARE).slice(0, TYPE_SLOTS).map((c) => c.cls);
+}
+
+/**
+ * The picture of an answer: each of `codes` (EVT values, largest first) solid in its typeColors color, every other type
+ * in its group's color at OTHER_TYPES_ALPHA.
+ */
+export function typeTiles(codes: number[]): EeNode {
+  const classes = codes.map((c) => EVT_CLASSES.get(c)!);
+  const colors = typeColors(classes);
+  const n = codes.length;
+  const values = [...EVT_CLASSES.keys()];
+  const to = values.map((v) => {
+    const i = codes.indexOf(v);
+    return i >= 0 ? i + 1 : n + groupByKey(EVT_CLASSES.get(v)!.group)!.code;
+  });
+  const index = call("Image.remap", { image: evt(), from: values, to, bandName: EVT_BAND });
+  const alpha = subtract(1, multiply(gte(index, n + 1), 1 - OTHER_TYPES_ALPHA));
+  return updateMask(visualize(index, { min: 1, max: n + GROUPS.length, palette: [...colors, ...GROUPS.map((g) => g.color)] }), updateMask(alpha, gte(index, 1)));
+}
+
+export function typesTileQuery(codes: number[]): string {
+  return `view=types&v=1&c=${codes.join(",")}`;
+}
+
+/** The codes of a types picture's query: 1 to TYPE_SLOTS distinct EVT values of the lower 48 table, else null. */
+export function parseTypesQuery(q: URLSearchParams): number[] | null {
+  if (q.get("view") !== "types" || q.get("v") !== "1") return null;
+  const raw = (q.get("c") ?? "").split(",");
+  if (raw.length < 1 || raw.length > TYPE_SLOTS) return null;
+  const codes = raw.map((s) => (/^\d{4}$/.test(s) ? Number(s) : Number.NaN));
+  if (codes.some((c) => !EVT_CLASSES.has(c)) || new Set(codes).size !== codes.length) return null;
+  return codes;
+}
+
+export const typesTileKey = (codes: number[]) => `vegetation-types:types:v1:${codes.join(",")}`;
 

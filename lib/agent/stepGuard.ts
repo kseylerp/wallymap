@@ -543,24 +543,30 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
   if (ending) {
     const drawnHere = new Set(calls.flatMap((c) => (c.toolName === "render" || c.toolName === "compare") && typeof c.input.layerId === "string" ? [c.input.layerId] : []));
     const pending = undrawn(turn).filter((id) => !drawnHere.has(id));
-    if (pending.length > 0) {
-      const renders = pending.map((layerId): DraftCall => ({
-        toolCallId: guardId(),
-        toolName: "render",
-        input: normalizeRenderInput({ layerId }, getLayer(layerId), turn.question),
-      }));
-      // The answer's ranked layer is drawn again after them, so the camera ends on its top features, not on the context
-      // layer drawn last (Asheville's waterfall loops were framed off screen by the waterfalls' own render).
-      const ranked = [...turn.calls].reverse().find((c) => c.toolName === "render" && (c.output as { view?: unknown } | undefined)?.view === "ranked");
-      const rankedId = (ranked?.output as { layerId?: unknown } | undefined)?.layerId;
-      if (ranked && typeof rankedId === "string" && !pending.includes(rankedId) && !drawnHere.has(rankedId)) {
-        renders.push({ toolCallId: guardId(), toolName: "render", input: { ...(ranked.output as Record<string, unknown>), layerId: /^combine\b/.test(rankedId) ? "combine" : rankedId } });
-      }
+    const renders = pending.map((layerId): DraftCall => ({
+      toolCallId: guardId(),
+      toolName: "render",
+      input: normalizeRenderInput({ layerId }, getLayer(layerId), turn.question),
+    }));
+    // The answer's ranked layer is drawn again after the step's other renders, so the camera ends on its top features,
+    // not on a context layer drawn last (Asheville's waterfall loops were framed off screen by the waterfalls' own
+    // render) or on one trail the model picked out by name (Boulder's camera ended on Meyer's Homestead Trail).
+    const main = mainRankedRender(turn);
+    const stepRenders = [...calls.filter((c) => c.toolName === "render" || c.toolName === "compare"), ...renders];
+    const last = stepRenders[stepRenders.length - 1];
+    const lastId = typeof last?.input.layerId === "string" ? last.input.layerId : null;
+    const sameAsMain = (id: string | null) => id !== null && main !== null && (id === main.layerId || (/^combine\b/.test(id) && main.layerId === "combine"));
+    const redraw = main !== null && last !== undefined && !(sameAsMain(lastId) && !singleNamed(last.input));
+    if (redraw) renders.push({ toolCallId: guardId(), toolName: "render", input: main });
+    if (renders.length > 0) {
       const at = calls.findIndex((c) => c.toolName === "note");
-      calls = at === -1 ? renders : [...calls.slice(0, at), ...renders, ...calls.slice(at)];
-      // A text-only ending is written again after the renders, from the drawn map (unless it becomes the note below).
-      dropText = !hasNote && draft.hasText;
-      turn.note(`rendered ${pending.join(", ")} before the ${hasNote ? "note" : "answer"}: queried but never drawn`);
+      calls = at === -1 ? [...calls.filter((c) => c.toolName !== "note"), ...renders] : [...calls.slice(0, at), ...renders, ...calls.slice(at)];
+      if (pending.length > 0) {
+        // A text-only ending is written again after the renders, from the drawn map (unless it becomes the note below).
+        dropText = !hasNote && draft.hasText;
+        turn.note(`rendered ${pending.join(", ")} before the ${hasNote ? "note" : "answer"}: queried but never drawn`);
+      }
+      if (redraw) turn.note(`drew ${main!.layerId} ranked again last, so the camera ends on its top features`);
       changed = true;
     }
   }
@@ -644,6 +650,27 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
   const trailingText = calls.some((c) => c.toolName === "note") && turn.step >= MAX_STEPS - 1 ? followUpList(followUpsForTurn(turn, turn.modelFollowUps)) : undefined;
   if (trailingText) changed = true;
   return { calls, dropText: dropText || leakedText || deferred, rejected, changed, ...(text !== undefined && { text }), ...(trailingText && { trailingText }) };
+}
+
+/** True for a render that picks out one or two features by name (a detail of one trail), not the ranked answer. */
+function singleNamed(input: Record<string, unknown>): boolean {
+  const name = (input.filters as { name?: { include?: unknown[]; match?: unknown } } | undefined)?.name;
+  return (Array.isArray(name?.include) && name.include.length > 0) || (typeof name?.match === "string" && name.match.trim() !== "");
+}
+
+/**
+ * The render that draws the answer ranked, as drawn: the last ranked render of a join (hikes near a waterfall), else
+ * the last ranked render that does not pick out features by name. Its layer id is "combine" for a join. Null when the
+ * turn drew nothing ranked.
+ */
+export function mainRankedRender(turn: Pick<Turn, "calls">): Record<string, unknown> | null {
+  const ranked = turn.calls
+    .filter((c) => c.toolName === "render" && (c.output as { view?: unknown } | undefined)?.view === "ranked" && typeof (c.output as { layerId?: unknown }).layerId === "string")
+    .map((c) => c.output as Record<string, unknown> & { layerId: string });
+  const isJoin = (o: { layerId: string }) => /^combine\b/.test(o.layerId);
+  const pick = [...ranked].reverse().find(isJoin) ?? [...ranked].reverse().find((o) => !singleNamed(o));
+  if (!pick) return null;
+  return { ...pick, layerId: isJoin(pick) ? "combine" : pick.layerId };
 }
 
 /**

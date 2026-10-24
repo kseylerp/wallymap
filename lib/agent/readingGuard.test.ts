@@ -190,3 +190,38 @@ describe("withReading", () => {
     expect(withReading({ layerId: "glaciers", view: "detail" }, turn).view).toBe("change");
   });
 });
+
+describe("the camera ends on the ranked answer", () => {
+  it("draws the join ranked again after a render that picks one trail by name (Boulder's camera ended on one trail)", async () => {
+    const turn = turnFor("Out-and-back hikes to a viewpoint near Boulder, 3 to 6 miles round trip");
+    turn.place = sedona;
+    for (const l of turn.reading.layers) {
+      turn.readingAdded.add(l.layerId);
+      turn.queries.push({ layerId: l.layerId, bbox: SEDONA, inputKey: "[]", ok: true, drawable: true, wide: false });
+      turn.drawn.add(l.layerId);
+    }
+    turn.readingAdded.add("combine");
+    turn.calls.push({ toolName: "render", input: { layerId: "combine" }, output: { layerId: "combine:osm-trails-near-viewpoints", view: "ranked", rankBy: "roundTripKm" } });
+    const named = call("render", { layerId: "osm-trails", filters: { name: { include: ["Meyer's Homestead Trail"] } }, view: "ranked" });
+    const decision = await decideStep({ calls: [named, call("note", { markdown: "Seven hikes." })], hasText: false }, turn, ["query_osm-trails", "render", "note", "combine"]);
+    expect(decision.calls.map((c) => [c.toolName, c.input.layerId])).toEqual([
+      ["render", "osm-trails"],
+      ["render", "combine"],
+      ["note", undefined],
+    ]);
+    expect(decision.calls[1].input).toMatchObject({ view: "ranked", rankBy: "roundTripKm" });
+  });
+
+  it("adds nothing when the step's last render is the ranked answer itself", async () => {
+    const turn = turnFor("Good day hikes near Bend");
+    turn.place = sedona;
+    for (const l of turn.reading.layers) {
+      turn.readingAdded.add(l.layerId);
+      turn.queries.push({ layerId: l.layerId, bbox: SEDONA, inputKey: "[]", ok: true, drawable: true, wide: false });
+      turn.drawn.add(l.layerId);
+    }
+    turn.calls.push({ toolName: "render", input: { layerId: "osm-trails" }, output: { layerId: "osm-trails", view: "ranked" } });
+    const decision = await decideStep({ calls: [call("render", { layerId: "osm-trails", view: "ranked" }), call("note", { markdown: "Hikes." })], hasText: false }, turn, ["query_osm-trails", "render", "note"]);
+    expect(decision.calls.map((c) => c.toolName)).toEqual(["render", "note"]);
+  });
+});

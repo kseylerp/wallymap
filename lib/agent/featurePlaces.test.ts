@@ -63,6 +63,17 @@ describe("pickFeature", () => {
     expect(townWins("Lake Powell", LAKE_POWELL)).toBe(false);
   });
 
+  it("takes a famous lake over an obscure namesake in the same region, but not over one in the view", () => {
+    const tahoe = [
+      osm("Lake Tahoe", "water", "lake", 0.575, [-120.164, 38.928, -119.926, 39.249], "Lake Tahoe, Placer County, California"),
+      osm("Lake Tahoe", "water", "lake", 0.133, [-123.6014, 45.3496, -123.6011, 45.3499], "Lake Tahoe, Tillamook County, Oregon"),
+    ];
+    // Asked beside Crater Lake (the question's other place), 290 km from the Oregon pond.
+    expect(pickFeature("Lake Tahoe", tahoe, [-122.1, 42.94])?.center[1]).toBeCloseTo(39.09, 1);
+    // Looking at the pond itself.
+    expect(pickFeature("Lake Tahoe", tahoe, [-123.6, 45.35])?.center[1]).toBeCloseTo(45.35, 2);
+  });
+
   it("does not take an obscure feature far from anywhere asked", () => {
     expect(pickFeature("Jackson Hole", JACKSON_HOLE)).toBeNull();
     expect(pickFeature("Jackson Hole", JACKSON_HOLE, [-88.6, 37.5])).not.toBeNull();

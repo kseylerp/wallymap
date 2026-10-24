@@ -74,6 +74,48 @@ export function isRangeLike(place: string): boolean {
   return RANGE_LIKE.test(place);
 }
 
+const US_STATES = [
+  "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho",
+  "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota",
+  "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey", "New Mexico", "New York", "North Carolina",
+  "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas",
+  "Utah", "Vermont", "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming",
+];
+
+/** Short names people give ranges that cross state lines, and the range's own name. */
+const RANGE_ALIASES: Record<string, string> = {
+  rockies: "Rocky Mountains",
+  "rocky mountains": "Rocky Mountains",
+  cascades: "Cascade Range",
+  "cascade range": "Cascade Range",
+  "cascade mountains": "Cascade Range",
+  appalachians: "Appalachian Mountains",
+  "appalachian mountains": "Appalachian Mountains",
+  sierra: "Sierra Nevada",
+  "sierra nevada": "Sierra Nevada",
+  "great basin": "Great Basin",
+  "mojave desert": "Mojave Desert",
+  "sonoran desert": "Sonoran Desert",
+};
+
+/**
+ * A state's part of a range ("Colorado Rockies", "the Montana Rockies", "Rocky Mountains, Colorado"): the state and the
+ * range, or null. The place geocoder answers "Colorado Rockies" with Colorado Avenue in Seibert, Colorado.
+ */
+export function stateRange(place: string): { state: string; range: string } | null {
+  const text = place.trim().replace(/^the\s+/i, "");
+  const state = US_STATES.find((st) => new RegExp(`^${st}(?:'s)?\\s+(?:part\\s+of\\s+)?(?:the\\s+)?`, "i").test(text));
+  if (state) {
+    const rest = text.replace(new RegExp(`^${state}(?:'s)?\\s+(?:part\\s+of\\s+)?(?:the\\s+)?`, "i"), "").trim().toLowerCase();
+    const range = RANGE_ALIASES[rest];
+    if (range) return { state, range };
+  }
+  const [first, ...rest] = text.split(",").map((t) => t.trim());
+  const range = RANGE_ALIASES[first.replace(/^the\s+/i, "").toLowerCase()];
+  const named = US_STATES.find((st) => st.toLowerCase() === rest.join(", ").toLowerCase());
+  return range && named ? { state: named, range } : null;
+}
+
 /** Place types asked of the place geocoder for a range-like name: areas and settlements, never streets or addresses. */
 const RANGE_PLACE_TYPES = "region,district,place,locality";
 
@@ -168,6 +210,22 @@ export async function geocode(
 
   const polar = worldRegion(place.split(",")[0]);
   if (polar) return polar;
+  // A state's part of a range is where the two overlap: "Colorado Rockies" is the Rocky Mountains inside Colorado.
+  const part = opts.nearOf ? null : stateRange(place);
+  if (part) {
+    const [range, state] = await Promise.all([geocode(part.range, { nearOf: place }), geocode(/^(?:Washington|New York)$/.test(part.state) ? `${part.state} State` : part.state, { nearOf: place })]);
+    if (!("error" in range) && !("error" in state)) {
+      const bbox: BBox = [
+        Math.max(range.bbox[0], state.bbox[0]),
+        Math.max(range.bbox[1], state.bbox[1]),
+        Math.min(range.bbox[2], state.bbox[2]),
+        Math.min(range.bbox[3], state.bbox[3]),
+      ];
+      if (bbox[0] < bbox[2] && bbox[1] < bbox[3]) {
+        return { bbox, center: [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2], name: `${part.state}'s part of the ${range.name.split(",")[0]}`, source: range.source };
+      }
+    }
+  }
   const named = await lookupRegion(place, opts.proximity, { naturalEarth: firstRegion });
   if (named) return named;
   // A natural feature or a named route (a bay, a reservoir, a volcano, a river, a trail): OpenStreetMap's search, then

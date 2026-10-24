@@ -609,3 +609,15 @@ describe("an exact name beats a town that only starts with it", () => {
     vi.unstubAllEnvs();
   });
 });
+
+describe("a state's part of a range", () => {
+  it("reads the state and the range from either order", async () => {
+    const { stateRange } = await import("@/lib/agent/geocode");
+    expect(stateRange("Colorado Rockies")).toEqual({ state: "Colorado", range: "Rocky Mountains" });
+    expect(stateRange("the Montana Rockies")).toEqual({ state: "Montana", range: "Rocky Mountains" });
+    expect(stateRange("Rocky Mountains, Colorado")).toEqual({ state: "Colorado", range: "Rocky Mountains" });
+    expect(stateRange("West Virginia Appalachians")).toEqual({ state: "West Virginia", range: "Appalachian Mountains" });
+    expect(stateRange("Colorado Springs")).toBeNull();
+    expect(stateRange("Rocky Mountain National Park")).toBeNull();
+  });
+});

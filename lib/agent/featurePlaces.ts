@@ -98,6 +98,15 @@ const union = (boxes: BBox[]): BBox => [
   Math.max(...boxes.map((b) => b[3])),
 ];
 
+/** Nominatim's importance (from Wikipedia and Wikidata links) of a feature famous enough to be the one meant anywhere. */
+const FAMOUS = 0.4;
+
+/** A namesake this close to the view or the question's other places is the one the user is looking at. */
+const IN_VIEW_KM = 50;
+
+/** A box's size in square degrees, enough to tell a lake from a pond. */
+const area = (p: Pick<OsmPlace, "bbox">) => Math.max(0, p.bbox[2] - p.bbox[0]) * Math.max(0, p.bbox[3] - p.bbox[1]);
+
 /** The farthest any feature of a route may lie from its nearest neighbour and still be the same route. */
 const ROUTE_GAP_KM = 250;
 
@@ -120,7 +129,13 @@ export function pickFeature(place: string, found: OsmPlace[], proximity?: [numbe
     // Near the view or the question's other places, the closest wins (Red Rock Canyon near Las Vegas is the Clark County
     // one, not Nye County's 250 km north); with nothing to go by, the most important.
     .sort((a, b) => b.near - a.near || (a.near && b.near ? a.km - b.km : 0) || a.way - b.way || b.p.importance - a.p.importance);
-  const best = ranked[0].p;
+  let best = ranked[0].p;
+  // A famous, larger feature beats an obscure namesake that is only somewhere in the region: "Lake Tahoe" beside Crater
+  // Lake is the lake in the Sierra (importance 0.58, from its Wikipedia and Wikidata links), not the pond of that name in
+  // Tillamook County (0.13), 290 km from Crater Lake. A namesake in the view itself (within 50 km) is still the one meant.
+  const famous = [...features].sort((a, b) => b.importance - a.importance)[0];
+  const inView = proximity !== undefined && km(proximity, best.center) <= IN_VIEW_KM;
+  if (famous !== best && !inView && famous.importance >= FAMOUS && famous.importance >= 3 * best.importance && area(famous) > area(best)) best = famous;
   if (!near(best)) {
     if (town && town.importance >= best.importance) return null;
     if (best.importance < 0.2 && best.category !== "highway") return null;

@@ -262,10 +262,36 @@ async function sideOf(side: z.infer<typeof SideSchema>, turn: Turn, view: MapVie
   if (body.kind !== "geojson") return { error: `${id} answers with map tiles, not features, so it cannot be combined.` };
   // The model's filters, else the ones the question's words set on this layer ("in drought" is D1 to D4).
   const fromQuestion = Object.fromEntries(readingFilters(turn.reading, id).filter((f) => f.include).map((f) => [f.key, { include: f.include }]));
-  const filters: LayerFilters = { ...(side.filters ?? fromQuestion) } as LayerFilters;
+  const { filters, dropped } = sideFilters((side.filters ?? fromQuestion) as LayerFilters, layer, body.data.features);
+  if (dropped.length > 0) turn.note(`combine: ${id} filter${dropped.length > 1 ? "s" : ""} ${dropped.join(", ")} name${dropped.length > 1 ? "" : "s"} no property of its features: left out`);
   if (side.match) filters.name = { ...filters.name, match: side.match };
   const kept = applyFilters(body.data, filters).features;
   return { layer, features: kept, citation: body.citation, bbox, input };
+}
+
+/**
+ * A side's filters as its features carry them: a chip's label or plural ("kinds", the query input's name, is the
+ * features' `kind`) becomes the property, and a key no feature has is left out rather than hiding every feature
+ * (Asheville's waterfall loops: b.filters { kinds: waterfall } kept no waterfall, and the join said "no features").
+ */
+export function sideFilters(filters: LayerFilters, layer: Pick<Layer, "attributes">, features: Feature[]): { filters: LayerFilters; dropped: string[] } {
+  const has = (key: string) => features.some((f) => f.properties?.[key] !== undefined && f.properties?.[key] !== null);
+  const attrs = layer.attributes ?? [];
+  const out: LayerFilters = {};
+  const dropped: string[] = [];
+  for (const [key, entry] of Object.entries(filters ?? {})) {
+    const singular = key.replace(/(?<=[a-z])s$/, "");
+    const target =
+      [key, attrs.find((a) => a.key === key || a.label.toLowerCase() === key.toLowerCase())?.key, singular, attrs.find((a) => a.key === singular)?.key].find(
+        (k): k is string => typeof k === "string" && has(k),
+      ) ?? null;
+    if (target === null && features.length > 0) {
+      dropped.push(key);
+      continue;
+    }
+    out[target ?? key] = entry;
+  }
+  return { filters: out, dropped };
 }
 
 /**

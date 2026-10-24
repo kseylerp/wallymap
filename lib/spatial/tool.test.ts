@@ -95,6 +95,19 @@ describe("runCombine", () => {
     expect(out.data.features.map((x) => x.properties?.name)).toEqual(["Far Camp"]);
   });
 
+  it("reads a filter named like the query input (kinds) as the features' own property (kind), and leaves out one no feature has", async () => {
+    answers.set("outdoor-features", geojson([f({ type: "Point", coordinates: [-121.8, 46.85 + north(200)] }, { name: "Sylvia Falls", kind: "waterfall" })]));
+    const turn = turnWithQueries("osm-trails", "outdoor-features");
+    const out = await runCombine(
+      { op: "near", a: { layerId: "osm-trails", filters: { color: { include: ["blue"] } } }, b: { layerId: "outdoor-features", filters: { kinds: { include: ["waterfall"] } } }, distance: 0.5, unit: "km" },
+      turn,
+      null,
+    );
+    if ("error" in out) throw new Error(out.error);
+    expect(out.data.features.map((x) => x.properties?.name)).toEqual(["Wonderland Trail"]);
+    expect(turn.log.some((l) => /color .*left out/.test(l))).toBe(true);
+  });
+
   it("overlap: allotments clipped to habitat, with acres in the statement", async () => {
     const turn = turnWithQueries("grazing-allotments", "critical-habitat");
     const out = await runCombine({ op: "overlap", a: { layerId: "grazing-allotments" }, b: { layerId: "critical-habitat" }, unit: "km" }, turn, null);

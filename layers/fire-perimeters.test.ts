@@ -302,3 +302,19 @@ describe("fire-perimeters layer", () => {
     expect(contractProblems(layer)).toEqual([]);
   });
 });
+
+describe("fires over a year old with no incident record", () => {
+  it("read Out; a recent one keeps no status", async () => {
+    const { pastFiresOut } = await import("./fire-perimeters");
+    const fc = {
+      type: "FeatureCollection" as const,
+      features: [
+        { type: "Feature" as const, geometry: null, properties: { name: "Park", t: "2024-07-24T21:52:43.000Z" } },
+        { type: "Feature" as const, geometry: null, properties: { name: "New", t: "2026-10-01T00:00:00.000Z" } },
+        { type: "Feature" as const, geometry: null, properties: { name: "Tamarack", t: "2021-07-04T00:00:00.000Z", status: "active" } },
+      ],
+    };
+    pastFiresOut(fc as never, Date.parse("2026-10-24T00:00:00Z"));
+    expect(fc.features.map((f) => (f.properties as { status?: string }).status)).toEqual(["out", undefined, "active"]);
+  });
+});

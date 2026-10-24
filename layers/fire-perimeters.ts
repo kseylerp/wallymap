@@ -308,6 +308,19 @@ export function joinIncidents(fc: FeatureCollection, incidents: Map<string, Inci
   return joined;
 }
 
+/** A fire discovered longer ago than this, with no incident record, is out (the Park Fire of July 2024 had no record). */
+const LONG_OUT_DAYS = 365;
+
+/** Marks fires over a year old that no incident record joined as out (2020 on; the older history is already out). */
+export function pastFiresOut(fc: FeatureCollection, now: number = Date.now()): void {
+  for (const f of fc.features) {
+    const p = f.properties as Record<string, string | number> | null;
+    if (!p || p.status !== undefined) continue;
+    const t = typeof p.t === "string" ? Date.parse(p.t) : Number.NaN;
+    if (Number.isFinite(t) && now - t > LONG_OUT_DAYS * 86_400_000) p.status = "out";
+  }
+}
+
 const TRUNCATED_NOTE = "Showing the 2,000 largest fires; zoom in for all";
 
 /**
@@ -364,7 +377,7 @@ const HELP: Record<string, FieldHelp> = {
     source: "NIFC WFIGS Incident Locations",
     url: "https://data-nifc.opendata.arcgis.com/",
   },
-  status: { text: "Out (declared out), Contained (a line all the way around) or Still burning, from the incident record (2020 on); fires before 2020 come from the history record, which has no status, and are all long out." },
+  status: { text: "Out (declared out), Contained (a line all the way around) or Still burning, from the incident record (2020 on); fires before 2020 come from the history record, which has no status, and are all long out, as is any fire over a year old with no incident record." },
   lastMapped: { text: "When this perimeter was last mapped; a fire still burning can have grown since." },
 };
 
@@ -474,8 +487,10 @@ const firePerimeters = defineLayer({
     const total = wide && history.total !== undefined && wfigs.total !== undefined ? history.total + wfigs.total : undefined;
     const data = normalizeFirePerimeters(history.fc, wfigs.fc);
     const notes: string[] = [];
-    if (incidents.ok) joinIncidents(data, incidentsById(incidents.fc));
-    else {
+    if (incidents.ok) {
+      joinIncidents(data, incidentsById(incidents.fc));
+      pastFiresOut(data);
+    } else {
       joinIncidents(data, new Map());
       notes.push("Containment could not be loaded right now, so the fires' status is not shown");
     }

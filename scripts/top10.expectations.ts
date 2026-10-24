@@ -504,14 +504,14 @@ export const TOP10: Top10Expect[] = [
   {
     id: "T10.1", useCase: "T10",
     question: "Typical temperature and precipitation by month at Lake Tahoe, and when the snow usually arrives",
-    layers: ["snowpack|weather-forecast"], main: "snowpack|weather-forecast", basemap: TOPO,
+    layers: ["climate-normals|snowpack|weather-forecast"], main: "climate-normals|snowpack|weather-forecast", basemap: TOPO,
     facts: [{ what: "monthly temperatures in °F", re: DEG_F }, { what: "precipitation by month", re: /\b\d+(?:\.\d+)?\s*(?:in|inches|mm)\b/i }, { what: "when snow arrives", re: /snow[^.]*(?:oct|nov|dec)|(?:oct|nov|dec)[^.]*snow/i }],
     needs: ["climate normals by month (Open-Meteo history or ERA5-Land through Earth Engine, or NOAA 1991-2020 station normals)", "a monthly climate strip"],
   },
   {
     id: "T10.2", useCase: "T10",
     question: "When in the year is the Merced River highest in Yosemite Valley?",
-    layers: ["streamflow|river-pulse"], main: "streamflow|river-pulse", basemap: TOPO,
+    layers: ["flow-by-month|streamflow|river-pulse"], main: "flow-by-month|streamflow|river-pulse", basemap: TOPO,
     facts: [{ what: "peak month", re: /\b(?:may|june|apr(?:il)?)\b/i }, { what: "flow in cfs", re: CFS }],
     needs: ["flow by month of the year (USGS daily statistics) as a monthly strip"],
   },

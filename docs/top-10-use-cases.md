@@ -967,12 +967,12 @@ National Phenology Network, NASA MODIS; depth: NOAA NCEI, GEBCO Compilation Grou
   "Show Crater Lake's depth profile".
 
 **Acceptance tests.**
-- T10.1: `snowpack` or `weather-forecast`; Topographical; note gives monthly °F, precipitation in inches or mm, and
+- T10.1: `climate-normals`, `snowpack` or `weather-forecast`; Topographical; note gives monthly °F, precipitation in inches or mm, and
   when snow arrives. Needs normals and the monthly strip.
-- T10.2: `streamflow` or `river-pulse`; note gives the peak month and cfs. Needs flow by month.
+- T10.2: `flow-by-month`, `streamflow` or `river-pulse`; note gives the peak month and cfs. Needs flow by month.
 - T10.3: `lakes`; detail or ranked; both lakes named with numbers; card Maximum depth, Kind, Area; note gives both
   depths; names ≥ 2. Needs bathymetry for both.
-- T10.4: `phenology` or `greenness`; Topo or Data only; note gives the green-up month and early or late.
+- T10.4: `phenology` (its `greenup` view: MODIS green-up dates) or `greenness`; Topo or Data only; note gives the green-up month and early or late.
 - T10.5: `lakes` or `tides` in the view; note gives a depth. Needs bathymetry.
 
 ---

@@ -73,3 +73,17 @@ layer's short title with its rank ("Wolf packs #3"). Give features a `place` or 
 ## `identify?(ctx, at, input)` (raster tile layers)
 
 A raster picture has no features to pick, so a tap on it opens nothing unless the layer can ask its source what is drawn at the point. `identify` does that through the source's own endpoint (`layers/_shared/identify.ts`: ArcGIS MapServer `identify`, ArcGIS ImageServer `identify` for a pixel value, WMS `GetFeatureInfo` as GeoServer JSON) and returns one feature for the card (title in `name`, facts the layer's `card` lists), `null` where the source has nothing there, or `{ error }`. `at` carries the point, plus the start of the tile period on screen (`time`, ISO) for dated tiles and the scenario value shown (`scenario`), so the answer matches the picture. The browser calls `POST /api/layer/<id>/identify` (`lib/render/identify.ts`) when a tap picks nothing else; the catalog marks such layers `identify: true`. Layers with identify: flood-zones (FEMA zone), fire-hazard (hazard class), burn-severity (severity of the year shown), land-cover (the NLCD class of the map year shown; WorldCover has no feature-info service). Vector tile layers (geology, hardiness zones, public lands) need none: their features are picked from the tiles.
+
+## `months` on answers (the monthly strip)
+
+`{ place; period; rows: MonthlyRow[]; mark?: { month; fraction; label }; source? }`, on geojson and tiles answers.
+
+An answer that is a year at one place (climate normals at a station, a river's flow by month, the months spring greens
+up) carries twelve values per variable, January first, and the app draws them under the map in the linked chart's
+slot (`components/MonthlyStrip.tsx`, shaped by `lib/render/monthlyStrip.ts`): the top shown layer with `months` wins.
+Each row is a `band` (`high` and `low`: the normal daily temperatures), `bars` (`values`: precipitation, flow) or
+`cells` (`values` shaded up to `max`, default the largest: the share of days with snow on the ground, years greening
+up). Every row has a `label`, a `unit` the strip prints ("°F", "in", "cfs", "share of days", "years") and a `legend`
+in words ("Bars: normal monthly precipitation (rain and melted snow), 1991–2020"). `mark` pins one date inside a
+month (the usual green-up). The current month carries the pink playhead; tapping a month states its values. Layers
+with it: climate-normals, flow-by-month, phenology (greenup view, and the anomaly view when Earth Engine is set up).

@@ -55,6 +55,8 @@ type LayerStackProps = {
   compareSlot?: ReactNode;
   /** The scenario scrubbers (components/ScenarioScrubber.tsx), docked under the time scrubber; they bring their own hairlines. */
   scenarioSlot?: ReactNode;
+  /** The monthly strip (components/MonthlyStrip.tsx), in the linked chart's slot under the time panel; it brings its own hairline. */
+  monthsSlot?: ReactNode;
   /** "Export map…" at the foot of the console (components/ExportControl.tsx); empty, it takes no space. */
   exportSlot?: ReactNode;
   /** The scenario scrubber's state: a scenario layer's row slider shows the amount it holds. */
@@ -748,6 +750,7 @@ export function LayerStack({
   shownLayers,
   compareSlot,
   scenarioSlot,
+  monthsSlot,
   exportSlot,
   scenario,
   compare,
@@ -833,6 +836,12 @@ export function LayerStack({
       <div data-slot="compare" className="shrink-0 empty:hidden">
         {compareSlot}
       </div>
+      {/* The monthly strip (a year at one place) sits where the linked chart does; empty, the slot takes no space. */}
+      {monthsSlot !== undefined && (
+        <div data-slot="months" className="shrink-0 empty:hidden">
+          {monthsSlot}
+        </div>
+      )}
     </>
   );
   const listEl = (

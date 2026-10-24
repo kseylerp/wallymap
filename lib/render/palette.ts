@@ -130,6 +130,8 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "uranium": "hazard",
   avalanche: "hazard",
   "weather-forecast": "data",
+  "climate-normals": "data",
+  "flow-by-month": "data",
 };
 
 /**

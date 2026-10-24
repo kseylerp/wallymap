@@ -567,6 +567,9 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   // The forecasts added for the use cases (audit R8, R10): a 7-day hourly weather forecast and the avalanche centers' danger.
   "will it rain in yosemite valley this weekend?": { layers: ["weather-forecast"] },
   "what's the avalanche danger in little cottonwood canyon today?": { layers: ["avalanche"] },
+  // A place through the year (T10): monthly climate normals and a river's flow by month.
+  "what is the weather usually like in july in bozeman?": { layers: ["climate-normals"] },
+  "which month does the truckee river run highest?": { layers: ["flow-by-month"] },
 };
 
 /**

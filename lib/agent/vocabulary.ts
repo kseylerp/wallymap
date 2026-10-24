@@ -100,6 +100,8 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "wind-flow", synonyms: ["wind", "windiest", "windy", "gusty", "wind direction"], notes: "hourly 10 m wind forecast as moving particles, today and the next days", gist: "hourly wind forecast drawn as moving particles" },
   { layerId: "weather-forecast", synonyms: ["forecast", "will it rain", "too hot", "too cold", "temperature", "gusts", "tomorrow's weather"], notes: "7-day hourly forecast at the place: temperature, rain chance and amount, wind and gusts; saturday and sunday lines", gist: "seven-day hourly weather forecast at the asked place" },
   { layerId: "avalanche", synonyms: ["avalanche danger", "avalanche forecast", "avalanche risk", "avy"], notes: "US avalanche centers' daily danger by zone; quote the center and link it, never infer from weather", gist: "daily avalanche danger by US forecast zone" },
+  { layerId: "climate-normals", synonyms: ["climate", "typical weather", "normals"], notes: "1991-2020 monthly normals at a place; lon, lat, name", gist: "typical temperature, rain and snow for each month" },
+  { layerId: "flow-by-month", synonyms: ["peak flow", "river highest", "snowmelt peak"], notes: "median gauge flow per month; peak and low month", gist: "the months a river runs highest and lowest" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

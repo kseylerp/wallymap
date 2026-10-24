@@ -362,6 +362,8 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - Show my class how the glaciers in Glacier National Park have shrunk
 - What rock is under Denver?
 - How has Arctic sea ice changed since 2012?
+- What is the weather usually like in July in Bozeman?
+- Which month does the Truckee River run highest?
 <!-- eval:end -->
 
 ## Last run

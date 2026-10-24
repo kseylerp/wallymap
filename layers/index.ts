@@ -90,3 +90,5 @@ import "./forest-types";
 import "./terrain";
 import "./weather-forecast";
 import "./avalanche";
+import "./climate-normals";
+import "./flow-by-month";

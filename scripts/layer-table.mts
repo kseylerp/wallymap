@@ -69,7 +69,7 @@ const META: Record<string, { shows: string; source: string; freshness: string; c
   "fire-weather": { shows: "Fire danger forecast (Fire Weather Index)", source: "EC JRC GWIS / EFFIS", freshness: "Daily, up to 9 days ahead" },
   lakes: { shows: "Named lakes and reservoirs with maximum depth", source: "Wikidata", freshness: "Live (community edits)" },
   drought: { shows: "Weekly drought categories D0 to D4", source: "U.S. Drought Monitor (NDMC)", freshness: "Weekly" },
-  phenology: { shows: "Whether spring leaf-out and bloom came early or late", source: "USA National Phenology Network", freshness: "Daily this year; yearly back to 1981", coverage: "Lower 48 states" },
+  phenology: { shows: "Whether spring leaf-out and bloom came early or late; the usual green-up date", source: "USA National Phenology Network; NASA MODIS via Earth Engine", freshness: "Daily this year; yearly back to 1981; green-up 2001–2025", coverage: "Lower 48 states (green-up worldwide)" },
   "burn-severity": { shows: "Burned areas of large fires, by year", source: "MTBS (USGS, USFS)", freshness: "Yearly, about 18 months behind" },
   smoke: { shows: "Wildfire smoke plumes by density", source: "NOAA Hazard Mapping System", freshness: "Daily", coverage: "North and Central America" },
   "geologic-unit": { shows: "The rock unit, age and rock type under one point", source: "Macrostrat", freshness: "Static" },
@@ -102,6 +102,11 @@ const META: Record<string, { shows: string; source: string; freshness: string; c
   "imagery-by-date": { shows: "True-colour 30 m satellite picture on a chosen day", source: "NASA HLS (Landsat, Sentinel-2) via GIBS", freshness: "Every few days, about 2 days behind" },
   mines: { shows: "Mines, prospects and mineral deposits by commodity", source: "USGS MRDS, USMIN", freshness: "Static (about 2011)" },
   uranium: { shows: "Navajo Nation abandoned uranium mines and DOE mill-tailings sites", source: "Navajo Nation AUM program, DOE Legacy Management", freshness: "Static (2007 hazard scores)", coverage: "Western US" },
+  terrain: { shows: "Slope angle, the way slopes face and terrain in its own shade, computed from the elevation model", source: "AWS Terrain Tiles (Mapzen, USGS 3DEP and others)", freshness: "Static" },
+  "weather-forecast": { shows: "Seven-day hourly forecast at the asked place and across the view: temperature, rain, wind", source: "NOAA National Weather Service (US), Open-Meteo elsewhere", freshness: "Hourly forecast (updated through the day)" },
+  avalanche: { shows: "Avalanche danger today by forecast zone, on the North American scale", source: "US avalanche centers via avalanche.org", freshness: "Daily in season", coverage: "US forecast zones" },
+  "climate-normals": { shows: "Normal high and low temperature, precipitation and snow for each month at a place, with the monthly strip", source: "NOAA NCEI U.S. Climate Normals; TerraClimate via Earth Engine", freshness: "Static (1991–2020 normals)" },
+  "flow-by-month": { shows: "The month a river runs highest and lowest at USGS gauges, median flow by month", source: "USGS NWIS monthly statistics", freshness: "Monthly record, whole period of each gauge" },
 };
 
 function coverageText(l: Layer): string {

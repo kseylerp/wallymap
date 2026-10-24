@@ -49,6 +49,13 @@ describe("plans read before the model chooses", () => {
     expect(readQuestion("Campsites near a lake in the Sierra", NOW).combine).toMatchObject({ op: "near" });
   });
 
+  it("reads bike trails as the mountain bike trails, with an easy level", () => {
+    const easy = readQuestion("Easy bike trails here", NOW);
+    expect(easy.layers.filter((l) => l.strong).map((l) => l.layerId)).toEqual(["mtb-trails"]);
+    expect(easy.layers.map((l) => l.layerId)).not.toContain("osm-trails");
+    expect(easy.filters).toContainEqual(expect.objectContaining({ layerId: "mtb-trails", key: "level", include: ["beginner"] }));
+  });
+
   it("names only registered layers", () => {
     expect(planLayerIds().filter((id) => !getLayer(id))).toEqual([]);
   });

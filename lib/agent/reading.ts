@@ -315,6 +315,13 @@ const PHRASES: {
     because: "a trail color or flow trail is a mountain bike rating",
   },
   {
+    // "Easy bike trails here" is mountain biking: the bike trails with their IMBA rating, not every footpath.
+    re: /\b(?:bike|biking|bicycle|cycling|mtb|mountain[- ]bik\w*)\s+(?:trails?|paths?|rides?|loops?|routes?)\b|\b(?:trails?|places?)\s+to\s+(?:mountain\s+)?bike\b|\bwhere\s+(?:to|can\s+i)\s+(?:mountain\s+)?bike\b/i,
+    layers: ["mtb-trails"],
+    avoid: ["osm-trails", "river-pulse", "streamflow"],
+    because: "bike trails are the mountain bike trails with their difficulty rating",
+  },
+  {
     re: /\b(?:day\s+hikes?|good\s+hikes?|best\s+hikes?|easy\s+hikes?|short\s+hikes?|long\s+hikes?|hikes?\b(?!\s+(?:to|up)\b)|trail\s+runs?|trail\s+running|long\s+runs?)\b/i,
     layers: ["osm-trails"],
     filters: { "osm-trails": { kind: ["path", "footway"] } },

@@ -196,9 +196,9 @@ const mineralLeases = defineLayer({
   hardMaxAreaKm2: 40_000,
   wide: { mode: "ranked", limit: MAX_LEASES, orderBy: "area (acres)" },
   input: z.object({
+    // One kind as a bare string ("oil-gas") is read as a list of one (the model sent it so on 2026-10-23).
     kinds: z
-      .array(z.enum(["oil-gas", "coal", "minerals"]))
-      .min(1)
+      .preprocess((v) => (typeof v === "string" ? [v] : v), z.array(z.enum(["oil-gas", "coal", "minerals"])).min(1))
       .default(["oil-gas", "coal", "minerals"])
       .describe("Which leases: 'oil-gas', 'coal', 'minerals' (other solid minerals); default all three."),
   }),

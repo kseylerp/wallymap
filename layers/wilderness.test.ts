@@ -120,7 +120,7 @@ describe("wilderness layer", () => {
 
     expect(r.data.features.some((f) => f.properties?.name === "Desolation Wilderness")).toBe(true);
     expect(r.citation.source).toContain("Wilderness");
-    expect(r.coverageNote).toBeUndefined();
+    expect(r.coverageNote).toBe("4 wilderness areas touch the view: Mokelumne Wilderness (USFS, 104,048 acres), Desolation Wilderness (USFS, 64,041 acres), Mt. Rose Wilderness (USFS, 31,223 acres), Granite Chief Wilderness (USFS, 28,374 acres)");
   });
 
   it("adds a coverage note when the service reports it capped the result", async () => {

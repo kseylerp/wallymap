@@ -88,6 +88,8 @@ describe("mineral-leases layer", () => {
     expect(legendOf(layer)).toMatchObject({ kind: "categories", field: "kind" });
     expect(labelsOf(layer)).toMatchObject({ field: "name", rankBy: "acres" });
     expect(layer.input.parse({})).toEqual({ kinds: ["oil-gas", "coal", "minerals"] });
+    expect(layer.input.parse({ kinds: "oil-gas" })).toEqual({ kinds: ["oil-gas"] });
+    expect(layer.input.safeParse({ kinds: ["gold"] }).success).toBe(false);
   });
 
   it("asks all three services largest first and says how many leases, acres and producing", async () => {

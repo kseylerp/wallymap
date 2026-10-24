@@ -596,10 +596,10 @@ development.
 | Fact | Primary | Fallback | Freshness needed / actual | Coverage and gaps |
 |---|---|---|---|---|
 | Who manages, how protected | `public-lands` (PAD-US manager, access), `wilderness`, `monuments`, `protected-areas-world` (IUCN) | — | Yearly / static 4.1 | US; WDPA global (non-commercial terms) |
-| Mining claims | `mining-claims` (BLM MLRS) | Nevada and Alaska state copies (in the layer) | Weeks / daily | **The app points at BLM's old host**; the service moved to `nlsdbpubgis.blm.gov` and answers |
+| Mining claims | `mining-claims` (BLM MLRS) | Nevada and Alaska state copies (in the layer) | Weeks / daily | Read from BLM's new host `nlsdbpubgis.blm.gov` since 2026-10-23 |
 | Mines and prospects | `mines` (USGS MRDS, USMIN; commodity chips) | — | Static (~2011) | US |
 | Uranium legacy sites | `uranium` (Navajo AUM, DOE) | `mines` with commodity Uranium | Static | Navajo Nation and DOE sites; **not the Grand Canyon's mines** |
-| Oil and gas | **New:** BLM oil and gas leases (production status) | `methane-plumes`, `pipelines-lines` | Weeks | Federal minerals only; wells need state records |
+| Oil and gas | `mineral-leases` (BLM oil and gas leases with production status; coal and other mineral leases too) | `methane-plumes`, `pipelines-lines` | Weeks | Federal minerals only; wells need state records |
 | Pipelines and power lines | `pipelines-lines` (EIA, HIFLD) | — | Yearly | US |
 | Fire hazard | `fire-hazard` (USFS WHP 2023) | `fire-weather` for this week | Static | US |
 | Development | `land-cover` NLCD developed classes | Dynamic World built class | Years | US (NLCD) |
@@ -646,12 +646,15 @@ record); methane plumes as proof of a lease.
 
 **Acceptance tests.**
 - T06.1: `monuments`, `mines` or `mining-claims`, `pipelines-lines`; card Area, Boundary, Designation; note names the
-  protection, counts mines or claims, and says pipelines. Needs claims outside AK/NV (host move), leases, a near join.
+  protection, counts mines or claims, and says pipelines. Claims everywhere (host moved, 2026-10-23) and
+  `mineral-leases` are in; the near join is the `combine` tool against the monument.
 - T06.2: `mines` or `uranium`; filter commodity Uranium; ≥ 3 labels; card Status, Commodities; note counts uranium
   sites with their status; names ≥ 2.
-- T06.3: `pipelines-lines` or `methane-plumes`; ≥ 3 labels; note gives a rate or count and a distance; names ≥ 2.
-  Needs leases and wells.
-- T06.4: a threat layer; numbers and the named threat. Needs Minnesota leases and a near join.
+- T06.3: `mineral-leases`, `pipelines-lines` or `methane-plumes`; ≥ 3 labels; note gives a lease, pipeline or plume
+  count (or a rate) and a distance; names ≥ 2. Leases are the direct answer to "oil and gas" since 2026-10-23 (BLM
+  leases with production status, 40 in force around Chaco, 36 producing); wells still need state records.
+- T06.4: a threat layer (`mineral-leases` holds Minnesota's federal hardrock leases); numbers and the named threat.
+  Needs a near join (`combine`) against the wilderness.
 - T06.5: `public-lands` and `wilderness` or `protected-areas-world` in the view; legend "Managed by"; note names BLM
   and protected areas with size; names ≥ 2.
 

@@ -181,10 +181,10 @@ const geology = defineLayer({
   id: "geology",
   title: "Geology",
   description:
-    "What an AREA is made of (a canyon, a park, a range, the map view): the geologic map from Macrostrat (world coverage, most detailed in the United States), whose note names the main rock units in the box (formations such as Navajo Sandstone or Kayenta Formation) with rock types, ages in million years and each unit's share; quote those names, ages and shares. " +
-    "It draws as map tiles filled by rock family (sedimentary sage, volcanic pink, plutonic purple, metamorphic grey hatched, loose sediments stippled), darker for older rock, legend 'Rock family'; query it for every 'what rocks make up <place>' or 'what's under my feet here' question, with geologic-unit for one spot and faults when faults are asked. " +
-    "Tapping a unit shows its name, age and description. " +
-    "For the rock at ONE spot ('what is this peak made of') call geologic-unit with that place's lon and lat; for faults ('are there faults', 'is there a fault line') query the faults layer as well. " +
+    "What an AREA is made of (a canyon, a park, a range, the map view): Macrostrat's geologic map (worldwide, most detailed in the US), whose note names the box's main rock units (formations such as Navajo Sandstone or Kayenta Formation) with ages in million years and shares; query it AND geologic-unit at the place's centre (that point's card gives the main unit's rock), plus faults when faults are asked. " +
+    "Draws map tiles by rock family (sedimentary sage, volcanic pink, plutonic purple, metamorphic grey hatched, loose sediments stippled), darker for older rock, legend 'Rock family'. " +
+    "Quote the note's names, ages and shares; tapping a unit shows its name, age and description. " +
+    "For the rock at ONE spot only ('what is this peak made of') geologic-unit alone is enough. " +
     "Caveats: geologic maps are drawn at the scale of their source, so edges are generalised and small outcrops are missed; units can be loose ('undivided granitic rocks'); " +
     "surface deposits like glacial till or alluvium can hide the bedrock below; the shares come from sampled points, so say 'about'. Works at any size of region.",
   coverage: "global",

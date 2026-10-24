@@ -100,10 +100,9 @@ describe("geology layer", () => {
     expect(r).toMatchObject({ kind: "tiles" });
   });
 
-  it("points one-spot questions at geologic-unit, areas here, and faults at the faults layer", () => {
-    expect(layer.description).toContain("geologic-unit");
-    expect(layer.description).toContain("lon and lat");
-    expect(layer.description).toContain("faults layer");
+  it("pairs an area with geologic-unit at its centre (the card), and names the faults layer", () => {
+    expect(layer.description).toContain("geologic-unit at the place's centre");
+    expect(layer.description).toContain("plus faults when faults are asked");
     expect(layer.description).toMatch(/AREA/);
     expect(layer.description).not.toMatch(/colou?red by|per-unit colou?r|each polygon/i);
   });

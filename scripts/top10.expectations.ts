@@ -78,6 +78,8 @@ const SUN = /\bsun(?:day)?\b/i;
 const COUNT = /\b\d[\d,]*\s+(?:\w+\s+){0,2}(?:sightings|records|observations|sites|claims|mines|campsites|campgrounds|sites|crags|trails|fires|plumes|stations|gauges)\b/i;
 const MONTH = /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i;
 const YEAR = /\b(?:19|20)\d\d\b/;
+/** A rock's age: in years, or any named period or epoch of the geologic time scale. */
+const GEO_AGE = /million years|thousand years|\bma\b|\b(?:holocene|pleistocene|pliocene|miocene|oligocene|eocene|paleocene|quaternary|tertiary|neogene|paleogene|cretaceous|jurassic|triassic|permian|pennsylvanian|mississippian|carboniferous|devonian|silurian|ordovician|cambrian|precambrian|proterozoic|archean)\b/i;
 
 const TRAIL_CARD = ["Length", "Shape", "Round trip", "Climb, round trip", "Difficulty"];
 const OUTDOOR = ["outdoors-satellite", "outdoors"] as Basemap[];
@@ -456,7 +458,9 @@ export const TOP10: Top10Expect[] = [
     question: "What's under my feet here? @view=[-109.65,38.68,-109.5,38.78]",
     layers: ["geologic-unit|geology"], main: "geologic-unit|geology", basemap: DATA_GROUND,
     card: ["Rock", "Description"],
-    facts: [{ what: "rock name", re: /sandstone|entrada|navajo|shale|limestone|rock/i }, { what: "age", re: /million years|jurassic|triassic|permian|\bma\b/i }],
+    // The point under the view's centre can be a surface deposit (alluvial gravel near Arches): its name and its epoch
+    // (Pleistocene, Holocene) answer the question as well as a bedrock formation and a period do.
+    facts: [{ what: "rock or deposit name", re: /sandstone|entrada|navajo|shale|limestone|rock|gravel|alluvi|sediment/i }, { what: "age", re: GEO_AGE }],
   },
 
   // T09. What grows and lives here.

@@ -291,12 +291,27 @@ function questionPlace(calls: ToolCall[], view: MapView | null, question?: strin
   return view?.bbox ? { bbox: view.bbox as BBox, name: "the map view" } : null;
 }
 
-/** The map the browser would end on: every tool result through the client's mapping and the reducer, in order. */
+/**
+ * The map the browser would end on: every tool result through the client's mapping and the reducer, in order. The
+ * catalog carries what GET /api/layers sends (app/api/layers/route.ts), the layer contract included: without the
+ * declared legend, labels, time and display, a tile layer's row had no key and a declared legend read as derived.
+ */
 export function mapAfter(calls: ToolCall[]): MapState {
   const catalog: LayerCatalog = Object.fromEntries(
     listLayers().map((l) => [
       l.id,
-      { title: l.title, style: l.style, license: l.license, ...(l.fieldHelp && { fieldHelp: l.fieldHelp }), ...(l.card && { card: l.card }), ...(l.attributes && { attributes: l.attributes }) },
+      {
+        title: l.title,
+        style: l.style,
+        license: l.license,
+        ...(l.fieldHelp && { fieldHelp: l.fieldHelp }),
+        ...(l.card && { card: l.card }),
+        ...(l.attributes && { attributes: l.attributes }),
+        ...(l.time && { time: l.time }),
+        ...(l.legend && { legend: l.legend }),
+        ...(l.labels && { labels: l.labels }),
+        ...(l.display && { display: l.display }),
+      },
     ]),
   );
   let state = reduce(initialMapState, { type: "turn_start" });

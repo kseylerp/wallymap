@@ -812,7 +812,8 @@ whole canyon's geology; peak elevations from OSM `ele` without units checked (th
 - T08.3: `peaks` ranked by elevation; ≥ 3 labels; card Elevation; legend "Elevation"; note gives the
   highest (Telescope Peak) and the lowest below sea level (Badwater); names ≥ 2. Needs lowest points.
 - T08.4: `soils` (or another ground layer); note gives soil texture and a share or depth. Needs soils outside the US.
-- T08.5: `geologic-unit` or `geology` in the view; card Rock, Description; note names the rock and its age.
+- T08.5: `geologic-unit` or `geology` in the view; card Rock, Description; note names the rock (or the surface deposit
+  under the point, such as alluvial gravel) and its age (in years, or its geologic period or epoch).
 
 ---
 

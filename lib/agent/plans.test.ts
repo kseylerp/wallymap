@@ -60,6 +60,11 @@ describe("plans read before the model chooses", () => {
     expect(strongIds("Conditions here this weekend?")).toEqual(expect.arrayContaining(["weather-forecast", "weather-alerts"]));
   });
 
+  it("reads what threatens a place as its mining, leases and wildfire hazard", () => {
+    expect(strongIds("What threatens the Boundary Waters?")).toEqual(expect.arrayContaining(["mining-claims", "mineral-leases", "mines", "fire-hazard"]));
+    expect(strongIds("Is Chaco Canyon threatened by oil and gas?")).not.toContain("fire-hazard");
+  });
+
   it("names only registered layers", () => {
     expect(planLayerIds().filter((id) => !getLayer(id))).toEqual([]);
   });

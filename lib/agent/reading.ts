@@ -554,6 +554,14 @@ const PHRASES: {
     because: "a cross-section is the elevation along a line",
   },
   {
+    // "What threatens the Boundary Waters?": the threats the app maps on the land itself, mining and leases first, and
+    // wildfire hazard (the model drew county temperature and forest types and never asked the mining claims near Ely).
+    re: /\bwhat\s+threatens\b|\bthreats?\s+to\b|\bthreatened\b(?![^?]*\b(?:species|by\s+oil|by\s+gas)\b)/i,
+    unless: /\boil\b|\bgas\b|\bspecies\b|\bendangered\b/i,
+    layers: ["mining-claims", "mineral-leases", "mines", "fire-hazard"],
+    because: "what threatens a place on the map is the mining, leases and wildfire hazard around it",
+  },
+  {
     // "Are there mining claims, mines or pipelines?": each threat it names is asked (Grand Staircase's answer left the
     // mines out).
     re: /\bmining\s+claims?\b/i,

@@ -311,6 +311,8 @@ const PHRASES: {
     layers: ["osm-trails"],
     filters: { "osm-trails": { kind: ["path", "footway"] } },
     views: { "osm-trails": "ranked", popularity: "ranked" },
+    // A good hike is a trail, not a remoteness score over the map (Bend's day hikes drew remoteness hexes on top).
+    avoid: ["remoteness"],
     because: "hikes and runs are whole named trails with length and climb",
   },
   {

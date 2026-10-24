@@ -412,6 +412,8 @@ export function forecastDay(line: string): { day: string; date: string; text: st
   const parts = m[3]
     .split(/;\s*/)
     .map((p) => p.replace(/,\s*0\.00 in\b/, "").replace(/^rest of day\s+/, "").trim())
+    // "mostly cloudy, Chance of light rain showers" reads as one sentence.
+    .map((p) => p.replace(/(,\s*)([A-Z])(?=[a-z])/g, (_, sep: string, c: string) => `${sep}${c.toLowerCase()}`))
     .filter(Boolean);
   return { day: DAY_NAMES[m[1]], date: m[2], text: parts.join(", ") };
 }

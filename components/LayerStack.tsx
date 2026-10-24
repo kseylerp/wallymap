@@ -452,7 +452,6 @@ function LegendRow({
   const count = layer.result.kind === "geojson" ? layer.result.data.features.length : null;
   const shownCount = drawnCount(shownLayer, shownLayerB) ?? count;
   const data = layer.result.kind === "geojson" ? layer.result.data : null;
-  const unit = layer.style.unit;
   const attributes = attributesOf(layer);
   // The other fields the data offers go under More; the attributes have their own controls in the row.
   const fields = useMemo<FilterField[]>(

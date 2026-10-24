@@ -885,13 +885,15 @@ beta yearly series as final; `old-growth` firesheds as stand outlines.
   Mount Le Conte?", "Compare with the Blue Ridge".
 
 **Acceptance tests.**
-- T09.1: `land-cover` or `forest-types`; Topo or Data only; legend names the cover; note gives shares and named
-  ecosystems. Needs ecoregions, LANDFIRE, shares from the source.
-- T09.2: `forest-types`; Topo or Data only; legend "Forest type"; note says natural vs planted and gives
-  tree height. Needs canopy height.
-- T09.3: cover layer; both places named with numbers; shares and named vegetation. Needs the side-by-side view.
-- T09.4: a cover layer; named vegetation with a share or area.
-- T09.5: a cover layer in the view; the ecosystem named with a share or height.
+- T09.1: `vegetation-types`, `ecoregions`, `land-cover` or `forest-types`; Topo or Data only; legend names the
+  cover; note gives shares and named ecosystems. Needs ecoregions, LANDFIRE, shares from the source.
+- T09.2: `forest-types` and `canopy-height`; Topo or Data only; legend "Forest type" (or "Canopy height"); note says
+  natural vs planted and gives tree height. Needs canopy height.
+- T09.3: cover layer (`vegetation-types`, `land-cover` or `forest-types`), each place's own box queried; both places
+  named with numbers; shares and named vegetation. Needs the side-by-side view.
+- T09.4: a cover layer (`vegetation-types` first); named vegetation with a share or area.
+- T09.5: a cover layer in the view (`vegetation-types`, or `canopy-height` for height); the ecosystem named with a share
+  or height.
 
 ---
 

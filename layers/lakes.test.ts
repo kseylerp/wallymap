@@ -11,8 +11,10 @@ import layer, {
   SPARQL_ENDPOINT,
   areaText,
   assembleRings,
+  lakesByNameQuery,
   lakesQuery,
   mergeLakes,
+  nameVariants,
   normalizeLakes,
   osmLakeShapesQuery,
   osmLakesQuery,
@@ -62,7 +64,11 @@ describe("lakesQuery", () => {
     const q = lakesQuery(TAHOE);
     expect(q).toContain('wikibase:cornerSouthWest "Point(-120.2 38.8)"^^geo:wktLiteral');
     expect(q).toContain('wikibase:cornerNorthEast "Point(-119.8 39.2)"^^geo:wktLiteral');
-    expect(q).toContain("p:P4511/psn:P4511/wikibase:quantityAmount");
+    expect(q).toContain("?ds psn:P4511/wikibase:quantityAmount ?depthM");
+    // Crater Lake's 350 m average must not be read as a maximum, and the average is read on its own.
+    expect(q).toContain("FILTER NOT EXISTS { ?ds pq:P1013 ?dc . FILTER(?dc IN (wd:Q202785");
+    expect(q).toContain("?ms pq:P1013 ?mc ; psn:P4511/wikibase:quantityAmount ?meanM");
+    expect(q).toContain("(MAX(?meanM) AS ?mean)");
     expect(q).toContain("wd:Q23397");
     expect(q).toContain("wd:Q131681");
     expect(q).toContain(`LIMIT ${LIMIT}`);
@@ -272,10 +278,10 @@ describe("lakes layer", () => {
     expect(layer.style).toMatchObject({ geometry: "point", cluster: true, unit: "km²", encode: { size: "areaKm2" } });
   });
 
-  it("declares no time, a size legend by area, the five largest labelled and a clean contract", () => {
+  it("declares no time, a size legend by area, five lakes labelled deepest first and a clean contract", () => {
     expect(timeShapeOf(layer)).toEqual({ shape: "none" });
     expect(legendOf(layer)).toMatchObject({ kind: "size", field: "areaKm2", unit: "km²" });
-    expect(labelsOf(layer)).toEqual({ field: "name", max: 5, rankBy: "areaKm2" });
+    expect(labelsOf(layer)).toEqual({ field: "label", max: 5, rankBy: "labelRank" });
     expect(contractProblems(layer)).toEqual([]);
   });
 
@@ -456,5 +462,82 @@ describe("lakes layer", () => {
     const r = geojson(await layer.query({ ...ctx(stub), wide: true, wideStrategy: layer.wide }, {}));
     expect(r.data.features).toHaveLength(1000);
     expect(r.coverageNote).not.toContain("largest lakes");
+  });
+});
+
+describe("mean depth, depth labels and a namesake elsewhere", () => {
+  const item = (q: string) => ({ value: `http://www.wikidata.org/entity/${q}` });
+  /** Crater Lake as Wikidata holds it (2026-10-23): 594 m maximum and 350 m average under P4511, 1,883 m, 17.46 km³. */
+  const crater = {
+    item: item("Q329266"),
+    label: { value: "Crater Lake" },
+    coord: { value: "Point(-122.108 42.944)" },
+    depth: { value: "594" },
+    mean: { value: "350" },
+    area: { value: "53200000" },
+    elev: { value: "1883" },
+    vol: { value: "17460000000" },
+  };
+  const box: [number, number, number, number] = [-123.7, 45.28, -123.5, 45.42];
+  const pond = { elements: [{ type: "way", id: 1412652756, center: { lat: 45.3496, lon: -123.6012 }, tags: { natural: "water", name: "Lake Tahoe" } }] };
+  /** Wikidata answers the box query with nothing and the by-name query with `byName`; Overpass with the namesake pond. */
+  const namesake = (byName: unknown[]) =>
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url !== SPARQL_ENDPOINT) return json(pond);
+      const query = new URLSearchParams(String(init?.body)).get("query") ?? "";
+      return json({ results: { bindings: query.includes("VALUES ?label") ? byName : [] } });
+    });
+
+  it("reads the average depth apart from the maximum and drops an average as deep as the maximum", () => {
+    const [f] = normalizeLakes([crater]);
+    expect(f.properties).toMatchObject({ depthM: 594, meanDepthM: 350 });
+    const [slip] = normalizeLakes([{ ...crater, mean: { value: "594" } }]);
+    expect(slip.properties).not.toHaveProperty("meanDepthM");
+  });
+
+  it("puts mean depth on the card after area and names deep lakes with their depth before larger shallow ones", () => {
+    const merged = mergeLakes(normalizeLakes([crater]), [{ type: "way", id: 1, name: "Big Pond", kind: "pond", center: [-122.1, 42.9], areaKm2: 900 }], true);
+    const deep = merged.find((f) => f.properties?.name === "Crater Lake");
+    const big = merged.find((f) => f.properties?.name === "Big Pond");
+    expect(deep?.properties).toMatchObject({ label: "Crater Lake, 1,949 ft deep", meanDepthText: "1,148 ft (350 m)" });
+    expect(big?.properties).toMatchObject({ label: "Big Pond", labelRank: 900 });
+    expect(Number(deep?.properties?.labelRank)).toBeGreaterThan(Number(big?.properties?.labelRank));
+    if (!deep) throw new Error("Crater Lake");
+    const card = cardContent(deep, { unit: layer.style.unit, card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.measure).toMatchObject({ label: "Maximum depth", value: "1,949 ft (594 m)" });
+    expect(card.facts.map((x) => x.label).slice(0, 5)).toEqual(["Kind", "Area", "Mean depth", "Surface elevation", "Volume"]);
+    expect(mergeLakes(normalizeLakes([crater]), [], false)[0].properties?.label).toBe("Crater Lake, 594 m deep");
+  });
+
+  it("spells a lake's name the ways Wikidata labels it and asks for those labels anywhere", () => {
+    expect(nameVariants(" lake  tahoe ")).toEqual(["lake tahoe", "Lake Tahoe", "Tahoe"]);
+    expect(nameVariants("Crater")).toEqual(["Crater", "Lake Crater", "Crater Lake"]);
+    const q = lakesByNameQuery("Lake Tahoe");
+    expect(q).toContain('VALUES ?label { "Lake Tahoe"@en "Tahoe"@en }');
+    expect(q).toContain("wd:Q23397");
+    expect(q).not.toContain("wikibase:box");
+  });
+
+  it("says where the well-known lake of that name is when the box holds only a namesake pond", async () => {
+    // The 2026-10-23 eval: "Lake Tahoe" geocoded to a 2-acre pond in Tillamook County, Oregon.
+    const tahoe = { item: item("Q169962"), label: { value: "Lake Tahoe" }, coord: { value: "Point(-120.033333333 39.083333333)" }, depth: { value: "501" }, area: { value: "502000000" } };
+    const stub = namesake([tahoe]);
+    const r = geojson(await layer.query(ctx(stub, "lakes:k", box), { name: "Lake Tahoe" }));
+    expect(r.data.features).toHaveLength(1);
+    expect(r.coverageNote).toBe(
+      "0 of 1 lakes have a recorded maximum depth; Wikidata lists a larger Lake Tahoe elsewhere, at 39.083, -120.033: maximum depth 1,644 ft (501 m), " +
+        "area 194 mi² (502 km²). The lakes here may be a namesake: geocode that lake again with its state or country and ask again",
+    );
+    // Its own cache entry, so the box's cached answer is not handed back.
+    const calls = stub.mock.calls as unknown as [string, { cacheKey?: string }][];
+    expect(calls.filter(([u]) => u === SPARQL_ENDPOINT).map(([, i]) => i.cacheKey)).toEqual(["lakes:k", "lakes:k:by-name"]);
+  });
+
+  it("does not point elsewhere when the lake here is the larger one or Wikidata knows it here", async () => {
+    const tiny = { item: item("Q9"), label: { value: "Lake Tahoe" }, coord: { value: "Point(-84.48 33.55)" }, area: { value: "1000" } };
+    expect(geojson(await layer.query(ctx(namesake([tiny]), undefined, box), { name: "Lake Tahoe" })).coverageNote).not.toContain("elsewhere");
+    const known = route(tahoeWikidata, tahoeOsm);
+    await layer.query(ctx(known, undefined, AUDIT_BOX), { name: "tahoe" });
+    expect(known).toHaveBeenCalledTimes(2);
   });
 });

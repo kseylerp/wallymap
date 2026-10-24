@@ -1,5 +1,6 @@
 import { stepCountIs, wrapLanguageModel, type LanguageModel, type UIMessage } from "ai";
 import { contextForPrompt, contextFrom } from "./context";
+import { layerVocabularyForPrompt } from "./vocabulary";
 import { SYSTEM_PROMPT } from "./prompt";
 import { readingForPrompt } from "./reading";
 import { getModel } from "./provider";
@@ -10,6 +11,12 @@ import type { MapView } from "./view";
 import { systemForTurn } from "./viewContext";
 
 export { MAX_STEPS };
+
+/** Words of the layers that declare their own (Layer.vocabulary), beside the fixed table in the prompt. */
+function layerWords(): string {
+  const lines = layerVocabularyForPrompt();
+  return lines ? `More words people use, by layer:\n${lines}` : "";
+}
 
 /** Tools that draw or answer: the only ones offered in the last two steps before a note. */
 const ANSWER_TOOLS = ["render", "compare", "set_time", "set_view", "note"];
@@ -49,7 +56,7 @@ export function agentTurn({ question, view, model = getModel(), history = [] }: 
     turn,
     tools,
     // The fixed prompt, the map view, and the app's own reading of this question's words (lib/agent/reading.ts).
-    system: [systemForTurn(SYSTEM_PROMPT, view), context ? contextForPrompt(context, question) : "", readingForPrompt(turn.reading, turn.now, Object.keys(tools))].filter(Boolean).join("\n\n"),
+    system: [systemForTurn(SYSTEM_PROMPT, view), layerWords(), context ? contextForPrompt(context, question) : "", readingForPrompt(turn.reading, turn.now, Object.keys(tools))].filter(Boolean).join("\n\n"),
     model: wrapLanguageModel({ model, middleware: stepGuard(turn, Object.keys(tools)) }),
     stopWhen: stepCountIs(MAX_STEPS),
     prepareStep: prepareStepFor(turn, Object.keys(tools)),

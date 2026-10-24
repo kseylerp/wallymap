@@ -2,6 +2,7 @@ import type { Feature, FeatureCollection } from "geojson";
 import { getLayer, listLayers } from "@/layers/registry";
 import type { BBox } from "@/layers/types";
 import { toolResultToActions, type LayerCatalog } from "./applyToolResult";
+import { catalogEntry } from "@/lib/layers/catalog";
 import { rankedTop } from "@/lib/render/attributes";
 import { cardContent } from "@/lib/render/card";
 import { isCombinedId } from "@/lib/render/combined";
@@ -33,22 +34,8 @@ export type AnswerCall = { toolName: string; input?: unknown; output?: unknown }
 
 /** The map the browser ends on after these calls: each result through the client's mapping and the reducer, in order. */
 export function mapOf(calls: readonly AnswerCall[]): MapState {
-  const catalog: LayerCatalog = Object.fromEntries(
-    listLayers().map((l) => [
-      l.id,
-      {
-        title: l.title,
-        style: l.style,
-        license: l.license,
-        ...(l.fieldHelp && { fieldHelp: l.fieldHelp }),
-        ...(l.card && { card: l.card }),
-        ...(l.attributes && { attributes: l.attributes }),
-        ...(l.labels && { labels: l.labels }),
-        ...(l.display && { display: l.display }),
-        ...(l.coverage && { coverage: l.coverage }),
-      },
-    ]),
-  );
+  // The catalog the browser gets (GET /api/layers), so the map read here is the person's.
+  const catalog: LayerCatalog = Object.fromEntries(listLayers().map((l) => [l.id, catalogEntry(l)]));
   let state = reduce(initialMapState, { type: "turn_start" });
   for (const c of calls) {
     if (c.output === undefined) continue;

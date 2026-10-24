@@ -10,7 +10,7 @@ const views = (q: string) => Object.fromEntries(readQuestion(q, NOW).views.map((
 describe("plans read before the model chooses", () => {
   it("ranks hikes, keeps a day hike to a half day, and asks the viewpoints for a hike with a view", () => {
     expect(views("Good day hikes near Bend")["osm-trails"]).toBe("ranked");
-    expect(readQuestion("Good day hikes near Bend", NOW).filters).toContainEqual(expect.objectContaining({ layerId: "osm-trails", key: "roundTripKm", range: [4, 24] }));
+    expect(readQuestion("Good day hikes near Bend", NOW).filters).toContainEqual(expect.objectContaining({ layerId: "osm-trails", key: "roundTripKm", range: [3, 25] }));
     expect(readQuestion("Loop hikes under 6 miles near Asheville", NOW).filters.some((f) => f.key === "roundTripKm")).toBe(false);
     expect(strongIds("An easy hike with a view near Lake Tahoe")).toContain("outdoor-features");
   });

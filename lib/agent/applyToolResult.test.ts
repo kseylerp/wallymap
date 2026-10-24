@@ -114,6 +114,14 @@ describe("toolResultToActions", () => {
     ]);
   });
 
+  it("set_time with play starts one period wide at the start, so play steps from there (the Camp Fire's 2018 to 2024)", () => {
+    const output = { start: "2018", end: "2024", play: true };
+    expect(toolResultToActions("set_time", output, output, canvas, catalog, [])).toEqual([
+      { type: "set_time_window", window: ["2018-01-01T00:00:00.000Z", "2018-12-31T23:59:59.999Z"] },
+      { type: "set_time_playing", playing: true },
+    ]);
+  });
+
   it("set_time reads months and dates, orders reversed ends, and drops unreadable or bad modes", () => {
     const months = { start: "2024-03", end: "2024-02-10" };
     expect(toolResultToActions("set_time", months, months, canvas, catalog, [])).toEqual([

@@ -316,7 +316,10 @@ export function timeBound(value: unknown, edge: "start" | "end"): string | null 
  */
 function setTimeActions(output: Obj): MapAction[] {
   const start = timeBound(output.start, "start");
-  const end = timeBound(output.end, "end");
+  // Play animates one period at a time from the first (prompt: "a window one period wide starting at the first
+  // period"): a 2018 to 2024 window sent with play ran to the end of the data and started over at 1984, hiding every
+  // Camp Fire outline. Played, the window is the start's own period (its year, month or day), and play steps on.
+  const end = output.play === true && output.mode !== "cumulative" ? timeBound(output.start, "end") : timeBound(output.end, "end");
   if (!start || !end) return [];
   const actions: MapAction[] = [];
   if (TIME_MODES.includes(output.mode as TimeMode)) actions.push({ type: "set_time_mode", mode: output.mode as TimeMode });

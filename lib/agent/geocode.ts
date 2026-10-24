@@ -176,6 +176,12 @@ export async function geocode(
   // the place geocoder's (Half Moon Bay).
   if (isFeatureName(place)) {
     const feature = await featureLookup(place, opts.proximity);
+    // A landmark with a national park of its name is the park ("Grand Canyon" was the village's 20 km box).
+    if (feature && isSmall(feature.bbox) && !opts.nearOf) {
+      const park = await lookupRegion(`${place.split(",")[0].trim()} National Park`, feature.center, { naturalEarth: async () => null });
+      const [w, s, e, n] = park?.bbox ?? [0, 0, 0, 0];
+      if (park && feature.center[0] >= w && feature.center[0] <= e && feature.center[1] >= s && feature.center[1] <= n) return park;
+    }
     if (feature) return feature;
   }
   // A river OpenStreetMap does not know is its basin: "Colorado River" was a point on the Colorado of Texas, "Carson

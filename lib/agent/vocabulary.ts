@@ -1,3 +1,5 @@
+import { listLayers } from "@/layers/registry";
+
 /**
  * Routes the words people use to the data layers that answer them. The synonyms and notes are rendered into the
  * system prompt, so keep them short: only words people say, one spelling each (the model matches "dams" to "dam").
@@ -102,12 +104,50 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "avalanche", synonyms: ["avalanche danger", "avalanche forecast", "avalanche risk", "avy"], notes: "US avalanche centers' daily danger by zone; quote the center and link it, never infer from weather", gist: "daily avalanche danger by US forecast zone" },
 ];
 
-/** One line per layer: id, its synonyms, then a short note. */
+/**
+ * Every layer's vocabulary: this table, and the words a registered layer declares itself (Layer.vocabulary), so a new
+ * layer routes without an entry here. A layer in both keeps this table's note and gist and adds its own synonyms.
+ */
+export function vocabularyEntries(): VocabularyEntry[] {
+  const out = VOCABULARY.map((e) => ({ ...e, synonyms: [...e.synonyms] }));
+  for (const layer of listLayers()) {
+    const own = layer.vocabulary;
+    if (!own) continue;
+    const had = out.find((e) => e.layerId === layer.id);
+    if (had) had.synonyms.push(...own.synonyms.filter((w) => !had.synonyms.includes(w)));
+    else out.push({ layerId: layer.id, synonyms: own.synonyms, notes: own.notes, gist: own.gist });
+  }
+  return out;
+}
+
+/**
+ * One line per layer of the fixed table: its id and synonyms. The notes are not here (the prompt has room for every
+ * layer's words, not every layer's caveats): a question's reading adds the notes of the layers its words name
+ * (layerNotesForPrompt), so the table scales with the layers.
+ */
 export function vocabularyForPrompt(): string {
-  return VOCABULARY.map((e) => `- ${e.layerId}: ${e.synonyms.join(", ")} (${e.notes})`).join("\n");
+  return VOCABULARY.map((e) => `- ${e.layerId}: ${e.synonyms.join(", ")}`).join("\n");
+}
+
+/** The words of layers that declare their own (Layer.vocabulary) and are not in the fixed table, for this turn's prompt. */
+export function layerVocabularyForPrompt(): string {
+  const fixed = new Set(VOCABULARY.map((e) => e.layerId));
+  return vocabularyEntries()
+    .filter((e) => !fixed.has(e.layerId))
+    .map((e) => `- ${e.layerId}: ${e.synonyms.join(", ")}`)
+    .join("\n");
+}
+
+/** The notes of the named layers, one line each, for the question's reading block. */
+export function layerNotesForPrompt(layerIds: readonly string[]): string[] {
+  const entries = vocabularyEntries();
+  return [...new Set(layerIds)].flatMap((id) => {
+    const notes = entries.find((e) => e.layerId === id)?.notes;
+    return notes ? [`- ${id}: ${notes}.`] : [];
+  });
 }
 
 /** list_layers' 6-to-10-word description of a layer; empty when the layer has no entry. */
 export function gistFor(layerId: string): string {
-  return VOCABULARY.find((e) => e.layerId === layerId)?.gist ?? "";
+  return vocabularyEntries().find((e) => e.layerId === layerId)?.gist ?? "";
 }

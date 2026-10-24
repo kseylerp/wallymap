@@ -62,6 +62,7 @@ import { isFullLayerResult, summarizeLayerResult, type GeojsonSummary } from "@/
 import type { MapView } from "@/lib/agent/view";
 import { parseMapView } from "@/lib/agent/viewContext";
 import { toolResultToActions, type LayerCatalog } from "@/lib/agent/applyToolResult";
+import { catalogEntry } from "@/lib/layers/catalog";
 import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type MapState, type RenderMode, type ViewKind } from "@/lib/render/state";
 import { visibleState } from "@/lib/render/view";
@@ -293,12 +294,8 @@ function questionPlace(calls: ToolCall[], view: MapView | null, question?: strin
 
 /** The map the browser would end on: every tool result through the client's mapping and the reducer, in order. */
 export function mapAfter(calls: ToolCall[]): MapState {
-  const catalog: LayerCatalog = Object.fromEntries(
-    listLayers().map((l) => [
-      l.id,
-      { title: l.title, style: l.style, license: l.license, ...(l.fieldHelp && { fieldHelp: l.fieldHelp }), ...(l.card && { card: l.card }), ...(l.attributes && { attributes: l.attributes }) },
-    ]),
-  );
+  // The catalog the browser gets (GET /api/layers), so the legend, labels, time and units match the real map's.
+  const catalog: LayerCatalog = Object.fromEntries(listLayers().map((l) => [l.id, catalogEntry(l)]));
   let state = reduce(initialMapState, { type: "turn_start" });
   for (const c of calls) {
     if (c.output === undefined) continue;

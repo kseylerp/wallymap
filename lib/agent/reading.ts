@@ -4,7 +4,7 @@ import type { Attribute, Layer } from "@/layers/types";
 import { placeCandidates } from "./places";
 import { asksChange } from "./renderInput";
 import type { ViewKind } from "@/lib/render/state";
-import { VOCABULARY } from "./vocabulary";
+import { layerNotesForPrompt, vocabularyEntries } from "./vocabulary";
 
 /**
  * The app's own reading of a question, made before the model chooses anything (audit R1, 2026-10-23: "flowy blue
@@ -317,8 +317,8 @@ const PHRASES: {
     // A day hike is a half day or so, not a 30-mile through-trail (Bend's top "day hike" was 33 miles round trip).
     re: /\b(?:day|good|best|nice|great)\s+hikes?\b|\bday\s+hiking\b/i,
     unless: /\b(?:under|less than|shorter than|over|more than|longer than|at least|up to|at most)\s+\d|\b\d+(?:\.\d+)?\s*(?:to|-)\s*\d+(?:\.\d+)?\s*(?:miles?|mi|km)\b/i,
-    filters: { "osm-trails": { roundTripKm: { range: [4, 24] } } },
-    because: "a day hike is about 2.5 to 15 miles round trip",
+    filters: { "osm-trails": { roundTripKm: { range: [3, 25] } } },
+    because: "a day hike is about 2 to 15 miles round trip (3 to 25 km)",
   },
   {
     re: /\beasy\s+(?:hikes?|walks?|day\s+hikes?|hiking\s+trails?)\b|\b(?:hikes?|walks?)\b[^?]*\beasy\b/i,
@@ -331,6 +331,8 @@ const PHRASES: {
     re: /\b(?:hikes?|trails?|walks?)\b[^?]*\bwith\s+(?:a\s+)?(?:good\s+|great\s+|nice\s+)?views?\b|\b(?:hikes?|trails?|walks?)\s+to\s+(?:a\s+)?(?:viewpoints?|overlooks?|vistas?)\b/i,
     layers: ["outdoor-features"],
     inputs: { "outdoor-features": { kinds: ["viewpoint"] } },
+    // Where the trails carry their payoff, the chip says it too (kept only on a layer that declares the attribute).
+    filters: { "osm-trails": { payoff: ["viewpoint"] } },
     because: "a view is a mapped viewpoint the hike reaches",
   },
   {
@@ -395,6 +397,8 @@ const PHRASES: {
   },
   {
     re: /\bshade[ds]?\b|\bshady\b|\b(?:north|south|east|west)[- ]facing\b|\bfaces?\s+(?:north|south|east|west)\b|\baspect\b|\bslope\s+angle\b|\bslopes?\s+(?:over|above|under|below)\s+\d+|\b\d+\s*°|\blow[- ]angle\b|\bavalanche\s+terrain\b|\bsteepness\b/i,
+    // Crags and trails carry their own aspect and shade; the terrain tiles would take a crag answer off satellite imagery.
+    unless: /\b(?:crags?|climb\w*|boulder\w*|walls?|sport|trad)\b/i,
     layers: ["terrain"],
     because: "slope, aspect and shade come from the terrain layer (when the app has it)",
   },
@@ -644,7 +648,7 @@ const bareLabel = (label: string) => norm(label.replace(/^[A-Z]{1,2}\d\s+/, "").
 
 /** Words that are the layer's own subject: "hiking" on the trails layer names the activity, not its easiest grade. */
 function subjectWords(layer: Pick<Layer, "id" | "title">): Set<string> {
-  const entry = VOCABULARY.find((e) => e.layerId === layer.id);
+  const entry = vocabularyEntries().find((e) => e.layerId === layer.id);
   return new Set([...(entry?.synonyms ?? []), ...norm(layer.title).split(" ")].flatMap((w) => norm(w).split(" ")).flatMap(forms));
 }
 
@@ -760,7 +764,10 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     if (strong) for (const [layerId, input] of Object.entries(p.inputs ?? {})) if (!inputs.some((i) => i.layerId === layerId && JSON.stringify(i.input) === JSON.stringify(input))) inputs.push({ layerId, input, because: `"${m[0].trim()}": ${p.because}` });
     // A phrase whose "unless" words are there (the question gives its own length) sets no range of its own.
     for (const [layerId, chips] of Object.entries(p.filters ?? {})) {
+      const declared = getLayer(layerId);
       for (const [key, value] of Object.entries(chips)) {
+        // A chip or measure the layer does not declare would hide every feature: left out.
+        if (!declared || !hasMeasure(declared, key)) continue;
         if (Array.isArray(value)) phraseFilters.push({ layerId, key, include: value, because: m[0].trim() });
         else if (strong) phraseFilters.push({ layerId, key, range: value.range, because: m[0].trim() });
       }
@@ -771,7 +778,7 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
   for (const p of places) addLayer("streamflow", `"${p.written}" is a river: its gauges`, false);
   // A named trail or route ("the Wonderland Trail") is drawn whole from the trails layer's named routes.
   for (const p of named) if (/\b(?:Trail|Route|Way|Loop|Path)$/.test(p)) addLayer("osm-trails", `"${p}" is a named trail`, true);
-  for (const entry of VOCABULARY) {
+  for (const entry of vocabularyEntries()) {
     // A capitalised synonym is a name ("Lake Powell", "Bears Ears"), matched as written.
     const hit = entry.synonyms.find((s) => (/^[A-Z][a-z]/.test(s) && /\s/.test(s) ? new RegExp(`\\b${escape(s)}\\b`, "i").test(raw) : wordPattern(s).test(q)));
     if (hit) addLayer(entry.layerId, `"${hit}"`, false);
@@ -981,6 +988,9 @@ export function readingForPrompt(reading: Reading, now: Date = new Date(), tools
   } else if (reading.change) {
     lines.push(`- What changed: draw the answer in the change view (render.view change) with the numbers then and now.`);
   }
+  // What to know about the layers this question names (their notes are not in the fixed prompt: they scale per question).
+  const notes = layerNotesForPrompt([...strong, ...reading.layers.filter((l) => !l.strong)].map((l) => l.layerId).slice(0, 8));
+  if (notes.length > 0) lines.push("- About those layers:", ...notes.map((n) => `  ${n}`));
   if (lines.length === 0) return "";
   return ["Reading of this question (the app's own word list; follow it unless the user clearly means something else):", ...lines].join("\n");
 }

@@ -171,13 +171,19 @@ function clampWindow(index: TimeIndex, window: TimeWindow): TimeWindow {
   return [start === Date.parse(lo) ? lo : new Date(start).toISOString(), end === Date.parse(hi) ? hi : new Date(end).toISOString()];
 }
 
-/** Starts play. From the end (or with the whole span selected) it starts over at the first bucket, keeping the width. */
+/**
+ * Starts play. A window that ends on the last bucket but starts later than the first and spans several (an agent's or
+ * the user's "2018 to 2024" over fires since 1984) plays from its own start, one bucket at a time: it restarted at 1984
+ * and hid every Camp Fire outline. From the end of a one-bucket window, or with the whole span selected, play starts
+ * over at the first bucket, keeping the width.
+ */
 function startPlaying(time: TimeState): TimeState {
   const { index, window, mode } = time;
   const last = index.buckets.length - 1;
   const i = bucketAt(index, window[0]);
   const j = bucketAt(index, window[1]);
   if (j < last) return { ...time, playing: true };
+  if (mode !== "cumulative" && i > 0 && j > i) return { ...time, playing: true, window: [index.buckets[i].start, index.buckets[i].end] };
   if (mode === "cumulative") return { ...time, playing: true, window: [index.min, index.buckets[0].end] };
   const width = j - i >= last ? 0 : j - i;
   return { ...time, playing: true, window: [index.buckets[0].start, index.buckets[width].end] };

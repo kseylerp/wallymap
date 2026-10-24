@@ -105,11 +105,11 @@ describe("toolResultToActions", () => {
     });
   });
 
-  it("set_time maps to the mode, then the window (year bounds cover whole years), then play", () => {
+  it("set_time maps to the mode, then the window (year bounds cover whole years; played, the start's own year), then play", () => {
     const output = { start: "2016", end: "2017", play: true, mode: "cumulative" };
     expect(toolResultToActions("set_time", output, output, canvas, catalog, [])).toEqual([
       { type: "set_time_mode", mode: "cumulative" },
-      { type: "set_time_window", window: ["2016-01-01T00:00:00.000Z", "2017-12-31T23:59:59.999Z"] },
+      { type: "set_time_window", window: ["2016-01-01T00:00:00.000Z", "2016-12-31T23:59:59.999Z"] },
       { type: "set_time_playing", playing: true },
     ]);
   });

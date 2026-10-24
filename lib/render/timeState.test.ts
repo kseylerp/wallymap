@@ -74,11 +74,17 @@ describe("time state in the reducer", () => {
     expect(run(s, { type: "time_tick" })).toBe(s);
   });
 
-  it("play from the end or with the whole span starts over at the first bucket", () => {
+  it("play with the whole span, or from the end of a one-year window, starts over at the first bucket", () => {
     const whole = run(loaded, { type: "set_time_playing", playing: true });
     expect(whole.time?.window).toEqual([y(2016), yEnd(2016)]);
-    const atEnd = run(loaded, { type: "set_time_window", window: [y(2024), yEnd(2025)] }, { type: "set_time_playing", playing: true });
-    expect(atEnd.time?.window).toEqual([y(2016), yEnd(2017)]);
+    const atEnd = run(loaded, { type: "set_time_window", window: [y(2025), yEnd(2025)] }, { type: "set_time_playing", playing: true });
+    expect(atEnd.time?.window).toEqual([y(2016), yEnd(2016)]);
+  });
+
+  it("a window set to the end of the data plays from its own start (2018 to 2025 never restarts at 2016)", () => {
+    const s = run(loaded, { type: "set_time_window", window: [y(2018), yEnd(2025)] }, { type: "set_time_playing", playing: true });
+    expect(s.time?.window).toEqual([y(2018), yEnd(2018)]);
+    expect(s.time?.playing).toBe(true);
   });
 
   it("cumulative mode keeps the first date as the start and grows the end", () => {

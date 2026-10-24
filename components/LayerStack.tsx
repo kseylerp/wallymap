@@ -23,7 +23,7 @@ import { LegendKey } from "@/components/LegendKey";
 import { EncodingLegend } from "@/components/EncodingLegend";
 import { RowLegend } from "@/components/RowLegend";
 import { rowLegend } from "@/lib/render/legendView";
-import { failureLine, layerSourceStatus, timeShape } from "@/lib/render/contract";
+import { answeredEmpty, failureLine, layerSourceStatus, timeShape } from "@/lib/render/contract";
 import { layerChange } from "@/lib/render/views";
 import { formatValue } from "@/lib/format";
 import { rasterKeyFilter } from "@/lib/render/rasterCalm";
@@ -258,14 +258,7 @@ export function selectionSwatch(state: MapState, selection: Selection, layer: Lo
   return layerLegend(layer, op, feature);
 }
 
-/**
- * A layer whose source answered with no features at all (Zion's faults: 0) gets no row: an empty row is noise, and the
- * answer says it in a sentence (lib/agent/turnAnswer.ts withEmptyLayers). A failed source keeps its row and its failure line.
- */
-export function answeredEmpty(layer: LoadedLayer): boolean {
-  if (layer.result.kind !== "geojson" || !layerSourceStatus(layer).ok) return false;
-  return layer.result.data.features.length === 0 && (layer.allData?.features.length ?? 0) === 0;
-}
+export { answeredEmpty };
 
 /** Loaded layers top first (the last render op draws on top), then any layer still waiting for an op; empty answers left out. */
 function stackOrder(layers: MapState["layers"], renderOps: RenderOp[]): { layer: LoadedLayer; op?: RenderOp }[] {

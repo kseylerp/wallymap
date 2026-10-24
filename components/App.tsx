@@ -21,6 +21,7 @@ import { bboxToViewport, type Padding } from "@/lib/render/deck";
 import { askAboutText, featureBBox, featureCenter } from "@/lib/render/inspect";
 import { usePermalink } from "@/lib/render/usePermalink";
 import { isComparable } from "@/lib/render/compareView";
+import { answeredEmpty } from "@/lib/render/contract";
 import { useTimePlay } from "@/lib/render/useTimePlay";
 import { playStepMs, stepOverrideStore, usePlayhead } from "@/lib/render/playhead";
 import { isMapReset, reduce } from "@/lib/render/reducer";
@@ -255,7 +256,7 @@ export function App() {
           <MapPills
             basemap={state.basemap}
             onBasemapChange={setBasemap}
-            layerCount={Object.keys(state.layers).length + state.errors.filter((e) => !state.layers[e.layerId] && catalog?.[e.layerId] !== undefined).length}
+            layerCount={Object.values(state.layers).filter((l) => !answeredEmpty(l)).length + state.errors.filter((e) => !state.layers[e.layerId] && catalog?.[e.layerId] !== undefined).length}
             layersOpen={layersOpen}
             onLayersOpenChange={setLayersOpen}
             restoreStatus={permalink.status}

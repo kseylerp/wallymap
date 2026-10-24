@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { RowLegend } from "@/components/RowLegend";
 import { TimePanel, wholeSpan, windowText } from "@/components/TimePanel";
 import { shortTitle } from "@/layers/contract";
-import { failureLine, layerSourceStatus, timeShape } from "@/lib/render/contract";
+import { answeredEmpty, failureLine, layerSourceStatus, timeShape } from "@/lib/render/contract";
 import { featuresInView, useInView } from "@/lib/render/inView";
 import { rowLegend, type LegendBlock } from "@/lib/render/legendView";
 import { compareSideText, deltaKey, effectiveMode } from "@/lib/render/compareView";
@@ -75,7 +75,7 @@ function scenarioCaption(state: MapState, layer: LoadedLayer): string | undefine
 
 export function PhoneCaption({ state, shown, onOpen, titleOf }: { state: MapState; shown: MapState["layers"]; onOpen: () => void; titleOf?: (layerId: string) => string | undefined }) {
   // The top layer that answers; a forecast beside it (samplesView) is captioned only alone.
-  const drawnOps = [...state.renderOps].reverse().filter((op) => op.visible && state.layers[op.layerId]);
+  const drawnOps = [...state.renderOps].reverse().filter((op) => op.visible && state.layers[op.layerId] && !answeredEmpty(state.layers[op.layerId]));
   const top = drawnOps.find((op) => !state.layers[op.layerId].style.samplesView) ?? drawnOps[0];
   const layer = top ? state.layers[top.layerId] : undefined;
   const drawn = layer ? shown[layer.id] : undefined;

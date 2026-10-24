@@ -69,6 +69,16 @@ export function layerSourceStatus(layer: Pick<LoadedLayer, "result">): SourceSta
   return sourceStatusOf(layer.result);
 }
 
+/**
+ * A layer whose source answered with no features at all (Zion's faults: 0) is left off the layer panel, the phone's
+ * caption and the layer count: an empty row is noise, and the answer says it in a sentence (lib/agent/turnAnswer.ts
+ * withEmptyLayers). A failed source keeps its row and its failure line.
+ */
+export function answeredEmpty(layer: Pick<LoadedLayer, "result" | "allData">): boolean {
+  if (layer.result.kind !== "geojson" || !layerSourceStatus(layer).ok) return false;
+  return layer.result.data.features.length === 0 && (layer.allData?.features.length ?? 0) === 0;
+}
+
 /** The features of a GeoJSON answer, or null for tiles. */
 export function featuresOf(layer: Pick<LoadedLayer, "result">): FeatureCollection | null {
   return layer.result.kind === "geojson" ? layer.result.data : null;

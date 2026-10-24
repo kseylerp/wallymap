@@ -4,7 +4,7 @@ import { runLayer } from "@/lib/layers/run";
 import { contractProblems, legendOf } from "./contract";
 import { cardContent } from "@/lib/render/card";
 import { ROCK_FAMILY_FIELD } from "@/lib/render/rockFamily";
-import layer, { GEOLOGY_SOURCE_LAYER, GEOLOGY_TILE_URL, gridPoints, unitsNote, type SampledUnit } from "./geology";
+import layer, { GEOLOGY_SOURCE_LAYER, GEOLOGY_TILE_URL, gridPoints, rockWords, unitsNote, type SampledUnit } from "./geology";
 import fixture from "./__fixtures__/geologic-unit.tahoe.json";
 
 const BBOX: [number, number, number, number] = [-120.2, 38.8, -119.8, 39.0];
@@ -89,6 +89,8 @@ describe("geology layer", () => {
     expect(note).toContain("By rock family: sedimentary about 80% and loose sediment about 20%");
     expect(note).toContain("faults");
     expect(unitsNote([null], 1)).toMatch(/no geologic map unit/);
+    const tongue: SampledUnit = { name: "Kayenta Formation, Tenney Canyon Tongue", lith: "", descrip: "(Mapped as single line where thin.) Red sandstone and siltstone.", t_age: 180.55, b_age: 190.8, family: "sedimentary" };
+    expect(rockWords(tongue)).toBe("red sandstone and siltstone");
   });
 
   it("does not sample a continent-sized box", async () => {

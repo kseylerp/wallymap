@@ -391,10 +391,10 @@ const soils = defineLayer({
   title: "Soils",
   description:
     "Soils of the United States from the USDA NRCS soil surveys (SSURGO), drawn as soil map unit polygons colored by the texture of the surface layer, sand (pale) through sandy loam, loam and clay loam to clay (purple). " +
+    "The note gives the share of the box by texture class, the three largest map units with their shares, the typical depth to bedrock (inches first) and the main drainage class; quote them. " +
     "Use it for 'what's the soil like', 'soil type', 'is the ground clay or sand', 'how deep is the soil', 'does it drain well'. " +
     "Each polygon has soil (the map unit name, such as 'Valmont clay loam, 1 to 3 percent slopes'), texture (Sand, Sandy loam, Loam, Clay loam, Clay, or Rock outcrop, Water, Organic), textureDetail (such as 'Very cobbly sandy loam'), " +
     "drainage (Well drained ... Very poorly drained), bedrock (depth to bedrock, inches first, or none within the profile), hydGroup (hydrologic group A to D in words) and component (the main soil). " +
-    "The note gives the share of the box by texture class, the three largest map units with their shares, the typical depth to bedrock and the main drainage class; quote them. " +
     "Not land cover and not rock: for rock use geology. United States only (SSURGO); every polygon in a box up to 600 km² (about a 25 km square), the 1,500 largest up to 2,400 km²; zoom in for wider areas.",
   coverage: "us",
   surface: "land",

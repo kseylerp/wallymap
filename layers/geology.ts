@@ -128,7 +128,8 @@ function listText(items: string[]): string {
 export function rockWords(u: SampledUnit): string {
   const lith = u.lith?.trim();
   if (lith) return lithologyText(lith).toLowerCase();
-  const first = u.descrip?.trim().split(/[;.]/)[0]?.trim();
+  // A mapping remark in brackets ("(Mapped as single line where thin)") says nothing about the rock.
+  const first = u.descrip?.replace(/\([^)]*\)?/g, "").trim().split(/[;.]/)[0]?.trim();
   if (first && first.length >= 4) return (first.length > 70 ? `${first.slice(0, 69).trimEnd()}…` : first).replace(/^./, (c) => c.toLowerCase());
   return `${FAMILY_LABELS.find((f) => f.id === u.family)?.label.toLowerCase() ?? "sedimentary"} rock`;
 }
@@ -180,10 +181,9 @@ const geology = defineLayer({
   id: "geology",
   title: "Geology",
   description:
-    "The geologic map: bedrock and surface rock units from Macrostrat, a compilation of geologic maps (world coverage, most detailed in the United States). " +
-    "It draws as map tiles, each unit filled by its rock family (sedimentary sage, volcanic pink, plutonic purple, metamorphic grey hatched, loose young sediments off-white stippled), darker for older rock, with a legend 'Rock family'; tapping a unit shows its name, age and description. " +
-    "Its note lists the main map units in the asked box: name (formation names such as Navajo Sandstone or Kayenta Formation), rock types, age in million years and period, and each unit's share of points sampled on a grid, plus the share of each rock family; quote those names, ages and shares. " +
-    "Use it for any AREA: 'what rocks make up Zion Canyon', 'geology of this park', 'rock types around here', 'geologic map', 'what's under my feet here' with a map view (query it for the view). " +
+    "What an AREA is made of (a canyon, a park, a range, the map view): the geologic map from Macrostrat (world coverage, most detailed in the United States), whose note names the main rock units in the box (formations such as Navajo Sandstone or Kayenta Formation) with rock types, ages in million years and each unit's share; quote those names, ages and shares. " +
+    "It draws as map tiles filled by rock family (sedimentary sage, volcanic pink, plutonic purple, metamorphic grey hatched, loose sediments stippled), darker for older rock, legend 'Rock family'; query it for every 'what rocks make up <place>' or 'what's under my feet here' question, with geologic-unit for one spot and faults when faults are asked. " +
+    "Tapping a unit shows its name, age and description. " +
     "For the rock at ONE spot ('what is this peak made of') call geologic-unit with that place's lon and lat; for faults ('are there faults', 'is there a fault line') query the faults layer as well. " +
     "Caveats: geologic maps are drawn at the scale of their source, so edges are generalised and small outcrops are missed; units can be loose ('undivided granitic rocks'); " +
     "surface deposits like glacial till or alluvium can hide the bedrock below; the shares come from sampled points, so say 'about'. Works at any size of region.",

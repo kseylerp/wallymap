@@ -302,8 +302,8 @@ const faults = defineLayer({
     "Use it for 'are there faults', 'fault lines near here', 'is this an active fault', 'earthquake faults'; pair it with geology when the question is about rocks and faults. " +
     "Each line has fault (the fault name, such as 'Hurricane fault zone'), section, ageClass (historic, latest = under 15,000 years, late = under 130,000, middle-late = under 750,000, quaternary = under 1.6 million, unproven = class B), " +
     "slipRate in words (such as 'Under 0.2 mm a year'), slipSense (Normal, Thrust, Right lateral...), location (well, approximate or inferred), dip and lengthKm; color is the age of last movement and the dash how well the trace is located. " +
-    "The note counts the faults in the box and names the youngest and most active; quote it. If the box holds none, say 'no mapped Quaternary faults here' and name the nearest from the note; older bedrock faults (not active in 1.6 million years) are not in this database. " +
-    "United States only; a box up to 500,000 km² (a large state).",
+    "The note counts the faults in the box and names the youngest and most active; quote it. " +
+    "United States only, a box up to 500,000 km² (a large state); when the box holds none, say 'no mapped Quaternary faults here' and name the nearest the note gives; older bedrock faults (not active in 1.6 million years) are not in this database.",
   coverage: "us",
   surface: "any",
   license: "Public domain (USGS)",

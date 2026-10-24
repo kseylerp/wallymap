@@ -49,6 +49,10 @@ const set = (object: EeNode, key: string, value: EeNode) => call("Element.set", 
 export function regionsExpression(scheme: Scheme, bbox: BBox): EeNode {
   const t = TABLES[scheme];
   const rect = rectangle(bbox);
+  const [w, s, e, n] = bbox;
+  const dx = (e - w) / 4;
+  const dy = (n - s) / 4;
+  const wideRect = rectangle([Math.max(-180, w - dx), Math.max(-85, s - dy), Math.min(180, e + dx), Math.min(85, n + dy)]);
   const tol = tolerance(bbox);
   const touching = call("Collection.filter", {
     collection: call("Collection.loadTable", { tableId: t.id }),
@@ -58,7 +62,10 @@ export function regionsExpression(scheme: Scheme, bbox: BBox): EeNode {
     collection: touching,
     baseAlgorithm: lambda((f) => {
       const clipped = call("Geometry.intersection", { left: call("Feature.geometry", { feature: f }), right: rect, maxError: margin(tol) });
-      let out = call("Feature", { geometry: call("Geometry.simplify", { geometry: clipped, maxError: margin(tol) }) });
+      // Drawn past the box (a quarter of it each way), so the outlines never trace the box's own edges as a thick frame
+      // around the view (the Smokies' answer was boxed in black); the share is still measured inside the box.
+      const drawn = call("Geometry.intersection", { left: call("Feature.geometry", { feature: f }), right: wideRect, maxError: margin(tol) });
+      let out = call("Feature", { geometry: call("Geometry.simplify", { geometry: drawn, maxError: margin(tol) }) });
       out = set(out, "name", call("Element.get", { object: f, property: t.name }));
       if (t.code) out = set(out, "code", call("Element.get", { object: f, property: t.code }));
       if (t.parent) out = set(out, "parent", call("Element.get", { object: f, property: t.parent }));

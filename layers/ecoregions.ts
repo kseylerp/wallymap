@@ -44,11 +44,13 @@ export const LEGEND: LegendSpec = {
 
 const ATTRIBUTES: Attribute[] = [
   { key: "level", type: "category", label: "Ecoregion level", levels: LEVELS.map(({ value, label }) => ({ value, label })), primary: true },
-  { key: "share", type: "measure", label: "Share of view", unit: "share of 1" },
+  // In percent: the row's ranked list read "Blue Ridge 0.81 share of 1".
+  { key: "sharePct", type: "measure", label: "Share of view", unit: "%" },
 ];
 
 const FIELD_HELP: Record<string, FieldHelp> = {
   share: { text: "How much of the box asked this ecoregion covers.", unit: "share of 1" },
+  sharePct: { text: "How much of the box asked this ecoregion covers.", unit: "%" },
   area: { text: "The ecoregion's area inside the box asked, measured on Earth Engine before the outline was simplified." },
   parent: { text: "The broader region it sits in: the EPA Level II region for Level III, the Level III region for Level IV, the biome for RESOLVE." },
 };
@@ -61,7 +63,7 @@ const CARD: CardSpec = {
     { key: "parent", label: "Within" },
   ],
   // EPA's region codes ("66", "66g") mean nothing on a card; the name says it.
-  hidden: ["level", "areaSqKm", "code"],
+  hidden: ["level", "areaSqKm", "code", "sharePct"],
 };
 
 const inputSchema = z.object({
@@ -149,6 +151,7 @@ const ecoregions = defineLayer({
         level: LEVEL_OF[scheme],
         levelLabel: LEVELS.find((l) => l.value === LEVEL_OF[scheme])!.label,
         share: Math.round(r.share * 1000) / 1000,
+        sharePct: Math.round(r.share * 100),
         areaSqKm: Math.round(r.areaM2 / 1e6),
         area: areaText(r.areaM2 / 1e6),
         ...(r.parent && { parent: r.parent }),

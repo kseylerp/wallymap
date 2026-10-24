@@ -431,6 +431,16 @@ textarea:focus-visible {
 :root:has([data-chat-state="open"]):has([data-testid="phone-time-dock"]) .mapboxgl-ctrl-bottom-left {
   bottom: calc(34dvh + 64px);
 }
+/* The monthly strip's dock is taller than the time row: the logo rises above it too. */
+:root:has([data-testid="phone-month-dock"]) .mapboxgl-ctrl-bottom-left {
+  bottom: calc(220px + var(--safe-bottom));
+}
+:root:has([data-chat-state="collapsed"]):has([data-testid="phone-month-dock"]) .mapboxgl-ctrl-bottom-left {
+  bottom: calc(260px + var(--safe-bottom));
+}
+:root:has([data-chat-state="open"]):has([data-testid="phone-month-dock"]) .mapboxgl-ctrl-bottom-left {
+  bottom: calc(34dvh + 152px);
+}
 @media (min-width: 768px) {
   :root:has([data-testid="phone-time-dock"]) .mapboxgl-ctrl-bottom-left {
     bottom: calc(72px + var(--safe-bottom));
@@ -1014,6 +1024,49 @@ textarea:focus-visible {
 }
 .frame-chart-dot {
   fill: var(--coral);
+}
+/* The monthly strip (components/MonthlyStrip.tsx): sage temperature band with dark grey edges, purple bars, dark grey
+   snow cells and sage green-up cells, the pink playhead on the current month. */
+.month-band {
+  fill: color-mix(in srgb, var(--sage) 45%, transparent);
+}
+.month-band-edge {
+  stroke: var(--dark-grey);
+}
+.month-bar {
+  fill: color-mix(in srgb, var(--accent) 72%, transparent);
+}
+.month-cell-empty {
+  fill: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.month-cell-snow {
+  fill: var(--dark-grey);
+}
+.month-cell-green {
+  fill: var(--sage-deep);
+}
+.month-head {
+  stroke: var(--coral);
+}
+.month-mark {
+  stroke: var(--dark-grey);
+  stroke-dasharray: 2 2;
+}
+.month-focus {
+  fill: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.month-label {
+  fill: var(--ink);
+  font-size: 8.5px;
+  font-variant-numeric: tabular-nums;
+}
+.month-initial {
+  fill: var(--ink-muted);
+  font-size: 8.5px;
+}
+.month-initial-now {
+  fill: var(--coral);
+  font-weight: 600;
 }
 .time-handle:focus-visible::after {
   box-shadow: 0 0 0 2px var(--slate);

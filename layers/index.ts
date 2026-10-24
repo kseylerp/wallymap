@@ -96,3 +96,5 @@ import "./elevation-profile";
 import "./vegetation-types";
 import "./ecoregions";
 import "./canopy-height";
+import "./climate-normals";
+import "./flow-by-month";

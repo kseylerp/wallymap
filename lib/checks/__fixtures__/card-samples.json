@@ -392,6 +392,114 @@
    60
   ]
  },
+ "climate-normals": {
+  "kind": "geojson",
+  "recorded": "2026-10-24",
+  "bbox": [
+   -120.25,
+   38.9,
+   -119.9,
+   39.3
+  ],
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -120.1428,
+      39.1678
+     ]
+    },
+    "properties": {
+     "name": "Tahoe City, CA",
+     "stationId": "USC00048758",
+     "source": "NOAA station Tahoe City, CA (USC00048758)",
+     "distanceKm": 12.4,
+     "elevationM": 1898.9,
+     "place": "Lake Tahoe",
+     "warmest": "July: 78 °F by day and 46 °F at night",
+     "coldest": "January: 40 °F by day and 21 °F at night",
+     "wettest": "January: 6.2 in",
+     "driest": "July: 0.2 in",
+     "yearPrecipIn": 33.3,
+     "yearSnowIn": 179,
+     "snowSeason": "Snow usually arrives in November and is gone by May",
+     "period": "1991–2020",
+     "highF": [
+      39.6,
+      40.5,
+      44.6,
+      50.1,
+      59.2,
+      69.3,
+      78,
+      77.4,
+      70.4,
+      59.2,
+      47.7,
+      39.7
+     ],
+     "lowF": [
+      20.6,
+      21.1,
+      24.1,
+      27.6,
+      33.9,
+      40,
+      46,
+      45.4,
+      40.5,
+      32.6,
+      25.9,
+      20.7
+     ],
+     "precipIn": [
+      6.21,
+      5.72,
+      4.95,
+      2.23,
+      1.57,
+      0.61,
+      0.17,
+      0.3,
+      0.42,
+      1.89,
+      3.21,
+      6
+     ],
+     "snowIn": [
+      37.9,
+      41.3,
+      34.7,
+      14,
+      2.8,
+      0.2,
+      0,
+      0,
+      0.1,
+      2.4,
+      9.4,
+      36.2
+     ],
+     "snowDays": [
+      27.1,
+      24.4,
+      25.7,
+      13.5,
+      1.5,
+      0.1,
+      0,
+      0,
+      0.1,
+      1,
+      6.9,
+      23.9
+     ]
+    }
+   }
+  ]
+ },
  "climbing": {
   "kind": "geojson",
   "recorded": "2026-10-23",
@@ -4437,6 +4545,120 @@
    35.588,
    -82.542,
    35.601
+  ]
+ },
+ "flow-by-month": {
+  "kind": "geojson",
+  "recorded": "2026-10-24",
+  "bbox": [
+   -119.75,
+   37.7,
+   -119.5,
+   37.78
+  ],
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -119.6656667,
+      37.71627778
+     ]
+    },
+    "properties": {
+     "name": "Merced River at Pohono Bridge near Yosemite, CA",
+     "nameInSource": "MERCED R A POHONO BRIDGE NR YOSEMITE CA",
+     "siteNo": "11266500",
+     "v": 2280,
+     "peak": "May: 2,280 cfs",
+     "peakMonth": "May",
+     "low": "October: 36 cfs",
+     "lowMonth": "October",
+     "nowCfs": 18.8,
+     "period": "1916–2025 (110 years)",
+     "medianCfs": [
+      136,
+      213,
+      428,
+      1109,
+      2280,
+      1613,
+      370,
+      82.2,
+      36.3,
+      36,
+      63.5,
+      94.9
+     ],
+     "meanCfs": [
+      213,
+      264,
+      454,
+      1181,
+      2353,
+      1893,
+      638,
+      146,
+      61.5,
+      67.5,
+      119,
+      179
+     ],
+     "url": "https://waterdata.usgs.gov/monitoring-location/USGS-11266500/"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -119.5590243,
+      37.73130354
+     ]
+    },
+    "properties": {
+     "name": "Merced River at Happy Isles Bridge near Yosemite, CA",
+     "nameInSource": "MERCED R A HAPPY ISLES BRIDGE NR YOSEMITE CA",
+     "siteNo": "11264500",
+     "v": 1259,
+     "peak": "May: 1,259 cfs",
+     "peakMonth": "May",
+     "low": "October: 17 cfs",
+     "lowMonth": "October",
+     "nowCfs": 8.49,
+     "period": "1915–2026 (112 years)",
+     "medianCfs": [
+      68.2,
+      98,
+      194,
+      561,
+      1259,
+      1106,
+      275,
+      57.6,
+      20.7,
+      17.3,
+      34.4,
+      45
+     ],
+     "meanCfs": [
+      95.9,
+      116,
+      210,
+      574,
+      1274,
+      1203,
+      468,
+      108,
+      40.7,
+      38.9,
+      61.1,
+      81.7
+     ],
+     "url": "https://waterdata.usgs.gov/monitoring-location/USGS-11264500/"
+    }
+   }
   ]
  },
  "forest-alerts": {

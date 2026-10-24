@@ -73,7 +73,7 @@ const META: Record<string, { shows: string; source: string; freshness: string; c
   "fire-weather": { shows: "Fire danger forecast (Fire Weather Index)", source: "EC JRC GWIS / EFFIS", freshness: "Daily, up to 9 days ahead" },
   lakes: { shows: "Named lakes and reservoirs with maximum depth", source: "Wikidata", freshness: "Live (community edits)" },
   drought: { shows: "Weekly drought categories D0 to D4", source: "U.S. Drought Monitor (NDMC)", freshness: "Weekly" },
-  phenology: { shows: "Whether spring leaf-out and bloom came early or late", source: "USA National Phenology Network", freshness: "Daily this year; yearly back to 1981", coverage: "Lower 48 states" },
+  phenology: { shows: "Whether spring leaf-out and bloom came early or late; the usual green-up date", source: "USA National Phenology Network; NASA MODIS via Earth Engine", freshness: "Daily this year; yearly back to 1981; green-up 2001–2025", coverage: "Lower 48 states (green-up worldwide)" },
   "burn-severity": { shows: "Burned areas of large fires, by year", source: "MTBS (USGS, USFS)", freshness: "Yearly, about 18 months behind" },
   smoke: { shows: "Wildfire smoke plumes by density", source: "NOAA Hazard Mapping System", freshness: "Daily", coverage: "North and Central America" },
   "geologic-unit": { shows: "The rock unit, age and rock type under one point", source: "Macrostrat", freshness: "Static" },
@@ -111,6 +111,8 @@ const META: Record<string, { shows: string; source: string; freshness: string; c
   "vegetation-types": { shows: "849 named vegetation types (ecological systems) in eight groups, with their shares of the view", source: "LANDFIRE EVT (USGS, US Forest Service) via Earth Engine", freshness: "Static (about 2014)" },
   ecoregions: { shows: "Named ecoregion outlines with their share of the view: EPA Level III and IV, RESOLVE outside the US", source: "US EPA; RESOLVE Ecoregions 2017, via Earth Engine", freshness: "Static (2013, 2017)" },
   "canopy-height": { shows: "Height of the tree canopy at about 1 m, with the median and tallest trees in view", source: "Meta and WRI canopy height via Earth Engine", freshness: "Static (imagery 2018–2020)" },
+  "climate-normals": { shows: "Normal high and low temperature, precipitation and snow for each month at a place, with the monthly strip", source: "NOAA NCEI U.S. Climate Normals; TerraClimate via Earth Engine", freshness: "Static (1991–2020 normals)" },
+  "flow-by-month": { shows: "The month a river runs highest and lowest at USGS gauges, median flow by month", source: "USGS NWIS monthly statistics", freshness: "Monthly record, whole period of each gauge" },
 };
 
 function coverageText(l: Layer): string {

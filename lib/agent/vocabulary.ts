@@ -106,6 +106,8 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "vegetation-types", synonyms: ["vegetation type", "what grows", "ecosystems"], notes: "LANDFIRE named types with shares, lower 48", gist: "named vegetation types and their shares" },
   { layerId: "ecoregions", synonyms: ["ecoregion", "biome", "ecological region"], notes: "EPA Level III/IV, RESOLVE outside US; shares", gist: "named ecoregion outlines with their shares" },
   { layerId: "canopy-height", synonyms: ["tree height", "how tall", "canopy height"], notes: "1 m canopy height; median, p90, tallest in box", gist: "how tall the trees are, worldwide" },
+  { layerId: "climate-normals", synonyms: ["climate", "typical weather", "normals"], notes: "1991-2020 monthly normals at a place; lon, lat, name", gist: "typical temperature, rain and snow for each month" },
+  { layerId: "flow-by-month", synonyms: ["peak flow", "river highest", "snowmelt peak"], notes: "median gauge flow per month; peak and low month", gist: "the months a river runs highest and lowest" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

@@ -575,6 +575,9 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   "what's the avalanche danger in little cottonwood canyon today?": { layers: ["avalanche"] },
   // A cross-section along a straight line between two places (top 10 use case T08).
   "elevation profile from glacier point to half dome": { layers: ["elevation-profile"] },
+  // A place through the year (T10): monthly climate normals and a river's flow by month.
+  "what is the weather usually like in july in bozeman?": { layers: ["climate-normals"] },
+  "which month does the truckee river run highest?": { layers: ["flow-by-month"] },
 };
 
 /**

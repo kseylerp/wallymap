@@ -1,4 +1,45 @@
 {
+ "air-quality": {
+  "kind": "geojson",
+  "recorded": "2026-10-24",
+  "bbox": [
+   -119.7,
+   37.68,
+   -119.5,
+   37.78
+  ],
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -119.59,
+      37.74
+     ]
+    },
+    "properties": {
+     "name": "Air quality at the asked place, 37.74°N 119.59°W",
+     "t": "2026-10-24T02:00:00.000Z",
+     "v": 37,
+     "usAqi": 37,
+     "category": "Good",
+     "pm25": 3.6,
+     "today": "Fri Oct 23: air quality good, worst hour left US AQI 37, PM2.5 up to 3.6 µg/m³",
+     "tomorrow": "Sat Oct 24: air quality good, worst hour US AQI 43, PM2.5 up to 4.8 µg/m³",
+     "saturday": "Sat Oct 24: air quality good, worst hour US AQI 43, PM2.5 up to 4.8 µg/m³",
+     "sunday": "Sun Oct 25: air quality moderate, worst hour US AQI 53, PM2.5 up to 20.7 µg/m³",
+     "days": [
+      "Fri Oct 23: air quality good, worst hour left US AQI 37, PM2.5 up to 3.6 µg/m³",
+      "Sat Oct 24: air quality good, worst hour US AQI 43, PM2.5 up to 4.8 µg/m³",
+      "Sun Oct 25: air quality moderate, worst hour US AQI 53, PM2.5 up to 20.7 µg/m³",
+      "Mon Oct 26: air quality moderate, worst hour US AQI 66, PM2.5 up to 20.4 µg/m³",
+      "Tue Oct 27: air quality moderate, worst hour US AQI 58, PM2.5 up to 12.8 µg/m³"
+     ]
+    }
+   }
+  ]
+ },
  "aquifers": {
   "kind": "geojson",
   "recorded": "2026-10-23",
@@ -117,7 +158,7 @@
  },
  "campsites": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -109.8,
    38.4,
@@ -141,7 +182,12 @@
      "tents": true,
      "caravans": false,
      "feeStatus": "unknown",
-     "website": "https://www.blm.gov/ut/st/en/fo/moab/recreation/campgrounds/kane_creek_road/Moonflower_Camping_Area.html"
+     "website": "https://www.blm.gov/ut/st/en/fo/moab/recreation/campgrounds/kane_creek_road/Moonflower_Camping_Area.html",
+     "nearWater": true,
+     "waterM": 17,
+     "water": "Moonflower Canyon (stream) · a stream · Colorado River (river)",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf"
     }
    },
    {
@@ -166,7 +212,12 @@
      "website": "https://www.blm.gov/visit/cowboy-camp-campground",
      "operator": "Bureau of Land Management",
      "reservation": "no",
-     "toilets": true
+     "toilets": true,
+     "nearWater": true,
+     "waterM": 133,
+     "water": "a stream",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf"
     }
    },
    {
@@ -190,7 +241,9 @@
      "operator": "Sun RV Resorts",
      "reservation": "recommended",
      "toilets": true,
-     "drinkingWater": true
+     "drinkingWater": true,
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf"
     }
    },
    {
@@ -207,6 +260,8 @@
      "osmId": "node/3444896866",
      "backcountry": true,
      "feeStatus": "unknown",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
      "heading": "Camp site near Large Campsite",
      "title": "Camp site near Large Campsite"
     }
@@ -226,6 +281,8 @@
      "feeStatus": "unknown",
      "capacity": 3,
      "v": 3,
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
      "heading": "Parking lot near Sun Outdoors Arches Gateway",
      "title": "Parking lot near Sun Outdoors Arches Gateway"
     }
@@ -244,7 +301,9 @@
      "osmId": "node/1335211222",
      "name": "Kane Springs Campground",
      "feeStatus": "unknown",
-     "website": "http://www.kanesprings.com"
+     "website": "http://www.kanesprings.com",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf"
     }
    },
    {
@@ -263,7 +322,12 @@
      "tents": true,
      "caravans": false,
      "feeStatus": "unknown",
-     "website": "https://www.moabupthecreek.com/"
+     "website": "https://www.moabupthecreek.com/",
+     "nearWater": true,
+     "waterM": 20,
+     "water": "Mill Creek (stream)",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf"
     }
    },
    {
@@ -282,7 +346,12 @@
      "fee": true,
      "feeStatus": "fee",
      "website": "https://www.utahscouts.org/high-adventure/entrada-high-adventure-base/21841",
-     "operator": "Crossroads of the West Council, BSA"
+     "operator": "Crossroads of the West Council, BSA",
+     "nearWater": true,
+     "waterM": 162,
+     "water": "a stream",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf"
     }
    },
    {
@@ -301,7 +370,12 @@
      "fee": true,
      "feeStatus": "fee",
      "capacity": 15,
-     "reservation": "required"
+     "reservation": "required",
+     "nearWater": true,
+     "waterM": 47,
+     "water": "South Fork Shafer Canyon (stream)",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf"
     }
    },
    {
@@ -319,7 +393,9 @@
      "name": "Designated Campsite",
      "backcountry": true,
      "feeStatus": "unknown",
-     "operator": "BLM"
+     "operator": "BLM",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf"
     }
    },
    {
@@ -344,7 +420,12 @@
      "website": "https://www.blm.gov/visit/goose-island-campground",
      "operator": "BLM",
      "toilets": true,
-     "drinkingWater": false
+     "drinkingWater": false,
+     "nearWater": true,
+     "waterM": 106,
+     "water": "Colorado River (river)",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf"
     }
    },
    {
@@ -367,7 +448,12 @@
      "website": "https://www.blm.gov/visit/gold-bar-recreation-site",
      "reservation": "no",
      "toilets": true,
-     "drinkingWater": false
+     "drinkingWater": false,
+     "nearWater": true,
+     "waterM": 51,
+     "water": "Colorado River (river)",
+     "campingRule": "Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab and its developed campgrounds are closed to dispersed camping: camp in a campground or at a posted designated site (a tent symbol on a brown post); dispersed camping only outside those zones (BLM Moab Visitor Guide, 2024-07-16)",
+     "campingRuleUrl": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf"
     }
    }
   ]
@@ -2832,7 +2918,7 @@
  },
  "forest-roads": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -112.008,
    34.906,
@@ -2865,7 +2951,9 @@
      "motorhome": true,
      "atv": true,
      "motorcycle": true,
-     "miles": 2.86
+     "miles": 2.86,
+     "campingRule": "Coconino National Forest, forest-wide, outside the Sedona orders: dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30; drive no more than 30 feet off a forest road to camp, except inside the camping corridors the map shows as dots beside a road (Coconino camping guidance; stay limit Forest Order 03-04-20-18, 2020-09-02)",
+     "campingRuleUrl": "https://www.fs.usda.gov/r03/coconino/about-area/faqs"
     }
    },
    {
@@ -2894,36 +2982,9 @@
      "atv": true,
      "motorcycle": true,
      "miles": 1.45,
+     "campingRule": "Coconino National Forest, forest-wide, outside the Sedona orders: dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30; drive no more than 30 feet off a forest road to camp, except inside the camping corridors the map shows as dots beside a road (Coconino camping guidance; stay limit Forest Order 03-04-20-18, 2020-09-02)",
+     "campingRuleUrl": "https://www.fs.usda.gov/r03/coconino/about-area/faqs",
      "nameInSource": "KELSEY SPRING TRAILHEAD"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -111.75039,
-      34.97037
-     ]
-    },
-    "properties": {
-     "routeId": "89H",
-     "access": "Roads open to highway legal vehicles only, Yearlong",
-     "seasonal": false,
-     "passengerCar": true,
-     "highClearance": true,
-     "name": "Bootlegger Campground",
-     "forest": "Coconino National Forest",
-     "district": "Red Rock Ranger District",
-     "level": 3,
-     "surface": "AGG - CRUSHED AGGREGATE OR GRAVEL",
-     "surfaceKind": "gravel",
-     "carDates": "All year",
-     "motorhome": true,
-     "miles": 0.11,
-     "campingRule": "Coconino National Forest, Red Rock Ranger District, South of Sedona and Oak Creek Canyon: no camping year-round except in the developed campgrounds (Pine Flat, Cave Springs, Manzanita, Chavez group) (Forest Order 03-04-06-23-03, 2023-01-24)",
-     "campingRuleUrl": "https://www.fs.usda.gov/r03/coconino/alerts/sedona-oak-creek-canyon-camping-and-campfire-restrictions",
-     "nameInSource": "BOOTLEGGER CAMPGROUND"
     }
    },
    {
@@ -2951,7 +3012,9 @@
      "motorhome": true,
      "atv": true,
      "motorcycle": true,
-     "miles": 1.48
+     "miles": 1.48,
+     "campingRule": "Coconino National Forest, forest-wide, outside the Sedona orders: dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30; drive no more than 30 feet off a forest road to camp, except inside the camping corridors the map shows as dots beside a road (Coconino camping guidance; stay limit Forest Order 03-04-20-18, 2020-09-02)",
+     "campingRuleUrl": "https://www.fs.usda.gov/r03/coconino/about-area/faqs"
     }
    },
    {
@@ -2979,7 +3042,9 @@
      "motorhome": true,
      "atv": true,
      "motorcycle": true,
-     "miles": 0.06
+     "miles": 0.06,
+     "campingRule": "Coconino National Forest, forest-wide, outside the Sedona orders: dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30; drive no more than 30 feet off a forest road to camp, except inside the camping corridors the map shows as dots beside a road (Coconino camping guidance; stay limit Forest Order 03-04-20-18, 2020-09-02)",
+     "campingRuleUrl": "https://www.fs.usda.gov/r03/coconino/about-area/faqs"
     }
    },
    {
@@ -3007,7 +3072,9 @@
      "motorhome": true,
      "atv": true,
      "motorcycle": true,
-     "miles": 7.44
+     "miles": 7.44,
+     "campingRule": "Coconino National Forest, forest-wide, outside the Sedona orders: dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30; drive no more than 30 feet off a forest road to camp, except inside the camping corridors the map shows as dots beside a road (Coconino camping guidance; stay limit Forest Order 03-04-20-18, 2020-09-02)",
+     "campingRuleUrl": "https://www.fs.usda.gov/r03/coconino/about-area/faqs"
     }
    },
    {
@@ -3035,7 +3102,9 @@
      "motorhome": true,
      "atv": true,
      "motorcycle": true,
-     "miles": 3.64
+     "miles": 3.64,
+     "campingRule": "Coconino National Forest, forest-wide, outside the Sedona orders: dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30; drive no more than 30 feet off a forest road to camp, except inside the camping corridors the map shows as dots beside a road (Coconino camping guidance; stay limit Forest Order 03-04-20-18, 2020-09-02)",
+     "campingRuleUrl": "https://www.fs.usda.gov/r03/coconino/about-area/faqs"
     }
    },
    {
@@ -3063,7 +3132,9 @@
      "motorhome": true,
      "atv": true,
      "motorcycle": true,
-     "miles": 2.23
+     "miles": 2.23,
+     "campingRule": "Coconino National Forest, forest-wide, outside the Sedona orders: dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30; drive no more than 30 feet off a forest road to camp, except inside the camping corridors the map shows as dots beside a road (Coconino camping guidance; stay limit Forest Order 03-04-20-18, 2020-09-02)",
+     "campingRuleUrl": "https://www.fs.usda.gov/r03/coconino/about-area/faqs"
     }
    },
    {
@@ -3091,7 +3162,9 @@
      "motorhome": true,
      "atv": true,
      "motorcycle": true,
-     "miles": 1.31
+     "miles": 1.31,
+     "campingRule": "Coconino National Forest, forest-wide, outside the Sedona orders: dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30; drive no more than 30 feet off a forest road to camp, except inside the camping corridors the map shows as dots beside a road (Coconino camping guidance; stay limit Forest Order 03-04-20-18, 2020-09-02)",
+     "campingRuleUrl": "https://www.fs.usda.gov/r03/coconino/about-area/faqs"
     }
    },
    {
@@ -3119,7 +3192,9 @@
      "motorhome": true,
      "atv": true,
      "motorcycle": true,
-     "miles": 0.18
+     "miles": 0.18,
+     "campingRule": "Coconino National Forest, forest-wide, outside the Sedona orders: dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30; drive no more than 30 feet off a forest road to camp, except inside the camping corridors the map shows as dots beside a road (Coconino camping guidance; stay limit Forest Order 03-04-20-18, 2020-09-02)",
+     "campingRuleUrl": "https://www.fs.usda.gov/r03/coconino/about-area/faqs"
     }
    },
    {
@@ -3147,7 +3222,9 @@
      "motorhome": true,
      "atv": true,
      "motorcycle": true,
-     "miles": 6.53
+     "miles": 6.53,
+     "campingRule": "Coconino National Forest, forest-wide, outside the Sedona orders: dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30; drive no more than 30 feet off a forest road to camp, except inside the camping corridors the map shows as dots beside a road (Coconino camping guidance; stay limit Forest Order 03-04-20-18, 2020-09-02)",
+     "campingRuleUrl": "https://www.fs.usda.gov/r03/coconino/about-area/faqs"
     }
    },
    {
@@ -3173,7 +3250,39 @@
      "surfaceKind": "gravel",
      "carDates": "All year",
      "motorhome": true,
-     "miles": 0.05
+     "miles": 0.05,
+     "campingRule": "Coconino National Forest, forest-wide, outside the Sedona orders: dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30; drive no more than 30 feet off a forest road to camp, except inside the camping corridors the map shows as dots beside a road (Coconino camping guidance; stay limit Forest Order 03-04-20-18, 2020-09-02)",
+     "campingRuleUrl": "https://www.fs.usda.gov/r03/coconino/about-area/faqs"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -111.6846,
+      35.01185
+     ]
+    },
+    "properties": {
+     "routeId": "78",
+     "access": "Roads open to all Vehicles, Yearlong",
+     "seasonal": false,
+     "passengerCar": true,
+     "highClearance": true,
+     "heading": "Forest Road 78",
+     "forest": "Coconino National Forest",
+     "district": "Flagstaff Ranger District",
+     "level": 2,
+     "surface": "NAT - NATIVE MATERIAL",
+     "surfaceKind": "dirt",
+     "carDates": "All year",
+     "motorhome": true,
+     "atv": true,
+     "motorcycle": true,
+     "miles": 1.79,
+     "campingRule": "Coconino National Forest, forest-wide, outside the Sedona orders: dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30; drive no more than 30 feet off a forest road to camp, except inside the camping corridors the map shows as dots beside a road (Coconino camping guidance; stay limit Forest Order 03-04-20-18, 2020-09-02)",
+     "campingRuleUrl": "https://www.fs.usda.gov/r03/coconino/about-area/faqs"
     }
    }
   ]
@@ -5641,7 +5750,7 @@
  },
  "mtb-trails": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -109.8,
    38.4,
@@ -5668,10 +5777,12 @@
       "beginner"
      ],
      "lengthKm": 0.33,
+     "lengthMi": 0.2,
      "highway": "track",
      "gainM": 17,
      "lossM": 0,
-     "highM": 1230
+     "highM": 1230,
+     "gainFt": 56
     }
    },
    {
@@ -5693,11 +5804,13 @@
       "advanced"
      ],
      "lengthKm": 2.28,
+     "lengthMi": 1.4,
      "highway": "track",
      "surface": "dirt",
      "gainM": 7,
      "lossM": 54,
-     "highM": 1612
+     "highM": 1612,
+     "gainFt": 23
     }
    },
    {
@@ -5719,12 +5832,14 @@
       "beginner"
      ],
      "lengthKm": 3.84,
+     "lengthMi": 2.4,
      "highway": "tertiary",
      "ref": "CR 145",
      "surface": "dirt",
      "gainM": 63,
      "lossM": 37,
-     "highM": 1298
+     "highM": 1298,
+     "gainFt": 207
     }
    },
    {
@@ -5746,6 +5861,7 @@
       "advanced"
      ],
      "lengthKm": 5,
+     "lengthMi": 3.1,
      "highway": "track",
      "ref": "CR 144",
      "surface": "ground",
@@ -5754,7 +5870,8 @@
      "operator": "National Park System",
      "gainM": 82,
      "lossM": 147,
-     "highM": 1450
+     "highM": 1450,
+     "gainFt": 269
     }
    },
    {
@@ -5777,6 +5894,7 @@
       "intermediate"
      ],
      "lengthKm": 1.98,
+     "lengthMi": 1.2,
      "highway": "path",
      "surface": "ground",
      "bicycle": "designated",
@@ -5784,7 +5902,8 @@
      "operator": "Sand Flats Recreation Area",
      "gainM": 61,
      "lossM": 37,
-     "highM": 1422
+     "highM": 1422,
+     "gainFt": 200
     }
    },
    {
@@ -5801,10 +5920,12 @@
      "osmId": "relation/2788223",
      "name": "Kokopelli's Trail",
      "inViewKm": 16.22,
+     "inViewMi": 10.1,
      "ref": "Kokapelli",
      "gainM": 833,
      "lossM": 41,
-     "highM": 2203
+     "highM": 2203,
+     "gainFt": 2733
     }
    },
    {
@@ -5827,6 +5948,7 @@
       "advanced"
      ],
      "lengthKm": 0.48,
+     "lengthMi": 0.3,
      "highway": "path",
      "surface": "ground",
      "bicycle": "designated",
@@ -5834,7 +5956,8 @@
      "operator": "Sand Flats Recreation Area",
      "gainM": 10,
      "lossM": 0,
-     "highM": 1420
+     "highM": 1420,
+     "gainFt": 33
     }
    },
    {
@@ -5856,12 +5979,14 @@
       "beginner"
      ],
      "lengthKm": 2.14,
+     "lengthMi": 1.3,
      "highway": "secondary",
      "ref": "CR 134",
      "surface": "paved",
      "gainM": 4,
      "lossM": 3,
-     "highM": 1212
+     "highM": 1212,
+     "gainFt": 13
     }
    },
    {
@@ -5883,6 +6008,7 @@
       "advanced"
      ],
      "lengthKm": 8.46,
+     "lengthMi": 5.3,
      "highway": "secondary",
      "ref": "CR 142",
      "surface": "ground",
@@ -5891,7 +6017,8 @@
      "operator": "National Park System",
      "gainM": 120,
      "lossM": 558,
-     "highM": 1801
+     "highM": 1801,
+     "gainFt": 394
     }
    },
    {
@@ -5913,13 +6040,15 @@
       "advanced"
      ],
      "lengthKm": 1.63,
+     "lengthMi": 1,
      "highway": "track",
      "surface": "ground",
      "bicycle": "yes",
      "bikes": "yes",
      "gainM": 116,
      "lossM": 69,
-     "highM": 1312
+     "highM": 1312,
+     "gainFt": 381
     }
    },
    {
@@ -5942,13 +6071,15 @@
       "intermediate"
      ],
      "lengthKm": 4.88,
+     "lengthMi": 3,
      "highway": "path",
      "surface": "ground",
      "bicycle": "designated",
      "bikes": "designated",
      "gainM": 70,
      "lossM": 85,
-     "highM": 1429
+     "highM": 1429,
+     "gainFt": 230
     }
    },
    {
@@ -5970,11 +6101,13 @@
       "beginner"
      ],
      "lengthKm": 6.55,
+     "lengthMi": 4.1,
      "highway": "track",
      "surface": "dirt",
      "gainM": 48,
      "lossM": 81,
-     "highM": 1434
+     "highM": 1434,
+     "gainFt": 157
     }
    }
   ]
@@ -6493,7 +6626,7 @@
  },
  "osm-trails": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    6.814,
    45.833,
@@ -6520,13 +6653,47 @@
      "start": "45.98246, 6.90656",
      "end": "45.93621, 6.85341",
      "osmId": "way/217481421",
+     "roundTripKm": 17.98,
      "trail_visibility": "excellent",
      "surface": "ground",
+     "lengthMi": 5.6,
+     "roundTripMi": 11.2,
      "gainM": 548,
-     "lossM": 684,
+     "lossM": 672,
      "gainPerKm": 50.7,
      "highM": 2129,
-     "lowM": 1818
+     "lowM": 1818,
+     "roundTripGainM": 1220,
+     "gainFt": 1798,
+     "roundTripGainFt": 4003,
+     "payoff": [
+      "waterfall"
+     ],
+     "passes": "a waterfall"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      6.8664328,
+      45.9178396
+     ]
+    },
+    "properties": {
+     "highway": "footway",
+     "osmId": "way/22886799",
+     "informal": false,
+     "lengthKm": 0.02,
+     "kind": "footway",
+     "sac_scale": "not_rated",
+     "surface": "asphalt",
+     "gainM": 0,
+     "lossM": 0,
+     "highM": 1031,
+     "lengthMi": 0,
+     "gainFt": 0
     }
    },
    {
@@ -6551,34 +6718,21 @@
      "roundTripKm": 11.72,
      "trail_visibility": "excellent",
      "surface": "ground",
+     "lengthMi": 3.6,
+     "roundTripMi": 7.3,
      "gainM": 558,
      "lossM": 281,
      "gainPerKm": 80.4,
      "highM": 2201,
      "lowM": 1904,
-     "roundTripGainM": 664
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      6.8664328,
-      45.9178396
-     ]
-    },
-    "properties": {
-     "highway": "footway",
-     "osmId": "way/22886799",
-     "informal": false,
-     "lengthKm": 0.02,
-     "kind": "footway",
-     "sac_scale": "not_rated",
-     "surface": "asphalt",
-     "gainM": 0,
-     "lossM": 0,
-     "highM": 1031
+     "roundTripGainM": 839,
+     "gainFt": 1831,
+     "roundTripGainFt": 2753,
+     "payoff": [
+      "viewpoint",
+      "summit"
+     ],
+     "passes": "Signal Forbes (summit) · Signal Forbes (viewpoint) · a viewpoint"
     }
    },
    {
@@ -6602,12 +6756,21 @@
      "osmId": "way/117544137",
      "roundTripKm": 10.68,
      "surface": "ground",
+     "lengthMi": 3.3,
+     "roundTripMi": 6.6,
      "gainM": 99,
      "lossM": 743,
      "gainPerKm": 15.6,
      "highM": 3008,
      "lowM": 2364,
-     "roundTripGainM": 810
+     "roundTripGainM": 842,
+     "gainFt": 325,
+     "roundTripGainFt": 2762,
+     "payoff": [
+      "viewpoint",
+      "summit"
+     ],
+     "passes": "Les Grands Mulets (summit) · a viewpoint"
     }
    },
    {
@@ -6629,13 +6792,19 @@
      "start": "45.98314, 6.93459",
      "end": "45.99997, 6.9497",
      "osmId": "way/33554865",
+     "roundTripKm": 5.75,
      "trail_visibility": "excellent",
      "surface": "ground",
-     "gainM": 385,
-     "lossM": 155,
+     "lengthMi": 3.3,
+     "roundTripMi": 3.6,
+     "gainM": 249,
+     "lossM": 64,
      "gainPerKm": 78.1,
      "highM": 1516,
-     "lowM": 1292
+     "lowM": 1292,
+     "roundTripGainM": 313,
+     "gainFt": 817,
+     "roundTripGainFt": 1027
     }
    },
    {
@@ -6659,12 +6828,20 @@
      "osmId": "way/128225415",
      "roundTripKm": 10.23,
      "trail_visibility": "intermediate",
+     "lengthMi": 3.2,
+     "roundTripMi": 6.4,
      "gainM": 1075,
      "lossM": 243,
      "gainPerKm": 203.2,
      "highM": 2704,
      "lowM": 1844,
-     "roundTripGainM": 1246
+     "roundTripGainM": 1318,
+     "gainFt": 3527,
+     "roundTripGainFt": 4324,
+     "payoff": [
+      "summit"
+     ],
+     "passes": "Tête du Couvercle (summit)"
     }
    },
    {
@@ -6689,12 +6866,20 @@
      "roundTripKm": 8.31,
      "trail_visibility": "excellent",
      "surface": "ground",
+     "lengthMi": 2.6,
+     "roundTripMi": 5.2,
      "gainM": 69,
      "lossM": 754,
      "gainPerKm": 7.7,
      "highM": 1901,
      "lowM": 1212,
-     "roundTripGainM": 750
+     "roundTripGainM": 823,
+     "gainFt": 226,
+     "roundTripGainFt": 2700,
+     "payoff": [
+      "viewpoint"
+     ],
+     "passes": "a viewpoint"
     }
    },
    {
@@ -6716,13 +6901,19 @@
      "start": "45.98353, 6.92659",
      "end": "45.97877, 6.90289",
      "osmId": "way/32845662",
+     "roundTripKm": 7.92,
      "trail_visibility": "excellent",
      "surface": "ground",
+     "lengthMi": 2.5,
+     "roundTripMi": 4.9,
      "gainM": 768,
-     "lossM": 43,
+     "lossM": 39,
      "gainPerKm": 189.1,
      "highM": 2001,
-     "lowM": 1271
+     "lowM": 1271,
+     "roundTripGainM": 807,
+     "gainFt": 2520,
+     "roundTripGainFt": 2648
     }
    },
    {
@@ -6744,13 +6935,19 @@
      "start": "45.93975, 6.91683",
      "end": "45.92875, 6.88754",
      "osmId": "way/205100128",
+     "roundTripKm": 7.74,
      "trail_visibility": "excellent",
      "surface": "rock",
+     "lengthMi": 2.4,
+     "roundTripMi": 4.8,
      "gainM": 33,
      "lossM": 468,
      "gainPerKm": 3.1,
      "highM": 1616,
-     "lowM": 1181
+     "lowM": 1181,
+     "roundTripGainM": 501,
+     "gainFt": 108,
+     "roundTripGainFt": 1644
     }
    },
    {
@@ -6775,12 +6972,16 @@
      "roundTripKm": 7.16,
      "trail_visibility": "intermediate",
      "surface": "rocky",
+     "lengthMi": 2.2,
+     "roundTripMi": 4.4,
      "gainM": 1190,
      "lossM": 22,
      "gainPerKm": 324.2,
      "highM": 2771,
      "lowM": 1603,
-     "roundTripGainM": 1162
+     "roundTripGainM": 1212,
+     "gainFt": 3904,
+     "roundTripGainFt": 3976
     }
    },
    {
@@ -6805,12 +7006,20 @@
      "roundTripKm": 5.96,
      "trail_visibility": "intermediate",
      "surface": "rocky",
+     "lengthMi": 1.9,
+     "roundTripMi": 3.7,
      "gainM": 126,
      "lossM": 1432,
      "gainPerKm": 37.4,
      "highM": 4103,
      "lowM": 2771,
-     "roundTripGainM": 1530
+     "roundTripGainM": 1558,
+     "gainFt": 413,
+     "roundTripGainFt": 5112,
+     "payoff": [
+      "summit"
+     ],
+     "passes": "Pointe Walker / Punta Walker (summit) · Grandes Jorasses / Pointe Walker (summit) · Tour des Jorasses (summit) · Pointe Whymper / Punta Whymper (summit)"
     }
    },
    {
@@ -6832,13 +7041,19 @@
      "start": "45.97481, 6.91896",
      "end": "45.96702, 6.91167",
      "osmId": "way/65708274",
+     "roundTripKm": 2.69,
      "trail_visibility": "excellent",
      "surface": "ground",
-     "gainM": 31,
-     "lossM": 89,
+     "lengthMi": 1.7,
+     "roundTripMi": 1.7,
+     "gainM": 15,
+     "lossM": 33,
      "gainPerKm": 7.7,
      "highM": 1218,
-     "lowM": 1186
+     "lowM": 1186,
+     "roundTripGainM": 48,
+     "gainFt": 49,
+     "roundTripGainFt": 157
     }
    }
   ]
@@ -8248,7 +8463,7 @@
  },
  "popularity": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -120.15,
    38.9,
@@ -8277,7 +8492,7 @@
       "Inspiration Point",
       "On Lake Tahoe"
      ],
-     "wikipediaViews": 362,
+     "wikipediaViews": 358,
      "photos": 85,
      "parkingSpaces": 62,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Rubicon_Point_Light",
@@ -8301,7 +8516,9 @@
      "popularityNote": "estimate",
      "gainM": 257,
      "lossM": 175,
-     "highM": 2014
+     "highM": 2014,
+     "lengthMi": 6,
+     "gainFt": 843
     }
    },
    {
@@ -8318,7 +8535,7 @@
      "v": 49,
      "rank": 6,
      "lengthKm": 0.8,
-     "wikipediaViews": 15,
+     "wikipediaViews": 14,
      "photos": 1,
      "routes": [
       "PCT - California Section K"
@@ -8331,7 +8548,9 @@
      "popularityNote": "estimate",
      "gainM": 0,
      "lossM": 32,
-     "highM": 2586
+     "highM": 2586,
+     "lengthMi": 0.5,
+     "gainFt": 0
     }
    },
    {
@@ -8351,7 +8570,7 @@
      "leadsTo": [
       "Mount Tallac"
      ],
-     "wikipediaViews": 1268,
+     "wikipediaViews": 1225,
      "photos": 9,
      "parkingSpaces": 10,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Mount_Tallac",
@@ -8362,7 +8581,9 @@
      "popularityNote": "estimate",
      "gainM": 762,
      "lossM": 371,
-     "highM": 2897
+     "highM": 2897,
+     "lengthMi": 5.5,
+     "gainFt": 2500
     }
    },
    {
@@ -8384,7 +8605,7 @@
       "Calawee Cove Beach",
       "On Lake Tahoe"
      ],
-     "wikipediaViews": 362,
+     "wikipediaViews": 358,
      "photos": 16,
      "parkingSpaces": 10,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Rubicon_Point_Light",
@@ -8395,7 +8616,9 @@
      "popularityNote": "estimate",
      "gainM": 88,
      "lossM": 123,
-     "highM": 2068
+     "highM": 2068,
+     "lengthMi": 1.4,
+     "gainFt": 289
     }
    },
    {
@@ -8415,7 +8638,7 @@
      "leadsTo": [
       "Mount Tallac"
      ],
-     "wikipediaViews": 1268,
+     "wikipediaViews": 1225,
      "photos": 4,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Mount_Tallac",
      "osmIds": [
@@ -8424,7 +8647,9 @@
      "popularityNote": "estimate",
      "gainM": 61,
      "lossM": 3,
-     "highM": 2959
+     "highM": 2959,
+     "lengthMi": 0.2,
+     "gainFt": 200
     }
    },
    {
@@ -8445,7 +8670,7 @@
       "Eagle Lake",
       "Upper Eagle Falls"
      ],
-     "wikipediaViews": 194,
+     "wikipediaViews": 191,
      "photos": 17,
      "parkingSpaces": 10,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Eagle_Lake_(Desolation_Wilderness)",
@@ -8456,7 +8681,9 @@
      "popularityNote": "estimate",
      "gainM": 17,
      "lossM": 7,
-     "highM": 2143
+     "highM": 2143,
+     "lengthMi": 0.4,
+     "gainFt": 56
     }
    },
    {
@@ -8476,7 +8703,7 @@
      "leadsTo": [
       "Maggies Peaks"
      ],
-     "wikipediaViews": 205,
+     "wikipediaViews": 200,
      "photos": 0,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Maggies_Peaks",
      "osmIds": [
@@ -8485,7 +8712,9 @@
      "popularityNote": "estimate",
      "gainM": 90,
      "lossM": 0,
-     "highM": 2635
+     "highM": 2635,
+     "lengthMi": 0.2,
+     "gainFt": 295
     }
    },
    {
@@ -8505,7 +8734,7 @@
      "leadsTo": [
       "Eagle Lake"
      ],
-     "wikipediaViews": 194,
+     "wikipediaViews": 191,
      "photos": 0,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Eagle_Lake_(Desolation_Wilderness)",
      "osmIds": [
@@ -8514,7 +8743,9 @@
      "popularityNote": "estimate",
      "gainM": 356,
      "lossM": 3,
-     "highM": 2489
+     "highM": 2489,
+     "lengthMi": 0.7,
+     "gainFt": 1168
     }
    },
    {
@@ -8534,7 +8765,7 @@
      "leadsTo": [
       "Rubicon Peak"
      ],
-     "wikipediaViews": 84,
+     "wikipediaViews": 82,
      "photos": 0,
      "wikipediaUrl": "https://en.wikipedia.org/wiki/Rubicon_Peak",
      "osmIds": [
@@ -8543,7 +8774,9 @@
      "popularityNote": "estimate",
      "gainM": 667,
      "lossM": 3,
-     "highM": 2776
+     "highM": 2776,
+     "lengthMi": 1.7,
+     "gainFt": 2188
     }
    },
    {
@@ -8574,7 +8807,9 @@
      "popularityNote": "estimate",
      "gainM": 0,
      "lossM": 31,
-     "highM": 1945
+     "highM": 1945,
+     "lengthMi": 0.1,
+     "gainFt": 0
     }
    },
    {
@@ -8607,7 +8842,9 @@
      "popularityNote": "estimate",
      "gainM": 12,
      "lossM": 3,
-     "highM": 2030
+     "highM": 2030,
+     "lengthMi": 0.2,
+     "gainFt": 39
     }
    },
    {
@@ -8639,7 +8876,9 @@
      "popularityNote": "estimate",
      "gainM": 8,
      "lossM": 89,
-     "highM": 2092
+     "highM": 2092,
+     "lengthMi": 0.2,
+     "gainFt": 26
     }
    }
   ]
@@ -9867,7 +10106,7 @@
  },
  "recreation-sites": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -112.076,
    34.306,
@@ -9888,6 +10127,7 @@
      "name": "Spring Valley Cabin",
      "kind": "campground",
      "agency": "USFS",
+     "areaId": "11662",
      "forest": "Kaibab National Forest",
      "status": "open",
      "url": "https://www.fs.usda.gov/recarea/kaibab/recarea/?recid=11662"
@@ -9906,6 +10146,7 @@
      "name": "White Horse Lake Campground",
      "kind": "campground",
      "agency": "USFS",
+     "areaId": "11664",
      "forest": "Kaibab National Forest",
      "status": "closed",
      "url": "https://www.fs.usda.gov/recarea/kaibab/recarea/?recid=11664"
@@ -9924,6 +10165,7 @@
      "name": "Christopher Creek Campground and Group Site",
      "kind": "campground",
      "agency": "USFS",
+     "areaId": "35563",
      "forest": "Tonto National Forest",
      "status": "closed",
      "url": "https://www.fs.usda.gov/recarea/tonto/recarea/?recid=35563"
@@ -9942,6 +10184,7 @@
      "name": "Lower Tonto Creek Campground",
      "kind": "campground",
      "agency": "USFS",
+     "areaId": "35567",
      "forest": "Tonto National Forest",
      "status": "closed",
      "url": "https://www.fs.usda.gov/recarea/tonto/recarea/?recid=35567"
@@ -9960,6 +10203,7 @@
      "name": "Upper Tonto Creek Campground",
      "kind": "campground",
      "agency": "USFS",
+     "areaId": "35569",
      "forest": "Tonto National Forest",
      "status": "closed",
      "url": "https://www.fs.usda.gov/recarea/tonto/recarea/?recid=35569"
@@ -9978,6 +10222,7 @@
      "name": "Fr 9350 Campground",
      "kind": "campground",
      "agency": "USFS",
+     "areaId": "44651",
      "forest": "Apache-Sitgreaves National Forest",
      "status": "open",
      "url": "https://www.fs.usda.gov/recarea/asnf/recarea/?recid=44651"
@@ -9996,6 +10241,7 @@
      "name": "Fr 84 Camping Area",
      "kind": "campground",
      "agency": "USFS",
+     "areaId": "44661",
      "forest": "Apache-Sitgreaves National Forest",
      "status": "open",
      "url": "https://www.fs.usda.gov/recarea/asnf/recarea/?recid=44661"
@@ -10014,6 +10260,7 @@
      "name": "Promontory Pit Road Campground",
      "kind": "campground",
      "agency": "USFS",
+     "areaId": "44665",
      "forest": "Apache-Sitgreaves National Forest",
      "status": "open",
      "url": "https://www.fs.usda.gov/recarea/asnf/recarea/?recid=44665"
@@ -10032,6 +10279,7 @@
      "name": "Bear Canyon Lake and Camping Area",
      "kind": "campground",
      "agency": "USFS",
+     "areaId": "44681",
      "forest": "Apache-Sitgreaves National Forest",
      "status": "open",
      "url": "https://www.fs.usda.gov/recarea/asnf/recarea/?recid=44681"
@@ -10050,6 +10298,7 @@
      "name": "Blue Ridge Campground",
      "kind": "campground",
      "agency": "USFS",
+     "areaId": "54896",
      "forest": "Coconino National Forest Recreation",
      "status": "closed",
      "url": "https://www.fs.usda.gov/recarea/coconino/recarea/?recid=54896"
@@ -10068,6 +10317,7 @@
      "name": "Clints Well Campground",
      "kind": "campground",
      "agency": "USFS",
+     "areaId": "54902",
      "forest": "Coconino National Forest Recreation",
      "status": "open",
      "url": "https://www.fs.usda.gov/recarea/coconino/recarea/?recid=54902"
@@ -10086,6 +10336,7 @@
      "name": "Elks Group Campground",
      "kind": "campground",
      "agency": "USFS",
+     "areaId": "54904",
      "forest": "Coconino National Forest Recreation",
      "status": "closed",
      "url": "https://www.fs.usda.gov/recarea/coconino/recarea/?recid=54904"
@@ -12644,7 +12895,7 @@
  },
  "snowpack": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -122,
    45,
@@ -12665,13 +12916,14 @@
      "name": "Blazed Alder",
      "stationId": "351:OR:SNTL",
      "elevationFt": 3660,
-     "t": "2026-10-23T15:00:00.000Z",
-     "readingLocal": "Oct 23, 8 AM PDT",
+     "t": "2026-10-24T02:00:00.000Z",
+     "readingLocal": "Oct 23, 7 PM PDT",
      "v": 0,
-     "swe": 0,
+     "swe": 0.1,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 2.5,
+     "tempC": 3.9,
+     "normalNote": "Too early in the season to compare: the normal for today is 0 in of snow water, and snow normally arrives Nov 17",
      "normalOnset": "Nov 17",
      "medianPeakIn": 32.4
     }
@@ -12689,14 +12941,15 @@
      "name": "Mount Hood Test Site",
      "stationId": "651:OR:SNTL",
      "elevationFt": 5380,
-     "t": "2026-10-23T15:00:00.000Z",
-     "readingLocal": "Oct 23, 8 AM PDT",
+     "t": "2026-10-24T02:00:00.000Z",
+     "readingLocal": "Oct 23, 7 PM PDT",
      "v": 2,
      "swe": 0,
      "density": 0,
      "type": "powder",
-     "new24h": 1,
-     "tempC": -2.5,
+     "new24h": 0,
+     "tempC": -1.1,
+     "normalNote": "Too early in the season to compare: the normal for today is 0.2 in of snow water, and snow normally arrives Oct 30",
      "normalOnset": "Oct 30",
      "medianPeakIn": 59.4,
      "nameInSource": "Mt Hood Test Site"
@@ -12715,12 +12968,13 @@
      "name": "Clackamas Lake",
      "stationId": "398:OR:SNTL",
      "elevationFt": 3400,
-     "t": "2026-10-23T15:00:00.000Z",
-     "readingLocal": "Oct 23, 8 AM PDT",
+     "t": "2026-10-24T02:00:00.000Z",
+     "readingLocal": "Oct 23, 7 PM PDT",
      "v": 0,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 1.5,
+     "tempC": 0.7,
+     "normalNote": "Too early in the season to compare: the normal for today is 0 in of snow water, and snow normally arrives Nov 21",
      "normalOnset": "Nov 21",
      "medianPeakIn": 12.5
     }
@@ -12738,11 +12992,13 @@
      "name": "Clear Lake",
      "stationId": "401:OR:SNTL",
      "elevationFt": 3810,
-     "t": "2026-10-23T08:00:00.000Z",
-     "readingLocal": "Oct 23, 1 AM PDT",
+     "t": "2026-10-23T21:00:00.000Z",
+     "readingLocal": "Oct 23, 2 PM PDT",
      "v": 0,
+     "swe": 0,
      "type": "no snow",
-     "tempC": 1.6,
+     "tempC": 1.5,
+     "normalNote": "Too early in the season to compare: the normal for today is 0 in of snow water, and snow normally arrives Nov 22",
      "normalOnset": "Nov 22",
      "medianPeakIn": 12.1
     }
@@ -12760,13 +13016,13 @@
      "name": "Fifteenmile",
      "stationId": "1314:OR:SNTL",
      "elevationFt": 5970,
-     "t": "2026-10-23T15:00:00.000Z",
-     "readingLocal": "Oct 23, 8 AM PDT",
+     "t": "2026-10-24T02:00:00.000Z",
+     "readingLocal": "Oct 23, 7 PM PDT",
      "v": 0,
      "swe": 0.2,
      "type": "no snow",
      "new24h": 0,
-     "tempC": -2.3
+     "tempC": -1.3
     }
    },
    {
@@ -12782,12 +13038,14 @@
      "name": "Greenpoint",
      "stationId": "504:OR:SNTL",
      "elevationFt": 3320,
-     "t": "2026-10-23T15:00:00.000Z",
-     "readingLocal": "Oct 23, 8 AM PDT",
+     "t": "2026-10-24T01:00:00.000Z",
+     "readingLocal": "Oct 23, 6 PM PDT",
      "v": 0,
+     "swe": 0,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 2.5,
+     "tempC": 4.4,
+     "normalNote": "Too early in the season to compare: the normal for today is 0 in of snow water, and snow normally arrives Nov 20",
      "normalOnset": "Nov 20",
      "medianPeakIn": 17.8
     }
@@ -12805,13 +13063,13 @@
      "name": "Mud Ridge",
      "stationId": "655:OR:SNTL",
      "elevationFt": 4070,
-     "t": "2026-10-23T15:00:00.000Z",
-     "readingLocal": "Oct 23, 8 AM PDT",
+     "t": "2026-10-23T21:00:00.000Z",
+     "readingLocal": "Oct 23, 2 PM PDT",
      "v": 0,
      "swe": 0.2,
      "type": "no snow",
-     "new24h": 0,
-     "tempC": 0.6,
+     "tempC": 0.1,
+     "normalNote": "Too early in the season to compare: the normal for today is 0 in of snow water, and snow normally arrives Nov 14",
      "normalOnset": "Nov 14",
      "medianPeakIn": 24.8
     }
@@ -12829,12 +13087,13 @@
      "name": "Peavine Ridge",
      "stationId": "687:OR:SNTL",
      "elevationFt": 3420,
-     "t": "2026-10-23T15:00:00.000Z",
-     "readingLocal": "Oct 23, 8 AM PDT",
+     "t": "2026-10-24T01:00:00.000Z",
+     "readingLocal": "Oct 23, 6 PM PDT",
      "v": 0,
      "type": "no snow",
      "new24h": 0,
-     "tempC": 1.7,
+     "tempC": 3.7,
+     "normalNote": "Too early in the season to compare: the normal for today is 0 in of snow water, and snow normally arrives Nov 23",
      "normalOnset": "Nov 23",
      "medianPeakIn": 13.8
     }
@@ -12852,13 +13111,13 @@
      "name": "Red Hill",
      "stationId": "712:OR:SNTL",
      "elevationFt": 4410,
-     "t": "2026-10-23T15:00:00.000Z",
-     "readingLocal": "Oct 23, 8 AM PDT",
-     "v": 0,
-     "swe": 0.5,
-     "type": "no snow",
-     "new24h": 0,
-     "tempC": -0.2,
+     "t": "2026-10-24T02:00:00.000Z",
+     "readingLocal": "Oct 23, 7 PM PDT",
+     "v": 1,
+     "swe": 0.4,
+     "new24h": 1,
+     "tempC": 0.3,
+     "normalNote": "Too early in the season to compare: the normal for today is 0 in of snow water, and snow normally arrives Nov 11",
      "normalOnset": "Nov 11",
      "medianPeakIn": 48.4
     }
@@ -14836,7 +15095,7 @@
  },
  "weather-forecast": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -113.2,
    37.1,
@@ -14857,32 +15116,39 @@
      "name": "Forecast at the asked place, near Springdale, UT (37.30°N 113.03°W)",
      "kind": "here",
      "source": "nws",
-     "t": "2026-10-23T16:00:00.000Z",
-     "v": 43,
-     "tempF": 43,
+     "t": "2026-10-24T02:00:00.000Z",
+     "v": 45,
+     "tempF": 45,
      "precipChance": 1,
      "precipIn": 0,
-     "windMph": 4.6,
-     "gustMph": 9.2,
-     "skyPct": 23,
-     "windFrom": "east (100°)",
-     "sky": "Mostly clear",
+     "windMph": 3.5,
+     "gustMph": 8.1,
+     "skyPct": 4,
+     "windFrom": "north-northeast (20°)",
+     "sky": "Clear",
      "timeZone": "America/Denver",
-     "issued": "12:31 AM MDT",
+     "issued": "12:31 PM MDT",
      "days": [
-      "Fri, Oct 23: rest of day high 52 °F, low 41 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; mostly clear",
-      "Sat, Oct 24: high 52 °F, low 38 °F; 56% chance of rain or snow, 0.12 in; wind to 15 mph, gusts 18 mph; mostly cloudy, Scattered light rain showers",
-      "Sun, Oct 25: high 52 °F, low 41 °F; 26% chance of rain or snow, 0.00 in; wind to 6 mph, gusts 12 mph; partly cloudy, Scattered light rain showers",
-      "Mon, Oct 26: high 57 °F, low 39 °F; 0% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 13 mph; mostly clear",
-      "Tue, Oct 27: high 57 °F, low 41 °F; 0% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; mostly clear",
-      "Wed, Oct 28: high 55 °F, low 42 °F; 0% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 13 mph; partly cloudy",
-      "Thu, Oct 29: high 55 °F, low 43 °F; 17% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 15 mph; partly cloudy, Slight chance of light rain",
-      "Fri, Oct 30: high 45 °F, low 44 °F; 28% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 15 mph; mostly cloudy, Slight chance of light rain"
+      "Fri, Oct 23: rest of day high 45 °F, low 41 °F; 1% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 15 mph; clear",
+      "Sat, Oct 24: high 52 °F, low 37 °F; 49% chance of rain or snow, 0.18 in; wind to 15 mph, gusts 17 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
+      "Sun, Oct 25: high 53 °F, low 40 °F; 13% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 12 mph; partly cloudy",
+      "Mon, Oct 26: high 58 °F, low 39 °F; 0% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 15 mph; mostly clear",
+      "Tue, Oct 27: high 58 °F, low 42 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 16 mph; mostly clear",
+      "Wed, Oct 28: high 58 °F, low 41 °F; 0% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 14 mph; mostly clear",
+      "Thu, Oct 29: high 57 °F, low 44 °F; 23% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 15 mph; partly cloudy, Slight chance of light rain",
+      "Fri, Oct 30: high 54 °F, low 45 °F; 31% chance of rain or snow, 0.24 in; wind to 9 mph, gusts 15 mph; partly cloudy, Chance of light rain"
      ],
-     "today": "Fri, Oct 23: rest of day high 52 °F, low 41 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; mostly clear",
-     "tomorrow": "Sat, Oct 24: high 52 °F, low 38 °F; 56% chance of rain or snow, 0.12 in; wind to 15 mph, gusts 18 mph; mostly cloudy, Scattered light rain showers",
-     "saturday": "Sat, Oct 24: high 52 °F, low 38 °F; 56% chance of rain or snow, 0.12 in; wind to 15 mph, gusts 18 mph; mostly cloudy, Scattered light rain showers",
-     "sunday": "Sun, Oct 25: high 52 °F, low 41 °F; 26% chance of rain or snow, 0.00 in; wind to 6 mph, gusts 12 mph; partly cloudy, Scattered light rain showers"
+     "today": "Fri, Oct 23: rest of day high 45 °F, low 41 °F; 1% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 15 mph; clear",
+     "tomorrow": "Sat, Oct 24: high 52 °F, low 37 °F; 49% chance of rain or snow, 0.18 in; wind to 15 mph, gusts 17 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
+     "saturday": "Sat, Oct 24: high 52 °F, low 37 °F; 49% chance of rain or snow, 0.18 in; wind to 15 mph, gusts 17 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
+     "sunday": "Sun, Oct 25: high 53 °F, low 40 °F; 13% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 12 mph; partly cloudy",
+     "airQuality": [
+      "Now: US AQI 42 (good)",
+      "Fri Oct 23: air quality good, worst hour left US AQI 42, PM2.5 up to 2.7 µg/m³",
+      "Sat Oct 24: air quality good, worst hour US AQI 39, PM2.5 up to 2.8 µg/m³",
+      "Sun Oct 25: air quality good, worst hour US AQI 41, PM2.5 up to 3.3 µg/m³",
+      "Mon Oct 26: air quality good, worst hour US AQI 46, PM2.5 up to 1.9 µg/m³"
+     ]
     }
    },
    {
@@ -14898,32 +15164,32 @@
      "name": "Forecast near Virgin, UT (37.20°N 113.11°W)",
      "kind": "area",
      "source": "nws",
-     "t": "2026-10-23T16:00:00.000Z",
-     "v": 52,
-     "tempF": 52,
+     "t": "2026-10-24T02:00:00.000Z",
+     "v": 56,
+     "tempF": 56,
      "precipChance": 1,
      "precipIn": 0,
-     "windMph": 5.8,
-     "gustMph": 10.4,
-     "skyPct": 10,
-     "windFrom": "east-southeast (110°)",
-     "sky": "Mostly clear",
+     "windMph": 3.5,
+     "gustMph": 6.9,
+     "skyPct": 3,
+     "windFrom": "north (0°)",
+     "sky": "Clear",
      "timeZone": "America/Denver",
-     "issued": "12:31 AM MDT",
+     "issued": "12:31 PM MDT",
      "days": [
-      "Fri, Oct 23: rest of day high 61 °F, low 50 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; mostly clear",
-      "Sat, Oct 24: high 62 °F, low 45 °F; 46% chance of rain or snow, 0.06 in; wind to 12 mph, gusts 15 mph; mostly cloudy, Scattered light rain showers",
-      "Sun, Oct 25: high 61 °F, low 48 °F; 22% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 12 mph; partly cloudy, Isolated light rain showers",
-      "Mon, Oct 26: high 66 °F, low 46 °F; 0% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; mostly clear",
-      "Tue, Oct 27: high 67 °F, low 49 °F; 0% chance of rain or snow, 0.00 in; wind to 14 mph, gusts 17 mph; clear",
-      "Wed, Oct 28: high 65 °F, low 48 °F; 0% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; partly cloudy",
-      "Thu, Oct 29: high 65 °F, low 49 °F; 15% chance of rain or snow, 0.00 in; wind to 13 mph, gusts 17 mph; partly cloudy, Slight chance of light rain",
-      "Fri, Oct 30: high 53 °F, low 51 °F; 28% chance of rain or snow, 0.00 in; wind to 13 mph, gusts 17 mph; mostly cloudy, Slight chance of light rain"
+      "Fri, Oct 23: rest of day high 56 °F, low 51 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 14 mph; clear",
+      "Sat, Oct 24: high 62 °F, low 45 °F; 35% chance of rain or snow, 0.06 in; wind to 10 mph, gusts 15 mph; partly cloudy, Chance of light rain showers; Slight chance of thunderstorms",
+      "Sun, Oct 25: high 63 °F, low 46 °F; 9% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 12 mph; mostly clear",
+      "Mon, Oct 26: high 67 °F, low 46 °F; 0% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 17 mph; mostly clear",
+      "Tue, Oct 27: high 68 °F, low 48 °F; 1% chance of rain or snow, 0.00 in; wind to 14 mph, gusts 18 mph; mostly clear",
+      "Wed, Oct 28: high 68 °F, low 48 °F; 0% chance of rain or snow, 0.00 in; wind to 12 mph, gusts 15 mph; mostly clear",
+      "Thu, Oct 29: high 67 °F, low 50 °F; 19% chance of rain or snow, 0.00 in; wind to 13 mph, gusts 16 mph; partly cloudy, Slight chance of light rain",
+      "Fri, Oct 30: high 64 °F, low 52 °F; 31% chance of rain or snow, 0.24 in; wind to 13 mph, gusts 18 mph; partly cloudy, Chance of light rain"
      ],
-     "today": "Fri, Oct 23: rest of day high 61 °F, low 50 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; mostly clear",
-     "tomorrow": "Sat, Oct 24: high 62 °F, low 45 °F; 46% chance of rain or snow, 0.06 in; wind to 12 mph, gusts 15 mph; mostly cloudy, Scattered light rain showers",
-     "saturday": "Sat, Oct 24: high 62 °F, low 45 °F; 46% chance of rain or snow, 0.06 in; wind to 12 mph, gusts 15 mph; mostly cloudy, Scattered light rain showers",
-     "sunday": "Sun, Oct 25: high 61 °F, low 48 °F; 22% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 12 mph; partly cloudy, Isolated light rain showers"
+     "today": "Fri, Oct 23: rest of day high 56 °F, low 51 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 14 mph; clear",
+     "tomorrow": "Sat, Oct 24: high 62 °F, low 45 °F; 35% chance of rain or snow, 0.06 in; wind to 10 mph, gusts 15 mph; partly cloudy, Chance of light rain showers; Slight chance of thunderstorms",
+     "saturday": "Sat, Oct 24: high 62 °F, low 45 °F; 35% chance of rain or snow, 0.06 in; wind to 10 mph, gusts 15 mph; partly cloudy, Chance of light rain showers; Slight chance of thunderstorms",
+     "sunday": "Sun, Oct 25: high 63 °F, low 46 °F; 9% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 12 mph; mostly clear"
     }
    },
    {
@@ -14939,32 +15205,32 @@
      "name": "Forecast near Springdale, UT (37.20°N 112.94°W)",
      "kind": "area",
      "source": "nws",
-     "t": "2026-10-23T16:00:00.000Z",
-     "v": 45,
-     "tempF": 45,
+     "t": "2026-10-24T02:00:00.000Z",
+     "v": 50,
+     "tempF": 50,
      "precipChance": 1,
      "precipIn": 0,
-     "windMph": 5.8,
-     "gustMph": 10.4,
-     "skyPct": 15,
-     "windFrom": "east (100°)",
-     "sky": "Mostly clear",
+     "windMph": 2.3,
+     "gustMph": 6.9,
+     "skyPct": 3,
+     "windFrom": "north (10°)",
+     "sky": "Clear",
      "timeZone": "America/Denver",
-     "issued": "12:31 AM MDT",
+     "issued": "12:31 PM MDT",
      "days": [
-      "Fri, Oct 23: rest of day high 57 °F, low 45 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 14 mph; mostly clear",
-      "Sat, Oct 24: high 57 °F, low 42 °F; 55% chance of rain or snow, 0.12 in; wind to 13 mph, gusts 16 mph; mostly cloudy, Scattered light rain showers",
-      "Sun, Oct 25: high 56 °F, low 45 °F; 26% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 12 mph; partly cloudy, Scattered light rain showers",
-      "Mon, Oct 26: high 62 °F, low 42 °F; 0% chance of rain or snow, 0.00 in; wind to 12 mph, gusts 14 mph; mostly clear",
-      "Tue, Oct 27: high 62 °F, low 43 °F; 0% chance of rain or snow, 0.00 in; wind to 15 mph, gusts 17 mph; clear",
-      "Wed, Oct 28: high 60 °F, low 44 °F; 0% chance of rain or snow, 0.00 in; wind to 12 mph, gusts 15 mph; partly cloudy",
-      "Thu, Oct 29: high 60 °F, low 44 °F; 17% chance of rain or snow, 0.00 in; wind to 14 mph, gusts 16 mph; partly cloudy, Slight chance of light rain",
-      "Fri, Oct 30: high 49 °F, low 46 °F; 29% chance of rain or snow, 0.00 in; wind to 14 mph, gusts 16 mph; mostly cloudy, Slight chance of light rain"
+      "Fri, Oct 23: rest of day high 50 °F, low 46 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; clear",
+      "Sat, Oct 24: high 57 °F, low 41 °F; 47% chance of rain or snow, 0.30 in; wind to 13 mph, gusts 16 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
+      "Sun, Oct 25: high 58 °F, low 43 °F; 13% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 12 mph; partly cloudy",
+      "Mon, Oct 26: high 63 °F, low 42 °F; 0% chance of rain or snow, 0.00 in; wind to 14 mph, gusts 16 mph; mostly clear",
+      "Tue, Oct 27: high 63 °F, low 43 °F; 1% chance of rain or snow, 0.00 in; wind to 15 mph, gusts 20 mph; mostly clear",
+      "Wed, Oct 28: high 63 °F, low 43 °F; 0% chance of rain or snow, 0.00 in; wind to 12 mph, gusts 16 mph; mostly clear",
+      "Thu, Oct 29: high 62 °F, low 46 °F; 26% chance of rain or snow, 0.00 in; wind to 14 mph, gusts 16 mph; partly cloudy, Chance of light rain",
+      "Fri, Oct 30: high 59 °F, low 48 °F; 34% chance of rain or snow, 0.24 in; wind to 14 mph, gusts 17 mph; partly cloudy, Chance of light rain"
      ],
-     "today": "Fri, Oct 23: rest of day high 57 °F, low 45 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 14 mph; mostly clear",
-     "tomorrow": "Sat, Oct 24: high 57 °F, low 42 °F; 55% chance of rain or snow, 0.12 in; wind to 13 mph, gusts 16 mph; mostly cloudy, Scattered light rain showers",
-     "saturday": "Sat, Oct 24: high 57 °F, low 42 °F; 55% chance of rain or snow, 0.12 in; wind to 13 mph, gusts 16 mph; mostly cloudy, Scattered light rain showers",
-     "sunday": "Sun, Oct 25: high 56 °F, low 45 °F; 26% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 12 mph; partly cloudy, Scattered light rain showers"
+     "today": "Fri, Oct 23: rest of day high 50 °F, low 46 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 15 mph; clear",
+     "tomorrow": "Sat, Oct 24: high 57 °F, low 41 °F; 47% chance of rain or snow, 0.30 in; wind to 13 mph, gusts 16 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
+     "saturday": "Sat, Oct 24: high 57 °F, low 41 °F; 47% chance of rain or snow, 0.30 in; wind to 13 mph, gusts 16 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
+     "sunday": "Sun, Oct 25: high 58 °F, low 43 °F; 13% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 12 mph; partly cloudy"
     }
    },
    {
@@ -14980,32 +15246,32 @@
      "name": "Forecast near Toquerville, UT (37.40°N 113.11°W)",
      "kind": "area",
      "source": "nws",
-     "t": "2026-10-23T16:00:00.000Z",
+     "t": "2026-10-24T02:00:00.000Z",
      "v": 43,
      "tempF": 43,
      "precipChance": 1,
      "precipIn": 0,
-     "windMph": 5.8,
-     "gustMph": 11.5,
-     "skyPct": 16,
-     "windFrom": "south-southeast (160°)",
-     "sky": "Mostly clear",
+     "windMph": 3.5,
+     "gustMph": 10.4,
+     "skyPct": 7,
+     "windFrom": "northeast (50°)",
+     "sky": "Clear",
      "timeZone": "America/Denver",
-     "issued": "12:31 AM MDT",
+     "issued": "12:31 PM MDT",
      "days": [
-      "Fri, Oct 23: rest of day high 51 °F, low 42 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 18 mph; mostly clear",
-      "Sat, Oct 24: high 51 °F, low 39 °F; 52% chance of rain or snow, 0.12 in; wind to 18 mph, gusts 31 mph; mostly cloudy, Scattered light rain showers",
-      "Sun, Oct 25: high 51 °F, low 41 °F; 24% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 15 mph; partly cloudy, Isolated light rain showers",
-      "Mon, Oct 26: high 56 °F, low 40 °F; 0% chance of rain or snow, 0.00 in; wind to 6 mph, gusts 13 mph; mostly clear",
-      "Tue, Oct 27: high 57 °F, low 43 °F; 0% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 15 mph; clear",
-      "Wed, Oct 28: high 54 °F, low 43 °F; 0% chance of rain or snow, 0.00 in; wind to 6 mph, gusts 13 mph; partly cloudy",
-      "Thu, Oct 29: high 54 °F, low 44 °F; 17% chance of rain or snow, 0.06 in; wind to 7 mph, gusts 15 mph; partly cloudy, Slight chance of light rain",
-      "Fri, Oct 30: high 45 °F, low 45 °F; 26% chance of rain or snow, 0.06 in; wind to 6 mph, gusts 12 mph; mostly cloudy, Slight chance of light rain"
+      "Fri, Oct 23: rest of day high 43 °F, low 42 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 18 mph; clear",
+      "Sat, Oct 24: high 50 °F, low 38 °F; 46% chance of rain or snow, 0.12 in; wind to 17 mph, gusts 30 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
+      "Sun, Oct 25: high 53 °F, low 40 °F; 17% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 17 mph; partly cloudy, Slight chance of light rain",
+      "Mon, Oct 26: high 57 °F, low 40 °F; 0% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 14 mph; mostly clear",
+      "Tue, Oct 27: high 57 °F, low 43 °F; 1% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 15 mph; mostly clear",
+      "Wed, Oct 28: high 56 °F, low 43 °F; 0% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 15 mph; mostly clear",
+      "Thu, Oct 29: high 56 °F, low 45 °F; 19% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 16 mph; partly cloudy, Slight chance of light rain",
+      "Fri, Oct 30: high 53 °F, low 46 °F; 29% chance of rain or snow, 0.24 in; wind to 6 mph, gusts 14 mph; partly cloudy, Slight chance of light rain"
      ],
-     "today": "Fri, Oct 23: rest of day high 51 °F, low 42 °F; 2% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 18 mph; mostly clear",
-     "tomorrow": "Sat, Oct 24: high 51 °F, low 39 °F; 52% chance of rain or snow, 0.12 in; wind to 18 mph, gusts 31 mph; mostly cloudy, Scattered light rain showers",
-     "saturday": "Sat, Oct 24: high 51 °F, low 39 °F; 52% chance of rain or snow, 0.12 in; wind to 18 mph, gusts 31 mph; mostly cloudy, Scattered light rain showers",
-     "sunday": "Sun, Oct 25: high 51 °F, low 41 °F; 24% chance of rain or snow, 0.00 in; wind to 8 mph, gusts 15 mph; partly cloudy, Isolated light rain showers"
+     "today": "Fri, Oct 23: rest of day high 43 °F, low 42 °F; 1% chance of rain or snow, 0.00 in; wind to 10 mph, gusts 18 mph; clear",
+     "tomorrow": "Sat, Oct 24: high 50 °F, low 38 °F; 46% chance of rain or snow, 0.12 in; wind to 17 mph, gusts 30 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
+     "saturday": "Sat, Oct 24: high 50 °F, low 38 °F; 46% chance of rain or snow, 0.12 in; wind to 17 mph, gusts 30 mph; mostly clear, Chance of light rain showers; Slight chance of thunderstorms",
+     "sunday": "Sun, Oct 25: high 53 °F, low 40 °F; 17% chance of rain or snow, 0.00 in; wind to 9 mph, gusts 17 mph; partly cloudy, Slight chance of light rain"
     }
    },
    {
@@ -15021,32 +15287,32 @@
      "name": "Forecast near Springdale, UT (37.40°N 112.94°W)",
      "kind": "area",
      "source": "nws",
-     "t": "2026-10-23T16:00:00.000Z",
-     "v": 45,
-     "tempF": 45,
+     "t": "2026-10-24T02:00:00.000Z",
+     "v": 43,
+     "tempF": 43,
      "precipChance": 1,
      "precipIn": 0,
      "windMph": 2.3,
      "gustMph": 6.9,
-     "skyPct": 29,
-     "windFrom": "east (90°)",
-     "sky": "Mostly clear",
+     "skyPct": 8,
+     "windFrom": "north (10°)",
+     "sky": "Clear",
      "timeZone": "America/Denver",
-     "issued": "12:31 AM MDT",
+     "issued": "12:31 PM MDT",
      "days": [
-      "Fri, Oct 23: rest of day high 53 °F, low 41 °F; 2% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 13 mph; mostly clear",
-      "Sat, Oct 24: high 54 °F, low 38 °F; 62% chance of rain or snow, 0.18 in; wind to 10 mph, gusts 17 mph; mostly cloudy, Numerous light rain showers",
-      "Sun, Oct 25: high 52 °F, low 40 °F; 29% chance of rain or snow, 0.00 in; wind to 4 mph, gusts 7 mph; partly cloudy, Scattered light rain showers",
-      "Mon, Oct 26: high 57 °F, low 38 °F; 0% chance of rain or snow, 0.00 in; wind to 5 mph, gusts 12 mph; mostly clear",
-      "Tue, Oct 27: high 58 °F, low 40 °F; 0% chance of rain or snow, 0.00 in; wind to 6 mph, gusts 13 mph; mostly clear",
-      "Wed, Oct 28: high 56 °F, low 41 °F; 0% chance of rain or snow, 0.00 in; wind to 4 mph, gusts 9 mph; partly cloudy",
-      "Thu, Oct 29: high 55 °F, low 42 °F; 19% chance of rain or snow, 0.00 in; wind to 5 mph, gusts 12 mph; partly cloudy, Slight chance of light rain",
-      "Fri, Oct 30: high 45 °F, low 43 °F; 27% chance of rain or snow, 0.00 in; wind to 5 mph, gusts 8 mph; mostly cloudy, Slight chance of light rain"
+      "Fri, Oct 23: rest of day high 43 °F, low 40 °F; 1% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 13 mph; clear",
+      "Sat, Oct 24: high 54 °F, low 37 °F; 56% chance of rain or snow, 0.18 in; wind to 9 mph, gusts 17 mph; mostly cloudy, Chance of light rain",
+      "Sun, Oct 25: high 54 °F, low 38 °F; 20% chance of rain or snow, 0.00 in; wind to 4 mph, gusts 8 mph; partly cloudy, Slight chance of light rain",
+      "Mon, Oct 26: high 58 °F, low 37 °F; 0% chance of rain or snow, 0.00 in; wind to 5 mph, gusts 12 mph; mostly clear",
+      "Tue, Oct 27: high 58 °F, low 41 °F; 1% chance of rain or snow, 0.00 in; wind to 6 mph, gusts 13 mph; mostly clear",
+      "Wed, Oct 28: high 58 °F, low 41 °F; 0% chance of rain or snow, 0.00 in; wind to 6 mph, gusts 13 mph; mostly clear",
+      "Thu, Oct 29: high 57 °F, low 43 °F; 23% chance of rain or snow, 0.00 in; wind to 5 mph, gusts 13 mph; mostly cloudy, Slight chance of light rain",
+      "Fri, Oct 30: high 54 °F, low 44 °F; 32% chance of rain or snow, 0.24 in; wind to 4 mph, gusts 10 mph; partly cloudy, Chance of light rain"
      ],
-     "today": "Fri, Oct 23: rest of day high 53 °F, low 41 °F; 2% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 13 mph; mostly clear",
-     "tomorrow": "Sat, Oct 24: high 54 °F, low 38 °F; 62% chance of rain or snow, 0.18 in; wind to 10 mph, gusts 17 mph; mostly cloudy, Numerous light rain showers",
-     "saturday": "Sat, Oct 24: high 54 °F, low 38 °F; 62% chance of rain or snow, 0.18 in; wind to 10 mph, gusts 17 mph; mostly cloudy, Numerous light rain showers",
-     "sunday": "Sun, Oct 25: high 52 °F, low 40 °F; 29% chance of rain or snow, 0.00 in; wind to 4 mph, gusts 7 mph; partly cloudy, Scattered light rain showers"
+     "today": "Fri, Oct 23: rest of day high 43 °F, low 40 °F; 1% chance of rain or snow, 0.00 in; wind to 7 mph, gusts 13 mph; clear",
+     "tomorrow": "Sat, Oct 24: high 54 °F, low 37 °F; 56% chance of rain or snow, 0.18 in; wind to 9 mph, gusts 17 mph; mostly cloudy, Chance of light rain",
+     "saturday": "Sat, Oct 24: high 54 °F, low 37 °F; 56% chance of rain or snow, 0.18 in; wind to 9 mph, gusts 17 mph; mostly cloudy, Chance of light rain",
+     "sunday": "Sun, Oct 25: high 54 °F, low 38 °F; 20% chance of rain or snow, 0.00 in; wind to 4 mph, gusts 8 mph; partly cloudy, Slight chance of light rain"
     }
    }
   ]

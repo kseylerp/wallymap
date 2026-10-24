@@ -225,6 +225,10 @@ export type CampingRule = {
   expires?: string;
   url: string;
   bbox: BBox;
+  /** The national forest the rule holds on (a road's `forest`); unset holds on everything in the box. */
+  forest?: string;
+  /** `backcountry`: holds only on features tagged backcountry (walk-in camps), not on roads or campgrounds by a road. */
+  appliesTo?: "backcountry";
   checked: string;
 };
 
@@ -244,7 +248,7 @@ export function campingRuleText(r: CampingRule): string {
 /** The note's sentence on camping rules: the ones that meet the view, else where to look. */
 export function campingRuleNote(rules: CampingRule[]): string {
   if (rules.length === 0) {
-    return "Dispersed camping rules are not in this data; check the ranger district's (or BLM field office's) closure orders before camping";
+    return "No camping closure order on file for this area; check the ranger district's (or BLM field office's) closure orders before camping";
   }
   return `Camping rule${rules.length === 1 ? "" : "s"} here: ${rules.map((r) => `${campingRuleText(r)}, ${r.url}`).join("; ")}; elsewhere, check the district's closure orders`;
 }
@@ -268,20 +272,44 @@ function middleOf(geometry: Geometry): [number, number] | null {
   return w <= e ? [(w + e) / 2, (s + n) / 2] : null;
 }
 
-/** Puts the first rule whose box holds a road's middle on the road (campingRule, campingRuleUrl; mutates); returns how many. */
-export function attachCampingRules(fc: FeatureCollection, rules: CampingRule[]): number {
+/**
+ * The rule a national forest road falls under when no order on file covers it: the Forest Service's general one, in
+ * words that send the person to the district (36 CFR 261.58 lets each forest set its stay limit; 14 days is the usual).
+ */
+export function generalForestRule(district?: string): string {
+  return `No closure order on file here: national forests generally allow dispersed camping outside developed sites unless an order or sign closes the area, usually up to 14 days; confirm with the ${district ? `${district} Ranger District` : "ranger district"}`;
+}
+
+/**
+ * Puts the first rule whose box holds a feature's middle (and, for a rule with `forest`, whose forest is the feature's)
+ * on it (campingRule, campingRuleUrl; mutates); returns how many. With `fallback`, a feature no rule covers gets the text
+ * it returns (forest roads: the Forest Service's general rule).
+ */
+export function attachCampingRules(fc: FeatureCollection, rules: CampingRule[], fallback?: (f: Feature) => string | undefined): number {
   let n = 0;
-  if (rules.length === 0) return n;
   for (const f of fc.features) {
     const m = f.geometry ? middleOf(f.geometry) : null;
     if (!m || !f.properties) continue;
-    const rule = rules.find(({ bbox: [w, s, e, nn] }) => m[0] >= w && m[0] <= e && m[1] >= s && m[1] <= nn);
-    if (!rule) continue;
+    const forest = f.properties.forest;
+    const rule = rules.find(
+      ({ bbox: [w, s, e, nn], forest: only, appliesTo }) =>
+        m[0] >= w && m[0] <= e && m[1] >= s && m[1] <= nn && (only === undefined || only === forest) && (appliesTo !== "backcountry" || f.properties?.backcountry === true),
+    );
+    if (!rule) {
+      const text = fallback?.(f);
+      if (text) f.properties.campingRule = text;
+      continue;
+    }
     f.properties.campingRule = campingRuleText(rule);
     f.properties.campingRuleUrl = rule.url;
     n += 1;
   }
   return n;
+}
+
+/** "Flagstaff Ranger District" or "Flagstaff" as the service writes it, as the district's own name ("Flagstaff"). */
+function districtName(raw: string): string {
+  return raw.replace(/\s+Ranger\s+District$/i, "").trim();
 }
 
 const citation = () => ({
@@ -317,7 +345,8 @@ const HELP: Record<string, FieldHelp> = {
   campingRule: {
     text:
       "A dispersed-camping closure or rule that covers this area, from the managing agency's own order or page (kept by hand for the best-known " +
-      "places: Sedona, Moab, the Lake Tahoe Basin, Crested Butte). Elsewhere, check the ranger district's closure orders.",
+      "places: Sedona and the rest of the Coconino, Moab, the Lake Tahoe Basin, Crested Butte, Mount Rainier). Elsewhere it gives the Forest Service's general rule " +
+      "(dispersed camping allowed outside developed sites unless closed, usually up to 14 days): check the ranger district's closure orders.",
   },
   carDates: { text: "The dates the Motor Vehicle Use Map opens the road to passenger cars each year.", ...MVUM_SOURCE },
   district: { text: "The Forest Service ranger district that manages the road; call it for current conditions, closures and camping rules.", ...MVUM_SOURCE },
@@ -454,7 +483,7 @@ const forestRoads = defineLayer({
     "By default it shows roads open to ordinary highway-legal vehicles; set includeAllRoads to true to also include special-designation roads that allow only certain vehicle types. " +
     "IMPORTANT CAVEAT: the Forest Service's national data does NOT say which roads allow dispersed camping, so this layer does not either. " +
     "Many forests allow camping within a set distance (often one vehicle length to 300 feet) of these roads, but rules differ by forest and ranger district and can be closed by fire or season; " +
-    "tell the user to confirm with the local ranger district or the forest's MVUM before camping. Where a known closure applies (Sedona, Moab, Lake Tahoe Basin, Crested Butte) roads carry campingRule and the note quotes the order with its link. " +
+    "tell the user to confirm with the local ranger district or the forest's MVUM before camping. Every road carries campingRule: where a known order applies (Sedona, the Coconino's forest-wide 14-day and 30-foot rule, Moab, Lake Tahoe Basin, Crested Butte) the order with its link, else the Forest Service's general rule; quote it. " +
     "Pair it with the campsites layer to show developed sites and trailhead parking. " +
     "United States National Forests only (nothing on other land or outside the US); motorcycle and ATV trails (not roads) are not included. " +
     "Up to 25,000 km² (about a 160 km square) it returns the roads in the box, at most 2,000 segments, and says so when it trims; any wider US box, up to the whole country, returns the 2,000 longest segments, longest first, and the note gives the total.",
@@ -505,7 +534,7 @@ const forestRoads = defineLayer({
 
     const data = normalizeMvum(result.fc);
     const rules = campingRulesFor(ctx.bbox);
-    attachCampingRules(data, rules);
+    attachCampingRules(data, rules, (f) => generalForestRule(typeof f.properties?.district === "string" ? districtName(f.properties.district) : undefined));
     const notes = [
       ...(result.truncated && !wide ? ["Showing the first 2,000 road segments; zoom in for the rest"] : []),
       campingRuleNote(rules),

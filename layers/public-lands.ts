@@ -25,12 +25,101 @@
  * Tahoe Basin, Crested Butte, each with its order, date and link), and elsewhere says to check the closure orders.
  */
 import { z } from "zod";
-import { defineLayer, type Attribute, type AttributeLevel, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type LegendSpec } from "./types";
+import { defineLayer, type Attribute, type AttributeLevel, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type LegendSpec, type QueryContext } from "./types";
+import { UPSTREAM_TIMEOUT_MS, auxLookups } from "./_shared/constants";
 import { registerLayer } from "./registry";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { campingRuleNote, campingRulesFor } from "./forest-roads";
 import { DARK_GREY, layerColor, PINK, PURPLE, SAGE } from "@/lib/render/palette";
 import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
+
+/**
+ * Who manages the land in view, read from the USGS's own PAD-US 4.1 Fee Managers feature service (keyless ArcGIS, the
+ * same edition as the tiles; 0.8 s for Leadville on 2026-10-23: San Isabel National Forest, BLM Royal Gorge Field Office,
+ * Leadville National Fish Hatchery, Arkansas Headwaters): the largest units that reach into the box, by their whole
+ * acreage, so the note can say who manages the land without the model reading the tiles.
+ */
+export const PADUS_FEE_MANAGERS_URL = "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/Fee_Managers_PADUS/FeatureServer/0";
+const UNITS_LISTED = 6;
+
+/** PAD-US Mang_Name codes the tiles do not use, in words (the tiles' own codes are in AGENCY_NAMES). */
+const MANAGER_CODES: Record<string, string> = {
+  SPR: "State parks agency",
+  SFW: "State fish and wildlife agency",
+  SLB: "State land board",
+  SDC: "State conservation agency",
+  SDNR: "State natural resources agency",
+  OTHS: "State agency",
+  CITY: "City",
+  CNTY: "County",
+  REG: "Regional agency",
+  JNT: "Joint agencies",
+  NGO: "Private nonprofit (land trust)",
+  PVT: "Private owner",
+  TRIB: "Tribal government",
+  UNK: "Manager not recorded",
+};
+
+/** The general camping rule by federal manager, said only when its land is in view. */
+const MANAGER_CAMPING: Record<string, string> = {
+  USFS: "national forest land generally allows dispersed camping outside developed sites unless an order or sign closes the area, usually up to 14 days",
+  BLM: "BLM land generally allows dispersed camping up to 14 days unless the field office requires designated sites",
+  NPS: "national parks allow camping only in campgrounds, or in the backcountry with a permit",
+};
+
+export type LandUnit = { name: string; manager: string; acres: number };
+
+/** The units of a Fee Managers answer, one per name, largest first. */
+export function parseLandUnits(json: unknown): LandUnit[] {
+  const features = typeof json === "object" && json !== null ? (json as { features?: unknown }).features : undefined;
+  if (!Array.isArray(features)) return [];
+  const seen = new Set<string>();
+  const out: LandUnit[] = [];
+  for (const f of features) {
+    const a = (f as { attributes?: Record<string, unknown> }).attributes ?? {};
+    const name = typeof a.Unit_Nm === "string" ? a.Unit_Nm.trim() : "";
+    const manager = typeof a.Mang_Name === "string" ? a.Mang_Name.trim() : "";
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    out.push({ name, manager, acres: typeof a.GIS_Acres === "number" ? a.GIS_Acres : 0 });
+  }
+  return out.sort((x, y) => y.acres - x.acres);
+}
+
+/** "Land here: San Isabel National Forest (US Forest Service), ...; camping: national forest land generally allows ...". */
+export function landUnitsNote(units: LandUnit[]): string {
+  if (units.length === 0) return "";
+  const listed = units.slice(0, UNITS_LISTED).map((u) => `${u.name} (${AGENCY_NAMES[u.manager] ?? MANAGER_CODES[u.manager] ?? u.manager})`);
+  const managers = [...new Set(units.map((u) => u.manager))];
+  const camping = managers.flatMap((m) => (MANAGER_CAMPING[m] ? [MANAGER_CAMPING[m]] : []));
+  return `Land here, largest units first: ${listed.join(", ")}${camping.length > 0 ? `; camping in general: ${camping.join("; ")}` : ""}`;
+}
+
+async function landUnits(ctx: QueryContext, bbox: BBox): Promise<LandUnit[] | null> {
+  const search = new URLSearchParams({
+    where: "1=1",
+    geometry: bbox.join(","),
+    geometryType: "esriGeometryEnvelope",
+    inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects",
+    outFields: "Unit_Nm,Mang_Name,GIS_Acres",
+    orderByFields: "GIS_Acres DESC",
+    returnGeometry: "false",
+    resultRecordCount: "40",
+    f: "json",
+  });
+  try {
+    const res = await ctx.fetch(`${PADUS_FEE_MANAGERS_URL}/query?${search.toString()}`, {
+      cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:padus-units`,
+      ttlSeconds: 7 * 86_400,
+      timeoutMs: UPSTREAM_TIMEOUT_MS,
+    });
+    if (!res.ok) return null;
+    return parseLandUnits(await res.json());
+  } catch {
+    return null;
+  }
+}
 
 export const PADUS_TILE_URL = "https://storage.googleapis.com/wally-tiles/padus/v1/{z}/{x}/{y}.pbf";
 export const PADUS_SOURCE_LAYER = "padus";
@@ -147,10 +236,11 @@ const publicLands = defineLayer({
     "so one place can carry several overlapping polygons, for example a wilderness area inside a national forest. " +
     "Each area has a name, a manager (agency), a designation and a coarse public-access flag (open, restricted, closed, unknown); tapping an area shows them in plain words. " +
     "Use it to show public land ownership on the map so the user can see where national forest, BLM, park, or state land lies; the model itself cannot read the map. " +
+    "The note names the largest units in view with their managers (from PAD-US's own feature service) and the general camping rule for national forest, BLM and national park land there: quote it for 'who manages this land'. " +
     "Caveats: this is ownership and management, not access rules. It does not say whether camping, hunting, fires, drones or vehicles are allowed " +
     "(the note quotes the known dispersed-camping closures near Sedona, Moab, Lake Tahoe and Crested Butte with their orders), " +
     "private land outside the database is simply not drawn, and boundaries are approximate at parcel scale; check the managing agency before relying on it. " +
-    "United States only. Returns map tiles drawn on the globe, not features you can count or list. You cannot see the rendered map: say the layer is shown and what each color means, but do not claim which land lies where. " +
+    "United States only. Returns map tiles drawn on the globe, not features you can count or list. You cannot see the rendered map: say the layer is shown and what each color means, and name the managers only from the note. " +
     "Works at any size of region, from a whole state down to a single valley.",
   coverage: "us",
   surface: "land",
@@ -170,6 +260,11 @@ const publicLands = defineLayer({
 
   async query(ctx): Promise<LayerResult | LayerError> {
     // Outside the US the tiles are simply empty, so they are returned anyway along with the note.
+    const outside = outsideUs(ctx.bbox);
+    const units = outside || !auxLookups() ? [] : await landUnits(ctx, ctx.bbox);
+    const notes = outside
+      ? [OUTSIDE_US_NOTE]
+      : [units === null ? "Who manages the land here could not be read this time (PAD-US feature service)" : landUnitsNote(units), campingRuleNote(campingRulesFor(ctx.bbox).filter((r) => r.forest === undefined || units?.some((u) => u.name === r.forest)))].filter(Boolean);
     return {
       kind: "tiles",
       data: {
@@ -185,7 +280,7 @@ const publicLands = defineLayer({
         url: "https://www.usgs.gov/programs/gap-analysis-project/science/pad-us-data-overview",
         retrieved: new Date().toISOString(),
       },
-      coverageNote: outsideUs(ctx.bbox) ? OUTSIDE_US_NOTE : campingRuleNote(campingRulesFor(ctx.bbox)),
+      coverageNote: notes.join("; "),
     };
   },
 });

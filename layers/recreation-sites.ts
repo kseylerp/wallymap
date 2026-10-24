@@ -39,13 +39,17 @@ import {
 import { registerLayer } from "./registry";
 import { nameAttribute } from "./_shared/bands";
 import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
-import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
+import { UPSTREAM_TIMEOUT_MS, auxLookups } from "./_shared/constants";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
 
 export const USFS_URL =
   "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecreationAreaActivities_01/MapServer/0";
 // The BLM services moved from gis.blm.gov/arcgis to gis.blm.gov/natl (the old path redirects, checked 2026-10-14).
+/** One row per Forest Service area with its season, fee and reservation details (same areas, same recareaid). */
+export const USFS_OPPORTUNITIES_URL =
+  "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecreationOpportunities_01/MapServer/0";
+const USFS_OPPORTUNITY_FIELDS = ["recareaid", "open_season_start", "open_season_end", "reservation_info", "feedescription"];
 export const BLM_FACILITIES_URL =
   "https://gis.blm.gov/natl/rest/services/recreation/BLM_Natl_Recreation_Sites_Facilities/MapServer/0";
 export const BLM_SITES_URL =
@@ -138,9 +142,14 @@ const USFS_SPECIFIC_GROUPS = new Set([
   "OHV Riding & Camping",
 ]);
 
+/** A Forest Service road or trail number closing a name: "73E", "14N34A", "18E39.3", "12N08". */
+const ROUTE_CODE = /\b\d{1,3}[EN]\d{0,3}[A-Z]?(?:\.\d+)?\)?$/;
+
 /** The Forest Service's own marker group first when it is specific, then a strict name match, then the broad group. */
 function usfsKind(name: string, group: string | undefined): string {
   const fromGroup = group !== undefined ? USFS_KINDS[group] : undefined;
+  // A Forest Service route number at the end ("Mt. Watson 73E", "Buck Lake Road 14N40") is a trail or road, not a camp.
+  if (ROUTE_CODE.test(name) && !/\bcamp/i.test(name)) return group === "OHV Riding & Camping" ? "OHV area" : "trail";
   if (group !== undefined && USFS_SPECIFIC_GROUPS.has(group) && fromGroup !== undefined) return fromGroup;
   return kindFromNameOnly(name) ?? fromGroup ?? "recreation area";
 }
@@ -163,6 +172,7 @@ export function normalizeUsfs(fc: FeatureCollection): SiteFeature[] {
         // The marker group is the Forest Service's own label; a trailhead is often filed under the broad Hiking group, so the name decides then.
         kind: usfsKind(name, group),
         agency: "USFS",
+        areaId: String(id),
       };
       const forest = str(p.forestname);
       if (forest !== undefined) properties.forest = forest;
@@ -183,6 +193,46 @@ export function normalizeUsfs(fc: FeatureCollection): SiteFeature[] {
     if (activities.size > 0) feature.properties.activities = [...activities].join(", ");
     return feature;
   });
+}
+
+/** Text with its HTML tags and entities taken out ("<a href=...>www.recreation.gov</a>" reads "www.recreation.gov"). */
+function plain(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;|&#160;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&[a-z]+;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Season, fee and reservations for Forest Service areas from the Recreation Opportunities view (one row per area, keyed by
+ * recareaid; mutates): `season` ("May to October"), `fee` (the fee line), and `reservable` true when the reservation text
+ * points to recreation.gov or a booking, else "not listed" (the Forest Service lists none). Returns how many areas matched.
+ */
+export function addOpportunities(features: SiteFeature[], fc: FeatureCollection): number {
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const f of fc.features) {
+    const p = f.properties ?? {};
+    if (typeof p.recareaid === "number") byId.set(String(p.recareaid), p);
+  }
+  let n = 0;
+  for (const f of features) {
+    const id = f.properties.areaId;
+    if (typeof id !== "string") continue;
+    const p = byId.get(id);
+    if (!p) continue;
+    n += 1;
+    const start = str(p.open_season_start);
+    const end = str(p.open_season_end);
+    if (start && end) f.properties.season = start === end ? start : `${start} to ${end}`;
+    const fee = str(p.feedescription);
+    if (fee) f.properties.fee = plain(fee).slice(0, 120);
+    const reservation = str(p.reservation_info);
+    f.properties.reservable = reservation !== undefined && /recreation\.gov|reserv/i.test(reservation) ? true : "not listed";
+  }
+  return n;
 }
 
 /** BLM facilities with the permit, pass and kiosk rows removed. */
@@ -338,7 +388,11 @@ const HELP: Record<string, FieldHelp> = {
       "The type of site, from the Forest Service's own marker group, or read from the name for BLM facilities and sites (BLM only says 'facility'), so it can be wrong.",
   },
   status: { text: "Open or closed as the Forest Service's nightly feed from the Recreation Portal reports it; not a live closure notice." },
-  reservable: { text: "BLM marks the facility as reservable; check dates and fees on the linked page or recreation.gov." },
+  reservable: {
+    text: "Yes when BLM marks the facility reservable or the Forest Service's listing points to recreation.gov; 'not listed' when the Forest Service lists no reservations (often first come, first served). Check dates and fees on the linked page or recreation.gov.",
+  },
+  season: { text: "The months the Forest Service lists the area as open each year (its Recreation Opportunities listing); the status says whether it is open now." },
+  fee: { text: "The fee the Forest Service lists for the area, in its words." },
 };
 
 const KIND_LABELS: Record<string, string> = {
@@ -417,10 +471,13 @@ const CARD: CardSpec = {
     { key: "forest", label: "Forest" },
     { key: "state", label: "State" },
     { key: "status", label: "Status", values: { open: "Open", closed: "Closed" } },
-    { key: "reservable", label: "Reservable", values: { true: "Yes" } },
+    { key: "season", label: "Season" },
+    { key: "reservable", label: "Reservable", values: { true: "Yes", "not listed": "Not listed (often first come, first served)" } },
+    { key: "fee", label: "Fee" },
     { key: "activities", label: "Activities", format: "list" },
   ],
   links: [{ key: "url", label: "Agency page" }],
+  hidden: ["areaId"],
 };
 
 const recreationSites = defineLayer({
@@ -429,7 +486,8 @@ const recreationSites = defineLayer({
   description:
     "Developed recreation sites on US federal land: Forest Service recreation areas (national forests and grasslands) and Bureau of Land Management recreation sites and facilities. " +
     "Each point has name, kind (campground, trailhead, day use area, water access for boat ramps and beaches, viewpoint, trail, visitor center, winter sports, OHV area, or recreation area when it is none of those), " +
-    "agency (USFS or BLM), a link (url) to the agency page, and for Forest Service areas the forest and a list of activities (hiking, swimming, picnicking and so on) plus status (open or closed as the nightly feed reports it). " +
+    "agency (USFS or BLM), a link (url) to the agency page, and for Forest Service areas the forest and a list of activities (hiking, swimming, picnicking and so on) plus status (open or closed as the nightly feed reports it), season (the months it opens, 'May to October'), fee and reservable (true, or 'not listed'). " +
+    "For 'which campgrounds are open now', filter render.filters kind include [\"campground\"] and status include [\"open\"], and give how many are open of how many campgrounds. " +
     "Use it for 'campgrounds near here', 'trailheads', 'boat ramps', 'picnic areas', 'where can I camp on Forest Service land', or to pick a base for a trip; filter by kind for one type. " +
     "Caveats: the site type comes from the agencies' own labels (BLM only says 'facility', so its type is inferred from the name and can be wrong); " +
     "this is the agencies' listing, not a booking system, so fees, dates and reservations must be checked on the linked page or recreation.gov; the closed flag is not a live closure notice. " +
@@ -468,7 +526,7 @@ const recreationSites = defineLayer({
 
     if (ctx.wide === true && ctx.wideStrategy !== undefined) return queryWide(ctx, ctx.wideStrategy.limit, citation);
 
-    const [usfs, blmFacilities, blmSites] = await Promise.all([
+    const [usfs, blmFacilities, blmSites, opportunities] = await Promise.all([
       arcgisQuery(ctx, USFS_URL, {
         outFields: USFS_FIELDS,
         bbox: ctx.bbox,
@@ -490,6 +548,15 @@ const recreationSites = defineLayer({
         ttlSeconds: TTL_SECONDS,
         cacheSuffix: "blm-sites",
       }),
+      auxLookups()
+        ? arcgisQuery(ctx, USFS_OPPORTUNITIES_URL, {
+            outFields: USFS_OPPORTUNITY_FIELDS,
+            bbox: ctx.bbox,
+            orderByFields: "recareaid",
+            ttlSeconds: TTL_SECONDS,
+            cacheSuffix: "usfs-opportunities",
+          })
+        : Promise.resolve(null),
     ]);
 
     const runs = [
@@ -516,6 +583,17 @@ const recreationSites = defineLayer({
         ...(blmSites.ok ? normalizeBlmSites(blmSites.fc) : []),
       ]),
     ]);
+    if (opportunities?.ok) addOpportunities(features, opportunities.fc);
+    const campgrounds = features.filter((f) => f.properties.kind === "campground");
+    if (campgrounds.length > 0) {
+      const open = campgrounds.filter((f) => f.properties.status === "open").length;
+      const closed = campgrounds.filter((f) => f.properties.status === "closed").length;
+      notes.push(
+        open + closed > 0
+          ? `Campgrounds: ${campgrounds.length} in all, ${open} open and ${closed} closed in the Forest Service's nightly feed (BLM lists no status)`
+          : `Campgrounds: ${campgrounds.length} (no open or closed status listed)`,
+      );
+    }
     if (features.length > MAX_POINTS) {
       notes.push(`Showing ${MAX_POINTS.toLocaleString("en-US")} of ${features.length.toLocaleString("en-US")} sites`);
       features = features.slice(0, MAX_POINTS);

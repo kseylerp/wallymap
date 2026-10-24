@@ -5,6 +5,7 @@ import { runLayer } from "@/lib/layers/run";
 import layer, {
   CAMPING_RULES,
   attachCampingRules,
+  generalForestRule,
   campingRuleNote,
   campingRulesFor,
   datesOpen,
@@ -345,34 +346,44 @@ describe("dispersed camping rules (AUDIT R14)", () => {
   const NOW = new Date("2026-10-23T12:00:00Z");
 
   it("keeps every rule with an https order link, a date and a box", () => {
-    expect(CAMPING_RULES.map((r) => r.id)).toEqual(["sedona-west", "sedona-oak-creek", "moab", "lake-tahoe-basin", "crested-butte"]);
+    expect(CAMPING_RULES.map((r) => r.id)).toEqual(["sedona-west", "sedona-oak-creek", "coconino-forest-wide", "moab", "lake-tahoe-basin", "crested-butte", "mount-rainier-wilderness"]);
     for (const r of CAMPING_RULES) {
-      expect(r.url).toMatch(/^https:\/\/(www\.)?(fs\.usda\.gov|blm\.gov)\//);
+      expect(r.url).toMatch(/^https:\/\/(www\.)?(fs\.usda\.gov|blm\.gov|nps\.gov)\//);
       expect(r.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(r.bbox[0]).toBeLessThan(r.bbox[2]);
       expect(r.bbox[1]).toBeLessThan(r.bbox[3]);
     }
   });
 
-  it("finds Sedona's two Coconino orders, Moab's BLM rule, and none near Leadville", () => {
-    expect(campingRulesFor(SEDONA, NOW).map((r) => r.id)).toEqual(["sedona-west", "sedona-oak-creek"]);
+  it("finds Sedona's two Coconino orders and the forest-wide rule, Moab's BLM rule, and none near Leadville", () => {
+    expect(campingRulesFor(SEDONA, NOW).map((r) => r.id)).toEqual(["sedona-west", "sedona-oak-creek", "coconino-forest-wide"]);
     expect(campingRulesFor(MOAB, NOW).map((r) => r.id)).toEqual(["moab"]);
     expect(campingRulesFor(LEADVILLE, NOW)).toEqual([]);
     expect(campingRuleNote([])).toMatch(/check the ranger district's \(or BLM field office's\) closure orders/);
   });
 
   it("drops a rule past its end date", () => {
-    expect(campingRulesFor(SEDONA, new Date("2029-01-01T00:00:00Z")).map((r) => r.id)).toEqual(["sedona-oak-creek"]);
+    expect(campingRulesFor(SEDONA, new Date("2029-01-01T00:00:00Z")).map((r) => r.id)).toEqual(["sedona-oak-creek", "coconino-forest-wide"]);
   });
 
   it("puts the rule on Sedona's roads inside its box, with the order link on the card", () => {
     const fc = normalizeMvum(sedona);
     const n = attachCampingRules(fc, campingRulesFor(SEDONA, NOW));
     expect(n).toBeGreaterThan(0);
-    const road = fc.features.find((f) => f.properties?.campingRule !== undefined)!;
+    const road = fc.features.find((f) => /Red Rock/.test(String(f.properties?.campingRule)))!;
     expect(road.properties?.campingRule).toMatch(/^Coconino National Forest, Red Rock Ranger District, .*\(Forest Order 03-04-06-2[36]-0[34], 20\d{2}-\d{2}-\d{2}\)$/);
     const card = cardContent(road, { card: layer.card, fieldHelp: layer.fieldHelp });
     expect(card.facts.map((r) => r.label)).toContain("Camping rule here");
     expect(card.links.find((l) => l.label === "Closure order")?.url).toMatch(/^https:\/\/www\.fs\.usda\.gov\/r03\/coconino\//);
+  });
+
+  it("holds a forest-wide rule only on that forest's roads, and gives every other road the general rule", () => {
+    const flagstaff = { type: "Feature" as const, geometry: { type: "LineString" as const, coordinates: [[-111.7, 35.3], [-111.69, 35.31]] }, properties: { forest: "Coconino National Forest", district: "Flagstaff Ranger District" } };
+    const kaibab = { type: "Feature" as const, geometry: { type: "LineString" as const, coordinates: [[-111.98, 35.3], [-111.97, 35.31]] }, properties: { forest: "Kaibab National Forest", district: "Williams Ranger District" } };
+    const fc = { type: "FeatureCollection" as const, features: [flagstaff, kaibab] };
+    attachCampingRules(fc, campingRulesFor([-112, 35.2, -111.6, 35.4], NOW), (f) => generalForestRule(String(f.properties?.district).replace(/ Ranger District$/, "")));
+    expect(flagstaff.properties).toMatchObject({ campingRule: expect.stringMatching(/14 days in any 30; drive no more than 30 feet/) });
+    expect(kaibab.properties).toMatchObject({ campingRule: expect.stringMatching(/^No closure order on file here: .*confirm with the Williams Ranger District$/) });
+    expect("campingRuleUrl" in kaibab.properties).toBe(false);
   });
 });

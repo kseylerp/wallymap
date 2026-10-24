@@ -54,6 +54,7 @@ import "./drought";
 import "./phenology";
 import "./burn-severity";
 import "./smoke";
+import "./air-quality";
 import "./geologic-unit";
 import "./fishing";
 import "./weather-alerts";

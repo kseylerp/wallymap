@@ -1,5 +1,6 @@
 import type { Feature, Position } from "geojson";
 import type { Attribute, CardFact, FieldHelp, Layer, LayerError, LayerResult } from "@/layers/types";
+import { US_UNIT_KEYS, addUsUnits, roundTripGain } from "@/layers/_shared/roundTrip";
 import { pathsOf, verticesOf } from "@/lib/spatial/geo";
 import { compass8, profileOf, resample, shadedThrough, steepestFaceNear, sunPath } from "./analysis";
 import { type Dem, loadDemTiles, metresPerPixel, TERRAIN_CITATION_SOURCE, tileKeyOf, type TileSource } from "./dem";
@@ -110,13 +111,13 @@ export function withTerrainFields<L extends Layer>(layer: L): L {
   const own = layer.card ?? {};
   return {
     ...layer,
-    card: { ...own, facts: [...(own.facts ?? []).filter((f) => !keys.has(f.key)), ...facts] },
+    card: { ...own, facts: [...(own.facts ?? []).filter((f) => !keys.has(f.key)), ...facts], ...(spec.kind === "line" && { hidden: [...new Set([...(own.hidden ?? []), ...US_UNIT_KEYS])] }) },
     attributes: [...(layer.attributes ?? []).filter((a) => !keys.has(a.key)), ...attributes],
     fieldHelp: { ...layer.fieldHelp, ...help },
     description: `${layer.description} ${
       spec.kind === "point"
         ? "Each crag also carries aspect (N to NW, the way its wall faces), slopeDeg and afternoonShade (true when it faces away from the afternoon sun today) from an elevation model: for shade, pass render.filters afternoonShade include [\"true\"]."
-        : `Each line also carries gainM, lossM and highM (climb, descent and high point in metres from an elevation model)${spec.slope ? " and maxSlopeDeg (the steepest ground it crosses; low-angle is under 30)" : ""}: rank with render.rankBy ${spec.slope ? "maxSlopeDeg" : "gainM"} or filter with render.filters ${spec.slope ? "maxSlopeDeg" : "gainM"} range.`
+        : `Each line also carries gainM, lossM and highM (climb, descent and high point in metres from an elevation model), and in miles and feet lengthMi, roundTripMi, gainFt and roundTripGainFt (quote these in the US)${spec.slope ? " and maxSlopeDeg (the steepest ground it crosses; low-angle is under 30)" : ""}: rank with render.rankBy ${spec.slope ? "maxSlopeDeg" : "gainM"} or filter with render.filters ${spec.slope ? "maxSlopeDeg" : "gainM"} range.`
     }`,
   };
 }
@@ -161,11 +162,22 @@ function enrichPoint(f: Feature, dem: Dem, path: ReturnType<typeof sunPath>): Fe
 }
 
 function enrichLine(f: Feature, dem: Dem, slope: boolean): Feature {
-  const profile = profileOf(dem, pathsOf(f.geometry), { slope });
+  const shape = f.properties?.shape;
+  // A trail network (layers/_shared/hikes.ts) is walked along its longest stretch, the first of its lines.
+  const paths = shape === "network" ? pathsOf(f.geometry).slice(0, 1) : pathsOf(f.geometry);
+  const profile = profileOf(dem, paths, { slope });
   if (!profile) return f;
+  const roundTrip = roundTripGain(shape, profile.gainM, profile.lossM);
   return {
     ...f,
-    properties: { ...f.properties, gainM: profile.gainM, lossM: profile.lossM, highM: profile.maxM, ...(slope && { maxSlopeDeg: profile.maxSlopeDeg }) },
+    properties: addUsUnits({
+      ...f.properties,
+      gainM: profile.gainM,
+      lossM: profile.lossM,
+      highM: profile.maxM,
+      ...(roundTrip !== undefined && { roundTripGainM: roundTrip }),
+      ...(slope && { maxSlopeDeg: profile.maxSlopeDeg }),
+    }),
   };
 }
 

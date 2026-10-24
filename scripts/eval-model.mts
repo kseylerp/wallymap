@@ -567,6 +567,8 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   // The forecasts added for the use cases (audit R8, R10): a 7-day hourly weather forecast and the avalanche centers' danger.
   "will it rain in yosemite valley this weekend?": { layers: ["weather-forecast"] },
   "what's the avalanche danger in little cottonwood canyon today?": { layers: ["avalanche"] },
+  // Air quality at the place (top 10 T02: smoke now and this weekend, Open-Meteo).
+  "how is the air quality in yosemite valley this weekend?": { layers: ["air-quality"] },
 };
 
 /**

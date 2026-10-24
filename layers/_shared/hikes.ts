@@ -2,6 +2,7 @@ import { inflateSync } from "node:zlib";
 import type { Feature, LineString, MultiLineString, Position } from "geojson";
 import { gainLoss } from "@/lib/render/wally/sample";
 import { haversineKm } from "./geo";
+import { addUsUnits, roundTripGain } from "./roundTrip";
 
 /**
  * Whole hikes from OpenStreetMap ways (audit R4, 2026-10-23): a trail is mapped as many ways, split at every junction
@@ -19,6 +20,8 @@ const JOIN_M = 40;
 const GAP_M = 1_000;
 /** A hike whose two ends lie this close together is a loop. */
 const LOOP_M = 150;
+/** ...and no further apart than this share of its length. */
+const LOOP_SHARE = 0.1;
 
 const fold = (name: string) => name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
@@ -118,7 +121,8 @@ const round = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
  * Named ways merged into whole hikes, one per name and connected piece (two trails called "Lake Trail" in one box stay
  * two), longest first, followed by the unnamed ways as they are: kind and sac_scale (the hardest of its ways),
  * lengthKm (the whole hike in view), shape loop or out and back with roundTripKm, its two ends (start, end) and how
- * many ways it joins. A hike that branches (three ends or more) is a trail network: no round trip.
+ * many ways it joins. A hike that branches (three ends or more) is a trail network, walked out and back along its
+ * longest stretch: its roundTripKm is twice that stretch.
  */
 export function mergeHikes(ways: Feature[], notRated = "not_rated"): Feature[] {
   const byName = new Map<string, Feature[]>();
@@ -137,7 +141,9 @@ export function mergeHikes(ways: Feature[], notRated = "not_rated"): Feature[] {
       const main = chains[0];
       const start = main[0];
       const end = main[main.length - 1];
-      const loop = chains.length === 1 && close(start, end, LOOP_M);
+      const mainKm = lineKm(main);
+      // Ends together on a line much longer than the gap between them: a 170 m stub whose ends lie 130 m apart is no loop.
+      const loop = chains.length === 1 && close(start, end, Math.min(LOOP_M, mainKm * 1000 * LOOP_SHARE));
       const network = chains.length > 1;
       const first = part[0].properties ?? {};
       const properties: Record<string, string | number | boolean> = {
@@ -151,12 +157,14 @@ export function mergeHikes(ways: Feature[], notRated = "not_rated"): Feature[] {
         end: `${round(end[1], 5)}, ${round(end[0], 5)}`,
         osmId: String(first.osmId ?? ""),
       };
-      if (!network) properties.roundTripKm = round(loop ? lengthKm : 2 * lengthKm);
+      // A network is walked out and back along its longest stretch (the climb is read along it too).
+      properties.roundTripKm = round(loop ? lengthKm : network ? 2 * mainKm : 2 * lengthKm);
       for (const key of ["trail_visibility", "surface", "wikidata", "wikipedia"]) {
         const v = commonest(part, key);
         if (v !== undefined) properties[key] = v;
       }
       if (part.every((w) => w.properties?.informal === true)) properties.informal = true;
+      addUsUnits(properties);
       hikes.push({
         type: "Feature",
         geometry: chains.length === 1 ? { type: "LineString", coordinates: main } : { type: "MultiLineString", coordinates: chains },
@@ -335,8 +343,9 @@ export async function addClimb(hikes: Feature[], opts: ClimbOptions = {}): Promi
     props.gainPerKm = lengthKm > 0 ? round(gain / lengthKm, 1) : 0;
     props.highM = Math.round(Math.max(...known));
     props.lowM = Math.round(Math.min(...known));
-    if (props.shape === "out-and-back") props.roundTripGainM = Math.round(gain + loss);
-    else if (props.shape === "loop") props.roundTripGainM = Math.round(gain);
+    const roundTrip = roundTripGain(props.shape, gain, loss);
+    if (roundTrip !== undefined) props.roundTripGainM = roundTrip;
+    addUsUnits(props);
     hike.properties = props;
     done += 1;
   }

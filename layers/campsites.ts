@@ -12,6 +12,7 @@
 import { z } from "zod";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import {
+  bboxAreaKm2,
   defineLayer,
   type Attribute,
   type AttributeLevel,
@@ -26,6 +27,9 @@ import { registerLayer } from "./registry";
 import { nameAttribute } from "./_shared/bands";
 import { namedOverpassQuery, overpassCounts, overpassQuery } from "./_shared/overpass";
 import { layerColor } from "@/lib/render/palette";
+import { auxLookups } from "./_shared/constants";
+import { WATER_M, attachWater, buildWaterNearCampsQuery, parseWater } from "./_shared/water-near";
+import { attachCampingRules, campingRuleText, campingRulesFor } from "./forest-roads";
 
 const inputSchema = z.object({
   backcountryOnly: z.boolean().default(false),
@@ -33,6 +37,9 @@ const inputSchema = z.object({
 });
 
 type CampsitesInput = z.infer<typeof inputSchema>;
+
+/** Largest view in which each camp is checked for water nearby (one Overpass `around` call over every camp site). */
+export const WATER_NEAR_MAX_KM2 = 6_000;
 
 /** Most points returned; keeps every campsite and fills the rest with the largest parking lots. */
 const MAX_POINTS = 5_000;
@@ -275,6 +282,13 @@ const FIELD_HELP: Record<string, FieldHelp> = {
   capacity: { text: "How many pitches (camp sites) or spaces (parking) the mapper counted, from OpenStreetMap's capacity tag.", source: "OpenStreetMap wiki, Key:capacity", url: "https://wiki.openstreetmap.org/wiki/Key:capacity" },
   backcountry: { text: "A walk-in or wilderness site with no road to it, from OpenStreetMap's backcountry tag.", source: "OpenStreetMap wiki, Key:backcountry", url: "https://wiki.openstreetmap.org/wiki/Key:backcountry" },
   reservation: { text: "Whether pitches can or must be booked ahead, from OpenStreetMap's reservation tag.", source: "OpenStreetMap wiki, Key:reservation", url: "https://wiki.openstreetmap.org/wiki/Key:reservation" },
+  water: {
+    text: `Springs, drinking-water taps, lakes, streams and rivers mapped in OpenStreetMap within ${WATER_M} m of the site, nearest first (views up to ${WATER_NEAR_MAX_KM2.toLocaleString("en-US")} km²). Treat or filter natural water; a mapped stream can run dry.`,
+    source: "OpenStreetMap contributors",
+  },
+  campingRule: {
+    text: "A camping rule or permit that covers this area, from the managing agency's own order or page (kept by hand for the best-known places: Sedona and the Coconino, Moab, the Lake Tahoe Basin, Crested Butte, Mount Rainier's wilderness).",
+  },
   feeStatus: {
     text: "Whether the site charges, from OpenStreetMap's fee tag; most sites have no fee tag, which says nothing either way, so check before you go.",
     source: "OpenStreetMap wiki, Key:fee",
@@ -303,6 +317,7 @@ const ATTRIBUTES: Attribute[] = [
   { key: "tents", type: "flag", label: "Tents allowed" },
   { key: "caravans", type: "flag", label: "RVs allowed" },
   { key: "capacity", type: "measure", label: "Capacity", unit: "pitches or spaces", help: FIELD_HELP.capacity },
+  { key: "nearWater", type: "flag", label: `Water within ${WATER_M} m`, help: FIELD_HELP.water },
   nameAttribute(),
 ];
 
@@ -326,6 +341,8 @@ const CARD: CardSpec = {
     { key: "kind", label: "Type", values: KIND_ONE },
     { key: "capacity", label: "Capacity", format: "int" },
     { key: "feeStatus", label: "Fee", values: { fee: "Yes, costs money", free: "Free", unknown: "Fee not mapped" } },
+    { key: "water", label: "Water nearby" },
+    { key: "campingRule", label: "Camping rule here" },
     { key: "tents", label: "Tents allowed", values: YES_NO },
     { key: "caravans", label: "RVs allowed", values: YES_NO },
     { key: "backcountry", label: "Backcountry (walk-in)", values: YES_NO },
@@ -334,9 +351,9 @@ const CARD: CardSpec = {
     { key: "drinkingWater", label: "Drinking water", values: YES_NO },
     { key: "operator", label: "Run by" },
   ],
-  links: [{ key: "website", label: "Website" }],
   // The OpenStreetMap id is plumbing; the fee boolean is shown as feeStatus; title repeats the card's own title.
-  hidden: ["osmId", "fee", "title"],
+  hidden: ["osmId", "fee", "title", "nearWater", "waterM"],
+  links: [{ key: "website", label: "Website" }, { key: "campingRuleUrl", label: "Rule or order" }],
 };
 
 const campsites = defineLayer({
@@ -350,6 +367,8 @@ const campsites = defineLayer({
     "Set backcountryOnly to true to keep only camp sites tagged as backcountry (it drops RV parks and never hides parking); set includeParking to false to get camp and RV sites alone. " +
     "Caveats: OpenStreetMap is volunteer-mapped, so it misses many sites and is not a reservation or availability source; fees, seasons and rules may be out of date or missing; " +
     "free dispersed camping spots are mostly not mapped here (see forest-roads for the drivable Forest Service roads). " +
+    `In views up to ${WATER_NEAR_MAX_KM2.toLocaleString("en-US")} km², camp sites with water within ${WATER_M} m carry nearWater (true), waterM and water (e.g. 'Mowich Lake (lake) · a stream'): filter render.filters nearWater include ["true"] for camps near water. ` +
+    "Sites inside a known rule's area (Mount Rainier's wilderness permit, BLM Moab's designated sites, the Lake Tahoe Basin and Sedona closures) carry campingRule, quoted in the note. " +
     "Over 25,000 km² (about a 160 km square) it returns up to 2,000 named camp sites (no parking) and how many there are in all. At most 5,000 points are returned (all camp sites first, then the largest parking lots) and the result says so when it trims.",
   coverage: "global",
   surface: "land",
@@ -392,6 +411,11 @@ const campsites = defineLayer({
       };
     }
 
+    // Water beside each camp, asked alongside in a view small enough; a failure only leaves it out.
+    const waterPending =
+      auxLookups() && bboxAreaKm2(ctx.bbox) <= WATER_NEAR_MAX_KM2
+        ? overpassQuery(ctx, buildWaterNearCampsQuery(ctx.bbox), { cacheSuffix: "campsites:water" }).then((r) => (r.ok ? parseWater(r.json) : null), () => null)
+        : Promise.resolve(null);
     const result = await overpassQuery(ctx, buildCampsitesQuery(ctx.bbox, input), {
       cacheSuffix: "campsites",
     });
@@ -408,14 +432,22 @@ const campsites = defineLayer({
       features = [...camps, ...parking].slice(0, MAX_POINTS);
     }
 
+    const water = await waterPending;
+    const camps = features.filter((f) => f.properties?.kind !== "parking").length;
+    const watered = water ? attachWater(features, water) : 0;
+    const rules = campingRulesFor(ctx.bbox).filter((r) => r.forest === undefined);
+    const ruled = attachCampingRules({ type: "FeatureCollection", features }, rules);
+    const notes = [
+      total > MAX_POINTS
+        ? `Showing ${MAX_POINTS.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} sites (all camp sites, then the largest parking lots); zoom in for the rest`
+        : "",
+      camps === 0 ? "" : water ? `${watered} of ${camps} camp and RV sites have mapped water within ${WATER_M} m (nearWater, water)` : auxLookups() && bboxAreaKm2(ctx.bbox) <= WATER_NEAR_MAX_KM2 ? "Water near the camps could not be read this time" : "",
+      ruled > 0 ? `Rule${rules.length === 1 ? "" : "s"} for ${ruled} site${ruled === 1 ? "" : "s"}: ${rules.map((r) => `${campingRuleText(r)}, ${r.url}`).join("; ")}` : "",
+    ].filter(Boolean);
     return {
       kind: "geojson",
       data: { type: "FeatureCollection", features: presentCampsites(features) },
-      ...(total > MAX_POINTS
-        ? {
-            coverageNote: `Showing ${MAX_POINTS.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} sites (all camp sites, then the largest parking lots); zoom in for the rest`,
-          }
-        : {}),
+      ...(notes.length > 0 && { coverageNote: notes.join("; ") }),
       citation,
     };
   },

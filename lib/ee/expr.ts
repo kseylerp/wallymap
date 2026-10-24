@@ -40,6 +40,9 @@ function isNode(v: unknown): v is EeNode {
 // ---- Images and collections ----
 
 export const loadCollection = (id: string) => call("ImageCollection.load", { id });
+export const loadImage = (id: string) => call("Image.load", { id });
+/** Masks an image outside a geometry. */
+export const clip = (input: EeNode, geometry: EeNode) => call("Image.clip", { input, geometry });
 export const mosaic = (collection: EeNode) => call("ImageCollection.mosaic", { collection });
 /** A constant image: one band per value. */
 export const constantImage = (value: number | number[]) => call("Image.constant", { value });
@@ -98,6 +101,24 @@ export function reduceRegion(
     ...(opts.tileScale !== undefined && { tileScale: opts.tileScale }),
   });
 }
+
+// ---- Tables (feature collections) ----
+
+export const loadTable = (tableId: string) => call("Collection.loadTable", { tableId });
+/** The features of a collection that touch a geometry. */
+export const filterIntersects = (collection: EeNode, geometry: EeNode) =>
+  call("Collection.filter", { collection, filter: call("Filter.intersects", { leftField: ".geo", rightValue: geometry }) });
+/** The features whose property `field` equals `value`. */
+export const filterEquals = (collection: EeNode, field: string, value: string | number) =>
+  call("Collection.filter", { collection, filter: call("Filter.equals", { leftField: field, rightValue: value }) });
+/** The union of a collection's geometries, for reducing an image over a region read from a table. */
+export const collectionGeometry = (collection: EeNode) => call("Collection.geometry", { collection });
+/** Reduces an image over each feature (summing every band onto the feature's properties). */
+export const reduceRegionsSum = (image: EeNode, collection: EeNode, scale: number) =>
+  call("Image.reduceRegions", { image, collection, reducer: call("Reducer.sum"), scale, tileScale: 4 });
+/** The listed properties of every feature as rows (`{ list: [[a, b, …], …] }`), without the geometries. */
+export const rows = (collection: EeNode, selectors: string[]) =>
+  call("Collection.reduceColumns", { collection, reducer: call("Reducer.toList", { tupleSize: selectors.length }), selectors });
 
 // ---- Serialisation ----
 

@@ -56,6 +56,7 @@ const V2_FIELDS =
   "id,uri,observed_on,time_observed_at,obscured,license_code,species_guess,geojson,taxon.id,taxon.name,taxon.rank,taxon.preferred_common_name,taxon.min_species_taxon_id";
 const AUTOCOMPLETE_URL = "https://api.inaturalist.org/v1/taxa/autocomplete";
 const PLACES_URL = "https://api.inaturalist.org/v1/places/nearby";
+const SPECIES_COUNTS_URL = "https://api.inaturalist.org/v1/observations/species_counts";
 /** Taxon names and countries do not change; a week keeps repeat questions to one request. */
 const LOOKUP_TTL_SECONDS = 7 * 86_400;
 const PER_PAGE = 200;
@@ -233,6 +234,69 @@ export function pickTaxon(q: string, json: unknown): ResolvedTaxon | null {
     ...(hit.rank && { rank: hit.rank }),
     ...(hit.preferred_common_name && { commonName: hit.preferred_common_name }),
   };
+}
+
+/**
+ * Species whose common name or matched term ends in the asked word, when no result matches the name exactly: the
+ * candidates a sighting count in the box picks between ("condor" lists Andean Condor before California Condor, "desert
+ * tortoise" the whole genus Gopherus before the Mojave Desert Tortoise; 2026-10-23). Empty when a result is exact.
+ */
+export function speciesCandidates(q: string, json: unknown): ResolvedTaxon[] {
+  const parsed = autocompleteSchema.safeParse(json);
+  if (!parsed.success) return [];
+  const results = parsed.data.results.filter((r) => r.is_active !== false);
+  const want = norm(q);
+  const exact = results.some((r) => norm(r.name) === want || norm(r.preferred_common_name) === want || norm(r.matched_term) === want);
+  if (exact) return [];
+  const escaped = want.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const endsInWant = new RegExp(`(^|[^a-z])${escaped}(e?s)?$`);
+  return results
+    .filter((r) => r.rank === "species" && (endsInWant.test(norm(r.preferred_common_name)) || endsInWant.test(norm(r.matched_term))))
+    .slice(0, 5)
+    .map((r) => ({ id: r.id, name: r.name, rank: "species", ...(r.preferred_common_name && { commonName: r.preferred_common_name }) }));
+}
+
+/** How many verifiable sightings of each of these species lie in the box (one request, iNaturalist species counts). */
+export function speciesCountsUrl(ids: number[], bbox: BBox): string {
+  const [west, south, east, north] = bbox;
+  return `${SPECIES_COUNTS_URL}?taxon_id=${ids.join(",")}&nelat=${north}&nelng=${east}&swlat=${south}&swlng=${west}&verifiable=true`;
+}
+
+/** Sightings per species id from a species counts answer. */
+export function readSpeciesCounts(json: unknown): Map<number, number> {
+  const out = new Map<number, number>();
+  const results = (json as { results?: unknown } | null)?.results;
+  if (!Array.isArray(results)) return out;
+  for (const r of results) {
+    const id = (r as { taxon?: { id?: unknown } })?.taxon?.id;
+    const count = (r as { count?: unknown })?.count;
+    if (typeof id === "number" && typeof count === "number") out.set(id, count);
+  }
+  return out;
+}
+
+/** "most in June (45), September (30) and May (25)": the busiest months of the sightings, when they span several. */
+export function busiestMonths(features: Feature[], n = 3): string | undefined {
+  const byMonth = new Map<number, number>();
+  for (const f of features) {
+    const m = f.properties?.month;
+    if (typeof m === "number") byMonth.set(m, (byMonth.get(m) ?? 0) + 1);
+  }
+  if (byMonth.size < 2) return undefined;
+  const top = [...byMonth.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).slice(0, n);
+  const parts = top.map(([m, c]) => `${MONTH_NAMES[m - 1]} (${c.toLocaleString("en-US")})`);
+  return `most in ${parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0]}`;
+}
+
+/** "American Bison 398, Pronghorn 188, …": the most-seen species, for a question with no taxon. */
+export function topSpecies(features: Feature[], n = 5): { names: string; count: number } {
+  const bySpecies = new Map<string, number>();
+  for (const f of features) {
+    const s = f.properties?.species;
+    if (typeof s === "string") bySpecies.set(s, (bySpecies.get(s) ?? 0) + 1);
+  }
+  const top = [...bySpecies.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
+  return { names: top.map(([s, c]) => `${s} ${c.toLocaleString("en-US")}`).join(", "), count: bySpecies.size };
 }
 
 /** GBIF density tile template (`{z}/{x}/{y}` stay for the map) of iNaturalist research-grade observations, whole years covering `days`. */
@@ -473,7 +537,7 @@ const species = defineLayer({
         notes.push(`the iNaturalist name lookup failed, so "${input.taxon}" was matched as text and may include other species`);
       } else {
         asked = resolved.taxon;
-        notes.push(`${input.taxon.charAt(0).toUpperCase()}${input.taxon.slice(1)} was read as ${taxonWords(asked)}`);
+        notes.push(`${input.taxon.charAt(0).toUpperCase()}${input.taxon.slice(1)} was read as ${taxonWords(asked)}${resolved.seenHere ? " (of the species the name can mean, the one seen most here)" : ""}`);
       }
     }
     const filter: TaxonFilter = { ...(asked && { taxonId: asked.id }), ...(placeId !== undefined && { placeId }) };
@@ -534,10 +598,26 @@ const species = defineLayer({
     const hitPageCap = failedPage === null && pages.length === maxPages && total > fetched;
     groupBySpecies(features, asked);
 
-    if (skipped > 0) {
-      notes.push(
-        `${skipped} observation${skipped === 1 ? "" : "s"} with hidden (obscured) locations ${skipped === 1 ? "was" : "were"} left out`,
+    // The count, first: how many sightings are drawn, of what, and when most were seen.
+    const grade = input.researchGradeOnly ? " (research grade)" : "";
+    const window = `in the last ${input.days.toLocaleString("en-US")} days`;
+    const n = features.length;
+    if (n === 0 && skipped > 0) {
+      notes.unshift(
+        `All ${skipped.toLocaleString("en-US")} sightings${asked ? ` of ${asked.commonName ?? asked.name}` : ""}${grade} here ${window} have hidden (obscured) locations, as iNaturalist does for threatened species and when observers ask, so none are drawn`,
       );
+    } else if (n > 0) {
+      const months = busiestMonths(features);
+      const what = asked ? ` of ${asked.commonName ?? asked.name}` : "";
+      const species = asked ? null : topSpecies(features);
+      notes.unshift(
+        `${n.toLocaleString("en-US")} sightings${what}${grade} drawn ${window}` +
+          (species && species.count > 1 ? `, of ${species.count.toLocaleString("en-US")} species; most seen: ${species.names}` : "") +
+          (months ? `; ${months}` : ""),
+      );
+      if (skipped > 0) {
+        notes.push(`${skipped} observation${skipped === 1 ? "" : "s"} with hidden (obscured) locations ${skipped === 1 ? "was" : "were"} left out`);
+      }
     }
     if (failedPage !== null) {
       notes.push(`iNaturalist page ${failedPage} failed; showing only the first ${(failedPage - 1) * PER_PAGE} observations`);
@@ -589,7 +669,7 @@ async function countryUnder(ctx: Ctx): Promise<number | undefined> {
  * The one taxon `name` stands for (pickTaxon), or `taxon: null` when the lookup itself failed (the caller then matches
  * the name as text); an error the model can act on when iNaturalist knows no such name.
  */
-async function resolveTaxon(ctx: Ctx, name: string, placeId: number | undefined): Promise<{ taxon: ResolvedTaxon | null } | LayerError> {
+async function resolveTaxon(ctx: Ctx, name: string, placeId: number | undefined): Promise<{ taxon: ResolvedTaxon | null; seenHere?: true } | LayerError> {
   let body: unknown;
   try {
     const res = await ctx.fetch(autocompleteUrl(lookupName(name), placeId), {
@@ -607,6 +687,25 @@ async function resolveTaxon(ctx: Ctx, name: string, placeId: number | undefined)
   const taxon = pickTaxon(lookupName(name), body);
   if (taxon === null) {
     return { error: `iNaturalist knows no species or group called "${name}"; try a common name (mule deer) or a Latin one (Odocoileus hemionus)` };
+  }
+  // No exact name: of the species the name could mean, the one seen most in this box ("condor" near Big Sur is the
+  // California Condor, not the Andean one the autocomplete lists first).
+  const candidates = speciesCandidates(lookupName(name), body);
+  if (candidates.length > 1 || (candidates.length === 1 && candidates[0].id !== taxon.id)) {
+    try {
+      const res = await ctx.fetch(speciesCountsUrl(candidates.map((c) => c.id), ctx.bbox), {
+        cacheKey: ctx.cacheKey === undefined ? undefined : `${ctx.cacheKey}:inat-candidates:${name.toLowerCase()}`,
+        ttlSeconds: LOOKUP_TTL_SECONDS,
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      });
+      if (res.ok) {
+        const counts = readSpeciesCounts(await res.json());
+        const best = candidates.reduce<{ c: ResolvedTaxon; n: number } | null>((acc, c) => ((counts.get(c.id) ?? 0) > (acc?.n ?? 0) ? { c, n: counts.get(c.id) ?? 0 } : acc), null);
+        if (best) return { taxon: best.c, seenHere: true };
+      }
+    } catch {
+      // The count is a tie-breaker: without it the autocomplete's pick stands.
+    }
   }
   return { taxon };
 }

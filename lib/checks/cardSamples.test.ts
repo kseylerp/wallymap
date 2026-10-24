@@ -40,4 +40,4 @@ describe("card text on every layer's recorded sample", () => {
 });
 
 /** Layers whose upstream is down by a documented outage (layer description says so), allowed to lack a sample. */
-const DOCUMENTED_OUTAGES = new Set<string>(["mining-claims"]);
+const DOCUMENTED_OUTAGES = new Set<string>([]);

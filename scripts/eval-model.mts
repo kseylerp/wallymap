@@ -534,6 +534,7 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   "show plant hardiness zones in vermont": { layers: ["hardiness-zones"] },
   "what's the land cover around torres del paine?": { layers: ["land-cover"] },
   "active mining claims near moab": { layers: ["mining-claims"] },
+  "oil and gas leases near chaco canyon": { layers: ["mineral-leases"] },
   "where is the old-growth forest in oregon?": { layers: ["old-growth"] },
   // Forest types (ForTy via Earth Engine): the class here, and natural forest converted since a year (its change view).
   "is this primary forest or plantation?": { layers: ["forest-types"] },

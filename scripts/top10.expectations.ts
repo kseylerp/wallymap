@@ -293,7 +293,6 @@ export const TOP10: Top10Expect[] = [
     inputs: [{ layer: "forest-loss", key: "startYear", equals: 2017 }],
     timePanel: true, legend: ["Tree cover loss"],
     facts: [{ what: "hectares or km² lost", re: AREA }, { what: "the driver (or that the app cannot say)", re: /driver|agricultur|pasture|cattle|logging|fire|cannot|can't|not (?:in|available)/i }, { what: "since 2017", re: /2017/ }],
-    needs: ["hectares lost by year (Hansen through Earth Engine)", "drivers of loss (WRI and Google DeepMind 1 km)"],
   },
   {
     id: "T05.2", useCase: "T05",
@@ -335,7 +334,7 @@ export const TOP10: Top10Expect[] = [
     layers: ["monuments", "mines|mining-claims", "pipelines-lines"], main: "monuments", basemap: OUTDOOR,
     card: ["Area", "Boundary", "Designation"],
     facts: [{ what: "the protection (monument, managed by BLM)", re: /monument|BLM/i }, { what: "how many mines or claims", re: /\b\d[\d,]*\b[^.]*\b(?:mines?|claims?|prospects?)\b/i }, { what: "pipelines (or none)", re: /pipeline/i }],
-    needs: ["mining claims outside Alaska and Nevada (BLM's national claim map offline since 14 October 2026)", "oil and gas leases (BLM fluid mineral leases)", "a within/near join of threats against the protected outline"],
+    needs: ["a within/near join of threats against the protected outline"],
   },
   {
     id: "T06.2", useCase: "T06",
@@ -350,18 +349,18 @@ export const TOP10: Top10Expect[] = [
   {
     id: "T06.3", useCase: "T06",
     question: "Is Chaco Canyon threatened by oil and gas?",
-    layers: ["pipelines-lines|methane-plumes"], main: "methane-plumes|pipelines-lines", basemap: OUTDOOR,
+    layers: ["mineral-leases|pipelines-lines|methane-plumes"], main: "mineral-leases|methane-plumes|pipelines-lines", basemap: OUTDOOR,
     labels: 3,
-    facts: [{ what: "methane rate or pipeline count", re: /kg\/h|\b\d[\d,]*\b[^.]*(?:pipelines?|plumes?|sources?)/i }, { what: "distance to the park", re: /\b\d+(?:\.\d+)?\s*(?:mi|miles|km)\b/i }],
+    facts: [{ what: "lease, pipeline or plume count, or methane rate", re: /kg\/h|\b\d[\d,]*\b[^.]*(?:leases?|pipelines?|plumes?|sources?)/i }, { what: "distance to the park", re: /\b\d+(?:\.\d+)?\s*(?:mi|miles|km)\b/i }],
     names: 2,
-    needs: ["oil and gas wells and leases (BLM fluid mineral leases; state well records)", "the 10-mile withdrawal buffer around Chaco"],
+    needs: ["oil and gas wells (state well records)", "the 10-mile withdrawal buffer around Chaco"],
   },
   {
     id: "T06.4", useCase: "T06",
     question: "What threatens the Boundary Waters?",
-    layers: ["mines|mining-claims|fire-hazard|pipelines-lines"], main: "mines|mining-claims|fire-hazard|pipelines-lines", basemap: OUTDOOR,
+    layers: ["mines|mining-claims|mineral-leases|fire-hazard|pipelines-lines"], main: "mines|mining-claims|mineral-leases|fire-hazard|pipelines-lines", basemap: OUTDOOR,
     facts: [{ what: "named threats with numbers", re: /\b\d[\d,]*\b/ }, { what: "copper-nickel mining or fire", re: /copper|nickel|mining|mine|fire/i }],
-    needs: ["federal mineral leases in Minnesota (not claims)", "a within/near join against the wilderness outline"],
+    needs: ["a within/near join against the wilderness outline"],
   },
   {
     id: "T06.5", useCase: "T06",

@@ -153,12 +153,12 @@ function fromHistory(fc: FeatureCollection): Candidate[] {
     if (!f.geometry || year === undefined || acres === undefined) continue;
     const name = str(p.INCIDENT) ?? "Unnamed fire";
     const key = str(p.IRWINID) ?? `${name.toLowerCase()}|${year}`;
-    out.push({
-      key,
-      recency: acres,
-      // The history records only the year: mid-year, so a ten-year histogram does not stack every old fire on January 1.
-      feature: perimeter(f, { name, year, acres, agency: str(p.AGENCY), t: `${year}-07-01T00:00:00.000Z` }),
-    });
+    // The history records only the year: mid-year, so a ten-year histogram does not stack every old fire on January 1.
+    const feature = perimeter(f, { name, year, acres, agency: str(p.AGENCY), t: `${year}-07-01T00:00:00.000Z` });
+    // History is queried for years before 2020 only, so every one of these fires is long out; the card says so (top 10
+    // baseline: the Camp Fire's card had no status row).
+    (feature.properties as Record<string, string | number>).status = "out";
+    out.push({ key, recency: acres, feature });
   }
   return out;
 }
@@ -364,7 +364,7 @@ const HELP: Record<string, FieldHelp> = {
     source: "NIFC WFIGS Incident Locations",
     url: "https://data-nifc.opendata.arcgis.com/",
   },
-  status: { text: "Out (declared out), Contained (a line all the way around) or Still burning, from the incident record (2020 on)." },
+  status: { text: "Out (declared out), Contained (a line all the way around) or Still burning, from the incident record (2020 on); fires before 2020 come from the history record, which has no status, and are all long out." },
   lastMapped: { text: "When this perimeter was last mapped; a fire still burning can have grown since." },
 };
 
@@ -389,7 +389,7 @@ const firePerimeters = defineLayer({
   description:
     "Outlines of US wildfires from the National Interagency Fire Center: current fires (shown as the latest mapped perimeter) and past years. " +
     "Each polygon has name, year, acres, agency (in words, when known), t (discovery date, or July 1 of the fire year for fires before 2020) and v (burned acres, from the mapped perimeter). " +
-    "Fires from 2020 on also have status ('active' still burning, 'contained' or 'out'), contained (percent of the edge contained), outDate, lastMapped (when the perimeter was last mapped; a burning fire may have grown since), discovered and cause, from the incident record. " +
+    "Fires from 2020 on also have status ('active' still burning, 'contained' or 'out'), contained (percent of the edge contained), outDate, lastMapped (when the perimeter was last mapped; a burning fire may have grown since), discovered and cause, from the incident record; fires before 2020 come from the history record with status 'out'. " +
     "Use yearsBack (1 to 25, default 10) to choose how far back to go and minAcres (default 100) to hide small fires. " +
     "United States only; elsewhere it returns nothing. Perimeters are simplified for display, so acreage is approximate and edges are not survey-grade. " +
     "Each source returns at most 2,000 fires, largest first; when that cap is hit the result says so, so zoom in for the rest. " +

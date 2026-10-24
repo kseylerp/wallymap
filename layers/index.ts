@@ -82,6 +82,7 @@ import "./monuments";
 import "./tree-mortality";
 import "./permafrost";
 import "./mining-claims";
+import "./mineral-leases";
 import "./imagery-by-date";
 import "./mines";
 import "./uranium";

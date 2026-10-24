@@ -1,0 +1,52 @@
+{
+ "results": [
+  {
+   "id": 4747,
+   "name": "Vultur gryphus",
+   "rank": "species",
+   "preferred_common_name": "Andean Condor",
+   "matched_term": "C\u00f3ndor",
+   "is_active": true
+  },
+  {
+   "id": 71306,
+   "name": "Cathartidae",
+   "rank": "family",
+   "preferred_common_name": "New World Vultures",
+   "matched_term": "Condores e Urubus",
+   "is_active": true
+  },
+  {
+   "id": 559244,
+   "name": "Cathartiformes",
+   "rank": "order",
+   "preferred_common_name": "New World Vultures",
+   "matched_term": "Condores e Urubus",
+   "is_active": true
+  },
+  {
+   "id": 4746,
+   "name": "Vultur",
+   "rank": "genus",
+   "preferred_common_name": "South American Condors",
+   "matched_term": "C\u00f3ndor andino",
+   "is_active": true
+  },
+  {
+   "id": 4777,
+   "name": "Gymnogyps",
+   "rank": "genus",
+   "preferred_common_name": "North American Condors",
+   "matched_term": "C\u00f3ndor californiano",
+   "is_active": true
+  },
+  {
+   "id": 4778,
+   "name": "Gymnogyps californianus",
+   "rank": "species",
+   "preferred_common_name": "California Condor",
+   "matched_term": "California Condor",
+   "is_active": true
+  }
+ ]
+}

@@ -56,6 +56,21 @@ describe("the row legend (docs/layer-contract.md legend)", () => {
     ]);
   });
 
+  it("keys points drawn as clusters by what a circle holds first, then their categories", () => {
+    const layer: LoadedLayer = {
+      id: "species",
+      title: "Species sightings",
+      style: { geometry: "point", color: "#3A3A3C" },
+      attributes: [KIND],
+      result: { kind: "geojson", data: { type: "FeatureCollection", features: [pt("hut"), pt("spring")] }, citation },
+      receivedAt: "",
+    };
+    const blocks = rowLegend(layer, { layerId: layer.id, mode: "clusters", visible: true }, layer.result.kind === "geojson" ? layer.result.data : null);
+    expect(blocks[0]).toMatchObject({ kind: "symbol", title: "Species sightings per cluster", shape: "point" });
+    expect(blocks[1]).toMatchObject({ kind: "categories", title: "Kind" });
+    expect(rowLegend(layer, { layerId: layer.id, mode: "points", visible: true }, null).some((b) => /per cluster/.test(b.title ?? ""))).toBe(false);
+  });
+
   it("gives a raster layer its declared image, or its one-line note", () => {
     const base = {
       title: "Hardiness zones",

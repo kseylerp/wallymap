@@ -10,7 +10,8 @@
  *   unitname, subunitname and effectdate mostly hold the placeholder "Please check current species specific
  *   shapefile", so they are not used.
  * Output properties: species (common name, else scientific), scientificName, status, listingStatus,
- * federalRegister, t (publication date), kind (the species name, for filtering).
+ * federalRegister, published (publication date), kind (the species name, for filtering), areaKm2 and acres (from the
+ * returned outline; 2026-10-23: the desert tortoise designation is one outline of 26,606 km², all its units).
  * Smoke through runLayer (2026-10-09): Lake Tahoe box -120.4,38.7,-119.8,39.3 returned 1 polygon (Sierra Nevada
  * yellow-legged frog) in 0.5 s; San Bernardino box -117.5,34,-116,35.2 returned 20 units (302 KB); Oregon Cascades
  * -122,43,-119,46 returned 3 species in 0.8 s (1.0 MB, mostly the northern spotted owl); the proposed layer returned
@@ -30,6 +31,7 @@ import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { layerColor, PINK, PURPLE, SAGE } from "@/lib/render/palette";
+import { areaKm2, KM2_TO_ACRES } from "@/lib/spatial/geo";
 
 const SERVICE = "https://services.arcgis.com/QVENGdaPbd4LUkLV/arcgis/rest/services/USFWS_Critical_Habitat/FeatureServer";
 const FINAL_LAYER = `${SERVICE}/0`;
@@ -133,7 +135,7 @@ export function normalizeCriticalHabitat(fc: FeatureCollection, step?: number): 
     const common = str(p.comname);
     const scientific = str(p.sciname);
     const species = common ?? scientific ?? "Unnamed species";
-    const properties: Record<string, string> = { species, kind: species };
+    const properties: Record<string, string | number> = { species, kind: species };
     if (scientific !== undefined) properties.scientificName = scientific;
     const status = str(p.status);
     if (status !== undefined) properties.status = status;
@@ -148,9 +150,43 @@ export function normalizeCriticalHabitat(fc: FeatureCollection, step?: number): 
     const published = publishedOn(p.pubdate);
     if (published !== undefined) properties.published = published;
     properties.meaning = MEANING;
-    features.push({ type: "Feature", geometry: step === undefined ? f.geometry : thinGeometry(f.geometry, step), properties });
+    const geometry = step === undefined ? f.geometry : thinGeometry(f.geometry, step);
+    // The unit's area from its outline as returned (thinned for the view, so about right, not surveyed).
+    const km2 = areaKm2(geometry);
+    if (km2 > 0) {
+      properties.areaKm2 = Math.round(km2 * 10) / 10;
+      properties.acres = Math.round(km2 * KM2_TO_ACRES);
+    }
+    features.push({ type: "Feature", geometry, properties });
   }
   return { type: "FeatureCollection", features };
+}
+
+/**
+ * "Desert tortoise (Threatened): 1 unit, 1,234 km² (304,900 acres)": the species in view, largest designated area first
+ * (up to five), each with its listing, how many units and their area.
+ */
+export function habitatSentence(features: Feature[]): string {
+  type Row = { species: string; listing?: string; km2: number; proposed: boolean };
+  const rows = new Map<string, Row>();
+  for (const f of features) {
+    const p = f.properties ?? {};
+    const species = String(p.species ?? "Unnamed species");
+    const row = rows.get(species) ?? { species, km2: 0, proposed: false };
+    row.km2 += typeof p.areaKm2 === "number" ? p.areaKm2 : 0;
+    if (typeof p.listingStatus === "string") row.listing ??= p.listingStatus;
+    if (p.status === "Proposed") row.proposed = true;
+    rows.set(species, row);
+  }
+  const all = [...rows.values()].sort((a, b) => b.km2 - a.km2);
+  const size = (km2: number) => {
+    const acres = Math.round(km2 * KM2_TO_ACRES);
+    if (km2 < 0.1) return `${acres.toLocaleString("en-US")} acres`;
+    return `${km2 >= 100 ? Math.round(km2).toLocaleString("en-US") : km2.toFixed(1)} km² (${acres.toLocaleString("en-US")} acres)`;
+  };
+  const parts = all.slice(0, 5).map((r) => `${r.species}${r.listing ? ` (${r.listing})` : ""}: ${size(r.km2)} designated${r.proposed ? ", proposed" : ""}`);
+  const more = all.length > 5 ? `; and ${all.length - 5} more species` : "";
+  return `Critical habitat touching the view (whole designations, which can reach beyond it): ${parts.join("; ")}${more}`;
 }
 
 const FWS_SOURCE = { source: "US Fish and Wildlife Service, Critical Habitat", url: "https://ecos.fws.gov/ecp/report/table/critical-habitat.html" };
@@ -216,13 +252,14 @@ const CARD: CardSpec = {
     { key: "scientificName", label: "Scientific name" },
     { key: "listingStatus", label: "Listed as" },
     { key: "status", label: "Designation", values: { Final: "Final (in force)", Proposed: "Proposed (not yet in force)" } },
+    { key: "acres", label: "Area", unit: "acres", format: "int" },
     { key: "published", label: "Rule published", format: "date" },
     { key: "meaning", label: "What it means" },
     { key: "federalRegister", label: "Federal Register rule" },
   ],
   links: [{ key: "ruleUrl", label: "Read the rule" }],
   /** Kind is the species again, kept for filtering. */
-  hidden: ["kind"],
+  hidden: ["kind", "areaKm2"],
 };
 
 const criticalHabitat = defineLayer({
@@ -230,7 +267,7 @@ const criticalHabitat = defineLayer({
   title: "Critical habitat",
   description:
     "Areas the US Fish and Wildlife Service has designated as critical habitat for threatened and endangered species, drawn as polygons: the land and water a listed species needs to survive and recover. " +
-    "Each polygon has species (common name), scientificName, status (Final means in force, Proposed means a proposed rule), listingStatus (Endangered or Threatened), federalRegister (the rule's citation, such as 78 FR 10449) and ruleUrl, published (the date the rule was published), meaning and kind (the species, for filtering). " +
+    "Each polygon has species (common name), scientificName, status (Final means in force, Proposed means a proposed rule), listingStatus (Endangered or Threatened), federalRegister (the rule's citation, such as 78 FR 10449) and ruleUrl, published (the date the rule was published), meaning, kind (the species, for filtering), and areaKm2 and acres (the designation's area; one outline often holds all of a species' units, so it can reach far beyond the view); the coverage note sums them per species with the listing. " +
     "The map fills units by listing status (endangered pink, threatened purple, proposed for listing sage) with a legend, and species chips split a crowded map by animal. " +
     "Use it for 'endangered species habitat', 'where do protected animals live here', or 'is there critical habitat on this trail or river', and to see which listed species have habitat in view. " +
     "Set species to part of a common or scientific name (for example 'bull trout', 'desert tortoise', 'Rana') to show one species; includeProposed (default true) adds proposed designations. " +
@@ -297,6 +334,8 @@ const criticalHabitat = defineLayer({
       }
     }
     if (truncated && !wide) notes.push(TRUNCATED_NOTE);
+    // What is designated here, in numbers: units per species with their listing and area (the outlines as returned).
+    if (features.length > 0) notes.unshift(habitatSentence(features));
     // The total adds the proposed count only when the proposed layer was asked for and answered one.
     const total =
       finalRes.total === undefined

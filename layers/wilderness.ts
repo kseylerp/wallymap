@@ -84,6 +84,25 @@ export function thinGeometry(geometry: Geometry): Geometry {
   return geometry;
 }
 
+/**
+ * "3 wilderness areas touch the view: North Fork Owyhee Wilderness (BLM, 43,413 acres), …": the largest five named with
+ * manager and size, so a "who manages this and is it protected" answer can quote them (top 10 T06.5).
+ */
+export function wildernessSentence(features: Feature[]): string | undefined {
+  if (features.length === 0) return undefined;
+  const named = features
+    .filter((f) => typeof f.properties?.name === "string")
+    .sort((a, b) => Number(b.properties?.acres ?? 0) - Number(a.properties?.acres ?? 0))
+    .slice(0, 5)
+    .map((f) => {
+      const p = f.properties ?? {};
+      const bits = [typeof p.agency === "string" ? p.agency : undefined, typeof p.acres === "number" ? `${Math.round(p.acres).toLocaleString("en-US")} acres` : undefined].filter(Boolean);
+      return `${p.name}${bits.length > 0 ? ` (${bits.join(", ")})` : ""}`;
+    });
+  const n = features.length;
+  return `${n} wilderness ${n === 1 ? "area touches" : "areas touch"} the view: ${named.join(", ")}${n > named.length ? ", …" : ""}`;
+}
+
 /** Converts service rows to polygons with readable property names, `era` and `v` (acres). */
 export function normalizeWilderness(fc: FeatureCollection): FeatureCollection {
   const features: Feature<Geometry>[] = [];
@@ -254,11 +273,13 @@ const wilderness = defineLayer({
     });
     if (!res.ok) return { error: res.error, hint: "upstream" };
 
+    const data = normalizeWilderness(res.fc);
+    const notes = [wildernessSentence(data.features), ...(res.truncated ? [TRUNCATED_NOTE] : [])].filter((n): n is string => n !== undefined);
     return {
       kind: "geojson",
-      data: normalizeWilderness(res.fc),
+      data,
       citation,
-      ...(res.truncated ? { coverageNote: TRUNCATED_NOTE } : {}),
+      ...(notes.length > 0 ? { coverageNote: notes.join("; ") } : {}),
     };
   },
 });

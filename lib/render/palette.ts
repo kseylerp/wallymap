@@ -125,6 +125,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "tree-mortality": "hazard",
   permafrost: "natural",
   "mining-claims": "hazard",
+  "mineral-leases": "hazard",
   "imagery-by-date": "raster",
   "mines": "data",
   "uranium": "hazard",

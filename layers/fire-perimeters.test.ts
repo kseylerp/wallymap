@@ -274,7 +274,9 @@ describe("fire-perimeters layer", () => {
     // Tamarack last reported 84% but was declared out: out is 100% contained.
     expect(byName("Tamarack")).toMatchObject({ status: "out", contained: 100, cause: "Lightning" });
     expect(byName("Caldor")?.irwinId).toBeUndefined();
-    expect(byName("Voltaire")?.status).toBeUndefined();
+    // A fire from the history record (before 2020) has no incident record and is long out.
+    expect(byName("Voltaire")).toMatchObject({ status: "out" });
+    expect(byName("Voltaire")?.contained).toBeUndefined();
   });
 
   it("reads an active fire's percent contained, and keeps the perimeters when the incident service fails", async () => {

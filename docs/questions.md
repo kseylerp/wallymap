@@ -107,6 +107,7 @@ The layers added in Batch F answer questions like these.
 - "How has Bears Ears National Monument changed since 2021?": `query_monuments` with `version: both` → `render` → `render` with `filters` on `kind` (`2021` or `current`); the note gives both areas.
 - "Where are abandoned uranium mines near the Navajo Nation?": `query_uranium`; other mines are in `query_mines`.
 - "Where are the active mining claims near Moab?": `query_mining-claims`.
+- "Oil and gas leases near Chaco Canyon": `query_mineral-leases`.
 - "Show Lahaina before and after the 2023 fire": `query_imagery-by-date` once per date with the same `sensor` → `compare` with the two pass days.
 
 **Climate**
@@ -144,7 +145,7 @@ Beyond the six starters, these tools shape follow-up questions. They appear in t
 
 ## Coverage questions
 
-The 61 questions after "Show only sport crags at Red River Gorge" in the eval set make sure every layer and every standard view is asked about, so the map checks see each layer before the owner does. With the older questions, every registered layer appears in at least one question, and each view (change, timeline, ranked, density, detail, scenario, route) is expected at least twice. They mix regions (US West and East, Alaska, Hawaii, Canada, the Alps, Patagonia, New Zealand, Japan, Africa) and kinds: where is, which is biggest or highest, show only, what changed since, here (`@view`), plan a route, is it safe or open now, and compare two places.
+The 62 questions after "Show only sport crags at Red River Gorge" in the eval set make sure every layer and every standard view is asked about, so the map checks see each layer before the owner does. With the older questions, every registered layer appears in at least one question, and each view (change, timeline, ranked, density, detail, scenario, route) is expected at least twice. They mix regions (US West and East, Alaska, Hawaii, Canada, the Alps, Patagonia, New Zealand, Japan, Africa) and kinds: where is, which is biggest or highest, show only, what changed since, here (`@view`), plan a route, is it safe or open now, and compare two places.
 
 Each coverage question also has a pass expectation in `COVERAGE_QUESTIONS` (scripts/eval-model.mts): the layers it must query, get an answer from and draw (either of two, written `a|b`), the view the drawn layer must end in where it matters, and for two questions the Show as mode (heat, columns). A route view passes when a route is on the map; a change view also passes when the layer is open in a compare. `--tag coverage` runs only these questions:
 
@@ -159,7 +160,7 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --tag cover
 - **Detail**: Table Mountain's rock (`geologic-unit`), Kilimanjaro (`peaks` or `wikipedia-nearby`), Crater Lake's depth (`lakes`).
 - **Scenario**: Charleston at 6 feet and Honolulu at 2 feet of sea level rise (`sea-level-rise`).
 - **Route**: Banff to Lake Louise by bike, Zermatt to the Hörnli Hut on foot, Happy Isles to Half Dome (the `route` tool alone).
-- **One question per layer no older question asks about**: aquifers, burn-severity, carbon-flux, condor-range, critical-habitat, disasters (Mozambique), disturbance, drought, fire-hazard, fire-weather, fishing, flood-extent, flood-zones, forest-alerts, geology, grazing-allotments, hardiness-zones, land-cover, mining-claims, old-growth, forest-types (twice: a map view in Sabah, and Borneo's natural forest converted since 2017), paddling (twice), permafrost, phenology, photos, pipelines-lines, recreation-sites, river-basins, smoke, tides, wikipedia-nearby.
+- **One question per layer no older question asks about**: aquifers, burn-severity, carbon-flux, condor-range, critical-habitat, disasters (Mozambique), disturbance, drought, fire-hazard, fire-weather, fishing, flood-extent, flood-zones, forest-alerts, geology, grazing-allotments, hardiness-zones, land-cover, mining-claims, mineral-leases (oil and gas near Chaco Canyon), old-growth, forest-types (twice: a map view in Sabah, and Borneo's natural forest converted since 2017), paddling (twice), permafrost, phenology, photos, pipelines-lines, recreation-sites, river-basins, smoke, tides, wikipedia-nearby.
 - **Data stories** (spec §13, §13a): the Mississippi's flow over three months (`river-pulse`, timeline), Cook Inlet's currents this week (`ocean-currents`, timeline, the tide plotted under the scrubber), the Sierra's strongest wind tomorrow (`wind-flow`). Each also holds its answer to the data's shape: a low and a peak with numbers, a ratio for the river, and what size or brightness and color mean.
 - **Safe or open now, here, compare**: weather at Paradise (`weather-alerts`), forest roads near Flagstaff (`forest-roads`), huts around Zermatt on a map view (`outdoor-features`), fishing on the Kenai on a map view (`fishing`), the Gila against the Bob Marshall (`remoteness`), snow at Mount Baker against Mount Hood (`snowpack`).
 
@@ -279,6 +280,7 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - Show plant hardiness zones in Vermont
 - What's the land cover around Torres del Paine?
 - Active mining claims near Moab
+- Oil and gas leases near Chaco Canyon
 - Where is the old-growth forest in Oregon?
 - Is this primary forest or plantation? @view=[117.6,4.8,118,5.1]
 - Where has natural forest been converted to plantations in Borneo since 2017?

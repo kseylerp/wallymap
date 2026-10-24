@@ -425,9 +425,8 @@ export const TOP10: Top10Expect[] = [
     id: "T08.1", useCase: "T08",
     question: "What rock types and ages make up Zion Canyon, and are there faults?",
     layers: ["geology", "geologic-unit"], main: "geologic-unit|geology", basemap: DATA_GROUND,
-    legend: ["Age of the youngest rock|Geologic unit"], card: ["Rock", "Description"],
+    legend: ["Rock family|Age of the youngest rock|Geologic unit"], card: ["Rock", "Description"],
     facts: [{ what: "rock names (Navajo Sandstone, Kayenta)", re: /sandstone|navajo|kayenta|moenave|chinle/i }, { what: "age in million years or period", re: /million years|jurassic|triassic|\bma\b/i }, { what: "faults (or that the app has none)", re: /fault/i }],
-    needs: ["faults (USGS Quaternary Fault and Fold Database)", "formation names in view as a legend of rock families"],
   },
   {
     id: "T08.2", useCase: "T08",
@@ -448,9 +447,9 @@ export const TOP10: Top10Expect[] = [
   {
     id: "T08.4", useCase: "T08",
     question: "What's the soil like around Boulder?",
-    layers: ["geology|land-cover|geologic-unit"], main: "geology|land-cover|geologic-unit", basemap: DATA_GROUND,
+    layers: ["soils|geology|land-cover|geologic-unit"], main: "soils|geology|land-cover|geologic-unit", basemap: DATA_GROUND,
     facts: [{ what: "soil texture or type", re: /loam|clay|sand|silt|soil/i }, { what: "a share or depth", re: /\d+\s*(?:%|percent|in|inches|cm)\b/i }],
-    needs: ["soils (USDA SSURGO through Soil Data Access; SoilGrids outside the US)"],
+    needs: ["soils outside the US (SoilGrids or OpenLandMap)"],
   },
   {
     id: "T08.5", useCase: "T08",

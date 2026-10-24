@@ -2,6 +2,7 @@ import { anchorsOf, answerTemplate, chooseFollowUps, type AnswerTemplate } from 
 import { composeNote } from "./compose";
 import { followsUp } from "./context";
 import type { Turn } from "./turn";
+import { getLayer } from "@/layers";
 
 /**
  * The answer template for a turn (lib/agent/answer.ts) from what the turn recorded: its tool calls, the results the
@@ -33,9 +34,34 @@ export function answerForTurn(turn: Turn): AnswerTemplate | null {
 export function composeForTurn(markdown: string, turn: Turn): string {
   const template = answerForTurn(turn);
   turn.followUps = template?.followUps ?? [];
-  const composed = composeNote(markdown, template);
+  const composed = withEmptyLayers(composeNote(markdown, template), turn);
   if (composed !== markdown) turn.note(template?.lead ? "answer built on the template: lead, top options, then the model's caveats" : "answer put first: the note's first sentence now answers with a number");
   return composed;
+}
+
+/**
+ * Layers asked this turn that answered with nothing (Zion's faults: 0) have no row in the layer panel, so the note says
+ * so in one sentence, unless it already names them: "Quaternary faults: none mapped in the area asked."
+ */
+export function withEmptyLayers(markdown: string, turn: Pick<Turn, "queries">): string {
+  const empty: string[] = [];
+  for (const q of turn.queries) {
+    if (!q.ok || q.drawable || empty.includes(q.layerId)) continue;
+    if (turn.queries.some((o) => o.layerId === q.layerId && o.drawable)) continue;
+    empty.push(q.layerId);
+  }
+  const lines: string[] = [];
+  const text = markdown.toLowerCase();
+  for (const id of empty) {
+    const title = getLayer(id)?.title.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+    if (!title) continue;
+    // Already said: the note names the layer's main word ("faults") next to a none, no or zero.
+    const word = title.toLowerCase().split(/\s+/).filter((w) => w.length > 3).pop() ?? title.toLowerCase();
+    const stem = word.replace(/s$/, "");
+    if (new RegExp(`\\b(?:no|none|zero|0|not any|without)\\b[^.]{0,60}\\b${stem}|\\b${stem}\\w*\\b[^.]{0,40}\\b(?:none|no|zero|0)\\b`).test(text)) continue;
+    lines.push(`${title}: none mapped in the area asked.`);
+  }
+  return lines.length === 0 ? markdown : `${markdown.trimEnd()}\n\n${lines.join(" ")}`;
 }
 
 /** Exactly three follow-ups, at least two naming a feature or place from this answer: the model's that do, then the template's. */

@@ -13,12 +13,15 @@ import { initialMapState, type LoadedLayer, type MapAction, type MapState } from
 
 afterEach(cleanup);
 
+const ONE_TRAIL = { type: "Feature" as const, geometry: { type: "LineString" as const, coordinates: [[0, 0], [0.01, 0.01]] }, properties: { name: "Trail" } };
+const ONE_POINT = { type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [0, 0] }, properties: { name: "Moose" } };
 const citation = { source: "OpenStreetMap", url: "https://www.openstreetmap.org/copyright", retrieved: "2026-10-09" };
 const trails: LoadedLayer = {
   id: "osm-trails",
   title: "OSM trails",
   style: { geometry: "line", color: "#2F3A44" },
-  result: { kind: "geojson", data: { type: "FeatureCollection", features: [] }, citation, coverageNote: "Zoom in for more" },
+  // One trail: a layer that answered with nothing has no row (answeredEmpty).
+  result: { kind: "geojson", data: { type: "FeatureCollection", features: [ONE_TRAIL] }, citation, coverageNote: "Zoom in for more" },
   receivedAt: "2026-10-09T00:00:00Z",
 };
 const lands: LoadedLayer = {
@@ -64,7 +67,7 @@ describe("LayerStack", () => {
     render(<Harness spy={vi.fn()} />);
     const cards = screen.getAllByTestId("layer-card");
     expect(cards.map((c) => c.getAttribute("data-layer-id"))).toEqual(["osm-trails", "public-lands"]);
-    expect(within(cards[0]).getByTestId("layer-count").textContent).toBe("0");
+    expect(within(cards[0]).getByTestId("layer-count").textContent).toBe("1");
     const source = within(cards[0]).getByTestId("layer-source");
     expect(source.textContent).toContain("Zoom in for more");
     expect(source.querySelector(".truncate")).toBeTruthy();
@@ -128,7 +131,7 @@ describe("LayerStack", () => {
       id: "species",
       title: "Wildlife sightings",
       style: { geometry: "point", color: DARK_GREY, cluster: true, heat: true, extrude: "count" },
-      result: { kind: "geojson", data: { type: "FeatureCollection", features: [] }, citation },
+      result: { kind: "geojson", data: { type: "FeatureCollection", features: [ONE_POINT] }, citation },
     };
     const spy = vi.fn();
     function Points() {
@@ -711,5 +714,16 @@ describe("LayerStack: closing layers and the measure threshold (owner feedback)"
     const opacity = within(card).getByRole("slider", { name: "Opacity for Wildfire perimeters" });
     fireEvent.change(opacity, { target: { value: "0.5" } });
     expect(spy).toHaveBeenLastCalledWith({ type: "set_opacity", layerId: "fire-perimeters", opacity: 0.5 });
+  });
+});
+
+describe("a layer that answered with nothing", () => {
+  it("has no row, unless its source failed", async () => {
+    const { answeredEmpty } = await import("@/components/LayerStack");
+    const empty: LoadedLayer = { ...trails, id: "faults", result: { kind: "geojson", data: { type: "FeatureCollection", features: [] }, citation } };
+    expect(answeredEmpty(empty)).toBe(true);
+    expect(answeredEmpty(trails)).toBe(false);
+    const failed: LoadedLayer = { ...empty, result: { ...empty.result, sourceStatus: { ok: false, reason: "server-error", message: "USGS returned 503." } } as LoadedLayer["result"] };
+    expect(answeredEmpty(failed)).toBe(false);
   });
 });

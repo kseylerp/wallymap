@@ -760,7 +760,15 @@ function chipFilters(layer: Layer, q: string): FilterHint[] {
 const MI_KM = 1.609344;
 
 /** A length the question bounds ("under 5 miles", "over 10 km", "at least 8 mi"), as a km range, or null. */
-export function lengthRange(question: string): { range: [number, number]; because: string } | null {
+export function lengthRange(question: string): { range: [number, number]; because: string; roundTrip?: boolean } | null {
+  // "3 to 6 miles round trip": both bounds.
+  const between = /\b(\d+(?:\.\d+)?)\s*(?:to|-|–|and)\s*(\d+(?:\.\d+)?)\s*(miles?|mi|kilomet(?:er|re)s?|km)\b(\s+round[- ]trip)?/i.exec(question);
+  if (between) {
+    const k = /^mi/i.test(between[3]) ? MI_KM : 1;
+    const lo = Math.round(Number(between[1]) * k * 100) / 100;
+    const hi = Math.round(Number(between[2]) * k * 100) / 100;
+    if (lo < hi) return { range: [lo, hi], because: between[0].trim(), ...(between[4] && { roundTrip: true }) };
+  }
   const m = /\b(under|less than|shorter than|below|up to|at most|max(?:imum)?|over|more than|longer than|at least|above|min(?:imum)?)\s+(\d+(?:\.\d+)?)\s*(miles?|mi|kilomet(?:er|re)s?|km)\b/i.exec(question);
   if (!m) return null;
   const n = Number(m[2]) * (/^mi/i.test(m[3]) ? MI_KM : 1);
@@ -905,7 +913,9 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
   for (const hint of layers) {
     const layer = getLayer(hint.layerId);
     if (!layer) continue;
-    if (length && hasMeasure(layer, "lengthKm")) filters.push({ layerId: layer.id, key: "lengthKm", range: length.range, because: length.because });
+    // A round trip the question bounds is the hike's round trip where the layer has one.
+    const lengthKey = length?.roundTrip && hasMeasure(layer, "roundTripKm") ? "roundTripKm" : "lengthKm";
+    if (length && hasMeasure(layer, lengthKey)) filters.push({ layerId: layer.id, key: lengthKey, range: length.range, because: length.because });
     const climbCap = /\b(?:under|less than|below|up to|at most|max(?:imum)?)\s+(\d[\d,]*)\s*(ft|feet|m|meters?|metres?)\s+(?:of\s+)?(?:climb\w*|elevation\s+gain|gain|vert\w*)/i.exec(raw);
     if (climbCap && hasMeasure(layer, "gainM")) {
       const metres = Number(climbCap[1].replace(/,/g, "")) * (/^f/i.test(climbCap[2]) ? 0.3048 : 1);

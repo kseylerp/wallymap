@@ -87,3 +87,11 @@ describe("plans read before the model chooses", () => {
     expect(ydsBands("crags near Moab")).toEqual([]);
   });
 });
+
+describe("a length between two bounds", () => {
+  it("filters the round trip from the lower to the upper bound", () => {
+    const r = readQuestion("Out-and-back hikes to a viewpoint near Boulder, 3 to 6 miles round trip", NOW);
+    expect(r.filters).toContainEqual(expect.objectContaining({ layerId: "osm-trails", key: "roundTripKm", range: [4.83, 9.66] }));
+    expect(r.filters).toContainEqual(expect.objectContaining({ layerId: "osm-trails", key: "shape" }));
+  });
+});

@@ -153,6 +153,66 @@ export function trimNote(markdown: string, max = NOTE_MAX_WORDS): string {
   return out.join("\n").trimEnd();
 }
 
+/** Words of a question that a sentence answering part of it repeats ("avalanche", "alerts", "snow"). */
+const STOP = new Set(["what", "which", "where", "when", "there", "here", "this", "that", "with", "near", "from", "have", "been", "your", "about", "going", "like", "around", "right", "under", "over", "make", "made", "does", "much", "many", "good", "best", "some"]);
+function questionWords(question: string): string[] {
+  return [...new Set(question.toLowerCase().replace(/@view=\S+/g, " ").split(/[^a-z]+/).filter((w) => w.length >= 4 && !STOP.has(w)))].map((w) => w.replace(/(?:ies|es|s)$/, ""));
+}
+
+/**
+ * The note cut within `max` words by what matters: the lead line and the option list first, then the sentences that
+ * answer another part of the question (Lake Tahoe's "no avalanche danger rating today" was cut as the note's last line
+ * while sentences about the map stayed), then the rest; sentences that only say what the map or its colors show go
+ * first. What is kept stays in its order.
+ */
+export function trimNoteFor(markdown: string, question: string, max = NOTE_MAX_WORDS): string {
+  if (noteWords(markdown) <= max) return markdown;
+  const asked = questionWords(question);
+  type Unit = { line: number; text: string; rank: number; words: number };
+  const units: Unit[] = [];
+  const lines = markdown.split("\n");
+  const isHeading = (line: string) => /^\s*(?:#{1,6}\s|\*\*[^*]+\*\*\s*$)/.test(line);
+  let lead = -1;
+  lines.forEach((line, i) => {
+    if (line.trim() === "") return;
+    if (isHeading(line)) {
+      units.push({ line: i, text: line, rank: 0, words: noteWords(line) });
+      return;
+    }
+    const bullet = /^\s*(?:[-*+]|\d+\.)\s+/.test(line);
+    if (lead === -1) lead = i;
+    for (const text of bullet ? [line] : line.split(/(?<=[.!?])\s+/)) {
+      const t = text.toLowerCase();
+      const mapOnly = /\b(?:colou?r(?:ed)?\s+is|the\s+map\s+(?:shows|draws)|legend|sage\s+low|darker\s+(?:means|=))/.test(t);
+      const answers = asked.some((w) => t.includes(w));
+      const rank = i === lead ? 0 : mapOnly ? 3 : bullet || answers ? 1 : 2;
+      units.push({ line: i, text, rank, words: noteWords(text) });
+    }
+  });
+  let used = 0;
+  const keep = new Set<Unit>();
+  for (const rank of [0, 1, 2, 3]) {
+    for (const u of units) {
+      if (u.rank !== rank || used + u.words > max) continue;
+      keep.add(u);
+      used += u.words;
+    }
+  }
+  // The kept units by line, in order; a blank line stays where the note had one between kept lines.
+  const out: string[] = [];
+  let last = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const kept = units.filter((u) => u.line === i && keep.has(u));
+    if (kept.length === 0) continue;
+    if (last !== -1 && lines.slice(last + 1, i).some((l) => l.trim() === "")) out.push("");
+    out.push(kept.map((u) => u.text).join(" "));
+    last = i;
+  }
+  // A heading with nothing kept under it goes.
+  while (out.length > 0 && (isHeading(out[out.length - 1]) || out[out.length - 1].trim() === "")) out.pop();
+  return out.join("\n").trimEnd();
+}
+
 /**
  * The note tool's check: an error the model rewrites from (logged on the turn), the note cut to the word limit (a
  * rewrite still too long, or no step left to rewrite it), or null to show the note as written.
@@ -173,7 +233,7 @@ export function checkNote(markdown: string, turn: Turn, opts: { lastStep?: boole
   const shown = composed === grounded ? composed : (groundedNote(composed, turn) ?? composed);
   if (noteWords(shown) > NOTE_MAX_WORDS) {
     turn.note(`note cut from ${noteWords(shown)} to ${NOTE_MAX_WORDS} words or fewer`);
-    return { markdown: trimNote(shown) };
+    return { markdown: trimNoteFor(shown, turn.question) };
   }
   return shown === markdown ? null : { markdown: shown };
 }

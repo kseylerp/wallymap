@@ -80,3 +80,23 @@ describe("note check: names written with typographic dashes", () => {
     expect(followsStory("It peaked at 19,587 m³/s on 31 August.")).toBe(false);
   });
 });
+
+describe("trimNoteFor", () => {
+  it("keeps the lead, the options and the sentences that answer the question; the map's colors go first", async () => {
+    const { trimNoteFor } = await import("./noteCheck");
+    const note = [
+      "No snow on the ground at Lake Tahoe today: 0 in at 3 stations.",
+      "",
+      "- Fallen Leaf: 0 in, Oct 23.",
+      "- Rubicon #2: 0 in, Oct 23.",
+      "",
+      "Color is Snow depth, sage low to purple high. The map shows the stations as circles sized by depth. No avalanche danger rating today for the Central Sierra zone.",
+    ].join("\n");
+    const cut = trimNoteFor(note, "Is there snow on the ground at Lake Tahoe right now, and any avalanche danger?", 36);
+    expect(cut).toMatch(/^No snow on the ground/);
+    expect(cut).toContain("- Fallen Leaf");
+    expect(cut).toContain("No avalanche danger rating today");
+    expect(cut).not.toContain("Color is");
+    expect(noteWords(cut)).toBeLessThanOrEqual(36);
+  });
+});

@@ -392,7 +392,7 @@ export const TOP10: Top10Expect[] = [
     layers: ["species|gbif-occurrences"], main: "species|gbif-occurrences", basemap: OUTDOOR,
     inputs: [{ layer: "species", key: "days", max: 31 }],
     card: ["Scientific name", "Seen on"],
-    facts: [{ what: "how many sightings", re: /\b\d[\d,]*\s+(?:[\w-]+\s+){0,2}(?:sightings|observations|records)/i }, { what: "dates", re: MONTH }],
+    facts: [{ what: "how many sightings", re: /\b\d[\d,]*\s+(?:[\w-]+\s+){0,3}(?:sightings|observations|records)/i }, { what: "dates", re: MONTH }],
     names: 0,
   },
   {
@@ -400,7 +400,7 @@ export const TOP10: Top10Expect[] = [
     question: "Desert tortoise critical habitat near St. George and where tortoises have been seen",
     layers: ["critical-habitat", "species|gbif-occurrences"], main: "critical-habitat", basemap: OUTDOOR,
     card: ["Species", "Listed as", "Designation"], legend: ["Listed as"],
-    facts: [{ what: "habitat unit with area", re: AREA }, { what: "sightings count (or hidden)", re: /\b\d[\d,]*\s+(?:[\w-]+\s+){0,2}(?:sightings|observations|records)|obscured|hidden/i }, { what: "threatened status", re: /threatened/i }],
+    facts: [{ what: "habitat unit with area", re: AREA }, { what: "sightings count (or hidden)", re: /\b\d[\d,]*\s+(?:[\w-]+\s+){0,3}(?:sightings|observations|records)|obscured|hidden/i }, { what: "threatened status", re: /threatened/i }],
     names: 1,
     needs: ["sightings inside vs outside the habitat (a join; iNaturalist obscures tortoise locations)"],
   },
@@ -409,7 +409,7 @@ export const TOP10: Top10Expect[] = [
     question: "Condors near Big Sur",
     layers: ["condor-range", "species|gbif-occurrences"], main: "condor-range|species|gbif-occurrences", basemap: OUTDOOR,
     legend: ["Today"],
-    facts: [{ what: "range today vs early 1800s", re: /range|1800s|historic/i }, { what: "sightings count", re: /\b\d[\d,]*\s+(?:[\w-]+\s+){0,2}(?:sightings|observations|records)/i }],
+    facts: [{ what: "range today vs early 1800s", re: /range|1800s|historic/i }, { what: "sightings count", re: /\b\d[\d,]*\s+(?:[\w-]+\s+){0,3}(?:sightings|observations|records)/i }],
     needs: ["modelled range maps for any species (iNaturalist Open Range Maps)"],
   },
   {

@@ -41,3 +41,22 @@ describe("a picture layer the question asks for", () => {
     expect(withAskedPictures("Burn severity was mostly high.", turn)).toBe("Burn severity was mostly high.");
   });
 });
+
+describe("an ask that came back empty beside another ask of the same layer", () => {
+  it("says what the source said of it (Big Sur's hidden condor sightings)", () => {
+    const turn = {
+      queries: [
+        { layerId: "species", bbox: [0, 0, 1, 1] as [number, number, number, number], inputKey: "[]", ok: true, drawable: true, wide: false },
+        { layerId: "species", bbox: [0, 0, 1, 1] as [number, number, number, number], inputKey: '[["taxon","condor"]]', ok: true, drawable: false, wide: false },
+      ],
+      calls: [
+        { toolName: "query_species", input: {}, output: { kind: "geojson", data: { features: [{}] }, coverageNote: "1,770 sightings" } },
+        { toolName: "query_species", input: { taxon: "condor" }, output: { kind: "geojson", data: { features: [] }, coverageNote: "All 67 sightings of California Condor (research grade) here in the last 365 days have hidden (obscured) locations, as iNaturalist does for threatened species, so none are drawn; read as California Condor" } },
+      ],
+    };
+    expect(withEmptyLayers("Condors are present near Big Sur.", turn)).toBe(
+      "Condors are present near Big Sur.\n\nAll 67 sightings of California Condor (research grade) here in the last 365 days have hidden (obscured) locations.",
+    );
+    expect(withEmptyLayers("All 67 condor sightings are hidden.", turn)).toBe("All 67 condor sightings are hidden.");
+  });
+});

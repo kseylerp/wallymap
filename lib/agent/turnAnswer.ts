@@ -43,25 +43,54 @@ export function composeForTurn(markdown: string, turn: Turn): string {
  * Layers asked this turn that answered with nothing (Zion's faults: 0) have no row in the layer panel, so the note says
  * so in one sentence, unless it already names them: "Quaternary faults: none mapped in the area asked."
  */
-export function withEmptyLayers(markdown: string, turn: Pick<Turn, "queries">): string {
-  const empty: string[] = [];
-  for (const q of turn.queries) {
-    if (!q.ok || q.drawable || empty.includes(q.layerId)) continue;
-    if (turn.queries.some((o) => o.layerId === q.layerId && o.drawable)) continue;
-    empty.push(q.layerId);
-  }
+export function withEmptyLayers(markdown: string, turn: Pick<Turn, "queries"> & Partial<Pick<Turn, "calls">>): string {
   const lines: string[] = [];
   const text = markdown.toLowerCase();
-  for (const id of empty) {
-    const title = getLayer(id)?.title.replace(/\s*\([^)]*\)\s*/g, " ").trim();
-    if (!title) continue;
-    // Already said: the note names the layer's main word ("faults") next to a none, no or zero.
-    const word = title.toLowerCase().split(/\s+/).filter((w) => w.length > 3).pop() ?? title.toLowerCase();
-    const stem = word.replace(/s$/, "");
-    if (new RegExp(`\\b(?:no|none|zero|0|not any|without)\\b[^.]{0,60}\\b${stem}|\\b${stem}\\w*\\b[^.]{0,40}\\b(?:none|no|zero|0)\\b`).test(text)) continue;
-    lines.push(`${title}: none mapped in the area asked.`);
+  const said = new Set<string>();
+  for (const q of turn.queries) {
+    const key = `${q.layerId} ${q.inputKey}`;
+    if (!q.ok || q.drawable || said.has(key)) continue;
+    // The same ask drew something after all (a retry): nothing to say.
+    if (turn.queries.some((o) => o.layerId === q.layerId && o.inputKey === q.inputKey && o.drawable)) continue;
+    said.add(key);
+    // What the source said of the empty answer: "All 67 sightings of California Condor … have hidden (obscured) locations".
+    const note = emptyNoteOf(turn.calls ?? [], q.layerId);
+    if (note) {
+      const numbers = note.match(/\d[\d,]*/g) ?? [];
+      // Already said: the note holds its count (the first number).
+      if (numbers.length > 0 && new RegExp(`\\b${numbers[0].replace(/,/g, ",?")}\\b`).test(text)) continue;
+      if (numbers.length === 0 && mentionsNone(text, q.layerId)) continue;
+      // Each layer once.
+      if (lines.some((l) => l.startsWith(note.slice(0, 20)))) continue;
+      lines.push(`${note}.`);
+      continue;
+    }
+    if (q.wide || mentionsNone(text, q.layerId) || turn.queries.some((o) => o.layerId === q.layerId && o.drawable)) continue;
+    const title = getLayer(q.layerId)?.title.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+    if (title && !lines.some((l) => l.startsWith(title))) lines.push(`${title}: none mapped in the area asked.`);
   }
   return lines.length === 0 ? markdown : `${markdown.trimEnd()}\n\n${lines.join(" ")}`;
+}
+
+/** True when the note already says a layer found none: its main word ("faults") next to a none, no or zero. */
+function mentionsNone(text: string, layerId: string): boolean {
+  const title = getLayer(layerId)?.title.replace(/\s*\([^)]*\)\s*/g, " ").trim().toLowerCase();
+  if (!title) return false;
+  const word = title.split(/\s+/).filter((w) => w.length > 3).pop() ?? title;
+  const stem = word.replace(/s$/, "");
+  return new RegExp(`\\b(?:no|none|zero|0|not any|without)\\b[^.]{0,60}\\b${stem}|\\b${stem}\\w*\\b[^.]{0,40}\\b(?:none|no|zero|0)\\b`).test(text);
+}
+
+/** The first clause of the coverage note of a query of `layerId` that came back with no features, or null. */
+function emptyNoteOf(calls: Pick<Turn, "calls">["calls"], layerId: string): string | null {
+  for (const c of calls) {
+    if (c.toolName !== `query_${layerId}`) continue;
+    const out = c.output as { kind?: unknown; data?: { features?: unknown[] }; coverageNote?: unknown } | undefined;
+    if (out?.kind !== "geojson" || (out.data?.features?.length ?? 0) > 0 || typeof out.coverageNote !== "string") continue;
+    const clause = out.coverageNote.split(/;\s+|\.\s+/)[0].split(/,\s+(?:as|so|which)\s+/)[0].trim().replace(/[.:,]$/, "");
+    if (clause && clause.split(/\s+/).length <= 30) return clause;
+  }
+  return null;
 }
 
 /** Exactly three follow-ups, at least two naming a feature or place from this answer: the model's that do, then the template's. */

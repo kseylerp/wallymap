@@ -399,6 +399,9 @@ function sameBBox(a: BBox | undefined, b: BBox): boolean {
  */
 function fitCamera(state: MapState, bbox: BBox | null, lowerThird = false): MapState {
   if (!state.place || !bbox) return state;
+  // One point inside the place asked about (the rock at Zion Canyon's centre) frames the place, not a 1 km box at zoom 15.
+  const p = state.place.bbox;
+  if (bbox[0] === bbox[2] && bbox[1] === bbox[3] && bbox[0] >= p[0] && bbox[0] <= p[2] && bbox[1] >= p[1] && bbox[1] <= p[3]) bbox = p;
   const target = padBBox(bbox);
   const place = state.place.moved ? state.place : { ...state.place, moved: true };
   if (sameBBox(state.camera?.bbox, target) && Boolean(state.camera?.lowerThird) === lowerThird) return { ...state, place };

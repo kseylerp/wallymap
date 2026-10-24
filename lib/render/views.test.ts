@@ -218,3 +218,16 @@ describe("an implicit place (a query off the view without a geocode)", () => {
     expect(implicit.place?.bbox).toEqual([0, 0, 1, 1]);
   });
 });
+
+describe("one point inside the place asked about (Zion's rock at the canyon's centre)", () => {
+  it("frames the place, not a 1 km box around the point", () => {
+    const unit = layer("geologic-unit", { geometry: "point", color: "#000" }, [point(-112.9527, 37.2575, { name: "Alluvium" })]);
+    const s = run(
+      initialMapState,
+      { type: "place_named", bbox: [-112.9788, 37.2081, -112.9406, 37.2965] },
+      { type: "layer_loaded", layer: unit },
+      { type: "render", op: { layerId: "geologic-unit", mode: "points", visible: true, view: "detail" } },
+    );
+    expect(s.camera?.bbox).toEqual([-112.9788, 37.2081, -112.9406, 37.2965]);
+  });
+});

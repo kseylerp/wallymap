@@ -341,7 +341,12 @@ const MessageView = memo(function MessageView({ message, timings, streaming, onF
       const extras = toolExtras(part, onFollowUp, onZoomTo);
       if (extras !== null) {
         flushChips();
-        blocks.push(<div key={`${part.toolCallId}-extras`}>{extras}</div>);
+        // The note is the answer: the panel scrolls to its first sentence once the answer is done.
+        blocks.push(
+          <div key={`${part.toolCallId}-extras`} {...(getToolName(part) === "note" && { "data-answer-note": "" })}>
+            {extras}
+          </div>,
+        );
       }
     }
   });
@@ -400,6 +405,7 @@ export function ChatRail({
   const timings = useSyncExternalStore(timingStore.subscribe, timingStore.get, timingStore.get);
   const appliedRef = useRef<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const busy = status === "submitted" || status === "streaming";
   const hasMessages = messages.length > 0;
@@ -467,8 +473,20 @@ export function ChatRail({
   }, [busy, messages, timings, setMessages]);
 
   useEffect(() => {
+    // While an answer comes in, its newest line stays in sight. Once it is done, its note's first sentence (the answer,
+    // with its deciding number) is put at the top of the panel, so the folded phone sheet shows the answer and the top
+    // option without opening anything, not the follow-ups under them.
+    const log = logRef.current;
+    const last = messages[messages.length - 1];
+    const answered = !busy && !error && last?.role === "assistant" && last.parts.some((p) => isToolUIPart(p) && getToolName(p) === "note" && p.state === "output-available");
+    const notes = answered && log ? log.querySelectorAll<HTMLElement>("[data-answer-note]") : null;
+    const note = notes && notes.length > 0 ? notes[notes.length - 1] : null;
+    if (log && note) {
+      log.scrollTop += note.getBoundingClientRect().top - log.getBoundingClientRect().top - 8;
+      return;
+    }
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, error]);
+  }, [messages, error, busy]);
 
   // Any first message, however it was sent (the card, the composer, "Ask about this"), counts as having seen the card.
   useEffect(() => {
@@ -668,6 +686,7 @@ export function ChatRail({
             </header>
 
             <div
+              ref={logRef}
               role="log"
               aria-live="polite"
               aria-label="Conversation"

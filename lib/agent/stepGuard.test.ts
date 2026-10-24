@@ -5,6 +5,7 @@ import "@/layers";
 import type { BBox } from "@/layers/types";
 import { prepareStepFor } from "./agent";
 import { NOTE_MAX_WORDS, noteWords } from "./noteCheck";
+import { extractFollowUps } from "./followups";
 import { decideStep, leakedCalls, repeatReason, saysMeaning, stepGuard, withMeaning } from "./stepGuard";
 import { buildTools } from "./tools";
 import { createTurn, MAX_STEPS, type Geocoder } from "./turn";
@@ -95,16 +96,18 @@ describe("step guard: an empty step", () => {
 });
 
 describe("step guard: queried but never drawn", () => {
-  it("renders a layer queried and never drawn before a text-only ending, and the model answers after", async () => {
+  it("renders a layer queried and never drawn before a text-only ending, which becomes the note", async () => {
     const { calls, result, turn } = await run("What fires are here?", [
       { calls: [{ name: "query_fire-perimeters", input: { bbox: TAHOE } }] },
       { text: "Two fires burned here." },
-      { text: "Two fires are drawn." },
+      { text: "- Want older fires?" },
     ], { bbox: TAHOE, zoom: 9, center: [-120.05, 39.1] });
-    expect(calls.map((c) => c.name)).toEqual(["query_fire-perimeters", "render"]);
+    expect(calls.map((c) => c.name)).toEqual(["query_fire-perimeters", "render", "note"]);
     expect(calls[1].input).toEqual({ layerId: "fire-perimeters" });
-    expect(result.text).toBe("Two fires are drawn.");
+    expect(calls[2].input).toEqual({ markdown: "Two fires burned here." });
+    expect(extractFollowUps(result.text).followUps).toHaveLength(3);
     expect(turn.log.join("\n")).toMatch(/rendered fire-perimeters before the answer/);
+    expect(turn.log.join("\n")).toMatch(/answer written as text became the note/);
   });
 
   it("renders it before the note when the note comes first", async () => {
@@ -125,7 +128,7 @@ describe("step guard: queried but never drawn", () => {
       { text: "- More?" },
     ], { bbox: TAHOE, zoom: 9, center: [-120.05, 39.1] });
     expect(calls.map((c) => c.name)).toEqual(["query_fire-perimeters", "render", "note"]);
-    expect(turn.log).toEqual([]);
+    expect(turn.log.join("\n")).not.toMatch(/rendered/);
   });
 });
 
@@ -274,7 +277,10 @@ describe("step guard: a tool call written as text", () => {
       { text: "- More?" },
     ]);
     expect(calls.map((c) => c.name)).toEqual(["geocode", "query_lakes", "render", "note"]);
-    expect(result.text).toBe("- More?");
+    // After the note, the reply is its three follow-ups, two of them naming what the answer found.
+    const { followUps } = extractFollowUps(result.text);
+    expect(followUps).toHaveLength(3);
+    expect(followUps.filter((q) => q.includes("Top Site")).length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -403,7 +409,7 @@ describe("step guard: no asking again (shrinking, repeats, failures, the step bu
     expect(prepare({ stepNumber: MAX_STEPS - 2 })).toEqual({ activeTools: ["render", "compare", "note"] });
     expect(prepare({ stepNumber: MAX_STEPS - 1 })).toEqual({ activeTools: ["note"], toolChoice: "required" });
     turn.noted = true;
-    expect(prepare({ stepNumber: MAX_STEPS - 1 })).toEqual({});
+    expect(prepare({ stepNumber: MAX_STEPS - 1 })).toEqual({ toolChoice: "none" });
   });
 
   it("drops a query proposed in the last two steps before a note", () => {
@@ -415,25 +421,33 @@ describe("step guard: no asking again (shrinking, repeats, failures, the step bu
 });
 
 describe("step guard: a closing answer with no note", () => {
-  it("cuts a text-only answer to the note's word limit (good hiking in French Guiana ran 151 words)", async () => {
+  it("makes a text-only answer the note, cut to the note's word limit (good hiking in French Guiana ran 151 words)", async () => {
     const long = Array.from({ length: 30 }, (_, i) => `- Trail ${i} climbs ${i} hundred metres through the forest.`).join("\n");
     const { result, turn } = await run("good hiking in French Guiana", [
       { calls: [{ name: "query_osm-trails", input: { bbox: TAHOE } }, { name: "render", input: { layerId: "osm-trails" } }] },
       { text: long },
+      // Sent back once for its numbers and once as too long, and written again as long: shown, cut.
+      { text: long },
+      { text: long },
+      { text: "- More?" },
     ], { bbox: TAHOE, zoom: 9, center: [-120.04, 39.1] });
-    expect(noteWords(result.text)).toBeLessThanOrEqual(NOTE_MAX_WORDS);
-    expect(result.text.startsWith("- Trail 0 climbs")).toBe(true);
-    expect(turn.log.join("\n")).toMatch(/closing text with no note cut from \d+ to \d+ words/);
+    const note = result.steps.flatMap((s) => s.toolResults).findLast((r) => r.toolName === "note");
+    const shown = (note?.output as { markdown: string }).markdown;
+    expect(noteWords(shown)).toBeLessThanOrEqual(NOTE_MAX_WORDS);
+    expect(turn.log.join("\n")).toMatch(/answer written as text became the note/);
+    expect(extractFollowUps(result.text).followUps).toHaveLength(3);
   });
 
-  it("leaves the text after a note alone (follow-ups)", async () => {
+  it("makes the text after a note its three follow-ups, naming what the answer found", async () => {
     const long = Array.from({ length: 30 }, (_, i) => `- Follow-up ${i}: would you like trails near town ${i}?`).join("\n");
     const { result } = await run("good hiking in French Guiana", [
       { calls: [{ name: "query_osm-trails", input: { bbox: TAHOE } }, { name: "render", input: { layerId: "osm-trails" } }] },
       { calls: [{ name: "note", input: { markdown: "Trails." } }] },
       { text: long },
     ], { bbox: TAHOE, zoom: 9, center: [-120.04, 39.1] });
-    expect(result.text).toBe(long);
+    const { followUps } = extractFollowUps(result.text);
+    expect(followUps).toHaveLength(3);
+    expect(followUps.filter((q) => q.includes("Top Site")).length).toBeGreaterThanOrEqual(2);
   });
 });
 

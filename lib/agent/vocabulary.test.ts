@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { listLayers } from "@/layers";
 import { SYSTEM_PROMPT } from "@/lib/agent/prompt";
-import { VOCABULARY, vocabularyForPrompt } from "@/lib/agent/vocabulary";
+import { VOCABULARY, vocabularyEntries, vocabularyForPrompt } from "@/lib/agent/vocabulary";
 
 describe("VOCABULARY", () => {
   const ids = listLayers().map((l) => l.id);
@@ -11,7 +11,8 @@ describe("VOCABULARY", () => {
   });
 
   it("has an entry for every registered layer", () => {
-    const covered = VOCABULARY.map((e) => e.layerId);
+    // In the table, or declared with the layer itself (Layer.vocabulary).
+    const covered = vocabularyEntries().map((e) => e.layerId);
     for (const id of ids) expect(covered).toContain(id);
   });
 

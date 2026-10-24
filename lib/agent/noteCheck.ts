@@ -1,5 +1,6 @@
 import { factPool, ungroundedClaims, withoutClaims, type Claim } from "./grounding";
 import type { Turn } from "./turn";
+import { composeForTurn } from "./turnAnswer";
 
 /**
  * The note is the answer (lib/agent/prompt.ts): about 120 words, and for a question that asks which ranks highest, it
@@ -66,7 +67,7 @@ export function noteProblem(markdown: string, turn: Turn): { reason: string; err
       reason: "long",
       error:
         `This note has ${words} words; a note stops at ${NOTE_MAX_WORDS}. Call note again with the same answer in at most 120 words: ` +
-        "one line on what is drawn, two to four findings with numbers, one caveat, nothing else.",
+        "the answer with its deciding number first, the top options with the facts that decide them, one caveat, nothing else.",
     };
   }
   if (asksForTop(turn.question) && !turn.noteRewrites.has("top")) {
@@ -166,9 +167,13 @@ export function checkNote(markdown: string, turn: Turn, opts: { lastStep?: boole
   turn.noted = true;
   // What is still not in any result after the rewrite (or with no step left to rewrite) is cut, never shown.
   const grounded = groundedNote(markdown, turn) ?? markdown;
-  if (noteWords(grounded) > NOTE_MAX_WORDS) {
-    turn.note(`note cut from ${noteWords(grounded)} to ${NOTE_MAX_WORDS} words or fewer`);
-    return { markdown: trimNote(grounded) };
+  // The answer's shape (lib/agent/compose.ts): the deciding number first, the top options with their facts, then the
+  // model's caveats; whatever the composition carried that no result holds is cut too.
+  const composed = composeForTurn(grounded, turn);
+  const shown = composed === grounded ? composed : (groundedNote(composed, turn) ?? composed);
+  if (noteWords(shown) > NOTE_MAX_WORDS) {
+    turn.note(`note cut from ${noteWords(shown)} to ${NOTE_MAX_WORDS} words or fewer`);
+    return { markdown: trimNote(shown) };
   }
-  return grounded === markdown ? null : { markdown: grounded };
+  return shown === markdown ? null : { markdown: shown };
 }

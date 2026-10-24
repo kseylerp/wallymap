@@ -158,7 +158,8 @@ async function firstRegion(names: string[]): Promise<RegionMatch | null> {
  */
 export async function geocode(
   place: string,
-  opts: { proximity?: [number, number] } = {},
+  /** `nearOf`: set on the lookups of a "name, where" retry, so they do not retry again. */
+  opts: { proximity?: [number, number]; nearOf?: string } = {},
 ): Promise<GeocodeResult | GeocodeError> {
   const token = process.env.MAPBOX_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   if (!token) {
@@ -175,6 +176,12 @@ export async function geocode(
   // the place geocoder's (Half Moon Bay).
   if (isFeatureName(place)) {
     const feature = await featureLookup(place, opts.proximity);
+    // A landmark with a national park of its name is the park ("Grand Canyon" was the village's 20 km box).
+    if (feature && isSmall(feature.bbox) && !opts.nearOf) {
+      const park = await lookupRegion(`${place.split(",")[0].trim()} National Park`, feature.center, { naturalEarth: async () => null });
+      const [w, s, e, n] = park?.bbox ?? [0, 0, 0, 0];
+      if (park && feature.center[0] >= w && feature.center[0] <= e && feature.center[1] >= s && feature.center[1] <= n) return park;
+    }
     if (feature) return feature;
   }
   // A river OpenStreetMap does not know is its basin: "Colorado River" was a point on the Colorado of Texas, "Carson
@@ -214,6 +221,18 @@ export async function geocode(
     const { name, full_address, bbox, coordinates, feature_type } = feature.data.properties;
     const center: [number, number] = [coordinates.longitude, coordinates.latitude];
 
+    // A place that only shares a word of the name ("Grand Staircase-Escalante" was Staircase, a spot near Moab): the
+    // named feature itself, from Wikidata or OpenStreetMap, when one is found.
+    if (name !== undefined && !/\d/.test(place) && normalize(name) !== asked && normalize(name).split(" ").length < asked.split(" ").length) {
+      const named = (await wikidataFeature(place, LANDFORM_HALF_SPAN_KM, opts.proximity)) ?? (await featureLookup(place, opts.proximity));
+      if (named) return named;
+      // A protected area people name without its kind (Grand Staircase-Escalante National Monument).
+      for (const kind of ["National Monument", "National Park"]) {
+        const area = await lookupRegion(`${place.split(",")[0].trim()} ${kind}`, opts.proximity, { naturalEarth: async () => null });
+        if (area) return area;
+      }
+    }
+
     // The place geocoder has no natural features, so "Half Dome" came back as Half Dome Court in Boynton Beach, Florida.
     // A name with no house number that lands on a street or an address is looked up as a point of interest of exactly
     // that name first (a natural one, or one with no category), boxed to about 10 km.
@@ -222,6 +241,16 @@ export async function geocode(
       const span = rangeLike || /\b(?:river|creek|stream|canyon|fork)\b/i.test(place) ? LANDFORM_HALF_SPAN_KM : FEATURE_HALF_SPAN_KM;
       const poi = (await landformResult(place, opts.proximity, token, span)) ?? (await wikidataFeature(place, span, opts.proximity)) ?? (await featureLookup(place, opts.proximity));
       if (poi) return poi;
+      // "Paradise, Mount Rainier" was Mt Rainier View St in Las Vegas: the words after the comma say where, so the name
+      // before it is looked up near that place (Paradise, Washington, on the mountain's south side).
+      const [name, ...rest] = place.split(",").map((p) => p.trim());
+      if (rest.length > 0 && name.length >= 3 && !opts.nearOf) {
+        const near = await geocode(rest.join(", "), { ...opts, nearOf: place });
+        if (!("error" in near)) {
+          const found = await geocode(name, { proximity: near.center, nearOf: place });
+          if (!("error" in found) && distanceKm(found.center, near.center) <= 60) return found;
+        }
+      }
     }
 
     // Mapbox answers "the Andes" or "Sierra Nevada" with a town or a point; a named physical region is better, and for

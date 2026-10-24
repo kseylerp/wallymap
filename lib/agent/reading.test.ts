@@ -146,7 +146,7 @@ describe("readQuestion: the words the audit's questions use", () => {
     expect(read("Intermediate mountain bike trails near Bentonville").filters).toContainEqual(expect.objectContaining({ layerId: "mtb-trails", key: "level", include: ["intermediate"] }));
     expect(read("Show hiking trails around Lake Tahoe").filters).toEqual([]);
     expect(read("Are the fires near Missoula contained?").filters).toEqual([]);
-    expect(read("Which crags near Moab are sport and shaded in the afternoon?").filters.map((f) => f.key)).toEqual(["disciplines"]);
+    expect(read("Which crags near Moab are sport and shaded in the afternoon?").filters.map((f) => f.key)).toEqual(["afternoonShade", "disciplines"]);
   });
 
   it("spells out a river named short", () => {

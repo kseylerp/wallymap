@@ -75,7 +75,7 @@ export async function POST(req: Request): Promise<Response> {
     // Setup errors name the missing env var (never its value), so they are safe to return.
     // The view goes into this turn's system prompt only, never the history, so old views are not resent. The model
     // runs inside the step guard, which keeps tool names canonical in this stream (lib/agent/stepGuard.ts).
-    const { model, system, tools, stopWhen, prepareStep, repairToolCall } = agentTurn({ question: lastUserText(messages), view });
+    const { model, system, tools, stopWhen, prepareStep, repairToolCall } = agentTurn({ question: lastUserText(messages), view, history: messages });
     const result = streamText({
       model,
       system,

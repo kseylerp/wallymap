@@ -244,7 +244,8 @@ export function filterHolds(f: FilterExpect, calls: ToolCall[], state: MapState)
 
 function filtersAssert(e: Top10Expect, calls: ToolCall[], state: MapState): Assertion | null {
   if (!e.filters?.length) return null;
-  const results = e.filters.map((f) => filterHolds(f, calls, state));
+  // A filter with an alternative holds when either does.
+  const results = e.filters.map((f) => { const r = filterHolds(f, calls, state); return r.ok || !f.or ? r : filterHolds(f.or, calls, state); });
   return { id: "filters", ok: results.every((r) => r.ok), detail: results.map((r) => r.detail).join("; ") };
 }
 
@@ -345,7 +346,9 @@ export function top10Rule(e: Top10Expect, run: { calls: ToolCall[]; text: string
   }
 
   // Note: deciding facts, named features, grounding, answer first.
-  const lacking = e.facts.filter((f) => !f.re.test(note)).map((f) => f.what);
+  // Read as written: a non-breaking hyphen ("research‑grade") or a narrow space ("5,425 km²") is the plain one.
+  const plain = note.replace(/[\u2010-\u2015\u2212]/g, "-").replace(/[\u00a0\u2009\u202f]/g, " ");
+  const lacking = e.facts.filter((f) => !f.re.test(plain)).map((f) => f.what);
   asserts.push({ id: "facts", ok: lacking.length === 0, detail: lacking.length ? `note lacks: ${lacking.join("; ")}` : "deciding facts stated" });
   const resultList = resultNames(calls);
   const named = resultList.filter((n) => names(note, n));

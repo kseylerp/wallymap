@@ -404,6 +404,12 @@ export type Layer<I extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawSha
   id: string;
   title: string;
   description: string;
+  /**
+   * The words people use for this layer (lib/agent/vocabulary.ts), declared with the layer so a new one routes without
+   * editing the agent: synonyms (matched against questions, listed in the prompt), notes (said only when a question's
+   * words name the layer) and a 6-to-10-word gist for list_layers. Merged with the agent's own table when both exist.
+   */
+  vocabulary?: { synonyms: string[]; notes: string; gist: string };
   coverage: Coverage;
   /**
    * The one named region every feature lies in, as the geocoder resolves it ("Sierra Nevada" for sequoia groves): a

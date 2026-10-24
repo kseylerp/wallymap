@@ -8,6 +8,7 @@ import { lookupRegion } from "./regionNames";
 /** Words that make a question about land and what grows on it, where a bare name may be a national forest. */
 const LAND_WORDS = /\b(?:forests?|trees?|beetles?|timber|logging|burn\w*|fires?|wildfires?|wilderness|old[- ]growth|die-?off|mortality)\b/i;
 import type { MapView } from "./view";
+import { followsUp, type TurnContext } from "./context";
 
 /**
  * What one chat turn has done so far, shared by the tools (which record it as they run) and the step guard
@@ -76,11 +77,43 @@ export type Turn = {
   noted: boolean;
   /** Place lookups the model asked for this turn (the geocode tool's calls). */
   geocodes: number;
+  /** Every tool call this turn with its output, in the order they finished: replayed to the map the answer reads. */
+  calls: { toolName: string; input: unknown; output: unknown }[];
+  /** Tool calls still running, so the note waits for the renders sent in its own step. */
+  inflight: Set<Promise<unknown>>;
+  /** The follow-up questions the answer ends with, built when the note was shown (lib/agent/answer.ts). */
+  followUps: string[];
+  /** The follow-ups the model wrote under an answer it wrote as text (kept when they name what it found). */
+  modelFollowUps: string[];
+  /** What the conversation's earlier turns left on the map, for a follow-up question (lib/agent/context.ts). */
+  context: TurnContext | null;
   /** A place lookup, shared by the geocode tool and the step guard so one text is looked up once. */
   lookup(place: string): Promise<GeocodeResult | GeocodeError>;
   /** Records a server action in `log` and the console. */
   note(line: string): void;
 };
+
+/**
+ * A follow-up's reading (a question that names no place after an answer): the layers the last answer drew are this
+ * question's layers too, asked for again on the same place, and their filters stay unless this question names that
+ * attribute itself ("only the black ones" changes the difficulty chip and keeps the length range).
+ */
+export function withContext(reading: Reading, question: string, context: TurnContext | null): Reading {
+  if (!followsUp(question, context)) return reading;
+  const own = reading.layers.some((l) => l.strong);
+  const layers = [...reading.layers];
+  const filters = [...reading.filters];
+  for (const l of context.layers) {
+    if (!layers.some((x) => x.layerId === l.layerId)) layers.push({ layerId: l.layerId, because: "the last answer drew it, and this question follows it", strong: !own });
+    for (const [key, entry] of Object.entries(l.filters ?? {})) {
+      if (filters.some((f) => f.layerId === l.layerId && f.key === key) || typeof entry !== "object" || entry === null) continue;
+      const e = entry as { include?: unknown; range?: unknown };
+      if (Array.isArray(e.include)) filters.push({ layerId: l.layerId, key, include: e.include.map(String), because: "kept from the last answer" });
+      else if (Array.isArray(e.range) && e.range.length === 2) filters.push({ layerId: l.layerId, key, range: [Number(e.range[0]), Number(e.range[1])], because: "kept from the last answer" });
+    }
+  }
+  return { ...reading, layers, filters };
+}
 
 /** The text of a place as lookups compare it: case, punctuation and spacing ignored. */
 export function placeKey(place: string): string {
@@ -93,7 +126,8 @@ export function createTurn({
   geocoder = mapboxGeocode,
   now = new Date(),
   regions = geocoder === mapboxGeocode ? lookupRegion : undefined,
-}: { question?: string; view?: MapView | null; geocoder?: Geocoder; now?: Date; regions?: typeof lookupRegion } = {}): Turn {
+  context: lastAnswer = null,
+}: { question?: string; view?: MapView | null; geocoder?: Geocoder; now?: Date; regions?: typeof lookupRegion; context?: TurnContext | null } = {}): Turn {
   const lookups = new Map<string, Promise<GeocodeResult | GeocodeError>>();
   const context = new Map<string, Promise<GeocodeResult | GeocodeError>>();
 
@@ -133,7 +167,7 @@ export function createTurn({
 
   const self: Turn = {
     question,
-    reading: readQuestion(question, now),
+    reading: withContext(readQuestion(question, now), question, lastAnswer),
     now,
     outputs: [],
     readingAdded: new Set(),
@@ -150,6 +184,11 @@ export function createTurn({
     step: 0,
     noted: false,
     geocodes: 0,
+    calls: [],
+    inflight: new Set(),
+    followUps: [],
+    modelFollowUps: [],
+    context: lastAnswer,
     lookup(place) {
       const key = placeKey(place);
       let found = lookups.get(key);

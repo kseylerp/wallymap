@@ -14,7 +14,7 @@ export type UseCaseId = "T01" | "T02" | "T03" | "T04" | "T05" | "T06" | "T07" | 
  * `labels` the chip labels that must be picked (the attribute's level labels; all of them, others allowed), `max` and
  * `min` the range bounds a measure filter must keep inside (5% slack), `on` a flag that must be on.
  */
-export type FilterExpect = { layer: string; key: string; labels?: string[]; max?: number; min?: number; on?: boolean };
+export type FilterExpect = { layer: string; key: string; labels?: string[]; max?: number; min?: number; on?: boolean; /** Another filter that answers as well ("easy": a short range or the easiest difficulty chip). */ or?: FilterExpect };
 
 /** A query input the question needs: some successful query of `layer` had `key` equal, matching, or within min..max. */
 export type InputExpect = { layer: string; key: string; equals?: string | number | boolean; match?: string; min?: number; max?: number };
@@ -130,7 +130,7 @@ export const TOP10: Top10Expect[] = [
     id: "T01.4", useCase: "T01",
     question: "An easy hike with a view near Lake Tahoe",
     layers: ["osm-trails|popularity", "outdoor-features"], main: "combine|osm-trails|popularity", view: ["ranked"], basemap: OUTDOOR,
-    filters: [{ layer: "osm-trails|popularity|combine", key: "roundTripKm|lengthKm|gainM|sac_scale", max: 12 }],
+    filters: [{ layer: "osm-trails|popularity|combine", key: "roundTripKm|lengthKm|gainM", max: 12, or: { layer: "osm-trails|popularity|combine", key: "sac_scale", labels: ["Hiking (T1)"] } }],
     labels: 3, card: TRAIL_CARD,
     facts: [{ what: "round trip in miles", re: MI }, { what: "the view", re: /view|overlook|vista|lake/i }],
     names: 2,
@@ -308,7 +308,7 @@ export const TOP10: Top10Expect[] = [
     question: "How has Bears Ears changed since 2021?",
     layers: ["monuments"], main: "monuments", view: ["change"], basemap: OUTDOOR, compare: true,
     card: ["Area", "Boundary", "Designation"], legend: ["Boundary|2021|lost"],
-    facts: [{ what: "area then and now", re: /km²|km2|acres|square/i }, { what: "the difference", re: /\b(?:lost|smaller|cut|reduc|shrank|difference|less)\b/i }, { what: "2021", re: /2021/ }],
+    facts: [{ what: "area then and now", re: /km²|km2|acres|square/i }, { what: "the difference", re: /\b(?:lost|los(?:e|es|ing)|smaller|cut|reduc\w*|shr[iau]nk\w*|difference|less)\b/i }, { what: "2021", re: /2021/ }],
     names: 1,
   },
   {

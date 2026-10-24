@@ -174,6 +174,11 @@ export const NEAR_RADIUS_KM: Record<string, number> = {
   "outdoor-features": 25,
   climbing: 30,
   peaks: 30,
+  // Fires, smoke and alerts "near Yosemite Valley" reach well past the valley floor's box.
+  "fire-detections": 50,
+  "fire-perimeters": 50,
+  "weather-alerts": 50,
+  smoke: 75,
 };
 
 /**
@@ -187,8 +192,15 @@ const TOWN_MAX_DEG = 1.5;
  * from the app's own sources (the Navajo Nation, a national park, a range) is what "near" it means by itself.
  */
 export function isPointLike([w, s, e, n]: BBox, source?: string): boolean {
+  if (source === "openstreetmap" || source === "wikidata") return e - w < FEATURE_MAX_DEG && n - s < FEATURE_MAX_DEG;
   return (source === undefined || source === "mapbox") && e - w < TOWN_MAX_DEG && n - s < TOWN_MAX_DEG;
 }
+
+/**
+ * A natural feature from OpenStreetMap or Wikidata under this on both axes (degrees) is a spot "near" reaches around:
+ * Yosemite Valley is 0.13° by 0.03°, and fires "near" it lay outside the valley floor. A long river or a range is wider.
+ */
+const FEATURE_MAX_DEG = 0.3;
 
 const KM_PER_DEGREE = 111.32;
 

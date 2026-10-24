@@ -78,3 +78,14 @@ describe("offPlace", () => {
     expect(offPlace("Whales near Monterey")).toBeNull();
   });
 });
+
+describe("near a small natural feature", () => {
+  it("reaches the layer's radius around a valley, not around a range", async () => {
+    const { nearBox } = await import("@/lib/agent/places");
+    const valley = { bbox: [-119.676, 37.717, -119.547, 37.746] as [number, number, number, number], center: [-119.61, 37.73] as [number, number], source: "openstreetmap" };
+    const box = nearBox("Any fires near Yosemite Valley right now?", "fire-detections", valley)!;
+    expect(box[2] - box[0]).toBeGreaterThan(1);
+    const range = { bbox: [-121, 35.3, -118, 40.5] as [number, number, number, number], center: [-119.5, 37.9] as [number, number], source: "openstreetmap" };
+    expect(nearBox("Fires near the Sierra Nevada", "fire-detections", range)).toBeNull();
+  });
+});

@@ -163,6 +163,8 @@ export function esriAlertFeatures(fc: FeatureCollection, now: number, opts: { ev
     const props: Record<string, string | number | boolean> = {
       kind: event,
       event,
+      // The on-map label: the alert's event; the "now" point labels its temperature.
+      label: event,
       heading: short ? `${event}, ${short}` : event,
       severity,
       v: SEVERITY_RANK[severity] ?? 0,
@@ -380,6 +382,7 @@ export function alertFeatures(
     const props: Record<string, string | number> = {
       kind: p.event,
       event: p.event,
+      label: p.event,
       heading: short ? `${p.event}, ${short}` : p.event,
       severity: p.severity ?? "Unknown",
       v: SEVERITY_RANK[p.severity ?? ""] ?? 0,
@@ -454,6 +457,7 @@ export function nowFeature(body: unknown, centre: [number, number]): Feature<Poi
   if (typeof c.wind_speed_10m === "number") p.windMph = Math.round(c.wind_speed_10m / 1.609344);
   if (typeof c.wind_gusts_10m === "number") p.gustMph = Math.round(c.wind_gusts_10m / 1.609344);
   const wind = typeof p.windMph === "number" ? `, wind ${p.windMph} mph${typeof p.gustMph === "number" && p.gustMph > p.windMph ? ` gusting ${p.gustMph}` : ""}` : "";
+  p.label = `Now ${p.temperatureF} °F`;
   p.heading = `Weather now: ${p.temperatureF} °F (${Math.round(c.temperature_2m!)} °C)${wind}${typeof p.weather === "string" && p.weather !== "unknown" ? `, ${p.weather}` : ""}`;
   return { type: "Feature", geometry: { type: "Point", coordinates: centre }, properties: p };
 }
@@ -572,7 +576,7 @@ const CARD: CardSpec = {
    * The heading is the title; kind and event repeat it; the WMO code is the Weather row in words; metric temperature
    * and wind repeat the Temperature and Wind rows, which already print both systems.
    */
-  hidden: ["kind", "event", "heading", "weatherCode", "temperatureC", "windKmh", "gustKmh", "marine", "v"],
+  hidden: ["kind", "event", "label", "heading", "weatherCode", "temperatureC", "windKmh", "gustKmh", "marine", "v"],
   links: [{ key: "url", label: "Full alert from the National Weather Service" }],
 };
 
@@ -625,7 +629,8 @@ const weatherAlerts = defineLayer({
   attributes: ATTRIBUTES,
   // Alerts in force now: one moment, no scrubber (their onsets are not a time series).
   time: { shape: "single" },
-  labels: { field: "event", max: 5, rankBy: "v" },
+  // Alerts by their event, and the "now" point by its temperature, so the asked place is named even with no alert.
+  labels: { field: "label", max: 5, rankBy: "v" },
   display: { units: "us", timeZone: "local" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {

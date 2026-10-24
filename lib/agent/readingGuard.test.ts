@@ -180,6 +180,11 @@ describe("withReading", () => {
     expect(withReading({ layerId: "climbing", filters: { disciplines: { include: ["trad"] } } }, turn)).toMatchObject({ filters: { disciplines: { include: ["trad"] } } });
   });
 
+  it("draws fires right now on the timeline even when the model ranks them", () => {
+    const turn = turnFor("Any weather alerts, smoke or fires near Yosemite Valley right now?");
+    expect(withReading({ layerId: "fire-perimeters", view: "ranked" }, turn).view).toBe("timeline");
+  });
+
   it("draws a snapshot layer in the change view when the question asks what changed", () => {
     const turn = turnFor("Show my class how the glaciers in Glacier National Park have shrunk");
     expect(withReading({ layerId: "glaciers", view: "detail" }, turn).view).toBe("change");

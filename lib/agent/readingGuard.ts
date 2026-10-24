@@ -235,6 +235,9 @@ export function withReading(input: Record<string, unknown>, turn: Pick<Turn, "re
   const view = reading.views.find((v) => v.layerId === layerId);
   // The question's own view wins over none and over detail (the default the model reaches for): "by month" is a timeline.
   if (view && (out.view === undefined || out.view === "detail")) out.view = view.view;
+  // A question about time ("fires right now", "by month") is answered on the timeline even when the model ranks: Yosemite's
+  // fires drawn ranked left the time panel closed.
+  if (view?.view === "timeline" && out.view === "ranked") out.view = "timeline";
   // A question about the view ("any good hikes around here?") is about the lines whose middle is in it: a long trail
   // that only crosses the view is not ranked first and framed off screen (the Columbia Gorge's Pacific Crest Trail).
   const box = turn.view?.bbox;

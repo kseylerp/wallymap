@@ -87,7 +87,7 @@ describe("soils layer", () => {
     // Nine polygon rows, one of them a sliver line along the box edge.
     expect(r.data.features).toHaveLength(8);
     for (const f of r.data.features) expect(["Polygon", "MultiPolygon"]).toContain(f.geometry.type);
-    expect(r.data.features.every((f) => typeof f.properties?.soil === "string" && f.properties?.name === undefined)).toBe(true);
+    expect(r.data.features.every((f) => typeof f.properties?.soil === "string" && f.properties?.name === f.properties?.soil)).toBe(true);
     expect(r.coverageNote).toMatch(/^SSURGO soil map units in the box \(7 map units, 9 polygons\)/);
     expect(r.coverageNote).toContain("Surface texture by share of the box: loam about 54%, sandy loam about 43%, sand about 3%.");
     expect(r.coverageNote).toMatch(/Largest map units: Nederland very cobbly sandy loam, 1 to 12 percent slopes \(very cobbly sandy loam, about \d+%\)/);
@@ -124,7 +124,9 @@ describe("soils layer", () => {
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     const f = r.data.features.find((x) => x.properties?.bedrockCm !== undefined)!;
     const card = cardContent(f, { card: layer.card, fieldHelp: layer.fieldHelp });
-    expect(card.facts.map((x) => x.label)).toEqual(["Soil", "Texture", "Texture class", "Drainage", "Depth to bedrock", "Hydrologic group", "Main soil"]);
+    // The map unit's name titles the card (`name`), so no row repeats it.
+    expect(f.properties?.name).toBe(f.properties?.soil);
+    expect(card.facts.map((x) => x.label)).toEqual(["Texture", "Texture class", "Drainage", "Depth to bedrock", "Hydrologic group", "Main soil"]);
     expect(card.facts.find((x) => x.label === "Depth to bedrock")?.value).toBe("11 in (28 cm)");
     expect(card.details).toEqual([]);
   });

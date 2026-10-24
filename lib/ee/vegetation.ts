@@ -150,6 +150,15 @@ export const OTHER_TYPES_ALPHA = 0.3;
 export const faintOver = (hex: string, alpha: number): string => rgbToHex(hexToRgb(hex).map((c) => 255 - (255 - c) * alpha) as [number, number, number]);
 
 /**
+ * Two palette colors mixed in plain RGB. A mix across hues (sage to purple) taken through OKLCH swings through teal,
+ * a color outside the palette (the Smokies' montane oak forest drew teal, 2026-10-23); RGB keeps it a grey violet.
+ */
+const mixRgb = (a: string, b: string, t: number): string => {
+  const [x, y] = [hexToRgb(a), hexToRgb(b)];
+  return rgbToHex(x.map((c, i) => Math.round(c + (y[i] - c) * t)) as [number, number, number]);
+};
+
+/**
  * Colors the named types take, in turn, after conifer, water and farmland types have taken theirs: sage, light sage,
  * a sage-purple grey, lavender, darker sage, a pale pink and off-white sage, all from the palette, each far enough from
  * its neighbours to be told apart at a glance (Smokies: oak, cove, montane oak, northern hardwood and mesophytic forest).
@@ -157,14 +166,14 @@ export const faintOver = (hex: string, alpha: number): string => rgbToHex(hexToR
 const TYPE_SEQUENCE = [
   SAGE,
   mix(SAGE, OFF_WHITE, 0.55),
-  mix(SAGE, PURPLE, 0.45),
-  mix(PURPLE, OFF_WHITE, 0.55),
+  mixRgb(SAGE, PURPLE, 0.4),
+  mixRgb(PURPLE, OFF_WHITE, 0.55),
   deepen(SAGE, -0.16, 1.1),
-  mix(PINK, OFF_WHITE, 0.6),
+  mixRgb(PINK, OFF_WHITE, 0.6),
   mix(SAGE, OFF_WHITE, 0.82),
 ];
 /** Conifer types: the deep sage of the group, then a lighter and a bluer one. */
-const CONIFER_SEQUENCE = [deepen(SAGE, -0.33, 1.25), deepen(SAGE, -0.24, 1), mix(deepen(SAGE, -0.3, 1.1), PURPLE, 0.3)];
+const CONIFER_SEQUENCE = [deepen(SAGE, -0.33, 1.25), deepen(SAGE, -0.24, 1), mixRgb(deepen(SAGE, -0.3, 1.1), PURPLE, 0.3)];
 
 /**
  * One color per named type, in the order given (largest first): conifer types take the deep sages, water purple,
@@ -174,7 +183,7 @@ const CONIFER_SEQUENCE = [deepen(SAGE, -0.33, 1.25), deepen(SAGE, -0.24, 1), mix
 export function typeColors(classes: EvtClass[]): string[] {
   const own: Partial<Record<GroupKey, string[]>> = {
     conifer: CONIFER_SEQUENCE,
-    water: [PURPLE, mix(PURPLE, OFF_WHITE, 0.3)],
+    water: [PURPLE, mixRgb(PURPLE, OFF_WHITE, 0.3)],
     developed: [faintOver(DARK_GREY, 0.35), faintOver(DARK_GREY, 0.55), faintOver(DARK_GREY, 0.2)],
     sparse: [groupByKey("sparse")!.color, mix(groupByKey("sparse")!.color, DARK_GREY, 0.15)],
   };
@@ -197,9 +206,16 @@ export function typeColors(classes: EvtClass[]): string[] {
   });
 }
 
-/** The named types an answer colors: the largest at least TYPE_MIN_SHARE of the box, up to TYPE_SLOTS. */
+/** Groups that are not vegetation: they keep their group's faint color and never take a named type's slot. */
+const NOT_VEGETATION: ReadonlySet<GroupKey> = new Set(["developed", "water"]);
+
+/**
+ * The named types an answer colors: the largest vegetation types at least TYPE_MIN_SHARE of the box, up to TYPE_SLOTS.
+ * Pasture, roads and water are left to their groups' colors (the Smokies' key named "Developed-Roads" and pasture
+ * before its spruce-fir forest, 2026-10-23).
+ */
 export function topTypes(shares: EvtShares): EvtClass[] {
-  return shares.classes.filter((c) => c.share >= TYPE_MIN_SHARE).slice(0, TYPE_SLOTS).map((c) => c.cls);
+  return shares.classes.filter((c) => c.share >= TYPE_MIN_SHARE && !NOT_VEGETATION.has(c.cls.group)).slice(0, TYPE_SLOTS).map((c) => c.cls);
 }
 
 /**

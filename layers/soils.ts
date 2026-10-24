@@ -24,7 +24,7 @@ import { registerLayer } from "./registry";
 import { OUTSIDE_US_NOTE, outsideUs } from "./_shared/coverage";
 import { bodyHash } from "@/lib/fetch/cache";
 import { layerColor, OFF_WHITE, PURPLE, SAGE } from "@/lib/render/palette";
-import { interpolateStops, rgbToHex } from "@/lib/render/ramp";
+import { hexToRgb, rgbToHex } from "@/lib/render/ramp";
 
 export const SDA_URL = "https://sdmdataaccess.sc.egov.usda.gov/Tabular/post.rest";
 /** Every polygon up to this area; SDA answers a few hundred km² in one or two seconds. */
@@ -38,7 +38,17 @@ const SDA_TIMEOUT_MS = 25_000;
 export const TEXTURES = ["Sand", "Sandy loam", "Loam", "Clay loam", "Clay"] as const;
 /** Ramp positions along off-white → sage → purple; sand is kept off the bare off-white so it still reads as a soil. */
 const TEXTURE_AT = [0.16, 0.36, 0.55, 0.77, 1];
-export const TEXTURE_COLORS = TEXTURE_AT.map((t) => rgbToHex(interpolateStops([OFF_WHITE, SAGE, PURPLE], t)));
+/**
+ * Mixed in plain RGB: OKLCH (interpolateStops) carries sage to purple through teal, and clay loam came out #00A8CB,
+ * a cyan outside the palette (2026-10-23).
+ */
+function rampRgb(stops: string[], t: number): string {
+  const x = Math.min(1, Math.max(0, t)) * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(x));
+  const [a, b] = [hexToRgb(stops[i]), hexToRgb(stops[i + 1])];
+  return rgbToHex(a.map((c, k) => Math.round(c + (b[k] - c) * (x - i))) as [number, number, number]);
+}
+export const TEXTURE_COLORS = TEXTURE_AT.map((t) => rampRgb([OFF_WHITE, SAGE, PURPLE], t));
 
 const TEXTURE_HELP: Record<(typeof TEXTURES)[number], string> = {
   Sand: "Sand and loamy sand: gritty, drains fast, holds little water.",
@@ -277,7 +287,8 @@ export function mapUnitsOf(rows: Row[]): Map<string, MapUnit> {
 
 /** A map unit's feature properties: what the card and the map read. */
 export function unitProperties(u: MapUnit): Record<string, string | number> {
-  const p: Record<string, string | number> = { heading: u.muname, soil: u.muname, texture: u.texture.label, mukey: u.mukey };
+  // `name` titles the card and the ranked list (which read "Unnamed" without it).
+  const p: Record<string, string | number> = { name: u.muname, heading: u.muname, soil: u.muname, texture: u.texture.label, mukey: u.mukey };
   if (u.texture.rank !== undefined) p.textureRank = u.texture.rank;
   if (u.textureDetail) p.textureDetail = u.textureDetail;
   if (u.drainage) p.drainage = u.drainage;
@@ -357,9 +368,10 @@ const HELP: Record<string, FieldHelp> = {
 
 const ATTRIBUTES: Attribute[] = [
   { key: "texture", type: "ordinal", label: "Surface texture", levels: TEXTURES.map((t) => ({ value: t, label: t, help: TEXTURE_HELP[t] })), scale: "USDA soil texture classes, grouped sand to clay", primary: true },
-  { key: "textureRank", type: "measure", label: "Surface texture, sand (0) to clay (4)" },
   { key: "drainage", type: "ordinal", label: "Drainage", levels: DRAINAGE, scale: "USDA natural drainage classes" },
+  // First measure, so a ranked list is the shallowest soils (a list "by texture rank" read "Unnamed 4" ten times).
   { key: "bedrockIn", type: "measure", label: "Depth to bedrock", unit: "in", lowFirst: true },
+  { key: "textureRank", type: "measure", label: "Surface texture, sand (0) to clay (4)" },
 ];
 
 /** The key: the five texture classes on the off-white → sage → purple ramp, sand to clay. */
@@ -373,7 +385,6 @@ const LEGEND: LegendSpec = {
 
 const CARD: CardSpec = {
   facts: [
-    { key: "soil", label: "Soil" },
     { key: "textureDetail", label: "Texture" },
     { key: "texture", label: "Texture class" },
     { key: "drainage", label: "Drainage" },
@@ -381,7 +392,7 @@ const CARD: CardSpec = {
     { key: "hydGroup", label: "Hydrologic group" },
     { key: "component", label: "Main soil" },
   ],
-  hidden: ["heading", "textureRank", "bedrockCm", "bedrockIn", "mukey"],
+  hidden: ["heading", "soil", "textureRank", "bedrockCm", "bedrockIn", "mukey"],
 };
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -408,6 +419,9 @@ const soils = defineLayer({
   card: CARD,
   attributes: ATTRIBUTES,
   legend: LEGEND,
+  // The largest map units carry their texture on the map; their full names ("Nederland very cobbly sandy loam, 1 to 12
+  // percent slopes") stay on the card and in the ranked list, where `name` titles them.
+  labels: { field: "texture", max: 5 },
   time: { shape: "none" },
   display: { units: "us" },
 

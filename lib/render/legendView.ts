@@ -229,7 +229,10 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, loadedDa
       const r = view && spec.field ? (data ? rangeOf(data, spec.field) : tileRange(view.tile)) : null;
       const stopValues = (spec.stops ?? []).map((s) => s.value);
       if (r && stopValues.length > 1 && stopValues.every((v): v is number => typeof v === "number")) {
-        const stepped = layer.result.kind === "tiles";
+        // Tiles step by their stops; so does a key whose stops are words on whole steps 0, 1, 2 (soil texture, sand to
+        // clay), which read "In view: 0 to 4" when printed as amounts.
+        const worded = spec.stops!.every((s, i) => s.value === i && !/^[\d\s.,%-]+$/.test(s.label));
+        const stepped = layer.result.kind === "tiles" || worded;
         const signed = stopValues[0] < 0;
         const unit = spec.unit && spec.unit !== "score" ? ` ${spec.unit}` : "";
         const text = stepped

@@ -14760,6 +14760,7 @@
      ]
     },
     "properties": {
+     "name": "Water",
      "heading": "Water",
      "soil": "Water",
      "texture": "Water",
@@ -14777,6 +14778,7 @@
      ]
     },
     "properties": {
+     "name": "Nunn clay loam, 1 to 3 percent slopes",
      "heading": "Nunn clay loam, 1 to 3 percent slopes",
      "soil": "Nunn clay loam, 1 to 3 percent slopes",
      "texture": "Clay loam",
@@ -14799,6 +14801,7 @@
      ]
     },
     "properties": {
+     "name": "Sanitas, very stony-Betasso, extremely bouldery complex 20 to 50 percent slopes",
      "heading": "Sanitas, very stony-Betasso, extremely bouldery complex 20 to 50 percent slopes",
      "soil": "Sanitas, very stony-Betasso, extremely bouldery complex 20 to 50 percent slopes",
      "texture": "Sandy loam",
@@ -14823,6 +14826,7 @@
      ]
     },
     "properties": {
+     "name": "Littlejames, extremely bouldery-Lefthand, extremely bouldery-Rock outcrop complex, 10 to 25 percent slopes",
      "heading": "Littlejames, extremely bouldery-Lefthand, extremely bouldery-Rock outcrop complex, 10 to 25 percent slopes",
      "soil": "Littlejames, extremely bouldery-Lefthand, extremely bouldery-Rock outcrop complex, 10 to 25 percent slopes",
      "texture": "Sandy loam",
@@ -14847,6 +14851,7 @@
      ]
     },
     "properties": {
+     "name": "Littlejames, extremely bouldery-Lefthand, very stony complex, 7 to 25 percent slopes",
      "heading": "Littlejames, extremely bouldery-Lefthand, very stony complex, 7 to 25 percent slopes",
      "soil": "Littlejames, extremely bouldery-Lefthand, very stony complex, 7 to 25 percent slopes",
      "texture": "Sandy loam",
@@ -14871,6 +14876,7 @@
      ]
     },
     "properties": {
+     "name": "Renohill silty clay loam, 1 to 3 percent slopes",
      "heading": "Renohill silty clay loam, 1 to 3 percent slopes",
      "soil": "Renohill silty clay loam, 1 to 3 percent slopes",
      "texture": "Clay loam",
@@ -14895,6 +14901,7 @@
      ]
     },
     "properties": {
+     "name": "Hargreave fine sandy loam, 3 to 9 percent slopes",
      "heading": "Hargreave fine sandy loam, 3 to 9 percent slopes",
      "soil": "Hargreave fine sandy loam, 3 to 9 percent slopes",
      "texture": "Sandy loam",
@@ -14919,6 +14926,7 @@
      ]
     },
     "properties": {
+     "name": "Colby silty clay loam, 3 to 5 percent slopes",
      "heading": "Colby silty clay loam, 3 to 5 percent slopes",
      "soil": "Colby silty clay loam, 3 to 5 percent slopes",
      "texture": "Clay loam",
@@ -14941,6 +14949,7 @@
      ]
     },
     "properties": {
+     "name": "Colby silty clay loam, 3 to 5 percent slopes",
      "heading": "Colby silty clay loam, 3 to 5 percent slopes",
      "soil": "Colby silty clay loam, 3 to 5 percent slopes",
      "texture": "Clay loam",
@@ -14963,6 +14972,7 @@
      ]
     },
     "properties": {
+     "name": "Littlejames, extremely bouldery-Lefthand, extremely bouldery-Rock outcrop complex, 10 to 25 percent slopes",
      "heading": "Littlejames, extremely bouldery-Lefthand, extremely bouldery-Rock outcrop complex, 10 to 25 percent slopes",
      "soil": "Littlejames, extremely bouldery-Lefthand, extremely bouldery-Rock outcrop complex, 10 to 25 percent slopes",
      "texture": "Sandy loam",
@@ -14987,6 +14997,7 @@
      ]
     },
     "properties": {
+     "name": "Pearlstreet-Sanitas complex, 25 to 55 percent slopes, very stony",
      "heading": "Pearlstreet-Sanitas complex, 25 to 55 percent slopes, very stony",
      "soil": "Pearlstreet-Sanitas complex, 25 to 55 percent slopes, very stony",
      "texture": "Sandy loam",
@@ -15011,6 +15022,7 @@
      ]
     },
     "properties": {
+     "name": "Sanitas, very stony-Betasso, extremely bouldery complex 20 to 50 percent slopes",
      "heading": "Sanitas, very stony-Betasso, extremely bouldery complex 20 to 50 percent slopes",
      "soil": "Sanitas, very stony-Betasso, extremely bouldery complex 20 to 50 percent slopes",
      "texture": "Sandy loam",

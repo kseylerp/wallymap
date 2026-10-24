@@ -7,7 +7,7 @@ import { useCallback, useEffect, useImperativeHandle, useRef, type Ref } from "r
 import { MapSetupNotice } from "@/components/MapSetupNotice";
 import { drawnLineEntries, sitePath, syncHeatLayers, syncLineLayers, syncSatelliteHybrid, syncTileLayers, tileKeyOf } from "@/components/mapTiles";
 import { setInView, type InView, type TileSample } from "@/lib/render/inView";
-import { tileFieldValue } from "@/lib/render/rockFamily";
+import { geologyCardProperties, tileFieldValue } from "@/lib/render/rockFamily";
 import { ensureRouteImages, setRouteProgress, syncRouteLayers } from "@/components/routeLayers";
 import { basemapStyle, basemapStyleUrl } from "@/lib/render/basemaps";
 import { swipeStore } from "@/lib/render/compareView";
@@ -394,7 +394,8 @@ function pickAt(map: mapboxgl.Map, overlay: MapboxOverlay, state: MapState, poin
   const { lng, lat } = map.unproject(point);
   return pickToSelection(
     {
-      feature: { id: top.id, source: top.source, layer: top.layer, geometry: top.geometry, properties: top.properties },
+      // A geologic unit's card also reads its rock type and its age in million years (the served ages are bare numbers).
+      feature: { id: top.id, source: top.source, layer: top.layer, geometry: top.geometry, properties: top.layer?.id === "tiles-geology" ? { ...top.properties, ...geologyCardProperties(top.properties ?? {}) } : top.properties },
       lngLat: [lng, lat],
       point: { x: point.x, y: point.y },
     },

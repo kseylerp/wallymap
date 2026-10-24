@@ -8,10 +8,11 @@
  *   best_age_top, best_age_bottom, color as a hex string, ref_*) and `lines` (faults and other contacts; properties type, name, descrip).
  *   Tiles answer at z0 to z16 and beyond (z8 Tahoe: 927 units; z12: 47; z16: 5); the layer draws `units` only, since a tile result
  *   carries one source layer. The tile server is a public service run by the Macrostrat team; set no key.
- * Drawing (2026-10-23, spec T08): each unit is filled by its ROCK FAMILY (sedimentary sage, volcanic pink, plutonic purple,
- *   metamorphic grey hatched, loose sediments off-white stippled), darker with the age of its youngest rock in five steps
- *   (lib/render/rockFamily.ts classes a unit from its lith, name and description: over Zion, z11, `lith` is empty on most
- *   detailed units, so the name and description carry the rock words). Legend "Rock family" with "Darker = older".
+ * Drawing (2026-10-24, owner's review of Zion): each unit is filled by its ROCK TYPE in geologic-map lithology colors
+ *   (lib/render/rockFamily.ts ROCK_TYPES: sandstone yellow, siltstone orange-brown, shale grey-green, limestone blue, volcanic
+ *   red, plutonic pink, metamorphic purple, loose sediment pale), no hatch, dark grey contacts, formation names labelled from
+ *   zoom 10. Legend "Rock type" (the types in view with their share). Rock family and age of the youngest rock are filters
+ *   the map applies to the tiles. The card adds the rock type and the age in million years.
  * Coverage note (2026-10-23): the units in the asked box, sampled on a GRID by GRID grid of points through Macrostrat's point
  *   API (the one geologic-unit uses; most detailed map at each point), tallied by unit name with rock types, ages in million
  *   years, formation names and share of the sampled points, and the rock families' shares. Zion Canyon (-113.02,37.19 to
@@ -23,7 +24,7 @@ import { defineLayer, bboxAreaKm2, type Attribute, type BBox, type CardSpec, typ
 import { registerLayer } from "./registry";
 import { ageSpanText, ageText, identifySchema, lithologyText, scaleRank, type Unit } from "./geologic-unit";
 import { layerColor } from "@/lib/render/palette";
-import { FAMILY_LABELS, ROCK_FAMILY_LEGEND, rockFamilyOf, type RockFamily } from "@/lib/render/rockFamily";
+import { FAMILY_LABELS, ROCK_FAMILY_FIELD, ROCK_TYPE_LEGEND, rockFamilyOf, type RockFamily } from "@/lib/render/rockFamily";
 import { mapLimit } from "@/lib/fetch";
 
 export const GEOLOGY_TILE_URL = "https://tiles.macrostrat.org/carto/{z}/{x}/{y}.mvt";
@@ -53,6 +54,13 @@ const AGE_HELP: FieldHelp = {
 
 const ATTRIBUTES: Attribute[] = [
   {
+    // Derived from each unit's rock words (lib/render/rockFamily.ts); the map filters the tiles by it.
+    key: ROCK_FAMILY_FIELD,
+    type: "category",
+    label: "Rock family",
+    levels: FAMILY_LABELS.map((f) => ({ value: f.id, label: f.label, help: f.help.replace(/ \([^)]*\)\.$/, ".") })),
+  },
+  {
     key: "best_age_top",
     type: "measure",
     label: "Age of the youngest rock",
@@ -76,11 +84,13 @@ const ATTRIBUTES: Attribute[] = [
  */
 const CARD: CardSpec = {
   facts: [
+    { key: "rock_type_label", label: "Rock type" },
     { key: "age", label: "Age" },
+    { key: "age_span", label: "Million years" },
     { key: "descrip", label: "Description" },
   ],
   links: [{ key: "ref_url", label: "Source map" }],
-  hidden: ["map_id", "source_id", "legend_id", "t_int", "b_int", "color", "lith", "best_age_top", "best_age_bottom"],
+  hidden: ["map_id", "source_id", "legend_id", "t_int", "b_int", "color", "lith", "best_age_top", "best_age_bottom", "rock_family", "rock_type"],
 };
 
 /** One sampled point's most detailed unit. */
@@ -182,7 +192,7 @@ const geology = defineLayer({
   title: "Geology",
   description:
     "What an AREA is made of (a canyon, a park, a range, the map view): Macrostrat's geologic map (worldwide, most detailed in the US), whose note names the box's main rock units (formations such as Navajo Sandstone or Kayenta Formation) with ages in million years and shares; query it AND geologic-unit at the place's centre (that point's card gives the main unit's rock), plus faults when faults are asked. " +
-    "Draws map tiles by rock family (sedimentary sage, volcanic pink, plutonic purple, metamorphic grey hatched, loose sediments stippled), darker for older rock, legend 'Rock family'. " +
+    "Draws units by rock type in geologic-map colors (sandstone yellow, limestone blue, volcanic red) with formation names, legend 'Rock type'. " +
     "Quote the note's names, ages and shares; tapping a unit shows its name, age and description. " +
     "For the rock at ONE spot only ('what is this peak made of') geologic-unit alone is enough. " +
     "Caveats: geologic maps are drawn at the scale of their source, so edges are generalised and small outcrops are missed; units can be loose ('undivided granitic rocks'); " +
@@ -195,7 +205,7 @@ const geology = defineLayer({
   input: z.object({}),
   style: { geometry: "polygon", color: layerColor("geology") },
   attributes: ATTRIBUTES,
-  legend: ROCK_FAMILY_LEGEND,
+  legend: ROCK_TYPE_LEGEND,
   card: CARD,
   fieldHelp: { best_age_top: AGE_HELP, best_age_bottom: { ...AGE_HELP, text: "The oldest age of the rock unit (best_age_bottom), in millions of years." }, lith: { text: "The unit's rock types as Macrostrat lists them: major, minor and incidental." } },
   // A compiled map, not a dated record.

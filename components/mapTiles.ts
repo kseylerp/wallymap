@@ -23,7 +23,8 @@ import {
 } from "@/lib/render/hybridStyle";
 import { compareBaseId, compareBId, compareSideShown, effectiveMode } from "@/lib/render/compareView";
 import { hatchImage, hatchPatternId, HATCH_SCALE, stippleImage } from "@/lib/render/hatch";
-import { FAMILY_PATTERNS, ROCK_FAMILY_FIELD, rockFamilyExpression, rockFamilyFillExpression, stipplePatternId } from "@/lib/render/rockFamily";
+import { ROCK_FAMILY_FIELD, ROCK_TYPE_FIELD, rockFamilyOfTypeExpression, rockTypeExpression, rockTypeFillExpression } from "@/lib/render/rockFamily";
+import type { LayerFilters } from "@/lib/render/filters";
 import { areaRecipe, DARK_GREY, HATCH_COLORS, isPaletteColor, LINE, LINE_CLASSES, lineColorFor, SYMBOL, WHITE, type HatchColor } from "@/lib/render/palette";
 import { categoryKey } from "@/lib/render/categories";
 import { lineEntries, lineLayerSpecs, LINES_PREFIX, lineSourceData, lineSourceId, type LineEntry } from "@/lib/render/nativeLines";
@@ -133,13 +134,15 @@ export function vectorTileLayerSpecs(
    * each value's tint, hatch and outline in its color. Values not listed keep the layer's own color.
    */
   key?: TileKey,
+  /** The row's filters (the geologic map applies rock family, rock type and age to its tiles). */
+  filters?: LayerFilters,
 ): VectorLayerSpec[] {
   const layerId = `${PREFIX}${id}`;
   const requested = isPaletteColor(paint.color) ? paint.color.trim().toUpperCase() : undefined;
   const opacity = Math.min(1, Math.max(0, paint.opacity ?? 1));
   const common = { source: layerId, "source-layer": sourceLayer };
   const layout = { visibility: visible ? ("visible" as const) : ("none" as const) };
-  if (geometry === "polygon" && !requested && key?.paint === "rock-family") return rockFamilyLayerSpecs(layerId, common, layout, opacity);
+  if (geometry === "polygon" && !requested && key?.paint === "rock-family") return rockFamilyLayerSpecs(layerId, common, layout, opacity, rockFilter(filters));
   if (geometry === "polygon" && !requested && key?.steps && key.steps.length > 1) {
     // A stepped ramp (geology by the era of its youngest rock): each unit filled solid in its step's color.
     const [first, ...rest] = key.steps;
@@ -256,34 +259,43 @@ export const ROCK_TILE_FILL: [number, number][] = [
 ];
 
 /**
- * The geologic map by rock family (spec T08): each unit filled in its family's color, darker with the age of its
- * youngest rock (lib/render/rockFamily.ts derives both from the tile's lith, name, description and ages), metamorphic
- * units hatched and loose sediments stippled in dark grey, thin white edges between units. The fill fades a little with
- * zoom (ROCK_TILE_FILL), less than other solid-keyed tiles, so the rock still reads at canyon zooms.
+ * The geologic map by rock type (owner's review of Zion, 2026-10-24): each unit filled in its rock type's lithology color
+ * (lib/render/rockFamily.ts ROCK_TYPES), no hatch or stipple (they read as muddy hatching), dark grey contacts and the
+ * formation names. The fill fades a little with zoom (ROCK_TILE_FILL), less than other solid-keyed tiles, so the rock
+ * still reads at canyon zooms. `filter` (rockFilter) keeps the units the row's rock family, rock type and age keep.
  */
 export function rockFamilyLayerSpecs(
   layerId: string,
   common: { source: string; "source-layer": string },
   layout: { visibility: "visible" | "none" },
   opacity: number,
+  filter?: ExpressionSpecification,
 ): VectorLayerSpec[] {
-  const family = rockFamilyExpression();
-  const patterned = Object.keys(FAMILY_PATTERNS);
-  const hatch = hatchPatternId(DARK_GREY as HatchColor, ROCK_PATTERN_STEP);
-  const pattern = ["match", family, ...Object.entries(FAMILY_PATTERNS).flatMap(([f, kind]) => [f, kind === "stipple" ? stipplePatternId(DARK_GREY) : hatch]), hatch] as unknown as string;
   const fill = ["interpolate", ["linear"], ["zoom"], ...ROCK_TILE_FILL.flatMap(([z, o]) => [z, Math.round(o * opacity * 1000) / 1000])] as ExpressionSpecification;
-  const at = (o: number) => Math.round(o * 0.75 * opacity * 1000) / 1000;
-  const on = ["in", family, ["literal", patterned]];
-  const patternOpacity = ["interpolate", ["linear"], ["zoom"], 12, ["case", on, at(1), 0], 15, ["case", on, at(0.6), 0]] as unknown as ExpressionSpecification;
+  const filtered = filter ? { filter } : {};
   return [
-    { id: layerId, type: "fill", ...common, layout, paint: { "fill-color": rockFamilyFillExpression() as unknown as string, "fill-opacity": fill } },
-    { id: `${layerId}-hatch`, type: "fill", ...common, layout, paint: { "fill-pattern": pattern, "fill-opacity": patternOpacity } },
-    { id: `${layerId}-casing`, type: "line", ...common, layout: { ...layout, "line-join": "round" }, paint: { "line-color": WHITE, "line-width": 0, "line-opacity": 0 } },
-    // Contacts between units in dark grey (area outlines may be dark grey): two sandstones of one age share a fill, and
-    // only the contact tells the Navajo from the Kayenta.
-    { id: `${layerId}-line`, type: "line", ...common, layout: { ...layout, "line-join": "round" }, paint: { "line-color": DARK_GREY, "line-width": ROCK_CONTACT.width, "line-opacity": ROCK_CONTACT.opacity * opacity } },
-    rockUnitLabels(layerId, common, layout, opacity),
+    { id: layerId, type: "fill", ...common, ...filtered, layout, paint: { "fill-color": rockTypeFillExpression() as unknown as string, "fill-opacity": fill } },
+    // Contacts between units in dark grey (area outlines may be dark grey): two sandstones share a fill, and only the
+    // contact and the names tell the Navajo from the Temple Cap.
+    { id: `${layerId}-line`, type: "line", ...common, ...filtered, layout: { ...layout, "line-join": "round" }, paint: { "line-color": DARK_GREY, "line-width": ROCK_CONTACT.width, "line-opacity": ROCK_CONTACT.opacity * opacity } },
+    { ...rockUnitLabels(layerId, common, layout, opacity), ...filtered },
   ];
+}
+
+/** The tile filter of the geologic map's row filters (rock family, rock type, age of the youngest rock), or undefined. */
+export function rockFilter(filters: LayerFilters | undefined): ExpressionSpecification | undefined {
+  if (!filters) return undefined;
+  const all: unknown[] = [];
+  const family = filters[ROCK_FAMILY_FIELD]?.include;
+  if (family && family.length > 0) all.push(["in", rockFamilyOfTypeExpression(), ["literal", family]]);
+  const type = filters[ROCK_TYPE_FIELD]?.include;
+  if (type && type.length > 0) all.push(["in", rockTypeExpression(), ["literal", type]]);
+  const age = filters.best_age_top?.range;
+  if (age) {
+    const v = ["to-number", ["coalesce", ["get", "best_age_top"], 0]];
+    all.push([">=", v, age[0]], ["<=", v, age[1]]);
+  }
+  return all.length === 0 ? undefined : (["all", ...all] as unknown as ExpressionSpecification);
 }
 
 /** The contact lines between geologic units. */
@@ -347,7 +359,7 @@ export type TileKey = { field: string; colors: [string, string][]; steps?: [numb
 
 export function tileKeyOf(layer: LoadedLayer): TileKey | undefined {
   const legend = layer.result.legend ?? layer.legend;
-  if (legend?.field === ROCK_FAMILY_FIELD) return { field: ROCK_FAMILY_FIELD, colors: [], paint: "rock-family" };
+  if (legend?.field === ROCK_FAMILY_FIELD || legend?.field === ROCK_TYPE_FIELD) return { field: legend.field, colors: [], paint: "rock-family" };
   // A ramp whose every stop has a value and a color, low to high (geology's eras): a stepped fill.
   if (legend?.kind === "ramp" && legend.field && (legend.stops?.length ?? 0) > 1 && legend.stops!.every((s) => s.color && typeof s.value === "number")) {
     const steps = legend.stops!.map((s) => [s.value as number, s.color as string] as [number, string]).sort((a, b) => a[0] - b[0]);
@@ -451,7 +463,7 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
       dropStaleSource(map, style, id, "vector", url);
       if (!map.getSource(id)) map.addSource(id, { type: "vector", tiles: [url], minzoom, maxzoom });
       const color = op?.color && HEX.test(op.color.trim()) ? op.color.trim() : undefined;
-      const specs = vectorTileLayerSpecs(loaded.id, loaded.style, sourceLayer, geometry ?? loaded.style.geometry, visible, { color, opacity }, tileKeyOf(loaded));
+      const specs = vectorTileLayerSpecs(loaded.id, loaded.style, sourceLayer, geometry ?? loaded.style.geometry, visible, { color, opacity }, tileKeyOf(loaded), op?.filters);
       ensureHatchImages(map, hatchPatternsOf(specs));
       for (const spec of specs) {
         wantedLayers.add(spec.id);
@@ -461,6 +473,9 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
           continue;
         }
         map.setLayoutProperty(spec.id, "visibility", visible ? "visible" : "none");
+        // The row's filters on the tiles (the geologic map's rock family and age).
+        const filter = (spec as { filter?: ExpressionSpecification }).filter;
+        if (!sameJson(map.getFilter(spec.id) ?? null, filter ?? null)) map.setFilter(spec.id, filter ?? null);
         // Mapbox skips a paint update whose value is unchanged, so re-applying every sync is cheap.
         for (const [property, value] of Object.entries(spec.paint ?? {})) {
           map.setPaintProperty(spec.id, property as never, value as never);

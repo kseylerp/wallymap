@@ -7,6 +7,7 @@ import {
   heatLayerSpec,
   heatPointsCollection,
   insertBeforeId,
+  rockFilter,
   LAND_OUTLINE,
   landFillOpacity,
   landHatchOpacity,
@@ -19,7 +20,7 @@ import {
 } from "@/components/mapTiles";
 import { DARK_GREY, OFF_WHITE, PINK, PURPLE, SAGE, WHITE } from "@/lib/render/palette";
 import { hexToRgb, lightness } from "@/lib/render/ramp";
-import { ROCK_FAMILY_FIELD, ROCK_FAMILY_LEGEND, rockFamilyFillExpression } from "@/lib/render/rockFamily";
+import { ROCK_FAMILY_FIELD, ROCK_FAMILY_LEGEND, ROCK_TYPE_FIELD, ROCK_TYPE_LEGEND, rockTypeFillExpression } from "@/lib/render/rockFamily";
 import type { LayerResult, StyleHints } from "@/layers/types";
 import { buildDeckLayerSets } from "@/lib/render/deck";
 import { pickUnderHeat } from "@/lib/render/inspect";
@@ -182,6 +183,12 @@ function fakeMap(initialLayers: FakeLayer[] = [{ id: "land", type: "background" 
     setPaintProperty: (id: string, property: string, value: unknown) => {
       const layer = layers.find((l) => l.id === id);
       if (layer) layer.paint = { ...layer.paint, [property]: value };
+    },
+    getFilter: (id: string) => (layers.find((l) => l.id === id) as { filter?: unknown } | undefined)?.filter,
+    setFilter: (id: string, filter: unknown) => {
+      calls.push(`setFilter ${id}`);
+      const layer = layers.find((l) => l.id === id) as { filter?: unknown } | undefined;
+      if (layer) layer.filter = filter ?? undefined;
     },
     moveLayer: (id: string, beforeId?: string) => {
       calls.push(`moveLayer ${id}`);
@@ -574,22 +581,34 @@ describe("tile areas keyed by a stepped ramp (geology by era)", () => {
 describe("the geologic map by rock family", () => {
   const style: StyleHints = { geometry: "polygon", color: "#3A3A3C" };
 
-  it("keys a legend on the derived rock family to the rock family paint", () => {
-    const loaded = { id: "geology", style, legend: ROCK_FAMILY_LEGEND, result: { kind: "tiles", data: { url: "u", minzoom: 0, maxzoom: 16, format: "vector", sourceLayer: "units" } } };
-    expect(tileKeyOf(loaded as never)).toEqual({ field: ROCK_FAMILY_FIELD, colors: [], paint: "rock-family" });
+  it("keys a legend on the derived rock type (or family) to the geologic map's paint", () => {
+    const loaded = { id: "geology", style, legend: ROCK_TYPE_LEGEND, result: { kind: "tiles", data: { url: "u", minzoom: 0, maxzoom: 16, format: "vector", sourceLayer: "units" } } };
+    expect(tileKeyOf(loaded as never)).toEqual({ field: ROCK_TYPE_FIELD, colors: [], paint: "rock-family" });
+    expect(tileKeyOf({ ...loaded, legend: ROCK_FAMILY_LEGEND } as never)).toEqual({ field: ROCK_FAMILY_FIELD, colors: [], paint: "rock-family" });
   });
 
-  it("fills each unit by its family and age, hatches metamorphic, stipples loose sediments, with dark grey contacts and unit names", () => {
-    const specs = vectorTileLayerSpecs("geology", style, "units", "polygon", true, {}, { field: ROCK_FAMILY_FIELD, colors: [], paint: "rock-family" });
-    expect(specs.map((s) => s.id)).toEqual(["tiles-geology", "tiles-geology-hatch", "tiles-geology-casing", "tiles-geology-line", "tiles-geology-label"]);
+  it("fills each unit by its rock type, without hatching, with dark grey contacts and unit names", () => {
+    const specs = vectorTileLayerSpecs("geology", style, "units", "polygon", true, {}, { field: ROCK_TYPE_FIELD, colors: [], paint: "rock-family" });
+    expect(specs.map((s) => s.id)).toEqual(["tiles-geology", "tiles-geology-line", "tiles-geology-label"]);
     const fill = specs[0].paint as Record<string, unknown>;
-    expect(fill["fill-color"]).toEqual(rockFamilyFillExpression());
-    expect([...new Set(hatchPatternsOf(specs))].sort()).toEqual(["hatch-3A3A3C-2", "stipple-3A3A3C"]);
-    expect((specs[3].paint as Record<string, unknown>)["line-color"]).toBe(DARK_GREY);
-    expect(specs[4]).toMatchObject({ type: "symbol", minzoom: 10, paint: { "text-color": DARK_GREY, "text-halo-color": WHITE } });
+    expect(fill["fill-color"]).toEqual(rockTypeFillExpression());
+    expect(hatchPatternsOf(specs)).toEqual([]);
+    expect((specs[1].paint as Record<string, unknown>)["line-color"]).toBe(DARK_GREY);
+    expect(specs[2]).toMatchObject({ type: "symbol", minzoom: 10, paint: { "text-color": DARK_GREY, "text-halo-color": WHITE } });
+    expect(specs.every((s) => !("filter" in s))).toBe(true);
     // A color picked in the panel draws the plain recipe instead.
-    const recolored = vectorTileLayerSpecs("geology", style, "units", "polygon", true, { color: PURPLE }, { field: ROCK_FAMILY_FIELD, colors: [], paint: "rock-family" });
+    const recolored = vectorTileLayerSpecs("geology", style, "units", "polygon", true, { color: PURPLE }, { field: ROCK_TYPE_FIELD, colors: [], paint: "rock-family" });
     expect((recolored[0].paint as Record<string, unknown>)["fill-color"]).toBe(PURPLE);
+  });
+
+  it("applies the row's rock family and age filters to every part of the map", () => {
+    const filters = { [ROCK_FAMILY_FIELD]: { include: ["volcanic"] }, best_age_top: { range: [66, 252] as [number, number] } };
+    const specs = vectorTileLayerSpecs("geology", style, "units", "polygon", true, {}, { field: ROCK_TYPE_FIELD, colors: [], paint: "rock-family" }, filters);
+    const filter = rockFilter(filters);
+    expect(filter?.[0]).toBe("all");
+    expect(specs.every((s) => JSON.stringify((s as { filter?: unknown }).filter) === JSON.stringify(filter))).toBe(true);
+    expect(rockFilter({})).toBeUndefined();
+    expect(rockFilter(undefined)).toBeUndefined();
   });
 
   it("adds the stipple image once, at 2x", () => {

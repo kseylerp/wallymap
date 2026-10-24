@@ -11,8 +11,17 @@ import {
   rockFamilyFillExpression,
   rockFamilyOf,
   tileFieldValue,
+  ageSpanWords,
+  geologyCardProperties,
+  ROCK_TYPE_FIELD,
+  ROCK_TYPE_LEGEND,
+  ROCK_TYPES,
+  rockTypeExpression,
+  rockTypeFillExpression,
+  rockTypeOf,
   type RockFamily,
   type RockProps,
+  type RockType,
 } from "./rockFamily";
 import { hexToRgb, rgbToOklch } from "./ramp";
 import { stippleImage, HATCH_FRAME } from "./hatch";
@@ -192,5 +201,43 @@ describe("rock family classifier", () => {
       expect(a(x + step, y)).toBe(a(x, y));
       expect(a(x, y + 2 * step)).toBe(a(x, y));
     }
+  });
+});
+
+describe("rock types in geologic-map colors", () => {
+  /** Zion's units as Macrostrat's carto tiles serve them (2026-10-23), and the type each is. */
+  const TYPES: [RockProps, RockType][] = [
+    [{ name: "Navajo Sandstone", lith: "", descrip: "Cross-bedded quartz sandstone", best_age_top: 170.3, best_age_bottom: 180.55 }, "sandstone"],
+    [{ name: "Kayenta Formation, main body", lith: "", descrip: "Red-brown siltstone, mudstone and sandstone", best_age_top: 180.55 }, "siltstone"],
+    [{ name: "Kaibab Formation", lith: "", descrip: "Cherty limestone and dolomite", best_age_top: 270 }, "limestone"],
+    [{ name: "Moenkopi Formation", lith: "", descrip: "Shale, siltstone and gypsum", best_age_top: 247 }, "shale"],
+    [{ name: "Shinarump Conglomerate", lith: "", best_age_top: 227 }, "conglomerate"],
+    [{ name: "Basalt of Cinder Cone", lith: "basalt", best_age_top: 0.001, best_age_bottom: 0.01 }, "volcanic"],
+    [{ name: "Mesozoic granitic rocks", lith: "Major:{granodiorite}", best_age_top: 66 }, "plutonic"],
+    [{ name: "Vishnu Schist", lith: "", best_age_top: 1680 }, "metamorphic"],
+    [{ name: "Alluvial gravel", lith: "alluvium,gravel", best_age_top: 0, best_age_bottom: 0.126 }, "unconsolidated"],
+    [{ name: "Unit B", lith: "", descrip: "", best_age_top: 300, best_age_bottom: 350 }, "sedimentary"],
+    [{ name: "Gravelly sandstone", lith: "", best_age_top: 5 }, "sandstone"],
+  ];
+
+  it.each(TYPES)("classes %o", (props, type) => {
+    expect(rockTypeOf(props)).toBe(type);
+    // The map's expression agrees with the function, and the type's family with the family rule.
+    expect(evaluate(rockTypeExpression(), props as Record<string, unknown>)).toBe(type);
+    expect(ROCK_TYPES.find((t) => t.id === type)?.family).toBe(rockFamilyOf(props));
+    expect(evaluate(rockTypeFillExpression(), props as Record<string, unknown>)).toBe(ROCK_TYPES.find((t) => t.id === type)?.color);
+  });
+
+  it("tells the Navajo from the Kayenta and samples the type for the legend", () => {
+    expect(ROCK_TYPES.find((t) => t.id === "sandstone")?.color).not.toBe(ROCK_TYPES.find((t) => t.id === "siltstone")?.color);
+    expect(tileFieldValue(ROCK_TYPE_FIELD, { name: "Navajo Sandstone" })).toBe("sandstone");
+    expect(ROCK_TYPE_LEGEND.items?.map((i) => i.value)).toEqual(ROCK_TYPES.map((t) => t.id));
+  });
+
+  it("writes a unit's age span for the card", () => {
+    expect(ageSpanWords(170.3, 180.55)).toBe("170 to 181 million years old");
+    expect(ageSpanWords(0, 0.0117)).toBe("up to 0.01 million years old");
+    expect(ageSpanWords(0, 2.58)).toBe("up to 2.6 million years old");
+    expect(geologyCardProperties({ name: "Navajo Sandstone", best_age_top: 170.3, best_age_bottom: 180.55 })).toEqual({ rock_type_label: "Sandstone", age_span: "170 to 181 million years old" });
   });
 });

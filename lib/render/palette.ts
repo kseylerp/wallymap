@@ -165,6 +165,26 @@ export const SIGN_COLORS: Record<SignShape, string> = {
   "double-black-diamond": INK,
 };
 
+/**
+ * Geologic-map rock type colors, a standard geologists read by color like the avalanche scale (owner, 2026-10-24, on the
+ * Zion geology: "draw map units in USGS-style lithology colors: sandstone yellows and oranges, limestones blue, volcanics
+ * red and pink, Quaternary sediment pale"). Only the geology layer uses them (lib/render/rockFamily.ts ROCK_TYPES).
+ */
+export const ROCK_TYPE_COLORS = {
+  metamorphic: "#9B7FBF",
+  plutonic: "#F0A3B4",
+  volcanic: "#D9534F",
+  limestone: "#74A9D8",
+  shale: "#A3B38C",
+  siltstone: "#D98E5F",
+  conglomerate: "#D4A23F",
+  sandstone: "#F2C96B",
+  evaporite: "#DCC3E0",
+  coal: "#5C5C5C",
+  sedimentary: "#E3CFA1",
+  unconsolidated: "#F6F0CF",
+} as const;
+
 /** Layers that return raster tiles: the imagery carries its own colors. */
 export const RASTER_TILE_LAYERS: ReadonlySet<string> = new Set(
   Object.entries(LAYER_ROLES)

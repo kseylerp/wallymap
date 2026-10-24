@@ -3,7 +3,8 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { contractProblems, legendOf } from "./contract";
 import { cardContent } from "@/lib/render/card";
-import { ROCK_FAMILY_FIELD } from "@/lib/render/rockFamily";
+import { ROCK_FAMILY_FIELD, ROCK_TYPE_FIELD } from "@/lib/render/rockFamily";
+import { ROCK_TYPE_COLORS } from "@/lib/render/palette";
 import layer, { GEOLOGY_SOURCE_LAYER, GEOLOGY_TILE_URL, gridPoints, rockWords, unitsNote, type SampledUnit } from "./geology";
 import fixture from "./__fixtures__/geologic-unit.tahoe.json";
 
@@ -113,13 +114,14 @@ describe("geology layer", () => {
     expect(r.body).toMatchObject({ kind: "tiles" });
   });
 
-  it("keys units by rock family, darker for older rock, with a card for a tapped unit", () => {
+  it("keys units by rock type in geologic-map colors, filters by rock family and age, with a card for a tapped unit", () => {
     const legend = legendOf(layer);
-    expect(legend).toMatchObject({ kind: "categories", title: "Rock family", field: ROCK_FAMILY_FIELD });
-    expect(legend.items).toHaveLength(5);
-    expect(legend.note).toMatch(/^Darker = older/);
+    expect(legend).toMatchObject({ kind: "categories", title: "Rock type", field: ROCK_TYPE_FIELD });
+    expect(legend.items?.find((i) => i.value === "sandstone")?.color).toBe(ROCK_TYPE_COLORS.sandstone);
+    expect(legend.items?.find((i) => i.value === "limestone")?.color).toBe(ROCK_TYPE_COLORS.limestone);
     expect(layer.style.encode).toBeUndefined();
-    expect(layer.card?.facts?.map((f) => f.key)).toEqual(["age", "descrip"]);
+    expect(layer.attributes?.map((a) => a.key)).toEqual([ROCK_FAMILY_FIELD, "best_age_top"]);
+    expect(layer.card?.facts?.map((f) => f.key)).toEqual(["rock_type_label", "age", "age_span", "descrip"]);
     expect(contractProblems(layer)).toEqual([]);
   });
 

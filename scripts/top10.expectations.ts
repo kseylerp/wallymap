@@ -426,7 +426,7 @@ export const TOP10: Top10Expect[] = [
     id: "T08.1", useCase: "T08",
     question: "What rock types and ages make up Zion Canyon, and are there faults?",
     layers: ["geology", "geologic-unit"], main: "geologic-unit|geology", basemap: DATA_GROUND,
-    legend: ["Rock family|Age of the youngest rock|Geologic unit"], card: ["Rock", "Description"],
+    legend: ["Rock type|Rock family|Age of the youngest rock|Geologic unit"], card: ["Rock", "Description"],
     facts: [{ what: "rock names (Navajo Sandstone, Kayenta)", re: /sandstone|navajo|kayenta|moenave|chinle/i }, { what: "age in million years or period", re: /million years|jurassic|triassic|\bma\b/i }, { what: "faults (or that the app has none)", re: /fault/i }],
   },
   {

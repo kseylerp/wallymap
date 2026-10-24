@@ -781,10 +781,13 @@ whole canyon's geology; peak elevations from OSM `ele` without units checked (th
 - Remove: map source ids, scale codes.
 
 **Visualization.**
-- **Geology (categorical by rock family, lightness by age):** sedimentary in sage tints, volcanic in pink, plutonic in
-  purple, metamorphic in dark grey hatch, unconsolidated (young sediments) in off-white with a stipple; within a
-  family, older is darker (five steps). Legend: "Rock family" with five keys and "Darker = older", plus the age band
-  scale in million years. A tap gives the unit's name ("Navajo Sandstone"), age and description.
+- **Geology (categorical by rock type, in geologic-map colors; owner's review of Zion, 2026-10-24):** each unit filled
+  by its rock type as geologic maps color lithology: sandstone yellow, siltstone and mudstone orange-brown, shale
+  grey-green, limestone and dolomite blue, conglomerate ochre, gypsum lilac, coal dark grey, volcanic red, plutonic
+  pink, metamorphic purple, loose (Quaternary) sediment pale cream; no hatch or stipple; dark grey contacts; formation
+  names labelled on the map. Legend: "Rock type" with the types in view and their share. Rock family and age stay as
+  filters. A tap gives the unit's name ("Navajo Sandstone"), rock type, age (period and million years) and description.
+  (Was: rock family in the five palette colors, darker with age; it read as muddy green hatching with two families.)
 - **Faults:** dark grey lines, solid where well located, dashed where approximate; younger faults thicker.
 - **Elevation:** hypsometric tints derived from the palette (off-white low → sage → purple → dark grey high) over
   the hillshade, contour bands every 1,000 ft (300 m) labelled; legend "Elevation" with the band edges in feet first
@@ -792,12 +795,12 @@ whole canyon's geology; peak elevations from OSM `ele` without units checked (th
 - **Cross-section chart** (under the map, the route preview panel): distance on x (mi), elevation on y (ft), the
   vertical exaggeration stated ("×3"), the steepest segment in pink with its grade, start and top labelled with
   their elevations; hover on the chart moves a dot on the line; the geology band under the line as a strip of rock
-  family colors.
+  type colors.
 - **Soils:** texture classes on an ordinal ramp (sand to clay: off-white → sage → purple), drainage as hatch density.
 - Labels: the 5 largest units by name; the highest and lowest points with elevation.
 - View: detail (one place) or ranked (peaks); no time.
 - Phone first screen: answer sentence ("Zion Canyon's walls are Navajo Sandstone, about 190 million years old, over
-  …"), the main units labelled, the legend key collapsed to the rock families in view.
+  …"), the main units labelled, the legend key collapsed to the rock types in view.
 
 **Dialog box.**
 - Answer: rock names with ages first, then the 3 largest units in view with their share, then faults; caveat when the
@@ -808,7 +811,7 @@ whole canyon's geology; peak elevations from OSM `ele` without units checked (th
   river?", "How old is the Kayenta?".
 
 **Acceptance tests.**
-- T08.1: `geology` and `geologic-unit` (`faults` for the faults); Topo or Data only; legend "Rock family", rock age or unit; card Rock, Description;
+- T08.1: `geology` and `geologic-unit` (`faults` for the faults); Topo or Data only; legend "Rock type", rock age or unit; card Rock, Description;
   note names Navajo Sandstone (or Kayenta, Moenave, Chinle), an age, and faults (or "no mapped Quaternary faults here" and the nearest).
 - T08.2: `terrain`, `peaks` or `elevation-profile`; Topographical; note gives start and top elevations, the climb, and the steepest part.
   Needs a cross-section chart along a line.

@@ -231,6 +231,7 @@ const publicLands = defineLayer({
   title: "Public land ownership",
   description:
     "Who owns and manages land across the United States, from the USGS Protected Areas Database (PAD-US 4.1), drawn as tinted, hatched areas with a legend. " +
+    "Its note names the land units in view with who manages them and the general camping rule on each: quote it for who manages the land and where camping is allowed. " +
     "Fills show the manager in six groups: national parks and wildlife refuges (National Park Service, Fish and Wildlife Service) pink; national forests (Forest Service) sage; Bureau of Land Management dark grey; other federal land (military, Army Corps, Reclamation, energy) grey-purple; state land and state parks purple; local, tribal and private conservation land brick red. Areas with no manager recorded are outlined only. " +
     "PAD-US combines a Fee layer (who holds title) with Designation and Easement layers (wilderness areas, roadless areas, recreation areas, conservation easements), " +
     "so one place can carry several overlapping polygons, for example a wilderness area inside a national forest. " +

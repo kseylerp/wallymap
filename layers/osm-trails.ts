@@ -779,9 +779,10 @@ const osmTrails = defineLayer({
   title: "OpenStreetMap trails",
   description:
     "Hiking paths, footways and tracks from OpenStreetMap, with difficulty (sac_scale), visibility and surface tags where mapped, plus wikidata or wikipedia when the trail has an article. " +
+    "Each whole hike (its ways joined) gives roundTripMi and roundTripGainFt (quote miles and feet in the US), shape (loop, out-and-back, network) and passes: the waterfalls, viewpoints and summits within 250 m (filter payoff include [\"waterfall\"]). " +
     "Under 2,500 km² the ways of one name that touch come back as one whole hike: name, lengthKm (the whole hike in view), shape ('loop', 'out-and-back' or 'network'), roundTripKm, gainM (climb end to end, from terrain tiles), roundTripGainM, gainPerKm, highM, start and end; unnamed paths stay one per way. " +
     "Each has kind ('path', 'footway' or 'track'; a track is an unpaved farm or forest road) and sac_scale (the hardest of its ways; 'not_rated' when none is mapped, often most). " +
-    `A hike that passes within ${PAYOFF_M} m of a waterfall, viewpoint, named summit or hot spring carries payoff (the kinds: 'waterfall', 'viewpoint', 'summit', 'hot_spring'; filter render.filters payoff include ["waterfall"]) and passes (their names, e.g. 'Catawba Falls (waterfall)'). ` +
+    `payoff lists the kinds ('waterfall', 'viewpoint', 'summit', 'hot_spring') a hike passes within ${PAYOFF_M} m and passes their names ('Catawba Falls (waterfall)'). ` +
     "A day hike is a round trip of about 3 to 25 km: filter roundTripKm with that range and rank by roundTripKm or gainM; a trail network's roundTripKm is its longest stretch out and back. In the US quote miles and feet: lengthMi, roundTripMi, gainFt and roundTripGainFt carry them. " +
     "Under 2,500 km² it returns the paths; up to 400,000 km² the 150 longest named hiking routes instead (the note gives the total): kind 'route', name, v = lengthKm (km inside the region), distanceKm, network and sac_scale.",
   coverage: "global",

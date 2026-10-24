@@ -112,7 +112,11 @@ function visibleLayer(
 ): LoadedLayer {
   if (layer.result.kind === "geojson") {
     // Snapshots over their whole span draw the newest version of each thing; a stepped date draws that date's.
-    const newest = wholeSpan && !layer.result.series && timeShape(layer).shape === "snapshots";
+    const shape = timeShape(layer).shape;
+    const newest = wholeSpan && !layer.result.series && shape === "snapshots";
+    // One latest reading per site (snow stations) or no time at all is never cut by another layer's window: Tahoe's
+    // stations, read tonight, vanished under the satellite snow map's last clear day (top 10 T02.3, 2026-10-23).
+    if (window && !layer.result.series && (shape === "single" || shape === "none")) window = undefined;
     if (!window && !filters && !newest) return layer;
     const data = layer.result.data;
     const key = `f:${filters ? JSON.stringify(filters) : ""}|t:${window && !newest ? `${window[0]}|${window[1]}` : ""}|n:${newest}`;

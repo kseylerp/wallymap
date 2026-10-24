@@ -111,7 +111,7 @@ const terrain = defineLayer({
     "mode aspect colors slopes over 10° by face (north, east, south, west); faces keeps some. mode shade draws ground facing away from the sun through the morning or afternoon of date (self-shade; ridges' cast shadows not counted). " +
     "Its coverageNote gives the share of the box in each class and the steepest slope: quote those numbers. " +
     "It is not an avalanche forecast: say so, and never infer today's danger from slope. " +
-    "Crags (the climbing layer) already carry aspect and afternoonShade: for a crag's shade answer from them and leave terrain out, so the crags stay on satellite imagery. " +
+    "No mode is needed for a crag's shade or aspect: crags (the climbing layer) already carry aspect and afternoonShade, so leave terrain out and the crags stay on satellite imagery. " +
     "Up to 5,000 km²; slopes read lower over wider boxes, where the elevation is sampled more coarsely.",
   coverage: "global",
   surface: "land",

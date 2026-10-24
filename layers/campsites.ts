@@ -360,7 +360,9 @@ const campsites = defineLayer({
   id: "campsites",
   title: "Campsites and parking lots",
   description:
-    "Campsites, RV parks and parking lots from OpenStreetMap, anywhere in the world. Each point has kind ('camp_site', 'caravan_site' for RV and caravan parks, or 'parking'), name when mapped (an unnamed point has title instead, its kind and the nearest named point within 5 km: 'Camp site near Big Bend Campground'), and the tags that are mapped: " +
+    "Campsites, RV parks and parking lots from OpenStreetMap, anywhere in the world. " +
+    "With includeParking false (camping), camps carry water (water within 200 m, 'Snow Lake (lake)'; filter nearWater) and campingRule where a known rule covers them (Mount Rainier's wilderness permit, BLM Moab's designated sites): quote both. " +
+    "Each point has kind ('camp_site', 'caravan_site' for RV and caravan parks, or 'parking'), name when mapped (an unnamed point has title instead, its kind and the nearest named point within 5 km: 'Camp site near Big Bend Campground'), and the tags that are mapped: " +
     "backcountry (true for walk-in or wilderness sites), tents, caravans (true when tents or RVs are allowed), fee (true when it costs money), feeStatus ('free', 'fee', or 'unknown' when no fee is mapped, which is most sites) and capacity (spaces or pitches). " +
     "For parking, v is the number of spaces, so bigger lots draw bigger. Only parking lots with a stated capacity are included. " +
     "Use it to find places to camp or where to leave a car near a trail. " +

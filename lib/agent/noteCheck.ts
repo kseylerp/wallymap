@@ -192,7 +192,7 @@ export function trimNoteFor(markdown: string, question: string, max = NOTE_MAX_W
       const t = text.toLowerCase();
       const mapOnly = /\b(?:colou?r(?:ed)?\s+is|the\s+map\s+(?:shows|draws)|legend|sage\s+low|darker\s+(?:means|=))/.test(t);
       const answers = asked.some((w) => t.includes(w));
-      const rank = i === lead ? 0 : KEEP.test(text) ? 0.5 : mapOnly ? 3 : bullet || answers ? 1 : 2;
+      const rank = i === lead ? 0 : KEEP.test(text) ? 0.25 : mapOnly ? 3 : bullet || answers ? 1 : 2;
       units.push({ line: i, text, rank, words: noteWords(text) });
     }
   });
@@ -200,13 +200,13 @@ export function trimNoteFor(markdown: string, question: string, max = NOTE_MAX_W
   // right after the lead, before the options.
   const leadText = units.filter((u) => u.rank === 0).map((u) => u.text.toLowerCase()).join(" ");
   for (const u of units) {
-    if (u.rank === 0 || u.rank === 3) continue;
+    if (u.rank === 0 || u.rank === 0.25 || u.rank === 3) continue;
     const t = u.text.toLowerCase();
     if (asked.some((w) => t.includes(w) && !leadText.includes(w))) u.rank = 0.5;
   }
   let used = 0;
   const keep = new Set<Unit>();
-  for (const rank of [0, 0.5, 1, 2, 3]) {
+  for (const rank of [0, 0.25, 0.5, 1, 2, 3]) {
     for (const u of units) {
       if (u.rank !== rank || used + u.words > max) continue;
       keep.add(u);

@@ -212,14 +212,29 @@ export function matchingQuestion(body: unknown, layerId: string, turn: Pick<Turn
  * question asks what changed. A trail color governs a layer's difficulty: the model's filter on another difficulty
  * scale of the same layer gives way to it (IMBA blue is not Singletrack 2 on a third of Sedona's blue trails).
  */
-export function withReading(input: Record<string, unknown>, turn: Pick<Turn, "reading" | "place" | "view">): Record<string, unknown> {
+/** The source layer of the last join this turn drew (its combine call's output), or null. */
+function joinSource(calls: readonly { toolName: string; output?: unknown }[]): string | null {
+  const last = [...calls].reverse().find((c) => c.toolName === "combine" && typeof (c.output as { combined?: { sourceLayerId?: unknown } } | undefined)?.combined?.sourceLayerId === "string");
+  return last ? ((last.output as { combined: { sourceLayerId: string } }).combined.sourceLayerId) : null;
+}
+
+export function withReading(input: Record<string, unknown>, turn: Pick<Turn, "reading" | "place" | "view"> & Partial<Pick<Turn, "calls">>): Record<string, unknown> {
   const layerId = typeof input.layerId === "string" ? input.layerId : "";
-  const layer = getLayer(layerId);
+  // A join (hikes near a viewpoint) carries its source layer's features: the question's filters on that layer hold on
+  // the join too (Lake Tahoe's easy hikes near a view drew every length).
+  const source = /^combine\b/.test(layerId) ? joinSource(turn.calls ?? []) : null;
+  const layer = getLayer(source ?? layerId);
   if (!layer) return input;
   const reading = turn.reading;
   const out = { ...input };
   const center = turn.place?.center ?? turn.view?.center ?? null;
-  const wanted = readingFilters(reading, layerId, center);
+  const wanted = readingFilters(reading, layer.id, center);
+  if (source) {
+    if (wanted.length > 0 && (typeof out.filters !== "object" || out.filters === null || Object.keys(out.filters).length === 0)) {
+      out.filters = Object.fromEntries(wanted.map((f) => [f.key, f.include ? { include: f.include } : { range: f.range }]));
+    }
+    return out;
+  }
   if (wanted.length > 0) {
     const filters = { ...((typeof out.filters === "object" && out.filters !== null && !Array.isArray(out.filters) ? out.filters : {}) as Record<string, unknown>) };
     const colored = wanted.some((f) => f.color === true);

@@ -426,8 +426,8 @@ weather to infer avalanche danger.
   Satellite; card Routes, Grades, Sport, Afternoon shade; note gives route counts, 5.10/5.11 and shade; names ≥ 3.
 - T03.3 (**documented data gap**, 2026-10-24): no free source gives US river sections a whitewater class or a
   runnable flow range (American Whitewater's are not openly licensed; OpenStreetMap grades only some rapids), so the
-  answer cannot say whether this weekend's flow is enough. Asserted instead: `paddling` and `streamflow`; filter
-  Class III; the note gives cfs, the flow against normal for the date, the weekend, and says plainly that no free
+  answer cannot say whether this weekend's flow is enough. Asserted instead: `paddling` and `streamflow` (no Class
+  III chip: with no section classed there is often nothing to draw); the note gives cfs, the flow against normal for the date, the weekend, and says plainly that no free
   source rates sections by class or gives a runnable range, offering what the map shows (rapids OpenStreetMap graded by
   class, each gauge's flow against normal); names ≥ 2. The sentence is the server's (`lib/agent/turnAnswer.ts`
   DATA_GAPS), so the model cannot leave it out or invent a verdict.

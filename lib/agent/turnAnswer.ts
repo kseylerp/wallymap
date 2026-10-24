@@ -131,20 +131,27 @@ export function withLandManagers(markdown: string, turn: Pick<Turn, "question" |
  * severity and said nothing of it. So does a layer of features the question names whose note opens with its count
  * ("No pipelines and 9 power lines here": Grand Staircase's answer asked about pipelines and never said). Two at most.
  */
+/** Layers whose coverage note opens with the answer's total (glaciers: area then and now, and the share lost). */
+const TOTALS: ReadonlySet<string> = new Set(["glaciers"]);
+
 export function withAskedPictures(markdown: string, turn: Pick<Turn, "reading" | "calls">): string {
   const text = markdown.toLowerCase();
   const lines: string[] = [];
-  for (const hint of turn.reading.layers.filter((l) => l.strong)) {
+  for (const hint of turn.reading.layers.filter((l) => l.strong || TOTALS.has(l.layerId))) {
     const out = turn.calls.findLast((c) => c.toolName === `query_${hint.layerId}`)?.output as { kind?: unknown; coverageNote?: unknown } | undefined;
     if (typeof out?.coverageNote !== "string" || out.coverageNote.trim() === "") continue;
-    // Only a threat the question names (pipelines, mines, leases): a gauge or trail count added nothing but words.
-    const counted = out.kind === "geojson" && THREAT_LAYERS.has(hint.layerId) && /^(?:no|none|\d[\d,]*)\b/i.test(out.coverageNote.trim());
+    // Only a threat the question names (pipelines, mines, leases) or a total the layer states (the glaciers' area then
+    // and now): a gauge or trail count added nothing but words.
+    const counted = out.kind === "geojson" && (THREAT_LAYERS.has(hint.layerId) || TOTALS.has(hint.layerId)) && /^(?:no|none|\d[\d,]*)\b/i.test(out.coverageNote.trim());
     if (out.kind !== "tiles" && !counted) continue;
+    if (out.kind === "tiles" && !hint.strong) continue;
     const title = getLayer(hint.layerId)?.title.replace(/\s*\([^)]*\)\s*/g, " ").trim() ?? hint.layerId;
-    // Mentioned already: the title's longest word ("severity", "cover") is in the note.
-    const word = title.toLowerCase().split(/[\s:,]+/).sort((x, y) => y.length - x.length)[0] ?? "";
-    if (word && text.includes(word.replace(/s$/, ""))) continue;
     const clause = out.coverageNote.split(/;\s+|\.\s+/)[0].trim().replace(/[.:]$/, "");
+    // Mentioned already: the title's longest word ("severity", "cover") is in the note, and for a total its first
+    // measured number too (Glacier National Park's note said "42%" and never the 32.7 and 19 km² it came from).
+    const word = title.toLowerCase().split(/[\s:,]+/).sort((x, y) => y.length - x.length)[0] ?? "";
+    const measured = TOTALS.has(hint.layerId) ? /\d[\d,]*\.\d+/.exec(clause)?.[0] : undefined;
+    if (word && text.includes(word.replace(/s$/, "")) && (!measured || text.includes(measured))) continue;
     if (clause.split(/\s+/).length > 30) continue;
     lines.push(`${clause}.`);
     if (lines.length >= 2) break;

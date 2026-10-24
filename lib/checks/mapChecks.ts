@@ -541,7 +541,8 @@ export function checkDuplicates(layers: Drawn[]): CheckResult {
         const vi = top[i].properties?.[key];
         const si = nameStem(nameOf(top[i]) ?? "");
         // "Unnamed glacier" is many glaciers, not one place.
-        if (typeof vi !== "number" || vi === 0 || si === "" || isUnnamed(normalName(nameOf(top[i]) ?? ""))) continue;
+        // A count of one (one claim each: "Mesa 33" and "Mesa 34" at Grand Staircase) is no measure echoed from one place.
+        if (typeof vi !== "number" || vi === 0 || vi === 1 || si === "" || isUnnamed(normalName(nameOf(top[i]) ?? ""))) continue;
         for (let j = i + 1; j < top.length; j++) {
           if (top[j].properties?.[key] === vi && nameStem(nameOf(top[j]) ?? "") === si && !distinctOsmApart(top[i], top[j])) {
             echoes.push(`"${nameOf(top[i])}" and "${nameOf(top[j])}" (rows ${i + 1} and ${j + 1})`);

@@ -213,8 +213,8 @@ export const TOP10: Top10Expect[] = [
     question: "Class III whitewater near Asheville with enough water this weekend",
     // A documented data gap (docs/top-10-use-cases.md T03.3): no free source rates US sections by class or gives a
     // runnable range, so the answer says so plainly and gives what exists, the gauges' flow against normal.
+    // No Class III chip is asserted: with no section classed, the paddling layer near Asheville often has nothing to draw.
     layers: ["paddling", "streamflow"], main: "streamflow|paddling", basemap: TOPO,
-    filters: [{ layer: "paddling", key: "v", labels: ["Class III"] }],
     labels: 2,
     facts: [
       { what: "flow in cfs", re: CFS },

@@ -100,6 +100,9 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "wind-flow", synonyms: ["wind", "windiest", "windy", "gusty", "wind direction"], notes: "hourly 10 m wind forecast as moving particles, today and the next days", gist: "hourly wind forecast drawn as moving particles" },
   { layerId: "weather-forecast", synonyms: ["forecast", "will it rain", "too hot", "too cold", "temperature", "gusts", "tomorrow's weather"], notes: "7-day hourly forecast at the place: temperature, rain chance and amount, wind and gusts; saturday and sunday lines", gist: "seven-day hourly weather forecast at the asked place" },
   { layerId: "avalanche", synonyms: ["avalanche danger", "avalanche forecast", "avalanche risk", "avy"], notes: "US avalanche centers' daily danger by zone; quote the center and link it, never infer from weather", gist: "daily avalanche danger by US forecast zone" },
+  { layerId: "vegetation-types", synonyms: ["vegetation type", "what grows", "plant community"], notes: "LANDFIRE named types with shares, lower 48", gist: "named vegetation types and their shares" },
+  { layerId: "ecoregions", synonyms: ["ecoregion", "ecosystems", "biome"], notes: "EPA Level III/IV, RESOLVE outside US; shares", gist: "named ecoregion outlines with their shares" },
+  { layerId: "canopy-height", synonyms: ["tree height", "how tall", "canopy height"], notes: "1 m canopy height; median, p90, tallest in box", gist: "how tall the trees are, worldwide" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

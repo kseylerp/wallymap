@@ -102,6 +102,12 @@ const META: Record<string, { shows: string; source: string; freshness: string; c
   "imagery-by-date": { shows: "True-colour 30 m satellite picture on a chosen day", source: "NASA HLS (Landsat, Sentinel-2) via GIBS", freshness: "Every few days, about 2 days behind" },
   mines: { shows: "Mines, prospects and mineral deposits by commodity", source: "USGS MRDS, USMIN", freshness: "Static (about 2011)" },
   uranium: { shows: "Navajo Nation abandoned uranium mines and DOE mill-tailings sites", source: "Navajo Nation AUM program, DOE Legacy Management", freshness: "Static (2007 hazard scores)", coverage: "Western US" },
+  terrain: { shows: "Slope angle, aspect and ground in its own shade, computed from an elevation model", source: "AWS Terrain Tiles (USGS 3DEP, SRTM)", freshness: "Static" },
+  "weather-forecast": { shows: "Hourly 7-day forecast at the asked place: temperature, rain or snow, wind and gusts", source: "National Weather Service; Open-Meteo outside the US", freshness: "Live (hourly)" },
+  avalanche: { shows: "Today's avalanche danger by backcountry forecast zone", source: "US avalanche centers via avalanche.org", freshness: "Daily in season" },
+  "vegetation-types": { shows: "849 named vegetation types (ecological systems) in eight groups, with their shares of the view", source: "LANDFIRE EVT (USGS, US Forest Service) via Earth Engine", freshness: "Static (about 2014)" },
+  ecoregions: { shows: "Named ecoregion outlines with their share of the view: EPA Level III and IV, RESOLVE outside the US", source: "US EPA; RESOLVE Ecoregions 2017, via Earth Engine", freshness: "Static (2013, 2017)" },
+  "canopy-height": { shows: "Height of the tree canopy at about 1 m, with the median and tallest trees in view", source: "Meta and WRI canopy height via Earth Engine", freshness: "Static (imagery 2018–2020)" },
 };
 
 function coverageText(l: Layer): string {

@@ -541,6 +541,10 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   // Forest types (ForTy via Earth Engine): the class here, and natural forest converted since a year (its change view).
   "is this primary forest or plantation?": { layers: ["forest-types"] },
   "where has natural forest been converted to plantations in borneo since 2017?": { layers: ["forest-types"] },
+  // Living cover (T09): LANDFIRE vegetation types, EPA and RESOLVE ecoregions, Meta and WRI canopy height.
+  "what vegetation types grow around sedona?": { layers: ["vegetation-types"] },
+  "which ecoregions does yellowstone span?": { layers: ["ecoregions"] },
+  "how tall are the trees in redwood national park?": { layers: ["canopy-height"] },
   "rapids on the middle fork salmon": { layers: ["paddling"] },
   "kayaking rivers near queenstown": { layers: ["paddling"] },
   "where is the permafrost in alaska?": { layers: ["permafrost"] },

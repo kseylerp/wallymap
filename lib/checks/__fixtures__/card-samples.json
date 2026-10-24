@@ -372,6 +372,16 @@
    }
   ]
  },
+ "canopy-height": {
+  "kind": "tiles",
+  "recorded": "2026-10-24",
+  "bbox": [
+   -124,
+   47.8,
+   -123.8,
+   47.9
+  ]
+ },
  "carbon-flux": {
   "kind": "tiles",
   "recorded": "2026-10-23",
@@ -1983,6 +1993,178 @@
      "magType": "md",
      "kind": "earthquake",
      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75398866"
+    }
+   }
+  ]
+ },
+ "ecoregions": {
+  "kind": "geojson",
+  "recorded": "2026-10-24",
+  "bbox": [
+   -84,
+   35.42,
+   -83.1,
+   35.8
+  ],
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -84,
+      35.419999999999995
+     ]
+    },
+    "properties": {
+     "name": "Southern Metasedimentary Mountains",
+     "level": "4",
+     "levelLabel": "EPA Level IV ecoregion",
+     "share": 0.749,
+     "areaSqKm": 2576,
+     "area": "2,576 km² (994 sq mi)",
+     "parent": "Blue Ridge",
+     "code": "66g"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.1747367351652,
+      35.72458255405496
+     ]
+    },
+    "properties": {
+     "name": "High Mountains",
+     "level": "4",
+     "levelLabel": "EPA Level IV ecoregion",
+     "share": 0.117,
+     "areaSqKm": 401,
+     "area": "401 km² (155 sq mi)",
+     "parent": "Blue Ridge",
+     "code": "66i"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -84,
+      35.584853254599714
+     ]
+    },
+    "properties": {
+     "name": "Southern Sedimentary Ridges",
+     "level": "4",
+     "levelLabel": "EPA Level IV ecoregion",
+     "share": 0.035,
+     "areaSqKm": 121,
+     "area": "121 km² (47 sq mi)",
+     "parent": "Blue Ridge",
+     "code": "66e"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -84,
+      35.79322356749898
+     ]
+    },
+    "properties": {
+     "name": "Southern Limestone/Dolomite Valleys and Low Rolling Hills",
+     "level": "4",
+     "levelLabel": "EPA Level IV ecoregion",
+     "share": 0.03,
+     "areaSqKm": 103,
+     "area": "103 km² (40 sq mi)",
+     "parent": "Ridge and Valley",
+     "code": "67f"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.86813101688384,
+      35.675338733654634
+     ]
+    },
+    "properties": {
+     "name": "Limestone Valleys and Coves",
+     "level": "4",
+     "levelLabel": "EPA Level IV ecoregion",
+     "share": 0.024,
+     "areaSqKm": 84,
+     "area": "84 km² (32 sq mi)",
+     "parent": "Blue Ridge",
+     "code": "66f"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.81293552738272,
+      35.800203642814274
+     ]
+    },
+    "properties": {
+     "name": "Southern Shale Valleys",
+     "level": "4",
+     "levelLabel": "EPA Level IV ecoregion",
+     "share": 0.022,
+     "areaSqKm": 76,
+     "area": "76 km² (29 sq mi)",
+     "parent": "Ridge and Valley",
+     "code": "67g"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -84,
+      35.626292974723164
+     ]
+    },
+    "properties": {
+     "name": "Southern Dissected Ridges and Knobs",
+     "level": "4",
+     "levelLabel": "EPA Level IV ecoregion",
+     "share": 0.02,
+     "areaSqKm": 68,
+     "area": "68 km² (26 sq mi)",
+     "parent": "Ridge and Valley",
+     "code": "67i"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -83.1,
+      35.44278746969258
+     ]
+    },
+    "properties": {
+     "name": "Southern Crystalline Ridges and Mountains",
+     "level": "4",
+     "levelLabel": "EPA Level IV ecoregion",
+     "share": 0.002,
+     "areaSqKm": 8,
+     "area": "8 km² (3 sq mi)",
+     "parent": "Blue Ridge",
+     "code": "66d"
     }
    }
   ]
@@ -14712,6 +14894,16 @@
      "evaluationReport": "https://semspub.epa.gov/work/09/100016417.pdf"
     }
    }
+  ]
+ },
+ "vegetation-types": {
+  "kind": "tiles",
+  "recorded": "2026-10-24",
+  "bbox": [
+   -84,
+   35.42,
+   -83.1,
+   35.8
   ]
  },
  "weather-alerts": {

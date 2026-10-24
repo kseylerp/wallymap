@@ -5,6 +5,8 @@
  */
 import type { EeNode } from "./expr";
 import { parseTileQuery, tileImage, tileKey } from "./forestTypes";
+import * as vegetation from "./vegetation";
+import * as canopy from "./canopyHeight";
 
 export type EeTileLayer = {
   /** The picture for a tile URL's query, or null when the query is not one the layer publishes. */
@@ -21,6 +23,16 @@ export const EE_TILE_LAYERS: Record<string, EeTileLayer> = {
     },
     minzoom: 3,
     maxzoom: 14,
+  },
+  "vegetation-types": {
+    picture: (query) => (vegetation.parseTileQuery(query) ? { key: vegetation.TILE_KEY, image: vegetation.groupTiles() } : null),
+    minzoom: 4,
+    maxzoom: 15,
+  },
+  "canopy-height": {
+    picture: (query) => (canopy.parseTileQuery(query) ? { key: canopy.TILE_KEY, image: canopy.heightTiles() } : null),
+    minzoom: 3,
+    maxzoom: 17,
   },
 };
 

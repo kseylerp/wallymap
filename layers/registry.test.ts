@@ -76,9 +76,9 @@ describe("palette roles per layer", () => {
 
   it("lists the raster tile layers, which draw their own imagery", () => {
     expect([...RASTER_TILE_LAYERS].sort()).toEqual([
-      "burn-severity", "carbon-flux", "disturbance", "fire-hazard", "flood-extent", "forest-alerts",
+      "burn-severity", "canopy-height", "carbon-flux", "disturbance", "fire-hazard", "flood-extent", "forest-alerts",
       "forest-loss", "forest-types", "greenness", "imagery-by-date", "land-cover", "night-lights", "phenology", "population",
-      "sea-ice", "sea-level-rise", "snow-cover", "surface-water", "terrain",
+      "sea-ice", "sea-level-rise", "snow-cover", "surface-water", "terrain", "vegetation-types",
     ]);
   });
 });

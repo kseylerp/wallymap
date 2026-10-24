@@ -21,7 +21,7 @@ describe("VOCABULARY", () => {
   });
 
   it("renders a table small enough for the prompt", () => {
-    expect(vocabularyForPrompt().length).toBeLessThan(11_500);
+    expect(vocabularyForPrompt().length).toBeLessThan(13_500);
   });
 
   it("gives every layer a 6-to-10-word gist for list_layers, kept out of the prompt", () => {

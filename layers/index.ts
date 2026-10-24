@@ -90,3 +90,6 @@ import "./forest-types";
 import "./terrain";
 import "./weather-forecast";
 import "./avalanche";
+import "./vegetation-types";
+import "./ecoregions";
+import "./canopy-height";

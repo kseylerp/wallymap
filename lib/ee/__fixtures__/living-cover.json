@@ -1,0 +1,816 @@
+{
+ "recorded": "2026-10-23",
+ "note": "Live Earth Engine answers (value:compute results) recorded once with a scratch script; no credentials. Smokies [-84,35.42,-83.1,35.8], Mount Hood [-121.95,45.2,-121.5,45.5], Bend [-121.5,43.9,-121.1,44.2], Danum/Sabah [117.6,4.8,118,5.1].",
+ "evtSharesSmokies": {
+  "EVT": {
+   "3182": 17,
+   "3191": 5,
+   "3195": 57.898039215686275,
+   "3274": 1,
+   "3292": 638.2745098039215,
+   "3294": 21.058823529411764,
+   "3295": 6,
+   "3296": 289.83921568627454,
+   "3297": 144.49803921568628,
+   "3298": 45,
+   "3299": 1522.7921568627435,
+   "3300": 1,
+   "3309": 4481.505882352941,
+   "3315": 16644.91372549023,
+   "3317": 68.74901960784314,
+   "3318": 19222.729411764773,
+   "3319": 3,
+   "3320": 4028.9411764705815,
+   "3321": 394.4901960784314,
+   "3350": 2392.176470588235,
+   "3352": 1472.250980392156,
+   "3353": 571.7490196078431,
+   "3375": 436.81960784313725,
+   "3376": 6.874509803921569,
+   "3377": 12.874509803921569,
+   "3471": 48.898039215686275,
+   "3472": 413.02352941176474,
+   "3533": 608.8901960784312,
+   "3556": 61.87450980392157,
+   "3557": 9,
+   "3905": 133.39607843137256,
+   "3906": 164.64313725490197,
+   "3907": 180.12156862745098,
+   "3908": 240.94901960784316,
+   "3909": 381.6666666666667,
+   "3930": 104.5372549019608,
+   "3931": 2,
+   "3932": 3,
+   "3933": 13,
+   "3934": 90.1764705882353,
+   "3950": 2.0588235294117645,
+   "3953": 1,
+   "3954": 1.6823529411764706,
+   "3973": 4,
+   "3974": 126.24705882352941,
+   "3975": 16,
+   "3976": 7,
+   "3977": 2175.513725490195
+  }
+ },
+ "evtSharesBend": {
+  "EVT": {
+   "3001": 105.49411764705883,
+   "3003": 1,
+   "3006": 119.24705882352941,
+   "3011": 2348.866666666667,
+   "3017": 7794.117647058841,
+   "3019": 72.24705882352941,
+   "3028": 211.98823529411766,
+   "3031": 3,
+   "3032": 6,
+   "3037": 28,
+   "3041": 1333.474509803921,
+   "3042": 1,
+   "3043": 42.321568627450986,
+   "3044": 201.90196078431376,
+   "3045": 3644.3137254901953,
+   "3050": 1,
+   "3053": 28366.627450980508,
+   "3056": 2894.1176470588216,
+   "3058": 56.576470588235296,
+   "3061": 32,
+   "3062": 24,
+   "3063": 6,
+   "3065": 1,
+   "3068": 8.580392156862745,
+   "3080": 18112.247058823523,
+   "3084": 9.07843137254902,
+   "3098": 18.16078431372549,
+   "3103": 3,
+   "3106": 11.580392156862745,
+   "3123": 2411.2235294117645,
+   "3124": 1825.8588235294114,
+   "3125": 22107.384313725444,
+   "3126": 327.4980392156863,
+   "3127": 68.56470588235294,
+   "3138": 73.49803921568628,
+   "3139": 2217.9450980392157,
+   "3145": 102,
+   "3152": 3,
+   "3153": 98,
+   "3154": 1132.5607843137254,
+   "3158": 211.39215686274514,
+   "3159": 441.6235294117647,
+   "3164": 5,
+   "3165": 81,
+   "3167": 4.4980392156862745,
+   "3171": 8,
+   "3172": 156.8156862745098,
+   "3173": 100.48235294117646,
+   "3174": 1,
+   "3181": 4310.427450980392,
+   "3182": 1304.2470588235294,
+   "3183": 30,
+   "3203": 1,
+   "3206": 2,
+   "3227": 12.580392156862745,
+   "3251": 36,
+   "3252": 1,
+   "3255": 50.498039215686276,
+   "3292": 418.121568627451,
+   "3294": 3152.5254901960784,
+   "3295": 205,
+   "3296": 4136.305882352941,
+   "3297": 769,
+   "3298": 120,
+   "3299": 6431.56862745098,
+   "3900": 709.2470588235294,
+   "3901": 1348.4901960784314,
+   "3902": 100,
+   "3903": 373.6235294117647,
+   "3904": 1864.556862745098,
+   "3921": 80,
+   "3923": 6551.035294117647,
+   "3924": 106.62352941176471,
+   "3964": 54,
+   "3965": 269.11764705882354,
+   "3966": 2,
+   "3967": 584.6117647058824,
+   "3968": 30
+  }
+ },
+ "evtPointClingmans": {
+  "EVT": 3350
+ },
+ "canopyStatsHood": {
+  "h_p100": 39,
+  "h_p50": 17.000000000000078,
+  "h_p90": 23.99999999999999,
+  "treeShare": 0.8325944536068165
+ },
+ "canopyPointHood": {
+  "cover_code": 0
+ },
+ "ecoregionsSmokiesL3": {
+  "type": "FeatureCollection",
+  "columns": {
+   "area": "Float",
+   "code": "String",
+   "name": "String",
+   "parent": "String"
+  },
+  "version": 1566852390239791,
+  "id": "EPA/Ecoregions/2013/L3",
+  "properties": {
+   "date_range": [
+    1366070400000,
+    1366156800000
+   ],
+   "period": 0,
+   "thumb": "https://mw1.google.com/ges/dd/images/Ecoregions_thumb.png",
+   "description": "<p>The U.S. Environmental Protection Agency (USEPA) provides\nthe Ecoregions dataset to serve as a spatial framework for the\nresearch, assessment, management, and monitoring of ecosystems\nand ecosystem components. Ecoregions denote areas of general\nsimilarity in ecosystems and in the type, quality, and quantity\nof environmental resources. These general-purpose regions are\ncritical for structuring and implementing ecosystem management\nstrategies across federal agencies, state agencies, and nongovernmental\norganizations that are responsible for different types of resources\nwithin the same geographical areas.</p><p>The approach used to\ncompile this map is based on the premise that ecological regions\ncan be identified through the analysis of patterns of biotic\nand abiotic phenomena, including geology, physiography, vegetation,\nclimate, soils, land use, wildlife, and hydrology. The relative\nimportance of each characteristic varies from one ecological\nregion to another.</p><p>This dataset includes the USEPA ecoregions\nclassification scheme, as well as the scheme from the Commission\nfor Environmental Cooperation (CEC). Ecoregions are hierarchical,\nwith Level IV being the most detailed and Level I defining the\nbroadest classifications. Because of this hierarchy, Level III\nfeatures retain information from Levels I and II. The CEC divided\nall of North America in distinct ecoregions for Levels I, II,\nand III, while the USEPA did so only for the United States at\nLevel III and Level IV. The columns starting with 'us_' belong\nto the USEPA scheme, and the columns starting with 'na_' belong\nto the CEC scheme. The ingested version of this dataset contains\nfeatures for the conterminous United States only (that is, Alaska\nand Hawaii are not included). Methods used to define the ecoregions\nare explained in Omernik (1995, 2004), Omernik and others (2000),\nand Gallant and others (1989).\"</p><p><b>Table Schema</b><table class=\"eecat\"><tr><th scope=\"col\">Name</th><th scope=\"col\">Type</th><th scope=\"col\">Description</th></tr><tr><td>l1_key</td><td>STRING</td><td><p>NA Level I Code and Name</p></td></tr><tr><td>l2_key</td><td>STRING</td><td><p>NA Level II Code and Name</p></td></tr><tr><td>l3_key</td><td>STRING</td><td><p>US Level III Code and Name</p></td></tr><tr><td>na_l1code</td><td>STRING</td><td><p>Code for Level I Ecoregion (North America/CEC)</p></td></tr><tr><td>na_l1name</td><td>STRING</td><td><p>Name for Level I Ecoregion (North America/CEC)</p></td></tr><tr><td>na_l2code</td><td>STRING</td><td><p>Code for Level II Ecoregion (North America/CEC)</p></td></tr><tr><td>na_l2name</td><td>STRING</td><td><p>Name for Level II Ecoregion (North America/CEC)</p></td></tr><tr><td>na_l3code</td><td>STRING</td><td><p>Code for Level III Ecoregion (North America/CEC)</p></td></tr><tr><td>na_l3name</td><td>STRING</td><td><p>Name for Level III Ecoregion (North America/CEC)</p></td></tr><tr><td>shape_area*</td><td>DOUBLE</td><td><p>Area of the feature's geometry in its original format</p></td></tr><tr><td>shape_leng*</td><td>DOUBLE</td><td><p>Length of the edges in the feature's geometry in its original format</p></td></tr><tr><td>us_l3code</td><td>STRING</td><td><p>Code for Level III Ecoregion (US/USEPA)</p></td></tr><tr><td>us_l3name</td><td>STRING</td><td><p>Name for Level III Ecoregion (US/USEPA)</p></td></tr></table><p><sup>*Calculated by the data provider.</sup><p><b>Terms of Use</b><br><p>There are no restrictions on use of this US public domain data.</p><p><b>Suggested citation(s)</b><ul><li><p>Commission for Environmental Cooperation. 1997. Ecological regions of North America: toward a common perspective. Commission for Environmental Cooperation, Montreal, Quebec, Canada. 71p. Map (scale 1:12,500,000). Revised 2006.</p></li><li><p>McMahon, G., S.M. Gregonis, S.W. Waltman, J.M. Omernik, T.D. Thorson, J.A. Freeouf, A.H. Rorick, and J.E. Keys. 2001. Developing a spatial framework of common ecological regions for the conterminous United States. Environmental Management 28(3):293-316.</p></li><li><p>Omernik, J.M. 1987. Ecoregions of the conterminous United States. Map (scale 1:7,500,000). Annals of the Association of American Geographers 77(1):118-125.</p></li><li><p>Omernik, J.M. 1995. Ecoregions: A spatial framework for environmental management. In: Biological Assessment and Criteria: Tools for Water Resource Planning and Decision Making. Davis, W.S. and T.P. Simon (eds.),   Lewis Publishers, Boca Raton, FL. p. 49-62.</p></li><li><p>Omernik, J.M. 2004. Perspectives on the nature and definition of ecological regions. Environmental Management 34(Supplement 1):S27-S38.</p></li><li><p>Omernik, J.M. and G.E. Griffith. 2014. Ecoregions of the conterminous United States: evolution of a hierarchical spatial framework. Environmental Management 54(6):1249-1266.</p></li></ul><style>\n  table.eecat {\n  border: 1px solid black;\n  border-collapse: collapse;\n  font-size: 13px;\n  }\n  table.eecat td, tr, th {\n  text-align: left; vertical-align: top;\n  border: 1px solid gray; padding: 3px;\n  }\n  td.nobreak { white-space: nowrap; }\n</style>",
+   "source_tags": [
+    "epa"
+   ],
+   "provider_url": "https://www.epa.gov/eco-research/level-iii-and-iv-ecoregions-continental-united-states",
+   "title": "US EPA Ecoregions (Level III)",
+   "sample": "https://mw1.google.com/ges/dd/images/Ecoregions_sample.png",
+   "tags": [
+    "epa",
+    "ecoregions"
+   ],
+   "product_tags": [
+    "ecoregions"
+   ],
+   "provider": "United States Environmental Protection Agency",
+   "system:asset_size": 20656579
+  },
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "MultiPolygon",
+     "coordinates": [
+      [
+       [
+        [
+         -83.59387132735547,
+         35.80007376889796
+        ],
+        [
+         -83.5938723156824,
+         35.79949154621029
+        ],
+        [
+         -83.60092166767727,
+         35.796876307066654
+        ],
+        [
+         -83.60285845800261,
+         35.795303825475756
+        ],
+        [
+         -83.60308280470792,
+         35.792494352742736
+        ],
+        [
+         -83.59771532152851,
+         35.7913621270288
+        ],
+        [
+         -83.58778299322776,
+         35.79052133973998
+        ],
+        [
+         -83.5840118557868,
+         35.79183081511094
+        ],
+        [
+         -83.5821389996374,
+         35.79311467785696
+        ],
+        [
+         -83.57948261710901,
+         35.79383864192743
+        ],
+        [
+         -83.57651619616873,
+         35.79324621210148
+        ],
+        [
+         -83.57338434382301,
+         35.79134018683309
+        ],
+        [
+         -83.56398086225963,
+         35.78178189378523
+        ],
+        [
+         -83.55263518016244,
+         35.77339503978662
+        ],
+        [
+         -83.54555545987915,
+         35.77090633933454
+        ],
+        [
+         -83.54084116747538,
+         35.770681413573584
+        ],
+        [
+         -83.53694866771075,
+         35.772965319965664
+        ],
+        [
+         -83.53581436375651,
+         35.77607425332417
+        ],
+        [
+         -83.53676156994557,
+         35.781331895724186
+        ],
+        [
+         -83.5386512237675,
+         35.78445812586013
+        ],
+        [
+         -83.54122769676708,
+         35.786773907515965
+        ],
+        [
+         -83.5462809795448,
+         35.78985984479146
+        ],
+        [
+         -83.54724558908579,
+         35.792368104432306
+        ],
+        [
+         -83.54639691232661,
+         35.79570080409353
+        ],
+        [
+         -83.54357397797003,
+         35.79877350773292
+        ],
+        [
+         -83.54127792869652,
+         35.80001593532298
+        ],
+        [
+         -83.59387132735547,
+         35.80007376889796
+        ]
+       ]
+      ],
+      [
+       [
+        [
+         -84,
+         35.626292974723164
+        ],
+        [
+         -83.984214330408,
+         35.63410249050316
+        ],
+        [
+         -83.96574633616758,
+         35.6420798388445
+        ],
+        [
+         -83.95779488993423,
+         35.64690593584216
+        ],
+        [
+         -83.94436878849942,
+         35.66029742097207
+        ],
+        [
+         -83.93332959029571,
+         35.66815075453435
+        ],
+        [
+         -83.91857649736825,
+         35.676405042154734
+        ],
+        [
+         -83.90836298368717,
+         35.68378613168511
+        ],
+        [
+         -83.88872806145498,
+         35.70248160579751
+        ],
+        [
+         -83.86237094737056,
+         35.722480257329956
+        ],
+        [
+         -83.84267000982831,
+         35.7301738169914
+        ],
+        [
+         -83.83507255866259,
+         35.73578831583585
+        ],
+        [
+         -83.82398478089257,
+         35.73945178817711
+        ],
+        [
+         -83.82233904268331,
+         35.74119579346465
+        ],
+        [
+         -83.81987711180811,
+         35.74718950202834
+        ],
+        [
+         -83.816871117679,
+         35.75090038396465
+        ],
+        [
+         -83.81259774974679,
+         35.754516387314105
+        ],
+        [
+         -83.79215588631659,
+         35.76421794326889
+        ],
+        [
+         -83.765704293435,
+         35.772627408616636
+        ],
+        [
+         -83.75016732109584,
+         35.77887021510733
+        ],
+        [
+         -83.74449599992819,
+         35.779925446304226
+        ],
+        [
+         -83.73840505128045,
+         35.7811034333816
+        ],
+        [
+         -83.73478808036771,
+         35.7828737188324
+        ],
+        [
+         -83.73018358446285,
+         35.78769457955205
+        ],
+        [
+         -83.71756841208806,
+         35.79595293365889
+        ],
+        [
+         -83.71300322896741,
+         35.80019368757028
+        ],
+        [
+         -84,
+         35.8
+        ],
+        [
+         -84,
+         35.626292974723164
+        ]
+       ]
+      ]
+     ]
+    },
+    "id": "00000000000000000213",
+    "properties": {
+     "area": 247165049.5324299,
+     "code": "67",
+     "name": "Ridge and Valley",
+     "parent": "OZARK/OUACHITA-APPALACHIAN FORESTS"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Polygon",
+     "coordinates": [
+      [
+       [
+        -84,
+        35.419999999999995
+       ],
+       [
+        -83.55,
+        35.42
+       ],
+       [
+        -83.1,
+        35.419999999999995
+       ],
+       [
+        -83.1,
+        35.8
+       ],
+       [
+        -83.54127792869652,
+        35.80001593532298
+       ],
+       [
+        -83.54357397797003,
+        35.79877350773292
+       ],
+       [
+        -83.54639691232661,
+        35.79570080409353
+       ],
+       [
+        -83.54724558908579,
+        35.792368104432306
+       ],
+       [
+        -83.5462809795448,
+        35.78985984479146
+       ],
+       [
+        -83.54122769676708,
+        35.786773907515965
+       ],
+       [
+        -83.5386512237675,
+        35.78445812586013
+       ],
+       [
+        -83.53676156994557,
+        35.781331895724186
+       ],
+       [
+        -83.53581436375651,
+        35.77607425332417
+       ],
+       [
+        -83.53694866771075,
+        35.772965319965664
+       ],
+       [
+        -83.54084116747538,
+        35.770681413573584
+       ],
+       [
+        -83.54555545987915,
+        35.77090633933454
+       ],
+       [
+        -83.55263518016244,
+        35.77339503978662
+       ],
+       [
+        -83.56398086225963,
+        35.78178189378523
+       ],
+       [
+        -83.57338434382301,
+        35.79134018683309
+       ],
+       [
+        -83.57651619616873,
+        35.79324621210148
+       ],
+       [
+        -83.57948261710901,
+        35.79383864192743
+       ],
+       [
+        -83.5821389996374,
+        35.79311467785696
+       ],
+       [
+        -83.5840118557868,
+        35.79183081511094
+       ],
+       [
+        -83.58778299322776,
+        35.79052133973998
+       ],
+       [
+        -83.60046329172532,
+        35.791613589312824
+       ],
+       [
+        -83.60308280470792,
+        35.792494352742736
+       ],
+       [
+        -83.60285845800261,
+        35.795303825475756
+       ],
+       [
+        -83.60092166767727,
+        35.796876307066654
+       ],
+       [
+        -83.5938723156824,
+        35.79949154621029
+       ],
+       [
+        -83.59387132735547,
+        35.80007376889796
+       ],
+       [
+        -83.71300322896741,
+        35.80019368757028
+       ],
+       [
+        -83.71756841208806,
+        35.79595293365889
+       ],
+       [
+        -83.73018358446285,
+        35.78769457955205
+       ],
+       [
+        -83.73478808036771,
+        35.7828737188324
+       ],
+       [
+        -83.73840505128045,
+        35.7811034333816
+       ],
+       [
+        -83.75016732109584,
+        35.77887021510733
+       ],
+       [
+        -83.765704293435,
+        35.772627408616636
+       ],
+       [
+        -83.79215588631659,
+        35.76421794326889
+       ],
+       [
+        -83.81259774974679,
+        35.754516387314105
+       ],
+       [
+        -83.816871117679,
+        35.75090038396465
+       ],
+       [
+        -83.81987711180811,
+        35.74718950202834
+       ],
+       [
+        -83.82233904268331,
+        35.74119579346465
+       ],
+       [
+        -83.82398478089257,
+        35.73945178817711
+       ],
+       [
+        -83.83507255866259,
+        35.73578831583585
+       ],
+       [
+        -83.84267000982831,
+        35.7301738169914
+       ],
+       [
+        -83.86237094737056,
+        35.722480257329956
+       ],
+       [
+        -83.88872806145498,
+        35.70248160579751
+       ],
+       [
+        -83.91160026678433,
+        35.68115748084978
+       ],
+       [
+        -83.92515299984534,
+        35.67257720171755
+       ],
+       [
+        -83.93332959029571,
+        35.66815075453435
+       ],
+       [
+        -83.94436878849942,
+        35.66029742097207
+       ],
+       [
+        -83.95779488993423,
+        35.64690593584216
+       ],
+       [
+        -83.96574633616758,
+        35.6420798388445
+       ],
+       [
+        -83.99093470291955,
+        35.6307273742203
+       ],
+       [
+        -84,
+        35.626292974723164
+       ],
+       [
+        -84,
+        35.419999999999995
+       ]
+      ]
+     ]
+    },
+    "id": "00000000000000000225",
+    "properties": {
+     "area": 3190679913.026067,
+     "code": "66",
+     "name": "Blue Ridge",
+     "parent": "OZARK/OUACHITA-APPALACHIAN FORESTS"
+    }
+   }
+  ]
+ },
+ "resolveSabah": {
+  "type": "FeatureCollection",
+  "columns": {
+   "area": "Float",
+   "name": "String",
+   "parent": "String"
+  },
+  "version": 1691436358500527,
+  "id": "RESOLVE/ECOREGIONS/2017",
+  "properties": {
+   "time_start": "2017-04-05T00:00:00Z",
+   "time_end": "2017-04-05T00:00:00Z",
+   "system:asset_size": 121908241
+  },
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Polygon",
+     "coordinates": [
+      [
+       [
+        117.60000000000001,
+        4.925090246261772
+       ],
+       [
+        117.6647252251383,
+        4.923726026848909
+       ],
+       [
+        117.73233860306969,
+        4.8735387987138745
+       ],
+       [
+        117.80071445880603,
+        4.8558183419889
+       ],
+       [
+        117.83509860514509,
+        4.855073669850653
+       ],
+       [
+        117.88706944795886,
+        4.870194479084363
+       ],
+       [
+        117.92145354342625,
+        4.869440876135904
+       ],
+       [
+        117.93744828793112,
+        4.8203372663836195
+       ],
+       [
+        117.93694619362533,
+        4.800015459871969
+       ],
+       [
+        118.00000000000001,
+        4.8
+       ],
+       [
+        118.00000000000001,
+        5.1
+       ],
+       [
+        117.60000000000001,
+        5.1
+       ],
+       [
+        117.60000000000001,
+        4.925090246261772
+       ]
+      ]
+     ]
+    },
+    "id": "00000000000000000015",
+    "properties": {
+     "area": 1140474445.739177,
+     "name": "Borneo lowland rain forests",
+     "parent": "Tropical & Subtropical Moist Broadleaf Forests"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Polygon",
+     "coordinates": [
+      [
+       [
+        117.6,
+        4.799999999999999
+       ],
+       [
+        117.93694619362533,
+        4.800015459871969
+       ],
+       [
+        117.93744828793112,
+        4.8203372663836195
+       ],
+       [
+        117.92145354342625,
+        4.869440876135904
+       ],
+       [
+        117.88706944795886,
+        4.870194479084363
+       ],
+       [
+        117.83509860514509,
+        4.855073669850653
+       ],
+       [
+        117.80071445880603,
+        4.8558183419889
+       ],
+       [
+        117.73233860306969,
+        4.8735387987138745
+       ],
+       [
+        117.6647252251383,
+        4.923726026848909
+       ],
+       [
+        117.60000000000001,
+        4.925090246261772
+       ],
+       [
+        117.6,
+        4.799999999999999
+       ]
+      ]
+     ]
+    },
+    "id": "00000000000000000126",
+    "properties": {
+     "area": 337716765.6060481,
+     "name": "Borneo montane rain forests",
+     "parent": "Tropical & Subtropical Moist Broadleaf Forests"
+    }
+   }
+  ]
+ }
+}

@@ -12,7 +12,10 @@ export type EeNode =
   | { constantValue: unknown }
   | { functionInvocationValue: { functionName: string; arguments: Record<string, EeNode> } }
   | { valueReference: string }
-  | { arrayValue: { values: EeNode[] } };
+  | { arrayValue: { values: EeNode[] } }
+  /** A function (for Collection.map): its body is a tree here; on the wire it is the key of a value (toExpression). */
+  | { functionDefinitionValue: { argumentNames: string[]; body: EeNode | string } }
+  | { argumentReference: string };
 
 export type EeExpression = { result: string; values: Record<string, EeNode> };
 
@@ -33,8 +36,16 @@ function isNode(v: unknown): v is EeNode {
     !!v &&
     typeof v === "object" &&
     !Array.isArray(v) &&
-    ("constantValue" in v || "functionInvocationValue" in v || "valueReference" in v || "arrayValue" in v)
+    ("constantValue" in v || "functionInvocationValue" in v || "valueReference" in v || "arrayValue" in v || "functionDefinitionValue" in v || "argumentReference" in v)
   );
+}
+
+/**
+ * A one-argument function for `Collection.map`: `body(arg)` builds the result from the argument's reference. Nested
+ * functions need distinct names (`name`), as Earth Engine's own clients number them.
+ */
+export function lambda(body: (arg: EeNode) => EeNode, name = "_MAPPING_VAR_0_0"): EeNode {
+  return { functionDefinitionValue: { argumentNames: [name], body: body({ argumentReference: name }) } };
 }
 
 // ---- Images and collections ----
@@ -114,6 +125,8 @@ export function toExpression(root: EeNode): EeExpression {
       if ((counts.get(key) ?? 0) === 1) for (const child of Object.values(node.functionInvocationValue.arguments)) count(child);
     } else if ("arrayValue" in node) {
       for (const child of node.arrayValue.values) count(child);
+    } else if ("functionDefinitionValue" in node && typeof node.functionDefinitionValue.body !== "string") {
+      count(node.functionDefinitionValue.body);
     }
     return key;
   };
@@ -137,6 +150,17 @@ export function toExpression(root: EeNode): EeExpression {
       return { valueReference: ref };
     }
     if ("arrayValue" in node) return { arrayValue: { values: node.arrayValue.values.map((v) => emit(v)) } };
+    // A function's body goes on the wire as a value of its own, named by its key (the REST FunctionDefinition).
+    if ("functionDefinitionValue" in node && typeof node.functionDefinitionValue.body !== "string") {
+      const body = emit(node.functionDefinitionValue.body);
+      let ref: string;
+      if ("valueReference" in body) ref = body.valueReference;
+      else {
+        ref = String(next++);
+        values[ref] = body;
+      }
+      return { functionDefinitionValue: { argumentNames: node.functionDefinitionValue.argumentNames, body: ref } };
+    }
     return node;
   };
   values["0"] = emit(root, true);

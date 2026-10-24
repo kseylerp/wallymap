@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { call, constant, constantImage, eq, loadCollection, mosaic, reduceBands, toExpression, unmask, visualize } from "./expr";
+import { call, constant, constantImage, eq, lambda, loadCollection, mosaic, reduceBands, toExpression, unmask, visualize } from "./expr";
 
 describe("Earth Engine expressions", () => {
   it("writes calls with constants for plain arguments and leaves undefined ones out", () => {
@@ -20,6 +20,16 @@ describe("Earth Engine expressions", () => {
     expect(wire.match(/valueReference/g)).toHaveLength(2);
     const [ref] = Object.keys(expr.values).filter((k) => k !== "0");
     expect(JSON.stringify(expr.values[ref])).toContain("ImageCollection.mosaic");
+  });
+
+  it("sends a mapped function's body as a value of its own, named by key", () => {
+    const fn = lambda((f) => call("Element.get", { object: f, property: "name" }));
+    const expr = toExpression(call("Collection.map", { collection: loadCollection("x"), baseAlgorithm: fn }));
+    const def = (expr.values["0"] as { functionInvocationValue: { arguments: Record<string, { functionDefinitionValue?: { argumentNames: string[]; body: string } }> } }).functionInvocationValue.arguments.baseAlgorithm.functionDefinitionValue!;
+    expect(def.argumentNames).toEqual(["_MAPPING_VAR_0_0"]);
+    expect(expr.values[def.body]).toEqual({
+      functionInvocationValue: { functionName: "Element.get", arguments: { object: { argumentReference: "_MAPPING_VAR_0_0" }, property: { constantValue: "name" } } },
+    });
   });
 
   it("leaves a tree with nothing shared as one value", () => {

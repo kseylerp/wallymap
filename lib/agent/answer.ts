@@ -269,8 +269,22 @@ const UNKNOWN = /^(?:not (?:recorded|rated|mapped|known)|unknown|none|n\/a|—|-
 const firstUnit = (value: string) => value.replace(/^([−-]?[\d.,]+\s*[^\s(]+)\s*\([^)]*\)$/, "$1").trim();
 
 /** One deciding fact in words. */
+/** Longest value an option line quotes whole (words); a rule or description past it keeps its first clause. */
+const VALUE_WORDS = 18;
+
+/** A long value's first clause: Coconino's camping rule ran 60 words in each of three option lines. */
+export function briefValue(v: string): string {
+  if (v.split(/\s+/).length <= VALUE_WORDS) return v;
+  // The clause after the rule's owner ("Coconino National Forest, forest-wide, outside the Sedona orders: dispersed
+  // camping is allowed …") is the rule itself.
+  const after = /^[^:]{0,90}:\s+(.*)$/.exec(v)?.[1] ?? v;
+  const clause = after.split(/;\s+|\.\s+|\s+\(/)[0].trim();
+  const words = clause.split(/\s+/);
+  return words.length <= VALUE_WORDS + 6 ? clause.replace(/[.,;:]$/, "") : `${words.slice(0, VALUE_WORDS).join(" ").replace(/[.,;:]$/, "")}…`;
+}
+
 function phrase(label: string, raw: string): string {
-  const v = firstUnit(raw);
+  const v = briefValue(firstUnit(raw));
   switch (label) {
     case "Round trip":
       return `${v} round trip`;

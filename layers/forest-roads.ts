@@ -180,7 +180,8 @@ export function normalizeMvum(fc: FeatureCollection): FeatureCollection {
       highClearance: str(p.highclearancevehicle) === "open",
     };
     const name = str(p.name);
-    if (name !== undefined) properties.name = name;
+    // A database name ("Woodymtn_barneyflat_epocketlo", Flagstaff 2026-10-24) is no name people read or a sign shows.
+    if (name !== undefined && !/_/.test(name)) properties.name = name;
     // No name: the road number is what is signed on the road and printed on the map ("Forest Road 152C").
     else properties.heading = `Forest Road ${routeId}`;
     const forest = str(p.forestname);

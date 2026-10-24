@@ -65,3 +65,12 @@ describe("forecastDay", () => {
     });
   });
 });
+
+describe("briefValue", () => {
+  it("keeps a short value whole and a long rule's first clause", async () => {
+    const { briefValue } = await import("./answer");
+    expect(briefValue("Maintenance level 3")).toBe("Maintenance level 3");
+    const rule = "Coconino National Forest, forest-wide, outside the Sedona orders: dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30; drive no more than 30 feet off a forest road to camp (Coconino camping guidance).";
+    expect(briefValue(rule)).toBe("dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30");
+  });
+});

@@ -134,11 +134,12 @@ export function padBBox(bbox: BBox): BBox {
  * data (a change view's data holds both sides, so this is their union); ranked the top N by the layer's measure;
  * detail the one feature. Null for tiles (the caller falls back to the named place) and empty data.
  */
-export function viewTarget(view: ViewKind | undefined, layer: LoadedLayer, filters?: LayerFilters): BBox | null {
+export function viewTarget(view: ViewKind | undefined, layer: LoadedLayer, filters?: LayerFilters, rankBy?: string): BBox | null {
   if (layer.result.kind !== "geojson") return null;
   const data = filters ? applyFilters(layer.result.data, filters) : layer.result.data;
   if (view === "ranked") {
-    const key = measureKeyOf(layer);
+    // The measure the row ranks by (Tahoe's view hikes ranked by length framed the top by distance to a viewpoint).
+    const key = rankBy ?? measureKeyOf(layer);
     const top = topFeatures(data, key, RANKED_TOP_N, isLowFirst(layer, key));
     if (top.length > 0) return boundsOf(top);
   }

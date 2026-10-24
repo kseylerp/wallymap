@@ -247,3 +247,24 @@ describe("a colored map of areas added beside other answers (temperature anomaly
     expect(s.renderOps.map((o) => o.layerId)).toEqual(["temperature-anomaly", "fire-perimeters"]);
   });
 });
+
+describe("a ranked view the agent ranks by another measure (Tahoe's view hikes by length)", () => {
+  it("frames the top by that measure", () => {
+    const hikes = layer(
+      "combine:osm-trails-near-viewpoints",
+      { geometry: "point", color: "#000" },
+      [
+        ...Array.from({ length: 12 }, (_, i) => point(-120.0 + i / 1000, 39.0, { name: `Near ${i}`, v: 0.5 + i / 100, len: 1 })),
+        ...Array.from({ length: 10 }, (_, i) => point(-120.3 - i / 1000, 39.4, { name: `Long ${i}`, v: i / 100, len: 8 + i })),
+      ],
+      [{ key: "v", label: "Distance", type: "measure" }, { key: "len", label: "Length", type: "measure" }],
+    );
+    const s = run(
+      initialMapState,
+      { type: "place_named", bbox: [-120.2, 38.9, -119.9, 39.3] },
+      { type: "layer_loaded", layer: hikes },
+      { type: "render", op: { layerId: hikes.id, mode: "points", visible: true, view: "ranked", rankBy: "len" } },
+    );
+    expect(s.camera?.bbox[2]).toBeLessThan(-120.2);
+  });
+});

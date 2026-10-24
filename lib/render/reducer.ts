@@ -464,7 +464,7 @@ export function applyView(state: MapState, layerId: string, view: ViewKind, name
   }
   // Points that sample the view (the forecast) never frame it while another layer answers there: the answer keeps it.
   if (layer.style.samplesView && answersBeside(next, layerId)) return next;
-  return fitCamera(next, viewTarget(view, layer, op.filters) ?? (next.place && !next.place.moved ? next.place.bbox : null), lowerThird);
+  return fitCamera(next, viewTarget(view, layer, op.filters, op.rankBy) ?? (next.place && !next.place.moved ? next.place.bbox : null), lowerThird);
 }
 
 /** True when a visible layer other than `layerId` draws features of its own (not a sampling of the view). */

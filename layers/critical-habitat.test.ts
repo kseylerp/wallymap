@@ -250,7 +250,7 @@ describe("critical-habitat layer", () => {
 
 describe("habitatSentence", () => {
   it("sums each species' designated area with its listing, largest first", () => {
-    const f = (species: string, areaKm2: number, listingStatus: string, status = "Final") => ({ type: "Feature" as const, geometry: null, properties: { species, areaKm2, listingStatus, status } });
+    const f = (species: string, areaKm2: number, listingStatus: string, status = "Final") => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [0, 0] }, properties: { species, areaKm2, listingStatus, status } });
     expect(habitatSentence([f("Desert tortoise", 26_606.3, "Threatened"), f("Virgin River chub", 12.4, "Endangered"), f("Virgin River chub", 3.1, "Endangered"), f("Tiny snail", 0.02, "Proposed Endangered", "Proposed")])).toBe(
       "Critical habitat touching the view (whole designations, which can reach beyond it): Desert tortoise (Threatened): 26,606 km² (6,574,560 acres) designated; " +
         "Virgin River chub (Endangered): 15.5 km² (3,830 acres) designated; Tiny snail (Proposed Endangered): 5 acres designated, proposed",

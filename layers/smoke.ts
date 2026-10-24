@@ -28,11 +28,12 @@ import type { Feature, FeatureCollection, MultiPolygon, Polygon, Position } from
 import { defineLayer, type Attribute, type BBox, type CardSpec, type FieldHelp, type LayerError, type LayerResult, type QueryContext } from "./types";
 import { registerLayer } from "./registry";
 import { arcgisQuery } from "./_shared/arcgis";
-import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
+import { UPSTREAM_TIMEOUT_MS, auxLookups } from "./_shared/constants";
 import { bboxesDisjoint } from "./_shared/coverage";
 import { DAY_MS, dateInput, isoDay, resolveTileDate } from "./_shared/dated-tiles";
 import { textBody } from "@/lib/fetch/validate";
 import { layerColor } from "@/lib/render/palette";
+import { airQualityAt, airQualityNote } from "./air-quality";
 
 const BASE = "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/KML";
 /** First day HMS holds a KML for. */
@@ -48,6 +49,7 @@ const inputSchema = z.object({
   source: z.enum(["observed", "forecast"]).default("observed"),
   date: dateInput,
   days: z.number().int().min(1).max(7).default(1),
+  at: z.tuple([z.number(), z.number()]).optional().describe("The asked place as [lon, lat]; set by the app from the place found"),
 });
 
 export const FORECAST_URL = "https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/NDGD_SmokeForecast_v1/FeatureServer/0";
@@ -294,7 +296,7 @@ const smoke = defineLayer({
     "Example questions: is there smoke over Montana today, how heavy was the smoke over the Bay Area last week, did smoke from the Canadian fires reach the Northeast. " +
     "It is a feature layer, so you can count and list the polygons and read their densities. " +
     "Caveats: the outlines are hand-drawn from satellites, so they are daytime-only, cannot see through thick cloud, and are coarse; thickness is overhead smoke (the whole column), not what you breathe; several passes a day are drawn separately, so polygons overlap and the same plume repeats; smoke outside the Americas is not mapped; a few days have no map. " +
-    "For air quality at the ground check an air-quality source; for the fires themselves use fire-detections. " +
+    "The note also gives the air quality at the asked place now and each coming day (US AQI and PM2.5 from Open-Meteo, smoke included; the air-quality layer draws it): quote it for how smoky the air is. For the fires themselves use fire-detections. " +
     "Compare two dates works (pick two dates or years in compare). " +
     "Empty results carry a coverageNote saying why (no smoke mapped, a day with no map, or outside the Americas).",
   coverage: { bbox: SMOKE_EXTENT },
@@ -313,6 +315,19 @@ const smoke = defineLayer({
   display: { timeZone: "utc" },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
+    // How bad the air is at the place (Open-Meteo, smoke included), beside where the plumes are; a failure leaves it out.
+    const [w, s, e, n] = ctx.bbox;
+    const inside = input.at !== undefined && input.at[0] >= w && input.at[0] <= e && input.at[1] >= s && input.at[1] <= n;
+    const at: [number, number] = inside && input.at ? input.at : [Number(((w + e) / 2).toFixed(4)), Number(((s + n) / 2).toFixed(4))];
+    const [result, aq] = await Promise.all([querySmoke(ctx, input), auxLookups() ? airQualityAt(ctx, at) : Promise.resolve(null)]);
+    if ("error" in result || !aq) return result;
+    const line = airQualityNote(aq, `the asked place (${at[1].toFixed(2)}, ${at[0].toFixed(2)})`);
+    return { ...result, coverageNote: [result.coverageNote, line].filter(Boolean).join("; ") };
+  },
+});
+
+async function querySmoke(ctx: QueryContext, input: z.infer<typeof inputSchema>): Promise<LayerResult | LayerError> {
+  {
     const now = Date.now();
     const citation = {
       source: "NOAA NESDIS OSPO Hazard Mapping System smoke analysis",
@@ -394,8 +409,8 @@ const smoke = defineLayer({
       citation,
       coverageNote: notes.join("; "),
     };
-  },
-});
+  }
+}
 
 registerLayer(smoke);
 

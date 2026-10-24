@@ -36,9 +36,10 @@ import {
   type SeriesAxis,
 } from "./types";
 import { registerLayer } from "./registry";
-import { UPSTREAM_TIMEOUT_MS } from "./_shared/constants";
+import { UPSTREAM_TIMEOUT_MS, auxLookups } from "./_shared/constants";
 import { compass, inUs } from "./wind-flow";
 import { layerColor } from "@/lib/render/palette";
+import { airDayText, airDays, airQualityAt, aqiCategory } from "./air-quality";
 
 const NWS = "https://api.weather.gov";
 const OPEN_METEO = "https://api.open-meteo.com/v1/forecast";
@@ -543,6 +544,7 @@ const HELP: Record<string, FieldHelp> = {
   skyPct: { text: "Share of the sky covered by cloud.", unit: "%" },
   days: { text: "Each day in local time: high and low, the chance and total of rain or snow, top wind and gusts, and the daytime sky. Today covers only the hours left." },
   saturday: { text: "The coming Saturday in local time." },
+  airQuality: { text: "The US Air Quality Index and fine particles (PM2.5, mostly smoke on fire days) now and each coming day's worst hour, from Open-Meteo's air quality forecast (CAMS model).", source: "Open-Meteo air quality API (CC BY 4.0)", url: "https://open-meteo.com/en/docs/air-quality-api" },
   sunday: { text: "The coming Sunday in local time." },
 };
 
@@ -560,6 +562,7 @@ const CARD: CardSpec = {
     { key: "saturday", label: "Saturday" },
     { key: "sunday", label: "Sunday" },
     { key: "days", label: "Next 7 days", format: "list" },
+    { key: "airQuality", label: "Air quality", format: "list" },
     { key: "issued", label: "Forecast issued" },
     { key: "source", label: "Forecast", values: { nws: "National Weather Service", "open-meteo": "Open-Meteo (blend of national models)" } },
   ],
@@ -599,6 +602,7 @@ const weatherForecast = defineLayer({
     "United States: the National Weather Service's official gridded forecast (source 'nws', about 2.5 km); elsewhere Open-Meteo's blend of national models (source 'open-meteo'). " +
     "Each point has tempF, precipChance (%), precipIn (inches in the hour), windMph, gustMph, windFrom and sky at the current hour, every hour under series (the scrubber steps hourly and the asked place's temperature is the chart under it), and the days in local time as words: today, tomorrow, saturday and sunday (the coming weekend) and days (all seven), each with high and low in °F, chance and total of rain or snow, top wind and gusts in mph, and the daytime sky. " +
     "Quote the asked day's line for 'will it rain this weekend', 'too hot to climb Saturday', 'too windy tomorrow', 'what's the weather in Zion this week'; give °F and mph in the US. " +
+    "The asked place also carries airQuality (US AQI now and each day's worst hour, smoke included) and the note quotes it. " +
     "Warnings (flash flood, winter storm, red flag) are weather-alerts; a moving picture of the wind field is wind-flow; snow on the ground is snowpack. " +
     "Caveats: a forecast, less certain each day ahead; one point stands for a few kilometres, so a canyon floor and a rim can differ by 10 °F or more; precipChance is the chance of at least 0.01 in, not how much of the day it rains.",
   coverage: "global",
@@ -622,6 +626,8 @@ const weatherForecast = defineLayer({
     const points = forecastPoints(ctx.bbox, input.at);
     const here = points[0].at;
     const us = inUs(here);
+    // Air quality at the asked place (smoke included), asked alongside; a failure leaves it out.
+    const airPending = auxLookups() ? airQualityAt(ctx, here, nowDate) : Promise.resolve(null);
     let forecasts: (PointForecast | null)[] = us
       ? await Promise.all(points.map((p) => nwsPoint(ctx, p.at, times)))
       : points.map(() => null);
@@ -641,6 +647,15 @@ const weatherForecast = defineLayer({
     forecasts.forEach((fc, i) => {
       if (fc) features.push(forecastFeature(fc, points[i].kind, 0));
     });
+    const air = await airPending;
+    const airLines = air ? airDays(air).map(airDayText) : [];
+    const airNow = air?.aqi[air.now];
+    if (air && features[0] && points[0].kind === "here" && forecasts[0]) {
+      features[0].properties = {
+        ...features[0].properties,
+        airQuality: [...(airNow != null ? [`Now: US AQI ${Math.round(airNow)} (${aqiCategory(airNow).toLowerCase()})`] : []), ...airLines.slice(0, 4)],
+      };
+    }
     const data: FeatureCollection<Point> = { type: "FeatureCollection", features };
     const series: SeriesAxis = { times, step: "hour", now: 0, forecastFrom: 0 };
     const herePoint = forecasts[0];
@@ -659,6 +674,7 @@ const weatherForecast = defineLayer({
     } else {
       notes.push("The asked place's forecast did not answer; the points across the view did");
     }
+    if (air && airLines.length > 0) notes.push(`Air quality there (Open-Meteo, smoke included): ${airNow != null ? `now US AQI ${Math.round(airNow)} (${aqiCategory(airNow).toLowerCase()}) | ` : ""}${airLines.join(" | ")}`);
     if (features.length > 1) notes.push(`${features.length - 1} more points across the view`);
     if (nwsFailed) notes.push("The National Weather Service did not answer for some points; Open-Meteo filled them");
     return {

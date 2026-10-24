@@ -200,7 +200,9 @@ describe("campsites layer", () => {
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(fixture.elements.length);
     expect(r.citation.source).toContain("OpenStreetMap");
-    expect(r.coverageNote).toBeUndefined();
+    // The Lake Tahoe Basin order covers the fixture's camps; no water lookup in unit tests.
+    expect(r.coverageNote).toMatch(/^Rule for \d+ sites: Lake Tahoe Basin Management Unit/);
+    expect(r.data.features.some((f) => typeof f.properties?.campingRule === "string")).toBe(true);
   });
 
   it("maps a failing Overpass to an upstream error after the fallback", async () => {
@@ -229,7 +231,7 @@ describe("campsites layer", () => {
     const caps = r.data.features.flatMap((f) => (f.properties?.kind === "parking" ? [f.properties.v as number] : []));
     expect(Math.min(...caps)).toBe(5100 - 4999 + 1); // 4,999 parking lots kept, smallest dropped first
     expect(Math.max(...caps)).toBe(5100);
-    expect(r.coverageNote).toBe("Showing 5,000 of 5,101 sites (all camp sites, then the largest parking lots); zoom in for the rest");
+    expect(r.coverageNote).toMatch(/^Showing 5,000 of 5,101 sites \(all camp sites, then the largest parking lots\); zoom in for the rest(; |$)/);
   });
 
   it("returns 422 zoom_in from runLayer only over 1,500,000 km2", async () => {

@@ -1,5 +1,5 @@
 {
-  "about": "Hand-kept dispersed-camping closures and rules for the best-known places where the rule decides the answer (docs/use-cases.md UC13, AUDIT R14). No national machine-readable source exists. Each entry's url was fetched and read on `checked`; bbox is a rough box around the area the order or page describes, not its legal boundary. Recheck an entry by its `expires` date.",
+  "about": "Hand-kept dispersed-camping closures and rules for the best-known places where the rule decides the answer (docs/use-cases.md UC13, AUDIT R14). No national machine-readable source exists. Each entry's url was fetched and read on `checked`; bbox is a rough box around the area the order or page describes, not its legal boundary. Recheck an entry by its `expires` date. An entry with `forest` holds only on that national forest's roads; the first entry whose box holds a feature applies, so narrower orders come before forest-wide rules; `appliesTo: backcountry` holds only on camps tagged backcountry.",
   "rules": [
     {
       "id": "sedona-west",
@@ -10,7 +10,12 @@
       "date": "2026-08-18",
       "expires": "2028-08-31",
       "url": "https://www.fs.usda.gov/r03/coconino/alerts/west-sedona-camping-and-campfire-restrictions-0",
-      "bbox": [-111.98, 34.78, -111.8, 34.92],
+      "bbox": [
+        -111.98,
+        34.78,
+        -111.8,
+        34.92
+      ],
       "checked": "2026-10-23"
     },
     {
@@ -22,7 +27,29 @@
       "date": "2023-01-24",
       "expires": "2033-01-24",
       "url": "https://www.fs.usda.gov/r03/coconino/alerts/sedona-oak-creek-canyon-camping-and-campfire-restrictions",
-      "bbox": [-111.85, 34.7, -111.68, 35.0],
+      "bbox": [
+        -111.85,
+        34.7,
+        -111.68,
+        35.0
+      ],
+      "checked": "2026-10-23"
+    },
+    {
+      "id": "coconino-forest-wide",
+      "place": "forest-wide, outside the Sedona orders",
+      "manager": "Coconino National Forest",
+      "forest": "Coconino National Forest",
+      "rule": "Dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30; drive no more than 30 feet off a forest road to camp, except inside the camping corridors the map shows as dots beside a road",
+      "order": "Coconino camping guidance; stay limit Forest Order 03-04-20-18",
+      "date": "2020-09-02",
+      "url": "https://www.fs.usda.gov/r03/coconino/about-area/faqs",
+      "bbox": [
+        -112.0,
+        34.25,
+        -110.7,
+        35.65
+      ],
       "checked": "2026-10-23"
     },
     {
@@ -33,7 +60,12 @@
       "order": "BLM Moab Visitor Guide",
       "date": "2024-07-16",
       "url": "https://www.blm.gov/sites/default/files/docs/2025-12/BLM%20Moab%20Visitor%20Guide%207.16.24%20PFD_0.pdf",
-      "bbox": [-109.95, 38.35, -109.25, 38.85],
+      "bbox": [
+        -109.95,
+        38.35,
+        -109.25,
+        38.85
+      ],
       "checked": "2026-10-23"
     },
     {
@@ -45,7 +77,12 @@
       "date": "2024-06-28",
       "expires": "2027-12-01",
       "url": "https://fs.usda.gov/r05/laketahoebasin/alerts/camping-overnight-stay-restriction",
-      "bbox": [-120.2, 38.7, -119.9, 39.33],
+      "bbox": [
+        -120.2,
+        38.7,
+        -119.9,
+        39.33
+      ],
       "checked": "2026-10-23"
     },
     {
@@ -57,8 +94,30 @@
       "date": "2022-06-14",
       "expires": "2027-06-30",
       "url": "https://www.fs.usda.gov/r02/gmug/alerts/crested-butte-area-camping-and-fire-prohibitions",
-      "bbox": [-107.25, 38.7, -106.8, 39.05],
+      "bbox": [
+        -107.25,
+        38.7,
+        -106.8,
+        39.05
+      ],
       "checked": "2026-10-23"
+    },
+    {
+      "id": "mount-rainier-wilderness",
+      "place": "Mount Rainier National Park backcountry, including the Wonderland Trail",
+      "manager": "National Park Service, Mount Rainier National Park",
+      "rule": "A wilderness permit is required year-round for every overnight stay in the backcountry; the permit names the designated camp or area for each night",
+      "order": "Mount Rainier wilderness permits page",
+      "date": "2026-10-23",
+      "url": "https://www.nps.gov/mora/planyourvisit/wilderness-permit.htm",
+      "bbox": [
+        -121.95,
+        46.73,
+        -121.43,
+        47.0
+      ],
+      "checked": "2026-10-23",
+      "appliesTo": "backcountry"
     }
   ]
 }

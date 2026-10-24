@@ -63,6 +63,21 @@ describe("mergeHikes", () => {
     expect(hikes.find((h) => h.properties?.name === "Ring Loop")?.properties).toMatchObject({ shape: "loop" });
   });
 
+  it("reads a short stub whose ends lie close as out and back, not a loop (Julia Woodward Trail, 170 m)", () => {
+    // About 170 m long, its ends about 130 m apart.
+    const [hike] = mergeHikes([way("Stub", [[-82.2957, 35.663], [-82.2963, 35.6624], [-82.2953, 35.6618]])]);
+    expect(hike.properties?.shape).toBe("out-and-back");
+  });
+
+  it("gives a trail network a round trip: its longest stretch out and back", () => {
+    const [hike] = mergeHikes([
+      way("Fork Trail", [[-105.0, 40.0], [-104.98, 40.0]]),
+      way("Fork Trail", [[-104.99, 40.0], [-104.99, 40.005]]),
+    ]);
+    expect(hike.properties?.shape).toBe("network");
+    expect(Number(hike.properties?.roundTripKm)).toBeCloseTo(2 * 1.7, 0);
+  });
+
   it("takes the hardest rated difficulty among the ways", () => {
     const [hike] = mergeHikes([way("Ridge", [[0, 0], [0.01, 0]], { sac_scale: "hiking" }), way("Ridge", [[0.01, 0], [0.02, 0]], { sac_scale: "alpine_hiking" })]);
     expect(hike.properties?.sac_scale).toBe("alpine_hiking");

@@ -8,6 +8,7 @@ import layer, {
   BLM_SHOWN_FACILITIES,
   BLM_SITES_URL,
   USFS_URL,
+  addOpportunities,
   byKind,
   dedupe,
   interleave,
@@ -180,7 +181,7 @@ describe("recreation-sites layer", () => {
     const agencies = new Set(r.data.features.map((f) => f.properties?.agency));
     expect(agencies).toEqual(new Set(["USFS", "BLM"]));
     expect(r.data.features.length).toBeGreaterThan(40);
-    expect(r.coverageNote).toBeUndefined();
+    expect(r.coverageNote).toBe("Campgrounds: 28 in all, 1 open and 1 closed in the Forest Service's nightly feed (BLM lists no status)");
     expect(r.citation.source).toContain("Forest Service");
   });
 
@@ -194,7 +195,7 @@ describe("recreation-sites layer", () => {
     const stub = routed({ usfs: () => new Response("down", { status: 500 }) });
     const r = geojson(await layer.query(ctx(stub), {}));
     expect(r.data.features.every((f) => f.properties?.agency === "BLM")).toBe(true);
-    expect(r.coverageNote).toBe("Forest Service did not respond, so its sites are missing");
+    expect(r.coverageNote).toBe("Forest Service did not respond, so its sites are missing; Campgrounds: 26 (no open or closed status listed)");
   });
 
   it("returns a hinted error when every service fails", async () => {
@@ -337,5 +338,24 @@ describe("recreation-sites kinds and key", () => {
   it("ignores stray and empty keys in its input instead of failing (the Tahoe kayak run sent a \"\" key)", () => {
     expect(layer.input.safeParse({ "": "" })).toEqual({ success: true, data: {} });
     expect(layer.input.safeParse({ kind: "campground", "": 1 })).toEqual({ success: true, data: {} });
+  });
+
+  it("adds the Forest Service's season, fee and reservations to its campgrounds, by area id", () => {
+    const site = (name: string, areaId: string) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [-120, 39] }, properties: { name, kind: "campground", agency: "USFS", areaId } as Record<string, string | boolean> });
+    const nevada = site("Nevada Beach Campground", "11757");
+    const zephyr = site("Zephyr Cove Resort", "11759");
+    const blm = { ...site("Goose Island", "x"), properties: { name: "Goose Island", kind: "campground", agency: "BLM" } as Record<string, string | boolean> };
+    const n = addOpportunities([nevada, zephyr, blm], {
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", geometry: null as never, properties: { recareaid: 11757, open_season_start: "May", open_season_end: "October", feedescription: "Parking&nbsp;Fee", reservation_info: '<a href="https://www.recreation.gov/camping/campgrounds/232768">Reserve</a>' } },
+        { type: "Feature", geometry: null as never, properties: { recareaid: 11759, open_season_start: null, open_season_end: null, feedescription: null, reservation_info: null } },
+      ],
+    });
+    expect(n).toBe(2);
+    expect(nevada.properties).toMatchObject({ season: "May to October", fee: "Parking Fee", reservable: true });
+    expect(zephyr.properties).toMatchObject({ reservable: "not listed" });
+    expect(zephyr.properties.season).toBeUndefined();
+    expect(blm.properties.reservable).toBeUndefined();
   });
 });

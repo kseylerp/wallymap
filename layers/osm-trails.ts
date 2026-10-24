@@ -24,8 +24,10 @@ import {
 import { SAC_LEVELS, SAC_SCALE, nameAttribute } from "./_shared/bands";
 import { registerLayer } from "./registry";
 import { overpassQuery } from "./_shared/overpass";
+import { auxLookups } from "./_shared/constants";
 import { haversineKm } from "./_shared/geo";
 import { addClimb, mergeHikes } from "./_shared/hikes";
+import { PAYOFF_KINDS, PAYOFF_LABELS, PAYOFF_M, attachPayoffs, buildPayoffQuery, parsePayoffs } from "./_shared/payoffs";
 import { SAGE, layerColor } from "@/lib/render/palette";
 
 export { overpassFailure } from "./_shared/overpass";
@@ -650,6 +652,13 @@ const ATTRIBUTES: Attribute[] = [
   { key: "gainM", type: "measure", label: "Climb", unit: "m", presets: [{ label: "Flat (under 100 m)", max: 100 }, { label: "Big climb (over 600 m)", min: 600 }] },
   { key: "gainPerKm", type: "measure", label: "Climb per km", unit: "m/km" },
   { key: "shape", type: "category", label: "Shape", levels: Object.entries(SHAPE_LABELS).map(([value, label]) => ({ value, label })) },
+  {
+    key: "payoff",
+    type: "category",
+    label: "Leads to",
+    multi: true,
+    levels: PAYOFF_KINDS.map((value) => ({ value, label: PAYOFF_LABELS[value], help: `The trail passes within ${PAYOFF_M} m of a mapped ${PAYOFF_LABELS[value].toLowerCase()}.` })),
+  },
   nameAttribute(),
 ];
 
@@ -705,14 +714,21 @@ const HELP: Record<string, FieldHelp> = {
     unit: "km",
     source: "OpenStreetMap contributors",
   },
-  roundTripKm: { text: "The walk there and back: twice the length for an out and back, the length for a loop.", unit: "km" },
+  roundTripKm: {
+    text: "The walk there and back: twice the length for an out and back, the length for a loop, and for a trail network twice its longest stretch (walked out and back).",
+    unit: "km",
+  },
+  passes: {
+    text: `Waterfalls, viewpoints, named summits and hot springs mapped in OpenStreetMap within ${PAYOFF_M} m of the trail, nearest first.`,
+    source: "OpenStreetMap contributors",
+  },
   gainM: {
     text: "How much the hike climbs walking it once from one end to the other (for a trail network, along its longest stretch), from AWS Terrain Tiles (about 30 m in the US) sampled every 50 m; rises and dips under 8 m are ignored.",
     unit: "m",
     source: "AWS Terrain Tiles (Mapzen Terrarium, open data)",
     url: "https://registry.opendata.aws/terrain-tiles/",
   },
-  roundTripGainM: { text: "The climb of the whole round trip: up and back down for an out and back, once round for a loop.", unit: "m" },
+  roundTripGainM: { text: "The climb of the whole round trip: up and back down for an out and back (or a network's longest stretch), once round for a loop.", unit: "m" },
   gainPerKm: { text: "Climb per kilometre of trail: under 15 is flat, over 80 steep.", unit: "m/km" },
   shape: { text: "Loop when its ends meet; out and back when it is one line you walk and return on; trail network when it branches." },
   kind: {
@@ -745,6 +761,7 @@ const CARD: CardSpec = {
     { key: "roundTripGainM", label: "Climb, round trip", format: "m" },
     { key: "highM", label: "Highest point", format: "m" },
     { key: "sac_scale", label: "Difficulty", values: DIFFICULTY_LABELS },
+    { key: "passes", label: "Leads to" },
     { key: "kind", label: "Kind", values: KIND_LABELS },
     { key: "trail_visibility", label: "Visibility" },
     { key: "surface", label: "Surface" },
@@ -754,7 +771,7 @@ const CARD: CardSpec = {
     { key: "osmName", label: "Name in OpenStreetMap" },
   ],
   links: [{ key: "website", label: "Website" }],
-  hidden: ["osmId", "highway", "route", "ways", "start", "end", "lossM", "lowM", "gainPerKm"],
+  hidden: ["osmId", "highway", "route", "ways", "start", "end", "lossM", "lowM", "gainPerKm", "payoff"],
 };
 
 const osmTrails = defineLayer({
@@ -762,8 +779,11 @@ const osmTrails = defineLayer({
   title: "OpenStreetMap trails",
   description:
     "Hiking paths, footways and tracks from OpenStreetMap, with difficulty (sac_scale), visibility and surface tags where mapped, plus wikidata or wikipedia when the trail has an article. " +
+    "Each whole hike (its ways joined) gives roundTripMi and roundTripGainFt (quote miles and feet in the US), shape (loop, out-and-back, network) and passes: the waterfalls, viewpoints and summits within 250 m (filter payoff include [\"waterfall\"]). " +
     "Under 2,500 km² the ways of one name that touch come back as one whole hike: name, lengthKm (the whole hike in view), shape ('loop', 'out-and-back' or 'network'), roundTripKm, gainM (climb end to end, from terrain tiles), roundTripGainM, gainPerKm, highM, start and end; unnamed paths stay one per way. " +
     "Each has kind ('path', 'footway' or 'track'; a track is an unpaved farm or forest road) and sac_scale (the hardest of its ways; 'not_rated' when none is mapped, often most). " +
+    `payoff lists the kinds ('waterfall', 'viewpoint', 'summit', 'hot_spring') a hike passes within ${PAYOFF_M} m and passes their names ('Catawba Falls (waterfall)'). ` +
+    "A day hike is a round trip of about 3 to 25 km: filter roundTripKm with that range and rank by roundTripKm or gainM; a trail network's roundTripKm is its longest stretch out and back. In the US quote miles and feet: lengthMi, roundTripMi, gainFt and roundTripGainFt carry them. " +
     "Under 2,500 km² it returns the paths; up to 400,000 km² the 150 longest named hiking routes instead (the note gives the total): kind 'route', name, v = lengthKm (km inside the region), distanceKm, network and sac_scale.",
   coverage: "global",
   surface: "land",
@@ -792,6 +812,10 @@ const osmTrails = defineLayer({
     // Wide mode from run.ts; the area test covers a direct call over the path cap.
     if (ctx.wide === true || area > PATH_MAX_AREA_KM2) return queryRoutes(ctx, input);
 
+    // What the hikes lead to (waterfalls, viewpoints, summits), asked alongside; a failure only leaves them out.
+    const payoffsPending = input.ways || !auxLookups()
+      ? Promise.resolve([])
+      : overpassQuery(ctx, buildPayoffQuery(ctx.bbox), { cacheSuffix: "osm-trails:payoffs" }).then((r) => (r.ok ? parsePayoffs(r.json) : []), () => []);
     const result = await overpassQuery(ctx, buildOverpassQuery(ctx.bbox, input));
     if (!result.ok) {
       return { error: result.error, hint: "upstream" };
@@ -820,13 +844,17 @@ const osmTrails = defineLayer({
     // Whole hikes: the ways of one name that touch are one trail, with its climb from terrain tiles (tests have no network).
     const ways = data.features.length;
     data.features = mergeHikes(data.features, NOT_RATED);
-    if (!process.env.VITEST) await addClimb(data.features);
+    const [, payoffs] = await Promise.all([process.env.VITEST ? Promise.resolve(0) : addClimb(data.features), payoffsPending]);
+    const leading = attachPayoffs(data.features, payoffs);
     const merged = data.features.length < ways;
+    const payoffNote = leading > 0 ? `${leading.toLocaleString("en-US")} of them pass within ${PAYOFF_M} m of a waterfall, viewpoint, summit or hot spring (payoff, passes)` : "";
 
     return {
       kind: "geojson",
       data,
-      ...(truncated || merged ? { coverageNote: merged ? hikesNote(data.features.length, ways, total, truncated) : truncatedNote(data.features.length, total) } : {}),
+      ...(truncated || merged || payoffNote
+        ? { coverageNote: [merged ? hikesNote(data.features.length, ways, total, truncated) : truncated ? truncatedNote(data.features.length, total) : "", payoffNote].filter(Boolean).join("; ") }
+        : {}),
       citation: {
         source: "OpenStreetMap contributors (ODbL)",
         url: "https://www.openstreetmap.org/copyright",

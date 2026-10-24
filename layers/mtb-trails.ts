@@ -28,6 +28,7 @@
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
+import { US_UNIT_KEYS, addUsUnits } from "./_shared/roundTrip";
 import {
   defineLayer,
   type BBox,
@@ -230,6 +231,7 @@ export function normalizeMtb(json: unknown): FeatureCollection<Line> {
       const tagged = distanceTagKm(tags.distance);
       if (tagged !== undefined && tagged >= km) properties.distanceKm = Math.round(tagged * 10) / 10;
     } else properties.lengthKm = km;
+    addUsUnits(properties);
     if (tags.highway) properties.highway = tags.highway;
     if (tags.ref) properties.ref = tags.ref;
     if (tags.surface) properties.surface = tags.surface;
@@ -479,7 +481,7 @@ const CARD: CardSpec = {
     { key: "ref", label: "Trail number" },
     { key: "t", label: "Last checked", format: "date" },
   ],
-  hidden: ["osmId", "bicycle", "level"],
+  hidden: ["osmId", "bicycle", "level", ...US_UNIT_KEYS],
 };
 
 const mtbTrails = defineLayer({

@@ -3,7 +3,7 @@ import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { summarizeLayerResult } from "@/lib/layers/summarize";
 import { OUTSIDE_US_NOTE } from "./_shared/coverage";
-import layer, { MANAGER_GROUPS } from "./public-lands";
+import layer, { MANAGER_GROUPS, landUnitsNote, parseLandUnits } from "./public-lands";
 import { contractProblems, legendOf } from "./contract";
 import { cardContent } from "@/lib/render/card";
 import { PURPLE } from "@/lib/render/palette";
@@ -48,7 +48,7 @@ describe("public-lands layer", () => {
     const moab = await layer.query(ctx([-109.75, 38.45, -109.4, 38.7]), {});
     expect("coverageNote" in moab && moab.coverageNote).toMatch(/Bureau of Land Management, Moab Field Office, Moab area: many areas near Moab/);
     const leadville = await layer.query(ctx([-106.5, 39.1, -106.1, 39.4]), {});
-    expect("coverageNote" in leadville && leadville.coverageNote).toMatch(/^Dispersed camping rules are not in this data; check the ranger district's/);
+    expect("coverageNote" in leadville && leadville.coverageNote).toMatch(/^No camping closure order on file for this area; check the ranger district's/);
   });
 
   it("serves PADUS_TILES_URL instead of the default bucket when set", async () => {
@@ -132,5 +132,33 @@ describe("public-lands layer", () => {
   it("runs through runLayer", async () => {
     const ok = await runLayer("public-lands", { bbox: TAHOE, zoom: 9 });
     expect(ok.status).toBe(200);
+  });
+
+  it("names the land units in view with their managers, largest first, and the general camping rules", () => {
+    const units = parseLandUnits({
+      features: [
+        { attributes: { Unit_Nm: "Royal Gorge Field Office", Mang_Name: "BLM", GIS_Acres: 670237 } },
+        { attributes: { Unit_Nm: "San Isabel National Forest", Mang_Name: "USFS", GIS_Acres: 1108492 } },
+        { attributes: { Unit_Nm: "San Isabel National Forest", Mang_Name: "USFS", GIS_Acres: 1108492 } },
+        { attributes: { Unit_Nm: "Arkansas Headwaters", Mang_Name: "SPR", GIS_Acres: 1286 } },
+      ],
+    });
+    expect(units.map((u) => u.name)).toEqual(["San Isabel National Forest", "Royal Gorge Field Office", "Arkansas Headwaters"]);
+    const note = landUnitsNote(units);
+    expect(note).toMatch(/^Land here, largest units first: San Isabel National Forest \(US Forest Service\), Royal Gorge Field Office \(Bureau of Land Management\), Arkansas Headwaters \(State parks agency\)/);
+    expect(note).toMatch(/national forest land generally allows dispersed camping .*; BLM land generally allows dispersed camping up to 14 days/);
+    expect(landUnitsNote([])).toBe("");
+  });
+
+  it("asks PAD-US's feature service who manages the land in view when lookups are on", async () => {
+    vi.stubEnv("AUX_LOOKUPS", "on");
+    try {
+      const stub = vi.fn(async () => new Response(JSON.stringify({ features: [{ attributes: { Unit_Nm: "San Isabel National Forest", Mang_Name: "USFS", GIS_Acres: 1 } }] }), { status: 200 }));
+      const r = await layer.query(ctx([-106.45, 39.15, -106.2, 39.3], stub), {});
+      expect(String((stub.mock.calls[0] as unknown[])[0])).toContain("Fee_Managers_PADUS/FeatureServer/0/query");
+      expect("coverageNote" in r && r.coverageNote).toMatch(/^Land here, largest units first: San Isabel National Forest \(US Forest Service\)/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

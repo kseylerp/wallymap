@@ -32,9 +32,9 @@ const MAP_LAYER = `${API}/products/map-layer`;
 /** Most zones that get the full forecast (danger by elevation, problems, bottom line). */
 export const MAX_DETAIL = 8;
 
-/** The North American Public Avalanche Danger Scale, as avalanche.org draws it. */
+/** The North American Public Avalanche Danger Scale, as avalanche.org draws it (No rating a shade darker than its grey: at #888888 an off-season zone changed the Topo pixels by 19 of 255, under the 24 the screen check needs; darker still fails on imagery). */
 export const DANGER = [
-  { value: 0, label: "No rating", color: "#888888", help: "The center has not rated this zone today (out of season, or not enough information)." },
+  { value: 0, label: "No rating", color: "#7A7A7A", help: "The center has not rated this zone today (out of season, or not enough information)." },
   { value: 1, label: "1 Low", color: "#50B848", help: "Generally safe avalanche conditions. Watch for unstable snow on isolated terrain features." },
   { value: 2, label: "2 Moderate", color: "#FFF200", help: "Heightened avalanche conditions on specific terrain features. Evaluate snow and terrain carefully." },
   { value: 3, label: "3 Considerable", color: "#F7941E", help: "Dangerous avalanche conditions. Careful snowpack evaluation, cautious route-finding and conservative decision-making essential." },

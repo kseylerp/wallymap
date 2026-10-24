@@ -150,6 +150,9 @@ export function addNormals(fc: FeatureCollection, normals: Map<string, Normal>):
       p.pctMedian = Math.round((100 * n.swe) / n.median);
       p.vsNormal = vsNormalOf(p.pctMedian);
       p.medianSwe = n.median;
+    } else if (n.median !== undefined) {
+      // Early in the season the percent means nothing (0 of 0.2 in); the card says so instead of leaving the row out.
+      p.normalNote = `Too early in the season to compare: the normal for today is ${n.median} in of snow water${n.onset ? `, and snow normally arrives ${n.onset}` : ""}`;
     }
     if (n.onset) p.normalOnset = n.onset;
     if (n.peakIn !== undefined) p.medianPeakIn = n.peakIn;
@@ -407,6 +410,7 @@ const HELP: Record<string, FieldHelp> = {
     url: SNOTEL_URL,
   },
   vsNormal: { text: "The percent of normal in bands: well below under 70%, below 70 to 89%, near 90 to 109%, above 110 to 129%, well above 130% and up." },
+  normalNote: { text: "Why there is no percent of normal yet: the station's 1991-2020 median snow water for the day is under 1 inch, so a percent of it would mean nothing." },
   medianSwe: { text: "The station's 1991-2020 median snow water equivalent for this day of the year.", unit: "in" },
   normalOnset: { text: "The day snow normally starts to stay on the ground at this station (median of past years)." },
   medianPeakIn: { text: "The station's median yearly peak snow water equivalent: how much water a normal winter builds.", unit: "in" },
@@ -418,6 +422,7 @@ const CARD: CardSpec = {
   facts: [
     { key: "swe", label: "Snow water equivalent", unit: "in" },
     { key: "pctMedian", label: "Percent of normal", unit: "%", format: "int" },
+    { key: "normalNote", label: "Percent of normal" },
     { key: "vsNormal", label: "Compared with normal", values: Object.fromEntries(VS_NORMAL.map((b) => [b.value, b.label])) },
     { key: "medianSwe", label: "Normal for today", unit: "in" },
     { key: "normalOnset", label: "Snow normally arrives" },

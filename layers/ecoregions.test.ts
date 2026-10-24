@@ -32,7 +32,7 @@ describe("ecoregions layer", () => {
     expect(contractProblems(layer)).toEqual([]);
     expect(legendOf(layer).items?.every((i) => i.symbol === "line")).toBe(true);
     expect(labelsOf(layer)).toMatchObject({ field: "name", max: 6 });
-    expect(layer.card?.facts?.map((f) => f.label)).toEqual(["Level", "Share of view", "Area in view", "Within", "Code"]);
+    expect(layer.card?.facts?.map((f) => f.label)).toEqual(["Level", "Share of view", "Area in view", "Within"]);
   });
 
   it("sends the clip as a mapped function whose body is its own value", () => {

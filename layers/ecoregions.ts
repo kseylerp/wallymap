@@ -43,7 +43,7 @@ export const LEGEND: LegendSpec = {
 };
 
 const ATTRIBUTES: Attribute[] = [
-  { key: "level", type: "category", label: "Level", levels: LEVELS.map(({ value, label }) => ({ value, label })), primary: true },
+  { key: "level", type: "category", label: "Ecoregion level", levels: LEVELS.map(({ value, label }) => ({ value, label })), primary: true },
   { key: "share", type: "measure", label: "Share of view", unit: "share of 1" },
 ];
 
@@ -59,9 +59,9 @@ const CARD: CardSpec = {
     { key: "share", label: "Share of view", format: "pct" },
     { key: "area", label: "Area in view" },
     { key: "parent", label: "Within" },
-    { key: "code", label: "Code" },
   ],
-  hidden: ["level", "areaSqKm"],
+  // EPA's region codes ("66", "66g") mean nothing on a card; the name says it.
+  hidden: ["level", "areaSqKm", "code"],
 };
 
 const inputSchema = z.object({
@@ -97,7 +97,7 @@ const ecoregions = defineLayer({
   title: "Ecoregions",
   description:
     "Ecoregions (areas of similar ecosystems) as named outlines, the coverage note giving each one's share of the box to quote: EPA Level III (85, such as 'Blue Ridge') or Level IV (967) in the lower 48, RESOLVE 2017 elsewhere (846, such as 'Borneo lowland rain forests'). " +
-    "Use it for what ecosystems or ecoregions a place spans, and as outlines over vegetation-types; to compare two places query each place's box with place set to its name. " +
+    "Use it for what ecoregion or biome a place is in, and as outlines over vegetation-types (which names what grows); to compare two places query each place's box with place set to its name. " +
     "level 3 (default) or 4 (boxes up to 150,000 km²); scheme auto (EPA in the US, else RESOLVE), epa or resolve.",
   coverage: "global",
   surface: "land",
@@ -166,6 +166,7 @@ const ecoregions = defineLayer({
         label: scheme === "resolve" ? "RESOLVE Ecoregions 2017 (CC BY 4.0)" : "US EPA ecoregions (public domain)",
       },
       coverageNote: [stated, ...notes].join(". "),
+      legend: LEGEND,
     };
   },
 });

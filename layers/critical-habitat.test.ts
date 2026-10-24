@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
-import layer, { MEANING, federalRegisterCitation, normalizeCriticalHabitat, simplifyOffset, speciesWhere, thinGeometry } from "./critical-habitat";
+import layer, { MEANING, federalRegisterCitation, habitatSentence, normalizeCriticalHabitat, simplifyOffset, speciesWhere, thinGeometry } from "./critical-habitat";
 import { contractProblems, legendOf } from "./contract";
 import { categoryKey } from "@/lib/render/categories";
 import finalRaw from "./__fixtures__/critical-habitat.tahoe.json";
@@ -54,6 +54,8 @@ describe("critical-habitat layer", () => {
       ruleUrl: "https://www.federalregister.gov/citation/81-FR-59046",
       published: "2016-08-26",
       meaning: MEANING,
+      areaKm2: expect.any(Number),
+      acres: expect.any(Number),
     });
   });
 
@@ -86,7 +88,7 @@ describe("critical-habitat layer", () => {
       ],
     });
     expect(fc.features).toHaveLength(2);
-    expect(fc.features[0].properties).toEqual({ species: "Rana muscosa", kind: "Rana muscosa", scientificName: "Rana muscosa", meaning: MEANING });
+    expect(fc.features[0].properties).toEqual({ species: "Rana muscosa", kind: "Rana muscosa", scientificName: "Rana muscosa", meaning: MEANING, areaKm2: expect.any(Number), acres: expect.any(Number) });
     expect(fc.features[1].properties?.species).toBe("Unnamed species");
     for (const f of finalFc.features.length ? normalizeCriticalHabitat(finalFc).features : []) expect(f.properties).not.toHaveProperty("t");
   });
@@ -131,7 +133,7 @@ describe("critical-habitat layer", () => {
 
     expect(r.data.features).toHaveLength(finalFc.features.length + proposedFc.features.length);
     expect(r.data.features.some((f) => f.properties?.status === "Proposed")).toBe(true);
-    expect(r.coverageNote).toBeUndefined();
+    expect(r.coverageNote).toMatch(/^Critical habitat touching the view \(whole designations, which can reach beyond it\): Sierra Nevada Yellow-legged Frog \(Endangered\): [\d,]+ km² \([\d,]+ acres\) designated/);
     expect(r.citation.source).toContain("Fish and Wildlife");
   });
 
@@ -201,7 +203,7 @@ describe("critical-habitat layer", () => {
       expect(res.body).toMatchObject({
         total: 148,
         truncated: true,
-        coverageNote: `Showing the ${shown} largest of 148 (ranked by area); zoom in under 300,000 km² for all`,
+        coverageNote: expect.stringMatching(new RegExp(`^Showing the ${shown} largest of 148 \\(ranked by area\\); zoom in under 300,000 km² for all; Critical habitat touching the view`)),
       });
     } finally {
       vi.unstubAllGlobals();
@@ -216,7 +218,7 @@ describe("critical-habitat layer", () => {
     const r = await layer.query({ ...ctx(stub), bbox: [-124, 32, -114, 42], wide: true, wideStrategy: layer.wide }, { includeProposed: true });
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.total).toBeUndefined();
-    expect(r.coverageNote).toBe("Proposed critical habitat could not be loaded; only final designations are shown");
+    expect(r.coverageNote).toMatch(/; Proposed critical habitat could not be loaded; only final designations are shown$/);
     const only = await layer.query({ ...ctx(stub), bbox: [-124, 32, -114, 42], wide: true, wideStrategy: layer.wide }, { includeProposed: false });
     if (!("kind" in only) || only.kind !== "geojson") throw new Error("expected geojson");
     expect(only.total).toBe(136);
@@ -243,5 +245,15 @@ describe("critical-habitat layer", () => {
       ["Threatened", ["Threatened"], "#6E5BFF"],
       ["Proposed for listing", ["Proposed Endangered", "Proposed Threatened"], "#9FB693"],
     ]);
+  });
+});
+
+describe("habitatSentence", () => {
+  it("sums each species' designated area with its listing, largest first", () => {
+    const f = (species: string, areaKm2: number, listingStatus: string, status = "Final") => ({ type: "Feature" as const, geometry: null, properties: { species, areaKm2, listingStatus, status } });
+    expect(habitatSentence([f("Desert tortoise", 26_606.3, "Threatened"), f("Virgin River chub", 12.4, "Endangered"), f("Virgin River chub", 3.1, "Endangered"), f("Tiny snail", 0.02, "Proposed Endangered", "Proposed")])).toBe(
+      "Critical habitat touching the view (whole designations, which can reach beyond it): Desert tortoise (Threatened): 26,606 km² (6,574,560 acres) designated; " +
+        "Virgin River chub (Endangered): 15.5 km² (3,830 acres) designated; Tiny snail (Proposed Endangered): 5 acres designated, proposed",
+    );
   });
 });

@@ -327,6 +327,10 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, loadedDa
     const filter = rasterKeyFilter(layer.style.raster, true);
     if (filter) for (const b of blocks) b.filter = filter;
   }
+  // Points drawn as clusters key what a circle is first (top 10 baseline: sightings in clusters keyed only "Month seen").
+  if (op?.mode === "clusters" && layer.style.geometry === "point") {
+    blocks.unshift({ kind: "symbol", title: `${shortTitle(layer)} per cluster`, entries: [{ label: "Each circle holds the number on it; darker holds more" }], shape: "point" });
+  }
   // Every row has a key: at least the layer's own swatch and name, in the color it draws.
   if (blocks.length === 0 || blocks.every((b) => b.kind === "size")) {
     blocks.unshift({ kind: "categories", entries: [{ label: shortTitle(layer), color: op?.color ?? areaRecipe(layer.id).color }], shape });

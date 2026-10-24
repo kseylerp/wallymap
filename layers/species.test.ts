@@ -14,6 +14,11 @@ import layer, {
   observationsUrl,
   pickTaxon,
   taxonWords,
+  busiestMonths,
+  readSpeciesCounts,
+  speciesCandidates,
+  speciesCountsUrl,
+  topSpecies,
 } from "./species";
 import raw from "./__fixtures__/species.tahoe.json";
 import elkAutocomplete from "./__fixtures__/species.elk-autocomplete.json";
@@ -21,6 +26,7 @@ import elkPage from "./__fixtures__/species.elk-estes.json";
 import estesPlaces from "./__fixtures__/species.estes-places.json";
 import troutAutocomplete from "./__fixtures__/species.trout-autocomplete.json";
 import salmoninaeAutocomplete from "./__fixtures__/species.salmoninae-autocomplete.json";
+import condorAutocomplete from "./__fixtures__/species.condor-autocomplete.json";
 
 const TAHOE: [number, number, number, number] = [-120.2, 38.85, -120, 39];
 const ESTES: [number, number, number, number] = [-105.7, 40.3, -105.4, 40.45];
@@ -319,7 +325,7 @@ describe("species layer", () => {
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(8);
     expect(new Set(r.data.features.map((f) => f.properties?.species))).toEqual(new Set(["Elk"]));
-    expect(r.coverageNote).toBe('Elk was read as Elk (Cervus canadensis) and its subspecies');
+    expect(r.coverageNote).toBe('8 sightings of Elk (research grade) drawn in the last 365 days; Elk was read as Elk (Cervus canadensis) and its subspecies');
   });
 
   it("looks trout up as Salmoninae and asks by its id, so no fawn lily is drawn (Denver, UC11)", async () => {
@@ -361,12 +367,12 @@ describe("species layer", () => {
     expect(r.citation.source).toContain("iNaturalist");
   });
 
-  it("has no note when there is no taxon, nothing was skipped and the area is fully covered", async () => {
+  it("leads its note with the count when there is no taxon, nothing was skipped and the area is fully covered", async () => {
     const stub = routed(() => json(page(1, 5, 5)));
     const r = await run(stub);
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(5);
-    expect(r.coverageNote).toBeUndefined();
+    expect(r.coverageNote).toBe("5 sightings (research grade) drawn in the last 365 days");
   });
 
   it("starts page requests 600 ms apart and stops after 10 pages (2,000 sightings)", async () => {
@@ -389,7 +395,7 @@ describe("species layer", () => {
     const r = await promise;
     if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
     expect(r.data.features).toHaveLength(2000);
-    expect(r.coverageNote).toBe("Showing the 2,000 most recent of 5,000 observations; zoom in or narrow the dates for the rest");
+    expect(r.coverageNote).toBe("2,000 sightings (research grade) drawn in the last 365 days; Showing the 2,000 most recent of 5,000 observations; zoom in or narrow the dates for the rest");
   });
 
   it("stops after a short page without asking for more", async () => {
@@ -476,7 +482,7 @@ describe("species layer", () => {
     expect(urls.map((u) => u.searchParams.get("page"))).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
     expect(r.data.features).toHaveLength(2000);
     expect(r.total).toBe(26626);
-    expect(r.coverageNote).toBe('Birds was read as Birds (Aves), the whole class');
+    expect(r.coverageNote).toBe('2,000 sightings of Birds (research grade) drawn in the last 365 days; Birds was read as Birds (Aves), the whole class');
   });
 
   it("in wide mode quotes no total when every page was fetched", async () => {
@@ -498,5 +504,49 @@ describe("input", () => {
     const { default: layer } = await import("./species");
     expect(layer.input.safeParse({ taxon: "a".repeat(120) }).success).toBe(true);
     expect(layer.input.safeParse({ taxon: "a".repeat(121) }).success).toBe(false);
+  });
+});
+
+describe("a name with no exact match is read as the species seen most here", () => {
+  const BIG_SUR: [number, number, number, number] = [-121.93, 35.774, -121.244, 36.377];
+
+  it("lists the species a name can mean only when no result matches it exactly", () => {
+    expect(speciesCandidates("condor", condorAutocomplete).map((c) => c.name)).toEqual(["Vultur gryphus", "Gymnogyps californianus"]);
+    expect(speciesCandidates("elk", elkAutocomplete)).toEqual([]);
+    expect(speciesCountsUrl([4747, 4778], BIG_SUR)).toBe(
+      "https://api.inaturalist.org/v1/observations/species_counts?taxon_id=4747,4778&nelat=36.377&nelng=-121.244&swlat=35.774&swlng=-121.93&verifiable=true",
+    );
+    expect(readSpeciesCounts({ results: [{ count: 438, taxon: { id: 4778 } }, { taxon: {} }] })).toEqual(new Map([[4778, 438]]));
+    expect(readSpeciesCounts(null)).toEqual(new Map());
+  });
+
+  it("reads condor near Big Sur as the California Condor, and says all its sightings here are hidden", async () => {
+    const hidden = { total_results: 3, page: 1, per_page: 200, results: [1, 2, 3].map((id) => ({ id, obscured: true, observed_on: "2026-05-01", geojson: { type: "Point", coordinates: [-121.5, 36] } })) };
+    const stub = routed((url) => (url.includes("species_counts") ? json({ results: [{ count: 438, taxon: { id: 4778 } }] }) : json(hidden)), { taxa: condorAutocomplete });
+    const r = await run(stub, { ...DEFAULTS, taxon: "condor" }, BIG_SUR);
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(pageCalls(stub).every((u) => new URL(u).searchParams.get("taxon_id") === "4778")).toBe(true);
+    expect(r.coverageNote).toBe(
+      "All 3 sightings of California Condor (research grade) here in the last 365 days have hidden (obscured) locations, as iNaturalist does for threatened species and when observers ask, so none are drawn; " +
+        "Condor was read as California Condor (Gymnogyps californianus) and its subspecies (of the species the name can mean, the one seen most here)",
+    );
+  });
+
+  it("keeps the autocomplete's pick when the count does not answer", async () => {
+    const stub = routed((url) => (url.includes("species_counts") ? new Response("busy", { status: 503 }) : json(page(1, 2, 2))), { taxa: condorAutocomplete });
+    const r = await run(stub, { ...DEFAULTS, taxon: "condor" }, BIG_SUR);
+    if (!("kind" in r) || r.kind !== "geojson") throw new Error("expected geojson");
+    expect(r.coverageNote).toContain("Condor was read as Andean Condor (Vultur gryphus) and its subspecies");
+  });
+});
+
+describe("the count sentence", () => {
+  const point = (month: number, species: string): Feature<Point> => ({ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: { month, species } });
+
+  it("names the busiest months and the most-seen species", () => {
+    const fs = [point(6, "Moose"), point(6, "Moose"), point(9, "Elk"), point(9, "Moose"), point(9, "Bison"), point(5, "Moose")];
+    expect(busiestMonths(fs)).toBe("most in September (3), June (2) and May (1)");
+    expect(busiestMonths([point(6, "Moose")])).toBeUndefined();
+    expect(topSpecies(fs, 2)).toEqual({ names: "Moose 4, Elk 1", count: 3 });
   });
 });

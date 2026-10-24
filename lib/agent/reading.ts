@@ -3,6 +3,7 @@ import { getLayer } from "@/layers/registry";
 import type { Attribute, Layer } from "@/layers/types";
 import { placeCandidates } from "./places";
 import { asksChange } from "./renderInput";
+import type { ViewKind } from "@/lib/render/state";
 import { VOCABULARY } from "./vocabulary";
 
 /**
@@ -52,6 +53,8 @@ export type Reading = {
   change: boolean;
   /** How the question relates two layers ("outside protected areas", "along the Wonderland Trail"): the combine tool's op. */
   combine: CombineAsk | null;
+  /** The standard view the answer is drawn in on a layer ("good hikes" are ranked), when the model names none. */
+  views: { layerId: string; view: ViewKind; because: string }[];
 };
 
 export type CombineAsk = {
@@ -92,7 +95,7 @@ export function combineOf(question: string): CombineAsk | null {
     return { op: "near", because: near[0], distance: near[1] ? Number(near[1]) : 1, unit };
   }
   // A hike that reaches a feature ("hikes with a waterfall", "trails to a lake"): the trail passes within half a km of it.
-  if ((m = /\b(?:hikes?|hiking\s+trails?|trails?|walks?|runs?)\s+(?:with|to|past|that\s+(?:reach|pass)\w*)\s+(?:a\s+|the\s+)?(?:waterfalls?|lakes?|hot\s+springs?|springs?|swimming\s+holes?)\b/i.exec(q))) {
+  if ((m = /\b(?:hikes?|hiking\s+trails?|trails?|walks?|runs?)\s+(?:with|to|past|that\s+(?:reach|pass)\w*)\s+(?:a\s+|the\s+)?(?:waterfalls?|lakes?|hot\s+springs?|springs?|swimming\s+holes?|views?|viewpoints?|overlooks?|vistas?)\b/i.exec(q))) {
     return { op: "near", because: m[0], distance: 0.5, unit: "km" };
   }
   if ((m = /\b(?:inside|within)\s+(?:a\s+|the\s+)?(?![\d])(?:[A-Za-z][\w'-]*\s+){0,3}(?:national\s+forest|forest|park|wilderness|protected\s+areas?|habitat|burn\s+scars?|fire\s+perimeters?|reserve|monument|allotments?)\b/i.exec(q))) return { op: "within", because: m[0] };
@@ -291,8 +294,10 @@ const PHRASES: {
   layers?: string[];
   avoid?: string[];
   inputs?: Record<string, Record<string, unknown>>;
-  /** Chips a phrase means on a layer ("hikes" are paths and footpaths, not tracks, which are unpaved roads). */
-  filters?: Record<string, Record<string, string[]>>;
+  /** Chips a phrase means on a layer ("hikes" are paths and footpaths, not tracks, which are unpaved roads), or a measure's range. */
+  filters?: Record<string, Record<string, string[] | { range: [number, number] }>>;
+  /** The standard view a phrase's answer is drawn in on a layer (spec §12: hikes are ranked by their measure). */
+  views?: Record<string, ViewKind>;
   because: string;
 }[] = [
   {
@@ -305,10 +310,33 @@ const PHRASES: {
     re: /\b(?:day\s+hikes?|good\s+hikes?|best\s+hikes?|easy\s+hikes?|short\s+hikes?|long\s+hikes?|hikes?\b(?!\s+(?:to|up)\b)|trail\s+runs?|trail\s+running|long\s+runs?)\b/i,
     layers: ["osm-trails"],
     filters: { "osm-trails": { kind: ["path", "footway"] } },
+    views: { "osm-trails": "ranked", popularity: "ranked" },
     because: "hikes and runs are whole named trails with length and climb",
   },
   {
+    // A day hike is a half day or so, not a 30-mile through-trail (Bend's top "day hike" was 33 miles round trip).
+    re: /\b(?:day|good|best|nice|great)\s+hikes?\b|\bday\s+hiking\b/i,
+    unless: /\b(?:under|less than|shorter than|over|more than|longer than|at least|up to|at most)\s+\d|\b\d+(?:\.\d+)?\s*(?:to|-)\s*\d+(?:\.\d+)?\s*(?:miles?|mi|km)\b/i,
+    filters: { "osm-trails": { roundTripKm: { range: [4, 24] } } },
+    because: "a day hike is about 2.5 to 15 miles round trip",
+  },
+  {
+    re: /\beasy\s+(?:hikes?|walks?|day\s+hikes?|hiking\s+trails?)\b|\b(?:hikes?|walks?)\b[^?]*\beasy\b/i,
+    unless: /\b(?:under|less than|shorter than|up to|at most)\s+\d/i,
+    filters: { "osm-trails": { roundTripKm: { range: [0, 10] } } },
+    because: "an easy hike is short: under about 6 miles round trip",
+  },
+  {
+    // A hike with a view reaches a mapped viewpoint (the trails within half a km of one: combineOf below).
+    re: /\b(?:hikes?|trails?|walks?)\b[^?]*\bwith\s+(?:a\s+)?(?:good\s+|great\s+|nice\s+)?views?\b|\b(?:hikes?|trails?|walks?)\s+to\s+(?:a\s+)?(?:viewpoints?|overlooks?|vistas?)\b/i,
+    layers: ["outdoor-features"],
+    inputs: { "outdoor-features": { kinds: ["viewpoint"] } },
+    because: "a view is a mapped viewpoint the hike reaches",
+  },
+  {
     re: /\bwater\s+sources?\b|\bwhere\s+(?:to|can\s+i)\s+(?:get|find|filter)\s+water\b|\b(?:camping|camps?)\s+and\s+water\b|\bwater\s+(?:along|on)\s+the\b/i,
+    // "Campsites near water along the Wonderland Trail" asks for camps; the water only qualifies them.
+    unless: /\bcamp(?:s|sites?|grounds?|ing)\s+(?:near|by|with|close\s+to)\s+water\b/i,
     layers: ["outdoor-features", "lakes"],
     inputs: { "outdoor-features": { kinds: ["spring", "drinking_water"] } },
     because: "backcountry water is springs, taps, lakes and streams",
@@ -335,6 +363,20 @@ const PHRASES: {
     because: "a backpacker's camp is not a parking lot",
   },
   {
+    // Which campgrounds are open is the Forest Service and BLM site list, which carries open or closed; OpenStreetMap does not.
+    re: /\bcampgrounds?\b[^?]*\bopen\b|\bopen\b[^?]*\bcampgrounds?\b/i,
+    layers: ["recreation-sites"],
+    filters: { "recreation-sites": { kind: ["campground"], status: ["open"] } },
+    because: "a campground open now is a federal recreation site with its open or closed status",
+  },
+  {
+    // Where to camp: the campsites, and who manages the land around them (the rule for camping differs by manager).
+    re: /\bcamp(?:ing|sites?)?\b|\bwhere\s+(?:can|could)\s+(?:i|we)\s+camp\b/i,
+    unless: /\bcampgrounds?\b[^?]*\bopen\b|\bopen\b[^?]*\bcampgrounds?\b|\bpark(?:ing)?\b|\bvans?\b|\brvs?\b/i,
+    layers: ["campsites", "public-lands"],
+    because: "a place to camp is a campsite, and the land's manager sets the camping rule",
+  },
+  {
     // Camping is not parking: Mojave Road's "campsites" were Big Bear's ski parking lots (Moonridge Lot, 1,200 spaces).
     re: /\bcamp(?:ing|s|sites?|grounds?)?\b/i,
     unless: /\bpark(?:ing)?\b|\bvans?\b|\brvs?\b|\bcar\s+camp\w*|\bovernight\b|\btrailheads?\b/i,
@@ -343,8 +385,8 @@ const PHRASES: {
   },
   {
     re: /\bsnow[- ]free\b|\bstill\s+snow\b|\bsnow\s+on\s+the\b|\bany\s+snow\b|\bmelted\s+out\b|\bsnow\s+line\b/i,
-    layers: ["snow-cover"],
-    because: "snow on the ground is the daily satellite snow map",
+    layers: ["snowpack", "snow-cover"],
+    because: "snow on the ground is the stations' measured depth, with the daily satellite snow map",
   },
   {
     re: /\blaunch\s+(?:a\s+|my\s+)?(?:kayak|canoe|boat|paddle\s*board|sup|raft)\b|\bput[- ]ins?\b|\bboat\s+(?:ramp|launch)\b/i,
@@ -416,6 +458,59 @@ const PHRASES: {
     re: /\bdark(?:est)?\s+sk(?:y|ies)\b|\bmilky\s+way\b|\bstargaz\w*|\bastrophoto\w*/i,
     layers: ["night-lights"],
     because: "a dark sky is little light at night from the satellite",
+  },
+  // The top 10 use cases' plans (docs/top-10-use-cases.md): the layers a decision is read from, resolved before the model
+  // chooses. A layer another part of the app has not added yet is skipped (addLayer keeps only registered layers).
+  {
+    re: /\bwhat\s+protects\b|\bis\s+(?:it|this|that|the\s+[\w-]+)\s+protected\b|\bprotections?\b|\bhow\s+(?:is|are)\b[^?]*\bprotected\b/i,
+    layers: ["monuments", "wilderness"],
+    because: "what protects a place is its designation: a national monument, a wilderness",
+  },
+  {
+    re: /\bwho\s+(?:manages|owns|runs)\b|\bmanaged\s+by\b|\bwhose\s+land\b|\bpublic\s+or\s+private\b/i,
+    layers: ["public-lands"],
+    because: "who manages the land is the protected areas database's manager",
+  },
+  {
+    re: /\brock\s+(?:types?|units?|formations?)\b|\bwhat\s+rocks?\b|\bgeolog\w*|\bbedrock\b|\bunder\s+my\s+feet\b|\bwhat\s+is\s+the\s+ground\s+made\s+of\b|\bwhat\s+(?:is|are)\s+[^?]*\bmade\s+of\b/i,
+    unless: /\bsoils?\b/i,
+    layers: ["geology", "geologic-unit"],
+    because: "rock types and ages are the geologic map, and the unit at the place's center",
+  },
+  {
+    re: /\bfaults?\b|\bfault\s+lines?\b/i,
+    layers: ["faults", "quaternary-faults"],
+    because: "faults are the USGS Quaternary fault database",
+  },
+  {
+    re: /\bsoils?\b|\bloam\w*|\bclay\s+(?:soil|content)\b/i,
+    layers: ["soils", "soil"],
+    because: "soil is the USDA soil survey (SSURGO)",
+  },
+  {
+    re: /\becosystems?\b|\bvegetation(?:\s+types?)?\b|\bwhat\s+grows\b|\bwhat(?:'s|\s+is)\s+growing\b|\bplant\s+communit\w*/i,
+    layers: ["ecoregions", "vegetation", "land-cover"],
+    because: "what grows is the ecoregions and vegetation types, with land cover's shares",
+  },
+  {
+    re: /\bhow\s+tall\s+(?:are|is)\s+the\s+trees?\b|\btree\s+heights?\b|\bcanopy\s+heights?\b/i,
+    layers: ["canopy-height"],
+    because: "tree height is the 1 m canopy height map",
+  },
+  {
+    re: /\b(?:temperature|precipitation|rain|snowfall|climate)\b[^?]*\bby\s+month\b|\btypical\s+(?:temperature|weather|climate|precipitation)\b|\bclimate\s+normals?\b|\bwhen\b[^?]*\bsnow\s+usually\b/i,
+    layers: ["climate-normals", "climate", "seasonality"],
+    because: "typical weather by month is the climate normals",
+  },
+  {
+    re: /\bhow\s+deep\s+is\s+the\s+(?:water|ocean|sea|bay|sound)\b|\bwater\s+depth\b|\bbathymetr\w*|\bdepth\s+of\s+the\s+(?:water|bay|sound|ocean)\b/i,
+    layers: ["bathymetry", "water-depth"],
+    because: "depth under water is the bathymetry",
+  },
+  {
+    re: /\b(?:elevation\s+)?cross[- ]sections?\b|\belevation\s+profile\b|\bprofile\s+from\b/i,
+    layers: ["elevation-profile", "cross-section", "elevation"],
+    because: "a cross-section is the elevation along a line",
   },
 ];
 
@@ -591,6 +686,7 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
   const avoid: Reading["avoid"] = [];
   const inputs: InputHint[] = [];
   const phraseFilters: FilterHint[] = [];
+  const views: Reading["views"] = [];
   const addLayer = (layerId: string, because: string, strong: boolean) => {
     if (!getLayer(layerId)) return;
     const had = layers.find((l) => l.layerId === layerId);
@@ -606,9 +702,14 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     if ((p.layers ?? []).every((id) => getLayer(id))) for (const id of p.avoid ?? []) avoid.push({ layerId: id, because: `"${m[0].trim()}": ${p.because}` });
     // A phrase whose "unless" words are there names its layers only loosely and sets nothing.
     if (strong) for (const [layerId, input] of Object.entries(p.inputs ?? {})) if (!inputs.some((i) => i.layerId === layerId && JSON.stringify(i.input) === JSON.stringify(input))) inputs.push({ layerId, input, because: `"${m[0].trim()}": ${p.because}` });
+    // A phrase whose "unless" words are there (the question gives its own length) sets no range of its own.
     for (const [layerId, chips] of Object.entries(p.filters ?? {})) {
-      for (const [key, include] of Object.entries(chips)) phraseFilters.push({ layerId, key, include, because: m[0].trim() });
+      for (const [key, value] of Object.entries(chips)) {
+        if (Array.isArray(value)) phraseFilters.push({ layerId, key, include: value, because: m[0].trim() });
+        else if (strong) phraseFilters.push({ layerId, key, range: value.range, because: m[0].trim() });
+      }
     }
+    for (const [layerId, view] of Object.entries(p.views ?? {})) if (!views.some((v) => v.layerId === layerId)) views.push({ layerId, view, because: m[0].trim() });
   }
   const places = riverNames(raw);
   for (const p of places) addLayer("streamflow", `"${p.written}" is a river: its gauges`, false);
@@ -676,7 +777,7 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     filters.splice(filters.indexOf(grade), 1, ...styled.map((a) => ({ ...grade, key: a.key })));
   }
 
-  return { combine: combineOf(raw), taxon: taxonOf(masked), layers, avoid: kept, filters, inputs, rankBy, time: timeWindow(raw, now), places, colors, change: asksChange(raw) || /\b(?:shrunk|shrank|retreat\w*|then\s+and\s+now|changed?\s+since)\b/i.test(raw) };
+  return { combine: combineOf(raw), taxon: taxonOf(masked), layers, avoid: kept, filters, inputs, rankBy, views, time: timeWindow(raw, now), places, colors, change: asksChange(raw) || /\b(?:shrunk|shrank|retreat\w*|then\s+and\s+now|changed?\s+since)\b/i.test(raw) };
 }
 
 // ---- Inputs from the time window ---------------------------------------------------------------------------------
@@ -796,6 +897,7 @@ export function readingForPrompt(reading: Reading, now: Date = new Date(), tools
     );
   }
   for (const r of reading.rankBy) lines.push(`- Rank ${r.layerId} by ${r.key} ("${r.because}").`);
+  for (const v of reading.views) if (reading.layers.some((l) => l.layerId === v.layerId)) lines.push(`- Render ${v.layerId} with view ${v.view} ("${v.because}").`);
   for (const p of reading.places) lines.push(`- "${p.written}" is a river: geocode "${p.place}".`);
   const w = reading.time;
   if (w) {

@@ -38,7 +38,7 @@ function isBBox(value: unknown): value is BBox {
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /** Layers that answer for another when the model chose them: GBIF records for sightings, scored trails for trails. */
-const ANSWERS_FOR: Record<string, string[]> = {
+export const ANSWERS_FOR: Record<string, string[]> = {
   species: ["gbif-occurrences"],
   "osm-trails": ["popularity"],
   "recreation-sites": ["paddling", "fishing"],
@@ -48,11 +48,16 @@ const ANSWERS_FOR: Record<string, string[]> = {
 /** Words that already make a place a feature ("Madison River", "Lake Powell"), so a geocode is left as it is. */
 const FEATURE_WORD = /\b(?:river|creek|fork|lake|reservoir|bay|trail|road|range|mountains?|mount|mt|peak|valley|canyon|basin|forest|park|wilderness|county|city)\b/i;
 
-/** The inputs the reading sets on one query: the phrase's inputs, then the time window's. */
-export function readingInputs(reading: Reading, layerId: string, now: Date): Record<string, unknown> {
+/**
+ * The inputs the reading sets on one query: the phrase's inputs, then the time window's; and for a layer that reads one
+ * point (the rock at a place: geologic-unit's lon and lat), the place's center when `at` gives it.
+ */
+export function readingInputs(reading: Reading, layerId: string, now: Date, at?: [number, number] | null): Record<string, unknown> {
   const layer = getLayer(layerId);
   if (!layer) return {};
   const out: Record<string, unknown> = {};
+  const shape = (layer.input as unknown as { shape?: Record<string, unknown> }).shape ?? {};
+  if (at && "lon" in shape && "lat" in shape) Object.assign(out, { lon: at[0], lat: at[1] });
   for (const hint of reading.inputs) if (hint.layerId === layerId) Object.assign(out, hint.input);
   if (reading.time) Object.assign(out, timeInputs(layer, reading.time, now));
   // Only what the layer accepts.
@@ -144,7 +149,8 @@ export function applyReading(calls: GuardCall[], turn: Turn, finalSteps: boolean
       if (!layer || bboxAreaKm2(box) > hardMaxAreaKm2(layer)) continue;
       if (turn.readingAdded.has(hint.layerId)) continue;
       turn.readingAdded.add(hint.layerId);
-      added.push({ toolCallId: readingId(), toolName: `${QUERY}${hint.layerId}`, input: { ...readingInputs(reading, hint.layerId, turn.now), bbox: box } });
+      const at = turn.place?.center ?? turn.view?.center ?? [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
+      added.push({ toolCallId: readingId(), toolName: `${QUERY}${hint.layerId}`, input: { ...readingInputs(reading, hint.layerId, turn.now, at), bbox: box } });
     }
     if (added.length > 0) {
       turn.note(`queried ${added.map((c) => c.toolName.slice(QUERY.length)).join(", ")} as the question's words ask (${reading.layers.filter((l) => l.strong).map((l) => l.because)[0]})`);
@@ -226,6 +232,8 @@ export function withReading(input: Record<string, unknown>, turn: Pick<Turn, "re
     }
     out.filters = filters;
   }
+  const view = reading.views.find((v) => v.layerId === layerId);
+  if (view && out.view === undefined) out.view = view.view;
   const rank = reading.rankBy.find((r) => r.layerId === layerId);
   if (rank && out.rankBy === undefined) {
     out.rankBy = rank.key;

@@ -11,6 +11,7 @@ import { inUS, usSpeeds, usSpeedsDeep } from "./units";
 import { normalizeRenderInput } from "./renderInput";
 import { ROUTE_PROFILES, routeOutputForModel, runRouteTool } from "./route";
 import { checkNote } from "./noteCheck";
+import { settle } from "./turnAnswer";
 import { createTurn, inputKeyOf, isWideQuery, MAX_STEPS, placeKey, type Turn } from "./turn";
 import { canonicalLayerId, repairToolName } from "./toolNames";
 import { combineTool } from "@/lib/spatial/tool";
@@ -741,7 +742,11 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
       inputSchema: z.object({ markdown: z.string() }),
       // A note too long, or one that leaves out the top item a "which is highest" question asks for, comes back once to be rewritten.
       // On the last step there is no step left to rewrite, so the note is shown (cut to the limit when too long).
-      execute: async (input) => checkNote(input.markdown, turn, { lastStep: turn.step >= MAX_STEPS - 1 }) ?? input,
+      // The renders sent beside it finish first, so the answer is read off the finished map (lib/agent/turnAnswer.ts).
+      execute: async (input) => {
+        await settle(turn);
+        return checkNote(input.markdown, turn, { lastStep: turn.step >= MAX_STEPS - 1 }) ?? input;
+      },
     }),
   };
 
@@ -752,5 +757,30 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
   // combine: two answered layers joined into a new map layer (within, outside, near, along, overlap, drive_time).
   // Its contract lives in lib/spatial/tool.ts; keep this block separate from the tools above.
   tools.combine = combineTool({ turn, view });
+  return recorded(tools, turn);
+}
+
+/**
+ * Every tool's calls recorded on the turn with their outputs, in the order they finish, so the answer reads the map the
+ * browser ends on (lib/agent/answer.ts); the calls still running are kept, so the note waits for the renders beside it.
+ * The note itself is not waited for (it is the one waiting).
+ */
+function recorded(tools: ToolSet, turn: Turn): ToolSet {
+  for (const [name, t] of Object.entries(tools)) {
+    const execute = t.execute as ((input: unknown, options: unknown) => unknown) | undefined;
+    if (!execute || name === "note") continue;
+    t.execute = ((input: unknown, options: unknown) => {
+      const running = Promise.resolve(execute(input, options)).then((output) => {
+        turn.calls.push({ toolName: name, input, output });
+        return output;
+      });
+      turn.inflight.add(running);
+      void running.then(
+        () => turn.inflight.delete(running),
+        () => turn.inflight.delete(running),
+      );
+      return running;
+    }) as typeof t.execute;
+  }
   return tools;
 }

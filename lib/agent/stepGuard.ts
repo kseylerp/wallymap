@@ -4,8 +4,11 @@ import type { BBox } from "@/layers/types";
 import { bboxAreaKm2, hardMaxAreaKm2 } from "@/layers/types";
 import type { GeocodeResult } from "./geocode";
 import { placeCandidates } from "./places";
-import { groundedNote, NOTE_MAX_WORDS, noteWords, trimNote } from "./noteCheck";
-import { applyReading } from "./readingGuard";
+import { NOTE_MAX_WORDS, noteWords, trimNote } from "./noteCheck";
+import { followUpList } from "./compose";
+import { extractFollowUps } from "./followups";
+import { followUpsForTurn } from "./turnAnswer";
+import { ANSWERS_FOR, applyReading, readingInputs } from "./readingGuard";
 import { asksChange, normalizeRenderInput } from "./renderInput";
 import { canonicalLayerId, repairToolName } from "./toolNames";
 import { widerScaleFor, widerScaleHints } from "./tools";
@@ -47,8 +50,10 @@ export type Decision = {
   dropText: boolean;
   /** Calls dropped, with the reason the model is told when nothing else is left to run. */
   rejected: { call: DraftCall; reason: string }[];
-  /** The step's text in place of the model's: a closing answer with no note, cut to the note's word limit. */
+  /** The step's text in place of the model's: the follow-up questions after the note. */
   text?: string;
+  /** Text after the step's calls: the follow-ups when the note is on the last step and no step is left for them. */
+  trailingText?: string;
   /** True when anything differs from what the model proposed. */
   changed: boolean;
 };
@@ -268,6 +273,14 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
     changed = true;
     turn.note(`tool call${leaked.length > 1 ? "s" : ""} written as text turned into ${leaked.map((c) => c.toolName).join(", ")}`);
   }
+  // 0b. After the note, the reply is only the follow-ups: exactly three, at least two naming what this answer found
+  // (the model's own that do, then the answer template's). Anything else the model wrote repeats the note.
+  if (turn.noted && draft.calls.length === 0) {
+    const followUps = followUpsForTurn(turn, [...turn.modelFollowUps, ...extractFollowUps(draft.text ?? "").followUps]);
+    const text = followUpList(followUps);
+    if (text !== (draft.text ?? "").trim()) turn.note("the reply after the note is its three follow-ups, naming what the answer found");
+    return { calls: [], dropText: false, rejected: [], changed: text !== (draft.text ?? ""), text };
+  }
   // 1. Canonical tool names, and canonical layer ids in render and compare ("query_peaks" is peaks).
   const layerIds = toolNames.filter(isQuery).map(layerOf);
   let calls = draft.calls.map((c) => {
@@ -304,6 +317,33 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
       calls = calls.filter((c) => c.toolName !== "note");
       deferred = true;
       turn.note("note held back: the question's layers are queried first");
+    }
+  }
+
+  // 1c. Ending before asking the layers the question's words name (Boulder's soils: "there is no soil layer", and the
+  // turn stopped): they are asked first, on the place's box, and the answer waits for them. Once per layer.
+  const endingEarly = !turn.noted && turn.step < MAX_STEPS - 2 && (calls.some((c) => c.toolName === "note") || (calls.length === 0 && rejected.length === 0 && draft.hasText));
+  if (endingEarly) {
+    const box = turn.place?.bbox ?? turn.view?.bbox ?? null;
+    const missing = turn.reading.layers.filter(
+      (l) =>
+        l.strong &&
+        getLayer(l.layerId) &&
+        !turn.readingAdded.has(l.layerId) &&
+        !turn.queries.some((q) => [l.layerId, ...(ANSWERS_FOR[l.layerId] ?? [])].includes(q.layerId)) &&
+        !calls.some((c) => c.toolName === `${QUERY}${l.layerId}`) &&
+        (box === null || bboxAreaKm2(box) <= hardMaxAreaKm2(getLayer(l.layerId)!)),
+    );
+    if (missing.length > 0) {
+      const at = turn.place?.center ?? turn.view?.center ?? null;
+      const added = missing.map((l): DraftCall => {
+        turn.readingAdded.add(l.layerId);
+        return { toolCallId: guardId(), toolName: `${QUERY}${l.layerId}`, input: { ...readingInputs(turn.reading, l.layerId, turn.now, at), ...(box && { bbox: box }) } };
+      });
+      calls = [...calls.filter((c) => c.toolName !== "note"), ...added];
+      deferred = true;
+      changed = true;
+      turn.note(`queried ${missing.map((l) => l.layerId).join(", ")} before the answer: the question's words name ${missing.length > 1 ? "them" : "it"} (${missing[0].because})`);
     }
   }
 
@@ -511,27 +551,57 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
       }));
       const at = calls.findIndex((c) => c.toolName === "note");
       calls = at === -1 ? renders : [...calls.slice(0, at), ...renders, ...calls.slice(at)];
-      // A text-only ending is written again after the renders, from the drawn map.
+      // A text-only ending is written again after the renders, from the drawn map (unless it becomes the note below).
       dropText = !hasNote && draft.hasText;
       turn.note(`rendered ${pending.join(", ")} before the ${hasNote ? "note" : "answer"}: queried but never drawn`);
       changed = true;
     }
   }
-  // 5. A text-only answer (no note this turn) is the answer, held to the note's word limit like a note.
+  // 4b. A join drawn in its source's view (hikes near a waterfall ranked like the hikes), so its top features are
+  // listed, sized and framed like the source's were; the join draws with no view of its own.
+  if (ending) {
+    const joins = turn.calls.filter((c) => c.toolName === "combine" && typeof (c.output as { combined?: { id?: unknown } } | undefined)?.combined?.id === "string");
+    const last = joins[joins.length - 1]?.output as { combined: { id: string; sourceLayerId?: string } } | undefined;
+    const drawnAlready = [...turn.calls, ...calls.map((c) => ({ toolName: c.toolName, input: c.input }))].some(
+      (c) => c.toolName === "render" && typeof (c.input as { layerId?: unknown })?.layerId === "string" && /^combine\b/.test((c.input as { layerId: string }).layerId) && (c.input as { view?: unknown }).view !== undefined,
+    );
+    if (last && !drawnAlready && last.combined.sourceLayerId) {
+      const source = last.combined.sourceLayerId;
+      const sourceRender = [...turn.calls].reverse().find((c) => c.toolName === "render" && (c.input as { layerId?: unknown })?.layerId === source)?.output as { view?: string; rankBy?: string } | undefined;
+      const view = sourceRender?.view ?? turn.reading.views.find((v) => v.layerId === source)?.view;
+      if (view) {
+        // Ranked by the source's own measure (a hike's length), not the join's distance to the nearest waterfall.
+        const sourceLayer = getLayer(source);
+        const rankBy = sourceRender?.rankBy ?? turn.reading.rankBy.find((r) => r.layerId === source)?.key ?? sourceLayer?.labels?.rankBy ?? sourceLayer?.card?.measure?.key;
+        const render: DraftCall = { toolCallId: guardId(), toolName: "render", input: { layerId: "combine", view, ...(rankBy && { rankBy }) } };
+        const at = calls.findIndex((c) => c.toolName === "note");
+        calls = at === -1 ? [...calls, render] : [...calls.slice(0, at), render, ...calls.slice(at)];
+        turn.note(`drew the join ${last.combined.id} in the ${view} view of ${source}`);
+        changed = true;
+      }
+    }
+  }
+  // 5. An answer written as text with no note becomes the note (after any renders above), so it is grounded, composed
+  // and cut like one (lib/agent/noteCheck.ts) and its follow-ups come after it; the model's own are kept for that.
+  const textAnswer = extractFollowUps(draft.text ?? "");
+  if (
+    !hasNote &&
+    rejected.length === 0 &&
+    !leakedText &&
+    !turn.noted &&
+    textAnswer.body.trim() !== "" &&
+    // Only questions is no answer ("- More?" after a note sent back to be rewritten).
+    !textAnswer.body.split("\n").every((l) => l.trim() === "" || /^\s*[-*+]\s+.*\?\s*$/.test(l)) &&
+    calls.every((c) => c.toolName === "render") &&
+    (turn.queries.length > 0 || turn.calls.length > 0)
+  ) {
+    turn.modelFollowUps = textAnswer.followUps;
+    calls = [...calls, { toolCallId: guardId(), toolName: "note", input: { markdown: textAnswer.body } }];
+    dropText = true;
+    changed = true;
+    turn.note("the answer written as text became the note");
+  }
   let text: string | undefined;
-  const closing = !hasNote && calls.length === 0 && rejected.length === 0 && !dropText && !leakedText && !turn.noted && !!draft.text;
-  // Its numbers and names are held to the results like a note's: what no result holds is cut (no step to rewrite it).
-  const grounded = closing && draft.text ? groundedNote(draft.text, turn) : null;
-  if (grounded !== null) {
-    text = grounded;
-    changed = true;
-  }
-  if (closing && noteWords(text ?? draft.text ?? "") > NOTE_MAX_WORDS) {
-    const before = text ?? draft.text ?? "";
-    text = trimNote(before);
-    turn.note(`closing text with no note cut from ${noteWords(before)} to ${noteWords(text)} words`);
-    changed = true;
-  }
   // 6. A data story's answer has the data's shape (spec §13): the low and the peak with numbers and dates, and what size
   // (or width, or brightness) and color mean. What the note, or a closing text with no note, leaves out is added from
   // the story: its first sentence (the low and the peak) and the encoding sentence, before the follow-up questions.
@@ -552,17 +622,20 @@ export async function decideStep(draft: { calls: DraftCall[]; hasText: boolean; 
         turn.note("added the story's shape (low and peak, what size and color mean) to the note");
         changed = true;
       }
-    } else if (!hasNote && calls.length === 0 && rejected.length === 0 && !dropText && !leakedText && !turn.noted) {
-      const base = text ?? draft.text;
-      const add = base ? additions(base) : [];
-      if (base && add.length > 0) {
-        text = withMeaning(base, add.join(" "));
+    } else if (!hasNote && calls.length === 0 && rejected.length === 0 && !dropText && !leakedText && !turn.noted && draft.text) {
+      // A closing text that is no answer of the turn's (nothing was asked of a layer): the story's lines still go in.
+      const add = additions(draft.text);
+      if (add.length > 0) {
+        text = withMeaning(draft.text, add.join(" "));
         turn.note("added the story's shape (low and peak, what size and color mean) to the closing text");
         changed = true;
       }
     }
   }
-  return { calls, dropText: dropText || leakedText || deferred, rejected, changed, ...(text !== undefined && { text }) };
+  // 7. A note on the last step leaves no step for the follow-ups: they come after it in the same step.
+  const trailingText = calls.some((c) => c.toolName === "note") && turn.step >= MAX_STEPS - 1 ? followUpList(followUpsForTurn(turn, turn.modelFollowUps)) : undefined;
+  if (trailingText) changed = true;
+  return { calls, dropText: dropText || leakedText || deferred, rejected, changed, ...(text !== undefined && { text }), ...(trailingText && { trailingText }) };
 }
 
 /**
@@ -737,9 +810,10 @@ export function stepGuard(turn: Turn, toolNames: readonly string[]): Middleware 
       if (!decision.changed) return result;
       const kept = result.content.filter((c) => c.type !== "tool-call" && !(decision.dropText && c.type === "text") && !(decision.text !== undefined && c.type === "text"));
       const replacedText = decision.text !== undefined ? [{ type: "text", text: decision.text } as Content] : [];
+      const trailing = decision.trailingText !== undefined ? [{ type: "text", text: decision.trailingText } as Content] : [];
       return {
         ...result,
-        content: [...replacedText, ...kept, ...decision.calls.map((c) => toPart(c) as Content)],
+        content: [...replacedText, ...kept, ...decision.calls.map((c) => toPart(c) as Content), ...trailing],
         finishReason: finishFor(decision.calls, result.finishReason) as GenerateResult["finishReason"],
       };
     }
@@ -817,7 +891,11 @@ export function stepGuard(turn: Turn, toolNames: readonly string[]): Middleware 
         decision.text !== undefined
           ? ([{ type: "text-start", id }, { type: "text-delta", id, delta: decision.text }, { type: "text-end", id }] as StreamPart[])
           : [];
-      const out: StreamPart[] = [...replacedText, ...kept, ...decision.calls.map((c) => toPart(c) as StreamPart)];
+      const trailing: StreamPart[] =
+        decision.trailingText !== undefined
+          ? ([{ type: "text-start", id: "guard-follow-ups" }, { type: "text-delta", id: "guard-follow-ups", delta: decision.trailingText }, { type: "text-end", id: "guard-follow-ups" }] as StreamPart[])
+          : [];
+      const out: StreamPart[] = [...replacedText, ...kept, ...decision.calls.map((c) => toPart(c) as StreamPart), ...trailing];
       if (finish) out.push({ ...finish, finishReason: finishFor(decision.calls, finish.finishReason) } as StreamPart);
       return { ...result, stream: streamOf(out) };
     }

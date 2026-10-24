@@ -473,10 +473,14 @@ function categoryClaims(segment: string, named: string[], pool: FactPool): Claim
     if (!CLASS_KEY.test(k) || /shade/i.test(k) || compassKeys.includes(k) || vocab.size < 2 || vocab.size > 12) continue;
     const facts = factsOf((x) => x === k);
     if (facts.length === 0) continue;
+    // A held value said with the word after it is that value ("below normal" of a gauge that is "below"), not the next class.
+    const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    let said = unnamed;
+    for (const f of facts) for (const h of f.values) if (h.length >= 3) said = said.replace(new RegExp(` ${esc(comparable(h))} [\\p{L}-]+(?= )`, "gu"), " |");
     for (const v of vocab) {
       if (v === "true" || v === "false" || v.length < 3) continue;
       const word = comparable(v);
-      if (!new RegExp(` ${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}s? `).test(unnamed)) continue;
+      if (!new RegExp(` ${esc(word)}s? `).test(said)) continue;
       if (facts.some((f) => f.values.has(v) || [...f.values].some((held) => IMPLIES[held]?.includes(v)))) continue;
       out.push({ text, kind: "category", why: `"${v}": in the results ${facts.map((f) => `${nameOf(f.name)} is ${[...f.values].join(", ")}`).join("; ")}` });
     }

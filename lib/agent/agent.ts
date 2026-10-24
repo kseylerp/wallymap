@@ -1,4 +1,5 @@
-import { stepCountIs, wrapLanguageModel, type LanguageModel } from "ai";
+import { stepCountIs, wrapLanguageModel, type LanguageModel, type UIMessage } from "ai";
+import { contextForPrompt, contextFrom } from "./context";
 import { SYSTEM_PROMPT } from "./prompt";
 import { readingForPrompt } from "./reading";
 import { getModel } from "./provider";
@@ -21,7 +22,9 @@ const ANSWER_TOOLS = ["render", "compare", "set_time", "set_view", "note"];
 export function prepareStepFor(turn: Turn, toolNames: readonly string[]) {
   return ({ stepNumber }: { stepNumber: number }) => {
     turn.step = stepNumber;
-    if (turn.noted || stepNumber < MAX_STEPS - 2) return {};
+    // After the note, the reply is only its follow-ups (the step guard writes them): no tool is offered.
+    if (turn.noted) return { toolChoice: "none" as const };
+    if (stepNumber < MAX_STEPS - 2) return {};
     if (stepNumber >= MAX_STEPS - 1) {
       turn.note("last step and no note yet: only the note is offered");
       return { activeTools: ["note"], toolChoice: "required" as const };
@@ -36,15 +39,17 @@ export function prepareStepFor(turn: Turn, toolNames: readonly string[]) {
  * both answer the same way: this turn's record, the tools writing into it, the system prompt with the map view, and
  * the model wrapped in the step guard (lib/agent/stepGuard.ts).
  */
-export function agentTurn({ question, view, model = getModel() }: { question: string; view: MapView | null; model?: LanguageModel }) {
-  const turn: Turn = createTurn({ question, view });
+export function agentTurn({ question, view, model = getModel(), history = [] }: { question: string; view: MapView | null; model?: LanguageModel; history?: UIMessage[] }) {
+  // What the last answer left on the map, for a follow-up that names no place of its own (lib/agent/context.ts).
+  const context = contextFrom(history);
+  const turn: Turn = createTurn({ question, view, context });
   const tools = buildTools({ view, turn });
   if (typeof model === "string") throw new Error("A model instance is required (MODEL_PROVIDER and MODEL_NAME)");
   return {
     turn,
     tools,
     // The fixed prompt, the map view, and the app's own reading of this question's words (lib/agent/reading.ts).
-    system: [systemForTurn(SYSTEM_PROMPT, view), readingForPrompt(turn.reading, turn.now, Object.keys(tools))].filter(Boolean).join("\n\n"),
+    system: [systemForTurn(SYSTEM_PROMPT, view), context ? contextForPrompt(context, question) : "", readingForPrompt(turn.reading, turn.now, Object.keys(tools))].filter(Boolean).join("\n\n"),
     model: wrapLanguageModel({ model, middleware: stepGuard(turn, Object.keys(tools)) }),
     stopWhen: stepCountIs(MAX_STEPS),
     prepareStep: prepareStepFor(turn, Object.keys(tools)),

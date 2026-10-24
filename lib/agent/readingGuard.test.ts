@@ -100,7 +100,8 @@ describe("the combine tool", () => {
     expect(combineOf("Trailheads within 30 minutes' drive of Bend")).toMatchObject({ op: "drive_time", minutes: 30 });
     expect(combineOf("Easy hikes with a waterfall near Asheville")).toMatchObject({ op: "near", distance: 0.5, unit: "km" });
     expect(combineOf("Trails to a lake near Bishop")).toMatchObject({ op: "near" });
-    expect(combineOf("Hikes with a view near Boulder")).toBeNull();
+    // A hike with a view reaches a mapped viewpoint: the trails within half a km of one.
+    expect(combineOf("Hikes with a view near Boulder")).toMatchObject({ op: "near", distance: 0.5 });
     expect(combineOf("Trails near Boulder")).toBeNull();
     expect(combineOf("Is there flooding along the Zambezi right now?")).toBeNull();
   });

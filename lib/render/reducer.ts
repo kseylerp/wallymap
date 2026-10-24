@@ -545,9 +545,14 @@ function reduceAction(state: MapState, action: MapAction): MapState {
         ? (state.renderOps[index]?.mode ?? (loaded ? defaultRenderMode(loaded, state.viewport.zoom) : action.op.mode))
         : action.op.mode;
       const op: RenderOp = { ...action.op, mode: modeForGeometry(asked, loaded) };
+      // A colored map of areas (temperature anomaly by county, drought) the agent adds beside other answers goes under
+      // them: drawn last over the Boundary Waters, the counties' pink hid the fires and mines it was asked beside.
+      const under = index === -1 && !action.exact && !action.restored && loaded !== undefined && loaded.result.kind === "geojson" && isChoropleth(loaded) && state.renderOps.length > 0;
       const renderOps =
         index === -1
-          ? [...state.renderOps, op]
+          ? under
+            ? [op, ...state.renderOps]
+            : [...state.renderOps, op]
           : action.exact
             ? state.renderOps.map((old, i) => (i === index ? op : old))
             : state.renderOps.map((old, i) =>

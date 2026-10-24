@@ -231,3 +231,19 @@ describe("one point inside the place asked about (Zion's rock at the canyon's ce
     expect(s.camera?.bbox).toEqual([-112.9788, 37.2081, -112.9406, 37.2965]);
   });
 });
+
+describe("a colored map of areas added beside other answers (temperature anomaly over the Boundary Waters)", () => {
+  it("goes under them in the stack", () => {
+    const fires = layer("fire-perimeters", { geometry: "polygon", color: "#000" }, [point(-91, 48, { name: "Bear Trap" })]);
+    const square = (x: number, v: number): Feature => ({ type: "Feature", geometry: { type: "Polygon", coordinates: [[[x, 47], [x + 1, 47], [x + 1, 48], [x, 48], [x, 47]]] }, properties: { name: `County ${x}`, v } });
+    const counties = layer("temperature-anomaly", { geometry: "polygon", color: "#000", encode: { color: "v" } }, [square(-92, 1.7), square(-91, 3.5)]);
+    const s = run(
+      initialMapState,
+      { type: "layer_loaded", layer: fires },
+      { type: "render", op: { layerId: "fire-perimeters", mode: "polygons", visible: true } },
+      { type: "layer_loaded", layer: counties },
+      { type: "render", op: { layerId: "temperature-anomaly", mode: "polygons", visible: true } },
+    );
+    expect(s.renderOps.map((o) => o.layerId)).toEqual(["temperature-anomaly", "fire-perimeters"]);
+  });
+});

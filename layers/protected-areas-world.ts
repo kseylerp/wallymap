@@ -374,6 +374,7 @@ const protectedAreasWorld = defineLayer({
     "The map fills each area by its protection group with a legend; over 500,000 km² it keeps the 300 largest and draws them coarser. " +
     "International designations (UNESCO biosphere reserves, World Heritage and Ramsar sites) are left out because they overlay and hide the national parks; say so if asked about them. " +
     "Use it for 'is this place protected', 'where are the parks and reserves in this country' or 'how much of this coast is a marine reserve', anywhere in the world, and as the global counterpart of the US-only public-lands and wilderness layers. " +
+    "In the United States the sources of record come first: public-lands (PAD-US) for who manages the land, monuments for BLM national monuments and conservation areas, wilderness for wilderness areas; use this layer there only for the IUCN category or as features to join with combine (a park's outline to measure distance to). " +
     "Coverage depends on what each country reports, so a gap can mean the data is missing and not that the land is unprotected; many countries report no IUCN category, and many small reserves are recorded only as points and are left out. " +
     "Licence: free for non-commercial use only; commercial use needs permission from UNEP-WCMC, so say so when the user plans to use it commercially. " +
     "If the database does not answer, the layer returns an error saying so rather than an empty map. Works for regions up to about a continent (25 million km²); zoom in from a whole-world view.",

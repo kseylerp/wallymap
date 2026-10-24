@@ -1104,7 +1104,7 @@
  },
  "critical-habitat": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -113.85,
    37,
@@ -1130,7 +1130,9 @@
      "federalRegister": "59 FR 5820",
      "ruleUrl": "https://www.federalregister.gov/citation/59-FR-5820",
      "published": "1994-02-08",
-     "meaning": "Applies to federal projects, funding and permits; it does not close the land or limit visits by itself"
+     "meaning": "Applies to federal projects, funding and permits; it does not close the land or limit visits by itself",
+     "areaKm2": 26606.3,
+     "acres": 6574564
     }
    }
   ]
@@ -5035,6 +5037,295 @@
    }
   ]
  },
+ "mineral-leases": {
+  "kind": "geojson",
+  "recorded": "2026-10-24",
+  "bbox": [
+   -108.3,
+   35.9,
+   -107.6,
+   36.3
+  ],
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -107.64221,
+      36.20869
+     ]
+    },
+    "properties": {
+     "name": "Oil and gas lease NMNM105453503",
+     "kind": "oil-gas",
+     "source": "BLM Mineral and Land Records System (MLRS)",
+     "caseNumber": "NMNM105453503",
+     "leaseType": "Oil and gas competitive public domain lease post 1987",
+     "commodity": "Oil and gas",
+     "status": "Authorized",
+     "producing": "producing",
+     "acres": 2400,
+     "v": 2400,
+     "effective": "1988-09-01"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -107.62016,
+      36.13245
+     ]
+    },
+    "properties": {
+     "name": "Oil and gas lease NMNM106788113",
+     "kind": "oil-gas",
+     "source": "BLM Mineral and Land Records System (MLRS)",
+     "caseNumber": "NMNM106788113",
+     "leaseType": "Oil and gas competitive public domain lease post 2022",
+     "commodity": "Oil and gas",
+     "status": "Authorized",
+     "producing": "not producing",
+     "acres": 162.16,
+     "v": 162.16,
+     "effective": "2026-07-01",
+     "expires": "2036-06-30"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -107.66577,
+      36.09595
+     ]
+    },
+    "properties": {
+     "name": "Oil and gas lease NMNM105312638",
+     "kind": "oil-gas",
+     "source": "BLM Mineral and Land Records System (MLRS)",
+     "caseNumber": "NMNM105312638",
+     "leaseType": "Oil and gas simultaneous public domain lease",
+     "commodity": "Oil and gas",
+     "status": "Authorized",
+     "producing": "producing",
+     "acres": 2280,
+     "v": 2280,
+     "effective": "1984-04-01"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -107.67787,
+      36.24897
+     ]
+    },
+    "properties": {
+     "name": "Oil and gas lease NMNM105507247",
+     "kind": "oil-gas",
+     "source": "BLM Mineral and Land Records System (MLRS)",
+     "caseNumber": "NMNM105507247",
+     "leaseType": "Oil and gas simultaneous public domain lease",
+     "commodity": "Oil and gas",
+     "status": "Authorized",
+     "producing": "producing",
+     "acres": 2243.16,
+     "v": 2243.16,
+     "effective": "1973-06-01"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -107.78102,
+      36.27057
+     ]
+    },
+    "properties": {
+     "name": "Oil and gas lease NMNM105334310",
+     "kind": "oil-gas",
+     "source": "BLM Mineral and Land Records System (MLRS)",
+     "caseNumber": "NMNM105334310",
+     "leaseType": "Oil and gas simultaneous public domain lease",
+     "commodity": "Oil and gas",
+     "status": "Authorized",
+     "producing": "producing",
+     "acres": 2240,
+     "v": 2240,
+     "effective": "1970-10-01"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -107.89735,
+      36.17635
+     ]
+    },
+    "properties": {
+     "name": "Oil and gas lease NMNM105451109",
+     "kind": "oil-gas",
+     "source": "BLM Mineral and Land Records System (MLRS)",
+     "caseNumber": "NMNM105451109",
+     "leaseType": "Oil and gas simultaneous public domain lease",
+     "commodity": "Oil and gas",
+     "status": "Authorized",
+     "producing": "producing",
+     "acres": 2118.04,
+     "v": 2118.04,
+     "effective": "1981-11-01"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -107.7763,
+      36.23769
+     ]
+    },
+    "properties": {
+     "name": "Oil and gas lease NMNM105553737",
+     "kind": "oil-gas",
+     "source": "BLM Mineral and Land Records System (MLRS)",
+     "caseNumber": "NMNM105553737",
+     "leaseType": "Oil and gas simultaneous public domain lease",
+     "commodity": "Oil and gas",
+     "status": "Authorized",
+     "producing": "producing",
+     "acres": 2083.66,
+     "v": 2083.66,
+     "effective": "1969-01-01"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -107.70179,
+      36.07412
+     ]
+    },
+    "properties": {
+     "name": "Oil and gas lease NMNM105467447",
+     "kind": "oil-gas",
+     "source": "BLM Mineral and Land Records System (MLRS)",
+     "caseNumber": "NMNM105467447",
+     "leaseType": "Oil and gas simultaneous public domain lease",
+     "commodity": "Oil and gas",
+     "status": "Authorized",
+     "producing": "producing",
+     "acres": 1968.64,
+     "v": 1968.64,
+     "effective": "1969-03-01"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -107.91964,
+      36.23753
+     ]
+    },
+    "properties": {
+     "name": "Oil and gas lease NMNM105557492",
+     "kind": "oil-gas",
+     "source": "BLM Mineral and Land Records System (MLRS)",
+     "caseNumber": "NMNM105557492",
+     "leaseType": "Oil and gas simultaneous public domain lease",
+     "commodity": "Oil and gas",
+     "status": "Authorized",
+     "producing": "producing",
+     "acres": 1958.98,
+     "v": 1958.98,
+     "effective": "1971-07-01"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -107.91568,
+      36.19073
+     ]
+    },
+    "properties": {
+     "name": "Oil and gas lease NMNM105313855",
+     "kind": "oil-gas",
+     "source": "BLM Mineral and Land Records System (MLRS)",
+     "caseNumber": "NMNM105313855",
+     "leaseType": "Oil and gas simultaneous public domain lease",
+     "commodity": "Oil and gas",
+     "status": "Authorized",
+     "producing": "producing",
+     "acres": 1880,
+     "v": 1880,
+     "effective": "1981-12-01"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -107.95613,
+      36.21571
+     ]
+    },
+    "properties": {
+     "name": "Oil and gas lease NMNM105370315",
+     "kind": "oil-gas",
+     "source": "BLM Mineral and Land Records System (MLRS)",
+     "caseNumber": "NMNM105370315",
+     "leaseType": "Oil and gas simultaneous public domain lease",
+     "commodity": "Oil and gas",
+     "status": "Authorized",
+     "producing": "producing",
+     "acres": 1760.28,
+     "v": 1760.28,
+     "effective": "1980-02-01"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -107.89258,
+      36.22321
+     ]
+    },
+    "properties": {
+     "name": "Oil and gas lease NMNM105542761",
+     "kind": "oil-gas",
+     "source": "BLM Mineral and Land Records System (MLRS)",
+     "caseNumber": "NMNM105542761",
+     "leaseType": "Oil and gas competitive public domain lease post 1987",
+     "commodity": "Oil and gas",
+     "status": "Authorized",
+     "producing": "producing",
+     "acres": 1760,
+     "v": 1760,
+     "effective": "2002-12-01"
+    }
+   }
+  ]
+ },
  "mines": {
   "kind": "geojson",
   "recorded": "2026-10-23",
@@ -5301,12 +5592,12 @@
  },
  "mining-claims": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
-   -116.5,
-   40.6,
-   -116.1,
-   40.9
+   -109.8,
+   38.4,
+   -109.4,
+   38.7
   ],
   "features": [
    {
@@ -5314,71 +5605,207 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -116.12339,
-      40.85612
+      -109.72754,
+      38.67973
      ]
     },
     "properties": {
-     "name": "ELP 3 and 177 more claims",
-     "kind": "active",
-     "claims": 178,
-     "quarterSection": "21 0340N 0520E 010 NW",
-     "source": "Nevada Division of Minerals (from BLM records)",
-     "claimNames": "ELP 3, ELP 5, ELP 7, ELP 21, ELP 25, …",
-     "claimKind": "lode",
-     "claimType": "Lode claim",
-     "located": "2021-12-22",
-     "county": "Elko County"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -116.11391,
-      40.85062
-     ]
-    },
-    "properties": {
-     "name": "ELP 1 and 171 more claims",
-     "kind": "active",
-     "claims": 172,
-     "quarterSection": "21 0340N 0520E 010",
-     "source": "Nevada Division of Minerals (from BLM records)",
-     "claimNames": "ELP 1, ELP 2, ELP 4, ELP 6, ELP 8, …",
-     "claimKind": "lode",
-     "claimType": "Lode claim",
-     "located": "2021-12-22",
-     "county": "Elko County",
-     "acres": 3553.52,
-     "v": 3553.52
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -116.45344,
-      40.61825
-     ]
-    },
-    "properties": {
-     "name": "RRD 21",
+     "name": "Synth",
      "kind": "active",
      "claims": 1,
-     "quarterSection": "21 0320N 0490E 028 NE",
-     "source": "Nevada Division of Minerals (from BLM records)",
-     "claimNames": "RRD 21",
+     "source": "BLM national claim map (MLRS)",
+     "caseNumber": "UT106840161",
      "claimKind": "lode",
      "claimType": "Lode claim",
-     "located": "2021-04-03",
-     "caseNumber": "NV105243173",
-     "disposition": "Active",
-     "county": "Eureka County",
+     "disposition": "Filed",
+     "acres": 320,
+     "v": 320,
+     "locationQuality": "1; MIDPOINT, TYPICAL QUARTER SECTION WITH 4 STANDARD LEGALS ATTRIBUTED, aliquot"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.6998,
+      38.6743
+     ]
+    },
+    "properties": {
+     "name": "Copper King",
+     "kind": "active",
+     "claims": 1,
+     "source": "BLM national claim map (MLRS)",
+     "caseNumber": "UT106800518",
+     "claimKind": "placer",
+     "claimType": "Placer claim",
+     "disposition": "Filed",
+     "acres": 20,
+     "v": 20,
+     "locationQuality": "4.1; 1 intersecting parts, aliquot",
+     "nameInSource": "COPPER KING"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.72754,
+      38.67973
+     ]
+    },
+    "properties": {
+     "name": "Ghoul",
+     "kind": "active",
+     "claims": 1,
+     "source": "BLM national claim map (MLRS)",
+     "caseNumber": "UT106840160",
+     "claimKind": "lode",
+     "claimType": "Lode claim",
+     "disposition": "Filed",
+     "acres": 320,
+     "v": 320,
+     "locationQuality": "1; MIDPOINT, TYPICAL QUARTER SECTION WITH 4 STANDARD LEGALS ATTRIBUTED, aliquot"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.70903,
+      38.68335
+     ]
+    },
+    "properties": {
+     "name": "Cathedral",
+     "kind": "active",
+     "claims": 1,
+     "source": "BLM national claim map (MLRS)",
+     "caseNumber": "UT106840159",
+     "claimKind": "lode",
+     "claimType": "Lode claim",
+     "disposition": "Filed",
+     "acres": 20.66115702,
+     "v": 20.66115702,
+     "locationQuality": "1; MIDPOINT, TYPICAL QUARTER SECTION WITH 4 STANDARD LEGALS ATTRIBUTED, aliquot"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.70903,
+      38.69059
+     ]
+    },
+    "properties": {
+     "name": "Mutant",
+     "kind": "active",
+     "claims": 1,
+     "source": "BLM national claim map (MLRS)",
+     "caseNumber": "UT106840158",
+     "claimKind": "lode",
+     "claimType": "Lode claim",
+     "disposition": "Filed",
+     "acres": 20.66115702,
+     "v": 20.66115702,
+     "locationQuality": "1; MIDPOINT, TYPICAL QUARTER SECTION WITH 4 STANDARD LEGALS ATTRIBUTED, aliquot"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.72754,
+      38.68698
+     ]
+    },
+    "properties": {
+     "name": "Dweller",
+     "kind": "active",
+     "claims": 1,
+     "source": "BLM national claim map (MLRS)",
+     "caseNumber": "UT106840157",
+     "claimKind": "lode",
+     "claimType": "Lode claim",
+     "disposition": "Filed",
+     "acres": 320,
+     "v": 320,
+     "locationQuality": "1; MIDPOINT, TYPICAL QUARTER SECTION WITH 4 STANDARD LEGALS ATTRIBUTED, aliquot"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.72754,
+      38.68698
+     ]
+    },
+    "properties": {
+     "name": "Codsworth",
+     "kind": "active",
+     "claims": 1,
+     "source": "BLM national claim map (MLRS)",
+     "caseNumber": "UT106840156",
+     "claimKind": "lode",
+     "claimType": "Lode claim",
+     "disposition": "Filed",
+     "acres": 320,
+     "v": 320,
+     "locationQuality": "1; MIDPOINT, TYPICAL QUARTER SECTION WITH 4 STANDARD LEGALS ATTRIBUTED, aliquot"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.71366,
+      38.69421
+     ]
+    },
+    "properties": {
+     "name": "Atomfall",
+     "kind": "active",
+     "claims": 1,
+     "source": "BLM national claim map (MLRS)",
+     "caseNumber": "UT106840155",
+     "claimKind": "lode",
+     "claimType": "Lode claim",
+     "disposition": "Filed",
+     "acres": 20.66115702,
+     "v": 20.66115702,
+     "locationQuality": "1; MIDPOINT, TYPICAL QUARTER SECTION WITH 4 STANDARD LEGALS ATTRIBUTED, aliquot; MIDPOINT, TYPICAL QUARTER SECTION WITH 4 STANDARD LEGALS ATTRIBUTED, aliquot"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -109.69518,
+      38.67973
+     ]
+    },
+    "properties": {
+     "name": "CK 1",
+     "kind": "active",
+     "claims": 1,
+     "source": "BLM national claim map (MLRS)",
+     "caseNumber": "UT106797640",
+     "claimKind": "lode",
+     "claimType": "Lode claim",
+     "disposition": "Filed",
      "acres": 20.66,
-     "v": 20.66
+     "v": 20.66,
+     "locationQuality": "1; MIDPOINT, TYPICAL QUARTER SECTION WITH 4 STANDARD LEGALS ATTRIBUTED, aliquot"
     }
    },
    {
@@ -5386,21 +5813,23 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -116.44374,
-      40.63252
+      -109.41419,
+      38.41798
      ]
     },
     "properties": {
-     "name": "RRD 30 and 176 more claims",
+     "name": "Strike Ravine 3",
      "kind": "active",
-     "claims": 177,
-     "quarterSection": "21 0320N 0490E 022 NW",
-     "source": "Nevada Division of Minerals (from BLM records)",
-     "claimNames": "RRD 30, RRD 11, RRD 12, RRD 13, RRD 14, …",
+     "claims": 1,
+     "source": "BLM national claim map (MLRS)",
+     "caseNumber": "UT106792279",
      "claimKind": "lode",
      "claimType": "Lode claim",
-     "located": "2021-04-05",
-     "county": "Eureka County"
+     "disposition": "Filed",
+     "acres": 20.66,
+     "v": 20.66,
+     "locationQuality": "1; MIDPOINT, TYPICAL QUARTER SECTION WITH 4 STANDARD LEGALS ATTRIBUTED, aliquot",
+     "nameInSource": "STRIKE RAVINE 3"
     }
    },
    {
@@ -5408,21 +5837,23 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -116.4438,
-      40.62527
+      -109.41419,
+      38.41798
      ]
     },
     "properties": {
-     "name": "RRD 03 and 175 more claims",
+     "name": "Strike Ravine 2",
      "kind": "active",
-     "claims": 176,
-     "quarterSection": "21 0320N 0490E 022 SW",
-     "source": "Nevada Division of Minerals (from BLM records)",
-     "claimNames": "RRD 03, RRD 04, RRD 05, RRD 06, RRD 07, …",
+     "claims": 1,
+     "source": "BLM national claim map (MLRS)",
+     "caseNumber": "UT106792278",
      "claimKind": "lode",
      "claimType": "Lode claim",
-     "located": "2021-04-03",
-     "county": "Eureka County"
+     "disposition": "Filed",
+     "acres": 20.66,
+     "v": 20.66,
+     "locationQuality": "1; MIDPOINT, TYPICAL QUARTER SECTION WITH 4 STANDARD LEGALS ATTRIBUTED, aliquot",
+     "nameInSource": "STRIKE RAVINE 2"
     }
    },
    {
@@ -5430,155 +5861,23 @@
     "geometry": {
      "type": "Point",
      "coordinates": [
-      -116.12348,
-      40.84888
+      -109.40956,
+      38.41798
      ]
     },
     "properties": {
-     "name": "ELP 10 and 174 more claims",
+     "name": "Strike Ravine 1",
      "kind": "active",
-     "claims": 175,
-     "quarterSection": "21 0340N 0520E 010 SW",
-     "source": "Nevada Division of Minerals (from BLM records)",
-     "claimNames": "ELP 10, ELP 27, ELP 223, …",
+     "claims": 1,
+     "source": "BLM national claim map (MLRS)",
+     "caseNumber": "UT106792277",
      "claimKind": "lode",
      "claimType": "Lode claim",
-     "located": "2021-12-22",
-     "county": "Elko County"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -116.11394,
-      40.8488
-     ]
-    },
-    "properties": {
-     "name": "ELP 27 and 172 more claims",
-     "kind": "active",
-     "claims": 173,
-     "quarterSection": "21 0340N 0520E 010 SE",
-     "source": "Nevada Division of Minerals (from BLM records)",
-     "claimNames": "ELP 27, …",
-     "claimKind": "lode",
-     "claimType": "Lode claim",
-     "located": "2021-12-22",
-     "county": "Elko County"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -116.43423,
-      40.63247
-     ]
-    },
-    "properties": {
-     "name": "RRD 11 and 165 more claims",
-     "kind": "active",
-     "claims": 166,
-     "quarterSection": "21 0320N 0490E 022 NE",
-     "source": "Nevada Division of Minerals (from BLM records)",
-     "claimNames": "RRD 11, RRD 13, RRD 15, RRD 17, RRD 19, …",
-     "claimKind": "lode",
-     "claimType": "Lode claim",
-     "located": "2021-04-03",
-     "county": "Eureka County"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -116.43429,
-      40.62522
-     ]
-    },
-    "properties": {
-     "name": "BOB 01 and 161 more claims",
-     "kind": "active",
-     "claims": 162,
-     "quarterSection": "21 0320N 0490E 022 SE",
-     "source": "Nevada Division of Minerals (from BLM records)",
-     "claimNames": "BOB 01, …",
-     "claimKind": "lode",
-     "claimType": "Lode claim",
-     "located": "2024-10-16",
-     "county": "Eureka County"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -116.43421,
-      40.63428
-     ]
-    },
-    "properties": {
-     "name": "RRD 30 and 160 more claims",
-     "kind": "active",
-     "claims": 161,
-     "quarterSection": "21 0320N 0490E 022",
-     "source": "Nevada Division of Minerals (from BLM records)",
-     "claimNames": "RRD 30, RRD 03, RRD 04, RRD 05, RRD 06, …",
-     "claimKind": "lode",
-     "claimType": "Lode claim",
-     "located": "2021-04-05",
-     "county": "Eureka County",
-     "acres": 3326.26,
-     "v": 3326.26
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -116.15243,
-      40.76094
-     ]
-    },
-    "properties": {
-     "name": "MAG 9R and 157 more claims",
-     "kind": "active",
-     "claims": 158,
-     "quarterSection": "21 0330N 0520E 008 SE",
-     "source": "Nevada Division of Minerals (from BLM records)",
-     "claimNames": "MAG 9R, MAG 11R, MAG 12R, MAG 13R, MAG 15R, …",
-     "claimKind": "lode",
-     "claimType": "Lode claim",
-     "located": "2021-11-15",
-     "county": "Elko County"
-    }
-   },
-   {
-    "type": "Feature",
-    "geometry": {
-     "type": "Point",
-     "coordinates": [
-      -116.16196,
-      40.76101
-     ]
-    },
-    "properties": {
-     "name": "MAG 3R and 155 more claims",
-     "kind": "active",
-     "claims": 156,
-     "quarterSection": "21 0330N 0520E 008 SW",
-     "source": "Nevada Division of Minerals (from BLM records)",
-     "claimNames": "MAG 3R, MAG 6R, MAG 8R, MAG 9R, …",
-     "claimKind": "lode",
-     "claimType": "Lode claim",
-     "located": "2021-11-15",
-     "county": "Eureka County"
+     "disposition": "Filed",
+     "acres": 20.66,
+     "v": 20.66,
+     "locationQuality": "1; MIDPOINT, TYPICAL QUARTER SECTION WITH 4 STANDARD LEGALS ATTRIBUTED, aliquot",
+     "nameInSource": "STRIKE RAVINE 1"
     }
    }
   ]

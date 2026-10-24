@@ -179,13 +179,13 @@ describe("mining-claims layer", () => {
     expect(geojson(await layer.query(ctx(empty), { status: "both" })).coverageNote).toBe("No mining claims in this area");
   });
 
-  it("says plainly, with an offline source status, that claims are unavailable outside Alaska and Nevada while BLM's map is gone", async () => {
+  it("says plainly, with an offline source status, that claims are unavailable outside Alaska and Nevada when BLM's map is gone", async () => {
     const gone = upstream({ active: () => new Response("Service not found", { status: 404 }), closed: () => new Response("Service not found", { status: 404 }) });
     const result = await layer.query(ctx(gone), { status: "both" });
     expect(result).toMatchObject({
-      error: expect.stringMatching(/^Mining claims are unavailable here: The Bureau of Land Management took its national mining claim map offline on 14 October 2026/),
+      error: expect.stringMatching(/^Mining claims are unavailable here: The Bureau of Land Management's national mining claim map did not answer/),
       hint: "unavailable",
-      sourceStatus: { ok: false, reason: "offline", since: "2026-10-14", message: OFFLINE_MESSAGE },
+      sourceStatus: { ok: false, reason: "offline", message: OFFLINE_MESSAGE },
     });
     // Moab touches neither state service, so nothing else was asked.
     expect(gone.mock.calls.every((c) => String(c[0]).startsWith(SERVICE_URL))).toBe(true);
@@ -260,7 +260,7 @@ function states(national: () => Response = () => new Response("Service not found
   });
 }
 
-describe("Alaska and Nevada while BLM's national map is offline", () => {
+describe("Alaska and Nevada, and when BLM's national map is down", () => {
   it("answers an Alaska view from BLM Alaska alone: one claim per shape, plain claim types, dates staked and closed, the case report", async () => {
     const stub = states();
     const r = geojson(await layer.query(ctx(stub, FAIRBANKS), { status: "both" }));
@@ -322,7 +322,7 @@ describe("Alaska and Nevada while BLM's national map is offline", () => {
     const r = geojson(await layer.query(ctx(stub, ACROSS_NEVADA_LINE), { status: "active" }));
     expect(String(stub.mock.calls[0][0]).startsWith(SERVICE_URL)).toBe(true);
     expect(r.data.features.length).toBeGreaterThan(0);
-    expect(r.coverageNote).toMatch(/^BLM's national claim map has been offline since 14 October 2026, so only Alaska and Nevada claims are shown/);
+    expect(r.coverageNote).toMatch(/^BLM's national claim map did not answer, so only Alaska and Nevada claims are shown/);
     expect(r.sourceStatus).toEqual({ ok: true });
   });
 
@@ -336,7 +336,7 @@ describe("Alaska and Nevada while BLM's national map is offline", () => {
 
   it("draws the claim count, asks no time question, uses US units, names both shapes in the legend and labels the busiest", () => {
     expect(layer.style.encode).toEqual({ color: "claims" });
-    expect(legendOf(layer)).toMatchObject({ kind: "ramp", field: "claims", note: expect.stringMatching(/offline since 14 October 2026/) });
+    expect(legendOf(layer)).toMatchObject({ kind: "ramp", field: "claims", note: expect.stringMatching(/national map/) });
     expect(timeShapeOf(layer)).toEqual({ shape: "none" });
     expect(labelsOf(layer)).toMatchObject({ field: "name", rankBy: "claims" });
     expect(layer.display).toEqual({ units: "us" });

@@ -2,11 +2,12 @@
  * Unpatented mining claims on US public land: the Bureau of Land Management's Mineral and Land Records System (MLRS),
  * read from whichever official service is live for the view.
  *
- * National (offline since 2026-10-14): https://gis.blm.gov/nlsdb/rest/services/Mining_Claims/MiningClaims/MapServer
- *   layer 1 = Active Mining Claims, layer 2 = Closed. BLM took the claim services off its public server on 2026-10-14
- *   (the folder lists no services; the MLRS "Not Closed" and "Closed (Past Year)" Hub services answer 404, checked 2026-10-17).
- *   The layer still asks it first for views outside Alaska and Nevada, so it works again the day BLM restores it.
- *   Claims there are drawn from legal descriptions on the survey grid (the quarter-quarter or section named), not as staked.
+ * National (live, checked 2026-10-23): https://nlsdbpubgis.blm.gov/arcgis/rest/services/Mining_Claims/MiningClaims/MapServer
+ *   layer 1 = Active Mining Claims, layer 2 = Closed. BLM moved the service off gis.blm.gov/nlsdb in October 2026 (the old
+ *   address now redirects and the query there answers 400); the new host answers with the same fields plus LOC_DT (date
+ *   located). 502 active claims in the Moab box -109.7,38.4,-109.3,38.7. Asked first for every view outside Alaska and
+ *   Nevada. Claims there are drawn from legal descriptions on the survey grid (the quarter-quarter or section named), not
+ *   as staked.
  * Alaska (live, checked 2026-10-18; BLM Alaska State Office, 9,708 active claims, edited 2026-10-15):
  *   https://gis.blm.gov/akarcgis/rest/services/minerals/BLM_AK_Federal_Mining_Claims/FeatureServer
  *   layer 0 = Active (recorded or interim), layer 1 = Closed. Boundaries as plotted from the location notices (sketches,
@@ -27,7 +28,8 @@
  *   inNationalPark, disposition (plain words), acres and v (recorded acres, when known), located (date located, YYYY-MM-DD),
  *   closed (date closed), caseNumber, report (MLRS case report URL), quarterSection, county, claimNames, source.
  * Smoke 2026-10-18 (live, through runLayer): Fairbanks box -147.8,64.9,-147.4,65.1 returned 57 active Alaska claims; the
- *   Nevada box -117,39.4,-116.8,39.6 returned 33 squares holding 167 active claims; Moab answers offline with the reason.
+ *   Nevada box -117,39.4,-116.8,39.6 returned 33 squares holding 167 active claims. Moab (national map) answered again
+ *   on 2026-10-23 once the host was moved.
  */
 import { z } from "zod";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
@@ -38,7 +40,7 @@ import { arcgisCount, arcgisQuery, type ArcgisResult } from "./_shared/arcgis";
 import { OUTSIDE_US_NOTE, bboxesDisjoint, outsideUs } from "./_shared/coverage";
 import { layerColor } from "@/lib/render/palette";
 
-export const SERVICE_URL = "https://gis.blm.gov/nlsdb/rest/services/Mining_Claims/MiningClaims/MapServer";
+export const SERVICE_URL = "https://nlsdbpubgis.blm.gov/arcgis/rest/services/Mining_Claims/MiningClaims/MapServer";
 export const LAYERS = { active: 1, closed: 2 } as const;
 export const ALASKA_URL = "https://gis.blm.gov/akarcgis/rest/services/minerals/BLM_AK_Federal_Mining_Claims/FeatureServer";
 export const ALASKA_LAYERS = { active: 0, closed: 1 } as const;
@@ -51,12 +53,11 @@ export type Status = keyof typeof LAYERS;
 export const ALASKA_BOX: BBox = [-180, 51, -129.9, 71.6];
 export const NEVADA_BOX: BBox = [-120.01, 34.99, -114.03, 42.01];
 
-/** When BLM took the national claim services offline. */
-export const NATIONAL_OFFLINE_SINCE = "2026-10-14";
+/** Said when BLM's national claim map is gone (404) and the view is outside the two state services. */
 export const OFFLINE_MESSAGE =
-  "The Bureau of Land Management took its national mining claim map offline on 14 October 2026; claims can be shown only in Alaska (BLM Alaska) and Nevada (Nevada Division of Minerals) until it returns.";
+  "The Bureau of Land Management's national mining claim map did not answer; claims can be shown only in Alaska (BLM Alaska) and Nevada (Nevada Division of Minerals) until it returns.";
 
-const FIELDS = ["CSE_NAME", "CSE_NR", "CSE_DISP", "BLM_PROD", "RCRD_ACRS", "QLTY", "MC_PATENTED"];
+const FIELDS = ["CSE_NAME", "CSE_NR", "CSE_DISP", "BLM_PROD", "RCRD_ACRS", "QLTY", "MC_PATENTED", "LOC_DT"];
 const ALASKA_FIELDS: Record<Status, string[]> = {
   active: ["CSE_NAME", "CSE_NR", "CSE_DISP", "BLM_PROD", "RCRD_ACRS", "Location_Date", "Report"],
   closed: ["CSE_NAME", "CSE_NR", "CSE_DISP", "BLM_PROD", "RCRD_ACRS", "CSE_DISP_DT", "Report"],
@@ -137,7 +138,7 @@ export function normalizeClaims(fc: FeatureCollection, status: Status, source: E
       properties.acres = acres;
       properties.v = acres;
     }
-    const located = isoDay(p.Location_Date);
+    const located = isoDay(p.Location_Date ?? p.LOC_DT);
     if (located) properties.located = located;
     const closed = status === "closed" ? isoDay(p.CSE_DISP_DT) : undefined;
     if (closed) properties.closed = closed;
@@ -294,14 +295,14 @@ const miningClaims = defineLayer({
   id: "mining-claims",
   title: "Mining claims",
   description:
-    "Unpatented mining claims on US public land: staked claims for minerals that can limit other land use. Since 14 October 2026 BLM's national claim map is offline, so claims show only in Alaska (BLM Alaska, each claim as plotted from its location notice, active and closed) and Nevada (Nevada Division of Minerals, active claims only, grouped into the quarter-section squares their legal descriptions name, with a count per square); elsewhere the layer says the source is offline. Each shape has name, kind ('active' or 'closed'), claims (how many claims it stands for), claimType (lode, placer, mill site, tunnel site), disposition, acres when recorded, located (date staked), caseNumber. status picks active (default), closed or both. Shapes are not surveyed corners; do not use them to decide where to stake or camp. No mineral is named. At most 2,000 per status; over 2,500 km², 2,000 named claims and the total.",
+    "Unpatented mining claims on US public land: staked claims for minerals that can limit other land use. Every state from BLM's national claim map (MLRS; each claim drawn on the survey square its legal description names), except Alaska (BLM Alaska, each claim as plotted from its location notice, active and closed) and Nevada (Nevada Division of Minerals, active claims only, grouped into quarter-section squares with a count per square). Use it with monuments, wilderness or public-lands and the combine tool (within, near) to count claims inside or near a protected area. Each shape has name, kind ('active' or 'closed'), claims (how many claims it stands for), claimType (lode, placer, mill site, tunnel site), disposition, acres when recorded, located (date staked), caseNumber. status picks active (default), closed or both. Shapes are not surveyed corners; do not use them to decide where to stake or camp. No mineral is named. At most 2,000 per status; over 2,500 km², 2,000 named claims and the total.",
   coverage: "us",
   surface: "land",
   license: "Public domain (US Bureau of Land Management, MLRS; Nevada Division of Minerals)",
   requiredEnv: [],
   maxAreaKm2: 2_500,
   // "Near Moab" asks about 13,000 km²; the wide answer is capped at MAX_CLAIMS, so a town-sized radius still answers
-  // (in Alaska and Nevada with claims, elsewhere with the offline status) instead of being refused.
+  // instead of being refused.
   hardMaxAreaKm2: 20_000,
   wide: { mode: "named", limit: MAX_CLAIMS },
   input: z.object({
@@ -327,7 +328,7 @@ const miningClaims = defineLayer({
       { label: "20", value: 20 },
       { label: "50+", value: 50 },
     ],
-    note: "Alaska shapes are single claims as plotted from their notices; Nevada squares are quarter sections holding that many active claims. BLM's national claim map has been offline since 14 October 2026, so other states show nothing.",
+    note: "Alaska shapes are single claims as plotted from their notices; Nevada squares are quarter sections holding that many active claims. Elsewhere each shape is one claim from BLM's national map, on the survey square its legal description names.",
   },
 
   async query(ctx, input): Promise<LayerResult | LayerError> {
@@ -447,7 +448,7 @@ const miningClaims = defineLayer({
       }
     }
 
-    const offline: SourceStatus = { ok: false, reason: "offline", message: OFFLINE_MESSAGE, since: NATIONAL_OFFLINE_SINCE };
+    const offline: SourceStatus = { ok: false, reason: "offline", message: OFFLINE_MESSAGE };
     const answered = parts.filter((p) => p.failed.length === 0 || p.features.length > 0);
     if (answered.length === 0) {
       if (nationalDown !== null && parts.length === 0) {
@@ -462,7 +463,7 @@ const miningClaims = defineLayer({
     const notes = parts.flatMap((p) => p.notes);
     const failed = parts.flatMap((p) => p.failed);
     if (failed.length > 0) notes.push(`Missing the ${failed.join(" and the ")}`);
-    if (nationalDown !== null) notes.push("BLM's national claim map has been offline since 14 October 2026, so only Alaska and Nevada claims are shown");
+    if (nationalDown !== null) notes.push("BLM's national claim map did not answer, so only Alaska and Nevada claims are shown");
     if (parts.some((p) => p.features.some((f) => f.properties?.source === SOURCE_LABEL.nevada))) {
       notes.push("Nevada claims are grouped by the quarter section their legal description names, not drawn as staked");
     }

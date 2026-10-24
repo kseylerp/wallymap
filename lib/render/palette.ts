@@ -345,11 +345,15 @@ export type AreaRecipe = {
   outline: string;
   outlineWidth: number;
   casing: number;
+  /** The least white casing each side; AREA_CASING_MIN (lib/render/deck.ts) when unset. */
+  casingMin?: number;
 };
 
 const AREA_RECIPES: Record<"hazard" | "natural" | "data", AreaRecipe> = {
-  // Fire must read as fire on any basemap: pink tint, pink hatch (denser for larger fires), pink outline.
-  hazard: { color: PINK, tint: 0.15, hatchAlpha: 1, step: 2, outline: PINK, outlineWidth: 1.5, casing: 1 },
+  // Fire must read as fire on any basemap: pink tint, pink hatch (denser for larger fires), pink outline. The outline is
+  // 1px over a 0.5px white edge and the hatch at 60%: Paradise's perimeters drew a thick white casing and opaque pink
+  // over the burn severity inside them (owner, 2026-10-24).
+  hazard: { color: PINK, tint: 0.15, hatchAlpha: 0.6, step: 2, outline: PINK, outlineWidth: 1, casing: 0.5, casingMin: 0.5 },
   // Owner, 2026-10-17 ("needs to be discernible"): tints a step stronger so areas read on green Topo, outlines on a
   // white casing wide enough that they never pass for contours or borders.
   natural: { color: SAGE, tint: 0.18, hatchAlpha: 0.9, step: 1, outline: DARK_GREY, outlineWidth: 1.25, casing: 1 },

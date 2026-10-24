@@ -192,6 +192,8 @@ function renderActions(output: Obj, catalog: LayerCatalog): MapAction[] {
   // Two measures on one mark (spec §13): the keys asked for over the layer's own pair ("" switches one off).
   const encode = encodeOf(output.sizeBy, output.colorBy);
   if (encode) op.encode = encode;
+  // Areas around the answer the question is not about draw light, under it (lib/agent/roles.ts).
+  if (output.role === "context") op.role = "context";
   const actions: MapAction[] = [asked ? { type: "render", op } : { type: "render", op, defaultMode: true }];
   // `scenario` moves a scenario layer's scrubber (sea level rise feet); the reducer snaps it and ignores other layers.
   if (isNumber(output.scenario)) actions.push({ type: "set_scenario", layerId, value: output.scenario });

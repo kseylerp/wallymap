@@ -89,7 +89,10 @@ function categoryBlock(key: CategoryKey, data: FeatureCollection | null, shape: 
     const rest = key.groups.slice(4);
     entries.push({ label: `Other (${rest.map((g) => g.label.toLowerCase()).join(", ")})`, color: rest[0]?.color, count: rest.reduce((s, g) => s + g.values.reduce((t, v) => t + (n.get(v) ?? 0), 0), 0) });
   }
-  return { kind: "categories", title: key.attr.label, field: key.attr.key, ...(key.attr.unit && { unit: key.attr.unit }), entries: entries.filter((e) => e.count === undefined || e.count > 0 || data === null), shape };
+  const kept = entries.filter((e) => e.count === undefined || e.count > 0 || data === null);
+  // Features drawn and none in any kind (no reading yet): one line that counts them, never an empty key.
+  const none = kept.length === 0 && (data?.features.length ?? 0) > 0 ? [{ label: `${data!.features.length.toLocaleString("en-US")} in view, none ${lowerFirst(key.attr.label)}` }] : kept;
+  return { kind: "categories", title: key.attr.label, field: key.attr.key, ...(key.attr.unit && { unit: key.attr.unit }), entries: none, shape };
 }
 
 /**
@@ -101,7 +104,7 @@ function categoryBlock(key: CategoryKey, data: FeatureCollection | null, shape: 
  * One entry per label: a key that lists several raw values under one name (public lands' six "Other federal" agencies)
  * shows the name once, with the first value's swatch and the counts added; kinds not on the map are left off.
  */
-function shownEntries(entries: LegendEntry[]): LegendEntry[] {
+function shownEntries(entries: LegendEntry[], drawn?: { count: number; title?: string }): LegendEntry[] {
   const out = new Map<string, LegendEntry>();
   for (const e of entries) {
     const seen = out.get(e.label);
@@ -117,7 +120,12 @@ function shownEntries(entries: LegendEntry[]): LegendEntry[] {
   const counted = merged.some((e) => (e.count ?? 0) > 0);
   // Every kind counted and none drawn (Tahoe's snow stations, too early in the season to compare with normal): one line,
   // not four rows of zeros.
-  if (!counted && merged.length > 0 && merged.every((e) => e.count === 0)) return [{ label: "None in view" }];
+  // With features drawn but none of them in a kind (three snow stations, no reading to compare yet), the line says so:
+  // "None in view" beside three stations on the map read as a contradiction (owner, 2026-10-24).
+  if (!counted && merged.length > 0 && merged.every((e) => e.count === 0)) {
+    if (drawn && drawn.count > 0) return [{ label: `${drawn.count.toLocaleString("en-US")} in view, none ${drawn.title ? lowerFirst(drawn.title) : "in a kind of this key"}` }];
+    return [{ label: "None in view" }];
+  }
   return counted ? merged.filter((e) => e.count === undefined || e.count > 0) : merged;
 }
 
@@ -199,6 +207,7 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, loadedDa
               ...(data && spec.field && i.value !== undefined && { count: n.get(String(i.value)) ?? 0 }),
               ...(!data && shares && spec.field === view?.tile?.field && i.value !== undefined && { share: shares.get(String(i.value)) ?? 0 }),
             })),
+            data ? { count: data.features.length, ...(spec.title && { title: spec.title }) } : undefined,
           ),
           ...(spec.note && { note: spec.note }),
           shape,
@@ -342,4 +351,9 @@ export function rowLegend(layer: LoadedLayer, op: RenderOp | undefined, loadedDa
     blocks.unshift({ kind: "categories", entries: [{ label: shortTitle(layer), color: op?.color ?? areaRecipe(layer.id).color }], shape });
   }
   return blocks;
+}
+
+/** "Compared with normal" as it reads inside a sentence: "compared with normal" (a leading acronym stays). */
+function lowerFirst(text: string): string {
+  return /^[A-Z]{2}/.test(text) ? text : text.charAt(0).toLowerCase() + text.slice(1);
 }

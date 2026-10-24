@@ -56,7 +56,7 @@ describe("vegetation-types layer", () => {
     expect(r.kind).toBe("tiles");
     const top = topTypes(readShares(recorded.evtSharesSmokies)!).map((c) => c.value);
     expect(top.length).toBeGreaterThanOrEqual(5);
-    expect(r.data.url).toBe(`/api/ee/tiles/vegetation-types/{z}/{x}/{y}?view=types&v=1&c=${top.join(",")}`);
+    expect(r.data.url).toBe(`/api/ee/tiles/vegetation-types/{z}/{x}/{y}?view=types&v=2&c=${top.join(",")}`);
     expect(r.coverageNote).toMatch(/^LANDFIRE 1\.4\.0 \(about 2014\), share of the mapped land in the box asked for Great Smoky Mountains/);
     expect(r.coverageNote).toMatch(/Southern and Central Appalachian Cove Forest 34%, Southern Appalachian Oak Forest 29%/);
     expect(r.coverageNote).toMatch(/Central and Southern Appalachian Spruce-Fir Forest 4%/);
@@ -76,11 +76,11 @@ describe("vegetation-types layer", () => {
   });
 
   it("refuses a types picture with codes outside LANDFIRE's table, repeated or too many", () => {
-    expect(parseTypesQuery(new URLSearchParams("view=types&v=1&c=3350,3080"))).toEqual([3350, 3080]);
-    expect(parseTypesQuery(new URLSearchParams("view=types&v=1&c=3350,3350"))).toBeNull();
-    expect(parseTypesQuery(new URLSearchParams("view=types&v=1&c=9999"))).toBeNull();
-    expect(parseTypesQuery(new URLSearchParams("view=types&v=1&c=33a0"))).toBeNull();
-    expect(parseTypesQuery(new URLSearchParams(`view=types&v=1&c=${[...EVT_CLASSES.keys()].slice(0, 8).join(",")}`))).toBeNull();
+    expect(parseTypesQuery(new URLSearchParams("view=types&v=2&c=3350,3080"))).toEqual([3350, 3080]);
+    expect(parseTypesQuery(new URLSearchParams("view=types&v=2&c=3350,3350"))).toBeNull();
+    expect(parseTypesQuery(new URLSearchParams("view=types&v=2&c=9999"))).toBeNull();
+    expect(parseTypesQuery(new URLSearchParams("view=types&v=2&c=33a0"))).toBeNull();
+    expect(parseTypesQuery(new URLSearchParams(`view=types&v=2&c=${[...EVT_CLASSES.keys()].slice(0, 8).join(",")}`))).toBeNull();
   });
 
   it("gives each colored type its own palette-derived color: conifer deep sage, water purple", () => {

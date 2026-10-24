@@ -17,6 +17,7 @@ import {
   syncTileLayers,
   vectorHatchPattern,
   vectorTileLayerSpecs,
+  CONTEXT_TILE,
 } from "@/components/mapTiles";
 import { DARK_GREY, OFF_WHITE, PINK, PURPLE, SAGE, WHITE } from "@/lib/render/palette";
 import { hexToRgb, lightness } from "@/lib/render/ramp";
@@ -58,6 +59,18 @@ describe("vectorTileLayerSpecs", () => {
     expect(casing).toMatchObject({ type: "line", paint: { "line-color": WHITE, "line-width": 3.25, "line-opacity": 0.8 } });
     expect(line).toMatchObject({ type: "line", layout: { visibility: "visible" }, paint: { "line-color": DARK_GREY, "line-width": 1.25, "line-opacity": 0.8 } });
     expect(LAND_OUTLINE).toEqual({ opacity: 0.8 });
+  });
+
+  it("draws public land around the answer (role context) as a light tint in each manager's color, no hatch, a thin edge", () => {
+    const specs = vectorTileLayerSpecs("public-lands", STYLE, "padus", "polygon", true, { role: "context" }, { field: "Mang_Type", colors: [["FED", DARK_GREY], ["STAT", PURPLE]] });
+    expect(specs.map((s) => s.id)).toEqual(["tiles-public-lands", "tiles-public-lands-hatch", "tiles-public-lands-casing", "tiles-public-lands-line"]);
+    const [fill, hatch, casing, line] = specs.map((x) => x.paint as Record<string, unknown>);
+    expect(fill["fill-opacity"]).toEqual(landFillOpacity(1, CONTEXT_TILE.tint));
+    expect(fill["fill-color"]).toEqual(["match", ["to-string", ["get", "Mang_Type"]], "FED", DARK_GREY, "STAT", PURPLE, SAGE]);
+    expect(hatch["fill-opacity"]).toBe(0);
+    expect(casing["line-width"]).toBe(1.75);
+    expect(line["line-width"]).toBe(0.75);
+    expect(line["line-color"]).toEqual(["match", ["to-string", ["get", "Mang_Type"]], "FED", DARK_GREY, "STAT", PURPLE, DARK_GREY]);
   });
 
   it("draws no manager or agency colors: every area is the same sage, whatever its agency", () => {

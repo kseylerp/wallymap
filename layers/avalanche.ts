@@ -314,8 +314,10 @@ export const LEGEND: LegendSpec = {
   kind: "categories",
   title: "Avalanche danger today (North American scale)",
   field: "danger",
-  items: DANGER.map((d) => ({ label: d.label, value: d.value, color: d.color, symbol: "polygon" as const, help: d.help })),
-  note: "Each zone is filled by its center's rating for today, the highest of its elevation bands. Read the center's forecast before going.",
+  // An unrated zone (out of season) is outlined only: in October a grey fill over all of Lake Tahoe said nothing and hid
+  // the snow stations (owner, 2026-10-24).
+  items: DANGER.map((d) => ({ label: d.label, value: d.value, color: d.color, symbol: d.value === 0 ? ("line" as const) : ("polygon" as const), help: d.help })),
+  note: "Each zone is filled by its center's rating for today, the highest of its elevation bands; a zone with no rating (out of season) is outlined only. Read the center's forecast before going.",
 };
 
 const avalanche = defineLayer({

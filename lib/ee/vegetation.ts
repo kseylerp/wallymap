@@ -159,21 +159,23 @@ const mixRgb = (a: string, b: string, t: number): string => {
 };
 
 /**
- * Colors the named types take, in turn, after conifer, water and farmland types have taken theirs: sage, light sage,
- * a sage-purple grey, lavender, darker sage, a pale pink and off-white sage, all from the palette, each far enough from
- * its neighbours to be told apart at a glance (Smokies: oak, cove, montane oak, northern hardwood and mesophytic forest).
+ * Colors the named types take, in turn, after conifer, water and farmland types have taken theirs, each a different hue
+ * or a clearly different lightness from the ones before it, all from the palette: sage, lavender, salmon, deep violet,
+ * mid grey, then pale sage and pale pink. The Smokies' two largest types (oak forest 27%, cove forest 26%) drew sage and
+ * a paler sage that read as one color on Topo (owner, 2026-10-24); the top five now differ at a glance
+ * (lib/render/classContrast.test.ts).
  */
 const TYPE_SEQUENCE = [
   SAGE,
-  mix(SAGE, OFF_WHITE, 0.55),
-  mixRgb(SAGE, PURPLE, 0.4),
-  mixRgb(PURPLE, OFF_WHITE, 0.55),
-  deepen(SAGE, -0.16, 1.1),
-  mixRgb(PINK, OFF_WHITE, 0.6),
-  mix(SAGE, OFF_WHITE, 0.82),
+  mixRgb(PURPLE, OFF_WHITE, 0.42),
+  mixRgb(PINK, OFF_WHITE, 0.25),
+  mixRgb(PURPLE, DARK_GREY, 0.3),
+  mixRgb(DARK_GREY, OFF_WHITE, 0.3),
+  mixRgb(SAGE, OFF_WHITE, 0.62),
+  mixRgb(PINK, OFF_WHITE, 0.65),
 ];
-/** Conifer types: the deep sage of the group, then a lighter and a bluer one. */
-const CONIFER_SEQUENCE = [deepen(SAGE, -0.33, 1.25), deepen(SAGE, -0.24, 1), mixRgb(deepen(SAGE, -0.3, 1.1), PURPLE, 0.3)];
+/** Conifer types: the deep sage of the group, then a grey-green a step lighter, then a dark violet. */
+const CONIFER_SEQUENCE = [deepen(SAGE, -0.33, 1.25), mixRgb(SAGE, DARK_GREY, 0.45), mixRgb(PURPLE, DARK_GREY, 0.6)];
 
 /**
  * One color per named type, in the order given (largest first): conifer types take the deep sages, water purple,
@@ -185,7 +187,8 @@ export function typeColors(classes: EvtClass[]): string[] {
     conifer: CONIFER_SEQUENCE,
     water: [PURPLE, mixRgb(PURPLE, OFF_WHITE, 0.3)],
     developed: [faintOver(DARK_GREY, 0.35), faintOver(DARK_GREY, 0.55), faintOver(DARK_GREY, 0.2)],
-    sparse: [groupByKey("sparse")!.color, mix(groupByKey("sparse")!.color, DARK_GREY, 0.15)],
+    // A second sparse type takes the next of TYPE_SEQUENCE: a darker grey of the same hue read as the first.
+    sparse: [groupByKey("sparse")!.color],
   };
   const taken: Partial<Record<GroupKey, number>> = {};
   let next = 0;
@@ -237,12 +240,12 @@ export function typeTiles(codes: number[]): EeNode {
 }
 
 export function typesTileQuery(codes: number[]): string {
-  return `view=types&v=1&c=${codes.join(",")}`;
+  return `view=types&v=2&c=${codes.join(",")}`;
 }
 
 /** The codes of a types picture's query: 1 to TYPE_SLOTS distinct EVT values of the lower 48 table, else null. */
 export function parseTypesQuery(q: URLSearchParams): number[] | null {
-  if (q.get("view") !== "types" || q.get("v") !== "1") return null;
+  if (q.get("view") !== "types" || q.get("v") !== "2") return null;
   const raw = (q.get("c") ?? "").split(",");
   if (raw.length < 1 || raw.length > TYPE_SLOTS) return null;
   const codes = raw.map((s) => (/^\d{4}$/.test(s) ? Number(s) : Number.NaN));
@@ -250,5 +253,5 @@ export function parseTypesQuery(q: URLSearchParams): number[] | null {
   return codes;
 }
 
-export const typesTileKey = (codes: number[]) => `vegetation-types:types:v1:${codes.join(",")}`;
+export const typesTileKey = (codes: number[]) => `vegetation-types:types:v2:${codes.join(",")}`;
 

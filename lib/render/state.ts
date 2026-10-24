@@ -65,6 +65,12 @@ export type RenderOp = {
    * own `style.encode`; "" switches that channel off. Unset keeps the layer's declared pair.
    */
   encode?: Encoding;
+  /**
+   * The layer's part in the answer (lib/agent/roles.ts): "context" for areas drawn around the answer (public land, a
+   * wilderness, ecoregions) that the question is not about; they draw as a light tint under a thin outline, beneath the
+   * answer. Unset is the subject, drawn at full weight.
+   */
+  role?: "context";
 };
 
 /**

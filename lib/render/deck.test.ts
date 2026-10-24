@@ -155,17 +155,17 @@ describe("areas: tint, 45° hatch and an outline over a white casing", () => {
     stateOf(layerId, [a, b], op, { geometry: "polygon" });
   const fire = (acres: number): GeoJSON.Feature => ({ ...a, properties: { acres, v: acres } });
 
-  it("draws fire perimeters pink: 15% tint, pink hatch, a 1.5px pink outline over a 4px white casing", () => {
+  it("draws fire perimeters pink: 15% tint, pink hatch, a 1px pink outline over a 2px white casing", () => {
     const [casing, poly] = buildDeckLayers(polys("fire-perimeters"));
     expect(casing.id).toBe("fire-perimeters:polygons:casing");
-    expect(props(casing)).toMatchObject({ pickable: false, filled: false, getLineColor: WHITE, getLineWidth: 4 });
+    expect(props(casing)).toMatchObject({ pickable: false, filled: false, getLineColor: WHITE, getLineWidth: 2 });
     const p = props(poly);
     expect(poly.id).toBe("fire-perimeters:polygons");
     expect(p.pickable).toBe(true);
     expect(p.filled).toBe(true);
     expect((p.getFillPatternBackgroundColor as Accessor)(a)).toEqual(rgba(PINK, Math.round(255 * 0.15)));
     expect(p.getLineColor).toEqual(rgba(PINK));
-    expect(p.getLineWidth).toBe(1.5);
+    expect(p.getLineWidth).toBe(1);
     expect(p.fillPatternMask).toBe(true);
     expect(p.fillPatternSizeUnits).toBe("pixels");
     expect(p.getFillPatternScale).toBe(0.5);
@@ -193,6 +193,20 @@ describe("areas: tint, 45° hatch and an outline over a white casing", () => {
     expect((other.getFillPattern as (f: unknown) => string)(a)).toBe("hatch-3A3A3C-1");
   });
 
+  it("draws an area around the answer (role context) as a light tint under a thin outline, with no hatch, beneath the answer", () => {
+    const [casing, poly] = buildDeckLayers(polys("public-lands", { role: "context" }));
+    const p = props(poly);
+    expect(p.fillPatternEnabled).toBe(false);
+    expect((p.getFillColor as Accessor)(a)).toEqual(rgba(SAGE, Math.round(255 * 0.1)));
+    expect(p.getLineWidth).toBe(0.75);
+    expect(props(casing).getLineWidth).toBe(1.75);
+    const both = stateOf("public-lands", [a], { role: "context" }, { geometry: "polygon" });
+    const camp = stateOf("campsites", [a], {}, { geometry: "point" });
+    const state = { ...both, layers: { ...both.layers, ...camp.layers }, renderOps: [...camp.renderOps, ...both.renderOps] };
+    const ids = buildDeckLayers(state).map((l) => l.id);
+    expect(ids.findIndex((x) => x.startsWith("public-lands"))).toBeLessThan(ids.findIndex((x) => x.startsWith("campsites")));
+  });
+
   it("draws a compare side in its color: tint, hatch and outline", () => {
     const p = props(buildDeckLayers(polys("fire-perimeters", { color: PURPLE }))[1]);
     expect((p.getFillPattern as (f: unknown) => string)(fire(500))).toBe("hatch-6E5BFF-1");
@@ -212,7 +226,7 @@ describe("areas: tint, 45° hatch and an outline over a white casing", () => {
     expect((p.getLineColor as Accessor)(a)).toEqual(GREY);
     expect((p.getFillPattern as (f: unknown) => string)(a)).toMatch(new RegExp(`^hatch-${PINK.slice(1)}-`));
     expect((p.getLineWidth as WidthAccessor)(a)).toBe(2.5);
-    expect((p.getLineWidth as WidthAccessor)(b)).toBe(1.5);
+    expect((p.getLineWidth as WidthAccessor)(b)).toBe(1);
     expect((props(casing).getLineWidth as WidthAccessor)(a)).toBe(4.5);
     expect((p.getFillPatternBackgroundColor as Accessor)(b)[3]).toBe(Math.round(38 * SIBLING_FADE));
   });

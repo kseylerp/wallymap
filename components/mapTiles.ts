@@ -25,7 +25,7 @@ import { compareBaseId, compareBId, compareSideShown, effectiveMode } from "@/li
 import { hatchImage, hatchPatternId, HATCH_SCALE, stippleImage } from "@/lib/render/hatch";
 import { ROCK_FAMILY_FIELD, ROCK_TYPE_FIELD, rockFamilyOfTypeExpression, rockTypeExpression, rockTypeFillExpression } from "@/lib/render/rockFamily";
 import type { LayerFilters } from "@/lib/render/filters";
-import { areaRecipe, DARK_GREY, HATCH_COLORS, isPaletteColor, LINE, LINE_CLASSES, lineColorFor, SYMBOL, WHITE, type HatchColor } from "@/lib/render/palette";
+import { areaRecipe, DARK_GREY, HATCH_COLORS, isPaletteColor, LINE, LINE_CLASSES, lineColorFor, SAGE, SYMBOL, WHITE, type HatchColor } from "@/lib/render/palette";
 import { categoryKey } from "@/lib/render/categories";
 import { lineEntries, lineLayerSpecs, LINES_PREFIX, lineSourceData, lineSourceId, type LineEntry } from "@/lib/render/nativeLines";
 import { routeBeforeId } from "@/components/routeLayers";
@@ -127,8 +127,8 @@ export function vectorTileLayerSpecs(
   sourceLayer: string,
   geometry: "point" | "line" | "polygon",
   visible: boolean,
-  /** The layer panel's color (a palette color only) and opacity (render op), when set. */
-  paint: { color?: string; opacity?: number } = {},
+  /** The layer panel's color (a palette color only) and opacity (render op), when set; role "context" draws it light. */
+  paint: { color?: string; opacity?: number; role?: "context" } = {},
   /**
    * The category the areas are colored by (the legend's `field` and its items' colors, or the layer's category key):
    * each value's tint, hatch and outline in its color. Values not listed keep the layer's own color.
@@ -155,6 +155,7 @@ export function vectorTileLayerSpecs(
       { id: `${layerId}-line`, type: "line", ...common, layout: { ...layout, "line-join": "round" }, paint: { "line-color": WHITE, "line-width": SOLID_TILE_EDGE.width, "line-opacity": SOLID_TILE_EDGE.opacity * opacity } },
     ];
   }
+  if (geometry === "polygon" && paint.role === "context") return contextAreaSpecs(id, layerId, common, layout, opacity, requested, key);
   if (geometry === "polygon") {
     const r = areaRecipe(id, requested);
     const lineLayout = { ...layout, "line-join": "round" as const };
@@ -238,6 +239,53 @@ export function vectorTileLayerSpecs(
         "circle-stroke-width": SYMBOL.strokeWidth,
         "circle-opacity": opacity * SYMBOL.fillOpacity,
         "circle-stroke-opacity": opacity,
+      },
+    },
+  ];
+}
+
+/**
+ * A tile area drawn around the answer (op.role "context", lib/agent/roles.ts): each kind's color as a light tint, no
+ * hatch, a thin outline over a faint white edge (Moab's public land under its campsites drew BLM as heavy dark hatching).
+ * The layer ids match the full recipe's, so a role change restyles the same Mapbox layers.
+ */
+export const CONTEXT_TILE = { tint: 0.14, outlineWidth: 0.75, casing: 0.5, lineOpacity: 0.6 } as const;
+
+function contextAreaSpecs(
+  id: string,
+  layerId: string,
+  common: { source: string; "source-layer": string },
+  layout: { visibility: "visible" | "none" },
+  opacity: number,
+  requested: string | undefined,
+  key: TileKey | undefined,
+): VectorLayerSpec[] {
+  const r = areaRecipe(id, requested);
+  const keyed = !requested && key && key.colors.length > 0 ? key : undefined;
+  const match = (fallback: string) =>
+    keyed ? (["match", ["to-string", ["get", keyed.field]], ...keyed.colors.flatMap(([v, c]) => [v, c]), fallback] as unknown as string) : fallback;
+  const lineLayout = { ...layout, "line-join": "round" as const };
+  // A sage edge vanishes on green Topo: dark grey, as the full recipe does.
+  const edge = (c: string) => (c.toUpperCase() === SAGE.toUpperCase() ? DARK_GREY : c);
+  return [
+    { id: layerId, type: "fill", ...common, layout, paint: { "fill-color": match(r.color), "fill-opacity": landFillOpacity(opacity, CONTEXT_TILE.tint) } },
+    { id: `${layerId}-hatch`, type: "fill", ...common, layout, paint: { "fill-pattern": vectorHatchPattern(id, requested), "fill-opacity": 0 } },
+    {
+      id: `${layerId}-casing`,
+      type: "line",
+      ...common,
+      layout: lineLayout,
+      paint: { "line-color": WHITE, "line-width": CONTEXT_TILE.outlineWidth + 2 * CONTEXT_TILE.casing, "line-opacity": CONTEXT_TILE.lineOpacity * opacity },
+    },
+    {
+      id: `${layerId}-line`,
+      type: "line",
+      ...common,
+      layout: lineLayout,
+      paint: {
+        "line-color": keyed ? (["match", ["to-string", ["get", keyed.field]], ...keyed.colors.flatMap(([v, c]) => [v, edge(c)]), edge(r.outline)] as unknown as string) : edge(r.outline),
+        "line-width": CONTEXT_TILE.outlineWidth,
+        "line-opacity": CONTEXT_TILE.lineOpacity * opacity,
       },
     },
   ];
@@ -382,7 +430,8 @@ const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 /** Loaded layers bottom first: render-op order (a compare's side B right above its side A), then any layer without an op. */
 function layersInRenderOrder(state: MapState) {
-  const ordered = state.renderOps
+  // Areas drawn around the answer (op.role "context") first, under the layers that answer.
+  const ordered = [...state.renderOps.filter((o) => o.role === "context"), ...state.renderOps.filter((o) => o.role !== "context")]
     .flatMap((op) => [state.layers[op.layerId], state.layers[compareBId(op.layerId)]])
     .filter((l) => l !== undefined);
   const placed = new Set(ordered.map((l) => l.id));
@@ -463,7 +512,7 @@ export function syncTileLayers(map: MapboxMap, state: MapState): void {
       dropStaleSource(map, style, id, "vector", url);
       if (!map.getSource(id)) map.addSource(id, { type: "vector", tiles: [url], minzoom, maxzoom });
       const color = op?.color && HEX.test(op.color.trim()) ? op.color.trim() : undefined;
-      const specs = vectorTileLayerSpecs(loaded.id, loaded.style, sourceLayer, geometry ?? loaded.style.geometry, visible, { color, opacity }, tileKeyOf(loaded), op?.filters);
+      const specs = vectorTileLayerSpecs(loaded.id, loaded.style, sourceLayer, geometry ?? loaded.style.geometry, visible, { color, opacity, ...(op?.role && { role: op.role }) }, tileKeyOf(loaded), op?.filters);
       ensureHatchImages(map, hatchPatternsOf(specs));
       for (const spec of specs) {
         wantedLayers.add(spec.id);

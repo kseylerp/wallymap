@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { compositeOver, deltaE, hexToRgb, type Rgb } from "@/lib/render/ramp";
+import { compositeOver, deltaE, hexToRgb, rgbToOklch, type Rgb } from "@/lib/render/ramp";
+import { EVT_CLASSES, typeColors } from "@/lib/ee/vegetation";
 import { CATEGORY_AREA_TINT, CHOROPLETH_ALPHA } from "@/lib/render/deck";
 import { CATEGORY_COLORS } from "@/lib/render/categories";
 import { groupColors } from "@/lib/render/attributes";
@@ -79,5 +80,53 @@ describe("neighbouring classes differ visibly over every basemap", () => {
     });
     const w = weakestPair(colors, CHOROPLETH_ALPHA);
     expect(w.dE, `${w.pair} on ${w.ground}`).toBeGreaterThanOrEqual(MIN_NEIGHBOUR_DELTA_E);
+  });
+});
+
+/**
+ * The top five classes in view must tell apart at a glance, not only side by side: a different hue, or a clearly
+ * different lightness or saturation, and far enough apart overall (owner, 2026-10-24: the Smokies' oak forest, 27%, and
+ * cove forest, 26%, drew a sage and a paler sage that read as one color). Checked over Topo's and the satellite's ground
+ * at the vegetation picture's 85% opacity, for the mixes of groups a top five has: all broadleaf, conifer-led, alpine.
+ */
+const VEGETATION_ALPHA = 0.85;
+
+function atAGlance(a: string, b: string, ground: Rgb): { ok: boolean; why: string } {
+  const ca = compositeOver(hexToRgb(a), VEGETATION_ALPHA, ground);
+  const cb = compositeOver(hexToRgb(b), VEGETATION_ALPHA, ground);
+  const [la, xa, ha] = rgbToOklch(ca);
+  const [lb, xb, hb] = rgbToOklch(cb);
+  const dh = Math.min(Math.abs(ha - hb), 360 - Math.abs(ha - hb));
+  const dE = deltaE(ca, cb);
+  const distinct = dE >= 15 || (dE >= 10 && ((xa >= 0.03 && xb >= 0.03 && dh >= 60) || Math.abs(la - lb) >= 0.13 || Math.abs(xa - xb) >= 0.08));
+  return { ok: distinct, why: `${a}|${b} ΔE ${dE.toFixed(1)}, ΔL ${Math.abs(la - lb).toFixed(2)}, Δhue ${dh.toFixed(0)}°` };
+}
+
+describe("the top five vegetation types differ at a glance on Topo and Topo + Satellite", () => {
+  const byGroup = (group: string) => [...EVT_CLASSES.values()].filter((c) => c.group === group);
+  const mixes = [
+    ["hardwood", "hardwood", "hardwood", "hardwood", "hardwood"],
+    ["conifer", "hardwood", "hardwood", "hardwood", "hardwood"],
+    ["conifer", "conifer", "hardwood", "shrub", "grass"],
+    ["conifer", "conifer", "conifer", "shrub", "wet"],
+    ["sparse", "grass", "conifer", "shrub", "sparse"],
+    ["shrub", "shrub", "grass", "wet", "hardwood"],
+  ];
+
+  it.each(mixes.map((m) => [m.join(", "), m] as const))("%s", (_, groups) => {
+    const taken: Record<string, number> = {};
+    const classes = groups.map((g) => byGroup(g)[(taken[g] = (taken[g] ?? -1) + 1)]);
+    const colors = typeColors(classes).slice(0, 5);
+    expect(new Set(colors).size).toBe(5);
+    const weak: string[] = [];
+    for (const [name, ground] of Object.entries(GROUNDS)) {
+      for (let i = 0; i < colors.length; i++) {
+        for (let j = i + 1; j < colors.length; j++) {
+          const r = atAGlance(colors[i], colors[j], ground);
+          if (!r.ok) weak.push(`${r.why} on ${name}`);
+        }
+      }
+    }
+    expect(weak).toEqual([]);
   });
 });

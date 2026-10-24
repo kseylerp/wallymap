@@ -154,7 +154,7 @@ describe("legends list what is in view (owner, 2026-10-18)", () => {
 });
 
 describe("a declared key with none of its kinds drawn (Tahoe's snow stations, too early to compare)", () => {
-  it("reads one line, not a row of zeros per kind", () => {
+  it("reads one line, not a row of zeros per kind, that counts what is drawn (not \"None in view\" beside three stations)", () => {
     const stations = [1, 2, 3].map((i) => ({ ...pt("x"), properties: { name: `Station ${i}` } }));
     const layer: LoadedLayer = {
       id: "snowpack",
@@ -165,6 +165,6 @@ describe("a declared key with none of its kinds drawn (Tahoe's snow stations, to
       receivedAt: "",
     };
     const blocks = rowLegend(layer, { layerId: layer.id, mode: "points", visible: true }, layer.result.kind === "geojson" ? layer.result.data : null);
-    expect(blocks.find((b) => b.field === "normalClass")?.entries.map((e) => e.label)).toEqual(["None in view"]);
+    expect(blocks.find((b) => b.field === "normalClass")?.entries.map((e) => e.label)).toEqual(["3 in view, none compared with normal"]);
   });
 });

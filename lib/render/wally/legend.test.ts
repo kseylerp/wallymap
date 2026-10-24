@@ -64,7 +64,7 @@ describe("legendSymbol", () => {
       tint: PINK,
       tintAlpha: 0.15,
       hatch: PINK,
-      hatchAlpha: 1,
+      hatchAlpha: 0.6,
       spacing: HATCH_SPACINGS[2],
       outline: PINK,
       casing: WHITE,

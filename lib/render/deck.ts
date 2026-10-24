@@ -775,7 +775,10 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   };
   // The selected area keeps its own color (its category stays readable); the thick ink outline marks it.
   const colorOf = (f: Feature) => kindColor(f);
-  const tintAlpha = key ? Math.max(recipe.tint, CATEGORY_AREA_TINT) : recipe.tint;
+  // An area around the answer (op.role "context": public land under Moab's campsites) is a light tint under a thin
+  // outline, with no hatch, so the answer drawn over it keeps full contrast.
+  const context = op.role === "context";
+  const tintAlpha = context ? CONTEXT_AREA.tint : key ? Math.max(recipe.tint, CATEGORY_AREA_TINT) : recipe.tint;
   // A group the legend draws as a line is an outline only (no tint, no hatch, even selected), and picks only on its
   // edge: drawn in a layer of its own with no fill, so a tap inside the condors' early-1800s range (most of the West) no
   // longer selects it and floods the map.
@@ -796,8 +799,15 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
   // line blurred away (glacier edges over the Wind River snow read 11 of 255 in the screen checks): it draws wider there.
   // The core widens most (a colored edge reads on snow, where the white casing adds nothing); the casing a little less.
   const boost = terrain ? AREA_DRAPE_LINE_BOOST : 1;
-  const outlineWidth = recipe.outlineWidth * boost;
-  const casingWidth = outlineWidth + 2 * Math.max(recipe.casing, AREA_CASING_MIN) * (terrain ? AREA_DRAPE_CASING_BOOST : 1);
+  // Thin lines (context areas, outline-only groups such as ecoregions) widen at most THIN_DRAPE_BOOST on 3D terrain: the
+  // full boost drew the Smokies' ecoregion edge as a thick black-and-white band across the map.
+  const thinBoost = terrain ? THIN_DRAPE_BOOST : 1;
+  const outlineWidth = context ? CONTEXT_AREA.outlineWidth * thinBoost : recipe.outlineWidth * boost;
+  const casingWidth = context
+    ? outlineWidth + 2 * CONTEXT_AREA.casing * thinBoost
+    : outlineWidth + 2 * Math.max(recipe.casing, recipe.casingMin ?? AREA_CASING_MIN) * (terrain ? AREA_DRAPE_CASING_BOOST : 1);
+  const thinWidth = THIN_OUTLINE.width * thinBoost;
+  const thinCasing = thinWidth + 2 * THIN_OUTLINE.casing * thinBoost;
   const sizeKey = sizeMeasureKey(ctx);
   const sized = sizeKey ? { key: sizeKey, extent: memoExtent(data, sizeKey) } : undefined;
   return [
@@ -806,7 +816,7 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       data,
       pickable: false,
       filled: false,
-      getLineColor: colorFor(WHITE, opacity, selected, undefined, AREA_OUTLINE_SIBLING_FADE),
+      getLineColor: colorFor(WHITE, context ? opacity * CONTEXT_AREA.lineOpacity : opacity, selected, undefined, AREA_OUTLINE_SIBLING_FADE),
       getLineWidth: widthFor(casingWidth, (SELECTED_AREA.outlineWidth + 2 * SELECTED_AREA.casing) * boost, selected),
       lineWidthUnits: widths.units,
       lineWidthScale: widths.scale,
@@ -821,18 +831,18 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
       // With the hatch on, the fill color is the hatch line color and alpha, masked by the pattern, over the tint,
       // which deck draws as the pattern's background. Mask mode (not the atlas's own colors): a canvas uploads its
       // transparent pixels as black, and the mipmaps the drape onto 3D terrain samples then darken the hatch to maroon.
-      getFillColor: canvas ? hatch : tint,
+      getFillColor: canvas && !context ? hatch : tint,
       getLineColor: key
         ? (f: Feature) => {
             if (f === selected) return withOpacity(SELECT, opacity);
-            const c = withOpacity(outlineOf(f), opacity);
+            const c = withOpacity(outlineOf(f), context ? opacity * CONTEXT_AREA.lineOpacity : opacity);
             return selected ? withOpacity(c, AREA_OUTLINE_SIBLING_FADE) : c;
           }
-        : colorFor(hexToRgba(recipe.outline), opacity, selected, SELECT, AREA_OUTLINE_SIBLING_FADE),
+        : colorFor(hexToRgba(recipe.outline), context ? opacity * CONTEXT_AREA.lineOpacity : opacity, selected, SELECT, AREA_OUTLINE_SIBLING_FADE),
       getLineWidth: widthFor(outlineWidth, SELECTED_AREA.outlineWidth * boost, selected),
       lineWidthUnits: widths.units,
       lineWidthScale: widths.scale,
-      fillPatternEnabled: Boolean(canvas),
+      fillPatternEnabled: Boolean(canvas) && !context,
       // Only with a canvas: deck turns the prop into a texture and throws on an explicit undefined.
       ...(canvas && { fillPatternAtlas: canvas }),
       fillPatternMapping: hatchAtlas().mapping,
@@ -852,8 +862,8 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
             data: split.outlines,
             pickable: false,
             filled: false,
-            getLineColor: colorFor(WHITE, opacity, selected, undefined, AREA_OUTLINE_SIBLING_FADE),
-            getLineWidth: widthFor(casingWidth, (SELECTED_AREA.outlineWidth + 2 * SELECTED_AREA.casing) * boost, selected),
+            getLineColor: colorFor(WHITE, opacity * THIN_OUTLINE.casingOpacity, selected, undefined, AREA_OUTLINE_SIBLING_FADE),
+            getLineWidth: widthFor(thinCasing, (SELECTED_AREA.outlineWidth + 2 * SELECTED_AREA.casing) * boost, selected),
             lineWidthUnits: widths.units,
             lineWidthScale: widths.scale,
             updateTriggers,
@@ -864,8 +874,8 @@ function areaLayers(op: RenderOp, ctx: OpContext, opacity: number): Layer[] {
             data: split.outlines,
             pickable: true,
             filled: false,
-            getLineColor: (f: Feature) => (f === selected ? withOpacity(SELECT, opacity) : withOpacity(outlineOf(f), selected ? opacity * AREA_OUTLINE_SIBLING_FADE : opacity)),
-            getLineWidth: widthFor(outlineWidth + 0.5 * boost, SELECTED_AREA.outlineWidth * boost, selected),
+            getLineColor: (f: Feature) => (f === selected ? withOpacity(SELECT, opacity) : withOpacity(outlineOf(f), (selected ? opacity * AREA_OUTLINE_SIBLING_FADE : opacity) * THIN_OUTLINE.opacity)),
+            getLineWidth: widthFor(thinWidth, SELECTED_AREA.outlineWidth * boost, selected),
             lineWidthUnits: widths.units,
             lineWidthScale: widths.scale,
             updateTriggers,
@@ -887,6 +897,18 @@ export const AREA_DRAPE_LINE_BOOST = 4;
 /** How much wider an area's white casing draws on each side while draped. */
 export const AREA_DRAPE_CASING_BOOST = 4;
 export const AREA_CASING_MIN = 1.25;
+
+/**
+ * An area drawn around the answer (op.role "context"): a 10% tint, no hatch, a 0.75px outline over a 0.5px white edge,
+ * both at 70%. Moab's BLM land drew as heavy dark hatching over the campsites it was asked beside.
+ */
+export const CONTEXT_AREA = { tint: 0.1, outlineWidth: 0.75, casing: 0.5, lineOpacity: 0.7 } as const;
+
+/** Outline-only groups (ecoregions, a condor range's history): a 1px line over a 0.5px white edge each side. */
+export const THIN_OUTLINE = { width: 1, casing: 0.5, opacity: 0.85, casingOpacity: 0.7 } as const;
+
+/** How much wider thin lines draw while draped on 3D terrain (the full AREA_DRAPE_LINE_BOOST made bands of them). */
+export const THIN_DRAPE_BOOST = 2;
 
 /**
  * A choropleth's fill alpha: solid enough that each class reads on Topo, Topo + Satellite and Satellite (0.62 left
@@ -2225,7 +2247,9 @@ export function buildDeckLayerSets(
   // Points that sample the view (the forecast) draw first, under the layers that answer (layers/types.ts samplesView).
   const samples = (op: MapState["renderOps"][number]) => state.layers[op.layerId]?.style.samplesView === true;
   const answered = state.renderOps.some((o) => o.visible && !samples(o) && state.layers[o.layerId]?.result.kind === "geojson");
-  for (const op of [...state.renderOps.filter(samples), ...state.renderOps.filter((o) => !samples(o))]) {
+  // Areas drawn around the answer (op.role "context") go next, under the layers that answer.
+  const context = (op: MapState["renderOps"][number]) => op.role === "context" && !samples(op);
+  for (const op of [...state.renderOps.filter(samples), ...state.renderOps.filter(context), ...state.renderOps.filter((o) => !samples(o) && !context(o))]) {
     if (!op.visible) continue;
     const loaded = state.layers[op.layerId];
     if (!loaded) continue;

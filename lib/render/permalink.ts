@@ -41,6 +41,8 @@ export type PermalinkLayer = {
   color?: string;
   /** Two measures on one mark (`<size>|<color>`, "" for a channel switched off). */
   encode?: { size?: string; color?: string };
+  /** "context": an area drawn light around the answer (RenderOp.role). */
+  role?: "context";
   input?: Record<string, unknown>;
   /** The box the layer was asked over (`q=`), asked again on restore instead of the opener's screen. */
   queryBox?: BBox;
@@ -276,8 +278,8 @@ function round(value: number, digits: number): string {
 }
 
 /**
- * One `l=` entry: `<id>:<mode>:<visible>:<rank>:<basis>:<view>:<opacity>:<color>:<encode>`, the last five URI-encoded
- * where needed and trailing empty fields left off. `encode` is `<size>|<color>` (spec §13), each part present only when
+ * One `l=` entry: `<id>:<mode>:<visible>:<rank>:<basis>:<view>:<opacity>:<color>:<encode>:<role>`, the last five
+ * URI-encoded where needed and trailing empty fields left off; role is "c" for a context area. `encode` is `<size>|<color>` (spec §13), each part present only when
  * the op set it. Rank by None ("") is "-", so it is not read back as "rank by default"; no
  * view is "-" too, so the restore does not pick one the sender did not have.
  */
@@ -288,7 +290,7 @@ function layerEntry(op: RenderOp): string {
   const opacity = op.opacity !== undefined && Number.isFinite(op.opacity) && op.opacity !== 1 ? round(op.opacity, 3) : "";
   const color = op.color ? encodeURIComponent(op.color) : "";
   const enc = op.encode ? encodeURIComponent(`${op.encode.size ?? "~"}|${op.encode.color ?? "~"}`) : "";
-  const fields = [encodeURIComponent(op.layerId), op.mode, op.visible ? "1" : "0", rank, basis, view, opacity, color, enc];
+  const fields = [encodeURIComponent(op.layerId), op.mode, op.visible ? "1" : "0", rank, basis, view, opacity, color, enc, op.role === "context" ? "c" : ""];
   while (fields[fields.length - 1] === "") fields.pop();
   return fields.join(":");
 }
@@ -358,7 +360,7 @@ function safeDecode(value: string): string | null {
 function parseLayers(value: string): PermalinkLayer[] {
   const layers: PermalinkLayer[] = [];
   for (const entry of value.split(",")) {
-    const [rawId, mode, visible, rawRank, rawBasis, rawView, rawOpacity, rawColor, rawEncode] = entry.split(":");
+    const [rawId, mode, visible, rawRank, rawBasis, rawView, rawOpacity, rawColor, rawEncode, rawRole] = entry.split(":");
     const id = rawId ? safeDecode(rawId) : null;
     if (!id) continue;
     const rankBy = rawRank === "-" ? "" : rawRank ? safeDecode(rawRank) : null;
@@ -379,6 +381,7 @@ function parseLayers(value: string): PermalinkLayer[] {
       ...(Number.isFinite(opacity) && { opacity: Math.min(1, Math.max(0, opacity)) }),
       ...(color && color.length <= 64 && { color }),
       ...(encode && { encode }),
+      ...(rawRole === "c" && { role: "context" as const }),
     });
   }
   return layers;
@@ -618,6 +621,7 @@ export async function restoreFromPermalink(
         ...(layer.opacity !== undefined && { opacity: layer.opacity }),
         ...(layer.color && { color: layer.color }),
         ...(layer.encode && { encode: layer.encode }),
+        ...(layer.role && { role: layer.role }),
       },
       ...(layer.mode === undefined && { defaultMode: true }),
       ...(layer.view !== undefined && { exact: true }),

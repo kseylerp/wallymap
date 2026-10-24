@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { useTileSource } from "@/lib/terrain/dem";
+import { syntheticTiles } from "@/lib/terrain/__fixtures__/synthetic";
 import type { CachedFetch } from "@/lib/fetch";
 import { runLayer } from "@/lib/layers/run";
 import { cardContent } from "@/lib/render/card";
@@ -461,5 +463,66 @@ describe("dedupePeaks", () => {
     expect(out[1].properties).not.toHaveProperty("alsoNamed");
     const card = cardContent(out[0], { card: layer.card, fieldHelp: layer.fieldHelp });
     expect(card.facts.find((f) => f.label === "Also listed as")?.value).toBe("Grandes Jorasses");
+  });
+});
+
+describe("lowest point (input lowest)", () => {
+  /** A Death-Valley-like box: a basin floor at -84 m (the elevation model's reading), rising to 1,000 m at the edges. */
+  const DV: [number, number, number, number] = [-117.3, 36.1, -116.5, 36.8];
+  const FLOOR: [number, number] = [-116.83, 36.25];
+  const ground = (lon: number, lat: number) => Math.min(1000, -84 + Math.hypot(lon - FLOOR[0], lat - FLOOR[1]) * 1500);
+  const telescope = {
+    item: { value: "http://www.wikidata.org/entity/Q916811" },
+    itemLabel: { value: "Telescope Peak" },
+    coord: { value: "Point(-117.0892 36.1699)" },
+    elev: { value: "3366" },
+  };
+  const named = (label: string, q: string, [lon, lat]: [number, number], elev: number) => ({
+    item: { value: `http://www.wikidata.org/entity/${q}` },
+    itemLabel: { value: label },
+    coord: { value: `Point(${lon} ${lat})` },
+    elev: { value: String(elev) },
+  });
+  /** Wikidata answers the lowest-places query with `lows` and the peaks query with Telescope Peak; Overpass with nothing. */
+  function stub(lows: unknown[]) {
+    return vi.fn(async (url: string, init?: { body?: string }) => {
+      if (url !== SPARQL_ENDPOINT) return json({ elements: [] });
+      const query = new URLSearchParams(init?.body ?? "").get("query") ?? "";
+      return json({ results: { bindings: /ASC\(\?elev\)/.test(query) ? lows : [telescope] } });
+    });
+  }
+  afterEach(() => useTileSource());
+
+  it("names the lowest point after the recorded place that agrees with the elevation model, and leads the note with both", async () => {
+    useTileSource(syntheticTiles(ground));
+    const lows = [
+      // A record far below the ground the model reads at its spot: skipped.
+      named("Bad record", "Q1", [-116.9, 36.3], -300),
+      named("Badwater Basin", "Q799720", [-116.8258, 36.2503], -86),
+      named("Furnace Creek", "Q2", [-116.87, 36.46], -58),
+    ];
+    const r = geojson(await layer.query(ctx(stub(lows), "k", DV), { lowest: true }));
+    const low = r.data.features.find((f) => f.properties?.kind === "lowest");
+    expect(low?.properties).toMatchObject({ name: "Badwater Basin", elevation: -86, elevationFt: -282, elevationText: "-282 ft (-86 m)", elevationSource: "wikidata" });
+    expect(r.data.features.at(-1)).toBe(low);
+    expect(r.coverageNote).toMatch(/^Highest: Telescope Peak, 11,043 ft \(3,366 m\); lowest: Badwater Basin, -282 ft \(-86 m\), 282 ft below sea level at -116\.8258, 36\.2503/);
+    expect(r.legend).toMatchObject({ kind: "size", title: "Elevation" });
+    const card = cardContent(low!, { card: layer.card, fieldHelp: layer.fieldHelp });
+    expect(card.measure).toMatchObject({ label: "Elevation", value: "-282 ft (-86 m)" });
+    expect(card.facts.find((f) => f.label === "Kind")?.value).toBe("Lowest point");
+  });
+
+  it("falls back to the elevation model's floor when no recorded place agrees", async () => {
+    useTileSource(syntheticTiles(ground));
+    const r = geojson(await layer.query(ctx(stub([named("Furnace Creek", "Q2", [-116.87, 36.46], -58)]), "k", DV), { lowest: true }));
+    const low = r.data.features.find((f) => f.properties?.kind === "lowest");
+    expect(low?.properties).toMatchObject({ name: "Lowest point in view", elevationSource: "dem" });
+    expect(Number(low?.properties?.elevation)).toBeLessThan(-60);
+  });
+
+  it("adds nothing without lowest, and still keys the answer by elevation", async () => {
+    const r = geojson(await layer.query(ctx(stub([]), "k", DV), {}));
+    expect(r.data.features.some((f) => f.properties?.kind === "lowest")).toBe(false);
+    expect(r.legend?.title).toBe("Elevation");
   });
 });

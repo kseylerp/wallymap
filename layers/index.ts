@@ -92,3 +92,4 @@ import "./weather-forecast";
 import "./avalanche";
 import "./faults";
 import "./soils";
+import "./elevation-profile";

@@ -807,7 +807,7 @@ whole canyon's geology; peak elevations from OSM `ele` without units checked (th
 **Acceptance tests.**
 - T08.1: `geology` and `geologic-unit` (`faults` for the faults); Topo or Data only; legend "Rock family", rock age or unit; card Rock, Description;
   note names Navajo Sandstone (or Kayenta, Moenave, Chinle), an age, and faults (or "no mapped Quaternary faults here" and the nearest).
-- T08.2: `terrain` or `peaks`; Topographical; note gives start and top elevations, the climb, and the steepest part.
+- T08.2: `terrain`, `peaks` or `elevation-profile`; Topographical; note gives start and top elevations, the climb, and the steepest part.
   Needs a cross-section chart along a line.
 - T08.3: `peaks` ranked by elevation; ≥ 3 labels; card Elevation; legend "Elevation"; note gives the
   highest (Telescope Peak) and the lowest below sea level (Badwater); names ≥ 2. Needs lowest points.

@@ -132,6 +132,7 @@ export const LAYER_ROLES: Record<string, LayerRole> = {
   "weather-forecast": "data",
   faults: "data",
   soils: "natural",
+  "elevation-profile": "data",
 };
 
 /**

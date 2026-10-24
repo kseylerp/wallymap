@@ -11,7 +11,8 @@ import { tileFieldValue } from "@/lib/render/rockFamily";
 import { ensureRouteImages, setRouteProgress, syncRouteLayers } from "@/components/routeLayers";
 import { basemapStyle, basemapStyleUrl } from "@/lib/render/basemaps";
 import { swipeStore } from "@/lib/render/compareView";
-import { buildDeckLayerSets, isClusterFeature, type Padding } from "@/lib/render/deck";
+import { buildDeckLayerSets, isClusterFeature, profileCursorLayers, type Padding } from "@/lib/render/deck";
+import { profileCursorStore } from "@/lib/render/crossSection";
 import { deckLayerFilter, pickPasses, pickToSelection, pickUnderHeat, type DeckPick } from "@/lib/render/inspect";
 import { lineLayerId, linePickToSelection, PICKABLE_PARTS } from "@/lib/render/nativeLines";
 import { viewFromCamera, type MapView } from "@/lib/agent/view";
@@ -462,8 +463,13 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
   /** The moving particles of flow layers (lib/render/particles.ts), drawn over the other deck layers. */
   const particleLayersRef = useRef<Layer[]>([]);
   const particlesRef = useRef(new Map<string, ParticleSystem>());
-  /** Hands the overlay the data layers and the particles together. */
-  const pushDeck = useCallback(() => overlayRef.current?.setProps({ layers: [...deckLayersRef.current, ...particleLayersRef.current] }), []);
+  /** The cross-section chart's cursor dot (components/CrossSection.tsx), drawn over everything while a pointer is on the chart. */
+  const cursorLayersRef = useRef<Layer[]>([]);
+  /** Hands the overlay the data layers, the particles and the chart's cursor together. */
+  const pushDeck = useCallback(
+    () => overlayRef.current?.setProps({ layers: [...deckLayersRef.current, ...particleLayersRef.current, ...cursorLayersRef.current] }),
+    [],
+  );
   const stateRef = useRef(state);
   const onViewportChangeRef = useRef(onViewportChange);
   const onPickRef = useRef(onPick);
@@ -800,6 +806,17 @@ function GlobeMap({ state, onViewportChange, onPick, className, ref }: MapCanvas
 
   // The swipe handle moves the clip without a React render.
   useEffect(() => swipeStore.subscribe(() => clipSides(sidesRef.current, swipeStore.get())), []);
+
+  // The cross-section chart's cursor moves a dot along its line, outside React (lib/render/crossSection.ts).
+  useEffect(
+    () =>
+      profileCursorStore.subscribe(() => {
+        const s = stateRef.current;
+        cursorLayersRef.current = profileCursorLayers(profileCursorStore.get(), s.terrain && !s.flattened && MAPBOX_TOKEN !== "");
+        pushDeck();
+      }),
+    [pushDeck],
+  );
 
   // The preview control reads the map state from here (components/App.tsx does not pass it to the chat rail).
   useEffect(() => {

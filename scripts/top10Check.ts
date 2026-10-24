@@ -290,7 +290,7 @@ function outputsOf(calls: ToolCall[]): unknown[] {
  * Runs every assertion for one question. `question` is the text asked (without its @view); `view` is true for a
  * "here" question (the camera must not move to anything else).
  */
-export function top10Rule(e: Top10Expect, run: { calls: ToolCall[]; text: string; state: MapState; question: string; hereView?: BBox | null }): Top10Result {
+export function top10Rule(e: Top10Expect, run: { calls: ToolCall[]; text: string; state: MapState; question: string; hereView?: BBox | null; viewPlace?: string | null }): Top10Result {
   const { calls, text, state, question } = run;
   const note = answerText(calls, text);
   const asserts: (Assertion | null)[] = [layersAssert(e, calls, state), anyOfAssert(e, calls, state), forbidAssert(e, state), filtersAssert(e, calls, state), inputsAssert(e, calls)];
@@ -364,7 +364,8 @@ export function top10Rule(e: Top10Expect, run: { calls: ToolCall[]; text: string
 
   // Follow-ups: exactly 3, at least 2 naming a feature or the place from this answer.
   const { followUps } = extractFollowUps(text);
-  const anchors = [...resultList, ...placeNames(calls)];
+  // A "here" question's view is named by a reverse lookup of its middle (lib/agent/agent.ts): that name counts too.
+  const anchors = [...resultList, ...placeNames(calls), ...(run.viewPlace ? [run.viewPlace] : [])];
   const specific = followUps.filter((q) => anchors.some((a) => names(q, a)));
   asserts.push({ id: "followUps", ok: followUps.length === 3 && specific.length >= 2, detail: `${followUps.length} follow-ups, ${specific.length} specific` });
 

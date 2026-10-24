@@ -518,3 +518,33 @@ export async function geocodeWaypoint(
   }
   return geocode(place, { proximity: opts.proximity });
 }
+
+const REVERSE_ENDPOINT = "https://api.mapbox.com/search/geocode/v6/reverse";
+
+/**
+ * The named place at a point (the middle of a "here" view), for follow-ups that name where ("What changed near Detroit
+ * since 2015?" rather than "here"): the town, else the locality, else the county; null when nothing answers. Never
+ * moves the camera or counts as the question's place.
+ */
+export async function reverseGeocode([lng, lat]: [number, number], timeoutMs = 4000): Promise<string | null> {
+  const token = process.env.MAPBOX_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  if (!token) return null;
+  for (const types of ["place", "locality", "district"]) {
+    const url = new URL(REVERSE_ENDPOINT);
+    url.searchParams.set("longitude", String(lng));
+    url.searchParams.set("latitude", String(lat));
+    url.searchParams.set("types", types);
+    url.searchParams.set("access_token", token);
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+      if (!res.ok) return null;
+      const body = responseSchema.safeParse(await res.json());
+      const first = body.success ? body.data.features.map((f) => featureSchema.safeParse(f)).find((f) => f.success) : undefined;
+      const name = first?.success ? first.data.properties.name?.trim() : undefined;
+      if (name && name.length >= 3) return name;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}

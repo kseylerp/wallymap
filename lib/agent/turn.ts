@@ -87,6 +87,10 @@ export type Turn = {
   modelFollowUps: string[];
   /** What the conversation's earlier turns left on the map, for a follow-up question (lib/agent/context.ts). */
   context: TurnContext | null;
+  /** The named place at the middle of a "here" view, once looked up (follow-ups name it instead of "here"). */
+  viewPlace: string | null;
+  /** Resolves when the view's place lookup is done (it runs beside the model's first steps). */
+  viewPlaceReady: Promise<void>;
   /** A place lookup, shared by the geocode tool and the step guard so one text is looked up once. */
   lookup(place: string): Promise<GeocodeResult | GeocodeError>;
   /** Records a server action in `log` and the console. */
@@ -189,6 +193,8 @@ export function createTurn({
     followUps: [],
     modelFollowUps: [],
     context: lastAnswer,
+    viewPlace: null,
+    viewPlaceReady: Promise.resolve(),
     lookup(place) {
       const key = placeKey(place);
       let found = lookups.get(key);

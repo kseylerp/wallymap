@@ -74,3 +74,97 @@ describe("briefValue", () => {
     expect(briefValue(rule)).toBe("dispersed camping is allowed outside the closed areas the Motor Vehicle Use Map marks, up to 14 days in any 30");
   });
 });
+
+describe("answers that name enough places (top-10 T04.2, T04.3, T06.3, T06.5)", () => {
+  const pt = (name: string, lon: number, lat: number, props: Record<string, unknown> = {}) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [lon, lat] }, properties: { name, ...props } });
+  const box = (lon: number, lat: number, d: number) => ({ type: "Polygon" as const, coordinates: [[[lon, lat], [lon + d, lat], [lon + d, lat + d], [lon, lat + d], [lon, lat]]] });
+  const TAHOE: BBox = [-120.2, 38.9, -119.9, 39.3];
+  const geo = (data: unknown[]) => ({ kind: "geojson", data: { type: "FeatureCollection", features: data }, citation });
+
+  it("names the campgrounds a status filter hides: two open, the closed ones too", () => {
+    const sites = [
+      pt("Zephyr Cove Resort", -119.95, 39.0, { kind: "campground", status: "open" }),
+      pt("Camp Richardson Resort", -120.04, 38.93, { kind: "campground", status: "open" }),
+      pt("Fallen Leaf Campground", -120.05, 38.92, { kind: "campground", status: "closed" }),
+      pt("D.L. Bliss State Park", -120.1, 38.98, { kind: "campground", status: "closed" }),
+    ];
+    const t = answerTemplate({
+      calls: [
+        { toolName: "geocode", input: { place: "Lake Tahoe" }, output: { bbox: TAHOE, center: [-120.05, 39.09], name: "Lake Tahoe", source: "mapbox" } },
+        { toolName: "query_recreation-sites", input: { bbox: TAHOE }, output: geo(sites) },
+        { toolName: "render", input: {}, output: { layerId: "recreation-sites", filters: { kind: { include: ["campground"] }, status: { include: ["open"] } }, view: "ranked" } },
+      ],
+      question: "Which campgrounds near Lake Tahoe are open now?",
+      outputs: [],
+      places: [{ name: "Lake Tahoe", bbox: TAHOE }],
+      view: null,
+    })!;
+    expect(t.lines.join("\n")).toMatch(/^Closed now: Fallen Leaf Campground and D\.L\. Bliss State Park\.$/m);
+  });
+
+  it("says a camp's rule once under the options, without its owner", () => {
+    const rule = "National Park Service, Mount Rainier National Park, Mount Rainier National Park backcountry, including the Wonderland Trail: a wilderness permit is required year-round for every overnight stay in the backcountry (Mount Rainier wilderness permits page, 2026-10-23)";
+    const camps = ["Maple Creek Camp", "Indian Bar Camp", "Devil's Dream Camp"].map((n, i) => pt(n, -121.7 + i * 0.01, 46.8, { kind: "camp_site", campingRule: rule }));
+    const t = answerTemplate({
+      calls: [
+        { toolName: "query_campsites", input: { bbox: [-122, 46.7, -121.5, 47] }, output: geo(camps) },
+        { toolName: "render", input: {}, output: { layerId: "campsites" } },
+      ],
+      question: "Campsites near water along the Wonderland Trail",
+      outputs: [],
+      places: [],
+      view: null,
+    })!;
+    expect(t.lines.filter((l) => l.startsWith("Camping rule here"))).toEqual(["Camping rule here: A wilderness permit is required year-round for every overnight stay in the backcountry."]);
+  });
+
+  it("says how close the nearest threat comes to the place, from the distances the query recorded", () => {
+    const leases = [
+      { type: "Feature" as const, geometry: box(-108.1, 35.9, 0.02), properties: { name: "Oil and gas lease NMNM1", acres: 2118, distanceToPlaceKm: 6.1 } },
+      { type: "Feature" as const, geometry: box(-108.2, 35.95, 0.02), properties: { name: "Oil and gas lease NMNM2", acres: 900, distanceToPlaceKm: 14 } },
+    ];
+    const CHACO: BBox = [-108.19, 35.88, -107.74, 36.24];
+    const t = answerTemplate({
+      calls: [
+        { toolName: "geocode", input: { place: "Chaco Canyon" }, output: { bbox: CHACO, center: [-107.97, 36.06], name: "Chaco Canyon (valley in San Juan County, New Mexico, United States)", source: "wikidata" } },
+        { toolName: "query_mineral-leases", input: { bbox: CHACO }, output: geo(leases) },
+        { toolName: "render", input: {}, output: { layerId: "mineral-leases", view: "ranked", rankBy: "acres" } },
+      ],
+      question: "Is Chaco Canyon threatened by oil and gas?",
+      outputs: [],
+      places: [{ name: "Chaco Canyon (valley in San Juan County, New Mexico, United States)", bbox: CHACO }],
+      view: null,
+    })!;
+    expect(t.place).toBe("Chaco Canyon");
+    expect(t.allLines).toContain("Closest to Chaco Canyon: Oil and gas lease NMNM1, 3.8 mi (6.1 km) from its centre.");
+    expect(t.options.map((o) => o.name)).toEqual(["Oil and gas lease NMNM1", "Oil and gas lease NMNM2"]);
+  });
+
+  it("fills a short list of protected areas from the question's other layers, never the same place twice", () => {
+    const VIEW: BBox = [-117.5, 42.5, -116.8, 43];
+    const t = answerTemplate({
+      calls: [
+        { toolName: "query_wilderness", input: { bbox: VIEW }, output: geo([{ type: "Feature", geometry: box(-117.2, 42.6, 0.1), properties: { name: "North Fork Owyhee Wilderness", acres: 44027 } }]) },
+        {
+          toolName: "query_protected-areas-world",
+          input: { bbox: VIEW },
+          output: geo([
+            { type: "Feature", geometry: box(-117.4, 42.7, 0.2), properties: { name: "Owyhee River Canyon", designation: "Wilderness Study Area", areaKm2: 759, v: 759 } },
+            { type: "Feature", geometry: box(-117.2, 42.6, 0.1), properties: { name: "North Fork Owyhee", designation: "Wilderness Area", areaKm2: 181, v: 181 } },
+            { type: "Feature", geometry: box(-117.0, 42.8, 0.1), properties: { name: "Clarks Butte", designation: "Wilderness Study Area", areaKm2: 127, v: 127 } },
+          ]),
+        },
+        { toolName: "render", input: {}, output: { layerId: "wilderness", view: "ranked" } },
+        { toolName: "render", input: {}, output: { layerId: "protected-areas-world" } },
+      ],
+      question: "Who manages this land and is it protected?",
+      outputs: [],
+      places: [],
+      view: { bbox: VIEW },
+      prefer: ["wilderness", "protected-areas-world", "public-lands"],
+      viewPlace: "Rome",
+    })!;
+    expect(t.options.map((o) => o.name)).toEqual(["North Fork Owyhee Wilderness", "Owyhee River Canyon", "Clarks Butte"]);
+    expect(t.followUps.some((q) => q.includes("Rome") || q.includes("Owyhee"))).toBe(true);
+  });
+});

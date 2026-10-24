@@ -11,9 +11,11 @@ import { reduce } from "@/lib/render/reducer";
 import { initialMapState, type LoadedLayer, type MapState, type RenderOp } from "@/lib/render/state";
 import { visibleState } from "@/lib/render/view";
 import { boundsOf } from "@/lib/render/views";
+import { applyFilters } from "@/lib/render/filters";
 import { FIRST_SENTENCE_WORDS as FIRST_WORDS } from "./compose";
 import { factPool, ungroundedClaims } from "./grounding";
 import { inUS } from "./units";
+import { FROM_PLACE_KEY, shortPlace, THREAT_LAYERS } from "./fromPlace";
 
 /**
  * The answer, built from the turn's results rather than left to the model (top-10 use cases, 2026-10-23: 48 of 50
@@ -64,6 +66,8 @@ type Kind = {
   answer?: "pick" | "total";
   /** False when the features are not options worth listing (single sightings, a monument's two outlines). */
   list?: boolean;
+  /** A card row that is a rule the person must follow (a wilderness permit), said once under the options. */
+  rule?: string;
 };
 
 const HIKE: Kind = {
@@ -111,6 +115,7 @@ const KINDS: Record<string, Kind> = {
     one: "campsite",
     many: "campsites",
     rows: ["Type", "Fee", "Capacity", "Run by"],
+    rule: "Camping rule here",
     followUps: ["Is {A} reservable?", "Which campsites near {place} have drinking water?", "What is the weather near {place} this weekend?"],
   },
   "recreation-sites": {
@@ -236,6 +241,34 @@ const KINDS: Record<string, Kind> = {
     rows: ["Area", "Managed by", "Designated"],
     followUps: ["Who manages {A}?", "What threatens {A}?", "Are there mining claims near {A}?"],
   },
+  "protected-areas-world": {
+    answer: "total",
+    one: "protected area",
+    many: "protected areas",
+    rows: ["Designation", "Area", "Designated"],
+    followUps: ["Who manages {A}?", "What threatens {A}?", "Are there mining claims near {A}?"],
+  },
+  "mineral-leases": {
+    answer: "total",
+    one: "federal lease",
+    many: "federal leases",
+    rows: ["Area", "Production", "Commodity", "In effect since"],
+    followUps: ["Is {A} producing?", "Where are the pipelines near {place}?", "Which protected areas are near {place}?"],
+  },
+  uranium: {
+    answer: "total",
+    one: "uranium site",
+    many: "uranium sites",
+    rows: ["Kind", "Hazard score (2007 screening)", "EPA cleanup step reached"],
+    followUps: ["Has {A} been cleaned up?", "Which protected areas are near {A}?", "Are there mining claims near {place}?"],
+  },
+  "pipelines-lines": {
+    answer: "total",
+    one: "line",
+    many: "pipelines and power lines",
+    rows: ["Line", "Voltage", "Operator"],
+    followUps: ["Who operates {A}?", "Are there oil and gas leases near {place}?", "Which protected areas does {A} cross?"],
+  },
 };
 
 /** Follow-ups for answers read off a picture (tiles: no named features), by layer: the place is what they name. */
@@ -316,6 +349,9 @@ function phrase(label: string, raw: string): string {
       return `${v} burned`;
     case "Danger":
       return `danger ${v.toLowerCase()}`;
+    case "Fee":
+      // "Yes, costs money" reads "a fee"; "No, free" reads "free".
+      return /^yes\b/i.test(v) ? "fee charged" : /^(?:no|free)\b/i.test(v) ? "free" : `fee ${v}`;
     case "Reading":
       return `read ${v}`;
     case "Seen on":
@@ -489,6 +525,8 @@ export type AnswerInput = {
   taxon?: string | null;
   /** The question asks what changed: its answer is a change, not a pick. */
   change?: boolean;
+  /** The named place at the middle of a "here" view (a reverse lookup), for follow-ups that name where. */
+  viewPlace?: string | null;
 };
 
 const middleOf = (f: Feature): [number, number] | null => {
@@ -517,7 +555,7 @@ export function answerTemplate(input: AnswerInput, state: MapState = mapOf(input
   const kind = KINDS[sourceId];
   const { top, shown } = layer.result.kind === "geojson" ? topOfOp(state, op, 12) : { top: [] as Feature[], shown: [] as Feature[] };
   const place = placeFor(input.places, top[0]);
-  const placeName = place ? place.name.split(",")[0].trim() : null;
+  const placeName = place ? shortPlace(place.name) : null;
   const where = placeName ? `near ${placeName}` : "in this view";
   const box = place?.bbox ?? input.view?.bbox ?? null;
   const us = inUS(box);
@@ -527,28 +565,62 @@ export function answerTemplate(input: AnswerInput, state: MapState = mapOf(input
 
   const count = shown.length;
   const countGrounded = countHeld(count, input.outputs, input.question);
-  const seen = new Set<string>();
+  const seen: string[] = [];
+  // A name already listed, or one inside another ("North Fork Owyhee" in "North Fork Owyhee Wilderness").
+  const listed = (name: string) => {
+    const n = name.toLowerCase();
+    return seen.some((x) => x === n || (n.length >= 6 && x.includes(n)) || (x.length >= 6 && n.includes(x)));
+  };
   const options: AnswerOption[] = [];
-  for (const f of top) {
+  const ruleRows: string[] = [];
+  const optionOf = (f: Feature, of: LoadedLayer, k: Kind | undefined): AnswerOption | null => {
     const name = nameOf(f);
-    if (!name || seen.has(name.toLowerCase())) continue;
-    seen.add(name.toLowerCase());
-    const content = cardContent(f, { unit: layer.style.unit, card: layer.card, fieldHelp: layer.fieldHelp, display });
+    if (!name || listed(name)) return null;
+    seen.push(name.toLowerCase());
+    const content = cardContent(f, { unit: of.style.unit, card: of.card, fieldHelp: of.fieldHelp, display: { ...layerDisplay(of), units: display.units } });
     const rows = [...(content.measure ? [content.measure] : []), ...content.facts].filter((r) => r.value && !UNKNOWN.test(r.value.trim()));
-    const wanted = kind?.rows ?? [];
+    const wanted = k?.rows ?? [];
     const picked = wanted.length > 0 ? wanted.flatMap((label) => rows.filter((r) => r.label === label).slice(0, 1)) : rows.filter((r) => /\d/.test(r.value));
     // One climb is enough: the round trip's when there is one.
     const facts: string[] = [];
     for (const r of picked) {
       if (r.label === "Climb" && picked.some((p) => p.label === "Climb, round trip")) continue;
-      if (r.label === "Length" && picked.some((p) => p.label === "Round trip") && kind === HIKE) continue;
+      if (r.label === "Length" && picked.some((p) => p.label === "Round trip") && k === HIKE) continue;
       if (facts.length >= 3) break;
       const said = phrase(r.label, r.value);
       if (said) facts.push(said);
     }
-    options.push({ name, facts });
+    const rule = k?.rule ? rows.find((r) => r.label === k.rule)?.value : undefined;
+    if (rule) ruleRows.push(rule);
+    return { name, facts };
+  };
+  for (const f of top) {
+    const o = optionOf(f, layer, kind);
+    if (o) options.push(o);
     if (options.length >= 3) break;
   }
+  // A total or a picture names too few places by itself (one wilderness in the Owyhee view, a public-lands picture):
+  // the question's other drawn layers with named features fill the list to three.
+  const filling = layer.result.kind !== "geojson" || !kind || kind.answer === "total";
+  const fills: AnswerOption[] = [];
+  if (filling && options.length < 3) {
+    for (const other of fillOps(state, op, input.prefer ?? [])) {
+      const of = state.layers[other.layerId];
+      const otherKind = KINDS[sourceOf(of, other)];
+      for (const f of topOfOp(state, other, 8).top) {
+        const o = optionOf(f, of, otherKind);
+        if (o) fills.push(o);
+        if (options.length + fills.length >= 3) break;
+      }
+      if (options.length + fills.length >= 3) break;
+    }
+  }
+  // Under a status the question filters on (campgrounds open now), the ones it hides are named too: closed now.
+  const hiddenLine = hiddenByState(state, op, shown);
+  // A rule every camper there must follow (Mount Rainier's wilderness permit), once.
+  const ruleLine = ruleRows.length > 0 && kind?.rule ? `${kind.rule}: ${ruleOf(ruleRows[0])}.` : null;
+  // How close the nearest threat comes to the place asked about (Chaco Canyon's oil and gas leases).
+  const nearLine = THREAT_LAYERS.has(sourceId) && placeName ? nearestLine(shown, placeName, us) : null;
 
   // The lead and the option lines: only for the kinds of answer with a template; any other layer keeps the model's note.
   let lead: string | null = null;
@@ -574,18 +646,101 @@ export function answerTemplate(input: AnswerInput, state: MapState = mapOf(input
     lead = counted ? `${opening}; the top is ${first.name}${tail}.` : `${opening} is ${first.name}${tail}.`;
     if (words(lead) > FIRST_WORDS) lead = counted ? `${opening}; the top is ${first.name}.` : null;
     if (lead && !/\d/.test(lead)) lead = null;
-    lines = kind.list === false ? [] : options.map((o) => `- **${o.name}**${o.facts.length > 0 ? `: ${o.facts.join(", ")}` : ""}.`);
+    lines = kind.list === false ? [] : options.map(optionLine);
     allLines = lines;
+  }
+  const extra = [...fills.map(optionLine), ...[hiddenLine, ruleLine, nearLine].filter((l): l is string => l !== null)];
+  if (extra.length > 0 && sourceId !== "weather-forecast") {
+    lines = [...lines, ...extra];
+    allLines = [...allLines, ...extra];
   }
 
   // Follow-ups: the next decision, naming what was just found. Those naming a feature or the place come first.
-  const slots: Record<string, string | null> = { A: options[0]?.name ?? null, B: options[1]?.name ?? null, place: placeName, noun: noun.many, taxon: input.taxon ?? null };
+  const named = [...options, ...fills];
+  const where2 = placeName ?? input.viewPlace ?? null;
+  const slots: Record<string, string | null> = { A: named[0]?.name ?? null, B: named[1]?.name ?? null, place: where2, noun: noun.many, taxon: input.taxon ?? null };
   const filled = [...(kind?.followUps ?? TILE_FOLLOW_UPS[sourceId] ?? []), ...GENERIC_FOLLOW_UPS].map((t) => fill(t, slots)).filter((q): q is string => q !== null);
   const unique = [...new Set(filled)];
-  const anchored = unique.filter((q) => (slots.A && q.includes(slots.A)) || (slots.B && q.includes(slots.B)) || (placeName && q.includes(placeName)));
+  const anchored = unique.filter((q) => (slots.A && q.includes(slots.A)) || (slots.B && q.includes(slots.B)) || (where2 && q.includes(where2)));
   const followUps = [...anchored, ...unique.filter((q) => !anchored.includes(q))].slice(0, 3);
   const modelFirst = kind?.answer === "total" || input.change === true;
-  return { layerId: op.layerId, where, place: placeName, count, countGrounded, noun, options, lead, lines, allLines, modelFirst, followUps };
+  return { layerId: op.layerId, where, place: placeName, count, countGrounded, noun, options: named, lead, lines, allLines, modelFirst, followUps };
+}
+
+/** One option's line: its name in bold, then its deciding facts. */
+const optionLine = (o: AnswerOption) => `- **${o.name}**${o.facts.length > 0 ? `: ${o.facts.join(", ")}` : ""}.`;
+
+/** Layers never used to fill an answer's list: points that sample the view, pictures of the place, the payoff symbols. */
+const NO_FILL = new Set(["photos", "wikipedia-nearby", "weather-forecast", "weather-alerts", "outdoor-features", "terrain"]);
+
+/** The other drawn layers with named features that may fill a short list: the question's own layers first. */
+function fillOps(state: MapState, main: RenderOp, prefer: readonly string[]): RenderOp[] {
+  const ops = state.renderOps.filter((o) => o !== main && o.visible !== false && state.layers[o.layerId]?.result.kind === "geojson" && !NO_FILL.has(o.layerId) && !state.layers[o.layerId].style.samplesView);
+  const rank = (o: RenderOp) => {
+    const i = prefer.indexOf(o.layerId);
+    return i === -1 ? prefer.length : i;
+  };
+  return ops.filter((o) => prefer.includes(o.layerId)).sort((a, b) => rank(a) - rank(b));
+}
+
+/** Card keys that say how a thing stands now, which a question filters on ("open now"). */
+const STATE_KEY = /^(?:status|state|condition)$/i;
+
+/**
+ * The features a status filter hides, named in one line ("Closed now: Fallen Leaf, D.L. Bliss and Meeks Bay."): with
+ * only two campgrounds open, the person also learns which are shut. Null without such a filter or anything hidden.
+ */
+function hiddenByState(state: MapState, op: RenderOp, shown: Feature[]): string | null {
+  const entry = Object.entries(op.filters ?? {}).find(([k, f]) => STATE_KEY.test(k) && Array.isArray(f.include) && f.include.length > 0);
+  if (!entry) return null;
+  const [key, f] = entry;
+  const all = state.layers[op.layerId]?.allData ?? dataOf(state.layers[op.layerId]);
+  if (!all) return null;
+  const shownSet = new Set(shown);
+  // Hidden by the status alone: the other filters still hold (campgrounds, not trailheads).
+  const others = Object.fromEntries(Object.entries(op.filters ?? {}).filter(([k]) => k !== key));
+  const candidates = applyFilters(all, others).features.filter((x) => !shownSet.has(x) && !f.include!.includes(String(x.properties?.[key] ?? "")));
+  const byValue = new Map<string, string[]>();
+  for (const x of candidates) {
+    const v = x.properties?.[key];
+    const name = nameOf(x);
+    if (typeof v !== "string" || !v.trim() || !name) continue;
+    const list = byValue.get(v) ?? [];
+    if (!list.includes(name)) list.push(name);
+    byValue.set(v, list);
+  }
+  const [value, names] = [...byValue.entries()].sort((a, b) => b[1].length - a[1].length)[0] ?? [];
+  if (!value || !names?.length) return null;
+  const list = names.slice(0, 3);
+  const said = list.length === 1 ? list[0] : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)} now: ${said}${names.length > list.length ? ` and ${names.length - list.length} more` : ""}.`;
+}
+
+/**
+ * A camping rule as said under the options: the rule itself, without its owner and source ("National Park Service,
+ * Mount Rainier National Park …: a wilderness permit is required year-round …" reads "A wilderness permit is required
+ * year-round for every overnight stay in the backcountry").
+ */
+function ruleOf(value: string): string {
+  const rule = (value.includes(": ") ? value.slice(value.indexOf(": ") + 2) : value).split(/\s+\(|;\s+/)[0].trim().replace(/[.;:,]$/, "");
+  const said = briefValue(rule).replace(/[.;:,]$/, "");
+  return `${said.charAt(0).toUpperCase()}${said.slice(1)}`;
+}
+
+/** The threat nearest the place asked about, with its distance from the place's centre, or null without distances. */
+function nearestLine(features: Feature[], place: string, us: boolean): string | null {
+  let best: { f: Feature; km: number } | null = null;
+  for (const f of features) {
+    const km = f.properties?.[FROM_PLACE_KEY];
+    if (typeof km === "number" && (best === null || km < best.km)) best = { f, km };
+  }
+  if (!best) return null;
+  const name = nameOf(best.f) ?? "One";
+  if (best.km === 0) return `${name} covers the centre of ${place}.`;
+  const mi = best.km / 1.609344;
+  const r = (n: number) => (n < 10 ? n.toFixed(1) : String(Math.round(n)));
+  const distance = us ? `${r(mi)} mi (${r(best.km)} km)` : `${r(best.km)} km`;
+  return `Closest to ${place}: ${name}, ${distance} from its centre.`;
 }
 
 /** True when a follow-up names one of the anchors (a feature or the place), as the answer's rule asks. */

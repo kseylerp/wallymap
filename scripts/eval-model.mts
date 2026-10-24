@@ -828,6 +828,8 @@ type Run = {
   finish: string;
   /** What the server's step guard did for the model (lib/agent/stepGuard.ts). */
   guard?: string[];
+  /** The named place at the middle of a "here" view (lib/agent/agent.ts), which the follow-ups may name. */
+  viewPlace?: string;
 };
 
 /** Runs one question through the real agent and collects every tool call (with its output, when it returned). */
@@ -852,6 +854,7 @@ async function runModel(raw: string): Promise<Run> {
     seconds: Math.round((Date.now() - started) / 100) / 10,
     finish: result.finishReason,
     ...(turn.log.length > 0 && { guard: turn.log }),
+    ...(turn.viewPlace && { viewPlace: turn.viewPlace }),
   };
 }
 
@@ -939,7 +942,7 @@ function evaluate(run: Run): Evaluated {
   const skipped = expect ? outageSkip(expect, calls) : usecase ? outageSkip(usecase, calls) : undefined;
   // The top 10 use cases' strict rule (scripts/top10Check.ts): every assertion of the question's expectation.
   const top10Expect = top10For(run.raw);
-  const top10 = top10Expect ? top10Rule(top10Expect, { calls, text, state, question, hereView: (view?.bbox as BBox | undefined) ?? null }) : undefined;
+  const top10 = top10Expect ? top10Rule(top10Expect, { calls, text, state, question, hereView: (view?.bbox as BBox | undefined) ?? null, viewPlace: run.viewPlace ?? null }) : undefined;
   const okStrict = top10 ? ok && top10.ok : ok;
 
   return {

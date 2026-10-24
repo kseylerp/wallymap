@@ -1,5 +1,7 @@
 import { stepCountIs, wrapLanguageModel, type LanguageModel, type UIMessage } from "ai";
 import { contextForPrompt, contextFrom } from "./context";
+import { reverseGeocode } from "./geocode";
+import { placeCandidates } from "./places";
 import { layerVocabularyForPrompt } from "./vocabulary";
 import { SYSTEM_PROMPT } from "./prompt";
 import { readingForPrompt } from "./reading";
@@ -50,6 +52,17 @@ export function agentTurn({ question, view, model = getModel(), history = [] }: 
   // What the last answer left on the map, for a follow-up that names no place of its own (lib/agent/context.ts).
   const context = contextFrom(history);
   const turn: Turn = createTurn({ question, view, context });
+  // A "here" question's view, named (a town or county at its middle), so the follow-ups can say where; it runs beside
+  // the model's first steps and the answer waits for it (lib/agent/turnAnswer.ts settle).
+  if (view?.center && placeCandidates(question).length === 0) {
+    turn.viewPlaceReady = reverseGeocode(view.center as [number, number])
+      .then((name) => {
+        if (!name) return;
+        turn.viewPlace = name;
+        turn.outputs.push({ viewPlace: name });
+      })
+      .catch(() => undefined);
+  }
   const tools = buildTools({ view, turn });
   if (typeof model === "string") throw new Error("A model instance is required (MODEL_PROVIDER and MODEL_NAME)");
   return {

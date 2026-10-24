@@ -500,6 +500,13 @@ const PHRASES: {
     because: "what protects a place is its designation: a national monument, a wilderness",
   },
   {
+    // "Is it protected?" about land in view: every protected area there by name, wilderness study areas and wild rivers
+    // too (the Owyhee view has one wilderness and four more protected areas the answer never named).
+    re: /\bis\s+(?:it|this|that|the\s+[\w-]+)\s+protected\b|\bhow\s+(?:is|are)\b[^?]*\bprotected\b/i,
+    layers: ["protected-areas-world"],
+    because: "whether land is protected is every protected area over it: wilderness, study areas, wild rivers, parks",
+  },
+  {
     re: /\bwho\s+(?:manages|owns|runs)\b|\bmanaged\s+by\b|\bwhose\s+land\b|\bpublic\s+or\s+private\b/i,
     layers: ["public-lands"],
     because: "who manages the land is the protected areas database's manager",
@@ -573,6 +580,16 @@ const PHRASES: {
     unless: /\buranium\b/i,
     layers: ["mines"],
     because: "mines are the mine and mineral deposit records",
+  },
+  {
+    // "Uranium mines near the Grand Canyon": the mine records with uranium, not the Navajo Nation's abandoned-mine list
+    // (one mine in the park's box; the answer never named the Canyon, Pinenut or Orphan mines).
+    re: /\buranium\s+(?:mines?|mining|deposits?|sites?)\b/i,
+    unless: /\bnavajo\b|\bhazard\b|\bscores?\b|\bclean\s*-?up\b|\btailings\b/i,
+    layers: ["mines"],
+    // The Uranium chip comes from the question's own word (chipFilters).
+    inputs: { mines: { commodity: "uranium" } },
+    because: "uranium mines are the mine records that list uranium",
   },
   {
     re: /\bpipelines?\b/i,

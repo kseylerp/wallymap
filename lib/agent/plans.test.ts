@@ -100,3 +100,18 @@ describe("a length between two bounds", () => {
     expect(r.filters).toContainEqual(expect.objectContaining({ layerId: "osm-trails", key: "shape" }));
   });
 });
+
+describe("plans for protection and uranium (top-10 T06.2, T06.5)", () => {
+  it("reads uranium mines as the mine records with uranium, and the Navajo Nation's hazard scores as the uranium layer", () => {
+    const grand = readQuestion("Uranium mines near the Grand Canyon", NOW);
+    expect(grand.layers.find((l) => l.layerId === "mines")?.strong).toBe(true);
+    expect(grand.inputs).toContainEqual(expect.objectContaining({ layerId: "mines", input: { commodity: "uranium" } }));
+    expect(grand.filters).toContainEqual(expect.objectContaining({ layerId: "mines", key: "commodity", include: ["uranium"] }));
+    expect(readQuestion("Which uranium mines near the Navajo Nation score highest?", NOW).layers.find((l) => l.layerId === "mines")?.strong).toBeFalsy();
+  });
+
+  it("asks every protected area by name when the question asks whether land is protected", () => {
+    expect(strongIds("Who manages this land and is it protected?")).toEqual(expect.arrayContaining(["public-lands", "wilderness", "protected-areas-world"]));
+    expect(strongIds("What protects Grand Staircase-Escalante?")).not.toContain("protected-areas-world");
+  });
+});

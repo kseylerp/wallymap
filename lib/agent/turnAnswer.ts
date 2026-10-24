@@ -22,6 +22,7 @@ export function answerForTurn(turn: Turn): AnswerTemplate | null {
       window: turn.reading.time,
       taxon: turn.reading.taxon,
       change: turn.reading.change,
+      viewPlace: turn.viewPlace,
     });
   } catch (err) {
     // The answer still shows as the model wrote it.
@@ -34,7 +35,7 @@ export function answerForTurn(turn: Turn): AnswerTemplate | null {
 export function composeForTurn(markdown: string, turn: Turn): string {
   const template = answerForTurn(turn);
   turn.followUps = template?.followUps ?? [];
-  const composed = withLandManagers(withAskedPictures(withEmptyLayers(composeNote(markdown, template), turn), turn), turn);
+  const composed = withDataGaps(withLandManagers(withAskedPictures(withEmptyLayers(composeNote(markdown, template), turn), turn), turn), turn);
   if (composed !== markdown) turn.note(template?.lead ? "answer built on the template: lead, top options, then the model's caveats" : "answer put first: the note's first sentence now answers with a number");
   return composed;
 }
@@ -95,7 +96,7 @@ function emptyNoteOf(calls: Pick<Turn, "calls">["calls"], layerId: string): stri
 
 /** Exactly three follow-ups, at least two naming a feature or place from this answer: the model's that do, then the template's. */
 export function followUpsForTurn(turn: Turn, model: readonly string[]): string[] {
-  const places = turn.places.length > 0 ? turn.places : turn.context?.place ? [turn.context.place] : [];
+  const places = turn.places.length > 0 ? turn.places : turn.context?.place ? [turn.context.place] : turn.viewPlace ? [{ name: turn.viewPlace }] : [];
   const built = turn.followUps.length > 0 ? turn.followUps : (answerForTurn(turn)?.followUps ?? []);
   return chooseFollowUps(model, built, anchorsOf(turn.calls, places));
 }
@@ -104,7 +105,7 @@ export function followUpsForTurn(turn: Turn, model: readonly string[]): string[]
 export async function settle(turn: Turn): Promise<void> {
   // Every call of a step is started in the same task; one tick later all of them are in flight.
   await new Promise((resolve) => setTimeout(resolve, 0));
-  await Promise.allSettled([...turn.inflight]);
+  await Promise.allSettled([...turn.inflight, turn.viewPlaceReady]);
 }
 
 /**
@@ -126,14 +127,17 @@ export function withLandManagers(markdown: string, turn: Pick<Turn, "question" |
 /**
  * A picture layer the question asks for by its words (burn severity in "burn scars", the satellite snow map in "snow on
  * the ground") that the note never mentions gets one clause from its coverage note: Paradise's answer drew the burn
- * severity and said nothing of it. Two at most.
+ * severity and said nothing of it. So does a layer of features the question names whose note opens with its count
+ * ("No pipelines and 9 power lines here": Grand Staircase's answer asked about pipelines and never said). Two at most.
  */
 export function withAskedPictures(markdown: string, turn: Pick<Turn, "reading" | "calls">): string {
   const text = markdown.toLowerCase();
   const lines: string[] = [];
   for (const hint of turn.reading.layers.filter((l) => l.strong)) {
     const out = turn.calls.findLast((c) => c.toolName === `query_${hint.layerId}`)?.output as { kind?: unknown; coverageNote?: unknown } | undefined;
-    if (out?.kind !== "tiles" || typeof out.coverageNote !== "string" || out.coverageNote.trim() === "") continue;
+    if (typeof out?.coverageNote !== "string" || out.coverageNote.trim() === "") continue;
+    const counted = out.kind === "geojson" && /^(?:no|none|\d[\d,]*)\b/i.test(out.coverageNote.trim());
+    if (out.kind !== "tiles" && !counted) continue;
     const title = getLayer(hint.layerId)?.title.replace(/\s*\([^)]*\)\s*/g, " ").trim() ?? hint.layerId;
     // Mentioned already: the title's longest word ("severity", "cover") is in the note.
     const word = title.toLowerCase().split(/[\s:,]+/).sort((x, y) => y.length - x.length)[0] ?? "";
@@ -146,3 +150,28 @@ export function withAskedPictures(markdown: string, turn: Pick<Turn, "reading" |
   return lines.length === 0 ? markdown : `${markdown.trimEnd()}\n\n${lines.join(" ")}`;
 }
 
+/**
+ * What a question asks that no free source holds, said plainly with what the map shows instead (documented data gaps,
+ * docs/top-10-use-cases.md: T03.3). Each gap names the words that ask for it, the layer whose answer it qualifies, the
+ * words that show the note already says it, and the sentence.
+ */
+const DATA_GAPS: { asks: RegExp; layer: string; said: RegExp; sentence: string }[] = [
+  {
+    // T03.3: American Whitewater rates US sections and their runnable flows, under no open licence; OpenStreetMap grades
+    // only some rapids, and no free source gives a runnable range.
+    asks: /\bclass\s+(?:[1-6]|i{1,3}|iv|vi?)\+?(?=[\s?.,!]|$)|\bwhitewater\b|\benough\s+water\b/i,
+    layer: "paddling",
+    said: /\bno\s+free\s+source\b|\bopenly\s+licen[cs]ed\b|\brunnable\s+(?:flow\s+)?range\b/i,
+    sentence:
+      "No free source rates US river sections by whitewater class or gives a runnable flow range, so whether this weekend's flow is enough cannot be said; the map shows the rapids OpenStreetMap volunteers graded by class and each gauge's flow against normal for the date.",
+  },
+];
+
+export function withDataGaps(markdown: string, turn: Pick<Turn, "question" | "queries">): string {
+  const lines: string[] = [];
+  for (const gap of DATA_GAPS) {
+    if (!gap.asks.test(turn.question) || !turn.queries.some((q) => q.layerId === gap.layer) || gap.said.test(markdown)) continue;
+    lines.push(gap.sentence);
+  }
+  return lines.length === 0 ? markdown : `${markdown.trimEnd()}\n\n${lines.join(" ")}`;
+}

@@ -15,6 +15,8 @@ import { settle } from "./turnAnswer";
 import { createTurn, inputKeyOf, isWideQuery, MAX_STEPS, placeKey, type Turn } from "./turn";
 import { canonicalLayerId, repairToolName } from "./toolNames";
 import { combineTool } from "@/lib/spatial/tool";
+import { THREAT_LAYERS, withPlaceDistances } from "./fromPlace";
+import { layerRole } from "./roles";
 import { gistFor } from "./vocabulary";
 import type { GeocodeResult } from "./geocode";
 import type { MapView } from "./view";
@@ -449,7 +451,12 @@ function queryTool(layer: Layer, fromView: ViewSource = () => undefined, turn: T
       // A layer that reads one point (the weather forecast's asked place) gets the place found this turn, when in the box.
       const c = turn.place?.center;
       if (c && "at" in layer.input.shape && input.at === undefined && c[0] >= bbox[0] && c[0] <= bbox[2] && c[1] >= bbox[1] && c[1] <= bbox[3]) input.at = c;
-      const body = (await runLayer(layer.id, { bbox, zoom, input, fromView: view })).body;
+      let body = (await runLayer(layer.id, { bbox, zoom, input, fromView: view })).body;
+      // Threats found for a named place say how far they lie from it (lib/agent/fromPlace.ts).
+      if (turn.place && THREAT_LAYERS.has(layer.id) && "kind" in body && body.kind === "geojson" && body.data.features.length > 0) {
+        const { features, clause } = withPlaceDistances(body.data.features, turn.place);
+        body = { ...body, data: { ...body.data, features }, ...(clause && { coverageNote: [body.coverageNote, clause].filter(Boolean).join("; ") }) };
+      }
       const ok = !("error" in body);
       const highest = "kind" in body && body.kind === "geojson" ? highestOf(body.data.features, { ...layer.style, attributes: layer.attributes }) : undefined;
       const top = highest?.top[0] && { ...highest.top[0], by: highest.by, ...(highest.unit !== undefined && { unit: highest.unit }) };
@@ -657,7 +664,11 @@ export function buildTools({ view = null, turn = createTurn({ view }) }: { view?
       execute: async (input) => {
         // "query_peaks" (the tool's name) is the peaks layer; template junk is cut off.
         const layerId = canonicalLayerId(input.layerId, listLayers().map((l) => l.id));
-        const out = holdToPlace(withReading(normalizeRenderInput({ ...input, layerId }, getLayer(layerId), turn.question), turn), turn);
+        const out: Record<string, unknown> = holdToPlace(withReading(normalizeRenderInput({ ...input, layerId }, getLayer(layerId), turn.question), turn), turn);
+        // An area around the answer draws light, under it (lib/agent/roles.ts).
+        const others = [...turn.queries.filter((q) => q.ok && q.drawable).map((q) => q.layerId), ...turn.reading.layers.filter((l) => l.strong).map((l) => l.layerId)];
+        const role = layerRole(layerId, turn.question, others);
+        if (role) out.role = role;
         turn.drawn.add(layerId);
         if (typeof out.view === "string") turn.views.set(layerId, out.view);
         return out;

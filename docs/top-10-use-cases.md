@@ -79,6 +79,12 @@ top features in frame (an area larger than the view, such as an avalanche zone, 
 anything about mountains. Satellite imagery (Topo + Satellite or Satellite) for change, burn scars and crags. Topo or
 Data only for colored maps of the ground (geology, land cover, ecoregions, water depth) so the colors read.
 
+**Layer weight.** Each layer in an answer is the subject or context (`lib/agent/roles.ts`): an area the question does
+not ask about, drawn beside the answer (public land under campsites, ecoregions around vegetation, a wilderness beside
+what threatens it, an avalanche zone when avalanches are not asked), draws as a light tint under a thin outline,
+beneath the answer, which keeps full contrast. Outline-only areas (ecoregions, an unrated avalanche zone) draw thin.
+The top five classes of a categorical map (vegetation types) differ at a glance on Topo and Topo + Satellite.
+
 **Palette.** Spec §10 and §11 hold: the five approved colors, ramps derived from them, hatching for polygons; raster
 tiles may keep their source colors when they are a published standard (avalanche danger scale, drought categories).
 
@@ -418,9 +424,13 @@ weather to infer avalanche danger.
   Length; note gives miles and how many blue trails; names ≥ 3.
 - T03.2: `climbing`; filters Sport, Intermediate band, afternoon shade (or aspect); view ranked; Topo + Satellite or
   Satellite; card Routes, Grades, Sport, Afternoon shade; note gives route counts, 5.10/5.11 and shade; names ≥ 3.
-- T03.3: `paddling` and `streamflow`; filter Class III; legend "Class"; note gives cfs, the class, a
-  runnable verdict against a range, and the weekend; names ≥ 2. Needs class on US sections, runnable ranges, a
-  weekend flow forecast.
+- T03.3 (**documented data gap**, 2026-10-24): no free source gives US river sections a whitewater class or a
+  runnable flow range (American Whitewater's are not openly licensed; OpenStreetMap grades only some rapids), so the
+  answer cannot say whether this weekend's flow is enough. Asserted instead: `paddling` and `streamflow`; filter
+  Class III; the note gives cfs, the flow against normal for the date, the weekend, and says plainly that no free
+  source rates sections by class or gives a runnable range, offering what the map shows (rapids OpenStreetMap graded by
+  class, each gauge's flow against normal); names ≥ 2. The sentence is the server's (`lib/agent/turnAnswer.ts`
+  DATA_GAPS), so the model cannot leave it out or invent a verdict.
 - T03.4: `terrain` (mode slope) and `avalanche`; legend "Avalanche danger"; card Danger, Avalanche center (in season
   also Above, Near and Below treeline and Issued); note gives the slope angle and the rating or "no rating".
 - T03.5: `mtb-trails` in the view; filter Green (or Beginner); miles; names ≥ 3.

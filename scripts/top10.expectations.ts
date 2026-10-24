@@ -211,12 +211,19 @@ export const TOP10: Top10Expect[] = [
   {
     id: "T03.3", useCase: "T03",
     question: "Class III whitewater near Asheville with enough water this weekend",
-    layers: ["paddling", "streamflow"], main: "paddling|streamflow", basemap: TOPO,
+    // A documented data gap (docs/top-10-use-cases.md T03.3): no free source rates US sections by class or gives a
+    // runnable range, so the answer says so plainly and gives what exists, the gauges' flow against normal.
+    layers: ["paddling", "streamflow"], main: "streamflow|paddling", basemap: TOPO,
     filters: [{ layer: "paddling", key: "v", labels: ["Class III"] }],
-    labels: 3, legend: ["Class"],
-    facts: [{ what: "flow in cfs", re: CFS }, { what: "class", re: /class\s*(?:III|3)/i }, { what: "runnable verdict against a range", re: /runnable|too (?:low|high)|minimum|range/i }, { what: "the weekend", re: SAT }],
+    labels: 2,
+    facts: [
+      { what: "flow in cfs", re: CFS },
+      { what: "flow against normal for the date", re: /normal|median|percentile/i },
+      { what: "no free source for class or a runnable range, said plainly", re: /no free source|not openly licen[cs]ed/i },
+      { what: "the weekend", re: /weekend|\bsat(?:urday)?\b/i },
+    ],
     names: 2,
-    needs: ["whitewater class on US sections (OSM rarely has it)", "runnable range per section", "flow forecast for the weekend at the section's gauge"],
+    needs: ["whitewater class on US sections (no free source)", "runnable range per section (no free source)", "flow forecast for the weekend at the section's gauge"],
   },
   {
     id: "T03.4", useCase: "T03",

@@ -579,13 +579,14 @@ describe("the geologic map by rock family", () => {
     expect(tileKeyOf(loaded as never)).toEqual({ field: ROCK_FAMILY_FIELD, colors: [], paint: "rock-family" });
   });
 
-  it("fills each unit by its family and age, hatches metamorphic, stipples loose sediments, with white edges", () => {
+  it("fills each unit by its family and age, hatches metamorphic, stipples loose sediments, with dark grey contacts and unit names", () => {
     const specs = vectorTileLayerSpecs("geology", style, "units", "polygon", true, {}, { field: ROCK_FAMILY_FIELD, colors: [], paint: "rock-family" });
-    expect(specs.map((s) => s.id)).toEqual(["tiles-geology", "tiles-geology-hatch", "tiles-geology-casing", "tiles-geology-line"]);
+    expect(specs.map((s) => s.id)).toEqual(["tiles-geology", "tiles-geology-hatch", "tiles-geology-casing", "tiles-geology-line", "tiles-geology-label"]);
     const fill = specs[0].paint as Record<string, unknown>;
     expect(fill["fill-color"]).toEqual(rockFamilyFillExpression());
     expect([...new Set(hatchPatternsOf(specs))].sort()).toEqual(["hatch-3A3A3C-2", "stipple-3A3A3C"]);
-    expect((specs[3].paint as Record<string, unknown>)["line-color"]).toBe(WHITE);
+    expect((specs[3].paint as Record<string, unknown>)["line-color"]).toBe(DARK_GREY);
+    expect(specs[4]).toMatchObject({ type: "symbol", minzoom: 10, paint: { "text-color": DARK_GREY, "text-halo-color": WHITE } });
     // A color picked in the panel draws the plain recipe instead.
     const recolored = vectorTileLayerSpecs("geology", style, "units", "polygon", true, { color: PURPLE }, { field: ROCK_FAMILY_FIELD, colors: [], paint: "rock-family" });
     expect((recolored[0].paint as Record<string, unknown>)["fill-color"]).toBe(PURPLE);

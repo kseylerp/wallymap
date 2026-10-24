@@ -9,6 +9,7 @@ import type {
   LineLayerSpecification,
   Map as MapboxMap,
   StyleSpecification,
+  SymbolLayerSpecification,
 } from "mapbox-gl";
 import type { StyleHints } from "@/layers/types";
 import {
@@ -92,7 +93,7 @@ function solidHatchOpacity(opacity: number, solid: string[], field: string, alph
 /** Polygon outlines on vector tiles: the outline over a white casing, at 80%. */
 export const LAND_OUTLINE = { opacity: 0.8 } as const;
 
-type VectorLayerSpec = FillLayerSpecification | LineLayerSpecification | CircleLayerSpecification;
+type VectorLayerSpec = FillLayerSpecification | LineLayerSpecification | CircleLayerSpecification | SymbolLayerSpecification;
 
 /** The hatch pattern a vector tile area layer draws with (its id is a Mapbox image added by `ensureHatchImages`). */
 /** A categorized tile layer's tint: strong enough that each kind's color reads on green Topo and under satellite. */
@@ -278,8 +279,47 @@ export function rockFamilyLayerSpecs(
     { id: layerId, type: "fill", ...common, layout, paint: { "fill-color": rockFamilyFillExpression() as unknown as string, "fill-opacity": fill } },
     { id: `${layerId}-hatch`, type: "fill", ...common, layout, paint: { "fill-pattern": pattern, "fill-opacity": patternOpacity } },
     { id: `${layerId}-casing`, type: "line", ...common, layout: { ...layout, "line-join": "round" }, paint: { "line-color": WHITE, "line-width": 0, "line-opacity": 0 } },
-    { id: `${layerId}-line`, type: "line", ...common, layout: { ...layout, "line-join": "round" }, paint: { "line-color": WHITE, "line-width": SOLID_TILE_EDGE.width, "line-opacity": SOLID_TILE_EDGE.opacity * opacity } },
+    // Contacts between units in dark grey (area outlines may be dark grey): two sandstones of one age share a fill, and
+    // only the contact tells the Navajo from the Kayenta.
+    { id: `${layerId}-line`, type: "line", ...common, layout: { ...layout, "line-join": "round" }, paint: { "line-color": DARK_GREY, "line-width": ROCK_CONTACT.width, "line-opacity": ROCK_CONTACT.opacity * opacity } },
+    rockUnitLabels(layerId, common, layout, opacity),
   ];
+}
+
+/** The contact lines between geologic units. */
+export const ROCK_CONTACT = { width: 0.7, opacity: 0.55 } as const;
+
+/**
+ * Unit names on the map (spec T08 "Labels: the largest units by name"): each unit's name at its middle from zoom 10, in
+ * the basemap's label font, dark grey on a white halo; Mapbox drops labels that would collide, so the larger units keep
+ * theirs. "Kayenta Formation, main body" prints as "Kayenta Formation".
+ */
+export function rockUnitLabels(
+  layerId: string,
+  common: { source: string; "source-layer": string },
+  layout: { visibility: "visible" | "none" },
+  opacity: number,
+): SymbolLayerSpecification {
+  const name = ["to-string", ["coalesce", ["get", "name"], ""]];
+  const comma = ["index-of", ",", name];
+  const short = ["case", [">", comma, 0], ["slice", name, 0, comma], name];
+  return {
+    id: `${layerId}-label`,
+    type: "symbol",
+    ...common,
+    minzoom: 10,
+    layout: {
+      ...layout,
+      "text-field": short as unknown as ExpressionSpecification,
+      "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
+      "text-size": ["interpolate", ["linear"], ["zoom"], 10, 10, 14, 12] as ExpressionSpecification,
+      "text-max-width": 8,
+      // Wide padding: a formation that crops out in many slope polygons (the Kayenta) is named a few times, not on each.
+      "text-padding": 36,
+      "symbol-placement": "point",
+    },
+    paint: { "text-color": DARK_GREY, "text-halo-color": WHITE, "text-halo-width": 1.3, "text-opacity": opacity },
+  };
 }
 
 /** Adds every hatch and stipple pattern the style needs as a Mapbox image (once per style: a style swap drops images). */

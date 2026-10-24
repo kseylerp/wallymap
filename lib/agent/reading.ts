@@ -89,13 +89,19 @@ export function combineOf(question: string): CombineAsk | null {
     const name = m[0].replace(/^along\s+(?:the\s+)?/i, "").trim();
     return { op: "along", because: m[0].trim(), distance: 1, unit: "km", ...(/^[A-Z]/.test(name) && { match: name }) };
   }
-  const near = new RegExp(String.raw`\b(?:near|close\s+to|next\s+to|by)\s+(?:a\s+|the\s+|any\s+)?${NEAR_THINGS}\b|\bwithin\s+(\d+(?:\.\d+)?)\s*(km|mi|miles?|m|ft|feet)\s+of\s+(?:a\s+|the\s+)?${NEAR_THINGS}\b`, "i").exec(q);
+  // "near Lake Tahoe" names a place, not any lake: a thing written with a capital, or followed by a capitalised name, is
+  // a place (Tahoe's easy hikes were joined to lakes 1 km away).
+  const near = [...q.matchAll(new RegExp(String.raw`\b(?:near|close\s+to|next\s+to|by)\s+(?:a\s+|the\s+|any\s+)?${NEAR_THINGS}\b|\bwithin\s+(\d+(?:\.\d+)?)\s*(km|mi|miles?|m|ft|feet)\s+of\s+(?:a\s+|the\s+)?${NEAR_THINGS}\b`, "gi"))].find((x) => {
+    const thing = x[0].split(/\s+/).pop() ?? "";
+    return /^[a-z]/.test(thing) && !/^\s+[A-Z]/.test(q.slice((x.index ?? 0) + x[0].length));
+  });
   if (near) {
     const unit = near[2] ? (/^mi/i.test(near[2]) ? "mi" : /^f/i.test(near[2]) ? "ft" : near[2].toLowerCase() === "m" ? "m" : "km") : "km";
     return { op: "near", because: near[0], distance: near[1] ? Number(near[1]) : 1, unit };
   }
   // A hike that reaches a feature ("hikes with a waterfall", "trails to a lake"): the trail passes within half a km of it.
-  if ((m = /\b(?:hikes?|hiking\s+trails?|trails?|walks?|runs?)\s+(?:with|to|past|that\s+(?:reach|pass)\w*)\s+(?:a\s+|the\s+)?(?:waterfalls?|lakes?|hot\s+springs?|springs?|swimming\s+holes?|views?|viewpoints?|overlooks?|vistas?)\b/i.exec(q))) {
+  // A few words may come between ("loop hikes under 6 miles with a waterfall").
+  if ((m = /\b(?:hikes?|hiking\s+trails?|trails?|walks?|runs?)(?:\s+(?!with\b|to\b|past\b|that\b)[\w,.'-]+){0,6}?\s+(?:with|to|past|that\s+(?:reach|pass)\w*)\s+(?:a\s+|the\s+)?(?:waterfalls?|lakes?|hot\s+springs?|springs?|swimming\s+holes?|views?|viewpoints?|overlooks?|vistas?)\b/i.exec(q))) {
     return { op: "near", because: m[0], distance: 0.5, unit: "km" };
   }
   if ((m = /\b(?:inside|within)\s+(?:a\s+|the\s+)?(?![\d])(?:[A-Za-z][\w'-]*\s+){0,3}(?:national\s+forest|forest|park|wilderness|protected\s+areas?|habitat|burn\s+scars?|fire\s+perimeters?|reserve|monument|allotments?)\b/i.exec(q))) return { op: "within", because: m[0] };
@@ -583,6 +589,16 @@ export function planLayerIds(): string[] {
   return [...ids];
 }
 
+/** The layer and kinds a hike's feature is ("hikes with a waterfall": outdoor-features' waterfalls), or null. */
+export function hikeFeature(phrase: string): { layerId: string; kinds?: string[]; noun: string } | null {
+  if (/\bwaterfalls?\b/i.test(phrase)) return { layerId: "outdoor-features", kinds: ["waterfall"], noun: "waterfalls" };
+  if (/\bhot\s+springs?\b/i.test(phrase)) return { layerId: "outdoor-features", kinds: ["hot_spring"], noun: "hot springs" };
+  if (/\bsprings?\b/i.test(phrase)) return { layerId: "outdoor-features", kinds: ["spring"], noun: "springs" };
+  if (/\b(?:views?|viewpoints?|overlooks?|vistas?)\b/i.test(phrase)) return { layerId: "outdoor-features", kinds: ["viewpoint"], noun: "viewpoints" };
+  if (/\b(?:lakes?|swimming\s+holes?)\b/i.test(phrase)) return { layerId: "lakes", noun: "lakes" };
+  return null;
+}
+
 /** Animal words, and the words before one that make it a species ("sandhill cranes", "bald eagles"). */
 const ANIMAL = /\b(?:moose|elk|deer|bears?|grizzl\w*|whales?|humpbacks?|dolphins?|orcas?|seals?|sea\s+lions?|otters?|eagles?|owls?|hawks?|falcons?|cranes?|herons?|pelicans?|bison|buffalo|pronghorn|bighorn|mountain\s+goats?|jaguars?|pumas?|cougars?|mountain\s+lions?|lynx|bobcats?|coyotes?|foxes|beavers?|butterfl\w+|monarchs?|puffins?|condors?|tortoises?|salamanders?|frogs?|snakes?|rattlesnakes?)\b/i;
 const NOT_KIND = /^(?:the|a|an|see|any|some|where|are|is|of|for|best|place|to|near|in|have|been|being|seen|recent|records?|whales?|can|i|and|or|with)$/i;
@@ -834,6 +850,16 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     if (i >= 0) layers.splice(i, 1);
   }
 
+  // A hike that reaches a feature is a join: the hikes near the features of that kind, which are asked for themselves
+  // (Asheville's waterfall loops: the model filtered the trails' own 250 m payoff chip and found none, never asking
+  // the waterfalls). The join stands in for the payoff chip.
+  const combine = combineOf(raw);
+  const reaches = combine?.op === "near" && /^(?:hik|trail|walk|run)/i.test(combine.because) ? hikeFeature(combine.because) : null;
+  if (reaches) {
+    addLayer(reaches.layerId, `"${combine!.because}": the hikes near the ${reaches.noun}, joined`, true);
+    if (reaches.kinds && !inputs.some((i) => i.layerId === reaches.layerId)) inputs.push({ layerId: reaches.layerId, input: { kinds: reaches.kinds }, because: `"${combine!.because}": the ${reaches.noun}` });
+  }
+
   const filters: FilterHint[] = [...phraseFilters];
   for (const hint of layers) {
     const layer = getLayer(hint.layerId);
@@ -872,7 +898,9 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     filters.splice(filters.indexOf(grade), 1, ...styled.map((a) => ({ ...grade, key: a.key })));
   }
 
-  return { combine: combineOf(raw), taxon: taxonOf(masked), layers, avoid: kept, filters, inputs, rankBy, views, time: timeWindow(raw, now), places, colors, change: asksChange(raw) || /\b(?:shrunk|shrank|retreat\w*|then\s+and\s+now|changed?\s+since)\b/i.test(raw) };
+  if (reaches) for (let i = filters.length - 1; i >= 0; i--) if (filters[i].key === "payoff") filters.splice(i, 1);
+
+  return { combine, taxon: taxonOf(masked), layers, avoid: kept, filters, inputs, rankBy, views, time: timeWindow(raw, now), places, colors, change: asksChange(raw) || /\b(?:shrunk|shrank|retreat\w*|then\s+and\s+now|changed?\s+since)\b/i.test(raw) };
 }
 
 // ---- Inputs from the time window ---------------------------------------------------------------------------------

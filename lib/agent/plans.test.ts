@@ -38,6 +38,17 @@ describe("plans read before the model chooses", () => {
     expect(views("Research-grade moose sightings near Jackson Hole in the last year, by month").species).toBe("timeline");
   });
 
+  it("joins a hike to the feature it reaches, asking those features, without the trails' own payoff chip", () => {
+    const loops = readQuestion("Loop hikes under 6 miles with a waterfall near Asheville, under 1,500 ft of climb", NOW);
+    expect(loops.combine).toMatchObject({ op: "near", distance: 0.5 });
+    expect(loops.layers.filter((l) => l.strong).map((l) => l.layerId)).toEqual(expect.arrayContaining(["osm-trails", "outdoor-features"]));
+    expect(loops.inputs).toContainEqual(expect.objectContaining({ layerId: "outdoor-features", input: { kinds: ["waterfall"] } }));
+    expect(loops.filters.some((f) => f.key === "payoff")).toBe(false);
+    // "near Lake Tahoe" is the place, not a lake to join to.
+    expect(readQuestion("Campgrounds near Lake Tahoe", NOW).combine).toBeNull();
+    expect(readQuestion("Campsites near a lake in the Sierra", NOW).combine).toMatchObject({ op: "near" });
+  });
+
   it("names only registered layers", () => {
     expect(planLayerIds().filter((id) => !getLayer(id))).toEqual([]);
   });

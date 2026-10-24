@@ -918,8 +918,8 @@ snowy, green, when the river peaks; and what is under the water: lake and coasta
 | River flow by month | `streamflow` + USGS daily statistics (median by month) | `river-pulse` (GloFAS 3 months) | Static medians | Not a monthly strip yet |
 | Lake levels by month | `reservoir-levels` series | **New:** JRC monthly water history (Earth Engine) | Daily | Western US reservoirs |
 | Green-up timing | `phenology` (USA-NPN), `greenness` | **New:** MODIS phenology MCD12Q2 (Earth Engine) | Yearly | Lower 48 (NPN); global (MODIS) |
-| Lake depth | `lakes` (maximum depth from Wikidata) | USGS lake surveys where published | Static | One number per lake; no bathymetry |
-| Coastal and ocean depth | **New:** NOAA NCEI DEM mosaic (coastal), GEBCO (ocean) | ETOPO1 (Earth Engine) | Static | Not in the app today |
+| Lake depth | `lakes` (maximum and mean depth from Wikidata) | `water-depth` where NOAA surveyed the lake (Great Lakes, Lake Washington); USGS lake surveys | Static | One number per lake; no bathymetry for Tahoe or Crater |
+| Coastal and ocean depth | `water-depth`: NOAA NCEI DEM mosaic (CUDEM coasts, Great Lakes; ETOPO 2022 with GEBCO offshore) | — | Static | US coasts 3–10 m, Great Lakes, oceans about 450 m; lakes above sea level mostly unsurveyed (not Tahoe or Crater) |
 
 Licence line: "Normals: NOAA NCEI (public domain); ERA5-Land (Copernicus, attribution); flow: USGS; phenology: USA
 National Phenology Network, NASA MODIS; depth: NOAA NCEI, GEBCO Compilation Group (public domain), Wikidata (CC0)."
@@ -972,10 +972,14 @@ National Phenology Network, NASA MODIS; depth: NOAA NCEI, GEBCO Compilation Grou
 - T10.1: `climate-normals`, `snowpack` or `weather-forecast`; Topographical; note gives monthly °F, precipitation in inches or mm, and
   when snow arrives. Needs normals and the monthly strip.
 - T10.2: `flow-by-month`, `streamflow` or `river-pulse`; note gives the peak month and cfs. Needs flow by month.
-- T10.3: `lakes`; detail or ranked; both lakes named with numbers; card Maximum depth, Kind, Area; note gives both
-  depths; names ≥ 2. Needs bathymetry for both.
+- T10.3: `lakes`; detail or ranked; both lakes named with numbers; card Maximum depth, Kind, Area (and Mean depth,
+  Surface elevation, Volume where Wikidata has them); note gives both depths; names ≥ 2. Bathymetry for both still
+  needed: NOAA's mosaic holds only their flat surfaces (Tahoe 1,897 m, Crater 1,883 m), so `water-depth` cannot draw
+  them; USGS lake surveys are the next source.
 - T10.4: `phenology` (its `greenup` view: MODIS green-up dates) or `greenness`; Topo or Data only; note gives the green-up month and early or late.
-- T10.5: `lakes` or `tides` in the view; note gives a depth. Needs bathymetry.
+- T10.5: `lakes`, `tides` or `water-depth` in the view; note gives a depth. Bathymetry: `water-depth` (NOAA NCEI
+  mosaic: CUDEM on US coasts, Great Lakes, ETOPO 2022 with GEBCO offshore) with a depth ramp, contours and the deepest
+  point in the note.
 
 ---
 

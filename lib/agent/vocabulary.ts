@@ -108,6 +108,7 @@ export const VOCABULARY: VocabularyEntry[] = [
   { layerId: "canopy-height", synonyms: ["tree height", "how tall", "canopy height"], notes: "1 m canopy height; median, p90, tallest in box", gist: "how tall the trees are, worldwide" },
   { layerId: "climate-normals", synonyms: ["climate", "typical weather", "normals"], notes: "1991-2020 monthly normals at a place; lon, lat, name", gist: "typical temperature, rain and snow for each month" },
   { layerId: "flow-by-month", synonyms: ["peak flow", "river highest", "snowmelt peak"], notes: "median gauge flow per month; peak and low month", gist: "the months a river runs highest and lowest" },
+  { layerId: "water-depth", synonyms: ["water depth", "bathymetry", "seafloor"], notes: "depth ramp, contours; note gives deepest and median", gist: "how deep the sea, bays and surveyed lakes are" },
 ];
 
 /** One line per layer: id, its synonyms, then a short note. */

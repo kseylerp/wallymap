@@ -98,3 +98,4 @@ import "./ecoregions";
 import "./canopy-height";
 import "./climate-normals";
 import "./flow-by-month";
+import "./water-depth";

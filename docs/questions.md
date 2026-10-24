@@ -310,6 +310,7 @@ node --env-file=.env.local --import tsx scripts/eval-model.mts --set --replay /t
 - Will it rain in Yosemite Valley this weekend?
 - What's the avalanche danger in Little Cottonwood Canyon today?
 - Elevation profile from Glacier Point to Half Dome
+- How deep is Puget Sound off Seattle?
 - Where is the wind strongest over the Sierra tomorrow?
 - Good day hikes near Boulder under 5 miles
 - Easy hikes with a waterfall near Asheville

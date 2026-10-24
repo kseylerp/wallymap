@@ -151,6 +151,7 @@ This step is easy to forget and the layer is hard for the agent to find without 
 WallyMap ships 90 data layers. This table is generated from the layer registry by `pnpm exec tsx scripts/layer-table.mts --write`, which also refreshes the copy in the README.
 WallyMap ships 89 data layers. This table is generated from the layer registry by `pnpm exec tsx scripts/layer-table.mts --write`, which also refreshes the copy in the README.
 WallyMap ships 91 data layers. This table is generated from the layer registry by `pnpm exec tsx scripts/layer-table.mts --write`, which also refreshes the copy in the README.
+WallyMap ships 89 data layers. This table is generated from the layer registry by `pnpm exec tsx scripts/layer-table.mts --write`, which also refreshes the copy in the README.
 
 <!-- layers:start -->
 | Id | Title | What it shows | Source | Coverage | Area (km²) | Key needed | Freshness | Attributes |
@@ -204,7 +205,7 @@ WallyMap ships 91 data layers. This table is generated from the layer registry b
 | `disturbance` | Vegetation disturbance alerts | Where vegetation was just lost or damaged | NASA GIBS (OPERA) | Global | Any | None | Daily, about 3 days behind |  |
 | `sea-ice` | Sea ice | Sea ice concentration and extent | NASA GIBS (GHRSST MUR, MODIS) | Global | Any | None | Daily, back to 2000 |  |
 | `fire-weather` | Fire weather (fire danger) | Fire danger forecast (Fire Weather Index) | EC JRC GWIS / EFFIS | Global | Any | None | Daily, up to 9 days ahead |  |
-| `lakes` | Lakes and reservoirs | Named lakes and reservoirs with maximum depth | Wikidata | Global | 20,000; to 80,000 the 1,000 largest by area | `OVERPASS_URL` (optional) | Live (community edits) | Area (measure, km²); Maximum depth (measure, m); Kind (category): Lake, Reservoir, Pond, Oxbow lake, Lagoon; Name (name) |
+| `lakes` | Lakes and reservoirs | Named lakes and reservoirs with maximum depth | Wikidata | Global | 20,000; to 80,000 the 1,000 largest by area | `OVERPASS_URL` (optional) | Live (community edits) | Area (measure, km²); Maximum depth (measure, m); Mean depth (measure, m); Kind (category): Lake, Reservoir, Pond, Oxbow lake, Lagoon; Name (name) |
 | `drought` | Drought | Weekly drought categories D0 to D4 | U.S. Drought Monitor (NDMC) | US | 16,000,000 | None | Weekly | Category (ordinal, US Drought Monitor categories D0 to D4): D0 Abnormally Dry, D1 Moderate Drought, D2 Severe Drought, D3 Extreme Drought, D4 Exceptional Drought |
 | `phenology` | Spring arrival (leaf-out and bloom) | Whether spring leaf-out and bloom came early or late; the usual green-up date | USA National Phenology Network; NASA MODIS via Earth Engine | Lower 48 states (green-up worldwide) | Any | `EE_PROJECT` (optional), `EE_SERVICE_ACCOUNT_JSON` (optional), `GOOGLE_APPLICATION_CREDENTIALS` (optional) | Daily this year; yearly back to 1981; green-up 2001–2025 |  |
 | `burn-severity` | Burn severity of large fires (MTBS) | Burned areas of large fires, by year | MTBS (USGS, USFS) | US | Any | None | Yearly, about 18 months behind |  |
@@ -261,6 +262,10 @@ WallyMap ships 91 data layers. This table is generated from the layer registry b
 | `avalanche` | Avalanche forecasts (US avalanche centers) | Avalanche danger today by forecast zone, on the North American scale | US avalanche centers via avalanche.org | US forecast zones | 10,000,000 | None | Daily in season | Avalanche danger (ordinal, North American Public Avalanche Danger Scale (1 Low to 5 Extreme)): No rating, 1 Low, 2 Moderate, 3 Considerable, 4 High, 5 Extreme; Avalanche center (category, from the data) |
 | `climate-normals` | Climate normals by month | Normal high and low temperature, precipitation and snow for each month at a place, with the monthly strip | NOAA NCEI U.S. Climate Normals; TerraClimate via Earth Engine | Global | Any | `EE_PROJECT` (optional), `EE_SERVICE_ACCOUNT_JSON` (optional), `GOOGLE_APPLICATION_CREDENTIALS` (optional) | Static (1991–2020 normals) |  |
 | `flow-by-month` | River flow by month | The month a river runs highest and lowest at USGS gauges, median flow by month | USGS NWIS monthly statistics | US | 200,000 | None | Monthly record, whole period of each gauge |  |
+| `terrain` | Terrain: slope, aspect and shade | Slope angle classes, the way slopes face, and ground in its own shade | AWS Terrain Tiles (USGS 3DEP, SRTM), computed by this app | Global | 5,000 | None | Static elevation |  |
+| `weather-forecast` | Weather forecast (7 days, hourly) | Seven-day hourly forecast at a place: temperature, rain, wind and gusts | Open-Meteo forecast | Global | 2,000,000 | None | Hourly forecast | Temperature (measure, °F); Chance of rain or snow (measure, %); Wind (measure, mph); Gusts (measure, mph); Point (category): Asked place, Across the view |
+| `avalanche` | Avalanche forecasts (US avalanche centers) | Today's avalanche danger by forecast zone | US avalanche centers (avalanche.org) | US | 10,000,000 | None | Daily | Avalanche danger (ordinal, North American Public Avalanche Danger Scale (1 Low to 5 Extreme)): No rating, 1 Low, 2 Moderate, 3 Considerable, 4 High, 5 Extreme; Avalanche center (category, from the data) |
+| `water-depth` | Water depth (bathymetry) | Water depth as a ramp with contours and the deepest point; depth at a tapped point | NOAA NCEI DEM mosaic (CUDEM, Great Lakes bathymetry, ETOPO 2022 with GEBCO), computed by this app | Global | 5,000,000 | None | Static surveys |  |
 <!-- layers:end -->
 
 ## Checklist

@@ -578,6 +578,8 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   // A place through the year (T10): monthly climate normals and a river's flow by month.
   "what is the weather usually like in july in bozeman?": { layers: ["climate-normals"] },
   "which month does the truckee river run highest?": { layers: ["flow-by-month"] },
+  // Bathymetry (top-10 T10): NOAA's depth ramp, contours and the deepest point.
+  "how deep is puget sound off seattle?": { layers: ["water-depth"] },
 };
 
 /**

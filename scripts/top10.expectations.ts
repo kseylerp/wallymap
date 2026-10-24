@@ -535,7 +535,7 @@ export const TOP10: Top10Expect[] = [
   {
     id: "T10.5", useCase: "T10",
     question: "How deep is the water here? @view=[-122.55,47.55,-122.35,47.7]",
-    layers: ["lakes|tides"], main: "lakes|tides", basemap: DATA_GROUND,
+    layers: ["lakes|tides|water-depth"], main: "lakes|tides|water-depth", basemap: DATA_GROUND,
     facts: [{ what: "a depth", re: /\b\d[\d,]*\s*(?:ft|feet|m|fathoms)\b[^.]*deep|depth[^.]*\b\d[\d,]*\s*(?:ft|feet|m)\b/i }],
     needs: ["bathymetry (NOAA NCEI DEM mosaic and GEBCO) with a depth ramp and contours"],
   },

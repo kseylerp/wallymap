@@ -4430,7 +4430,7 @@
  },
  "lakes": {
   "kind": "geojson",
-  "recorded": "2026-10-23",
+  "recorded": "2026-10-24",
   "bbox": [
    -120.25,
    38.93,
@@ -4463,6 +4463,8 @@
      "v": 495,
      "areaText": "191 mi² (495 km²)",
      "depthText": "1,644 ft (501 m)",
+     "label": "Lake Tahoe, 1,644 ft deep",
+     "labelRank": 10000501,
      "elevationText": "6,232 ft (1,900 m)",
      "volumeText": "122 million acre-feet (150 km³)"
     }
@@ -4488,7 +4490,9 @@
      "osmUrl": "https://www.openstreetmap.org/way/28639357",
      "v": 0.857,
      "areaText": "212 acres (0.86 km²)",
-     "depthText": "Not recorded"
+     "depthText": "Not recorded",
+     "label": "Cascade Lake",
+     "labelRank": 0.857
     }
    },
    {
@@ -4509,7 +4513,9 @@
      "osmUrl": "https://www.openstreetmap.org/relation/1707175",
      "v": 0.492,
      "areaText": "122 acres (0.49 km²)",
-     "depthText": "Not recorded"
+     "depthText": "Not recorded",
+     "label": "Rockbound Lake",
+     "labelRank": 0.492
     }
    },
    {
@@ -4530,7 +4536,9 @@
      "osmUrl": "https://www.openstreetmap.org/relation/1707177",
      "v": 0.26,
      "areaText": "64 acres (0.26 km²)",
-     "depthText": "Not recorded"
+     "depthText": "Not recorded",
+     "label": "Buck Island Lake",
+     "labelRank": 0.26
     }
    },
    {
@@ -4553,6 +4561,8 @@
      "v": 0.223,
      "areaText": "55 acres (0.22 km²)",
      "depthText": "Not recorded",
+     "label": "Stony Ridge Lake",
+     "labelRank": 0.223,
      "elevationText": "7,815 ft (2,382 m)"
     }
    },
@@ -4578,6 +4588,8 @@
      "v": 0.176,
      "areaText": "43 acres (0.18 km²)",
      "depthText": "Not recorded",
+     "label": "Middle Velma Lake",
+     "labelRank": 0.176,
      "elevationText": "7,900 ft (2,408 m)"
     }
    },
@@ -4603,6 +4615,8 @@
      "v": 0.154,
      "areaText": "38 acres (0.15 km²)",
      "depthText": "Not recorded",
+     "label": "Lake Schmidell",
+     "labelRank": 0.154,
      "elevationText": "7,881 ft (2,402 m)"
     }
    },
@@ -4624,7 +4638,9 @@
      "osmUrl": "https://www.openstreetmap.org/relation/2329705",
      "v": 0.134,
      "areaText": "33 acres (0.13 km²)",
-     "depthText": "Not recorded"
+     "depthText": "Not recorded",
+     "label": "Lower Velma Lake",
+     "labelRank": 0.134
     }
    },
    {
@@ -4645,7 +4661,9 @@
      "osmUrl": "https://www.openstreetmap.org/way/388596035",
      "v": 0.115,
      "areaText": "28 acres (0.12 km²)",
-     "depthText": "Not recorded"
+     "depthText": "Not recorded",
+     "label": "Miller Lake",
+     "labelRank": 0.115
     }
    },
    {
@@ -4666,7 +4684,9 @@
      "osmUrl": "https://www.openstreetmap.org/way/182258083",
      "v": 0.104,
      "areaText": "26 acres (0.1 km²)",
-     "depthText": "Not recorded"
+     "depthText": "Not recorded",
+     "label": "McKinney Lake",
+     "labelRank": 0.104
     }
    },
    {
@@ -4687,7 +4707,9 @@
      "osmUrl": "https://www.openstreetmap.org/relation/6442415",
      "v": 0.0808,
      "areaText": "20 acres (0.081 km²)",
-     "depthText": "Not recorded"
+     "depthText": "Not recorded",
+     "label": "Crag Lake",
+     "labelRank": 0.0808
     }
    },
    {
@@ -4710,7 +4732,9 @@
      "url": "https://www.wikidata.org/wiki/Q49314623",
      "v": 0.074,
      "areaText": "18 acres (0.074 km²)",
-     "depthText": "Not recorded"
+     "depthText": "Not recorded",
+     "label": "Upper Velma Lake",
+     "labelRank": 0.074
     }
    }
   ]
@@ -14712,6 +14736,16 @@
      "evaluationReport": "https://semspub.epa.gov/work/09/100016417.pdf"
     }
    }
+  ]
+ },
+ "water-depth": {
+  "kind": "tiles",
+  "recorded": "2026-10-24",
+  "bbox": [
+   -122.55,
+   47.55,
+   -122.35,
+   47.7
   ]
  },
  "weather-alerts": {

@@ -1,0 +1,112 @@
+{
+ "samples": [
+  {
+   "location": {
+    "x": -120.04,
+    "y": 39.09,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "1897.000000000",
+   "rasterId": 2527,
+   "resolution": 0.004166666666666667,
+   "attributes": {
+    "Name": "ETOPO_2022_v1_15s_surface_elev",
+    "CellsizeArcseconds": 15
+   }
+  },
+  {
+   "location": {
+    "x": -120.04,
+    "y": 39.09,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "1897.000000000",
+   "rasterId": 2530,
+   "resolution": 0.004166666666666667,
+   "attributes": {
+    "Name": "ETOPO_2022_v1_15s_bed_elev",
+    "CellsizeArcseconds": 15
+   }
+  },
+  {
+   "location": {
+    "x": -120.04,
+    "y": 39.09,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "1897.000000000",
+   "rasterId": 2531,
+   "resolution": 0.008333333333333333,
+   "attributes": {
+    "Name": "ETOPO_2022_v1_30s_bed",
+    "CellsizeArcseconds": 30
+   }
+  },
+  {
+   "location": {
+    "x": -120.04,
+    "y": 39.09,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "1897.000000000",
+   "rasterId": 2532,
+   "resolution": 0.008333333333333333,
+   "attributes": {
+    "Name": "ETOPO_2022_v1_30s_surface",
+    "CellsizeArcseconds": 30
+   }
+  },
+  {
+   "location": {
+    "x": -120.04,
+    "y": 39.09,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "1897.000000000",
+   "rasterId": 2533,
+   "resolution": 0.016666666666666666,
+   "attributes": {
+    "Name": "ETOPO_2022_v1_60s_bed",
+    "CellsizeArcseconds": 60
+   }
+  },
+  {
+   "location": {
+    "x": -120.04,
+    "y": 39.09,
+    "spatialReference": {
+     "wkid": 4326,
+     "latestWkid": 4326
+    }
+   },
+   "locationId": 0,
+   "value": "1897.000000000",
+   "rasterId": 2534,
+   "resolution": 0.016666666666666666,
+   "attributes": {
+    "Name": "ETOPO_2022_v1_60s_surface",
+    "CellsizeArcseconds": 60
+   }
+  }
+ ]
+}

@@ -567,6 +567,8 @@ export const COVERAGE_QUESTIONS: Record<string, CoverageExpect> = {
   // The forecasts added for the use cases (audit R8, R10): a 7-day hourly weather forecast and the avalanche centers' danger.
   "will it rain in yosemite valley this weekend?": { layers: ["weather-forecast"] },
   "what's the avalanche danger in little cottonwood canyon today?": { layers: ["avalanche"] },
+  // Bathymetry (top-10 T10): NOAA's depth ramp, contours and the deepest point.
+  "how deep is puget sound off seattle?": { layers: ["water-depth"] },
 };
 
 /**

@@ -528,6 +528,20 @@ const PHRASES: {
     because: "burn scars are the fires' outlines with their acres and year, and the severity inside them",
   },
   {
+    // Shade in the afternoon is the crag's own flag (its wall faces away from the afternoon sun), ranked by routes.
+    re: /\bshaded?\s+in\s+the\s+afternoon\b|\bafternoon\s+shade\b|\bshady\s+in\s+the\s+afternoon\b/i,
+    filters: { climbing: { afternoonShade: ["true"] } },
+    views: { climbing: "ranked" },
+    because: "afternoon shade is the crag's wall facing away from the afternoon sun",
+  },
+  {
+    // What lives around a place is where the sightings are densest, and which species they are.
+    re: /\bwhat\s+(?:wildlife|animals|birds|species)\b|\bwildlife\b[^?]*\b(?:here|around|seen)\b/i,
+    unless: /\bby\s+month\b/i,
+    views: { species: "density", "gbif-occurrences": "density" },
+    because: "the wildlife of a place is where its sightings are densest",
+  },
+  {
     // "By month" is a question about time: the sightings drawn on the timeline, with the time panel open on them.
     re: /\bby\s+month\b|\bmonth\s+by\s+month\b|\beach\s+month\b/i,
     views: { species: "timeline", "gbif-occurrences": "timeline" },
@@ -678,6 +692,21 @@ export function lengthRange(question: string): { range: [number, number]; becaus
   return { range: upper ? [0, Math.round(n * 100) / 100] : [Math.round(n * 100) / 100, 100_000], because: m[0] };
 }
 
+/** The YDS route bands (beginner 5.0 to 5.7, intermediate 5.8 to 5.10, advanced 5.11 to 5.12, elite 5.13 up) of grades a question names. */
+export function ydsBands(question: string): string[] {
+  const out = new Set<string>();
+  const grades = [...question.matchAll(/\b5\.(\d{1,2})[a-d+-]?\b/g)].map((m) => Number(m[1]));
+  if (grades.length === 0) return [];
+  const band = (g: number) => (g <= 7 ? "beginner" : g <= 10 ? "intermediate" : g <= 12 ? "advanced" : "elite");
+  // A range ("5.10 to 5.11") holds every band between its ends.
+  const lo = Math.min(...grades);
+  const hi = Math.max(...grades);
+  const ranged = /\b5\.\d{1,2}[a-d+-]?\s*(?:to|-|–|through)\s*5\.\d{1,2}/.test(question);
+  for (let g = lo; g <= (ranged ? hi : lo); g++) out.add(band(g));
+  for (const g of grades) out.add(band(g));
+  return [...out];
+}
+
 /** True when a layer's answer can be ranked or filtered by `key` (a declared attribute, or the card's measure). */
 function hasMeasure(layer: Layer, key: string): boolean {
   return (layer.attributes ?? []).some((a) => a.key === key) || layer.card?.measure?.key === key;
@@ -736,7 +765,7 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
         else if (strong) phraseFilters.push({ layerId, key, range: value.range, because: m[0].trim() });
       }
     }
-    for (const [layerId, view] of Object.entries(p.views ?? {})) if (!views.some((v) => v.layerId === layerId)) views.push({ layerId, view, because: m[0].trim() });
+    if (strong) for (const [layerId, view] of Object.entries(p.views ?? {})) if (!views.some((v) => v.layerId === layerId)) views.push({ layerId, view, because: m[0].trim() });
   }
   const places = riverNames(raw);
   for (const p of places) addLayer("streamflow", `"${p.written}" is a river: its gauges`, false);
@@ -779,6 +808,9 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     const layer = getLayer(hint.layerId);
     if (layer) filters.push(...chipFilters(layer, q));
   }
+  // Route grades the question names ("5.10 to 5.11"): the bands that hold them, on climbing's grade chips.
+  const bands = ydsBands(raw);
+  if (bands.length > 0 && layers.some((l) => l.layerId === "climbing")) filters.push({ layerId: "climbing", key: "gradeBands", include: bands, because: "the route grades named" });
   const length = lengthRange(raw);
   const rankBy: Reading["rankBy"] = [];
   for (const hint of layers) {

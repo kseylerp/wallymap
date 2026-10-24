@@ -145,6 +145,7 @@ const KINDS: Record<string, Kind> = {
     followUps: ["How does the snow at {A} compare with normal?", "When does snow usually arrive at {A}?", "What is the avalanche danger near {place} today?"],
   },
   avalanche: {
+    answer: "total",
     one: "avalanche zone",
     many: "avalanche zones",
     rows: ["Danger", "Avalanche center", "Issued"],

@@ -34,7 +34,7 @@ export function answerForTurn(turn: Turn): AnswerTemplate | null {
 export function composeForTurn(markdown: string, turn: Turn): string {
   const template = answerForTurn(turn);
   turn.followUps = template?.followUps ?? [];
-  const composed = withLandManagers(withEmptyLayers(composeNote(markdown, template), turn), turn);
+  const composed = withLandManagers(withAskedPictures(withEmptyLayers(composeNote(markdown, template), turn), turn), turn);
   if (composed !== markdown) turn.note(template?.lead ? "answer built on the template: lead, top options, then the model's caveats" : "answer put first: the note's first sentence now answers with a number");
   return composed;
 }
@@ -92,5 +92,28 @@ export function withLandManagers(markdown: string, turn: Pick<Turn, "question" |
   if (!m) return markdown;
   const units = m[1].split(/\),\s+/).map((u) => (u.endsWith(")") ? u : `${u})`)).slice(0, 2);
   return `${markdown.trimEnd()}\n\nLand here: ${units.join(" and ")}.`;
+}
+
+/**
+ * A picture layer the question asks for by its words (burn severity in "burn scars", the satellite snow map in "snow on
+ * the ground") that the note never mentions gets one clause from its coverage note: Paradise's answer drew the burn
+ * severity and said nothing of it. Two at most.
+ */
+export function withAskedPictures(markdown: string, turn: Pick<Turn, "reading" | "calls">): string {
+  const text = markdown.toLowerCase();
+  const lines: string[] = [];
+  for (const hint of turn.reading.layers.filter((l) => l.strong)) {
+    const out = turn.calls.findLast((c) => c.toolName === `query_${hint.layerId}`)?.output as { kind?: unknown; coverageNote?: unknown } | undefined;
+    if (out?.kind !== "tiles" || typeof out.coverageNote !== "string" || out.coverageNote.trim() === "") continue;
+    const title = getLayer(hint.layerId)?.title.replace(/\s*\([^)]*\)\s*/g, " ").trim() ?? hint.layerId;
+    // Mentioned already: the title's longest word ("severity", "cover") is in the note.
+    const word = title.toLowerCase().split(/[\s:,]+/).sort((x, y) => y.length - x.length)[0] ?? "";
+    if (word && text.includes(word.replace(/s$/, ""))) continue;
+    const clause = out.coverageNote.split(/;\s+|\.\s+/)[0].trim().replace(/[.:]$/, "");
+    if (clause.split(/\s+/).length > 30) continue;
+    lines.push(`${clause}.`);
+    if (lines.length >= 2) break;
+  }
+  return lines.length === 0 ? markdown : `${markdown.trimEnd()}\n\n${lines.join(" ")}`;
 }
 

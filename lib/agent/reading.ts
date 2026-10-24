@@ -547,6 +547,24 @@ const PHRASES: {
     because: "a cross-section is the elevation along a line",
   },
   {
+    // "Are there mining claims, mines or pipelines?": each threat it names is asked (Grand Staircase's answer left the
+    // mines out).
+    re: /\bmining\s+claims?\b/i,
+    layers: ["mining-claims"],
+    because: "mining claims are BLM's claim cases",
+  },
+  {
+    re: /\bmines?\b/i,
+    unless: /\buranium\b/i,
+    layers: ["mines"],
+    because: "mines are the mine and mineral deposit records",
+  },
+  {
+    re: /\bpipelines?\b/i,
+    layers: ["pipelines-lines"],
+    because: "pipelines are the pipeline and power line network",
+  },
+  {
     // Oil and gas near a place: the federal leases (producing or not), its pipelines and the methane plumes over its wells.
     re: /\boil\s+(?:and|&)\s+gas\b|\bfracking\b|\bdrilling\b|\bgas\s+wells?\b|\boil\s+wells?\b|\bpipelines?\b/i,
     layers: ["mineral-leases", "pipelines-lines", "methane-plumes"],

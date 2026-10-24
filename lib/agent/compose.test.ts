@@ -97,3 +97,13 @@ describe("the model's own facts beside the template's list", () => {
     expect(out.match(/26,606/g)?.length).toBe(2);
   });
 });
+
+describe("readableNumbers", () => {
+  it("writes counts as numbers and ISO dates as month and day", async () => {
+    const { readableNumbers } = await import("./compose");
+    const now = new Date("2026-10-24T00:00:00Z");
+    expect(readableNumbers("Twenty‑one research‑grade Bald Eagle sightings; the latest on 2026‑10‑23 and 2025-12-01.", now)).toBe("21 research‑grade Bald Eagle sightings; the latest on Oct 23 and Dec 1, 2025.");
+    expect(readableNumbers("Three campgrounds are open; one is full; a two-day trip.", now)).toBe("3 campgrounds are open; one is full; a two-day trip.");
+    expect(readableNumbers("Observed 2026-10-23T04:00Z.", now)).toBe("Observed 2026-10-23T04:00Z.");
+  });
+});

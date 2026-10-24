@@ -308,7 +308,8 @@ function phrase(label: string, raw: string): string {
     case "Snow depth":
       return `${v} of snow`;
     case "Percent of normal":
-      return `${v} of normal`;
+      // "Too early in the season to compare: …" is no percent; Lake Tahoe's lines read "… of snow water of normal".
+      return /\d\s*%/.test(v) ? `${v} of normal` : "";
     case "Ice lost since the first survey":
       return `${v} of its ice lost since the first survey`;
     case "Acres burned":
@@ -542,7 +543,8 @@ export function answerTemplate(input: AnswerInput, state: MapState = mapOf(input
       if (r.label === "Climb" && picked.some((p) => p.label === "Climb, round trip")) continue;
       if (r.label === "Length" && picked.some((p) => p.label === "Round trip") && kind === HIKE) continue;
       if (facts.length >= 3) break;
-      facts.push(phrase(r.label, r.value));
+      const said = phrase(r.label, r.value);
+      if (said) facts.push(said);
     }
     options.push({ name, facts });
     if (options.length >= 3) break;

@@ -189,9 +189,17 @@ export function trimNoteFor(markdown: string, question: string, max = NOTE_MAX_W
       units.push({ line: i, text, rank, words: noteWords(text) });
     }
   });
+  // A sentence that answers a part of the question the lead does not ("any avalanche danger?" after a snow lead) comes
+  // right after the lead, before the options.
+  const leadText = units.filter((u) => u.rank === 0).map((u) => u.text.toLowerCase()).join(" ");
+  for (const u of units) {
+    if (u.rank === 0 || u.rank === 3) continue;
+    const t = u.text.toLowerCase();
+    if (asked.some((w) => t.includes(w) && !leadText.includes(w))) u.rank = 0.5;
+  }
   let used = 0;
   const keep = new Set<Unit>();
-  for (const rank of [0, 1, 2, 3]) {
+  for (const rank of [0, 0.5, 1, 2, 3]) {
     for (const u of units) {
       if (u.rank !== rank || used + u.words > max) continue;
       keep.add(u);

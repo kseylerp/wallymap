@@ -29,3 +29,15 @@ describe("who manages the land, for a camping answer", () => {
     expect(withLandManagers("12 hikes.", { question: "Good hikes here?", calls })).toBe("12 hikes.");
   });
 });
+
+describe("a picture layer the question asks for", () => {
+  it("gets one clause from its coverage note when the note never mentions it", async () => {
+    const { withAskedPictures } = await import("@/lib/agent/turnAnswer");
+    const turn = {
+      reading: { layers: [{ layerId: "fire-perimeters", because: "", strong: true }, { layerId: "burn-severity", because: "", strong: true }] },
+      calls: [{ toolName: "query_burn-severity", input: {}, output: { kind: "tiles", coverageNote: "MTBS burn severity of large fires in 2024, the lower 48 states: low sage, moderate pink, high purple" } }],
+    } as never;
+    expect(withAskedPictures("Six fires burned 584,475 acres near Paradise since 2018.", turn)).toMatch(/\n\nMTBS burn severity of large fires in 2024, the lower 48 states: low sage, moderate pink, high purple\.$/);
+    expect(withAskedPictures("Burn severity was mostly high.", turn)).toBe("Burn severity was mostly high.");
+  });
+});

@@ -113,7 +113,31 @@ export function answerFirst(markdown: string): string {
  * number), then the top options with their deciding facts in place of the model's own list, then the model's other
  * sentences (caveats, what the app cannot show). Without a template, the model's note with its answer moved first.
  */
+const SMALL = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * Counts and dates as a person reads them and the phone's first line can show: "Twenty-one sightings" is "21 sightings"
+ * (two to ninety-nine; "one" stays a word), and "2026-10-23" is "Oct 23" (with the year when it is not this year).
+ */
+export function readableNumbers(markdown: string, now: Date = new Date()): string {
+  const word = String.raw`(?:${TENS.slice(2).join("|")})(?:[-\u2010\u2011 ](?:${SMALL.slice(1, 10).join("|")}))?|${SMALL.slice(2).join("|")}`;
+  let out = markdown.replace(new RegExp(String.raw`\b(${word})\b(?![-\u2010\u2011](?:year|day|hour|week|month|mile|km|foot|ft|story|lane|way))`, "gi"), (m) => {
+    const parts = m.toLowerCase().split(/[-\u2010\u2011 ]/);
+    const n = parts.length === 2 ? TENS.indexOf(parts[0]) * 10 + SMALL.indexOf(parts[1]) : TENS.includes(parts[0]) ? TENS.indexOf(parts[0]) * 10 : SMALL.indexOf(parts[0]);
+    return n >= 2 ? String(n) : m;
+  });
+  out = out.replace(/\b(\d{4})[-\u2010\u2011](\d{2})[-\u2010\u2011](\d{2})\b(?![T:\d])/g, (m, y: string, mo: string, d: string) => {
+    const month = MONTHS_SHORT[Number(mo) - 1];
+    if (!month || Number(d) < 1 || Number(d) > 31) return m;
+    return `${month} ${Number(d)}${Number(y) === now.getUTCFullYear() ? "" : `, ${y}`}`;
+  });
+  return out;
+}
+
 export function composeNote(markdown: string, template: AnswerTemplate | null): string {
+  markdown = readableNumbers(markdown);
   if (!template || (!template.lead && template.allLines.length === 0)) return finished(answerFirst(markdown));
   // The template's lead answers first (or, without one, the model's answer moved first), so the model's list stays a list.
   const lines = (template.lead ? finished(markdown) : finished(answerFirst(markdown))).split("\n");

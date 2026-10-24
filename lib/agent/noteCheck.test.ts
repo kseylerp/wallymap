@@ -100,3 +100,19 @@ describe("trimNoteFor", () => {
     expect(noteWords(cut)).toBeLessThanOrEqual(36);
   });
 });
+
+describe("trimNoteFor and the parts of a question", () => {
+  it("keeps the sentence that answers what the lead leaves out before the options", async () => {
+    const { trimNoteFor } = await import("./noteCheck");
+    const note = [
+      "3 snow stations near Lake Tahoe; the top is Fallen Leaf, 0 in of snow.",
+      "",
+      "- **Fallen Leaf**: 0 in of snow, snow water equivalent 0.2 in, read Oct 23, 9 PM PDT at the station.",
+      "- **Rubicon #2**: 0 in of snow, snow water equivalent 0.4 in, read Oct 23, 9 PM PDT at the station.",
+      "",
+      "No snow on the ground now, and avalanche centers have not issued a rating.",
+    ].join("\n");
+    const cut = trimNoteFor(note, "Is there snow on the ground at Lake Tahoe right now, and any avalanche danger?", 40);
+    expect(cut).toContain("avalanche centers have not issued a rating");
+  });
+});

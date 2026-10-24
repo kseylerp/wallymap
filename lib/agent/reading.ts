@@ -828,7 +828,12 @@ export function readQuestion(question: string, now: Date = new Date()): Reading 
     const layer = getLayer(hint.layerId);
     if (!layer) continue;
     if (length && hasMeasure(layer, "lengthKm")) filters.push({ layerId: layer.id, key: "lengthKm", range: length.range, because: length.because });
-    const climb = /\b(?:big|lots? of|most|serious|steep|huge)\s+(?:climb\w*|elevation|vert\w*|gain)\b|\bclimbs?\b|\belevation gain\b|\bsteep\w*/i.exec(raw);
+    const climbCap = /\b(?:under|less than|below|up to|at most|max(?:imum)?)\s+(\d[\d,]*)\s*(ft|feet|m|meters?|metres?)\s+(?:of\s+)?(?:climb\w*|elevation\s+gain|gain|vert\w*)/i.exec(raw);
+    if (climbCap && hasMeasure(layer, "gainM")) {
+      const metres = Number(climbCap[1].replace(/,/g, "")) * (/^f/i.test(climbCap[2]) ? 0.3048 : 1);
+      filters.push({ layerId: layer.id, key: hasMeasure(layer, "roundTripGainM") ? "roundTripGainM" : "gainM", range: [0, Math.round(metres)], because: climbCap[0] });
+    }
+    const climb = climbCap ? null : /\b(?:big|lots? of|most|serious|steep|huge)\s+(?:climb\w*|elevation|vert\w*|gain)\b|\bclimbs?\b|\belevation gain\b|\bsteep\w*/i.exec(raw);
     if (climb && hasMeasure(layer, "gainM") && !/\bflat\b/i.test(raw)) rankBy.push({ layerId: layer.id, key: "gainM", because: climb[0] });
     const flat = /\bflat(?:test)?\b|\blittle\s+climb\w*|\bgentle\b/i.exec(raw);
     if (flat && hasMeasure(layer, "gainPerKm")) filters.push({ layerId: layer.id, key: "gainPerKm", range: [0, 15], because: flat[0] });

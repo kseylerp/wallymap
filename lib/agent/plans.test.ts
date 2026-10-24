@@ -13,6 +13,9 @@ describe("plans read before the model chooses", () => {
     expect(readQuestion("Good day hikes near Bend", NOW).filters).toContainEqual(expect.objectContaining({ layerId: "osm-trails", key: "roundTripKm", range: [3, 25] }));
     expect(readQuestion("Loop hikes under 6 miles near Asheville", NOW).filters.some((f) => f.key === "roundTripKm")).toBe(false);
     expect(strongIds("An easy hike with a view near Lake Tahoe")).toContain("outdoor-features");
+    const loops = readQuestion("Loop hikes under 6 miles with a waterfall near Asheville, under 1,500 ft of climb", NOW);
+    expect(loops.filters).toContainEqual(expect.objectContaining({ layerId: "osm-trails", key: "gainM", range: [0, 457] }));
+    expect(loops.rankBy).toEqual([]);
   });
 
   it("reads snow on the ground from the stations, open campgrounds from the federal sites, camping with who manages the land", () => {

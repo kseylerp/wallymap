@@ -43,6 +43,10 @@
  *                    one whose layer is under a documented outage (Layer.outage) and did not answer is skipped, not passed
  *   --tag usecase    runs only the use-case questions (USECASE_QUESTIONS, docs/use-cases.md), each held to its expected
  *                    layers, view and filter; what the app still lacks for the full answer is listed as `needs`
+ *   --tag top10      runs only the top 10 use cases' 50 golden questions (scripts/top10.expectations.ts, docs/top-10-use-cases.md;
+ *                    not in docs/questions.md), each also held to the strict rule in scripts/top10Check.ts: every
+ *                    assertion its expectation names (layers, filters, view, basemap, labels, legend, card order, the
+ *                    note's deciding facts, grounding, answer first, 3 specific follow-ups, camera, phone first screen)
  *   --screens        after the set, the screen checks (scripts/evalScreens.ts) on SCREEN_QUESTIONS: each one's final
  *                    map opened by permalink in a browser at desktop and phone size; see that file for the server.
  *                    Refuses to start with under 5 GB free disk, stops cleanly under 2 GB, and prints the disk the run
@@ -68,6 +72,8 @@ import type { BBox } from "@/layers/types";
 import { isActiveEntry } from "@/lib/render/filters";
 import { nearBox, nearPlace } from "@/lib/agent/places";
 import { freeBytes, sizeText, START_MIN_FREE, watchDisk, type DiskGuard } from "@/scripts/diskGuard";
+import { TOP10, top10For } from "@/scripts/top10.expectations";
+import { top10Rule } from "@/scripts/top10Check";
 
 
 const model = process.env.MODEL_NAME ?? "(unset)";
@@ -286,7 +292,7 @@ function questionPlace(calls: ToolCall[], view: MapView | null, question?: strin
 }
 
 /** The map the browser would end on: every tool result through the client's mapping and the reducer, in order. */
-function mapAfter(calls: ToolCall[]): MapState {
+export function mapAfter(calls: ToolCall[]): MapState {
   const catalog: LayerCatalog = Object.fromEntries(
     listLayers().map((l) => [
       l.id,
@@ -914,13 +920,18 @@ function evaluate(run: Run): Evaluated {
   const checksOk = checks.every((c) => c.ok);
   const ok = rulesOk && checksOk;
   const skipped = expect ? outageSkip(expect, calls) : usecase ? outageSkip(usecase, calls) : undefined;
+  // The top 10 use cases' strict rule (scripts/top10Check.ts): every assertion of the question's expectation.
+  const top10Expect = top10For(run.raw);
+  const top10 = top10Expect ? top10Rule(top10Expect, { calls, text, state, question, hereView: (view?.bbox as BBox | undefined) ?? null }) : undefined;
+  const okStrict = top10 ? ok && top10.ok : ok;
 
   return {
-    ok,
+    ok: okStrict,
     state,
     checks,
     ...(skipped && { skipped }),
     line: {
+      ...(top10Expect && { id: top10Expect.id }),
       question,
       ...(skipped && { skipped }),
       ...(view ? { view: view.bbox, geocoded: seq.includes("geocode"), movedCamera: moved } : {}),
@@ -930,8 +941,9 @@ function evaluate(run: Run): Evaluated {
       ...(rule ? { rule, answer: answer.join("\n") } : {}),
       ...(coverage ? { coverage } : {}),
       ...(usecaseResult ? { usecase: usecaseResult } : {}),
+      ...(top10 ? { top10: { ok: top10.ok, baseOk: ok, failed: top10.failed, passed: top10.assertions.filter((a) => a.ok).map((a) => a.id) } } : {}),
       model,
-      ok,
+      ok: okStrict,
       rulesOk,
       checks: checks.map((c) => (c.ok ? { check: c.check, ok: true } : c)),
       seq,
@@ -1026,7 +1038,7 @@ if (isMain) {
   const replay = argValue(args, "--replay");
   const only = argValue(args, "--only")?.toLowerCase().split("|");
   const tag = argValue(args, "--tag");
-  if (tag !== undefined && tag !== "coverage" && tag !== "usecase") throw new Error(`Unknown --tag ${tag} ("coverage" or "usecase")`);
+  if (tag !== undefined && tag !== "coverage" && tag !== "usecase" && tag !== "top10") throw new Error(`Unknown --tag ${tag} ("coverage", "usecase" or "top10")`);
   const screens = args.includes("--screens");
   // Screens fill the disk (a dev server, Chromium, screenshots): not started short of space, stopped cleanly when low.
   let disk: DiskGuard | undefined;
@@ -1039,7 +1051,8 @@ if (isMain) {
     disk = watchDisk((left) => console.error(`eval: free disk is down to ${sizeText(left)}; stopping the run cleanly`));
   }
   if (args.includes("--set")) {
-    const questions = readEvalSet()
+    // The top 10's golden questions live in their expectations file, not in docs/questions.md.
+    const questions = (tag === "top10" ? TOP10.map((e) => e.question) : readEvalSet())
       .filter((q) => !only || only.some((o) => q.toLowerCase().includes(o)))
       .filter((q) => tag !== "coverage" || coverageFor(q) !== undefined)
       .filter((q) => tag !== "usecase" || usecaseFor(q) !== undefined);
